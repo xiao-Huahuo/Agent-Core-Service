@@ -5,3 +5,4 @@ skills-lock.json
 runtime/
 dist/
 **/__pycache__/
+.env
