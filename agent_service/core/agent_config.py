@@ -1,3 +1,26 @@
+"""
+Agent 服务统一配置模块。
+
+功能说明:
+本文件集中管理 Agent-Core-Service 的所有通用常量、环境变量和运行参数。
+后端代码需要配置时应显式接收 `AgentConfig` 实例,避免在业务模块中直接书写
+全局常量或直接读取环境变量。
+
+使用说明:
+推荐通过 `AgentConfig.load_config()` 创建配置对象。该方法会先加载 dataclass
+默认值,再读取 `AGENT_` 前缀环境变量,最后应用 `overrides` 显式覆盖项。
+`overrides` 的优先级高于环境变量。
+
+示例:
+config = AgentConfig.load_config()
+config = AgentConfig.load_config({"model": {"model_name": "moonshot-v1-8k"}})
+
+模型检查:
+默认调用 `load_config()` 时会检查本地 Embedding 与 ReRank 模型是否存在。
+如果模型缺失,会调用 `agent_service.scripts.download_model.ensure_models()` 自动下载。
+测试或只读取配置时可以传入 `ensure_models=False` 关闭该行为。
+"""
+
 from __future__ import annotations
 
 import os

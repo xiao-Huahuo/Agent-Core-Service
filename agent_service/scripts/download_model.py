@@ -1,3 +1,21 @@
+"""
+模型下载脚本。
+
+功能说明:
+本文件负责检查并下载本地 Embedding 模型和 ReRank 模型。`AgentConfig.load_config()`
+会在加载配置时调用 `ensure_models()` 自动检查模型是否存在;如果模型目录缺失或目录中
+没有常见模型文件,则会使用 `huggingface_hub.snapshot_download()` 下载模型。
+
+手动使用:
+可以通过命令行同时指定 Embedding 与 ReRank 的模型名称和本地绝对下载目录:
+
+python -m agent_service.scripts.download_model \
+  --embedding-model-name "BAAI/bge-small-zh-v1.5" \
+  --embedding-model-dir "D:/Projects/Python/AgentService/runtime/models/embedding" \
+  --rerank-model-name "BAAI/bge-reranker-v2-m3" \
+  --rerank-model-dir "D:/Projects/Python/AgentService/runtime/models/rerank"
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -88,13 +106,20 @@ def _download_from_huggingface(model_name: str, target_dir: Path) -> None:
 
 
 def main() -> None:
-    """命令行入口,用于手动下载单个模型。"""
+    """命令行入口,用于手动下载 Embedding 与 ReRank 两类模型。"""
 
-    parser = argparse.ArgumentParser(description="Download a Hugging Face model into a local directory.")
-    parser.add_argument("--model-name", required=True)
-    parser.add_argument("--model-dir", required=True)
+    parser = argparse.ArgumentParser(description="Download Hugging Face embedding and rerank models.")
+    parser.add_argument("--embedding-model-name", required=True)
+    parser.add_argument("--embedding-model-dir", required=True)
+    parser.add_argument("--rerank-model-name", required=True)
+    parser.add_argument("--rerank-model-dir", required=True)
     args = parser.parse_args()
-    ensure_model(args.model_name, args.model_dir)
+    ensure_models(
+        embedding_model_name=args.embedding_model_name,
+        embedding_model_dir=args.embedding_model_dir,
+        rerank_model_name=args.rerank_model_name,
+        rerank_model_dir=args.rerank_model_dir,
+    )
 
 
 if __name__ == "__main__":
