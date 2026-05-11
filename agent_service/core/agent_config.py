@@ -163,6 +163,7 @@ class AgentConfig:
         *,
         load_env: bool = True,
         ensure_directories: bool = True,
+        ensure_models: bool = True,
     ) -> "AgentConfig":
         """
         加载完整 Agent 配置。
@@ -170,6 +171,7 @@ class AgentConfig:
         overrides: 外部传入的显式配置覆盖项,按子配置分组传入,高于环境变量配置。
         load_env: 是否读取环境变量覆盖默认配置。
         ensure_directories: 是否自动创建运行所需目录。
+        ensure_models: 是否检查并自动下载本地 Embedding 与 ReRank 模型。
         """
 
         data = cls._default_mapping()
@@ -187,8 +189,22 @@ class AgentConfig:
 
         if ensure_directories:
             config.storage.ensure_directories()
+        if ensure_models:
+            config._ensure_local_models()
 
         return config
+
+    def _ensure_local_models(self) -> None:
+        """检查本地模型目录,缺失时调用下载脚本补齐模型。"""
+
+        from agent_service.scripts.download_model import ensure_models
+
+        ensure_models(
+            embedding_model_name=self.model.embedding_model_name,
+            embedding_model_dir=self.storage.embedding_model_dir,
+            rerank_model_name=self.model.rerank_model_name,
+            rerank_model_dir=self.storage.rerank_model_dir,
+        )
 
     @classmethod
     def _default_mapping(cls) -> dict[str, dict[str, Any]]:
