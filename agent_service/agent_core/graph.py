@@ -23,6 +23,7 @@ from agent_service.agent_core.nodes.model_decision import ModelDecisionNode
 from agent_service.agent_core.nodes.summary import SummaryNode
 from agent_service.agent_core.nodes.tool_call import ToolCallNode
 from agent_service.core.agent_config import AgentConfig
+from agent_service.tools import ToolExecutor
 
 
 class AgentGraphBuilder:
@@ -31,20 +32,31 @@ class AgentGraphBuilder:
 
     config: 全局配置对象,由 `AgentCore` 显式传入。
     tools: 可供模型调用的 LangChain 工具列表。
+    tool_executor: 项目工具执行器,用于 action 节点实际执行 tool_calls。
     """
 
-    def __init__(self, *, config: AgentConfig, tools: Sequence[Any] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        config: AgentConfig,
+        tools: Sequence[Any] | None = None,
+        tool_executor: ToolExecutor | None = None,
+    ) -> None:
         """保存构图所需的配置和工具列表。"""
 
         self.config = config
         self.tools = list(tools or [])
+        self.tool_executor = tool_executor
 
     def build(self) -> CompiledStateGraph:
         """构建并编译最基础的 Agent ReAct 循环图。"""
 
         workflow = StateGraph(AgentState)
         workflow.add_node("agent", ModelDecisionNode(config=self.config, tools=self.tools))
-        workflow.add_node("action", ToolCallNode(config=self.config, tools=self.tools))
+        workflow.add_node(
+            "action",
+            ToolCallNode(config=self.config, tools=self.tools, tool_executor=self.tool_executor),
+        )
         workflow.add_node("summary", SummaryNode(config=self.config))
         workflow.set_entry_point("agent")
         workflow.add_conditional_edges(

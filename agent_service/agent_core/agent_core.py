@@ -28,6 +28,7 @@ from langgraph.graph.state import CompiledStateGraph
 from agent_service.agent_core.graph import AgentGraphBuilder
 from agent_service.core.agent_config import AgentConfig
 from agent_service.scripts.draw_agent_graph import draw_agent_graph
+from agent_service.tools import ToolExecutor, ToolRegistry
 
 
 class AgentCore:
@@ -35,7 +36,7 @@ class AgentCore:
     Agent 微服务核心入口。
 
     config: 由 `core.agent_config.AgentConfig.load_config()` 创建的显式配置对象。
-    tools: 可选 LangChain 工具列表,第一版允许为空,后续由工具注册中心提供。
+    tools: 可选 LangChain 工具列表;为空时默认加载工具注册表中的内置工具。
     graph: 可选已编译图对象,主要用于测试时注入假图以避免真实模型请求。
     """
 
@@ -49,8 +50,14 @@ class AgentCore:
         """保存配置、构建或接收 LangGraph 图,并输出当前节点流程图 SVG。"""
 
         self.config = config
-        self.tools = list(tools or [])
-        self.graph: CompiledStateGraph = graph or AgentGraphBuilder(config=config, tools=self.tools).build()
+        self.tool_registry = ToolRegistry.with_builtin_tools() if tools is None else None
+        self.tool_executor = ToolExecutor(registry=self.tool_registry) if self.tool_registry is not None else None
+        self.tools = list(tools) if tools is not None else self.tool_registry.to_langchain_tools()
+        self.graph: CompiledStateGraph = graph or AgentGraphBuilder(
+            config=config,
+            tools=self.tools,
+            tool_executor=self.tool_executor,
+        ).build()
         self.graph_diagram_path = draw_agent_graph(
             compiled_graph=self.graph,
             output_path=config.storage.project_root / "agent_graph.mmd",

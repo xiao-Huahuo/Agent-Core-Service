@@ -19,11 +19,13 @@ from typing import Any
 from langchain_core.messages import AIMessage
 
 from agent_service.agent_core import AgentCore
+from agent_service.agent_core.nodes.tool_call import ToolCallNode
 from agent_service.core.agent_config import AgentConfig
 from agent_service.models.session import SessionRecord
 from agent_service.schemas.session import SessionOut
 from agent_service.scripts.draw_agent_graph import build_mermaid
 from agent_service.services.session_service import SessionService
+from agent_service.tools import ToolExecutor, ToolRegistry
 
 
 TEST_TEMP_DIR = Path(__file__).resolve().parents[1] / "runtime" / "test_tmp"
@@ -163,3 +165,47 @@ def test_default_relational_dsn_uses_psycopg_driver() -> None:
     config = AgentConfig.load_config(load_env=False, ensure_directories=False, ensure_models=False)
 
     assert config.storage.relational_dsn.startswith("postgresql+psycopg://")
+
+
+def test_tool_registry_exports_builtin_langchain_tools() -> None:
+    """验证工具注册表会把内置工具转换为 LLM 可绑定的 LangChain 工具。"""
+
+    registry = ToolRegistry.with_builtin_tools()
+    tools = registry.to_langchain_tools()
+
+    assert registry.get("echo_text") is not None
+    assert {tool.name for tool in tools} >= {"echo_text", "get_current_utc_time"}
+
+
+def test_tool_executor_runs_builtin_tool() -> None:
+    """验证工具执行器可以根据工具名称和参数执行内置工具。"""
+
+    executor = ToolExecutor(registry=ToolRegistry.with_builtin_tools())
+
+    result = executor.execute("echo_text", {"text": "hello"})
+
+    assert result == "hello"
+
+
+def test_tool_call_node_uses_project_executor() -> None:
+    """验证 action 节点会通过项目工具执行器执行模型返回的 tool_calls。"""
+
+    config = make_test_config()
+    executor = ToolExecutor(registry=ToolRegistry.with_builtin_tools())
+    node = ToolCallNode(config=config, tool_executor=executor)
+    state = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[{"id": "call_echo", "name": "echo_text", "args": {"text": "node-ok"}}],
+            )
+        ],
+        "user_id": "u1",
+        "session_id": "s1",
+        "trace": [],
+    }
+
+    result = node(state)
+
+    assert result["messages"][0].content == "node-ok"
+    assert result["trace"][0]["executor"] == "project_tool_executor"
