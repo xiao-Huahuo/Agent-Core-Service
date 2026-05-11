@@ -123,6 +123,44 @@ def test_agent_core_stream_run_wraps_graph_updates() -> None:
     assert chunks[-1] == "data: [DONE]\n\n"
 
 
+def test_agent_core_run_once_returns_structured_result() -> None:
+    """验证 AgentCore.run_once 会返回最终输出、事件列表和原始流式数据。"""
+
+    config = make_test_config()
+    fake_graph = FakeCompiledGraph(
+        updates=[
+            {
+                "agent": {
+                    "messages": [AIMessage(content="最终回复")],
+                    "trace": [{"node": "agent", "event": "model_response"}],
+                }
+            }
+        ]
+    )
+    agent = AgentCore(config=config, graph=fake_graph)
+
+    result = agent.run_once(prompt="你好", user_id="u1", session_id="s1")
+
+    assert result["final_output"] == "最终回复"
+    assert result["events"][0]["node"] == "agent"
+    assert result["chunks"][-1] == "data: [DONE]\n\n"
+
+
+def test_agent_core_build_human_readable_process() -> None:
+    """验证 AgentCore 可以把结构化事件转换为给人阅读的执行过程。"""
+
+    events = [
+        {"node": "agent", "content": "", "tool_calls": [{"name": "echo_text"}], "trace": []},
+        {"node": "action", "content": "hello", "tool_calls": [], "trace": []},
+        {"node": "agent", "content": "最终回复", "tool_calls": [], "trace": []},
+    ]
+
+    process = AgentCore.build_human_readable_process(events)
+
+    assert process[0] == "1. 模型决定调用工具: echo_text"
+    assert process[-1] == "3. 模型生成最终回复。"
+
+
 def test_build_mermaid_uses_actual_graph_edges() -> None:
     """验证 Mermaid 文本来自图结构中的真实节点和边。"""
 
