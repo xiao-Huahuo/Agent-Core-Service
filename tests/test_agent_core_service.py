@@ -20,7 +20,10 @@ from langchain_core.messages import AIMessage
 
 from agent_service.agent_core import AgentCore
 from agent_service.core.agent_config import AgentConfig
+from agent_service.models.session import SessionRecord
+from agent_service.schemas.session import SessionOut
 from agent_service.scripts.draw_agent_graph import build_mermaid
+from agent_service.services.session_service import SessionService
 
 
 TEST_TEMP_DIR = Path(__file__).resolve().parents[1] / "runtime" / "test_tmp"
@@ -127,3 +130,36 @@ def test_build_mermaid_uses_actual_graph_edges() -> None:
     assert 'internal_start["START"]' in mermaid
     assert 'agent["agent"]' in mermaid
     assert 'agent -. "conditional" .-> summary' in mermaid
+
+
+def test_session_out_converts_from_session_record() -> None:
+    """验证 Session 数据库模型可以转换为输出 DTO。"""
+
+    record = SessionRecord(
+        session_id="sess_test",
+        user_id="user_1",
+        session_name="测试会话",
+    )
+
+    output = SessionOut.from_record(record)
+
+    assert output.session_id == "sess_test"
+    assert output.user_id == "user_1"
+    assert output.session_name == "测试会话"
+
+
+def test_session_service_generates_session_id() -> None:
+    """验证 SessionService 生成的会话 ID 使用统一前缀。"""
+
+    session_id = SessionService.generate_session_id()
+
+    assert session_id.startswith("sess_")
+    assert len(session_id) == 37
+
+
+def test_default_relational_dsn_uses_psycopg_driver() -> None:
+    """验证默认 PostgreSQL DSN 与 psycopg3 依赖保持一致。"""
+
+    config = AgentConfig.load_config(load_env=False, ensure_directories=False, ensure_models=False)
+
+    assert config.storage.relational_dsn.startswith("postgresql+psycopg://")

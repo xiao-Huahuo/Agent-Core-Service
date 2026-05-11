@@ -8,8 +8,9 @@ Agent 服务统一配置模块。
 
 使用说明:
 推荐通过 `AgentConfig.load_config()` 创建配置对象。该方法会先加载 dataclass
-默认值,再读取 `AGENT_` 前缀环境变量,最后应用 `overrides` 显式覆盖项。
-`overrides` 的优先级高于环境变量。
+默认值,再读取项目根目录 `.env` 文件和 `AGENT_` 前缀环境变量,最后应用
+`overrides` 显式覆盖项。进程环境变量优先于 `.env`, `overrides` 的优先级
+高于环境变量。
 
 示例:
 config = AgentConfig.load_config()
@@ -56,8 +57,8 @@ class AgentConfig:
 
         project_root: 项目根目录,用于解析 resources 等项目级目录。
         base_data_dir: 服务运行时数据根目录。
-        relational_dsn: PostgreSQL 关系数据库连接地址。
-        vector_dsn: pgvector 向量数据库连接地址。
+        relational_dsn: PostgreSQL 关系数据库连接地址,默认使用 SQLAlchemy psycopg3 方言。
+        vector_dsn: pgvector 向量数据库连接地址,默认使用 SQLAlchemy psycopg3 方言。
         relation_db_dir: 关系数据库运行数据目录。
         vector_db_dir: 向量数据库运行数据目录。
         embedding_model_dir: Embedding 模型本地缓存目录。
@@ -68,8 +69,8 @@ class AgentConfig:
 
         project_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
         base_data_dir: Path = field(default_factory=lambda: Path("./runtime"))
-        relational_dsn: str = "postgresql://postgres:postgres@localhost:5432/agent_service"
-        vector_dsn: str = "postgresql://postgres:postgres@localhost:5432/agent_service"
+        relational_dsn: str = "postgresql+psycopg://postgres:postgres@localhost:5432/agent_service"
+        vector_dsn: str = "postgresql+psycopg://postgres:postgres@localhost:5432/agent_service"
         relation_db_dir: Path = field(default_factory=lambda: Path("db/relation"))
         vector_db_dir: Path = field(default_factory=lambda: Path("db/vector"))
         embedding_model_dir: Path = field(default_factory=lambda: Path("models/embedding"))
@@ -185,6 +186,7 @@ class AgentConfig:
         overrides: Mapping[str, Any] | None = None,
         *,
         load_env: bool = True,
+        load_dotenv: bool = True,
         ensure_directories: bool = True,
         ensure_models: bool = True,
     ) -> "AgentConfig":
@@ -193,11 +195,14 @@ class AgentConfig:
 
         overrides: 外部传入的显式配置覆盖项,按子配置分组传入,高于环境变量配置。
         load_env: 是否读取环境变量覆盖默认配置。
+        load_dotenv: 是否在读取环境变量前加载项目根目录 `.env` 文件。
         ensure_directories: 是否自动创建运行所需目录。
         ensure_models: 是否检查并自动下载本地 Embedding 与 ReRank 模型。
         """
 
         data = cls._default_mapping()
+        if load_dotenv:
+            cls._load_dotenv_file(data["storage"]["project_root"])
         if load_env:
             cls._apply_env_overrides(data)
         if overrides:
@@ -286,6 +291,28 @@ class AgentConfig:
             if raw_value is None or raw_value == "":
                 continue
             data[section][key] = caster(raw_value)
+
+    @staticmethod
+    def _load_dotenv_file(project_root: Path | str) -> None:
+        """
+        从项目根目录 `.env` 文件加载环境变量。
+
+        project_root: 项目根目录路径。
+        """
+
+        dotenv_path = Path(project_root).expanduser().resolve() / ".env"
+        if not dotenv_path.exists():
+            return
+
+        for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
 
     @staticmethod
     def _deep_update(target: dict[str, Any], source: Mapping[str, Any]) -> None:

@@ -1,8 +1,11 @@
 flowchart TD
     internal_start["START"]
     agent["agent"]
+    action["action"]
     summary["summary"]
     internal_end["END"]
     internal_start --> agent
+    action --> agent
+    agent -. "conditional" .-> action
     agent -. "conditional" .-> summary
     summary --> internal_end
