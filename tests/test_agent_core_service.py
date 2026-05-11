@@ -1,1 +1,129 @@
-# AgentService的测试脚本
+"""
+AgentService 核心功能测试脚本。
+
+功能说明:
+本文件用于测试 `agent_service.agent_core` 的基础行为。测试不请求真实大模型,
+而是通过假图对象和假的图结构验证 `AgentCore` 的初始化、流式输出包装和
+Mermaid 图生成逻辑。
+
+使用说明:
+在项目根目录执行 `python -m pytest tests/test_agent_core_service.py`。
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+
+from langchain_core.messages import AIMessage
+
+from agent_service.agent_core import AgentCore
+from agent_service.core.agent_config import AgentConfig
+from agent_service.scripts.draw_agent_graph import build_mermaid
+
+
+TEST_TEMP_DIR = Path(__file__).resolve().parents[1] / "runtime" / "test_tmp"
+
+
+class FakeCompiledGraph:
+    """
+    测试用假编译图。
+
+    updates: 模拟 LangGraph `stream(..., stream_mode="updates")` 产生的节点更新。
+    graph_data: 模拟 `CompiledStateGraph.get_graph()` 返回的真实图结构数据。
+    """
+
+    def __init__(self, updates: list[dict[str, Any]] | None = None) -> None:
+        """创建包含固定节点、固定边和可控流式输出的假图。"""
+
+        self.updates = updates or []
+        self.graph_data = SimpleNamespace(
+            nodes={
+                "__start__": object(),
+                "agent": object(),
+                "summary": object(),
+                "__end__": object(),
+            },
+            edges=[
+                SimpleNamespace(source="__start__", target="agent", conditional=False),
+                SimpleNamespace(source="agent", target="summary", conditional=True),
+                SimpleNamespace(source="summary", target="__end__", conditional=False),
+            ],
+        )
+
+    def stream(self, *_args: Any, **_kwargs: Any) -> list[dict[str, Any]]:
+        """返回预设的 LangGraph 节点更新列表。"""
+
+        return self.updates
+
+    def get_graph(self) -> Any:
+        """返回预设图结构,供 Mermaid 绘图脚本读取。"""
+
+        return self.graph_data
+
+
+def make_test_config() -> AgentConfig:
+    """
+    创建测试用配置。
+    """
+
+    TEST_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    return AgentConfig.load_config(
+        {
+            "storage": {"project_root": str(TEST_TEMP_DIR), "base_data_dir": str(TEST_TEMP_DIR / "runtime")},
+            "model": {
+                "model_name": "test-model",
+                "api_key": "test-key",
+                "base_url": "https://example.com/v1",
+            },
+        },
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+
+
+def test_agent_core_init_generates_mermaid_graph() -> None:
+    """验证 AgentCore 初始化时会根据实际图结构生成 Mermaid 文件。"""
+
+    config = make_test_config()
+    agent = AgentCore(config=config, graph=FakeCompiledGraph())
+
+    assert agent.graph_diagram_path == TEST_TEMP_DIR / "agent_graph.mmd"
+    assert agent.graph_diagram_path.exists()
+    assert 'agent["agent"]' in agent.graph_diagram_path.read_text(encoding="utf-8")
+
+
+def test_agent_core_stream_run_wraps_graph_updates() -> None:
+    """验证 AgentCore 会把图节点更新包装为 SSE 风格字符串。"""
+
+    config = make_test_config()
+    fake_graph = FakeCompiledGraph(
+        updates=[
+            {
+                "agent": {
+                    "messages": [AIMessage(content="测试回复")],
+                    "trace": [{"node": "agent", "event": "model_response"}],
+                }
+            }
+        ]
+    )
+    agent = AgentCore(config=config, graph=fake_graph)
+
+    chunks = list(agent.stream_run(prompt="你好", user_id="u1", session_id="s1"))
+
+    assert chunks[0].startswith("data: ")
+    assert "测试回复" in chunks[0]
+    assert chunks[-1] == "data: [DONE]\n\n"
+
+
+def test_build_mermaid_uses_actual_graph_edges() -> None:
+    """验证 Mermaid 文本来自图结构中的真实节点和边。"""
+
+    mermaid = build_mermaid(FakeCompiledGraph())
+
+    assert "flowchart TD" in mermaid
+    assert 'internal_start["START"]' in mermaid
+    assert 'agent["agent"]' in mermaid
+    assert 'agent -. "conditional" .-> summary' in mermaid

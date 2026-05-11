@@ -1,0 +1,8 @@
+flowchart TD
+    internal_start["START"]
+    agent["agent"]
+    summary["summary"]
+    internal_end["END"]
+    internal_start --> agent
+    agent -. "conditional" .-> summary
+    summary --> internal_end
