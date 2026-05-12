@@ -30,4 +30,13 @@
 - 将 `ToolExecutor` 接入 Agent 图的 `action` 节点,使内置工具调用走项目自己的注册-执行链路,并补充工具注册、执行和节点调用测试。
 - 扩展内置工具集,新增指定时区时间、UUID 生成、安全计算、JSON 解析、JSON 路径取值、文本统计和内置工具自查能力。
 - 新增 PostgreSQL 版 Session 会话管理基础实现,包含 `models/session.py` 数据库模型、`schemas/session.py` DTO 和 `services/session_service.py` 业务服务。
+- 新增 `MessageRecord` 会话消息模型和 DTO,通过 `session_id` 外键关联 Session,用于保存会话原始消息和工具调用轨迹。
+- 新增统一长期记忆结构 `LongTermMemorySpec` 和 DTO,用 `tag`、`memory_type`、source、validity、confidence、importance、authority 等字段统一承载长期会话记忆和知识库记忆。
+- 新增 `MessageService` 和第一版 `ContextBuilder`,支持按 session 读取最近消息、滑动窗口截断、LangChain 消息转换和当前 prompt 追加。
+- 为 `AgentConfig.MemoryConfig` 增加 `max_context_messages` 配置和 `AGENT_MAX_CONTEXT_MESSAGES` 环境变量,用于控制第一版上下文滑动窗口。
+- 为 `AgentCore` 增加 `run_session_prompt()` 正式 session 级入口,支持通过 ContextBuilder 加载历史上下文并通过 MessageService 保存本轮消息。
+- 更新 `main.py` 本地演示,创建两个 session 并分别执行 2 轮和 5 轮前后关联 prompt。
+- 将默认 PostgreSQL DSN 密码调整为本地配置 `1111`,并让 `main.py` session 演示直接使用正式配置而非 SQLite 演示库。
+- 将 PostgreSQL 默认 DSN 密码拆分为独立配置字段和环境变量,未显式配置完整 DSN 时按密码字段自动组装 DSN。
+- 在 `scripts/db_init.py` 中实现 PostgreSQL 初始化逻辑,支持先创建缺失的业务数据库再初始化 SQLModel 表结构,并让 `main.py` 通过该脚本初始化数据库。
 - 将默认 PostgreSQL DSN 调整为 SQLAlchemy psycopg3 方言 `postgresql+psycopg://`,与 `psycopg[binary]` 依赖保持一致。

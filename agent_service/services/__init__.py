@@ -6,5 +6,6 @@
 """
 
 from agent_service.services.session_service import SessionService
+from agent_service.services.message_service import MessageService
 
-__all__ = ["SessionService"]
+__all__ = ["MessageService", "SessionService"]

@@ -19,9 +19,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlmodel import Session, SQLModel, create_engine, select
 from sqlalchemy.engine import Engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
+import agent_service.models  # noqa: F401
 from agent_service.core.agent_config import AgentConfig
 from agent_service.models.session import SessionRecord
 from agent_service.schemas.session import SessionCreate, SessionOut, SessionUpdate

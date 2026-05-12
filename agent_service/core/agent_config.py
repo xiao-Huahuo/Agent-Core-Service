@@ -28,6 +28,7 @@ import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
+from urllib.parse import quote_plus
 
 
 @dataclass(slots=True)
@@ -57,8 +58,10 @@ class AgentConfig:
 
         project_root: 项目根目录,用于解析 resources 等项目级目录。
         base_data_dir: 服务运行时数据根目录。
-        relational_dsn: PostgreSQL 关系数据库连接地址,默认使用 SQLAlchemy psycopg3 方言。
-        vector_dsn: pgvector 向量数据库连接地址,默认使用 SQLAlchemy psycopg3 方言。
+        relational_dsn: PostgreSQL 关系数据库连接地址;为空时按独立密码字段自动组装。
+        vector_dsn: pgvector 向量数据库连接地址;为空时按独立密码字段自动组装。
+        relational_db_password: PostgreSQL 关系库默认 DSN 使用的密码。
+        vector_db_password: pgvector 默认 DSN 使用的密码。
         relation_db_dir: 关系数据库运行数据目录。
         vector_db_dir: 向量数据库运行数据目录。
         embedding_model_dir: Embedding 模型本地缓存目录。
@@ -69,8 +72,10 @@ class AgentConfig:
 
         project_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
         base_data_dir: Path = field(default_factory=lambda: Path("./runtime"))
-        relational_dsn: str = "postgresql+psycopg://postgres:postgres@localhost:5432/agent_service"
-        vector_dsn: str = "postgresql+psycopg://postgres:postgres@localhost:5432/agent_service"
+        relational_dsn: str = ""
+        vector_dsn: str = ""
+        relational_db_password: str = "postgres"
+        vector_db_password: str = "postgres"
         relation_db_dir: Path = field(default_factory=lambda: Path("db/relation"))
         vector_db_dir: Path = field(default_factory=lambda: Path("db/vector"))
         embedding_model_dir: Path = field(default_factory=lambda: Path("models/embedding"))
@@ -89,6 +94,10 @@ class AgentConfig:
             self.rerank_model_dir = self._resolve_runtime_path(self.rerank_model_dir)
             self.knowledge_dir = self._resolve_project_path(self.knowledge_dir)
             self.log_dir = self._resolve_runtime_path(self.log_dir)
+            if not self.relational_dsn:
+                self.relational_dsn = self._build_postgres_dsn(self.relational_db_password)
+            if not self.vector_dsn:
+                self.vector_dsn = self._build_postgres_dsn(self.vector_db_password)
 
         def _resolve_project_path(self, path_value: Path | str) -> Path:
             """将相对路径转换为基于 project_root 的绝对路径。"""
@@ -116,6 +125,13 @@ class AgentConfig:
             self.rerank_model_dir.mkdir(parents=True, exist_ok=True)
             self.knowledge_dir.mkdir(parents=True, exist_ok=True)
             self.log_dir.mkdir(parents=True, exist_ok=True)
+
+        @staticmethod
+        def _build_postgres_dsn(password: str) -> str:
+            """根据独立密码字段组装默认 PostgreSQL DSN。"""
+
+            escaped_password = quote_plus(password)
+            return f"postgresql+psycopg://postgres:{escaped_password}@localhost:5432/agent_service"
 
     @dataclass(slots=True)
     class ModelConfig:
@@ -149,6 +165,7 @@ class AgentConfig:
         管理上下文窗口、RAG 召回、重排与记忆时效相关参数。
 
         context_window_tokens: 会话上下文最大 token 窗口。
+        max_context_messages: 第一版滑动窗口保留的最近历史消息数量。
         summary_trigger_tokens: 触发上下文摘要压缩的 token 阈值。
         chunk_size: 知识切片目标大小。
         chunk_overlap: 相邻知识切片的重叠大小。
@@ -163,6 +180,7 @@ class AgentConfig:
         """
 
         context_window_tokens: int = 8192
+        max_context_messages: int = 20
         summary_trigger_tokens: int = 6144
         chunk_size: int = 512
         chunk_overlap: int = 128
@@ -238,7 +256,10 @@ class AgentConfig:
     def _default_mapping(cls) -> dict[str, dict[str, Any]]:
         """返回所有子配置的默认值映射。"""
 
-        return asdict(cls())
+        data = asdict(cls())
+        data["storage"]["relational_dsn"] = ""
+        data["storage"]["vector_dsn"] = ""
+        return data
 
     @staticmethod
     def _apply_env_overrides(data: dict[str, dict[str, Any]]) -> None:
@@ -254,6 +275,8 @@ class AgentConfig:
             "AGENT_BASE_DATA_DIR": ("storage", "base_data_dir", str),
             "AGENT_RELATIONAL_DSN": ("storage", "relational_dsn", str),
             "AGENT_VECTOR_DSN": ("storage", "vector_dsn", str),
+            "AGENT_RELATIONAL_DB_PASSWORD": ("storage", "relational_db_password", str),
+            "AGENT_VECTOR_DB_PASSWORD": ("storage", "vector_db_password", str),
             "AGENT_RELATION_DB_DIR": ("storage", "relation_db_dir", str),
             "AGENT_VECTOR_DB_DIR": ("storage", "vector_db_dir", str),
             "AGENT_EMBEDDING_MODEL_DIR": ("storage", "embedding_model_dir", str),
@@ -270,6 +293,7 @@ class AgentConfig:
             "AGENT_EMBEDDING_MODEL_NAME": ("model", "embedding_model_name", str),
             "AGENT_RERANK_MODEL_NAME": ("model", "rerank_model_name", str),
             "AGENT_CONTEXT_WINDOW_TOKENS": ("memory", "context_window_tokens", int),
+            "AGENT_MAX_CONTEXT_MESSAGES": ("memory", "max_context_messages", int),
             "AGENT_SUMMARY_TRIGGER_TOKENS": ("memory", "summary_trigger_tokens", int),
             "AGENT_MEMORY_CHUNK_SIZE": ("memory", "chunk_size", int),
             "AGENT_MEMORY_CHUNK_OVERLAP": ("memory", "chunk_overlap", int),
