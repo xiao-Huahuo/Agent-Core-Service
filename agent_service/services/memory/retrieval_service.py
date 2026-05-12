@@ -46,6 +46,7 @@ class RetrievedMemory:
     relevance_score: float
     freshness_score: float
     final_score: float
+    current_session_match: bool = False
 
 
 class MemoryRetrievalService:
@@ -84,10 +85,20 @@ class MemoryRetrievalService:
 
         query: 当前查询文本。
         user_id: 用户 ID。
-        session_id: 可选 session ID,用于优先限定当前会话相关记忆。
+        session_id: 可选 session ID,用于在跨 session 召回后给当前会话记忆更高排序优先级。
         top_k: 可选返回条数。
         """
 
+        fact_memories = self._retrieve(
+            query=query,
+            user_id=user_id,
+            session_id=session_id,
+            tag=self.config.constants.memory_tag,
+            memory_type="session_fact",
+            top_k=top_k,
+        )
+        if fact_memories:
+            return fact_memories
         return self._retrieve(
             query=query,
             user_id=user_id,
@@ -141,6 +152,7 @@ class MemoryRetrievalService:
             relevance_score=1.0,
             freshness_score=self._freshness_score(memory, now=now),
             final_score=0.0,
+            current_session_match=True,
         )
         retrieved.final_score = self._final_score(retrieved)
         return retrieved
@@ -160,7 +172,7 @@ class MemoryRetrievalService:
 
         query: 当前查询文本。
         user_id: 用户 ID。
-        session_id: 可选会话 ID。
+        session_id: 可选会话 ID,用于在用户级跨 session 召回后标记当前会话优先级。
         tag: Memory 或 Knowledge。
         memory_type: 记忆子类型。
         top_k: 返回条数。
@@ -198,6 +210,7 @@ class MemoryRetrievalService:
                     relevance_score=item["relevance_score"],
                     freshness_score=self._freshness_score(item["memory"], now=now),
                     final_score=0.0,
+                    current_session_match=bool(session_id and item["memory"].session_id == session_id),
                 )
                 for item in candidates
             ),
@@ -224,7 +237,7 @@ class MemoryRetrievalService:
 
         query_vector: 查询向量。
         user_id: 用户 ID。
-        session_id: 可选会话 ID。
+        session_id: 可选会话 ID,仅用于标记当前会话匹配,不再限制跨 session 召回范围。
         tag: 记忆大类。
         memory_type: 记忆子类型。
         limit: 候选数量上限。
@@ -246,9 +259,6 @@ class MemoryRetrievalService:
             "query_vector": json.dumps(query_vector, separators=(",", ":")),
             "limit": limit,
         }
-        if session_id is not None:
-            where_clauses.append("(session_id = :session_id OR session_id IS NULL)")
-            parameters["session_id"] = session_id
         sql = text(
             "SELECT memory_id, (1 - (embedding_vector <=> CAST(:query_vector AS vector))) AS relevance_score "
             "FROM longterm_memory_specs "
@@ -272,7 +282,7 @@ class MemoryRetrievalService:
                 "relevance_score": self._clamp_score(float(row["relevance_score"] or 0.0)),
             }
             for row in rows
-            if row["memory_id"] in record_map
+            if row["memory_id"] in record_map and self._is_memory_currently_active(record_map[row["memory_id"]])
         ]
 
     def _retrieve_by_json_vectors(
@@ -290,7 +300,7 @@ class MemoryRetrievalService:
 
         query_vector: 查询向量。
         user_id: 用户 ID。
-        session_id: 可选会话 ID。
+        session_id: 可选会话 ID,仅用于保持函数签名一致,不限制跨 session 候选集。
         tag: 记忆大类。
         memory_type: 记忆子类型。
         limit: 候选数量上限。
@@ -304,10 +314,6 @@ class MemoryRetrievalService:
             .where(LongTermMemorySpec.user_id == user_id)
             .order_by(LongTermMemorySpec.updated_at.desc())
         )
-        if session_id is not None:
-            statement = statement.where(
-                (LongTermMemorySpec.session_id == session_id) | (LongTermMemorySpec.session_id == None)  # noqa: E711
-            )
         with Session(self.engine) as db_session:
             records = db_session.exec(statement).all()
         scored: list[dict[str, Any]] = []
@@ -316,9 +322,12 @@ class MemoryRetrievalService:
                 continue
             if not record.embedding_vector_json:
                 continue
+            memory = LongTermMemorySpecOut.from_record(record)
+            if not self._is_memory_currently_active(memory):
+                continue
             scored.append(
                 {
-                    "memory": LongTermMemorySpecOut.from_record(record),
+                    "memory": memory,
                     "relevance_score": self._cosine_similarity(query_vector, record.embedding_vector_json),
                 }
             )
@@ -356,7 +365,7 @@ class MemoryRetrievalService:
             + self.config.memory.authority_weight * item.memory.authority
         )
 
-    def _rank_key(self, item: RetrievedMemory) -> tuple[float, float, float]:
+    def _rank_key(self, item: RetrievedMemory) -> tuple[float, int, datetime, float, float]:
         """
         返回联合排序键。
 
@@ -364,7 +373,7 @@ class MemoryRetrievalService:
         """
 
         final_score = self._final_score(item)
-        return final_score, item.relevance_score, item.memory.importance
+        return final_score, int(item.current_session_match), item.memory.updated_at, item.relevance_score, item.memory.importance
 
     @staticmethod
     def _freshness_score(memory: LongTermMemorySpecOut, *, now: datetime) -> float:
@@ -380,6 +389,23 @@ class MemoryRetrievalService:
             updated_at = updated_at.replace(tzinfo=timezone.utc)
         age_days = max((now - updated_at).total_seconds() / 86400.0, 0.0)
         return 1.0 / (1.0 + age_days / 30.0)
+
+    @staticmethod
+    def _is_memory_currently_active(memory: LongTermMemorySpecOut) -> bool:
+        """
+        判断长期记忆当前是否仍应参与召回。
+        memory: 长期记忆输出记录。
+        """
+
+        if memory.valid_until is not None and memory.valid_until <= datetime.now(timezone.utc):
+            return False
+        fact_status = memory.metadata_json.get("fact_status")
+        if fact_status in {"superseded", "expired", "deleted"}:
+            return False
+        fact = memory.metadata_json.get("fact")
+        if isinstance(fact, dict) and fact.get("status") in {"superseded", "expired", "deleted"}:
+            return False
+        return True
 
     @staticmethod
     def _clamp_score(value: float) -> float:

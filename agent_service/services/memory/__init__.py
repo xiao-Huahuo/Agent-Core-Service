@@ -8,7 +8,8 @@
 
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
+from agent_service.services.memory.memory_resolver import MemoryResolver
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 from agent_service.services.memory.summary_service import SessionSummaryService
 
-__all__ = ["ContextBuilder", "LongTermMemoryService", "MemoryRetrievalService", "SessionSummaryService"]
+__all__ = ["ContextBuilder", "LongTermMemoryService", "MemoryResolver", "MemoryRetrievalService", "SessionSummaryService"]

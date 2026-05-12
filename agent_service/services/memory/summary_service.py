@@ -23,6 +23,7 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
 from agent_service.schemas.message import MessageOut
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
+from agent_service.services.memory.memory_resolver import MemoryResolver
 from agent_service.services.memory.rag.embedding import EmbeddingService
 from agent_service.services.message_service import MessageService
 
@@ -51,6 +52,11 @@ class SessionSummaryService:
         self.message_service = message_service or MessageService(config=config)
         self.memory_service = memory_service or LongTermMemoryService(config=config)
         self.embedding_service = embedding_service or EmbeddingService(config=config)
+        self.memory_resolver = MemoryResolver(
+            config=config,
+            memory_service=self.memory_service,
+            embedding_service=self.embedding_service,
+        )
         self.model = self._build_model()
 
     def summarize_session(self, *, user_id: str, session_id: str) -> str | None:
@@ -69,7 +75,7 @@ class SessionSummaryService:
             return None
         vector = self.embedding_service.embed_text(summary)
         message_ids = [message.message_id for message in messages]
-        self.memory_service.create_memory(
+        summary_memory = self.memory_service.create_memory(
             LongTermMemorySpecCreate(
                 user_id=user_id,
                 session_id=session_id,
@@ -87,6 +93,11 @@ class SessionSummaryService:
                 embedding_model=self.config.model.embedding_model_name,
                 embedding_vector_json=vector,
             )
+        )
+        self.memory_resolver.resolve_summary(
+            user_id=user_id,
+            session_id=session_id,
+            summary_memory=summary_memory,
         )
         self.message_service.mark_messages_summarized(message_ids=message_ids)
         return summary

@@ -112,6 +112,88 @@ class LongTermMemoryService:
         with Session(self.engine) as db_session:
             return db_session.exec(statement).first() is not None
 
+    def list_active_fact_memories(
+        self,
+        *,
+        user_id: str,
+        namespace: str,
+        key: str,
+        exclude_memory_id: str | None = None,
+    ) -> list[LongTermMemorySpecOut]:
+        """
+        读取指定用户下当前仍然有效的结构化事实记忆。
+        user_id: 用户 ID。
+        namespace: 事实命名空间。
+        key: 事实键名。
+        exclude_memory_id: 可选的排除记忆 ID,用于避免把新事实自己查回来。
+        """
+
+        statement = (
+            select(LongTermMemorySpec)
+            .where(LongTermMemorySpec.user_id == user_id)
+            .where(LongTermMemorySpec.tag == self.config.constants.memory_tag)
+            .where(LongTermMemorySpec.memory_type == "session_fact")
+            .order_by(LongTermMemorySpec.updated_at.desc())
+        )
+        if exclude_memory_id is not None:
+            statement = statement.where(LongTermMemorySpec.memory_id != exclude_memory_id)
+        now = self._utc_now()
+        with Session(self.engine) as db_session:
+            records = db_session.exec(statement).all()
+        active_memories: list[LongTermMemorySpecOut] = []
+        for record in records:
+            metadata_json = record.metadata_json or {}
+            fact = metadata_json.get("fact", {})
+            if not isinstance(fact, dict):
+                continue
+            if fact.get("namespace") != namespace or fact.get("key") != key:
+                continue
+            if metadata_json.get("fact_status", "active") != "active":
+                continue
+            if record.valid_until is not None and record.valid_until <= now:
+                continue
+            active_memories.append(LongTermMemorySpecOut.from_record(record))
+        return active_memories
+
+    def update_fact_status(
+        self,
+        *,
+        memory_id: str,
+        fact_status: str,
+        valid_until: datetime | None = None,
+        superseded_by_memory_id: str | None = None,
+    ) -> LongTermMemorySpecOut:
+        """
+        更新结构化事实记忆的状态。
+        memory_id: 需要更新的事实记忆 ID。
+        fact_status: 新的事实状态,例如 `active`、`superseded`、`expired`。
+        valid_until: 可选失效时间。
+        superseded_by_memory_id: 可选覆盖来源记忆 ID。
+        """
+
+        with Session(self.engine) as db_session:
+            record = db_session.get(LongTermMemorySpec, memory_id)
+            if record is None:
+                raise ValueError(f"未找到长期记忆: {memory_id}")
+            metadata_json = dict(record.metadata_json or {})
+            fact = dict(metadata_json.get("fact", {}))
+            if fact:
+                fact["status"] = fact_status
+                if valid_until is not None:
+                    fact["valid_until"] = valid_until.isoformat()
+                metadata_json["fact"] = fact
+            metadata_json["fact_status"] = fact_status
+            if superseded_by_memory_id is not None:
+                metadata_json["superseded_by_memory_id"] = superseded_by_memory_id
+            record.metadata_json = metadata_json
+            if valid_until is not None:
+                record.valid_until = valid_until
+            record.updated_at = self._utc_now()
+            db_session.add(record)
+            db_session.commit()
+            db_session.refresh(record)
+            return LongTermMemorySpecOut.from_record(record)
+
     def ensure_pgvector_storage(self, *, vector_dimension: int) -> None:
         """
         在 PostgreSQL 中初始化 pgvector 扩展和向量列。

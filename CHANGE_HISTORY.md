@@ -1,12 +1,20 @@
 # CHANGE HISTORY
 
 ## 2026-05-12
+- 重建 `README.md` 为正常 UTF-8 中文内容，修复此前文档被错误写入后出现的整份乱码问题，并保留最新的记忆系统、RAG、`MemoryResolver` 与“信息时效性”结构说明。
 - 为 `AgentConfig.StorageConfig` 新增 `frontmatter_dir` 和 `AGENT_FRONTMATTER_DIR`,将知识库结构化中间产物路径纳入统一配置管理,默认输出到 `runtime/frontmatter`。
 - 新增 `scripts/frontmatter_bootstrap.py` 和 `FrontmatterBootstrapService`,先将 `resources/knowledge` 下的原始 Markdown/TXT 结构化为统一知识 JSON,再供后续灌库链路消费。
 - 重构 `KnowledgeIngestionService` 和 `knowledge_bootstrap.py`,改为只读取 `runtime/frontmatter` 中的结构化文档 JSON 执行章节切块、Embedding 和长期记忆入库,不再直接消费原始文本文件。
 - 调整 `ContextBuilder` 的记忆注入策略,新增“同 session 双保底”机制: 优先使用短期历史消息,若长期记忆检索未命中则强制补入最近一条当前 session 摘要记忆。
 - 明确上下文拼装优先级为“短期历史消息 -> 当前 session 摘要记忆 -> 外部知识库片段”,并同步写入 `README.md` 说明。
 - 将检索增强用的系统提示词迁入 `AgentConfig.ModelConfig.retrieval_context_system_prompt`,并新增 `AGENT_RETRIEVAL_CONTEXT_SYSTEM_PROMPT` 环境变量,避免 `ContextBuilder` 硬编码提示文案。
+- 调整长期记忆检索范围为“同用户跨 session 召回”,并在排序中补充“当前 session 匹配优先、更新时间更新优先”规则,让新事实覆盖旧事实的场景更稳定。
+- 重写 `main.py` 本地演示为三个不同 session 的时效性测试: 第一轮写入代号 `1111111`,第二轮写入更新代号 `2222222`,第三轮在新 session 中查询当前代号。
+- 同步修正 `MemoryRetrievalService` 注释与参数语义说明,明确 `session_id` 现在用于“当前 session 优先排序”而非“限制检索范围”。
+- 新增 `MemoryResolver`,把 `session_summary` 进一步解析为结构化 `session_fact`,并为事实打上 `active/superseded/expired` 状态,用于处理单值覆盖、多值追加和时序失效。
+- 扩展 `LongTermMemoryService` 以支持读取有效事实和更新事实状态,同时让 `SessionSummaryService` 在摘要入库后自动触发记忆时效性解析。
+- 调整 `MemoryRetrievalService` 的长期记忆召回策略为“优先 `session_fact`,过滤 superseded/expired 旧事实,无事实命中时再回退到 `session_summary`”,并把 `MemoryResolver` 的处理方法补充进 `README.md`。
+- 将 `MemoryResolver` 的事实抽取策略升级为“优先 LLM 按 schema 输出结构化 facts,失败时回退到规则提取”,与 `README.md` 中的事实类型裁决方法保持一致。
 
 ## 2026-05-11
 - 新增 `agent_service/core/agent_config.py` 中的分层配置体系，包含 `Constants`、`StorageConfig`、`ModelConfig`、`MemoryConfig` 与 `AgentConfig.load_config()`。
