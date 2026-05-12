@@ -12,9 +12,11 @@ Mermaid 图生成逻辑。
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from uuid import UUID
 
 from langchain_core.messages import AIMessage
 
@@ -212,7 +214,17 @@ def test_tool_registry_exports_builtin_langchain_tools() -> None:
     tools = registry.to_langchain_tools()
 
     assert registry.get("echo_text") is not None
-    assert {tool.name for tool in tools} >= {"echo_text", "get_current_utc_time"}
+    assert {tool.name for tool in tools} >= {
+        "calculate",
+        "echo_text",
+        "generate_uuid",
+        "get_current_time",
+        "get_current_utc_time",
+        "json_parse",
+        "json_pick",
+        "list_builtin_tools",
+        "text_stats",
+    }
 
 
 def test_tool_executor_runs_builtin_tool() -> None:
@@ -223,6 +235,32 @@ def test_tool_executor_runs_builtin_tool() -> None:
     result = executor.execute("echo_text", {"text": "hello"})
 
     assert result == "hello"
+
+
+def test_tool_executor_runs_general_builtin_tools() -> None:
+    """验证常用内置工具可以通过统一执行器执行。"""
+
+    executor = ToolExecutor(registry=ToolRegistry.with_builtin_tools())
+
+    uuid_value = executor.execute("generate_uuid")
+    calculate_value = executor.execute("calculate", {"expression": "(1 + 2) * 3"})
+    json_value = executor.execute("json_pick", {"json_text": '{"user": {"name": "Ada"}}', "path": "user.name"})
+    text_stats_value = json.loads(executor.execute("text_stats", {"text": "hello\nworld"}))
+
+    assert str(UUID(uuid_value)) == uuid_value
+    assert calculate_value == "9"
+    assert json_value == '"Ada"'
+    assert text_stats_value["lines"] == 2
+
+
+def test_calculate_rejects_unsafe_expression() -> None:
+    """验证计算工具不会执行函数调用等非白名单表达式。"""
+
+    executor = ToolExecutor(registry=ToolRegistry.with_builtin_tools())
+
+    result = executor.execute("calculate", {"expression": "__import__('os').system('echo bad')"})
+
+    assert result.startswith("计算失败:")
 
 
 def test_tool_call_node_uses_project_executor() -> None:
