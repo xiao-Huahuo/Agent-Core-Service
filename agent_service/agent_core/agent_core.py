@@ -49,6 +49,7 @@ from agent_service.schemas.message import MessageCreate
 from agent_service.scripts.draw_agent_graph import draw_agent_graph
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.message_service import MessageService
+from agent_service.task_schedule import LLMTaskScheduler, get_llm_task_scheduler
 from agent_service.tools import ToolExecutor, ToolRegistry, clear_tool_runtime, set_tool_runtime
 
 
@@ -71,6 +72,7 @@ class AgentCore:
         graph: CompiledStateGraph | None = None,
         message_service: MessageService | None = None,
         context_builder: ContextBuilder | None = None,
+        task_scheduler: LLMTaskScheduler | None = None,
     ) -> None:
         """保存配置、检查本地模型、构建或接收 LangGraph 图,并输出当前节点流程图。"""
 
@@ -78,6 +80,7 @@ class AgentCore:
         self.config.ensure_local_models()
         self.message_service = message_service
         self.context_builder = context_builder
+        self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.tool_registry = ToolRegistry.with_builtin_tools() if tools is None else None
         self.tool_executor = ToolExecutor(registry=self.tool_registry) if self.tool_registry is not None else None
         self.tools = list(tools) if tools is not None else self.tool_registry.to_langchain_tools()
@@ -85,6 +88,7 @@ class AgentCore:
             config=config,
             tools=self.tools,
             tool_executor=self.tool_executor,
+            task_scheduler=self.task_scheduler,
         ).build()
         self.graph_diagram_path = draw_agent_graph(
             compiled_graph=self.graph,
@@ -163,7 +167,9 @@ class AgentCore:
         }
 
     def close(self) -> None:
-        """释放 AgentCore 持有的资源;第一版没有长期连接需要关闭。"""
+        """释放 AgentCore 持有的调度器等资源。"""
+
+        self.task_scheduler.shutdown()
 
     def _stream_messages(
         self,

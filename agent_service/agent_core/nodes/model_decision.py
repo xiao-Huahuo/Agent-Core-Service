@@ -19,6 +19,7 @@ from langchain_openai import ChatOpenAI
 
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
+from agent_service.task_schedule import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
 
 
 class ModelDecisionNode:
@@ -29,18 +30,30 @@ class ModelDecisionNode:
     tools: 可供模型调用的 LangChain 工具列表;为空时模型只会进行普通对话。
     """
 
-    def __init__(self, *, config: AgentConfig, tools: Sequence[Any] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        config: AgentConfig,
+        tools: Sequence[Any] | None = None,
+        task_scheduler: LLMTaskScheduler | None = None,
+    ) -> None:
         """初始化聊天模型,并在存在工具时绑定工具。"""
 
         self.config = config
         self.tools = list(tools or [])
+        self.tool_names = [str(tool.name) for tool in self.tools if getattr(tool, "name", None)]
+        self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.model = self._build_model()
 
     def __call__(self, state: AgentState) -> dict[str, Any]:
         """读取当前消息状态,调用模型,并把模型响应追加回 `messages`。"""
 
         system_message = SystemMessage(content=self.config.model.system_prompt)
-        response = self.model.invoke([system_message, *state["messages"]])
+        response = self.task_scheduler.invoke_chat(
+            task_type=FOREGROUND_AGENT_TASK,
+            messages=[system_message, *state["messages"]],
+            tool_names=self.tool_names,
+        )
         tool_calls = getattr(response, "tool_calls", []) or []
         return {
             "messages": [response],

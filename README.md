@@ -59,8 +59,9 @@
      3. 时效状态管理：配置 `MemoryResolver` 作为独立记忆裁决层，先把自然语言摘要解析为结构化事实单元 `session_fact`，再为事实写入 `active / superseded / expired` 状态。
      4. 事实更新策略：针对单值强排他事实执行新值覆盖旧值，针对多值弱排他事实执行新值追加，针对时序事实执行到期失效处理，不再仅依赖向量检索排序推断新旧关系。
      5. 事实类型裁决：已知 `fact_key` 走 schema 固定类别，未知 `fact_key` 由 LLM 提供候选类别，最终由程序统一裁决，避免同一事实在不同轮次被判成不同类型。
-### 记忆机制流程图
-
+12. 多级队列与并发: 设置一个限流调度器`LLMTaskScheduler`,所有的LLM调用都要通过它.内部存在多级队列调度(按主 Agent、Summary、Fact Extraction 三个等级分配到不同队列,分配同一semaphore),配备超时,熔断,重试等机制.
+### 项目工作原理流程图
+#### 记忆机制
 ##### 长期记忆 / 知识库入库流程
 
 ```mermaid
@@ -107,6 +108,46 @@ flowchart TD
     L --> N
     M --> O[未命中时回退 session_summary]
 ```
+#### 任务调度机制
+
+```mermaid
+flowchart TD
+    A["AgentCore / SummaryService / MemoryResolver 发起任务"] --> B{"任务类型"}
+    B -->|"foreground_agent / summary / fact 的 LLM 请求"| C["LLMTaskScheduler.invoke_chat(...)"]
+    B -->|"SummaryNode 的业务摘要任务"| D["LLMTaskScheduler.submit_summary_job(...)"]
+
+    C --> E{"是否启用 Redis"}
+    D --> F{"是否启用 Redis"}
+
+    E -->|"否"| G["本地 generic 队列回退"]
+    E -->|"是"| H["Redis Stream: chat request"]
+    F -->|"否"| I["本地 Summary 队列回退"]
+    F -->|"是"| J["Redis Stream: summary job"]
+
+    H --> K["consumer group worker 消费"]
+    J --> L["summary job worker 消费"]
+
+    L --> M["SessionSummaryService.summarize_session(user_id, session_id)"]
+    M --> N["内部再次通过 invoke_chat 提交摘要 / fact extraction 的 LLM 请求"]
+    N --> H
+
+    K --> O["全局 semaphore + timeout + retry + circuit breaker"]
+    O --> P["ChatOpenAI.invoke(...)"]
+    P --> Q["结果回写 Redis result key"]
+
+    H --> R["调用方轮询等待 chat 结果"]
+    J --> S["调用方轮询等待 summary job 结果"]
+    Q --> R
+    M --> T["summary 完成后回写 summary 结果"]
+    T --> S
+
+    G --> U["本地 worker 执行 LLM 请求"]
+    I --> V["本地 worker 执行 summarize_session(...)"]
+    U --> O
+    V --> M
+```
+
+
 
 ## 技术栈
 

@@ -430,6 +430,7 @@ def test_summary_node_schedules_async_summary() -> None:
     node.pending_tasks[-1].join(timeout=2)
 
     assert result["trace"][0]["event"] == "summary_scheduled"
+    assert result["trace"][0]["mode"] == "scheduler_queue"
     assert summary_service.calls == [("u1", "s1")]
 
 

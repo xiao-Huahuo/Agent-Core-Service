@@ -1,6 +1,19 @@
 # CHANGE HISTORY
 
 ## 2026-05-12
+- 将 `SummaryNode -> summarize_session(user_id, session_id)` 升级为真正的 Redis 持久化业务任务: 新增专用 summary job Stream、独立 worker、结果回写和去重,使服务实例关闭后 summary 任务仍可由其他实例或重启后的实例继续处理。
+- 为调度器新增 `submit_summary_job(...)` 入口和 `SerializedSummaryJobRequest/Result` 协议,将“Summary 业务任务分布式化”与“内部 LLM 调用 Redis 化”分层解耦。
+- 修复 `main.py` 退出阶段后台 summary 任务偶发报出 `cannot schedule new futures after interpreter shutdown` 的问题: 为调度器增加 `atexit` 关闭钩子,在 `main.py` 末尾主动重置 scheduler,并在解释器收尾阶段静默忽略 summary 后台任务异常。
+- 在 `README.md` 的“#### 任务调度机制”小节补充 Mermaid 流程图,展示 Summary 业务任务持久化、LLM Chat 请求持久化、本地回退路径以及 worker / semaphore / retry / circuit breaker 的实际运行链路。
+- 将 `task_schedule` 升级为“Redis Stream 生产模式 + 本地 generic 队列双通道”结构: 真正的 LLM 请求改为可序列化 chat request,写入 Redis Stream 由 consumer group worker 消费,结果回写 Redis 后由调用方轮询等待。
+- 扩展 `TaskScheduleConfig` 新增 Redis consumer group、Stream 长度、结果 TTL、去重 TTL、visibility timeout 与结果轮询间隔等配置项,用于支撑生产级别的 Redis 调度参数。
+- 将 `ModelDecisionNode`、`SessionSummaryService` 与 `MemoryResolver` 的 LLM 调用统一切换到 `LLMTaskScheduler.invoke_chat(...)`,不再向调度器传入不可跨进程序列化的 Python lambda 作为真正的 LLM 执行单元。
+- 新增 `task_schedule/redis_backend.py` 并扩展 `tests/test_task_scheduler.py`,覆盖无 Redis 配置时的本地 Chat 回退路径,为后续接入真实 Redis 环境留出稳定协议层。
+- 修复 `memory_resolver.py` 中事实提取正则被错误写成 Unicode 转义串的问题,恢复为可读的中文模式文本,避免源码层面出现“像乱码”的内容。
+- 新增 `agent_service.task_schedule` 包中的第一版统一 `LLMTaskScheduler`,为 LLM 调用提供主 Agent / Summary / Fact Extraction 多级队列、全局并发闸门、超时、指数退避重试和熔断能力,并允许通过 `TaskScheduleConfig` 与可选 Redis 状态共享配置统一管理。
+- 扩展 `AgentConfig` 增加 `TaskScheduleConfig` 及对应 `AGENT_TASK_SCHEDULE_*` 环境变量,用于统一配置 LLM 调度器的 worker、队列、超时、重试和熔断参数。
+- 将 `ModelDecisionNode`、`SummaryNode`、`SessionSummaryService` 与 `MemoryResolver` 的 LLM 调用全部收口到统一调度器,同时把 Summary 后台触发从裸线程改为调度器异步队列。
+- 新增 `tests/test_task_scheduler.py` 覆盖调度器的重试与 Summary 去重能力,防止 LLM 调用入口回退成直接 `invoke()`。
 - 修复 `MemoryRetrievalService` 与 `LongTermMemoryService` 在 SQLite 环境下比较 `valid_until` 时出现的“offset-naive / offset-aware datetime”异常: 统一将数据库读回的无时区时间按 UTC 处理,避免 `main.py` 演示链路在长期记忆预览阶段崩溃。
 - 在 `tests/test_agent_core_service.py` 新增 SQLite 回归测试,覆盖带 `valid_until` 的长期记忆检索场景,防止时区比较问题再次出现。
 - 重建 `README.md` 为正常 UTF-8 中文内容，修复此前文档被错误写入后出现的整份乱码问题，并保留最新的记忆系统、RAG、`MemoryResolver` 与“信息时效性”结构说明。

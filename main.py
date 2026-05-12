@@ -258,25 +258,30 @@ async def agent_test(prompt: str = Query(default="你好,请用一句话回复�
 
 
 if __name__ == "__main__":
-    demo_result = run_session_dialog_demo()
-    print("AgentCore session demo raw JSON:")
-    print(json.dumps(demo_result, ensure_ascii=False, indent=2, default=str))
-    print("AgentCore graph Mermaid:")
-    first_dialog = demo_result["dialogs"][0]
-    first_turn = first_dialog["turns"][0]
-    print(first_turn["result"]["graph_diagram"])
-    print("AgentCore session demo readable output:")
-    print("Knowledge bootstrap:")
-    print(json.dumps(demo_result["knowledge_bootstrap"], ensure_ascii=False, indent=2, default=str))
-    for dialog in demo_result["dialogs"]:
-        print(f"Session: {dialog['session']['session_id']} - {dialog['session']['session_name']}")
-        for index, turn in enumerate(dialog["turns"], start=1):
-            print(f"Turn {index} prompt: {turn['prompt']}")
-            if turn["retrieved_context_preview"]:
-                print("Retrieved context preview:")
-                print(turn["retrieved_context_preview"])
-            if turn["forced_summary"]:
-                print(f"Forced summary: {turn['forced_summary']}")
-            for process_line in AgentCore.build_human_readable_process(turn["result"]["events"]):
-                print(process_line)
-            print(f"Turn {index} final output: {turn['result']['final_output']}")
+    from agent_service.task_schedule import reset_llm_task_schedulers
+
+    try:
+        demo_result = run_session_dialog_demo()
+        print("AgentCore session demo raw JSON:")
+        print(json.dumps(demo_result, ensure_ascii=False, indent=2, default=str))
+        print("AgentCore graph Mermaid:")
+        first_dialog = demo_result["dialogs"][0]
+        first_turn = first_dialog["turns"][0]
+        print(first_turn["result"]["graph_diagram"])
+        print("AgentCore session demo readable output:")
+        print("Knowledge bootstrap:")
+        print(json.dumps(demo_result["knowledge_bootstrap"], ensure_ascii=False, indent=2, default=str))
+        for dialog in demo_result["dialogs"]:
+            print(f"Session: {dialog['session']['session_id']} - {dialog['session']['session_name']}")
+            for index, turn in enumerate(dialog["turns"], start=1):
+                print(f"Turn {index} prompt: {turn['prompt']}")
+                if turn["retrieved_context_preview"]:
+                    print("Retrieved context preview:")
+                    print(turn["retrieved_context_preview"])
+                if turn["forced_summary"]:
+                    print(f"Forced summary: {turn['forced_summary']}")
+                for process_line in AgentCore.build_human_readable_process(turn["result"]["events"]):
+                    print(process_line)
+                print(f"Turn {index} final output: {turn['result']['final_output']}")
+    finally:
+        reset_llm_task_schedulers()

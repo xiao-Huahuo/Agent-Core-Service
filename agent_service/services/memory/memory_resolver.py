@@ -24,6 +24,11 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate, LongTermMemorySpecOut
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 from agent_service.services.memory.rag.embedding import EmbeddingService
+from agent_service.task_schedule import (
+    BACKGROUND_FACT_RESOLUTION_TASK,
+    LLMTaskScheduler,
+    get_llm_task_scheduler,
+)
 
 
 @dataclass(slots=True)
@@ -83,17 +88,16 @@ class MemoryResolver:
 
     PROJECT_CODE_PATTERNS = (
         re.compile(
-            r"(?:\u5f53\u524d)?\u9879\u76ee\u4ee3\u53f7"
-            r"(?:\u5df2\u7ecf\u4ece[^\s\uff0c\u3002]+\u6539\u6210|\u5df2\u66f4\u65b0\u4e3a|\u66f4\u65b0\u4e3a|"
-            r"\u5df2\u786e\u8ba4\u4e3a|\u5df2\u786e\u8ba4|\u786e\u8ba4|\u4e3a|\u662f)"
-            r"\s*[\uff1a:]?\s*[\"“]?([A-Za-z0-9_-]+)[\"”]?"
+            r"(?:当前)?项目代号"
+            r"(?:已经从[^\s，。]+改成|已更新为|更新为|已确认为|已确认|确认|为|是)"
+            r"\s*[：:]?\s*[\"“]?([A-Za-z0-9_-]+)[\"”]?"
         ),
     )
     OWNER_MODULE_PATTERNS = (
         re.compile(
-            r"(?:\u8d1f\u8d23\u6a21\u5757|(?:\u5f53\u524d)?\u8d1f\u8d23\u6a21\u5757)"
-            r"(?:\u5df2\u66f4\u65b0\u4e3a|\u4e3a|\u662f)"
-            r"\s*[\uff1a:]?\s*[\"“]?([A-Za-z0-9_.-]+)[\"”]?"
+            r"(?:负责模块|(?:当前)?负责模块)"
+            r"(?:已更新为|为|是)"
+            r"\s*[：:]?\s*[\"“]?([A-Za-z0-9_.-]+)[\"”]?"
         ),
     )
 
@@ -103,12 +107,14 @@ class MemoryResolver:
         config: AgentConfig,
         memory_service: LongTermMemoryService | None = None,
         embedding_service: EmbeddingService | None = None,
+        task_scheduler: LLMTaskScheduler | None = None,
     ) -> None:
         """初始化记忆时效性解析器。"""
 
         self.config = config
         self.memory_service = memory_service or LongTermMemoryService(config=config)
         self.embedding_service = embedding_service or EmbeddingService(config=config)
+        self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.model = self._build_model()
 
     def resolve_summary(
@@ -181,8 +187,9 @@ class MemoryResolver:
         summary: 当前 session 的自然语言摘要。
         """
 
-        response = self.model.invoke(
-            [
+        response = self.task_scheduler.invoke_chat(
+            task_type=BACKGROUND_FACT_RESOLUTION_TASK,
+            messages=[
                 SystemMessage(
                     content=(
                         "你负责从记忆摘要中抽取结构化事实。"
@@ -203,7 +210,7 @@ class MemoryResolver:
                         f"摘要: {summary}"
                     )
                 ),
-            ]
+            ],
         )
         content = str(response.content).strip()
         if not content:

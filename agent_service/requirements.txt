@@ -7,3 +7,4 @@ psycopg[binary]
 sentence-transformers
 sqlmodel
 pytest
+redis

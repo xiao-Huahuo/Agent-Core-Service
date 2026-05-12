@@ -23,6 +23,7 @@ from agent_service.agent_core.nodes.model_decision import ModelDecisionNode
 from agent_service.agent_core.nodes.summary import SummaryNode
 from agent_service.agent_core.nodes.tool_call import ToolCallNode
 from agent_service.core.agent_config import AgentConfig
+from agent_service.task_schedule import LLMTaskScheduler
 from agent_service.tools import ToolExecutor
 
 
@@ -41,23 +42,38 @@ class AgentGraphBuilder:
         config: AgentConfig,
         tools: Sequence[Any] | None = None,
         tool_executor: ToolExecutor | None = None,
+        task_scheduler: LLMTaskScheduler | None = None,
     ) -> None:
         """保存构图所需的配置和工具列表。"""
 
         self.config = config
         self.tools = list(tools or [])
         self.tool_executor = tool_executor
+        self.task_scheduler = task_scheduler
 
     def build(self) -> CompiledStateGraph:
         """构建并编译最基础的 Agent ReAct 循环图。"""
 
         workflow = StateGraph(AgentState)
-        workflow.add_node("agent", ModelDecisionNode(config=self.config, tools=self.tools))
+        workflow.add_node(
+            "agent",
+            ModelDecisionNode(
+                config=self.config,
+                tools=self.tools,
+                task_scheduler=self.task_scheduler,
+            ),
+        )
         workflow.add_node(
             "action",
             ToolCallNode(config=self.config, tools=self.tools, tool_executor=self.tool_executor),
         )
-        workflow.add_node("summary", SummaryNode(config=self.config))
+        workflow.add_node(
+            "summary",
+            SummaryNode(
+                config=self.config,
+                task_scheduler=self.task_scheduler,
+            ),
+        )
         workflow.set_entry_point("agent")
         workflow.add_conditional_edges(
             "agent",

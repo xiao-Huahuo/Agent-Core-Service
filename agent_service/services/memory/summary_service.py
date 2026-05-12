@@ -26,6 +26,7 @@ from agent_service.services.memory.longterm_memory_service import LongTermMemory
 from agent_service.services.memory.memory_resolver import MemoryResolver
 from agent_service.services.memory.rag.embedding import EmbeddingService
 from agent_service.services.message_service import MessageService
+from agent_service.task_schedule import BACKGROUND_SUMMARY_TASK, LLMTaskScheduler, get_llm_task_scheduler
 
 
 class SessionSummaryService:
@@ -45,6 +46,7 @@ class SessionSummaryService:
         message_service: MessageService | None = None,
         memory_service: LongTermMemoryService | None = None,
         embedding_service: EmbeddingService | None = None,
+        task_scheduler: LLMTaskScheduler | None = None,
     ) -> None:
         """初始化摘要服务。"""
 
@@ -52,10 +54,12 @@ class SessionSummaryService:
         self.message_service = message_service or MessageService(config=config)
         self.memory_service = memory_service or LongTermMemoryService(config=config)
         self.embedding_service = embedding_service or EmbeddingService(config=config)
+        self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.memory_resolver = MemoryResolver(
             config=config,
             memory_service=self.memory_service,
             embedding_service=self.embedding_service,
+            task_scheduler=self.task_scheduler,
         )
         self.model = self._build_model()
 
@@ -112,8 +116,9 @@ class SessionSummaryService:
         transcript = "\n".join(f"{message.role}: {message.content}" for message in messages if message.content)
         if not transcript.strip():
             return ""
-        response = self.model.invoke(
-            [
+        response = self.task_scheduler.invoke_chat(
+            task_type=BACKGROUND_SUMMARY_TASK,
+            messages=[
                 SystemMessage(
                     content=(
                         "你负责为 Agent 会话生成长期记忆摘要。"
@@ -122,7 +127,7 @@ class SessionSummaryService:
                     )
                 ),
                 HumanMessage(content=transcript),
-            ]
+            ],
         )
         return str(response.content).strip()
 

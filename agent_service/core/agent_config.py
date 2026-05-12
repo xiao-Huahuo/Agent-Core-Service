@@ -206,10 +206,73 @@ class AgentConfig:
         authority_weight: float = 0.2
         knowledge_hash_lock_enabled: bool = True
 
+    @dataclass(slots=True)
+    class TaskScheduleConfig:
+        """
+        管理 LLM 多级任务队列调度参数。
+
+        enabled: 是否启用统一 LLM 调度器。
+        redis_url: 可选 Redis 地址,用于共享熔断状态。
+        redis_prefix: Redis 键前缀。
+        global_max_concurrency: 全局允许同时执行的 LLM 任务上限。
+        foreground_agent_worker_count: Agent 主循环 worker 数量。
+        background_summary_worker_count: Summary 后台 worker 数量。
+        background_fact_worker_count: Fact Extraction 后台 worker 数量。
+        foreground_queue_max_size: 主循环队列最大长度。
+        background_queue_max_size: 后台队列最大长度。
+        default_timeout_seconds: 默认任务超时时间。
+        foreground_timeout_seconds: 主循环任务超时时间。
+        summary_timeout_seconds: Summary 任务超时时间。
+        fact_resolution_timeout_seconds: Fact Extraction 任务超时时间。
+        max_retries: 可重试错误的最大重试次数。
+        initial_backoff_seconds: 首次退避秒数。
+        max_backoff_seconds: 最大退避秒数。
+        circuit_breaker_failure_threshold: 熔断器连续失败阈值。
+        circuit_breaker_recovery_seconds: 熔断恢复探测时间窗口。
+        summary_deduplicate_by_session: 是否按 session 合并 summary 任务。
+        drop_low_priority_when_overloaded: 队列满载时是否直接拒绝低优先级任务。
+        redis_consumer_group: Redis Stream consumer group 名称。
+        redis_stream_maxlen: Redis Stream 近似裁剪上限。
+        redis_result_ttl_seconds: 任务结果保留秒数。
+        redis_dedup_ttl_seconds: 去重键保留秒数。
+        redis_visibility_timeout_seconds: pending message 认领阈值秒数。
+        redis_block_timeout_ms: 阻塞拉取超时毫秒数。
+        redis_result_poll_interval_seconds: 等待结果时的 Redis 轮询间隔秒数。
+        """
+
+        enabled: bool = True
+        redis_url: str = ""
+        redis_prefix: str = "agent_service:llm_scheduler"
+        global_max_concurrency: int = 6
+        foreground_agent_worker_count: int = 4
+        background_summary_worker_count: int = 1
+        background_fact_worker_count: int = 1
+        foreground_queue_max_size: int = 256
+        background_queue_max_size: int = 256
+        default_timeout_seconds: int = 120
+        foreground_timeout_seconds: int = 120
+        summary_timeout_seconds: int = 180
+        fact_resolution_timeout_seconds: int = 120
+        max_retries: int = 2
+        initial_backoff_seconds: float = 1.0
+        max_backoff_seconds: float = 8.0
+        circuit_breaker_failure_threshold: int = 5
+        circuit_breaker_recovery_seconds: int = 30
+        summary_deduplicate_by_session: bool = True
+        drop_low_priority_when_overloaded: bool = False
+        redis_consumer_group: str = "agent_service_llm_workers"
+        redis_stream_maxlen: int = 10000
+        redis_result_ttl_seconds: int = 600
+        redis_dedup_ttl_seconds: int = 600
+        redis_visibility_timeout_seconds: int = 120
+        redis_block_timeout_ms: int = 1000
+        redis_result_poll_interval_seconds: float = 0.2
+
     constants: Constants = field(default_factory=Constants)
     storage: StorageConfig = field(default_factory=StorageConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
+    task_schedule: TaskScheduleConfig = field(default_factory=TaskScheduleConfig)
 
     @classmethod
     def load_config(
@@ -244,6 +307,7 @@ class AgentConfig:
             storage=cls.StorageConfig(**data["storage"]),
             model=cls.ModelConfig(**data["model"]),
             memory=cls.MemoryConfig(**data["memory"]),
+            task_schedule=cls.TaskScheduleConfig(**data["task_schedule"]),
         )
 
         if ensure_directories:
@@ -329,6 +393,125 @@ class AgentConfig:
                 "memory",
                 "knowledge_hash_lock_enabled",
                 AgentConfig._parse_bool,
+            ),
+            "AGENT_TASK_SCHEDULE_ENABLED": ("task_schedule", "enabled", AgentConfig._parse_bool),
+            "AGENT_TASK_SCHEDULE_REDIS_URL": ("task_schedule", "redis_url", str),
+            "AGENT_TASK_SCHEDULE_REDIS_PREFIX": ("task_schedule", "redis_prefix", str),
+            "AGENT_TASK_SCHEDULE_GLOBAL_MAX_CONCURRENCY": (
+                "task_schedule",
+                "global_max_concurrency",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_FOREGROUND_WORKERS": (
+                "task_schedule",
+                "foreground_agent_worker_count",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_SUMMARY_WORKERS": (
+                "task_schedule",
+                "background_summary_worker_count",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_FACT_WORKERS": (
+                "task_schedule",
+                "background_fact_worker_count",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_FOREGROUND_QUEUE_MAX_SIZE": (
+                "task_schedule",
+                "foreground_queue_max_size",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_BACKGROUND_QUEUE_MAX_SIZE": (
+                "task_schedule",
+                "background_queue_max_size",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_DEFAULT_TIMEOUT_SECONDS": (
+                "task_schedule",
+                "default_timeout_seconds",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_FOREGROUND_TIMEOUT_SECONDS": (
+                "task_schedule",
+                "foreground_timeout_seconds",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_SUMMARY_TIMEOUT_SECONDS": (
+                "task_schedule",
+                "summary_timeout_seconds",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_FACT_TIMEOUT_SECONDS": (
+                "task_schedule",
+                "fact_resolution_timeout_seconds",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_MAX_RETRIES": ("task_schedule", "max_retries", int),
+            "AGENT_TASK_SCHEDULE_INITIAL_BACKOFF_SECONDS": (
+                "task_schedule",
+                "initial_backoff_seconds",
+                float,
+            ),
+            "AGENT_TASK_SCHEDULE_MAX_BACKOFF_SECONDS": (
+                "task_schedule",
+                "max_backoff_seconds",
+                float,
+            ),
+            "AGENT_TASK_SCHEDULE_CIRCUIT_BREAKER_FAILURE_THRESHOLD": (
+                "task_schedule",
+                "circuit_breaker_failure_threshold",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_CIRCUIT_BREAKER_RECOVERY_SECONDS": (
+                "task_schedule",
+                "circuit_breaker_recovery_seconds",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_SUMMARY_DEDUPLICATE_BY_SESSION": (
+                "task_schedule",
+                "summary_deduplicate_by_session",
+                AgentConfig._parse_bool,
+            ),
+            "AGENT_TASK_SCHEDULE_DROP_LOW_PRIORITY_WHEN_OVERLOADED": (
+                "task_schedule",
+                "drop_low_priority_when_overloaded",
+                AgentConfig._parse_bool,
+            ),
+            "AGENT_TASK_SCHEDULE_REDIS_CONSUMER_GROUP": (
+                "task_schedule",
+                "redis_consumer_group",
+                str,
+            ),
+            "AGENT_TASK_SCHEDULE_REDIS_STREAM_MAXLEN": (
+                "task_schedule",
+                "redis_stream_maxlen",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_REDIS_RESULT_TTL_SECONDS": (
+                "task_schedule",
+                "redis_result_ttl_seconds",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_REDIS_DEDUP_TTL_SECONDS": (
+                "task_schedule",
+                "redis_dedup_ttl_seconds",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_REDIS_VISIBILITY_TIMEOUT_SECONDS": (
+                "task_schedule",
+                "redis_visibility_timeout_seconds",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_REDIS_BLOCK_TIMEOUT_MS": (
+                "task_schedule",
+                "redis_block_timeout_ms",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_REDIS_RESULT_POLL_INTERVAL_SECONDS": (
+                "task_schedule",
+                "redis_result_poll_interval_seconds",
+                float,
             ),
         }
         for env_name, (section, key, caster) in env_mapping.items():
