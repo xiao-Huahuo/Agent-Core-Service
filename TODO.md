@@ -1,0 +1,1 @@
+- [ ] 在frontmatter显式提取字段之后加上异步并行的LLM来sematic_enrichment语义提取字段的过程.以免出现文章写有效开始时间却无法结构化提取的困难.

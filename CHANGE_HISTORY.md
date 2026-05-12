@@ -1,5 +1,13 @@
 # CHANGE HISTORY
 
+## 2026-05-12
+- 为 `AgentConfig.StorageConfig` 新增 `frontmatter_dir` 和 `AGENT_FRONTMATTER_DIR`,将知识库结构化中间产物路径纳入统一配置管理,默认输出到 `runtime/frontmatter`。
+- 新增 `scripts/frontmatter_bootstrap.py` 和 `FrontmatterBootstrapService`,先将 `resources/knowledge` 下的原始 Markdown/TXT 结构化为统一知识 JSON,再供后续灌库链路消费。
+- 重构 `KnowledgeIngestionService` 和 `knowledge_bootstrap.py`,改为只读取 `runtime/frontmatter` 中的结构化文档 JSON 执行章节切块、Embedding 和长期记忆入库,不再直接消费原始文本文件。
+- 调整 `ContextBuilder` 的记忆注入策略,新增“同 session 双保底”机制: 优先使用短期历史消息,若长期记忆检索未命中则强制补入最近一条当前 session 摘要记忆。
+- 明确上下文拼装优先级为“短期历史消息 -> 当前 session 摘要记忆 -> 外部知识库片段”,并同步写入 `README.md` 说明。
+- 将检索增强用的系统提示词迁入 `AgentConfig.ModelConfig.retrieval_context_system_prompt`,并新增 `AGENT_RETRIEVAL_CONTEXT_SYSTEM_PROMPT` 环境变量,避免 `ContextBuilder` 硬编码提示文案。
+
 ## 2026-05-11
 - 新增 `agent_service/core/agent_config.py` 中的分层配置体系，包含 `Constants`、`StorageConfig`、`ModelConfig`、`MemoryConfig` 与 `AgentConfig.load_config()`。
 - 配置支持默认值、环境变量覆盖、显式 `overrides` 覆盖以及运行目录自动创建，作为后端统一常量与环境变量入口。
@@ -39,4 +47,20 @@
 - 将默认 PostgreSQL DSN 密码调整为本地配置 `1111`,并让 `main.py` session 演示直接使用正式配置而非 SQLite 演示库。
 - 将 PostgreSQL 默认 DSN 密码拆分为独立配置字段和环境变量,未显式配置完整 DSN 时按密码字段自动组装 DSN。
 - 在 `scripts/db_init.py` 中实现 PostgreSQL 初始化逻辑,支持先创建缺失的业务数据库再初始化 SQLModel 表结构,并让 `main.py` 通过该脚本初始化数据库。
+- 在 `resources/knowledge` 中新增 10 个 Markdown 和 10 个 TXT 知识库样本文档,覆盖气候、健康、AI、城市、网络安全、能源、睡眠、农业、海洋和地球观测等主题。
 - 将默认 PostgreSQL DSN 调整为 SQLAlchemy psycopg3 方言 `postgresql+psycopg://`,与 `psycopg[binary]` 依赖保持一致。
+- 扩写 `resources/knowledge` 中 10 个 TXT 知识库样本文档,将每篇长度补足到约 500 字以满足 RAG 样本语料要求。
+- 新增 RAG 入库第一版能力,包含文本重叠切片、本地 Embedding 服务、知识库文件入库服务和 `knowledge_bootstrap.py` 手动灌库脚本。
+- 新增 `LongTermMemoryService`,支持将统一长期记忆写入 SQLModel 表,并在 PostgreSQL 下动态初始化 pgvector 扩展、向量列和 ivfflat 索引。
+- 将 `summary` 节点从占位改为异步会话摘要调度,通过 LLM 提取未摘要消息的长期摘要,Embedding 后写入向量库并标记原始消息已摘要。
+- 将 Embedding/ReRank 模型检查绑定到 `AgentCore.__init__()`,确保启动 AgentCore 时一定调用 `scripts/download_model.py` 的检查下载逻辑。
+- 修正真实 Embedding 模型加载路径,让 `EmbeddingService` 加载 `download_model.py` 实际下载的模型子目录,并强化模型完整性校验。
+- 增强 pgvector 初始化逻辑,在写入向量前检查既有向量列维度,避免不同 Embedding 维度混写导致向量库损坏。
+- 更新 `main.py` 本地会话测试 prompt,让演示内容明确覆盖短期上下文、SummaryNode 调度和长期摘要入库场景,并在命令行输出当前 AgentCore Mermaid 图。
+- 压缩 `main.py` 真实 LLM 演示轮次,避免主 Agent 与后台 summary 在短时间内产生过多模型请求导致 429,并为 SummaryNode 后台任务增加异常捕获。
+- 修正本地演示输出,恢复 raw JSON 和 Mermaid 图打印,并在 PostgreSQL 未安装 pgvector 扩展时降级保存 JSON 向量,避免 summary 后台任务输出长堆栈。
+- 新增专供项目使用的 `agentservice-pgvector` 容器并绑定 `localhost:5433`,同时将 `.env` 的关系库和向量库 DSN 显式切换到该容器。
+- 在 `scripts/db_init.py` 中增加 `ensure_vector_extension()`,初始化数据库时自动执行 `CREATE EXTENSION IF NOT EXISTS vector`。
+- 新增 `MemoryRetrievalService`,支持对 `session_summary` 和 `knowledge_chunk` 执行统一向量召回,优先走 pgvector,不可用时回退到 JSON 向量余弦相似度检索。
+- 将 `ContextBuilder` 升级为自动召回长期记忆和知识库片段并注入系统上下文,同时新增 `get_long_term_memory` 与 `get_knowledge_context` 两个 builtin 工具走同一检索链路。
+- 将 `main.py` 改为长期记忆与知识库召回验证脚本: 启动时自动灌知识库,首轮对话后同步生成 summary,第二轮调用前打印召回上下文预览以便确认 Memory 和 Knowledge 是否同时命中。

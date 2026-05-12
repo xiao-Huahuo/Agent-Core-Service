@@ -3,8 +3,8 @@
 
 功能说明:
 本文件负责检查并下载本地 Embedding 模型和 ReRank 模型。`AgentConfig.load_config()`
-会在加载配置时调用 `ensure_models()` 自动检查模型是否存在;如果模型目录缺失或目录中
-没有常见模型文件,则会使用 `huggingface_hub.snapshot_download()` 下载模型。
+会在加载配置时调用 `ensure_models()` 自动检查模型是否存在;如果模型目录缺失、
+缺少模型配置或缺少权重文件,则会使用 `huggingface_hub.snapshot_download()` 下载模型。
 
 手动使用:
 可以通过命令行同时指定 Embedding 与 ReRank 的模型名称和本地绝对下载目录:
@@ -23,12 +23,21 @@ from pathlib import Path
 
 
 MODEL_MARKER_FILE = ".download_complete"
-MODEL_REQUIRED_FILES = {
+MODEL_CONFIG_FILES = {
     "config.json",
+    "modules.json",
+    "config_sentence_transformers.json",
+}
+MODEL_WEIGHT_FILES = {
     "model.safetensors",
     "pytorch_model.bin",
-    "modules.json",
+    "model.onnx",
+}
+MODEL_TOKENIZER_FILES = {
     "tokenizer.json",
+    "tokenizer_config.json",
+    "sentencepiece.bpe.model",
+    "vocab.txt",
 }
 
 
@@ -43,11 +52,13 @@ def ensure_model(model_name: str, model_dir: Path | str) -> Path | None:
     if not model_name:
         return None
 
-    target_dir = _model_target_dir(model_name, model_dir)
-    if _is_model_available(target_dir):
+    target_dir = model_target_dir(model_name, model_dir)
+    if is_model_available(target_dir):
         return target_dir
 
     _download_from_huggingface(model_name, target_dir)
+    if not is_model_available(target_dir):
+        raise RuntimeError(f"模型下载后仍不完整: {target_dir}")
     return target_dir
 
 
@@ -71,21 +82,33 @@ def ensure_models(
     ensure_model(rerank_model_name, rerank_model_dir)
 
 
-def _model_target_dir(model_name: str, model_dir: Path | str) -> Path:
-    """根据模型名称生成稳定的本地目标目录。"""
+def model_target_dir(model_name: str, model_dir: Path | str) -> Path:
+    """
+    根据模型名称生成稳定的本地目标目录。
+
+    model_name: Hugging Face 模型名称。
+    model_dir: 该类模型的本地缓存根目录。
+    """
 
     safe_name = model_name.replace("/", "__")
     return Path(model_dir).expanduser().resolve() / safe_name
 
 
-def _is_model_available(target_dir: Path) -> bool:
-    """判断目标目录中是否已经存在可用模型文件。"""
+def is_model_available(target_dir: Path) -> bool:
+    """
+    判断目标目录中是否已经存在完整可用的模型文件。
+
+    target_dir: 某个具体模型的本地目录。
+    """
 
     if not target_dir.exists() or not target_dir.is_dir():
         return False
-    if (target_dir / MODEL_MARKER_FILE).exists():
-        return True
-    return any(path.name in MODEL_REQUIRED_FILES for path in target_dir.rglob("*") if path.is_file())
+    file_names = {path.name for path in target_dir.rglob("*") if path.is_file()}
+    has_config = bool(file_names & MODEL_CONFIG_FILES)
+    has_weight = bool(file_names & MODEL_WEIGHT_FILES)
+    has_tokenizer = bool(file_names & MODEL_TOKENIZER_FILES)
+    has_marker = (target_dir / MODEL_MARKER_FILE).exists()
+    return has_marker and has_config and has_weight and has_tokenizer
 
 
 def _download_from_huggingface(model_name: str, target_dir: Path) -> None:

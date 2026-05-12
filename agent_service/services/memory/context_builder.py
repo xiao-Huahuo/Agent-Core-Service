@@ -2,10 +2,8 @@
 短期上下文构建服务。
 
 功能说明:
-本文件实现第一版 `ContextBuilder`。它只负责同一 session 内的上下文追加和
-滑动窗口: 从 MessageService 读取最近 N 条历史消息,转换成 LangChain messages,
-然后把当前用户输入追加到最后。关键信息提取、summary、长期记忆和知识库 RAG
-会在后续版本接入,不在第一版中实现。
+本文件实现上下文构建器。它负责同一 session 内的短期消息窗口拼接,并在构建
+时自动召回长期摘要记忆和知识库片段,把它们压缩成结构化上下文附加给模型。
 
 使用说明:
 调用方需要显式传入配置和 MessageService:
@@ -22,6 +20,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.message import MessageOut
+from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 from agent_service.services.message_service import MessageService
 
 
@@ -31,13 +30,21 @@ class ContextBuilder:
 
     config: 全局配置对象,用于读取滑动窗口大小。
     message_service: 消息服务,用于读取同一 session 的历史消息。
+    retrieval_service: 统一长期记忆检索服务,用于自动召回 Memory/Knowledge。
     """
 
-    def __init__(self, *, config: AgentConfig, message_service: MessageService) -> None:
-        """保存配置和消息服务。"""
+    def __init__(
+        self,
+        *,
+        config: AgentConfig,
+        message_service: MessageService,
+        retrieval_service: MemoryRetrievalService | None = None,
+    ) -> None:
+        """保存配置、消息服务和长期记忆检索服务。"""
 
         self.config = config
         self.message_service = message_service
+        self.retrieval_service = retrieval_service or MemoryRetrievalService(config=config)
 
     def build_messages(self, *, user_id: str, session_id: str, current_prompt: str) -> list[BaseMessage]:
         """
@@ -53,9 +60,71 @@ class ContextBuilder:
             session_id=session_id,
             limit=self.config.memory.max_context_messages,
         )
-        messages = [self._to_langchain_message(message) for message in history]
+        messages: list[BaseMessage] = []
+        memory_context = self._build_retrieved_context(
+            user_id=user_id,
+            session_id=session_id,
+            current_prompt=current_prompt,
+            has_history=bool(history),
+        )
+        if memory_context:
+            messages.append(SystemMessage(content=memory_context))
+        messages.extend(self._to_langchain_message(message) for message in history)
         messages.append(HumanMessage(content=current_prompt))
         return messages
+
+    def _build_retrieved_context(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        current_prompt: str,
+        has_history: bool,
+    ) -> str:
+        """
+        构建长期记忆和知识库召回上下文文本。
+
+        user_id: 用户 ID。
+        session_id: 会话 ID。
+        current_prompt: 当前用户输入。
+        """
+
+        memories = self.retrieval_service.retrieve_long_term_memory(
+            query=current_prompt,
+            user_id=user_id,
+            session_id=session_id,
+            top_k=2,
+        )
+        if not memories:
+            latest_summary = self.retrieval_service.get_latest_session_summary(
+                user_id=user_id,
+                session_id=session_id,
+            )
+            if latest_summary is not None:
+                memories = [latest_summary]
+        knowledge = self.retrieval_service.retrieve_knowledge(
+            query=current_prompt,
+            top_k=self.config.memory.rerank_top_k,
+        )
+        sections: list[str] = []
+        sections.extend(self.config.model.retrieval_context_system_prompt.splitlines())
+        if has_history:
+            sections.append("短期上下文状态: 当前 session 已存在历史消息,回答时优先使用这些历史事实。")
+        if memories:
+            sections.append("长期记忆召回:")
+            sections.extend(
+                f"- score={item.final_score:.3f} content={item.memory.content}"
+                for item in memories
+            )
+        if knowledge:
+            sections.append("知识库召回:")
+            sections.extend(
+                f"- score={item.final_score:.3f} source={item.memory.source_uri or item.memory.source_id} content={item.memory.content}"
+                for item in knowledge
+            )
+        if len(sections) <= 4 and not has_history:
+            return ""
+        return "\n".join(sections)
 
     @staticmethod
     def _to_langchain_message(message: MessageOut) -> BaseMessage:

@@ -4,7 +4,7 @@ AgentCore 对外入口模块。
 功能说明:
 本文件提供 `AgentCore` 类,作为 Agent 微服务核心能力的对外门面。它负责接收
 `AgentConfig`、加载默认内置工具、构建 LangGraph 图、输出图结构 Mermaid 文件,
-并对外提供 Agent 执行入口。具体节点逻辑不写在本文件中,而是由
+启动时检查并下载 Embedding/ReRank 本地模型,并对外提供 Agent 执行入口。具体节点逻辑不写在本文件中,而是由
 `AgentGraphBuilder` 装配 `model_decision`、`tool_call` 和 `summary` 等节点。
 
 执行能力:
@@ -49,7 +49,7 @@ from agent_service.schemas.message import MessageCreate
 from agent_service.scripts.draw_agent_graph import draw_agent_graph
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.message_service import MessageService
-from agent_service.tools import ToolExecutor, ToolRegistry
+from agent_service.tools import ToolExecutor, ToolRegistry, clear_tool_runtime, set_tool_runtime
 
 
 class AgentCore:
@@ -72,9 +72,10 @@ class AgentCore:
         message_service: MessageService | None = None,
         context_builder: ContextBuilder | None = None,
     ) -> None:
-        """保存配置、构建或接收 LangGraph 图,并输出当前节点流程图 SVG。"""
+        """保存配置、检查本地模型、构建或接收 LangGraph 图,并输出当前节点流程图。"""
 
         self.config = config
+        self.config.ensure_local_models()
         self.message_service = message_service
         self.context_builder = context_builder
         self.tool_registry = ToolRegistry.with_builtin_tools() if tools is None else None
@@ -188,19 +189,23 @@ class AgentCore:
             "trace": [],
         }
         runtime_config = {"configurable": {"thread_id": session_id}}
-        for event in self.graph.stream(inputs, config=runtime_config, stream_mode="updates"):
-            for node_name, state_update in event.items():
-                if message_service is not None:
-                    self._save_state_update_messages(
-                        message_service=message_service,
-                        user_id=user_id,
-                        session_id=session_id,
-                        node_name=node_name,
-                        state_update=state_update,
-                    )
-                payload = self._build_stream_payload(node_name=node_name, state_update=state_update)
-                yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-        yield "data: [DONE]\n\n"
+        set_tool_runtime(config=self.config, user_id=user_id, session_id=session_id)
+        try:
+            for event in self.graph.stream(inputs, config=runtime_config, stream_mode="updates"):
+                for node_name, state_update in event.items():
+                    if message_service is not None:
+                        self._save_state_update_messages(
+                            message_service=message_service,
+                            user_id=user_id,
+                            session_id=session_id,
+                            node_name=node_name,
+                            state_update=state_update,
+                        )
+                    payload = self._build_stream_payload(node_name=node_name, state_update=state_update)
+                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        finally:
+            clear_tool_runtime()
 
     def _get_message_service(self) -> MessageService:
         """获取或懒加载消息服务。"""

@@ -123,6 +123,46 @@ class MessageService:
             records.reverse()
             return [MessageOut.from_record(record) for record in records]
 
+    def list_unsummarized_messages(self, *, user_id: str, session_id: str) -> list[MessageOut]:
+        """
+        查询同一会话下所有尚未被摘要覆盖的消息。
+
+        user_id: 用户 ID。
+        session_id: 会话 ID。
+        """
+
+        statement = (
+            select(MessageRecord)
+            .where(MessageRecord.user_id == user_id)
+            .where(MessageRecord.session_id == session_id)
+            .where(MessageRecord.is_summarized == False)  # noqa: E712
+            .order_by(MessageRecord.created_at.asc())
+        )
+        with Session(self.engine) as db_session:
+            records = list(db_session.exec(statement).all())
+            return [MessageOut.from_record(record) for record in records]
+
+    def mark_messages_summarized(self, *, message_ids: list[str]) -> int:
+        """
+        将指定消息批量标记为已被摘要覆盖。
+
+        message_ids: 需要标记的消息 ID 列表。
+        """
+
+        if not message_ids:
+            return 0
+        updated_count = 0
+        with Session(self.engine) as db_session:
+            for message_id in message_ids:
+                record = db_session.get(MessageRecord, message_id)
+                if record is None:
+                    continue
+                record.is_summarized = True
+                db_session.add(record)
+                updated_count += 1
+            db_session.commit()
+        return updated_count
+
     @staticmethod
     def generate_message_id() -> str:
         """生成消息 ID。"""

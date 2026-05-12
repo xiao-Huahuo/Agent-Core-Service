@@ -21,6 +21,8 @@ from typing import Any, Callable
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from agent_service.tools.runtime_context import get_tool_runtime
+
 
 ToolFunction = Callable[..., str]
 
@@ -166,6 +168,65 @@ def list_builtin_tools() -> str:
         for definition in BUILTIN_TOOL_DEFINITIONS
     ]
     return json.dumps(tools, ensure_ascii=False, indent=2)
+
+
+def get_long_term_memory(query: str, top_k: int = 3) -> str:
+    """
+    检索当前用户的长期摘要记忆。
+
+    query: 检索查询文本。
+    top_k: 最多返回多少条结果。
+    """
+
+    runtime = get_tool_runtime()
+    results = runtime.retrieval_service.retrieve_long_term_memory(
+        query=query,
+        user_id=runtime.user_id,
+        session_id=runtime.session_id,
+        top_k=top_k,
+    )
+    payload = [
+        {
+            "memory_id": item.memory.memory_id,
+            "tag": item.memory.tag,
+            "memory_type": item.memory.memory_type,
+            "content": item.memory.content,
+            "score": round(item.final_score, 4),
+            "source_uri": item.memory.source_uri,
+            "valid_from": item.memory.valid_from.isoformat(),
+            "valid_until": item.memory.valid_until.isoformat() if item.memory.valid_until else None,
+            "authority": item.memory.authority,
+        }
+        for item in results
+    ]
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def get_knowledge_context(query: str, top_k: int = 3) -> str:
+    """
+    检索知识库相关片段。
+
+    query: 检索查询文本。
+    top_k: 最多返回多少条结果。
+    """
+
+    runtime = get_tool_runtime()
+    results = runtime.retrieval_service.retrieve_knowledge(query=query, top_k=top_k)
+    payload = [
+        {
+            "memory_id": item.memory.memory_id,
+            "tag": item.memory.tag,
+            "memory_type": item.memory.memory_type,
+            "content": item.memory.content,
+            "score": round(item.final_score, 4),
+            "source_uri": item.memory.source_uri,
+            "valid_from": item.memory.valid_from.isoformat(),
+            "valid_until": item.memory.valid_until.isoformat() if item.memory.valid_until else None,
+            "authority": item.memory.authority,
+        }
+        for item in results
+    ]
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def _evaluate_math_expression(node: ast.AST) -> int | float:
@@ -323,5 +384,43 @@ BUILTIN_TOOL_DEFINITIONS = [
             "required": [],
         },
         function=list_builtin_tools,
+    ),
+    BuiltinToolDefinition(
+        name="get_long_term_memory",
+        description="检索当前用户在长期记忆中的相关摘要信息,用于跨轮对话回忆项目目标、约束、偏好和历史事实。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "需要检索的记忆查询文本。",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "最多返回多少条结果,默认 3。",
+                },
+            },
+            "required": ["query"],
+        },
+        function=get_long_term_memory,
+    ),
+    BuiltinToolDefinition(
+        name="get_knowledge_context",
+        description="检索知识库中的相关片段,用于回答事实性、说明性和文档型问题。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "需要检索的知识查询文本。",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "最多返回多少条结果,默认 3。",
+                },
+            },
+            "required": ["query"],
+        },
+        function=get_knowledge_context,
     ),
 ]

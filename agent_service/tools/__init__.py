@@ -8,6 +8,14 @@
 
 from agent_service.tools.builtin import BUILTIN_TOOL_DEFINITIONS, BuiltinToolDefinition
 from agent_service.tools.executor import ToolExecutor
+from agent_service.tools.runtime_context import clear_tool_runtime, set_tool_runtime
 from agent_service.tools.tool_registry import ToolRegistry
 
-__all__ = ["BUILTIN_TOOL_DEFINITIONS", "BuiltinToolDefinition", "ToolExecutor", "ToolRegistry"]
+__all__ = [
+    "BUILTIN_TOOL_DEFINITIONS",
+    "BuiltinToolDefinition",
+    "ToolExecutor",
+    "ToolRegistry",
+    "clear_tool_runtime",
+    "set_tool_runtime",
+]

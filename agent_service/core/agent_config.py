@@ -19,7 +19,8 @@ config = AgentConfig.load_config({"model": {"model_name": "moonshot-v1-8k"}})
 模型检查:
 默认调用 `load_config()` 时会检查本地 Embedding 与 ReRank 模型是否存在。
 如果模型缺失,会调用 `agent_service.scripts.download_model.ensure_models()` 自动下载。
-测试或只读取配置时可以传入 `ensure_models=False` 关闭该行为。
+测试或只读取配置时可以传入 `ensure_models=False` 关闭该行为。`AgentCore`
+初始化时也会再次调用 `ensure_local_models()`,确保真正启动 Agent 时一定完成检查。
 """
 
 from __future__ import annotations
@@ -66,7 +67,8 @@ class AgentConfig:
         vector_db_dir: 向量数据库运行数据目录。
         embedding_model_dir: Embedding 模型本地缓存目录。
         rerank_model_dir: ReRank 模型本地缓存目录。
-        knowledge_dir: 本地知识库资源目录,用于知识灌装与哈希锁。
+        knowledge_dir: 本地知识库原始资源目录,用于 frontmatter 结构化预处理扫描。
+        frontmatter_dir: 结构化知识文档 JSON 目录,用于 frontmatter_bootstrap 输出与 knowledge_bootstrap 输入。
         log_dir: 日志文件输出目录。
         """
 
@@ -81,6 +83,7 @@ class AgentConfig:
         embedding_model_dir: Path = field(default_factory=lambda: Path("models/embedding"))
         rerank_model_dir: Path = field(default_factory=lambda: Path("models/rerank"))
         knowledge_dir: Path = field(default_factory=lambda: Path("resources/knowledge"))
+        frontmatter_dir: Path = field(default_factory=lambda: Path("frontmatter"))
         log_dir: Path = field(default_factory=lambda: Path("logs"))
 
         def __post_init__(self) -> None:
@@ -93,6 +96,7 @@ class AgentConfig:
             self.embedding_model_dir = self._resolve_runtime_path(self.embedding_model_dir)
             self.rerank_model_dir = self._resolve_runtime_path(self.rerank_model_dir)
             self.knowledge_dir = self._resolve_project_path(self.knowledge_dir)
+            self.frontmatter_dir = self._resolve_runtime_path(self.frontmatter_dir)
             self.log_dir = self._resolve_runtime_path(self.log_dir)
             if not self.relational_dsn:
                 self.relational_dsn = self._build_postgres_dsn(self.relational_db_password)
@@ -124,6 +128,7 @@ class AgentConfig:
             self.embedding_model_dir.mkdir(parents=True, exist_ok=True)
             self.rerank_model_dir.mkdir(parents=True, exist_ok=True)
             self.knowledge_dir.mkdir(parents=True, exist_ok=True)
+            self.frontmatter_dir.mkdir(parents=True, exist_ok=True)
             self.log_dir.mkdir(parents=True, exist_ok=True)
 
         @staticmethod
@@ -145,6 +150,7 @@ class AgentConfig:
         temperature: 模型采样温度。
         timeout_seconds: 模型请求超时时间,单位为秒。
         system_prompt: Agent 默认系统提示词。
+        retrieval_context_system_prompt: 检索增强上下文注入时使用的系统提示词模板。
         embedding_model_name: Embedding 模型名称。
         rerank_model_name: RAG 召回结果重排模型名称。
         """
@@ -156,6 +162,13 @@ class AgentConfig:
         temperature: float = 0.0
         timeout_seconds: int = 240
         system_prompt: str = "你是一个具备自主能力的 AI Agent。"
+        retrieval_context_system_prompt: str = (
+            "以下是与当前问题相关的历史记忆和知识片段,回答时优先参考,但不要编造未出现的信息。\n"
+            "上下文优先级:\n"
+            "- 第一优先级: 当前 session 的短期历史消息。\n"
+            "- 第二优先级: 当前 session 的长期摘要记忆。\n"
+            "- 第三优先级: 外部知识库检索结果。"
+        )
         embedding_model_name: str = ""
         rerank_model_name: str = ""
 
@@ -236,12 +249,18 @@ class AgentConfig:
         if ensure_directories:
             config.storage.ensure_directories()
         if ensure_models:
-            config._ensure_local_models()
+            config.ensure_local_models()
 
         return config
 
-    def _ensure_local_models(self) -> None:
-        """检查本地模型目录,缺失时调用下载脚本补齐模型。"""
+    def ensure_local_models(self) -> None:
+        """
+        检查本地 Embedding 与 ReRank 模型,缺失时调用下载脚本补齐。
+
+        该方法是 `scripts/download_model.py` 在配置层的唯一入口。`load_config()`
+        和 `AgentCore.__init__()` 都会调用它,保证配置加载和 Agent 启动路径均能
+        触发模型存在性检查。
+        """
 
         from agent_service.scripts.download_model import ensure_models
 
@@ -282,6 +301,7 @@ class AgentConfig:
             "AGENT_EMBEDDING_MODEL_DIR": ("storage", "embedding_model_dir", str),
             "AGENT_RERANK_MODEL_DIR": ("storage", "rerank_model_dir", str),
             "AGENT_KNOWLEDGE_DIR": ("storage", "knowledge_dir", str),
+            "AGENT_FRONTMATTER_DIR": ("storage", "frontmatter_dir", str),
             "AGENT_LOG_DIR": ("storage", "log_dir", str),
             "AGENT_MODEL_PROVIDER": ("model", "provider", str),
             "AGENT_MODEL_NAME": ("model", "model_name", str),
@@ -290,6 +310,7 @@ class AgentConfig:
             "AGENT_MODEL_TEMPERATURE": ("model", "temperature", float),
             "AGENT_MODEL_TIMEOUT_SECONDS": ("model", "timeout_seconds", int),
             "AGENT_SYSTEM_PROMPT": ("model", "system_prompt", str),
+            "AGENT_RETRIEVAL_CONTEXT_SYSTEM_PROMPT": ("model", "retrieval_context_system_prompt", str),
             "AGENT_EMBEDDING_MODEL_NAME": ("model", "embedding_model_name", str),
             "AGENT_RERANK_MODEL_NAME": ("model", "rerank_model_name", str),
             "AGENT_CONTEXT_WINDOW_TOKENS": ("memory", "context_window_tokens", int),

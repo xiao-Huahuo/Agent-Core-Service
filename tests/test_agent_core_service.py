@@ -22,21 +22,30 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from sqlmodel import SQLModel, create_engine
 
 from agent_service.agent_core import AgentCore
+from agent_service.agent_core.nodes.summary import SummaryNode
 from agent_service.agent_core.nodes.tool_call import ToolCallNode
 from agent_service.core.agent_config import AgentConfig
 from agent_service.models.longterm_memory_spec import LongTermMemorySpec
 from agent_service.models.message import MessageRecord
 from agent_service.models.session import SessionRecord
+from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecOut
 from agent_service.schemas.message import MessageCreate
 from agent_service.schemas.message import MessageOut
 from agent_service.schemas.session import SessionOut
 from agent_service.scripts.db_init import build_admin_dsn
+from agent_service.scripts.download_model import MODEL_MARKER_FILE
 from agent_service.scripts.draw_agent_graph import build_mermaid
+from agent_service.scripts.download_model import is_model_available
+from agent_service.scripts.download_model import model_target_dir
+from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 from agent_service.services.memory.context_builder import ContextBuilder
+from agent_service.services.memory.retrieval_service import MemoryRetrievalService
+from agent_service.services.memory.rag.embedding import EmbeddingService
+from agent_service.services.memory.rag.knowledge_ingestion import KnowledgeIngestionService
 from agent_service.services.message_service import MessageService
 from agent_service.services.session_service import SessionService
-from agent_service.tools import ToolExecutor, ToolRegistry
+from agent_service.tools import ToolExecutor, ToolRegistry, clear_tool_runtime, set_tool_runtime
 
 
 TEST_TEMP_DIR = Path(__file__).resolve().parents[1] / "runtime" / "test_tmp"
@@ -80,6 +89,43 @@ class FakeCompiledGraph:
         """返回预设图结构,供 Mermaid 绘图脚本读取。"""
 
         return self.graph_data
+
+
+class FakeEmbeddingProvider:
+    """
+    测试用假 Embedding 提供者。
+
+    dimension: 输出向量维度。
+    """
+
+    def __init__(self, *, dimension: int = 3) -> None:
+        """保存固定向量维度。"""
+
+        self.dimension = dimension
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        """根据文本长度生成稳定假向量。"""
+
+        return [[float(len(text) + index) for index in range(self.dimension)] for text in texts]
+
+
+class FakeSummaryService:
+    """
+    测试用假摘要服务。
+
+    calls: 记录被异步调用的 user_id 和 session_id。
+    """
+
+    def __init__(self) -> None:
+        """初始化调用记录。"""
+
+        self.calls: list[tuple[str, str]] = []
+
+    def summarize_session(self, *, user_id: str, session_id: str) -> str:
+        """记录摘要调用并返回固定摘要。"""
+
+        self.calls.append((user_id, session_id))
+        return "测试摘要"
 
 
 def make_test_config() -> AgentConfig:
@@ -305,6 +351,87 @@ def test_longterm_memory_spec_converts_to_out_with_source_metadata() -> None:
     assert output.embedding_vector_json == [0.1, 0.2, 0.3]
 
 
+def test_longterm_memory_service_creates_memory_with_embedding_json() -> None:
+    """验证长期记忆服务可以保存摘要或知识库向量 JSON。"""
+
+    config = make_test_config()
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    service = LongTermMemoryService(config=config, engine=engine, create_tables=False)
+
+    memory = service.create_memory(
+        LongTermMemorySpecCreate(
+            user_id="user_1",
+            session_id="sess_1",
+            tag="Memory",
+            memory_type="session_summary",
+            content="用户希望构建 RAG 记忆系统。",
+            source_type="session_messages",
+            source_id="sess_1",
+            embedding_model="fake",
+            embedding_vector_json=[1.0, 2.0, 3.0],
+        )
+    )
+
+    assert memory.content == "用户希望构建 RAG 记忆系统。"
+    assert memory.embedding_vector_json == [1.0, 2.0, 3.0]
+
+
+def test_knowledge_ingestion_chunks_embeds_and_stores_files() -> None:
+    """验证知识库入库服务会把本地文件切片、Embedding 并写入统一长期记忆。"""
+
+    knowledge_dir = TEST_TEMP_DIR / "knowledge_ingestion"
+    knowledge_dir.mkdir(parents=True, exist_ok=True)
+    (knowledge_dir / "demo.txt").write_text("第一段知识。" * 80, encoding="utf-8")
+    config = AgentConfig.load_config(
+        {
+            "storage": {
+                "project_root": str(TEST_TEMP_DIR),
+                "base_data_dir": str(TEST_TEMP_DIR / "runtime"),
+                "knowledge_dir": str(knowledge_dir),
+            },
+            "memory": {"chunk_size": 120, "chunk_overlap": 20},
+            "model": {"embedding_model_name": "fake-embedding"},
+        },
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    memory_service = LongTermMemoryService(config=config, engine=engine, create_tables=False)
+    embedding_service = EmbeddingService(config=config, provider=FakeEmbeddingProvider(dimension=4))
+    ingestion_service = KnowledgeIngestionService(
+        config=config,
+        embedding_service=embedding_service,
+        memory_service=memory_service,
+    )
+
+    result = ingestion_service.ingest_knowledge_dir()
+
+    assert result.files_seen == 1
+    assert result.files_ingested == 1
+    assert result.chunks_created > 1
+    assert memory_service.has_source_hash(
+        source_hash=KnowledgeIngestionService._hash_file(knowledge_dir / "demo.txt"),
+        memory_type="knowledge_chunk",
+    )
+
+
+def test_summary_node_schedules_async_summary() -> None:
+    """验证 summary 节点会异步触发会话摘要服务。"""
+
+    config = make_test_config()
+    summary_service = FakeSummaryService()
+    node = SummaryNode(config=config, summary_service=summary_service)
+
+    result = node({"messages": [HumanMessage(content="你好")], "user_id": "u1", "session_id": "s1", "trace": []})
+    node.pending_tasks[-1].join(timeout=2)
+
+    assert result["trace"][0]["event"] == "summary_scheduled"
+    assert summary_service.calls == [("u1", "s1")]
+
+
 def test_session_service_generates_session_id() -> None:
     """验证 SessionService 生成的会话 ID 使用统一前缀。"""
 
@@ -389,6 +516,162 @@ def test_context_builder_appends_current_prompt_and_converts_roles() -> None:
     assert messages[-1].content == "继续"
 
 
+def test_retrieval_service_returns_ranked_memory_and_knowledge() -> None:
+    """验证统一检索服务可以从 JSON 向量回退路径召回长期记忆和知识库片段。"""
+
+    config = AgentConfig.load_config(
+        {"memory": {"rerank_top_k": 2, "score_threshold": 0.0}},
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    memory_service = LongTermMemoryService(config=config, engine=engine, create_tables=False)
+    memory_service.create_memory(
+        LongTermMemorySpecCreate(
+            user_id="user_1",
+            session_id="sess_recall",
+            tag="Memory",
+            memory_type="session_summary",
+            content="项目代号是 stone-cat,负责模块是 SummaryNode。",
+            source_type="session_messages",
+            source_id="sess_recall",
+            authority=0.8,
+            embedding_model="fake",
+            embedding_vector_json=[10.0, 11.0, 12.0],
+        )
+    )
+    memory_service.create_memory(
+        LongTermMemorySpecCreate(
+            user_id="system",
+            session_id=None,
+            tag="Knowledge",
+            memory_type="knowledge_chunk",
+            content="海洋酸化会影响贝类和珊瑚的钙化过程。",
+            source_type="knowledge_file",
+            source_id="ocean.txt",
+            source_uri="resources/knowledge/ocean.txt",
+            authority=0.7,
+            embedding_model="fake",
+            embedding_vector_json=[10.0, 11.0, 12.0],
+        )
+    )
+    retrieval_service = MemoryRetrievalService(
+        config=config,
+        embedding_service=EmbeddingService(config=config, provider=FakeEmbeddingProvider(dimension=3)),
+        memory_service=memory_service,
+    )
+
+    memories = retrieval_service.retrieve_long_term_memory(
+        query="项目代号和负责模块是什么",
+        user_id="user_1",
+        session_id="sess_recall",
+    )
+    knowledge = retrieval_service.retrieve_knowledge(query="海洋酸化影响什么")
+
+    assert memories[0].memory.content.startswith("项目代号是 stone-cat")
+    assert knowledge[0].memory.source_uri == "resources/knowledge/ocean.txt"
+
+
+def test_context_builder_includes_retrieved_memory_context() -> None:
+    """验证上下文构建器会把长期记忆和知识库召回结果插入系统上下文。"""
+
+    config = AgentConfig.load_config(
+        {"memory": {"max_context_messages": 2, "rerank_top_k": 1, "score_threshold": 0.0}},
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    message_service = MessageService(config=config, engine=engine, create_tables=False)
+    memory_service = LongTermMemoryService(config=config, engine=engine, create_tables=False)
+    memory_service.create_memory(
+        LongTermMemorySpecCreate(
+            user_id="user_1",
+            session_id="sess_ctx",
+            tag="Memory",
+            memory_type="session_summary",
+            content="项目代号是 stone-cat。",
+            source_type="session_messages",
+            embedding_model="fake",
+            embedding_vector_json=[8.0, 9.0, 10.0],
+        )
+    )
+    retrieval_service = MemoryRetrievalService(
+        config=config,
+        embedding_service=EmbeddingService(config=config, provider=FakeEmbeddingProvider(dimension=3)),
+        memory_service=memory_service,
+    )
+    builder = ContextBuilder(config=config, message_service=message_service, retrieval_service=retrieval_service)
+    message_service.create_message(MessageCreate(session_id="sess_ctx", user_id="user_1", role="user", content="你好"))
+
+    messages = builder.build_messages(user_id="user_1", session_id="sess_ctx", current_prompt="项目代号是什么")
+
+    assert isinstance(messages[0], SystemMessage)
+    assert "长期记忆召回" in messages[0].content
+    assert "stone-cat" in messages[0].content
+
+
+def test_builtin_memory_tools_use_runtime_context() -> None:
+    """验证 builtin 记忆工具可以通过运行时上下文访问统一检索服务。"""
+
+    config = AgentConfig.load_config(
+        {"memory": {"score_threshold": 0.0}},
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    memory_service = LongTermMemoryService(config=config, engine=engine, create_tables=False)
+    memory_service.create_memory(
+        LongTermMemorySpecCreate(
+            user_id="user_1",
+            session_id="sess_tool",
+            tag="Memory",
+            memory_type="session_summary",
+            content="用户偏好直接给出结论。",
+            source_type="session_messages",
+            embedding_model="fake",
+            embedding_vector_json=[6.0, 7.0, 8.0],
+        )
+    )
+    memory_service.create_memory(
+        LongTermMemorySpecCreate(
+            user_id="system",
+            session_id=None,
+            tag="Knowledge",
+            memory_type="knowledge_chunk",
+            content="珊瑚礁会支持渔业和海岸防护。",
+            source_type="knowledge_file",
+            source_uri="resources/knowledge/coral.txt",
+            embedding_model="fake",
+            embedding_vector_json=[6.0, 7.0, 8.0],
+        )
+    )
+    retrieval_service = MemoryRetrievalService(
+        config=config,
+        embedding_service=EmbeddingService(config=config, provider=FakeEmbeddingProvider(dimension=3)),
+        memory_service=memory_service,
+    )
+    set_tool_runtime(
+        config=config,
+        user_id="user_1",
+        session_id="sess_tool",
+        retrieval_service=retrieval_service,
+    )
+    executor = ToolExecutor(registry=ToolRegistry.with_builtin_tools())
+
+    memory_result = executor.execute("get_long_term_memory", {"query": "用户偏好是什么", "top_k": 1})
+    knowledge_result = executor.execute("get_knowledge_context", {"query": "珊瑚礁有什么作用", "top_k": 1})
+    clear_tool_runtime()
+
+    assert "用户偏好直接给出结论" in memory_result
+    assert "珊瑚礁会支持渔业和海岸防护" in knowledge_result
+
+
 def test_default_relational_dsn_uses_psycopg_driver() -> None:
     """验证默认 PostgreSQL DSN 与 psycopg3 依赖保持一致。"""
 
@@ -421,6 +704,41 @@ def test_storage_dsn_can_be_built_from_password_field() -> None:
     assert config.storage.vector_dsn == "postgresql+psycopg://postgres:2222@localhost:5432/agent_service"
 
 
+def test_download_model_resolves_safe_target_dir_and_checks_completeness() -> None:
+    """验证下载脚本会使用模型名子目录,并要求模型文件完整。"""
+
+    target_dir = model_target_dir("BAAI/bge-small-zh-v1.5", TEST_TEMP_DIR / "models" / "embedding")
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    assert target_dir.name == "BAAI__bge-small-zh-v1.5"
+    assert not is_model_available(target_dir)
+
+    (target_dir / MODEL_MARKER_FILE).write_text("BAAI/bge-small-zh-v1.5", encoding="utf-8")
+    (target_dir / "config.json").write_text("{}", encoding="utf-8")
+    (target_dir / "model.safetensors").write_text("", encoding="utf-8")
+    (target_dir / "tokenizer.json").write_text("{}", encoding="utf-8")
+
+    assert is_model_available(target_dir)
+
+
+def test_agent_core_init_checks_local_models(monkeypatch: Any) -> None:
+    """验证 AgentCore 初始化时会强制触发本地模型检查。"""
+
+    config = make_test_config()
+    calls: list[AgentConfig] = []
+
+    def fake_ensure_local_models(self: AgentConfig) -> None:
+        """记录 AgentCore 是否调用了模型检查入口。"""
+
+        calls.append(self)
+
+    monkeypatch.setattr(AgentConfig, "ensure_local_models", fake_ensure_local_models)
+
+    AgentCore(config=config, graph=FakeCompiledGraph())
+
+    assert calls == [config]
+
+
 def test_tool_registry_exports_builtin_langchain_tools() -> None:
     """验证工具注册表会把内置工具转换为 LLM 可绑定的 LangChain 工具。"""
 
@@ -432,6 +750,8 @@ def test_tool_registry_exports_builtin_langchain_tools() -> None:
         "calculate",
         "echo_text",
         "generate_uuid",
+        "get_knowledge_context",
+        "get_long_term_memory",
         "get_current_time",
         "get_current_utc_time",
         "json_parse",

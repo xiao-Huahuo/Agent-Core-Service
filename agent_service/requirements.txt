@@ -4,4 +4,6 @@ langchain-core
 langchain-openai
 langgraph
 psycopg[binary]
+sentence-transformers
 sqlmodel
+pytest
