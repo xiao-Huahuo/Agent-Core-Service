@@ -150,7 +150,8 @@ class LongTermMemoryService:
                 continue
             if metadata_json.get("fact_status", "active") != "active":
                 continue
-            if record.valid_until is not None and record.valid_until <= now:
+            valid_until = self._ensure_aware_datetime(record.valid_until)
+            if valid_until is not None and valid_until <= now:
                 continue
             active_memories.append(LongTermMemorySpecOut.from_record(record))
         return active_memories
@@ -294,3 +295,17 @@ class LongTermMemoryService:
         """返回 UTC 当前时间。"""
 
         return datetime.now(timezone.utc)
+
+    @staticmethod
+    def _ensure_aware_datetime(value: datetime | None) -> datetime | None:
+        """
+        将数据库读回的时间统一规范为带 UTC 时区的 datetime。
+
+        value: 可能来自 SQLite 的无时区 datetime。
+        """
+
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value

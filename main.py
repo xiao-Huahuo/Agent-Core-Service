@@ -1,9 +1,10 @@
 """
 AgentService 本地真实 LLM 调用入口。
 功能说明:
-本文件提供 FastAPI 应用入口和本地脚本入口,用于调用真正的 `AgentCore` 图。默认演示改为
-“同一用户跨三个 session 的长期记忆时效性测试”: 先写入旧代号,再写入新代号,最后在第三个
-session 中查询当前代号,用于验证跨 session 召回与新旧事实排序。
+本文件提供 FastAPI 应用入口和本地脚本入口,用于调用真正的 `AgentCore` 图。默认演示为
+“同一用户跨四个 session 的高强度记忆时效性测试”: 连续三次更新同一个长期事实,最后在第四个
+session 中同时查询“当前值、旧值是否失效、外部知识库问题”,用于验证多轮覆盖、跨 session 召回、
+知识库召回与上下文优先级是否稳定。
 使用说明:
 运行前需要在环境变量中配置主模型:
 AGENT_MODEL_NAME: 主模型名称。
@@ -29,6 +30,7 @@ from agent_service.agent_core import AgentCore
 from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.session import SessionCreate
 from agent_service.scripts.db_init import initialize_database
+from agent_service.scripts.knowledge_bootstrap import bootstrap_knowledge
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.memory.summary_service import SessionSummaryService
 from agent_service.services.message_service import MessageService
@@ -63,12 +65,14 @@ def run_real_agent_once(prompt: str) -> dict[str, Any]:
 
 def run_session_dialog_demo() -> dict[str, Any]:
     """
-    运行跨三个 session 的长期记忆时效性演示。
-    第一轮写入旧代号,第二轮写入更新后的新代号,第三轮在新 session 中查询当前代号。
+    运行跨四个 session 的高强度长期记忆时效性演示。
+    前三轮分别写入三个连续更新后的代号,第四轮在全新 session 中同时查询当前值、旧值有效性
+    与知识库问题,用于验证 MemoryResolver 的覆盖链和 RAG 混合召回链路。
     """
 
     config = build_real_config()
     initialize_database(config=config)
+    knowledge_stats = bootstrap_knowledge(config=config)
     agent = AgentCore(config=config)
     session_service = SessionService(config=config)
     message_service = MessageService(config=config)
@@ -77,13 +81,16 @@ def run_session_dialog_demo() -> dict[str, Any]:
     user_id = f"demo-user-{uuid4().hex[:8]}"
 
     session_one = session_service.create_session(
-        SessionCreate(user_id=user_id, session_name="时效性演示-旧代号")
+        SessionCreate(user_id=user_id, session_name="高强度时效性演示-初始代号")
     )
     session_two = session_service.create_session(
-        SessionCreate(user_id=user_id, session_name="时效性演示-新代号")
+        SessionCreate(user_id=user_id, session_name="高强度时效性演示-第二次代号")
     )
     session_three = session_service.create_session(
-        SessionCreate(user_id=user_id, session_name="时效性演示-最终查询")
+        SessionCreate(user_id=user_id, session_name="高强度时效性演示-第三次代号")
+    )
+    session_four = session_service.create_session(
+        SessionCreate(user_id=user_id, session_name="高强度时效性演示-最终综合查询")
     )
 
     dialogs: list[dict[str, Any]] = []
@@ -132,30 +139,56 @@ def run_session_dialog_demo() -> dict[str, Any]:
         }
     )
 
-    third_prompt = "不要调用工具。请根据你召回到的长期记忆回答: 当前项目代号是什么?"
-    preview_messages = context_builder.build_messages(
-        user_id=user_id,
-        session_id=session_three.session_id,
-        current_prompt=third_prompt,
-    )
-    retrieved_context_preview = ""
-    if preview_messages and isinstance(preview_messages[0], SystemMessage):
-        retrieved_context_preview = preview_messages[0].content
+    third_prompt = "请记住这个长期事实再次更新: 当前项目代号已经从2222222改成3333333。只用一句话确认。"
     third_result = _run_demo_turn(
         agent=agent,
         prompt=third_prompt,
         user_id=user_id,
         session_id=session_three.session_id,
     )
+    third_summary = summary_service.summarize_session(user_id=user_id, session_id=session_three.session_id)
     dialogs.append(
         {
             "session": session_three.model_dump(),
             "turns": [
                 {
                     "prompt": third_prompt,
+                    "retrieved_context_preview": "",
+                    "forced_summary": third_summary,
+                    "result": third_result,
+                }
+            ],
+        }
+    )
+
+    fourth_prompt = (
+        "不要调用工具。请根据你召回到的长期记忆和知识库内容回答: "
+        "当前项目代号是什么? 1111111 和 2222222 现在还算当前值吗? "
+        "另外城市有什么内容?"
+    )
+    preview_messages = context_builder.build_messages(
+        user_id=user_id,
+        session_id=session_four.session_id,
+        current_prompt=fourth_prompt,
+    )
+    retrieved_context_preview = ""
+    if preview_messages and isinstance(preview_messages[0], SystemMessage):
+        retrieved_context_preview = preview_messages[0].content
+    fourth_result = _run_demo_turn(
+        agent=agent,
+        prompt=fourth_prompt,
+        user_id=user_id,
+        session_id=session_four.session_id,
+    )
+    dialogs.append(
+        {
+            "session": session_four.model_dump(),
+            "turns": [
+                {
+                    "prompt": fourth_prompt,
                     "retrieved_context_preview": retrieved_context_preview,
                     "forced_summary": None,
-                    "result": third_result,
+                    "result": fourth_result,
                 }
             ],
         }
@@ -163,6 +196,7 @@ def run_session_dialog_demo() -> dict[str, Any]:
 
     return {
         "user_id": user_id,
+        "knowledge_bootstrap": knowledge_stats,
         "dialogs": dialogs,
     }
 
@@ -232,6 +266,8 @@ if __name__ == "__main__":
     first_turn = first_dialog["turns"][0]
     print(first_turn["result"]["graph_diagram"])
     print("AgentCore session demo readable output:")
+    print("Knowledge bootstrap:")
+    print(json.dumps(demo_result["knowledge_bootstrap"], ensure_ascii=False, indent=2, default=str))
     for dialog in demo_result["dialogs"]:
         print(f"Session: {dialog['session']['session_id']} - {dialog['session']['session_name']}")
         for index, turn in enumerate(dialog["turns"], start=1):

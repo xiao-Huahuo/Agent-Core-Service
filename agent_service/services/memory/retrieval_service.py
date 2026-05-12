@@ -318,7 +318,8 @@ class MemoryRetrievalService:
             records = db_session.exec(statement).all()
         scored: list[dict[str, Any]] = []
         for record in records:
-            if record.valid_until is not None and record.valid_until < now:
+            valid_until = self._ensure_aware_datetime(record.valid_until)
+            if valid_until is not None and valid_until < now:
                 continue
             if not record.embedding_vector_json:
                 continue
@@ -373,7 +374,10 @@ class MemoryRetrievalService:
         """
 
         final_score = self._final_score(item)
-        return final_score, int(item.current_session_match), item.memory.updated_at, item.relevance_score, item.memory.importance
+        updated_at = self._ensure_aware_datetime(item.memory.updated_at)
+        if updated_at is None:
+            updated_at = datetime.min.replace(tzinfo=timezone.utc)
+        return final_score, int(item.current_session_match), updated_at, item.relevance_score, item.memory.importance
 
     @staticmethod
     def _freshness_score(memory: LongTermMemorySpecOut, *, now: datetime) -> float:
@@ -384,9 +388,7 @@ class MemoryRetrievalService:
         now: 当前时间。
         """
 
-        updated_at = memory.updated_at
-        if updated_at.tzinfo is None:
-            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        updated_at = MemoryRetrievalService._ensure_aware_datetime(memory.updated_at)
         age_days = max((now - updated_at).total_seconds() / 86400.0, 0.0)
         return 1.0 / (1.0 + age_days / 30.0)
 
@@ -397,7 +399,8 @@ class MemoryRetrievalService:
         memory: 长期记忆输出记录。
         """
 
-        if memory.valid_until is not None and memory.valid_until <= datetime.now(timezone.utc):
+        valid_until = MemoryRetrievalService._ensure_aware_datetime(memory.valid_until)
+        if valid_until is not None and valid_until <= datetime.now(timezone.utc):
             return False
         fact_status = memory.metadata_json.get("fact_status")
         if fact_status in {"superseded", "expired", "deleted"}:
@@ -416,3 +419,17 @@ class MemoryRetrievalService:
         """
 
         return max(0.0, min(1.0, value))
+
+    @staticmethod
+    def _ensure_aware_datetime(value: datetime | None) -> datetime | None:
+        """
+        将数据库读回的时间统一规范为带 UTC 时区的 datetime。
+
+        value: 可能来自 SQLite 的无时区 datetime。
+        """
+
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value

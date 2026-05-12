@@ -12,6 +12,7 @@ Mermaid 图生成逻辑。
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -572,6 +573,48 @@ def test_retrieval_service_returns_ranked_memory_and_knowledge() -> None:
 
     assert memories[0].memory.content.startswith("项目代号是 stone-cat")
     assert knowledge[0].memory.source_uri == "resources/knowledge/ocean.txt"
+
+
+def test_retrieval_service_handles_sqlite_naive_valid_until() -> None:
+    """验证 SQLite 读回无时区 valid_until 时,长期记忆检索不会抛出时区比较异常。"""
+
+    config = AgentConfig.load_config(
+        {"memory": {"rerank_top_k": 1, "score_threshold": 0.0}},
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    memory_service = LongTermMemoryService(config=config, engine=engine, create_tables=False)
+    memory_service.create_memory(
+        LongTermMemorySpecCreate(
+            user_id="user_1",
+            session_id="sess_time",
+            tag="Memory",
+            memory_type="session_summary",
+            content="项目代号是 stone-cat。",
+            source_type="session_messages",
+            source_id="sess_time",
+            valid_until=datetime.now(timezone.utc) + timedelta(days=1),
+            embedding_model="fake",
+            embedding_vector_json=[7.0, 8.0, 9.0],
+        )
+    )
+    retrieval_service = MemoryRetrievalService(
+        config=config,
+        embedding_service=EmbeddingService(config=config, provider=FakeEmbeddingProvider(dimension=3)),
+        memory_service=memory_service,
+    )
+
+    memories = retrieval_service.retrieve_long_term_memory(
+        query="项目代号是什么",
+        user_id="user_1",
+        session_id="sess_time",
+    )
+
+    assert len(memories) == 1
+    assert memories[0].memory.content == "项目代号是 stone-cat。"
 
 
 def test_context_builder_includes_retrieved_memory_context() -> None:
