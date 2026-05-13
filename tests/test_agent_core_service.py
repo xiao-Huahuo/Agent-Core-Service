@@ -837,6 +837,28 @@ def test_default_relational_dsn_uses_psycopg_driver() -> None:
     assert config.storage.relational_dsn.startswith("postgresql+psycopg://")
 
 
+def test_model_config_normalizes_kimi_k2_temperature_to_one() -> None:
+    """验证 kimi-k2 系列模型会自动把 temperature 归一到接口允许的固定值 1。"""
+
+    config = AgentConfig.load_config(
+        {
+            "model": {
+                "model_name": "kimi-k2.5",
+                "temperature": 0.0,
+                "small_model_name": "kimi-k2.5",
+                "small_model_temperature": 0.0,
+            }
+        },
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+
+    assert config.model.resolve_primary_temperature() == 1.0
+    assert config.model.resolve_primary_temperature(0.3) == 1.0
+    assert config.model.resolve_small_temperature() == 1.0
+
+
 def test_db_init_builds_admin_dsn_from_target_dsn() -> None:
     """验证数据库初始化脚本可以从业务库 DSN 派生管理库 DSN。"""
 

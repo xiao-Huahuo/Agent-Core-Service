@@ -81,7 +81,7 @@ class ModelDecisionNode:
             model=self.config.model.model_name,
             api_key=self.config.model.api_key,
             base_url=self.config.model.base_url,
-            temperature=self.config.model.temperature,
+            temperature=self.config.model.resolve_primary_temperature(),
             timeout=self.config.model.timeout_seconds,
         )
         if self.tools:

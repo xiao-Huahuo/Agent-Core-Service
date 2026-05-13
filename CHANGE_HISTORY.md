@@ -1,6 +1,11 @@
 # CHANGE HISTORY
 
 ## 2026-05-13
+- 为 `AgentConfig.ModelConfig` 增加 Kimi `kimi-k2.*` 温度兼容逻辑: 新增 `resolve_primary_temperature()` 与 `resolve_small_temperature()`，自动将该系列模型的 temperature 归一为接口要求的固定值 `1.0`，修复 `invalid temperature: only 1 is allowed for this model` 导致的主链路与摘要链路 400 错误。
+- 将 `LLMTaskScheduler`、`ModelDecisionNode`、`SessionSummaryService`、`MemoryResolver` 以及 `test_small_model.py` 的 `ChatOpenAI` 构造统一切换为走配置层温度兼容函数,避免同类 provider 约束在不同调用入口重复踩坑。
+- 在 `tests/test_agent_core_service.py` 新增 `kimi-k2` 温度归一回归测试,防止后续模型配置重构时重新把不兼容温度透传到 Kimi API。
+- 扩展 `AgentConfig.ModelConfig` 增加 `small_model_provider`、`small_model_name`、`small_model_api_key`、`small_model_base_url`、`small_model_temperature` 与 `small_model_timeout_seconds`，并补充对应 `AGENT_SMALL_MODEL_*` 环境变量映射,为后续小模型调度与轻量语义任务接入预留统一配置入口。
+- 新增 `agent_service/scripts/test_small_model.py`，用于直接读取 `.env` 中的小模型配置并执行一次最小 `ChatOpenAI` 联通性测试，快速验证本地小模型或 OpenAI 兼容小模型服务是否可用。
 - 修复长期记忆检索中 ReRank 过度降权 active fact 的问题: `MemoryRetrievalService` 现在将最终相关性分解释为 `max(rerank_score, merged_score)`，避免当前有效事实因 CrossEncoder 低分被阈值过滤后错误回退到旧 `session_summary`。
 - 在 `tests/test_memory_rag.py` 新增低分 ReRank 回归测试,覆盖“active fact 已存在但 ReRank 低于混合召回分时仍必须保留”的检索场景。
 - 修复 `MemoryResolver` 在已知事实键上的时效性覆盖漏洞: 规则抽取现在优先于 LLM 结果,避免模型把旧值或上下文噪声错误写回当前事实。

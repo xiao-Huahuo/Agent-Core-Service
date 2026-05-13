@@ -148,7 +148,7 @@ class SessionSummaryService:
             model=self.config.model.model_name,
             api_key=self.config.model.api_key,
             base_url=self.config.model.base_url,
-            temperature=0.0,
+            temperature=self.config.model.resolve_primary_temperature(0.0),
             timeout=self.config.model.timeout_seconds,
         )
 

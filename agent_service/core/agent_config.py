@@ -147,6 +147,12 @@ class AgentConfig:
         model_name: 主推理模型名称。
         api_key: 主推理模型 API Key。
         base_url: 主推理模型 API 基础地址。
+        small_model_provider: 小模型服务提供方类型,默认兼容 OpenAI API。
+        small_model_name: 小模型名称,用于轻量分类、摘要或事实抽取任务。
+        small_model_api_key: 小模型 API Key。
+        small_model_base_url: 小模型 API 基础地址。
+        small_model_temperature: 小模型采样温度。
+        small_model_timeout_seconds: 小模型请求超时时间,单位为秒。
         temperature: 模型采样温度。
         timeout_seconds: 模型请求超时时间,单位为秒。
         system_prompt: Agent 默认系统提示词。
@@ -159,6 +165,12 @@ class AgentConfig:
         model_name: str = ""
         api_key: str = ""
         base_url: str = ""
+        small_model_provider: str = "openai-compatible"
+        small_model_name: str = ""
+        small_model_api_key: str = ""
+        small_model_base_url: str = ""
+        small_model_temperature: float = 0.0
+        small_model_timeout_seconds: int = 120
         temperature: float = 0.0
         timeout_seconds: int = 240
         system_prompt: str = "你是一个具备自主能力的 AI Agent。"
@@ -171,6 +183,49 @@ class AgentConfig:
         )
         embedding_model_name: str = ""
         rerank_model_name: str = ""
+
+        def resolve_primary_temperature(self, requested_temperature: float | None = None) -> float:
+            """
+            为主模型返回兼容当前 provider 约束的温度值。
+
+            requested_temperature: 调用方显式指定的温度;为空时回退到主模型默认温度。
+            """
+
+            return self._normalize_temperature_for_model(
+                model_name=self.model_name,
+                requested_temperature=self.temperature if requested_temperature is None else requested_temperature,
+            )
+
+        def resolve_small_temperature(self, requested_temperature: float | None = None) -> float:
+            """
+            为小模型返回兼容当前 provider 约束的温度值。
+
+            requested_temperature: 调用方显式指定的温度;为空时回退到小模型默认温度。
+            """
+
+            return self._normalize_temperature_for_model(
+                model_name=self.small_model_name,
+                requested_temperature=(
+                    self.small_model_temperature if requested_temperature is None else requested_temperature
+                ),
+            )
+
+        @staticmethod
+        def _normalize_temperature_for_model(*, model_name: str, requested_temperature: float) -> float:
+            """
+            根据模型兼容性要求规范温度值。
+
+            目前 Kimi `kimi-k2` 系列要求 temperature 固定为 1,否则接口会返回
+            `invalid temperature: only 1 is allowed for this model`。
+
+            model_name: 实际调用的模型名称。
+            requested_temperature: 调用方想使用的温度值。
+            """
+
+            normalized_model_name = model_name.strip().lower()
+            if normalized_model_name.startswith("kimi-k2"):
+                return 1.0
+            return float(requested_temperature)
 
     @dataclass(slots=True)
     class MemoryConfig:
@@ -371,6 +426,13 @@ class AgentConfig:
             "AGENT_MODEL_NAME": ("model", "model_name", str),
             "AGENT_MODEL_API_KEY": ("model", "api_key", str),
             "AGENT_MODEL_BASE_URL": ("model", "base_url", str),
+            "AGENT_SMALL_MODEL_PROVIDER": ("model", "small_model_provider", str),
+            "AGENT_SMALL_MODEL_NAME": ("model", "small_model_name", str),
+            "AGENT_SMALL_MODEL_API_KEY": ("model", "small_model_api_key", str),
+            "AGENT_SMALL_MODE_API_KEY": ("model", "small_model_api_key", str),
+            "AGENT_SMALL_MODEL_BASE_URL": ("model", "small_model_base_url", str),
+            "AGENT_SMALL_MODEL_TEMPERATURE": ("model", "small_model_temperature", float),
+            "AGENT_SMALL_MODEL_TIMEOUT_SECONDS": ("model", "small_model_timeout_seconds", int),
             "AGENT_MODEL_TEMPERATURE": ("model", "temperature", float),
             "AGENT_MODEL_TIMEOUT_SECONDS": ("model", "timeout_seconds", int),
             "AGENT_SYSTEM_PROMPT": ("model", "system_prompt", str),

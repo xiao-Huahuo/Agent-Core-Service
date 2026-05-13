@@ -669,7 +669,7 @@ class LLMTaskScheduler:
     ) -> Any:
         """构造或复用与请求匹配的 ChatOpenAI 实例。"""
 
-        final_temperature = self.config.model.temperature if temperature is None else temperature
+        final_temperature = self.config.model.resolve_primary_temperature(temperature)
         cache_key = (tuple(sorted(tool_names)), float(final_temperature), float(timeout_seconds))
         with self._model_cache_lock:
             model = self._model_cache.get(cache_key)
