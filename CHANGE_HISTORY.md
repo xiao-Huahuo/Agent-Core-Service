@@ -1,6 +1,12 @@
 # CHANGE HISTORY
 
 ## 2026-05-13
+- 将 MCP 正式接入 Agent 工具链: 新增 `agent_service/tools/mcp/registry.py` 作为配置驱动的 MCP 工具注册适配层,按 `AgentConfig.MCPConfig` 发现外部 MCP Server 工具,为每个工具生成带 server 隔离前缀的稳定工具名,并包装成现有 `BuiltinToolDefinition` 兼容结构。
+- 升级 `ToolRegistry.with_builtin_tools(config=...)` 为“原生工具 + MCP 工具”统一注册入口,同时让 `AgentCore` 和 `LLMTaskScheduler` 在创建默认工具注册表时显式传入全局配置,确保模型绑定工具与 `ToolExecutor` 使用的是同一份 MCP/原生混合工具视图。
+- 新增 `tests/test_mcp_tool_registry.py`,通过伪造 MCP 工具发现和工具调用结果,回归验证 MCP 工具会被统一注册,且能通过现有同步 `ToolExecutor` 正常执行,无需依赖真实 MCP server 或真实 `mcp` Python SDK。
+- 修正 MCP 客户端落点: 将第一版最小异步 `MCPClient` 从误建的 `agent_service/mcp/` 迁回 `agent_service/tools/mcp/`,同时删除错误主目录包并同步修正 `tests/test_mcp_client.py` 的导入路径。
+- 在 `agent_service/tools/mcp/client.py` 与 `agent_service/tools/mcp/__init__.py` 中补齐第一版最小异步 `MCPClient`,支持 `connect / disconnect / list_tools / call_tool` 四个核心能力,为后续接入外部 MCP Server 做准备。
+- 新增 `tests/test_mcp_client.py`,通过假 MCP SDK 验证最小客户端的连接初始化、工具发现与工具调用结果规范化逻辑。
 - 在 `README.md` 第 12 条“多级队列与并发”下补充大小模型分流子条目,明确 `foreground_agent -> large`、`compress/summary/fact extraction -> small` 的默认路由,并说明 small 模型配置完整时会真正物理隔离到独立小模型。
 - 更新 `README.md` 的“#### 任务调度机制”文档图示: 将原本合并的“上下文压缩 / 重要事实摘要流程”拆分为 `compress` 与 `summary` 两条独立 Mermaid 流程图,并把模型池调度图更新为主 Agent 走 `large`、compress/summary/fact extraction 走 `small` 的实际分配关系。
 - 为 `AgentConfig.ModelConfig` 增加 Kimi `kimi-k2.*` 温度兼容逻辑: 新增 `resolve_primary_temperature()` 与 `resolve_small_temperature()`，自动将该系列模型的 temperature 归一为接口要求的固定值 `1.0`，修复 `invalid temperature: only 1 is allowed for this model` 导致的主链路与摘要链路 400 错误。

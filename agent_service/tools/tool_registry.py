@@ -1,13 +1,14 @@
 """
 工具注册表模块。
-
 功能说明:
-本文件负责维护工具名称到工具定义的映射,并提供 LangChain 工具对象转换能力。
-它不直接书写工具函数,也不直接执行工具。
+本文文件负责维护工具名到工具定义的映射,并提供将项目工具定义转换为 LangChain
+`StructuredTool` 的能力。当前注册源包括:
+1. 项目原生 builtin tools
+2. 配置驱动的 MCP tools
 
 使用说明:
-调用 `ToolRegistry.with_builtin_tools()` 可以创建包含当前全部内置工具的注册表。
-AgentCore 默认会使用该注册表生成 LangChain 工具列表并绑定到模型。
+推荐通过 `ToolRegistry.with_builtin_tools(config=...)` 创建完整注册表。这样 AgentCore、
+调度器和 ToolExecutor 都能看到同一组原生工具与 MCP 工具。
 """
 
 from __future__ import annotations
@@ -17,14 +18,14 @@ from typing import Any
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field, create_model
 
+from agent_service.core.agent_config import AgentConfig
 from agent_service.tools.builtin import BUILTIN_TOOL_DEFINITIONS, BuiltinToolDefinition
 
 
 class ToolRegistry:
     """
     工具注册表。
-
-    definitions: 工具名称到工具定义的映射。
+    definitions: 工具名到工具定义的映射。
     """
 
     def __init__(self) -> None:
@@ -33,19 +34,27 @@ class ToolRegistry:
         self.definitions: dict[str, BuiltinToolDefinition] = {}
 
     @classmethod
-    def with_builtin_tools(cls) -> "ToolRegistry":
-        """创建并返回已注册所有内置工具的注册表。"""
+    def with_builtin_tools(cls, *, config: AgentConfig | None = None) -> "ToolRegistry":
+        """
+        创建并返回完整工具注册表。
+        config: 可选全局配置。传入后会在启用 MCP 时一并注册外部 MCP 工具。
+        """
 
         registry = cls()
         for definition in BUILTIN_TOOL_DEFINITIONS:
             registry.register(definition)
+        if config is not None and config.mcp.enabled:
+            from agent_service.tools.mcp import MCPToolRegistryAdapter
+
+            adapter = MCPToolRegistryAdapter(config=config)
+            for definition in adapter.build_tool_definitions():
+                registry.register(definition)
         return registry
 
     def register(self, definition: BuiltinToolDefinition) -> None:
         """
         注册单个工具定义。
-
-        definition: 需要注册的内置工具定义。
+        definition: 需要注册的工具定义。
         """
 
         if definition.name in self.definitions:
@@ -54,23 +63,21 @@ class ToolRegistry:
 
     def get(self, name: str) -> BuiltinToolDefinition | None:
         """
-        根据工具名称获取工具定义。
-
+        根据工具名获取工具定义。
         name: 工具名称。
         """
 
         return self.definitions.get(name)
 
     def to_langchain_tools(self) -> list[StructuredTool]:
-        """将全部已注册工具转换为 LangChain StructuredTool 列表。"""
+        """将全部已注册工具转换为 LangChain `StructuredTool` 列表。"""
 
         return [self._to_langchain_tool(definition) for definition in self.definitions.values()]
 
     def _to_langchain_tool(self, definition: BuiltinToolDefinition) -> StructuredTool:
         """
-        将单个工具定义转换为 LangChain StructuredTool。
-
-        definition: 需要转换的内置工具定义。
+        将单个工具定义转换为 LangChain `StructuredTool`。
+        definition: 需要转换的工具定义。
         """
 
         return StructuredTool.from_function(
@@ -84,8 +91,7 @@ class ToolRegistry:
     def _build_args_model(definition: BuiltinToolDefinition) -> type[BaseModel]:
         """
         根据工具 JSON Schema 创建 Pydantic 参数模型。
-
-        definition: 需要生成参数模型的内置工具定义。
+        definition: 需要生成参数模型的工具定义。
         """
 
         fields: dict[str, tuple[type[Any], Any]] = {}
@@ -101,9 +107,8 @@ class ToolRegistry:
     @staticmethod
     def _json_schema_type_to_python(schema_type: str) -> type[Any]:
         """
-        将简单 JSON Schema 类型转换为 Python 类型。
-
-        schema_type: JSON Schema 的 type 字段。
+        将简化 JSON Schema 类型转换为 Python 类型。
+        schema_type: JSON Schema 中的 `type` 字段。
         """
 
         mapping: dict[str, type[Any]] = {

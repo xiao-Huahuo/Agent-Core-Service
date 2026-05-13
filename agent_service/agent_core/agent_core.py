@@ -81,7 +81,7 @@ class AgentCore:
         self.message_service = message_service
         self.context_builder = context_builder
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
-        self.tool_registry = ToolRegistry.with_builtin_tools() if tools is None else None
+        self.tool_registry = ToolRegistry.with_builtin_tools(config=config) if tools is None else None
         self.tool_executor = ToolExecutor(registry=self.tool_registry) if self.tool_registry is not None else None
         self.tools = list(tools) if tools is not None else self.tool_registry.to_langchain_tools()
         self.graph: CompiledStateGraph = graph or AgentGraphBuilder(

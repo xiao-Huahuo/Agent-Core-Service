@@ -762,7 +762,7 @@ class LLMTaskScheduler:
             return self._tool_registry
         from agent_service.tools.tool_registry import ToolRegistry
 
-        self._tool_registry = ToolRegistry.with_builtin_tools()
+        self._tool_registry = ToolRegistry.with_builtin_tools(config=self.config)
         return self._tool_registry
 
     def _run_with_retries(self, task: ScheduledLLMTask) -> Any:

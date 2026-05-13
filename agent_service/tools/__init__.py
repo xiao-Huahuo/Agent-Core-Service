@@ -1,9 +1,9 @@
 """
 工具层导出模块。
-
 功能说明:
-本文件集中导出内置工具、工具注册表和工具执行器。AgentCore 默认从这里获取
-内置工具对应的 LangChain 工具列表。
+本文文件集中导出原生工具定义、工具注册表、执行器和工具运行时上下文。
+MCP 适配仍位于 `agent_service.tools.mcp` 子包中,但通过 `ToolRegistry.with_builtin_tools(config=...)`
+会自动与原生工具一起注册到 Agent。
 """
 
 from agent_service.tools.builtin import BUILTIN_TOOL_DEFINITIONS, BuiltinToolDefinition

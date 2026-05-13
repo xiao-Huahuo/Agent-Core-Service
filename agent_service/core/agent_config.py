@@ -25,6 +25,7 @@ config = AgentConfig.load_config({"model": {"model_name": "moonshot-v1-8k"}})
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -332,11 +333,27 @@ class AgentConfig:
         large_model_max_concurrency: int = 4
         small_model_max_concurrency: int = 4
 
+    @dataclass(slots=True)
+    class MCPConfig:
+        """
+        管理外部 MCP Server 接入配置。
+
+        enabled: 是否启用 MCP 工具接入。
+        tool_name_prefix: 注册为 Agent 工具时使用的统一前缀。
+        servers: MCP Server 配置列表。每个元素至少需要包含 `server_id`、`command`,
+            可选 `args`、`env` 与 `enabled`。
+        """
+
+        enabled: bool = False
+        tool_name_prefix: str = "mcp"
+        servers: list[dict[str, Any]] = field(default_factory=list)
+
     constants: Constants = field(default_factory=Constants)
     storage: StorageConfig = field(default_factory=StorageConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     task_schedule: TaskScheduleConfig = field(default_factory=TaskScheduleConfig)
+    mcp: MCPConfig = field(default_factory=MCPConfig)
 
     @classmethod
     def load_config(
@@ -372,6 +389,7 @@ class AgentConfig:
             model=cls.ModelConfig(**data["model"]),
             memory=cls.MemoryConfig(**data["memory"]),
             task_schedule=cls.TaskScheduleConfig(**data["task_schedule"]),
+            mcp=cls.MCPConfig(**data["mcp"]),
         )
 
         if ensure_directories:
@@ -604,6 +622,9 @@ class AgentConfig:
                 "small_model_max_concurrency",
                 int,
             ),
+            "AGENT_MCP_ENABLED": ("mcp", "enabled", AgentConfig._parse_bool),
+            "AGENT_MCP_TOOL_NAME_PREFIX": ("mcp", "tool_name_prefix", str),
+            "AGENT_MCP_SERVERS_JSON": ("mcp", "servers", AgentConfig._parse_json),
         }
         for env_name, (section, key, caster) in env_mapping.items():
             raw_value = os.getenv(env_name)
@@ -649,3 +670,9 @@ class AgentConfig:
 
         normalized = value.strip().lower()
         return normalized in {"1", "true", "yes", "on"}
+
+    @staticmethod
+    def _parse_json(value: str) -> Any:
+        """将环境变量中的 JSON 字符串解析为 Python 对象。"""
+
+        return json.loads(value)
