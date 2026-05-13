@@ -71,6 +71,7 @@ class AgentConfig:
         rerank_model_dir: ReRank 模型本地缓存目录。
         knowledge_dir: 本地知识库原始资源目录,用于 frontmatter 结构化预处理扫描。
         frontmatter_dir: 结构化知识文档 JSON 目录,用于 frontmatter_bootstrap 输出与 knowledge_bootstrap 输入。
+        mcp_server_config_dir: MCP Server 配置文件目录,下辖 *.json 文件。
         log_dir: 日志文件输出目录。
         """
 
@@ -86,6 +87,7 @@ class AgentConfig:
         rerank_model_dir: Path = field(default_factory=lambda: Path("models/rerank"))
         knowledge_dir: Path = field(default_factory=lambda: Path("resources/knowledge"))
         frontmatter_dir: Path = field(default_factory=lambda: Path("frontmatter"))
+        mcp_server_config_dir: Path = field(default_factory=lambda: Path("resources/mcp"))
         log_dir: Path = field(default_factory=lambda: Path("logs"))
 
         def __post_init__(self) -> None:
@@ -99,6 +101,7 @@ class AgentConfig:
             self.rerank_model_dir = self._resolve_runtime_path(self.rerank_model_dir)
             self.knowledge_dir = self._resolve_project_path(self.knowledge_dir)
             self.frontmatter_dir = self._resolve_runtime_path(self.frontmatter_dir)
+            self.mcp_server_config_dir = self._resolve_project_path(self.mcp_server_config_dir)
             self.log_dir = self._resolve_runtime_path(self.log_dir)
             if not self.relational_dsn:
                 self.relational_dsn = self._build_postgres_dsn(self.relational_db_password)
@@ -122,7 +125,7 @@ class AgentConfig:
             return (self.base_data_dir / path).resolve()
 
         def ensure_directories(self) -> None:
-            """创建运行目录、模型目录、日志目录以及知识库资源目录。"""
+            """创建运行目录、模型目录、日志目录、知识库资源目录以及 MCP 配置目录。"""
 
             self.base_data_dir.mkdir(parents=True, exist_ok=True)
             self.relation_db_dir.mkdir(parents=True, exist_ok=True)
@@ -131,6 +134,7 @@ class AgentConfig:
             self.rerank_model_dir.mkdir(parents=True, exist_ok=True)
             self.knowledge_dir.mkdir(parents=True, exist_ok=True)
             self.frontmatter_dir.mkdir(parents=True, exist_ok=True)
+            self.mcp_server_config_dir.mkdir(parents=True, exist_ok=True)
             self.log_dir.mkdir(parents=True, exist_ok=True)
 
         @staticmethod
@@ -175,7 +179,12 @@ class AgentConfig:
         small_model_timeout_seconds: int = 120
         temperature: float = 0.0
         timeout_seconds: int = 240
-        system_prompt: str = "你是一个具备自主能力的 AI Agent。"
+        system_prompt: str = (
+            "你是一个具备自主能力的 AI Agent。"
+            "你的每次对话回复都会由后台系统自动生成摘要并持久化到长期记忆中,"
+            "你无需调用额外的存储工具来记住内容。"
+            "在后续对话中,系统会自动从长期记忆和知识库中检索相关内容供你参考。"
+        )
         retrieval_context_system_prompt: str = (
             "以下是与当前问题相关的历史记忆和知识片段,回答时优先参考,但不要编造未出现的信息。\n"
             "上下文优先级:\n"
@@ -378,6 +387,7 @@ class AgentConfig:
         data = cls._default_mapping()
         if load_dotenv:
             cls._load_dotenv_file(data["storage"]["project_root"])
+        cls._load_mcp_servers_from_files(data)
         if load_env:
             cls._apply_env_overrides(data)
         if overrides:
@@ -391,6 +401,7 @@ class AgentConfig:
             task_schedule=cls.TaskScheduleConfig(**data["task_schedule"]),
             mcp=cls.MCPConfig(**data["mcp"]),
         )
+
 
         if ensure_directories:
             config.storage.ensure_directories()
@@ -427,6 +438,44 @@ class AgentConfig:
         return data
 
     @staticmethod
+    def _load_mcp_servers_from_files(data: dict[str, dict[str, Any]]) -> None:
+        """
+        扫描 `data["storage"]["mcp_server_config_dir"]` 目录下的所有 `.json` 文件,
+        合并为 MCP Server 配置。
+        每个文件可以是单个 server 对象 `{...}` 或 server 数组 `[{...}, ...]`。
+        文件按名称排序后顺序加载;已通过环境变量加载的配置会被文件内容替换。
+        """
+
+        mcp_dir_raw = data["storage"]["mcp_server_config_dir"]
+        servers_dir = Path(str(mcp_dir_raw)).expanduser()
+        if not servers_dir.is_absolute():
+            servers_dir = (Path(data["storage"]["project_root"]) / servers_dir).resolve()
+        else:
+            servers_dir = servers_dir.resolve()
+
+        if not servers_dir.is_dir():
+            return
+
+        servers: list[dict[str, Any]] = []
+        for file_path in sorted(servers_dir.iterdir()):
+            if file_path.suffix.lower() != ".json":
+                continue
+            try:
+                content = file_path.read_text(encoding="utf-8")
+                parsed = json.loads(content)
+            except (json.JSONDecodeError, OSError) as exc:
+                raise RuntimeError(
+                    f"加载 MCP Server 配置文件 {file_path} 失败: {exc}"
+                ) from exc
+            if isinstance(parsed, dict):
+                servers.append(parsed)
+            elif isinstance(parsed, list):
+                servers.extend(parsed)
+
+        if servers:
+            data["mcp"]["servers"] = servers
+
+    @staticmethod
     def _apply_env_overrides(data: dict[str, dict[str, Any]]) -> None:
         """读取 AGENT_ 前缀环境变量并覆盖对应配置项。"""
 
@@ -448,6 +497,7 @@ class AgentConfig:
             "AGENT_RERANK_MODEL_DIR": ("storage", "rerank_model_dir", str),
             "AGENT_KNOWLEDGE_DIR": ("storage", "knowledge_dir", str),
             "AGENT_FRONTMATTER_DIR": ("storage", "frontmatter_dir", str),
+            "AGENT_MCP_SERVER_CONFIG_DIR": ("storage", "mcp_server_config_dir", str),
             "AGENT_LOG_DIR": ("storage", "log_dir", str),
             "AGENT_MODEL_PROVIDER": ("model", "provider", str),
             "AGENT_MODEL_NAME": ("model", "model_name", str),

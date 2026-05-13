@@ -66,19 +66,21 @@
      - `compress -> small`
      - `summary -> small`
      - `fact extraction -> small`
-   - 物理模型隔离：如果已配置 `AGENT_SMALL_MODEL_NAME / AGENT_SMALL_MODEL_API_KEY / AGENT_SMALL_MODEL_BASE_URL`,则 `small` 任务会真正调用独立小模型;未配置时才会回退到主模型配置,但仍占用 `small pool` 的并发配额。
+   - 物理模型隔离：如果配置 `AGENT_SMALL_MODEL_NAME / AGENT_SMALL_MODEL_API_KEY / AGENT_SMALL_MODEL_BASE_URL`,则 `small` 任务会真正调用独立小模型;未配置时才会回退到主模型配置,但仍占用 `small pool` 的并发配额。
 ### 项目工作原理流程图
 #### 记忆机制
 ##### 长期记忆 / 知识库入库流程
 
 ```mermaid
 flowchart TD
-    A[跨会话记忆工具] --> B[Embedding]
-    B --> C[pgvector 入库]
-    D[知识库 / 原始大文本] -->|frontmatter| G[结构化 JSON]
-    G -->|bootstrap| E[语义切块]
-    E --> F[重叠切片]
-    F --> B
+    A["write_long_term_memory 工具"] -->|"主模型主动写入"| H["Embedding"]
+    B["跨会话记忆工具"] -->|"SummaryNode / CompressNode"| H
+    C["知识库 / 原始大文本"] -->|"frontmatter"| G["结构化 JSON"]
+    G -->|"bootstrap"| D["语义切块"]
+    D --> E["重叠切片"]
+    E --> H
+    H --> F["pgvector 入库"]
+    F --> I["longterm_memory_specs 表"]
 ```
 
 ##### RAG 召回流程
@@ -158,6 +160,8 @@ flowchart TD
     D --> I["small pool semaphore"]
     E --> I
     F --> I
+
+    C -->|"工具调用: write_long_term_memory"| J2["Embedding + DB 直写, 不经 LLM"]
 
     H --> J{"是否启用 Redis"}
     I --> J

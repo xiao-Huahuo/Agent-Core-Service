@@ -22,6 +22,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from agent_service.tools.runtime_context import get_tool_runtime
+from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
 
 
 ToolFunction = Callable[..., str]
@@ -229,6 +230,56 @@ def get_knowledge_context(query: str, top_k: int = 3) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
+def write_long_term_memory(
+    content: str,
+    memory_type: str = "important_fact_summary",
+    importance: float = 0.5,
+    authority: float = 0.5,
+) -> str:
+    """
+    向当前用户的长期记忆中写入一条记录,包含向量化后可被后续对话检索召回。
+
+    content: 需要记忆的内容。
+    memory_type: 记忆子类型,默认 important_fact_summary。可选值与检索优先级相关。
+    importance: 重要性(0~1),默认 0.5。
+    authority: 权威性(0~1),默认 0.5。
+    """
+
+    runtime = get_tool_runtime()
+    embedding = runtime.embedding_service.embed_text(content) if runtime.embedding_service else []
+    now = datetime.now(timezone.utc)
+    create_dto = LongTermMemorySpecCreate(
+        user_id=runtime.user_id,
+        session_id=runtime.session_id,
+        tag=runtime.config.constants.memory_tag,
+        memory_type=memory_type,
+        content=content,
+        source_type="manual_write",
+        source_id=None,
+        source_uri="manual",
+        confidence=1.0,
+        importance=importance,
+        authority=authority,
+        embedding_model=runtime.config.model.embedding_model_name or None,
+        embedding_vector_json=embedding,
+        metadata_json={
+            "fact_status": "active",
+            "fact": {"namespace": "general", "key": memory_type, "value": content},
+        },
+    )
+
+    memory = runtime.memory_service.create_memory(create_dto)
+
+    result = {
+        "memory_id": memory.memory_id,
+        "content": content,
+        "memory_type": memory.memory_type,
+        "importance": memory.importance,
+        "status": "created",
+    }
+    return json.dumps(result, ensure_ascii=False)
+
+
 def _evaluate_math_expression(node: ast.AST) -> int | float:
     """
     递归计算经过 AST 白名单校验的数学表达式。
@@ -422,5 +473,32 @@ BUILTIN_TOOL_DEFINITIONS = [
             "required": ["query"],
         },
         function=get_knowledge_context,
+    ),
+    BuiltinToolDefinition(
+        name="write_long_term_memory",
+        description="向当前用户的长期记忆中写入一条记录,包含向量化后可被后续对话检索召回。可用于手动存储重要信息、项目代号、用户偏好等需要跨会话持久化的内容。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "description": "需要记忆的内容,建议简洁完整,以便后续检索。",
+                },
+                "memory_type": {
+                    "type": "string",
+                    "description": "记忆子类型,默认 important_fact_summary。一般无需修改。",
+                },
+                "importance": {
+                    "type": "number",
+                    "description": "重要性(0~1),默认 0.5。0~0.3 为低,0.4~0.6 为中,0.7~1.0 为高。",
+                },
+                "authority": {
+                    "type": "number",
+                    "description": "权威性(0~1),默认 0.5。",
+                },
+            },
+            "required": ["content"],
+        },
+        function=write_long_term_memory,
     ),
 ]
