@@ -10,7 +10,7 @@ LLM 任务调度包。
 `run(...)` 或 `submit(...)` 提交具体 LLM 任务。
 """
 
-from agent_service.task_schedule.scheduler import (
+from agent_service.services.scheduler.scheduler import (
     BACKGROUND_FACT_RESOLUTION_TASK,
     BACKGROUND_SUMMARY_TASK,
     FOREGROUND_AGENT_TASK,

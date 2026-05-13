@@ -19,7 +19,8 @@ from langchain_core.messages import SystemMessage
 
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
-from agent_service.task_schedule import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
+from agent_service.services.memory.context_builder import ContextBuilder
+from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
 
 
 REFLECTION_SYSTEM_PROMPT = (
@@ -55,13 +56,18 @@ class ReflectionNode:
         """
         审视最近一次工具执行结果,决定继续还是回答。
 
+        当 LLM 决定继续时,额外检查上下文 token 是否溢出:
+        - 未溢出 → "continue"(直接路由到 planner)
+        - 已溢出 → "compress"(先经过 compress 再到 planner)
+
         state: 当前 LangGraph 状态。
         """
 
         summary = self._build_reflection_context(state)
         if not summary:
+            decision = self._check_overflow_then_decide(state, "continue")
             return {
-                "reflection_decision": "continue",
+                "reflection_decision": decision,
                 "trace": [{"node": "reflection", "event": "no_tool_results_to_review"}],
             }
 
@@ -72,13 +78,24 @@ class ReflectionNode:
             messages=[system_message, context_message],
             model_tier="large",
         )
-        decision = self._parse_decision(response.content)
+        llm_decision = self._parse_decision(response.content)
+        decision = self._check_overflow_then_decide(state, llm_decision)
         trace = {
             "node": "reflection",
             "event": "reflection_complete",
             "decision": decision,
         }
         return {"reflection_decision": decision, "trace": [trace]}
+
+    def _check_overflow_then_decide(self, state: AgentState, llm_decision: str) -> str:
+        """当 LLM 决定 continue 时,检查上下文是否溢出;溢出则返回 compress 迫使进入压缩节点。"""
+
+        if llm_decision != "continue":
+            return llm_decision
+        estimated_tokens = ContextBuilder.estimate_messages_tokens(state.get("messages", []))
+        if estimated_tokens > self.config.memory.summary_trigger_tokens:
+            return "compress"
+        return "continue"
 
     @staticmethod
     def _build_reflection_context(state: AgentState) -> str:

@@ -27,33 +27,35 @@ from typing import Any
 MERMAID_HEADER = "flowchart TD"
 
 
-def draw_agent_graph(compiled_graph: Any, output_path: Path | str) -> Path:
+def draw_agent_graph(compiled_graph: Any, output_path: Path | str, *, branch_labels: dict[tuple[str, str], str] | None = None) -> Path:
     """
     从实际编译后的 LangGraph 图读取节点和边,生成 Mermaid 文件并尽量渲染 SVG。
 
     compiled_graph: LangGraph 编译后的图对象,通常是 `CompiledStateGraph`。
     output_path: Mermaid 输出路径;如果传入 `.svg`,会自动改为同名 `.mmd` 作为源文件。
+    branch_labels: 条件边的 (source, target) → 描述映射,来自 AgentGraphBuilder.branch_labels。
     """
 
     resolved_output_path = Path(output_path).expanduser().resolve()
     mermaid_path = _resolve_mermaid_path(resolved_output_path)
     mermaid_path.parent.mkdir(parents=True, exist_ok=True)
-    mermaid_path.write_text(build_mermaid(compiled_graph), encoding="utf-8")
+    mermaid_path.write_text(build_mermaid(compiled_graph, branch_labels=branch_labels), encoding="utf-8")
     _render_svg_if_available(mermaid_path=mermaid_path, requested_output_path=resolved_output_path)
     return mermaid_path
 
 
-def build_mermaid(compiled_graph: Any) -> str:
+def build_mermaid(compiled_graph: Any, *, branch_labels: dict[tuple[str, str], str] | None = None) -> str:
     """
     把实际编译后的 LangGraph 图转换为 Mermaid flowchart 文本。
 
     compiled_graph: LangGraph 编译后的图对象,通常是 `CompiledStateGraph`。
+    branch_labels: 条件边的 (source, target) → 描述映射,来自 AgentGraphBuilder.branch_labels。
     """
 
     graph_data = compiled_graph.get_graph()
     node_lines = [_build_node_line(str(node_id)) for node_id in graph_data.nodes.keys()]
-    edge_lines = [_build_edge_line(edge) for edge in graph_data.edges]
-    return "\n".join([MERMAID_HEADER, *node_lines, *edge_lines, ""]) 
+    edge_lines = [_build_edge_line(edge, branch_labels=branch_labels) for edge in graph_data.edges]
+    return "\n".join([MERMAID_HEADER, *node_lines, *edge_lines, ""])
 
 
 def _resolve_mermaid_path(output_path: Path) -> Path:
@@ -100,17 +102,21 @@ def _build_node_line(node_id: str) -> str:
     return f'    {mermaid_id}["{label}"]'
 
 
-def _build_edge_line(edge: Any) -> str:
+def _build_edge_line(edge: Any, *, branch_labels: dict[tuple[str, str], str] | None = None) -> str:
     """
     构造 Mermaid 边声明。
 
     edge: LangGraph `get_graph().edges` 中的边对象。
+    branch_labels: 条件边的 (source, target) → 描述映射,来自 AgentGraphBuilder.branch_labels。
     """
 
     source = _to_mermaid_id(str(edge.source))
     target = _to_mermaid_id(str(edge.target))
     if edge.conditional:
-        return f'    {source} -. "conditional" .-> {target}'
+        label = "conditional"
+        if branch_labels:
+            label = branch_labels.get((str(edge.source), str(edge.target)), "conditional")
+        return f'    {source} -. "{label}" .-> {target}'
     return f"    {source} --> {target}"
 
 
@@ -156,8 +162,9 @@ def main() -> None:
     from agent_service.core.agent_config import AgentConfig
 
     config = AgentConfig.load_config(ensure_models=False)
-    compiled_graph = AgentGraphBuilder(config=config).build()
-    draw_agent_graph(compiled_graph=compiled_graph, output_path=args.output)
+    builder = AgentGraphBuilder(config=config)
+    compiled_graph = builder.build()
+    draw_agent_graph(compiled_graph=compiled_graph, output_path=args.output, branch_labels=builder.branch_labels)
 
 
 if __name__ == "__main__":

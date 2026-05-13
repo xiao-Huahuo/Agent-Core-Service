@@ -23,7 +23,7 @@ from agent_service.services.memory.longterm_memory_service import LongTermMemory
 from agent_service.services.memory.memory_resolver import MemoryResolver
 from agent_service.services.memory.rag.embedding import EmbeddingService
 from agent_service.services.message_service import MessageService
-from agent_service.task_schedule import BACKGROUND_SUMMARY_TASK, LLMTaskScheduler, get_llm_task_scheduler
+from agent_service.services.scheduler import BACKGROUND_SUMMARY_TASK, LLMTaskScheduler, get_llm_task_scheduler
 
 
 class SessionSummaryService:

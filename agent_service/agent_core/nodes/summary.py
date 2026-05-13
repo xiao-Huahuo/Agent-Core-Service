@@ -19,7 +19,7 @@ from typing import Any
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.summary_service import SessionSummaryService
-from agent_service.task_schedule import BACKGROUND_SUMMARY_TASK, LLMTaskHandle, LLMTaskScheduler, get_llm_task_scheduler
+from agent_service.services.scheduler import BACKGROUND_SUMMARY_TASK, LLMTaskHandle, LLMTaskScheduler, get_llm_task_scheduler
 
 
 class SummaryNode:

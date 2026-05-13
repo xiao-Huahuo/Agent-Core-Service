@@ -49,7 +49,8 @@ from agent_service.schemas.message import MessageCreate
 from agent_service.scripts.draw_agent_graph import draw_agent_graph
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.message_service import MessageService
-from agent_service.task_schedule import LLMTaskScheduler, get_llm_task_scheduler
+from agent_service.services.safety import SafetyService
+from agent_service.services.scheduler import LLMTaskScheduler, get_llm_task_scheduler
 from agent_service.tools import ToolExecutor, ToolRegistry, clear_tool_runtime, set_tool_runtime
 
 
@@ -84,15 +85,19 @@ class AgentCore:
         self.tool_registry = ToolRegistry.with_builtin_tools(config=config) if tools is None else None
         self.tool_executor = ToolExecutor(registry=self.tool_registry) if self.tool_registry is not None else None
         self.tools = list(tools) if tools is not None else self.tool_registry.to_langchain_tools()
-        self.graph: CompiledStateGraph = graph or AgentGraphBuilder(
+        safety_service = SafetyService(config=config, task_scheduler=self.task_scheduler)
+        builder = AgentGraphBuilder(
             config=config,
             tools=self.tools,
             tool_executor=self.tool_executor,
             task_scheduler=self.task_scheduler,
-        ).build()
+            safety_service=safety_service,
+        )
+        self.graph: CompiledStateGraph = graph or builder.build()
         self.graph_diagram_path = draw_agent_graph(
             compiled_graph=self.graph,
             output_path=config.storage.project_root / "agent_graph.mmd",
+            branch_labels=builder.branch_labels,
         )
 
     def stream_run(self, *, prompt: str, user_id: str, session_id: str) -> Iterator[str]:

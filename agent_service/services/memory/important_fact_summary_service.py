@@ -26,7 +26,7 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate, LongTermMemorySpecOut
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 from agent_service.services.memory.rag.embedding import EmbeddingService
-from agent_service.task_schedule import LLMTaskScheduler, SMALL_MODEL_TIER, get_llm_task_scheduler
+from agent_service.services.scheduler import LLMTaskScheduler, SMALL_MODEL_TIER, get_llm_task_scheduler
 
 
 class ImportantFactSummaryService:

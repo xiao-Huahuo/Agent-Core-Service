@@ -11,7 +11,7 @@ LLM 多级任务队列调度器模块。
    由 worker 消费并执行 `ChatOpenAI.invoke(...)`,再将结果回写 Redis。
 
 这样做的原因是: Python callable 不能跨进程放入 Redis 队列,但项目里所有真正的 LLM
-调用都可以抽象成“可序列化的 chat request”,因此可以在不破坏现有业务结构的前提下,
+调用都可以抽象成"可序列化的 chat request",因此可以在不破坏现有业务结构的前提下,
 把 LLM 资源调度升级为生产可扩展模式。
 
 使用说明:
@@ -39,8 +39,8 @@ from langchain_core.messages import BaseMessage
 from langchain_openai import ChatOpenAI
 
 from agent_service.core.agent_config import AgentConfig
-from agent_service.task_schedule.circuit_breaker import CircuitBreaker, RedisCircuitBreakerStore
-from agent_service.task_schedule.redis_backend import (
+from agent_service.services.scheduler.circuit_breaker import CircuitBreaker, RedisCircuitBreakerStore
+from agent_service.services.scheduler.redis_backend import (
     RedisStreamLLMBackend,
     SerializedChatRequest,
     SerializedChatResult,

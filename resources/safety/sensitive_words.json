@@ -1,0 +1,139 @@
+{
+  "_description": "敏感词库,按类别分组。支持 exact 精确匹配 + regex 正则匹配",
+  "categories": {
+    "politics": {
+      "name": "政治敏感",
+      "risk_level": "high",
+      "block": true,
+      "exact": [
+        "习近平黑料",
+        "六四事件",
+        "法轮功",
+        "台独",
+        "藏独",
+        "疆独",
+        "港独",
+        "煽动颠覆国家政权",
+        "颜色革命",
+        "推背图预言",
+        "中共黑幕",
+        "天安门事件"
+      ],
+      "regex": [
+        "(六|6)[\\s]*四.*(事件|运动|学潮)",
+        "(法轮|FLG|falun).*(功|gong|dafa)",
+        "(台|藏|疆|港).*(独|独立)"
+      ]
+    },
+    "pornography": {
+      "name": "色情低俗",
+      "risk_level": "high",
+      "block": true,
+      "exact": [
+        "色情",
+        "成人视频",
+        "裸聊",
+        "性服务",
+        "卖淫",
+        "嫖娼",
+        "约炮",
+        "一夜情",
+        "性爱",
+        "淫秽",
+        "黄片",
+        "A片",
+        "三级片"
+      ],
+      "regex": [
+        "(裸|露点|无码).*(照|图|视频|直播)",
+        "(成人|色情|黄色).*(网站|视频|直播|平台)"
+      ]
+    },
+    "violence": {
+      "name": "暴力恐怖",
+      "risk_level": "high",
+      "block": true,
+      "exact": [
+        "恐怖袭击",
+        "炸弹制作",
+        "杀人方法",
+        "枪支购买",
+        "ISIS",
+        "基地组织",
+        "圣战",
+        "人体炸弹",
+        "校园枪击",
+        "无差别攻击"
+      ],
+      "regex": [
+        "(制作|购买|获取).*(炸弹|炸药|枪支|武器)",
+        "(如何|怎么|教).*(杀人|伤人|下毒|绑架)"
+      ]
+    },
+    "illegal": {
+      "name": "违法犯罪",
+      "risk_level": "high",
+      "block": true,
+      "exact": [
+        "诈骗教程",
+        "洗钱",
+        "黑客攻击",
+        "DDoS",
+        "盗号",
+        "数据泄露",
+        "刷单",
+        "套现",
+        "假币",
+        "假冒",
+        "传销",
+        "赌博"
+      ],
+      "regex": [
+        "(如何|教|帮).*(翻墙|越狱|破解|盗版)",
+        "(非法|违法).*(集资|集资|放贷)"
+      ]
+    },
+    "spam_ad": {
+      "name": "垃圾广告",
+      "risk_level": "medium",
+      "block": false,
+      "exact": [
+        "加微信",
+        "扫码领红包",
+        "日赚",
+        "点击就送",
+        "免费领取",
+        "限时优惠"
+
+      ],
+      "regex": [
+        "(加|联系).*(微信|QQ|QQ群)",
+        "\\d{5,}.*(元|块).*(日|天|小时).*(赚|挣)"
+      ]
+    },
+    "prompt_injection": {
+      "name": "Prompt注入攻击",
+      "risk_level": "high",
+      "block": true,
+      "exact": [],
+      "regex": [
+        "(忽略|无视|忘记|不要管).*(以上|之前|所有|上面).*(指令|指示|规则|设定|prompt|system)",
+        "(你|现在|从现在开始).*(是|扮演|成为).*(DAN|越狱|不受限|无限制)",
+        "(开发者|调试|debug).*(模式|指令|命令)",
+        "(输出|打印|显示).*(你的|系统).*(prompt|提示词|指令|设定|规则)",
+        "(you\\s+are|you\\s+now|from\\s+now).*(DAN|jailbreak|unrestricted|no\\s+limits)",
+        "(ignore|forget|disregard).*(previous|above|all).*(instructions|rules|prompt|guidelines|system)"
+      ]
+    },
+    "data_exfiltration": {
+      "name": "数据窃取",
+      "risk_level": "high",
+      "block": true,
+      "exact": [],
+      "regex": [
+        "(泄漏|泄露|窃取|偷).*(密码|密钥|token|api.?key|数据库|credential)",
+        "(secret|password|api_key|token).*(泄露|泄漏|窃取)"
+      ]
+    }
+  }
+}

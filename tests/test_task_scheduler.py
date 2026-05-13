@@ -20,11 +20,11 @@ from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 
 from agent_service.core.agent_config import AgentConfig
-from agent_service.task_schedule import BACKGROUND_SUMMARY_TASK
-from agent_service.task_schedule import FOREGROUND_AGENT_TASK
-from agent_service.task_schedule import SMALL_MODEL_TIER
-from agent_service.task_schedule import get_llm_task_scheduler
-from agent_service.task_schedule import reset_llm_task_schedulers
+from agent_service.services.scheduler import BACKGROUND_SUMMARY_TASK
+from agent_service.services.scheduler import FOREGROUND_AGENT_TASK
+from agent_service.services.scheduler import SMALL_MODEL_TIER
+from agent_service.services.scheduler import get_llm_task_scheduler
+from agent_service.services.scheduler import reset_llm_task_schedulers
 
 
 def make_scheduler_test_config() -> AgentConfig:

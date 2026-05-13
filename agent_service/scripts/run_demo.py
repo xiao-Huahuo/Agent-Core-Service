@@ -28,7 +28,7 @@ from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.memory.summary_service import SessionSummaryService
 from agent_service.services.message_service import MessageService
 from agent_service.services.session_service import SessionService
-from agent_service.task_schedule import reset_llm_task_schedulers
+from agent_service.services.scheduler import reset_llm_task_schedulers
 
 
 def _build_config() -> AgentConfig:
