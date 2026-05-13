@@ -540,9 +540,13 @@ class MemoryRetrievalService:
             + self.config.memory.authority_weight * item.memory.authority
         )
 
-    def _rank_key(self, item: RetrievedMemory) -> tuple[float, int, datetime, float, float]:
+    def _rank_key(self, item: RetrievedMemory) -> tuple[datetime, float, int, float, float]:
         """
         返回联合排序键。
+
+        排序策略: 更新时间优先 → 最终得分 → 当前 session 命中 → 相关性 → 重要性。
+        理由: score_threshold 已经滤掉无关记忆,在剩余的候选集中,越新的信息越可能是当前事实。
+        对于"当前项目代号是什么"这类时效敏感查询,此排序远优于纯 relevance 排序。
 
         item: 检索结果。
         """
@@ -551,9 +555,9 @@ class MemoryRetrievalService:
         if updated_at is None:
             updated_at = datetime.min.replace(tzinfo=timezone.utc)
         return (
+            updated_at,
             item.final_score,
             int(item.current_session_match),
-            updated_at,
             item.relevance_score,
             item.memory.importance,
         )

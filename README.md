@@ -57,7 +57,7 @@
 10. 注意力优化：上下文拼装优先级为 `短期历史消息 -> important_fact_summary -> 当前 session 的 session_fact / session_summary -> 外部知识库片段`，避免知识库内容覆盖用户刚刚明确给出的事实。
 11. 信息时效性：为了保证信息时效性，每条记忆都要含有内容有效性时间戳字段（`created_at`、`updated_at`、`valid_from`、`valid_until`），检索时采用优先新内容、旧内容降权、过期内容直接过滤的算法：
      1. 过滤层：过滤 `valid_until < now` 的过时信息。
-     2. 排序层：相关性 + 时效性联合排序，公式：$$Score = 0.5 * relevance + 0.3 * freshness + 0.2 * authority$$
+     2. 排序层：先经过 score_threshold 过滤无关候选，再以**时间优先**策略排序。主排序键为 `updated_at DESC`（最新优先），次排序键为 `final_score DESC`（联合得分）。理由：通过阈值过滤的候选均已相关，在此集合中越新的信息越可能是当前事实，可避免查询中携带的旧关键词（如"1111111 还算当前值吗"）通过 BM25 带偏排序。联合得分公式（用于同级时间的次排序）：$$Score = 0.5 \cdot relevance + 0.3 \cdot freshness + 0.2 \cdot authority$$
      3. 时效状态管理：配置 `MemoryResolver` 作为独立记忆裁决层，先把自然语言摘要解析为结构化事实单元 `session_fact`，再为事实写入 `active / superseded / expired` 状态。
      4. 事实更新策略：针对单值强排他事实执行新值覆盖旧值，针对多值弱排他事实执行新值追加，针对时序事实执行到期失效处理，不再仅依赖向量检索排序推断新旧关系。
      5. 事实类型裁决：已知 `fact_key` 走 schema 固定类别，未知 `fact_key` 由 LLM 提供候选类别，最终由程序统一裁决，避免同一事实在不同轮次被判成不同类型。
@@ -93,7 +93,8 @@ flowchart TD
     B -->|N 条| H{过滤过期记忆}
     H -->|及时| D[混合检索 / 多路召回]
     D -->|10 条| E[重排序]
-    E -->|3 条| F[召回]
+    E -->|3 条| F[时效优先排序]
+    F -->|updated_at DESC| I[最终召回]
     H -->|过时| G[去除]
 ```
 
