@@ -1,5 +1,18 @@
 # CHANGE HISTORY
 
+## 2026-05-13
+- 修复长期记忆检索中 ReRank 过度降权 active fact 的问题: `MemoryRetrievalService` 现在将最终相关性分解释为 `max(rerank_score, merged_score)`，避免当前有效事实因 CrossEncoder 低分被阈值过滤后错误回退到旧 `session_summary`。
+- 在 `tests/test_memory_rag.py` 新增低分 ReRank 回归测试,覆盖“active fact 已存在但 ReRank 低于混合召回分时仍必须保留”的检索场景。
+- 修复 `MemoryResolver` 在已知事实键上的时效性覆盖漏洞: 规则抽取现在优先于 LLM 结果,避免模型把旧值或上下文噪声错误写回当前事实。
+- 扩展 `MemoryResolver.PROJECT_CODE_PATTERNS`，补齐 `更改为`、`改为`、`变更为` 等更新型句式,修复“1111111 -> 2222222 -> 3333333”连续更新时第三次代号无法落库的问题。
+- 在 `tests/test_agent_core_service.py` 新增两条回归测试,分别覆盖“LLM 输出错误旧值时规则覆盖”和“三次连续代号更新后仅最新值保持 active”的场景。
+- 补全 `agent_service/services/memory/rag/hybrid_retrieval.py`，实现生产链路所需的关键词抽取、关键词召回、向量召回候选与关键词候选去重合并，正式落地 README 中的“混合检索 / 多路召回”能力。
+- 补全 `agent_service/services/memory/rag/rerank.py`，新增基于本地 `sentence-transformers CrossEncoder` 的 ReRank 服务与可注入 provider 接口，使混合召回结果能够进入真实精排阶段。
+- 重写 `agent_service/services/memory/retrieval_service.py` 的主工作流，将长期记忆与知识库检索统一切换为“embedding -> vector recall -> keyword recall -> hybrid merge -> rerank -> relevance/freshness/authority final rank”链路，并保留 pgvector / JSON 向量双路径回退。
+- 更新 `agent_service/services/memory/rag/__init__.py` 导出项，正式对外暴露 `HybridRetrievalService`、`HybridRetrievalCandidate` 与 `RerankService`，便于后续 `ContextBuilder` 和其他模块复用统一检索组件。
+- 在 `requirements.txt` 中补充 `sentence-transformers` 依赖，用于本地 Embedding 与 CrossEncoder ReRank 模型的生产推理。
+- 新增 `tests/test_memory_rag.py`，覆盖关键词召回命中与 `MemoryRetrievalService` 已接入 hybrid retrieval + rerank 工作流的回归测试。
+
 ## 2026-05-12
 - 将 `SummaryNode -> summarize_session(user_id, session_id)` 升级为真正的 Redis 持久化业务任务: 新增专用 summary job Stream、独立 worker、结果回写和去重,使服务实例关闭后 summary 任务仍可由其他实例或重启后的实例继续处理。
 - 为调度器新增 `submit_summary_job(...)` 入口和 `SerializedSummaryJobRequest/Result` 协议,将“Summary 业务任务分布式化”与“内部 LLM 调用 Redis 化”分层解耦。

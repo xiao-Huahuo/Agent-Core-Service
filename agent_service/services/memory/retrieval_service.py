@@ -2,14 +2,18 @@
 统一长期记忆检索服务。
 
 功能说明:
-本文件实现第一版 Memory/Knowledge 统一召回链路。它负责根据当前 query 生成
-Embedding,优先使用 pgvector 做向量召回,在不可用时回退到 JSON 向量字段的
-Python 余弦相似度计算,然后按相关性、时效性和权威性做联合排序。
+本文件实现项目当前生产形态的 Memory/Knowledge 统一召回链路。完整流程为:
+1. 生成 query embedding。
+2. 先做向量召回候选。
+3. 并行补做关键词召回候选。
+4. 对两路候选做去重合并。
+5. 对混合候选执行 ReRank 精排。
+6. 最后叠加 relevance、freshness、authority 产出最终排序。
 
 使用说明:
 service = MemoryRetrievalService(config=config)
 memories = service.retrieve_long_term_memory(query="项目代号是什么", user_id="u1", session_id="s1")
-knowledge = service.retrieve_knowledge(query="什么是海洋酸化")
+knowledge = service.retrieve_knowledge(query="海洋酸化影响什么")
 """
 
 from __future__ import annotations
@@ -29,6 +33,11 @@ from agent_service.models.longterm_memory_spec import LongTermMemorySpec
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecOut
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 from agent_service.services.memory.rag.embedding import EmbeddingService
+from agent_service.services.memory.rag.hybrid_retrieval import (
+    HybridRetrievalCandidate,
+    HybridRetrievalService,
+)
+from agent_service.services.memory.rag.rerank import RerankService
 
 
 @dataclass(slots=True)
@@ -36,10 +45,14 @@ class RetrievedMemory:
     """
     检索结果结构。
 
-    memory: 长期记忆输出 DTO。
-    relevance_score: 向量相似度得分。
-    freshness_score: 时效性得分。
-    final_score: 联合排序得分。
+    memory: 统一长期记忆输出 DTO。
+    relevance_score: 当前最终使用的相关性分数。启用 ReRank 时取 ReRank 分数,否则取混合召回分。
+    freshness_score: 时效性分数。
+    final_score: relevance + freshness + authority 联合排序分。
+    current_session_match: 是否命中当前 session。
+    keyword_score: 关键词召回分数,便于观测。
+    rerank_score: ReRank 分数,未启用时为空。
+    retrieval_channels: 命中的召回通道列表。
     """
 
     memory: LongTermMemorySpecOut
@@ -47,15 +60,20 @@ class RetrievedMemory:
     freshness_score: float
     final_score: float
     current_session_match: bool = False
+    keyword_score: float = 0.0
+    rerank_score: float | None = None
+    retrieval_channels: tuple[str, ...] = ()
 
 
 class MemoryRetrievalService:
     """
     统一长期记忆检索服务。
 
-    config: 全局配置对象,用于读取 top_k 和排序权重。
-    embedding_service: 可选 Embedding 服务,测试时可注入假向量生成器。
-    memory_service: 可选长期记忆服务,用于复用同一数据库引擎和 pgvector 状态。
+    config: 全局配置对象。
+    embedding_service: 可选 Embedding 服务。
+    memory_service: 可选长期记忆服务。
+    hybrid_retrieval_service: 可选混合检索服务,测试时可注入假实现。
+    rerank_service: 可选 ReRank 服务,测试时可注入假实现。
     """
 
     def __init__(
@@ -64,13 +82,20 @@ class MemoryRetrievalService:
         config: AgentConfig,
         embedding_service: EmbeddingService | None = None,
         memory_service: LongTermMemoryService | None = None,
+        hybrid_retrieval_service: HybridRetrievalService | None = None,
+        rerank_service: RerankService | None = None,
     ) -> None:
-        """初始化检索服务。"""
+        """初始化统一检索服务。"""
 
         self.config = config
         self.embedding_service = embedding_service or EmbeddingService(config=config)
         self.memory_service = memory_service or LongTermMemoryService(config=config)
         self.engine: Engine = self.memory_service.engine
+        self.hybrid_retrieval_service = hybrid_retrieval_service or HybridRetrievalService(
+            config=config,
+            engine=self.engine,
+        )
+        self.rerank_service = rerank_service or RerankService(config=config)
 
     def retrieve_long_term_memory(
         self,
@@ -85,7 +110,7 @@ class MemoryRetrievalService:
 
         query: 当前查询文本。
         user_id: 用户 ID。
-        session_id: 可选 session ID,用于在跨 session 召回后给当前会话记忆更高排序优先级。
+        session_id: 可选 session ID,用于在跨 session 召回后给予当前会话更高排序优先级。
         top_k: 可选返回条数。
         """
 
@@ -128,6 +153,7 @@ class MemoryRetrievalService:
     def get_latest_session_summary(self, *, user_id: str, session_id: str) -> RetrievedMemory | None:
         """
         获取当前会话最近一条摘要记忆,用于同 session 的保底注入。
+
         user_id: 用户 ID。
         session_id: 会话 ID。
         """
@@ -153,6 +179,7 @@ class MemoryRetrievalService:
             freshness_score=self._freshness_score(memory, now=now),
             final_score=0.0,
             current_session_match=True,
+            retrieval_channels=("session_summary_fallback",),
         )
         retrieved.final_score = self._final_score(retrieved)
         return retrieved
@@ -172,7 +199,7 @@ class MemoryRetrievalService:
 
         query: 当前查询文本。
         user_id: 用户 ID。
-        session_id: 可选会话 ID,用于在用户级跨 session 召回后标记当前会话优先级。
+        session_id: 可选会话 ID。
         tag: Memory 或 Knowledge。
         memory_type: 记忆子类型。
         top_k: 返回条数。
@@ -185,7 +212,8 @@ class MemoryRetrievalService:
         query_vector = self.embedding_service.embed_text(normalized_query)
         if not query_vector:
             return []
-        candidates = self._retrieve_by_pgvector(
+
+        vector_candidates = self._retrieve_vector_candidates(
             query_vector=query_vector,
             user_id=user_id,
             session_id=session_id,
@@ -193,34 +221,75 @@ class MemoryRetrievalService:
             memory_type=memory_type,
             limit=max(final_top_k, self.config.memory.vector_top_k),
         )
-        if not candidates:
-            candidates = self._retrieve_by_json_vectors(
-                query_vector=query_vector,
-                user_id=user_id,
-                session_id=session_id,
-                tag=tag,
-                memory_type=memory_type,
-                limit=max(final_top_k, self.config.memory.vector_top_k),
-            )
-        now = datetime.now(timezone.utc)
-        ranked = sorted(
-            (
-                RetrievedMemory(
-                    memory=item["memory"],
-                    relevance_score=item["relevance_score"],
-                    freshness_score=self._freshness_score(item["memory"], now=now),
-                    final_score=0.0,
-                    current_session_match=bool(session_id and item["memory"].session_id == session_id),
-                )
-                for item in candidates
-            ),
-            key=self._rank_key,
-            reverse=True,
+        keyword_candidates = self.hybrid_retrieval_service.retrieve_keyword_candidates(
+            query=normalized_query,
+            user_id=user_id,
+            session_id=session_id,
+            tag=tag,
+            memory_type=memory_type,
+            limit=max(final_top_k, self.config.memory.keyword_top_k),
         )
-        for item in ranked:
+        merged_candidates = self.hybrid_retrieval_service.merge_candidates(
+            vector_candidates=vector_candidates,
+            keyword_candidates=keyword_candidates,
+            session_id=session_id,
+        )
+        reranked_candidates = self.rerank_service.rerank(
+            query=normalized_query,
+            candidates=merged_candidates,
+            top_k=max(final_top_k, self.config.memory.rerank_top_k),
+        )
+
+        now = datetime.now(timezone.utc)
+        retrieved = [
+            self._candidate_to_retrieved_memory(candidate=candidate, now=now, session_id=session_id)
+            for candidate in reranked_candidates
+        ]
+        for item in retrieved:
             item.final_score = self._final_score(item)
-        ranked = [item for item in ranked if item.final_score >= self.config.memory.score_threshold]
-        return ranked[:final_top_k]
+        retrieved = [item for item in retrieved if item.final_score >= self.config.memory.score_threshold]
+        retrieved.sort(key=self._rank_key, reverse=True)
+        return retrieved[:final_top_k]
+
+    def _retrieve_vector_candidates(
+        self,
+        *,
+        query_vector: list[float],
+        user_id: str,
+        session_id: str | None,
+        tag: str,
+        memory_type: str,
+        limit: int,
+    ) -> list[HybridRetrievalCandidate]:
+        """
+        统一执行向量候选召回。
+
+        query_vector: 查询向量。
+        user_id: 用户 ID。
+        session_id: 当前会话 ID。
+        tag: 记忆大类。
+        memory_type: 记忆子类型。
+        limit: 召回数量上限。
+        """
+
+        candidates = self._retrieve_by_pgvector(
+            query_vector=query_vector,
+            user_id=user_id,
+            session_id=session_id,
+            tag=tag,
+            memory_type=memory_type,
+            limit=limit,
+        )
+        if candidates:
+            return candidates
+        return self._retrieve_by_json_vectors(
+            query_vector=query_vector,
+            user_id=user_id,
+            session_id=session_id,
+            tag=tag,
+            memory_type=memory_type,
+            limit=limit,
+        )
 
     def _retrieve_by_pgvector(
         self,
@@ -231,13 +300,13 @@ class MemoryRetrievalService:
         tag: str,
         memory_type: str,
         limit: int,
-    ) -> list[dict[str, Any]]:
+    ) -> list[HybridRetrievalCandidate]:
         """
         使用 pgvector 向量列检索候选记忆。
 
         query_vector: 查询向量。
         user_id: 用户 ID。
-        session_id: 可选会话 ID,仅用于标记当前会话匹配,不再限制跨 session 召回范围。
+        session_id: 当前会话 ID。
         tag: 记忆大类。
         memory_type: 记忆子类型。
         limit: 候选数量上限。
@@ -276,14 +345,22 @@ class MemoryRetrievalService:
             statement = select(LongTermMemorySpec).where(LongTermMemorySpec.memory_id.in_(memory_ids))
             records = db_session.exec(statement).all()
         record_map = {record.memory_id: LongTermMemorySpecOut.from_record(record) for record in records}
-        return [
-            {
-                "memory": record_map[row["memory_id"]],
-                "relevance_score": self._clamp_score(float(row["relevance_score"] or 0.0)),
-            }
-            for row in rows
-            if row["memory_id"] in record_map and self._is_memory_currently_active(record_map[row["memory_id"]])
-        ]
+        candidates: list[HybridRetrievalCandidate] = []
+        for row in rows:
+            memory = record_map.get(row["memory_id"])
+            if memory is None or not self._is_memory_currently_active(memory):
+                continue
+            vector_score = self._clamp_score(float(row["relevance_score"] or 0.0))
+            candidates.append(
+                HybridRetrievalCandidate(
+                    memory=memory,
+                    vector_score=vector_score,
+                    merged_score=vector_score,
+                    source_channels=("vector",),
+                    current_session_match=bool(session_id and memory.session_id == session_id),
+                )
+            )
+        return candidates
 
     def _retrieve_by_json_vectors(
         self,
@@ -294,13 +371,13 @@ class MemoryRetrievalService:
         tag: str,
         memory_type: str,
         limit: int,
-    ) -> list[dict[str, Any]]:
+    ) -> list[HybridRetrievalCandidate]:
         """
         使用 JSON 向量字段回退检索候选记忆。
 
         query_vector: 查询向量。
         user_id: 用户 ID。
-        session_id: 可选会话 ID,仅用于保持函数签名一致,不限制跨 session 候选集。
+        session_id: 当前会话 ID。
         tag: 记忆大类。
         memory_type: 记忆子类型。
         limit: 候选数量上限。
@@ -316,7 +393,7 @@ class MemoryRetrievalService:
         )
         with Session(self.engine) as db_session:
             records = db_session.exec(statement).all()
-        scored: list[dict[str, Any]] = []
+        scored: list[HybridRetrievalCandidate] = []
         for record in records:
             valid_until = self._ensure_aware_datetime(record.valid_until)
             if valid_until is not None and valid_until < now:
@@ -326,13 +403,24 @@ class MemoryRetrievalService:
             memory = LongTermMemorySpecOut.from_record(record)
             if not self._is_memory_currently_active(memory):
                 continue
+            vector_score = self._cosine_similarity(query_vector, record.embedding_vector_json)
             scored.append(
-                {
-                    "memory": memory,
-                    "relevance_score": self._cosine_similarity(query_vector, record.embedding_vector_json),
-                }
+                HybridRetrievalCandidate(
+                    memory=memory,
+                    vector_score=vector_score,
+                    merged_score=vector_score,
+                    source_channels=("vector",),
+                    current_session_match=bool(session_id and memory.session_id == session_id),
+                )
             )
-        scored.sort(key=lambda item: item["relevance_score"], reverse=True)
+        scored.sort(
+            key=lambda item: (
+                item.vector_score,
+                int(item.current_session_match),
+                self._ensure_aware_datetime(item.memory.updated_at),
+            ),
+            reverse=True,
+        )
         return scored[:limit]
 
     @staticmethod
@@ -352,6 +440,45 @@ class MemoryRetrievalService:
         if left_norm == 0.0 or right_norm == 0.0:
             return 0.0
         return MemoryRetrievalService._clamp_score((numerator / (left_norm * right_norm) + 1.0) / 2.0)
+
+    def _candidate_to_retrieved_memory(
+        self,
+        *,
+        candidate: HybridRetrievalCandidate,
+        now: datetime,
+        session_id: str | None,
+    ) -> RetrievedMemory:
+        """
+        将混合召回候选转换为最终检索 DTO。
+
+        candidate: 混合召回候选。
+        now: 当前时间。
+        session_id: 当前 session ID。
+        """
+
+        relevance_score = self._resolve_relevance_score(candidate)
+        return RetrievedMemory(
+            memory=candidate.memory,
+            relevance_score=relevance_score,
+            freshness_score=self._freshness_score(candidate.memory, now=now),
+            final_score=0.0,
+            current_session_match=bool(session_id and candidate.memory.session_id == session_id),
+            keyword_score=candidate.keyword_score,
+            rerank_score=candidate.rerank_score,
+            retrieval_channels=candidate.source_channels,
+        )
+
+    @staticmethod
+    def _resolve_relevance_score(candidate: HybridRetrievalCandidate) -> float:
+        """
+        解析候选最终用于排序的相关性分数。
+
+        candidate: 混合召回候选。
+        """
+
+        if candidate.rerank_score is not None:
+            return max(candidate.rerank_score, candidate.merged_score)
+        return max(candidate.merged_score, candidate.vector_score, candidate.keyword_score)
 
     def _final_score(self, item: RetrievedMemory) -> float:
         """
@@ -373,11 +500,16 @@ class MemoryRetrievalService:
         item: 检索结果。
         """
 
-        final_score = self._final_score(item)
         updated_at = self._ensure_aware_datetime(item.memory.updated_at)
         if updated_at is None:
             updated_at = datetime.min.replace(tzinfo=timezone.utc)
-        return final_score, int(item.current_session_match), updated_at, item.relevance_score, item.memory.importance
+        return (
+            item.final_score,
+            int(item.current_session_match),
+            updated_at,
+            item.relevance_score,
+            item.memory.importance,
+        )
 
     @staticmethod
     def _freshness_score(memory: LongTermMemorySpecOut, *, now: datetime) -> float:
@@ -396,19 +528,11 @@ class MemoryRetrievalService:
     def _is_memory_currently_active(memory: LongTermMemorySpecOut) -> bool:
         """
         判断长期记忆当前是否仍应参与召回。
+
         memory: 长期记忆输出记录。
         """
 
-        valid_until = MemoryRetrievalService._ensure_aware_datetime(memory.valid_until)
-        if valid_until is not None and valid_until <= datetime.now(timezone.utc):
-            return False
-        fact_status = memory.metadata_json.get("fact_status")
-        if fact_status in {"superseded", "expired", "deleted"}:
-            return False
-        fact = memory.metadata_json.get("fact")
-        if isinstance(fact, dict) and fact.get("status") in {"superseded", "expired", "deleted"}:
-            return False
-        return True
+        return HybridRetrievalService.is_memory_currently_active(memory)
 
     @staticmethod
     def _clamp_score(value: float) -> float:

@@ -1,5 +1,2 @@
-- [ ] 在frontmatter显式提取字段之后加上异步并行的LLM来sematic_enrichment语义提取字段的过程.以免出现文章写有效开始时间却无法结构化提取的困难.
-- [ ] 更强的版本治理:时序更新,新事实自动替换旧事实,旧事实自动失效,冲突记忆自动合并
-- [ ] 为LLM的调用增加Redis队列,解决overload问题.
-  - 设置一个限流调度器LLMTaskScheduler,所有的LLM调用都要通过它,参数配置写在AgentConfig.TaskScheduleConfig.内部存在多级队列调度(按主 Agent、Summary、Fact Extraction 三个等级分配到不同队列,分配同一semaphore),配备超时,熔断,重试等机制.
+- [ ] 在frontmatter显式提取字段之后加上sematic_enrichment语义提取字段的过程(最低任务队列).以免出现文章写有效开始时间却无法结构化提取的困难.
 - [ ] agent安全机制,防prompt注入.

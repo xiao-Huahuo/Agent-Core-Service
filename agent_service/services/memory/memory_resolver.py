@@ -89,7 +89,9 @@ class MemoryResolver:
     PROJECT_CODE_PATTERNS = (
         re.compile(
             r"(?:当前)?项目代号"
-            r"(?:已经从[^\s，。]+改成|已更新为|更新为|已确认为|已确认|确认|为|是)"
+            r"(?:已经从[^\s，。]+改成|已从[^\s，。]+改成|已经从[^\s，。]+更改为|已从[^\s，。]+更改为|"
+            r"已经从[^\s，。]+改为|已从[^\s，。]+改为|已经从[^\s，。]+变更为|已从[^\s，。]+变更为|"
+            r"已更新为|更新为|已改为|改为|已更改为|更改为|已变更为|变更为|已确认为|已确认|确认|为|是)"
             r"\s*[：:]?\s*[\"“]?([A-Za-z0-9_-]+)[\"”]?"
         ),
     )
@@ -155,9 +157,6 @@ class MemoryResolver:
         normalized = summary.strip()
         if not normalized:
             return []
-        llm_facts = self._extract_facts_via_model(normalized)
-        if llm_facts:
-            return llm_facts
         extracted: list[MemoryFact] = []
         project_code = self._extract_first_match(normalized, self.PROJECT_CODE_PATTERNS)
         if project_code:
@@ -179,7 +178,10 @@ class MemoryResolver:
                     category="single_value",
                 )
             )
-        return extracted
+        llm_facts = self._extract_facts_via_model(normalized)
+        if not llm_facts:
+            return extracted
+        return self._merge_known_and_llm_facts(known_facts=extracted, llm_facts=llm_facts)
 
     def _extract_facts_via_model(self, summary: str) -> list[MemoryFact]:
         """
@@ -242,6 +244,35 @@ class MemoryResolver:
                 )
             )
         return facts
+
+    @staticmethod
+    def _merge_known_and_llm_facts(
+        *,
+        known_facts: list[MemoryFact],
+        llm_facts: list[MemoryFact],
+    ) -> list[MemoryFact]:
+        """
+        合并规则抽取结果与 LLM 抽取结果。
+
+        对于已知 schema 的事实键,优先采用规则抽取结果,避免模型把旧值或上下文噪声写回当前事实。
+        对于规则尚未覆盖的新事实,保留 LLM 结果作为补充。
+
+        known_facts: 规则抽取出的已知事实。
+        llm_facts: LLM 抽取出的事实列表。
+        """
+
+        merged: list[MemoryFact] = list(known_facts)
+        known_keys = {(fact.namespace, fact.key) for fact in known_facts}
+        seen_pairs = {(fact.namespace, fact.key, fact.value) for fact in known_facts}
+        for fact in llm_facts:
+            if (fact.namespace, fact.key) in known_keys:
+                continue
+            unique_pair = (fact.namespace, fact.key, fact.value)
+            if unique_pair in seen_pairs:
+                continue
+            merged.append(fact)
+            seen_pairs.add(unique_pair)
+        return merged
 
     def _create_fact_memory(
         self,

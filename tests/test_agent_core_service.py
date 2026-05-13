@@ -40,6 +40,8 @@ from agent_service.scripts.draw_agent_graph import build_mermaid
 from agent_service.scripts.download_model import is_model_available
 from agent_service.scripts.download_model import model_target_dir
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
+from agent_service.services.memory.memory_resolver import MemoryFact
+from agent_service.services.memory.memory_resolver import MemoryResolver
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 from agent_service.services.memory.rag.embedding import EmbeddingService
@@ -656,6 +658,117 @@ def test_context_builder_includes_retrieved_memory_context() -> None:
     assert isinstance(messages[0], SystemMessage)
     assert "长期记忆召回" in messages[0].content
     assert "stone-cat" in messages[0].content
+
+
+def test_memory_resolver_prefers_rule_based_known_fact_over_llm_output() -> None:
+    """验证已知事实键优先使用规则抽取结果,避免 LLM 旧值覆盖当前值。"""
+
+    config = AgentConfig.load_config(
+        {
+            "storage": {"relational_dsn": "sqlite://", "vector_dsn": "sqlite://"},
+            "model": {"model_name": "test-model", "api_key": "test-key", "base_url": "https://example.com/v1"},
+        },
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    memory_service = LongTermMemoryService(config=config, engine=engine, create_tables=False)
+    resolver = MemoryResolver(
+        config=config,
+        memory_service=memory_service,
+        embedding_service=EmbeddingService(config=config, provider=FakeEmbeddingProvider(dimension=3)),
+    )
+    resolver._extract_facts_via_model = lambda summary: [
+        MemoryFact(
+            namespace="project",
+            key="project_code",
+            value="1111111",
+            category="single_value",
+        )
+    ]
+
+    facts = resolver.extract_facts("当前项目代号已更新为2222222。")
+
+    assert len(facts) == 1
+    assert facts[0].key == "project_code"
+    assert facts[0].value == "2222222"
+
+
+def test_memory_resolver_marks_latest_project_code_as_active_after_multiple_updates() -> None:
+    """验证项目代号连续三次更新后,只有最新值保留为 active。"""
+
+    config = AgentConfig.load_config(
+        {
+            "storage": {"relational_dsn": "sqlite://", "vector_dsn": "sqlite://"},
+            "model": {
+                "model_name": "test-model",
+                "api_key": "test-key",
+                "base_url": "https://example.com/v1",
+                "embedding_model_name": "fake-embedding",
+            },
+            "memory": {"score_threshold": 0.0},
+        },
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    memory_service = LongTermMemoryService(config=config, engine=engine, create_tables=False)
+    embedding_service = EmbeddingService(config=config, provider=FakeEmbeddingProvider(dimension=3))
+    resolver = MemoryResolver(
+        config=config,
+        memory_service=memory_service,
+        embedding_service=embedding_service,
+    )
+    resolver._extract_facts_via_model = lambda summary: []
+
+    def write_summary(session_id: str, content: str) -> None:
+        summary_memory = memory_service.create_memory(
+            LongTermMemorySpecCreate(
+                user_id="user_1",
+                session_id=session_id,
+                tag="Memory",
+                memory_type="session_summary",
+                content=content,
+                source_type="session_messages",
+                source_id=session_id,
+                embedding_model="fake-embedding",
+                embedding_vector_json=[1.0, 2.0, 3.0],
+            )
+        )
+        resolver.resolve_summary(
+            user_id="user_1",
+            session_id=session_id,
+            summary_memory=summary_memory,
+        )
+
+    write_summary("sess_1", "当前项目代号为1111111。")
+    write_summary("sess_2", "当前项目代号已更新为2222222。")
+    write_summary("sess_3", "当前项目代号已从2222222更改为3333333。")
+
+    active_facts = memory_service.list_active_fact_memories(
+        user_id="user_1",
+        namespace="project",
+        key="project_code",
+    )
+    retrieval_service = MemoryRetrievalService(
+        config=config,
+        embedding_service=embedding_service,
+        memory_service=memory_service,
+    )
+    retrieved = retrieval_service.retrieve_long_term_memory(
+        query="当前项目代号是什么",
+        user_id="user_1",
+        session_id="sess_final",
+        top_k=3,
+    )
+
+    assert len(active_facts) == 1
+    assert active_facts[0].content == "当前项目代号为3333333。"
+    assert retrieved[0].memory.content == "当前项目代号为3333333。"
 
 
 def test_builtin_memory_tools_use_runtime_context() -> None:
