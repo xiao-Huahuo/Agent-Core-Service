@@ -136,25 +136,8 @@ class AgentCore:
         session_id: 会话 ID,由外部主服务控制连续对话或新对话。
         """
 
-        message_service = self._get_message_service()
-        context_builder = self._get_context_builder(message_service=message_service)
-        messages = context_builder.build_messages(user_id=user_id, session_id=session_id, current_prompt=prompt)
-        message_service.create_message(
-            MessageCreate(
-                session_id=session_id,
-                user_id=user_id,
-                role="user",
-                content=prompt,
-                metadata_json={"source": "run_session_prompt"},
-            )
-        )
         chunks: list[str] = []
-        for chunk in self._stream_messages(
-            messages=messages,
-            user_id=user_id,
-            session_id=session_id,
-            message_service=message_service,
-        ):
+        for chunk in self.stream_session_prompt(prompt=prompt, user_id=user_id, session_id=session_id):
             chunks.append(chunk)
         events = self.parse_stream_chunks(chunks)
         graph_diagram = self.graph_diagram_path.read_text(encoding="utf-8")
@@ -165,6 +148,38 @@ class AgentCore:
             "events": events,
             "chunks": chunks,
         }
+
+    def stream_session_prompt(self, *, prompt: str, user_id: str, session_id: str) -> Iterator[str]:
+        """
+        运行带 session 上下文和消息持久化的一轮 Agent,以 SSE 流式输出。
+
+        与 `run_session_prompt` 共享相同的上下文构建和持久化逻辑,但不再缓冲全部
+        chunk 再返回 dict,而是逐节点 yield SSE 字符串,适合 gRPC server-streaming
+        或 SSE 直推到前端。
+
+        prompt: 用户本轮输入。
+        user_id: 用户 ID,用于读取和保存该用户的消息。
+        session_id: 会话 ID,由外部主服务控制连续对话或新对话。
+        """
+
+        message_service = self._get_message_service()
+        context_builder = self._get_context_builder(message_service=message_service)
+        messages = context_builder.build_messages(user_id=user_id, session_id=session_id, current_prompt=prompt)
+        message_service.create_message(
+            MessageCreate(
+                session_id=session_id,
+                user_id=user_id,
+                role="user",
+                content=prompt,
+                metadata_json={"source": "stream_session_prompt"},
+            )
+        )
+        yield from self._stream_messages(
+            messages=messages,
+            user_id=user_id,
+            session_id=session_id,
+            message_service=message_service,
+        )
 
     def close(self) -> None:
         """释放 AgentCore 持有的调度器等资源。"""

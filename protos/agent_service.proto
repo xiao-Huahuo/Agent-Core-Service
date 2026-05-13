@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package agent_service;
+
+// ---------------------------------------------------------------------------
+// AgentService — Agent 微服务 gRPC 接口定义
+//
+// 覆盖能力:
+//   - AgentCore 的 4 个方法（流式 / 非流式 × 有状态 / 无状态）
+//   - SessionService 的 5 个 CRUD 方法
+// ---------------------------------------------------------------------------
+
+service AgentService {
+  // ---- Agent 调用 ----
+
+  // 无状态流式运行（无长期记忆 / 知识库召回）。
+  rpc StreamRun(RunRequest) returns (stream ChunkMessage);
+
+  // 无状态单次运行，返回结构化结果。
+  rpc RunOnce(RunRequest) returns (RunResult);
+
+  // 带 session 上下文的流式运行（长期记忆召回 + 消息持久化 + 逐节点推送）。
+  rpc StreamSessionPrompt(RunRequest) returns (stream ChunkMessage);
+
+  // 带 session 上下文的单次运行，缓冲全部节点后返回结构化结果。
+  rpc RunSessionPrompt(RunRequest) returns (RunResult);
+
+  // ---- Session 管理 ----
+
+  rpc CreateSession(SessionCreateRequest) returns (SessionResponse);
+
+  rpc GetSession(SessionIdRequest) returns (SessionResponse);
+
+  rpc ListUserSessions(ListSessionsRequest) returns (ListSessionsResponse);
+
+  rpc UpdateSessionName(SessionUpdateRequest) returns (SessionResponse);
+
+  rpc DeleteSession(SessionIdRequest) returns (DeleteResponse);
+}
+
+// ---------------------------------------------------------------------------
+// 通用请求 / 响应
+// ---------------------------------------------------------------------------
+
+message RunRequest {
+  string prompt = 1;
+  string user_id = 2;
+  string session_id = 3;
+}
+
+message RunResult {
+  string graph_diagram = 1;
+  string final_output = 2;
+  // JSON 序列化的 list[dict],内部结构由 AgentCore 定义。
+  string events_json = 3;
+  string chunks_json = 4;
+}
+
+// ---------------------------------------------------------------------------
+// 流式推送块
+// ---------------------------------------------------------------------------
+
+message ToolCall {
+  string name = 1;
+  // JSON 序列化的工具参数 dict。
+  string args_json = 2;
+  string id = 3;
+}
+
+message TraceEntry {
+  string node = 1;
+  string event = 2;
+  string error_type = 3;
+  string message = 4;
+}
+
+message ChunkMessage {
+  string node = 1;
+  string content = 2;
+  repeated ToolCall tool_calls = 3;
+  repeated TraceEntry trace = 4;
+  // 当 done == true 时表示流结束，其余字段可忽略。
+  bool done = 5;
+}
+
+// ---------------------------------------------------------------------------
+// Session 管理消息
+// ---------------------------------------------------------------------------
+
+message SessionCreateRequest {
+  string user_id = 1;
+  string session_name = 2;
+}
+
+message SessionIdRequest {
+  string session_id = 1;
+}
+
+message ListSessionsRequest {
+  string user_id = 1;
+}
+
+message SessionUpdateRequest {
+  string session_id = 1;
+  string session_name = 2;
+}
+
+message SessionResponse {
+  string session_id = 1;
+  string user_id = 2;
+  string session_name = 3;
+  // ISO 8601 格式 UTC 时间字符串。
+  string created_at = 4;
+  string updated_at = 5;
+}
+
+message ListSessionsResponse {
+  repeated SessionResponse sessions = 1;
+}
+
+message DeleteResponse {
+  bool success = 1;
+}

@@ -1,8 +1,18 @@
 flowchart TD
     internal_start["START"]
+    compress["compress"]
+    planner["planner"]
     agent["agent"]
+    action["action"]
+    reflection["reflection"]
     summary["summary"]
     internal_end["END"]
-    internal_start --> agent
+    internal_start --> compress
+    action --> reflection
+    agent -. "conditional" .-> action
     agent -. "conditional" .-> summary
+    compress --> planner
+    planner --> agent
+    reflection -. "conditional" .-> compress
+    reflection -. "conditional" .-> summary
     summary --> internal_end

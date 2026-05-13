@@ -25,6 +25,17 @@
 - 更新 `agent_service/services/memory/rag/__init__.py` 导出项，正式对外暴露 `HybridRetrievalService`、`HybridRetrievalCandidate` 与 `RerankService`，便于后续 `ContextBuilder` 和其他模块复用统一检索组件。
 - 在 `requirements.txt` 中补充 `sentence-transformers` 依赖，用于本地 Embedding 与 CrossEncoder ReRank 模型的生产推理。
 - 新增 `tests/test_memory_rag.py`，覆盖关键词召回命中与 `MemoryRetrievalService` 已接入 hybrid retrieval + rerank 工作流的回归测试。
+- 为 `AgentConfig` 增加小模型池与上下文压缩相关配置,包括 `important_fact_summary_system_prompt`、`context_compression_tail_messages`、`large_model_max_concurrency` 与 `small_model_max_concurrency`,并补充对应环境变量读取逻辑。
+- 扩展 `LLMTaskScheduler` 与 Redis 序列化协议,为所有可序列化 LLM 请求新增 `model_tier=large/small` 路由能力,并在调度器内部加入独立的大模型池/小模型池并发闸门。
+- 新增 `ImportantFactSummaryService`,统一封装“小模型重要事实摘要 + 向量库长期记忆入库”能力,供会话摘要和上下文压缩两条链路复用。
+- 将 `SessionSummaryService` 的摘要生成逻辑改为复用重要事实摘要服务,摘要继续写入 `session_summary`,随后仍由 `MemoryResolver` 执行 `session_fact` 提取与时效裁决。
+- 将 `MemoryResolver` 的结构化事实抽取 LLM 调用切换到 `small` 模型池,与摘要和压缩任务保持一致的轻量模型调度策略。
+- 新增 `CompressNode`,把 Agent 图升级为 `compress -> agent -> action -> compress -> ... -> summary -> END`,在上下文 token 估算触顶时生成重要事实摘要、写入 `important_fact_summary`,并用“摘要 + 最近消息”重写当前工作上下文。
+- 升级 `ContextBuilder`,增加重要事实摘要注入、字符启发式 token 估算和上下文超限时的尾部消息重建逻辑,使后续轮次能够直接消费 `important_fact_summary`。
+- 调整 `MemoryRetrievalService`,在 `session_fact` 之后新增 `important_fact_summary` 召回层,并补充 `get_latest_important_fact_summary()` 供 `ContextBuilder` 使用。
+- 调整 `AgentCore` 的工具运行时上下文注入逻辑,优先复用 `ContextBuilder` 已持有的统一检索服务,避免同一轮执行里重复构造检索依赖。
+- 更新 `README.md` 的记忆机制与任务调度机制说明,补充 `compress` 节点、重要事实摘要流和 `large/small` 双模型池调度 Mermaid 图。
+- 新增并更新测试,覆盖小模型路由解析、`compress` 节点消息重写、上下文超限时的重要事实摘要注入等关键行为。
 
 ## 2026-05-12
 - 将 `SummaryNode -> summarize_session(user_id, session_id)` 升级为真正的 Redis 持久化业务任务: 新增专用 summary job Stream、独立 worker、结果回写和去重,使服务实例关闭后 summary 任务仍可由其他实例或重启后的实例继续处理。
@@ -115,15 +126,4 @@
 - 新增 `MemoryRetrievalService`,支持对 `session_summary` 和 `knowledge_chunk` 执行统一向量召回,优先走 pgvector,不可用时回退到 JSON 向量余弦相似度检索。
 - 将 `ContextBuilder` 升级为自动召回长期记忆和知识库片段并注入系统上下文,同时新增 `get_long_term_memory` 与 `get_knowledge_context` 两个 builtin 工具走同一检索链路。
 - 将 `main.py` 改为长期记忆与知识库召回验证脚本: 启动时自动灌知识库,首轮对话后同步生成 summary,第二轮调用前打印召回上下文预览以便确认 Memory 和 Knowledge 是否同时命中。
-- ## 2026-05-13
-- 为 `AgentConfig` 增加小模型池与上下文压缩相关配置,包括 `important_fact_summary_system_prompt`、`context_compression_tail_messages`、`large_model_max_concurrency` 与 `small_model_max_concurrency`,并补充对应环境变量读取逻辑。
-- 扩展 `LLMTaskScheduler` 与 Redis 序列化协议,为所有可序列化 LLM 请求新增 `model_tier=large/small` 路由能力,并在调度器内部加入独立的大模型池/小模型池并发闸门。
-- 新增 `ImportantFactSummaryService`,统一封装“小模型重要事实摘要 + 向量库长期记忆入库”能力,供会话摘要和上下文压缩两条链路复用。
-- 将 `SessionSummaryService` 的摘要生成逻辑改为复用重要事实摘要服务,摘要继续写入 `session_summary`,随后仍由 `MemoryResolver` 执行 `session_fact` 提取与时效裁决。
-- 将 `MemoryResolver` 的结构化事实抽取 LLM 调用切换到 `small` 模型池,与摘要和压缩任务保持一致的轻量模型调度策略。
-- 新增 `CompressNode`,把 Agent 图升级为 `compress -> agent -> action -> compress -> ... -> summary -> END`,在上下文 token 估算触顶时生成重要事实摘要、写入 `important_fact_summary`,并用“摘要 + 最近消息”重写当前工作上下文。
-- 升级 `ContextBuilder`,增加重要事实摘要注入、字符启发式 token 估算和上下文超限时的尾部消息重建逻辑,使后续轮次能够直接消费 `important_fact_summary`。
-- 调整 `MemoryRetrievalService`,在 `session_fact` 之后新增 `important_fact_summary` 召回层,并补充 `get_latest_important_fact_summary()` 供 `ContextBuilder` 使用。
-- 调整 `AgentCore` 的工具运行时上下文注入逻辑,优先复用 `ContextBuilder` 已持有的统一检索服务,避免同一轮执行里重复构造检索依赖。
-- 更新 `README.md` 的记忆机制与任务调度机制说明,补充 `compress` 节点、重要事实摘要流和 `large/small` 双模型池调度 Mermaid 图。
-- 新增并更新测试,覆盖小模型路由解析、`compress` 节点消息重写、上下文超限时的重要事实摘要注入等关键行为。
+
