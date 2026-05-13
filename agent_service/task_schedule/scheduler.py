@@ -24,6 +24,7 @@ from __future__ import annotations
 import atexit
 from collections.abc import Callable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 import itertools
 import queue
@@ -49,6 +50,8 @@ from agent_service.task_schedule.redis_backend import (
 
 
 LLMOperation = Callable[[], Any]
+LARGE_MODEL_TIER = "large"
+SMALL_MODEL_TIER = "small"
 FOREGROUND_AGENT_TASK = "foreground_agent"
 BACKGROUND_SUMMARY_TASK = "background_summary"
 BACKGROUND_FACT_RESOLUTION_TASK = "background_fact_resolution"
@@ -57,6 +60,7 @@ SUPPORTED_TASK_TYPES = {
     BACKGROUND_SUMMARY_TASK,
     BACKGROUND_FACT_RESOLUTION_TASK,
 }
+SUPPORTED_MODEL_TIERS = {LARGE_MODEL_TIER, SMALL_MODEL_TIER}
 
 
 class LLMTaskSchedulerError(RuntimeError):
@@ -141,6 +145,10 @@ class LLMTaskScheduler:
         self._sequence = itertools.count()
         self._shutdown_event = threading.Event()
         self._global_semaphore = threading.Semaphore(max(self.task_config.global_max_concurrency, 1))
+        self._model_semaphores = {
+            LARGE_MODEL_TIER: threading.Semaphore(max(self.task_config.large_model_max_concurrency, 1)),
+            SMALL_MODEL_TIER: threading.Semaphore(max(self.task_config.small_model_max_concurrency, 1)),
+        }
         self._dedup_lock = threading.Lock()
         self._dedup_handles: dict[str, LLMTaskHandle] = {}
         self._tool_registry: Any | None = None
@@ -270,6 +278,7 @@ class LLMTaskScheduler:
         dedup_key: str | None = None,
         timeout_seconds: float | None = None,
         temperature: float | None = None,
+        model_tier: str = LARGE_MODEL_TIER,
     ) -> BaseMessage:
         """提交并同步等待一个可序列化的 LLM Chat 请求。"""
 
@@ -280,6 +289,7 @@ class LLMTaskScheduler:
             dedup_key=dedup_key,
             timeout_seconds=timeout_seconds,
             temperature=temperature,
+            model_tier=model_tier,
         )
         return handle.wait(timeout=timeout_seconds)
 
@@ -292,10 +302,12 @@ class LLMTaskScheduler:
         dedup_key: str | None = None,
         timeout_seconds: float | None = None,
         temperature: float | None = None,
+        model_tier: str = LARGE_MODEL_TIER,
     ) -> LLMTaskHandle:
         """提交一个可序列化的 LLM Chat 请求。"""
 
         self._ensure_supported_task_type(task_type)
+        self._ensure_supported_model_tier(model_tier)
         actual_dedup_key = self._normalize_dedup_key(task_type=task_type, dedup_key=dedup_key)
         if not self._circuit_breakers[task_type].allow_request():
             raise LLMTaskOverloadedError(f"任务类型 {task_type} 当前处于熔断状态,暂时拒绝新请求。")
@@ -308,6 +320,7 @@ class LLMTaskScheduler:
             max_retries=max(self.task_config.max_retries, 0),
             dedup_key=actual_dedup_key,
             temperature=temperature,
+            model_tier=model_tier,
         )
         if self._backend is None:
             return self._submit_local_chat_request(request)
@@ -643,8 +656,10 @@ class LLMTaskScheduler:
             tool_names=request.tool_names,
             temperature=request.temperature,
             timeout_seconds=request.timeout_seconds,
+            model_tier=request.model_tier,
         )
-        response = model.invoke(messages)
+        with self._acquire_model_pool(request.model_tier):
+            response = model.invoke(messages)
         if not isinstance(response, BaseMessage):
             raise TypeError("ChatOpenAI.invoke 未返回 LangChain BaseMessage。")
         return response
@@ -666,19 +681,23 @@ class LLMTaskScheduler:
         tool_names: list[str],
         temperature: float | None,
         timeout_seconds: float,
+        model_tier: str,
     ) -> Any:
         """构造或复用与请求匹配的 ChatOpenAI 实例。"""
 
-        final_temperature = self.config.model.resolve_primary_temperature(temperature)
-        cache_key = (tuple(sorted(tool_names)), float(final_temperature), float(timeout_seconds))
+        model_name, api_key, base_url, final_temperature = self._resolve_model_runtime(
+            model_tier=model_tier,
+            requested_temperature=temperature,
+        )
+        cache_key = (model_tier, tuple(sorted(tool_names)), float(final_temperature), float(timeout_seconds))
         with self._model_cache_lock:
             model = self._model_cache.get(cache_key)
             if model is not None:
                 return model
             model = ChatOpenAI(
-                model=self.config.model.model_name,
-                api_key=self.config.model.api_key,
-                base_url=self.config.model.base_url,
+                model=model_name,
+                api_key=api_key,
+                base_url=base_url,
                 temperature=final_temperature,
                 timeout=timeout_seconds,
             )
@@ -693,6 +712,48 @@ class LLMTaskScheduler:
                     model = model.bind_tools(tools)
             self._model_cache[cache_key] = model
             return model
+
+    def _resolve_model_runtime(
+        self,
+        *,
+        model_tier: str,
+        requested_temperature: float | None,
+    ) -> tuple[str, str, str, float]:
+        """
+        根据模型池等级解析实际调用所需的模型参数。
+
+        model_tier: 目标模型池等级。
+        requested_temperature: 调用方显式传入的温度覆盖值。
+        """
+
+        if model_tier == SMALL_MODEL_TIER and self.config.model.small_model_name:
+            return (
+                self.config.model.small_model_name,
+                self.config.model.small_model_api_key or self.config.model.api_key,
+                self.config.model.small_model_base_url or self.config.model.base_url,
+                self.config.model.resolve_small_temperature(requested_temperature),
+            )
+        return (
+            self.config.model.model_name,
+            self.config.model.api_key,
+            self.config.model.base_url,
+            self.config.model.resolve_primary_temperature(requested_temperature),
+        )
+
+    @contextmanager
+    def _acquire_model_pool(self, model_tier: str) -> Any:
+        """
+        获取指定模型池的并发许可。
+
+        model_tier: 目标模型池等级。
+        """
+
+        semaphore = self._model_semaphores[model_tier]
+        semaphore.acquire()
+        try:
+            yield
+        finally:
+            semaphore.release()
 
     def _get_tool_registry(self) -> Any:
         """懒加载工具注册表,避免在模块导入阶段引入环依赖。"""
@@ -823,6 +884,13 @@ class LLMTaskScheduler:
 
         if task_type not in SUPPORTED_TASK_TYPES:
             raise ValueError(f"不支持的 LLM 调度任务类型: {task_type}")
+
+    @staticmethod
+    def _ensure_supported_model_tier(model_tier: str) -> None:
+        """校验模型池等级是否合法。"""
+
+        if model_tier not in SUPPORTED_MODEL_TIERS:
+            raise ValueError(f"不支持的模型池等级: {model_tier}")
 
     @staticmethod
     def _is_retryable_error(exc: Exception) -> bool:

@@ -50,6 +50,7 @@ class AgentConfig:
         default_session_name: str = "新对话"
         memory_tag: str = "Memory"
         knowledge_tag: str = "Knowledge"
+        important_fact_summary_memory_type: str = "important_fact_summary"
         default_display_mode: str = "default"
 
     @dataclass(slots=True)
@@ -183,6 +184,11 @@ class AgentConfig:
         )
         embedding_model_name: str = ""
         rerank_model_name: str = ""
+        important_fact_summary_system_prompt: str = (
+            "你负责把对话或工作上下文压缩成后续推理可直接使用的重要事实摘要。"
+            "只保留当前仍然有效的事实、用户约束、任务目标、未完成事项和最近工具结论。"
+            "删除寒暄、重复、推测和无意义细节。输出中文短摘要。"
+        )
 
         def resolve_primary_temperature(self, requested_temperature: float | None = None) -> float:
             """
@@ -260,6 +266,7 @@ class AgentConfig:
         relevance_weight: float = 0.5
         authority_weight: float = 0.2
         knowledge_hash_lock_enabled: bool = True
+        context_compression_tail_messages: int = 6
 
     @dataclass(slots=True)
     class TaskScheduleConfig:
@@ -322,6 +329,8 @@ class AgentConfig:
         redis_visibility_timeout_seconds: int = 120
         redis_block_timeout_ms: int = 1000
         redis_result_poll_interval_seconds: float = 0.2
+        large_model_max_concurrency: int = 4
+        small_model_max_concurrency: int = 4
 
     constants: Constants = field(default_factory=Constants)
     storage: StorageConfig = field(default_factory=StorageConfig)
@@ -439,6 +448,11 @@ class AgentConfig:
             "AGENT_RETRIEVAL_CONTEXT_SYSTEM_PROMPT": ("model", "retrieval_context_system_prompt", str),
             "AGENT_EMBEDDING_MODEL_NAME": ("model", "embedding_model_name", str),
             "AGENT_RERANK_MODEL_NAME": ("model", "rerank_model_name", str),
+            "AGENT_IMPORTANT_FACT_SUMMARY_SYSTEM_PROMPT": (
+                "model",
+                "important_fact_summary_system_prompt",
+                str,
+            ),
             "AGENT_CONTEXT_WINDOW_TOKENS": ("memory", "context_window_tokens", int),
             "AGENT_MAX_CONTEXT_MESSAGES": ("memory", "max_context_messages", int),
             "AGENT_SUMMARY_TRIGGER_TOKENS": ("memory", "summary_trigger_tokens", int),
@@ -455,6 +469,11 @@ class AgentConfig:
                 "memory",
                 "knowledge_hash_lock_enabled",
                 AgentConfig._parse_bool,
+            ),
+            "AGENT_MEMORY_CONTEXT_COMPRESSION_TAIL_MESSAGES": (
+                "memory",
+                "context_compression_tail_messages",
+                int,
             ),
             "AGENT_TASK_SCHEDULE_ENABLED": ("task_schedule", "enabled", AgentConfig._parse_bool),
             "AGENT_TASK_SCHEDULE_REDIS_URL": ("task_schedule", "redis_url", str),
@@ -574,6 +593,16 @@ class AgentConfig:
                 "task_schedule",
                 "redis_result_poll_interval_seconds",
                 float,
+            ),
+            "AGENT_TASK_SCHEDULE_LARGE_MODEL_MAX_CONCURRENCY": (
+                "task_schedule",
+                "large_model_max_concurrency",
+                int,
+            ),
+            "AGENT_TASK_SCHEDULE_SMALL_MODEL_MAX_CONCURRENCY": (
+                "task_schedule",
+                "small_model_max_concurrency",
+                int,
             ),
         }
         for env_name, (section, key, caster) in env_mapping.items():

@@ -13,15 +13,12 @@ service.summarize_session(user_id="u1", session_id="s1")
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Sequence
-
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+import hashlib
 
 from agent_service.core.agent_config import AgentConfig
-from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
 from agent_service.schemas.message import MessageOut
+from agent_service.services.memory.important_fact_summary_service import ImportantFactSummaryService
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 from agent_service.services.memory.memory_resolver import MemoryResolver
 from agent_service.services.memory.rag.embedding import EmbeddingService
@@ -55,13 +52,18 @@ class SessionSummaryService:
         self.memory_service = memory_service or LongTermMemoryService(config=config)
         self.embedding_service = embedding_service or EmbeddingService(config=config)
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
+        self.important_fact_summary_service = ImportantFactSummaryService(
+            config=config,
+            memory_service=self.memory_service,
+            embedding_service=self.embedding_service,
+            task_scheduler=self.task_scheduler,
+        )
         self.memory_resolver = MemoryResolver(
             config=config,
             memory_service=self.memory_service,
             embedding_service=self.embedding_service,
             task_scheduler=self.task_scheduler,
         )
-        self.model = self._build_model()
 
     def summarize_session(self, *, user_id: str, session_id: str) -> str | None:
         """
@@ -77,27 +79,23 @@ class SessionSummaryService:
         summary = self._summarize_messages(messages)
         if not summary:
             return None
-        vector = self.embedding_service.embed_text(summary)
         message_ids = [message.message_id for message in messages]
-        summary_memory = self.memory_service.create_memory(
-            LongTermMemorySpecCreate(
-                user_id=user_id,
-                session_id=session_id,
-                tag=self.config.constants.memory_tag,
-                memory_type="session_summary",
-                content=summary,
-                source_type="session_messages",
-                source_id=session_id,
-                source_hash=self._hash_message_ids(message_ids),
-                source_range_json={"message_ids": message_ids},
-                metadata_json={"message_count": len(messages)},
-                confidence=0.8,
-                importance=0.7,
-                authority=0.5,
-                embedding_model=self.config.model.embedding_model_name,
-                embedding_vector_json=vector,
-            )
+        summary_memory = self.important_fact_summary_service.persist_summary_memory(
+            user_id=user_id,
+            session_id=session_id,
+            summary_text=summary,
+            memory_type="session_summary",
+            source_type="session_messages",
+            source_id=session_id,
+            source_hash=self._hash_message_ids(message_ids),
+            source_range_json={"message_ids": message_ids},
+            metadata_json={"message_count": len(messages)},
+            importance=0.7,
+            authority=0.5,
         )
+        if summary_memory is None:
+            self.message_service.mark_messages_summarized(message_ids=message_ids)
+            return summary
         self.memory_resolver.resolve_summary(
             user_id=user_id,
             session_id=session_id,
@@ -116,40 +114,10 @@ class SessionSummaryService:
         transcript = "\n".join(f"{message.role}: {message.content}" for message in messages if message.content)
         if not transcript.strip():
             return ""
-        response = self.task_scheduler.invoke_chat(
+        return self.important_fact_summary_service.summarize_text(
             task_type=BACKGROUND_SUMMARY_TASK,
-            messages=[
-                SystemMessage(
-                    content=(
-                        "你负责为 Agent 会话生成长期记忆摘要。"
-                        "只保留后续对话有用的用户偏好、事实、约束、任务目标、未完成事项和工具结果。"
-                        "不要编造,不要保留无意义寒暄。输出中文短摘要。"
-                    )
-                ),
-                HumanMessage(content=transcript),
-            ],
-        )
-        return str(response.content).strip()
-
-    def _build_model(self) -> ChatOpenAI:
-        """
-        创建摘要用 LLM。
-
-        使用主模型配置,避免为第一版额外增加摘要专用模型配置。
-        """
-
-        if not self.config.model.model_name:
-            raise ValueError("config.model.model_name 不能为空。")
-        if not self.config.model.api_key:
-            raise ValueError("config.model.api_key 不能为空。")
-        if not self.config.model.base_url:
-            raise ValueError("config.model.base_url 不能为空。")
-        return ChatOpenAI(
-            model=self.config.model.model_name,
-            api_key=self.config.model.api_key,
-            base_url=self.config.model.base_url,
-            temperature=self.config.model.resolve_primary_temperature(0.0),
-            timeout=self.config.model.timeout_seconds,
+            transcript=transcript,
+            mode="summary",
         )
 
     @staticmethod

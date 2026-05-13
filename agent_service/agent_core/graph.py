@@ -3,12 +3,12 @@ Agent LangGraph 图构建模块。
 
 功能说明:
 本文件负责把独立节点装配成最基础的 ReAct 循环图。节点实现不写在这里,
-而是分别放在 `nodes/model_decision.py`、`nodes/tool_call.py` 和 `nodes/summary.py`
+而是分别放在 `nodes/compress.py`、`nodes/model_decision.py`、`nodes/tool_call.py` 和 `nodes/summary.py`
 中,满足每个节点文件只实现一个节点的结构要求。
 
 使用说明:
 外部通常不直接调用本模块,而是通过 `AgentCore(config=...)` 间接构建图。
-第一版图结构为 `agent -> action -> agent -> summary -> END`。
+当前图结构为 `compress -> agent -> action -> compress -> ... -> summary -> END`。
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from agent_service.agent_core.nodes.base import AgentState
+from agent_service.agent_core.nodes.compress import CompressNode
 from agent_service.agent_core.nodes.model_decision import ModelDecisionNode
 from agent_service.agent_core.nodes.summary import SummaryNode
 from agent_service.agent_core.nodes.tool_call import ToolCallNode
@@ -56,6 +57,13 @@ class AgentGraphBuilder:
 
         workflow = StateGraph(AgentState)
         workflow.add_node(
+            "compress",
+            CompressNode(
+                config=self.config,
+                task_scheduler=self.task_scheduler,
+            ),
+        )
+        workflow.add_node(
             "agent",
             ModelDecisionNode(
                 config=self.config,
@@ -74,13 +82,14 @@ class AgentGraphBuilder:
                 task_scheduler=self.task_scheduler,
             ),
         )
-        workflow.set_entry_point("agent")
+        workflow.set_entry_point("compress")
+        workflow.add_edge("compress", "agent")
         workflow.add_conditional_edges(
             "agent",
             self._route_after_model,
             path_map={"action": "action", "summary": "summary"},
         )
-        workflow.add_edge("action", "agent")
+        workflow.add_edge("action", "compress")
         workflow.add_edge("summary", END)
         return workflow.compile()
 

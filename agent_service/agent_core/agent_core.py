@@ -195,7 +195,15 @@ class AgentCore:
             "trace": [],
         }
         runtime_config = {"configurable": {"thread_id": session_id}}
-        set_tool_runtime(config=self.config, user_id=user_id, session_id=session_id)
+        retrieval_service = None
+        if self.context_builder is not None:
+            retrieval_service = self.context_builder.retrieval_service
+        set_tool_runtime(
+            config=self.config,
+            user_id=user_id,
+            session_id=session_id,
+            retrieval_service=retrieval_service,
+        )
         try:
             for event in self.graph.stream(inputs, config=runtime_config, stream_mode="updates"):
                 for node_name, state_update in event.items():
@@ -377,6 +385,8 @@ class AgentCore:
                 process_lines.append(f"{index}. 工具执行完成,返回内容: {content}")
             elif node_name == "agent" and content:
                 process_lines.append(f"{index}. 模型生成最终回复。")
+            elif node_name == "compress":
+                process_lines.append(f"{index}. 压缩节点执行: {event.get('trace', [])}")
             elif node_name == "summary":
                 process_lines.append(f"{index}. 摘要节点执行: {event.get('trace', [])}")
         return process_lines

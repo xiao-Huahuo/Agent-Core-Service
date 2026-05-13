@@ -124,6 +124,16 @@ class MemoryRetrievalService:
         )
         if fact_memories:
             return fact_memories
+        important_fact_summaries = self._retrieve(
+            query=query,
+            user_id=user_id,
+            session_id=session_id,
+            tag=self.config.constants.memory_tag,
+            memory_type=self.config.constants.important_fact_summary_memory_type,
+            top_k=top_k,
+        )
+        if important_fact_summaries:
+            return important_fact_summaries
         return self._retrieve(
             query=query,
             user_id=user_id,
@@ -158,31 +168,27 @@ class MemoryRetrievalService:
         session_id: 会话 ID。
         """
 
-        statement = (
-            select(LongTermMemorySpec)
-            .where(LongTermMemorySpec.tag == self.config.constants.memory_tag)
-            .where(LongTermMemorySpec.memory_type == "session_summary")
-            .where(LongTermMemorySpec.user_id == user_id)
-            .where(LongTermMemorySpec.session_id == session_id)
-            .order_by(LongTermMemorySpec.updated_at.desc())
-            .limit(1)
+        return self._get_latest_memory_by_type(
+            user_id=user_id,
+            session_id=session_id,
+            memory_type="session_summary",
+            retrieval_channel="session_summary_fallback",
         )
-        with Session(self.engine) as db_session:
-            record = db_session.exec(statement).first()
-        if record is None:
-            return None
-        memory = LongTermMemorySpecOut.from_record(record)
-        now = datetime.now(timezone.utc)
-        retrieved = RetrievedMemory(
-            memory=memory,
-            relevance_score=1.0,
-            freshness_score=self._freshness_score(memory, now=now),
-            final_score=0.0,
-            current_session_match=True,
-            retrieval_channels=("session_summary_fallback",),
+
+    def get_latest_important_fact_summary(self, *, user_id: str, session_id: str) -> RetrievedMemory | None:
+        """
+        获取当前会话最近一条重要事实摘要记忆。
+
+        user_id: 用户 ID。
+        session_id: 会话 ID。
+        """
+
+        return self._get_latest_memory_by_type(
+            user_id=user_id,
+            session_id=session_id,
+            memory_type=self.config.constants.important_fact_summary_memory_type,
+            retrieval_channel="important_fact_summary",
         )
-        retrieved.final_score = self._final_score(retrieved)
-        return retrieved
 
     def _retrieve(
         self,
@@ -250,6 +256,49 @@ class MemoryRetrievalService:
         retrieved = [item for item in retrieved if item.final_score >= self.config.memory.score_threshold]
         retrieved.sort(key=self._rank_key, reverse=True)
         return retrieved[:final_top_k]
+
+    def _get_latest_memory_by_type(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        memory_type: str,
+        retrieval_channel: str,
+    ) -> RetrievedMemory | None:
+        """
+        获取指定记忆类型在当前会话中的最近一条记录。
+
+        user_id: 用户 ID。
+        session_id: 会话 ID。
+        memory_type: 目标记忆类型。
+        retrieval_channel: 观测用检索通道名称。
+        """
+
+        statement = (
+            select(LongTermMemorySpec)
+            .where(LongTermMemorySpec.tag == self.config.constants.memory_tag)
+            .where(LongTermMemorySpec.memory_type == memory_type)
+            .where(LongTermMemorySpec.user_id == user_id)
+            .where(LongTermMemorySpec.session_id == session_id)
+            .order_by(LongTermMemorySpec.updated_at.desc())
+            .limit(1)
+        )
+        with Session(self.engine) as db_session:
+            record = db_session.exec(statement).first()
+        if record is None:
+            return None
+        memory = LongTermMemorySpecOut.from_record(record)
+        now = datetime.now(timezone.utc)
+        retrieved = RetrievedMemory(
+            memory=memory,
+            relevance_score=1.0,
+            freshness_score=self._freshness_score(memory, now=now),
+            final_score=0.0,
+            current_session_match=True,
+            retrieval_channels=(retrieval_channel,),
+        )
+        retrieved.final_score = self._final_score(retrieved)
+        return retrieved
 
     def _retrieve_vector_candidates(
         self,

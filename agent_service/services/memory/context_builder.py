@@ -71,6 +71,14 @@ class ContextBuilder:
             messages.append(SystemMessage(content=memory_context))
         messages.extend(self._to_langchain_message(message) for message in history)
         messages.append(HumanMessage(content=current_prompt))
+        if self.estimate_messages_tokens(messages) > self.config.memory.summary_trigger_tokens:
+            compressed_history = history[-self.config.memory.context_compression_tail_messages :]
+            messages = self._rebuild_messages_for_compressed_context(
+                user_id=user_id,
+                session_id=session_id,
+                current_prompt=current_prompt,
+                history=compressed_history,
+            )
         return messages
 
     def _build_retrieved_context(
@@ -106,10 +114,19 @@ class ContextBuilder:
             query=current_prompt,
             top_k=self.config.memory.rerank_top_k,
         )
+        important_summary = self.retrieval_service.get_latest_important_fact_summary(
+            user_id=user_id,
+            session_id=session_id,
+        )
         sections: list[str] = []
         sections.extend(self.config.model.retrieval_context_system_prompt.splitlines())
         if has_history:
             sections.append("短期上下文状态: 当前 session 已存在历史消息,回答时优先使用这些历史事实。")
+        if important_summary is not None:
+            sections.append("重要事实摘要:")
+            sections.append(
+                f"- score={important_summary.final_score:.3f} content={important_summary.memory.content}"
+            )
         if memories:
             sections.append("长期记忆召回:")
             sections.extend(
@@ -125,6 +142,52 @@ class ContextBuilder:
         if len(sections) <= 4 and not has_history:
             return ""
         return "\n".join(sections)
+
+    def _rebuild_messages_for_compressed_context(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        current_prompt: str,
+        history: list[MessageOut],
+    ) -> list[BaseMessage]:
+        """
+        在上下文接近 token 上限时重建更紧凑的消息列表。
+
+        user_id: 用户 ID。
+        session_id: 会话 ID。
+        current_prompt: 当前用户输入。
+        history: 已裁剪后的近期历史消息。
+        """
+
+        messages: list[BaseMessage] = []
+        memory_context = self._build_retrieved_context(
+            user_id=user_id,
+            session_id=session_id,
+            current_prompt=current_prompt,
+            has_history=bool(history),
+        )
+        if memory_context:
+            messages.append(SystemMessage(content=memory_context))
+        messages.extend(self._to_langchain_message(message) for message in history)
+        messages.append(HumanMessage(content=current_prompt))
+        return messages
+
+    @staticmethod
+    def estimate_messages_tokens(messages: list[BaseMessage]) -> int:
+        """
+        使用轻量字符启发式估算消息 token 数量。
+
+        messages: 待估算的 LangChain 消息列表。
+        """
+
+        total_characters = 0
+        for message in messages:
+            total_characters += len(str(getattr(message, "content", "") or ""))
+            tool_calls = getattr(message, "tool_calls", []) or []
+            if tool_calls:
+                total_characters += len(str(tool_calls))
+        return max(1, total_characters // 4)
 
     @staticmethod
     def _to_langchain_message(message: MessageOut) -> BaseMessage:

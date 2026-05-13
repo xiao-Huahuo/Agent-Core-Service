@@ -22,6 +22,7 @@ from langchain_core.messages import HumanMessage
 from agent_service.core.agent_config import AgentConfig
 from agent_service.task_schedule import BACKGROUND_SUMMARY_TASK
 from agent_service.task_schedule import FOREGROUND_AGENT_TASK
+from agent_service.task_schedule import SMALL_MODEL_TIER
 from agent_service.task_schedule import get_llm_task_scheduler
 from agent_service.task_schedule import reset_llm_task_schedulers
 
@@ -153,3 +154,35 @@ def test_llm_task_scheduler_submit_summary_job_uses_local_fallback_without_redis
     handle = scheduler.submit_summary_job(user_id="u1", session_id="s1", dedup_key="s1")
 
     assert handle.wait(timeout=2) == "u1:s1"
+
+
+def test_llm_task_scheduler_resolves_small_model_runtime() -> None:
+    """验证调度器会为 `small` 模型池解析独立的小模型配置。"""
+
+    config = AgentConfig.load_config(
+        {
+            "model": {
+                "model_name": "large-model",
+                "api_key": "large-key",
+                "base_url": "https://large.example.com/v1",
+                "small_model_name": "small-model",
+                "small_model_api_key": "small-key",
+                "small_model_base_url": "https://small.example.com/v1",
+                "small_model_temperature": 0.3,
+            }
+        },
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    scheduler = get_llm_task_scheduler(config)
+
+    model_name, api_key, base_url, temperature = scheduler._resolve_model_runtime(
+        model_tier=SMALL_MODEL_TIER,
+        requested_temperature=None,
+    )
+
+    assert model_name == "small-model"
+    assert api_key == "small-key"
+    assert base_url == "https://small.example.com/v1"
+    assert temperature == 0.3

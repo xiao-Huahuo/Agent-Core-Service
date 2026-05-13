@@ -19,10 +19,11 @@ from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 from sqlmodel import SQLModel, create_engine
 
 from agent_service.agent_core import AgentCore
+from agent_service.agent_core.nodes.compress import CompressNode
 from agent_service.agent_core.nodes.summary import SummaryNode
 from agent_service.agent_core.nodes.tool_call import ToolCallNode
 from agent_service.core.agent_config import AgentConfig
@@ -139,7 +140,12 @@ def make_test_config() -> AgentConfig:
     TEST_TEMP_DIR.mkdir(parents=True, exist_ok=True)
     return AgentConfig.load_config(
         {
-            "storage": {"project_root": str(TEST_TEMP_DIR), "base_data_dir": str(TEST_TEMP_DIR / "runtime")},
+            "storage": {
+                "project_root": str(TEST_TEMP_DIR),
+                "base_data_dir": str(TEST_TEMP_DIR / "runtime"),
+                "relational_dsn": "sqlite://",
+                "vector_dsn": "sqlite://",
+            },
             "model": {
                 "model_name": "test-model",
                 "api_key": "test-key",
@@ -221,7 +227,17 @@ def test_agent_core_run_session_prompt_uses_context_and_persists_messages() -> N
     engine = create_engine("sqlite://")
     SQLModel.metadata.create_all(engine)
     message_service = MessageService(config=config, engine=engine, create_tables=False)
-    context_builder = ContextBuilder(config=config, message_service=message_service)
+    retrieval_service = SimpleNamespace(
+        retrieve_long_term_memory=lambda **_kwargs: [],
+        get_latest_session_summary=lambda **_kwargs: None,
+        retrieve_knowledge=lambda **_kwargs: [],
+        get_latest_important_fact_summary=lambda **_kwargs: None,
+    )
+    context_builder = ContextBuilder(
+        config=config,
+        message_service=message_service,
+        retrieval_service=retrieval_service,
+    )
     message_service.create_message(
         MessageCreate(
             session_id="sess_formal",
@@ -251,7 +267,8 @@ def test_agent_core_run_session_prompt_uses_context_and_persists_messages() -> N
     saved_messages = message_service.list_recent_messages(user_id="user_1", session_id="sess_formal", limit=10)
 
     assert result["final_output"] == "blue-river"
-    assert fake_graph.stream_inputs[0]["messages"][0].content == "上一轮关键词是 blue-river"
+    assert isinstance(fake_graph.stream_inputs[0]["messages"][0], SystemMessage)
+    assert fake_graph.stream_inputs[0]["messages"][1].content == "上一轮关键词是 blue-river"
     assert fake_graph.stream_inputs[0]["messages"][-1].content == "关键词是什么?"
     assert [message.role for message in saved_messages] == ["user", "user", "assistant"]
     assert saved_messages[-1].content == "blue-river"
@@ -488,7 +505,13 @@ def test_context_builder_appends_current_prompt_and_converts_roles() -> None:
     engine = create_engine("sqlite://")
     SQLModel.metadata.create_all(engine)
     service = MessageService(config=config, engine=engine, create_tables=False)
-    builder = ContextBuilder(config=config, message_service=service)
+    retrieval_service = SimpleNamespace(
+        retrieve_long_term_memory=lambda **_kwargs: [],
+        get_latest_session_summary=lambda **_kwargs: None,
+        retrieve_knowledge=lambda **_kwargs: [],
+        get_latest_important_fact_summary=lambda **_kwargs: None,
+    )
+    builder = ContextBuilder(config=config, message_service=service, retrieval_service=retrieval_service)
     service.create_message(MessageCreate(session_id="sess_ctx", user_id="user_1", role="system", content="系统提示"))
     service.create_message(MessageCreate(session_id="sess_ctx", user_id="user_1", role="user", content="你好"))
     service.create_message(
@@ -513,9 +536,10 @@ def test_context_builder_appends_current_prompt_and_converts_roles() -> None:
     messages = builder.build_messages(user_id="user_1", session_id="sess_ctx", current_prompt="继续")
 
     assert isinstance(messages[0], SystemMessage)
-    assert isinstance(messages[1], HumanMessage)
-    assert isinstance(messages[2], AIMessage)
-    assert isinstance(messages[3], ToolMessage)
+    assert isinstance(messages[1], SystemMessage)
+    assert any(isinstance(message, HumanMessage) and message.content == "你好" for message in messages)
+    assert any(isinstance(message, AIMessage) for message in messages)
+    assert any(isinstance(message, ToolMessage) and message.content == "hello" for message in messages)
     assert isinstance(messages[-1], HumanMessage)
     assert messages[-1].content == "继续"
 
@@ -658,6 +682,98 @@ def test_context_builder_includes_retrieved_memory_context() -> None:
     assert isinstance(messages[0], SystemMessage)
     assert "长期记忆召回" in messages[0].content
     assert "stone-cat" in messages[0].content
+
+
+def test_context_builder_uses_important_fact_summary_when_budget_is_exceeded() -> None:
+    """验证上下文接近 token 上限时,构建器会保留重要事实摘要并裁剪历史消息。"""
+
+    config = AgentConfig.load_config(
+        {
+            "memory": {
+                "max_context_messages": 6,
+                "summary_trigger_tokens": 5,
+                "context_compression_tail_messages": 2,
+            }
+        },
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    message_service = MessageService(config=config, engine=engine, create_tables=False)
+    for index in range(4):
+        message_service.create_message(
+            MessageCreate(
+                session_id="sess_budget",
+                user_id="user_1",
+                role="user",
+                content=f"历史消息-{index}",
+            )
+        )
+    retrieval_service = SimpleNamespace(
+        retrieve_long_term_memory=lambda **_kwargs: [],
+        get_latest_session_summary=lambda **_kwargs: None,
+        retrieve_knowledge=lambda **_kwargs: [],
+        get_latest_important_fact_summary=lambda **_kwargs: SimpleNamespace(
+            final_score=1.0,
+            memory=SimpleNamespace(content="当前项目代号为3333333, 1111111 和 2222222 均已失效。"),
+        ),
+    )
+    builder = ContextBuilder(config=config, message_service=message_service, retrieval_service=retrieval_service)
+
+    messages = builder.build_messages(
+        user_id="user_1",
+        session_id="sess_budget",
+        current_prompt="当前项目代号是什么",
+    )
+
+    assert isinstance(messages[0], SystemMessage)
+    assert "重要事实摘要" in messages[0].content
+    assert "3333333" in messages[0].content
+    history_messages = [message for message in messages[1:-1] if isinstance(message, HumanMessage)]
+    assert {message.content for message in history_messages} == {"历史消息-2", "历史消息-3"}
+
+
+def test_compress_node_replaces_messages_after_context_overflow() -> None:
+    """验证 compress 节点会生成重要事实摘要并替换当前工作消息。"""
+
+    config = AgentConfig.load_config(
+        {
+            "memory": {
+                "summary_trigger_tokens": 5,
+                "context_compression_tail_messages": 2,
+            }
+        },
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    fake_summary_service = SimpleNamespace(
+        summarize_text=lambda **_kwargs: "当前项目代号为3333333, 旧值1111111和2222222均已失效。",
+        build_hash=lambda *parts: "|".join(parts),
+    )
+    persisted: list[str] = []
+    fake_summary_service.persist_summary_memory = lambda **kwargs: persisted.append(kwargs["summary_text"]) or None
+    node = CompressNode(config=config, summary_service=fake_summary_service)
+    state = {
+        "messages": [
+            SystemMessage(content="很长的系统提示,需要压缩。"),
+            HumanMessage(content="当前项目代号已经从2222222改成3333333。"),
+            AIMessage(content="我已记住当前项目代号。"),
+            HumanMessage(content="现在请告诉我当前项目代号是什么。"),
+        ],
+        "user_id": "u1",
+        "session_id": "s1",
+        "trace": [],
+    }
+
+    result = node(state)
+
+    assert isinstance(result["messages"][0], RemoveMessage)
+    assert isinstance(result["messages"][1], SystemMessage)
+    assert "3333333" in result["messages"][1].content
+    assert persisted == ["当前项目代号为3333333, 旧值1111111和2222222均已失效。"]
 
 
 def test_memory_resolver_prefers_rule_based_known_fact_over_llm_output() -> None:

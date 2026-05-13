@@ -14,9 +14,11 @@ from agent_service.task_schedule.scheduler import (
     BACKGROUND_FACT_RESOLUTION_TASK,
     BACKGROUND_SUMMARY_TASK,
     FOREGROUND_AGENT_TASK,
+    LARGE_MODEL_TIER,
     LLMTaskHandle,
     LLMTaskOverloadedError,
     LLMTaskScheduler,
+    SMALL_MODEL_TIER,
     get_llm_task_scheduler,
     reset_llm_task_schedulers,
 )
@@ -25,9 +27,11 @@ __all__ = [
     "BACKGROUND_FACT_RESOLUTION_TASK",
     "BACKGROUND_SUMMARY_TASK",
     "FOREGROUND_AGENT_TASK",
+    "LARGE_MODEL_TIER",
     "LLMTaskHandle",
     "LLMTaskOverloadedError",
     "LLMTaskScheduler",
+    "SMALL_MODEL_TIER",
     "get_llm_task_scheduler",
     "reset_llm_task_schedulers",
 ]

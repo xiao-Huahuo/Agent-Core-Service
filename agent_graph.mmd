@@ -1,11 +1,13 @@
 flowchart TD
     internal_start["START"]
+    compress["compress"]
     agent["agent"]
     action["action"]
     summary["summary"]
     internal_end["END"]
-    internal_start --> agent
-    action --> agent
+    internal_start --> compress
+    action --> compress
     agent -. "conditional" .-> action
     agent -. "conditional" .-> summary
+    compress --> agent
     summary --> internal_end

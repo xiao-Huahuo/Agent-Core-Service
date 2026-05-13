@@ -18,7 +18,6 @@ import re
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate, LongTermMemorySpecOut
@@ -27,6 +26,7 @@ from agent_service.services.memory.rag.embedding import EmbeddingService
 from agent_service.task_schedule import (
     BACKGROUND_FACT_RESOLUTION_TASK,
     LLMTaskScheduler,
+    SMALL_MODEL_TIER,
     get_llm_task_scheduler,
 )
 
@@ -117,7 +117,6 @@ class MemoryResolver:
         self.memory_service = memory_service or LongTermMemoryService(config=config)
         self.embedding_service = embedding_service or EmbeddingService(config=config)
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
-        self.model = self._build_model()
 
     def resolve_summary(
         self,
@@ -191,6 +190,7 @@ class MemoryResolver:
 
         response = self.task_scheduler.invoke_chat(
             task_type=BACKGROUND_FACT_RESOLUTION_TASK,
+            model_tier=SMALL_MODEL_TIER,
             messages=[
                 SystemMessage(
                     content=(
@@ -413,23 +413,3 @@ class MemoryResolver:
         """返回当前 UTC 时间。"""
 
         return datetime.now(timezone.utc)
-
-    def _build_model(self) -> ChatOpenAI:
-        """
-        创建事实提取用 LLM。
-        目前复用主模型配置,避免第一版增加单独的事实解析模型配置。
-        """
-
-        if not self.config.model.model_name:
-            raise ValueError("config.model.model_name 不能为空。")
-        if not self.config.model.api_key:
-            raise ValueError("config.model.api_key 不能为空。")
-        if not self.config.model.base_url:
-            raise ValueError("config.model.base_url 不能为空。")
-        return ChatOpenAI(
-            model=self.config.model.model_name,
-            api_key=self.config.model.api_key,
-            base_url=self.config.model.base_url,
-            temperature=self.config.model.resolve_primary_temperature(0.0),
-            timeout=self.config.model.timeout_seconds,
-        )

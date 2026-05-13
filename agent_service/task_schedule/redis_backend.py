@@ -39,6 +39,7 @@ class SerializedChatRequest:
     max_retries: 最大重试次数。
     dedup_key: 可选去重键。
     temperature: 可选温度覆盖值。
+    model_tier: 模型池等级,支持 `large` 或 `small`。
     """
 
     task_id: str
@@ -49,6 +50,7 @@ class SerializedChatRequest:
     max_retries: int
     dedup_key: str | None = None
     temperature: float | None = None
+    model_tier: str = "large"
 
     @classmethod
     def from_messages(
@@ -62,6 +64,7 @@ class SerializedChatRequest:
         max_retries: int,
         dedup_key: str | None = None,
         temperature: float | None = None,
+        model_tier: str = "large",
     ) -> "SerializedChatRequest":
         """从 LangChain messages 构造可序列化请求。"""
 
@@ -74,6 +77,7 @@ class SerializedChatRequest:
             max_retries=max_retries,
             dedup_key=dedup_key,
             temperature=temperature,
+            model_tier=model_tier,
         )
 
     def to_stream_fields(self) -> dict[str, str]:
@@ -93,6 +97,7 @@ class SerializedChatRequest:
             "max_retries": self.max_retries,
             "dedup_key": self.dedup_key,
             "temperature": self.temperature,
+            "model_tier": self.model_tier,
         }
 
     @classmethod
@@ -109,6 +114,7 @@ class SerializedChatRequest:
             max_retries=int(payload["max_retries"]),
             dedup_key=str(payload["dedup_key"]) if payload.get("dedup_key") else None,
             temperature=float(payload["temperature"]) if payload.get("temperature") is not None else None,
+            model_tier=str(payload.get("model_tier") or "large"),
         )
 
     def restore_messages(self) -> list[BaseMessage]:
