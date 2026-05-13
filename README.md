@@ -19,19 +19,20 @@
 1. 智能体核心 `AgentCore` 设计：采用 ReAct 思考模式，但不再硬编码节点流，而是形成可配置、可展示、可定制的节点流。
 2. 节点设计：除了提供项目自带的节点，还提供用户自己编写节点的能力（继承节点父类），并提供用户节点配置持久化。
    基础节点有以下几种：
-   - 输入/输出节点
+   - 启动/终止节点
+   - 决策/汇合节点
    - 工具调用节点
+     - 跨会话记忆检索
+     - 上下文压缩与事实持久化
+     - 知识库检索
+     - 其他内置工具
+     - MCP外部工具
    - 安全审核节点
-   - 控制节点集，包含：
-     - 启动/终止节点
-     - 决策/汇合节点
-     - 推理规划节点
-     - 反思节点
-   - 记忆节点集，包含：
-     - 上下文压缩与事实持久化节点
-     - 跨会话记忆检索节点
-     - 知识库检索节点
-     - 摘要节点
+   - 推理规划节点
+   - 反思节点
+   - 摘要节点
+   - 上下文压缩节点
+     
 3. 工具系统设计：采用 **Function Calling** 模式，并对接 **MCP 协议** 接入用户可自定义的工具。除了系统自带的默认工具，还可以实现用户对工具的高度自定义。
 4. 数据库设计：必须按照分布式设计规范来制定。关联库 PostgreSQL 只存储智能体相关的内容，向量库采用 pgvector。
 5. 服务间调用：完全采用 **gRPC 协议** 函数化接口，只暴露特定的对外接口，如智能体信息流、思考轨迹、数据库调用等。
@@ -149,16 +150,20 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["AgentCore / CompressNode / SummaryService / MemoryResolver 发起任务"] --> B{"调用入口"}
+    A["AgentCore / CompressNode / PlannerNode / ReflectionNode / SummaryService / MemoryResolver 发起任务"] --> B{"调用入口"}
     B -->|"主 Agent 决策"| C["invoke_chat(task_type=foreground_agent, model_tier=large)"]
+    B -->|"推理规划"| D2["invoke_chat(task_type=foreground_agent, model_tier=small)"]
     B -->|"compress 重要事实摘要"| D["invoke_chat(task_type=foreground_agent, model_tier=small)"]
     B -->|"summary 长期记忆摘要"| E["invoke_chat(task_type=background_summary, model_tier=small)"]
+    B -->|"reflection 执行审视"| R2["invoke_chat(task_type=foreground_agent, model_tier=large)"]
     B -->|"fact extraction"| F["invoke_chat(task_type=background_fact_resolution, model_tier=small)"]
     B -->|"SummaryNode 业务任务"| G["submit_summary_job(...)"]
 
     C --> H["large pool semaphore"]
-    D --> I["small pool semaphore"]
+    D2 --> I["small pool semaphore"]
+    D --> I
     E --> I
+    R2 --> H
     F --> I
 
     C -->|"工具调用: write_long_term_memory"| J2["Embedding + DB 直写, 不经 LLM"]

@@ -2,13 +2,13 @@
 Agent LangGraph 图构建模块。
 
 功能说明:
-本文件负责把独立节点装配成最基础的 ReAct 循环图。节点实现不写在这里,
-而是分别放在 `nodes/compress.py`、`nodes/model_decision.py`、`nodes/tool_call.py` 和 `nodes/summary.py`
-中,满足每个节点文件只实现一个节点的结构要求。
+本文件负责把独立节点装配成包含推理规划与反思的循环图。节点实现不写在这里,
+而是分别放在 `nodes/` 目录下各文件中,满足每个节点文件只实现一个节点的结构要求。
 
 使用说明:
 外部通常不直接调用本模块,而是通过 `AgentCore(config=...)` 间接构建图。
-当前图结构为 `compress -> agent -> action -> compress -> ... -> summary -> END`。
+当前图结构:
+  compress -> planner -> agent -> action -> reflection -> compress -> ... -> summary -> END
 """
 
 from __future__ import annotations
@@ -21,6 +21,8 @@ from langgraph.graph.state import CompiledStateGraph
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.agent_core.nodes.compress import CompressNode
 from agent_service.agent_core.nodes.model_decision import ModelDecisionNode
+from agent_service.agent_core.nodes.planner import PlannerNode
+from agent_service.agent_core.nodes.reflection import ReflectionNode
 from agent_service.agent_core.nodes.summary import SummaryNode
 from agent_service.agent_core.nodes.tool_call import ToolCallNode
 from agent_service.core.agent_config import AgentConfig
@@ -53,12 +55,19 @@ class AgentGraphBuilder:
         self.task_scheduler = task_scheduler
 
     def build(self) -> CompiledStateGraph:
-        """构建并编译最基础的 Agent ReAct 循环图。"""
+        """构建并编译 ReAct 循环图,包含推理规划与反思节点。"""
 
         workflow = StateGraph(AgentState)
         workflow.add_node(
             "compress",
             CompressNode(
+                config=self.config,
+                task_scheduler=self.task_scheduler,
+            ),
+        )
+        workflow.add_node(
+            "planner",
+            PlannerNode(
                 config=self.config,
                 task_scheduler=self.task_scheduler,
             ),
@@ -76,6 +85,13 @@ class AgentGraphBuilder:
             ToolCallNode(config=self.config, tools=self.tools, tool_executor=self.tool_executor),
         )
         workflow.add_node(
+            "reflection",
+            ReflectionNode(
+                config=self.config,
+                task_scheduler=self.task_scheduler,
+            ),
+        )
+        workflow.add_node(
             "summary",
             SummaryNode(
                 config=self.config,
@@ -83,20 +99,36 @@ class AgentGraphBuilder:
             ),
         )
         workflow.set_entry_point("compress")
-        workflow.add_edge("compress", "agent")
+        workflow.add_edge("compress", "planner")
+        workflow.add_edge("planner", "agent")
         workflow.add_conditional_edges(
             "agent",
             self._route_after_model,
             path_map={"action": "action", "summary": "summary"},
         )
-        workflow.add_edge("action", "compress")
+        workflow.add_edge("action", "reflection")
+        workflow.add_conditional_edges(
+            "reflection",
+            self._route_after_reflection,
+            path_map={"compress": "compress", "summary": "summary"},
+        )
         workflow.add_edge("summary", END)
         return workflow.compile()
 
     @staticmethod
     def _route_after_model(state: AgentState) -> Literal["action", "summary"]:
-        """根据模型最后一条消息是否包含工具调用决定下一步节点。"""
+        """根据模型最后一条消息是否包含工具调用决定下一步。"""
 
         last_message = state["messages"][-1]
         tool_calls = getattr(last_message, "tool_calls", []) or []
         return "action" if tool_calls else "summary"
+
+    @staticmethod
+    def _route_after_reflection(state: AgentState) -> Literal["compress", "summary"]:
+        """
+        根据反思节点决策决定下一步。
+        "continue" → compress(继续工具循环), "answer" → summary(输出答案)。
+        """
+
+        decision = state.get("reflection_decision", "continue")
+        return "compress" if decision == "continue" else "summary"

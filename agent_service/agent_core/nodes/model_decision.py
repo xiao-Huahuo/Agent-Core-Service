@@ -48,7 +48,19 @@ class ModelDecisionNode:
     def __call__(self, state: AgentState) -> dict[str, Any]:
         """读取当前消息状态,调用模型,并把模型响应追加回 `messages`。"""
 
-        system_message = SystemMessage(content=self.config.model.system_prompt)
+        system_content = self.config.model.system_prompt
+        plan = state.get("plan")
+        if plan and plan.get("need_plan") and plan.get("steps"):
+            current_step = plan.get("current_step", 0)
+            total_steps = len(plan["steps"])
+            plan_text = "\n".join(f"  {i+1}. {step}" for i, step in enumerate(plan["steps"]))
+            system_content += (
+                f"\n\n【执行计划】\n{plan_text}\n"
+                f"当前进度: 第 {current_step + 1}/{total_steps} 步。"
+                f"请按计划逐步执行,每一步完成后等待工具结果,然后继续下一步。"
+            )
+
+        system_message = SystemMessage(content=system_content)
         response = self.task_scheduler.invoke_chat(
             task_type=FOREGROUND_AGENT_TASK,
             messages=[system_message, *state["messages"]],

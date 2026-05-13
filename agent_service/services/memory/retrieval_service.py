@@ -107,6 +107,7 @@ class MemoryRetrievalService:
     ) -> list[RetrievedMemory]:
         """
         检索用户长期记忆摘要。
+        三层记忆 (session_fact、important_fact_summary、session_summary) 合并去重后统一排序返回。
 
         query: 当前查询文本。
         user_id: 用户 ID。
@@ -114,34 +115,31 @@ class MemoryRetrievalService:
         top_k: 可选返回条数。
         """
 
-        fact_memories = self._retrieve(
-            query=query,
-            user_id=user_id,
-            session_id=session_id,
-            tag=self.config.constants.memory_tag,
-            memory_type="session_fact",
-            top_k=top_k,
-        )
-        if fact_memories:
-            return fact_memories
-        important_fact_summaries = self._retrieve(
-            query=query,
-            user_id=user_id,
-            session_id=session_id,
-            tag=self.config.constants.memory_tag,
-            memory_type=self.config.constants.important_fact_summary_memory_type,
-            top_k=top_k,
-        )
-        if important_fact_summaries:
-            return important_fact_summaries
-        return self._retrieve(
-            query=query,
-            user_id=user_id,
-            session_id=session_id,
-            tag=self.config.constants.memory_tag,
-            memory_type="session_summary",
-            top_k=top_k,
-        )
+        seen_ids: set[str] = set()
+        merged: list[RetrievedMemory] = []
+
+        for memory_type in (
+            "session_fact",
+            self.config.constants.important_fact_summary_memory_type,
+            "session_summary",
+        ):
+            candidates = self._retrieve(
+                query=query,
+                user_id=user_id,
+                session_id=session_id,
+                tag=self.config.constants.memory_tag,
+                memory_type=memory_type,
+                top_k=top_k,
+            )
+            for item in candidates:
+                memory_id = item.memory.memory_id
+                if memory_id not in seen_ids:
+                    seen_ids.add(memory_id)
+                    merged.append(item)
+
+        merged.sort(key=self._rank_key, reverse=True)
+        final_top_k = top_k or self.config.memory.rerank_top_k
+        return merged[:final_top_k]
 
     def retrieve_knowledge(self, *, query: str, top_k: int | None = None) -> list[RetrievedMemory]:
         """

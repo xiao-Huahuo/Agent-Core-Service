@@ -1,0 +1,121 @@
+"""
+推理规划节点。
+
+功能说明:
+本文件只实现 `PlannerNode` 一个节点。该节点在 Agent 做出决策前,先用小模型分析
+用户需求是否需要多步操作。如果需要,则生成结构化分步计划并存入 AgentState.plan。
+后续 ModelDecisionNode 会读取该计划并注入到系统提示词中,指导模型按计划推进。
+
+使用说明:
+`graph.py` 会把本节点注册为 `planner` 节点,放在 `compress` 与 `agent` 之间。
+节点只执行一次(计划已存在时直接跳过)。
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from langchain_core.messages import SystemMessage
+
+from agent_service.agent_core.nodes.base import AgentState
+from agent_service.core.agent_config import AgentConfig
+from agent_service.task_schedule import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
+
+
+PLANNER_SYSTEM_PROMPT = (
+    "你是一个任务规划助手。分析用户的最新需求,判断是否需要分步完成。\n"
+    "如果任务需要多步操作才能完成(例如查询多个信息、执行多个计算、依次处理数据),"
+    "请输出 JSON 格式的分步计划。\n"
+    "如果任务很简单,只需回答即可,无需计划。\n"
+    "输出格式(只输出 JSON,不要其他文字):\n"
+    '{"need_plan": true, "steps": ["第一步: ...", "第二步: ..."]}\n'
+    '或\n'
+    '{"need_plan": false}'
+)
+
+
+class PlannerNode:
+    """
+    推理规划节点。
+
+    config: 全局配置对象。
+    task_scheduler: 可选 LLM 任务调度器,为空时自动创建。
+    """
+
+    def __init__(
+        self,
+        *,
+        config: AgentConfig,
+        task_scheduler: LLMTaskScheduler | None = None,
+    ) -> None:
+        """保存配置和调度器。"""
+
+        self.config = config
+        self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
+
+    def __call__(self, state: AgentState) -> dict[str, Any]:
+        """
+        检查是否需要规划,需要时用小模型生成计划。
+
+        state: 当前 LangGraph 状态。
+        """
+
+        if state.get("plan") is not None:
+            return {"trace": [{"node": "planner", "event": "plan_already_exists"}]}
+
+        original_prompt = self._extract_latest_user_message(state)
+        if not original_prompt:
+            return {"trace": [{"node": "planner", "event": "no_user_message"}]}
+
+        system_message = SystemMessage(content=PLANNER_SYSTEM_PROMPT)
+        user_message = SystemMessage(
+            content=f"用户需求:\n{original_prompt}\n\n请输出 JSON 计划。"
+        )
+        response = self.task_scheduler.invoke_chat(
+            task_type=FOREGROUND_AGENT_TASK,
+            messages=[system_message, user_message],
+            model_tier="small",
+        )
+        plan = self._parse_plan(response.content)
+        if plan is not None:
+            trace = {
+                "node": "planner",
+                "event": "plan_generated",
+                "need_plan": plan.get("need_plan", False),
+                "steps": plan.get("steps", []),
+            }
+            return {"plan": plan, "trace": [trace]}
+
+        return {
+            "plan": {"need_plan": False},
+            "trace": [{"node": "planner", "event": "no_plan_needed"}],
+        }
+
+    @staticmethod
+    def _extract_latest_user_message(state: AgentState) -> str:
+        """从消息列表中提取最后一条用户消息。"""
+
+        for message in reversed(state["messages"]):
+            content = getattr(message, "content", None)
+            if content and getattr(message, "type", None) == "human":
+                return content if isinstance(content, str) else str(content)
+        return ""
+
+    @staticmethod
+    def _parse_plan(raw_content: str | None) -> dict[str, Any] | None:
+        """从模型响应中解析 JSON 计划。"""
+
+        if not raw_content:
+            return None
+        content = raw_content.strip()
+        if content.startswith("```"):
+            content = content.split("\n", 1)[-1]
+            content = content.rsplit("```", 1)[0]
+        content = content.strip()
+        if content.startswith("{") and content.endswith("}"):
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                return None
+        return None

@@ -5,7 +5,7 @@ AgentCore 对外入口模块。
 本文件提供 `AgentCore` 类,作为 Agent 微服务核心能力的对外门面。它负责接收
 `AgentConfig`、加载默认内置工具、构建 LangGraph 图、输出图结构 Mermaid 文件,
 启动时检查并下载 Embedding/ReRank 本地模型,并对外提供 Agent 执行入口。具体节点逻辑不写在本文件中,而是由
-`AgentGraphBuilder` 装配 `model_decision`、`tool_call` 和 `summary` 等节点。
+`AgentGraphBuilder` 装配 `compress`、`planner`、`model_decision`、`tool_call`、`reflection` 和 `summary` 等节点。
 
 执行能力:
 `stream_run()` 提供 SSE 风格的原始流式输出,适合接口层直接转发给前端。

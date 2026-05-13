@@ -230,6 +230,43 @@ def get_knowledge_context(query: str, top_k: int = 3) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
+def _supersede_prior_entries(
+    *,
+    runtime: Any,
+    user_id: str,
+    memory_type: str,
+) -> None:
+    """
+    将同一用户、同一 memory_type 的旧 active 记忆标记为 superseded。
+    确保手动写入的类型中只有最新一条保持 active 状态。
+    """
+
+    from sqlmodel import Session, select
+
+    from agent_service.models.longterm_memory_spec import LongTermMemorySpec
+
+    if runtime.memory_service is None:
+        return
+    memory_service = runtime.memory_service
+    with Session(memory_service.engine) as db_session:
+        statement = (
+            select(LongTermMemorySpec)
+            .where(LongTermMemorySpec.user_id == user_id)
+            .where(LongTermMemorySpec.tag == runtime.config.constants.memory_tag)
+            .where(LongTermMemorySpec.memory_type == memory_type)
+            .where(LongTermMemorySpec.source_type == "manual_write")
+        )
+        records = db_session.exec(statement).all()
+        for record in records:
+            metadata = dict(record.metadata_json or {})
+            if metadata.get("fact_status") != "active":
+                continue
+            metadata["fact_status"] = "superseded"
+            record.metadata_json = metadata
+            db_session.add(record)
+        db_session.commit()
+
+
 def write_long_term_memory(
     content: str,
     memory_type: str = "important_fact_summary",
@@ -246,6 +283,11 @@ def write_long_term_memory(
     """
 
     runtime = get_tool_runtime()
+    _supersede_prior_entries(
+        runtime=runtime,
+        user_id=runtime.user_id,
+        memory_type=memory_type,
+    )
     embedding = runtime.embedding_service.embed_text(content) if runtime.embedding_service else []
     now = datetime.now(timezone.utc)
     create_dto = LongTermMemorySpecCreate(

@@ -101,7 +101,7 @@ class ContextBuilder:
             query=current_prompt,
             user_id=user_id,
             session_id=session_id,
-            top_k=2,
+            top_k=self.config.memory.rerank_top_k,
         )
         if not memories:
             latest_summary = self.retrieval_service.get_latest_session_summary(
