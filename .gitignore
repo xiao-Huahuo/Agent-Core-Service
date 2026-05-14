@@ -3,6 +3,8 @@
 .codex
 skills-lock.json
 runtime/
-dist/
+**/dist/
+**/build/
 **/__pycache__/
 .env
+console/node_modules/

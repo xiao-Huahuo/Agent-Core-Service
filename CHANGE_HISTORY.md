@@ -1,6 +1,7 @@
 # CHANGE HISTORY
 
 ## 2026-05-14
+- 新增 `AgentConfig.ServerConfig` 子配置,将 FastAPI HTTP 端口(默认 8000)和 gRPC 端口(默认 50051)纳入统一配置管理,注册 `AGENT_HTTP_HOST/PORT` 与 `AGENT_GRPC_HOST/PORT` 环境变量,并更新 `main.py` 从配置读取监听地址。
 - 扩展 REST 接口层: 为前端对话面板与观测面板补齐 5 个 HTTP 端点。
   - `GET /sessions?user_id=xxx` — 列出用户的所有会话(按更新时间倒序)。
   - `POST /sessions` — 创建新会话,body 传入 user_id 和可选 session_name。

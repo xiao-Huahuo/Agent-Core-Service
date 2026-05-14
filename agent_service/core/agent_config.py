@@ -391,6 +391,22 @@ class AgentConfig:
         file_daily_backup_count: int = 7
         module_levels: dict[str, str] = field(default_factory=dict)
 
+    @dataclass(slots=True)
+    class ServerConfig:
+        """
+        管理 HTTP (FastAPI) 与 gRPC 服务的监听地址与端口。
+
+        http_host: FastAPI HTTP 监听地址,默认 0.0.0.0。
+        http_port: FastAPI HTTP 监听端口,默认 8000。
+        grpc_host: gRPC 监听地址,默认 [::] (IPv6 全接口)。
+        grpc_port: gRPC 监听端口,默认 50051。
+        """
+
+        http_host: str = "0.0.0.0"
+        http_port: int = 8000
+        grpc_host: str = "[::]"
+        grpc_port: int = 50051
+
     constants: Constants = field(default_factory=Constants)
     storage: StorageConfig = field(default_factory=StorageConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
@@ -398,6 +414,7 @@ class AgentConfig:
     task_schedule: TaskScheduleConfig = field(default_factory=TaskScheduleConfig)
     mcp: MCPConfig = field(default_factory=MCPConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
+    server: ServerConfig = field(default_factory=ServerConfig)
 
     @classmethod
     def load_config(
@@ -436,6 +453,7 @@ class AgentConfig:
             task_schedule=cls.TaskScheduleConfig(**data["task_schedule"]),
             mcp=cls.MCPConfig(**data["mcp"]),
             logging=cls.LoggingConfig(**data["logging"]),
+            server=cls.ServerConfig(**data["server"]),
         )
 
 
@@ -724,6 +742,10 @@ class AgentConfig:
             "AGENT_LOG_FILE_DAILY_WHEN": ("logging", "file_daily_when", str),
             "AGENT_LOG_FILE_DAILY_BACKUP_COUNT": ("logging", "file_daily_backup_count", int),
             "AGENT_LOG_MODULE_LEVELS_JSON": ("logging", "module_levels", AgentConfig._parse_json),
+            "AGENT_HTTP_HOST": ("server", "http_host", str),
+            "AGENT_HTTP_PORT": ("server", "http_port", int),
+            "AGENT_GRPC_HOST": ("server", "grpc_host", str),
+            "AGENT_GRPC_PORT": ("server", "grpc_port", int),
         }
         for env_name, (section, key, caster) in env_mapping.items():
             raw_value = os.getenv(env_name)

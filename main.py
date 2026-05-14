@@ -61,11 +61,12 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     rest_routes._session_service = session_service
     rest_routes._message_service = message_service
 
+    grpc_address = f"{config.server.grpc_host}:{config.server.grpc_port}"
     _grpc_server = grpc.server(ThreadPoolExecutor(max_workers=10))
     add_AgentServiceServicer_to_server(_grpc_servicer, _grpc_server)
-    _grpc_server.add_insecure_port("[::]:50051")
+    _grpc_server.add_insecure_port(grpc_address)
     _grpc_server.start()
-    logger.info("gRPC server 已启动 | port=50051")
+    logger.info("gRPC server 已启动 | address=%s", grpc_address)
 
     try:
         yield
@@ -89,4 +90,5 @@ app.include_router(rest_router)
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    temp_config = AgentConfig.load_config(ensure_models=False)
+    uvicorn.run(app, host=temp_config.server.http_host, port=temp_config.server.http_port)
