@@ -18,6 +18,7 @@ return output_result.safe_output
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,8 @@ from agent_service.services.scheduler import (
     SMALL_MODEL_TIER,
     get_llm_task_scheduler,
 )
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_SENSITIVE_WORDS_PATH = Path(__file__).resolve().parent.parent.parent.parent / "resources" / "safety" / "sensitive_words.json"
@@ -81,6 +84,11 @@ class SafetyService:
         if self._sensitive_checker is not None:
             sensitive_result = self._sensitive_checker.check(user_input)
             if sensitive_result.blocked:
+                logger.warning(
+                    "输入审核拦截(敏感词) | categories=%s input_len=%d",
+                    sensitive_result.blocked_categories,
+                    len(user_input),
+                )
                 is_political = "politics" in sensitive_result.blocked_categories
                 return InputAuditResult(
                     passed=False,
@@ -96,6 +104,11 @@ class SafetyService:
 
         intent_result = self._intent_auditor.audit(user_input)
         if intent_result.blocked:
+            logger.warning(
+                "输入审核拦截(意图) | risk_type=%s input_len=%d",
+                intent_result.risk_type,
+                len(user_input),
+            )
             is_political = (
                 intent_result.risk_type == "政治敏感"
                 or (sensitive_result is not None and "politics" in sensitive_result.blocked_categories)
@@ -198,7 +211,15 @@ class SafetyService:
     def audit_output(self, output_text: str, *, user_input: str = "") -> OutputAuditResult:
         """对 Agent 输出执行 Layer 3 输出审核。"""
 
-        return self._output_auditor.audit(output_text, user_input=user_input)
+        result = self._output_auditor.audit(output_text, user_input=user_input)
+        if result.blocked or result.scrubbed:
+            logger.warning(
+                "输出审核 | blocked=%s scrubbed=%s output_len=%d",
+                result.blocked,
+                result.scrubbed,
+                len(output_text),
+            )
+        return result
 
     @property
     def supports_input_audit(self) -> bool:

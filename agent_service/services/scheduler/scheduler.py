@@ -27,6 +27,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as Futur
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 import itertools
+import logging
 import queue
 import random
 import threading
@@ -61,6 +62,8 @@ SUPPORTED_TASK_TYPES = {
     BACKGROUND_FACT_RESOLUTION_TASK,
 }
 SUPPORTED_MODEL_TIERS = {LARGE_MODEL_TIER, SMALL_MODEL_TIER}
+
+logger = logging.getLogger(__name__)
 
 
 class LLMTaskSchedulerError(RuntimeError):
@@ -142,6 +145,13 @@ class LLMTaskScheduler:
 
         self.config = config
         self.task_config = config.task_schedule
+        logger.info(
+            "LLM 调度器初始化 | redis=%s large_pool=%d small_pool=%d global_max=%d",
+            bool(self.task_config.redis_url),
+            self.task_config.large_model_max_concurrency,
+            self.task_config.small_model_max_concurrency,
+            self.task_config.global_max_concurrency,
+        )
         self._sequence = itertools.count()
         self._shutdown_event = threading.Event()
         self._global_semaphore = threading.Semaphore(max(self.task_config.global_max_concurrency, 1))
@@ -282,6 +292,13 @@ class LLMTaskScheduler:
     ) -> BaseMessage:
         """提交并同步等待一个可序列化的 LLM Chat 请求。"""
 
+        logger.debug(
+            "LLM Chat 调用 | task_type=%s model_tier=%s msg_count=%d tools=%d",
+            task_type,
+            model_tier,
+            len(messages),
+            len(tool_names or []),
+        )
         handle = self.submit_chat(
             task_type=task_type,
             messages=messages,
@@ -388,11 +405,14 @@ class LLMTaskScheduler:
     def shutdown(self) -> None:
         """停止 worker 线程。"""
 
+        logger.info("LLM 调度器正在关闭 | local_workers=%d redis_workers=%d",
+                     len(self._local_worker_threads), len(self._redis_worker_threads))
         self._shutdown_event.set()
         for worker in self._local_worker_threads:
             worker.join(timeout=1.0)
         for worker in self._redis_worker_threads:
             worker.join(timeout=1.0)
+        logger.info("LLM 调度器已关闭")
 
     def supports_persistent_summary_jobs(self) -> bool:
         """返回当前调度器是否启用了 Redis 持久化 Summary 业务任务。"""

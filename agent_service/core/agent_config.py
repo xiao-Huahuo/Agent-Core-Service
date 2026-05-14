@@ -357,12 +357,47 @@ class AgentConfig:
         tool_name_prefix: str = "mcp"
         servers: list[dict[str, Any]] = field(default_factory=list)
 
+    @dataclass(slots=True)
+    class LoggingConfig:
+        """
+        管理全局日志系统的输出目标、格式、级别与轮转策略。
+
+        level: 全局日志级别,默认 INFO。可选 DEBUG / INFO / WARNING / ERROR / CRITICAL。
+        enable_console: 是否启用控制台日志输出。
+        console_level: 控制台日志独立级别,默认与全局 level 一致。
+        console_format: 控制台日志格式,可选 plain / structured。
+        enable_file: 是否启用文件日志输出,文件存储在 storage.log_dir 下。
+        file_level: 文件日志独立级别,默认 DEBUG。
+        file_format: 文件日志格式,可选 json / plain。
+        file_rotation: 文件轮转策略,可选 size / daily。
+        file_max_bytes: 按大小轮转时单个日志文件最大字节数,默认 10MB。
+        file_backup_count: 按大小轮转时保留的历史日志文件数,默认 5。
+        file_daily_when: 按天轮转的时间点,默认 midnight (午夜轮转)。
+        file_daily_backup_count: 按天轮转时保留的历史日志文件数,默认 7。
+        module_levels: 按模块名指定独立日志级别,例如 {"agent_service.agent_core": "DEBUG"}。
+        """
+
+        level: str = "INFO"
+        enable_console: bool = True
+        console_level: str = ""
+        console_format: str = "plain"
+        enable_file: bool = True
+        file_level: str = "DEBUG"
+        file_format: str = "json"
+        file_rotation: str = "size"
+        file_max_bytes: int = 10 * 1024 * 1024
+        file_backup_count: int = 5
+        file_daily_when: str = "midnight"
+        file_daily_backup_count: int = 7
+        module_levels: dict[str, str] = field(default_factory=dict)
+
     constants: Constants = field(default_factory=Constants)
     storage: StorageConfig = field(default_factory=StorageConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     task_schedule: TaskScheduleConfig = field(default_factory=TaskScheduleConfig)
     mcp: MCPConfig = field(default_factory=MCPConfig)
+    logging: LoggingConfig = field(default_factory=LoggingConfig)
 
     @classmethod
     def load_config(
@@ -400,6 +435,7 @@ class AgentConfig:
             memory=cls.MemoryConfig(**data["memory"]),
             task_schedule=cls.TaskScheduleConfig(**data["task_schedule"]),
             mcp=cls.MCPConfig(**data["mcp"]),
+            logging=cls.LoggingConfig(**data["logging"]),
         )
 
 
@@ -675,6 +711,19 @@ class AgentConfig:
             "AGENT_MCP_ENABLED": ("mcp", "enabled", AgentConfig._parse_bool),
             "AGENT_MCP_TOOL_NAME_PREFIX": ("mcp", "tool_name_prefix", str),
             "AGENT_MCP_SERVERS_JSON": ("mcp", "servers", AgentConfig._parse_json),
+            "AGENT_LOG_LEVEL": ("logging", "level", str),
+            "AGENT_LOG_ENABLE_CONSOLE": ("logging", "enable_console", AgentConfig._parse_bool),
+            "AGENT_LOG_CONSOLE_LEVEL": ("logging", "console_level", str),
+            "AGENT_LOG_CONSOLE_FORMAT": ("logging", "console_format", str),
+            "AGENT_LOG_ENABLE_FILE": ("logging", "enable_file", AgentConfig._parse_bool),
+            "AGENT_LOG_FILE_LEVEL": ("logging", "file_level", str),
+            "AGENT_LOG_FILE_FORMAT": ("logging", "file_format", str),
+            "AGENT_LOG_FILE_ROTATION": ("logging", "file_rotation", str),
+            "AGENT_LOG_FILE_MAX_BYTES": ("logging", "file_max_bytes", int),
+            "AGENT_LOG_FILE_BACKUP_COUNT": ("logging", "file_backup_count", int),
+            "AGENT_LOG_FILE_DAILY_WHEN": ("logging", "file_daily_when", str),
+            "AGENT_LOG_FILE_DAILY_BACKUP_COUNT": ("logging", "file_daily_backup_count", int),
+            "AGENT_LOG_MODULE_LEVELS_JSON": ("logging", "module_levels", AgentConfig._parse_json),
         }
         for env_name, (section, key, caster) in env_mapping.items():
             raw_value = os.getenv(env_name)

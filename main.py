@@ -15,6 +15,7 @@ AgentService 微服务入口。
 
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Any
@@ -29,6 +30,10 @@ from agent_service.api.rest import router as rest_router
 import agent_service.api.rest.routes as rest_routes
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.session_service import SessionService
+from agent_service.services.message_service import MessageService
+from agent_service.services.logging_service import setup_logging
+
+logger = logging.getLogger(__name__)
 
 _grpc_server: grpc.Server | None = None
 _grpc_servicer: AgentServiceServicer | None = None
@@ -41,27 +46,41 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     global _grpc_server, _grpc_servicer
 
     config = AgentConfig.load_config(ensure_models=False)
+    setup_logging(config)
+
+    logger.info("AgentService 启动中...")
+    logger.info("配置加载完成 | app=%s model=%s", config.constants.app_name, config.model.model_name)
+
     agent = AgentCore(config=config)
+    logger.info("AgentCore 初始化完成 | graph_diagram=%s", agent.graph_diagram_path)
+
     session_service = SessionService(config=config)
+    message_service = MessageService(config=config)
     _grpc_servicer = AgentServiceServicer(agent=agent, session_service=session_service)
     rest_routes._agent = agent
+    rest_routes._session_service = session_service
+    rest_routes._message_service = message_service
 
     _grpc_server = grpc.server(ThreadPoolExecutor(max_workers=10))
     add_AgentServiceServicer_to_server(_grpc_servicer, _grpc_server)
     _grpc_server.add_insecure_port("[::]:50051")
     _grpc_server.start()
-    print("gRPC server listening on [::]:50051")
+    logger.info("gRPC server 已启动 | port=50051")
 
     try:
         yield
     finally:
+        logger.info("AgentService 正在关闭...")
         if _grpc_server is not None:
             _grpc_server.stop(0)
-            print("gRPC server stopped")
+            logger.info("gRPC server 已停止")
         if _grpc_servicer is not None:
             _grpc_servicer.shutdown()
-            print("AgentCore shutdown complete")
+            logger.info("AgentCore 资源已释放")
         rest_routes._agent = None
+        rest_routes._session_service = None
+        rest_routes._message_service = None
+        logger.info("AgentService 已关闭")
 
 
 app = FastAPI(title="Agent-Core-Service", lifespan=_lifespan)

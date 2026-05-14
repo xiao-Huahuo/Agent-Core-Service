@@ -37,6 +37,7 @@ result = agent.run_once(prompt="你好", user_id="u1", session_id="s1")
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Iterator, Sequence
 from typing import Any
 
@@ -52,6 +53,8 @@ from agent_service.services.message_service import MessageService
 from agent_service.services.safety import SafetyService
 from agent_service.services.scheduler import LLMTaskScheduler, get_llm_task_scheduler
 from agent_service.tools import ToolExecutor, ToolRegistry, clear_tool_runtime, set_tool_runtime
+
+logger = logging.getLogger(__name__)
 
 
 class AgentCore:
@@ -78,7 +81,9 @@ class AgentCore:
         """保存配置、检查本地模型、构建或接收 LangGraph 图,并输出当前节点流程图。"""
 
         self.config = config
+        logger.debug("AgentCore 初始化开始 | model=%s", config.model.model_name)
         self.config.ensure_local_models()
+        logger.debug("本地模型检查完成")
         self.message_service = message_service
         self.context_builder = context_builder
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
@@ -110,7 +115,9 @@ class AgentCore:
         """
 
         messages = [HumanMessage(content=prompt)]
+        logger.info("开始无状态流式运行 | user=%s session=%s prompt_len=%d", user_id, session_id, len(prompt))
         yield from self._stream_messages(messages=messages, user_id=user_id, session_id=session_id)
+        logger.debug("无状态流式运行完成 | user=%s session=%s", user_id, session_id)
 
     def run_once(self, *, prompt: str, user_id: str, session_id: str) -> dict[str, Any]:
         """
@@ -169,7 +176,14 @@ class AgentCore:
 
         message_service = self._get_message_service()
         context_builder = self._get_context_builder(message_service=message_service)
+        logger.info(
+            "开始 session 流式运行 | user=%s session=%s prompt_len=%d",
+            user_id,
+            session_id,
+            len(prompt),
+        )
         messages = context_builder.build_messages(user_id=user_id, session_id=session_id, current_prompt=prompt)
+        logger.debug("上下文构建完成 | message_count=%d", len(messages))
         message_service.create_message(
             MessageCreate(
                 session_id=session_id,
@@ -189,7 +203,9 @@ class AgentCore:
     def close(self) -> None:
         """释放 AgentCore 持有的调度器等资源。"""
 
+        logger.info("AgentCore 正在释放调度器资源...")
         self.task_scheduler.shutdown()
+        logger.info("AgentCore 资源释放完成")
 
     def _stream_messages(
         self,
@@ -227,6 +243,7 @@ class AgentCore:
         try:
             for event in self.graph.stream(inputs, config=runtime_config, stream_mode="updates"):
                 for node_name, state_update in event.items():
+                    logger.debug("图节点执行 | node=%s user=%s session=%s", node_name, user_id, session_id)
                     if message_service is not None:
                         self._save_state_update_messages(
                             message_service=message_service,

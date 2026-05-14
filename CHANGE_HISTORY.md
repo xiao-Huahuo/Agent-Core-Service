@@ -1,5 +1,22 @@
 # CHANGE HISTORY
 
+## 2026-05-14
+- 扩展 REST 接口层: 为前端对话面板与观测面板补齐 5 个 HTTP 端点。
+  - `GET /sessions?user_id=xxx` — 列出用户的所有会话(按更新时间倒序)。
+  - `POST /sessions` — 创建新会话,body 传入 user_id 和可选 session_name。
+  - `GET /sessions/{session_id}/messages?user_id=xxx&limit=50` — 获取会话消息历史(按时间正序,未摘要消息),供前端聊天面板加载历史记录。
+  - `GET /agent/stream?prompt=xxx&user_id=x&session_id=x` — SSE 流式对话接口,复用 `AgentCore.stream_session_prompt()` 逐节点推送 Agent 执行事件,以 `data: [DONE]` 结束流。
+  - `GET /agent/events?session_id=x&user_id=xxx` — 查询会话中带有 node trace 信息的消息事件列表,供前端观测面板还原智能体思考轨迹。
+- 更新 `main.py`: lifespan 启动阶段创建 `MessageService` 并将 `AgentCore`、`SessionService`、`MessageService` 注入 `routes` 模块,关闭阶段清理注入引用。
+- 新增统一日志系统: 在 `AgentConfig` 中新增 `LoggingConfig` 子配置类,管理全局日志级别、控制台/文件双通道输出、日志格式(plain/json/stuctured)、文件轮转策略(按大小/按天)以及各模块独立日志级别覆写,并注册 `AGENT_LOG_*` 系列环境变量。
+- 新增 `agent_service/services/logging_service.py`,提供 `setup_logging(config)` 统一日志初始化入口,支持控制台 `StreamHandler` + 文件 `RotatingFileHandler`/`TimedRotatingFileHandler` 双输出、JSON 行格式文件日志和 structured 控制台格式,日志文件写入 `runtime/logs/agent_service.log`。
+- 更新 `main.py`: 在 `_lifespan` 最早阶段调用 `setup_logging()`,将原有 `print()` 调用全部替换为结构化 logger 输出,覆盖 gRPC 启动/关闭、AgentCore 初始化完成、配置加载等关键生命周期事件。
+- 更新 `agent_service/agent_core/agent_core.py`: 为 `AgentCore.__init__`、`stream_run`、`stream_session_prompt`、`close` 和 `_stream_messages` 添加 INFO/DEBUG 级别日志,记录模型名称、session/user、prompt 长度、图节点执行等核心链路信息。
+- 更新 `agent_service/agent_core/graph.py`: 为 `AgentGraphBuilder.build()` 添加图构建开始/完成日志,记录最终编译图的节点数量。
+- 更新 `agent_service/services/safety/safety_service.py`: 为三层安全审核(敏感词拦截、意图审核拦截、输出审核)添加 WARNING 级别日志,记录拦截类型、风险类别和内容长度。
+- 更新 `agent_service/services/scheduler/scheduler.py`: 为 `LLMTaskScheduler` 初始化、`invoke_chat` LLM 调用和 `shutdown` 资源释放添加日志,记录 Redis 启用状态、模型池并发数、任务类型与模型 tier 等关键调度参数。
+- 更新 `agent_service/services/__init__.py` 导出 `setup_logging` 和 `is_initialized`,便于外部模块统一引用。
+
 ## 2026-05-13
 - 将 MCP 正式接入 Agent 工具链: 新增 `agent_service/tools/mcp/registry.py` 作为配置驱动的 MCP 工具注册适配层,按 `AgentConfig.MCPConfig` 发现外部 MCP Server 工具,为每个工具生成带 server 隔离前缀的稳定工具名,并包装成现有 `BuiltinToolDefinition` 兼容结构。
 - 升级 `ToolRegistry.with_builtin_tools(config=...)` 为“原生工具 + MCP 工具”统一注册入口,同时让 `AgentCore` 和 `LLMTaskScheduler` 在创建默认工具注册表时显式传入全局配置,确保模型绑定工具与 `ToolExecutor` 使用的是同一份 MCP/原生混合工具视图。

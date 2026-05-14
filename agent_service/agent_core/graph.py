@@ -14,6 +14,7 @@ Agent LangGraph 图构建模块。
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal, Sequence
 
 from langgraph.graph import END, StateGraph
@@ -31,6 +32,8 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.services.safety import SafetyService
 from agent_service.services.scheduler import LLMTaskScheduler
 from agent_service.tools import ToolExecutor
+
+logger = logging.getLogger(__name__)
 
 
 class AgentGraphBuilder:
@@ -69,6 +72,7 @@ class AgentGraphBuilder:
     def build(self) -> CompiledStateGraph:
         """构建并编译 ReAct 循环图,包含安全审核、推理规划与反思节点。"""
 
+        logger.info("开始构建 Agent 图...")
         self._branch_labels.clear()
         workflow = StateGraph(AgentState)
         if self.safety_service and self.safety_service.supports_input_audit:
@@ -166,7 +170,9 @@ class AgentGraphBuilder:
             self._branch_labels[("safety_output", "summary")] = "审核通过"
             self._branch_labels[("safety_output", "__end__")] = "审核拦截"
         workflow.add_edge("summary", END)
-        return workflow.compile()
+        compiled = workflow.compile()
+        logger.info("Agent 图构建完成 | 节点数=%d", len(compiled.get_graph().nodes))
+        return compiled
 
     def _route_after_model(self, state: AgentState) -> Literal["action", "safety_output", "summary"]:
         """根据模型最后一条消息是否包含工具调用决定下一步。"""
