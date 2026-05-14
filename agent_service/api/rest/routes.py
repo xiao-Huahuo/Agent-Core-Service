@@ -188,7 +188,7 @@ async def agent_stream(
 
     agent = _require_agent()
 
-    async def _event_generator():
+    def _event_generator():
         try:
             for chunk in agent.stream_session_prompt(
                 prompt=prompt,

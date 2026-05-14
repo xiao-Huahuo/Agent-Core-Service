@@ -13,12 +13,15 @@ reranked = service.rerank(query="项目代号是什么", candidates=candidates, 
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from typing import Protocol
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.scripts.download_model import ensure_model, model_target_dir
 from agent_service.services.memory.rag.hybrid_retrieval import HybridRetrievalCandidate
+
+logger = logging.getLogger(__name__)
 
 
 class RerankProvider(Protocol):
@@ -45,6 +48,11 @@ class SentenceTransformerCrossEncoderProvider:
         self.config = config
         self._model: object | None = None
 
+    def warmup(self) -> None:
+        """预加载模型到内存,避免首次请求冷启动延迟。"""
+
+        self._get_model()
+
     def score_pairs(self, *, query: str, documents: Sequence[str]) -> list[float]:
         """
         对 query-document 对打分。
@@ -57,7 +65,7 @@ class SentenceTransformerCrossEncoderProvider:
             return []
         model = self._get_model()
         pairs = [[query, document] for document in documents]
-        raw_scores = model.predict(pairs)
+        raw_scores = model.predict(pairs, show_progress_bar=False)
         return [self._normalize_score(float(score)) for score in raw_scores]
 
     def _get_model(self) -> object:
@@ -85,7 +93,15 @@ class SentenceTransformerCrossEncoderProvider:
             )
         if not model_path.exists():
             raise FileNotFoundError(f"ReRank 模型目录不存在: {model_path}")
+        banner = "=" * 57
+        logger.info(banner)
+        logger.info("开始加载 ReRank 模型: %s", self.config.model.rerank_model_name)
+        logger.info("模型路径: %s", model_path)
+        logger.info(banner)
         self._model = CrossEncoder(str(model_path))
+        logger.info(banner)
+        logger.info("ReRank 模型加载完成: %s", self.config.model.rerank_model_name)
+        logger.info(banner)
         return self._model
 
     @staticmethod
@@ -116,6 +132,19 @@ class RerankService:
 
         self.config = config
         self.provider = provider
+        self._cached_provider: RerankProvider | None = None
+
+    def warmup(self) -> None:
+        """预加载底层 ReRank 模型到内存。"""
+
+        if not self.is_enabled():
+            return
+        provider = self.provider or self._cached_provider
+        if provider is None:
+            provider = SentenceTransformerCrossEncoderProvider(config=self.config)
+            self._cached_provider = provider
+        if hasattr(provider, 'warmup'):
+            provider.warmup()
 
     def is_enabled(self) -> bool:
         """
@@ -149,7 +178,10 @@ class RerankService:
             ranked = list(candidates)
             ranked.sort(key=self._fallback_rank_key, reverse=True)
             return ranked[:top_k]
-        provider = self.provider or SentenceTransformerCrossEncoderProvider(config=self.config)
+        provider = self.provider or self._cached_provider
+        if provider is None:
+            provider = SentenceTransformerCrossEncoderProvider(config=self.config)
+            self._cached_provider = provider
         documents = [candidate.memory.content for candidate in candidates]
         scores = provider.score_pairs(query=query, documents=documents)
         reranked: list[HybridRetrievalCandidate] = []

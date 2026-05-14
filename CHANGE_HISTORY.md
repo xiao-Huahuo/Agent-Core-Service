@@ -1,6 +1,53 @@
 # CHANGE HISTORY
 
 ## 2026-05-14
+
+### 后端 — Bug 修复
+- 修复 `safety_service.py` 中 `audit_output()` 访问不存在的 `result.scrubbed` 属性的 bug,改为正确的 `result.sanitized`（`OutputAuditResult` 的属性名为 `sanitized`）。此 bug 导致 safety_output 节点每次执行都抛出 `AttributeError`,Agent 流式对话在输出审核阶段异常终止。
+- 修复 `rerank.py` 中 `RerankService.rerank()` 每次调用都创建新的 `SentenceTransformerCrossEncoderProvider` 实例导致 CrossEncoder 模型被反复加载（每次 ~4s）的性能问题。改为在 `RerankService` 实例上缓存 provider,首次创建后复用,与 Embedding 模型的延迟加载缓存策略对齐。
+- 修复 `scheduler.py` 中 `ChatOpenAI` SDK 层重试与调度器 `_run_with_retries` 双重重试叠加导致 Moonshot API 429 雪崩的问题。为 `ChatOpenAI` 设置 `max_retries=0`,将重试控制权完全交给调度器统一管理（指数退避 + 熔断器）。
+- 修复 SSE 流式推送失效问题：将 `routes.py` 中 `/agent/stream` 的 `async def _event_generator()` 改为 `def _event_generator()`,避免 `agent.stream_session_prompt()` 的同步阻塞在事件循环中导致流式失效；在 `vite.config.js` 代理中移除 `accept-encoding` 防止压缩缓冲、强制保留流式响应头；在 `client.js` 中增加 `response.body` 空值防御。
+
+### 前端 — Agent Console 聊天面板
+- 新建 `console/` Vue 3 前端项目,实现 Agent 对话面板。
+  - **基础架构**: 新增 `package.json` 依赖 `lucide-vue-next` 功能图标库; 配置 `vite.config.js` 代理 `/sessions`、`/agent` 到 `localhost:8000`; 更新 `index.html` (lang=zh-CN, title=Agent Console); 更新 `main.js` 引入全局样式与主题初始化。
+  - **设计系统**: 新增 `src/assets/ui-system.css` (CSS 自定义属性:明暗主题配色、字体栈、间距尺、动画参数) 与 `src/assets/main.css` (全局 reset、直角边框、毛玻璃 `.glass-panel` 工具类、滚动条样式)。
+  - **数据层**: 新增 `src/api/client.js` (fetch 封装、`ApiError`、SSE `streamLines` AsyncGenerator 解析器、`getUserId`/`setUserId` localStorage 管理)、`src/api/session.js` (会话列表/创建/消息历史 API)、`src/api/agent.js` (SSE 流式对话 `streamPrompt`)。
+  - **用户管理**: 新增 `src/composable/useUserId.js` — 响应式 user_id 管理,读写 localStorage,不涉及认证。
+  - **状态管理 (Pinia)**:
+    - `src/stores/settings.js` — 明暗主题切换,通过 `data-theme` DOM 属性驱动 CSS 变量,持久化到 localStorage。
+    - `src/stores/session.js` — 会话列表、当前选中会话、加载/创建/选中方法。
+    - `src/stores/chat.js` — 消息列表、SSE 流式状态、`send()` 方法逐块更新助手回复。
+  - **通用组件**: `ThemeToggle.vue` (Sun/Moon 图标切换)、`AppTopBar.vue` (macOS 风格毛玻璃顶栏,三色圆点+标题+Chat/Obs 标签导航+主题按钮)。
+  - **会话组件**: `SessionDrawer.vue` (毛玻璃左侧滑出抽屉,新建按钮+会话列表)、`SessionItem.vue` (单条会话行,选中高亮)。
+  - **聊天组件**: `MessageBubble.vue` (user/assistant 差异化气泡)、`MessageList.vue` (自动滚底容器)、`StreamingIndicator.vue` (脉冲点加载指示器)、`ChatInput.vue` (输入框+Send 按钮,Enter 发送/Shift+Enter 换行)。
+  - **路由与页面**: 新增 `src/router/api_routes.js` (API 端点路径常量); 更新 `src/router/index.js` (ChatView + DashboardView 路由,`/` 重定向到 `/chat`); 新增 `ChatView.vue` (聊天主页面,组合抽屉+消息+输入+流式指示器,首次使用提示输入 user_id); 新增 `DashboardView.vue` (观测面板占位页)。
+  - **外壳**: 更新 `App.vue` 为 AppTopBar + router-view。
+
+### TODO 实现 — 工具分组分离
+- 将 `builtin.py` 中单一 `BUILTIN_TOOL_DEFINITIONS` 拆分为三个明确分组: `UTILITY_TOOL_DEFINITIONS`（通用工具 9 个）、`MEMORY_TOOL_DEFINITIONS`（长期记忆工具 2 个: `get_long_term_memory`、`write_long_term_memory`）、`KNOWLEDGE_TOOL_DEFINITIONS`（知识库工具 1 个: `get_knowledge_context`）。`BUILTIN_TOOL_DEFINITIONS` 保留为三个分组的合并列表,`ToolRegistry` 无需修改。新增分组名称在 `tools/__init__.py` 中一并导出。
+
+### TODO 实现 — 模型加载日志围栏
+- 为所有模型下载和加载操作添加 `====` 格式日志横幅,使操作过程可观测:
+  - `scripts/download_model.py`: `_download_from_huggingface()` 下载前/后打印横幅+模型名+目标目录; `ensure_model()` 已存在时打印跳过提示。
+  - `services/memory/rag/embedding.py`: `SentenceTransformerEmbeddingProvider._get_model()` 加载前/后打印横幅+模型名+路径。
+  - `services/memory/rag/rerank.py`: `SentenceTransformerCrossEncoderProvider._get_model()` 加载前/后打印横幅+模型名+路径。
+
+### TODO 实现 — 前端 Markdown 渲染
+- 新增 `console/package.json` 依赖 `marked ^15.0.0`。
+- 新建 `components/chat/MarkdownContent.vue`: 用 `marked.parse()` 渲染 Markdown 为 HTML,scoped 样式遵循"去AI化"设计系统（直角无阴影、JetBrains Mono 等宽、低饱和冷色、细线边框）,覆盖代码块、表格、引用、标题、列表等全部 Markdown 元素。
+- 修改 `components/chat/MessageBubble.vue`: assistant 气泡中的 `<pre>` 替换为 `<MarkdownContent>`,user 气泡保持不变。
+
+### TODO 实现 — 流式推送修复 (token 级)
+- **scheduler.py**: 新增 `stream_chat()` 公开方法和 `_stream_chat_request()` 私有实现,使用 `model.stream()` 逐 token yield `AIMessageChunk`,Redis 后端自动降级为 `invoke_chat()` + 单 chunk。
+- **runtime_context.py**: 新增 `set_agent_token_callback()` / `get_agent_token_callback()` / `clear_agent_token_callback()`,通过 `threading.local` 在线程间传递 token 回调,避免通过图构建器传参。
+- **model_decision.py**: `__call__()` 检测 thread-local token 回调,有则走 `_streaming_call()` 使用 `stream_chat()` 并逐 token 触发回调,无则使用原 `invoke_chat()` 路径。
+- **agent_core.py**: `_stream_events()` 改为双线程+队列模式: 创建 `queue.Queue`,设置 token 回调推入队列,后台 daemon 线程执行 `graph.stream()`,主线程从队列读取并 yield token 事件和节点事件;异常通过队列传播,finally 清理回调并 join 线程。
+- HTTP SSE 和 gRPC 共用同一 `_stream_events()` 核心,无需修改路由或 servicer。
+- 前端 `chat.js` 现有累积式内容更新逻辑已兼容 token 级流式,无需改动。
+  - 删除 `src/stores/counter.js` (示例 store)、`src/view/` (拼写错误目录)。
+
+### 后端
 - 新增 `AgentConfig.ServerConfig` 子配置,将 FastAPI HTTP 端口(默认 8000)和 gRPC 端口(默认 50051)纳入统一配置管理,注册 `AGENT_HTTP_HOST/PORT` 与 `AGENT_GRPC_HOST/PORT` 环境变量,并更新 `main.py` 从配置读取监听地址。
 - 扩展 REST 接口层: 为前端对话面板与观测面板补齐 5 个 HTTP 端点。
   - `GET /sessions?user_id=xxx` — 列出用户的所有会话(按更新时间倒序)。

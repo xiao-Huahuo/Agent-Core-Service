@@ -51,11 +51,13 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     logger.info("AgentService 启动中...")
     logger.info("配置加载完成 | app=%s model=%s", config.constants.app_name, config.model.model_name)
 
-    agent = AgentCore(config=config)
+    # 提前创建 MessageService,以便 AgentCore 在初始化阶段预加载 Embedding/ReRank 模型
+    message_service = MessageService(config=config)
+
+    agent = AgentCore(config=config, message_service=message_service)
     logger.info("AgentCore 初始化完成 | graph_diagram=%s", agent.graph_diagram_path)
 
     session_service = SessionService(config=config)
-    message_service = MessageService(config=config)
     _grpc_servicer = AgentServiceServicer(agent=agent, session_service=session_service)
     rest_routes._agent = agent
     rest_routes._session_service = session_service

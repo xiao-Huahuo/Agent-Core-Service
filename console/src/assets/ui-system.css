@@ -1,0 +1,172 @@
+/*
+ * Agent Console 设计系统变量。
+ *
+ * 参考 macOS 终端面板风格。
+ */
+
+/* ==================================================================
+ * 字体
+ * ================================================================== */
+
+:root {
+  --font-sans: "JetBrains Mono", "Cascadia Code", "Consolas", ui-monospace, monospace;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
+
+  --font-size-xs: 0.75rem;    /* 12px */
+  --font-size-sm: 0.825rem;   /* 13.2px */
+  --font-size-base: 0.9rem;   /* 14.4px */
+  --font-size-md: 1rem;       /* 16px */
+  --font-size-lg: 1.15rem;    /* 18.4px */
+  --font-size-xl: 1.4rem;     /* 22.4px */
+  --font-size-2xl: 1.7rem;    /* 27.2px */
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.625;
+
+  --tracking-tight: -0.025em;
+}
+
+/* ==================================================================
+ * 间距
+ * ================================================================== */
+
+:root {
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+}
+
+/* ==================================================================
+ * 圆角
+ * ================================================================== */
+
+:root {
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+}
+
+/* ==================================================================
+ * 动画
+ * ================================================================== */
+
+:root {
+  --transition-fast: 120ms ease-out;
+  --transition-normal: 200ms ease-out;
+  --transition-slow: 300ms ease-out;
+}
+
+/* ==================================================================
+ * 暗色主题 (默认)
+ * ================================================================== */
+
+:root,
+[data-theme="dark"] {
+  --color-bg-primary: #0a0a0a;
+  --color-bg-card: #111;
+  --color-bg-muted: #262626;
+  --color-bg-hover: rgba(255, 255, 255, 0.05);
+  --color-bg-active: rgba(255, 255, 255, 0.08);
+
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-light: rgba(255, 255, 255, 0.04);
+  --color-border-strong: rgba(255, 255, 255, 0.12);
+
+  --color-text-primary: #ededed;
+  --color-text-secondary: #a3a3a3;
+  --color-text-tertiary: rgba(237, 237, 237, 0.35);
+
+  --color-accent: #d99178;
+  --color-accent-hover: #e0a890;
+  --color-accent-muted: rgba(217, 145, 120, 0.12);
+  --color-accent-glow: rgba(217, 145, 120, 0.1);
+
+  --color-user-bubble: rgba(217, 145, 120, 0.1);
+  --color-user-bubble-border: rgba(217, 145, 120, 0.2);
+
+  --color-green: #00c758;
+  --color-blue: #3080ff;
+  --color-sky: #00b7d7;
+  --color-error: #ef4444;
+
+  /* 输入框 */
+  --input-bg: rgba(0, 0, 0, 0.3);
+  --input-border: rgba(255, 255, 255, 0.1);
+  --input-text: #ededed;
+  --input-placeholder: rgba(237, 237, 237, 0.35);
+  --input-btn-bg: rgba(255, 255, 255, 0.05);
+  --input-btn-color: rgba(255, 255, 255, 0.4);
+  --input-btn-hover-bg: rgba(255, 255, 255, 0.1);
+  --input-btn-hover-color: rgba(255, 255, 255, 0.7);
+  --input-send-disabled: rgba(255, 255, 255, 0.25);
+
+  --glass-bg: rgba(17, 17, 17, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --blur-strength: 12px;
+
+  --shadow-window: 0 0 0 1px rgba(255,255,255,0.03), 0 8px 32px rgba(0,0,0,0.4);
+}
+
+/* ==================================================================
+ * 浅色主题
+ * ================================================================== */
+
+[data-theme="light"] {
+  --color-bg-primary: #f0f0f0;
+  --color-bg-card: #ffffff;
+  --color-bg-muted: #f5f5f5;
+  --color-bg-hover: rgba(0, 0, 0, 0.04);
+  --color-bg-active: rgba(0, 0, 0, 0.06);
+
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-light: rgba(0, 0, 0, 0.04);
+  --color-border-strong: rgba(0, 0, 0, 0.12);
+
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: rgba(0, 0, 0, 0.55);
+  --color-text-tertiary: rgba(0, 0, 0, 0.3);
+
+  --color-accent: #b87050;
+  --color-accent-hover: #9e5d40;
+  --color-accent-muted: rgba(184, 112, 80, 0.1);
+  --color-accent-glow: rgba(184, 112, 80, 0.08);
+
+  --color-user-bubble: rgba(184, 112, 80, 0.08);
+  --color-user-bubble-border: rgba(184, 112, 80, 0.15);
+
+  --color-green: #00a544;
+  --color-blue: #155dfc;
+  --color-sky: #0092b5;
+  --color-error: #c0392b;
+
+  /* 输入框 (亮色) */
+  --input-bg: rgba(0, 0, 0, 0.04);
+  --input-border: rgba(0, 0, 0, 0.1);
+  --input-text: #1a1a1a;
+  --input-placeholder: rgba(0, 0, 0, 0.3);
+  --input-btn-bg: rgba(0, 0, 0, 0.05);
+  --input-btn-color: rgba(0, 0, 0, 0.35);
+  --input-btn-hover-bg: rgba(0, 0, 0, 0.08);
+  --input-btn-hover-color: rgba(0, 0, 0, 0.6);
+  --input-send-disabled: rgba(0, 0, 0, 0.2);
+
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --blur-strength: 10px;
+
+  --shadow-window: 0 0 0 1px rgba(0,0,0,0.04), 0 4px 24px rgba(0,0,0,0.1);
+}

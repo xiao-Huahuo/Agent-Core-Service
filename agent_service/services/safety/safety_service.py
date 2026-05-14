@@ -170,7 +170,7 @@ class SafetyService:
                 "1. 立场坚定,用事实和正面论述回应\n"
                 "2. 不重复用户的具体不当言论内容\n"
                 "3. 语气冷静、得体、有说服力\n"
-                "4. 80-150字,不要超过限制\n"
+                "4. 240-450字,充分展开论述\n"
                 "5. 不要提及'审核'、'拦截'、'敏感'等漏检词汇"
             )
         return (
@@ -212,11 +212,11 @@ class SafetyService:
         """对 Agent 输出执行 Layer 3 输出审核。"""
 
         result = self._output_auditor.audit(output_text, user_input=user_input)
-        if result.blocked or result.scrubbed:
+        if result.blocked or result.sanitized:
             logger.warning(
-                "输出审核 | blocked=%s scrubbed=%s output_len=%d",
+                "输出审核 | blocked=%s sanitized=%s output_len=%d",
                 result.blocked,
-                result.scrubbed,
+                result.sanitized,
                 len(output_text),
             )
         return result

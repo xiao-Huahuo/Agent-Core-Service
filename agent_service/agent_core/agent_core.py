@@ -38,6 +38,8 @@ from __future__ import annotations
 
 import json
 import logging
+import queue as queue_module
+import threading
 from collections.abc import Iterator, Sequence
 from typing import Any
 
@@ -52,7 +54,14 @@ from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.message_service import MessageService
 from agent_service.services.safety import SafetyService
 from agent_service.services.scheduler import LLMTaskScheduler, get_llm_task_scheduler
-from agent_service.tools import ToolExecutor, ToolRegistry, clear_tool_runtime, set_tool_runtime
+from agent_service.tools import (
+    ToolExecutor,
+    ToolRegistry,
+    clear_agent_token_callback,
+    clear_tool_runtime,
+    set_agent_token_callback,
+    set_tool_runtime,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +99,12 @@ class AgentCore:
         self.tool_registry = ToolRegistry.with_builtin_tools(config=config) if tools is None else None
         self.tool_executor = ToolExecutor(registry=self.tool_registry) if self.tool_registry is not None else None
         self.tools = list(tools) if tools is not None else self.tool_registry.to_langchain_tools()
+        if message_service is not None:
+            self._get_context_builder(message_service=message_service)
+            if self.context_builder is not None:
+                logger.info("预加载 Embedding / ReRank 模型中...")
+                self.context_builder.retrieval_service.warmup()
+                logger.info("Embedding / ReRank 模型预加载完成")
         safety_service = SafetyService(config=config, task_scheduler=self.task_scheduler)
         builder = AgentGraphBuilder(
             config=config,
@@ -116,8 +131,16 @@ class AgentCore:
 
         messages = [HumanMessage(content=prompt)]
         logger.info("开始无状态流式运行 | user=%s session=%s prompt_len=%d", user_id, session_id, len(prompt))
-        yield from self._stream_messages(messages=messages, user_id=user_id, session_id=session_id)
+        yield from self._format_sse(self._stream_events(messages=messages, user_id=user_id, session_id=session_id))
         logger.debug("无状态流式运行完成 | user=%s session=%s", user_id, session_id)
+
+    def stream_run_events(self, *, prompt: str, user_id: str, session_id: str) -> Iterator[dict[str, Any]]:
+        """与 stream_run 相同的逻辑,但直接产出 dict 供 gRPC 使用。"""
+
+        messages = [HumanMessage(content=prompt)]
+        logger.info("开始无状态流式运行(gRPC) | user=%s session=%s", user_id, session_id)
+        yield from self._stream_events(messages=messages, user_id=user_id, session_id=session_id)
+        logger.debug("无状态流式运行完成(gRPC) | user=%s session=%s", user_id, session_id)
 
     def run_once(self, *, prompt: str, user_id: str, session_id: str) -> dict[str, Any]:
         """
@@ -166,8 +189,7 @@ class AgentCore:
         运行带 session 上下文和消息持久化的一轮 Agent,以 SSE 流式输出。
 
         与 `run_session_prompt` 共享相同的上下文构建和持久化逻辑,但不再缓冲全部
-        chunk 再返回 dict,而是逐节点 yield SSE 字符串,适合 gRPC server-streaming
-        或 SSE 直推到前端。
+        chunk 再返回 dict,而是逐节点 yield SSE 字符串,适合 HTTP SSE 直推到前端。
 
         prompt: 用户本轮输入。
         user_id: 用户 ID,用于读取和保存该用户的消息。
@@ -193,7 +215,40 @@ class AgentCore:
                 metadata_json={"source": "stream_session_prompt"},
             )
         )
-        yield from self._stream_messages(
+        yield from self._format_sse(
+            self._stream_events(
+                messages=messages,
+                user_id=user_id,
+                session_id=session_id,
+                message_service=message_service,
+            )
+        )
+
+    def stream_session_prompt_events(
+        self, *, prompt: str, user_id: str, session_id: str
+    ) -> Iterator[dict[str, Any]]:
+        """与 stream_session_prompt 相同的逻辑,但直接产出 dict 供 gRPC 使用。"""
+
+        message_service = self._get_message_service()
+        context_builder = self._get_context_builder(message_service=message_service)
+        logger.info(
+            "开始 session 流式运行(gRPC) | user=%s session=%s prompt_len=%d",
+            user_id,
+            session_id,
+            len(prompt),
+        )
+        messages = context_builder.build_messages(user_id=user_id, session_id=session_id, current_prompt=prompt)
+        logger.debug("上下文构建完成(gRPC) | message_count=%d", len(messages))
+        message_service.create_message(
+            MessageCreate(
+                session_id=session_id,
+                user_id=user_id,
+                role="user",
+                content=prompt,
+                metadata_json={"source": "stream_session_prompt_grpc"},
+            )
+        )
+        yield from self._stream_events(
             messages=messages,
             user_id=user_id,
             session_id=session_id,
@@ -207,16 +262,24 @@ class AgentCore:
         self.task_scheduler.shutdown()
         logger.info("AgentCore 资源释放完成")
 
-    def _stream_messages(
+    def _stream_events(
         self,
         *,
         messages: list[BaseMessage],
         user_id: str,
         session_id: str,
         message_service: MessageService | None = None,
-    ) -> Iterator[str]:
+    ) -> Iterator[dict[str, Any]]:
         """
-        使用给定 LangChain messages 执行图并输出 SSE 风格字符串。
+        使用给定 LangChain messages 执行图并逐节点产出 dict 事件。
+
+        统一的流式核心,HTTP 和 gRPC 共用此方法。
+        HTTP 侧再用 _format_sse() 包一层 SSE 格式;
+        gRPC 侧直接将 dict 转换为 ChunkMessage。
+
+        采用双线程 + 队列模式: 图在后台线程中执行,Agent 节点的 token 级
+        流式输出通过 thread-local 回调实时推入队列,主线程从队列读取并 yield,
+        实现真正的 token 级流式推送。
 
         messages: 已构建好的本轮初始上下文。
         user_id: 用户 ID。
@@ -240,23 +303,89 @@ class AgentCore:
             session_id=session_id,
             retrieval_service=retrieval_service,
         )
+
+        token_queue: queue_module.Queue[dict[str, Any]] = queue_module.Queue()
+
+        def on_token(cumulative_text: str) -> None:
+            """Agent 节点逐 token 回调: 将增量文本包装为流式事件推入队列。"""
+            token_queue.put({
+                "type": "token",
+                "node": "agent",
+                "content": cumulative_text,
+                "tool_calls": [],
+                "trace": [],
+            })
+
+        set_agent_token_callback(on_token)
+
+        graph_error: Exception | None = None
+
+        def run_graph() -> None:
+            """在后台线程中同步执行 LangGraph 图,捕获异常。"""
+            nonlocal graph_error
+            try:
+                for event in self.graph.stream(inputs, config=runtime_config, stream_mode="updates"):
+                    token_queue.put({"type": "node", "event": event})
+                token_queue.put({"type": "done"})
+            except Exception as exc:
+                graph_error = exc
+                token_queue.put({"type": "error", "error": exc})
+
+        graph_thread = threading.Thread(target=run_graph, daemon=True, name=f"graph-{session_id[:12]}")
+        graph_thread.start()
+
         try:
-            for event in self.graph.stream(inputs, config=runtime_config, stream_mode="updates"):
-                for node_name, state_update in event.items():
-                    logger.debug("图节点执行 | node=%s user=%s session=%s", node_name, user_id, session_id)
-                    if message_service is not None:
-                        self._save_state_update_messages(
-                            message_service=message_service,
-                            user_id=user_id,
-                            session_id=session_id,
-                            node_name=node_name,
-                            state_update=state_update,
-                        )
-                    payload = self._build_stream_payload(node_name=node_name, state_update=state_update)
-                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-            yield "data: [DONE]\n\n"
+            while True:
+                try:
+                    item = token_queue.get(timeout=0.1)
+                except queue_module.Empty:
+                    if graph_error is not None:
+                        raise graph_error from graph_error
+                    if not graph_thread.is_alive() and token_queue.empty():
+                        break
+                    continue
+
+                item_type = item.get("type")
+
+                if item_type == "done":
+                    break
+
+                if item_type == "error":
+                    raise item["error"]
+
+                if item_type == "token":
+                    yield {
+                        "node": item.get("node", "agent"),
+                        "content": item.get("content", ""),
+                        "tool_calls": item.get("tool_calls", []),
+                        "trace": item.get("trace", []),
+                    }
+
+                elif item_type == "node":
+                    event = item["event"]
+                    for node_name, state_update in event.items():
+                        logger.debug("图节点执行 | node=%s user=%s session=%s", node_name, user_id, session_id)
+                        if message_service is not None:
+                            self._save_state_update_messages(
+                                message_service=message_service,
+                                user_id=user_id,
+                                session_id=session_id,
+                                node_name=node_name,
+                                state_update=state_update,
+                            )
+                        yield self._build_stream_payload(node_name=node_name, state_update=state_update)
         finally:
+            clear_agent_token_callback()
             clear_tool_runtime()
+            graph_thread.join(timeout=5.0)
+
+    @staticmethod
+    def _format_sse(events_iter: Iterator[dict[str, Any]]) -> Iterator[str]:
+        """将 dict 事件迭代器包装为 SSE (text/event-stream) 格式字符串。"""
+
+        for payload in events_iter:
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
 
     def _get_message_service(self) -> MessageService:
         """获取或懒加载消息服务。"""

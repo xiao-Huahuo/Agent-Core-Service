@@ -85,6 +85,42 @@ def clear_tool_runtime() -> None:
         delattr(_TOOL_RUNTIME, "state")
 
 
+# ------------------------------------------------------------------
+# 流式 Token 回调 (用于 ModelDecisionNode → AgentCore 实时推送)
+# ------------------------------------------------------------------
+
+from collections.abc import Callable
+
+_AGENT_TOKEN_CALLBACK: local = local()
+
+
+def set_agent_token_callback(callback: Callable[[str], None]) -> None:
+    """
+    设置当前线程的 Agent token 回调,供 ModelDecisionNode 在流式生成时逐 token 调用。
+
+    callback: 接收累积文本内容的回调函数。
+    """
+
+    _AGENT_TOKEN_CALLBACK.callback = callback
+
+
+def get_agent_token_callback() -> Callable[[str], None] | None:
+    """
+    获取当前线程的 Agent token 回调。
+
+    返回值: 已设置的回调函数,未设置时返回 None。
+    """
+
+    return getattr(_AGENT_TOKEN_CALLBACK, "callback", None)
+
+
+def clear_agent_token_callback() -> None:
+    """清理当前线程的 Agent token 回调。"""
+
+    if hasattr(_AGENT_TOKEN_CALLBACK, "callback"):
+        delattr(_AGENT_TOKEN_CALLBACK, "callback")
+
+
 def get_tool_runtime() -> ToolRuntimeState:
     """
     获取当前线程的工具运行时状态。

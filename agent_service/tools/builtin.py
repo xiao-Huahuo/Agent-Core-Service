@@ -5,9 +5,15 @@
 本文件只负责书写项目自带的小工具函数,不负责工具注册和工具执行。工具注册由
 `tool_registry.py` 完成,工具执行由 `executor.py` 完成。
 
+工具分为三个类别,分别存放在独立的分组列表中:
+- UTILITY_TOOL_DEFINITIONS  通用工具 (时间、UUID、计算、JSON、文本统计等)
+- MEMORY_TOOL_DEFINITIONS   长期记忆工具 (检索与写入用户跨会话记忆)
+- KNOWLEDGE_TOOL_DEFINITIONS 知识库工具 (检索系统知识库文档切片)
+- BUILTIN_TOOL_DEFINITIONS  合并全部内置工具,保持向后兼容
+
 使用说明:
-新增内置工具时,在本文件中书写普通 Python 函数,并在 `BUILTIN_TOOL_DEFINITIONS`
-中登记工具名称、描述、参数说明和函数对象。
+新增内置工具时,在本文件中书写普通 Python 函数,并在对应的分组列表中
+登记工具名称、描述、参数说明和函数对象。
 """
 
 from __future__ import annotations
@@ -353,7 +359,10 @@ def _evaluate_math_expression(node: ast.AST) -> int | float:
     raise ValueError("表达式包含不允许的内容。")
 
 
-BUILTIN_TOOL_DEFINITIONS = [
+# ------------------------------------------------------------------
+# 通用工具
+# ------------------------------------------------------------------
+UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="get_current_utc_time",
         description="获取当前 UTC 时间。当用户询问当前时间或需要时间戳时使用。",
@@ -478,6 +487,12 @@ BUILTIN_TOOL_DEFINITIONS = [
         },
         function=list_builtin_tools,
     ),
+]
+
+# ------------------------------------------------------------------
+# 长期记忆工具
+# ------------------------------------------------------------------
+MEMORY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="get_long_term_memory",
         description="检索当前用户在长期记忆中的相关摘要信息,用于跨轮对话回忆项目目标、约束、偏好和历史事实。",
@@ -496,25 +511,6 @@ BUILTIN_TOOL_DEFINITIONS = [
             "required": ["query"],
         },
         function=get_long_term_memory,
-    ),
-    BuiltinToolDefinition(
-        name="get_knowledge_context",
-        description="检索知识库中的相关片段,用于回答事实性、说明性和文档型问题。",
-        args_schema={
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "需要检索的知识查询文本。",
-                },
-                "top_k": {
-                    "type": "integer",
-                    "description": "最多返回多少条结果,默认 3。",
-                },
-            },
-            "required": ["query"],
-        },
-        function=get_knowledge_context,
     ),
     BuiltinToolDefinition(
         name="write_long_term_memory",
@@ -544,3 +540,35 @@ BUILTIN_TOOL_DEFINITIONS = [
         function=write_long_term_memory,
     ),
 ]
+
+# ------------------------------------------------------------------
+# 知识库工具
+# ------------------------------------------------------------------
+KNOWLEDGE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
+    BuiltinToolDefinition(
+        name="get_knowledge_context",
+        description="检索知识库中的相关片段,用于回答事实性、说明性和文档型问题。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "需要检索的知识查询文本。",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "最多返回多少条结果,默认 3。",
+                },
+            },
+            "required": ["query"],
+        },
+        function=get_knowledge_context,
+    ),
+]
+
+# ------------------------------------------------------------------
+# 合并全部内置工具 (保持向后兼容)
+# ------------------------------------------------------------------
+BUILTIN_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = (
+    UTILITY_TOOL_DEFINITIONS + MEMORY_TOOL_DEFINITIONS + KNOWLEDGE_TOOL_DEFINITIONS
+)

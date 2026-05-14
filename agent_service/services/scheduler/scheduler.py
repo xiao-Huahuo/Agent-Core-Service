@@ -36,7 +36,7 @@ from typing import Any
 from uuid import uuid4
 import sys
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_openai import ChatOpenAI
 
 from agent_service.core.agent_config import AgentConfig
@@ -309,6 +309,70 @@ class LLMTaskScheduler:
             model_tier=model_tier,
         )
         return handle.wait(timeout=timeout_seconds)
+
+    def stream_chat(
+        self,
+        *,
+        task_type: str,
+        messages: Sequence[BaseMessage],
+        tool_names: list[str] | None = None,
+        timeout_seconds: float | None = None,
+        temperature: float | None = None,
+        model_tier: str = LARGE_MODEL_TIER,
+    ) -> Iterator[dict[str, Any]]:
+        """
+        流式调用 LLM Chat,逐 token 产出增量内容。
+
+        与 invoke_chat() 不同,本方法不会阻塞等待完整回复,而是通过
+        model.stream() 逐 token yield dict。适用于 SSE / gRPC 流式推送场景。
+
+        每个 chunk: {"content_delta": str}
+        最后一个 chunk: {"content_delta": "...", "message": BaseMessage, "status": "complete"}
+
+        task_type: 任务类型。
+        messages: 对话消息列表。
+        tool_names: 可选工具名列表,用于绑定工具。
+        timeout_seconds: 可选超时秒数。
+        temperature: 可选温度覆盖值。
+        model_tier: 模型池等级,默认 large。
+        """
+
+        self._ensure_supported_task_type(task_type)
+        self._ensure_supported_model_tier(model_tier)
+        if not self._circuit_breakers[task_type].allow_request():
+            raise LLMTaskOverloadedError(f"任务类型 {task_type} 当前处于熔断状态,暂时拒绝新请求。")
+        logger.debug(
+            "LLM Chat 流式调用 | task_type=%s model_tier=%s msg_count=%d tools=%d",
+            task_type,
+            model_tier,
+            len(messages),
+            len(tool_names or []),
+        )
+        request = SerializedChatRequest.from_messages(
+            task_id=f"llm_chat_{uuid4().hex}",
+            task_type=task_type,
+            messages=list(messages),
+            tool_names=tool_names or [],
+            timeout_seconds=timeout_seconds or self._resolve_timeout_seconds(task_type),
+            max_retries=0,
+            dedup_key=None,
+            temperature=temperature,
+            model_tier=model_tier,
+        )
+        if self._backend is not None:
+            logger.warning("Redis 后端不支持流式推送,降级为 invoke_chat 后单 chunk 返回")
+            message = self.invoke_chat(
+                task_type=task_type,
+                messages=messages,
+                tool_names=tool_names,
+                timeout_seconds=timeout_seconds,
+                temperature=temperature,
+                model_tier=model_tier,
+            )
+            content = getattr(message, "content", "") or ""
+            yield {"content_delta": content, "message": message, "status": "complete"}
+            return
+        yield from self._stream_chat_request(request)
 
     def submit_chat(
         self,
@@ -684,6 +748,48 @@ class LLMTaskScheduler:
             raise TypeError("ChatOpenAI.invoke 未返回 LangChain BaseMessage。")
         return response
 
+    def _stream_chat_request(self, request: SerializedChatRequest) -> Iterator[dict[str, Any]]:
+        """
+        流式执行 Chat 请求,逐 token yield 增量内容。
+
+        与 _invoke_chat_request() 不同,本方法使用 model.stream() 获取
+        AIMessageChunk 流,实时产出每个 token 的增量文本。
+
+        request: 序列化的 Chat 请求。
+        """
+
+        messages = request.restore_messages()
+        model = self._get_chat_model(
+            tool_names=request.tool_names,
+            temperature=request.temperature,
+            timeout_seconds=request.timeout_seconds,
+            model_tier=request.model_tier,
+        )
+        breaker = self._circuit_breakers[request.task_type]
+        try:
+            with self._acquire_model_pool(request.model_tier):
+                full_message: BaseMessage | None = None
+                for chunk in model.stream(messages):
+                    if not isinstance(chunk, BaseMessage):
+                        continue
+                    full_message = chunk
+                    content_delta = getattr(chunk, "content", "") or ""
+                    if isinstance(content_delta, str) and content_delta:
+                        yield {"content_delta": content_delta}
+                if full_message is None:
+                    yield {"content_delta": "", "message": AIMessage(content=""), "status": "complete"}
+                    return
+                content = getattr(full_message, "content", "") or ""
+                yield {
+                    "content_delta": content if isinstance(content, str) else "",
+                    "message": full_message,
+                    "status": "complete",
+                }
+        except Exception:
+            breaker.record_failure()
+            raise
+        breaker.record_success()
+
     def _run_summary_business_task(self, *, user_id: str, session_id: str) -> str | None:
         """执行 Summary 业务任务。"""
 
@@ -714,12 +820,15 @@ class LLMTaskScheduler:
             model = self._model_cache.get(cache_key)
             if model is not None:
                 return model
+            model_kwargs = self.config.model.get_model_kwargs(model_name)
             model = ChatOpenAI(
                 model=model_name,
                 api_key=api_key,
                 base_url=base_url,
                 temperature=final_temperature,
                 timeout=timeout_seconds,
+                max_retries=0,
+                **model_kwargs,
             )
             if tool_names:
                 tool_registry = self._get_tool_registry()

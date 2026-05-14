@@ -68,6 +68,12 @@ class PlannerNode:
         if not original_prompt:
             return {"trace": [{"node": "planner", "event": "no_user_message"}]}
 
+        if self._is_simple_query(original_prompt):
+            return {
+                "plan": {"need_plan": False},
+                "trace": [{"node": "planner", "event": "fast_path_simple_query"}],
+            }
+
         system_message = SystemMessage(content=PLANNER_SYSTEM_PROMPT)
         user_message = SystemMessage(
             content=f"用户需求:\n{original_prompt}\n\n请输出 JSON 计划。"
@@ -101,6 +107,25 @@ class PlannerNode:
             if content and getattr(message, "type", None) == "human":
                 return content if isinstance(content, str) else str(content)
         return ""
+
+    @staticmethod
+    def _is_simple_query(prompt: str) -> bool:
+        """
+        启发式判断是否为简单查询,跳过 LLM 规划调用。
+
+        规则:
+        - 纯中文/英文问候语(≤10 字)
+        - 单句短问题(≤20 字且无逗号/分号)
+        - 不含"步骤"、"规划"、"然后"等复杂意图关键词
+        """
+        text = prompt.strip()
+        if len(text) <= 10:
+            return True
+        if len(text) <= 20:
+            separators = ("，", ",", "；", ";", "。", "、", "\n")
+            if not any(sep in text for sep in separators):
+                return True
+        return False
 
     @staticmethod
     def _parse_plan(raw_content: str | None) -> dict[str, Any] | None:

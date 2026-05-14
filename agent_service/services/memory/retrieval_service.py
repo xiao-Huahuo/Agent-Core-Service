@@ -188,6 +188,12 @@ class MemoryRetrievalService:
             retrieval_channel="important_fact_summary",
         )
 
+    def warmup(self) -> None:
+        """预加载 Embedding 和 ReRank 模型,避免首次检索冷启动。"""
+
+        self.embedding_service.warmup()
+        self.rerank_service.warmup()
+
     def _retrieve(
         self,
         *,

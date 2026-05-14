@@ -1,0 +1,205 @@
+/*
+ * Agent Console 全局样式。
+ *
+ * macOS 终端面板风格:
+ * - JetBrains Mono 全局
+ * - 点阵网格背景纹理
+ * - 毛玻璃面板工具类
+ * - 圆角卡片
+ */
+
+@import "./ui-system.css";
+
+/* ==================================================================
+ * Reset
+ * ================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==================================================================
+ * 背景纹理 - 点阵网格
+ * ================================================================== */
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.03;
+  background-image:
+    linear-gradient(to right, currentColor 1px, transparent 1px),
+    linear-gradient(to bottom, currentColor 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ==================================================================
+ * 排版
+ * ================================================================== */
+
+pre,
+code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--color-accent-hover);
+}
+
+/* ==================================================================
+ * 滚动条
+ * ================================================================== */
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* ==================================================================
+ * 焦点环
+ * ================================================================== */
+
+:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* ==================================================================
+ * 毛玻璃面板
+ * ================================================================== */
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-strength));
+  -webkit-backdrop-filter: blur(var(--blur-strength));
+  border: 1px solid var(--glass-border);
+}
+
+/* ==================================================================
+ * macOS 窗口卡片
+ * ================================================================== */
+
+.macos-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  background: var(--color-bg-card);
+}
+
+.macos-card-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.macos-card-body {
+  padding: 16px;
+}
+
+/* ==================================================================
+ * 红绿灯按钮
+ * ================================================================== */
+
+.traffic-lights {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.traffic-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.traffic-dot.red    { background: rgba(237, 106, 94, 0.8); }
+.traffic-dot.yellow { background: rgba(244, 191, 79, 0.8); }
+.traffic-dot.green  { background: rgba(97, 196, 84, 0.8); }
+
+.traffic-dot.sm { width: 8px; height: 8px; }
+
+/* ==================================================================
+ * 文件/终端标签名
+ * ================================================================== */
+
+.window-filename {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.window-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+/* ==================================================================
+ * 工具类
+ * ================================================================== */
+
+.text-mono {
+  font-family: var(--font-mono);
+}
+
+.text-secondary {
+  color: var(--color-text-secondary);
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

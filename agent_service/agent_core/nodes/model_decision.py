@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Sequence
 
 from langchain_core.messages import SystemMessage
@@ -20,6 +21,9 @@ from langchain_openai import ChatOpenAI
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
+from agent_service.tools.runtime_context import get_agent_token_callback
+
+logger = logging.getLogger(__name__)
 
 
 class ModelDecisionNode:
@@ -61,6 +65,15 @@ class ModelDecisionNode:
             )
 
         system_message = SystemMessage(content=system_content)
+        token_callback = get_agent_token_callback()
+
+        if token_callback is not None:
+            return self._streaming_call(
+                system_message=system_message,
+                state=state,
+                token_callback=token_callback,
+            )
+
         response = self.task_scheduler.invoke_chat(
             task_type=FOREGROUND_AGENT_TASK,
             messages=[system_message, *state["messages"]],
@@ -79,6 +92,50 @@ class ModelDecisionNode:
             ],
         }
 
+    def _streaming_call(
+        self,
+        *,
+        system_message: SystemMessage,
+        state: AgentState,
+        token_callback: Any,
+    ) -> dict[str, Any]:
+        """
+        流式调用模型,逐 token 通过 callback 推送,最终返回完整消息。
+
+        system_message: 系统提示消息。
+        state: 当前 AgentState。
+        token_callback: 接收累积文本内容的回调。
+        """
+
+        cumulative = ""
+        final_message: Any = None
+        for chunk in self.task_scheduler.stream_chat(
+            task_type=FOREGROUND_AGENT_TASK,
+            messages=[system_message, *state["messages"]],
+            tool_names=self.tool_names,
+        ):
+            delta = chunk.get("content_delta", "")
+            if delta:
+                cumulative += delta
+                token_callback(cumulative)
+            if chunk.get("status") == "complete":
+                final_message = chunk.get("message")
+        if final_message is None:
+            from langchain_core.messages import AIMessage
+            final_message = AIMessage(content=cumulative)
+        tool_calls = getattr(final_message, "tool_calls", []) or []
+        return {
+            "messages": [final_message],
+            "trace": [
+                {
+                    "node": "agent",
+                    "event": "model_response",
+                    "tool_call_count": len(tool_calls),
+                    "has_content": bool(getattr(final_message, "content", None)),
+                }
+            ],
+        }
+
     def _build_model(self) -> Any:
         """根据 `AgentConfig.ModelConfig` 创建 OpenAI Compatible 聊天模型。"""
 
@@ -89,12 +146,14 @@ class ModelDecisionNode:
         if not self.config.model.base_url:
             raise ValueError("config.model.base_url 不能为空。")
 
+        model_kwargs = AgentConfig.ModelConfig.get_model_kwargs(self.config.model.model_name)
         model = ChatOpenAI(
             model=self.config.model.model_name,
             api_key=self.config.model.api_key,
             base_url=self.config.model.base_url,
             temperature=self.config.model.resolve_primary_temperature(),
             timeout=self.config.model.timeout_seconds,
+            **model_kwargs,
         )
         if self.tools:
             return model.bind_tools(self.tools)

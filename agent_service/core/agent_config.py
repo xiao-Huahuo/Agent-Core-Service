@@ -180,7 +180,7 @@ class AgentConfig:
         temperature: float = 0.0
         timeout_seconds: int = 240
         system_prompt: str = (
-            "你是一个具备自主能力的 AI Agent。"
+            "你是一个具备MCP、工具调用、记忆系统、gRPC、模型任务队列的全能型Agent。"
             "你的每次对话回复都会由后台系统自动生成摘要并持久化到长期记忆中,"
             "你无需调用额外的存储工具来记住内容。"
             "在后续对话中,系统会自动从长期记忆和知识库中检索相关内容供你参考。"
@@ -231,17 +231,35 @@ class AgentConfig:
             """
             根据模型兼容性要求规范温度值。
 
-            目前 Kimi `kimi-k2` 系列要求 temperature 固定为 1,否则接口会返回
-            `invalid temperature: only 1 is allowed for this model`。
+            Kimi 系列各模型 temperature 要求不同:
+            - kimi-k2.5: 固定 0.6
+            - kimi-k2:   固定 1.0
 
             model_name: 实际调用的模型名称。
             requested_temperature: 调用方想使用的温度值。
             """
 
             normalized_model_name = model_name.strip().lower()
+            if normalized_model_name.startswith("kimi-k2.5"):
+                return 0.6
             if normalized_model_name.startswith("kimi-k2"):
                 return 1.0
             return float(requested_temperature)
+
+        @staticmethod
+        def get_model_kwargs(model_name: str) -> dict[str, Any]:
+            """
+            返回特定模型需要的额外 ChatOpenAI 构造参数。
+
+            目前 Kimi `kimi-k2` 系列默认启用 thinking 模式,
+            但会话历史中的 assistant tool_call 消息缺少 reasoning_content 字段会导致 400 错误。
+            通过 extra_body 禁用 thinking 模式。
+            """
+
+            normalized = model_name.strip().lower()
+            if normalized.startswith("kimi-k2"):
+                return {"extra_body": {"thinking": {"type": "disabled"}}}
+            return {}
 
     @dataclass(slots=True)
     class MemoryConfig:

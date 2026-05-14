@@ -13,11 +13,14 @@ vectors = service.embed_texts(["hello"])
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from typing import Protocol
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.scripts.download_model import ensure_model, model_target_dir
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingProvider(Protocol):
@@ -54,8 +57,13 @@ class SentenceTransformerEmbeddingProvider:
         if not texts:
             return []
         model = self._get_model()
-        vectors = model.encode(list(texts), normalize_embeddings=True)
+        vectors = model.encode(list(texts), normalize_embeddings=True, show_progress_bar=False)
         return [[float(value) for value in vector] for vector in vectors]
+
+    def warmup(self) -> None:
+        """预加载模型到内存,避免首次请求冷启动延迟。"""
+
+        self._get_model()
 
     def _get_model(self) -> object:
         """延迟加载本地 sentence-transformers 模型。"""
@@ -82,7 +90,17 @@ class SentenceTransformerEmbeddingProvider:
             )
         if not model_path.exists():
             raise FileNotFoundError(f"Embedding 模型目录不存在: {model_path}")
+        import os
+        os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+        banner = "=" * 57
+        logger.info(banner)
+        logger.info("开始加载 Embedding 模型: %s", self.config.model.embedding_model_name)
+        logger.info("模型路径: %s", model_path)
+        logger.info(banner)
         self._model = SentenceTransformer(str(model_path))
+        logger.info(banner)
+        logger.info("Embedding 模型加载完成: %s", self.config.model.embedding_model_name)
+        logger.info(banner)
         return self._model
 
 
@@ -99,6 +117,12 @@ class EmbeddingService:
 
         self.config = config
         self.provider = provider or SentenceTransformerEmbeddingProvider(config=config)
+
+    def warmup(self) -> None:
+        """预加载底层 Embedding 模型到内存。"""
+
+        if hasattr(self.provider, 'warmup'):
+            self.provider.warmup()
 
     def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
         """

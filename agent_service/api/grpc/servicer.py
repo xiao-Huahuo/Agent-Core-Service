@@ -68,8 +68,8 @@ class AgentServiceServicer(BaseServicer):
         """无状态流式运行。"""
 
         logger.info("StreamRun user=%s session=%s", request.user_id, request.session_id)
-        yield from self._stream_agent(
-            self._agent.stream_run(
+        yield from self._stream_from_dicts(
+            self._agent.stream_run_events(
                 prompt=request.prompt,
                 user_id=request.user_id,
                 session_id=request.session_id,
@@ -80,8 +80,8 @@ class AgentServiceServicer(BaseServicer):
         """带 session 上下文的流式运行。"""
 
         logger.info("StreamSessionPrompt user=%s session=%s", request.user_id, request.session_id)
-        yield from self._stream_agent(
-            self._agent.stream_session_prompt(
+        yield from self._stream_from_dicts(
+            self._agent.stream_session_prompt_events(
                 prompt=request.prompt,
                 user_id=request.user_id,
                 session_id=request.session_id,
@@ -176,25 +176,15 @@ class AgentServiceServicer(BaseServicer):
     # 内部辅助
     # ------------------------------------------------------------------
 
-    def _stream_agent(self, chunks: Any) -> Any:
+    @staticmethod
+    def _stream_from_dicts(events_iter: Any) -> Any:
+        """将统一 dict 事件流直接转换为 ChunkMessage 流(gRPC server-streaming)。
+
+        events_iter: `AgentCore.stream_*_events()` 返回的 Iterator[dict]。
+        HTTP 侧用 _format_sse() 从同一 dict 流生成 SSE。
         """
-        将 AgentCore SSE 字符串迭代器转换为 ChunkMessage 流。
 
-        chunks: `AgentCore.stream_*()` 返回的 Iterator[str]。
-        """
-
-        for chunk in chunks:
-            data = chunk.removeprefix("data: ").strip()
-            if not data:
-                continue
-            if data == "[DONE]":
-                continue
-            try:
-                payload = json.loads(data)
-            except json.JSONDecodeError:
-                logger.warning("Failed to parse SSE chunk: %.100s", chunk)
-                continue
-
+        for payload in events_iter:
             tool_calls = []
             for tc in payload.get("tool_calls", []) or []:
                 tool_calls.append(

@@ -19,8 +19,10 @@ python -m agent_service.scripts.download_model \
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
 
 MODEL_MARKER_FILE = ".download_complete"
 MODEL_CONFIG_FILES = {
@@ -54,6 +56,7 @@ def ensure_model(model_name: str, model_dir: Path | str) -> Path | None:
 
     target_dir = model_target_dir(model_name, model_dir)
     if is_model_available(target_dir):
+        logger.info("模型已存在,跳过下载: %s | 路径: %s", model_name, target_dir)
         return target_dir
 
     _download_from_huggingface(model_name, target_dir)
@@ -119,6 +122,11 @@ def _download_from_huggingface(model_name: str, target_dir: Path) -> None:
     except ImportError as exc:
         raise RuntimeError("缺少 huggingface_hub 依赖,无法自动下载模型。") from exc
 
+    banner = "=" * 57
+    logger.info(banner)
+    logger.info("开始下载模型: %s", model_name)
+    logger.info("目标目录: %s", target_dir)
+    logger.info(banner)
     target_dir.mkdir(parents=True, exist_ok=True)
     snapshot_download(
         repo_id=model_name,
@@ -126,6 +134,9 @@ def _download_from_huggingface(model_name: str, target_dir: Path) -> None:
         local_dir_use_symlinks=False,
     )
     (target_dir / MODEL_MARKER_FILE).write_text(model_name, encoding="utf-8")
+    logger.info(banner)
+    logger.info("模型下载完成: %s", model_name)
+    logger.info(banner)
 
 
 def main() -> None:
