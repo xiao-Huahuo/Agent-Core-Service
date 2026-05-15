@@ -26,7 +26,6 @@ from agent_service.agent_core.nodes.model_decision import ModelDecisionNode
 from agent_service.agent_core.nodes.planner import PlannerNode
 from agent_service.agent_core.nodes.reflection import ReflectionNode
 from agent_service.agent_core.nodes.safety import SafetyInputNode, SafetyOutputNode
-from agent_service.agent_core.nodes.summary import SummaryNode
 from agent_service.agent_core.nodes.tool_call import ToolCallNode
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.safety import SafetyService
@@ -118,14 +117,6 @@ class AgentGraphBuilder:
                 "safety_output",
                 SafetyOutputNode(config=self.config, safety_service=self.safety_service),
             )
-        workflow.add_node(
-            "summary",
-            SummaryNode(
-                config=self.config,
-                task_scheduler=self.task_scheduler,
-            ),
-        )
-
         if self.safety_service and self.safety_service.supports_input_audit:
             workflow.set_entry_point("safety_input")
             workflow.add_conditional_edges(
@@ -139,56 +130,64 @@ class AgentGraphBuilder:
             workflow.set_entry_point("compress")
         workflow.add_edge("compress", "planner")
         workflow.add_edge("planner", "agent")
-        workflow.add_conditional_edges(
-            "agent",
-            self._route_after_model,
-            path_map={"action": "action", "safety_output": "safety_output", "summary": "summary"},
-        )
-        self._branch_labels[("agent", "action")] = "有 tool_calls"
-        if self.safety_service is not None:
-            self._branch_labels[("agent", "safety_output")] = "无 tool_calls"
-        else:
-            self._branch_labels[("agent", "summary")] = "无 tool_calls"
-        workflow.add_edge("action", "reflection")
-        workflow.add_conditional_edges(
-            "reflection",
-            self._route_after_reflection,
-            path_map={"planner": "planner", "compress": "compress", "safety_output": "safety_output", "summary": "summary"},
-        )
-        self._branch_labels[("reflection", "planner")] = "continue"
-        self._branch_labels[("reflection", "compress")] = "context overflow"
-        if self.safety_service is not None:
-            self._branch_labels[("reflection", "safety_output")] = "answer"
-        else:
-            self._branch_labels[("reflection", "summary")] = "answer"
         if self.safety_service is not None:
             workflow.add_conditional_edges(
-                "safety_output",
-                self._route_after_safety_output,
-                path_map={"summary": "summary", "__end__": END},
+                "agent",
+                self._route_after_model,
+                path_map={"action": "action", "safety_output": "safety_output", "__end__": END},
             )
-            self._branch_labels[("safety_output", "summary")] = "审核通过"
-            self._branch_labels[("safety_output", "__end__")] = "审核拦截"
-        workflow.add_edge("summary", END)
+            self._branch_labels[("agent", "action")] = "有 tool_calls"
+            self._branch_labels[("agent", "safety_output")] = "无 tool_calls"
+        else:
+            workflow.add_conditional_edges(
+                "agent",
+                self._route_after_model,
+                path_map={"action": "action", "__end__": END},
+            )
+            self._branch_labels[("agent", "action")] = "有 tool_calls"
+            self._branch_labels[("agent", "__end__")] = "无 tool_calls → 结束"
+        workflow.add_edge("action", "reflection")
+        if self.safety_service is not None:
+            workflow.add_conditional_edges(
+                "reflection",
+                self._route_after_reflection,
+                path_map={"planner": "planner", "compress": "compress", "safety_output": "safety_output", "__end__": END},
+            )
+            self._branch_labels[("reflection", "planner")] = "continue"
+            self._branch_labels[("reflection", "compress")] = "context overflow"
+            self._branch_labels[("reflection", "safety_output")] = "answer"
+        else:
+            workflow.add_conditional_edges(
+                "reflection",
+                self._route_after_reflection,
+                path_map={"planner": "planner", "compress": "compress", "__end__": END},
+            )
+            self._branch_labels[("reflection", "planner")] = "continue"
+            self._branch_labels[("reflection", "compress")] = "context overflow"
+            self._branch_labels[("reflection", "__end__")] = "answer → 结束"
+        if self.safety_service is not None:
+            workflow.add_edge("safety_output", END)
+            self._branch_labels[("safety_output", "__end__")] = "审核结束"
+        # Summary 节点不再在图中自动执行,写入长期记忆改为由 write_long_term_memory 工具主动触发
         compiled = workflow.compile()
         logger.info("Agent 图构建完成 | 节点数=%d", len(compiled.get_graph().nodes))
         return compiled
 
-    def _route_after_model(self, state: AgentState) -> Literal["action", "safety_output", "summary"]:
+    def _route_after_model(self, state: AgentState) -> Literal["action", "safety_output", "__end__"]:
         """根据模型最后一条消息是否包含工具调用决定下一步。"""
 
         last_message = state["messages"][-1]
         tool_calls = getattr(last_message, "tool_calls", []) or []
         if tool_calls:
             return "action"
-        return "safety_output" if self.safety_service is not None else "summary"
+        return "safety_output" if self.safety_service is not None else "__end__"
 
-    def _route_after_reflection(self, state: AgentState) -> Literal["planner", "compress", "safety_output", "summary"]:
+    def _route_after_reflection(self, state: AgentState) -> Literal["planner", "compress", "safety_output", "__end__"]:
         """
         根据反思节点决策决定下一步。
         "continue" → planner(继续工具循环),
         "compress" → compress(上下文溢出,先压缩再进入 planner),
-        "answer" → 安全输出审核或摘要。
+        "answer" → 安全输出审核或直接结束。
         """
 
         decision = state.get("reflection_decision", "continue")
@@ -196,7 +195,7 @@ class AgentGraphBuilder:
             return "planner"
         if decision == "compress":
             return "compress"
-        return "safety_output" if self.safety_service is not None else "summary"
+        return "safety_output" if self.safety_service is not None else "__end__"
 
     @staticmethod
     def _route_after_safety_input(state: AgentState) -> Literal["compress", "__end__"]:

@@ -7,21 +7,18 @@ flowchart TD
     action["action"]
     reflection["reflection"]
     safety_output["safety_output"]
-    summary["summary"]
     internal_end["END"]
     internal_start --> safety_input
     action --> reflection
+    agent -. "conditional" .-> internal_end
     agent -. "有 tool_calls" .-> action
     agent -. "无 tool_calls" .-> safety_output
-    agent -. "conditional" .-> summary
     compress --> planner
     planner --> agent
+    reflection -. "conditional" .-> internal_end
     reflection -. "context overflow" .-> compress
     reflection -. "continue" .-> planner
     reflection -. "answer" .-> safety_output
-    reflection -. "conditional" .-> summary
     safety_input -. "审核拦截" .-> internal_end
     safety_input -. "审核通过" .-> compress
-    safety_output -. "审核拦截" .-> internal_end
-    safety_output -. "审核通过" .-> summary
-    summary --> internal_end
+    safety_output --> internal_end

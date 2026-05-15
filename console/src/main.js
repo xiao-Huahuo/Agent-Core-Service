@@ -14,6 +14,7 @@ import router from './router'
 import { useSettingsStore } from './stores/settings'
 
 import '@/assets/main.css'
+import '@/assets/hljs-theme.css'
 
 const app = createApp(App)
 

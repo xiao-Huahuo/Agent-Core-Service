@@ -55,7 +55,7 @@ class ContextBuilder:
         current_prompt: 当前用户输入,永远追加到上下文最后。
         """
 
-        history = self.message_service.list_recent_messages(
+        history = self.message_service.list_session_messages(
             user_id=user_id,
             session_id=session_id,
             limit=self.config.memory.max_context_messages,
@@ -122,23 +122,20 @@ class ContextBuilder:
         sections.extend(self.config.model.retrieval_context_system_prompt.splitlines())
         if has_history:
             sections.append("短期上下文状态: 当前 session 已存在历史消息,回答时优先使用这些历史事实。")
+        has_refs = important_summary is not None or memories or knowledge
+        if has_refs:
+            sections.append("--- 参考材料开始(用自己的话总结,不要直接复制) ---")
         if important_summary is not None:
             sections.append("重要事实摘要:")
-            sections.append(
-                f"- score={important_summary.final_score:.3f} content={important_summary.memory.content}"
-            )
+            sections.append(f"- {important_summary.memory.content}")
         if memories:
             sections.append("长期记忆召回:")
-            sections.extend(
-                f"- score={item.final_score:.3f} content={item.memory.content}"
-                for item in memories
-            )
+            sections.extend(f"- {item.memory.content}" for item in memories)
         if knowledge:
             sections.append("知识库召回:")
-            sections.extend(
-                f"- score={item.final_score:.3f} source={item.memory.source_uri or item.memory.source_id} content={item.memory.content}"
-                for item in knowledge
-            )
+            sections.extend(f"- {item.memory.content}" for item in knowledge)
+        if has_refs:
+            sections.append("--- 参考材料结束 ---")
         if len(sections) <= 4 and not has_history:
             return ""
         return "\n".join(sections)

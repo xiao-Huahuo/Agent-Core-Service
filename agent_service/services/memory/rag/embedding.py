@@ -14,6 +14,7 @@ vectors = service.embed_texts(["hello"])
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Sequence
 from typing import Protocol
 
@@ -21,6 +22,20 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.scripts.download_model import ensure_model, model_target_dir
 
 logger = logging.getLogger(__name__)
+
+_provider: SentenceTransformerEmbeddingProvider | None = None
+_provider_lock = threading.Lock()
+
+
+def _get_shared_provider(config: AgentConfig) -> SentenceTransformerEmbeddingProvider:
+    """返回模块级单例 provider,避免多次加载模型。"""
+    global _provider
+    if _provider is not None:
+        return _provider
+    with _provider_lock:
+        if _provider is None:
+            _provider = SentenceTransformerEmbeddingProvider(config=config)
+        return _provider
 
 
 class EmbeddingProvider(Protocol):
@@ -116,7 +131,7 @@ class EmbeddingService:
         """初始化 Embedding 服务。"""
 
         self.config = config
-        self.provider = provider or SentenceTransformerEmbeddingProvider(config=config)
+        self.provider = provider or _get_shared_provider(config)
 
     def warmup(self) -> None:
         """预加载底层 Embedding 模型到内存。"""

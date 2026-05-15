@@ -51,6 +51,7 @@ class SerializedChatRequest:
     dedup_key: str | None = None
     temperature: float | None = None
     model_tier: str = "large"
+    stream_channel: str | None = None
 
     @classmethod
     def from_messages(
@@ -98,6 +99,7 @@ class SerializedChatRequest:
             "dedup_key": self.dedup_key,
             "temperature": self.temperature,
             "model_tier": self.model_tier,
+            "stream_channel": self.stream_channel,
         }
 
     @classmethod
@@ -115,6 +117,7 @@ class SerializedChatRequest:
             dedup_key=str(payload["dedup_key"]) if payload.get("dedup_key") else None,
             temperature=float(payload["temperature"]) if payload.get("temperature") is not None else None,
             model_tier=str(payload.get("model_tier") or "large"),
+            stream_channel=str(payload["stream_channel"]) if payload.get("stream_channel") else None,
         )
 
     def restore_messages(self) -> list[BaseMessage]:
@@ -469,6 +472,20 @@ class RedisStreamLLMBackend:
             if deadline is not None and time.time() >= deadline:
                 raise TimeoutError(f"等待 Redis Summary 任务 {task_id} 结果超时。")
             time.sleep(self.result_poll_interval_seconds)
+
+    # ---- Streaming (Pub/Sub) ----
+
+    def publish_stream_chunk(self, *, channel: str, data: dict[str, Any]) -> None:
+        """向指定 Pub/Sub 频道推送流式 chunk。"""
+
+        self.client.publish(channel, json.dumps(data, ensure_ascii=False))
+
+    def subscribe_stream(self, *, channel: str):
+        """订阅流式频道,返回可迭代的 pubsub 对象。"""
+
+        pubsub = self.client.pubsub()
+        pubsub.subscribe(channel)
+        return pubsub
 
     def read_next_request(
         self,

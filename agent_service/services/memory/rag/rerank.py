@@ -14,6 +14,7 @@ reranked = service.rerank(query="项目代号是什么", candidates=candidates, 
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Sequence
 from typing import Protocol
 
@@ -22,6 +23,20 @@ from agent_service.scripts.download_model import ensure_model, model_target_dir
 from agent_service.services.memory.rag.hybrid_retrieval import HybridRetrievalCandidate
 
 logger = logging.getLogger(__name__)
+
+_rerank_provider: SentenceTransformerCrossEncoderProvider | None = None
+_rerank_provider_lock = threading.Lock()
+
+
+def _get_shared_rerank_provider(config: AgentConfig) -> SentenceTransformerCrossEncoderProvider:
+    """返回模块级单例 ReRank provider,避免多次加载模型。"""
+    global _rerank_provider
+    if _rerank_provider is not None:
+        return _rerank_provider
+    with _rerank_provider_lock:
+        if _rerank_provider is None:
+            _rerank_provider = SentenceTransformerCrossEncoderProvider(config=config)
+        return _rerank_provider
 
 
 class RerankProvider(Protocol):
@@ -132,17 +147,15 @@ class RerankService:
 
         self.config = config
         self.provider = provider
-        self._cached_provider: RerankProvider | None = None
+        self._cached_provider: RerankProvider | None = provider
 
     def warmup(self) -> None:
         """预加载底层 ReRank 模型到内存。"""
 
         if not self.is_enabled():
             return
-        provider = self.provider or self._cached_provider
-        if provider is None:
-            provider = SentenceTransformerCrossEncoderProvider(config=self.config)
-            self._cached_provider = provider
+        provider = self.provider or _get_shared_rerank_provider(self.config)
+        self._cached_provider = provider
         if hasattr(provider, 'warmup'):
             provider.warmup()
 
@@ -178,10 +191,8 @@ class RerankService:
             ranked = list(candidates)
             ranked.sort(key=self._fallback_rank_key, reverse=True)
             return ranked[:top_k]
-        provider = self.provider or self._cached_provider
-        if provider is None:
-            provider = SentenceTransformerCrossEncoderProvider(config=self.config)
-            self._cached_provider = provider
+        provider = self.provider or _get_shared_rerank_provider(self.config)
+        self._cached_provider = provider
         documents = [candidate.memory.content for candidate in candidates]
         scores = provider.score_pairs(query=query, documents=documents)
         reranked: list[HybridRetrievalCandidate] = []

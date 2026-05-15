@@ -8,7 +8,7 @@
  * import { listSessions, createSession, fetchMessages } from '@/api/session'
  */
 
-import { apiGet, apiPost } from './client'
+import { apiGet, apiPost, apiDelete, apiPut } from './client'
 
 /**
  * 列出用户的所有会话,按更新时间倒序排列。
@@ -41,4 +41,35 @@ export function createSession(userId, sessionName) {
  */
 export function fetchMessages(sessionId, userId, limit = 50) {
   return apiGet(`/sessions/${sessionId}/messages`, { user_id: userId, limit })
+}
+
+/**
+ * 删除指定会话。
+ *
+ * @param {string} sessionId 会话 ID
+ * @returns {Promise<{ok: boolean}>}
+ */
+export function deleteSession(sessionId) {
+  return apiDelete(`/sessions/${sessionId}`)
+}
+
+/**
+ * 清空用户的所有会话。
+ *
+ * @param {string} userId 用户 ID
+ * @returns {Promise<{ok: boolean, deleted_count: number}>}
+ */
+export function clearAllSessions(userId) {
+  return apiDelete('/sessions', { user_id: userId })
+}
+
+/**
+ * 更新会话名称。
+ *
+ * @param {string} sessionId 会话 ID
+ * @param {string} sessionName 新的会话名称
+ * @returns {Promise<{session_id: string, session_name: string, updated_at: string}>}
+ */
+export function updateSessionName(sessionId, sessionName) {
+  return apiPut(`/sessions/${sessionId}/name`, { session_name: sessionName })
 }

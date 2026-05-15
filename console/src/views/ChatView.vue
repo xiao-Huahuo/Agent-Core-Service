@@ -26,13 +26,12 @@ async function submitUserId() {
 }
 
 async function handleSend(text) {
+  if (chatStore.isStreaming) return
   let sessionId = sessionStore.currentSessionId
   if (!sessionId) {
     sessionId = await sessionStore.create(userId.value)
-    /* 新会话: 手动切到新会话并加载空历史 */
     sessionStore.select(sessionId)
-    chatStore.clear()
-    await chatStore.loadHistory(sessionId, userId.value)
+    /* 新会话历史为空，直接发送 */
   }
   await chatStore.send(userId.value, sessionId, text)
 }
@@ -87,7 +86,6 @@ async function handleSend(text) {
 
       <!-- 输入区 -->
       <ChatInput
-        :disabled="!chatStore.canSend"
         @send="handleSend"
       />
     </template>

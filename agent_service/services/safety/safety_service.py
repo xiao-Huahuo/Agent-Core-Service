@@ -110,7 +110,7 @@ class SafetyService:
                 len(user_input),
             )
             is_political = (
-                intent_result.risk_type == "政治敏感"
+                intent_result.risk_type == "政治抹黑"
                 or (sensitive_result is not None and "politics" in sensitive_result.blocked_categories)
             )
             return InputAuditResult(

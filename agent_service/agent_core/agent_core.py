@@ -53,7 +53,12 @@ from agent_service.scripts.draw_agent_graph import draw_agent_graph
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.message_service import MessageService
 from agent_service.services.safety import SafetyService
-from agent_service.services.scheduler import LLMTaskScheduler, get_llm_task_scheduler
+from agent_service.services.scheduler import (
+    BACKGROUND_SUMMARY_TASK,
+    SMALL_MODEL_TIER,
+    LLMTaskScheduler,
+    get_llm_task_scheduler,
+)
 from agent_service.tools import (
     ToolExecutor,
     ToolRegistry,
@@ -223,6 +228,8 @@ class AgentCore:
                 message_service=message_service,
             )
         )
+        # Fire-and-forget: 用小模型根据对话内容生成会话标题
+        _launch_auto_rename(self, user_id=user_id, session_id=session_id)
 
     def stream_session_prompt_events(
         self, *, prompt: str, user_id: str, session_id: str
@@ -254,6 +261,7 @@ class AgentCore:
             session_id=session_id,
             message_service=message_service,
         )
+        _launch_auto_rename(self, user_id=user_id, session_id=session_id)
 
     def close(self) -> None:
         """释放 AgentCore 持有的调度器等资源。"""
@@ -297,53 +305,54 @@ class AgentCore:
         retrieval_service = None
         if self.context_builder is not None:
             retrieval_service = self.context_builder.retrieval_service
-        set_tool_runtime(
-            config=self.config,
-            user_id=user_id,
-            session_id=session_id,
-            retrieval_service=retrieval_service,
-        )
 
         token_queue: queue_module.Queue[dict[str, Any]] = queue_module.Queue()
 
         def on_token(cumulative_text: str) -> None:
-            """Agent 节点逐 token 回调: 将增量文本包装为流式事件推入队列。"""
+            """Agent 节点逐 token 回调: 将累积文本包装为流式事件推入队列。"""
+            content = AgentCore._sanitize_streaming_content(cumulative_text)
             token_queue.put({
                 "type": "token",
                 "node": "agent",
-                "content": cumulative_text,
+                "content": content,
                 "tool_calls": [],
                 "trace": [],
             })
 
-        set_agent_token_callback(on_token)
-
         graph_error: Exception | None = None
 
         def run_graph() -> None:
-            """在后台线程中同步执行 LangGraph 图,捕获异常。"""
+            """在后台线程中同步执行 LangGraph 图,捕获异常。
+
+            关键: thread-local (tool_runtime / token_callback) 必须在
+            graph 线程内部设置,因为 Python threading.local() 不会跨线程继承。
+            finally 块保证一定会推送 done 哨兵,主线程不会永久阻塞。
+            """
             nonlocal graph_error
+            set_tool_runtime(
+                config=self.config,
+                user_id=user_id,
+                session_id=session_id,
+                retrieval_service=retrieval_service,
+            )
+            set_agent_token_callback(on_token)
             try:
                 for event in self.graph.stream(inputs, config=runtime_config, stream_mode="updates"):
                     token_queue.put({"type": "node", "event": event})
-                token_queue.put({"type": "done"})
             except Exception as exc:
                 graph_error = exc
                 token_queue.put({"type": "error", "error": exc})
+            finally:
+                clear_agent_token_callback()
+                clear_tool_runtime()
+                token_queue.put({"type": "done"})
 
         graph_thread = threading.Thread(target=run_graph, daemon=True, name=f"graph-{session_id[:12]}")
         graph_thread.start()
 
         try:
             while True:
-                try:
-                    item = token_queue.get(timeout=0.1)
-                except queue_module.Empty:
-                    if graph_error is not None:
-                        raise graph_error from graph_error
-                    if not graph_thread.is_alive() and token_queue.empty():
-                        break
-                    continue
+                item = token_queue.get()
 
                 item_type = item.get("type")
 
@@ -568,9 +577,112 @@ class AgentCore:
         last_message = messages[-1] if messages else None
         content = getattr(last_message, "content", "") if last_message is not None else ""
         tool_calls = getattr(last_message, "tool_calls", []) if last_message is not None else []
+        content = AgentCore._sanitize_agent_output(content or "")
         return {
             "node": node_name,
-            "content": content or "",
+            "content": content,
             "tool_calls": tool_calls or [],
             "trace": state_update.get("trace", []),
         }
+
+    @staticmethod
+    def _sanitize_streaming_content(cumulative_text: str) -> str:
+        """
+        流式 token 级的 JSON 检测,仅在累积足够长度后才拦截。
+
+        cumulative_text: 当前已累积的全部文本。
+        """
+        if not cumulative_text:
+            return cumulative_text
+        stripped = cumulative_text.strip()
+        if len(stripped) < 20:
+            return cumulative_text
+        if stripped.startswith("```json") or stripped.startswith("```JSON"):
+            return "（系统拦截了原始 JSON 输出，请用自然语言重新回答。）"
+        if stripped.startswith("{") or stripped.startswith("["):
+            try:
+                json.loads(stripped)
+                logger.warning("流式输出中检测到完整 JSON,已拦截")
+                return "（系统拦截了原始 JSON 输出，请用自然语言重新回答。）"
+            except (json.JSONDecodeError, ValueError):
+                pass
+        return cumulative_text
+
+    @staticmethod
+    def _sanitize_agent_output(content: str) -> str:
+        """
+        检测并拦截 agent 输出中的原始 JSON,强制返回自然语言提示。
+
+        content: agent 节点输出的文本内容。
+        """
+        if not content:
+            return content
+        stripped = content.strip()
+        if stripped.startswith("```json") or stripped.startswith("```JSON"):
+            logger.warning("Agent 输出包含 JSON 代码块,已拦截")
+            return "（系统拦截了原始 JSON 输出，请用自然语言重新回答。）"
+        if stripped.startswith("{") or stripped.startswith("["):
+            try:
+                json.loads(stripped)
+                logger.warning("Agent 输出包含原始 JSON 字符串,已拦截")
+                return "（系统拦截了原始 JSON 输出，请用自然语言重新回答。）"
+            except (json.JSONDecodeError, ValueError):
+                pass
+        return content
+
+
+def _launch_auto_rename(agent: AgentCore, *, user_id: str, session_id: str) -> None:
+    """Fire-and-forget: 用小模型根据对话内容生成并更新会话标题。"""
+
+    def _rename_worker() -> None:
+        try:
+            message_service = agent._get_message_service()
+            recent = message_service.list_recent_messages(
+                user_id=user_id, session_id=session_id, limit=6
+            )
+            if len(recent) < 2:
+                return
+            lines: list[str] = []
+            for m in recent[-6:]:
+                role_label = ""
+                if m.role == "user":
+                    role_label = "用户"
+                elif m.role == "assistant":
+                    role_label = "助手"
+                if not role_label:
+                    continue
+                content_preview = (m.content or "")[:200].replace("\n", " ")
+                lines.append(f"{role_label}: {content_preview}")
+            if not lines:
+                return
+            conversation = "\n".join(lines)
+            rename_prompt = (
+                "根据以下对话内容,为这个会话生成一个简洁的标题(15字以内,中文):\n\n"
+                f"{conversation}\n\n标题:"
+            )
+            response = agent.task_scheduler.invoke_chat(
+                task_type=BACKGROUND_SUMMARY_TASK,
+                messages=[HumanMessage(content=rename_prompt)],
+                tool_names=[],
+                model_tier=SMALL_MODEL_TIER,
+                temperature=0.3,
+            )
+            title = (getattr(response, "content", "") or "").strip()
+            if not title:
+                return
+            title = title[:30]
+            from agent_service.services.session_service import SessionService
+            from agent_service.schemas.session import SessionUpdate
+            session_service = SessionService(config=agent.config)
+            session_service.update_session_name(
+                session_id, SessionUpdate(session_name=title)
+            )
+        except Exception:
+            logger.debug("会话自动重命名失败 | session=%s", session_id, exc_info=True)
+
+    thread = threading.Thread(
+        target=_rename_worker,
+        daemon=True,
+        name=f"rename-{session_id[:12]}",
+    )
+    thread.start()

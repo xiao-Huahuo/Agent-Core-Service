@@ -95,6 +95,48 @@ export async function apiPost(path, body = {}) {
   return response.json()
 }
 
+/**
+ * 发起 DELETE 请求并返回解析后的 JSON。
+ *
+ * @param {string} path 请求路径
+ * @param {Record<string, string|number>} [params] 查询参数
+ * @returns {Promise<any>} 解析后的 JSON 响应体
+ */
+export async function apiDelete(path, params = {}) {
+  const url = new URL(path, window.location.origin)
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, String(value))
+    }
+  }
+  const response = await fetch(url.toString(), { method: 'DELETE' })
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new ApiError(response.status, text || response.statusText)
+  }
+  return response.json()
+}
+
+/**
+ * 发起 PUT 请求并返回解析后的 JSON。
+ *
+ * @param {string} path 请求路径
+ * @param {Record<string, any>} [body] JSON 请求体
+ * @returns {Promise<any>} 解析后的 JSON 响应体
+ */
+export async function apiPut(path, body = {}) {
+  const response = await fetch(path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new ApiError(response.status, text || response.statusText)
+  }
+  return response.json()
+}
+
 /* ==================================================================
  * SSE 流式解析
  * ================================================================== */

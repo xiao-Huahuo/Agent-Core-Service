@@ -8,3 +8,4 @@ runtime/
 **/__pycache__/
 .env
 console/node_modules/
+*.db

@@ -133,6 +133,58 @@ async def create_session(body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@router.delete("/sessions/{session_id}")
+async def delete_session(session_id: str) -> dict[str, Any]:
+    """
+    删除指定会话。
+
+    session_id: 会话 ID。
+    """
+
+    service = _require_session_service()
+    deleted = service.delete_session(session_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"ok": True}
+
+
+@router.delete("/sessions")
+async def clear_all_sessions(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+    """
+    清空指定用户的所有会话。
+
+    user_id: 用户 ID。
+    """
+
+    service = _require_session_service()
+    count = service.delete_all_user_sessions(user_id)
+    return {"ok": True, "deleted_count": count}
+
+
+@router.put("/sessions/{session_id}/name")
+async def update_session_name(session_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    """
+    更新会话显示名称。
+
+    body: 包含 session_name 字段。
+    """
+
+    from agent_service.schemas.session import SessionUpdate
+
+    session_name = body.get("session_name")
+    if not session_name:
+        raise HTTPException(status_code=422, detail="session_name is required")
+    service = _require_session_service()
+    session = service.update_session_name(session_id, SessionUpdate(session_name=str(session_name)))
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {
+        "session_id": session.session_id,
+        "session_name": session.session_name,
+        "updated_at": session.updated_at.isoformat(),
+    }
+
+
 @router.get("/sessions/{session_id}/messages")
 async def list_messages(
     session_id: str,
@@ -148,7 +200,7 @@ async def list_messages(
     """
 
     ms = _require_message_service()
-    messages = ms.list_recent_messages(user_id=user_id, session_id=session_id, limit=limit)
+    messages = ms.list_session_messages(user_id=user_id, session_id=session_id, limit=limit)
     return [
         {
             "message_id": m.message_id,
@@ -239,7 +291,7 @@ async def agent_events(
     """
 
     ms = _require_message_service()
-    messages = ms.list_recent_messages(user_id=user_id, session_id=session_id, limit=200)
+    messages = ms.list_session_messages(user_id=user_id, session_id=session_id, limit=200)
 
     events: list[dict[str, Any]] = []
     for m in messages:

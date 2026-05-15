@@ -14,7 +14,7 @@
 
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { listSessions, createSession as apiCreateSession } from '@/api/session'
+import { listSessions, createSession as apiCreateSession, deleteSession as apiDeleteSession, clearAllSessions as apiClearAllSessions, updateSessionName as apiUpdateSessionName } from '@/api/session'
 
 export const useSessionStore = defineStore('session', () => {
   /* ================================================================
@@ -90,6 +90,44 @@ export const useSessionStore = defineStore('session', () => {
     currentSessionId.value = null
   }
 
+  /**
+   * 删除指定会话。
+   *
+   * @param {string} sessionId 会话 ID
+   */
+  async function remove(sessionId) {
+    await apiDeleteSession(sessionId)
+    sessions.value = sessions.value.filter(s => s.session_id !== sessionId)
+    if (currentSessionId.value === sessionId) {
+      currentSessionId.value = null
+    }
+  }
+
+  /**
+   * 清空当前用户的所有会话。
+   *
+   * @param {string} userId 用户 ID
+   */
+  async function clearAll(userId) {
+    await apiClearAllSessions(userId)
+    sessions.value = []
+    currentSessionId.value = null
+  }
+
+  /**
+   * 更新会话名称。
+   *
+   * @param {string} sessionId 会话 ID
+   * @param {string} sessionName 新的会话名称
+   */
+  async function rename(sessionId, sessionName) {
+    await apiUpdateSessionName(sessionId, sessionName)
+    const session = sessions.value.find(s => s.session_id === sessionId)
+    if (session) {
+      session.session_name = sessionName
+    }
+  }
+
   return {
     sessions,
     currentSessionId,
@@ -100,5 +138,8 @@ export const useSessionStore = defineStore('session', () => {
     create,
     select,
     clearSelection,
+    remove,
+    clearAll,
+    rename,
   }
 })

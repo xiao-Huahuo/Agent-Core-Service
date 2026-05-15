@@ -132,6 +132,30 @@ flowchart TD
     L --> N
     M --> O[未命中时回退 session_summary]
 ```
+
+##### 上下文构建器
+
+```mermaid
+flowchart TD
+    A["ContextBuilder.build_messages()"] --> B["加载近期历史消息\n(list_recent_messages, 最多 N 条)"]
+    B --> C["检索长期记忆\n(retrieve_long_term_memory)"]
+    C --> D["检索知识库片段\n(retrieve_knowledge)"]
+    D --> E["获取重要事实摘要\n(get_latest_important_fact_summary)"]
+    E --> F{"拼接检索上下文"}
+    F --> G["SystemMessage: 检索上下文\n(记忆 + 知识库 + 重要事实)"]
+    G --> H["转换历史消息\n(MessageOut → LangChain Message)"]
+    H --> I["追加 HumanMessage\n(current_prompt)"]
+    I --> J{"Token 估算\n超过 summary_trigger_tokens?"}
+    J -->|"未超过"| K["返回完整 messages 列表\n[SystemMessage, ...history, HumanMessage]"]
+    J -->|"超过"| L["裁剪历史消息\n(仅保留最近 tail 条)"]
+    L --> M["重建压缩上下文\n_rebuild_messages_for_compressed_context"]
+    M --> K
+    K --> N["送入 Agent 图执行"]
+```
+
+**消息角色优先级（上下文拼装顺序）：**  
+`SystemMessage(检索上下文)` → `历史消息按时间正序` → `HumanMessage(当前输入)`  
+检索上下文内部优先级：`important_fact_summary > 当前 session 摘要 > 长期记忆 > 知识库`
 #### 任务调度机制
 ##### compress 路径: 上下文压缩 / 重要事实摘要流程
 

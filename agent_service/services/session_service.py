@@ -24,6 +24,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 import agent_service.models  # noqa: F401
 from agent_service.core.agent_config import AgentConfig
+from agent_service.models.message import MessageRecord
 from agent_service.models.session import SessionRecord
 from agent_service.schemas.session import SessionCreate, SessionOut, SessionUpdate
 
@@ -83,9 +84,40 @@ class SessionService:
             record = db_session.get(SessionRecord, session_id)
             if record is None:
                 return False
+            # 先删除关联的消息，再删除会话
+            msgs = db_session.exec(
+                select(MessageRecord).where(MessageRecord.session_id == session_id)
+            ).all()
+            for msg in msgs:
+                db_session.delete(msg)
             db_session.delete(record)
             db_session.commit()
             return True
+
+    def delete_all_user_sessions(self, user_id: str) -> int:
+        """
+        删除指定用户的所有会话,返回删除数量。
+
+        user_id: 需要清空会话的用户 ID。
+        """
+
+        with Session(self.engine) as db_session:
+            records = db_session.exec(
+                select(SessionRecord).where(SessionRecord.user_id == user_id)
+            ).all()
+            count = len(records)
+            # 先删除所有关联消息
+            for record in records:
+                msgs = db_session.exec(
+                    select(MessageRecord).where(MessageRecord.session_id == record.session_id)
+                ).all()
+                for msg in msgs:
+                    db_session.delete(msg)
+            # 再删除会话
+            for record in records:
+                db_session.delete(record)
+            db_session.commit()
+            return count
 
     def update_session_name(self, session_id: str, session_update: SessionUpdate) -> SessionOut | None:
         """

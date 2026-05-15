@@ -123,6 +123,27 @@ class MessageService:
             records.reverse()
             return [MessageOut.from_record(record) for record in records]
 
+    def list_session_messages(self, *, user_id: str, session_id: str, limit: int) -> list[MessageOut]:
+        """
+        查询同一会话最近 N 条消息(包含已摘要消息),按时间正序返回。
+
+        供前端加载聊天历史使用,不做 is_summarized 过滤。
+        """
+
+        if limit <= 0:
+            return []
+        statement = (
+            select(MessageRecord)
+            .where(MessageRecord.user_id == user_id)
+            .where(MessageRecord.session_id == session_id)
+            .order_by(MessageRecord.created_at.desc())
+            .limit(limit)
+        )
+        with Session(self.engine) as db_session:
+            records = list(db_session.exec(statement).all())
+            records.reverse()
+            return [MessageOut.from_record(record) for record in records]
+
     def list_unsummarized_messages(self, *, user_id: str, session_id: str) -> list[MessageOut]:
         """
         查询同一会话下所有尚未被摘要覆盖的消息。

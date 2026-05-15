@@ -7,7 +7,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Plus, Menu } from 'lucide-vue-next'
+import { Plus, Trash2 } from 'lucide-vue-next'
 import { useUserId } from '@/composable/useUserId'
 import { useSessionStore } from '@/stores/session'
 import { useChatStore } from '@/stores/chat'
@@ -41,7 +41,18 @@ function selectSession(sessionId) {
 
 async function handleCreate() {
   if (!userId.value) return
-  await sessionStore.create(userId.value)
+  const sessionId = await sessionStore.create(userId.value)
+  selectSession(sessionId)
+}
+
+async function handleDelete(sessionId) {
+  await sessionStore.remove(sessionId)
+}
+
+async function handleClearAll() {
+  if (!userId.value || sessionStore.sessions.length === 0) return
+  if (!window.confirm('确认清空全部会话？此操作不可撤销。')) return
+  await sessionStore.clearAll(userId.value)
 }
 
 onMounted(async () => {
@@ -82,10 +93,18 @@ onMounted(async () => {
             :session="s"
             :is-active="s.session_id === sessionStore.currentSessionId"
             @select="selectSession"
+            @delete="handleDelete"
           />
           <p v-if="!sessionStore.sessions.length" class="empty-hint">
             $ no sessions found
           </p>
+        </div>
+
+        <div v-if="sessionStore.sessions.length > 0" class="sidebar-footer">
+          <button class="clear-all-btn" @click="handleClearAll">
+            <Trash2 :size="12" />
+            <span>清空全部会话</span>
+          </button>
         </div>
       </aside>
     </Transition>
@@ -118,10 +137,18 @@ onMounted(async () => {
             :session="s"
             :is-active="s.session_id === sessionStore.currentSessionId"
             @select="selectSession"
+            @delete="handleDelete"
           />
           <p v-if="!sessionStore.sessions.length" class="empty-hint">
             $ no sessions found
           </p>
+        </div>
+
+        <div v-if="sessionStore.sessions.length > 0" class="sidebar-footer">
+          <button class="clear-all-btn" @click="handleClearAll">
+            <Trash2 :size="12" />
+            <span>清空全部会话</span>
+          </button>
         </div>
       </aside>
     </Transition>
@@ -200,6 +227,33 @@ onMounted(async () => {
   color: var(--color-text-tertiary);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
+}
+
+.sidebar-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.clear-all-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  padding: var(--space-8) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.clear-all-btn:hover {
+  color: #c56565;
+  border-color: rgba(197, 101, 101, 0.4);
+  background: rgba(197, 101, 101, 0.08);
 }
 
 /* ================================================================

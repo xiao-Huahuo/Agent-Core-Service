@@ -43,8 +43,13 @@
 - **runtime_context.py**: 新增 `set_agent_token_callback()` / `get_agent_token_callback()` / `clear_agent_token_callback()`,通过 `threading.local` 在线程间传递 token 回调,避免通过图构建器传参。
 - **model_decision.py**: `__call__()` 检测 thread-local token 回调,有则走 `_streaming_call()` 使用 `stream_chat()` 并逐 token 触发回调,无则使用原 `invoke_chat()` 路径。
 - **agent_core.py**: `_stream_events()` 改为双线程+队列模式: 创建 `queue.Queue`,设置 token 回调推入队列,后台 daemon 线程执行 `graph.stream()`,主线程从队列读取并 yield token 事件和节点事件;异常通过队列传播,finally 清理回调并 join 线程。
+  - **关键修复**: 将 `set_tool_runtime()` 和 `set_agent_token_callback()` 移入 `run_graph()` 内部(graph 线程),因为 Python `threading.local()` 不会跨线程继承。初始实现将 thread-local 设在了主线程,导致 graph 线程中的 ModelDecisionNode 永远拿不到 token 回调,回退到非流式 `invoke()` 路径,流式推送完全失效。
 - HTTP SSE 和 gRPC 共用同一 `_stream_events()` 核心,无需修改路由或 servicer。
 - 前端 `chat.js` 现有累积式内容更新逻辑已兼容 token 级流式,无需改动。
+
+### TODO 实现 — Markdown 代码语法高亮
+- 新增 `console/package.json` 依赖 `highlight.js ^11.11.0` + `marked-highlight ^2.2.0`。
+- 更新 `components/chat/MarkdownContent.vue`: 集成 `marked-highlight` 插件,注册 13 种常用语言 (python/javascript/typescript/java/go/rust/c/sql/bash/json/yaml/xml/css),在 marked 解析阶段对围栏代码块自动应用 `hljs.highlight()`。高亮配色采用非 scoped 独立 `<style>` 块定义 `.hljs-*` 类,低饱和冷色工业风 (注释灰色、关键字棕红、字符串暗绿、数字暗金、函数暗蓝、变量暗紫),与 Agent Console 设计系统协调。
   - 删除 `src/stores/counter.js` (示例 store)、`src/view/` (拼写错误目录)。
 
 ### 后端

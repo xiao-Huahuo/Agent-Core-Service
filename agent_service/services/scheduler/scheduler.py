@@ -27,6 +27,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as Futur
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 import itertools
+import json
 import logging
 import queue
 import random
@@ -360,17 +361,34 @@ class LLMTaskScheduler:
             model_tier=model_tier,
         )
         if self._backend is not None:
-            logger.warning("Redis 后端不支持流式推送,降级为 invoke_chat 后单 chunk 返回")
-            message = self.invoke_chat(
-                task_type=task_type,
-                messages=messages,
-                tool_names=tool_names,
-                timeout_seconds=timeout_seconds,
-                temperature=temperature,
-                model_tier=model_tier,
-            )
-            content = getattr(message, "content", "") or ""
-            yield {"content_delta": content, "message": message, "status": "complete"}
+            request.stream_channel = f"stream:{request.task_id}"
+            pubsub = self._backend.subscribe_stream(channel=request.stream_channel)
+            try:
+                self._backend.enqueue_chat_request(
+                    request,
+                    queue_max_size=self._resolve_queue_max_size(task_type),
+                )
+                for message in pubsub.listen():
+                    if message["type"] != "message":
+                        continue
+                    chunk = json.loads(message["data"])
+                    if chunk.get("status") == "done":
+                        final_message = self._backend.wait_for_result(
+                            task_id=request.task_id, timeout=request.timeout_seconds
+                        )
+                        full_content = getattr(final_message, "content", "") or ""
+                        yield {
+                            "content_delta": full_content,
+                            "message": final_message,
+                            "status": "complete",
+                        }
+                        return
+                    if chunk.get("status") == "error":
+                        raise RuntimeError(chunk.get("error_message", "流式任务失败"))
+                    yield chunk
+            finally:
+                pubsub.unsubscribe(request.stream_channel)
+                pubsub.close()
             return
         yield from self._stream_chat_request(request)
 
@@ -684,6 +702,11 @@ class LLMTaskScheduler:
         """执行单条 Redis Chat 请求并写回结果。"""
 
         assert self._backend is not None
+        if request.stream_channel:
+            self._execute_redis_streaming_chat_request(
+                request=request, entry_id=entry_id
+            )
+            return
         breaker = self._circuit_breakers[request.task_type]
         try:
             with self._global_semaphore:
@@ -697,6 +720,10 @@ class LLMTaskScheduler:
                     dedup_key=request.dedup_key,
                 )
                 message = self._run_with_retries(task)
+                self._backend.write_result(
+                    task_id=request.task_id,
+                    result=SerializedChatResult.from_message(message),
+                )
         except Exception as exc:  # noqa: BLE001
             breaker.record_failure()
             self._backend.write_result(task_id=request.task_id, result=SerializedChatResult.from_exception(exc))
@@ -704,9 +731,55 @@ class LLMTaskScheduler:
             self._backend.ack_and_delete(task_type=request.task_type, entry_id=entry_id)
             return
         breaker.record_success()
-        self._backend.write_result(task_id=request.task_id, result=SerializedChatResult.from_message(message))
         self._backend.release_dedup_if_owner(dedup_key=request.dedup_key, task_id=request.task_id)
         self._backend.ack_and_delete(task_type=request.task_type, entry_id=entry_id)
+
+    def _execute_redis_streaming_chat_request(self, *, request: SerializedChatRequest, entry_id: str) -> None:
+        """流式执行 Redis Chat 请求,通过 Pub/Sub 逐 token 推送,自行处理清理。"""
+
+        assert self._backend is not None
+        channel = request.stream_channel
+        assert channel is not None
+        breaker = self._circuit_breakers[request.task_type]
+        success = False
+        try:
+            with self._global_semaphore:
+                final_message: Any = None
+                for chunk in self._stream_chat_request(request):
+                    content_delta = chunk.get("content_delta", "")
+                    if content_delta:
+                        self._backend.publish_stream_chunk(
+                            channel=channel,
+                            data={"content_delta": content_delta},
+                        )
+                    if chunk.get("status") == "complete":
+                        final_message = chunk.get("message")
+                if final_message is not None:
+                    self._backend.write_result(
+                        task_id=request.task_id,
+                        result=SerializedChatResult.from_message(final_message),
+                    )
+                self._backend.publish_stream_chunk(channel=channel, data={"status": "done"})
+            success = True
+        except Exception as exc:
+            breaker.record_failure()
+            self._backend.write_result(
+                task_id=request.task_id,
+                result=SerializedChatResult.from_exception(exc),
+            )
+            self._backend.publish_stream_chunk(
+                channel=channel,
+                data={"status": "error", "error_message": str(exc)},
+            )
+        finally:
+            if success:
+                breaker.record_success()
+            self._backend.release_dedup_if_owner(
+                dedup_key=request.dedup_key, task_id=request.task_id
+            )
+            self._backend.ack_and_delete(
+                task_type=request.task_type, entry_id=entry_id
+            )
 
     def _execute_redis_summary_job(self, *, entry_id: str, request: SerializedSummaryJobRequest) -> None:
         """执行单条 Redis Summary 业务任务并写回结果。"""
@@ -768,21 +841,35 @@ class LLMTaskScheduler:
         breaker = self._circuit_breakers[request.task_type]
         try:
             with self._acquire_model_pool(request.model_tier):
-                full_message: BaseMessage | None = None
+                merged: Any = None
                 for chunk in model.stream(messages):
                     if not isinstance(chunk, BaseMessage):
                         continue
-                    full_message = chunk
-                    content_delta = getattr(chunk, "content", "") or ""
-                    if isinstance(content_delta, str) and content_delta:
-                        yield {"content_delta": content_delta}
-                if full_message is None:
+                    tool_calls = getattr(chunk, "tool_calls", None) or []
+                    has_reasoning = bool(
+                        getattr(chunk, "additional_kwargs", {}).get("reasoning_content")
+                    )
+                    if not tool_calls and not has_reasoning:
+                        content_delta = getattr(chunk, "content", "") or ""
+                        if isinstance(content_delta, str) and content_delta:
+                            yield {"content_delta": content_delta}
+                    if merged is None:
+                        merged = chunk
+                    else:
+                        merged += chunk
+                if merged is None:
                     yield {"content_delta": "", "message": AIMessage(content=""), "status": "complete"}
                     return
-                content = getattr(full_message, "content", "") or ""
+                full_content: str = getattr(merged, "content", "") or ""
+                if not isinstance(full_content, str):
+                    full_content = ""
+                final_message = AIMessage(
+                    content=full_content,
+                    tool_calls=getattr(merged, "tool_calls", None) or [],
+                )
                 yield {
-                    "content_delta": content if isinstance(content, str) else "",
-                    "message": full_message,
+                    "content_delta": full_content,
+                    "message": final_message,
                     "status": "complete",
                 }
         except Exception:

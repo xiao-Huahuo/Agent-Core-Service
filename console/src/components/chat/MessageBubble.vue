@@ -36,13 +36,21 @@ const bubbleRadius = computed(() => {
   </div>
 
   <!-- User 消息: 头像在右 -->
-  <div v-else class="bubble-row user">
+  <div v-else-if="message.role === 'user'" class="bubble-row user">
     <div class="bubble-col">
       <div class="bubble user" :style="{ borderRadius: bubbleRadius }">
         <pre class="content">{{ message.content }}</pre>
       </div>
     </div>
     <img :src="userAvatar" class="avatar" alt="user" />
+  </div>
+
+  <!-- 系统 / 工具消息: 居中灰显 -->
+  <div v-else class="bubble-row system">
+    <div class="bubble system-bubble">
+      <span class="system-role">{{ message.role }}</span>
+      <pre class="content system-content">{{ message.content }}</pre>
+    </div>
   </div>
 </template>
 
@@ -130,6 +138,38 @@ const bubbleRadius = computed(() => {
   line-height: var(--line-height-relaxed);
   color: var(--color-text-primary);
   white-space: pre-wrap;
+}
+
+/* ---- 系统 / 工具消息 ---- */
+.bubble-row.system {
+  align-self: center;
+  max-width: 90%;
+  margin-bottom: var(--space-8);
+}
+
+.system-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 6px 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.system-role {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.system-content {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  max-height: 120px;
+  overflow-y: auto;
 }
 
 /* ---- 流式光标 ---- */

@@ -112,7 +112,7 @@ def calculate(expression: str) -> str:
 
 def json_parse(json_text: str) -> str:
     """
-    解析 JSON 字符串并返回格式化结果。
+    解析 JSON 字符串并返回结构化描述。
 
     json_text: 需要解析的 JSON 字符串。
     """
@@ -121,12 +121,25 @@ def json_parse(json_text: str) -> str:
         parsed = json.loads(json_text)
     except json.JSONDecodeError as exc:
         return f"JSON 解析失败: 第 {exc.lineno} 行第 {exc.colno} 列: {exc.msg}"
-    return json.dumps(parsed, ensure_ascii=False, indent=2)
+    if isinstance(parsed, dict):
+        keys = list(parsed.keys())
+        summary = f"JSON 解析成功,这是一个包含 {len(keys)} 个字段的对象"
+        if len(keys) <= 10:
+            summary += f",字段: {', '.join(keys)}"
+        else:
+            summary += f",主要字段: {', '.join(keys[:10])} 等"
+        return summary + "。"
+    if isinstance(parsed, list):
+        summary = f"JSON 解析成功,这是一个包含 {len(parsed)} 个元素的数组"
+        if parsed and isinstance(parsed[0], dict):
+            summary += f",每个元素是包含 {len(parsed[0])} 个字段的对象"
+        return summary + "。"
+    return f"JSON 解析成功,值为: {parsed}"
 
 
 def json_pick(json_text: str, path: str) -> str:
     """
-    从 JSON 字符串中按简单路径取值。
+    从 JSON 字符串中按简单路径取值,返回人类可读的描述。
 
     json_text: 需要读取的 JSON 字符串。
     path: 点分路径,例如 `user.name` 或 `items.0.title`。
@@ -143,38 +156,40 @@ def json_pick(json_text: str, path: str) -> str:
                 return f"路径 {path} 在 {segment} 处无法继续读取。"
     except (json.JSONDecodeError, KeyError, IndexError, ValueError) as exc:
         return f"JSON 取值失败: {exc}"
-    return json.dumps(current_value, ensure_ascii=False)
+    if isinstance(current_value, (dict, list)):
+        kind = "对象" if isinstance(current_value, dict) else "数组"
+        return f"路径 {path} 的值是一个{kind},包含 {len(current_value)} 个元素。"
+    if isinstance(current_value, str) and len(str(current_value)) > 200:
+        return f"路径 {path} 的值是一段文本,共 {len(current_value)} 个字符。"
+    return f"路径 {path} 的值为: {current_value}"
 
 
 def text_stats(text: str) -> str:
     """
-    统计文本基础信息。
+    统计文本基础信息,返回人类可读的统计结果。
 
     text: 需要统计的文本。
     """
 
-    stats = {
-        "characters": len(text),
-        "non_whitespace_characters": len("".join(text.split())),
-        "lines": 0 if text == "" else text.count("\n") + 1,
-        "words": len(text.split()),
-        "rough_tokens": max(1, len(text) // 4) if text else 0,
-    }
-    return json.dumps(stats, ensure_ascii=False)
+    chars = len(text)
+    non_ws = len("".join(text.split()))
+    lines = 0 if text == "" else text.count("\n") + 1
+    words = len(text.split())
+    tokens = max(1, len(text) // 4) if text else 0
+    return f"文本统计: {chars} 个字符, {non_ws} 个非空白字符, {lines} 行, {words} 个词, 约 {tokens} 个 token。"
 
 
 def list_builtin_tools() -> str:
     """
-    列出当前注册的内置工具定义。
+    列出当前注册的内置工具,返回人类可读的编号列表。
 
-    返回值: 工具名称和描述的 JSON 字符串。
+    返回值: 工具名称和描述的格式化文本。
     """
 
-    tools = [
-        {"name": definition.name, "description": definition.description}
-        for definition in BUILTIN_TOOL_DEFINITIONS
-    ]
-    return json.dumps(tools, ensure_ascii=False, indent=2)
+    lines = [f"当前可用工具共 {len(BUILTIN_TOOL_DEFINITIONS)} 个:"]
+    for i, definition in enumerate(BUILTIN_TOOL_DEFINITIONS, 1):
+        lines.append(f"{i}. {definition.name} — {definition.description}")
+    return "\n".join(lines)
 
 
 def get_long_term_memory(query: str, top_k: int = 3) -> str:
@@ -192,21 +207,13 @@ def get_long_term_memory(query: str, top_k: int = 3) -> str:
         session_id=runtime.session_id,
         top_k=top_k,
     )
-    payload = [
-        {
-            "memory_id": item.memory.memory_id,
-            "tag": item.memory.tag,
-            "memory_type": item.memory.memory_type,
-            "content": item.memory.content,
-            "score": round(item.final_score, 4),
-            "source_uri": item.memory.source_uri,
-            "valid_from": item.memory.valid_from.isoformat(),
-            "valid_until": item.memory.valid_until.isoformat() if item.memory.valid_until else None,
-            "authority": item.memory.authority,
-        }
-        for item in results
-    ]
-    return json.dumps(payload, ensure_ascii=False, indent=2)
+    if not results:
+        return "未找到相关长期记忆。"
+    lines = []
+    for i, item in enumerate(results, 1):
+        label = item.memory.tag or item.memory.memory_type or "记忆"
+        lines.append(f"{i}. [{label}] {item.memory.content}")
+    return "\n\n".join(lines)
 
 
 def get_knowledge_context(query: str, top_k: int = 3) -> str:
@@ -219,21 +226,13 @@ def get_knowledge_context(query: str, top_k: int = 3) -> str:
 
     runtime = get_tool_runtime()
     results = runtime.retrieval_service.retrieve_knowledge(query=query, top_k=top_k)
-    payload = [
-        {
-            "memory_id": item.memory.memory_id,
-            "tag": item.memory.tag,
-            "memory_type": item.memory.memory_type,
-            "content": item.memory.content,
-            "score": round(item.final_score, 4),
-            "source_uri": item.memory.source_uri,
-            "valid_from": item.memory.valid_from.isoformat(),
-            "valid_until": item.memory.valid_until.isoformat() if item.memory.valid_until else None,
-            "authority": item.memory.authority,
-        }
-        for item in results
-    ]
-    return json.dumps(payload, ensure_ascii=False, indent=2)
+    if not results:
+        return "未找到相关知识库内容。"
+    lines = []
+    for i, item in enumerate(results, 1):
+        source = item.memory.source_uri or "未知来源"
+        lines.append(f"{i}. [来源: {source}] {item.memory.content}")
+    return "\n\n".join(lines)
 
 
 def _supersede_prior_entries(
@@ -317,15 +316,7 @@ def write_long_term_memory(
     )
 
     memory = runtime.memory_service.create_memory(create_dto)
-
-    result = {
-        "memory_id": memory.memory_id,
-        "content": content,
-        "memory_type": memory.memory_type,
-        "importance": memory.importance,
-        "status": "created",
-    }
-    return json.dumps(result, ensure_ascii=False)
+    return f"已记住: {content}"
 
 
 def _evaluate_math_expression(node: ast.AST) -> int | float:
@@ -430,7 +421,7 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     ),
     BuiltinToolDefinition(
         name="json_parse",
-        description="解析 JSON 字符串,返回格式化 JSON 或错误位置。",
+        description="解析 JSON 字符串,返回结构化描述(字段列表/元素数量等),不返回原始 JSON。",
         args_schema={
             "type": "object",
             "properties": {
@@ -445,7 +436,7 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     ),
     BuiltinToolDefinition(
         name="json_pick",
-        description="从 JSON 字符串中按点分路径读取字段值。",
+        description="从 JSON 字符串中按点分路径读取字段值,返回人类可读的值描述。",
         args_schema={
             "type": "object",
             "properties": {
@@ -464,7 +455,7 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     ),
     BuiltinToolDefinition(
         name="text_stats",
-        description="统计文本字符数、非空白字符数、行数、词数和粗略 token 数。",
+        description="统计文本字符数、非空白字符数、行数、词数和粗略 token 数,返回人类可读的统计结果。",
         args_schema={
             "type": "object",
             "properties": {

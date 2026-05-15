@@ -15,6 +15,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { streamPrompt } from '@/api/agent'
 import { fetchMessages } from '@/api/session'
+import { useSessionStore } from '@/stores/session'
 
 export const useChatStore = defineStore('chat', () => {
   /* ================================================================
@@ -99,7 +100,8 @@ export const useChatStore = defineStore('chat', () => {
         trace: m.metadata?.trace || [],
         created_at: m.created_at,
       }))
-    } catch {
+    } catch (err) {
+      console.error('加载历史消息失败:', err)
       messages.value = []
     }
   }
@@ -159,6 +161,11 @@ export const useChatStore = defineStore('chat', () => {
     } finally {
       isStreaming.value = false
       currentNode.value = ''
+      /* 流式结束后刷新会话列表(获取后台自动生成的标题) */
+      try {
+        const sessionStore = useSessionStore()
+        await sessionStore.load(userId)
+      } catch { /* 非关键 */ }
     }
   }
 

@@ -3,15 +3,22 @@
 -->
 
 <script setup>
-defineProps({
+import { X } from 'lucide-vue-next'
+
+const props = defineProps({
   session: { type: Object, required: true },
   isActive: { type: Boolean, default: false },
 })
 
-defineEmits(['select'])
+const emit = defineEmits(['select', 'delete'])
 
-function displayName(session) {
-  return session.session_name || session.session_id.slice(0, 8)
+function displayName(s) {
+  return s.session_name || s.session_id.slice(0, 8)
+}
+
+function onDelete(e) {
+  e.stopPropagation()
+  emit('delete', props.session.session_id)
 }
 </script>
 
@@ -24,6 +31,9 @@ function displayName(session) {
     <span class="session-icon">$</span>
     <span class="session-name">{{ displayName(session) }}</span>
     <span class="session-time">{{ session.updated_at?.slice(0, 10) }}</span>
+    <span class="delete-btn" title="删除会话" @click="onDelete">
+      <X :size="12" />
+    </span>
   </button>
 </template>
 
@@ -73,5 +83,27 @@ function displayName(session) {
   font-size: 9px;
   color: var(--color-text-tertiary);
   flex-shrink: 0;
+}
+
+.delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 0;
+  flex-shrink: 0;
+  opacity: 0;
+  color: var(--color-text-tertiary);
+  transition: all var(--transition-fast);
+}
+
+.session-item:hover .delete-btn {
+  opacity: 1;
+}
+
+.delete-btn:hover {
+  color: #c56565;
+  background: rgba(197, 101, 101, 0.12);
 }
 </style>
