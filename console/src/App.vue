@@ -7,7 +7,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Plus, Trash2 } from 'lucide-vue-next'
+import { Plus, Trash2, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
 import { useUserId } from '@/composable/useUserId'
 import { useSessionStore } from '@/stores/session'
 import { useChatStore } from '@/stores/chat'
@@ -69,13 +69,21 @@ onMounted(async () => {
          ============================================================ -->
     <Transition name="sidebar-slide">
       <aside v-if="showSidebar() && sidebarOpen && !isMobile" class="sidebar-card macos-card">
+        <!-- 切换按钮,溢出在侧边栏右侧 -->
+        <button
+          v-if="showSidebar()"
+          class="sidebar-toggle-outside"
+          @click="sidebarOpen = false"
+        >
+          <PanelLeftClose :size="13" />
+        </button>
         <div class="macos-card-titlebar">
           <div class="traffic-lights">
             <span class="traffic-dot sm red"></span>
             <span class="traffic-dot sm yellow"></span>
             <span class="traffic-dot sm green"></span>
           </div>
-          <span class="window-filename">sessions --list</span>
+          <span class="window-filename">会话记录</span>
           <span class="window-status">{{ sessionStore.sessions.length }} total</span>
         </div>
 
@@ -115,13 +123,20 @@ onMounted(async () => {
     </Transition>
     <Transition name="slide">
       <aside v-if="showSidebar() && isMobile && sidebarOpen" class="sidebar-card macos-card drawer-mobile">
+        <button
+          v-if="showSidebar()"
+          class="sidebar-toggle-outside mobile-toggle"
+          @click="sidebarOpen = false"
+        >
+          <PanelLeftClose :size="13" />
+        </button>
         <div class="macos-card-titlebar">
           <div class="traffic-lights">
             <span class="traffic-dot sm red"></span>
             <span class="traffic-dot sm yellow"></span>
             <span class="traffic-dot sm green"></span>
           </div>
-          <span class="window-filename">sessions --list</span>
+          <span class="window-filename">会话记录</span>
           <button class="drawer-close" @click="sidebarOpen = false">&times;</button>
         </div>
         <div class="sidebar-toolbar">
@@ -157,11 +172,20 @@ onMounted(async () => {
          右侧: 主聊天窗口
          ============================================================ -->
     <div class="main-window macos-card">
-      <AppTopBar :show-menu-btn="showSidebar()" @toggle-sidebar="sidebarOpen = !sidebarOpen" />
+      <AppTopBar />
       <div class="window-body">
         <router-view />
       </div>
     </div>
+
+    <!-- 侧边栏关闭时的重开按钮 -->
+    <button
+      v-if="showSidebar() && !sidebarOpen"
+      class="sidebar-reopen-btn"
+      @click="sidebarOpen = true"
+    >
+      <PanelLeftOpen :size="14" />
+    </button>
   </div>
 </template>
 
@@ -185,8 +209,9 @@ onMounted(async () => {
   min-width: 260px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--shadow-window);
+  position: relative;
 }
 
 .sidebar-toolbar {
@@ -274,9 +299,16 @@ onMounted(async () => {
   bottom: 0;
   z-index: 310;
   width: 280px;
+  overflow: hidden;
   border-radius: 0;
   border-top: none;
   border-bottom: none;
+}
+
+.mobile-toggle {
+  right: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
 }
 
 .drawer-close {
@@ -297,6 +329,60 @@ onMounted(async () => {
 .drawer-close:hover {
   color: var(--color-text-primary);
   background: var(--color-bg-hover);
+}
+
+/* 侧边栏内侧关闭按钮 (溢出右侧) */
+
+.sidebar-toggle-outside {
+  position: absolute;
+  right: -22px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 52px;
+  border: 1px solid var(--color-border);
+  border-left: none;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--color-bg-card);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.sidebar-toggle-outside:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+  background: var(--color-bg-muted);
+}
+
+/* 侧边栏关闭时的浮动重开按钮 */
+.sidebar-reopen-btn {
+  position: absolute;
+  top: 50%;
+  left: 1.5rem;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 52px;
+  border: 1px solid var(--color-border);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--color-bg-card);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.sidebar-reopen-btn:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+  background: var(--color-bg-muted);
 }
 
 /* ================================================================
@@ -361,6 +447,9 @@ onMounted(async () => {
   .main-window {
     border-radius: 0;
     border: none;
+  }
+  .sidebar-reopen-btn {
+    left: 4px;
   }
 }
 </style>

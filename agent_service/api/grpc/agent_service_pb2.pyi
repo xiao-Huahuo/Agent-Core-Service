@@ -112,7 +112,89 @@ class ListSessionsResponse(_message.Message):
     def __init__(self, sessions: _Optional[_Iterable[_Union[SessionResponse, _Mapping]]] = ...) -> None: ...
 
 class DeleteResponse(_message.Message):
-    __slots__ = ("success",)
+    __slots__ = ("success", "deleted_count")
     SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    DELETED_COUNT_FIELD_NUMBER: _ClassVar[int]
     success: bool
-    def __init__(self, success: bool = ...) -> None: ...
+    deleted_count: int
+    def __init__(self, success: bool = ..., deleted_count: _Optional[int] = ...) -> None: ...
+
+class DeleteAllSessionsRequest(_message.Message):
+    __slots__ = ("user_id",)
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    def __init__(self, user_id: _Optional[str] = ...) -> None: ...
+
+class ListMessagesRequest(_message.Message):
+    __slots__ = ("user_id", "session_id", "limit")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    session_id: str
+    limit: int
+    def __init__(self, user_id: _Optional[str] = ..., session_id: _Optional[str] = ..., limit: _Optional[int] = ...) -> None: ...
+
+class MessageEntry(_message.Message):
+    __slots__ = ("message_id", "session_id", "user_id", "role", "content", "tool_calls_json", "metadata_json", "created_at")
+    MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    CONTENT_FIELD_NUMBER: _ClassVar[int]
+    TOOL_CALLS_JSON_FIELD_NUMBER: _ClassVar[int]
+    METADATA_JSON_FIELD_NUMBER: _ClassVar[int]
+    CREATED_AT_FIELD_NUMBER: _ClassVar[int]
+    message_id: str
+    session_id: str
+    user_id: str
+    role: str
+    content: str
+    tool_calls_json: str
+    metadata_json: str
+    created_at: str
+    def __init__(self, message_id: _Optional[str] = ..., session_id: _Optional[str] = ..., user_id: _Optional[str] = ..., role: _Optional[str] = ..., content: _Optional[str] = ..., tool_calls_json: _Optional[str] = ..., metadata_json: _Optional[str] = ..., created_at: _Optional[str] = ...) -> None: ...
+
+class ListMessagesResponse(_message.Message):
+    __slots__ = ("messages",)
+    MESSAGES_FIELD_NUMBER: _ClassVar[int]
+    messages: _containers.RepeatedCompositeFieldContainer[MessageEntry]
+    def __init__(self, messages: _Optional[_Iterable[_Union[MessageEntry, _Mapping]]] = ...) -> None: ...
+
+class EventsRequest(_message.Message):
+    __slots__ = ("user_id", "session_id")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    session_id: str
+    def __init__(self, user_id: _Optional[str] = ..., session_id: _Optional[str] = ...) -> None: ...
+
+class EventEntry(_message.Message):
+    __slots__ = ("message_id", "role", "node", "content", "tool_calls_json", "created_at", "metadata_json")
+    MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    NODE_FIELD_NUMBER: _ClassVar[int]
+    CONTENT_FIELD_NUMBER: _ClassVar[int]
+    TOOL_CALLS_JSON_FIELD_NUMBER: _ClassVar[int]
+    CREATED_AT_FIELD_NUMBER: _ClassVar[int]
+    METADATA_JSON_FIELD_NUMBER: _ClassVar[int]
+    message_id: str
+    role: str
+    node: str
+    content: str
+    tool_calls_json: str
+    created_at: str
+    metadata_json: str
+    def __init__(self, message_id: _Optional[str] = ..., role: _Optional[str] = ..., node: _Optional[str] = ..., content: _Optional[str] = ..., tool_calls_json: _Optional[str] = ..., created_at: _Optional[str] = ..., metadata_json: _Optional[str] = ...) -> None: ...
+
+class EventsResponse(_message.Message):
+    __slots__ = ("session_id", "user_id", "event_count", "events")
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    EVENT_COUNT_FIELD_NUMBER: _ClassVar[int]
+    EVENTS_FIELD_NUMBER: _ClassVar[int]
+    session_id: str
+    user_id: str
+    event_count: int
+    events: _containers.RepeatedCompositeFieldContainer[EventEntry]
+    def __init__(self, session_id: _Optional[str] = ..., user_id: _Optional[str] = ..., event_count: _Optional[int] = ..., events: _Optional[_Iterable[_Union[EventEntry, _Mapping]]] = ...) -> None: ...

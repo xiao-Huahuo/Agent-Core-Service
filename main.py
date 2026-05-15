@@ -27,7 +27,7 @@ from agent_service.agent_core import AgentCore
 from agent_service.api.grpc.agent_service_pb2_grpc import add_AgentServiceServicer_to_server
 from agent_service.api.grpc.servicer import AgentServiceServicer
 from agent_service.api.rest import router as rest_router
-import agent_service.api.rest.routes as rest_routes
+import agent_service.api.rest.deps as rest_deps
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.session_service import SessionService
 from agent_service.services.message_service import MessageService
@@ -58,10 +58,10 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     logger.info("AgentCore 初始化完成 | graph_diagram=%s", agent.graph_diagram_path)
 
     session_service = SessionService(config=config)
-    _grpc_servicer = AgentServiceServicer(agent=agent, session_service=session_service)
-    rest_routes._agent = agent
-    rest_routes._session_service = session_service
-    rest_routes._message_service = message_service
+    _grpc_servicer = AgentServiceServicer(agent=agent, session_service=session_service, message_service=message_service)
+    rest_deps._agent = agent
+    rest_deps._session_service = session_service
+    rest_deps._message_service = message_service
 
     grpc_address = f"{config.server.grpc_host}:{config.server.grpc_port}"
     _grpc_server = grpc.server(ThreadPoolExecutor(max_workers=10))
@@ -80,9 +80,9 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         if _grpc_servicer is not None:
             _grpc_servicer.shutdown()
             logger.info("AgentCore 资源已释放")
-        rest_routes._agent = None
-        rest_routes._session_service = None
-        rest_routes._message_service = None
+        rest_deps._agent = None
+        rest_deps._session_service = None
+        rest_deps._message_service = None
         logger.info("AgentService 已关闭")
 
 

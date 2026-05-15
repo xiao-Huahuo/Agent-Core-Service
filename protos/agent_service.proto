@@ -36,6 +36,16 @@ service AgentService {
   rpc UpdateSessionName(SessionUpdateRequest) returns (SessionResponse);
 
   rpc DeleteSession(SessionIdRequest) returns (DeleteResponse);
+
+  rpc DeleteAllSessions(DeleteAllSessionsRequest) returns (DeleteResponse);
+
+  // ---- 消息历史 ----
+
+  rpc ListMessages(ListMessagesRequest) returns (ListMessagesResponse);
+
+  // ---- 观测 / trace 事件 ----
+
+  rpc GetEvents(EventsRequest) returns (EventsResponse);
 }
 
 // ---------------------------------------------------------------------------
@@ -120,4 +130,67 @@ message ListSessionsResponse {
 
 message DeleteResponse {
   bool success = 1;
+  // deleted_count 仅在 DeleteAllSessions 时有意义。
+  int32 deleted_count = 2;
+}
+
+message DeleteAllSessionsRequest {
+  string user_id = 1;
+}
+
+// ---------------------------------------------------------------------------
+// 消息历史
+// ---------------------------------------------------------------------------
+
+message ListMessagesRequest {
+  string user_id = 1;
+  string session_id = 2;
+  int32 limit = 3;
+}
+
+message MessageEntry {
+  string message_id = 1;
+  string session_id = 2;
+  string user_id = 3;
+  string role = 4;
+  string content = 5;
+  // JSON 序列化的 tool_calls 列表。
+  string tool_calls_json = 6;
+  // JSON 序列化的 metadata dict。
+  string metadata_json = 7;
+  // ISO 8601 格式 UTC 时间字符串。
+  string created_at = 8;
+}
+
+message ListMessagesResponse {
+  repeated MessageEntry messages = 1;
+}
+
+// ---------------------------------------------------------------------------
+// 观测 / trace 事件
+// ---------------------------------------------------------------------------
+
+message EventsRequest {
+  string user_id = 1;
+  string session_id = 2;
+}
+
+message EventEntry {
+  string message_id = 1;
+  string role = 2;
+  string node = 3;
+  string content = 4;
+  // JSON 序列化的 tool_calls 列表。
+  string tool_calls_json = 5;
+  // ISO 8601 格式 UTC 时间字符串。
+  string created_at = 6;
+  // JSON 序列化的 metadata dict。
+  string metadata_json = 7;
+}
+
+message EventsResponse {
+  string session_id = 1;
+  string user_id = 2;
+  int32 event_count = 3;
+  repeated EventEntry events = 4;
 }

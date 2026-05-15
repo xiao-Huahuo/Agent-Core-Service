@@ -125,80 +125,63 @@ class AgentCore:
             branch_labels=builder.branch_labels,
         )
 
-    def stream_run(self, *, prompt: str, user_id: str, session_id: str) -> Iterator[str]:
+    def stream_run(self, *, prompt: str, user_id: str, session_id: str) -> Iterator[dict[str, Any]]:
         """
-        运行一轮 Agent 循环并输出 SSE 风格字符串。
+        运行一轮无状态 Agent 并逐节点产出 dict 事件。
 
         prompt: 用户本轮输入。
-        user_id: 用户 ID,用于后续记忆和会话隔离。
-        session_id: 会话 ID,用于后续 checkpoint 和短期记忆恢复。
+        user_id: 用户 ID。
+        session_id: 会话 ID。
         """
 
         messages = [HumanMessage(content=prompt)]
-        logger.info("开始无状态流式运行 | user=%s session=%s prompt_len=%d", user_id, session_id, len(prompt))
-        yield from self._format_sse(self._stream_events(messages=messages, user_id=user_id, session_id=session_id))
-        logger.debug("无状态流式运行完成 | user=%s session=%s", user_id, session_id)
-
-    def stream_run_events(self, *, prompt: str, user_id: str, session_id: str) -> Iterator[dict[str, Any]]:
-        """与 stream_run 相同的逻辑,但直接产出 dict 供 gRPC 使用。"""
-
-        messages = [HumanMessage(content=prompt)]
-        logger.info("开始无状态流式运行(gRPC) | user=%s session=%s", user_id, session_id)
+        logger.info("开始无状态流式运行 | user=%s session=%s", user_id, session_id)
         yield from self._stream_events(messages=messages, user_id=user_id, session_id=session_id)
-        logger.debug("无状态流式运行完成(gRPC) | user=%s session=%s", user_id, session_id)
+        logger.debug("无状态流式运行完成 | user=%s session=%s", user_id, session_id)
 
     def run_once(self, *, prompt: str, user_id: str, session_id: str) -> dict[str, Any]:
         """
-        运行一轮 Agent 并返回结构化结果。
+        运行一轮无状态 Agent 并返回结构化结果。
 
         prompt: 用户本轮输入。
-        user_id: 用户 ID,用于隔离不同用户的上下文。
-        session_id: 会话 ID,用于标识同一轮会话线程。
+        user_id: 用户 ID。
+        session_id: 会话 ID。
         """
 
         chunks = list(self.stream_run(prompt=prompt, user_id=user_id, session_id=session_id))
-        events = self.parse_stream_chunks(chunks)
         graph_diagram = self.graph_diagram_path.read_text(encoding="utf-8")
         return {
             "graph_diagram_path": str(self.graph_diagram_path),
             "graph_diagram": graph_diagram,
-            "final_output": self.extract_final_output(events),
-            "events": events,
-            "chunks": chunks,
+            "final_output": self.extract_final_output(chunks),
+            "events": chunks,
         }
 
     def run_session_prompt(self, *, prompt: str, user_id: str, session_id: str) -> dict[str, Any]:
         """
-        运行带 session 上下文和消息持久化的一轮 Agent。
+        运行带 session 上下文和消息持久化的一轮 Agent,返回结构化结果。
 
         prompt: 用户本轮输入。
-        user_id: 用户 ID,用于读取和保存该用户的消息。
-        session_id: 会话 ID,由外部主服务控制连续对话或新对话。
+        user_id: 用户 ID。
+        session_id: 会话 ID。
         """
 
-        chunks: list[str] = []
-        for chunk in self.stream_session_prompt(prompt=prompt, user_id=user_id, session_id=session_id):
-            chunks.append(chunk)
-        events = self.parse_stream_chunks(chunks)
+        chunks = list(self.stream_session_prompt(prompt=prompt, user_id=user_id, session_id=session_id))
         graph_diagram = self.graph_diagram_path.read_text(encoding="utf-8")
         return {
             "graph_diagram_path": str(self.graph_diagram_path),
             "graph_diagram": graph_diagram,
-            "final_output": self.extract_final_output(events),
-            "events": events,
-            "chunks": chunks,
+            "final_output": self.extract_final_output(chunks),
+            "events": chunks,
         }
 
-    def stream_session_prompt(self, *, prompt: str, user_id: str, session_id: str) -> Iterator[str]:
+    def stream_session_prompt(self, *, prompt: str, user_id: str, session_id: str) -> Iterator[dict[str, Any]]:
         """
-        运行带 session 上下文和消息持久化的一轮 Agent,以 SSE 流式输出。
-
-        与 `run_session_prompt` 共享相同的上下文构建和持久化逻辑,但不再缓冲全部
-        chunk 再返回 dict,而是逐节点 yield SSE 字符串,适合 HTTP SSE 直推到前端。
+        运行带 session 上下文和消息持久化的一轮 Agent,逐节点产出 dict 事件。
 
         prompt: 用户本轮输入。
-        user_id: 用户 ID,用于读取和保存该用户的消息。
-        session_id: 会话 ID,由外部主服务控制连续对话或新对话。
+        user_id: 用户 ID。
+        session_id: 会话 ID。
         """
 
         message_service = self._get_message_service()
@@ -218,41 +201,6 @@ class AgentCore:
                 role="user",
                 content=prompt,
                 metadata_json={"source": "stream_session_prompt"},
-            )
-        )
-        yield from self._format_sse(
-            self._stream_events(
-                messages=messages,
-                user_id=user_id,
-                session_id=session_id,
-                message_service=message_service,
-            )
-        )
-        # Fire-and-forget: 用小模型根据对话内容生成会话标题
-        _launch_auto_rename(self, user_id=user_id, session_id=session_id)
-
-    def stream_session_prompt_events(
-        self, *, prompt: str, user_id: str, session_id: str
-    ) -> Iterator[dict[str, Any]]:
-        """与 stream_session_prompt 相同的逻辑,但直接产出 dict 供 gRPC 使用。"""
-
-        message_service = self._get_message_service()
-        context_builder = self._get_context_builder(message_service=message_service)
-        logger.info(
-            "开始 session 流式运行(gRPC) | user=%s session=%s prompt_len=%d",
-            user_id,
-            session_id,
-            len(prompt),
-        )
-        messages = context_builder.build_messages(user_id=user_id, session_id=session_id, current_prompt=prompt)
-        logger.debug("上下文构建完成(gRPC) | message_count=%d", len(messages))
-        message_service.create_message(
-            MessageCreate(
-                session_id=session_id,
-                user_id=user_id,
-                role="user",
-                content=prompt,
-                metadata_json={"source": "stream_session_prompt_grpc"},
             )
         )
         yield from self._stream_events(
@@ -282,7 +230,7 @@ class AgentCore:
         使用给定 LangChain messages 执行图并逐节点产出 dict 事件。
 
         统一的流式核心,HTTP 和 gRPC 共用此方法。
-        HTTP 侧再用 _format_sse() 包一层 SSE 格式;
+        REST 侧只需将 dict 转为 SSE 格式即可;
         gRPC 侧直接将 dict 转换为 ChunkMessage。
 
         采用双线程 + 队列模式: 图在后台线程中执行,Agent 节点的 token 级
@@ -387,14 +335,6 @@ class AgentCore:
             clear_agent_token_callback()
             clear_tool_runtime()
             graph_thread.join(timeout=5.0)
-
-    @staticmethod
-    def _format_sse(events_iter: Iterator[dict[str, Any]]) -> Iterator[str]:
-        """将 dict 事件迭代器包装为 SSE (text/event-stream) 格式字符串。"""
-
-        for payload in events_iter:
-            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-        yield "data: [DONE]\n\n"
 
     def _get_message_service(self) -> MessageService:
         """获取或懒加载消息服务。"""

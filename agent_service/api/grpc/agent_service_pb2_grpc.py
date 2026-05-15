@@ -88,6 +88,21 @@ class AgentServiceStub(object):
                 request_serializer=agent__service__pb2.SessionIdRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.DeleteResponse.FromString,
                 _registered_method=True)
+        self.DeleteAllSessions = channel.unary_unary(
+                '/agent_service.AgentService/DeleteAllSessions',
+                request_serializer=agent__service__pb2.DeleteAllSessionsRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.DeleteResponse.FromString,
+                _registered_method=True)
+        self.ListMessages = channel.unary_unary(
+                '/agent_service.AgentService/ListMessages',
+                request_serializer=agent__service__pb2.ListMessagesRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.ListMessagesResponse.FromString,
+                _registered_method=True)
+        self.GetEvents = channel.unary_unary(
+                '/agent_service.AgentService/GetEvents',
+                request_serializer=agent__service__pb2.EventsRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.EventsResponse.FromString,
+                _registered_method=True)
 
 
 class AgentServiceServicer(object):
@@ -162,6 +177,28 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def DeleteAllSessions(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListMessages(self, request, context):
+        """---- 消息历史 ----
+
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetEvents(self, request, context):
+        """---- 观测 / trace 事件 ----
+
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AgentServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -209,6 +246,21 @@ def add_AgentServiceServicer_to_server(servicer, server):
                     servicer.DeleteSession,
                     request_deserializer=agent__service__pb2.SessionIdRequest.FromString,
                     response_serializer=agent__service__pb2.DeleteResponse.SerializeToString,
+            ),
+            'DeleteAllSessions': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteAllSessions,
+                    request_deserializer=agent__service__pb2.DeleteAllSessionsRequest.FromString,
+                    response_serializer=agent__service__pb2.DeleteResponse.SerializeToString,
+            ),
+            'ListMessages': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListMessages,
+                    request_deserializer=agent__service__pb2.ListMessagesRequest.FromString,
+                    response_serializer=agent__service__pb2.ListMessagesResponse.SerializeToString,
+            ),
+            'GetEvents': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetEvents,
+                    request_deserializer=agent__service__pb2.EventsRequest.FromString,
+                    response_serializer=agent__service__pb2.EventsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -463,6 +515,87 @@ class AgentService(object):
             '/agent_service.AgentService/DeleteSession',
             agent__service__pb2.SessionIdRequest.SerializeToString,
             agent__service__pb2.DeleteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteAllSessions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/DeleteAllSessions',
+            agent__service__pb2.DeleteAllSessionsRequest.SerializeToString,
+            agent__service__pb2.DeleteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListMessages(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/ListMessages',
+            agent__service__pb2.ListMessagesRequest.SerializeToString,
+            agent__service__pb2.ListMessagesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetEvents(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetEvents',
+            agent__service__pb2.EventsRequest.SerializeToString,
+            agent__service__pb2.EventsResponse.FromString,
             options,
             channel_credentials,
             insecure,

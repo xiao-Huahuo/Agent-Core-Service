@@ -1,20 +1,21 @@
 <!--
   应用顶栏 — macOS 窗口标题栏。
-  红绿灯 + 文件名 + 侧边栏切换 + 标签导航 + 主题切换。
+  红绿灯 + 标签导航 + 绝对居中会话标题 + 主题切换。
 -->
 
 <script setup>
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Menu } from 'lucide-vue-next'
+import { useSessionStore } from '@/stores/session'
 import ThemeToggle from './ThemeToggle.vue'
 
-defineProps({
-  showMenuBtn: { type: Boolean, default: false },
-})
-
-const emit = defineEmits(['toggleSidebar'])
-
 const route = useRoute()
+const sessionStore = useSessionStore()
+
+const title = computed(() => {
+  const name = sessionStore.currentSession?.session_name
+  return name || 'agent-console ~/chat'
+})
 
 function isActive(path) {
   if (path === '/chat') return route.path === '/' || route.path.startsWith('/chat')
@@ -31,14 +32,6 @@ function isActive(path) {
       <span class="traffic-dot green"></span>
     </div>
 
-    <!-- 侧边栏切换 -->
-    <button v-if="showMenuBtn" class="menu-btn" @click="$emit('toggleSidebar')">
-      <Menu :size="13" />
-    </button>
-
-    <!-- 文件名 -->
-    <span class="window-filename">agent-console ~/chat</span>
-
     <!-- 标签导航 -->
     <nav class="tabs">
       <RouterLink to="/chat" class="tab" :class="{ active: isActive('/chat') }">
@@ -49,42 +42,41 @@ function isActive(path) {
       </RouterLink>
     </nav>
 
-    <!-- 填充 -->
+    <!-- 绝对居中标题 -->
+    <span class="window-title">{{ title }}</span>
+
     <div class="spacer"></div>
 
-    <!-- 状态 + 主题 -->
     <span class="window-status">ready</span>
     <ThemeToggle />
   </div>
 </template>
 
 <style scoped>
-.menu-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  flex-shrink: 0;
+.macos-card-titlebar {
+  position: relative;
 }
 
-.menu-btn:hover {
+.window-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   color: var(--color-text-primary);
-  border-color: var(--color-border-strong);
-  background: var(--color-bg-hover);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40%;
+  pointer-events: none;
 }
 
 .tabs {
   display: flex;
   align-items: center;
   gap: 2px;
-  margin-left: var(--space-12);
+  margin-left: var(--space-10);
+  flex-shrink: 0;
 }
 
 .tab {
