@@ -70,6 +70,7 @@ class ContextBuilder:
         if memory_context:
             messages.append(SystemMessage(content=memory_context))
         messages.extend(self._to_langchain_message(message) for message in history)
+        messages = self._filter_orphaned_tool_messages(messages)
         messages.append(HumanMessage(content=current_prompt))
         if self.estimate_messages_tokens(messages) > self.config.memory.summary_trigger_tokens:
             compressed_history = history[-self.config.memory.context_compression_tail_messages :]
@@ -171,6 +172,7 @@ class ContextBuilder:
         if memory_context:
             messages.append(SystemMessage(content=memory_context))
         messages.extend(self._to_langchain_message(message) for message in history)
+        messages = self._filter_orphaned_tool_messages(messages)
         messages.append(HumanMessage(content=current_prompt))
         return messages
 
@@ -189,6 +191,29 @@ class ContextBuilder:
             if tool_calls:
                 total_characters += len(str(tool_calls))
         return max(1, total_characters // 4)
+
+    @staticmethod
+    def _filter_orphaned_tool_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
+        """
+        过滤孤立的 ToolMessage:其 tool_call_id 对应的 AIMessage 不在消息列表中。
+        历史加载窗口或上下文裁剪可能截断 AIMessage 而留下 ToolMessage,导致 API 400 错误。
+        """
+
+        known_ids: set[str] = set()
+        for msg in messages:
+            if isinstance(msg, AIMessage):
+                for tc in getattr(msg, "tool_calls", []) or []:
+                    tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
+                    if tc_id:
+                        known_ids.add(tc_id)
+
+        return [
+            msg
+            for msg in messages
+            if not isinstance(msg, ToolMessage)
+            or not getattr(msg, "tool_call_id", None)
+            or getattr(msg, "tool_call_id") in known_ids
+        ]
 
     @staticmethod
     def _to_langchain_message(message: MessageOut) -> BaseMessage:
