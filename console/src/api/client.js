@@ -60,14 +60,14 @@ export class ApiError extends Error {
  * @param {Record<string, string|number>} [params] 查询参数
  * @returns {Promise<any>} 解析后的 JSON 响应体
  */
-export async function apiGet(path, params = {}) {
+export async function apiGet(path, params = {}, { signal } = {}) {
   const url = new URL(path, window.location.origin)
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null && value !== '') {
       url.searchParams.set(key, String(value))
     }
   }
-  const response = await fetch(url.toString())
+  const response = await fetch(url.toString(), { signal })
   if (!response.ok) {
     const text = await response.text().catch(() => '')
     throw new ApiError(response.status, text || response.statusText)
@@ -151,8 +151,8 @@ export async function apiPut(path, body = {}) {
  * @param {string} url 完整的 SSE 端点 URL
  * @returns {AsyncGenerator<Record<string, any>>} 每次 yield 一个解析后的事件对象
  */
-export async function* streamLines(url) {
-  const response = await fetch(url)
+export async function* streamLines(url, { signal } = {}) {
+  const response = await fetch(url, { signal })
   if (!response.ok) {
     throw new ApiError(response.status, 'SSE stream connection failed')
   }
@@ -163,6 +163,15 @@ export async function* streamLines(url) {
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+
+  /* signal 触发时取消 reader,让 reader.read() 立即返回 {done: true} */
+  if (signal) {
+    if (signal.aborted) {
+      reader.cancel()
+    } else {
+      signal.addEventListener('abort', () => reader.cancel(), { once: true })
+    }
+  }
 
   try {
     while (true) {
@@ -177,7 +186,6 @@ export async function* streamLines(url) {
         const trimmed = part.trim()
         if (!trimmed) continue
 
-        /* 按行拆分,取 data: 前缀的行 */
         for (const line of trimmed.split('\n')) {
           if (!line.startsWith('data: ')) continue
           const payload = line.slice(6)
@@ -191,6 +199,9 @@ export async function* streamLines(url) {
         }
       }
     }
+  } catch (err) {
+    if (err.name === 'AbortError') return
+    throw err
   } finally {
     reader.releaseLock()
   }

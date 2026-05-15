@@ -18,10 +18,17 @@ logger = logging.getLogger(__name__)
 
 
 def _to_sse(events: Iterator[dict[str, Any]]) -> Iterator[str]:
-    """将 dict 事件迭代器包装为 SSE 格式字符串。"""
-    for payload in events:
-        yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-    yield "data: [DONE]\n\n"
+    """将 dict 事件迭代器包装为 SSE 格式字符串,客户端断开时传播取消信号。"""
+    try:
+        for payload in events:
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
+    except GeneratorExit:
+        try:
+            events.close()
+        except GeneratorExit:
+            pass
+        raise
 
 
 # ------------------------------------------------------------------

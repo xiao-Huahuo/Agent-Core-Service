@@ -19,11 +19,11 @@ import { streamLines } from './client'
  * @param {string} prompt 用户输入
  * @returns {AsyncGenerator<{node: string, content: string, tool_calls: Array, trace: Array}>}
  */
-export function streamPrompt(userId, sessionId, prompt) {
+export function streamPrompt(userId, sessionId, prompt, options = {}) {
   const params = new URLSearchParams({
     user_id: userId,
     session_id: sessionId,
     prompt,
   })
-  return streamLines(`/agent/stream?${params}`)
+  return streamLines(`/agent/stream?${params}`, options)
 }

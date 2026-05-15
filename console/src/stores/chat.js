@@ -34,6 +34,9 @@ export const useChatStore = defineStore('chat', () => {
   /** 流式传输过程中的错误信息 */
   const streamError = ref('')
 
+  /** 用于取消正在进行的请求(加载历史、发送消息) */
+  let _abortController = null
+
   /* ================================================================
    * 计算属性
    * ================================================================ */
@@ -89,9 +92,13 @@ export const useChatStore = defineStore('chat', () => {
    * @param {number} [limit=50] 返回数量上限
    */
   async function loadHistory(sessionId, userId, limit = 50) {
+    _abortController?.abort()
+    _abortController = new AbortController()
+    const { signal } = _abortController
+
     messages.value = []
     try {
-      const history = await fetchMessages(sessionId, userId, limit)
+      const history = await fetchMessages(sessionId, userId, limit, { signal })
       messages.value = history.map(m => ({
         role: m.role,
         content: m.content,
@@ -101,6 +108,7 @@ export const useChatStore = defineStore('chat', () => {
         created_at: m.created_at,
       }))
     } catch (err) {
+      if (err.name === 'AbortError') return
       console.error('加载历史消息失败:', err)
       messages.value = []
     }
@@ -109,18 +117,25 @@ export const useChatStore = defineStore('chat', () => {
   /**
    * 发送用户消息并开始流式对话。
    *
-   * 流程:
-   * 1. 将用户消息加入 messages
-   * 2. 添加占位助手消息
-   * 3. 调用 SSE 流接口,逐块更新助手消息内容
-   * 4. 流结束时最终化消息
+   * 如果当前正在流式输出,会先中断上一次请求,保留已输出的部分内容,
+   * 然后立即发送新的 prompt。
    *
    * @param {string} userId 用户 ID
    * @param {string} sessionId 会话 ID
    * @param {string} prompt 用户输入文本
    */
   async function send(userId, sessionId, prompt) {
-    if (!prompt.trim() || isStreaming.value) return
+    if (!prompt.trim()) return
+
+    /* 如果正在流式输出,中断上一次请求 */
+    if (isStreaming.value) {
+      _abortController?.abort()
+      isStreaming.value = false
+      const last = messages.value[messages.value.length - 1]
+      if (last && last.role === 'assistant') {
+        last.node = 'interrupted'
+      }
+    }
 
     /* 用户消息入列 */
     appendMessage({ role: 'user', content: prompt })
@@ -128,18 +143,18 @@ export const useChatStore = defineStore('chat', () => {
     /* 助手占位消息 */
     appendMessage({ role: 'assistant', content: '', node: '', tool_calls: [], trace: [] })
 
+    _abortController = new AbortController()
+    const { signal } = _abortController
     isStreaming.value = true
     streamError.value = ''
 
     try {
-      for await (const chunk of streamPrompt(userId, sessionId, prompt)) {
+      for await (const chunk of streamPrompt(userId, sessionId, prompt, { signal })) {
         currentNode.value = chunk.node || ''
-        /* 始终更新节点标签，让用户看到进度（如 safety_input → planner → agent） */
         const last = messages.value[messages.value.length - 1]
         if (last && last.role === 'assistant') {
           if (chunk.node) last.node = chunk.node
         }
-        /* 有内容或 tool_calls 时更新消息体 */
         if (chunk.content || (chunk.tool_calls && chunk.tool_calls.length > 0)) {
           updateLastMessage(
             chunk.content,
@@ -150,8 +165,8 @@ export const useChatStore = defineStore('chat', () => {
         }
       }
     } catch (err) {
+      if (err.name === 'AbortError') return
       streamError.value = err.message || 'Stream connection failed'
-      /* 在助手消息中显示错误 */
       updateLastMessage(
         streamError.value,
         undefined,
@@ -159,9 +174,10 @@ export const useChatStore = defineStore('chat', () => {
         undefined
       )
     } finally {
+      /* 如果 signal 已被新请求 abort,跳过清理,让新请求接管 */
+      if (signal.aborted) return
       isStreaming.value = false
       currentNode.value = ''
-      /* 流式结束后刷新会话列表(获取后台自动生成的标题) */
       try {
         const sessionStore = useSessionStore()
         await sessionStore.load(userId)
@@ -170,9 +186,11 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   /**
-   * 清空当前消息列表。
+   * 清空当前消息列表,中止正在进行的请求。
    */
   function clear() {
+    _abortController?.abort()
+    _abortController = null
     messages.value = []
     isStreaming.value = false
     streamError.value = ''

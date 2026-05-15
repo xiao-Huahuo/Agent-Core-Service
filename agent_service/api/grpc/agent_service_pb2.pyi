@@ -198,3 +198,15 @@ class EventsResponse(_message.Message):
     event_count: int
     events: _containers.RepeatedCompositeFieldContainer[EventEntry]
     def __init__(self, session_id: _Optional[str] = ..., user_id: _Optional[str] = ..., event_count: _Optional[int] = ..., events: _Optional[_Iterable[_Union[EventEntry, _Mapping]]] = ...) -> None: ...
+
+class CancelRequest(_message.Message):
+    __slots__ = ("session_id",)
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    session_id: str
+    def __init__(self, session_id: _Optional[str] = ...) -> None: ...
+
+class CancelResponse(_message.Message):
+    __slots__ = ("ok",)
+    OK_FIELD_NUMBER: _ClassVar[int]
+    ok: bool
+    def __init__(self, ok: bool = ...) -> None: ...

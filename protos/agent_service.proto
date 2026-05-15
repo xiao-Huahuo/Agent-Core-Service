@@ -43,6 +43,11 @@ service AgentService {
 
   rpc ListMessages(ListMessagesRequest) returns (ListMessagesResponse);
 
+  // ---- 取消执行 ----
+
+  // 取消指定 session 正在执行的图,中断后部分输出自动保存。
+  rpc CancelSession(CancelRequest) returns (CancelResponse);
+
   // ---- 观测 / trace 事件 ----
 
   rpc GetEvents(EventsRequest) returns (EventsResponse);
@@ -193,4 +198,16 @@ message EventsResponse {
   string user_id = 2;
   int32 event_count = 3;
   repeated EventEntry events = 4;
+}
+
+// ---------------------------------------------------------------------------
+// 取消执行
+// ---------------------------------------------------------------------------
+
+message CancelRequest {
+  string session_id = 1;
+}
+
+message CancelResponse {
+  bool ok = 1;
 }

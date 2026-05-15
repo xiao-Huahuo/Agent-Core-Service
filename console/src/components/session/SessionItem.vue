@@ -62,7 +62,6 @@ function onDelete(e) {
 
 .session-item.active {
   background: var(--color-accent-muted);
-  border-left-color: var(--color-accent);
   color: var(--color-accent);
 }
 

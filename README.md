@@ -245,33 +245,32 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[用户输入] --> B[Layer 1: 敏感词初检
-(SensitiveWordChecker)
-exact + regex 快速匹配]
+    A[用户输入] --> B[Layer 1: 敏感词初检<br/>SensitiveWordChecker<br/>exact + regex 快速匹配]
+    
     B -->|命中政治类| C1[政治敏感通道]
     B -->|命中其他拦截类| C2[一般拦截通道]
-    B -->|通过 / 命中 medium| D[Layer 2: 小模型意图审核
-(IntentAuditor)
-small 模型语义判断]
-    C1 --> G1[小模型生成
-政治立场反驳回复]
-    C2 --> G2[小模型生成
-脱敏礼貌拒绝回复]
+    B -->|通过 / 命中 medium| D[Layer 2: 小模型意图审核<br/>IntentAuditor<br/>small 模型语义判断]
+    
+    C1 --> G1[小模型生成<br/>政治立场反驳回复]
+    C2 --> G2[小模型生成<br/>脱敏礼貌拒绝回复]
+    
     G1 --> K1[返回用户]
     G2 --> K2[返回用户]
+    
     D -->|政治敏感| C1
     D -->|其他 block| C2
-    D -->|suspect| E[降级处理
-限制功能]
+    D -->|suspect| E[降级处理<br/>限制功能]
     D -->|pass| F[进入 AgentCore 主循环]
+    
     E --> K3[返回用户]
     F --> G[Agent 生成最终回复]
-    G --> H[Layer 3: 输出审核
-(OutputAuditor)
-敏感词扫描 + 脱敏]
+    
+    G --> H[Layer 3: 输出审核<br/>OutputAuditor<br/>敏感词扫描 + 脱敏]
+    
     H -->|命中拦截类| I[替换为标准安全回复]
     H -->|命中清洗类| J[敏感词脱敏 ***]
     H -->|通过| K[正常返回用户]
+    
     I --> K
     J --> K
 ```

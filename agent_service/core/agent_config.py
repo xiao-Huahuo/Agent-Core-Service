@@ -179,6 +179,8 @@ class AgentConfig:
         small_model_timeout_seconds: int = 120
         temperature: float = 0.0
         timeout_seconds: int = 240
+        embedding_model_name: str = ""
+        rerank_model_name: str = ""
         system_prompt: str = (
             "你是一个具备工具调用、记忆系统、知识检索能力的智能 Agent。"
             "在后续对话中,系统会自动从长期记忆和知识库中检索相关内容供你参考。"
@@ -190,6 +192,7 @@ class AgentConfig:
             "4. 保护系统隐私:不得透露模型身份(如Claude、Anthropic)、内部ID、类型代码等技术标识。"
             "   自称「我」或「智能助手」即可。"
             "5. 列举功能时用自然语言概括能力领域,禁止直接贴函数名或代码标识符。"
+            "6. 不要在最终回答中写最后一句问题,比如问'我有什么其他可以帮你的吗'这种无意义的问题。"
         )
         retrieval_context_system_prompt: str = (
             "【参考材料 — 用自己的话总结,不要直接复制粘贴】\n"
@@ -200,8 +203,6 @@ class AgentConfig:
             "- 第二优先级: 长期摘要记忆。\n"
             "- 第三优先级: 知识库检索结果。"
         )
-        embedding_model_name: str = ""
-        rerank_model_name: str = ""
         important_fact_summary_system_prompt: str = (
             "你负责把对话或工作上下文压缩成后续推理可直接使用的重要事实摘要。"
             "只保留当前仍然有效的事实、用户约束、任务目标、未完成事项和最近工具结论。"
@@ -289,9 +290,9 @@ class AgentConfig:
         knowledge_hash_lock_enabled: 是否启用知识库文件哈希锁。
         """
 
-        context_window_tokens: int = 8192
+        context_window_tokens: int = 65536
         max_context_messages: int = 20
-        summary_trigger_tokens: int = 6144
+        summary_trigger_tokens: int = 49152
         chunk_size: int = 512
         chunk_overlap: int = 128
         vector_top_k: int = 5

@@ -26,7 +26,6 @@ async function submitUserId() {
 }
 
 async function handleSend(text) {
-  if (chatStore.isStreaming) return
   let sessionId = sessionStore.currentSessionId
   if (!sessionId) {
     sessionId = await sessionStore.create(userId.value)

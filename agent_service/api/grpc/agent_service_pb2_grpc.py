@@ -98,6 +98,11 @@ class AgentServiceStub(object):
                 request_serializer=agent__service__pb2.ListMessagesRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.ListMessagesResponse.FromString,
                 _registered_method=True)
+        self.CancelSession = channel.unary_unary(
+                '/agent_service.AgentService/CancelSession',
+                request_serializer=agent__service__pb2.CancelRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.CancelResponse.FromString,
+                _registered_method=True)
         self.GetEvents = channel.unary_unary(
                 '/agent_service.AgentService/GetEvents',
                 request_serializer=agent__service__pb2.EventsRequest.SerializeToString,
@@ -191,6 +196,15 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def CancelSession(self, request, context):
+        """---- 取消执行 ----
+
+        取消指定 session 正在执行的图,中断后部分输出自动保存。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def GetEvents(self, request, context):
         """---- 观测 / trace 事件 ----
 
@@ -256,6 +270,11 @@ def add_AgentServiceServicer_to_server(servicer, server):
                     servicer.ListMessages,
                     request_deserializer=agent__service__pb2.ListMessagesRequest.FromString,
                     response_serializer=agent__service__pb2.ListMessagesResponse.SerializeToString,
+            ),
+            'CancelSession': grpc.unary_unary_rpc_method_handler(
+                    servicer.CancelSession,
+                    request_deserializer=agent__service__pb2.CancelRequest.FromString,
+                    response_serializer=agent__service__pb2.CancelResponse.SerializeToString,
             ),
             'GetEvents': grpc.unary_unary_rpc_method_handler(
                     servicer.GetEvents,
@@ -569,6 +588,33 @@ class AgentService(object):
             '/agent_service.AgentService/ListMessages',
             agent__service__pb2.ListMessagesRequest.SerializeToString,
             agent__service__pb2.ListMessagesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CancelSession(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/CancelSession',
+            agent__service__pb2.CancelRequest.SerializeToString,
+            agent__service__pb2.CancelResponse.FromString,
             options,
             channel_credentials,
             insecure,

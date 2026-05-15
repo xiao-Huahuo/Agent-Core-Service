@@ -22,6 +22,8 @@ import grpc
 
 from agent_service.agent_core.agent_core import AgentCore
 from agent_service.api.grpc.agent_service_pb2 import (
+    CancelRequest,
+    CancelResponse,
     ChunkMessage,
     DeleteAllSessionsRequest,
     DeleteResponse,
@@ -173,6 +175,16 @@ class AgentServiceServicer(BaseServicer):
         return DeleteResponse(success=True, deleted_count=count)
 
     # ------------------------------------------------------------------
+    # 取消执行 RPC
+    # ------------------------------------------------------------------
+
+    def CancelSession(self, request: CancelRequest, context: grpc.ServicerContext) -> CancelResponse:  # noqa: N802
+        """取消指定 session 正在执行的图,中断后部分输出自动保存。"""
+        logger.info("CancelSession session=%s", request.session_id)
+        self._agent.cancel_session(request.session_id)
+        return CancelResponse(ok=True)
+
+    # ------------------------------------------------------------------
     # 消息历史 RPC
     # ------------------------------------------------------------------
 
@@ -251,38 +263,45 @@ class AgentServiceServicer(BaseServicer):
 
     @staticmethod
     def _stream_from_dicts(events_iter: Any) -> Any:
-        """将 dict 事件流转换为 ChunkMessage 流。"""
-        for payload in events_iter:
-            tool_calls = []
-            for tc in payload.get("tool_calls", []) or []:
-                tool_calls.append(
-                    ToolCall(
-                        name=tc.get("name", ""),
-                        args_json=json.dumps(tc.get("args", {}), ensure_ascii=False),
-                        id=tc.get("id", ""),
+        """将 dict 事件流转换为 ChunkMessage 流,客户端断开时传播取消信号。"""
+        try:
+            for payload in events_iter:
+                tool_calls = []
+                for tc in payload.get("tool_calls", []) or []:
+                    tool_calls.append(
+                        ToolCall(
+                            name=tc.get("name", ""),
+                            args_json=json.dumps(tc.get("args", {}), ensure_ascii=False),
+                            id=tc.get("id", ""),
+                        )
                     )
+
+                trace_entries = []
+                for te in payload.get("trace", []) or []:
+                    trace_entries.append(
+                        TraceEntry(
+                            node=te.get("node", ""),
+                            event=te.get("event", ""),
+                            error_type=te.get("error_type", ""),
+                            message=te.get("message", ""),
+                        )
+                    )
+
+                yield ChunkMessage(
+                    node=payload.get("node", ""),
+                    content=payload.get("content", ""),
+                    tool_calls=tool_calls,
+                    trace=trace_entries,
+                    done=False,
                 )
 
-            trace_entries = []
-            for te in payload.get("trace", []) or []:
-                trace_entries.append(
-                    TraceEntry(
-                        node=te.get("node", ""),
-                        event=te.get("event", ""),
-                        error_type=te.get("error_type", ""),
-                        message=te.get("message", ""),
-                    )
-                )
-
-            yield ChunkMessage(
-                node=payload.get("node", ""),
-                content=payload.get("content", ""),
-                tool_calls=tool_calls,
-                trace=trace_entries,
-                done=False,
-            )
-
-        yield ChunkMessage(done=True)
+            yield ChunkMessage(done=True)
+        except GeneratorExit:
+            try:
+                events_iter.close()
+            except GeneratorExit:
+                pass
+            raise
 
     @staticmethod
     def _build_run_result(result: dict[str, Any]) -> RunResult:

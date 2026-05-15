@@ -39,8 +39,8 @@ export function createSession(userId, sessionName) {
  * @param {number} [limit=50] 返回消息数量上限
  * @returns {Promise<Array<{message_id: string, role: string, content: string, tool_calls: Array, metadata: Record<string,any>, created_at: string}>>}
  */
-export function fetchMessages(sessionId, userId, limit = 50) {
-  return apiGet(`/sessions/${sessionId}/messages`, { user_id: userId, limit })
+export function fetchMessages(sessionId, userId, limit = 50, options = {}) {
+  return apiGet(`/sessions/${sessionId}/messages`, { user_id: userId, limit }, options)
 }
 
 /**

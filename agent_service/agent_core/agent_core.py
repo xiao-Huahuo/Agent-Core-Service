@@ -103,6 +103,8 @@ class AgentCore:
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.tool_registry = ToolRegistry.with_builtin_tools(config=config) if tools is None else None
         self.tool_executor = ToolExecutor(registry=self.tool_registry) if self.tool_registry is not None else None
+        self._cancel_events: dict[str, threading.Event] = {}
+        self._cancel_events_lock = threading.Lock()
         self.tools = list(tools) if tools is not None else self.tool_registry.to_langchain_tools()
         if message_service is not None:
             self._get_context_builder(message_service=message_service)
@@ -211,6 +213,15 @@ class AgentCore:
         )
         _launch_auto_rename(self, user_id=user_id, session_id=session_id)
 
+    def cancel_session(self, session_id: str) -> None:
+        """取消指定 session 正在执行的图,保存部分输出。"""
+
+        with self._cancel_events_lock:
+            event = self._cancel_events.get(session_id)
+        if event is not None:
+            logger.info("收到取消请求 | session=%s", session_id)
+            event.set()
+
     def close(self) -> None:
         """释放 AgentCore 持有的调度器等资源。"""
 
@@ -230,12 +241,8 @@ class AgentCore:
         使用给定 LangChain messages 执行图并逐节点产出 dict 事件。
 
         统一的流式核心,HTTP 和 gRPC 共用此方法。
-        REST 侧只需将 dict 转为 SSE 格式即可;
-        gRPC 侧直接将 dict 转换为 ChunkMessage。
-
-        采用双线程 + 队列模式: 图在后台线程中执行,Agent 节点的 token 级
-        流式输出通过 thread-local 回调实时推入队列,主线程从队列读取并 yield,
-        实现真正的 token 级流式推送。
+        支持通过 GeneratorExit (客户端断开 SSE) 或 cancel_session() 中断执行,
+        中断时会保存当前已流式输出的部分内容到 agent_messages。
 
         messages: 已构建好的本轮初始上下文。
         user_id: 用户 ID。
@@ -254,11 +261,16 @@ class AgentCore:
         if self.context_builder is not None:
             retrieval_service = self.context_builder.retrieval_service
 
+        cancel_event = threading.Event()
+        with self._cancel_events_lock:
+            self._cancel_events[session_id] = cancel_event
+
         token_queue: queue_module.Queue[dict[str, Any]] = queue_module.Queue()
+        _streamed_content: list[str] = [""]
 
         def on_token(cumulative_text: str) -> None:
-            """Agent 节点逐 token 回调: 将累积文本包装为流式事件推入队列。"""
             content = AgentCore._sanitize_streaming_content(cumulative_text)
+            _streamed_content[0] = content
             token_queue.put({
                 "type": "token",
                 "node": "agent",
@@ -270,12 +282,6 @@ class AgentCore:
         graph_error: Exception | None = None
 
         def run_graph() -> None:
-            """在后台线程中同步执行 LangGraph 图,捕获异常。
-
-            关键: thread-local (tool_runtime / token_callback) 必须在
-            graph 线程内部设置,因为 Python threading.local() 不会跨线程继承。
-            finally 块保证一定会推送 done 哨兵,主线程不会永久阻塞。
-            """
             nonlocal graph_error
             set_tool_runtime(
                 config=self.config,
@@ -286,6 +292,8 @@ class AgentCore:
             set_agent_token_callback(on_token)
             try:
                 for event in self.graph.stream(inputs, config=runtime_config, stream_mode="updates"):
+                    if cancel_event.is_set():
+                        break
                     token_queue.put({"type": "node", "event": event})
             except Exception as exc:
                 graph_error = exc
@@ -300,7 +308,27 @@ class AgentCore:
 
         try:
             while True:
-                item = token_queue.get()
+                try:
+                    item = token_queue.get(timeout=0.3)
+                except queue_module.Empty:
+                    if cancel_event.is_set():
+                        partial = _streamed_content[0]
+                        if message_service is not None and partial:
+                            try:
+                                message_service.create_message(
+                                    MessageCreate(
+                                        session_id=session_id,
+                                        user_id=user_id,
+                                        role="assistant",
+                                        content=partial,
+                                        metadata_json={"node": "agent", "source": "interrupted"},
+                                    )
+                                )
+                                logger.info("已保存中断时的部分输出 | session=%s len=%d", session_id, len(partial))
+                            except Exception:
+                                logger.exception("保存中断输出失败 | session=%s", session_id)
+                        break
+                    continue
 
                 item_type = item.get("type")
 
@@ -331,7 +359,28 @@ class AgentCore:
                                 state_update=state_update,
                             )
                         yield self._build_stream_payload(node_name=node_name, state_update=state_update)
+        except GeneratorExit:
+            cancel_event.set()
+            partial = _streamed_content[0]
+            if message_service is not None and partial:
+                try:
+                    message_service.create_message(
+                        MessageCreate(
+                            session_id=session_id,
+                            user_id=user_id,
+                            role="assistant",
+                            content=partial,
+                            metadata_json={"node": "agent", "source": "interrupted"},
+                        )
+                    )
+                    logger.info("已保存中断时的部分输出 | session=%s len=%d", session_id, len(partial))
+                except Exception:
+                    logger.exception("保存中断输出失败 | session=%s", session_id)
+            raise
         finally:
+            cancel_event.set()
+            with self._cancel_events_lock:
+                self._cancel_events.pop(session_id, None)
             clear_agent_token_callback()
             clear_tool_runtime()
             graph_thread.join(timeout=5.0)
