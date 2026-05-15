@@ -12,6 +12,7 @@ import { ref } from 'vue'
 
 const props = defineProps({
   traces: { type: Array, default: () => [] },
+  isStreaming: { type: Boolean, default: false },
 })
 
 const isExpanded = ref(false)
@@ -50,7 +51,8 @@ function traceKey(trace, idx) {
     <!-- 折叠栏 -->
     <div class="collapsed-bar" @click="togglePanel">
       <span class="bar-chevron" :class="{ expanded: isExpanded }">></span>
-      <span v-if="!isExpanded" class="bar-text">思考中...</span>
+      <span v-if="!isExpanded && isStreaming" class="bar-text">思考中...</span>
+      <span v-else-if="!isExpanded && !isStreaming" class="bar-text">思考完成</span>
       <span v-else class="bar-text">思考过程 ({{ traces.length }} 步)</span>
     </div>
 

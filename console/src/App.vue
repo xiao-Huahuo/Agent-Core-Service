@@ -5,9 +5,9 @@
 -->
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Plus, Trash2, PanelLeftClose, PanelLeftOpen } from 'lucide-vue-next'
+import { Plus, Trash2, PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { useUserId } from '@/composable/useUserId'
 import { useSessionStore } from '@/stores/session'
 import { useChatStore } from '@/stores/chat'
@@ -25,6 +25,35 @@ const isMobile = ref(window.innerWidth < 768)
 function onResize() { isMobile.value = window.innerWidth < 768 }
 if (typeof window !== 'undefined') {
   window.addEventListener('resize', onResize)
+}
+
+/* ---- 会话列表分页 ---- */
+const currentPage = ref(1)
+const ITEM_HEIGHT = 36
+const OVERHEAD = 200  // 标题栏 + 工具栏 + 分页栏 + footer
+
+const pageSize = computed(() => {
+  const h = window.innerHeight - 64  // app-shell padding: 2rem top + bottom
+  return Math.max(5, Math.floor((h - OVERHEAD) / ITEM_HEIGHT))
+})
+
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(sessionStore.sessions.length / pageSize.value))
+)
+
+const pagedSessions = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return sessionStore.sessions.slice(start, start + pageSize.value)
+})
+
+watch(() => sessionStore.sessions.length, () => {
+  if (currentPage.value > totalPages.value) {
+    currentPage.value = Math.max(1, totalPages.value)
+  }
+})
+
+function goPage(dir) {
+  currentPage.value = Math.max(1, Math.min(totalPages.value, currentPage.value + dir))
 }
 
 /** 是否显示侧边栏 (仅 /chat 路由 + 已登录) */
@@ -96,7 +125,7 @@ onMounted(async () => {
 
         <div class="session-list">
           <SessionItem
-            v-for="s in sessionStore.sessions"
+            v-for="s in pagedSessions"
             :key="s.session_id"
             :session="s"
             :is-active="s.session_id === sessionStore.currentSessionId"
@@ -106,6 +135,16 @@ onMounted(async () => {
           <p v-if="!sessionStore.sessions.length" class="empty-hint">
             $ no sessions found
           </p>
+        </div>
+
+        <div v-if="sessionStore.sessions.length > pageSize" class="sidebar-pager">
+          <button class="pager-btn" :disabled="currentPage <= 1" @click="goPage(-1)">
+            <ChevronLeft :size="12" />
+          </button>
+          <span class="pager-info">{{ currentPage }} / {{ totalPages }}</span>
+          <button class="pager-btn" :disabled="currentPage >= totalPages" @click="goPage(1)">
+            <ChevronRight :size="12" />
+          </button>
         </div>
 
         <div v-if="sessionStore.sessions.length > 0" class="sidebar-footer">
@@ -147,7 +186,7 @@ onMounted(async () => {
         </div>
         <div class="session-list">
           <SessionItem
-            v-for="s in sessionStore.sessions"
+            v-for="s in pagedSessions"
             :key="s.session_id"
             :session="s"
             :is-active="s.session_id === sessionStore.currentSessionId"
@@ -157,6 +196,16 @@ onMounted(async () => {
           <p v-if="!sessionStore.sessions.length" class="empty-hint">
             $ no sessions found
           </p>
+        </div>
+
+        <div v-if="sessionStore.sessions.length > pageSize" class="sidebar-pager">
+          <button class="pager-btn" :disabled="currentPage <= 1" @click="goPage(-1)">
+            <ChevronLeft :size="12" />
+          </button>
+          <span class="pager-info">{{ currentPage }} / {{ totalPages }}</span>
+          <button class="pager-btn" :disabled="currentPage >= totalPages" @click="goPage(1)">
+            <ChevronRight :size="12" />
+          </button>
         </div>
 
         <div v-if="sessionStore.sessions.length > 0" class="sidebar-footer">
@@ -279,6 +328,49 @@ onMounted(async () => {
   color: #c56565;
   border-color: rgba(197, 101, 101, 0.4);
   background: rgba(197, 101, 101, 0.08);
+}
+
+/* ---- 分页 ---- */
+.sidebar-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-10);
+  border-top: 1px solid var(--color-border);
+}
+
+.pager-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.pager-btn:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+  background: var(--color-accent-muted);
+}
+
+.pager-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.pager-info {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  min-width: 44px;
+  text-align: center;
 }
 
 /* ================================================================

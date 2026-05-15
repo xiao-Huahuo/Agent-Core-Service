@@ -42,7 +42,7 @@ const thinkingTraces = computed(() => {
     <div class="bubble-col">
       <span v-if="message.node" class="node-label">{{ message.node }}</span>
       <div class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
-        <ThinkingSteps v-if="thinkingTraces.length > 0" :traces="thinkingTraces" />
+        <ThinkingSteps v-if="thinkingTraces.length > 0" :traces="thinkingTraces" :is-streaming="isStreaming" />
         <MarkdownContent v-if="message.content" :content="message.content" :is-streaming="isStreaming" />
         <span v-if="isStreaming" class="cursor">|</span>
       </div>

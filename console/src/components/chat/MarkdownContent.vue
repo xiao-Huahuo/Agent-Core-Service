@@ -69,8 +69,60 @@ const props = defineProps({
   isStreaming: { type: Boolean, default: false },
 })
 
+/** 检测内容中是否包含 Kimi API 注入的 highlight.js span 标签 */
+const HLJS_SPAN_RE = /<span\s+class="hljs-/
+
+/**
+ * 预处理 Kimi API 注入的 hljs span 代码:
+ * 把 <span class="hljs-*"> 包裹的代码行包进 <pre><code class="hljs">,
+ * 让 highlight.js 的 CSS 直接渲染,呈现彩色代码。
+ */
+function preprocessHljsContent(content) {
+  if (!HLJS_SPAN_RE.test(content)) {
+    return content
+  }
+  const lines = content.split('\n')
+  const result = []
+  let block = []
+  let inBlock = false
+
+  function flushBlock() {
+    if (block.length === 0) return
+    const raw = block.join('\n')
+    // 解码 Kimi 注入的 HTML 实体: &amp; &quot; &lt; &gt; &#x27; 等
+    const decoded = raw
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&#x27;/g, "'")
+      .replace(/&#39;/g, "'")
+    result.push(`<pre><code class="hljs">${decoded}</code></pre>`)
+    block = []
+  }
+
+  for (const line of lines) {
+    if (HLJS_SPAN_RE.test(line)) {
+      if (!inBlock) inBlock = true
+      block.push(line)
+    } else {
+      if (inBlock) {
+        flushBlock()
+        inBlock = false
+      }
+      result.push(line)
+    }
+  }
+  flushBlock()
+  return result.join('\n')
+}
+
 /** 解析 Markdown 为 HTML (含语法高亮) */
-const html = computed(() => marked.parse(props.content || ''))
+const html = computed(() => {
+  const raw = props.content || ''
+  const processed = preprocessHljsContent(raw)
+  return marked.parse(processed)
+})
 </script>
 
 <template>

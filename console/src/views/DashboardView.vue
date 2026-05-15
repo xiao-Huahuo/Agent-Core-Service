@@ -1,45 +1,83 @@
 <!--
-  观测面板 — macOS 终端风格占位页。
+  观测面板主视图 — 两个可切换子页面。
+  页面切换通过本地 tab 实现,不依赖路由。
 -->
 
+<script setup>
+import { ref } from 'vue'
+import AgentTracePanel from '@/components/dashboard/AgentTracePanel.vue'
+import MemoryKnowledgePanel from '@/components/dashboard/MemoryKnowledgePanel.vue'
+
+const activeTab = ref('trace')
+</script>
+
 <template>
-  <div class="dashboard">
-    <div class="placeholder-card">
-      <span class="dollar">$</span>
-      <span class="cmd">cat /var/log/agent/observability</span>
-      <span class="comment">// 观测面板 — 即将上线</span>
+  <div class="dashboard-view">
+    <!-- ================================================================
+         子页面切换 Tab
+         ================================================================ -->
+    <div class="obs-tabs">
+      <button
+        class="obs-tab"
+        :class="{ active: activeTab === 'trace' }"
+        @click="activeTab = 'trace'"
+      >
+        Agent 轨迹
+      </button>
+      <button
+        class="obs-tab"
+        :class="{ active: activeTab === 'mk' }"
+        @click="activeTab = 'mk'"
+      >
+        记忆与知识
+      </button>
     </div>
+
+    <!-- ================================================================
+         面板内容
+         ================================================================ -->
+    <AgentTracePanel v-if="activeTab === 'trace'" />
+    <MemoryKnowledgePanel v-if="activeTab === 'mk'" />
   </div>
 </template>
 
 <style scoped>
-.dashboard {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-}
-
-.placeholder-card {
+.dashboard-view {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ---- 子页面切换 Tab ---- */
+.obs-tabs {
+  display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: 2px;
+  padding: var(--space-8) var(--space-10) 0;
+  flex-shrink: 0;
+}
+
+.obs-tab {
   font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
 }
 
-.dollar {
-  font-size: var(--font-size-2xl);
-  color: var(--color-green);
-}
-
-.cmd {
-  font-size: var(--font-size-md);
+.obs-tab:hover {
   color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
-.comment {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-tertiary);
+.obs-tab.active {
+  color: var(--color-accent);
+  border-color: rgba(217, 145, 120, 0.35);
+  background: var(--color-accent-muted);
 }
 </style>
