@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.messages import BaseMessage, RemoveMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, RemoveMessage, SystemMessage, ToolMessage
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 
 from agent_service.agent_core.nodes.base import AgentState
@@ -67,6 +67,7 @@ class CompressNode:
                         "node": "compress",
                         "event": "compression_skipped",
                         "estimated_tokens": estimated_tokens,
+                        "human_readable": f"当前上下文 {estimated_tokens} tokens，未超过阈值，无需压缩。",
                     }
                 ]
             }
@@ -83,6 +84,7 @@ class CompressNode:
                         "node": "compress",
                         "event": "compression_empty",
                         "estimated_tokens": estimated_tokens,
+                        "human_readable": f"上下文 {estimated_tokens} tokens 已超阈值，但摘要生成失败，继续使用原有上下文。",
                     }
                 ]
             }
@@ -116,6 +118,7 @@ class CompressNode:
                     "event": "compression_applied",
                     "estimated_tokens": estimated_tokens,
                     "compressed_message_count": len(compressed_messages),
+                    "human_readable": f"上下文 {estimated_tokens} tokens 已超阈值，已将历史对话压缩为重要事实摘要后保留最近 {len(compressed_messages)} 条消息。",
                 }
             ],
         }
@@ -136,6 +139,52 @@ class CompressNode:
             lines.append(f"{message.type}: {content}")
         return "\n".join(lines)
 
+    @staticmethod
+    def _collect_valid_tail(
+        messages: list[BaseMessage],
+        tail_count: int,
+    ) -> list[BaseMessage]:
+        """
+        从消息列表末尾往前收集有效的尾部消息。
+        跳过孤立的 ToolMessage(其 tool_call_id 对应的 AIMessage 不在尾部),避免 API 400 错误。
+
+        方法:先超量收集候选消息(两倍 tail_count),从中提取 AIMessage 的 tool_call_id,
+        再过滤掉孤立的 ToolMessage,最后取末尾 tail_count 条。
+        """
+
+        def _tool_call_ids_from_message(msg: BaseMessage) -> set[str]:
+            ids: set[str] = set()
+            for tc in getattr(msg, "tool_calls", []) or []:
+                tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
+                if tc_id:
+                    ids.add(tc_id)
+            return ids
+
+        # 从末尾超量收集候选
+        buffer: list[BaseMessage] = []
+        idx = len(messages) - 1
+        while idx >= 0 and len(buffer) < tail_count * 2:
+            buffer.append(messages[idx])
+            idx -= 1
+        buffer.reverse()
+
+        # 从候选中提取已知 tool_call_id
+        known_ids: set[str] = set()
+        for msg in buffer:
+            if isinstance(msg, AIMessage):
+                known_ids.update(_tool_call_ids_from_message(msg))
+
+        # 过滤孤立的 ToolMessage
+        filtered: list[BaseMessage] = []
+        for msg in buffer:
+            if isinstance(msg, ToolMessage):
+                tc_id = getattr(msg, "tool_call_id", None)
+                if tc_id and tc_id not in known_ids:
+                    continue
+            filtered.append(msg)
+
+        return filtered[-tail_count:] if len(filtered) >= tail_count else filtered
+
     def _build_compressed_messages(
         self,
         *,
@@ -150,7 +199,7 @@ class CompressNode:
         """
 
         tail_count = max(self.config.memory.context_compression_tail_messages, 1)
-        recent_messages = original_messages[-tail_count:]
+        recent_messages = self._collect_valid_tail(original_messages, tail_count)
         summary_message = SystemMessage(
             content=(
                 "以下是当前会话在上下文压缩后保留的重要事实摘要,继续回答时必须优先参考:\n"

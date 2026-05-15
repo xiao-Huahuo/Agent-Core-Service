@@ -88,6 +88,7 @@ class ModelDecisionNode:
                     "event": "model_response",
                     "tool_call_count": len(tool_calls),
                     "has_content": bool(response.content),
+                    "human_readable": self._make_agent_readable(tool_calls, bool(response.content)),
                 }
             ],
         }
@@ -124,6 +125,7 @@ class ModelDecisionNode:
             from langchain_core.messages import AIMessage
             final_message = AIMessage(content=cumulative)
         tool_calls = getattr(final_message, "tool_calls", []) or []
+        has_content = bool(getattr(final_message, "content", None))
         return {
             "messages": [final_message],
             "trace": [
@@ -131,10 +133,22 @@ class ModelDecisionNode:
                     "node": "agent",
                     "event": "model_response",
                     "tool_call_count": len(tool_calls),
-                    "has_content": bool(getattr(final_message, "content", None)),
+                    "has_content": has_content,
+                    "human_readable": self._make_agent_readable(tool_calls, has_content),
                 }
             ],
         }
+
+    @staticmethod
+    def _make_agent_readable(tool_calls: list, has_content: bool) -> str:
+        """根据模型决策生成人类可读的思考描述。"""
+
+        if tool_calls:
+            names = ", ".join(tc.get("name", "") for tc in tool_calls if tc.get("name"))
+            return f"模型决定调用工具：{names}"
+        if has_content:
+            return "模型生成最终回复。"
+        return "模型返回空响应。"
 
     def _build_model(self) -> Any:
         """根据 `AgentConfig.ModelConfig` 创建 OpenAI Compatible 聊天模型。"""

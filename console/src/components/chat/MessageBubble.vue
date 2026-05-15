@@ -6,6 +6,7 @@
 <script setup>
 import { computed } from 'vue'
 import MarkdownContent from './MarkdownContent.vue'
+import ThinkingSteps from './ThinkingSteps.vue'
 
 const props = defineProps({
   message: { type: Object, required: true },
@@ -20,6 +21,18 @@ const bubbleRadius = computed(() => {
     ? '18px 4px 18px 18px'
     : '4px 18px 18px 18px'
 })
+
+/** 过滤出有 human_readable 的思考步骤,去重(按 human_readable 文本) */
+const thinkingTraces = computed(() => {
+  const traces = props.message.trace || []
+  const seen = new Set()
+  return traces.filter(t => {
+    if (!t.human_readable) return false
+    if (seen.has(t.human_readable)) return false
+    seen.add(t.human_readable)
+    return true
+  })
+})
 </script>
 
 <template>
@@ -29,6 +42,7 @@ const bubbleRadius = computed(() => {
     <div class="bubble-col">
       <span v-if="message.node" class="node-label">{{ message.node }}</span>
       <div class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
+        <ThinkingSteps v-if="thinkingTraces.length > 0" :traces="thinkingTraces" />
         <MarkdownContent v-if="message.content" :content="message.content" :is-streaming="isStreaming" />
         <span v-if="isStreaming" class="cursor">|</span>
       </div>
@@ -45,8 +59,8 @@ const bubbleRadius = computed(() => {
     <img :src="userAvatar" class="avatar" alt="user" />
   </div>
 
-  <!-- 系统 / 工具消息: 居中灰显 -->
-  <div v-else class="bubble-row system">
+  <!-- 系统消息: 居中灰显 -->
+  <div v-else-if="message.role === 'system'" class="bubble-row system">
     <div class="bubble system-bubble">
       <span class="system-role">{{ message.role }}</span>
       <pre class="content system-content">{{ message.content }}</pre>

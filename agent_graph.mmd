@@ -15,10 +15,8 @@ flowchart TD
     agent -. "无 tool_calls" .-> safety_output
     compress --> planner
     planner --> agent
-    reflection -. "conditional" .-> internal_end
     reflection -. "context overflow" .-> compress
-    reflection -. "continue" .-> planner
-    reflection -. "answer" .-> safety_output
+    reflection -. "continue / answer → 生成最终回复" .-> planner
     safety_input -. "审核拦截" .-> internal_end
     safety_input -. "审核通过" .-> compress
     safety_output --> internal_end

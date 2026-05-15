@@ -68,7 +68,11 @@ class ReflectionNode:
             decision = self._check_overflow_then_decide(state, "continue")
             return {
                 "reflection_decision": decision,
-                "trace": [{"node": "reflection", "event": "no_tool_results_to_review"}],
+                "trace": [{
+                    "node": "reflection",
+                    "event": "no_tool_results_to_review",
+                    "human_readable": "没有需要审视的工具执行结果，继续推进。",
+                }],
             }
 
         system_message = SystemMessage(content=REFLECTION_SYSTEM_PROMPT)
@@ -80,10 +84,17 @@ class ReflectionNode:
         )
         llm_decision = self._parse_decision(response.content)
         decision = self._check_overflow_then_decide(state, llm_decision)
+        if decision == "answer":
+            readable = "工具执行结果已足够回答用户问题，准备生成最终回复。"
+        elif decision == "compress":
+            readable = "上下文已接近 token 上限，需要先压缩历史对话再继续。"
+        else:
+            readable = "信息还不够充分，需要继续调用工具获取更多信息。"
         trace = {
             "node": "reflection",
             "event": "reflection_complete",
             "decision": decision,
+            "human_readable": readable,
         }
         return {"reflection_decision": decision, "trace": [trace]}
 
@@ -101,21 +112,28 @@ class ReflectionNode:
     def _build_reflection_context(state: AgentState) -> str:
         """
         从 state 中提取最近一次工具调用的上下文。
-        包括:最近一次用户问题、工具调用名称、参数、结果。
+        只提取当前 cycle(最近一条人类消息之后)的工具调用和结果,
+        避免跨 cycle 污染。
         """
 
         messages = state.get("messages", [])
         parts: list[str] = []
-        for message in reversed(messages):
-            msg_type = getattr(message, "type", None)
-            content = getattr(message, "content", None)
-            if msg_type == "human" and content:
-                parts.insert(0, f"用户问题:\n{content}")
-                break
 
+        # 找到最近一条人类消息的位置,作为当前 cycle 的起点
+        human_idx = -1
+        for i, message in enumerate(messages):
+            if getattr(message, "type", None) == "human":
+                human_idx = i
+
+        if human_idx < 0:
+            return ""
+
+        parts.append(f"用户问题:\n{messages[human_idx].content}")
+
+        # 只提取当前 cycle(人类消息之后)的工具调用和结果
         tool_calls = []
         tool_results = []
-        for message in reversed(messages):
+        for message in messages[human_idx + 1:]:
             msg_type = getattr(message, "type", None)
             content = getattr(message, "content", None)
             if msg_type == "ai":
@@ -123,7 +141,7 @@ class ReflectionNode:
                 for tc in calls:
                     tool_calls.append(tc)
             elif msg_type == "tool" and content:
-                tool_results.insert(0, f"  结果: {content[:500]}")
+                tool_results.append(f"  结果: {content[:500]}")
 
         if tool_calls:
             tc = tool_calls[-1]

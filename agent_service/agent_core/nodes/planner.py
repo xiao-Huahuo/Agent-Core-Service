@@ -62,16 +62,32 @@ class PlannerNode:
         """
 
         if state.get("plan") is not None:
-            return {"trace": [{"node": "planner", "event": "plan_already_exists"}]}
+            return {
+                "trace": [{
+                    "node": "planner",
+                    "event": "plan_already_exists",
+                    "human_readable": "已有执行计划，继续按计划推进。",
+                }]
+            }
 
         original_prompt = self._extract_latest_user_message(state)
         if not original_prompt:
-            return {"trace": [{"node": "planner", "event": "no_user_message"}]}
+            return {
+                "trace": [{
+                    "node": "planner",
+                    "event": "no_user_message",
+                    "human_readable": "未找到用户消息，跳过规划。",
+                }]
+            }
 
         if self._is_simple_query(original_prompt):
             return {
                 "plan": {"need_plan": False},
-                "trace": [{"node": "planner", "event": "fast_path_simple_query"}],
+                "trace": [{
+                    "node": "planner",
+                    "event": "fast_path_simple_query",
+                    "human_readable": "这是一个简单问题，无需分步规划，直接回答。",
+                }],
             }
 
         system_message = SystemMessage(content=PLANNER_SYSTEM_PROMPT)
@@ -85,17 +101,31 @@ class PlannerNode:
         )
         plan = self._parse_plan(response.content)
         if plan is not None:
+            need_plan = plan.get("need_plan", False)
+            steps = plan.get("steps", [])
+            if need_plan and steps:
+                readable = "我需要分 {} 步来完成这个任务：\n{}".format(
+                    len(steps),
+                    "\n".join(f"  {i+1}. {s}" for i, s in enumerate(steps)),
+                )
+            else:
+                readable = "分析后判断：不需要分步计划，可以直接处理。"
             trace = {
                 "node": "planner",
                 "event": "plan_generated",
-                "need_plan": plan.get("need_plan", False),
-                "steps": plan.get("steps", []),
+                "need_plan": need_plan,
+                "steps": steps,
+                "human_readable": readable,
             }
             return {"plan": plan, "trace": [trace]}
 
         return {
             "plan": {"need_plan": False},
-            "trace": [{"node": "planner", "event": "no_plan_needed"}],
+            "trace": [{
+                "node": "planner",
+                "event": "no_plan_needed",
+                "human_readable": "模型未生成有效计划，直接进入决策。",
+            }],
         }
 
     @staticmethod

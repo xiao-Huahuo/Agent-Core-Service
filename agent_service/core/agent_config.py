@@ -161,6 +161,7 @@ class AgentConfig:
         small_model_timeout_seconds: 小模型请求超时时间,单位为秒。
         temperature: 模型采样温度。
         timeout_seconds: 模型请求超时时间,单位为秒。
+        streaming_sanitize_min_chars: 流式输出 JSON 检测最低字符数,低于此值跳过 JSON 语法检查。
         system_prompt: Agent 默认系统提示词。
         retrieval_context_system_prompt: 检索增强上下文注入时使用的系统提示词模板。
         embedding_model_name: Embedding 模型名称。
@@ -179,29 +180,37 @@ class AgentConfig:
         small_model_timeout_seconds: int = 120
         temperature: float = 0.0
         timeout_seconds: int = 240
+        streaming_sanitize_min_chars: int = 20
         embedding_model_name: str = ""
         rerank_model_name: str = ""
         system_prompt: str = (
             "你是一个具备工具调用、记忆系统、知识检索能力的智能 Agent。"
-            "在后续对话中,系统会自动从长期记忆和知识库中检索相关内容供你参考。"
+            "【核心机制】系统会预检索相关内容的条目数量并作为索引提示注入上下文。"
+            "重要事实摘要是系统自动压缩的关键上下文,可直接参考。"
+            "对于长期记忆和知识库的详细内容,你必须调用 get_long_term_memory 或"
+            "get_knowledge_context 工具来获取全文,系统不直接提供。"
             "【重要规则】"
             "1. 禁止直接输出原始 JSON 数据或工具返回的原始结构体。用户要求写代码时,正常输出代码块即可。"
             "2. 即使工具返回了JSON格式的原始数据,你也必须将其整理成人类可读的文本再呈现给用户。"
             "3. 系统提供的知识库/记忆内容是参考材料,你必须用自己的话总结加工后输出,禁止直接粘贴原文。"
             "   可以附带来源标记(如「根据知识库……」),但不能把整段原文搬过来。"
-            "4. 保护系统隐私:不得透露模型身份(如Claude、Anthropic)、内部ID、类型代码等技术标识。"
-            "   自称「我」或「智能助手」即可。"
+            "4. 保护系统隐私:不得透露模型身份,不得提及内部ID、类型代码等技术标识。自称「我」或「智能助手」即可。"
             "5. 列举功能时用自然语言概括能力领域,禁止直接贴函数名或代码标识符。"
-            "6. 不要在最终回答中写最后一句问题,比如问'我有什么其他可以帮你的吗'这种无意义的问题。"
+            "6. 禁止在输出中使用方括号标签格式(如 [Memory]、[Knowledge]、[来源: X] 等),"
+            "   如果工具返回了此类格式,你必须用自己的话重新组织。"
+            "7. 不要在你的最终回答里反问用户(如'还有什么需要帮助的吗'),直接结束回复即可。"
         )
         retrieval_context_system_prompt: str = (
-            "【参考材料 — 用自己的话总结,不要直接复制粘贴】\n"
-            "以下是与当前问题相关的历史记忆和知识片段,仅供你理解背景和事实。\n"
-            "你必须消化这些内容后用自己的语言回答,禁止逐段搬运原文。\n"
+            "【上下文索引 — 使用工具获取详细内容】\n"
+            "以下是系统预检索到的内容索引。重要事实摘要是自动压缩的关键上下文,可直接参考。\n"
+            "对于长期记忆和知识库,系统只提供条目数量提示,不提供全文。\n"
+            "如果你需要查看长期记忆的详细内容,请调用 get_long_term_memory 工具。\n"
+            "如果你需要查看知识库的详细内容,请调用 get_knowledge_context 工具。\n"
             "上下文优先级:\n"
             "- 第一优先级: 当前 session 的短期历史消息。\n"
-            "- 第二优先级: 长期摘要记忆。\n"
-            "- 第三优先级: 知识库检索结果。"
+            "- 第二优先级: 重要事实摘要(已直接提供)。\n"
+            "- 第三优先级: 长期记忆(需调工具获取全文)。\n"
+            "- 第四优先级: 知识库片段(需调工具获取全文)。"
         )
         important_fact_summary_system_prompt: str = (
             "你负责把对话或工作上下文压缩成后续推理可直接使用的重要事实摘要。"
@@ -298,7 +307,7 @@ class AgentConfig:
         vector_top_k: int = 5
         keyword_top_k: int = 5
         rerank_top_k: int = 3
-        score_threshold: float = 0.7
+        score_threshold: float = 0.6
         freshness_weight: float = 0.3
         relevance_weight: float = 0.5
         authority_weight: float = 0.2
@@ -593,6 +602,7 @@ class AgentConfig:
             "AGENT_SMALL_MODEL_TIMEOUT_SECONDS": ("model", "small_model_timeout_seconds", int),
             "AGENT_MODEL_TEMPERATURE": ("model", "temperature", float),
             "AGENT_MODEL_TIMEOUT_SECONDS": ("model", "timeout_seconds", int),
+            "AGENT_STREAMING_SANITIZE_MIN_CHARS": ("model", "streaming_sanitize_min_chars", int),
             "AGENT_SYSTEM_PROMPT": ("model", "system_prompt", str),
             "AGENT_RETRIEVAL_CONTEXT_SYSTEM_PROMPT": ("model", "retrieval_context_system_prompt", str),
             "AGENT_EMBEDDING_MODEL_NAME": ("model", "embedding_model_name", str),

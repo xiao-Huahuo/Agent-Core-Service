@@ -197,3 +197,46 @@
 - 将 `ContextBuilder` 升级为自动召回长期记忆和知识库片段并注入系统上下文,同时新增 `get_long_term_memory` 与 `get_knowledge_context` 两个 builtin 工具走同一检索链路。
 - 将 `main.py` 改为长期记忆与知识库召回验证脚本: 启动时自动灌知识库,首轮对话后同步生成 summary,第二轮调用前打印召回上下文预览以便确认 Memory 和 Knowledge 是否同时命中。
 
+## 2026-05-15
+
+### 后端 — Agent 思考轨迹 (trace human_readable)
+
+- 为 `PlannerNode` 的所有 trace 事件增加 `human_readable` 字段,包含人类可读的规划描述（如"我需要分3步来完成这个任务"、"这是一个简单问题,直接作答"等）。
+- 为 `ToolCallNode` 拆分工具调用 trace：每个工具调用生成两条独立 trace（`tool_call_start` + `tool_call_end`）,分别描述正在调用哪个工具及参数摘要、以及工具返回结果摘要。同时为 fallback 路径（LangGraph ToolNode 和未注册工具）增加 `human_readable`。
+- 为 `ReflectionNode` 的所有 trace 事件增加 `human_readable` 字段,根据不同决策（answer/compress/continue）输出不同描述文本。
+- 为 `CompressNode` 的所有 trace 事件（`compression_skipped`、`compression_empty`、`compression_applied`）增加 `human_readable` 字段,描述当前 token 数量和压缩决策。
+- 为 `ModelDecisionNode` 增加 `human_readable` trace,根据模型是否产生 tool_calls 输出"模型决定调用工具：X"或"模型生成最终回复"。
+- 修改 `AgentCore._stream_events()` 在单轮对话中累积 `_turn_traces`,并在保存 assistant 消息时将累积 trace 注入 `metadata_json.trace`。同时修改 `_save_state_update_messages()` 和 `_message_to_create()` 传递 `turn_traces` 参数,使思考轨迹随消息持久化,支持前端历史回显。
+
+### 前端 — 思考步骤展示组件
+
+- 新增 `src/components/chat/ThinkingSteps.vue` 组件：接收 trace 数组,将每个节点的思考过程渲染为可折叠步骤卡片。步骤头部显示节点名（彩色标签）+ human_readable 描述文本,工具调用步骤可展开查看详细参数和返回结果。整体采用直角边框 + 单色系 + functional 旋转动画,符合开发规范。
+- 修改 `MessageBubble.vue` 集成 `ThinkingSteps`：在 assistant 气泡中,最终回复内容上方渲染思考步骤组件,仅展示含 `human_readable` 且去重的 trace 条目。
+- 修改 `chat.js` store 的 `updateLastMessage()` 将 trace 从替换改为追加累积,确保多个节点产生的思考步骤按序保留在同一消息中。
+
+### 后端 — 修复工具输出标记泄露 + 工具调用流式化
+
+- 修复 `builtin.py` 中 `get_long_term_memory()` 输出格式中的 `[Memory]` 标签和 `get_knowledge_context()` 中的 `[来源: X]` 标签，改为纯文本格式，避免内部标记泄露到前端对话框。
+- 强化 `system_prompt`：新增规则明确要求用户搜索类请求必须主动调用工具；禁止输出方括号标签格式（如 `[Memory]`）；禁止反问用户。
+- 增强 `_sanitize_streaming_content()` 和 `_sanitize_agent_output()`：新增正则检测 `^[标签]` 格式的内部标记输出并拦截。
+- 新增工具调用流式推送机制：在 `runtime_context.py` 增加 `set_tool_trace_callback` / `get_tool_trace_callback` / `clear_tool_trace_callback`，遵循与 `agent_token_callback` 一致的线程本地模式。`ToolCallNode` 在每个工具执行前后通过 callback 实时推送 trace 事件到 `token_queue`，`_stream_events` 主循环处理新的 `tool_trace` 事件类型并作为 SSE 事件产出，使工具调用轨迹（工具名、参数、返回摘要）在前端流式展示。
+
+### 前端 — 调整思考步骤样式
+
+- 将 `ThinkingSteps.vue` 边框从左侧粗线改为 1px 圆角矩形（`border-radius: var(--radius-md)`），与外部气泡风格一致；步骤项之间用分割线分隔，最后一项无底线，展开区域增加暗色背景。
+
+### 后端 — 流式输出缓冲防止内容闪现
+
+- 将 `_sanitize_streaming_content()` 中方括号标签检测从 20 字 guard 之后提前到最前面，确保 `[Memory]` / `[Knowledge]` 等内部标记在 `]` 闭合的第一时间即被拦截，不再漏过。
+- 修改 `_stream_events()` 中 `on_token` 回调增加缓冲窗口（40 字符）：在前 40 字内不向 token_queue 推送任何内容，仅累积；若在缓冲期内触发 sanitization 则直接发送清理消息并永久阻塞后续 token 推送（`_token_blocked`）；若缓冲期满且内容干净则一次性释放全部累积文本，之后恢复正常流式。消除工具/记忆标记在流式早期闪现后被清除的不良体验。
+
+### 后端 — ContextBuilder 从全文注入改为索引提示
+
+- 将 `ContextBuilder._build_retrieved_context()` 中长期记忆和知识库的检索结果从注入全文改为注入条数提示：`"系统中检索到 N 条与当前问题相关的长期记忆，如需查看具体内容请调用 get_long_term_memory 工具"`。重要事实摘要（CompressNode 输出的压缩上下文）保持全文注入不变。这解决了"模型看到预注入答案后直接复述、跳过工具调用"的问题，迫使模型在需要记忆/知识内容时主动调用工具，从而触发 Planner → ToolCall → Reflection 完整思考链路。
+- 同步更新 `retrieval_context_system_prompt`：从"参考材料 — 用自己的话总结"改为"上下文索引 — 使用工具获取详细内容"，明确告知模型哪些内容已直接提供、哪些需调工具获取。
+- 同步更新主 `system_prompt` 中【核心机制】段落：从"系统自动注入上下文"改为"系统预检索条目数量作为索引提示，详细内容需调工具获取"。
+
+### 前端 — 修复 SSE 中 action 节点内容污染 assistant 气泡
+
+- 修复 `chat.js` 的 `send()` 中 SSE chunk 处理逻辑：当 `chunk.node === 'action'` 且有内容时，将工具返回结果写入独立的 `role: 'tool'` 消息，不再覆盖 assistant 占位气泡。同时 action 节点的 trace（工具调用开始/结束描述）仍附加到 assistant 消息的 trace 数组中供 ThinkingSteps 展示。planner/reflection/compress 等纯 trace 节点事件也改为仅附加 trace 而不触发 content 更新。解决了流式过程中工具返回全文在对话框主体闪现、重进后才正确归位到 tool 灰框的同步/异步渲染不一致问题。
+

@@ -23,9 +23,11 @@ from agent_service.tools.executor import ToolExecutor
 from agent_service.tools.runtime_context import (
     clear_agent_token_callback,
     clear_tool_runtime,
+    clear_tool_trace_callback,
     get_agent_token_callback,
     set_agent_token_callback,
     set_tool_runtime,
+    set_tool_trace_callback,
 )
 from agent_service.tools.tool_registry import ToolRegistry
 
@@ -39,7 +41,9 @@ __all__ = [
     "ToolRegistry",
     "clear_agent_token_callback",
     "clear_tool_runtime",
+    "clear_tool_trace_callback",
     "get_agent_token_callback",
     "set_agent_token_callback",
     "set_tool_runtime",
+    "set_tool_trace_callback",
 ]

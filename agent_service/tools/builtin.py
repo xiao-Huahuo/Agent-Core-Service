@@ -211,8 +211,7 @@ def get_long_term_memory(query: str, top_k: int = 3) -> str:
         return "未找到相关长期记忆。"
     lines = []
     for i, item in enumerate(results, 1):
-        label = item.memory.tag or item.memory.memory_type or "记忆"
-        lines.append(f"{i}. [{label}] {item.memory.content}")
+        lines.append(f"{i}. {item.memory.content}")
     return "\n\n".join(lines)
 
 
@@ -231,7 +230,7 @@ def get_knowledge_context(query: str, top_k: int = 3) -> str:
     lines = []
     for i, item in enumerate(results, 1):
         source = item.memory.source_uri or "未知来源"
-        lines.append(f"{i}. [来源: {source}] {item.memory.content}")
+        lines.append(f"{i}. (来源: {source}) {item.memory.content}")
     return "\n\n".join(lines)
 
 

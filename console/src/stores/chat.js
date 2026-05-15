@@ -68,15 +68,24 @@ export const useChatStore = defineStore('chat', () => {
    * @param {string} content 累积的完整内容
    * @param {string} [node] 当前节点名
    * @param {Array} [toolCalls] 工具调用列表
-   * @param {Array} [trace] trace 事件列表
+   * @param {Array} [trace] trace 事件列表(追加而非替换)
    */
+  function findLastAssistant() {
+    for (let i = messages.value.length - 1; i >= 0; i--) {
+      if (messages.value[i].role === 'assistant') return messages.value[i]
+    }
+    return null
+  }
+
   function updateLastMessage(content, node, toolCalls, trace) {
-    const last = messages.value[messages.value.length - 1]
-    if (last && last.role === 'assistant') {
-      last.content = content
-      if (node !== undefined) last.node = node
-      if (toolCalls !== undefined) last.tool_calls = toolCalls
-      if (trace !== undefined) last.trace = trace
+    const last = findLastAssistant()
+    if (!last) return
+    last.content = content
+    if (node !== undefined) last.node = node
+    if (toolCalls !== undefined) last.tool_calls = toolCalls
+    if (trace !== undefined && trace.length > 0) {
+      if (!last.trace) last.trace = []
+      last.trace.push(...trace)
     }
   }
 
@@ -99,14 +108,16 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = []
     try {
       const history = await fetchMessages(sessionId, userId, limit, { signal })
-      messages.value = history.map(m => ({
-        role: m.role,
-        content: m.content,
-        message_id: m.message_id,
-        tool_calls: m.tool_calls,
-        trace: m.metadata?.trace || [],
-        created_at: m.created_at,
-      }))
+      messages.value = history
+        .filter(m => m.role !== 'tool')
+        .map(m => ({
+          role: m.role,
+          content: m.content,
+          message_id: m.message_id,
+          tool_calls: m.tool_calls,
+          trace: m.metadata?.trace || [],
+          created_at: m.created_at,
+        }))
     } catch (err) {
       if (err.name === 'AbortError') return
       console.error('加载历史消息失败:', err)
@@ -131,9 +142,9 @@ export const useChatStore = defineStore('chat', () => {
     if (isStreaming.value) {
       _abortController?.abort()
       isStreaming.value = false
-      const last = messages.value[messages.value.length - 1]
-      if (last && last.role === 'assistant') {
-        last.node = 'interrupted'
+      const lastAssistant = findLastAssistant()
+      if (lastAssistant) {
+        lastAssistant.node = 'interrupted'
       }
     }
 
@@ -151,9 +162,24 @@ export const useChatStore = defineStore('chat', () => {
     try {
       for await (const chunk of streamPrompt(userId, sessionId, prompt, { signal })) {
         currentNode.value = chunk.node || ''
-        const last = messages.value[messages.value.length - 1]
-        if (last && last.role === 'assistant') {
-          if (chunk.node) last.node = chunk.node
+
+        /* action 节点: trace 附加到 assistant 占位,工具结果已在思考步骤中展示 */
+        if (chunk.node === 'action' && chunk.content) {
+          const lastAssistant = findLastAssistant()
+          if (lastAssistant) {
+            lastAssistant.node = chunk.node
+            if (chunk.trace && chunk.trace.length > 0) {
+              if (!lastAssistant.trace) lastAssistant.trace = []
+              lastAssistant.trace.push(...chunk.trace)
+            }
+          }
+          continue
+        }
+
+        /* 普通节点事件: 更新 assistant 占位消息 */
+        const lastAssistant = findLastAssistant()
+        if (lastAssistant) {
+          if (chunk.node) lastAssistant.node = chunk.node
         }
         if (chunk.content || (chunk.tool_calls && chunk.tool_calls.length > 0)) {
           updateLastMessage(
@@ -162,6 +188,12 @@ export const useChatStore = defineStore('chat', () => {
             chunk.tool_calls,
             chunk.trace
           )
+        } else if (chunk.trace && chunk.trace.length > 0) {
+          /* trace 仅有事件(planner/reflection/compress): 附加 trace 到 assistant */
+          if (lastAssistant) {
+            if (!lastAssistant.trace) lastAssistant.trace = []
+            lastAssistant.trace.push(...chunk.trace)
+          }
         }
       }
     } catch (err) {

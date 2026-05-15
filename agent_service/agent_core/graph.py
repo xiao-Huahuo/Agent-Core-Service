@@ -151,20 +151,18 @@ class AgentGraphBuilder:
             workflow.add_conditional_edges(
                 "reflection",
                 self._route_after_reflection,
-                path_map={"planner": "planner", "compress": "compress", "safety_output": "safety_output", "__end__": END},
+                path_map={"planner": "planner", "compress": "compress"},
             )
-            self._branch_labels[("reflection", "planner")] = "continue"
+            self._branch_labels[("reflection", "planner")] = "continue / answer → 生成最终回复"
             self._branch_labels[("reflection", "compress")] = "context overflow"
-            self._branch_labels[("reflection", "safety_output")] = "answer"
         else:
             workflow.add_conditional_edges(
                 "reflection",
                 self._route_after_reflection,
-                path_map={"planner": "planner", "compress": "compress", "__end__": END},
+                path_map={"planner": "planner", "compress": "compress"},
             )
-            self._branch_labels[("reflection", "planner")] = "continue"
+            self._branch_labels[("reflection", "planner")] = "continue / answer → 生成最终回复"
             self._branch_labels[("reflection", "compress")] = "context overflow"
-            self._branch_labels[("reflection", "__end__")] = "answer → 结束"
         if self.safety_service is not None:
             workflow.add_edge("safety_output", END)
             self._branch_labels[("safety_output", "__end__")] = "审核结束"
@@ -187,7 +185,7 @@ class AgentGraphBuilder:
         根据反思节点决策决定下一步。
         "continue" → planner(继续工具循环),
         "compress" → compress(上下文溢出,先压缩再进入 planner),
-        "answer" → 安全输出审核或直接结束。
+        "answer" → planner(让 agent 模型看到工具结果后生成最终回复)。
         """
 
         decision = state.get("reflection_decision", "continue")
@@ -195,7 +193,8 @@ class AgentGraphBuilder:
             return "planner"
         if decision == "compress":
             return "compress"
-        return "safety_output" if self.safety_service is not None else "__end__"
+        # "answer": 回到 planner→agent,让模型基于工具结果生成最终回复
+        return "planner"
 
     @staticmethod
     def _route_after_safety_input(state: AgentState) -> Literal["compress", "__end__"]:

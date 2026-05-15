@@ -64,8 +64,10 @@ from agent_service.tools import (
     ToolRegistry,
     clear_agent_token_callback,
     clear_tool_runtime,
+    clear_tool_trace_callback,
     set_agent_token_callback,
     set_tool_runtime,
+    set_tool_trace_callback,
 )
 
 logger = logging.getLogger(__name__)
@@ -267,10 +269,28 @@ class AgentCore:
 
         token_queue: queue_module.Queue[dict[str, Any]] = queue_module.Queue()
         _streamed_content: list[str] = [""]
+        _turn_traces: list[dict[str, Any]] = []
+        _token_blocked: list[bool] = [False]
+
 
         def on_token(cumulative_text: str) -> None:
-            content = AgentCore._sanitize_streaming_content(cumulative_text)
+            if _token_blocked[0]:
+                return
+            content = AgentCore._sanitize_streaming_content(
+                cumulative_text,
+                min_chars=self.config.model.streaming_sanitize_min_chars,
+            )
             _streamed_content[0] = content
+            if content != cumulative_text:
+                _token_blocked[0] = True
+                token_queue.put({
+                    "type": "token",
+                    "node": "agent",
+                    "content": content,
+                    "tool_calls": [],
+                    "trace": [],
+                })
+                return
             token_queue.put({
                 "type": "token",
                 "node": "agent",
@@ -281,6 +301,9 @@ class AgentCore:
 
         graph_error: Exception | None = None
 
+        def on_tool_trace(trace: dict[str, Any]) -> None:
+            token_queue.put({"type": "tool_trace", "trace": trace})
+
         def run_graph() -> None:
             nonlocal graph_error
             set_tool_runtime(
@@ -290,6 +313,7 @@ class AgentCore:
                 retrieval_service=retrieval_service,
             )
             set_agent_token_callback(on_token)
+            set_tool_trace_callback(on_tool_trace)
             try:
                 for event in self.graph.stream(inputs, config=runtime_config, stream_mode="updates"):
                     if cancel_event.is_set():
@@ -300,6 +324,7 @@ class AgentCore:
                 token_queue.put({"type": "error", "error": exc})
             finally:
                 clear_agent_token_callback()
+                clear_tool_trace_callback()
                 clear_tool_runtime()
                 token_queue.put({"type": "done"})
 
@@ -346,10 +371,24 @@ class AgentCore:
                         "trace": item.get("trace", []),
                     }
 
+                elif item_type == "tool_trace":
+                    trace = item.get("trace", {})
+                    if trace:
+                        _turn_traces.append(trace)
+                    yield {
+                        "node": trace.get("node", "action"),
+                        "content": "",
+                        "tool_calls": [],
+                        "trace": [trace] if trace else [],
+                    }
+
                 elif item_type == "node":
                     event = item["event"]
                     for node_name, state_update in event.items():
                         logger.debug("图节点执行 | node=%s user=%s session=%s", node_name, user_id, session_id)
+                        node_traces = state_update.get("trace", []) if state_update else []
+                        if node_traces:
+                            _turn_traces.extend(node_traces)
                         if message_service is not None:
                             self._save_state_update_messages(
                                 message_service=message_service,
@@ -357,6 +396,7 @@ class AgentCore:
                                 session_id=session_id,
                                 node_name=node_name,
                                 state_update=state_update,
+                                turn_traces=_turn_traces,
                             )
                         yield self._build_stream_payload(node_name=node_name, state_update=state_update)
         except GeneratorExit:
@@ -382,6 +422,7 @@ class AgentCore:
             with self._cancel_events_lock:
                 self._cancel_events.pop(session_id, None)
             clear_agent_token_callback()
+            clear_tool_trace_callback()
             clear_tool_runtime()
             graph_thread.join(timeout=5.0)
 
@@ -407,6 +448,7 @@ class AgentCore:
         session_id: str,
         node_name: str,
         state_update: dict[str, Any] | None,
+        turn_traces: list[dict[str, Any]] | None = None,
     ) -> None:
         """
         将图节点返回的新增消息保存为 MessageRecord。
@@ -416,6 +458,7 @@ class AgentCore:
         session_id: 会话 ID。
         node_name: 当前节点名称。
         state_update: LangGraph 节点返回的状态更新。
+        turn_traces: 本轮截至当前节点累积的所有 trace,用于附加到 assistant 消息 metadata 中。
         """
 
         if not state_update:
@@ -426,6 +469,7 @@ class AgentCore:
                 user_id=user_id,
                 session_id=session_id,
                 node_name=node_name,
+                turn_traces=turn_traces,
             )
             if message_create is not None:
                 message_service.create_message(message_create)
@@ -437,6 +481,7 @@ class AgentCore:
         user_id: str,
         session_id: str,
         node_name: str,
+        turn_traces: list[dict[str, Any]] | None = None,
     ) -> MessageCreate | None:
         """
         将 LangChain message 转换为 MessageCreate。
@@ -445,9 +490,12 @@ class AgentCore:
         user_id: 用户 ID。
         session_id: 会话 ID。
         node_name: 产生该消息的节点名称。
+        turn_traces: 本轮累积的 trace,附加到 assistant 消息 metadata 中。
         """
 
-        metadata = {"node": node_name, "source": "agent_graph"}
+        metadata: dict[str, Any] = {"node": node_name, "source": "agent_graph"}
+        if turn_traces:
+            metadata["trace"] = turn_traces
         if isinstance(message, AIMessage):
             return MessageCreate(
                 session_id=session_id,
@@ -575,16 +623,21 @@ class AgentCore:
         }
 
     @staticmethod
-    def _sanitize_streaming_content(cumulative_text: str) -> str:
+    def _sanitize_streaming_content(cumulative_text: str, min_chars: int = 20) -> str:
         """
         流式 token 级的 JSON 检测,仅在累积足够长度后才拦截。
 
         cumulative_text: 当前已累积的全部文本。
+        min_chars: JSON 检测最低字符数,低于此值跳过 JSON 语法检查。
         """
         if not cumulative_text:
             return cumulative_text
         stripped = cumulative_text.strip()
-        if len(stripped) < 20:
+        import re
+        if re.match(r"^\[[A-Za-z一-鿿]+\]", stripped):
+            logger.warning("流式输出中检测到内部标记格式,已拦截: %s", stripped[:60])
+            return "（系统拦截了内部标记格式的输出，请用自然语言重新回答。）"
+        if len(stripped) < min_chars:
             return cumulative_text
         if stripped.startswith("```json") or stripped.startswith("```JSON"):
             return "（系统拦截了原始 JSON 输出，请用自然语言重新回答。）"
@@ -617,6 +670,10 @@ class AgentCore:
                 return "（系统拦截了原始 JSON 输出，请用自然语言重新回答。）"
             except (json.JSONDecodeError, ValueError):
                 pass
+        import re
+        if re.match(r"^\[[A-Za-z一-鿿]+\]", stripped):
+            logger.warning("Agent 输出包含内部标记格式,已拦截: %s", stripped[:60])
+            return "（系统拦截了内部标记格式的输出，请用自然语言重新回答。）"
         return content
 
 

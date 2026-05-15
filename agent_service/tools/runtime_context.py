@@ -121,6 +121,42 @@ def clear_agent_token_callback() -> None:
         delattr(_AGENT_TOKEN_CALLBACK, "callback")
 
 
+# ------------------------------------------------------------------
+# 工具调用 Trace 回调 (用于 ToolCallNode → AgentCore 实时推送)
+# ------------------------------------------------------------------
+
+from typing import Any
+
+_TOOL_TRACE_CALLBACK: local = local()
+
+
+def set_tool_trace_callback(callback: Callable[[dict[str, Any]], None]) -> None:
+    """
+    设置当前线程的工具 trace 回调,供 ToolCallNode 在每步工具调用前后调用。
+
+    callback: 接收 trace dict 的回调函数。
+    """
+
+    _TOOL_TRACE_CALLBACK.callback = callback
+
+
+def get_tool_trace_callback() -> Callable[[dict[str, Any]], None] | None:
+    """
+    获取当前线程的工具 trace 回调。
+
+    返回值: 已设置的回调函数,未设置时返回 None。
+    """
+
+    return getattr(_TOOL_TRACE_CALLBACK, "callback", None)
+
+
+def clear_tool_trace_callback() -> None:
+    """清理当前线程的工具 trace 回调。"""
+
+    if hasattr(_TOOL_TRACE_CALLBACK, "callback"):
+        delattr(_TOOL_TRACE_CALLBACK, "callback")
+
+
 def get_tool_runtime() -> ToolRuntimeState:
     """
     获取当前线程的工具运行时状态。

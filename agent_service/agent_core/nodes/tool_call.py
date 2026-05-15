@@ -21,6 +21,7 @@ from langgraph.prebuilt import ToolNode
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
 from agent_service.tools import ToolExecutor
+from agent_service.tools.runtime_context import get_tool_trace_callback
 
 
 class ToolCallNode:
@@ -54,11 +55,17 @@ class ToolCallNode:
 
         if self.tool_node is not None:
             result = self.tool_node.invoke(state)
-            trace = {"node": "action", "event": "tools_executed", "tool_count": len(self.tools)}
+            trace = {
+                "node": "action",
+                "event": "tools_executed",
+                "tool_count": len(self.tools),
+                "human_readable": f"通过 LangGraph ToolNode 执行了 {len(self.tools)} 个工具。",
+            }
             return {**result, "trace": [trace]}
 
         last_message = state["messages"][-1]
         tool_calls = getattr(last_message, "tool_calls", []) or []
+        tool_names = [tc.get("name", "") for tc in tool_calls]
         messages = [
             ToolMessage(
                 content=f"工具 {tool_call.get('name', '')} 未注册,无法执行。",
@@ -74,6 +81,7 @@ class ToolCallNode:
                     "node": "action",
                     "event": "no_tools_registered",
                     "requested_tool_count": len(tool_calls),
+                    "human_readable": f"模型尝试调用工具（{', '.join(tool_names)}），但工具未注册，无法执行。",
                 }
             ],
         }
@@ -88,6 +96,8 @@ class ToolCallNode:
         last_message = state["messages"][-1]
         tool_calls = getattr(last_message, "tool_calls", []) or []
         messages: list[ToolMessage] = []
+        traces: list[dict[str, Any]] = []
+        trace_callback = get_tool_trace_callback()
         for tool_call in tool_calls:
             tool_call_id = tool_call.get("id")
             if not tool_call_id:
@@ -96,19 +106,53 @@ class ToolCallNode:
             arguments = tool_call.get("args", {})
             if not isinstance(arguments, dict):
                 arguments = {}
+            args_summary = self._summarize_args(arguments)
+            start_trace = {
+                "node": "action",
+                "event": "tool_call_start",
+                "tool_name": tool_name,
+                "tool_args_summary": args_summary,
+                "human_readable": f"正在调用工具「{tool_name}」，参数：{args_summary}",
+            }
+            traces.append(start_trace)
+            if trace_callback is not None:
+                trace_callback(start_trace)
             try:
                 content = self.tool_executor.execute(tool_name, arguments)
             except Exception as exc:
                 content = f"工具 {tool_name} 执行失败: {exc}"
             messages.append(ToolMessage(content=content, tool_call_id=tool_call_id))
-        return {
-            "messages": messages,
-            "trace": [
-                {
-                    "node": "action",
-                    "event": "tools_executed",
-                    "tool_count": len(messages),
-                    "executor": "project_tool_executor",
-                }
-            ],
-        }
+            result_summary = self._summarize_result(content)
+            end_trace = {
+                "node": "action",
+                "event": "tool_call_end",
+                "tool_name": tool_name,
+                "result_summary": result_summary,
+                "human_readable": f"工具「{tool_name}」返回：{result_summary}",
+            }
+            traces.append(end_trace)
+            if trace_callback is not None:
+                trace_callback(end_trace)
+        return {"messages": messages, "trace": traces}
+
+    @staticmethod
+    def _summarize_args(arguments: dict[str, Any]) -> str:
+        """将工具参数转为简短可读摘要，单行截断。"""
+
+        parts: list[str] = []
+        for k, v in arguments.items():
+            v_str = str(v)
+            if len(v_str) > 80:
+                v_str = v_str[:80] + "…"
+            parts.append(f"{k}={v_str}")
+        summary = ", ".join(parts) if parts else "无参数"
+        return summary[:200]
+
+    @staticmethod
+    def _summarize_result(content: str) -> str:
+        """将工具返回结果截断为摘要文本。"""
+
+        text = str(content).strip()
+        if len(text) <= 200:
+            return text
+        return text[:200] + "…"

@@ -124,16 +124,20 @@ class ContextBuilder:
             sections.append("短期上下文状态: 当前 session 已存在历史消息,回答时优先使用这些历史事实。")
         has_refs = important_summary is not None or memories or knowledge
         if has_refs:
-            sections.append("--- 参考材料开始(用自己的话总结,不要直接复制) ---")
+            sections.append("--- 参考材料开始 ---")
         if important_summary is not None:
-            sections.append("重要事实摘要:")
+            sections.append("重要事实摘要(以下是系统自动压缩的关键上下文,直接使用,无需再调工具获取):")
             sections.append(f"- {important_summary.memory.content}")
         if memories:
-            sections.append("长期记忆召回:")
-            sections.extend(f"- {item.memory.content}" for item in memories)
+            sections.append(
+                f"长期记忆索引: 系统中检索到 {len(memories)} 条与当前问题相关的历史记忆。"
+                f"如果你需要查看具体内容,请调用 get_long_term_memory 工具来获取全文。"
+            )
         if knowledge:
-            sections.append("知识库召回:")
-            sections.extend(f"- {item.memory.content}" for item in knowledge)
+            sections.append(
+                f"知识库索引: 系统中检索到 {len(knowledge)} 条与当前问题相关的知识库片段。"
+                f"如果你需要查看具体内容,请调用 get_knowledge_context 工具来获取全文。"
+            )
         if has_refs:
             sections.append("--- 参考材料结束 ---")
         if len(sections) <= 4 and not has_history:
