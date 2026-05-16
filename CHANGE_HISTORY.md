@@ -1,5 +1,18 @@
 # CHANGE HISTORY
 
+## 2026-05-16
+
+### 前端 - Obs 面板响应式适配
+- 重写 `console/src/components/dashboard/StateGraphCard.vue` 的状态图刷新逻辑：LangGraph Mermaid 图结构改为首次挂载时只渲染一次，后续 `currentNode` 变化仅通过 DOM class 更新节点与边高亮，不再因状态切换重复执行 `mermaid.render()`，修复状态切换时整图闪烁、短暂消失和布局抖动的问题。
+- 调整 `console/src/views/DashboardView.vue` 的 Obs 页面外层结构,新增 `dashboard-content` 容器,补充 `min-height` 与移动端滚动策略,并让顶部 tab 在窄屏下支持换行与粘性定位,避免移动端切页后内容被固定高度容器截断。
+- 调整 `console/src/components/dashboard/AgentTracePanel.vue` 的桌面三栏布局为断点响应式网格: 宽屏保持三列,中屏改为“状态图整行 + 语言轨迹/执行轨迹双列”,小屏改为单列顺序堆叠,使 Agent 轨迹页同时适配桌面端与手机端。
+- 调整 `console/src/components/dashboard/MemoryKnowledgePanel.vue` 的双层固定横向布局为断点响应式布局: 宽屏保留原有信息分区,中屏改为上层纵向堆叠与下层两列网格,小屏改为全部卡片单列堆叠,避免记忆/知识面板在移动端横向溢出。
+- 放大桌面端 `StateGraphCard` 的展示空间: 提升 `AgentTracePanel` 左栏宽度,并收紧状态图卡片桌面端内边距与最小图宽,修复状态转移图在桌面端看起来过小的问题。
+- 修复 Obs 面板在移动端单列布局下卡片未拉满容器宽度的问题: 为 `AgentTracePanel` 与 `MemoryKnowledgePanel` 的列容器及其直接子卡片补充 `width: 100%` 和 `min-width: 0`,避免卡片按内容宽度收缩后在右侧留下空档。
+- 进一步修复 Obs 面板移动端右侧留白问题: 将 `DashboardView.vue` 中移动端的 `dashboard-content` 从横向 flex 容器切换为 `block + width: 100%`,并强制其直接子页面面板占满宽度,避免整页 panel 作为 flex item 按内容宽度收缩。
+- 调整桌面端状态转移图的尺寸判定策略: 超宽桌面布局下改为优先参考视口高度推导 `AgentTracePanel` 左栏宽度,使状态图更接近按竖直空间放大; 普通桌面宽度区间继续维持按横向宽度分配列宽,移动端布局保持不变。
+- 收紧桌面端“按高度优先”触发条件: 仅在超宽且横向比例明显大于方屏的桌面环境下启用高度优先的状态图布局,避免 `1:1` 或接近方屏的桌面错误进入高度优先模式,这些桌面继续按宽度优先布局处理。
+
 ## 2026-05-14
 
 ### 后端 — Bug 修复

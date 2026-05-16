@@ -36,8 +36,10 @@ const activeTab = ref('trace')
     <!-- ================================================================
          面板内容
          ================================================================ -->
-    <AgentTracePanel v-if="activeTab === 'trace'" />
-    <MemoryKnowledgePanel v-if="activeTab === 'mk'" />
+    <div class="dashboard-content">
+      <AgentTracePanel v-if="activeTab === 'trace'" />
+      <MemoryKnowledgePanel v-if="activeTab === 'mk'" />
+    </div>
   </div>
 </template>
 
@@ -46,6 +48,14 @@ const activeTab = ref('trace')
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -53,6 +63,7 @@ const activeTab = ref('trace')
 .obs-tabs {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 2px;
   padding: var(--space-8) var(--space-10) 0;
   flex-shrink: 0;
@@ -79,5 +90,43 @@ const activeTab = ref('trace')
   color: var(--color-accent);
   border-color: rgba(217, 145, 120, 0.35);
   background: var(--color-accent-muted);
+}
+
+@media (max-width: 900px) {
+  .obs-tabs {
+    padding: var(--space-8);
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-view {
+    overflow: auto;
+  }
+
+  .dashboard-content {
+    display: block;
+    width: 100%;
+    overflow: visible;
+  }
+
+  .dashboard-content > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .obs-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding: var(--space-8);
+    background: var(--color-bg-app);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .obs-tab {
+    flex: 1 1 calc(50% - 2px);
+    min-width: 0;
+    text-align: center;
+  }
 }
 </style>

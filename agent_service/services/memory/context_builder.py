@@ -199,21 +199,52 @@ class ContextBuilder:
         历史加载窗口或上下文裁剪可能截断 AIMessage 而留下 ToolMessage,导致 API 400 错误。
         """
 
-        known_ids: set[str] = set()
-        for msg in messages:
-            if isinstance(msg, AIMessage):
-                for tc in getattr(msg, "tool_calls", []) or []:
-                    tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
-                    if tc_id:
-                        known_ids.add(tc_id)
+        normalized: list[BaseMessage] = []
+        index = 0
+        total = len(messages)
 
-        return [
-            msg
-            for msg in messages
-            if not isinstance(msg, ToolMessage)
-            or not getattr(msg, "tool_call_id", None)
-            or getattr(msg, "tool_call_id") in known_ids
-        ]
+        while index < total:
+            message = messages[index]
+
+            if isinstance(message, ToolMessage):
+                index += 1
+                continue
+
+            if not isinstance(message, AIMessage) or not getattr(message, "tool_calls", None):
+                normalized.append(message)
+                index += 1
+                continue
+
+            required_ids: list[str] = []
+            for tool_call in getattr(message, "tool_calls", []) or []:
+                tool_call_id = tool_call.get("id") if isinstance(tool_call, dict) else getattr(tool_call, "id", None)
+                if tool_call_id:
+                    required_ids.append(str(tool_call_id))
+
+            if not required_ids:
+                normalized.append(message)
+                index += 1
+                continue
+
+            next_index = index + 1
+            trailing_tool_messages: list[ToolMessage] = []
+            matched_ids: set[str] = set()
+            required_id_set = set(required_ids)
+
+            while next_index < total and isinstance(messages[next_index], ToolMessage):
+                tool_message = messages[next_index]
+                tool_call_id = getattr(tool_message, "tool_call_id", None)
+                if tool_call_id in required_id_set:
+                    trailing_tool_messages.append(tool_message)
+                    matched_ids.add(str(tool_call_id))
+                next_index += 1
+
+            if matched_ids == required_id_set:
+                normalized.append(message)
+                normalized.extend(trailing_tool_messages)
+            index = next_index
+
+        return normalized
 
     @staticmethod
     def _to_langchain_message(message: MessageOut) -> BaseMessage:

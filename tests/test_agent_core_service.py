@@ -544,6 +544,58 @@ def test_context_builder_appends_current_prompt_and_converts_roles() -> None:
     assert messages[-1].content == "继续"
 
 
+def test_context_builder_drops_incomplete_assistant_tool_call_history() -> None:
+    """��֤����ʷ assistant.tool_calls ȱ�� ToolMessage ��Ӧʱ,ContextBuilder ���Զ�������Ϣ�����Ƴ���"""
+
+    config = AgentConfig.load_config(
+        {"memory": {"max_context_messages": 4}},
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    service = MessageService(config=config, engine=engine, create_tables=False)
+    retrieval_service = SimpleNamespace(
+        retrieve_long_term_memory=lambda **_kwargs: [],
+        get_latest_session_summary=lambda **_kwargs: None,
+        retrieve_knowledge=lambda **_kwargs: [],
+        get_latest_important_fact_summary=lambda **_kwargs: None,
+    )
+    builder = ContextBuilder(config=config, message_service=service, retrieval_service=retrieval_service)
+    service.create_message(
+        MessageCreate(
+            session_id="sess_tool_gap",
+            user_id="user_1",
+            role="assistant",
+            content="",
+            tool_calls_json=[
+                {"id": "call_knowledge_0", "name": "get_knowledge_context", "args": {"query": "����"}}
+            ],
+        )
+    )
+    service.create_message(
+        MessageCreate(
+            session_id="sess_tool_gap",
+            user_id="user_1",
+            role="user",
+            content="��ʷ�Ѿ����������ˣ�����û�й��߻�ִ�С�",
+        )
+    )
+
+    messages = builder.build_messages(
+        user_id="user_1",
+        session_id="sess_tool_gap",
+        current_prompt="���ڳ��е�������ʲô?",
+    )
+
+    assert all(
+        not (isinstance(message, AIMessage) and getattr(message, "tool_calls", None))
+        for message in messages
+    )
+    assert messages[-1].content == "���ڳ��е�������ʲô?"
+
+
 def test_retrieval_service_returns_ranked_memory_and_knowledge() -> None:
     """验证统一检索服务可以从 JSON 向量回退路径召回长期记忆和知识库片段。"""
 
