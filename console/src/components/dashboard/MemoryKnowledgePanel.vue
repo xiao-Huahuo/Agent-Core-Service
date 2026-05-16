@@ -127,7 +127,7 @@ watch(
 
 .row-lower {
   display: grid;
-  grid-template-columns: 280px 280px minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr) minmax(0, 1fr);
   gap: var(--space-10);
   flex: 1;
   min-height: 0;
@@ -193,6 +193,11 @@ watch(
     max-height: none;
   }
 
+  .col-token {
+    flex: none;
+    height: 300px;
+  }
+
   .row-lower {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
@@ -224,6 +229,11 @@ watch(
   .row-lower {
     display: flex;
     flex-direction: column;
+  }
+
+  .col-token {
+    flex: none;
+    height: 320px;
   }
 }
 

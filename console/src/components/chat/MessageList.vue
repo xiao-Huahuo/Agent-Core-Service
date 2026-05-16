@@ -123,6 +123,11 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   padding: var(--space-16);
+  scrollbar-width: none;
+}
+
+.message-list::-webkit-scrollbar {
+  display: none;
 }
 
 .empty-hint {

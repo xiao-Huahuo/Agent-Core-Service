@@ -4,7 +4,7 @@
 -->
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import MarkdownContent from './MarkdownContent.vue'
 import ThinkingInline from './ThinkingInline.vue'
 
@@ -23,6 +23,13 @@ const bubbleRadius = computed(() => {
 })
 
 const thinkingRevealed = ref(true)
+
+watch(
+  () => props.isStreaming,
+  (streaming) => {
+    if (!streaming) thinkingRevealed.value = false
+  }
+)
 
 /** 过滤出有 human_readable 的思考步骤,去重(按 human_readable 文本) */
 const thinkingTraces = computed(() => {

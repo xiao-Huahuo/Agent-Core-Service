@@ -65,22 +65,24 @@ async function handleSend(text) {
          聊天界面
          ================================================================ -->
     <template v-else>
-      <!-- 消息列表 -->
-      <MessageList
-        :messages="chatStore.messages"
-        :is-streaming="chatStore.isStreaming"
-      />
+      <div class="chat-content">
+        <!-- 消息列表 -->
+        <MessageList
+          :messages="chatStore.messages"
+          :is-streaming="chatStore.isStreaming"
+        />
 
-      <!-- 流式指示器 -->
-      <StreamingIndicator
-        :is-streaming="chatStore.isStreaming"
-        :has-content="!!chatStore.lastMessage?.content"
-      />
+        <!-- 流式指示器 -->
+        <StreamingIndicator
+          :is-streaming="chatStore.isStreaming"
+          :has-content="!!chatStore.lastMessage?.content"
+        />
 
-      <!-- 输入区 -->
-      <ChatInput
-        @send="handleSend"
-      />
+        <!-- 输入区 -->
+        <ChatInput
+          @send="handleSend"
+        />
+      </div>
     </template>
   </div>
 </template>
@@ -91,6 +93,24 @@ async function handleSend(text) {
   flex-direction: column;
   flex: 1;
   overflow: hidden;
+  align-items: center;
+}
+
+.chat-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  max-width: 50%;
+  min-width: 360px;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .chat-content {
+    max-width: 100%;
+    min-width: 0;
+  }
 }
 
 /* ---- user_id 设置 ---- */

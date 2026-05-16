@@ -207,8 +207,11 @@ class AgentCore:
                     user_id=user_id,
                     role="system",
                     content=self.config.model.system_prompt,
-                    node="system_prompt",
-                    metadata_json={"source": "agent_config", "type": "system_prompt"},
+                    metadata_json={
+                        "node": "system_prompt",
+                        "source": "agent_config",
+                        "type": "system_prompt",
+                    },
                 )
             )
 
