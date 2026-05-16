@@ -235,6 +235,13 @@ watch(
     flex: none;
     height: 320px;
   }
+
+  .col-memory,
+  .col-knowledge,
+  .col-latency {
+    height: 320px;
+    flex: none;
+  }
 }
 
 @media (max-width: 560px) {
