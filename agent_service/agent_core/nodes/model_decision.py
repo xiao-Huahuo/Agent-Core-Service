@@ -68,11 +68,13 @@ class ModelDecisionNode:
         token_callback = get_agent_token_callback()
 
         if token_callback is not None:
-            return self._streaming_call(
+            result = self._streaming_call(
                 system_message=system_message,
                 state=state,
                 token_callback=token_callback,
             )
+            result["_persist_system_message"] = system_message
+            return result
 
         response = self.task_scheduler.invoke_chat(
             task_type=FOREGROUND_AGENT_TASK,
@@ -91,6 +93,7 @@ class ModelDecisionNode:
                     "human_readable": self._make_agent_readable(tool_calls, bool(response.content)),
                 }
             ],
+            "_persist_system_message": system_message,
         }
 
     def _streaming_call(

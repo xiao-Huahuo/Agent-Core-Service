@@ -118,6 +118,8 @@ mermaid.initialize({
     primaryBorderColor: '#3a3a3a',
     lineColor: '#4a4a4a',
     fontSize: '11px',
+    clusterBkg: 'transparent',
+    clusterBorder: '#3a3a3a',
   },
   flowchart: {
     useMaxWidth: true,
@@ -127,25 +129,27 @@ mermaid.initialize({
 })
 
 const GRAPH_CODE = `flowchart TD
-    %% 节点定义
     safety_input["safety_input"]
-    compress["compress"]
-    planner["planner"]
-    agent["agent"]
-    action["action"]
-    reflection["reflection"]
+
+    subgraph loop["Agent 循环"]
+        planner["planner"]
+        compress["compress"]
+        agent["agent"]
+        action["action"]
+        reflection["reflection"]
+    end
+
     safety_output["safety_output"]
 
-    %% 边
-    safety_input -->|"通过"| compress
+    safety_input -->|"通过"| planner
     safety_input -->|"拦截"| E1((END))
-    compress --> planner
     planner --> agent
     agent -->|"工具调用"| action
     agent -->|"直接回复"| safety_output
     action --> reflection
     reflection -->|"继续/回答"| planner
     reflection -->|"上下文溢出"| compress
+    compress --> planner
     safety_output --> E2((END))`
 
 /**
@@ -639,6 +643,18 @@ const queueStatusLabel = computed(() => {
 .graph-svg :deep(.graph-edge-active marker path),
 .graph-svg :deep(.graph-edge-active polygon) {
   fill: #d99178 !important;
+}
+
+.graph-svg :deep(.cluster rect) {
+  stroke: var(--color-border);
+  stroke-dasharray: 6 3;
+  rx: 10;
+  ry: 10;
+  fill: none !important;
+}
+
+.graph-svg :deep(.cluster-label) {
+  display: none;
 }
 
 @media (min-width: 1201px) {

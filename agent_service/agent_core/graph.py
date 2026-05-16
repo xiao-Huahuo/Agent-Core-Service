@@ -8,8 +8,10 @@ Agent LangGraph 图构建模块。
 使用说明:
 外部通常不直接调用本模块,而是通过 `AgentCore(config=...)` 间接构建图。
 当前图结构:
-  safety_input -> compress -> planner -> agent -> action -> reflection -> compress -> ...
-    -> safety_output -> summary -> END
+  safety_input -> planner -> agent -> action -> reflection
+    ├── continue / answer → planner
+    └── overflow → compress → planner
+  agent (无 tool_calls) → safety_output → END
 """
 
 from __future__ import annotations
@@ -122,12 +124,13 @@ class AgentGraphBuilder:
             workflow.add_conditional_edges(
                 "safety_input",
                 self._route_after_safety_input,
-                path_map={"compress": "compress", "__end__": END},
+                path_map={"planner": "planner", "__end__": END},
             )
-            self._branch_labels[("safety_input", "compress")] = "审核通过"
+            self._branch_labels[("safety_input", "planner")] = "审核通过"
             self._branch_labels[("safety_input", "__end__")] = "审核拦截"
         else:
-            workflow.set_entry_point("compress")
+            workflow.set_entry_point("planner")
+        # compress 仅在 reflection 判定上下文溢出时触发,压缩后回到 planner 重新规划
         workflow.add_edge("compress", "planner")
         workflow.add_edge("planner", "agent")
         if self.safety_service is not None:
@@ -197,13 +200,13 @@ class AgentGraphBuilder:
         return "planner"
 
     @staticmethod
-    def _route_after_safety_input(state: AgentState) -> Literal["compress", "__end__"]:
-        """安全输入审核通过 → compress,拦截 → 直接结束。"""
+    def _route_after_safety_input(state: AgentState) -> Literal["planner", "__end__"]:
+        """安全输入审核通过 → planner,拦截 → 直接结束。"""
 
         decision = state.get("reflection_decision")
         if decision == "blocked":
             return "__end__"
-        return "compress"
+        return "planner"
 
     @staticmethod
     def _route_after_safety_output(state: AgentState) -> Literal["summary", "__end__"]:

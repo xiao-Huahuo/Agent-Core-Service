@@ -18,5 +18,5 @@ flowchart TD
     reflection -. "context overflow" .-> compress
     reflection -. "continue / answer → 生成最终回复" .-> planner
     safety_input -. "审核拦截" .-> internal_end
-    safety_input -. "审核通过" .-> compress
+    safety_input -. "审核通过" .-> planner
     safety_output --> internal_end

@@ -198,6 +198,20 @@ class AgentCore:
         )
         messages = context_builder.build_messages(user_id=user_id, session_id=session_id, current_prompt=prompt)
         logger.debug("上下文构建完成 | message_count=%d", len(messages))
+
+        # 持久化主系统提示词,供前端上下文拼接面板展示
+        if self.config.model.system_prompt:
+            message_service.create_message(
+                MessageCreate(
+                    session_id=session_id,
+                    user_id=user_id,
+                    role="system",
+                    content=self.config.model.system_prompt,
+                    node="system_prompt",
+                    metadata_json={"source": "agent_config", "type": "system_prompt"},
+                )
+            )
+
         for msg in messages:
             if isinstance(msg, SystemMessage):
                 msg_create = self._message_to_create(
@@ -405,6 +419,18 @@ class AgentCore:
                                 t["model_name"] = self._model_name_for_node(node_name)
                             _turn_traces.extend(node_traces)
                         if message_service is not None:
+                            # 持久化 agent 节点实际使用的 system prompt(含执行计划)
+                            system_msg = state_update.get("_persist_system_message")
+                            if system_msg is not None:
+                                msg_create = self._message_to_create(
+                                    message=system_msg,
+                                    user_id=user_id,
+                                    session_id=session_id,
+                                    node_name=node_name,
+                                )
+                                if msg_create is not None:
+                                    message_service.create_message(msg_create)
+
                             self._save_state_update_messages(
                                 message_service=message_service,
                                 user_id=user_id,
