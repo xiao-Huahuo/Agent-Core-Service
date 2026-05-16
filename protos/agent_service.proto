@@ -51,6 +51,7 @@ service AgentService {
   // ---- 观测 / trace 事件 ----
 
   rpc GetEvents(EventsRequest) returns (EventsResponse);
+  rpc GetRecallDetails(RecallDetailsRequest) returns (RecallDetailsResponse);
 }
 
 // ---------------------------------------------------------------------------
@@ -198,6 +199,21 @@ message EventsResponse {
   string user_id = 2;
   int32 event_count = 3;
   repeated EventEntry events = 4;
+}
+
+message RecallDetailsRequest {
+  string user_id = 1;
+  string session_id = 2;
+}
+
+message RecallDetailsResponse {
+  string session_id = 1;
+  string user_id = 2;
+  string created_at = 3;
+  string query = 4;
+  string rag_metrics_json = 5;
+  string memory_recall_json = 6;
+  string knowledge_recall_json = 7;
 }
 
 // ---------------------------------------------------------------------------

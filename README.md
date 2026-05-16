@@ -9,6 +9,18 @@
 不是给终端用户直接使用的，而是为能够写代码、追求高度自定义智能体、希望自己搭建智能体能力的开发者准备。
 
 ## 项目设计
+### 核心结构设计
+##### Agent宏观结构
+```mermaid
+flowchart TD
+    长短记忆["长短记忆"] & 知识库RAG["知识库 RAG"] & 安全审核["安全审核"] & 上下文管理["上下文管理"] --> agent
+    agent["🤖 Agent<br/>智能体核心"]
+    会话管理["会话管理"] & 规划与编排["规划与编排"] & 可观测性["可观测性"] & 工具系统["工具系统"] --> agent
+```
+##### Agent状态转移图
+<object data="./agent_graph.mmd" type="text/plain" width="100%" height="600">
+  agent_graph.mmd
+</object>
 
 ### 各部分设计
 

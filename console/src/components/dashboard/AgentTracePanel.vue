@@ -35,21 +35,30 @@ import ExecutionTraceCard from '@/components/dashboard/ExecutionTraceCard.vue'
 }
 
 .col-left {
+  position: relative;
+  z-index: 1;
   width: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 .col-mid {
+  position: relative;
+  z-index: 3;
   width: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 .col-right {
+  position: relative;
+  z-index: 1;
   width: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 .col-left > *,

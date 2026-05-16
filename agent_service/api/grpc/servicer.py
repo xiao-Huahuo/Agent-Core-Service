@@ -21,6 +21,7 @@ from typing import Any
 import grpc
 
 from agent_service.agent_core.agent_core import AgentCore
+from agent_service.api.recall_details import build_recall_details_payload
 from agent_service.api.grpc.agent_service_pb2 import (
     CancelRequest,
     CancelResponse,
@@ -30,6 +31,8 @@ from agent_service.api.grpc.agent_service_pb2 import (
     EventEntry,
     EventsRequest,
     EventsResponse,
+    RecallDetailsRequest,
+    RecallDetailsResponse,
     ListMessagesRequest,
     ListMessagesResponse,
     ListSessionsRequest,
@@ -250,6 +253,29 @@ class AgentServiceServicer(BaseServicer):
             user_id=request.user_id,
             event_count=len(events),
             events=events,
+        )
+
+    def GetRecallDetails(  # noqa: N802
+        self, request: RecallDetailsRequest, context: grpc.ServicerContext
+    ) -> RecallDetailsResponse:
+        """返回最近一次真实召回快照,供外部面板复现 ReRank 前后切换。"""
+
+        logger.info("GetRecallDetails user=%s session=%s", request.user_id, request.session_id)
+        ms = self._require_message_service(context)
+        payload = build_recall_details_payload(
+            agent=self._agent,
+            message_service=ms,
+            user_id=request.user_id,
+            session_id=request.session_id,
+        )
+        return RecallDetailsResponse(
+            session_id=payload["session_id"],
+            user_id=payload["user_id"],
+            created_at=payload["created_at"],
+            query=payload["query"],
+            rag_metrics_json=json.dumps(payload["rag_metrics"], ensure_ascii=False),
+            memory_recall_json=json.dumps(payload["memory_recall"], ensure_ascii=False),
+            knowledge_recall_json=json.dumps(payload["knowledge_recall"], ensure_ascii=False),
         )
 
     # ------------------------------------------------------------------

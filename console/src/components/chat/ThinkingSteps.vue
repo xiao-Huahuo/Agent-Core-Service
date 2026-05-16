@@ -13,14 +13,21 @@ import { ref } from 'vue'
 const props = defineProps({
   traces: { type: Array, default: () => [] },
   isStreaming: { type: Boolean, default: false },
+  defaultExpanded: { type: Boolean, default: false },
 })
 
-const isExpanded = ref(false)
+const emit = defineEmits(['collapse'])
+
+const isExpanded = ref(props.defaultExpanded)
 
 const stepExpanded = ref({})
 
 function togglePanel() {
-  isExpanded.value = !isExpanded.value
+  if (isExpanded.value) {
+    emit('collapse')
+  } else {
+    isExpanded.value = true
+  }
 }
 
 function toggleStep(index) {

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -63,6 +63,19 @@ class RetrievedMemory:
     keyword_score: float = 0.0
     rerank_score: float | None = None
     retrieval_channels: tuple[str, ...] = ()
+
+
+@dataclass(slots=True)
+class RetrievalDebugSnapshot:
+    """
+    单路召回的观测快照。
+
+    pre_rerank_candidates: 混合召回并去重后的候选列表,尚未经过 ReRank 精排。
+    post_rerank_results: ReRank 与最终过滤后的结果列表。
+    """
+
+    pre_rerank_candidates: list[HybridRetrievalCandidate] = field(default_factory=list)
+    post_rerank_results: list[RetrievedMemory] = field(default_factory=list)
 
 
 class MemoryRetrievalService:
@@ -115,31 +128,12 @@ class MemoryRetrievalService:
         top_k: 可选返回条数。
         """
 
-        seen_ids: set[str] = set()
-        merged: list[RetrievedMemory] = []
-
-        for memory_type in (
-            "session_fact",
-            self.config.constants.important_fact_summary_memory_type,
-            "session_summary",
-        ):
-            candidates = self._retrieve(
-                query=query,
-                user_id=user_id,
-                session_id=session_id,
-                tag=self.config.constants.memory_tag,
-                memory_type=memory_type,
-                top_k=top_k,
-            )
-            for item in candidates:
-                memory_id = item.memory.memory_id
-                if memory_id not in seen_ids:
-                    seen_ids.add(memory_id)
-                    merged.append(item)
-
-        merged.sort(key=self._rank_key, reverse=True)
-        final_top_k = top_k or self.config.memory.rerank_top_k
-        return merged[:final_top_k]
+        return self.retrieve_long_term_memory_with_debug(
+            query=query,
+            user_id=user_id,
+            session_id=session_id,
+            top_k=top_k,
+        ).post_rerank_results
 
     def retrieve_knowledge(self, *, query: str, top_k: int | None = None) -> list[RetrievedMemory]:
         """
@@ -148,8 +142,83 @@ class MemoryRetrievalService:
         query: 当前查询文本。
         top_k: 可选返回条数。
         """
+        return self.retrieve_knowledge_with_debug(query=query, top_k=top_k).post_rerank_results
 
-        return self._retrieve(
+    def retrieve_long_term_memory_with_debug(
+        self,
+        *,
+        query: str,
+        user_id: str,
+        session_id: str | None = None,
+        top_k: int | None = None,
+    ) -> RetrievalDebugSnapshot:
+        """
+        检索用户长期记忆摘要,并返回 ReRank 前后的真实快照。
+
+        query: 当前查询文本。
+        user_id: 用户 ID。
+        session_id: 可选 session ID。
+        top_k: 可选返回条数。
+        """
+
+        seen_pre_ids: set[str] = set()
+        seen_post_ids: set[str] = set()
+        merged_pre: list[HybridRetrievalCandidate] = []
+        merged_post: list[RetrievedMemory] = []
+
+        for memory_type in (
+            "session_fact",
+            self.config.constants.important_fact_summary_memory_type,
+            "session_summary",
+        ):
+            snapshot = self._retrieve_with_debug(
+                query=query,
+                user_id=user_id,
+                session_id=session_id,
+                tag=self.config.constants.memory_tag,
+                memory_type=memory_type,
+                top_k=top_k,
+            )
+            for candidate in snapshot.pre_rerank_candidates:
+                memory_id = candidate.memory.memory_id
+                if memory_id in seen_pre_ids:
+                    continue
+                seen_pre_ids.add(memory_id)
+                merged_pre.append(candidate)
+            for item in snapshot.post_rerank_results:
+                memory_id = item.memory.memory_id
+                if memory_id in seen_post_ids:
+                    continue
+                seen_post_ids.add(memory_id)
+                merged_post.append(item)
+
+        merged_pre.sort(
+            key=lambda item: (
+                item.merged_score,
+                int(item.current_session_match),
+                len(item.source_channels),
+                self._ensure_aware_datetime(item.memory.updated_at)
+                or datetime.min.replace(tzinfo=timezone.utc),
+                item.memory.importance,
+            ),
+            reverse=True,
+        )
+        merged_post.sort(key=self._rank_key, reverse=True)
+        final_top_k = top_k or self.config.memory.rerank_top_k
+        return RetrievalDebugSnapshot(
+            pre_rerank_candidates=merged_pre[: max(final_top_k, self.config.memory.rerank_top_k)],
+            post_rerank_results=merged_post[:final_top_k],
+        )
+
+    def retrieve_knowledge_with_debug(self, *, query: str, top_k: int | None = None) -> RetrievalDebugSnapshot:
+        """
+        检索知识库切片,并返回 ReRank 前后的真实快照。
+
+        query: 当前查询文本。
+        top_k: 可选返回条数。
+        """
+
+        return self._retrieve_with_debug(
             query=query,
             user_id="system",
             session_id=None,
@@ -194,7 +263,7 @@ class MemoryRetrievalService:
         self.embedding_service.warmup()
         self.rerank_service.warmup()
 
-    def _retrieve(
+    def _retrieve_with_debug(
         self,
         *,
         query: str,
@@ -203,7 +272,7 @@ class MemoryRetrievalService:
         tag: str,
         memory_type: str,
         top_k: int | None,
-    ) -> list[RetrievedMemory]:
+    ) -> RetrievalDebugSnapshot:
         """
         执行统一检索。
 
@@ -217,11 +286,11 @@ class MemoryRetrievalService:
 
         normalized_query = query.strip()
         if not normalized_query:
-            return []
+            return RetrievalDebugSnapshot()
         final_top_k = top_k or self.config.memory.rerank_top_k
         query_vector = self.embedding_service.embed_text(normalized_query)
         if not query_vector:
-            return []
+            return RetrievalDebugSnapshot()
 
         vector_candidates = self._retrieve_vector_candidates(
             query_vector=query_vector,
@@ -259,7 +328,75 @@ class MemoryRetrievalService:
             item.final_score = self._final_score(item)
         retrieved = [item for item in retrieved if item.final_score >= self.config.memory.score_threshold]
         retrieved.sort(key=self._rank_key, reverse=True)
-        return retrieved[:final_top_k]
+        return RetrievalDebugSnapshot(
+            pre_rerank_candidates=merged_candidates,
+            post_rerank_results=retrieved[:final_top_k],
+        )
+
+    @staticmethod
+    def serialize_candidate(candidate: HybridRetrievalCandidate) -> dict[str, Any]:
+        """
+        将 ReRank 前候选序列化为前端可消费的观测对象。
+
+        candidate: 混合召回候选。
+        """
+
+        return {
+            "memory_id": candidate.memory.memory_id,
+            "content": candidate.memory.content,
+            "memory_type": candidate.memory.memory_type,
+            "source_type": candidate.memory.source_type,
+            "source_uri": candidate.memory.source_uri,
+            "updated_at": _to_iso(candidate.memory.updated_at),
+            "matched_terms": list(candidate.matched_terms),
+            "retrieval_channels": list(candidate.source_channels),
+            "current_session_match": candidate.current_session_match,
+            "vector_score": round(candidate.vector_score, 4),
+            "keyword_score": round(candidate.keyword_score, 4),
+            "merged_score": round(candidate.merged_score, 4),
+            "rerank_score": round(candidate.rerank_score, 4) if candidate.rerank_score is not None else None,
+            "final_score": None,
+        }
+
+    @staticmethod
+    def serialize_retrieved_memory(item: RetrievedMemory) -> dict[str, Any]:
+        """
+        将 ReRank 后结果序列化为前端可消费的观测对象。
+
+        item: 最终检索结果。
+        """
+
+        return {
+            "memory_id": item.memory.memory_id,
+            "content": item.memory.content,
+            "memory_type": item.memory.memory_type,
+            "source_type": item.memory.source_type,
+            "source_uri": item.memory.source_uri,
+            "updated_at": _to_iso(item.memory.updated_at),
+            "matched_terms": [],
+            "retrieval_channels": list(item.retrieval_channels),
+            "current_session_match": item.current_session_match,
+            "vector_score": None,
+            "keyword_score": round(item.keyword_score, 4),
+            "merged_score": None,
+            "rerank_score": round(item.rerank_score, 4) if item.rerank_score is not None else None,
+            "relevance_score": round(item.relevance_score, 4),
+            "freshness_score": round(item.freshness_score, 4),
+            "final_score": round(item.final_score, 4),
+        }
+
+    @classmethod
+    def serialize_debug_snapshot(cls, snapshot: RetrievalDebugSnapshot) -> dict[str, Any]:
+        """
+        将单路召回快照序列化为 API 输出结构。
+
+        snapshot: 单路召回观测快照。
+        """
+
+        return {
+            "pre_rerank": [cls.serialize_candidate(item) for item in snapshot.pre_rerank_candidates],
+            "post_rerank": [cls.serialize_retrieved_memory(item) for item in snapshot.post_rerank_results],
+        }
 
     def _get_latest_memory_by_type(
         self,
@@ -614,3 +751,17 @@ class MemoryRetrievalService:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value
+
+
+def _to_iso(value: datetime | None) -> str:
+    """
+    将 datetime 序列化为稳定的 ISO 8601 字符串。
+
+    value: 待序列化时间。
+    """
+
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()

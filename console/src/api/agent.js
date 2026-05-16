@@ -9,7 +9,8 @@
  * for await (const chunk of streamPrompt(userId, sessionId, prompt)) { ... }
  */
 
-import { streamLines } from './client'
+import { apiGet, streamLines } from './client'
+import { API } from '@/router/api_routes'
 
 /**
  * 发起 SSE 流式 Agent 对话请求。
@@ -25,5 +26,16 @@ export function streamPrompt(userId, sessionId, prompt, options = {}) {
     session_id: sessionId,
     prompt,
   })
-  return streamLines(`/agent/stream?${params}`, options)
+  return streamLines(`${API.AGENT_STREAM}?${params}`, options)
+}
+
+/**
+ * 获取指定会话最近一次真实召回快照。
+ *
+ * @param {string} sessionId 会话 ID
+ * @param {string} userId 用户 ID
+ * @returns {Promise<{session_id:string,user_id:string,created_at:string,query:string,rag_metrics:Object,memory_recall:Object,knowledge_recall:Object}>}
+ */
+export function fetchRecallDetails(sessionId, userId, options = {}) {
+  return apiGet(API.AGENT_RECALL_DETAILS, { session_id: sessionId, user_id: userId }, options)
 }

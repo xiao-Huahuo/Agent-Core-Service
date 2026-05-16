@@ -2,7 +2,42 @@
 
 ## 2026-05-16
 
+### 前端 - Obs 饼图重叠修复
+- 调整 `console/src/components/dashboard/RagMetricsCard.vue` 的环形图配置: 收紧 donut 半径并下移图内标签文案,同时将三图并排布局改为可按断点换行的响应式网格,修复 Obs 面板窄宽度下饼状图图形与文字重叠的问题。
+- 进一步调整 `console/src/components/dashboard/RagMetricsCard.vue` 的 donut 标签布局: 去掉图心覆盖文字,改为在饼图外侧通过标签线显示百分比和指标名称,并左移图心为外侧标签留出空间,避免数字和文字继续压在图形内部。
+- 将 `console/src/components/dashboard/RagMetricsCard.vue` 的 donut 文案展示方式改为原生 DOM 布局: ECharts 仅负责绘制环形图,百分比和指标名由卡片右侧独立渲染,避免 `overflow: hidden` 裁掉图表外侧标签导致文字消失。
+- 继续调整 `console/src/components/dashboard/RagMetricsCard.vue` 的三指标排布: 每个指标块改为“上方环形图 + 下方数值/名称”的纵向结构,避免右侧文案挤压图形,使三个饼图的视觉主体尺寸重新大于数字文本。
+- 修正 `console/src/components/dashboard/RagMetricsCard.vue` 的移动端 donut 布局: 手机端保持三列紧凑排布,限制单图最大宽度并收紧文字尺寸,避免窄屏下单个饼图被拉得过大且视觉偏移。
+
+### 前端 - Obs 召回卡片语义纠偏
+- 调整 `console/src/components/dashboard/LongTermMemoryCard.vue` 与 `KnowledgeRecallCard.vue`: 去掉误导性的 “ReRank 前 / ReRank 后” 切换,改为明确展示当前已注入 system context 的记忆/知识索引提示。修复前端用同一份注入后摘要伪造“前后对比”导致界面语义与后端真实数据不一致的问题。
+
+### 前后端 - Obs 真实召回快照
+- 扩展 `agent_service/services/memory/retrieval_service.py`、`context_builder.py` 与 `agent_core/agent_core.py`: 在构建上下文时保留长期记忆与知识库的真实 `pre_rerank` / `post_rerank` 快照,并随 system message metadata 一起持久化。
+- 扩展 `agent_service/api/rest/agent.py`、`protos/agent_service.proto` 与 `agent_service/api/grpc/servicer.py`: 新增 Obs 召回详情能力,返回最近一次真实召回快照而不是前端推断的索引摘要,并同步补齐 gRPC 接口。
+- 调整 `console/src/router/api_routes.js`、`src/api/agent.js`、`components/dashboard/MemoryKnowledgePanel.vue`、`LongTermMemoryCard.vue` 与 `KnowledgeRecallCard.vue`: 前端改为请求真实召回快照,恢复真正的 “ReRank 前 / ReRank 后” 切换,展示真实条目正文与评分信息。
+
+### 前端 - 聊天气泡即时占位恢复
+- 调整 `console/src/stores/chat.js` 与 `console/src/components/chat/MessageBubble.vue`: 用户发送消息后立即插入 assistant 占位消息,并让空内容流式阶段直接渲染闪动光标气泡,修复 agent 需要等到首个回复 chunk 或最终回复才显示气泡的问题。
+- 进一步调整 `console/src/stores/chat.js`: 在插入 user / assistant 占位消息后显式 `await nextTick()`,先让浏览器完成首帧渲染,再进入流式请求循环,缩短“用户发送消息”和“占位气泡出现”之间仍然存在的可感知延迟。
+- 继续调整 `console/src/stores/chat.js`: 在 `nextTick()` 之后额外等待一次浏览器绘制帧 (`requestAnimationFrame`),确保 assistant 占位气泡在网络请求正式推进前已经真正绘制到屏幕上,进一步压缩发送瞬间的空档。
+
+### 前端 - 暗色聊天气泡配色
+- 调整 `console/src/assets/ui-system.css` 与 `console/src/components/chat/MessageBubble.vue`: 仅在暗色主题下将用户气泡改为磨砂玻璃发光蓝色,将 AI 气泡改为磨砂玻璃发光红色; 亮色主题继续保持原有低干扰样式。
+- 进一步修正 `console/src/assets/ui-system.css`: 将暗色主题下用户气泡的底色与边框也切换到蓝色系,避免只改发光层但主体仍残留原橙色的问题。
+- 继续调整 `console/src/assets/ui-system.css`: 为亮色主题下的用户 / AI 气泡也补上蓝 / 红主体配色,但保持无发光效果,避免亮色界面过于刺眼。
+- 修正 `console/src/components/dashboard/MemoryKnowledgePanel.vue` 的召回快照刷新时机: 不再依赖前端消息列表中已被过滤掉的 `system` 消息作为刷新键,改为在 assistant 消息落库且流式结束后重新拉取 `recall-details`,解决 Obs 面板长期记忆 / 知识库召回长期空白的问题。
+- 调整 `console/src/components/dashboard/LongTermMemoryCard.vue` 与 `KnowledgeRecallCard.vue` 的 ReRank 切换按钮样式: 将按钮从标题栏移到正文工具条,并复用 `RagMetricsCard` 同款切换视觉,避免原先标题栏里的小按钮过丑且不统一。
+- 修正 `agent_service/api/rest/agent.py` 与 `agent_service/api/grpc/servicer.py` 的召回详情接口: 新增共用的 `agent_service/api/recall_details.py`,当历史 system message 没有持久化 `recall_details` 时,使用最近用户问题实时补算长期记忆和知识库的 `pre_rerank` / `post_rerank` 快照,避免旧会话或未携带快照的消息在 Obs 面板中显示空白。
+- 修正 `agent_service/api/grpc/agent_service_pb2_grpc.py` 的生成代码导入路径: 将顶层 `import agent_service_pb2` 改为包内绝对导入,避免从 `main.py` 启动时出现 `ModuleNotFoundError: No module named 'agent_service_pb2'`。
+- 修复 `console/src/components/dashboard/LatencyCard.vue` 的数据来源问题: 调整 `useObsData.js` 的耗时轮次派生逻辑,支持流式中的 pending turn、过滤空 assistant 消息,并让 Obs 页面补拉最多 200 条历史消息; 同时将 `chat.js` 的流式请求与历史加载拆成独立 AbortController,避免补拉历史时误中断当前发送状态,导致“每次 message 思考耗时”卡片显示无数据。
+- 修正 `console/src/views/DashboardView.vue` 直接进入 Obs 页面时没有当前会话的问题: 当 `currentSessionId` 为空时自动加载会话列表并选中最近会话,再补拉消息历史,避免刷新或直接打开 `/dashboard` 后所有基于消息的 Obs 卡片显示空数据。
+- 进一步修正 Obs 页面无数据时的入口状态: `DashboardView.vue` 在未设置 `user_id` 时直接显示 Obs 专用输入框,避免直接打开 `/dashboard` 后静默空白; `LatencyCard.vue` 的空态补充当前 session 与消息数量,方便确认是未选会话、未加载消息还是确实没有完整轮次。
+- 修正 `console/src/components/dashboard/LatencyCard.vue` 在无耗时数据时整块图表消失的问题: 折线图容器现在始终渲染,即使没有 turn 数据也会显示坐标轴和占位刻度,避免卡片内部看起来完全空白。
+
 ### 前端 - Obs 面板响应式适配
+- 为 Obs 面板新增 `console/src/composable/useObsData.js` 统一观测数据派生层，集中从 chat/session store 提取当前节点、trace、上下文来源、RAG 指标、Token 趋势、耗时趋势、运行路径和调度池快照，避免每张卡片重复解析消息与 trace。
+- 重做 `console/src/components/dashboard/LanguageTraceCard.vue`、`ExecutionTraceCard.vue`、`RagMetricsCard.vue`、`TokenUsageCard.vue`、`LongTermMemoryCard.vue`、`KnowledgeRecallCard.vue`、`LatencyCard.vue` 与 `StateGraphCard.vue` 的卡片内容：由原先的占位文案改为真实 Obs 面板，分别展示思考轨迹、上下文拼装、节点时间线、工具输入输出、调度池状态、RAG 命中指标、large/small token 估算柱图、长期记忆/知识线索切换视图以及每轮消息耗时拆分。
 - 重写 `console/src/components/dashboard/StateGraphCard.vue` 的状态图刷新逻辑：LangGraph Mermaid 图结构改为首次挂载时只渲染一次，后续 `currentNode` 变化仅通过 DOM class 更新节点与边高亮，不再因状态切换重复执行 `mermaid.render()`，修复状态切换时整图闪烁、短暂消失和布局抖动的问题。
 - 调整 `console/src/views/DashboardView.vue` 的 Obs 页面外层结构,新增 `dashboard-content` 容器,补充 `min-height` 与移动端滚动策略,并让顶部 tab 在窄屏下支持换行与粘性定位,避免移动端切页后内容被固定高度容器截断。
 - 调整 `console/src/components/dashboard/AgentTracePanel.vue` 的桌面三栏布局为断点响应式网格: 宽屏保持三列,中屏改为“状态图整行 + 语言轨迹/执行轨迹双列”,小屏改为单列顺序堆叠,使 Agent 轨迹页同时适配桌面端与手机端。
@@ -209,6 +244,7 @@
 - 新增 `MemoryRetrievalService`,支持对 `session_summary` 和 `knowledge_chunk` 执行统一向量召回,优先走 pgvector,不可用时回退到 JSON 向量余弦相似度检索。
 - 将 `ContextBuilder` 升级为自动召回长期记忆和知识库片段并注入系统上下文,同时新增 `get_long_term_memory` 与 `get_knowledge_context` 两个 builtin 工具走同一检索链路。
 - 将 `main.py` 改为长期记忆与知识库召回验证脚本: 启动时自动灌知识库,首轮对话后同步生成 summary,第二轮调用前打印召回上下文预览以便确认 Memory 和 Knowledge 是否同时命中。
+- 调整聊天发送链路: 将新会话创建从 `ChatView.vue` 前移到 `chat.js` 的占位气泡渲染之后执行。现在用户发送首条消息时,前端会先立即插入 assistant 占位气泡并完成首帧绘制,再异步创建 session 和发起流式请求,避免首条消息在后端思考期间看起来像“没有回复”。
 
 ## 2026-05-15
 
@@ -252,4 +288,33 @@
 ### 前端 — 修复 SSE 中 action 节点内容污染 assistant 气泡
 
 - 修复 `chat.js` 的 `send()` 中 SSE chunk 处理逻辑：当 `chunk.node === 'action'` 且有内容时，将工具返回结果写入独立的 `role: 'tool'` 消息，不再覆盖 assistant 占位气泡。同时 action 节点的 trace（工具调用开始/结束描述）仍附加到 assistant 消息的 trace 数组中供 ThinkingSteps 展示。planner/reflection/compress 等纯 trace 节点事件也改为仅附加 trace 而不触发 content 更新。解决了流式过程中工具返回全文在对话框主体闪现、重进后才正确归位到 tool 灰框的同步/异步渲染不一致问题。
+
+### 前端 — 聊天区流式滚动改为仅在贴底时自动跟随
+
+- 修改 `console/src/components/chat/MessageList.vue` 的自动滚动逻辑：新增“是否仍贴底”状态与滚动监听。只有当用户原本停留在底部时，新消息和流式 token 才会自动滚到底部；如果用户主动向上滚动查看历史消息，则不再强制抢回滚动位置，直到用户再次滚回底部为止。改善流式对话时的阅读体验。
+
+### 前端 — Obs 上下文拼装模块改为块级拼装视图
+
+- 修改 `console/src/composable/useObsData.js`：新增 `contextAssembly` 派生数据，按真实拼装顺序拆出系统提示、重要事实摘要、长期记忆索引、知识库索引、短期历史窗口和当前问题，并附带块数量、总行数、记忆/知识数量等统计信息。
+- 修改 `console/src/components/dashboard/LanguageTraceCard.vue`：将“上下文拼装”从简单来源列表升级为块级结构展示。可按顺序查看每个上下文块的来源颜色、类型状态、行数和具体内容，更接近真实 `ContextBuilder` 的送模拼装效果；保留原有来源列表作为兜底回退视图。
+
+### 前端 — 修复 Obs 上下文拼装标签无法点击
+
+- 调整 `console/src/components/dashboard/LanguageTraceCard.vue` 标题栏局部布局：覆盖卡片标题栏的 `space-between` 排布，改为左对齐流式布局，并让 `window-status` 自动顶到最右侧。同步提升标签按钮的点击层级，修复“上下文拼装”标签被右侧状态文本挤压导致无法点击的问题。
+- 进一步将 `LanguageTraceCard` 标题栏拆成 `titlebar-content` 双区结构：左侧独立承载 tabs，右侧单独承载状态文本，并为标签按钮显式添加 `type=\"button\"`。避免浏览器默认按钮行为或标题栏布局挤压继续影响“上下文拼装”标签点击。
+- 最终将 `LanguageTraceCard` 的切换 tabs 从标题栏中完全移出，改为卡片正文顶部的独立 `card-tabs` 条，标题栏仅保留窗口标题与状态文本。彻底规避 macOS titlebar 布局和覆盖层对“上下文拼装”按钮点击的干扰。
+- 为 `LanguageTraceCard` 的上下文分支增加兜底空值保护：`assemblyBlocks` 和 `assemblyStats` 改为可空读取并提供默认值，避免切到“上下文拼装”时因 `contextAssembly` 尚未准备好而触发渲染异常，表现为“按钮点击无响应”。
+- 调整 `AgentTracePanel.vue` 三列容器层级与裁剪：为 `col-mid` 提升 `z-index`，同时给左右三列都加 `overflow: hidden`，防止相邻卡片内容越界覆盖中间列点击区域。
+- 调整 `StateGraphCard.vue` 的状态图 SVG：为 `graph-svg` 增加裁剪，并将渲染出的 Mermaid `svg` 设为 `pointer-events: none`。状态图仍可展示，但不再因为 SVG 越界而吞掉中间 `LanguageTraceCard` 的标签点击事件。
+- 最终通过自动化复现定位到真实原因：点击“上下文拼装”后浏览器运行时报 `Cannot read properties of undefined (reading 'value')`。修复 `LanguageTraceCard.vue` 中对 `obs.contextAssembly.value` 的直接访问，改为先安全读取 `obs.contextAssembly?.value ?? {}`，再派生 `assemblyBlocks` 和 `assemblyStats`，避免分支切换时因 composable 字段暂未挂载而导致整块视图回退成“按钮无响应”。
+
+### 前端 — Obs 页面自动补拉当前会话历史，修复上下文拼装空白
+
+- 修改 `console/src/stores/chat.js`：新增 `loadedSessionId` 状态，记录当前消息列表对应的已加载会话；历史加载时同时保留服务端返回的 `metadata` 字段，供后续 Obs 面板扩展使用。
+- 修改 `console/src/views/DashboardView.vue`：进入 Obs 页面时，若当前存在选中 session 且 `chatStore` 尚未载入该会话历史，则自动调用 `loadHistory()` 补拉消息。这样观测面板不再依赖“必须先留在 Chat 页并保持 store 热状态”，可直接获得当前会话的消息数据源，避免“上下文拼装”与其他 Obs 卡片空白。
+
+### 前端 — 修复 Obs 耗时卡内容区空白
+
+- 修改 `console/src/components/dashboard/MemoryKnowledgePanel.vue`：为下层三列卡片补齐 `height: 100%` 和 `min-height: 0`，修复 `LatencyCard` 在 grid 第三列中高度链不完整、正文区域可能被压空的问题。
+- 修改 `console/src/components/dashboard/LatencyCard.vue`：无耗时数据时不再依赖 ECharts 占位渲染，改为直接输出固定高度的 SVG 坐标骨架与示意折线，保证至少可见坐标轴、网格线和占位图形；有真实数据时仍使用 ECharts 折线图和步骤明细视图。
 

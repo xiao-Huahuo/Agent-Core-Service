@@ -198,6 +198,16 @@ class AgentCore:
         )
         messages = context_builder.build_messages(user_id=user_id, session_id=session_id, current_prompt=prompt)
         logger.debug("上下文构建完成 | message_count=%d", len(messages))
+        for msg in messages:
+            if isinstance(msg, SystemMessage):
+                msg_create = self._message_to_create(
+                    message=msg,
+                    user_id=user_id,
+                    session_id=session_id,
+                    node_name="context_builder",
+                )
+                if msg_create is not None:
+                    message_service.create_message(msg_create)
         message_service.create_message(
             MessageCreate(
                 session_id=session_id,
@@ -369,17 +379,20 @@ class AgentCore:
                         "content": item.get("content", ""),
                         "tool_calls": item.get("tool_calls", []),
                         "trace": item.get("trace", []),
+                        "model_name": self._model_name_for_node(item.get("node", "agent")),
                     }
 
                 elif item_type == "tool_trace":
                     trace = item.get("trace", {})
                     if trace:
+                        trace["model_name"] = self._model_name_for_node(trace.get("node", "action"))
                         _turn_traces.append(trace)
                     yield {
                         "node": trace.get("node", "action"),
                         "content": "",
                         "tool_calls": [],
                         "trace": [trace] if trace else [],
+                        "model_name": self._model_name_for_node(trace.get("node", "action")),
                     }
 
                 elif item_type == "node":
@@ -388,6 +401,8 @@ class AgentCore:
                         logger.debug("图节点执行 | node=%s user=%s session=%s", node_name, user_id, session_id)
                         node_traces = state_update.get("trace", []) if state_update else []
                         if node_traces:
+                            for t in node_traces:
+                                t["model_name"] = self._model_name_for_node(node_name)
                             _turn_traces.extend(node_traces)
                         if message_service is not None:
                             self._save_state_update_messages(
@@ -398,7 +413,9 @@ class AgentCore:
                                 state_update=state_update,
                                 turn_traces=_turn_traces,
                             )
-                        yield self._build_stream_payload(node_name=node_name, state_update=state_update)
+                        payload = self._build_stream_payload(node_name=node_name, state_update=state_update)
+                        payload["model_name"] = self._model_name_for_node(node_name)
+                        yield payload
         except GeneratorExit:
             cancel_event.set()
             partial = _streamed_content[0]
@@ -523,6 +540,12 @@ class AgentCore:
                 metadata_json=metadata,
             )
         if isinstance(message, SystemMessage):
+            rag_metrics = (getattr(message, "additional_kwargs", {}) or {}).get("rag_metrics")
+            if rag_metrics:
+                metadata["rag_metrics"] = rag_metrics
+            recall_details = (getattr(message, "additional_kwargs", {}) or {}).get("recall_details")
+            if recall_details:
+                metadata["recall_details"] = recall_details
             return MessageCreate(
                 session_id=session_id,
                 user_id=user_id,
@@ -602,6 +625,13 @@ class AgentCore:
             elif node_name == "summary":
                 process_lines.append(f"{index}. 摘要节点执行: {event.get('trace', [])}")
         return process_lines
+
+    def _model_name_for_node(self, node_name: str) -> str:
+        """根据节点名返回对应的模型名称，供前端展示。"""
+        small_nodes = {"planner"}
+        if node_name in small_nodes and self.config.model.small_model_name:
+            return self.config.model.small_model_name
+        return self.config.model.model_name
 
     @staticmethod
     def _build_stream_payload(*, node_name: str, state_update: dict[str, Any] | None) -> dict[str, Any]:

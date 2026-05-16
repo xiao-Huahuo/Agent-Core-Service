@@ -11,6 +11,7 @@ from typing import Any, Iterator
 from fastapi import APIRouter, Body, Query
 from fastapi.responses import StreamingResponse
 
+from agent_service.api.recall_details import build_recall_details_payload
 from agent_service.api.rest.deps import _require_agent, _require_message_service
 
 router = APIRouter()
@@ -167,3 +168,23 @@ async def agent_events(
         "event_count": len(events),
         "events": events,
     }
+
+
+@router.get("/agent/recall-details")
+async def agent_recall_details(
+    session_id: str = Query(..., min_length=1, description="会话 ID"),
+    user_id: str = Query(..., min_length=1, description="用户 ID"),
+) -> dict[str, Any]:
+    """
+    获取指定会话最近一次真实召回快照,供 Obs 面板展示 ReRank 前后条目。
+
+    数据来源是 ContextBuilder 构建的 system message metadata,其中包含真实的
+    pre_rerank / post_rerank 明细,而不是前端二次推断的索引摘要。
+    """
+
+    return build_recall_details_payload(
+        agent=_require_agent(),
+        message_service=_require_message_service(),
+        user_id=user_id,
+        session_id=session_id,
+    )

@@ -108,6 +108,11 @@ class AgentServiceStub(object):
                 request_serializer=agent__service__pb2.EventsRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.EventsResponse.FromString,
                 _registered_method=True)
+        self.GetRecallDetails = channel.unary_unary(
+                '/agent_service.AgentService/GetRecallDetails',
+                request_serializer=agent__service__pb2.RecallDetailsRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.RecallDetailsResponse.FromString,
+                _registered_method=True)
 
 
 class AgentServiceServicer(object):
@@ -213,6 +218,12 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetRecallDetails(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AgentServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -280,6 +291,11 @@ def add_AgentServiceServicer_to_server(servicer, server):
                     servicer.GetEvents,
                     request_deserializer=agent__service__pb2.EventsRequest.FromString,
                     response_serializer=agent__service__pb2.EventsResponse.SerializeToString,
+            ),
+            'GetRecallDetails': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetRecallDetails,
+                    request_deserializer=agent__service__pb2.RecallDetailsRequest.FromString,
+                    response_serializer=agent__service__pb2.RecallDetailsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -642,6 +658,33 @@ class AgentService(object):
             '/agent_service.AgentService/GetEvents',
             agent__service__pb2.EventsRequest.SerializeToString,
             agent__service__pb2.EventsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetRecallDetails(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetRecallDetails',
+            agent__service__pb2.RecallDetailsRequest.SerializeToString,
+            agent__service__pb2.RecallDetailsResponse.FromString,
             options,
             channel_credentials,
             insecure,

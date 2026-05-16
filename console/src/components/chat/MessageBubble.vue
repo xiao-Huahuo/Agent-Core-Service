@@ -4,9 +4,9 @@
 -->
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import MarkdownContent from './MarkdownContent.vue'
-import ThinkingSteps from './ThinkingSteps.vue'
+import ThinkingInline from './ThinkingInline.vue'
 
 const props = defineProps({
   message: { type: Object, required: true },
@@ -21,6 +21,8 @@ const bubbleRadius = computed(() => {
     ? '18px 4px 18px 18px'
     : '4px 18px 18px 18px'
 })
+
+const thinkingRevealed = ref(true)
 
 /** 过滤出有 human_readable 的思考步骤,去重(按 human_readable 文本) */
 const thinkingTraces = computed(() => {
@@ -41,8 +43,28 @@ const thinkingTraces = computed(() => {
     <img :src="agentAvatar" class="avatar" alt="agent" />
     <div class="bubble-col">
       <span v-if="message.node" class="node-label">{{ message.node }}</span>
-      <div class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
-        <ThinkingSteps v-if="thinkingTraces.length > 0" :traces="thinkingTraces" :is-streaming="isStreaming" />
+      <Transition name="think-slide">
+        <div v-if="thinkingTraces.length > 0 && (isStreaming || thinkingRevealed)" class="thinking-wrapper">
+          <ThinkingInline :traces="thinkingTraces" :is-streaming="isStreaming" :default-expanded="thinkingRevealed" @collapse="thinkingRevealed = false" />
+          <button
+            v-if="!isStreaming && thinkingRevealed"
+            class="thinking-toggle thinking-close"
+            @click="thinkingRevealed = false"
+          >
+            收起
+          </button>
+        </div>
+      </Transition>
+      <Transition name="think-fade">
+        <button
+          v-if="thinkingTraces.length > 0 && !isStreaming && !thinkingRevealed"
+          class="thinking-toggle"
+          @click="thinkingRevealed = true"
+        >
+          思考过程
+        </button>
+      </Transition>
+      <div v-if="message.content || isStreaming" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
         <MarkdownContent v-if="message.content" :content="message.content" :is-streaming="isStreaming" />
         <span v-if="isStreaming" class="cursor">|</span>
       </div>
@@ -126,6 +148,83 @@ const thinkingTraces = computed(() => {
   letter-spacing: 0.5px;
 }
 
+/* ---- 思考过程外框 ---- */
+.thinking-wrapper {
+  margin-bottom: var(--space-8);
+  overflow: hidden;
+}
+
+/* 展开: 向下滑入 */
+.think-slide-enter-active {
+  transition: max-height 0.35s ease, opacity 0.25s ease, margin-bottom 0.35s ease;
+  overflow: hidden;
+}
+
+.think-slide-leave-active {
+  transition: max-height 0.25s ease, opacity 0.2s ease, margin-bottom 0.25s ease;
+  overflow: hidden;
+}
+
+.think-slide-enter-from {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+}
+
+.think-slide-enter-to {
+  max-height: 800px;
+  opacity: 1;
+  margin-bottom: var(--space-8);
+}
+
+.think-slide-leave-from {
+  max-height: 800px;
+  opacity: 1;
+  margin-bottom: var(--space-8);
+}
+
+.think-slide-leave-to {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+}
+
+/* 链接: 淡入淡出 */
+.think-fade-enter-active {
+  transition: opacity 0.25s ease;
+}
+
+.think-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.think-fade-enter-from,
+.think-fade-leave-to {
+  opacity: 0;
+}
+
+.thinking-toggle {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--color-text-tertiary);
+  background: transparent;
+  border: none;
+  padding: 0 0 var(--space-6) 0;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+}
+
+.thinking-toggle:hover {
+  opacity: 0.8;
+  color: var(--color-accent);
+}
+
+.thinking-close {
+  padding: var(--space-6) 0 0 0;
+}
+
 /* ---- 气泡 ---- */
 .bubble {
   display: inline-block;
@@ -133,21 +232,31 @@ const thinkingTraces = computed(() => {
   max-width: 100%;
   border: 1px solid;
   word-break: break-word;
+  backdrop-filter: blur(var(--blur-strength));
+  -webkit-backdrop-filter: blur(var(--blur-strength));
 }
 
 .bubble.user {
   background: var(--color-user-bubble);
   border-color: var(--color-user-bubble-border);
+  box-shadow:
+    inset 0 1px 0 var(--color-user-bubble-highlight),
+    0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 0 18px var(--color-user-bubble-glow);
 }
 
 .bubble.assistant {
-  background: rgba(255,255,255,0.025);
-  border-color: var(--color-border);
+  background: var(--color-agent-bubble);
+  border-color: var(--color-agent-bubble-border);
+  box-shadow:
+    inset 0 1px 0 var(--color-agent-bubble-highlight),
+    0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 0 18px var(--color-agent-bubble-glow);
 }
 
 .content {
   margin: 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-chat);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
   color: var(--color-text-primary);

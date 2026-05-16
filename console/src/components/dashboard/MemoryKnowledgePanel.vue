@@ -5,11 +5,75 @@
 -->
 
 <script setup>
+import { computed, ref, watch } from 'vue'
+import { fetchRecallDetails } from '@/api/agent'
+import { useUserId } from '@/composable/useUserId'
+import { useSessionStore } from '@/stores/session'
+import { useChatStore } from '@/stores/chat'
 import RagMetricsCard from '@/components/dashboard/RagMetricsCard.vue'
 import TokenUsageCard from '@/components/dashboard/TokenUsageCard.vue'
 import LongTermMemoryCard from '@/components/dashboard/LongTermMemoryCard.vue'
 import KnowledgeRecallCard from '@/components/dashboard/KnowledgeRecallCard.vue'
 import LatencyCard from '@/components/dashboard/LatencyCard.vue'
+
+const { userId } = useUserId()
+const sessionStore = useSessionStore()
+const chatStore = useChatStore()
+
+function createEmptyRecallPayload() {
+  return {
+    session_id: '',
+    user_id: '',
+    created_at: '',
+    query: '',
+    rag_metrics: {},
+    memory_recall: { pre_rerank: [], post_rerank: [] },
+    knowledge_recall: { pre_rerank: [], post_rerank: [] },
+  }
+}
+
+const recallPayload = ref(createEmptyRecallPayload())
+const isRecallLoading = ref(false)
+
+const recallRefreshKey = computed(() => {
+  const lastAssistant = [...chatStore.messages].reverse().find((message) => message.role === 'assistant')
+  return [
+    sessionStore.currentSessionId || '',
+    chatStore.loadedSessionId || '',
+    chatStore.isStreaming ? 'streaming' : 'idle',
+    lastAssistant?.message_id || lastAssistant?.created_at || '',
+    chatStore.messages.length,
+  ].join(':')
+})
+
+async function loadRecallPayload() {
+  const sessionId = sessionStore.currentSessionId
+  if (!userId.value || !sessionId) {
+    recallPayload.value = createEmptyRecallPayload()
+    return
+  }
+  if (chatStore.isStreaming) {
+    return
+  }
+
+  isRecallLoading.value = true
+  try {
+    recallPayload.value = await fetchRecallDetails(sessionId, userId.value)
+  } catch (error) {
+    console.error('加载召回快照失败:', error)
+    recallPayload.value = createEmptyRecallPayload()
+  } finally {
+    isRecallLoading.value = false
+  }
+}
+
+watch(
+  () => [userId.value, sessionStore.currentSessionId, recallRefreshKey.value],
+  () => {
+    loadRecallPayload()
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
@@ -24,10 +88,16 @@ import LatencyCard from '@/components/dashboard/LatencyCard.vue'
     </div>
     <div class="row-lower">
       <div class="col-memory">
-        <LongTermMemoryCard />
+        <LongTermMemoryCard
+          :recall-snapshot="recallPayload.memory_recall"
+          :is-loading="isRecallLoading"
+        />
       </div>
       <div class="col-knowledge">
-        <KnowledgeRecallCard />
+        <KnowledgeRecallCard
+          :recall-snapshot="recallPayload.knowledge_recall"
+          :is-loading="isRecallLoading"
+        />
       </div>
       <div class="col-latency">
         <LatencyCard />
@@ -51,20 +121,27 @@ import LatencyCard from '@/components/dashboard/LatencyCard.vue'
   display: flex;
   gap: var(--space-10);
   min-height: 0;
+  height: 240px;
+  align-items: stretch;
 }
 
 .row-lower {
   display: grid;
-  grid-template-columns: 180px 180px minmax(0, 1fr);
+  grid-template-columns: 280px 280px minmax(0, 1fr);
   gap: var(--space-10);
   flex: 1;
   min-height: 0;
 }
 
 .col-rag {
-  width: 260px;
+  flex: 0 0 auto;
   min-width: 200px;
-  height: 200px;
+  max-width: 340px;
+  min-height: 0;
+}
+
+.col-rag > * {
+  height: 100%;
 }
 
 .col-token {
@@ -97,20 +174,23 @@ import LatencyCard from '@/components/dashboard/LatencyCard.vue'
 .col-memory > *,
 .col-knowledge > *,
 .col-latency > * {
+  height: 100%;
   width: 100%;
   min-width: 0;
+  min-height: 0;
 }
 
 @media (max-width: 1200px) {
   .row-upper {
     flex-direction: column;
+    height: auto;
   }
 
   .col-rag {
-    width: auto;
-    min-width: 0;
-    height: auto;
+    flex: 1 1 auto;
+    max-width: none;
     min-height: 180px;
+    max-height: none;
   }
 
   .row-lower {

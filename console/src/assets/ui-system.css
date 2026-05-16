@@ -11,6 +11,7 @@
 :root {
   --font-sans: "JetBrains Mono", "Cascadia Code", "Consolas", ui-monospace, monospace;
   --font-mono: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
+  --font-chat: system-ui, "Segoe UI", "Roboto", "Inter", "Noto Sans SC", sans-serif;
 
   --font-size-xs: 0.75rem;    /* 12px */
   --font-size-sm: 0.825rem;   /* 13.2px */
@@ -95,8 +96,14 @@
   --color-accent-muted: rgba(217, 145, 120, 0.12);
   --color-accent-glow: rgba(217, 145, 120, 0.1);
 
-  --color-user-bubble: rgba(217, 145, 120, 0.1);
-  --color-user-bubble-border: rgba(217, 145, 120, 0.2);
+  --color-user-bubble: rgba(255, 72, 72, 0.12);
+  --color-user-bubble-border: rgba(255, 96, 96, 0.28);
+  --color-user-bubble-glow: rgba(255, 72, 72, 0.26);
+  --color-user-bubble-highlight: rgba(255, 164, 164, 0.12);
+  --color-agent-bubble: rgba(48, 128, 255, 0.16);
+  --color-agent-bubble-border: rgba(96, 164, 255, 0.3);
+  --color-agent-bubble-glow: rgba(48, 128, 255, 0.32);
+  --color-agent-bubble-highlight: rgba(116, 179, 255, 0.18);
 
   --color-green: #00c758;
   --color-blue: #3080ff;
@@ -145,8 +152,14 @@
   --color-accent-muted: rgba(184, 112, 80, 0.1);
   --color-accent-glow: rgba(184, 112, 80, 0.08);
 
-  --color-user-bubble: rgba(184, 112, 80, 0.08);
-  --color-user-bubble-border: rgba(184, 112, 80, 0.15);
+  --color-user-bubble: rgba(239, 68, 68, 0.06);
+  --color-user-bubble-border: rgba(239, 68, 68, 0.14);
+  --color-user-bubble-glow: transparent;
+  --color-user-bubble-highlight: transparent;
+  --color-agent-bubble: rgba(21, 93, 252, 0.08);
+  --color-agent-bubble-border: rgba(21, 93, 252, 0.18);
+  --color-agent-bubble-glow: transparent;
+  --color-agent-bubble-highlight: transparent;
 
   --color-green: #00a544;
   --color-blue: #155dfc;

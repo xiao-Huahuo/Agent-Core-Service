@@ -21,6 +21,9 @@ export const API = {
   /** Agent trace 事件查询 */
   AGENT_EVENTS: '/agent/events',
 
+  /** Agent 真实召回快照查询 */
+  AGENT_RECALL_DETAILS: '/agent/recall-details',
+
   /** 会话列表 / 创建 */
   SESSIONS: '/sessions',
 

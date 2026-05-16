@@ -26,13 +26,7 @@ async function submitUserId() {
 }
 
 async function handleSend(text) {
-  let sessionId = sessionStore.currentSessionId
-  if (!sessionId) {
-    sessionId = await sessionStore.create(userId.value)
-    sessionStore.select(sessionId)
-    /* 新会话历史为空，直接发送 */
-  }
-  await chatStore.send(userId.value, sessionId, text)
+  await chatStore.send(userId.value, sessionStore.currentSessionId, text)
 }
 </script>
 

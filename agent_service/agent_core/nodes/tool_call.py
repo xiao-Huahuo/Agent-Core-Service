@@ -123,12 +123,14 @@ class ToolCallNode:
                 content = f"工具 {tool_name} 执行失败: {exc}"
             messages.append(ToolMessage(content=content, tool_call_id=tool_call_id))
             result_summary = self._summarize_result(content)
+            result_count = self._count_results(content)
             end_trace = {
                 "node": "action",
                 "event": "tool_call_end",
                 "tool_name": tool_name,
                 "result_summary": result_summary,
                 "human_readable": f"工具「{tool_name}」返回：{result_summary}",
+                "result_count": result_count,
             }
             traces.append(end_trace)
             if trace_callback is not None:
@@ -156,3 +158,17 @@ class ToolCallNode:
         if len(text) <= 200:
             return text
         return text[:200] + "…"
+
+    @staticmethod
+    def _count_results(content: str) -> int | None:
+        """从工具输出中统计条目数,供前端展示"检索到 X 条知识"等。"""
+        lines = str(content).strip().split("\n")
+        count = 0
+        for line in lines:
+            stripped = line.lstrip()
+            # 匹配 "1. " "2. " 等编号行
+            if stripped and stripped[0].isdigit():
+                dot_pos = stripped.find(". ")
+                if dot_pos > 0 and stripped[:dot_pos].isdigit():
+                    count += 1
+        return count if count > 0 else None

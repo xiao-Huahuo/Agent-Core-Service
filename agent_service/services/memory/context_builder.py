@@ -60,15 +60,21 @@ class ContextBuilder:
             session_id=session_id,
             limit=self.config.memory.max_context_messages,
         )
+        history = [msg for msg in history if msg.role != "system"]
         messages: list[BaseMessage] = []
-        memory_context = self._build_retrieved_context(
+        memory_context, rag_metrics, recall_details = self._build_retrieved_context(
             user_id=user_id,
             session_id=session_id,
             current_prompt=current_prompt,
             has_history=bool(history),
         )
         if memory_context:
-            messages.append(SystemMessage(content=memory_context))
+            messages.append(
+                SystemMessage(
+                    content=memory_context,
+                    additional_kwargs={"rag_metrics": rag_metrics, "recall_details": recall_details},
+                )
+            )
         messages.extend(self._to_langchain_message(message) for message in history)
         messages = self._filter_orphaned_tool_messages(messages)
         messages.append(HumanMessage(content=current_prompt))
@@ -89,21 +95,25 @@ class ContextBuilder:
         session_id: str,
         current_prompt: str,
         has_history: bool,
-    ) -> str:
+    ) -> tuple[str, dict[str, float | int], dict[str, Any]]:
         """
-        构建长期记忆和知识库召回上下文文本。
+        构建长期记忆和知识库召回上下文文本,并产出检索指标。
 
         user_id: 用户 ID。
         session_id: 会话 ID。
         current_prompt: 当前用户输入。
+        has_history: 当前 session 是否有历史消息。
+
+        返回 (context_text, rag_metrics, recall_details)。
         """
 
-        memories = self.retrieval_service.retrieve_long_term_memory(
+        memory_snapshot = self.retrieval_service.retrieve_long_term_memory_with_debug(
             query=current_prompt,
             user_id=user_id,
             session_id=session_id,
             top_k=self.config.memory.rerank_top_k,
         )
+        memories = memory_snapshot.post_rerank_results
         if not memories:
             latest_summary = self.retrieval_service.get_latest_session_summary(
                 user_id=user_id,
@@ -111,14 +121,51 @@ class ContextBuilder:
             )
             if latest_summary is not None:
                 memories = [latest_summary]
-        knowledge = self.retrieval_service.retrieve_knowledge(
+        knowledge_snapshot = self.retrieval_service.retrieve_knowledge_with_debug(
             query=current_prompt,
             top_k=self.config.memory.rerank_top_k,
         )
+        knowledge = knowledge_snapshot.post_rerank_results
         important_summary = self.retrieval_service.get_latest_important_fact_summary(
             user_id=user_id,
             session_id=session_id,
         )
+
+        # ---- 计算 RAG 指标 ----
+        top_k = max(self.config.memory.rerank_top_k, 1)
+        memory_count = len(memories)
+        knowledge_count = len(knowledge)
+        important_count = 1 if important_summary is not None else 0
+
+        recall_memory = (memory_count / top_k) * 100
+        recall_knowledge = (knowledge_count / top_k) * 100
+        recall = round((recall_memory + recall_knowledge) / 2, 1)
+
+        hit_memory = 1 if memories else 0
+        hit_knowledge = 1 if knowledge else 0
+        hit_rate = round(((hit_memory + hit_knowledge) / 2) * 100, 1)
+
+        all_scored = list(memories) + list(knowledge)
+        if all_scored:
+            confidence = round(sum(item.final_score for item in all_scored) / len(all_scored) * 100, 1)
+        else:
+            confidence = 0.0
+
+        metrics: dict[str, float | int] = {
+            "recall": min(recall, 100.0),
+            "hit_rate": hit_rate,
+            "confidence": confidence,
+            "memory_count": memory_count,
+            "knowledge_count": knowledge_count,
+            "important_count": important_count,
+        }
+        recall_details: dict[str, Any] = {
+            "query": current_prompt,
+            "memory_recall": self.retrieval_service.serialize_debug_snapshot(memory_snapshot),
+            "knowledge_recall": self.retrieval_service.serialize_debug_snapshot(knowledge_snapshot),
+        }
+
+        # ---- 构建上下文文本 ----
         sections: list[str] = []
         sections.extend(self.config.model.retrieval_context_system_prompt.splitlines())
         if has_history:
@@ -131,19 +178,19 @@ class ContextBuilder:
             sections.append(f"- {important_summary.memory.content}")
         if memories:
             sections.append(
-                f"长期记忆索引: 系统中检索到 {len(memories)} 条与当前问题相关的历史记忆。"
+                f"长期记忆索引: 系统中检索到 {memory_count} 条与当前问题相关的历史记忆。"
                 f"如果你需要查看具体内容,请调用 get_long_term_memory 工具来获取全文。"
             )
         if knowledge:
             sections.append(
-                f"知识库索引: 系统中检索到 {len(knowledge)} 条与当前问题相关的知识库片段。"
+                f"知识库索引: 系统中检索到 {knowledge_count} 条与当前问题相关的知识库片段。"
                 f"如果你需要查看具体内容,请调用 get_knowledge_context 工具来获取全文。"
             )
         if has_refs:
             sections.append("--- 参考材料结束 ---")
         if len(sections) <= 4 and not has_history:
-            return ""
-        return "\n".join(sections)
+            return "", metrics, recall_details
+        return "\n".join(sections), metrics, recall_details
 
     def _rebuild_messages_for_compressed_context(
         self,
@@ -163,14 +210,19 @@ class ContextBuilder:
         """
 
         messages: list[BaseMessage] = []
-        memory_context = self._build_retrieved_context(
+        memory_context, rag_metrics, recall_details = self._build_retrieved_context(
             user_id=user_id,
             session_id=session_id,
             current_prompt=current_prompt,
             has_history=bool(history),
         )
         if memory_context:
-            messages.append(SystemMessage(content=memory_context))
+            messages.append(
+                SystemMessage(
+                    content=memory_context,
+                    additional_kwargs={"rag_metrics": rag_metrics, "recall_details": recall_details},
+                )
+            )
         messages.extend(self._to_langchain_message(message) for message in history)
         messages = self._filter_orphaned_tool_messages(messages)
         messages.append(HumanMessage(content=current_prompt))

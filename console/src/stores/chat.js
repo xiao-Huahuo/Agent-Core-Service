@@ -34,8 +34,14 @@ export const useChatStore = defineStore('chat', () => {
   /** 流式传输过程中的错误信息 */
   const streamError = ref('')
 
-  /** 用于取消正在进行的请求(加载历史、发送消息) */
-  let _abortController = null
+  /** 当前已加载到消息列表中的会话 ID,供观测面板判断是否需要补拉历史。 */
+  const loadedSessionId = ref('')
+
+  /** 用于取消正在进行的流式发送请求 */
+  let _streamAbortController = null
+
+  /** 用于取消正在进行的历史消息加载请求 */
+  let _historyAbortController = null
 
   /* ================================================================
    * 计算属性
@@ -55,21 +61,11 @@ export const useChatStore = defineStore('chat', () => {
 
   /**
    * 向消息列表添加一条消息。
-   *
-   * @param {{role:string,content:string,message_id?:string,node?:string,tool_calls?:Array,trace?:Array,created_at?:string}} msg
    */
   function appendMessage(msg) {
     messages.value.push({ ...msg })
   }
 
-  /**
-   * 更新最后一条消息的内容和元数据。
-   *
-   * @param {string} content 累积的完整内容
-   * @param {string} [node] 当前节点名
-   * @param {Array} [toolCalls] 工具调用列表
-   * @param {Array} [trace] trace 事件列表(追加而非替换)
-   */
   function findLastAssistant() {
     for (let i = messages.value.length - 1; i >= 0; i--) {
       if (messages.value[i].role === 'assistant') return messages.value[i]
@@ -95,52 +91,52 @@ export const useChatStore = defineStore('chat', () => {
 
   /**
    * 从服务端加载会话的历史消息。
-   *
-   * @param {string} sessionId 会话 ID
-   * @param {string} userId 用户 ID
-   * @param {number} [limit=50] 返回数量上限
    */
   async function loadHistory(sessionId, userId, limit = 50) {
-    _abortController?.abort()
-    _abortController = new AbortController()
-    const { signal } = _abortController
+    _historyAbortController?.abort()
+    _historyAbortController = new AbortController()
+    const { signal } = _historyAbortController
 
     messages.value = []
     try {
       const history = await fetchMessages(sessionId, userId, limit, { signal })
       messages.value = history
         .filter(m => m.role !== 'tool')
+        .filter(m => m.role !== 'assistant' || m.content)
         .map(m => ({
           role: m.role,
           content: m.content,
           message_id: m.message_id,
           tool_calls: m.tool_calls,
+          metadata: m.metadata || {},
           trace: m.metadata?.trace || [],
           created_at: m.created_at,
         }))
+      loadedSessionId.value = sessionId
     } catch (err) {
       if (err.name === 'AbortError') return
       console.error('加载历史消息失败:', err)
       messages.value = []
+      loadedSessionId.value = ''
     }
   }
 
   /**
    * 发送用户消息并开始流式对话。
    *
-   * 如果当前正在流式输出,会先中断上一次请求,保留已输出的部分内容,
-   * 然后立即发送新的 prompt。
-   *
-   * @param {string} userId 用户 ID
-   * @param {string} sessionId 会话 ID
-   * @param {string} prompt 用户输入文本
+   * 不预先创建 assistant 占位消息 — “思考中”的气泡由 MessageList 模板
+   * 根据 isStreaming 标志直接渲染,不受任何异步时序影响。
+   * trace 优先到达时暂存缓冲,第一条有内容或 tool_calls 的事件到达时才创建
+   * assistant 消息,并将缓冲的 trace 一次性注入。
    */
   async function send(userId, sessionId, prompt) {
     if (!prompt.trim()) return
+    const sessionStore = useSessionStore()
+    let targetSessionId = sessionId || sessionStore.currentSessionId
 
     /* 如果正在流式输出,中断上一次请求 */
     if (isStreaming.value) {
-      _abortController?.abort()
+      _streamAbortController?.abort()
       isStreaming.value = false
       const lastAssistant = findLastAssistant()
       if (lastAssistant) {
@@ -149,71 +145,86 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     /* 用户消息入列 */
-    appendMessage({ role: 'user', content: prompt })
+    appendMessage({ role: 'user', content: prompt, created_at: new Date().toISOString() })
 
-    /* 助手占位消息 */
-    appendMessage({ role: 'assistant', content: '', node: '', tool_calls: [], trace: [] })
-
-    _abortController = new AbortController()
-    const { signal } = _abortController
+    _streamAbortController = new AbortController()
+    const { signal } = _streamAbortController
     isStreaming.value = true
     streamError.value = ''
 
+    const bufferedTraces = []
+    let assistantCreated = false
+
+    function ensureAssistant(node) {
+      if (assistantCreated) return
+      appendMessage({
+        role: 'assistant',
+        content: '​', // 零宽空格,避免 content 为空触发布尔短路
+        node: node || '',
+        tool_calls: [],
+        trace: [...bufferedTraces],
+      })
+      assistantCreated = true
+      bufferedTraces.length = 0
+    }
+
     try {
-      for await (const chunk of streamPrompt(userId, sessionId, prompt, { signal })) {
+      if (!targetSessionId) {
+        targetSessionId = await sessionStore.create(userId)
+        sessionStore.select(targetSessionId)
+      }
+
+      for await (const chunk of streamPrompt(userId, targetSessionId, prompt, { signal })) {
         currentNode.value = chunk.node || ''
 
-        /* action 节点: trace 附加到 assistant 占位,工具结果已在思考步骤中展示 */
+        /* action 节点 */
         if (chunk.node === 'action' && chunk.content) {
-          const lastAssistant = findLastAssistant()
-          if (lastAssistant) {
-            lastAssistant.node = chunk.node
+          ensureAssistant(chunk.node)
+          const la = findLastAssistant()
+          if (la) {
+            la.node = chunk.node
             if (chunk.trace && chunk.trace.length > 0) {
-              if (!lastAssistant.trace) lastAssistant.trace = []
-              lastAssistant.trace.push(...chunk.trace)
+              if (!la.trace) la.trace = []
+              la.trace.push(...chunk.trace)
             }
           }
           continue
         }
 
-        /* 普通节点事件: 更新 assistant 占位消息 */
-        const lastAssistant = findLastAssistant()
-        if (lastAssistant) {
-          if (chunk.node) lastAssistant.node = chunk.node
-        }
+        /* 有实质内容 → 确保 assistant 存在并写入 */
         if (chunk.content || (chunk.tool_calls && chunk.tool_calls.length > 0)) {
-          updateLastMessage(
-            chunk.content,
-            chunk.node,
-            chunk.tool_calls,
-            chunk.trace
-          )
+          ensureAssistant(chunk.node)
+          updateLastMessage(chunk.content, chunk.node, chunk.tool_calls, chunk.trace)
         } else if (chunk.trace && chunk.trace.length > 0) {
-          /* trace 仅有事件(planner/reflection/compress): 附加 trace 到 assistant */
-          if (lastAssistant) {
-            if (!lastAssistant.trace) lastAssistant.trace = []
-            lastAssistant.trace.push(...chunk.trace)
+          /* 仅有 trace 的事件 */
+          if (assistantCreated) {
+            const la = findLastAssistant()
+            if (la) {
+              if (!la.trace) la.trace = []
+              la.trace.push(...chunk.trace)
+            }
+          } else {
+            bufferedTraces.push(...chunk.trace)
           }
         }
       }
     } catch (err) {
       if (err.name === 'AbortError') return
       streamError.value = err.message || 'Stream connection failed'
-      updateLastMessage(
-        streamError.value,
-        undefined,
-        undefined,
-        undefined
-      )
+      if (assistantCreated) {
+        updateLastMessage(streamError.value, undefined, undefined, undefined)
+      }
     } finally {
-      /* 如果 signal 已被新请求 abort,跳过清理,让新请求接管 */
       if (signal.aborted) return
       isStreaming.value = false
       currentNode.value = ''
-      try {
-        const sessionStore = useSessionStore()
-        await sessionStore.load(userId)
-      } catch { /* 非关键 */ }
+      loadedSessionId.value = targetSessionId || ''
+      if (targetSessionId) {
+        try {
+          await sessionStore.load(userId)
+          await loadHistory(targetSessionId, userId)
+        } catch { /* 非关键 */ }
+      }
     }
   }
 
@@ -221,12 +232,15 @@ export const useChatStore = defineStore('chat', () => {
    * 清空当前消息列表,中止正在进行的请求。
    */
   function clear() {
-    _abortController?.abort()
-    _abortController = null
+    _streamAbortController?.abort()
+    _historyAbortController?.abort()
+    _streamAbortController = null
+    _historyAbortController = null
     messages.value = []
     isStreaming.value = false
     streamError.value = ''
     currentNode.value = ''
+    loadedSessionId.value = ''
   }
 
   return {
@@ -234,6 +248,7 @@ export const useChatStore = defineStore('chat', () => {
     isStreaming,
     currentNode,
     streamError,
+    loadedSessionId,
     lastMessage,
     canSend,
     loadHistory,

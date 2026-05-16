@@ -132,7 +132,7 @@ const html = computed(() => {
 <style scoped>
 /* ---- 根容器 ---- */
 .markdown-body {
-  font-family: var(--font-mono);
+  font-family: var(--font-chat);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
   color: var(--color-text-primary);
