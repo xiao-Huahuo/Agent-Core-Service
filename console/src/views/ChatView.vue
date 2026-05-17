@@ -144,18 +144,10 @@ async function handleSend(text) {
   display: flex;
   flex-direction: column;
   flex: 1;
-  width: 100%;
-  max-width: 50%;
-  min-width: 360px;
+  width: 720px;
+  max-width: 100%;
   overflow: hidden;
   align-self: center;
-}
-
-@media (max-width: 768px) {
-  .chat-content {
-    max-width: 100%;
-    min-width: 0;
-  }
 }
 
 /* ---- user_id 设置 ---- */

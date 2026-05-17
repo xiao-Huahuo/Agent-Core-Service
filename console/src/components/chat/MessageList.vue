@@ -147,6 +147,7 @@ onMounted(() => {
       :is-streaming="isStreaming && idx === visibleMessages.length - 1"
       :user-avatar="userAvatar"
       :agent-avatar="agentAvatar"
+      :show-avatar="msg.role !== 'assistant' || idx === 0 || visibleMessages[idx - 1].role !== 'assistant'"
     />
 
     <!-- 思考中占位: 头像 + 悬空文字 -->

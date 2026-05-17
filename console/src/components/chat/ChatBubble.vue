@@ -13,6 +13,7 @@ const props = defineProps({
   isStreaming: { type: Boolean, default: false },
   userAvatar: { type: String, default: '' },
   agentAvatar: { type: String, default: '' },
+  showAvatar: { type: Boolean, default: true },
 })
 
 /** agent: 左上直角指向左头像, user: 右上直角指向右头像 */

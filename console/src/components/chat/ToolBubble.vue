@@ -12,6 +12,7 @@ const props = defineProps({
   isStreaming: { type: Boolean, default: false },
   userAvatar: { type: String, default: '' },
   agentAvatar: { type: String, default: '' },
+  showAvatar: { type: Boolean, default: true },
 })
 
 const bubbleRadius = computed(() => {
@@ -24,12 +25,11 @@ const bubbleRadius = computed(() => {
 </script>
 
 <template>
-  <!-- Agent 消息: 头像在左 -->
+  <!-- Agent 消息: 只在连续组首条显示头像 -->
   <div v-if="message.role === 'assistant'" class="bubble-row assistant">
-    <img :src="agentAvatar" class="avatar" alt="agent" />
+    <img v-if="showAvatar" :src="agentAvatar" class="avatar" alt="agent" />
+    <div v-else class="avatar-spacer" />
     <div class="bubble-col">
-      <span v-if="message.node" class="node-label">{{ message.node }}</span>
-
       <div v-if="message.content || isStreaming" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
         <MarkdownContent v-if="message.content" :content="message.content" :is-streaming="isStreaming" />
         <span v-if="isStreaming" class="cursor">|</span>
@@ -85,6 +85,13 @@ const bubbleRadius = computed(() => {
   border: 1px solid var(--color-border);
 }
 
+.avatar-spacer {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
 /* ---- 列 ---- */
 .bubble-col {
   display: flex;
@@ -97,16 +104,6 @@ const bubbleRadius = computed(() => {
 }
 .bubble-row.user .bubble-col {
   align-items: flex-end;
-}
-
-/* ---- 节点标签 ---- */
-.node-label {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  color: var(--color-text-tertiary);
-  margin-bottom: var(--space-4);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 /* ---- 气泡 ---- */

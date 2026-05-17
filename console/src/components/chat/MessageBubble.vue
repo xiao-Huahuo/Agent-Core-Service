@@ -13,6 +13,7 @@ const props = defineProps({
   isStreaming: { type: Boolean, default: false },
   userAvatar: { type: String, default: '' },
   agentAvatar: { type: String, default: '' },
+  showAvatar: { type: Boolean, default: true },
 })
 
 const settings = useSettingsStore()
