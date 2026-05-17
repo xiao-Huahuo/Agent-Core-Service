@@ -26,6 +26,54 @@ from fastapi import FastAPI
 
 warnings.filterwarnings("ignore", message=".*allowed_objects.*")
 
+# Patch langchain_openai to preserve reasoning_content for DeepSeek thinking mode.
+# ChatOpenAI explicitly drops this field per its OpenAI-spec-only policy; DeepSeek
+# requires it back on every subsequent assistant message in the same conversation.
+import langchain_openai.chat_models.base as _lc_openai_base
+
+# 1) Response parsing: capture reasoning_content from API response into additional_kwargs
+_original_convert_dict = _lc_openai_base._convert_dict_to_message
+_original_convert_delta = _lc_openai_base._convert_delta_to_message_chunk
+
+
+def _patched_convert_dict_to_message(_dict: dict, **kwargs: Any) -> Any:
+    message = _original_convert_dict(_dict, **kwargs)
+    reasoning = _dict.get("reasoning_content")
+    if reasoning:
+        additional_kwargs = getattr(message, "additional_kwargs", None) or {}
+        additional_kwargs["reasoning_content"] = reasoning
+        message.additional_kwargs = additional_kwargs
+    return message
+
+
+def _patched_convert_delta_to_message_chunk(_dict: dict, default_class: Any) -> Any:
+    chunk = _original_convert_delta(_dict, default_class)
+    reasoning = _dict.get("reasoning_content")
+    if reasoning:
+        additional_kwargs = getattr(chunk, "additional_kwargs", None) or {}
+        additional_kwargs["reasoning_content"] = reasoning
+        chunk.additional_kwargs = additional_kwargs
+    return chunk
+
+
+_lc_openai_base._convert_dict_to_message = _patched_convert_dict_to_message
+_lc_openai_base._convert_delta_to_message_chunk = _patched_convert_delta_to_message_chunk
+
+# 2) Request formatting: include reasoning_content from additional_kwargs in API payload
+_original_convert_message = _lc_openai_base._convert_message_to_dict
+
+
+def _patched_convert_message_to_dict(message: Any, api: Any = "chat/completions") -> dict[str, Any]:
+    result = _original_convert_message(message, api=api)
+    additional_kwargs = getattr(message, "additional_kwargs", None) or {}
+    reasoning = additional_kwargs.get("reasoning_content")
+    if reasoning:
+        result["reasoning_content"] = reasoning
+    return result
+
+
+_lc_openai_base._convert_message_to_dict = _patched_convert_message_to_dict
+
 from agent_service.agent_core import AgentCore
 from agent_service.api.grpc.agent_service_pb2_grpc import add_AgentServiceServicer_to_server
 from agent_service.api.grpc.servicer import AgentServiceServicer

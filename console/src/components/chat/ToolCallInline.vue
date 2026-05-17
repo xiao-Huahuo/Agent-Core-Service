@@ -26,10 +26,21 @@ function toolSummary(trace) {
 }
 
 const toolEntries = computed(() => {
-  return props.traces
-    .filter(t => t.event === 'tool_call_end' && t.tool_name)
+  const endTraces = props.traces.filter(t => t.event === 'tool_call_end' && t.tool_name)
+  const merged = new Map()
+  for (const t of endTraces) {
+    const existing = merged.get(t.tool_name)
+    if (existing) {
+      if (t.result_count != null) {
+        existing.result_count = (existing.result_count || 0) + t.result_count
+      }
+    } else {
+      merged.set(t.tool_name, { tool_name: t.tool_name, result_count: t.result_count })
+    }
+  }
+  return Array.from(merged.values())
     .map(t => ({
-      key: `${t.tool_name}-${t.event}`,
+      key: `${t.tool_name}-${t.result_count ?? ''}`,
       text: toolSummary(t),
     }))
     .filter(e => e.text)
@@ -51,25 +62,33 @@ const toolEntries = computed(() => {
 .tool-call-box {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-8);
   width: 100%;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-lg);
+  background: none;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding: var(--space-8) var(--space-12);
   margin-bottom: var(--space-6);
+  animation: count-pop 0.35s ease;
+}
+
+@keyframes count-pop {
+  0% { opacity: 0.6; transform: scaleY(0.95); }
+  100% { opacity: 1; transform: scaleY(1); }
 }
 
 .tool-icon {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--color-accent);
   flex-shrink: 0;
 }
 
 .tool-text {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--color-text-secondary);
   line-height: var(--line-height-normal);
 }

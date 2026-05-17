@@ -181,21 +181,32 @@ export const useChatStore = defineStore('chat', () => {
       for await (const chunk of streamPrompt(userId, targetSessionId, prompt, { signal })) {
         currentNode.value = chunk.node || ''
 
-        /* tool_trace 事件(action 节点仅 trace): 缓冲,等 action 气泡创建时注入 */
+        /* tool_trace 事件(action 节点): 仅 tool_call_end 才创建/更新气泡,实现数字滚动 */
         if (chunk.node === 'action' && !chunk.content && chunk.trace && chunk.trace.length > 0) {
-          bufferedTraces.push(...chunk.trace)
+          const endTraces = chunk.trace.filter(t => t.event === 'tool_call_end')
+          if (endTraces.length > 0) {
+            ensureAssistant('action')
+            const la = findLastAssistant()
+            if (la) {
+              if (!la.trace) la.trace = []
+              la.trace.push(...bufferedTraces, ...chunk.trace)
+              bufferedTraces.length = 0
+            }
+          } else {
+            bufferedTraces.push(...chunk.trace)
+          }
           continue
         }
 
-        /* action 节点(有内容) */
+        /* action 节点(有内容): 只更新内容,不追加 trace(node 事件的 trace 与 tool_trace 重复) */
         if (chunk.node === 'action' && chunk.content) {
           ensureAssistant(chunk.node)
-          updateLastMessage(chunk.content, chunk.node, undefined, chunk.trace)
+          updateLastMessage(chunk.content, chunk.node, undefined, undefined)
           continue
         }
 
-        /* 有实质内容 → 确保 assistant 存在并写入 */
-        if (chunk.content || (chunk.tool_calls && chunk.tool_calls.length > 0)) {
+        /* 有实质文本内容 → 确保 assistant 存在并写入 */
+        if (chunk.content) {
           ensureAssistant(chunk.node)
           updateLastMessage(chunk.content, chunk.node, chunk.tool_calls, chunk.trace)
         } else if (chunk.trace && chunk.trace.length > 0) {
@@ -225,7 +236,6 @@ export const useChatStore = defineStore('chat', () => {
       if (targetSessionId) {
         try {
           await sessionStore.load(userId)
-          await loadHistory(targetSessionId, userId)
         } catch { /* 非关键 */ }
       }
     }

@@ -10,6 +10,7 @@
 import { computed, watch, ref, nextTick, onMounted } from 'vue'
 import { useAvatar } from '@/composable/useAvatar'
 import MessageBubble from './MessageBubble.vue'
+import LoaderCube from './LoaderCube.vue'
 
 const props = defineProps({
   messages: { type: Array, required: true },
@@ -19,7 +20,7 @@ const props = defineProps({
 
 const { userAvatar, agentAvatar } = useAvatar()
 
-/** 合并连续 assistant 消息的辅助函数 */
+/** 合并连续 assistant 消息的辅助函数(对话模式: 全部合并) */
 function mergeConsecutiveAssistants(msgs) {
   return msgs.filter(m => m.role !== 'system').reduce((acc, msg) => {
     if (msg.role === 'assistant' && acc.length > 0 && acc[acc.length - 1].role === 'assistant') {
@@ -38,9 +39,31 @@ function mergeConsecutiveAssistants(msgs) {
   }, [])
 }
 
+/** 合并连续同 node 的 assistant 消息(工具模式): 仅相邻且同节点才合并。 */
+function mergeConsecutiveSameNode(msgs) {
+  return msgs.filter(m => m.role !== 'system').reduce((acc, msg) => {
+    if (msg.role !== 'assistant') {
+      acc.push(msg)
+      return acc
+    }
+    const prev = acc[acc.length - 1]
+    if (prev && prev.role === 'assistant' && prev.node === msg.node) {
+      acc[acc.length - 1] = {
+        ...prev,
+        content: msg.content || prev.content,
+        tool_calls: msg.tool_calls?.length ? msg.tool_calls : prev.tool_calls,
+        trace: [...(prev.trace || []), ...(msg.trace || [])],
+      }
+    } else {
+      acc.push(msg)
+    }
+    return acc
+  }, [])
+}
+
 const visibleMessages = computed(() => {
   const base = props.messages.filter(m => m.role !== 'system')
-  return props.mergeAssistants ? mergeConsecutiveAssistants(base) : base
+  return props.mergeAssistants ? mergeConsecutiveAssistants(base) : mergeConsecutiveSameNode(base)
 })
 
 const containerRef = ref(null)
@@ -130,10 +153,10 @@ onMounted(() => {
       :show-avatar="msg.role !== 'assistant' || idx === 0 || visibleMessages[idx - 1].role !== 'assistant'"
     />
 
-    <!-- 思考中占位: 头像 + 悬空文字 -->
+    <!-- 思考中占位: 头像 + 3D 立方体 loader -->
     <div v-if="showThinkingBubble" class="thinking-row">
       <img :src="agentAvatar" class="thinking-avatar" alt="agent" />
-      <span class="thinking-text">思考中<span class="dot-anim">...</span></span>
+      <LoaderCube />
     </div>
   </div>
 </template>
@@ -178,19 +201,4 @@ onMounted(() => {
   border: 1px solid var(--color-border);
 }
 
-.thinking-text {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
-  opacity: 0.55;
-}
-
-.dot-anim {
-  animation: dot-blink 1.2s step-end infinite;
-}
-
-@keyframes dot-blink {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 1; }
-}
 </style>

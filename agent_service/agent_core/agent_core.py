@@ -614,6 +614,9 @@ class AgentCore:
         if turn_traces:
             metadata["trace"] = turn_traces
         if isinstance(message, AIMessage):
+            reasoning_content = (message.additional_kwargs or {}).get("reasoning_content")
+            if reasoning_content:
+                metadata["reasoning_content"] = reasoning_content
             return MessageCreate(
                 session_id=session_id,
                 user_id=user_id,

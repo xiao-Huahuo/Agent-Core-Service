@@ -54,14 +54,17 @@ class ModelDecisionNode:
 
         system_content = self.config.model.system_prompt
         plan = state.get("plan")
-        if plan and plan.get("need_plan") and plan.get("steps"):
-            current_step = plan.get("current_step", 0)
-            total_steps = len(plan["steps"])
-            plan_text = "\n".join(f"  {i+1}. {step}" for i, step in enumerate(plan["steps"]))
+        if plan and plan.get("hint"):
+            covered = plan.get("covered", [])
+            suggested = plan.get("suggested", [])
+            sufficient = plan.get("sufficient", False)
+            status = "信息已充足，可以结束探索" if sufficient else "信息尚不充分，需继续探索"
             system_content += (
-                f"\n\n【执行计划】\n{plan_text}\n"
-                f"当前进度: 第 {current_step + 1}/{total_steps} 步。"
-                f"请按计划逐步执行,每一步完成后等待工具结果,然后继续下一步。"
+                f"\n\n【探索状态 — 仅供参考，你自行决定下一步】\n"
+                f"已覆盖: {', '.join(covered) if covered else '暂无'}\n"
+                f"建议方向: {', '.join(suggested) if suggested else '暂无'}\n"
+                f"当前判断: {status}\n"
+                f"策略提示: {plan['hint']}"
             )
 
         system_message = SystemMessage(content=system_content)

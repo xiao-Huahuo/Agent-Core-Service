@@ -863,9 +863,11 @@ class LLMTaskScheduler:
                 full_content: str = getattr(merged, "content", "") or ""
                 if not isinstance(full_content, str):
                     full_content = ""
+                merged_additional = getattr(merged, "additional_kwargs", None) or {}
                 final_message = AIMessage(
                     content=full_content,
                     tool_calls=getattr(merged, "tool_calls", None) or [],
+                    additional_kwargs=merged_additional,
                 )
                 yield {
                     "content_delta": full_content,

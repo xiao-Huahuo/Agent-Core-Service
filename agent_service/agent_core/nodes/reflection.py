@@ -27,10 +27,11 @@ from agent_service.tools.runtime_context import get_reflection_content_callback
 REFLECTION_SYSTEM_PROMPT = (
     "你是一个执行结果审视助手。分析最近一次工具调用的结果,"
     "判断是否已经获得足够信息来回答用户的原始问题。\n"
-    "如果还需要继续调用工具获取更多信息,只输出: continue\n"
-    "如果已经足够,可以给出最终答案了,只输出: answer\n"
-    "只输出 continue 或 answer,不要其他文字。\n"
-    "注意:如果工具执行返回了错误,你可以建议继续尝试其他方式。"
+    "用一句简短的中文给出你的判断和建议（20字以内），"
+    "并在末尾标注 [continue] 或 [answer]。\n"
+    "例如：'已覆盖主要方向，建议再查一下海洋酸化。[continue]'\n"
+    "又如：'信息充足，可以给出最终答案。[answer]'\n"
+    "如果工具执行返回了错误,建议继续尝试其他方式并标注 [continue]。"
 )
 
 
@@ -80,14 +81,8 @@ class ReflectionNode:
         system_message = SystemMessage(content=REFLECTION_SYSTEM_PROMPT)
         context_message = SystemMessage(content=summary)
         response = self._call_llm(system_message, context_message)
-        llm_decision = self._parse_decision(response.content)
+        llm_decision, readable = self._parse_decision(response.content)
         decision = self._check_overflow_then_decide(state, llm_decision)
-        if decision == "answer":
-            readable = "工具执行结果已足够回答用户问题，准备生成最终回复。"
-        elif decision == "compress":
-            readable = "上下文已接近 token 上限，需要先压缩历史对话再继续。"
-        else:
-            readable = "信息还不够充分，需要继续调用工具获取更多信息。"
         trace = {
             "node": "reflection",
             "event": "reflection_complete",
@@ -183,12 +178,16 @@ class ReflectionNode:
         return "\n".join(parts)
 
     @staticmethod
-    def _parse_decision(raw_content: str | None) -> str:
-        """从模型响应中解析决策。"""
+    def _parse_decision(raw_content: str | None) -> tuple[str, str]:
+        """从模型响应中解析决策标记和可读文本。"""
 
         if not raw_content:
-            return "continue"
-        cleaned = raw_content.strip().lower()
-        if "answer" in cleaned:
-            return "answer"
-        return "continue"
+            return "continue", "信息还不够充分，需要继续调用工具获取更多信息。"
+        cleaned = raw_content.strip()
+        lowered = cleaned.lower()
+        if "[answer]" in lowered:
+            text = cleaned.rsplit("[answer]", 1)[0].strip()
+            return "answer", text or "信息充足，准备生成最终回复。"
+        # Remove [continue] tag for display
+        text = lowered.rsplit("[continue]", 1)[0].strip()
+        return "continue", text or "信息还不够充分，需要继续调用工具获取更多信息。"

@@ -312,6 +312,9 @@ class ContextBuilder:
             additional_kwargs: dict[str, Any] = {}
             if message.tool_calls_json:
                 additional_kwargs["tool_calls"] = message.tool_calls_json
+            reasoning_content = (message.metadata_json or {}).get("reasoning_content")
+            if reasoning_content:
+                additional_kwargs["reasoning_content"] = reasoning_content
             return AIMessage(
                 content=message.content,
                 tool_calls=message.tool_calls_json,

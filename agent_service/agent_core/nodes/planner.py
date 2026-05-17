@@ -1,14 +1,15 @@
 """
-推理规划节点。
+推理规划节点（策略顾问模式）。
 
 功能说明:
-本文件只实现 `PlannerNode` 一个节点。该节点在 Agent 做出决策前,先用小模型分析
-用户需求是否需要多步操作。如果需要,则生成结构化分步计划并存入 AgentState.plan。
-后续 ModelDecisionNode 会读取该计划并注入到系统提示词中,指导模型按计划推进。
+本文件只实现 `PlannerNode` 一个节点。该节点在 Agent 做出决策前,用大模型分析
+当前探索进度和已获取的信息,给出下一步策略建议,而不是生成固定步骤清单。
+后续 ModelDecisionNode 会将建议注入到系统提示词中供 agent 参考,
+但 agent 保留完全自主的决策权。
 
 使用说明:
 `graph.py` 会把本节点注册为 `planner` 节点,放在 `compress` 与 `agent` 之间。
-节点只执行一次(计划已存在时直接跳过)。
+节点支持重入:首次调用给出初步探索方向,后续调用根据执行历史更新策略建议。
 """
 
 from __future__ import annotations
@@ -16,29 +17,33 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
-from agent_service.tools.runtime_context import get_planner_content_callback
+
+
 
 
 PLANNER_SYSTEM_PROMPT = (
-    "你是一个任务规划助手。分析用户的最新需求,判断是否需要分步完成。\n"
-    "如果任务需要多步操作才能完成(例如查询多个信息、执行多个计算、依次处理数据),"
-    "请输出 JSON 格式的分步计划。\n"
-    "如果任务很简单,只需回答即可,无需计划。\n"
-    "输出格式(只输出 JSON,不要其他文字):\n"
-    '{"need_plan": true, "steps": ["第一步: ...", "第二步: ..."]}\n'
-    '或\n'
-    '{"need_plan": false}'
+    "你是一个知识探索策略顾问。根据用户问题和当前已获取的信息，分析探索进度并给出建议。\n"
+    "输出格式（只输出 JSON，不要其他文字）：\n"
+    '{"covered": ["已覆盖的主题或方向"], "suggested": ["建议继续深挖的方向"], "sufficient": false, "hint": "给 agent 的一两句策略建议"}\n'
+    "字段说明:\n"
+    "- covered: 目前已覆盖了哪些子话题/方向(可为空数组)\n"
+    "- suggested: 建议 agent 下一步探索的方向(可为空数组)\n"
+    "- sufficient: 当前信息是否已经足够回答用户问题\n"
+    "- hint: 给 agent 的简短策略建议,一两句话即可,不要超过80字"
 )
 
 
 class PlannerNode:
     """
-    推理规划节点。
+    策略顾问节点。
+
+    不生成固定步骤清单,而是分析当前探索进度并给出策略建议。
+    Agent 读取建议后自主决定下一步操作。
 
     config: 全局配置对象。
     task_scheduler: 可选 LLM 任务调度器,为空时自动创建。
@@ -57,106 +62,124 @@ class PlannerNode:
 
     def __call__(self, state: AgentState) -> dict[str, Any]:
         """
-        检查是否需要规划,需要时用小模型生成计划。
+        分析当前探索进度，给出策略建议。
+
+        首次调用：给出初步探索方向。
+        重入调用：根据执行历史分析已覆盖的主题，建议下一步方向。
 
         state: 当前 LangGraph 状态。
         """
 
-        if state.get("plan") is not None:
-            return {
-                "messages": [AIMessage(content="已有执行计划，继续按计划推进。")],
-                "trace": [{
-                    "node": "planner",
-                    "event": "plan_already_exists",
-                    "human_readable": "已有执行计划，继续按计划推进。",
-                }],
-            }
-
         original_prompt = self._extract_latest_user_message(state)
         if not original_prompt:
             return {
-                "messages": [AIMessage(content="未找到用户消息，跳过规划。")],
+                "messages": [AIMessage(content="未找到用户消息，跳过策略分析。")],
                 "trace": [{
                     "node": "planner",
                     "event": "no_user_message",
-                    "human_readable": "未找到用户消息，跳过规划。",
+                    "human_readable": "未找到用户消息，跳过策略分析。",
                 }],
             }
 
-        if self._is_simple_query(original_prompt):
-            return {
-                "messages": [AIMessage(content="这是一个简单问题，无需分步规划，直接回答。")],
-                "plan": {"need_plan": False},
-                "trace": [{
-                    "node": "planner",
-                    "event": "fast_path_simple_query",
-                    "human_readable": "这是一个简单问题，无需分步规划，直接回答。",
-                }],
-            }
-
+        existing_plan = state.get("plan")
         system_message = SystemMessage(content=PLANNER_SYSTEM_PROMPT)
-        user_message = SystemMessage(
-            content=f"用户需求:\n{original_prompt}\n\n请输出 JSON 计划。"
-        )
+        user_content = self._build_planning_prompt(original_prompt, existing_plan, state)
+        user_message = SystemMessage(content=user_content)
         response = self._call_llm(system_message, user_message)
         plan = self._parse_plan(response.content)
         if plan is not None:
-            need_plan = plan.get("need_plan", False)
-            steps = plan.get("steps", [])
-            if need_plan and steps:
-                readable = "我需要分 {} 步来完成这个任务：\n{}".format(
-                    len(steps),
-                    "\n".join(f"  {i+1}. {s}" for i, s in enumerate(steps)),
-                )
-            else:
-                readable = "分析后判断：不需要分步计划，可以直接处理。"
+            event = "strategy_updated" if existing_plan else "strategy_generated"
+            hint = plan.get("hint", "")
+            readable = hint or "策略分析完成。"
             trace = {
                 "node": "planner",
-                "event": "plan_generated",
-                "need_plan": need_plan,
-                "steps": steps,
+                "event": event,
+                "covered": plan.get("covered", []),
+                "suggested": plan.get("suggested", []),
+                "sufficient": plan.get("sufficient", False),
                 "human_readable": readable,
             }
             return {"messages": [AIMessage(content=readable)], "plan": plan, "trace": [trace]}
 
         return {
-            "messages": [AIMessage(content="模型未生成有效计划，直接进入决策。")],
-            "plan": {"need_plan": False},
+            "messages": [AIMessage(content="策略分析未产出有效结果，直接进入决策。")],
+            "plan": {"covered": [], "suggested": [], "sufficient": False, "hint": ""},
             "trace": [{
                 "node": "planner",
                 "event": "no_plan_needed",
-                "human_readable": "模型未生成有效计划，直接进入决策。",
+                "human_readable": "策略分析未产出有效结果，直接进入决策。",
             }],
         }
 
     def _call_llm(self, system_message: Any, user_message: Any) -> Any:
-        """调用 LLM,流式场景下通过 callback 逐 token 推送。"""
+        """调用 LLM 获取策略建议。
 
-        callback = get_planner_content_callback()
-        if callback is not None:
-            cumulative = ""
-            final_message: Any = None
-            for chunk in self.task_scheduler.stream_chat(
-                task_type=FOREGROUND_AGENT_TASK,
-                messages=[system_message, user_message],
-                model_tier="small",
-            ):
-                delta = chunk.get("content_delta", "")
-                if delta:
-                    cumulative += delta
-                    callback(cumulative)
-                if chunk.get("status") == "complete":
-                    final_message = chunk.get("message")
-            if final_message is None:
-                from langchain_core.messages import AIMessage
-                final_message = AIMessage(content=cumulative)
-            return final_message
+        Planner 输出是简短 JSON,不需要流式推送;始终使用 invoke_chat 避免
+        前端看到逐 token 拼接的原始 JSON。
+        """
 
         return self.task_scheduler.invoke_chat(
             task_type=FOREGROUND_AGENT_TASK,
             messages=[system_message, user_message],
-            model_tier="small",
         )
+
+    def _build_planning_prompt(
+        self, query: str, existing_plan: dict[str, Any] | None, state: AgentState
+    ) -> str:
+        """
+        构建发给策略顾问 LLM 的 prompt。
+
+        query: 原始用户问题。
+        existing_plan: 当前探索状态,为 None 表示首次分析。
+        state: 当前 AgentState,用于提取执行历史。
+        """
+
+        if existing_plan is None:
+            return f"用户需求:\n{query}\n\n请分析这个需求涉及哪些子话题，给出初步探索建议。输出 JSON。"
+
+        # 重入: 附带当前覆盖状态和执行历史
+        parts: list[str] = [f"用户需求:\n{query}"]
+        covered = existing_plan.get("covered", [])
+        if covered:
+            parts.append(f"\n当前已覆盖的主题: {', '.join(covered)}")
+        history = self._build_execution_history(state, limit=6)
+        if history:
+            parts.append(f"\n最近探索结果:\n{history}")
+        parts.append("\n请根据以上信息更新探索状态，判断是否已经足够回答用户问题。输出 JSON。")
+        return "\n".join(parts)
+
+    @staticmethod
+    def _build_execution_history(state: AgentState, limit: int = 6) -> str:
+        """
+        从状态消息中提取最近的工具调用摘要。
+
+        state: 当前 AgentState。
+        limit: 最多提取的消息对数。
+        """
+
+        messages = state.get("messages", [])
+        if not messages:
+            return ""
+        lines: list[str] = []
+        count = 0
+        for msg in reversed(messages):
+            if count >= limit:
+                break
+            if isinstance(msg, ToolMessage):
+                content = str(getattr(msg, "content", "") or "")
+                name = getattr(msg, "name", "") or ""
+                label = f"{name}: " if name else ""
+                lines.append(f"- {label}{content[:200]}{'...' if len(content) > 200 else ''}")
+                count += 1
+            elif isinstance(msg, AIMessage):
+                tool_calls = getattr(msg, "tool_calls", []) or []
+                if tool_calls:
+                    names = ", ".join(tc.get("name", "") for tc in tool_calls if tc.get("name"))
+                    if names:
+                        lines.append(f"- [调用工具] {names}")
+                        count += 1
+        lines.reverse()
+        return "\n".join(lines)
 
     @staticmethod
     def _extract_latest_user_message(state: AgentState) -> str:
@@ -167,25 +190,6 @@ class PlannerNode:
             if content and getattr(message, "type", None) == "human":
                 return content if isinstance(content, str) else str(content)
         return ""
-
-    @staticmethod
-    def _is_simple_query(prompt: str) -> bool:
-        """
-        启发式判断是否为简单查询,跳过 LLM 规划调用。
-
-        规则:
-        - 纯中文/英文问候语(≤10 字)
-        - 单句短问题(≤20 字且无逗号/分号)
-        - 不含"步骤"、"规划"、"然后"等复杂意图关键词
-        """
-        text = prompt.strip()
-        if len(text) <= 10:
-            return True
-        if len(text) <= 20:
-            separators = ("，", ",", "；", ";", "。", "、", "\n")
-            if not any(sep in text for sep in separators):
-                return True
-        return False
 
     @staticmethod
     def _parse_plan(raw_content: str | None) -> dict[str, Any] | None:

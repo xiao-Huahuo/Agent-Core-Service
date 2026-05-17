@@ -31,22 +31,20 @@ const bubbleRadius = computed(() => {
 </script>
 
 <template>
+  <!-- action 节点: 整行宽度的工具条 -->
+  <div v-if="message.role === 'assistant' && message.node === 'action'" class="action-row">
+    <ToolCallInline :traces="message.trace || []" />
+  </div>
+
   <!-- Agent 消息: 只在连续组首条显示头像 -->
-  <div v-if="message.role === 'assistant'" class="bubble-row assistant">
+  <div v-else-if="message.role === 'assistant'" class="bubble-row assistant">
     <img v-if="showAvatar" :src="agentAvatar" class="avatar" alt="agent" />
     <div v-else class="avatar-spacer" />
     <div class="bubble-col">
-      <!-- action 节点: 只显示工具调用条,不显示内容气泡 -->
-      <template v-if="message.node === 'action'">
-        <ToolCallInline :traces="message.trace || []" />
-      </template>
-      <!-- 其余节点: 只显示内容气泡 -->
-      <template v-else>
-        <div v-if="hasContent || isStreaming" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
-          <MarkdownContent v-if="hasContent" :content="message.content" :is-streaming="isStreaming" />
-          <span v-if="isStreaming" class="cursor">|</span>
-        </div>
-      </template>
+      <div v-if="hasContent || isStreaming" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
+        <MarkdownContent v-if="hasContent" :content="message.content" :is-streaming="isStreaming" />
+        <span v-if="isStreaming" class="cursor">|</span>
+      </div>
     </div>
   </div>
 
@@ -103,6 +101,12 @@ const bubbleRadius = computed(() => {
   height: 36px;
   flex-shrink: 0;
   margin-top: 2px;
+}
+
+/* ---- action 整行宽度的工具条 ---- */
+.action-row {
+  width: 100%;
+  margin-bottom: var(--space-12);
 }
 
 /* ---- 列 ---- */
