@@ -6,7 +6,6 @@
 <script setup>
 import { computed } from 'vue'
 import MarkdownContent from './MarkdownContent.vue'
-import ToolCallInline from './ToolCallInline.vue'
 
 const props = defineProps({
   message: { type: Object, required: true },
@@ -21,7 +20,7 @@ const bubbleRadius = computed(() => {
     : '4px 18px 18px 18px'
 })
 
-const messageTraces = computed(() => props.message.trace || [])
+
 </script>
 
 <template>
@@ -30,9 +29,6 @@ const messageTraces = computed(() => props.message.trace || [])
     <img :src="agentAvatar" class="avatar" alt="agent" />
     <div class="bubble-col">
       <span v-if="message.node" class="node-label">{{ message.node }}</span>
-
-      <!-- 工具调用内联 -->
-      <ToolCallInline :traces="messageTraces" />
 
       <div v-if="message.content || isStreaming" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
         <MarkdownContent v-if="message.content" :content="message.content" :is-streaming="isStreaming" />

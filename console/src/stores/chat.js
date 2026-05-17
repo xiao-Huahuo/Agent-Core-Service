@@ -181,16 +181,18 @@ export const useChatStore = defineStore('chat', () => {
       for await (const chunk of streamPrompt(userId, targetSessionId, prompt, { signal })) {
         currentNode.value = chunk.node || ''
 
-        /* action 节点 */
+        /* tool_trace 事件(action 节点仅 trace): 缓冲,等 action 气泡创建时注入 */
+        if (chunk.node === 'action' && !chunk.content && chunk.trace && chunk.trace.length > 0) {
+          bufferedTraces.push(...chunk.trace)
+          continue
+        }
+
+        /* action 节点(有内容) */
         if (chunk.node === 'action' && chunk.content) {
           ensureAssistant(chunk.node)
           const la = findLastAssistant()
           if (la) {
             la.node = chunk.node
-            if (chunk.trace && chunk.trace.length > 0) {
-              if (!la.trace) la.trace = []
-              la.trace.push(...chunk.trace)
-            }
           }
           continue
         }

@@ -509,7 +509,7 @@ class AgentCore:
                                 session_id=session_id,
                                 node_name=node_name,
                                 state_update=state_update,
-                                turn_traces=_turn_traces,
+                                turn_traces=state_update.get("trace", []),
                             )
                         payload = self._build_stream_payload(node_name=node_name, state_update=state_update)
                         payload["model_name"] = self._model_name_for_node(node_name)
