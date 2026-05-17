@@ -1,12 +1,128 @@
-# Agent-Core-Service 智能体插件微服务
+# Agent-Core-Service 通用智能体微服务
 
 ## 产品定位
 
 ##### 项目目标
-本项目的目标是设计一个独立于主要软件后台之外的、可定制可编排的通用智能体微服务 `Agent-Core-Service`。
+本项目是一个独立的、可定制、可观测、可接MCP的通用智能体微服务 `Agent-Core-Service`。
 
 ##### 主要服务人群
 不是给终端用户直接使用的，而是为能够写代码、追求高度自定义智能体、希望自己搭建智能体能力的开发者准备。
+
+## 快速启动
+
+### 环境要求
+
+- Python 3.12+
+- Node.js 18+
+- 已配置 LLM API（OpenAI 兼容接口）
+
+### 1. 配置环境变量
+
+在根目录创建.env文件,配置如下环境变量：
+```bash
+# 必填：大小模型API-KEY,主模型默认为deepseek-v4-flash,小模型默认为moonshot-v1-8k
+AGENT_MODEL_API_KEY=sk-xxxxxxxx
+AGENT_SMALL_MODEL_API_KEY=sk-yyyyyyyy
+```
+
+### 2. 启动后端（FastAPI）
+
+```bash
+# 安装后端依赖
+pip install -r agent_service/requirements.txt
+
+# 启动服务（HTTP: 8002, gRPC: 50051）
+uvicorn main:app --host 0.0.0.0 --port 8002
+```
+
+启动时自动执行知识库灌库：扫描 `resources/knowledge/` 下的 Markdown/TXT 文件，结构化 → 向量化 → 写入 ChromaDB。已入库且内容未变更的文件会被哈希锁跳过。
+
+### 3. 启动前端（Vite + Vue 3）
+
+```bash
+cd console
+npm i --verbose
+npm run dev          # 开发模式 → http://localhost:8003
+# npm run build      # 构建静态文件 → console/dist/
+```
+
+前端开发服务器自动代理到 `localhost:8002`。
+
+### 4. 验证
+
+浏览器访问 `http://localhost:8003`，在控制台输入问题即可测试 Agent。
+
+后端健康检查：`curl http://localhost:8002/health`
+
+## MCP 工具接入
+
+AgentService 通过 MCP（Model Context Protocol）协议对接外部工具服务器。Agent 启动时自动发现并注册 MCP 工具，注册后的工具与内置工具无差别可用。
+
+### 启用 MCP
+在.env中:
+```bash
+AGENT_MCP_ENABLED=true
+```
+### 配置 MCP 服务器
+
+在 `resources/mcp/` 目录下创建 `.json` 配置文件：
+
+```json
+[
+  {
+    "server_id": "filesystem",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"],
+    "enabled": true
+  },
+  {
+    "server_id": "web-search",
+    "command": "python",
+    "args": ["-m", "my_mcp_server"],
+    "enabled": true,
+    "env": {
+      "API_KEY": "your-api-key"
+    }
+  }
+]
+```
+
+每个服务器条目支持以下字段：
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `server_id` | 是 | 唯一标识符，只允许小写字母、数字、下划线 |
+| `command` | 是 | 启动 MCP 服务器的可执行文件（`npx`、`python` 等） |
+| `args` | 否 | 命令行参数列表 |
+| `env` | 否 | 注入子进程的环境变量 |
+| `enabled` | 否 | 是否启用，默认 `true` |
+| `encoding` | 否 | stdio 编码，默认 `"utf-8"` |
+
+如需用环境变量配置，可设置 `AGENT_MCP_SERVERS_JSON`（JSON 字符串）或逐个服务器的环境变量。但推荐使用 JSON 文件方式，更直观且支持多服务器管理。
+
+
+### 工具命名与调用规则
+
+MCP 工具自动注册为 `{prefix}__{server_id}__{tool_name}` 格式：
+
+- `prefix` — 默认为 `mcp`，可通过 `AGENT_MCP_TOOL_NAME_PREFIX` 自定义
+- `server_id` — 配置中指定的服务器标识
+- `tool_name` — MCP 服务器上报的工具名称
+
+例如 `filesystem` 服务器的 `read_file` 工具注册为 `mcp__filesystem__read_file`，Agent 在对话中调用此工具时即通过 MCP 协议转发到对应服务器进程执行。
+
+### 运行机制
+
+1. 启动时 AgentCore 扫描 `resources/mcp/*.json`，加载服务器配置
+2. 对每个启用的服务器启动子进程，通过 stdio 建立 MCP 会话
+3. 调用 `list_tools()` 发现该服务器提供的工具
+4. 将所有 MCP 工具包装为与内置工具相同的 `StructuredTool`，注册到工具注册表
+5. 对话中 LLM 选择调用 MCP 工具时，通过同步-异步桥接转发到对应 MCP 服务器执行
+
+MCP 工具与内置工具共用同一个工具选择池，LLM 根据任务自动决定是否调用以及调用哪个。
+
+
+
 
 ## 项目设计
 ### 核心结构设计
@@ -45,7 +161,22 @@ flowchart TD
     safety_output --> E2((END))
 ```
 
+### 技术栈
 
+- 版本：Python 3.12
+- 微服务框架：FastAPI 
+- 通信与工具协议: gRPC + REST/HTTP + MCP
+- 观测面板：Vue 3 + Pinia
+- 反向代理：Vite
+- 智能体编排：LangGraph + LangChain
+- 模型接入：DeepSeek-v4-flash(大模型) + Moonshot-v1-8k(小模型)
+- 关联数据库：SQLite
+- 向量数据库：ChromaDB
+- 长期记忆方案：RAG（向量检索 + 关键词检索 + ReRank）
+- 配置管理：Pydantic / dataclass 风格 AgentConfig
+- 异步任务：asyncio
+- 日志与监控：logging / structlog + Prometheus + Grafana
+- 测试与质量：Pytest + Ruff + mypy
 
 ### 各部分设计
 
@@ -53,7 +184,7 @@ flowchart TD
 
 各部分的设计如下：
 
-1. 智能体核心 `AgentCore` 设计：采用 ReAct 思考模式，但不再硬编码节点流，而是形成可配置、可展示、可定制的节点流。
+1. 智能体核心 `AgentCore` 设计：采用 ReAct 思考模式，节点流可配置、可展示、可定制，不硬编码。
 2. 节点设计：基础节点有以下几种：
    - 启动/终止节点
    - 决策/汇合节点
@@ -71,17 +202,16 @@ flowchart TD
    - 摘要节点
    - 上下文压缩节点
      
-3. 工具系统设计：采用 **Function Calling** 模式，并对接 **MCP 协议** 接入用户可自定义的工具。除了系统自带的默认工具，还可以实现用户对工具的高度自定义。
-4. 数据库设计：必须按照分布式设计规范来制定。关联库 PostgreSQL 只存储智能体相关的内容，向量库采用 pgvector。
-5. 服务间调用：完全采用 **gRPC 协议** 函数化接口，只暴露特定的对外接口，如智能体信息流、思考轨迹、数据库调用等。
-6. 配置管理：配置一个 `AgentConfig` 类，含有 `Constants`、`StorageConfig`、`ModelConfig`、`MemoryConfig` 等子配置类，配置类应提供外部配置参数的接口 `AgentConfig.load_config(...) -> AgentConfig`。
-   调用配置应该从 `AgentCore` 隐式使用 `AgentConfig` 规范为 `agent = AgentCore(config=AgentConfig.load_config(...))` 的显式调用。
-7. 可观测性：配置一个前端，观测 Agent 在后台的一切行动，包括节点状态、上下文构建器的 JSON、RAG 召回的条目、召回筛选过程、会话摘要等。配置完备的日志系统，所有的 Agent 行动也应该记录下来，务必保证信息传递过程完全可视化。
-    - 前端轨迹面板可以参考 AI Agent Debugger 的思路，消费 LangGraph 节点事件、工具调用事件和状态更新事件来还原智能体行动过程。
-8. 记忆管理：优化长短记忆的算法和机制。
+3. 工具系统设计：采用 **Function Calling** 模式，对接 **MCP 协议** 接入外部工具。系统自带默认工具，同时支持用户对工具的高度自定义。
+4. 数据库设计：关联库采用 SQLite 存储智能体会话与消息，向量库采用 ChromaDB。
+5. 服务间调用：采用 **gRPC 协议** 函数化接口，暴露智能体信息流、思考轨迹、数据库调用等对外接口。
+6. 配置管理：`AgentConfig` 类包含 `Constants`、`StorageConfig`、`ModelConfig`、`MemoryConfig` 等子配置类，通过 `AgentConfig.load_config(...)` 加载外部配置参数。配置通过 `agent = AgentCore(config=AgentConfig.load_config(...))` 显式传入 AgentCore。
+7. 可观测性：前端面板实时展示 Agent 行动轨迹，包括节点状态、上下文构建器 JSON、RAG 召回条目、召回筛选过程、会话摘要等。日志系统记录全部 Agent 行动，信息传递过程完全可视化。
+    - 前端轨迹面板消费 LangGraph 节点事件、工具调用事件和状态更新事件，还原智能体行动过程。
+8. 记忆管理：分层长短记忆的算法和机制。
     - 短期记忆：即会话内上下文管理，不超过上下文长度的直接追加到上下文构建器 `ContextBuilder`，超过 `summary_trigger_tokens` 阈值时会先进入 `compress` 节点,用小模型生成“重要事实摘要”,再把工作上下文重写为 `重要事实摘要 + 最近少量消息`。
-    - 会话管理：仍然采用 Session 会话管理机制。每次连续提问就从 PostgreSQL 中读取同 ID 会话并加载到上下文构建器。
-    - 长期记忆：采用 RAG 检索增强生成 + pgvector 向量库作为长期记忆提取方式。
+    - 会话管理：基于 Session 机制，每次连续提问从 SQLite 读取同 ID 会话并加载到上下文构建器。
+    - 长期记忆：采用 RAG 检索增强生成 + ChromaDB 向量库作为长期记忆提取方式。
        - 跨对话记忆：Tag 为 `Memory`，每次发送 prompt 且内容有用时自动异步提取摘要，存储到用户会话向量库中。
        - 知识库 / 大文本记忆：Tag 为 `Knowledge`，需包含切片来源和时效性有关字段。本地知识库文件采用哈希锁来锁定文件已读状态。原始数据会先进行 `frontmatter_bootstrap` 处理，提取元结构 JSON，然后再进行 `knowledge_bootstrap` 处理得到可操作对象，再进行后续切片。
        - 重要事实摘要记忆：上下文压缩后生成的摘要会写入 `important_fact_summary` 长期记忆,供后续 `ContextBuilder` 优先注入。
@@ -98,7 +228,7 @@ flowchart TD
     3. 时效状态管理：配置 `MemoryResolver` 作为独立记忆裁决层，先把自然语言摘要解析为结构化事实单元 `session_fact`，再为事实写入 `active / superseded / expired` 状态。
     4. 事实更新策略：针对单值强排他事实执行新值覆盖旧值，针对多值弱排他事实执行新值追加，针对时序事实执行到期失效处理，不再仅依赖向量检索排序推断新旧关系。
     5. 事实类型裁决：已知 `fact_key` 走 schema 固定类别，未知 `fact_key` 由 LLM 提供候选类别，最终由程序统一裁决，避免同一事实在不同轮次被判成不同类型。
-11. 多级队列与并发: 设置一个限流调度器`LLMTaskScheduler`,所有的LLM调用都要通过它.内部存在多级队列调度(按主 Agent、Summary、Fact Extraction 三个等级分配到不同队列),同时增加 `large / small` 双模型池路由,主推理走大模型池,摘要/事实抽取/上下文压缩走小模型池,并分别配备独立并发上限、超时、熔断与重试机制.
+11. 多级队列与并发: 限流调度器 `LLMTaskScheduler` 统一管理所有 LLM 调用。内部多级队列按主 Agent、Summary、Fact Extraction 三个等级分配,同时设置 `large / small` 双模型池路由——主推理走大模型池,摘要/事实抽取/上下文压缩走小模型池,分别配备独立并发上限、超时、熔断与重试机制。
     - 大小模型分流机制：调度器先按任务语义决定 `model_tier`,再按 `model_tier` 选择实际模型配置。主回答模型负责复杂推理与最终回答,小模型负责重要事实摘要、长期记忆摘要、事实抽取、分类与轻量语义压缩,以降低主模型的延迟与负载压力。
     - 物理模型隔离：如果配置 `AGENT_SMALL_MODEL_NAME / AGENT_SMALL_MODEL_API_KEY / AGENT_SMALL_MODEL_BASE_URL`,则 `small` 任务会真正调用独立小模型;未配置时才会回退到主模型配置,但仍占用 `small pool` 的并发配额。
 12. 安全审核机制：采用**三层递进式**安全防线,在 Agent 输入和输出两个位置执行审核,阻断风险请求并清洗敏感输出。
@@ -132,7 +262,7 @@ flowchart TD
     G -->|"bootstrap"| D["语义切块"]
     D --> E["重叠切片"]
     E --> H
-    H --> F["pgvector 入库"]
+    H --> F["ChromaDB 入库"]
     F --> I["longterm_memory_specs 表"]
 ```
 
@@ -140,7 +270,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[长期记忆调用工具] --> B[pgvector 检索]
+    A[长期记忆调用工具] --> B[ChromaDB 检索]
     C[知识库检索工具] --> B
     B -->|N 条| H{过滤过期记忆}
     H -->|及时| D[混合检索 / 多路召回]
@@ -182,7 +312,7 @@ flowchart TD
     A --> C["关键词抽取<br/>(ASCII token + CJK 片段 + stopwords 过滤)"]
 
     subgraph vector_path["向量召回路径"]
-        B --> D["pgvector 余弦相似度检索<br/>(<=> operator)"]
+        B --> D["ChromaDB 余弦相似度检索<br/>(<=> operator)"]
         D --> E["过滤 valid_until 过期的候选"]
         E --> F["向量召回候选集<br/>(vector_top_k 条)"]
     end
@@ -283,7 +413,7 @@ flowchart TD
         plan --> P2
     end
 
-    plan <-->|"持久化 / 加载"| DB["PostgreSQL<br/>session.state_json"]
+    plan <-->|"持久化 / 加载"| DB["SQLite<br/>session.state_json"]
 ```
 
 ### 任务调度与节流机制
@@ -406,23 +536,7 @@ flowchart TD
     J --> K
 ```
 
-## 技术栈
 
-- 版本：Python 3.12
-- 微服务框架：FastAPI + gRPC
-- 观测面板：Vue 3 + Pinia
-- 反向代理：Vite（开发阶段） / Nginx（生产阶段）
-- 智能体编排：LangGraph（可配置工作流 / 节点流转）
-- 模型接入：LangChain + OpenAI Compatible API
-- 工具协议：MCP
-- 关联数据库：PostgreSQL
-- 向量数据库：pgvector
-- 长期记忆方案：RAG（向量检索 + 关键词检索 + ReRank）
-- 配置管理：Pydantic / dataclass 风格 AgentConfig
-- 异步任务：asyncio
-- 日志与监控：logging / structlog + Prometheus + Grafana
-- 容器化部署：Docker + Docker Compose
-- 测试与质量：Pytest + Ruff + mypy
 
 ## 接口设计
 
@@ -486,6 +600,4 @@ flowchart TD
 | DeleteCustomMemory | `DELETE /settings/memories/{memory_id}` | `DeleteCustomMemory` | 删除指定自定义长期记忆 | `memory_id` (string, 必填) | `{ok, deleted_count}` |
 
 > 系统提示词条目在每次 Agent 对话时自动全部加载并拼接到系统提示词末尾；自定义长期记忆通过向量检索在相关对话中自动召回。
-
-## 快速启动
 

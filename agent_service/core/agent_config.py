@@ -433,13 +433,13 @@ class AgentConfig:
         管理 HTTP (FastAPI) 与 gRPC 服务的监听地址与端口。
 
         http_host: FastAPI HTTP 监听地址,默认 0.0.0.0。
-        http_port: FastAPI HTTP 监听端口,默认 8000。
+        http_port: FastAPI HTTP 监听端口,默认 8002。
         grpc_host: gRPC 监听地址,默认 [::] (IPv6 全接口)。
         grpc_port: gRPC 监听端口,默认 50051。
         """
 
         http_host: str = "0.0.0.0"
-        http_port: int = 8000
+        http_port: int = 8002
         grpc_host: str = "[::]"
         grpc_port: int = 50051
 

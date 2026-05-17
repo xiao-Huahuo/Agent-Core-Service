@@ -6,7 +6,7 @@ AgentService 微服务入口。
 - gRPC (50051): AgentCore 全量方法和 Session 管理。
 
 启动方式:
-    uvicorn main:app --host 0.0.0.0 --port 8000
+    uvicorn main:app --host 0.0.0.0 --port 8002
 
 环境变量:
     AGENT_MODEL_NAME / AGENT_MODEL_API_KEY / AGENT_MODEL_BASE_URL: 主模型配置。
