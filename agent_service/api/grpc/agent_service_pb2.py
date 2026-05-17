@@ -22,61 +22,62 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
+from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13\x61gent_service.proto\x12\ragent_service\"A\n\nRunRequest\x12\x0e\n\x06prompt\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x12\n\nsession_id\x18\x03 \x01(\t\"b\n\tRunResult\x12\x15\n\rgraph_diagram\x18\x01 \x01(\t\x12\x14\n\x0c\x66inal_output\x18\x02 \x01(\t\x12\x13\n\x0b\x65vents_json\x18\x03 \x01(\t\x12\x13\n\x0b\x63hunks_json\x18\x04 \x01(\t\"7\n\x08ToolCall\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x11\n\targs_json\x18\x02 \x01(\t\x12\n\n\x02id\x18\x03 \x01(\t\"N\n\nTraceEntry\x12\x0c\n\x04node\x18\x01 \x01(\t\x12\r\n\x05\x65vent\x18\x02 \x01(\t\x12\x12\n\nerror_type\x18\x03 \x01(\t\x12\x0f\n\x07message\x18\x04 \x01(\t\"\x92\x01\n\x0c\x43hunkMessage\x12\x0c\n\x04node\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\t\x12+\n\ntool_calls\x18\x03 \x03(\x0b\x32\x17.agent_service.ToolCall\x12(\n\x05trace\x18\x04 \x03(\x0b\x32\x19.agent_service.TraceEntry\x12\x0c\n\x04\x64one\x18\x05 \x01(\x08\"=\n\x14SessionCreateRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x14\n\x0csession_name\x18\x02 \x01(\t\"&\n\x10SessionIdRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\"&\n\x13ListSessionsRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"@\n\x14SessionUpdateRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x14\n\x0csession_name\x18\x02 \x01(\t\"t\n\x0fSessionResponse\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x14\n\x0csession_name\x18\x03 \x01(\t\x12\x12\n\ncreated_at\x18\x04 \x01(\t\x12\x12\n\nupdated_at\x18\x05 \x01(\t\"H\n\x14ListSessionsResponse\x12\x30\n\x08sessions\x18\x01 \x03(\x0b\x32\x1e.agent_service.SessionResponse\"8\n\x0e\x44\x65leteResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x15\n\rdeleted_count\x18\x02 \x01(\x05\"+\n\x18\x44\x65leteAllSessionsRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"I\n\x13ListMessagesRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\x05\"\xaa\x01\n\x0cMessageEntry\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\x12\x0c\n\x04role\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\x12\x17\n\x0ftool_calls_json\x18\x06 \x01(\t\x12\x15\n\rmetadata_json\x18\x07 \x01(\t\x12\x12\n\ncreated_at\x18\x08 \x01(\t\"E\n\x14ListMessagesResponse\x12-\n\x08messages\x18\x01 \x03(\x0b\x32\x1b.agent_service.MessageEntry\"4\n\rEventsRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\"\x91\x01\n\nEventEntry\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12\x0c\n\x04role\x18\x02 \x01(\t\x12\x0c\n\x04node\x18\x03 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x04 \x01(\t\x12\x17\n\x0ftool_calls_json\x18\x05 \x01(\t\x12\x12\n\ncreated_at\x18\x06 \x01(\t\x12\x15\n\rmetadata_json\x18\x07 \x01(\t\"u\n\x0e\x45ventsResponse\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x13\n\x0b\x65vent_count\x18\x03 \x01(\x05\x12)\n\x06\x65vents\x18\x04 \x03(\x0b\x32\x19.agent_service.EventEntry\";\n\x14RecallDetailsRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\"\xb4\x01\n\x15RecallDetailsResponse\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x12\n\ncreated_at\x18\x03 \x01(\t\x12\r\n\x05query\x18\x04 \x01(\t\x12\x18\n\x10rag_metrics_json\x18\x05 \x01(\t\x12\x1a\n\x12memory_recall_json\x18\x06 \x01(\t\x12\x1d\n\x15knowledge_recall_json\x18\x07 \x01(\t\"#\n\rCancelRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\"\x1c\n\x0e\x43\x61ncelResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x32\x89\t\n\x0c\x41gentService\x12\x45\n\tStreamRun\x12\x19.agent_service.RunRequest\x1a\x1b.agent_service.ChunkMessage0\x01\x12>\n\x07RunOnce\x12\x19.agent_service.RunRequest\x1a\x18.agent_service.RunResult\x12O\n\x13StreamSessionPrompt\x12\x19.agent_service.RunRequest\x1a\x1b.agent_service.ChunkMessage0\x01\x12G\n\x10RunSessionPrompt\x12\x19.agent_service.RunRequest\x1a\x18.agent_service.RunResult\x12T\n\rCreateSession\x12#.agent_service.SessionCreateRequest\x1a\x1e.agent_service.SessionResponse\x12M\n\nGetSession\x12\x1f.agent_service.SessionIdRequest\x1a\x1e.agent_service.SessionResponse\x12[\n\x10ListUserSessions\x12\".agent_service.ListSessionsRequest\x1a#.agent_service.ListSessionsResponse\x12X\n\x11UpdateSessionName\x12#.agent_service.SessionUpdateRequest\x1a\x1e.agent_service.SessionResponse\x12O\n\rDeleteSession\x12\x1f.agent_service.SessionIdRequest\x1a\x1d.agent_service.DeleteResponse\x12[\n\x11\x44\x65leteAllSessions\x12\'.agent_service.DeleteAllSessionsRequest\x1a\x1d.agent_service.DeleteResponse\x12W\n\x0cListMessages\x12\".agent_service.ListMessagesRequest\x1a#.agent_service.ListMessagesResponse\x12L\n\rCancelSession\x12\x1c.agent_service.CancelRequest\x1a\x1d.agent_service.CancelResponse\x12H\n\tGetEvents\x12\x1c.agent_service.EventsRequest\x1a\x1d.agent_service.EventsResponse\x12]\n\x10GetRecallDetails\x12#.agent_service.RecallDetailsRequest\x1a$.agent_service.RecallDetailsResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13\x61gent_service.proto\x12\ragent_service\x1a\x1cgoogle/protobuf/struct.proto\"A\n\nRunRequest\x12\x0e\n\x06prompt\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x12\n\nsession_id\x18\x03 \x01(\t\"}\n\tRunResult\x12\x15\n\rgraph_diagram\x18\x01 \x01(\t\x12\x14\n\x0c\x66inal_output\x18\x02 \x01(\t\x12\'\n\x06\x65vents\x18\x03 \x03(\x0b\x32\x17.google.protobuf.Struct\x12\x1a\n\x12graph_diagram_path\x18\x04 \x01(\t\"K\n\x08ToolCall\x12\x0c\n\x04name\x18\x01 \x01(\t\x12%\n\x04\x61rgs\x18\x02 \x01(\x0b\x32\x17.google.protobuf.Struct\x12\n\n\x02id\x18\x03 \x01(\t\"N\n\nTraceEntry\x12\x0c\n\x04node\x18\x01 \x01(\t\x12\r\n\x05\x65vent\x18\x02 \x01(\t\x12\x12\n\nerror_type\x18\x03 \x01(\t\x12\x0f\n\x07message\x18\x04 \x01(\t\"\xa1\x02\n\x0c\x43hunkMessage\x12\x0c\n\x04node\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\t\x12+\n\ntool_calls\x18\x03 \x03(\x0b\x32\x17.agent_service.ToolCall\x12(\n\x05trace\x18\x04 \x03(\x0b\x32\x19.agent_service.TraceEntry\x12\x0c\n\x04\x64one\x18\x05 \x01(\x08\x12\x12\n\nmodel_name\x18\x06 \x01(\t\x12\x0c\n\x04type\x18\x07 \x01(\t\x12\x31\n\x10\x63ontext_messages\x18\x08 \x03(\x0b\x32\x17.google.protobuf.Struct\x12)\n\x08metadata\x18\t \x01(\x0b\x32\x17.google.protobuf.Struct\x12\r\n\x05\x65rror\x18\n \x01(\t\"=\n\x14SessionCreateRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x14\n\x0csession_name\x18\x02 \x01(\t\"&\n\x10SessionIdRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\"&\n\x13ListSessionsRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"@\n\x14SessionUpdateRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x14\n\x0csession_name\x18\x02 \x01(\t\"t\n\x0fSessionResponse\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x14\n\x0csession_name\x18\x03 \x01(\t\x12\x12\n\ncreated_at\x18\x04 \x01(\t\x12\x12\n\nupdated_at\x18\x05 \x01(\t\"H\n\x14ListSessionsResponse\x12\x30\n\x08sessions\x18\x01 \x03(\x0b\x32\x1e.agent_service.SessionResponse\"3\n\x0e\x44\x65leteResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x15\n\rdeleted_count\x18\x02 \x01(\x05\"+\n\x18\x44\x65leteAllSessionsRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"I\n\x13ListMessagesRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\x05\"\xd2\x01\n\x0cMessageEntry\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\x12\x0c\n\x04role\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\x12+\n\ntool_calls\x18\x06 \x03(\x0b\x32\x17.agent_service.ToolCall\x12)\n\x08metadata\x18\x07 \x01(\x0b\x32\x17.google.protobuf.Struct\x12\x12\n\ncreated_at\x18\x08 \x01(\t\"E\n\x14ListMessagesResponse\x12-\n\x08messages\x18\x01 \x03(\x0b\x32\x1b.agent_service.MessageEntry\"4\n\rEventsRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\"\xb9\x01\n\nEventEntry\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12\x0c\n\x04role\x18\x02 \x01(\t\x12\x0c\n\x04node\x18\x03 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x04 \x01(\t\x12+\n\ntool_calls\x18\x05 \x03(\x0b\x32\x17.agent_service.ToolCall\x12\x12\n\ncreated_at\x18\x06 \x01(\t\x12)\n\x08metadata\x18\x07 \x01(\x0b\x32\x17.google.protobuf.Struct\"u\n\x0e\x45ventsResponse\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x13\n\x0b\x65vent_count\x18\x03 \x01(\x05\x12)\n\x06\x65vents\x18\x04 \x03(\x0b\x32\x19.agent_service.EventEntry\";\n\x14RecallDetailsRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\"\xf0\x01\n\x15RecallDetailsResponse\x12\x12\n\nsession_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x12\n\ncreated_at\x18\x03 \x01(\t\x12\r\n\x05query\x18\x04 \x01(\t\x12,\n\x0brag_metrics\x18\x05 \x01(\x0b\x32\x17.google.protobuf.Struct\x12.\n\rmemory_recall\x18\x06 \x01(\x0b\x32\x17.google.protobuf.Struct\x12\x31\n\x10knowledge_recall\x18\x07 \x01(\x0b\x32\x17.google.protobuf.Struct\"#\n\rCancelRequest\x12\x12\n\nsession_id\x18\x01 \x01(\t\"\x1c\n\x0e\x43\x61ncelResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x32\x89\t\n\x0c\x41gentService\x12\x45\n\tStreamRun\x12\x19.agent_service.RunRequest\x1a\x1b.agent_service.ChunkMessage0\x01\x12>\n\x07RunOnce\x12\x19.agent_service.RunRequest\x1a\x18.agent_service.RunResult\x12O\n\x13StreamSessionPrompt\x12\x19.agent_service.RunRequest\x1a\x1b.agent_service.ChunkMessage0\x01\x12G\n\x10RunSessionPrompt\x12\x19.agent_service.RunRequest\x1a\x18.agent_service.RunResult\x12T\n\rCreateSession\x12#.agent_service.SessionCreateRequest\x1a\x1e.agent_service.SessionResponse\x12M\n\nGetSession\x12\x1f.agent_service.SessionIdRequest\x1a\x1e.agent_service.SessionResponse\x12[\n\x10ListUserSessions\x12\".agent_service.ListSessionsRequest\x1a#.agent_service.ListSessionsResponse\x12X\n\x11UpdateSessionName\x12#.agent_service.SessionUpdateRequest\x1a\x1e.agent_service.SessionResponse\x12O\n\rDeleteSession\x12\x1f.agent_service.SessionIdRequest\x1a\x1d.agent_service.DeleteResponse\x12[\n\x11\x44\x65leteAllSessions\x12\'.agent_service.DeleteAllSessionsRequest\x1a\x1d.agent_service.DeleteResponse\x12W\n\x0cListMessages\x12\".agent_service.ListMessagesRequest\x1a#.agent_service.ListMessagesResponse\x12L\n\rCancelSession\x12\x1c.agent_service.CancelRequest\x1a\x1d.agent_service.CancelResponse\x12H\n\tGetEvents\x12\x1c.agent_service.EventsRequest\x1a\x1d.agent_service.EventsResponse\x12]\n\x10GetRecallDetails\x12#.agent_service.RecallDetailsRequest\x1a$.agent_service.RecallDetailsResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'agent_service_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_RUNREQUEST']._serialized_start=38
-  _globals['_RUNREQUEST']._serialized_end=103
-  _globals['_RUNRESULT']._serialized_start=105
-  _globals['_RUNRESULT']._serialized_end=203
-  _globals['_TOOLCALL']._serialized_start=205
-  _globals['_TOOLCALL']._serialized_end=260
-  _globals['_TRACEENTRY']._serialized_start=262
-  _globals['_TRACEENTRY']._serialized_end=340
-  _globals['_CHUNKMESSAGE']._serialized_start=343
-  _globals['_CHUNKMESSAGE']._serialized_end=489
-  _globals['_SESSIONCREATEREQUEST']._serialized_start=491
-  _globals['_SESSIONCREATEREQUEST']._serialized_end=552
-  _globals['_SESSIONIDREQUEST']._serialized_start=554
-  _globals['_SESSIONIDREQUEST']._serialized_end=592
-  _globals['_LISTSESSIONSREQUEST']._serialized_start=594
-  _globals['_LISTSESSIONSREQUEST']._serialized_end=632
-  _globals['_SESSIONUPDATEREQUEST']._serialized_start=634
-  _globals['_SESSIONUPDATEREQUEST']._serialized_end=698
-  _globals['_SESSIONRESPONSE']._serialized_start=700
-  _globals['_SESSIONRESPONSE']._serialized_end=816
-  _globals['_LISTSESSIONSRESPONSE']._serialized_start=818
-  _globals['_LISTSESSIONSRESPONSE']._serialized_end=890
-  _globals['_DELETERESPONSE']._serialized_start=892
-  _globals['_DELETERESPONSE']._serialized_end=948
-  _globals['_DELETEALLSESSIONSREQUEST']._serialized_start=950
-  _globals['_DELETEALLSESSIONSREQUEST']._serialized_end=993
-  _globals['_LISTMESSAGESREQUEST']._serialized_start=995
-  _globals['_LISTMESSAGESREQUEST']._serialized_end=1068
-  _globals['_MESSAGEENTRY']._serialized_start=1071
-  _globals['_MESSAGEENTRY']._serialized_end=1241
-  _globals['_LISTMESSAGESRESPONSE']._serialized_start=1243
-  _globals['_LISTMESSAGESRESPONSE']._serialized_end=1312
-  _globals['_EVENTSREQUEST']._serialized_start=1314
-  _globals['_EVENTSREQUEST']._serialized_end=1366
-  _globals['_EVENTENTRY']._serialized_start=1369
-  _globals['_EVENTENTRY']._serialized_end=1514
-  _globals['_EVENTSRESPONSE']._serialized_start=1516
-  _globals['_EVENTSRESPONSE']._serialized_end=1633
-  _globals['_RECALLDETAILSREQUEST']._serialized_start=1635
-  _globals['_RECALLDETAILSREQUEST']._serialized_end=1694
-  _globals['_RECALLDETAILSRESPONSE']._serialized_start=1697
-  _globals['_RECALLDETAILSRESPONSE']._serialized_end=1877
-  _globals['_CANCELREQUEST']._serialized_start=1879
-  _globals['_CANCELREQUEST']._serialized_end=1914
-  _globals['_CANCELRESPONSE']._serialized_start=1916
-  _globals['_CANCELRESPONSE']._serialized_end=1944
-  _globals['_AGENTSERVICE']._serialized_start=1947
-  _globals['_AGENTSERVICE']._serialized_end=3108
+  _globals['_RUNREQUEST']._serialized_start=68
+  _globals['_RUNREQUEST']._serialized_end=133
+  _globals['_RUNRESULT']._serialized_start=135
+  _globals['_RUNRESULT']._serialized_end=260
+  _globals['_TOOLCALL']._serialized_start=262
+  _globals['_TOOLCALL']._serialized_end=337
+  _globals['_TRACEENTRY']._serialized_start=339
+  _globals['_TRACEENTRY']._serialized_end=417
+  _globals['_CHUNKMESSAGE']._serialized_start=420
+  _globals['_CHUNKMESSAGE']._serialized_end=709
+  _globals['_SESSIONCREATEREQUEST']._serialized_start=711
+  _globals['_SESSIONCREATEREQUEST']._serialized_end=772
+  _globals['_SESSIONIDREQUEST']._serialized_start=774
+  _globals['_SESSIONIDREQUEST']._serialized_end=812
+  _globals['_LISTSESSIONSREQUEST']._serialized_start=814
+  _globals['_LISTSESSIONSREQUEST']._serialized_end=852
+  _globals['_SESSIONUPDATEREQUEST']._serialized_start=854
+  _globals['_SESSIONUPDATEREQUEST']._serialized_end=918
+  _globals['_SESSIONRESPONSE']._serialized_start=920
+  _globals['_SESSIONRESPONSE']._serialized_end=1036
+  _globals['_LISTSESSIONSRESPONSE']._serialized_start=1038
+  _globals['_LISTSESSIONSRESPONSE']._serialized_end=1110
+  _globals['_DELETERESPONSE']._serialized_start=1112
+  _globals['_DELETERESPONSE']._serialized_end=1163
+  _globals['_DELETEALLSESSIONSREQUEST']._serialized_start=1165
+  _globals['_DELETEALLSESSIONSREQUEST']._serialized_end=1208
+  _globals['_LISTMESSAGESREQUEST']._serialized_start=1210
+  _globals['_LISTMESSAGESREQUEST']._serialized_end=1283
+  _globals['_MESSAGEENTRY']._serialized_start=1286
+  _globals['_MESSAGEENTRY']._serialized_end=1496
+  _globals['_LISTMESSAGESRESPONSE']._serialized_start=1498
+  _globals['_LISTMESSAGESRESPONSE']._serialized_end=1567
+  _globals['_EVENTSREQUEST']._serialized_start=1569
+  _globals['_EVENTSREQUEST']._serialized_end=1621
+  _globals['_EVENTENTRY']._serialized_start=1624
+  _globals['_EVENTENTRY']._serialized_end=1809
+  _globals['_EVENTSRESPONSE']._serialized_start=1811
+  _globals['_EVENTSRESPONSE']._serialized_end=1928
+  _globals['_RECALLDETAILSREQUEST']._serialized_start=1930
+  _globals['_RECALLDETAILSREQUEST']._serialized_end=1989
+  _globals['_RECALLDETAILSRESPONSE']._serialized_start=1992
+  _globals['_RECALLDETAILSRESPONSE']._serialized_end=2232
+  _globals['_CANCELREQUEST']._serialized_start=2234
+  _globals['_CANCELREQUEST']._serialized_end=2269
+  _globals['_CANCELRESPONSE']._serialized_start=2271
+  _globals['_CANCELRESPONSE']._serialized_end=2299
+  _globals['_AGENTSERVICE']._serialized_start=2302
+  _globals['_AGENTSERVICE']._serialized_end=3463
 # @@protoc_insertion_point(module_scope)

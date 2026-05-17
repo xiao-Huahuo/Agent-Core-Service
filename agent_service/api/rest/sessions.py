@@ -49,6 +49,22 @@ async def create_session(body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@router.get("/sessions/{session_id}")
+async def get_session(session_id: str) -> dict[str, Any]:
+    """获取指定会话详情。"""
+    service = _require_session_service()
+    session = service.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {
+        "session_id": session.session_id,
+        "user_id": session.user_id,
+        "session_name": session.session_name,
+        "created_at": session.created_at.isoformat(),
+        "updated_at": session.updated_at.isoformat(),
+    }
+
+
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str) -> dict[str, Any]:
     """删除指定会话。"""
@@ -56,7 +72,7 @@ async def delete_session(session_id: str) -> dict[str, Any]:
     deleted = service.delete_session(session_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
-    return {"ok": True}
+    return {"ok": True, "deleted_count": 1}
 
 
 @router.delete("/sessions")
@@ -79,7 +95,9 @@ async def update_session_name(session_id: str, body: dict[str, Any]) -> dict[str
         raise HTTPException(status_code=404, detail="Session not found")
     return {
         "session_id": session.session_id,
+        "user_id": session.user_id,
         "session_name": session.session_name,
+        "created_at": session.created_at.isoformat(),
         "updated_at": session.updated_at.isoformat(),
     }
 

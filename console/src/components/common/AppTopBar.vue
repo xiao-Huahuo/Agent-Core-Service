@@ -7,10 +7,17 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
-import ThemeToggle from './ThemeToggle.vue'
+import { useSettingsStore } from '@/stores/settings'
+import ThemeSwitch from './ThemeSwitch.vue'
 
 const route = useRoute()
 const sessionStore = useSessionStore()
+const settingsStore = useSettingsStore()
+
+const isDark = computed({
+  get: () => settingsStore.themeMode === 'dark',
+  set: () => settingsStore.toggleTheme(),
+})
 
 const title = computed(() => {
   const name = sessionStore.currentSession?.session_name
@@ -48,7 +55,7 @@ function isActive(path) {
     <div class="spacer"></div>
 
     <span class="window-status">ready</span>
-    <ThemeToggle />
+    <ThemeSwitch v-model="isDark" />
   </div>
 </template>
 

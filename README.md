@@ -45,6 +45,8 @@ flowchart TD
     safety_output --> E2((END))
 ```
 
+
+
 ### 各部分设计
 
 项目设计遵循分布式设计原则，形成可插拔、可定制的独立微服务。
@@ -116,8 +118,8 @@ flowchart TD
       - 一般拦截：色情/暴力/违法/注入/广告等其他类别 → 小模型生成脱敏的礼貌拒绝（如"对不起,我不能回答这个问题,因为[脱敏理由]。如需其他帮助请随时告诉我。"）。
      两项回复均通过 `SafetyService._get_block_message_prompt()` 选择对应系统提示词,经 `LLMTaskScheduler` → `small` 模型池生成;小模型不可用时回退到静态后备文案。
 
-### 项目工作原理流程图
-#### 记忆机制
+## 工作原理流程图
+### 记忆机制
 ##### 长期记忆 / 知识库入库流程
 
 ```mermaid
@@ -168,28 +170,7 @@ flowchart TD
     M --> O[未命中时回退 session_summary]
 ```
 
-##### 上下文构建器
 
-```mermaid
-flowchart TD
-    A["ContextBuilder.build_messages()"] --> B["加载近期历史消息\n(list_recent_messages, 最多 N 条)"]
-    B --> C["检索长期记忆\n(retrieve_long_term_memory)"]
-    C --> D["检索知识库片段\n(retrieve_knowledge)"]
-    D --> E["获取重要事实摘要\n(get_latest_important_fact_summary)"]
-    E --> F{"拼接检索上下文"}
-    F --> G["SystemMessage: 检索上下文\n(记忆 + 知识库 + 重要事实)"]
-    G --> H["转换历史消息\n(MessageOut → LangChain Message)"]
-    H --> I["追加 HumanMessage\n(current_prompt)"]
-    I --> J{"Token 估算\n超过 summary_trigger_tokens?"}
-    J -->|"未超过"| K["返回完整 messages 列表\n[SystemMessage, ...history, HumanMessage]"]
-    J -->|"超过"| L["裁剪历史消息\n(仅保留最近 tail 条)"]
-    L --> M["重建压缩上下文\n_rebuild_messages_for_compressed_context"]
-    M --> K
-    K --> N["送入 Agent 图执行"]
-```
-**消息角色优先级（上下文拼装顺序）：**  
-`SystemMessage(检索上下文)` → `历史消息按时间正序` → `HumanMessage(当前输入)`  
-检索上下文内部优先级：`important_fact_summary > 当前 session 摘要 > 长期记忆 > 知识库`
 
 ##### 混合检索与ReRank机制
 
@@ -227,9 +208,32 @@ flowchart TD
     R --> S["最终排序<br/>(session_match DESC → updated_at DESC → final_score DESC → importance DESC)"]
     S --> T["返回 TopK 结果<br/>(rerank_top_k 条)"]
 ```
+### 上下文与状态机制
+##### 上下文构建器
 
-#### 任务调度机制
-##### compress 路径: 上下文压缩 / 重要事实摘要流程
+```mermaid
+flowchart TD
+    A["ContextBuilder.build_messages()"] --> B["加载近期历史消息\n(list_recent_messages, 最多 N 条)"]
+    B --> C["检索长期记忆\n(retrieve_long_term_memory)"]
+    C --> D["检索知识库片段\n(retrieve_knowledge)"]
+    D --> E["获取重要事实摘要\n(get_latest_important_fact_summary)"]
+    E --> F{"拼接检索上下文"}
+    F --> G["SystemMessage: 检索上下文\n(记忆 + 知识库 + 重要事实)"]
+    G --> H["转换历史消息\n(MessageOut → LangChain Message)"]
+    H --> I["追加 HumanMessage\n(current_prompt)"]
+    I --> J{"Token 估算\n超过 summary_trigger_tokens?"}
+    J -->|"未超过"| K["返回完整 messages 列表\n[SystemMessage, ...history, HumanMessage]"]
+    J -->|"超过"| L["裁剪历史消息\n(仅保留最近 tail 条)"]
+    L --> M["重建压缩上下文\n_rebuild_messages_for_compressed_context"]
+    M --> K
+    K --> N["送入 Agent 图执行"]
+```
+**消息角色优先级（上下文拼装顺序）：**  
+`SystemMessage(检索上下文)` → `历史消息按时间正序` → `HumanMessage(当前输入)`  
+检索上下文内部优先级：`important_fact_summary > 当前 session 摘要 > 长期记忆 > 知识库`
+
+##### 上下文压缩机制
+###### compress 路径: 上下文压缩 / 重要事实摘要流程
 
 ```mermaid
 flowchart TD
@@ -242,7 +246,7 @@ flowchart TD
     E --> G["后续 ContextBuilder 优先注入 important_fact_summary"]
 ```
 
-##### summary 路径: 长期记忆摘要流程
+###### summary 路径: 长期记忆摘要流程
 
 ```mermaid
 flowchart TD
@@ -255,6 +259,32 @@ flowchart TD
     D --> H["原始消息标记 is_summarized=true"]
 ```
 
+##### 探索状态机制
+
+```mermaid
+flowchart TD
+    subgraph session["同一 Session"]
+        subgraph turn1["Turn N"]
+            P1["planner<br/>分析进度给出建议"] -->|"plan 注入<br/>system prompt"| A1["agent<br/>自主决策"]
+            A1 -->|"工具调用"| T1["action → reflection"]
+            T1 -->|"继续探索"| P1
+        end
+
+        subgraph turn2["Turn N+1"]
+            P2["planner<br/>基于上一轮 plan<br/>更新建议"] -->|"plan 注入"| A2["agent"]
+        end
+
+        plan["plan 状态<br/>{covered, suggested,<br/>sufficient, hint}"]
+
+        P1 --> plan
+        A1 -.->|"update_exploration_state"| plan
+        plan --> P2
+    end
+
+    plan <-->|"持久化 / 加载"| DB["PostgreSQL<br/>session.state_json"]
+```
+
+### 任务调度与节流机制
 
 ##### 模型路由与大/小模型池
 
@@ -312,7 +342,34 @@ flowchart TD
     K --> L["结果写回 Redis result key"]
     L --> M["调用方轮询 / 阻塞等待"]
 ```
-#### 安全机制
+
+##### 节流机制
+
+流式对话中每个 SSE token 都直接写入 Vue 响应式对象，触发完整响应链（`visibleMessages` 全量 reduce → 模板重渲染 → vdom diff → scroll 计算）。随会话消息累积（100+ 条），每秒 30~60 次的全量重算产生 ~3,000 个临时对象，GC 频繁停顿导致卡顿。
+
+```mermaid
+flowchart LR
+    A["SSE token<br/>30~60/s"] -->|"优化前: 逐 token 写响应式"| B["visibleMessages<br/>全量 reduce"]
+    B --> C["模板重渲染"]
+    C --> D["vdom diff"]
+    D --> E["scroll 重算"]
+    E -.->|"GC 停顿<br/>50~150ms"| A
+
+    A -->|"优化后: 50ms 批量"| F["_pendingContent<br/>非响应式缓冲"]
+    F -->|"20fps flush"| G["last.content<br/>仅触发 1 次"]
+    G --> H["UI 更新"]
+```
+
+**_pendingContent**（`src/stores/chat.js`）：非响应式字符串缓冲，`updateStreamContent` 存入最新累积内容（0 次响应链触发），`flushStreamContent` 每 50ms 写入 `last.content`（1 次响应链触发），`forceFlushContent` 在流结束/中断/异常时立即清空缓冲防丢字。
+
+| 指标 | 优化前 | 优化后 |
+|---|---|
+| 每次 token 响应链触发 | 1 次 | 0 次 |
+| 每秒响应链触发（100 条消息） | ~30 次 | ~20 次 |
+| 每秒临时对象 | ~3,000 | ~1,000 |
+| 长对话滚动 | 频繁卡顿，无法滚动 | 平滑跟随 |
+
+### 安全机制
 ##### 三层审核设计
 
 ```mermaid
@@ -364,3 +421,55 @@ flowchart TD
 - 日志与监控：logging / structlog + Prometheus + Grafana
 - 容器化部署：Docker + Docker Compose
 - 测试与质量：Pytest + Ruff + mypy
+
+## 接口设计
+
+本服务同时提供 **REST (FastAPI)** 和 **gRPC (protobuf)** 两套接口，二者功能完全等价、返回结构一致，可根据客户端需求任选其一。
+
+> 约定：下表中参数字段名在 REST 和 gRPC 中相同；REST 使用 JSON body / query string，gRPC 使用对应的 proto message。
+
+### 一、Session 管理
+
+| 方法 | REST | gRPC | 功能 | 请求参数 | 返回结构 |
+|------|------|------|------|----------|----------|
+| ListSessions | `GET /sessions?user_id=` | `ListUserSessions` | 列出用户全部会话，按更新时间倒序 | `user_id` (string, 必填) | `[{session_id, user_id, session_name, created_at, updated_at}]` |
+| CreateSession | `POST /sessions` | `CreateSession` | 创建新会话 | `user_id` (string, 必填), `session_name` (string, 可选) | `{session_id, user_id, session_name, created_at, updated_at}` |
+| GetSession | `GET /sessions/{id}` | `GetSession` | 获取单个会话详情 | `session_id` (string, 必填) | `{session_id, user_id, session_name, created_at, updated_at}` |
+| UpdateSessionName | `PUT /sessions/{id}/name` | `UpdateSessionName` | 重命名会话 | `session_id` (string, 必填), `session_name` (string, 必填) | `{session_id, user_id, session_name, created_at, updated_at}` |
+| DeleteSession | `DELETE /sessions/{id}` | `DeleteSession` | 删除单个会话 | `session_id` (string, 必填) | `{ok, deleted_count}` |
+| DeleteAllSessions | `DELETE /sessions?user_id=` | `DeleteAllSessions` | 清空用户全部会话 | `user_id` (string, 必填) | `{ok, deleted_count}` |
+
+### 二、消息历史
+
+| 方法 | REST | gRPC | 功能 | 请求参数 | 返回结构 |
+|------|------|------|------|----------|----------|
+| ListMessages | `GET /sessions/{id}/messages?user_id=&limit=` | `ListMessages` | 拉取会话历史消息 | `session_id` (string, 必填), `user_id` (string, 必填), `limit` (int, 默认 50) | `[{message_id, session_id, user_id, role, content, tool_calls, metadata, created_at}]` |
+
+### 三、Agent 流式对话
+
+| 方法 | REST | gRPC | 功能 | 请求参数 | 流事件字段 |
+|------|------|------|------|----------|------------|
+| StreamSessionPrompt | `GET /agent/stream?prompt=&user_id=&session_id=` | `StreamSessionPrompt` | 带 Session 上下文的 SSE 流式对话（长期记忆 + 知识库 + 持久化） | `prompt` (string, 必填), `user_id` (string, 必填), `session_id` (string, 必填) | `node, content, tool_calls, trace, model_name, type, context_messages, metadata, error, done` |
+| StreamRun | `GET /agent/stream-run?prompt=&user_id=&session_id=` | `StreamRun` | 无状态 SSE 流式运行（无记忆/召回/持久化） | 同上 | 同上 |
+
+> 流事件说明：
+> - `type`: 普通 chunk 为空；`"system_prompt"` 时 `metadata` 含 RAG 指标；`"context_mirror"` 时 `context_messages` 含模型完整上下文
+> - `done`: 流结束标志（REST 以 `data: [DONE]\n\n` 结束）
+> - `error`: 仅在发生错误时非空，含友好错误描述
+
+### 四、Agent 非流式调用
+
+| 方法 | REST | gRPC | 功能 | 请求参数 | 返回结构 |
+|------|------|------|------|----------|----------|
+| RunSessionPrompt | `POST /agent/run` | `RunSessionPrompt` | 带 Session 上下文的单次运行 | `prompt` (string, 必填), `user_id` (string, 必填), `session_id` (string, 必填) | `{graph_diagram_path, graph_diagram, final_output, events}` |
+| RunOnce | `POST /agent/run-once` | `RunOnce` | 无状态单次运行 | 同上 | 同上 |
+| CancelSession | `POST /agent/cancel` | `CancelSession` | 取消正在执行的 Agent 图 | `session_id` (string, 必填) | `{ok}` |
+
+### 五、观测
+
+| 方法 | REST | gRPC | 功能 | 请求参数 | 返回结构 |
+|------|------|------|------|----------|----------|
+| GetEvents | `GET /agent/events?session_id=&user_id=` | `GetEvents` | 获取最近一次执行的 trace 事件列表 | `session_id` (string, 必填), `user_id` (string, 必填) | `{session_id, user_id, event_count, events: [{message_id, role, node, content, tool_calls, created_at, metadata}]}` |
+| GetRecallDetails | `GET /agent/recall-details?session_id=&user_id=` | `GetRecallDetails` | 获取最近一次 RAG 召回快照（pre/post rerank） | 同上 | `{session_id, user_id, created_at, query, rag_metrics, memory_recall, knowledge_recall}` |
+
+## 使用说明

@@ -203,6 +203,34 @@ def clear_reflection_content_callback() -> None:
         delattr(_REFLECTION_CONTENT_CALLBACK, "callback")
 
 
+# ------------------------------------------------------------------
+# 上下文镜像回调 (用于 ModelDecisionNode → AgentCore 发送模型所见完整消息列表)
+# ------------------------------------------------------------------
+
+_CONTEXT_MIRROR_CALLBACK: local = local()
+
+
+def set_context_mirror_callback(callback: Callable[[list[dict[str, Any]]], None]) -> None:
+    """
+    设置当前线程的上下文镜像回调, 供 ModelDecisionNode 在调用 LLM 前
+    将完整消息列表镜像给 AgentCore, 再由 SSE 下发给前端 Obs 面板。
+
+    callback: 接收序列化后的消息列表 (list[dict]) 的回调函数。
+    """
+    _CONTEXT_MIRROR_CALLBACK.callback = callback
+
+
+def get_context_mirror_callback() -> Callable[[list[dict[str, Any]]], None] | None:
+    """获取当前线程的上下文镜像回调。"""
+    return getattr(_CONTEXT_MIRROR_CALLBACK, "callback", None)
+
+
+def clear_context_mirror_callback() -> None:
+    """清理当前线程的上下文镜像回调。"""
+    if hasattr(_CONTEXT_MIRROR_CALLBACK, "callback"):
+        delattr(_CONTEXT_MIRROR_CALLBACK, "callback")
+
+
 def get_tool_runtime() -> ToolRuntimeState:
     """
     获取当前线程的工具运行时状态。
@@ -214,3 +242,27 @@ def get_tool_runtime() -> ToolRuntimeState:
     if state is None:
         raise RuntimeError("当前工具调用缺少 Agent 运行时上下文。")
     return state
+
+
+# ------------------------------------------------------------------
+# Agent 探索状态 (供 update_exploration_state 工具修改)
+# ------------------------------------------------------------------
+
+_PLAN_STATE: local = local()
+
+
+def set_plan_state(plan: dict[str, Any] | None) -> None:
+    """设置当前线程的探索状态,供工具读取和修改。"""
+    import copy
+    _PLAN_STATE.state = copy.deepcopy(plan) if plan is not None else None
+
+
+def get_plan_state() -> dict[str, Any] | None:
+    """获取当前线程的探索状态。"""
+    return getattr(_PLAN_STATE, "state", None)
+
+
+def clear_plan_state() -> None:
+    """清理当前线程的探索状态。"""
+    if hasattr(_PLAN_STATE, "state"):
+        delattr(_PLAN_STATE, "state")

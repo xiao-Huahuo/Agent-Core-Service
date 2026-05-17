@@ -7,15 +7,18 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Plus, Trash2, PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { useUserId } from '@/composable/useUserId'
 import { useSessionStore } from '@/stores/session'
 import { useChatStore } from '@/stores/chat'
 import AppTopBar from '@/components/common/AppTopBar.vue'
+import LogoutButton from '@/components/common/LogoutButton.vue'
 import SessionItem from '@/components/session/SessionItem.vue'
+import AddButton from '@/components/session/AddButton.vue'
+import TrashButton from '@/components/session/TrashButton.vue'
 
 const route = useRoute()
-const { userId, hasUserId } = useUserId()
+const { userId, hasUserId, clearUserId } = useUserId()
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
 
@@ -99,6 +102,11 @@ async function handleClearAll() {
   await sessionStore.clearAll(userId.value)
 }
 
+function handleLogout() {
+  clearUserId()
+  chatStore.clear()
+}
+
 onMounted(async () => {
   if (hasUserId.value) {
     await sessionStore.load(userId.value)
@@ -132,10 +140,7 @@ onMounted(async () => {
         </div>
 
         <div class="sidebar-toolbar">
-          <button class="new-btn" @click="handleCreate">
-            <Plus :size="13" />
-            <span>New Session</span>
-          </button>
+          <AddButton @click="handleCreate" />
         </div>
 
         <div class="session-list">
@@ -162,11 +167,12 @@ onMounted(async () => {
           </button>
         </div>
 
-        <div v-if="sessionStore.sessions.length > 0" class="sidebar-footer">
-          <button class="clear-all-btn" @click="handleClearAll">
-            <Trash2 :size="12" />
-            <span>清空全部会话</span>
-          </button>
+        <div class="sidebar-footer">
+          <TrashButton
+            v-if="sessionStore.sessions.length > 0"
+            @click="handleClearAll"
+          />
+          <LogoutButton @click="handleLogout" />
         </div>
       </aside>
     </Transition>
@@ -194,10 +200,7 @@ onMounted(async () => {
           <button class="drawer-close" @click="sidebarOpen = false">&times;</button>
         </div>
         <div class="sidebar-toolbar">
-          <button class="new-btn" @click="handleCreate">
-            <Plus :size="13" />
-            <span>New Session</span>
-          </button>
+          <AddButton @click="handleCreate" />
         </div>
         <div class="session-list">
           <SessionItem
@@ -223,11 +226,12 @@ onMounted(async () => {
           </button>
         </div>
 
-        <div v-if="sessionStore.sessions.length > 0" class="sidebar-footer">
-          <button class="clear-all-btn" @click="handleClearAll">
-            <Trash2 :size="12" />
-            <span>清空全部会话</span>
-          </button>
+        <div class="sidebar-footer">
+          <TrashButton
+            v-if="sessionStore.sessions.length > 0"
+            @click="handleClearAll"
+          />
+          <LogoutButton @click="handleLogout" />
         </div>
       </aside>
     </Transition>
@@ -283,26 +287,13 @@ onMounted(async () => {
   border-bottom: 1px solid var(--color-border);
 }
 
-.new-btn {
+.sidebar-footer {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
-  width: 100%;
-  padding: var(--space-8) var(--space-10);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.new-btn:hover {
-  color: var(--color-text-primary);
-  border-color: var(--color-accent);
-  background: var(--color-accent-muted);
+  justify-content: center;
+  gap: var(--space-10);
+  padding: 8px 12px;
+  border-top: 1px solid var(--color-border);
 }
 
 .session-list {
@@ -316,33 +307,6 @@ onMounted(async () => {
   color: var(--color-text-tertiary);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
-}
-
-.sidebar-footer {
-  padding: 8px 12px;
-  border-top: 1px solid var(--color-border);
-}
-
-.clear-all-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  width: 100%;
-  padding: var(--space-8) var(--space-10);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.clear-all-btn:hover {
-  color: #c56565;
-  border-color: rgba(197, 101, 101, 0.4);
-  background: rgba(197, 101, 101, 0.08);
 }
 
 /* ---- 分页 ---- */

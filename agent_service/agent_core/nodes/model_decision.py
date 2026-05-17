@@ -21,7 +21,7 @@ from langchain_openai import ChatOpenAI
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
-from agent_service.tools.runtime_context import get_agent_token_callback
+from agent_service.tools.runtime_context import get_agent_token_callback, get_context_mirror_callback
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +113,11 @@ class ModelDecisionNode:
 
         cumulative = ""
         final_message: Any = None
+
+        context_callback = get_context_mirror_callback()
+        if context_callback is not None:
+            context_callback(self._serialize_messages([system_message, *state["messages"]]))
+
         for chunk in self.task_scheduler.stream_chat(
             task_type=FOREGROUND_AGENT_TASK,
             messages=[system_message, *state["messages"]],
@@ -152,6 +157,32 @@ class ModelDecisionNode:
         if has_content:
             return "模型生成最终回复。"
         return "模型返回空响应。"
+
+    @staticmethod
+    def _serialize_messages(messages: list) -> list[dict[str, Any]]:
+        """
+        将 LangChain BaseMessage 列表序列化为 JSON 友好的 dict 列表。
+
+        用于上下文镜像回调, 让前端 Obs 面板能看到模型收到的完整消息。
+        """
+        role_map = {"system": "system", "human": "user", "ai": "assistant", "tool": "tool"}
+        result: list[dict[str, Any]] = []
+        for msg in messages:
+            entry: dict[str, Any] = {
+                "role": role_map.get(msg.type, msg.type),
+                "content": str(getattr(msg, "content", "") or ""),
+            }
+            tool_calls = getattr(msg, "tool_calls", None)
+            if tool_calls:
+                entry["tool_calls"] = tool_calls
+            tool_call_id = getattr(msg, "tool_call_id", None)
+            if tool_call_id:
+                entry["tool_call_id"] = tool_call_id
+            name = getattr(msg, "name", None)
+            if name:
+                entry["name"] = name
+            result.append(entry)
+        return result
 
     def _build_model(self) -> Any:
         """根据 `AgentConfig.ModelConfig` 创建 OpenAI Compatible 聊天模型。"""

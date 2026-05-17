@@ -99,13 +99,16 @@ class MessageService:
             db_session.refresh(record)
             return MessageOut.from_record(record)
 
-    def list_recent_messages(self, *, user_id: str, session_id: str, limit: int) -> list[MessageOut]:
+    def list_recent_messages(
+        self, *, user_id: str, session_id: str, limit: int, include_summarized: bool = False
+    ) -> list[MessageOut]:
         """
-        查询同一会话最近 N 条未摘要消息,并按时间正序返回。
+        查询同一会话最近 N 条消息,并按时间正序返回。
 
         user_id: 用户 ID,用于防止跨用户读取消息。
         session_id: 会话 ID。
         limit: 最多返回的历史消息数量。
+        include_summarized: 是否包含已摘要消息,默认 False 仅返回未摘要。
         """
 
         if limit <= 0:
@@ -114,10 +117,11 @@ class MessageService:
             select(MessageRecord)
             .where(MessageRecord.user_id == user_id)
             .where(MessageRecord.session_id == session_id)
-            .where(MessageRecord.is_summarized == False)  # noqa: E712
             .order_by(MessageRecord.created_at.desc())
             .limit(limit)
         )
+        if not include_summarized:
+            statement = statement.where(MessageRecord.is_summarized == False)  # noqa: E712
         with Session(self.engine) as db_session:
             records = list(db_session.exec(statement).all())
             records.reverse()

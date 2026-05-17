@@ -13,7 +13,6 @@ AgentService gRPC Servicer 实现。
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -168,14 +167,14 @@ class AgentServiceServicer(BaseServicer):
     ) -> DeleteResponse:
         logger.info("DeleteSession session=%s", request.session_id)
         success = self._session_service.delete_session(request.session_id)
-        return DeleteResponse(success=success)
+        return DeleteResponse(ok=success, deleted_count=1 if success else 0)
 
     def DeleteAllSessions(  # noqa: N802
         self, request: DeleteAllSessionsRequest, context: grpc.ServicerContext,  # noqa: ARG002
     ) -> DeleteResponse:
         logger.info("DeleteAllSessions user=%s", request.user_id)
         count = self._session_service.delete_all_user_sessions(request.user_id)
-        return DeleteResponse(success=True, deleted_count=count)
+        return DeleteResponse(ok=True, deleted_count=count)
 
     # ------------------------------------------------------------------
     # 取消执行 RPC
@@ -210,8 +209,8 @@ class AgentServiceServicer(BaseServicer):
                     user_id=m.user_id,
                     role=m.role,
                     content=m.content,
-                    tool_calls_json=json.dumps(m.tool_calls_json or [], ensure_ascii=False),
-                    metadata_json=json.dumps(m.metadata_json or {}, ensure_ascii=False),
+                    tool_calls=_build_tool_call_list(m.tool_calls_json),
+                    metadata=m.metadata_json or {},
                     created_at=_to_iso(m.created_at),
                 )
             )
@@ -243,9 +242,9 @@ class AgentServiceServicer(BaseServicer):
                     role=m.role,
                     node=node_name,
                     content=m.content[:500] if m.role in ("assistant", "tool", "system") else "",
-                    tool_calls_json=json.dumps(m.tool_calls_json or [], ensure_ascii=False),
+                    tool_calls=_build_tool_call_list(m.tool_calls_json),
                     created_at=_to_iso(m.created_at),
-                    metadata_json=json.dumps(meta, ensure_ascii=False),
+                    metadata=meta,
                 )
             )
         return EventsResponse(
@@ -273,9 +272,9 @@ class AgentServiceServicer(BaseServicer):
             user_id=payload["user_id"],
             created_at=payload["created_at"],
             query=payload["query"],
-            rag_metrics_json=json.dumps(payload["rag_metrics"], ensure_ascii=False),
-            memory_recall_json=json.dumps(payload["memory_recall"], ensure_ascii=False),
-            knowledge_recall_json=json.dumps(payload["knowledge_recall"], ensure_ascii=False),
+            rag_metrics=payload["rag_metrics"],
+            memory_recall=payload["memory_recall"],
+            knowledge_recall=payload["knowledge_recall"],
         )
 
     # ------------------------------------------------------------------
@@ -297,7 +296,7 @@ class AgentServiceServicer(BaseServicer):
                     tool_calls.append(
                         ToolCall(
                             name=tc.get("name", ""),
-                            args_json=json.dumps(tc.get("args", {}), ensure_ascii=False),
+                            args=tc.get("args", {}),
                             id=tc.get("id", ""),
                         )
                     )
@@ -319,6 +318,11 @@ class AgentServiceServicer(BaseServicer):
                     tool_calls=tool_calls,
                     trace=trace_entries,
                     done=False,
+                    model_name=payload.get("model_name", ""),
+                    type=payload.get("type", ""),
+                    context_messages=payload.get("context_messages", []),
+                    metadata=payload.get("metadata", {}),
+                    error=payload.get("error", ""),
                 )
 
             yield ChunkMessage(done=True)
@@ -331,12 +335,11 @@ class AgentServiceServicer(BaseServicer):
 
     @staticmethod
     def _build_run_result(result: dict[str, Any]) -> RunResult:
-        events_json = json.dumps(result.get("events", []), ensure_ascii=False)
         return RunResult(
             graph_diagram=result.get("graph_diagram", ""),
             final_output=result.get("final_output", ""),
-            events_json=events_json,
-            chunks_json=result.get("chunks_json", events_json),
+            events=result.get("events", []),
+            graph_diagram_path=result.get("graph_diagram_path", ""),
         )
 
     @staticmethod
@@ -356,3 +359,18 @@ def _to_iso(value: datetime | None) -> str:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.isoformat()
+
+
+def _build_tool_call_list(tool_calls: list | None) -> list:
+    """将数据库中的 tool_calls JSON 列表转换为 proto ToolCall 消息列表。"""
+    result = []
+    for tc in (tool_calls or []):
+        if isinstance(tc, dict):
+            result.append(
+                ToolCall(
+                    name=tc.get("name", ""),
+                    args=tc.get("args", {}),
+                    id=tc.get("id", ""),
+                )
+            )
+    return result

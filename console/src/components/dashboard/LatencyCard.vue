@@ -13,27 +13,19 @@ import { useObsData } from '@/composable/useObsData'
 const obs = useObsData()
 const selectedIdx = ref(-1)
 
-watch(() => obs.latencyTurns.value.length, (n) => {
-  console.debug('[LatencyCard] turns changed:', n, 'msgs:', obs.messages.value.length)
-})
-watch(() => obs.messages.value.length, (n) => {
-  console.debug('[LatencyCard] msgs changed:', n, 'turns:', obs.latencyTurns.value.length)
-})
-
 const turns = computed(() => obs.latencyTurns.value)
 const hasTurns = computed(() => turns.value.length > 0)
-const diagInfo = computed(() => {
-  const msgCount = obs.messages.value.length
-  const turnCount = turns.value.length
-  if (turnCount > 0) {
-    const t = turns.value[0]
-    return `turns=${turnCount} msgs=${msgCount} first=[T${t.index} ${t.seconds}s]`
+
+watch(turns, (val) => {
+  if (val.length > 0) {
+    selectedIdx.value = val.length - 1
   }
-  if (msgCount > 0) {
-    const roles = obs.messages.value.map(m => m.role).join(',')
-    return `turns=0 msgs=${msgCount} roles=[${roles}]`
-  }
-  return `turns=0 msgs=0 (no messages loaded)`
+})
+
+const summaryLabel = computed(() => {
+  const s = obs.latencySummary.value
+  if (turns.value.length === 0) return 'no data'
+  return `avg ${s.avg}s · max ${s.max}s · ${turns.value.length} turns`
 })
 const emptyHint = computed(() => {
   const sessionId = obs.sessionStats.value.currentSessionId || '--'
@@ -170,9 +162,8 @@ const roseOption = computed(() => {
     },
     series: [{
       type: 'pie',
-      radius: ['20%', '75%'],
-      center: ['50%', '45%'],
-      roseType: 'area',
+      radius: '65%',
+      center: ['50%', '42%'],
       itemStyle: { borderRadius: 2 },
       label: { show: false },
       data: items.map((d, i) => ({
@@ -202,7 +193,7 @@ function onLineClick(params) {
         <span class="traffic-dot sm green"></span>
       </div>
       <span class="window-filename">每次 message 思考耗时</span>
-      <span class="window-status">avg {{ obs.latencySummary.value.avg }}s | {{ diagInfo }}</span>
+      <span class="window-status">{{ summaryLabel }}</span>
     </div>
 
     <div class="card-body">
@@ -281,7 +272,7 @@ function onLineClick(params) {
   flex-direction: column;
   gap: var(--space-8);
   padding: var(--space-8) var(--space-10);
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* ---- 折线图 ---- */
@@ -342,6 +333,8 @@ function onLineClick(params) {
   border-top: 1px solid var(--color-border-light);
   padding-top: var(--space-8);
   flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .detail-summary {
@@ -372,6 +365,8 @@ function onLineClick(params) {
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0 0 var(--space-8);
+  max-height: 48px;
+  overflow: hidden;
 }
 
 /* ---- 步骤占比 ---- */
@@ -381,10 +376,17 @@ function onLineClick(params) {
   gap: var(--space-10);
 }
 
+@media (max-width: 480px) {
+  .breakdown-charts {
+    grid-template-columns: 1fr;
+  }
+}
+
 .breakdown-col {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .col-label {
@@ -392,11 +394,14 @@ function onLineClick(params) {
   font-size: 8px;
   color: var(--color-text-tertiary);
   margin-bottom: var(--space-4);
+  flex-shrink: 0;
 }
 
 .breakdown-chart {
   width: 100%;
-  height: 200px;
+  height: 130px;
+  min-height: 0;
+  flex-shrink: 1;
 }
 
 /* ---- 提示 / 空状态 ---- */

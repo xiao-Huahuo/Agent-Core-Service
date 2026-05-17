@@ -41,6 +41,28 @@ class SessionUpdate(SQLModel):
     session_name: str = Field(min_length=1, max_length=255)
 
 
+class SessionStateUpdate(SQLModel):
+    """
+    更新会话状态 DTO。
+
+    state_json: Agent 探索状态 JSON 字符串。
+    """
+
+    state_json: str | None = Field(default=None)
+
+
+class SessionStateOut(SQLModel):
+    """
+    会话状态输出 DTO。
+
+    session_id: 会话 ID。
+    state_json: Agent 探索状态 JSON 字符串。
+    """
+
+    session_id: str
+    state_json: str | None
+
+
 class SessionOut(SQLModel):
     """
     会话输出 DTO。

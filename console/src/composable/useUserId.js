@@ -35,9 +35,15 @@ export function useUserId() {
     saveUserId(id)
   }
 
+  function clearUserId() {
+    userId.value = ''
+    saveUserId('')
+  }
+
   return {
     userId,
     hasUserId,
     setUserId: updateUserId,
+    clearUserId,
   }
 }

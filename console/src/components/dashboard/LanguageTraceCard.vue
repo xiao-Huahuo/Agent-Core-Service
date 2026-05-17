@@ -51,6 +51,11 @@ const assemblyStats = computed(() => {
 })
 
 const rawContextJson = computed(() => {
+  /* 优先展示模型收到的真实上下文镜像 (agent 节点调用 LLM 前的完整消息列表) */
+  if (obs.contextMirror?.value?.length > 0) {
+    return JSON.stringify(obs.contextMirror.value, null, 2)
+  }
+  /* 回退到从消息列表中解析的上下文拼装 */
   const assembly = contextAssemblyState.value
   if (!assembly || !assembly.blocks || assembly.blocks.length === 0) return ''
   const payload = {

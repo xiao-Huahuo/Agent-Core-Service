@@ -37,6 +37,9 @@ export const useChatStore = defineStore('chat', () => {
   /** 当前已加载到消息列表中的会话 ID,供观测面板判断是否需要补拉历史。 */
   const loadedSessionId = ref('')
 
+  /** 模型收到的完整上下文镜像 (序列化后的消息列表), 供 Obs 面板 Raw 视图使用。 */
+  const contextMirror = ref([])
+
   /** 用于取消正在进行的流式发送请求 */
   let _streamAbortController = null
 
@@ -76,13 +79,45 @@ export const useChatStore = defineStore('chat', () => {
   function updateLastMessage(content, node, toolCalls, trace) {
     const last = findLastAssistant()
     if (!last) return
-    last.content = content
+    if (content !== undefined) last.content = content
     if (node !== undefined) last.node = node
     if (toolCalls !== undefined) last.tool_calls = toolCalls
     if (trace !== undefined && trace.length > 0) {
       if (!last.trace) last.trace = []
       last.trace.push(...trace)
     }
+  }
+
+  /*
+   * 流式内容节流: 避免每个 token 都触发完整 Vue 响应链
+   * (visibleMessages 重算 → 模板重渲染 → vdom diff → scroll)。
+   * content 以固定间隔 (~50ms) 写入响应式对象, 其它字段立即写入。
+   */
+  let _pendingContent = ''
+  let _flushTimer = null
+  const CONTENT_FLUSH_MS = 50
+
+  function flushStreamContent() {
+    _flushTimer = null
+    if (!_pendingContent) return
+    const last = findLastAssistant()
+    if (last) last.content = _pendingContent
+  }
+
+  function scheduleContentFlush() {
+    if (_flushTimer !== null) return
+    _flushTimer = setTimeout(flushStreamContent, CONTENT_FLUSH_MS)
+  }
+
+  function updateStreamContent(content) {
+    _pendingContent = content
+    scheduleContentFlush()
+  }
+
+  function forceFlushContent() {
+    if (_flushTimer !== null) clearTimeout(_flushTimer)
+    flushStreamContent()
+    _pendingContent = ''
   }
 
   /* ================================================================
@@ -138,6 +173,7 @@ export const useChatStore = defineStore('chat', () => {
     /* 如果正在流式输出,中断上一次请求 */
     if (isStreaming.value) {
       _streamAbortController?.abort()
+      forceFlushContent()
       isStreaming.value = false
       const lastAssistant = findLastAssistant()
       if (lastAssistant) {
@@ -181,6 +217,24 @@ export const useChatStore = defineStore('chat', () => {
       for await (const chunk of streamPrompt(userId, targetSessionId, prompt, { signal })) {
         currentNode.value = chunk.node || ''
 
+        /* 系统提示事件: 将 system prompt 注入消息列表供 Obs 面板上下文拼装使用。
+           每轮只保留最新一条, 避免旧轮次系统消息污染当前上下文拼装视图。 */
+        if (chunk.type === 'system_prompt' && chunk.content) {
+          messages.value = messages.value.filter(m => m.role !== 'system')
+          messages.value.push({
+            role: 'system',
+            content: chunk.content,
+            metadata: chunk.metadata || {},
+          })
+          continue
+        }
+
+        /* 上下文镜像: 模型收到的完整消息列表, 供 Obs 面板 Raw 视图展示真实 context */
+        if (chunk.type === 'context_mirror' && chunk.context_messages) {
+          contextMirror.value = chunk.context_messages
+          continue
+        }
+
         /* tool_trace 事件(action 节点): 仅 tool_call_end 才创建/更新气泡,实现数字滚动 */
         if (chunk.node === 'action' && !chunk.content && chunk.trace && chunk.trace.length > 0) {
           const endTraces = chunk.trace.filter(t => t.event === 'tool_call_end')
@@ -201,14 +255,16 @@ export const useChatStore = defineStore('chat', () => {
         /* action 节点(有内容): 只更新内容,不追加 trace(node 事件的 trace 与 tool_trace 重复) */
         if (chunk.node === 'action' && chunk.content) {
           ensureAssistant(chunk.node)
-          updateLastMessage(chunk.content, chunk.node, undefined, undefined)
+          updateStreamContent(chunk.content)
+          updateLastMessage(undefined, chunk.node, undefined, undefined)
           continue
         }
 
-        /* 有实质文本内容 → 确保 assistant 存在并写入 */
+        /* 有实质文本内容 → 确保 assistant 存在, 内容节流写入 */
         if (chunk.content) {
           ensureAssistant(chunk.node)
-          updateLastMessage(chunk.content, chunk.node, chunk.tool_calls, chunk.trace)
+          updateStreamContent(chunk.content)
+          updateLastMessage(undefined, chunk.node, chunk.tool_calls, chunk.trace)
         } else if (chunk.trace && chunk.trace.length > 0) {
           /* 仅有 trace 的事件 */
           if (assistantCreated) {
@@ -224,12 +280,14 @@ export const useChatStore = defineStore('chat', () => {
       }
     } catch (err) {
       if (err.name === 'AbortError') return
+      forceFlushContent()
       streamError.value = err.message || 'Stream connection failed'
       if (assistantCreated) {
         updateLastMessage(streamError.value, undefined, undefined, undefined)
       }
     } finally {
       if (signal.aborted) return
+      forceFlushContent()
       isStreaming.value = false
       currentNode.value = ''
       loadedSessionId.value = targetSessionId || ''
@@ -250,6 +308,7 @@ export const useChatStore = defineStore('chat', () => {
     _streamAbortController = null
     _historyAbortController = null
     messages.value = []
+    contextMirror.value = []
     isStreaming.value = false
     streamError.value = ''
     currentNode.value = ''
@@ -262,6 +321,7 @@ export const useChatStore = defineStore('chat', () => {
     currentNode,
     streamError,
     loadedSessionId,
+    contextMirror,
     lastMessage,
     canSend,
     loadHistory,

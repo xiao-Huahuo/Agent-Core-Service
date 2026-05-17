@@ -40,6 +40,7 @@ import json
 import logging
 import queue as queue_module
 import threading
+import time
 from collections.abc import Iterator, Sequence
 from typing import Any
 
@@ -63,15 +64,20 @@ from agent_service.tools import (
     ToolExecutor,
     ToolRegistry,
     clear_agent_token_callback,
+    clear_context_mirror_callback,
+    clear_plan_state,
+    clear_planner_content_callback,
+    clear_reflection_content_callback,
     clear_tool_runtime,
     clear_tool_trace_callback,
+    get_plan_state,
     set_agent_token_callback,
+    set_context_mirror_callback,
+    set_plan_state,
+    set_planner_content_callback,
+    set_reflection_content_callback,
     set_tool_runtime,
     set_tool_trace_callback,
-    set_planner_content_callback,
-    clear_planner_content_callback,
-    set_reflection_content_callback,
-    clear_reflection_content_callback,
 )
 
 logger = logging.getLogger(__name__)
@@ -113,6 +119,7 @@ class AgentCore:
     graph: 可选已编译图对象,主要用于测试时注入假图以避免真实模型请求。
     message_service: 可选消息服务,用于 session 级正式入口的消息持久化。
     context_builder: 可选上下文构建器,用于 session 级正式入口的短期上下文构建。
+    session_service: 可选会话服务,用于跨轮持久化和恢复 Agent 探索状态。
     """
 
     def __init__(
@@ -124,6 +131,7 @@ class AgentCore:
         message_service: MessageService | None = None,
         context_builder: ContextBuilder | None = None,
         task_scheduler: LLMTaskScheduler | None = None,
+        session_service: Any = None,
     ) -> None:
         """保存配置、检查本地模型、构建或接收 LangGraph 图,并输出当前节点流程图。"""
 
@@ -133,6 +141,7 @@ class AgentCore:
         logger.debug("本地模型检查完成")
         self.message_service = message_service
         self.context_builder = context_builder
+        self.session_service = session_service
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.tool_registry = ToolRegistry.with_builtin_tools(config=config) if tools is None else None
         self.tool_executor = ToolExecutor(registry=self.tool_registry) if self.tool_registry is not None else None
@@ -230,6 +239,8 @@ class AgentCore:
         messages = context_builder.build_messages(user_id=user_id, session_id=session_id, current_prompt=prompt)
         logger.debug("上下文构建完成 | message_count=%d", len(messages))
 
+        initial_plan = self._load_session_plan(session_id)
+
         for msg in messages:
             if isinstance(msg, SystemMessage):
                 msg_create = self._message_to_create(
@@ -249,11 +260,35 @@ class AgentCore:
                 metadata_json={"source": "stream_session_prompt"},
             )
         )
+
+        # 将系统提示作为首个 SSE 事件下发, 供前端 Obs 面板的上下文拼装卡片使用。
+        # 系统消息不在图节点输出中, 不走常规 node 事件, 需要单独 yield。
+        for msg in messages:
+            if isinstance(msg, SystemMessage):
+                rag_metrics = (getattr(msg, "additional_kwargs", {}) or {}).get("rag_metrics")
+                recall_details = (getattr(msg, "additional_kwargs", {}) or {}).get("recall_details")
+                system_meta = {}
+                if rag_metrics:
+                    system_meta["rag_metrics"] = rag_metrics
+                if recall_details:
+                    system_meta["recall_details"] = recall_details
+                yield {
+                    "node": "context_builder",
+                    "type": "system_prompt",
+                    "content": AgentCore._stringify_content(msg.content),
+                    "tool_calls": [],
+                    "trace": [],
+                    "model_name": "",
+                    "metadata": system_meta,
+                }
+                break
+
         yield from self._stream_events(
             messages=messages,
             user_id=user_id,
             session_id=session_id,
             message_service=message_service,
+            initial_plan=initial_plan,
         )
         _launch_auto_rename(self, user_id=user_id, session_id=session_id)
 
@@ -280,6 +315,7 @@ class AgentCore:
         user_id: str,
         session_id: str,
         message_service: MessageService | None = None,
+        initial_plan: dict[str, Any] | None = None,
     ) -> Iterator[dict[str, Any]]:
         """
         使用给定 LangChain messages 执行图并逐节点产出 dict 事件。
@@ -292,14 +328,17 @@ class AgentCore:
         user_id: 用户 ID。
         session_id: 会话 ID。
         message_service: 可选消息服务;传入时会持久化图节点新增消息。
+        initial_plan: 可选上一轮的探索状态,跨轮注入。
         """
 
-        inputs = {
+        inputs: dict[str, Any] = {
             "messages": messages,
             "user_id": user_id,
             "session_id": session_id,
             "trace": [],
         }
+        if initial_plan is not None:
+            inputs["plan"] = initial_plan
         runtime_config = {"configurable": {"thread_id": session_id}}
         retrieval_service = None
         if self.context_builder is not None:
@@ -313,6 +352,7 @@ class AgentCore:
         _streamed_content: list[str] = [""]
         _turn_traces: list[dict[str, Any]] = []
         _token_blocked: list[bool] = [False]
+        _latest_plan: dict[str, Any] | None = initial_plan
 
 
         def on_token(cumulative_text: str) -> None:
@@ -364,6 +404,9 @@ class AgentCore:
                 "trace": [],
             })
 
+        def on_context_mirror(messages: list[dict[str, Any]]) -> None:
+            token_queue.put({"type": "context_mirror", "messages": messages})
+
         def run_graph() -> None:
             nonlocal graph_error
             set_tool_runtime(
@@ -376,6 +419,8 @@ class AgentCore:
             set_tool_trace_callback(on_tool_trace)
             set_planner_content_callback(on_planner_content)
             set_reflection_content_callback(on_reflection_content)
+            set_context_mirror_callback(on_context_mirror)
+            set_plan_state(initial_plan)
             try:
                 for event in self.graph.stream(inputs, config=runtime_config, stream_mode="updates"):
                     if cancel_event.is_set():
@@ -389,6 +434,8 @@ class AgentCore:
                 clear_tool_trace_callback()
                 clear_planner_content_callback()
                 clear_reflection_content_callback()
+                clear_context_mirror_callback()
+                clear_plan_state()
                 clear_tool_runtime()
                 token_queue.put({"type": "done"})
 
@@ -422,6 +469,8 @@ class AgentCore:
                 item_type = item.get("type")
 
                 if item_type == "done":
+                    final_plan = get_plan_state()
+                    self._persist_session_plan(session_id, final_plan)
                     break
 
                 if item_type == "error":
@@ -466,6 +515,7 @@ class AgentCore:
                     trace = item.get("trace", {})
                     if trace:
                         trace["model_name"] = self._model_name_for_node(trace.get("node", "action"))
+                        trace["ts"] = time.time()
                         _turn_traces.append(trace)
                     yield {
                         "node": trace.get("node", "action"),
@@ -493,15 +543,30 @@ class AgentCore:
                         "model_name": self._model_name_for_node("reflection"),
                     }
 
+                elif item_type == "context_mirror":
+                    yield {
+                        "node": "agent",
+                        "type": "context_mirror",
+                        "content": "",
+                        "tool_calls": [],
+                        "trace": [],
+                        "model_name": self._model_name_for_node("agent"),
+                        "context_messages": item.get("messages", []),
+                    }
+
                 elif item_type == "node":
                     event = item["event"]
                     for node_name, state_update in event.items():
                         logger.debug("图节点执行 | node=%s user=%s session=%s", node_name, user_id, session_id)
                         node_traces = state_update.get("trace", []) if state_update else []
                         if node_traces:
+                            _now = time.time()
                             for t in node_traces:
                                 t["model_name"] = self._model_name_for_node(node_name)
+                                t["ts"] = _now
                             _turn_traces.extend(node_traces)
+                        if isinstance(state_update, dict) and "plan" in state_update:
+                            _latest_plan = state_update["plan"]
                         if message_service is not None:
                             self._save_state_update_messages(
                                 message_service=message_service,
@@ -540,6 +605,7 @@ class AgentCore:
             clear_tool_trace_callback()
             clear_planner_content_callback()
             clear_reflection_content_callback()
+            clear_plan_state()
             clear_tool_runtime()
             graph_thread.join(timeout=5.0)
 
@@ -810,6 +876,32 @@ class AgentCore:
         return content
 
 
+    def _load_session_plan(self, session_id: str) -> dict[str, Any] | None:
+        """从 DB 加载会话的探索状态,跨轮恢复 planner 的上下文。"""
+
+        if self.session_service is None:
+            return None
+        state_json = self.session_service.get_session_state(session_id)
+        if not state_json:
+            return None
+        try:
+            return json.loads(state_json)
+        except (json.JSONDecodeError, TypeError):
+            logger.warning("会话状态 JSON 解析失败 | session=%s", session_id)
+            return None
+
+    def _persist_session_plan(self, session_id: str, plan: dict[str, Any] | None) -> None:
+        """将探索状态持久化到 DB,供下一轮恢复。"""
+
+        if self.session_service is None:
+            return
+        if plan is None:
+            self.session_service.update_session_state(session_id, None)
+            return
+        state_json = json.dumps(plan, ensure_ascii=False)
+        self.session_service.update_session_state(session_id, state_json)
+
+
 def _launch_auto_rename(agent: AgentCore, *, user_id: str, session_id: str) -> None:
     """Fire-and-forget: 用小模型根据对话内容生成并更新会话标题。"""
 
@@ -817,7 +909,8 @@ def _launch_auto_rename(agent: AgentCore, *, user_id: str, session_id: str) -> N
         try:
             message_service = agent._get_message_service()
             recent = message_service.list_recent_messages(
-                user_id=user_id, session_id=session_id, limit=6
+                user_id=user_id, session_id=session_id, limit=6,
+                include_summarized=True,
             )
             if len(recent) < 2:
                 return

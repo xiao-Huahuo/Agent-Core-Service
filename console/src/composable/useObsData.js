@@ -293,22 +293,22 @@ function isAssistantRenderable(message) {
 function buildLatencyTurns(messages, isStreaming = false) {
   const turns = []
   let pendingUser = null
+  let pendingAssistants = []
   let turnIndex = 0
 
-  for (const message of messages) {
-    if (message.role === 'user') {
-      pendingUser = message
-      continue
-    }
-
-    if (!pendingUser || !isAssistantRenderable(message)) {
-      continue
-    }
-
+  function flushTurn() {
+    if (!pendingUser || pendingAssistants.length === 0) return
+    const lastAssistant = pendingAssistants[pendingAssistants.length - 1]
     const userTime = parseDate(pendingUser.created_at)
-    const assistantTime = parseDate(message.created_at)
-    const traceCount = safeArray(message.trace).length
-    const toolCount = safeArray(message.tool_calls).length
+    const assistantTime = parseDate(lastAssistant.created_at)
+    const allTraces = pendingAssistants.flatMap((m) => safeArray(m.trace))
+    const allToolCalls = pendingAssistants.flatMap((m) => safeArray(m.tool_calls))
+    const combinedOutput = pendingAssistants
+      .map((m) => String(m.content || '').trim())
+      .filter(Boolean)
+      .pop() || ''
+    const traceCount = allTraces.length
+    const toolCount = allToolCalls.length
     let seconds = 0
     let estimated = false
 
@@ -317,7 +317,7 @@ function buildLatencyTurns(messages, isStreaming = false) {
     } else {
       seconds = Math.max(
         0.8,
-        traceCount * 0.45 + toolCount * 0.35 + estimateTextTokens(message.content || '') / 25
+        traceCount * 0.45 + toolCount * 0.35 + estimateTextTokens(combinedOutput) / 25
       )
       estimated = true
     }
@@ -326,18 +326,34 @@ function buildLatencyTurns(messages, isStreaming = false) {
       id: `turn-${turnIndex}`,
       index: turnIndex + 1,
       userPrompt: pendingUser.content || '',
-      assistantOutput: message.content || '',
+      assistantOutput: combinedOutput,
       seconds: roundNumber(seconds, 2),
       estimated,
       traceCount,
       toolCount,
-      nodeBreakdown: summarizeNodeBreakdown(message.trace),
+      nodeBreakdown: summarizeNodeBreakdown(allTraces),
     })
-    pendingUser = null
     turnIndex += 1
   }
 
-  if (pendingUser && isStreaming) {
+  for (const message of messages) {
+    if (message.role === 'user') {
+      flushTurn()
+      pendingUser = message
+      pendingAssistants = []
+      continue
+    }
+
+    if (!pendingUser || !isAssistantRenderable(message)) {
+      continue
+    }
+
+    pendingAssistants.push(message)
+  }
+
+  flushTurn()
+
+  if (pendingUser && isStreaming && pendingAssistants.length === 0) {
     const lastAssistant = [...messages].reverse().find((message) => message.role === 'assistant')
     const traceCount = safeArray(lastAssistant?.trace).length
     const toolCount = safeArray(lastAssistant?.tool_calls).length
@@ -361,8 +377,36 @@ function buildLatencyTurns(messages, isStreaming = false) {
 }
 
 function summarizeNodeBreakdown(traces) {
+  const list = safeArray(traces)
+  const timed = list
+    .filter((t) => typeof t.ts === 'number')
+    .sort((a, b) => a.ts - b.ts)
+
+  if (timed.length >= 2) {
+    const nodeElapsed = {}
+    let totalElapsed = 0
+    for (let i = 0; i < timed.length - 1; i++) {
+      const elapsed = Math.max(0, (timed[i + 1].ts - timed[i].ts) * 1000)
+      const node = timed[i].node || 'unknown'
+      nodeElapsed[node] = (nodeElapsed[node] || 0) + elapsed
+      totalElapsed += elapsed
+    }
+    const counts = {}
+    for (const t of timed) {
+      const node = t.node || 'unknown'
+      counts[node] = (counts[node] || 0) + 1
+    }
+    if (totalElapsed > 0) {
+      return Object.entries(nodeElapsed).map(([node, elapsed]) => ({
+        node,
+        count: counts[node] || 0,
+        share: roundNumber((elapsed / totalElapsed) * 100, 1),
+      }))
+    }
+  }
+
   const counts = {}
-  for (const trace of safeArray(traces)) {
+  for (const trace of list) {
     const node = trace.node || 'unknown'
     counts[node] = (counts[node] || 0) + 1
   }
@@ -443,7 +487,23 @@ export function useObsData() {
   })
 
   const contextSources = computed(() => buildContextSources(messages.value))
-  const contextAssembly = computed(() => buildContextAssembly(messages.value))
+
+  /*
+   * 上下文拼装: 优先使用 agent 节点传来的完整上下文镜像 (模型收到的真实消息列表),
+   * 回退到从消息列表中解析系统消息的方式。
+   * 镜像消息格式为 [{role, content, ...}], 与 messages 格式兼容,
+   * 可直接传入 buildContextAssembly。
+   */
+  const contextAssembly = computed(() => {
+    const mirror = chatStore.contextMirror
+    if (mirror && mirror.length > 0) {
+      return buildContextAssembly(mirror)
+    }
+    return buildContextAssembly(messages.value)
+  })
+
+  /** 模型收到的完整上下文镜像, 由 agent 节点在调用 LLM 前通过 SSE 下发。 */
+  const contextMirror = computed(() => chatStore.contextMirror || [])
   const memorySources = computed(() =>
     contextSources.value.filter((source) => ['important_summary', 'memory'].includes(source.type))
   )
@@ -602,11 +662,26 @@ export function useObsData() {
     return path
   })
 
-  // 当前消息 (最后一条 assistant) 维度的轨迹,用于 ExecutionTraceCard
+  /*
+   * 当前轮次 (自最后一条 user 消息以来) 所有 assistant 消息的轨迹聚合。
+   * 在对话模式下只有一条 assistant 消息; 在工具模式下每个图节点单独产生一条
+   * assistant 消息, 需要合并同一轮次内所有 assistant 的 trace 才能得到完整的
+   * 语言轨迹、节点时间线和工具轨迹。
+   */
   const currentMessageTraces = computed(() => {
-    const lastAssistant = [...messages.value].reverse().find((m) => m.role === 'assistant')
-    if (!lastAssistant) return []
-    return safeArray(lastAssistant.trace)
+    const traces = []
+    /*
+     * 从尾部向前扫描: 收集最后一条 user 消息之后的所有 assistant trace。
+     * 这样只包含当前轮次, 不混入历史轮次的旧轨迹。
+     */
+    for (let i = messages.value.length - 1; i >= 0; i--) {
+      const msg = messages.value[i]
+      if (msg.role === 'user') break
+      if (msg.role === 'assistant') {
+        traces.unshift(...safeArray(msg.trace))
+      }
+    }
+    return traces
   })
 
   const currentMessageThinkingTraces = computed(() => {
@@ -665,6 +740,7 @@ export function useObsData() {
     currentMessageThinkingTraces,
     contextSources,
     contextAssembly,
+    contextMirror,
     memorySources,
     knowledgeSources,
     schedulerSnapshot,

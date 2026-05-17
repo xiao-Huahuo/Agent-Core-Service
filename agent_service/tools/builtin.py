@@ -27,7 +27,7 @@ from typing import Any, Callable
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from agent_service.tools.runtime_context import get_tool_runtime
+from agent_service.tools.runtime_context import get_plan_state, get_tool_runtime, set_plan_state
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
 
 
@@ -479,6 +479,44 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     ),
 ]
 
+def update_exploration_state(
+    covered: str = "",
+    suggested: str = "",
+    sufficient: str = "",
+    hint: str = "",
+) -> str:
+    """
+    更新 Agent 自身的知识探索状态,供跨轮持续追踪探索进度。
+
+    covered: 逗号分隔的已覆盖主题。
+    suggested: 逗号分隔的建议继续探索方向。
+    sufficient: 当前信息是否足够回答用户问题,true/false。
+    hint: 给后续轮次的一两句策略提示。
+    """
+
+    state = get_plan_state() or {"covered": [], "suggested": [], "sufficient": False, "hint": ""}
+    if covered:
+        new_covered = [c.strip() for c in covered.split(",") if c.strip()]
+        existing = state.get("covered", [])
+        for c in new_covered:
+            if c not in existing:
+                existing.append(c)
+        state["covered"] = existing
+    if suggested:
+        state["suggested"] = [s.strip() for s in suggested.split(",") if s.strip()]
+    if sufficient:
+        state["sufficient"] = sufficient.strip().lower() == "true"
+    if hint:
+        state["hint"] = hint.strip()
+    set_plan_state(state)
+    covered_count = len(state.get("covered", []))
+    return (
+        f"探索状态已更新。已覆盖 {covered_count} 个主题"
+        + (f", 信息充足" if state.get("sufficient") else "")
+        + "。"
+    )
+
+
 # ------------------------------------------------------------------
 # 长期记忆工具
 # ------------------------------------------------------------------
@@ -557,8 +595,41 @@ KNOWLEDGE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
 ]
 
 # ------------------------------------------------------------------
+# 状态管理工具
+# ------------------------------------------------------------------
+STATE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
+    BuiltinToolDefinition(
+        name="update_exploration_state",
+        description="更新 Agent 自身的知识探索状态,记录已覆盖的主题、建议方向和是否信息充足,用于跨轮次追踪探索进度。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "covered": {
+                    "type": "string",
+                    "description": "逗号分隔的新增已覆盖主题,例如 '海洋物理,大气科学'。已存在的主题不会重复添加。",
+                },
+                "suggested": {
+                    "type": "string",
+                    "description": "逗号分隔的建议继续探索方向,会替换之前的建议,例如 '海洋酸化,生态系统'。",
+                },
+                "sufficient": {
+                    "type": "string",
+                    "description": "当前信息是否足够回答用户问题,ture 或 false。",
+                },
+                "hint": {
+                    "type": "string",
+                    "description": "给下一轮的一两句策略提示。",
+                },
+            },
+            "required": [],
+        },
+        function=update_exploration_state,
+    ),
+]
+
+# ------------------------------------------------------------------
 # 合并全部内置工具 (保持向后兼容)
 # ------------------------------------------------------------------
 BUILTIN_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = (
-    UTILITY_TOOL_DEFINITIONS + MEMORY_TOOL_DEFINITIONS + KNOWLEDGE_TOOL_DEFINITIONS
+    UTILITY_TOOL_DEFINITIONS + MEMORY_TOOL_DEFINITIONS + KNOWLEDGE_TOOL_DEFINITIONS + STATE_TOOL_DEFINITIONS
 )

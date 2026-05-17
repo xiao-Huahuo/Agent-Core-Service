@@ -105,10 +105,10 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     # 提前创建 MessageService,以便 AgentCore 在初始化阶段预加载 Embedding/ReRank 模型
     message_service = MessageService(config=config)
 
-    agent = AgentCore(config=config, message_service=message_service)
+    session_service = SessionService(config=config)
+    agent = AgentCore(config=config, message_service=message_service, session_service=session_service)
     logger.info("AgentCore 初始化完成 | graph_diagram=%s", agent.graph_diagram_path)
 
-    session_service = SessionService(config=config)
     _grpc_servicer = AgentServiceServicer(agent=agent, session_service=session_service, message_service=message_service)
     rest_deps._agent = agent
     rest_deps._session_service = session_service

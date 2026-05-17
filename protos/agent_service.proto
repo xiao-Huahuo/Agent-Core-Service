@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package agent_service;
 
+import "google/protobuf/struct.proto";
+
 // ---------------------------------------------------------------------------
 // AgentService — Agent 微服务 gRPC 接口定义
 //
@@ -67,9 +69,8 @@ message RunRequest {
 message RunResult {
   string graph_diagram = 1;
   string final_output = 2;
-  // JSON 序列化的 list[dict],内部结构由 AgentCore 定义。
-  string events_json = 3;
-  string chunks_json = 4;
+  repeated google.protobuf.Struct events = 3;
+  string graph_diagram_path = 4;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,8 +79,7 @@ message RunResult {
 
 message ToolCall {
   string name = 1;
-  // JSON 序列化的工具参数 dict。
-  string args_json = 2;
+  google.protobuf.Struct args = 2;
   string id = 3;
 }
 
@@ -95,8 +95,13 @@ message ChunkMessage {
   string content = 2;
   repeated ToolCall tool_calls = 3;
   repeated TraceEntry trace = 4;
-  // 当 done == true 时表示流结束，其余字段可忽略。
   bool done = 5;
+  string model_name = 6;
+  string type = 7;
+  repeated google.protobuf.Struct context_messages = 8;
+  google.protobuf.Struct metadata = 9;
+  // error 事件携带的友好错误信息。
+  string error = 10;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +140,7 @@ message ListSessionsResponse {
 }
 
 message DeleteResponse {
-  bool success = 1;
+  bool ok = 1;
   // deleted_count 仅在 DeleteAllSessions 时有意义。
   int32 deleted_count = 2;
 }
@@ -160,10 +165,8 @@ message MessageEntry {
   string user_id = 3;
   string role = 4;
   string content = 5;
-  // JSON 序列化的 tool_calls 列表。
-  string tool_calls_json = 6;
-  // JSON 序列化的 metadata dict。
-  string metadata_json = 7;
+  repeated ToolCall tool_calls = 6;
+  google.protobuf.Struct metadata = 7;
   // ISO 8601 格式 UTC 时间字符串。
   string created_at = 8;
 }
@@ -186,12 +189,10 @@ message EventEntry {
   string role = 2;
   string node = 3;
   string content = 4;
-  // JSON 序列化的 tool_calls 列表。
-  string tool_calls_json = 5;
+  repeated ToolCall tool_calls = 5;
   // ISO 8601 格式 UTC 时间字符串。
   string created_at = 6;
-  // JSON 序列化的 metadata dict。
-  string metadata_json = 7;
+  google.protobuf.Struct metadata = 7;
 }
 
 message EventsResponse {
@@ -211,9 +212,9 @@ message RecallDetailsResponse {
   string user_id = 2;
   string created_at = 3;
   string query = 4;
-  string rag_metrics_json = 5;
-  string memory_recall_json = 6;
-  string knowledge_recall_json = 7;
+  google.protobuf.Struct rag_metrics = 5;
+  google.protobuf.Struct memory_recall = 6;
+  google.protobuf.Struct knowledge_recall = 7;
 }
 
 // ---------------------------------------------------------------------------

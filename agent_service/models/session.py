@@ -42,6 +42,7 @@ class SessionRecord(SessionBase, table=True):
     session_id: 会话主键,由业务层生成。
     created_at: 会话创建时间。
     updated_at: 会话最近更新时间。
+    state_json: Agent 探索状态 JSON,跨轮持久化。
     """
 
     __tablename__ = "agent_sessions"
@@ -49,3 +50,4 @@ class SessionRecord(SessionBase, table=True):
     session_id: str = Field(primary_key=True, max_length=64)
     created_at: datetime = Field(default_factory=utc_now, index=True)
     updated_at: datetime = Field(default_factory=utc_now, index=True)
+    state_json: str | None = Field(default=None, nullable=True)

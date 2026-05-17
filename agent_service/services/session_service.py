@@ -151,6 +151,37 @@ class SessionService:
                 return None
             return SessionOut.from_record(record)
 
+    def update_session_state(self, session_id: str, state_json: str | None) -> bool:
+        """
+        更新会话 Agent 探索状态。
+
+        session_id: 会话 ID。
+        state_json: 探索状态 JSON 字符串,为 None 时清空状态。
+        """
+
+        with Session(self.engine) as db_session:
+            record = db_session.get(SessionRecord, session_id)
+            if record is None:
+                return False
+            record.state_json = state_json
+            record.updated_at = self._utc_now()
+            db_session.add(record)
+            db_session.commit()
+            return True
+
+    def get_session_state(self, session_id: str) -> str | None:
+        """
+        获取会话 Agent 探索状态。
+
+        session_id: 会话 ID。
+        """
+
+        with Session(self.engine) as db_session:
+            record = db_session.get(SessionRecord, session_id)
+            if record is None:
+                return None
+            return record.state_json
+
     def list_user_sessions(self, user_id: str) -> list[SessionOut]:
         """
         查询用户所有会话,按更新时间倒序排列。

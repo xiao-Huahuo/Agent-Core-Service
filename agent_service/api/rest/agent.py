@@ -114,6 +114,19 @@ async def agent_stream_run(
 # ------------------------------------------------------------------
 
 
+@router.post("/agent/run-once")
+async def agent_run_once(
+    prompt: str = Body(..., embed=True),
+    user_id: str = Body(..., embed=True),
+    session_id: str = Body(..., embed=True),
+) -> dict[str, Any]:
+    """
+    无状态单次非流式调用,无长期记忆/知识库召回。
+    """
+    agent = _require_agent()
+    return agent.run_once(prompt=prompt, user_id=user_id, session_id=session_id)
+
+
 @router.post("/agent/run")
 async def agent_run_session(
     prompt: str = Body(..., embed=True),
@@ -125,6 +138,23 @@ async def agent_run_session(
     """
     agent = _require_agent()
     return agent.run_session_prompt(prompt=prompt, user_id=user_id, session_id=session_id)
+
+
+# ------------------------------------------------------------------
+# 取消执行
+# ------------------------------------------------------------------
+
+
+@router.post("/agent/cancel")
+async def agent_cancel(
+    session_id: str = Body(..., embed=True),
+) -> dict[str, Any]:
+    """
+    取消指定 session 正在执行的图,中断后部分输出自动保存。
+    """
+    agent = _require_agent()
+    agent.cancel_session(session_id)
+    return {"ok": True}
 
 
 # ------------------------------------------------------------------
