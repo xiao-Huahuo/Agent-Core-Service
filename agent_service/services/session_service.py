@@ -2,7 +2,7 @@
 Session 会话业务服务。
 
 功能说明:
-本文件实现会话生命周期管理业务逻辑,直接使用 PostgreSQL 作为持久化数据库。
+本文件实现会话生命周期管理业务逻辑,直接使用 SQLite 作为持久化数据库。
 服务层负责创建、查询、重命名和删除会话;`AgentCore` 只消费已有的 `session_id`,
 不负责会话生命周期。
 
@@ -33,7 +33,7 @@ class SessionService:
     """
     会话管理业务服务。
 
-    config: 全局配置对象,用于读取 PostgreSQL 连接地址和默认会话名。
+    config: 全局配置对象,用于读取 SQLite 连接地址和默认会话名。
     engine: 可选 SQLAlchemy Engine,主要用于测试或外部依赖注入。
     create_tables: 是否初始化数据库表结构。
     """
@@ -45,16 +45,16 @@ class SessionService:
         engine: Engine | None = None,
         create_tables: bool = True,
     ) -> None:
-        """初始化 PostgreSQL 引擎,并按需创建会话表。"""
+        """初始化 SQLite 引擎,并按需创建会话表。"""
 
         self.config = config
-        self.engine = engine or create_engine(config.storage.relational_dsn, pool_pre_ping=True)
+        self.engine = engine or create_engine(f"sqlite:///{config.storage.sqlite_path}", pool_pre_ping=True)
         if create_tables:
             SQLModel.metadata.create_all(self.engine)
 
     def create_session(self, session_create: SessionCreate) -> SessionOut:
         """
-        创建新会话并写入 PostgreSQL。
+        创建新会话并写入 SQLite。
 
         session_create: 创建会话 DTO。
         """

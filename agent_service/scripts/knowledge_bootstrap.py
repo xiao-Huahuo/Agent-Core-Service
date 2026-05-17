@@ -7,8 +7,8 @@
 python -m agent_service.scripts.knowledge_bootstrap
 
 前置条件:
-1. PostgreSQL 业务库可连接。
-2. PostgreSQL 已安装 pgvector 扩展或当前用户具备 `CREATE EXTENSION vector` 权限。
+1. SQLite 数据库文件路径可访问。
+2. ChromaDB 持久化目录可读写。
 3. 已安装 `sentence-transformers`,且本地 Embedding 模型目录存在。
 """
 

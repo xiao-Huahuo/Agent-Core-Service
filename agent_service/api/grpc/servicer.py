@@ -30,6 +30,11 @@ from agent_service.api.grpc.agent_service_pb2 import (
     EventEntry,
     EventsRequest,
     EventsResponse,
+    MemoryAddRequest,
+    MemoryDeleteRequest,
+    MemoryEntryResponse,
+    MemoryListRequest,
+    MemoryListResponse,
     RecallDetailsRequest,
     RecallDetailsResponse,
     ListMessagesRequest,
@@ -43,6 +48,11 @@ from agent_service.api.grpc.agent_service_pb2 import (
     SessionIdRequest,
     SessionResponse,
     SessionUpdateRequest,
+    SystemPromptAddRequest,
+    SystemPromptDeleteRequest,
+    SystemPromptEntriesResponse,
+    SystemPromptEntryResponse,
+    SystemPromptRequest,
     ToolCall,
     TraceEntry,
 )
@@ -50,6 +60,7 @@ from agent_service.api.grpc.agent_service_pb2_grpc import AgentServiceServicer a
 from agent_service.schemas.session import SessionCreate, SessionUpdate
 from agent_service.services.message_service import MessageService
 from agent_service.services.session_service import SessionService
+from agent_service.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +74,12 @@ class AgentServiceServicer(BaseServicer):
         agent: AgentCore,
         session_service: SessionService,
         message_service: MessageService | None = None,
+        settings_service: SettingsService | None = None,
     ) -> None:
         self._agent = agent
         self._session_service = session_service
         self._message_service = message_service
+        self._settings_service = settings_service
 
     def shutdown(self) -> None:
         self._agent.close()
@@ -278,6 +291,92 @@ class AgentServiceServicer(BaseServicer):
         )
 
     # ------------------------------------------------------------------
+    # 用户设置 — 系统提示词条目
+    # ------------------------------------------------------------------
+
+    def ListSystemPromptEntries(  # noqa: N802
+        self, request: SystemPromptRequest, context: grpc.ServicerContext,
+    ) -> SystemPromptEntriesResponse:
+        logger.info("ListSystemPromptEntries user=%s", request.user_id)
+        svc = self._require_settings_service(context)
+        entries = svc.list_system_prompt_entries(user_id=request.user_id)
+        return SystemPromptEntriesResponse(
+            entries=[SystemPromptEntryResponse(
+                prompt_id=e["prompt_id"],
+                content=e["content"],
+                created_at=e["created_at"],
+            ) for e in entries]
+        )
+
+    def AddSystemPromptEntry(  # noqa: N802
+        self, request: SystemPromptAddRequest, context: grpc.ServicerContext,
+    ) -> SystemPromptEntryResponse:
+        logger.info("AddSystemPromptEntry user=%s", request.user_id)
+        svc = self._require_settings_service(context)
+        entry = svc.add_system_prompt_entry(user_id=request.user_id, content=request.content)
+        return SystemPromptEntryResponse(
+            prompt_id=entry["prompt_id"],
+            content=entry["content"],
+            created_at=entry["created_at"],
+        )
+
+    def DeleteSystemPromptEntry(  # noqa: N802
+        self, request: SystemPromptDeleteRequest, context: grpc.ServicerContext,
+    ) -> DeleteResponse:
+        logger.info("DeleteSystemPromptEntry prompt=%s", request.prompt_id)
+        svc = self._require_settings_service(context)
+        success = svc.delete_system_prompt_entry(prompt_id=request.prompt_id)
+        if not success:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"prompt entry {request.prompt_id} not found")
+        return DeleteResponse(ok=True, deleted_count=1)
+
+    # ------------------------------------------------------------------
+    # 用户设置 — 自定义长期记忆
+    # ------------------------------------------------------------------
+
+    def ListCustomMemories(  # noqa: N802
+        self, request: MemoryListRequest, context: grpc.ServicerContext,
+    ) -> MemoryListResponse:
+        logger.info("ListCustomMemories user=%s", request.user_id)
+        svc = self._require_settings_service(context)
+        entries = svc.list_memories(user_id=request.user_id)
+        return MemoryListResponse(
+            entries=[MemoryEntryResponse(
+                memory_id=e["memory_id"],
+                content=e["content"],
+                importance=e.get("importance", 0.5),
+                created_at=e["created_at"],
+            ) for e in entries]
+        )
+
+    def AddCustomMemory(  # noqa: N802
+        self, request: MemoryAddRequest, context: grpc.ServicerContext,
+    ) -> MemoryEntryResponse:
+        logger.info("AddCustomMemory user=%s", request.user_id)
+        svc = self._require_settings_service(context)
+        entry = svc.add_memory(
+            user_id=request.user_id,
+            content=request.content,
+            importance=request.importance or 0.5,
+        )
+        return MemoryEntryResponse(
+            memory_id=entry["memory_id"],
+            content=entry["content"],
+            importance=entry.get("importance", 0.5),
+            created_at=entry["created_at"],
+        )
+
+    def DeleteCustomMemory(  # noqa: N802
+        self, request: MemoryDeleteRequest, context: grpc.ServicerContext,
+    ) -> DeleteResponse:
+        logger.info("DeleteCustomMemory memory=%s", request.memory_id)
+        svc = self._require_settings_service(context)
+        success = svc.remove_memory(memory_id=request.memory_id)
+        if not success:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"memory {request.memory_id} not found")
+        return DeleteResponse(ok=True, deleted_count=1)
+
+    # ------------------------------------------------------------------
     # 内部辅助
     # ------------------------------------------------------------------
 
@@ -285,6 +384,11 @@ class AgentServiceServicer(BaseServicer):
         if self._message_service is None:
             context.abort(grpc.StatusCode.UNAVAILABLE, "MessageService not available")
         return self._message_service  # type: ignore[return-value]
+
+    def _require_settings_service(self, context: grpc.ServicerContext) -> SettingsService:
+        if self._settings_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "SettingsService not available")
+        return self._settings_service  # type: ignore[return-value]
 
     @staticmethod
     def _stream_from_dicts(events_iter: Any) -> Any:

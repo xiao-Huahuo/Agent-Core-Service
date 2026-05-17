@@ -47,6 +47,9 @@ function isActive(path) {
       <RouterLink to="/dashboard" class="tab" :class="{ active: isActive('/dashboard') }">
         Obs
       </RouterLink>
+      <RouterLink to="/settings" class="tab" :class="{ active: isActive('/settings') }">
+        Setting
+      </RouterLink>
     </nav>
 
     <!-- 绝对居中标题 -->

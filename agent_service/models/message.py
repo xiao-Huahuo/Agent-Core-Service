@@ -2,7 +2,7 @@
 Message 数据库模型。
 
 功能说明:
-本文件定义会话消息相关的 SQLModel 模型。`MessageRecord` 映射 PostgreSQL
+本文件定义会话消息相关的 SQLModel 模型。`MessageRecord` 映射 SQLite
 中的 `agent_messages` 表,用于保存一个 Session 下的用户消息、模型回复、
 工具调用消息和工具返回消息。Message 是 Session 的原始事件日志,后续摘要、
 长期记忆和前端可观测轨迹都应从这些原始记录溯源。

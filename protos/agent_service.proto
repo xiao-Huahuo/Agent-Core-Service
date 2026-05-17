@@ -54,6 +54,18 @@ service AgentService {
 
   rpc GetEvents(EventsRequest) returns (EventsResponse);
   rpc GetRecallDetails(RecallDetailsRequest) returns (RecallDetailsResponse);
+
+  // ---- 用户设置 ----
+
+  // 系统提示词条目
+  rpc ListSystemPromptEntries(SystemPromptRequest) returns (SystemPromptEntriesResponse);
+  rpc AddSystemPromptEntry(SystemPromptAddRequest) returns (SystemPromptEntryResponse);
+  rpc DeleteSystemPromptEntry(SystemPromptDeleteRequest) returns (DeleteResponse);
+
+  // 自定义长期记忆
+  rpc ListCustomMemories(MemoryListRequest) returns (MemoryListResponse);
+  rpc AddCustomMemory(MemoryAddRequest) returns (MemoryEntryResponse);
+  rpc DeleteCustomMemory(MemoryDeleteRequest) returns (DeleteResponse);
 }
 
 // ---------------------------------------------------------------------------
@@ -227,4 +239,60 @@ message CancelRequest {
 
 message CancelResponse {
   bool ok = 1;
+}
+
+// ---------------------------------------------------------------------------
+// 用户设置 — 系统提示词条目
+// ---------------------------------------------------------------------------
+
+message SystemPromptRequest {
+  string user_id = 1;
+}
+
+message SystemPromptEntryResponse {
+  string prompt_id = 1;
+  string content = 2;
+  string created_at = 3;
+}
+
+message SystemPromptEntriesResponse {
+  repeated SystemPromptEntryResponse entries = 1;
+}
+
+message SystemPromptAddRequest {
+  string user_id = 1;
+  string content = 2;
+}
+
+message SystemPromptDeleteRequest {
+  string prompt_id = 1;
+}
+
+// ---------------------------------------------------------------------------
+// 用户设置 — 自定义长期记忆
+// ---------------------------------------------------------------------------
+
+message MemoryListRequest {
+  string user_id = 1;
+}
+
+message MemoryEntryResponse {
+  string memory_id = 1;
+  string content = 2;
+  double importance = 3;
+  string created_at = 4;
+}
+
+message MemoryListResponse {
+  repeated MemoryEntryResponse entries = 1;
+}
+
+message MemoryAddRequest {
+  string user_id = 1;
+  string content = 2;
+  double importance = 3;
+}
+
+message MemoryDeleteRequest {
+  string memory_id = 1;
 }

@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from agent_service.core.agent_config import AgentConfig
+
+logger = logging.getLogger(__name__)
 from agent_service.services.memory.rag.frontmatter_document import (
     StructuredKnowledgeDocument,
     StructuredKnowledgeSection,
@@ -57,8 +60,11 @@ class FrontmatterBootstrapService:
         """
 
         result = FrontmatterBootstrapResult()
-        for source_path in self._iter_source_files(self.config.storage.knowledge_dir):
+        source_files = self._iter_source_files(self.config.storage.knowledge_dir)
+        logger.info("Frontmatter 结构化开始 | 扫描到 %d 个文件", len(source_files))
+        for source_path in source_files:
             result.files_seen += 1
+            rel_path = source_path.relative_to(self.config.storage.knowledge_dir)
             source_hash = self._hash_file(source_path)
             document = self._build_document(source_path=source_path, source_hash=source_hash)
             output_path = self._resolve_output_path(source_path)
@@ -66,9 +72,17 @@ class FrontmatterBootstrapService:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             if output_path.exists() and output_path.read_text(encoding="utf-8") == output_payload:
                 result.files_skipped += 1
+                logger.debug("  [跳过] %s (未变更)", rel_path)
                 continue
             output_path.write_text(output_payload, encoding="utf-8")
             result.files_written += 1
+            logger.info("  [写入] %s → %d sections", rel_path, len(document.sections))
+        logger.info(
+            "Frontmatter 结构化完成 | %d 文件: %d 写入, %d 跳过",
+            result.files_seen,
+            result.files_written,
+            result.files_skipped,
+        )
         return result
 
     def _build_document(self, *, source_path: Path, source_hash: str) -> StructuredKnowledgeDocument:

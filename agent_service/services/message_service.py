@@ -33,7 +33,7 @@ class MessageService:
     """
     会话消息业务服务。
 
-    config: 全局配置对象,用于读取 PostgreSQL 连接地址。
+    config: 全局配置对象,用于读取 SQLite 连接地址。
     engine: 可选 SQLAlchemy Engine,主要用于测试或外部依赖注入。
     create_tables: 是否初始化数据库表结构。
     """
@@ -48,7 +48,7 @@ class MessageService:
         """初始化数据库引擎,并按需创建消息相关表。"""
 
         self.config = config
-        self.engine = engine or create_engine(config.storage.relational_dsn, pool_pre_ping=True)
+        self.engine = engine or create_engine(f"sqlite:///{config.storage.sqlite_path}", pool_pre_ping=True)
         if create_tables:
             SQLModel.metadata.create_all(self.engine)
 

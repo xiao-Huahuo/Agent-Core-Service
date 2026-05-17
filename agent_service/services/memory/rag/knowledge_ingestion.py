@@ -12,11 +12,14 @@ result = service.ingest_frontmatter_dir()
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 from agent_service.core.agent_config import AgentConfig
+
+logger = logging.getLogger(__name__)
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 from agent_service.services.memory.rag.chunk import chunk_text
@@ -68,21 +71,34 @@ class KnowledgeIngestionService:
         """
 
         result = KnowledgeIngestionResult()
-        for frontmatter_path in self._iter_frontmatter_files(self.config.storage.frontmatter_dir):
+        frontmatter_files = self._iter_frontmatter_files(self.config.storage.frontmatter_dir)
+        logger.info("知识库向量灌库开始 | 扫描到 %d 个结构化文档", len(frontmatter_files))
+        for frontmatter_path in frontmatter_files:
             result.files_seen += 1
+            rel_path = frontmatter_path.relative_to(self.config.storage.frontmatter_dir)
             document = self._load_document(frontmatter_path)
             if self.config.memory.knowledge_hash_lock_enabled and self.memory_service.has_source_hash(
                 source_hash=document.source_hash,
                 memory_type="knowledge_chunk",
             ):
                 result.files_skipped += 1
+                logger.debug("  [跳过] %s (哈希未变更)", rel_path)
                 continue
             chunks_created = self._ingest_document(document=document)
             if chunks_created == 0:
                 result.files_skipped += 1
+                logger.warning("  [跳过] %s (0 chunk)", rel_path)
                 continue
             result.files_ingested += 1
             result.chunks_created += chunks_created
+            logger.info("  [入库] %s → %d chunks", document.title, chunks_created)
+        logger.info(
+            "知识库向量灌库完成 | %d 文档: %d 入库, %d 跳过, 共 %d chunks",
+            result.files_seen,
+            result.files_ingested,
+            result.files_skipped,
+            result.chunks_created,
+        )
         return result
 
     def _ingest_document(self, *, document: StructuredKnowledgeDocument) -> int:
@@ -108,6 +124,7 @@ class KnowledgeIngestionService:
                 )
                 for chunk_input in chunk_inputs
             ]
+            logger.debug("    Embedding %d chunks for '%s'...", len(chunk_contents), section.heading)
             vectors = self.embedding_service.embed_texts(chunk_contents)
             for chunk_input, chunk_content, vector in zip(chunk_inputs, chunk_contents, vectors, strict=True):
                 self.memory_service.create_memory(

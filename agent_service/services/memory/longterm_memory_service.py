@@ -3,8 +3,7 @@
 
 功能说明:
 本文件负责把会话摘要记忆和知识库切片记忆写入 `LongTermMemorySpec` 表,并在
-PostgreSQL 环境下初始化 pgvector 扩展、`embedding_vector` 向量列和 ivfflat
-索引。业务层只需要传入统一 DTO,本服务会同时保存 JSON 向量和 pgvector 向量列。
+ChromaDB 中管理向量集合。关系数据走 SQLite,向量数据走 ChromaDB PersistentClient。
 
 使用说明:
 service = LongTermMemoryService(config=config)
@@ -14,11 +13,9 @@ memory = service.create_memory(LongTermMemorySpecCreate(...))
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -28,12 +25,19 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.models.longterm_memory_spec import LongTermMemorySpec
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate, LongTermMemorySpecOut
 
+try:
+    import chromadb
+    from chromadb.api.types import EmbeddingFunction
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+
 
 class LongTermMemoryService:
     """
     统一长期记忆服务。
 
-    config: 全局配置对象,用于读取向量库 DSN 和常量标签。
+    config: 全局配置对象,用于读取 SQLite 路径和 ChromaDB 持久化目录。
     engine: 可选 SQLAlchemy Engine,测试时可注入 SQLite Engine。
     create_tables: 是否初始化 SQLModel 表结构。
     """
@@ -45,13 +49,51 @@ class LongTermMemoryService:
         engine: Engine | None = None,
         create_tables: bool = True,
     ) -> None:
-        """初始化数据库引擎并按需创建长期记忆表。"""
+        """初始化 SQLite 引擎和 ChromaDB 客户端,并按需创建表。"""
 
         self.config = config
-        self.engine = engine or create_engine(config.storage.vector_dsn, pool_pre_ping=True)
-        self.pgvector_available: bool | None = None
+        self.engine = engine or create_engine(
+            f"sqlite:///{config.storage.sqlite_path}", pool_pre_ping=True
+        )
+        self._chroma_client = None
+        self._chroma_collection = None
         if create_tables:
             SQLModel.metadata.create_all(self.engine)
+
+    @property
+    def chroma_available(self) -> bool:
+        """ChromaDB 是否可用。"""
+        return CHROMADB_AVAILABLE and self._chroma_client is not None
+
+    def _ensure_chroma_collection(self, *, vector_dimension: int) -> None:
+        """初始化 ChromaDB PersistentClient 并获取或创建向量集合。"""
+        if not CHROMADB_AVAILABLE:
+            return
+        if self._chroma_client is None:
+            persist_dir = str(self.config.storage.chroma_persist_dir)
+            self._chroma_client = chromadb.PersistentClient(
+                path=persist_dir,
+                settings=chromadb.Settings(anonymized_telemetry=False),
+            )
+        if self._chroma_collection is not None:
+            existing_dim = self._chroma_collection.metadata.get("dimension")
+            if existing_dim is not None and int(existing_dim) != vector_dimension:
+                self._chroma_client.delete_collection("longterm_memories")
+                self._chroma_collection = None
+        if self._chroma_collection is None:
+            self._chroma_collection = self._chroma_client.get_or_create_collection(
+                name="longterm_memories",
+                metadata={"dimension": vector_dimension},
+            )
+            # get_or_create_collection returns existing collection as-is if it
+            # already exists; verify dimension and recreate if needed.
+            existing_dim = self._chroma_collection.metadata.get("dimension")
+            if existing_dim is not None and int(existing_dim) != vector_dimension:
+                self._chroma_client.delete_collection("longterm_memories")
+                self._chroma_collection = self._chroma_client.create_collection(
+                    name="longterm_memories",
+                    metadata={"dimension": vector_dimension},
+                )
 
     def create_memory(self, memory_create: LongTermMemorySpecCreate) -> LongTermMemorySpecOut:
         """
@@ -62,8 +104,6 @@ class LongTermMemoryService:
 
         now = self._utc_now()
         vector = memory_create.embedding_vector_json
-        if vector:
-            self.ensure_pgvector_storage(vector_dimension=len(vector))
         record = LongTermMemorySpec(
             memory_id=self.generate_memory_id(),
             user_id=memory_create.user_id,
@@ -91,9 +131,51 @@ class LongTermMemoryService:
             db_session.add(record)
             db_session.commit()
             db_session.refresh(record)
-        if vector and self.pgvector_available is not False:
-            self._write_pgvector(memory_id=record.memory_id, vector=vector)
+        if vector:
+            self._write_chroma(
+                memory_id=record.memory_id,
+                vector=vector,
+                user_id=record.user_id,
+                tag=record.tag,
+                memory_type=record.memory_type,
+            )
         return LongTermMemorySpecOut.from_record(record)
+
+    def list_user_memories(
+        self,
+        *,
+        user_id: str,
+        memory_type: str | None = None,
+        limit: int = 50,
+    ) -> list[LongTermMemorySpecOut]:
+        """列出用户的自定义长期记忆。"""
+        statement = (
+            select(LongTermMemorySpec)
+            .where(LongTermMemorySpec.user_id == user_id)
+            .where(LongTermMemorySpec.tag == self.config.constants.memory_tag)
+            .order_by(LongTermMemorySpec.created_at.desc())
+            .limit(limit)
+        )
+        if memory_type:
+            statement = statement.where(LongTermMemorySpec.memory_type == memory_type)
+        with Session(self.engine) as db_session:
+            rows = db_session.exec(statement).all()
+            return [LongTermMemorySpecOut.from_record(r) for r in rows]
+
+    def delete_memory(self, *, memory_id: str) -> bool:
+        """删除指定长期记忆。返回是否删除成功。"""
+        with Session(self.engine) as db_session:
+            record = db_session.get(LongTermMemorySpec, memory_id)
+            if record is None:
+                return False
+            db_session.delete(record)
+            db_session.commit()
+        if self.chroma_available:
+            try:
+                self._chroma_collection.delete(ids=[memory_id])
+            except Exception:
+                pass
+        return True
 
     def has_source_hash(self, *, source_hash: str, memory_type: str) -> bool:
         """
@@ -195,94 +277,25 @@ class LongTermMemoryService:
             db_session.refresh(record)
             return LongTermMemorySpecOut.from_record(record)
 
-    def ensure_pgvector_storage(self, *, vector_dimension: int) -> None:
-        """
-        在 PostgreSQL 中初始化 pgvector 扩展和向量列。
-
-        vector_dimension: 当前 Embedding 向量维度。
-        """
-
-        if vector_dimension <= 0 or not self.engine.dialect.name.startswith("postgresql"):
+    def _write_chroma(
+        self,
+        *,
+        memory_id: str,
+        vector: list[float],
+        user_id: str = "",
+        tag: str = "",
+        memory_type: str = "",
+    ) -> None:
+        """将 embedding 向量写入 ChromaDB 集合。"""
+        if not CHROMADB_AVAILABLE:
             return
-        if self.pgvector_available is False:
-            return
-        try:
-            with self.engine.begin() as connection:
-                connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-                existing_dimension = self._get_existing_vector_dimension()
-                if existing_dimension is not None and existing_dimension != vector_dimension:
-                    raise ValueError(
-                        "pgvector 向量列维度与当前 Embedding 维度不一致: "
-                        f"existing={existing_dimension}, current={vector_dimension}"
-                    )
-                connection.execute(
-                    text(
-                        "ALTER TABLE longterm_memory_specs "
-                        f"ADD COLUMN IF NOT EXISTS embedding_vector vector({vector_dimension})"
-                    )
-                )
-                connection.execute(
-                    text(
-                        "CREATE INDEX IF NOT EXISTS idx_longterm_memory_embedding_vector "
-                        "ON longterm_memory_specs USING ivfflat (embedding_vector vector_cosine_ops)"
-                    )
-                )
-            self.pgvector_available = True
-        except SQLAlchemyError as exc:
-            self.pgvector_available = False
-            print(
-                "pgvector is unavailable; memory will keep embedding_vector_json only. "
-                f"{exc.__class__.__name__}: {exc.__cause__ or exc}"
+        self._ensure_chroma_collection(vector_dimension=len(vector))
+        if self._chroma_collection is not None:
+            self._chroma_collection.upsert(
+                ids=[memory_id],
+                embeddings=[vector],
+                metadatas=[{"user_id": user_id, "tag": tag, "memory_type": memory_type}],
             )
-
-    def _get_existing_vector_dimension(self) -> int | None:
-        """
-        读取已存在 pgvector 列的维度。
-
-        返回 None 表示向量列尚未创建或当前数据库不是 PostgreSQL。
-        """
-
-        if not self.engine.dialect.name.startswith("postgresql"):
-            return None
-        with self.engine.begin() as connection:
-            vector_type = connection.execute(
-                text(
-                    "SELECT format_type(a.atttypid, a.atttypmod) "
-                    "FROM pg_attribute a "
-                    "JOIN pg_class c ON c.oid = a.attrelid "
-                    "WHERE c.relname = 'longterm_memory_specs' "
-                    "AND a.attname = 'embedding_vector' "
-                    "AND NOT a.attisdropped"
-                )
-            ).scalar()
-        if not vector_type:
-            return None
-        match = re.fullmatch(r"vector\((\d+)\)", str(vector_type))
-        return int(match.group(1)) if match else None
-
-    def _write_pgvector(self, *, memory_id: str, vector: list[float]) -> None:
-        """
-        将 JSON 向量同步写入 pgvector 向量列。
-
-        memory_id: 长期记忆 ID。
-        vector: Embedding 向量。
-        """
-
-        if not self.engine.dialect.name.startswith("postgresql"):
-            return
-        vector_literal = json.dumps(vector, separators=(",", ":"))
-        try:
-            with self.engine.begin() as connection:
-                connection.execute(
-                    text(
-                        "UPDATE longterm_memory_specs "
-                        "SET embedding_vector = CAST(:vector_literal AS vector) "
-                        "WHERE memory_id = :memory_id"
-                    ),
-                    {"vector_literal": vector_literal, "memory_id": memory_id},
-                )
-        except SQLAlchemyError as exc:
-            raise RuntimeError("写入 pgvector 向量列失败,请确认数据库已安装 vector 扩展。") from exc
 
     @staticmethod
     def generate_memory_id() -> str:

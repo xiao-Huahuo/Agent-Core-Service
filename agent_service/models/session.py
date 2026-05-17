@@ -2,7 +2,7 @@
 Session 数据库模型。
 
 功能说明:
-本文件定义会话管理相关的 SQLModel 模型。`SessionRecord` 映射 PostgreSQL
+本文件定义会话管理相关的 SQLModel 模型。`SessionRecord` 映射 SQLite
 中的 `agent_sessions` 表,用于保存用户会话的生命周期信息。
 
 使用说明:

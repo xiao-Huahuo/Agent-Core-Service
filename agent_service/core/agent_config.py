@@ -30,9 +30,6 @@ import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
-from urllib.parse import quote_plus
-
-
 @dataclass(slots=True)
 class AgentConfig:
     @dataclass(slots=True)
@@ -61,12 +58,11 @@ class AgentConfig:
 
         project_root: 项目根目录,用于解析 resources 等项目级目录。
         base_data_dir: 服务运行时数据根目录。
-        relational_dsn: PostgreSQL 关系数据库连接地址;为空时按独立密码字段自动组装。
-        vector_dsn: pgvector 向量数据库连接地址;为空时按独立密码字段自动组装。
-        relational_db_password: PostgreSQL 关系库默认 DSN 使用的密码。
-        vector_db_password: pgvector 默认 DSN 使用的密码。
-        relation_db_dir: 关系数据库运行数据目录。
-        vector_db_dir: 向量数据库运行数据目录。
+        sqlite_path: SQLite 关系数据库文件路径。
+        chroma_persist_dir: ChromaDB 向量库持久化目录。
+        vector_backend: 向量后端类型,默认 chromadb,留 "pgvector" 扩展口。
+        relation_db_dir: 关系数据库运行数据目录 (sqlite_path 父目录)。
+        vector_db_dir: 向量数据库运行数据目录 (chroma_persist_dir 父目录)。
         embedding_model_dir: Embedding 模型本地缓存目录。
         rerank_model_dir: ReRank 模型本地缓存目录。
         knowledge_dir: 本地知识库原始资源目录,用于 frontmatter 结构化预处理扫描。
@@ -77,10 +73,9 @@ class AgentConfig:
 
         project_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
         base_data_dir: Path = field(default_factory=lambda: Path("./runtime"))
-        relational_dsn: str = ""
-        vector_dsn: str = ""
-        relational_db_password: str = "postgres"
-        vector_db_password: str = "postgres"
+        sqlite_path: Path = field(default_factory=lambda: Path("db/relation/agent_service.db"))
+        chroma_persist_dir: Path = field(default_factory=lambda: Path("db/vector/chroma"))
+        vector_backend: str = "chromadb"
         relation_db_dir: Path = field(default_factory=lambda: Path("db/relation"))
         vector_db_dir: Path = field(default_factory=lambda: Path("db/vector"))
         embedding_model_dir: Path = field(default_factory=lambda: Path("models/embedding"))
@@ -95,6 +90,8 @@ class AgentConfig:
 
             self.project_root = Path(self.project_root).expanduser().resolve()
             self.base_data_dir = self._resolve_project_path(self.base_data_dir)
+            self.sqlite_path = self._resolve_runtime_path(self.sqlite_path)
+            self.chroma_persist_dir = self._resolve_runtime_path(self.chroma_persist_dir)
             self.relation_db_dir = self._resolve_runtime_path(self.relation_db_dir)
             self.vector_db_dir = self._resolve_runtime_path(self.vector_db_dir)
             self.embedding_model_dir = self._resolve_runtime_path(self.embedding_model_dir)
@@ -103,10 +100,6 @@ class AgentConfig:
             self.frontmatter_dir = self._resolve_runtime_path(self.frontmatter_dir)
             self.mcp_server_config_dir = self._resolve_project_path(self.mcp_server_config_dir)
             self.log_dir = self._resolve_runtime_path(self.log_dir)
-            if not self.relational_dsn:
-                self.relational_dsn = self._build_postgres_dsn(self.relational_db_password)
-            if not self.vector_dsn:
-                self.vector_dsn = self._build_postgres_dsn(self.vector_db_password)
 
         def _resolve_project_path(self, path_value: Path | str) -> Path:
             """将相对路径转换为基于 project_root 的绝对路径。"""
@@ -128,6 +121,8 @@ class AgentConfig:
             """创建运行目录、模型目录、日志目录、知识库资源目录以及 MCP 配置目录。"""
 
             self.base_data_dir.mkdir(parents=True, exist_ok=True)
+            self.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+            self.chroma_persist_dir.mkdir(parents=True, exist_ok=True)
             self.relation_db_dir.mkdir(parents=True, exist_ok=True)
             self.vector_db_dir.mkdir(parents=True, exist_ok=True)
             self.embedding_model_dir.mkdir(parents=True, exist_ok=True)
@@ -136,13 +131,6 @@ class AgentConfig:
             self.frontmatter_dir.mkdir(parents=True, exist_ok=True)
             self.mcp_server_config_dir.mkdir(parents=True, exist_ok=True)
             self.log_dir.mkdir(parents=True, exist_ok=True)
-
-        @staticmethod
-        def _build_postgres_dsn(password: str) -> str:
-            """根据独立密码字段组装默认 PostgreSQL DSN。"""
-
-            escaped_password = quote_plus(password)
-            return f"postgresql+psycopg://postgres:{escaped_password}@localhost:5432/agent_service"
 
     @dataclass(slots=True)
     class ModelConfig:
@@ -169,20 +157,20 @@ class AgentConfig:
         """
 
         provider: str = "openai-compatible"
-        model_name: str = ""
+        model_name: str = "deepseek-v4-flash"
         api_key: str = ""
-        base_url: str = ""
+        base_url: str = "https://api.deepseek.com"
         small_model_provider: str = "openai-compatible"
-        small_model_name: str = ""
+        small_model_name: str = "moonshot-v1-8k"
         small_model_api_key: str = ""
-        small_model_base_url: str = ""
+        small_model_base_url: str = "https://api.moonshot.cn/v1"
         small_model_temperature: float = 0.0
         small_model_timeout_seconds: int = 120
         temperature: float = 0.0
         timeout_seconds: int = 240
         streaming_sanitize_min_chars: int = 20
-        embedding_model_name: str = ""
-        rerank_model_name: str = ""
+        embedding_model_name: str = "BAAI/bge-small-zh-v1.5"
+        rerank_model_name: str = "BAAI/bge-reranker-v2-m3"
         system_prompt: str = (
             "你是一个具备工具调用、记忆系统、知识检索能力的智能 Agent。"
             "【核心机制】系统会预检索相关内容的条目数量并作为索引提示注入上下文。"
@@ -534,10 +522,7 @@ class AgentConfig:
     def _default_mapping(cls) -> dict[str, dict[str, Any]]:
         """返回所有子配置的默认值映射。"""
 
-        data = asdict(cls())
-        data["storage"]["relational_dsn"] = ""
-        data["storage"]["vector_dsn"] = ""
-        return data
+        return asdict(cls())
 
     @staticmethod
     def _load_mcp_servers_from_files(data: dict[str, dict[str, Any]]) -> None:
@@ -589,10 +574,9 @@ class AgentConfig:
             "AGENT_DISPLAY_MODE": ("constants", "default_display_mode", str),
             "AGENT_PROJECT_ROOT": ("storage", "project_root", str),
             "AGENT_BASE_DATA_DIR": ("storage", "base_data_dir", str),
-            "AGENT_RELATIONAL_DSN": ("storage", "relational_dsn", str),
-            "AGENT_VECTOR_DSN": ("storage", "vector_dsn", str),
-            "AGENT_RELATIONAL_DB_PASSWORD": ("storage", "relational_db_password", str),
-            "AGENT_VECTOR_DB_PASSWORD": ("storage", "vector_db_password", str),
+            "AGENT_SQLITE_PATH": ("storage", "sqlite_path", str),
+            "AGENT_CHROMA_PERSIST_DIR": ("storage", "chroma_persist_dir", str),
+            "AGENT_VECTOR_BACKEND": ("storage", "vector_backend", str),
             "AGENT_RELATION_DB_DIR": ("storage", "relation_db_dir", str),
             "AGENT_VECTOR_DB_DIR": ("storage", "vector_db_dir", str),
             "AGENT_EMBEDDING_MODEL_DIR": ("storage", "embedding_model_dir", str),

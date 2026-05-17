@@ -78,6 +78,10 @@ from agent_service.agent_core import AgentCore
 from agent_service.api.grpc.agent_service_pb2_grpc import add_AgentServiceServicer_to_server
 from agent_service.api.grpc.servicer import AgentServiceServicer
 from agent_service.api.rest import router as rest_router
+from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
+from agent_service.services.settings_service import SettingsService
+from agent_service.services.memory.rag.knowledge_ingestion import KnowledgeIngestionService
+from agent_service.scripts.frontmatter_bootstrap import bootstrap_frontmatter
 import agent_service.api.rest.deps as rest_deps
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.session_service import SessionService
@@ -109,7 +113,30 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     agent = AgentCore(config=config, message_service=message_service, session_service=session_service)
     logger.info("AgentCore 初始化完成 | graph_diagram=%s", agent.graph_diagram_path)
 
-    _grpc_servicer = AgentServiceServicer(agent=agent, session_service=session_service, message_service=message_service)
+    memory_service = LongTermMemoryService(config=config)
+    settings_service = SettingsService(config=config, memory_service=memory_service)
+    rest_deps._settings_service = settings_service
+    logger.info("SettingsService 初始化完成")
+
+    # 自动灌库: 扫描 resources/knowledge, 对已变更的文件执行 frontmatter 结构化 + Embedding + 入库
+    try:
+        frontmatter_result = bootstrap_frontmatter(config=config)
+        ingestion_service = KnowledgeIngestionService(config=config, memory_service=memory_service)
+        ingestion_result = ingestion_service.ingest_frontmatter_dir()
+        logger.info(
+            "知识库灌库完成 | frontmatter: seen=%d written=%d skipped=%d | ingestion: seen=%d ingested=%d skipped=%d chunks=%d",
+            frontmatter_result["files_seen"],
+            frontmatter_result["files_written"],
+            frontmatter_result["files_skipped"],
+            ingestion_result.files_seen,
+            ingestion_result.files_ingested,
+            ingestion_result.files_skipped,
+            ingestion_result.chunks_created,
+        )
+    except Exception:
+        logger.exception("知识库灌库失败,服务继续启动")
+
+    _grpc_servicer = AgentServiceServicer(agent=agent, session_service=session_service, message_service=message_service, settings_service=settings_service)
     rest_deps._agent = agent
     rest_deps._session_service = session_service
     rest_deps._message_service = message_service
@@ -134,6 +161,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._agent = None
         rest_deps._session_service = None
         rest_deps._message_service = None
+        rest_deps._settings_service = None
         logger.info("AgentService 已关闭")
 
 

@@ -29,4 +29,13 @@ export const API = {
 
   /** 会话消息历史 */
   SESSION_MESSAGES: (sessionId) => `/sessions/${sessionId}/messages`,
+
+  /** 用户自定义系统提示词 */
+  SETTINGS_SYSTEM_PROMPT: '/settings/system-prompt',
+
+  /** 用户自定义长期记忆列表 / 新增 */
+  SETTINGS_MEMORIES: '/settings/memories',
+
+  /** 删除指定自定义长期记忆 */
+  SETTINGS_MEMORY_ITEM: (memoryId) => `/settings/memories/${memoryId}`,
 }

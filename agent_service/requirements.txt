@@ -3,7 +3,7 @@ huggingface_hub
 langchain-core
 langchain-openai
 langgraph
-psycopg[binary]
+chromadb
 sentence-transformers
 sqlmodel
 pytest

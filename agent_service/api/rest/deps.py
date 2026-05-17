@@ -12,10 +12,12 @@ from fastapi import HTTPException
 from agent_service.agent_core.agent_core import AgentCore
 from agent_service.services.message_service import MessageService
 from agent_service.services.session_service import SessionService
+from agent_service.services.settings_service import SettingsService
 
 _agent: AgentCore | None = None
 _session_service: SessionService | None = None
 _message_service: MessageService | None = None
+_settings_service: SettingsService | None = None
 
 
 def _require_agent() -> AgentCore:
@@ -34,3 +36,9 @@ def _require_message_service() -> MessageService:
     if _message_service is None:
         raise HTTPException(status_code=503, detail="MessageService not initialized yet")
     return _message_service
+
+
+def _require_settings_service() -> SettingsService:
+    if _settings_service is None:
+        raise HTTPException(status_code=503, detail="SettingsService not initialized yet")
+    return _settings_service

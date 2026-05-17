@@ -35,7 +35,6 @@ from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecOut
 from agent_service.schemas.message import MessageCreate
 from agent_service.schemas.message import MessageOut
 from agent_service.schemas.session import SessionOut
-from agent_service.scripts.db_init import build_admin_dsn
 from agent_service.scripts.download_model import MODEL_MARKER_FILE
 from agent_service.scripts.draw_agent_graph import build_mermaid
 from agent_service.scripts.download_model import is_model_available
@@ -143,8 +142,6 @@ def make_test_config() -> AgentConfig:
             "storage": {
                 "project_root": str(TEST_TEMP_DIR),
                 "base_data_dir": str(TEST_TEMP_DIR / "runtime"),
-                "relational_dsn": "sqlite://",
-                "vector_dsn": "sqlite://",
             },
             "model": {
                 "model_name": "test-model",
@@ -833,7 +830,6 @@ def test_memory_resolver_prefers_rule_based_known_fact_over_llm_output() -> None
 
     config = AgentConfig.load_config(
         {
-            "storage": {"relational_dsn": "sqlite://", "vector_dsn": "sqlite://"},
             "model": {"model_name": "test-model", "api_key": "test-key", "base_url": "https://example.com/v1"},
         },
         load_env=False,
@@ -869,7 +865,6 @@ def test_memory_resolver_marks_latest_project_code_as_active_after_multiple_upda
 
     config = AgentConfig.load_config(
         {
-            "storage": {"relational_dsn": "sqlite://", "vector_dsn": "sqlite://"},
             "model": {
                 "model_name": "test-model",
                 "api_key": "test-key",
@@ -997,12 +992,13 @@ def test_builtin_memory_tools_use_runtime_context() -> None:
     assert "珊瑚礁会支持渔业和海岸防护" in knowledge_result
 
 
-def test_default_relational_dsn_uses_psycopg_driver() -> None:
-    """验证默认 PostgreSQL DSN 与 psycopg3 依赖保持一致。"""
+def test_default_sqlite_path_points_to_runtime_db() -> None:
+    """验证默认 SQLite 路径指向 runtime/db/relation。"""
 
     config = AgentConfig.load_config(load_env=False, ensure_directories=False, ensure_models=False)
 
-    assert config.storage.relational_dsn.startswith("postgresql+psycopg://")
+    assert config.storage.sqlite_path.name == "agent_service.db"
+    assert "runtime" in str(config.storage.sqlite_path)
 
 
 def test_model_config_normalizes_kimi_k2_temperature_to_one() -> None:
@@ -1027,28 +1023,30 @@ def test_model_config_normalizes_kimi_k2_temperature_to_one() -> None:
     assert config.model.resolve_small_temperature() == 1.0
 
 
-def test_db_init_builds_admin_dsn_from_target_dsn() -> None:
-    """验证数据库初始化脚本可以从业务库 DSN 派生管理库 DSN。"""
+def test_db_init_creates_sqlite_and_chroma_dirs() -> None:
+    """验证数据库初始化脚本会创建 SQLite 文件和 ChromaDB 目录。"""
 
-    admin_dsn = build_admin_dsn(
-        target_dsn="postgresql+psycopg://postgres:1111@localhost:5432/agent_service"
-    )
+    from agent_service.scripts.db_init import initialize_database
 
-    assert admin_dsn == "postgresql+psycopg://postgres:1111@localhost:5432/postgres"
+    config = AgentConfig.load_config(load_env=False, ensure_directories=True, ensure_models=False)
+    initialize_database(config=config)
+
+    assert config.storage.sqlite_path.exists()
+    assert config.storage.chroma_persist_dir.exists()
 
 
-def test_storage_dsn_can_be_built_from_password_field() -> None:
-    """验证默认 DSN 可以从独立数据库密码字段组装。"""
+def test_storage_sqlite_path_can_be_overridden() -> None:
+    """验证 SQLite 路径和 ChromaDB 目录可以通过 overrides 自定义。"""
 
     config = AgentConfig.load_config(
-        {"storage": {"relational_db_password": "1111", "vector_db_password": "2222"}},
+        {"storage": {"sqlite_path": "/tmp/test_agent.db", "chroma_persist_dir": "/tmp/test_chroma"}},
         load_env=False,
         ensure_directories=False,
         ensure_models=False,
     )
 
-    assert config.storage.relational_dsn == "postgresql+psycopg://postgres:1111@localhost:5432/agent_service"
-    assert config.storage.vector_dsn == "postgresql+psycopg://postgres:2222@localhost:5432/agent_service"
+    assert config.storage.sqlite_path.name == "test_agent.db"
+    assert config.storage.chroma_persist_dir.name == "test_chroma"
 
 
 def test_download_model_resolves_safe_target_dir_and_checks_completeness() -> None:

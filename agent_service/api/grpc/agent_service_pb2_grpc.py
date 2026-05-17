@@ -113,6 +113,36 @@ class AgentServiceStub(object):
                 request_serializer=agent__service__pb2.RecallDetailsRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.RecallDetailsResponse.FromString,
                 _registered_method=True)
+        self.ListSystemPromptEntries = channel.unary_unary(
+                '/agent_service.AgentService/ListSystemPromptEntries',
+                request_serializer=agent__service__pb2.SystemPromptRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.SystemPromptEntriesResponse.FromString,
+                _registered_method=True)
+        self.AddSystemPromptEntry = channel.unary_unary(
+                '/agent_service.AgentService/AddSystemPromptEntry',
+                request_serializer=agent__service__pb2.SystemPromptAddRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.SystemPromptEntryResponse.FromString,
+                _registered_method=True)
+        self.DeleteSystemPromptEntry = channel.unary_unary(
+                '/agent_service.AgentService/DeleteSystemPromptEntry',
+                request_serializer=agent__service__pb2.SystemPromptDeleteRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.DeleteResponse.FromString,
+                _registered_method=True)
+        self.ListCustomMemories = channel.unary_unary(
+                '/agent_service.AgentService/ListCustomMemories',
+                request_serializer=agent__service__pb2.MemoryListRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.MemoryListResponse.FromString,
+                _registered_method=True)
+        self.AddCustomMemory = channel.unary_unary(
+                '/agent_service.AgentService/AddCustomMemory',
+                request_serializer=agent__service__pb2.MemoryAddRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.MemoryEntryResponse.FromString,
+                _registered_method=True)
+        self.DeleteCustomMemory = channel.unary_unary(
+                '/agent_service.AgentService/DeleteCustomMemory',
+                request_serializer=agent__service__pb2.MemoryDeleteRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.DeleteResponse.FromString,
+                _registered_method=True)
 
 
 class AgentServiceServicer(object):
@@ -224,6 +254,46 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ListSystemPromptEntries(self, request, context):
+        """---- 用户设置 ----
+
+        系统提示词条目
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddSystemPromptEntry(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteSystemPromptEntry(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListCustomMemories(self, request, context):
+        """自定义长期记忆
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddCustomMemory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteCustomMemory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AgentServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -296,6 +366,36 @@ def add_AgentServiceServicer_to_server(servicer, server):
                     servicer.GetRecallDetails,
                     request_deserializer=agent__service__pb2.RecallDetailsRequest.FromString,
                     response_serializer=agent__service__pb2.RecallDetailsResponse.SerializeToString,
+            ),
+            'ListSystemPromptEntries': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListSystemPromptEntries,
+                    request_deserializer=agent__service__pb2.SystemPromptRequest.FromString,
+                    response_serializer=agent__service__pb2.SystemPromptEntriesResponse.SerializeToString,
+            ),
+            'AddSystemPromptEntry': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddSystemPromptEntry,
+                    request_deserializer=agent__service__pb2.SystemPromptAddRequest.FromString,
+                    response_serializer=agent__service__pb2.SystemPromptEntryResponse.SerializeToString,
+            ),
+            'DeleteSystemPromptEntry': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteSystemPromptEntry,
+                    request_deserializer=agent__service__pb2.SystemPromptDeleteRequest.FromString,
+                    response_serializer=agent__service__pb2.DeleteResponse.SerializeToString,
+            ),
+            'ListCustomMemories': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListCustomMemories,
+                    request_deserializer=agent__service__pb2.MemoryListRequest.FromString,
+                    response_serializer=agent__service__pb2.MemoryListResponse.SerializeToString,
+            ),
+            'AddCustomMemory': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddCustomMemory,
+                    request_deserializer=agent__service__pb2.MemoryAddRequest.FromString,
+                    response_serializer=agent__service__pb2.MemoryEntryResponse.SerializeToString,
+            ),
+            'DeleteCustomMemory': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteCustomMemory,
+                    request_deserializer=agent__service__pb2.MemoryDeleteRequest.FromString,
+                    response_serializer=agent__service__pb2.DeleteResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -685,6 +785,168 @@ class AgentService(object):
             '/agent_service.AgentService/GetRecallDetails',
             agent__service__pb2.RecallDetailsRequest.SerializeToString,
             agent__service__pb2.RecallDetailsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListSystemPromptEntries(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/ListSystemPromptEntries',
+            agent__service__pb2.SystemPromptRequest.SerializeToString,
+            agent__service__pb2.SystemPromptEntriesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddSystemPromptEntry(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/AddSystemPromptEntry',
+            agent__service__pb2.SystemPromptAddRequest.SerializeToString,
+            agent__service__pb2.SystemPromptEntryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteSystemPromptEntry(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/DeleteSystemPromptEntry',
+            agent__service__pb2.SystemPromptDeleteRequest.SerializeToString,
+            agent__service__pb2.DeleteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListCustomMemories(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/ListCustomMemories',
+            agent__service__pb2.MemoryListRequest.SerializeToString,
+            agent__service__pb2.MemoryListResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddCustomMemory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/AddCustomMemory',
+            agent__service__pb2.MemoryAddRequest.SerializeToString,
+            agent__service__pb2.MemoryEntryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteCustomMemory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/DeleteCustomMemory',
+            agent__service__pb2.MemoryDeleteRequest.SerializeToString,
+            agent__service__pb2.DeleteResponse.FromString,
             options,
             channel_credentials,
             insecure,

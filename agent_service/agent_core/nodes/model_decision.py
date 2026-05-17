@@ -53,6 +53,19 @@ class ModelDecisionNode:
         """读取当前消息状态,调用模型,并把模型响应追加回 `messages`。"""
 
         system_content = self.config.model.system_prompt
+
+        # 追加用户自定义系统提示词(数据库持久化,每次对话自动加载)
+        user_id = state.get("user_id")
+        if user_id:
+            try:
+                from agent_service.api.rest.deps import _settings_service
+                if _settings_service is not None:
+                    custom_prompt = _settings_service.get_system_prompt(user_id=user_id)
+                    if custom_prompt:
+                        system_content += f"\n\n【用户自定义指令】\n{custom_prompt}"
+            except Exception:
+                pass  # 获取用户设置失败时不阻断流程
+
         plan = state.get("plan")
         if plan and plan.get("hint"):
             covered = plan.get("covered", [])

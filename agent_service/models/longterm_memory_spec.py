@@ -45,7 +45,7 @@ class LongTermMemorySpecBase(SQLModel):
     importance: 记忆重要性,范围建议为 0 到 1。
     authority: 来源权威性,范围建议为 0 到 1。
     embedding_model: 生成向量的模型名称。
-    embedding_vector_json: 向量列表;后续接入 pgvector 时可迁移为向量列。
+    embedding_vector_json: 向量列表;与 ChromaDB 向量集合保持同步。
     """
 
     user_id: str = Field(index=True, min_length=1, max_length=128)

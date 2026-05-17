@@ -18,13 +18,11 @@ knowledge = service.retrieve_knowledge(query="海洋酸化影响什么")
 
 from __future__ import annotations
 
-import json
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
@@ -170,6 +168,7 @@ class MemoryRetrievalService:
             "session_fact",
             self.config.constants.important_fact_summary_memory_type,
             "session_summary",
+            "user_custom",
         ):
             snapshot = self._retrieve_with_debug(
                 query=query,
@@ -462,7 +461,7 @@ class MemoryRetrievalService:
         limit: 召回数量上限。
         """
 
-        candidates = self._retrieve_by_pgvector(
+        candidates = self._retrieve_by_chroma(
             query_vector=query_vector,
             user_id=user_id,
             session_id=session_id,
@@ -481,7 +480,7 @@ class MemoryRetrievalService:
             limit=limit,
         )
 
-    def _retrieve_by_pgvector(
+    def _retrieve_by_chroma(
         self,
         *,
         query_vector: list[float],
@@ -492,7 +491,7 @@ class MemoryRetrievalService:
         limit: int,
     ) -> list[HybridRetrievalCandidate]:
         """
-        使用 pgvector 向量列检索候选记忆。
+        使用 ChromaDB 向量集合检索候选记忆。
 
         query_vector: 查询向量。
         user_id: 用户 ID。
@@ -502,45 +501,53 @@ class MemoryRetrievalService:
         limit: 候选数量上限。
         """
 
-        self.memory_service.ensure_pgvector_storage(vector_dimension=len(query_vector))
-        if not self.engine.dialect.name.startswith("postgresql") or self.memory_service.pgvector_available is False:
+        memory_service = self.memory_service
+        memory_service._ensure_chroma_collection(vector_dimension=len(query_vector))
+        if not memory_service.chroma_available:
             return []
-        where_clauses = [
-            "tag = :tag",
-            "memory_type = :memory_type",
-            "user_id = :user_id",
-            "(valid_until IS NULL OR valid_until >= NOW())",
-        ]
-        parameters: dict[str, Any] = {
-            "tag": tag,
-            "memory_type": memory_type,
-            "user_id": user_id,
-            "query_vector": json.dumps(query_vector, separators=(",", ":")),
-            "limit": limit,
+
+        collection = memory_service._chroma_collection
+        where_filter = {
+            "$and": [
+                {"user_id": user_id},
+                {"tag": tag},
+                {"memory_type": memory_type},
+            ]
         }
-        sql = text(
-            "SELECT memory_id, (1 - (embedding_vector <=> CAST(:query_vector AS vector))) AS relevance_score "
-            "FROM longterm_memory_specs "
-            f"WHERE {' AND '.join(where_clauses)} "
-            "AND embedding_vector IS NOT NULL "
-            "ORDER BY embedding_vector <=> CAST(:query_vector AS vector) "
-            "LIMIT :limit"
-        )
-        with self.engine.begin() as connection:
-            rows = list(connection.execute(sql, parameters).mappings())
-        if not rows:
+        try:
+            results = collection.query(
+                query_embeddings=[query_vector],
+                n_results=limit,
+                where=where_filter,
+                include=["metadatas", "distances"],
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("ChromaDB query failed, falling back to JSON vectors: %s", exc)
             return []
-        memory_ids = [row["memory_id"] for row in rows]
+
+        if not results or not results.get("ids") or not results["ids"][0]:
+            return []
+
+        memory_ids = results["ids"][0]
+        distances = results.get("distances", [[]])[0] if results.get("distances") else []
+
         with Session(self.engine) as db_session:
             statement = select(LongTermMemorySpec).where(LongTermMemorySpec.memory_id.in_(memory_ids))
             records = db_session.exec(statement).all()
         record_map = {record.memory_id: LongTermMemorySpecOut.from_record(record) for record in records}
+
+        now = datetime.now(timezone.utc)
         candidates: list[HybridRetrievalCandidate] = []
-        for row in rows:
-            memory = record_map.get(row["memory_id"])
+        for i, memory_id in enumerate(memory_ids):
+            memory = record_map.get(memory_id)
             if memory is None or not self._is_memory_currently_active(memory):
                 continue
-            vector_score = self._clamp_score(float(row["relevance_score"] or 0.0))
+            valid_until = self._ensure_aware_datetime(memory.valid_until)
+            if valid_until is not None and valid_until < now:
+                continue
+            distance = distances[i] if i < len(distances) else 1.0
+            vector_score = self._clamp_score(1.0 - float(distance))
             candidates.append(
                 HybridRetrievalCandidate(
                     memory=memory,

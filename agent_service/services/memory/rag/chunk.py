@@ -4,7 +4,7 @@ RAG 文本切片工具。
 功能说明:
 本文件提供知识库和摘要入库前的轻量切片能力。第一版不做复杂语义解析,
 而是按段落优先、固定窗口兜底的方式生成重叠 chunk,用于后续 Embedding 和
-pgvector 入库。
+ChromaDB 入库。
 
 使用说明:
 业务层调用 `chunk_text(text=..., chunk_size=..., chunk_overlap=...)` 获取

@@ -117,7 +117,9 @@ flowchart TD
       - 政治敏感：命中 `politics` 分类或意图审核判定"政治敏感" → 小模型生成立场正确的反驳性回复（如"这种说法是完全错误的。中国共产党始终坚持……"）。
       - 一般拦截：色情/暴力/违法/注入/广告等其他类别 → 小模型生成脱敏的礼貌拒绝（如"对不起,我不能回答这个问题,因为[脱敏理由]。如需其他帮助请随时告诉我。"）。
      两项回复均通过 `SafetyService._get_block_message_prompt()` 选择对应系统提示词,经 `LLMTaskScheduler` → `small` 模型池生成;小模型不可用时回退到静态后备文案。
-
+13. 可定制性: 用户可自定义长期记忆和系统提示词并持久化.
+  - 用户自定义长期记忆:用户可以管理长期记忆,可以增加新的自定义长期记忆注入到向量库,或者删除长期记忆.
+  - 用户自定义系统提示词:用户可编辑"用户设置系统提示词",追加到原本的系统提示词中.
 ## 工作原理流程图
 ### 记忆机制
 ##### 长期记忆 / 知识库入库流程
@@ -472,4 +474,18 @@ flowchart TD
 | GetEvents | `GET /agent/events?session_id=&user_id=` | `GetEvents` | 获取最近一次执行的 trace 事件列表 | `session_id` (string, 必填), `user_id` (string, 必填) | `{session_id, user_id, event_count, events: [{message_id, role, node, content, tool_calls, created_at, metadata}]}` |
 | GetRecallDetails | `GET /agent/recall-details?session_id=&user_id=` | `GetRecallDetails` | 获取最近一次 RAG 召回快照（pre/post rerank） | 同上 | `{session_id, user_id, created_at, query, rag_metrics, memory_recall, knowledge_recall}` |
 
-## 使用说明
+### 六、用户设置
+
+| 方法 | REST | gRPC | 功能 | 请求参数 | 返回结构 |
+|------|------|------|------|----------|----------|
+| ListSystemPromptEntries | `GET /settings/system-prompt?user_id=` | `ListSystemPromptEntries` | 列出用户全部系统提示词条目 | `user_id` (string, 必填) | `{entries: [{prompt_id, content, created_at}]}` |
+| AddSystemPromptEntry | `POST /settings/system-prompt/entries` | `AddSystemPromptEntry` | 添加一条系统提示词条目 | `user_id` (string, 必填), `content` (string, 必填) | `{prompt_id, content, created_at}` |
+| DeleteSystemPromptEntry | `DELETE /settings/system-prompt/entries/{prompt_id}` | `DeleteSystemPromptEntry` | 删除指定提示词条目 | `prompt_id` (string, 必填) | `{ok, deleted_count}` |
+| ListCustomMemories | `GET /settings/memories?user_id=` | `ListCustomMemories` | 列出用户全部自定义长期记忆 | `user_id` (string, 必填) | `[{memory_id, content, importance, created_at}]` |
+| AddCustomMemory | `POST /settings/memories` | `AddCustomMemory` | 添加一条自定义长期记忆（自动向量化入库） | `user_id` (string, 必填), `content` (string, 必填), `importance` (float, 可选, 默认 0.5) | `{memory_id, content, importance, created_at}` |
+| DeleteCustomMemory | `DELETE /settings/memories/{memory_id}` | `DeleteCustomMemory` | 删除指定自定义长期记忆 | `memory_id` (string, 必填) | `{ok, deleted_count}` |
+
+> 系统提示词条目在每次 Agent 对话时自动全部加载并拼接到系统提示词末尾；自定义长期记忆通过向量检索在相关对话中自动召回。
+
+## 快速启动
+
