@@ -16,7 +16,9 @@ AgentService 微服务入口。
 from __future__ import annotations
 
 import logging
+import sys
 import warnings
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Any
@@ -167,6 +169,41 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
 
 app = FastAPI(title="Agent-Core-Service", lifespan=_lifespan)
 app.include_router(rest_router)
+
+
+def _resolve_static_dir() -> Path | None:
+    """定位前端静态资源目录。
+
+    优先级:
+    1. PyInstaller 打包环境: _MEIPASS/console/dist
+    2. 开发环境: 项目根目录/console/dist
+    如果目录不存在则返回 None,跳过静态文件挂载。
+    """
+    if getattr(sys, "frozen", False):
+        candidate = Path(sys._MEIPASS) / "console" / "dist"
+    else:
+        candidate = Path(__file__).resolve().parent / "console" / "dist"
+    return candidate if candidate.is_dir() else None
+
+
+_static_dir = _resolve_static_dir()
+if _static_dir is not None:
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+
+    app.mount("/assets", StaticFiles(directory=_static_dir / "assets"), name="assets")
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def _favicon() -> FileResponse:
+        return FileResponse(_static_dir / "favicon.ico")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def _spa_fallback(full_path: str) -> FileResponse:
+        """SPA 兜底: 非 API 路径返回 index.html,由 Vue Router 接管。"""
+        file_path = _static_dir / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(_static_dir / "index.html")
 
 if __name__ == "__main__":
     import uvicorn

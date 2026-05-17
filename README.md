@@ -54,6 +54,56 @@ npm run dev          # 开发模式 → http://localhost:8003
 
 后端健康检查：`curl http://localhost:8002/health`
 
+## 构建
+
+### 前端 — 静态 HTML
+
+```bash
+cd console
+npm i --verbose
+npm run build          # 输出 → console/dist/
+```
+
+### 后端 — 单文件 exe
+
+```bash
+# 安装 PyInstaller
+pip install pyinstaller
+
+# 打包（读取 AgentService.spec）
+pyinstaller AgentService.spec
+```
+
+产物为 `dist/AgentService.exe`。`.spec` 配置将 `console/dist/`（前端静态资源）和 `resources/`（知识库、MCP 配置、安全词库）一并打包进 exe。
+
+### 部署结构
+
+首次启动自动生成空 `resources/` 和 `runtime/` 目录骨架:
+
+```
+AgentService.exe
+├── .env                 # 模型 API Key 等配置
+├── resources/           # 自动生成空目录,放入文件即可覆盖 exe 内置默认
+│   ├── knowledge/       # 放 .md / .txt 知识文档,重启自动灌库
+│   ├── mcp/             # 放 .json MCP 服务器配置,重启自动加载
+│   └── safety/          # 放 sensitive_words.json,覆盖内置安全词库
+└── runtime/             # 自动生成: db/ models/ frontmatter/ logs/
+```
+
+> **读取规则**: 外置目录有文件则用外置,外置为空则回退到 exe 内置副本。按需在外置目录增删文件即生效,无需重新打包。
+
+### 单 exe 运行
+
+双击启动或命令行:
+
+```bash
+AgentService.exe
+```
+
+浏览器访问 `http://localhost:8002`，后端同时提供 API 和前端界面。`runtime/` 目录首次启动自动生成。
+
+> 开发模式下前后端分离（后端 8002 + 前端 8003），打包后后端直接托管前端静态文件，无需额外 Web 服务器。
+
 ## MCP 工具接入
 
 AgentService 通过 MCP（Model Context Protocol）协议对接外部工具服务器。Agent 启动时自动发现并注册 MCP 工具，注册后的工具与内置工具无差别可用。

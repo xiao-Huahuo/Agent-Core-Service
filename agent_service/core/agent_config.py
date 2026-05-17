@@ -27,9 +27,28 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
+
+
+def _resolve_default_project_root() -> Path:
+    """推断默认项目根目录。
+
+    优先级:
+    1. AGENT_PROJECT_ROOT 环境变量
+    2. PyInstaller 打包环境: sys.executable 所在目录
+    3. 开发环境: 当前文件上溯两级 (仓库根)
+    """
+    env_root = os.environ.get("AGENT_PROJECT_ROOT")
+    if env_root:
+        return Path(env_root).resolve()
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[2]
+
+
 @dataclass(slots=True)
 class AgentConfig:
     @dataclass(slots=True)
@@ -71,7 +90,7 @@ class AgentConfig:
         log_dir: 日志文件输出目录。
         """
 
-        project_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
+        project_root: Path = field(default_factory=_resolve_default_project_root)
         base_data_dir: Path = field(default_factory=lambda: Path("./runtime"))
         sqlite_path: Path = field(default_factory=lambda: Path("db/relation/agent_service.db"))
         chroma_persist_dir: Path = field(default_factory=lambda: Path("db/vector/chroma"))
@@ -102,12 +121,22 @@ class AgentConfig:
             self.log_dir = self._resolve_runtime_path(self.log_dir)
 
         def _resolve_project_path(self, path_value: Path | str) -> Path:
-            """将相对路径转换为基于 project_root 的绝对路径。"""
+            """将相对路径转换为基于 project_root 的绝对路径。
+
+            在 PyInstaller 打包环境下,如果外置目录不存在,回退到 exe 内置副本
+            (_MEIPASS)。这样首次运行时无需手动复制 resources/,后续用户在外置
+            目录中增删文件即可覆盖内置默认值。
+            """
 
             path = Path(path_value).expanduser()
             if path.is_absolute():
                 return path.resolve()
-            return (self.project_root / path).resolve()
+            resolved = (self.project_root / path).resolve()
+            if not resolved.exists() and getattr(sys, "frozen", False):
+                bundled = (Path(sys._MEIPASS) / path).resolve()
+                if bundled.exists():
+                    return bundled
+            return resolved
 
         def _resolve_runtime_path(self, path_value: Path | str) -> Path:
             """将相对路径转换为基于 base_data_dir 的绝对路径。"""
@@ -118,7 +147,12 @@ class AgentConfig:
             return (self.base_data_dir / path).resolve()
 
         def ensure_directories(self) -> None:
-            """创建运行目录、模型目录、日志目录、知识库资源目录以及 MCP 配置目录。"""
+            """创建运行目录与外部资源目录骨架。
+
+            runtime/ 下的可写目录始终创建在 project_root 外置路径。
+            resources/ 子目录同时在外置路径创建空骨架,方便用户放入自定义文件;
+            读取时外置优先,不存在则回退到 exe 内置副本 (_MEIPASS)。
+            """
 
             self.base_data_dir.mkdir(parents=True, exist_ok=True)
             self.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
@@ -131,6 +165,9 @@ class AgentConfig:
             self.frontmatter_dir.mkdir(parents=True, exist_ok=True)
             self.mcp_server_config_dir.mkdir(parents=True, exist_ok=True)
             self.log_dir.mkdir(parents=True, exist_ok=True)
+            # 外置资源骨架: 确保 project_root 下有空目录,即使读取回退到 _MEIPASS
+            for res_dir in ("resources/knowledge", "resources/mcp", "resources/safety"):
+                (self.project_root / res_dir).mkdir(parents=True, exist_ok=True)
 
     @dataclass(slots=True)
     class ModelConfig:

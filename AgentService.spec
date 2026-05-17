@@ -1,0 +1,44 @@
+# -*- mode: python ; coding: utf-8 -*-
+"""PyInstaller 构建配置 — 将后端 + 前端静态资源打包为单个 exe。"""
+
+import sys
+from pathlib import Path
+
+from PyInstaller.utils.hooks import collect_submodules
+
+_project_root = Path(__file__).resolve().parent
+
+a = Analysis(
+    ['main.py'],
+    pathex=[str(_project_root)],
+    binaries=[],
+    datas=[
+        ('console/dist', 'console/dist'),
+        ('resources', 'resources'),
+    ],
+    hiddenimports=collect_submodules('agent_service'),
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[
+        'pytest',
+        'pip',
+        'setuptools',
+    ],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+)
+
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    a.zipfiles,
+    name='AgentService',
+    icon=None,
+    console=True,
+    debug=False,
+)
