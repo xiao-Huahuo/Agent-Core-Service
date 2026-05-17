@@ -10,7 +10,6 @@
 import { computed, watch, ref, nextTick, onMounted } from 'vue'
 import { useAvatar } from '@/composable/useAvatar'
 import MessageBubble from './MessageBubble.vue'
-import ToolCallInline from './ToolCallInline.vue'
 
 const props = defineProps({
   messages: { type: Array, required: true },
@@ -42,22 +41,6 @@ function mergeConsecutiveAssistants(msgs) {
 const visibleMessages = computed(() => {
   const base = props.messages.filter(m => m.role !== 'system')
   return props.mergeAssistants ? mergeConsecutiveAssistants(base) : base
-})
-
-/** 从所有消息 trace 中提取去重后的工具调用,独立于气泡渲染 */
-const allToolTraces = computed(() => {
-  const seen = new Set()
-  const result = []
-  for (const msg of props.messages) {
-    for (const t of (msg.trace || [])) {
-      if (t.event !== 'tool_call_end' || !t.tool_name) continue
-      const key = `${t.tool_name}-${t.event}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      result.push(t)
-    }
-  }
-  return result
 })
 
 const containerRef = ref(null)
@@ -136,9 +119,6 @@ onMounted(() => {
     <p v-if="visibleMessages.length === 0" class="empty-hint">
       $ 输入消息开始对话
     </p>
-
-    <!-- 工具调用条 —— 独立于气泡 -->
-    <ToolCallInline :traces="allToolTraces" />
 
     <MessageBubble
       v-for="(msg, idx) in visibleMessages"

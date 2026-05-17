@@ -6,6 +6,7 @@
 <script setup>
 import { computed } from 'vue'
 import MarkdownContent from './MarkdownContent.vue'
+import ToolCallInline from './ToolCallInline.vue'
 
 const props = defineProps({
   message: { type: Object, required: true },
@@ -35,10 +36,17 @@ const bubbleRadius = computed(() => {
     <img v-if="showAvatar" :src="agentAvatar" class="avatar" alt="agent" />
     <div v-else class="avatar-spacer" />
     <div class="bubble-col">
-      <div v-if="hasContent || isStreaming" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
-        <MarkdownContent v-if="hasContent" :content="message.content" :is-streaming="isStreaming" />
-        <span v-if="isStreaming" class="cursor">|</span>
-      </div>
+      <!-- action 节点: 只显示工具调用条,不显示内容气泡 -->
+      <template v-if="message.node === 'action'">
+        <ToolCallInline :traces="message.trace || []" />
+      </template>
+      <!-- 其余节点: 只显示内容气泡 -->
+      <template v-else>
+        <div v-if="hasContent || isStreaming" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
+          <MarkdownContent v-if="hasContent" :content="message.content" :is-streaming="isStreaming" />
+          <span v-if="isStreaming" class="cursor">|</span>
+        </div>
+      </template>
     </div>
   </div>
 

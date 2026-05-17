@@ -101,10 +101,10 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const history = await fetchMessages(sessionId, userId, limit, { signal })
       messages.value = history
-        .filter(m => m.role !== 'tool')
-        .filter(m => m.role !== 'assistant' || m.content || (m.tool_calls && m.tool_calls.length > 0))
+        .filter(m => m.role !== 'tool' || m.metadata?.node === 'action')
+        .filter(m => m.role !== 'assistant' || m.content || (m.tool_calls && m.tool_calls.length > 0) || m.metadata?.node === 'action')
         .map(m => ({
-          role: m.role,
+          role: m.role === 'tool' ? 'assistant' : m.role,
           content: m.content,
           message_id: m.message_id,
           node: m.metadata?.node || '',

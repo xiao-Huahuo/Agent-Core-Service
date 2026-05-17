@@ -18,9 +18,32 @@ flowchart TD
     会话管理["会话管理"] & 规划与编排["规划与编排"] & 可观测性["可观测性"] & 工具系统["工具系统"] --> agent
 ```
 ##### Agent状态转移图
-<object data="./agent_graph.mmd" type="text/plain" width="100%" height="600">
-  agent_graph.mmd
-</object>
+
+```mermaid
+flowchart TD
+    safety_input["safety_input"]
+
+    subgraph loop["Agent 循环"]
+        planner["planner"]
+        compress["compress"]
+        agent["agent"]
+        action["action"]
+        reflection["reflection"]
+    end
+
+    safety_output["safety_output"]
+
+    safety_input -->|"通过"| planner
+    safety_input -->|"拦截"| E1((END))
+    planner --> agent
+    agent -->|"工具调用"| action
+    agent -->|"直接回复"| safety_output
+    action --> reflection
+    reflection -->|"继续/回答"| planner
+    reflection -->|"上下文溢出"| compress
+    compress --> planner
+    safety_output --> E2((END))
+```
 
 ### 各部分设计
 
@@ -164,10 +187,47 @@ flowchart TD
     M --> K
     K --> N["送入 Agent 图执行"]
 ```
-
 **消息角色优先级（上下文拼装顺序）：**  
 `SystemMessage(检索上下文)` → `历史消息按时间正序` → `HumanMessage(当前输入)`  
 检索上下文内部优先级：`important_fact_summary > 当前 session 摘要 > 长期记忆 > 知识库`
+
+##### 混合检索与ReRank机制
+
+```mermaid
+flowchart TD
+    A["用户 query"] --> B["Embedding 向量化<br/>(本地 Embedding 模型)"]
+    A --> C["关键词抽取<br/>(ASCII token + CJK 片段 + stopwords 过滤)"]
+
+    subgraph vector_path["向量召回路径"]
+        B --> D["pgvector 余弦相似度检索<br/>(<=> operator)"]
+        D --> E["过滤 valid_until 过期的候选"]
+        E --> F["向量召回候选集<br/>(vector_top_k 条)"]
+    end
+
+    subgraph keyword_path["关键词召回路径"]
+        C --> G["SQL ILIKE 预筛<br/>(content 包含最强 8 个关键词)"]
+        G --> H["Python 关键词打分<br/>(coverage + 词频加权 + phrase bonus)"]
+        H --> I["过滤 valid_until 过期 /<br/>fact_status 为 superseded/expired"]
+        I --> J["关键词召回候选集<br/>(keyword_top_k 条)"]
+    end
+
+    F --> K["merge_candidates 合并去重"]
+    J --> K
+
+    K --> L{"双通道命中?"}
+    L -->|"是"| M["merged_score = 0.6 × max(v,k) + 0.4 × avg(v,k) + 0.05"]
+    L -->|"否"| N["merged_score = max(v,k)"]
+    M --> O["候选排序<br/>(merged_score → session_match → channel_count → updated_at)"]
+    N --> O
+
+    O --> P["ReRank 精排<br/>(本地 ReRank 模型)"]
+
+    P --> Q["计算 final_score<br/>= 0.5·relevance + 0.3·freshness + 0.2·authority"]
+    Q --> R["过滤 score_threshold 以下"]
+    R --> S["最终排序<br/>(session_match DESC → updated_at DESC → final_score DESC → importance DESC)"]
+    S --> T["返回 TopK 结果<br/>(rerank_top_k 条)"]
+```
+
 #### 任务调度机制
 ##### compress 路径: 上下文压缩 / 重要事实摘要流程
 
