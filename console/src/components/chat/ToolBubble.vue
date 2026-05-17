@@ -15,6 +15,11 @@ const props = defineProps({
   showAvatar: { type: Boolean, default: true },
 })
 
+const hasContent = computed(() => {
+  const c = props.message.content
+  return c && c !== '​'
+})
+
 const bubbleRadius = computed(() => {
   return props.message.role === 'user'
     ? '18px 4px 18px 18px'
@@ -30,8 +35,8 @@ const bubbleRadius = computed(() => {
     <img v-if="showAvatar" :src="agentAvatar" class="avatar" alt="agent" />
     <div v-else class="avatar-spacer" />
     <div class="bubble-col">
-      <div v-if="message.content || isStreaming" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
-        <MarkdownContent v-if="message.content" :content="message.content" :is-streaming="isStreaming" />
+      <div v-if="hasContent || isStreaming" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
+        <MarkdownContent v-if="hasContent" :content="message.content" :is-streaming="isStreaming" />
         <span v-if="isStreaming" class="cursor">|</span>
       </div>
     </div>

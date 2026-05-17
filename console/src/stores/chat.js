@@ -161,7 +161,7 @@ export const useChatStore = defineStore('chat', () => {
       if (assistantCreated && activeNode === node) return
       appendMessage({
         role: 'assistant',
-        content: '​', // 零宽空格,避免 content 为空触发布尔短路
+        content: '',
         node: node || '',
         tool_calls: [],
         trace: [...bufferedTraces],
@@ -190,10 +190,7 @@ export const useChatStore = defineStore('chat', () => {
         /* action 节点(有内容) */
         if (chunk.node === 'action' && chunk.content) {
           ensureAssistant(chunk.node)
-          const la = findLastAssistant()
-          if (la) {
-            la.node = chunk.node
-          }
+          updateLastMessage(chunk.content, chunk.node, undefined, chunk.trace)
           continue
         }
 
