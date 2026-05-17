@@ -59,8 +59,8 @@ class ContextBuilder:
             user_id=user_id,
             session_id=session_id,
             limit=self.config.memory.max_context_messages,
+            exclude_roles=["system"],
         )
-        history = [msg for msg in history if msg.role != "system"]
         messages: list[BaseMessage] = []
         memory_context, rag_metrics, recall_details = self._build_retrieved_context(
             user_id=user_id,

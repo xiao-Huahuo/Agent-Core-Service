@@ -16,12 +16,15 @@ AgentService 微服务入口。
 from __future__ import annotations
 
 import logging
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Any
 
 import grpc
 from fastapi import FastAPI
+
+warnings.filterwarnings("ignore", message=".*allowed_objects.*")
 
 from agent_service.agent_core import AgentCore
 from agent_service.api.grpc.agent_service_pb2_grpc import add_AgentServiceServicer_to_server

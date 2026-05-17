@@ -28,6 +28,10 @@ from agent_service.tools.runtime_context import (
     set_agent_token_callback,
     set_tool_runtime,
     set_tool_trace_callback,
+    set_planner_content_callback,
+    clear_planner_content_callback,
+    set_reflection_content_callback,
+    clear_reflection_content_callback,
 )
 from agent_service.tools.tool_registry import ToolRegistry
 
@@ -46,4 +50,8 @@ __all__ = [
     "set_agent_token_callback",
     "set_tool_runtime",
     "set_tool_trace_callback",
+    "set_planner_content_callback",
+    "clear_planner_content_callback",
+    "set_reflection_content_callback",
+    "clear_reflection_content_callback",
 ]

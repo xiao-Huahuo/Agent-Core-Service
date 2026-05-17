@@ -22,7 +22,22 @@ const chatStore = useChatStore()
 const sidebarOpen = ref(true)
 const isMobile = ref(window.innerWidth < 768)
 
-function onResize() { isMobile.value = window.innerWidth < 768 }
+const SIDEBAR_WIDTH = 260
+const CHAT_FIXED_WIDTH = 720
+const APP_SHELL_PADDING = 64   // 2rem top + bottom
+const APP_SHELL_GAP = 16        // 1rem gap
+const MIN_WIDTH_FOR_SIDEBAR = SIDEBAR_WIDTH + CHAT_FIXED_WIDTH + APP_SHELL_PADDING + APP_SHELL_GAP // 1060
+
+function onResize() {
+  isMobile.value = window.innerWidth < 768
+
+  // 宽度不足以同时容纳侧边栏 + 固定宽度聊天区时,自动坍缩;宽度足够则展开
+  if (window.innerWidth < MIN_WIDTH_FOR_SIDEBAR) {
+    sidebarOpen.value = false
+  } else if (!isMobile.value) {
+    sidebarOpen.value = true
+  }
+}
 if (typeof window !== 'undefined') {
   window.addEventListener('resize', onResize)
 }

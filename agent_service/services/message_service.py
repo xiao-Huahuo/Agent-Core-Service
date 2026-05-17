@@ -123,11 +123,20 @@ class MessageService:
             records.reverse()
             return [MessageOut.from_record(record) for record in records]
 
-    def list_session_messages(self, *, user_id: str, session_id: str, limit: int) -> list[MessageOut]:
+    def list_session_messages(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        limit: int,
+        exclude_roles: list[str] | None = None,
+    ) -> list[MessageOut]:
         """
         查询同一会话最近 N 条消息(包含已摘要消息),按时间正序返回。
 
         供前端加载聊天历史使用,不做 is_summarized 过滤。
+        exclude_roles: 可选,排除指定角色的消息(如 ["system"]),在 DB 层面过滤,
+                       避免浪费 limit 配额。
         """
 
         if limit <= 0:
@@ -136,9 +145,10 @@ class MessageService:
             select(MessageRecord)
             .where(MessageRecord.user_id == user_id)
             .where(MessageRecord.session_id == session_id)
-            .order_by(MessageRecord.created_at.desc())
-            .limit(limit)
         )
+        if exclude_roles:
+            statement = statement.where(~MessageRecord.role.in_(exclude_roles))
+        statement = statement.order_by(MessageRecord.created_at.desc()).limit(limit)
         with Session(self.engine) as db_session:
             records = list(db_session.exec(statement).all())
             records.reverse()

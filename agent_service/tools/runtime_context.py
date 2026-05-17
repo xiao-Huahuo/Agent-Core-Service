@@ -157,6 +157,52 @@ def clear_tool_trace_callback() -> None:
         delattr(_TOOL_TRACE_CALLBACK, "callback")
 
 
+# ------------------------------------------------------------------
+# Planner 内容回调 (用于 PlannerNode → AgentCore 流式推送)
+# ------------------------------------------------------------------
+
+_PLANNER_CONTENT_CALLBACK: local = local()
+
+
+def set_planner_content_callback(callback: Callable[[str], None]) -> None:
+    """设置当前线程的 planner 内容回调,供 PlannerNode 在流式生成时逐 token 调用。"""
+    _PLANNER_CONTENT_CALLBACK.callback = callback
+
+
+def get_planner_content_callback() -> Callable[[str], None] | None:
+    """获取当前线程的 planner 内容回调。"""
+    return getattr(_PLANNER_CONTENT_CALLBACK, "callback", None)
+
+
+def clear_planner_content_callback() -> None:
+    """清理当前线程的 planner 内容回调。"""
+    if hasattr(_PLANNER_CONTENT_CALLBACK, "callback"):
+        delattr(_PLANNER_CONTENT_CALLBACK, "callback")
+
+
+# ------------------------------------------------------------------
+# Reflection 内容回调 (用于 ReflectionNode → AgentCore 流式推送)
+# ------------------------------------------------------------------
+
+_REFLECTION_CONTENT_CALLBACK: local = local()
+
+
+def set_reflection_content_callback(callback: Callable[[str], None]) -> None:
+    """设置当前线程的 reflection 内容回调,供 ReflectionNode 在流式生成时逐 token 调用。"""
+    _REFLECTION_CONTENT_CALLBACK.callback = callback
+
+
+def get_reflection_content_callback() -> Callable[[str], None] | None:
+    """获取当前线程的 reflection 内容回调。"""
+    return getattr(_REFLECTION_CONTENT_CALLBACK, "callback", None)
+
+
+def clear_reflection_content_callback() -> None:
+    """清理当前线程的 reflection 内容回调。"""
+    if hasattr(_REFLECTION_CONTENT_CALLBACK, "callback"):
+        delattr(_REFLECTION_CONTENT_CALLBACK, "callback")
+
+
 def get_tool_runtime() -> ToolRuntimeState:
     """
     获取当前线程的工具运行时状态。

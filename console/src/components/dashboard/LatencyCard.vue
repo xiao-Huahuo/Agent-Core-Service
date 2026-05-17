@@ -5,7 +5,7 @@
 -->
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import VChart from 'vue-echarts'
 import 'echarts'
 import { useObsData } from '@/composable/useObsData'
@@ -13,8 +13,28 @@ import { useObsData } from '@/composable/useObsData'
 const obs = useObsData()
 const selectedIdx = ref(-1)
 
+watch(() => obs.latencyTurns.value.length, (n) => {
+  console.debug('[LatencyCard] turns changed:', n, 'msgs:', obs.messages.value.length)
+})
+watch(() => obs.messages.value.length, (n) => {
+  console.debug('[LatencyCard] msgs changed:', n, 'turns:', obs.latencyTurns.value.length)
+})
+
 const turns = computed(() => obs.latencyTurns.value)
 const hasTurns = computed(() => turns.value.length > 0)
+const diagInfo = computed(() => {
+  const msgCount = obs.messages.value.length
+  const turnCount = turns.value.length
+  if (turnCount > 0) {
+    const t = turns.value[0]
+    return `turns=${turnCount} msgs=${msgCount} first=[T${t.index} ${t.seconds}s]`
+  }
+  if (msgCount > 0) {
+    const roles = obs.messages.value.map(m => m.role).join(',')
+    return `turns=0 msgs=${msgCount} roles=[${roles}]`
+  }
+  return `turns=0 msgs=0 (no messages loaded)`
+})
 const emptyHint = computed(() => {
   const sessionId = obs.sessionStats.value.currentSessionId || '--'
   const messageCount = obs.messages.value.length
@@ -27,55 +47,56 @@ const selectedTurn = computed(() => {
 })
 
 const ACCENT = '#d99178'
+const LINE_COLOR = '#e8a880'
+const POINT_FILL = '#1a1a2e'
 const ACTIVE_FILL = '#d99178'
-const BORDER = 'rgba(255,255,255,0.08)'
-const TXT_LABEL = '#777'
-const BG_ELEVATED = '#1e1e2e'
+const GRID_COLOR = 'rgba(255,255,255,0.10)'
+const TXT_LABEL = '#888'
 const NODE_COLORS = ['#4da6ff', '#d99178', '#6ee7b7', '#a78bfa', '#f59e0b', '#f472b6', '#94a3b8']
 
 function nodeColor(i) {
   return NODE_COLORS[i % NODE_COLORS.length]
 }
 
-/** 折线图 */
 const lineOption = computed(() => {
   const items = turns.value
-  const chartItems = items
   const sel = selectedIdx.value
-  const pointColors = chartItems.map((_, i) => (i === sel ? ACTIVE_FILL : BG_ELEVATED))
-  const pointBorderColors = chartItems.map((_, i) => (i === sel ? ACTIVE_FILL : BORDER))
-  const pointSizes = chartItems.map((_, i) => (i === sel ? 9 : 6))
 
   return {
     backgroundColor: 'transparent',
     grid: { top: 14, right: 20, bottom: 24, left: 42 },
     xAxis: {
       type: 'category',
-      data: chartItems.map((t) => `T${t.index}`),
-      axisLine: { lineStyle: { color: BORDER } },
+      data: items.map((t) => `T${t.index}`),
+      axisLine: { lineStyle: { color: GRID_COLOR } },
       axisTick: { show: false },
-      axisLabel: { color: TXT_LABEL, fontSize: 8 },
+      axisLabel: { color: TXT_LABEL, fontSize: 9 },
     },
     yAxis: {
       type: 'value',
       name: '秒',
       min: 0,
-      nameTextStyle: { color: TXT_LABEL, fontSize: 8 },
-      splitLine: { lineStyle: { color: BORDER, type: 'dashed' } },
-      axisLabel: { color: TXT_LABEL, fontSize: 8 },
+      nameTextStyle: { color: TXT_LABEL, fontSize: 9 },
+      splitLine: { lineStyle: { color: GRID_COLOR, type: 'dashed' } },
+      axisLabel: { color: TXT_LABEL, fontSize: 9 },
     },
     series: [{
       type: 'line',
-      data: chartItems.map((t) => t.seconds),
+      data: items.map((t, i) => {
+        const isSel = i === sel
+        return {
+          value: t.seconds,
+          symbol: items.length === 1 ? 'pin' : 'circle',
+          symbolSize: items.length === 1 ? 14 : (isSel ? 10 : 6),
+          itemStyle: {
+            color: isSel ? ACTIVE_FILL : POINT_FILL,
+            borderColor: LINE_COLOR,
+            borderWidth: 1.5,
+          },
+        }
+      }),
       smooth: true,
-      symbol: 'circle',
-      symbolSize: (val, { dataIndex }) => pointSizes[dataIndex],
-      lineStyle: { color: ACCENT, width: 1.6 },
-      itemStyle: {
-        color: (val, { dataIndex }) => pointColors[dataIndex],
-        borderColor: (val, { dataIndex }) => pointBorderColors[dataIndex],
-        borderWidth: 1.5,
-      },
+      lineStyle: { color: LINE_COLOR, width: items.length === 1 ? 0 : 2 },
       areaStyle: {
         color: {
           type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
@@ -118,7 +139,7 @@ const barOption = computed(() => {
     yAxis: {
       type: 'value',
       max: 100,
-      splitLine: { lineStyle: { color: BORDER, type: 'dashed' } },
+      splitLine: { lineStyle: { color: GRID_COLOR, type: 'dashed' } },
       axisLabel: { color: TXT_LABEL, fontSize: 7, formatter: '{value}%' },
     },
     series: [{
@@ -181,7 +202,7 @@ function onLineClick(params) {
         <span class="traffic-dot sm green"></span>
       </div>
       <span class="window-filename">每次 message 思考耗时</span>
-      <span class="window-status">avg {{ obs.latencySummary.value.avg }}s</span>
+      <span class="window-status">avg {{ obs.latencySummary.value.avg }}s | {{ diagInfo }}</span>
     </div>
 
     <div class="card-body">
@@ -260,7 +281,7 @@ function onLineClick(params) {
   flex-direction: column;
   gap: var(--space-8);
   padding: var(--space-8) var(--space-10);
-  overflow: auto;
+  overflow: hidden;
 }
 
 /* ---- 折线图 ---- */
@@ -268,12 +289,13 @@ function onLineClick(params) {
   flex-shrink: 0;
   height: 150px;
   min-height: 150px;
-  border-bottom: 1px solid var(--color-border-light);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .line-chart {
   width: 100%;
   height: 100%;
+  min-height: 100px;
 }
 
 .line-chart-skeleton {
@@ -289,30 +311,30 @@ function onLineClick(params) {
 }
 
 .axis-line {
-  stroke: var(--color-border);
+  stroke: var(--color-border-strong);
   stroke-width: 1;
 }
 
 .grid-line {
-  stroke: var(--color-border-light);
+  stroke: var(--color-border);
   stroke-width: 1;
   stroke-dasharray: 2 2;
 }
 
 .axis-text {
-  fill: var(--color-text-tertiary);
+  fill: var(--color-text-secondary);
   font-size: 4px;
   font-family: var(--font-mono);
 }
 
 .ghost-line {
   fill: none;
-  stroke: rgba(217, 145, 120, 0.45);
-  stroke-width: 1.2;
+  stroke: rgba(217, 145, 120, 0.6);
+  stroke-width: 1.5;
 }
 
 .ghost-dot {
-  fill: rgba(217, 145, 120, 0.75);
+  fill: rgba(217, 145, 120, 0.8);
 }
 
 /* ---- 明细面板 ---- */

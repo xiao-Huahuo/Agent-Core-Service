@@ -15,12 +15,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage
 
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
+from agent_service.tools.runtime_context import get_reflection_content_callback
 
 
 REFLECTION_SYSTEM_PROMPT = (
@@ -67,6 +68,7 @@ class ReflectionNode:
         if not summary:
             decision = self._check_overflow_then_decide(state, "continue")
             return {
+                "messages": [AIMessage(content="没有需要审视的工具执行结果，继续推进。")],
                 "reflection_decision": decision,
                 "trace": [{
                     "node": "reflection",
@@ -77,11 +79,7 @@ class ReflectionNode:
 
         system_message = SystemMessage(content=REFLECTION_SYSTEM_PROMPT)
         context_message = SystemMessage(content=summary)
-        response = self.task_scheduler.invoke_chat(
-            task_type=FOREGROUND_AGENT_TASK,
-            messages=[system_message, context_message],
-            model_tier="large",
-        )
+        response = self._call_llm(system_message, context_message)
         llm_decision = self._parse_decision(response.content)
         decision = self._check_overflow_then_decide(state, llm_decision)
         if decision == "answer":
@@ -96,7 +94,36 @@ class ReflectionNode:
             "decision": decision,
             "human_readable": readable,
         }
-        return {"reflection_decision": decision, "trace": [trace]}
+        return {"messages": [AIMessage(content=readable)], "reflection_decision": decision, "trace": [trace]}
+
+    def _call_llm(self, system_message: Any, context_message: Any) -> Any:
+        """调用 LLM,流式场景下通过 callback 逐 token 推送。"""
+
+        callback = get_reflection_content_callback()
+        if callback is not None:
+            cumulative = ""
+            final_message: Any = None
+            for chunk in self.task_scheduler.stream_chat(
+                task_type=FOREGROUND_AGENT_TASK,
+                messages=[system_message, context_message],
+                model_tier="large",
+            ):
+                delta = chunk.get("content_delta", "")
+                if delta:
+                    cumulative += delta
+                    callback(cumulative)
+                if chunk.get("status") == "complete":
+                    final_message = chunk.get("message")
+            if final_message is None:
+                from langchain_core.messages import AIMessage
+                final_message = AIMessage(content=cumulative)
+            return final_message
+
+        return self.task_scheduler.invoke_chat(
+            task_type=FOREGROUND_AGENT_TASK,
+            messages=[system_message, context_message],
+            model_tier="large",
+        )
 
     def _check_overflow_then_decide(self, state: AgentState, llm_decision: str) -> str:
         """当 LLM 决定 continue 时,检查上下文是否溢出;溢出则返回 compress 迫使进入压缩节点。"""

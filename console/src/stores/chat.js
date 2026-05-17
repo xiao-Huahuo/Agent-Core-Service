@@ -102,11 +102,12 @@ export const useChatStore = defineStore('chat', () => {
       const history = await fetchMessages(sessionId, userId, limit, { signal })
       messages.value = history
         .filter(m => m.role !== 'tool')
-        .filter(m => m.role !== 'assistant' || m.content)
+        .filter(m => m.role !== 'assistant' || m.content || (m.tool_calls && m.tool_calls.length > 0))
         .map(m => ({
           role: m.role,
           content: m.content,
           message_id: m.message_id,
+          node: m.metadata?.node || '',
           tool_calls: m.tool_calls,
           metadata: m.metadata || {},
           trace: m.metadata?.trace || [],
@@ -154,17 +155,20 @@ export const useChatStore = defineStore('chat', () => {
 
     const bufferedTraces = []
     let assistantCreated = false
+    let activeNode = ''
 
     function ensureAssistant(node) {
-      if (assistantCreated) return
+      if (assistantCreated && activeNode === node) return
       appendMessage({
         role: 'assistant',
         content: '​', // 零宽空格,避免 content 为空触发布尔短路
         node: node || '',
         tool_calls: [],
         trace: [...bufferedTraces],
+        created_at: new Date().toISOString(),
       })
       assistantCreated = true
+      activeNode = node
       bufferedTraces.length = 0
     }
 

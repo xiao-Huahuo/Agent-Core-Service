@@ -14,13 +14,34 @@ import MessageBubble from './MessageBubble.vue'
 const props = defineProps({
   messages: { type: Array, required: true },
   isStreaming: { type: Boolean, default: false },
+  mergeAssistants: { type: Boolean, default: false },
 })
 
 const { userAvatar, agentAvatar } = useAvatar()
 
-const visibleMessages = computed(() =>
-  props.messages.filter(m => m.role !== 'system')
-)
+/** 合并连续 assistant 消息的辅助函数 */
+function mergeConsecutiveAssistants(msgs) {
+  return msgs.filter(m => m.role !== 'system').reduce((acc, msg) => {
+    if (msg.role === 'assistant' && acc.length > 0 && acc[acc.length - 1].role === 'assistant') {
+      const prev = acc[acc.length - 1]
+      acc[acc.length - 1] = {
+        ...prev,
+        content: msg.content || prev.content,
+        node: msg.node || prev.node,
+        tool_calls: msg.tool_calls?.length ? msg.tool_calls : prev.tool_calls,
+        trace: [...(prev.trace || []), ...(msg.trace || [])],
+      }
+    } else {
+      acc.push(msg)
+    }
+    return acc
+  }, [])
+}
+
+const visibleMessages = computed(() => {
+  const base = props.messages.filter(m => m.role !== 'system')
+  return props.mergeAssistants ? mergeConsecutiveAssistants(base) : base
+})
 
 const containerRef = ref(null)
 const isPinnedToBottom = ref(true)
@@ -36,7 +57,7 @@ const showThinkingBubble = computed(() => {
 
 /**
  * 判断当前滚动位置是否仍然贴近底部。
- * 使用一个小阈值，避免因为子像素误差导致“明明在底部却判定不在底部”。
+ * 使用一个小阈值，避免因为子像素误差导致"明明在底部却判定不在底部"。
  */
 function isNearBottom() {
   const container = containerRef.value
@@ -57,7 +78,7 @@ function scrollToBottom() {
 }
 
 /**
- * 在用户主动滚动时更新“是否跟随到底部”的状态。
+ * 在用户主动滚动时更新"是否跟随到底部"的状态。
  * 如果用户已经上滚查看历史消息，则后续流式推送不再强制把视图拖回底部。
  */
 function handleScroll() {
@@ -66,7 +87,7 @@ function handleScroll() {
 
 /**
  * 仅在用户原本就在底部时才自动滚动。
- * 这里在 DOM 更新前先读取当前滚动位置，避免内容变长后误判为“不在底部”。
+ * 这里在 DOM 更新前先读取当前滚动位置，避免内容变长后误判为"不在底部"。
  */
 function scheduleScrollIfNeeded() {
   const shouldAutoScroll = isPinnedToBottom.value || isNearBottom()

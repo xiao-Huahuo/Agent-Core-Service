@@ -16,11 +16,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage
 
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
+from agent_service.tools.runtime_context import get_planner_content_callback
 
 
 PLANNER_SYSTEM_PROMPT = (
@@ -63,25 +64,28 @@ class PlannerNode:
 
         if state.get("plan") is not None:
             return {
+                "messages": [AIMessage(content="已有执行计划，继续按计划推进。")],
                 "trace": [{
                     "node": "planner",
                     "event": "plan_already_exists",
                     "human_readable": "已有执行计划，继续按计划推进。",
-                }]
+                }],
             }
 
         original_prompt = self._extract_latest_user_message(state)
         if not original_prompt:
             return {
+                "messages": [AIMessage(content="未找到用户消息，跳过规划。")],
                 "trace": [{
                     "node": "planner",
                     "event": "no_user_message",
                     "human_readable": "未找到用户消息，跳过规划。",
-                }]
+                }],
             }
 
         if self._is_simple_query(original_prompt):
             return {
+                "messages": [AIMessage(content="这是一个简单问题，无需分步规划，直接回答。")],
                 "plan": {"need_plan": False},
                 "trace": [{
                     "node": "planner",
@@ -94,11 +98,7 @@ class PlannerNode:
         user_message = SystemMessage(
             content=f"用户需求:\n{original_prompt}\n\n请输出 JSON 计划。"
         )
-        response = self.task_scheduler.invoke_chat(
-            task_type=FOREGROUND_AGENT_TASK,
-            messages=[system_message, user_message],
-            model_tier="small",
-        )
+        response = self._call_llm(system_message, user_message)
         plan = self._parse_plan(response.content)
         if plan is not None:
             need_plan = plan.get("need_plan", False)
@@ -117,9 +117,10 @@ class PlannerNode:
                 "steps": steps,
                 "human_readable": readable,
             }
-            return {"plan": plan, "trace": [trace]}
+            return {"messages": [AIMessage(content=readable)], "plan": plan, "trace": [trace]}
 
         return {
+            "messages": [AIMessage(content="模型未生成有效计划，直接进入决策。")],
             "plan": {"need_plan": False},
             "trace": [{
                 "node": "planner",
@@ -127,6 +128,35 @@ class PlannerNode:
                 "human_readable": "模型未生成有效计划，直接进入决策。",
             }],
         }
+
+    def _call_llm(self, system_message: Any, user_message: Any) -> Any:
+        """调用 LLM,流式场景下通过 callback 逐 token 推送。"""
+
+        callback = get_planner_content_callback()
+        if callback is not None:
+            cumulative = ""
+            final_message: Any = None
+            for chunk in self.task_scheduler.stream_chat(
+                task_type=FOREGROUND_AGENT_TASK,
+                messages=[system_message, user_message],
+                model_tier="small",
+            ):
+                delta = chunk.get("content_delta", "")
+                if delta:
+                    cumulative += delta
+                    callback(cumulative)
+                if chunk.get("status") == "complete":
+                    final_message = chunk.get("message")
+            if final_message is None:
+                from langchain_core.messages import AIMessage
+                final_message = AIMessage(content=cumulative)
+            return final_message
+
+        return self.task_scheduler.invoke_chat(
+            task_type=FOREGROUND_AGENT_TASK,
+            messages=[system_message, user_message],
+            model_tier="small",
+        )
 
     @staticmethod
     def _extract_latest_user_message(state: AgentState) -> str:

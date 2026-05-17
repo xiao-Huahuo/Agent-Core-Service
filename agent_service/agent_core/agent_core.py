@@ -68,9 +68,40 @@ from agent_service.tools import (
     set_agent_token_callback,
     set_tool_runtime,
     set_tool_trace_callback,
+    set_planner_content_callback,
+    clear_planner_content_callback,
+    set_reflection_content_callback,
+    clear_reflection_content_callback,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_friendly_error(error_message: str) -> str:
+    """从 LLM 调度层抛出的原始错误中提取对用户友好的提示信息。
+
+    根据错误来源分类处理：
+    - content_filter: 内容安全策略拦截,提示用户修改输入。
+    - rate_limit: 速率限制,提示稍后重试。
+    - 其他: 保留简洁的概要信息,避免暴露内部调用栈。
+    """
+    lower = error_message.lower()
+    if "content_filter" in lower:
+        msg = error_message
+        # 提取 API 返回的具体原因文本
+        import re
+        match = re.search(r"'message':\s*'([^']+)'", msg) or re.search(
+            r'"message":\s*"([^"]+)"', msg
+        )
+        detail = match.group(1) if match else "请求因内容安全策略被拦截"
+        return f"内容安全拦截: {detail}"
+    if "rate_limit" in lower or "rate limit" in lower:
+        return "请求过于频繁,请稍后重试"
+    if "timeout" in lower:
+        return "请求超时,请稍后重试"
+    # 默认返回精简后的第一行错误,避免泄漏堆栈
+    first_line = error_message.split("\n")[0].strip()
+    return first_line
 
 
 class AgentCore:
@@ -199,22 +230,6 @@ class AgentCore:
         messages = context_builder.build_messages(user_id=user_id, session_id=session_id, current_prompt=prompt)
         logger.debug("上下文构建完成 | message_count=%d", len(messages))
 
-        # 持久化主系统提示词,供前端上下文拼接面板展示
-        if self.config.model.system_prompt:
-            message_service.create_message(
-                MessageCreate(
-                    session_id=session_id,
-                    user_id=user_id,
-                    role="system",
-                    content=self.config.model.system_prompt,
-                    metadata_json={
-                        "node": "system_prompt",
-                        "source": "agent_config",
-                        "type": "system_prompt",
-                    },
-                )
-            )
-
         for msg in messages:
             if isinstance(msg, SystemMessage):
                 msg_create = self._message_to_create(
@@ -331,6 +346,24 @@ class AgentCore:
         def on_tool_trace(trace: dict[str, Any]) -> None:
             token_queue.put({"type": "tool_trace", "trace": trace})
 
+        def on_planner_content(cumulative_text: str) -> None:
+            token_queue.put({
+                "type": "planner_content",
+                "node": "planner",
+                "content": cumulative_text,
+                "tool_calls": [],
+                "trace": [],
+            })
+
+        def on_reflection_content(cumulative_text: str) -> None:
+            token_queue.put({
+                "type": "reflection_content",
+                "node": "reflection",
+                "content": cumulative_text,
+                "tool_calls": [],
+                "trace": [],
+            })
+
         def run_graph() -> None:
             nonlocal graph_error
             set_tool_runtime(
@@ -341,6 +374,8 @@ class AgentCore:
             )
             set_agent_token_callback(on_token)
             set_tool_trace_callback(on_tool_trace)
+            set_planner_content_callback(on_planner_content)
+            set_reflection_content_callback(on_reflection_content)
             try:
                 for event in self.graph.stream(inputs, config=runtime_config, stream_mode="updates"):
                     if cancel_event.is_set():
@@ -352,6 +387,8 @@ class AgentCore:
             finally:
                 clear_agent_token_callback()
                 clear_tool_trace_callback()
+                clear_planner_content_callback()
+                clear_reflection_content_callback()
                 clear_tool_runtime()
                 token_queue.put({"type": "done"})
 
@@ -388,7 +425,33 @@ class AgentCore:
                     break
 
                 if item_type == "error":
-                    raise item["error"]
+                    error_msg = str(item["error"])
+                    # 提取对用户友好的错误信息,去除冗余的技术细节
+                    friendly_msg = _extract_friendly_error(error_msg)
+                    logger.warning("图执行出错 | user=%s session=%s error=%s", user_id, session_id, friendly_msg)
+                    if message_service is not None:
+                        try:
+                            message_service.create_message(
+                                MessageCreate(
+                                    session_id=session_id,
+                                    user_id=user_id,
+                                    role="assistant",
+                                    content=friendly_msg,
+                                    metadata_json={"node": "error", "source": "api_content_filter"},
+                                )
+                            )
+                            logger.info("已保存错误消息到数据库 | session=%s", session_id)
+                        except Exception:
+                            logger.exception("保存错误消息失败 | session=%s", session_id)
+                    yield {
+                        "node": "error",
+                        "content": friendly_msg,
+                        "error": friendly_msg,
+                        "tool_calls": [],
+                        "trace": [],
+                        "model_name": "",
+                    }
+                    break
 
                 if item_type == "token":
                     yield {
@@ -412,6 +475,24 @@ class AgentCore:
                         "model_name": self._model_name_for_node(trace.get("node", "action")),
                     }
 
+                elif item_type == "planner_content":
+                    yield {
+                        "node": "planner",
+                        "content": item.get("content", ""),
+                        "tool_calls": [],
+                        "trace": [],
+                        "model_name": self._model_name_for_node("planner"),
+                    }
+
+                elif item_type == "reflection_content":
+                    yield {
+                        "node": "reflection",
+                        "content": item.get("content", ""),
+                        "tool_calls": [],
+                        "trace": [],
+                        "model_name": self._model_name_for_node("reflection"),
+                    }
+
                 elif item_type == "node":
                     event = item["event"]
                     for node_name, state_update in event.items():
@@ -422,18 +503,6 @@ class AgentCore:
                                 t["model_name"] = self._model_name_for_node(node_name)
                             _turn_traces.extend(node_traces)
                         if message_service is not None:
-                            # 持久化 agent 节点实际使用的 system prompt(含执行计划)
-                            system_msg = state_update.get("_persist_system_message")
-                            if system_msg is not None:
-                                msg_create = self._message_to_create(
-                                    message=system_msg,
-                                    user_id=user_id,
-                                    session_id=session_id,
-                                    node_name=node_name,
-                                )
-                                if msg_create is not None:
-                                    message_service.create_message(msg_create)
-
                             self._save_state_update_messages(
                                 message_service=message_service,
                                 user_id=user_id,
@@ -469,6 +538,8 @@ class AgentCore:
                 self._cancel_events.pop(session_id, None)
             clear_agent_token_callback()
             clear_tool_trace_callback()
+            clear_planner_content_callback()
+            clear_reflection_content_callback()
             clear_tool_runtime()
             graph_thread.join(timeout=5.0)
 

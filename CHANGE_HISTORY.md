@@ -1,7 +1,27 @@
 # CHANGE HISTORY
 
 ## 2026-05-16
-
+- [x] 增加"Agent思考轨迹",展示agent在思考过程中的所有中间状态输出和工具调用,以免agent在思考中将对话框占用然后又清除来显示最终回答的问题.应该在对话框内有这样的效果:
+  - 用户: 帮我查一下有没有海洋相关的知识,然后立一个待办.
+  - Agent对话框:
+    - 好的,先让我查一查海洋的知识库知识.                              (Planner节点的输出)
+    - （agent调用了检索工具,并且展示了检索工具的输入和输出）
+    - 很好,我得到了海洋的知识库知识.这些知识很有用.                    (Reflection节点的输出)
+    - 接下来我准备使用待办工具来添加待办:                             (Planner节点的输出)
+    - （调用待办工具,并展示待办工具的输入和输出）
+    - 我已经完成了用户的任务,接下来进行最终回复.                       (Reflection节点的输出)
+    - 好的,我已经帮你查到了海洋相关的知识,并且立了一个待办,内容是....          (最终回复)
+  - 这样用户就能清楚地看到agent的思考过程,而不是在等待中觉得agent没有反应或者卡住了,也能让用户更有信任地使用agent,因为他们能看到agent在做什么.
+- [x] 可观测面板,展示agent的决策过程,切换到可观测面板时对话面板不刷新且仍需继续接受后台信息,可以在对话时实时更新.以下几点需要同步化展示:
+  - agent的LangGraph图以及当前所在节点,节点高亮,边切换也高亮
+  - 节点执行轨迹和工具调用轨迹展示
+  - 上下文拼装的内容与来源,不同来源的内容用不同颜色区分
+  - 长期记忆召回+rerank结果前后对比+状态+知识库召回+摘要工具结果展示
+  - 多级队列实时任务状态
+  - RAG召回率,命中率和置信度等各项指标的本次数值展示和对话曲线图
+  - 按时刻和模型的的token用量变化柱状-曲线图
+  - 每次message的思考时间耗时折线图,点击一个耗时则放大并划分为每个步骤的耗时占比
+  - agent超参数可视化展示
 ### 前端 - Obs 饼图重叠修复
 - 调整 `console/src/components/dashboard/RagMetricsCard.vue` 的环形图配置: 收紧 donut 半径并下移图内标签文案,同时将三图并排布局改为可按断点换行的响应式网格,修复 Obs 面板窄宽度下饼状图图形与文字重叠的问题。
 - 进一步调整 `console/src/components/dashboard/RagMetricsCard.vue` 的 donut 标签布局: 去掉图心覆盖文字,改为在饼图外侧通过标签线显示百分比和指标名称,并左移图心为外侧标签留出空间,避免数字和文字继续压在图形内部。
@@ -317,4 +337,13 @@
 
 - 修改 `console/src/components/dashboard/MemoryKnowledgePanel.vue`：为下层三列卡片补齐 `height: 100%` 和 `min-height: 0`，修复 `LatencyCard` 在 grid 第三列中高度链不完整、正文区域可能被压空的问题。
 - 修改 `console/src/components/dashboard/LatencyCard.vue`：无耗时数据时不再依赖 ECharts 占位渲染，改为直接输出固定高度的 SVG 坐标骨架与示意折线，保证至少可见坐标轴、网格线和占位图形；有真实数据时仍使用 ECharts 折线图和步骤明细视图。
+
+### 后端 — 修复 LLM 内容安全拦截导致 SSE 流异常崩溃
+
+- **问题**: Kimi/Moonshot API 返回 `content_filter` (400 high risk) 时,`scheduler.py` 抛出 `RuntimeError`,经 `agent_core.py` 的 `_stream_events()` 中 `raise item["error"]` 直接传播到 `agent.py` SSE 端点,被 `except Exception` 捕获后只返回模糊的 `internal server error`,客户端无法获知真实原因。
+- **修复**:
+  - 新增 `_extract_friendly_error()` 模块级函数,识别 `content_filter`、`rate_limit`、`timeout` 等典型 API 错误类型,提取 API 返回的具体 `message` 字段,组装为用户可理解的中文提示(如 `内容安全拦截: The request was rejected because it was considered high risk`)。
+  - 修改 `agent_core.py` 的 `_stream_events()`: 队列收到 `error` 事件时不再 `raise item["error"]`,改为 `yield` 一个 `node="error"` 的 SSE 事件并 `break` 终止流,使错误消息通过标准 SSE 通道传递给客户端。
+  - HTTP SSE (`agent.py`) 和 gRPC (`servicer.py`) 共享同一 `_stream_events()` 核心,无需额外修改。
+- **影响**: 敏感内容拦截不再导致服务端异常日志,客户端可收到有意义的错误提示并据此引导用户修改输入。
 

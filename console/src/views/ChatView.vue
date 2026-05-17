@@ -8,6 +8,7 @@ import { ref } from 'vue'
 import { useUserId } from '@/composable/useUserId'
 import { useSessionStore } from '@/stores/session'
 import { useChatStore } from '@/stores/chat'
+import { useSettingsStore } from '@/stores/settings'
 import MessageList from '@/components/chat/MessageList.vue'
 import StreamingIndicator from '@/components/chat/StreamingIndicator.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
@@ -15,6 +16,7 @@ import ChatInput from '@/components/chat/ChatInput.vue'
 const { userId, hasUserId, setUserId } = useUserId()
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
+const settings = useSettingsStore()
 
 const userIdInput = ref(userId.value)
 
@@ -65,11 +67,23 @@ async function handleSend(text) {
          聊天界面
          ================================================================ -->
     <template v-else>
+      <!-- 模式切换 —— 置顶整栏右对齐 -->
+      <div class="chat-toolbar">
+        <button
+          class="mode-toggle"
+          :class="{ active: settings.chatMode === 'tool' }"
+          @click="settings.toggleChatMode()"
+        >
+          {{ settings.chatMode === 'chat' ? '对话模式' : '工具模式' }}
+        </button>
+      </div>
+
       <div class="chat-content">
         <!-- 消息列表 -->
         <MessageList
           :messages="chatStore.messages"
           :is-streaming="chatStore.isStreaming"
+          :merge-assistants="settings.chatMode === 'chat'"
         />
 
         <!-- 流式指示器 -->
@@ -93,7 +107,37 @@ async function handleSend(text) {
   flex-direction: column;
   flex: 1;
   overflow: hidden;
+}
+
+.chat-toolbar {
+  display: flex;
   align-items: center;
+  justify-content: flex-end;
+  padding: var(--space-8) var(--space-16);
+  flex-shrink: 0;
+}
+
+.mode-toggle {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--color-text-tertiary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.mode-toggle:hover {
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-strong);
+}
+
+.mode-toggle.active {
+  color: var(--color-accent);
+  border-color: rgba(217, 145, 120, 0.35);
+  background: var(--color-accent-muted);
 }
 
 .chat-content {
@@ -104,6 +148,7 @@ async function handleSend(text) {
   max-width: 50%;
   min-width: 360px;
   overflow: hidden;
+  align-self: center;
 }
 
 @media (max-width: 768px) {

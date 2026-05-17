@@ -17,20 +17,22 @@ import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 const THEME_KEY = 'agent_console_theme'
+const CHAT_MODE_KEY = 'agent_console_chat_mode'
 
-/**
- * 从 localStorage 读取持久化的主题设置。
- * 返回空字符串表示尚未设置,后续由 initTheme 根据系统偏好决定。
- */
 function loadTheme() {
   return localStorage.getItem(THEME_KEY)
 }
 
-/**
- * 将主题写入 localStorage。
- */
 function saveTheme(theme) {
   localStorage.setItem(THEME_KEY, theme)
+}
+
+function loadChatMode() {
+  return localStorage.getItem(CHAT_MODE_KEY) || 'chat'
+}
+
+function saveChatMode(mode) {
+  localStorage.setItem(CHAT_MODE_KEY, mode)
 }
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -40,6 +42,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /** @type {import('vue').Ref<'dark'|'light'>} */
   const themeMode = ref(loadTheme() || '')
+
+  /** 对话气泡渲染模式: chat(对话模式) | tool(工具模式) */
+  const chatMode = ref(loadChatMode())
 
   /** 全局配色方案,预留扩展 */
   const colorScheme = ref('default')
@@ -80,10 +85,20 @@ export const useSettingsStore = defineStore('settings', () => {
     applyTheme()
   }
 
+  /**
+   * 在对话模式 / 工具模式之间切换。
+   */
+  function toggleChatMode() {
+    chatMode.value = chatMode.value === 'chat' ? 'tool' : 'chat'
+    saveChatMode(chatMode.value)
+  }
+
   return {
     themeMode,
+    chatMode,
     colorScheme,
     initTheme,
     toggleTheme,
+    toggleChatMode,
   }
 })
