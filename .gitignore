@@ -9,3 +9,4 @@ runtime/
 .env
 console/node_modules/
 *.db
+*.exe

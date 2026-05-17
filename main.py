@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import sys
 import warnings
+import webbrowser
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
@@ -105,6 +106,17 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     config = AgentConfig.load_config(ensure_models=False)
     setup_logging(config)
 
+    # 首次启动自动生成 .env 模板
+    env_path = config.storage.project_root / ".env"
+    if not env_path.exists():
+        env_path.write_text(
+            "# AgentService 环境配置\n"
+            "# AGENT_MODEL_API_KEY=sk-xxxxxxxx\n"
+            "# AGENT_SMALL_MODEL_API_KEY=sk-yyyyyyyy\n",
+            encoding="utf-8",
+        )
+        logger.info(".env 模板已创建 | path=%s", env_path)
+
     logger.info("AgentService 启动中...")
     logger.info("配置加载完成 | app=%s model=%s", config.constants.app_name, config.model.model_name)
 
@@ -149,6 +161,10 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     _grpc_server.add_insecure_port(grpc_address)
     _grpc_server.start()
     logger.info("gRPC server 已启动 | address=%s", grpc_address)
+
+    http_url = f"http://localhost:{config.server.http_port}"
+    webbrowser.open(http_url)
+    logger.info("浏览器已打开 | url=%s", http_url)
 
     try:
         yield

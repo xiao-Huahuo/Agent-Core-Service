@@ -1,12 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller 构建配置 — 将后端 + 前端静态资源打包为单个 exe。"""
 
-import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_submodules
 
-_project_root = Path(__file__).resolve().parent
+# SPECPATH 由 PyInstaller 在 exec spec 前注入,指向 spec 文件所在目录
+_project_root = Path(SPECPATH)  # noqa: F821
 
 a = Analysis(
     ['main.py'],

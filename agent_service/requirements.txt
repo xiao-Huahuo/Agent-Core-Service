@@ -10,3 +10,4 @@ pytest
 redis
 grpcio
 grpcio-tools
+pyinstaller

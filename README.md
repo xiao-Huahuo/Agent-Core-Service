@@ -100,7 +100,8 @@ AgentService.exe
 AgentService.exe
 ```
 
-浏览器访问 `http://localhost:8002`，后端同时提供 API 和前端界面。`runtime/` 目录首次启动自动生成。
+启动时自动启动默认浏览器访问 `http://localhost:8002`，后端同时提供 API 和前端界面。`runtime/` 和 `resources/` 目录和 `.env` 空文件首次启动自动生成。
+首次启动时无法使用.需要在`.env`里面配置大小模型API-KEY,然后才能启动exe.
 
 > 开发模式下前后端分离（后端 8002 + 前端 8003），打包后后端直接托管前端静态文件，无需额外 Web 服务器。
 
