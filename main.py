@@ -162,7 +162,14 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     _grpc_server.start()
     logger.info("gRPC server 已启动 | address=%s", grpc_address)
 
-    http_url = f"http://localhost:{config.server.http_port}"
+    # 前端端口: 打包模式下后端托管静态文件(8002), 开发模式下 Vite dev server(8003)
+    if _static_dir is not None:
+        logger.info("前端静态文件已挂载 | path=%s", _static_dir)
+        frontend_port = config.server.http_port
+    else:
+        logger.info("未找到前端静态文件,使用开发模式端口 8003")
+        frontend_port = 8003
+    http_url = f"http://localhost:{frontend_port}"
     webbrowser.open(http_url)
     logger.info("浏览器已打开 | url=%s", http_url)
 
@@ -197,6 +204,11 @@ def _resolve_static_dir() -> Path | None:
     """
     if getattr(sys, "frozen", False):
         candidate = Path(sys._MEIPASS) / "console" / "dist"
+        # 尝试修正: datas 有时展平到 _MEIPASS 根目录
+        if not candidate.is_dir():
+            alt = Path(sys._MEIPASS) / "dist"
+            if alt.is_dir():
+                candidate = alt
     else:
         candidate = Path(__file__).resolve().parent / "console" / "dist"
     return candidate if candidate.is_dir() else None
