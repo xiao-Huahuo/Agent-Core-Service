@@ -1,6 +1,6 @@
 <!--
   ToolBubble —— 工具模式消息气泡。
-  思考步骤内联展示（planner → 工具调用 → reflection → 最终回答），无折叠面板。
+  思考步骤内联展示（planner → 工具调用 → observation → 最终回答），无折叠面板。
 -->
 
 <script setup>

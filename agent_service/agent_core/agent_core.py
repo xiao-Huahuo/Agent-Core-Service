@@ -5,7 +5,7 @@ AgentCore 对外入口模块。
 本文件提供 `AgentCore` 类,作为 Agent 微服务核心能力的对外门面。它负责接收
 `AgentConfig`、加载默认内置工具、构建 LangGraph 图、输出图结构 Mermaid 文件,
 启动时检查并下载 Embedding/ReRank 本地模型,并对外提供 Agent 执行入口。具体节点逻辑不写在本文件中,而是由
-`AgentGraphBuilder` 装配 `compress`、`planner`、`model_decision`、`tool_call`、`reflection` 和 `summary` 等节点。
+`AgentGraphBuilder` 装配 `compress`、`planner`、`model_decision`、`tool_call`、`observation` 和 `summary` 等节点。
 
 执行能力:
 `stream_run()` 提供 SSE 风格的原始流式输出,适合接口层直接转发给前端。
@@ -67,7 +67,7 @@ from agent_service.tools import (
     clear_context_mirror_callback,
     clear_plan_state,
     clear_planner_content_callback,
-    clear_reflection_content_callback,
+    clear_observation_content_callback,
     clear_tool_runtime,
     clear_tool_trace_callback,
     get_plan_state,
@@ -75,7 +75,7 @@ from agent_service.tools import (
     set_context_mirror_callback,
     set_plan_state,
     set_planner_content_callback,
-    set_reflection_content_callback,
+    set_observation_content_callback,
     set_tool_runtime,
     set_tool_trace_callback,
 )
@@ -395,10 +395,10 @@ class AgentCore:
                 "trace": [],
             })
 
-        def on_reflection_content(cumulative_text: str) -> None:
+        def on_observation_content(cumulative_text: str) -> None:
             token_queue.put({
-                "type": "reflection_content",
-                "node": "reflection",
+                "type": "observation_content",
+                "node": "observation",
                 "content": cumulative_text,
                 "tool_calls": [],
                 "trace": [],
@@ -418,7 +418,7 @@ class AgentCore:
             set_agent_token_callback(on_token)
             set_tool_trace_callback(on_tool_trace)
             set_planner_content_callback(on_planner_content)
-            set_reflection_content_callback(on_reflection_content)
+            set_observation_content_callback(on_observation_content)
             set_context_mirror_callback(on_context_mirror)
             set_plan_state(initial_plan)
             try:
@@ -433,7 +433,7 @@ class AgentCore:
                 clear_agent_token_callback()
                 clear_tool_trace_callback()
                 clear_planner_content_callback()
-                clear_reflection_content_callback()
+                clear_observation_content_callback()
                 clear_context_mirror_callback()
                 clear_plan_state()
                 clear_tool_runtime()
@@ -534,13 +534,13 @@ class AgentCore:
                         "model_name": self._model_name_for_node("planner"),
                     }
 
-                elif item_type == "reflection_content":
+                elif item_type == "observation_content":
                     yield {
-                        "node": "reflection",
+                        "node": "observation",
                         "content": item.get("content", ""),
                         "tool_calls": [],
                         "trace": [],
-                        "model_name": self._model_name_for_node("reflection"),
+                        "model_name": self._model_name_for_node("observation"),
                     }
 
                 elif item_type == "context_mirror":
@@ -604,7 +604,7 @@ class AgentCore:
             clear_agent_token_callback()
             clear_tool_trace_callback()
             clear_planner_content_callback()
-            clear_reflection_content_callback()
+            clear_observation_content_callback()
             clear_plan_state()
             clear_tool_runtime()
             graph_thread.join(timeout=5.0)

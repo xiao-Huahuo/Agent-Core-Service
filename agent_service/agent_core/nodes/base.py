@@ -29,7 +29,7 @@ class AgentState(TypedDict):
     session_id: 会话 ID,后续用于短期记忆和 checkpoint 恢复。
     trace: 节点运行轨迹,用于观测面板展示每个节点发生了什么。
     plan: 策略顾问节点生成的探索状态,格式: {"covered": [...], "suggested": [...], "sufficient": bool, "hint": str}。
-    reflection_decision: 反思节点决策结果,"continue" 继续调工具 / "answer" 直接回答。
+    observation_decision: 反思节点决策结果,"continue" 继续调工具 / "answer" 直接回答。
     """
 
     messages: Annotated[list[BaseMessage], add_messages]
@@ -37,4 +37,4 @@ class AgentState(TypedDict):
     session_id: str
     trace: Annotated[list[dict[str, Any]], add]
     plan: dict[str, Any] | None
-    reflection_decision: str
+    observation_decision: str

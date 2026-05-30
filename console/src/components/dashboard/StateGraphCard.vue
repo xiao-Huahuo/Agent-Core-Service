@@ -21,7 +21,7 @@ const activeEdgeElements = ref([])
 
 /** 队列任务追踪：按模型池分组，基于 currentNode 变化触发进出队动效 */
 const LARGE_NODES = new Set(['agent'])
-const SMALL_NODES = new Set(['compress', 'planner', 'reflection', 'summary'])
+const SMALL_NODES = new Set(['compress', 'planner', 'observation', 'summary'])
 
 const poolTasks = ref({
   large: [],
@@ -136,7 +136,7 @@ const GRAPH_CODE = `flowchart TD
         compress["compress"]
         agent["agent"]
         action["action"]
-        reflection["reflection"]
+        observation["observation"]
     end
 
     safety_output["safety_output"]
@@ -146,9 +146,9 @@ const GRAPH_CODE = `flowchart TD
     planner --> agent
     agent -->|"工具调用"| action
     agent -->|"直接回复"| safety_output
-    action --> reflection
-    reflection -->|"继续/回答"| planner
-    reflection -->|"上下文溢出"| compress
+    action --> observation
+    observation -->|"继续/回答"| planner
+    observation -->|"上下文溢出"| compress
     compress --> planner
     safety_output --> E2((END))`
 

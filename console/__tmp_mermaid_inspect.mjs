@@ -16,7 +16,7 @@ const code = `flowchart TD
     planner["planner"]
     agent["agent"]
     action["action"]
-    reflection["reflection"]
+    observation["observation"]
     safety_output["safety_output"]
     safety_input -->|"通过"| compress
     safety_input -->|"拦截"| E1((END))
@@ -24,9 +24,9 @@ const code = `flowchart TD
     planner --> agent
     agent -->|"工具调用"| action
     agent -->|"直接回复"| safety_output
-    action --> reflection
-    reflection -->|"继续/回答"| planner
-    reflection -->|"上下文溢出"| compress
+    action --> observation
+    observation -->|"继续/回答"| planner
+    observation -->|"上下文溢出"| compress
     safety_output --> E2((END))`
 const { svg } = await mermaid.render('langgraph-svg', code)
 console.log(svg)

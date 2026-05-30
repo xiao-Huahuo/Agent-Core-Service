@@ -1,13 +1,13 @@
 """
-反思节点。
+观察节点。
 
 功能说明:
-本文件只实现 `ReflectionNode` 一个节点。该节点在工具调用执行完毕后,用大模型审视
+本文件只实现 `ObservationNode` 一个节点。该节点在工具调用执行完毕后,用大模型审视
 工具执行结果,判断是否已经获得足够信息回答用户问题,或者还需要继续调用工具。
 
 使用说明:
-`graph.py` 会把本节点注册为 `reflection` 节点,放在 `action` 之后。
-节点输出 `reflection_decision` 字段,"continue" 表示继续工具循环,"answer" 表示
+`graph.py` 会把本节点注册为 `observation` 节点,放在 `action` 之后。
+节点输出 `observation_decision` 字段,"continue" 表示继续工具循环,"answer" 表示
 可以输出最终答案,路由到摘要节点结束本轮执行。
 """
 
@@ -21,10 +21,10 @@ from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
-from agent_service.tools.runtime_context import get_reflection_content_callback
+from agent_service.tools.runtime_context import get_observation_content_callback
 
 
-REFLECTION_SYSTEM_PROMPT = (
+OBSERVATION_SYSTEM_PROMPT = (
     "你是一个执行结果审视助手。分析最近一次工具调用的结果,"
     "判断是否已经获得足够信息来回答用户的原始问题。\n"
     "用一句简短的中文给出你的判断和建议（20字以内），"
@@ -35,9 +35,9 @@ REFLECTION_SYSTEM_PROMPT = (
 )
 
 
-class ReflectionNode:
+class ObservationNode:
     """
-    反思节点。
+    观察节点。
 
     config: 全局配置对象。
     task_scheduler: 可选 LLM 任务调度器,为空时自动创建。
@@ -65,36 +65,36 @@ class ReflectionNode:
         state: 当前 LangGraph 状态。
         """
 
-        summary = self._build_reflection_context(state)
+        summary = self._build_observation_context(state)
         if not summary:
             decision = self._check_overflow_then_decide(state, "continue")
             return {
                 "messages": [AIMessage(content="没有需要审视的工具执行结果，继续推进。")],
-                "reflection_decision": decision,
+                "observation_decision": decision,
                 "trace": [{
-                    "node": "reflection",
+                    "node": "observation",
                     "event": "no_tool_results_to_review",
                     "human_readable": "没有需要审视的工具执行结果，继续推进。",
                 }],
             }
 
-        system_message = SystemMessage(content=REFLECTION_SYSTEM_PROMPT)
+        system_message = SystemMessage(content=OBSERVATION_SYSTEM_PROMPT)
         context_message = SystemMessage(content=summary)
         response = self._call_llm(system_message, context_message)
         llm_decision, readable = self._parse_decision(response.content)
         decision = self._check_overflow_then_decide(state, llm_decision)
         trace = {
-            "node": "reflection",
-            "event": "reflection_complete",
+            "node": "observation",
+            "event": "observation_complete",
             "decision": decision,
             "human_readable": readable,
         }
-        return {"messages": [AIMessage(content=readable)], "reflection_decision": decision, "trace": [trace]}
+        return {"messages": [AIMessage(content=readable)], "observation_decision": decision, "trace": [trace]}
 
     def _call_llm(self, system_message: Any, context_message: Any) -> Any:
         """调用 LLM,流式场景下通过 callback 逐 token 推送。"""
 
-        callback = get_reflection_content_callback()
+        callback = get_observation_content_callback()
         if callback is not None:
             cumulative = ""
             final_message: Any = None
@@ -131,7 +131,7 @@ class ReflectionNode:
         return "continue"
 
     @staticmethod
-    def _build_reflection_context(state: AgentState) -> str:
+    def _build_observation_context(state: AgentState) -> str:
         """
         从 state 中提取最近一次工具调用的上下文。
         只提取当前 cycle(最近一条人类消息之后)的工具调用和结果,

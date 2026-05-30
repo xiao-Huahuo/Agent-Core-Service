@@ -58,7 +58,7 @@ class SafetyInputNode:
                     "category": "political" if result.is_political else "general",
                     "message": result.block_reason,
                 }],
-                "reflection_decision": "blocked",
+                "observation_decision": "blocked",
             }
         return {
             "trace": [{

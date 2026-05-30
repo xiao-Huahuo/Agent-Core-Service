@@ -39,7 +39,7 @@ function nodeColor(node) {
     planner: 'var(--color-sky)',
     agent: 'var(--color-accent)',
     action: 'var(--color-blue)',
-    reflection: 'var(--color-green)',
+    observation: 'var(--color-green)',
     compress: 'var(--color-text-tertiary)',
     safety_input: 'var(--color-error)',
     safety_output: 'var(--color-error)',

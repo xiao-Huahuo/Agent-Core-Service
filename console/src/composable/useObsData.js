@@ -15,7 +15,7 @@ import { computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 
-const SMALL_MODEL_NODES = new Set(['compress', 'planner', 'reflection', 'summary'])
+const SMALL_MODEL_NODES = new Set(['compress', 'planner', 'observation', 'summary'])
 const LARGE_MODEL_NODES = new Set(['agent'])
 
 function safeArray(value) {

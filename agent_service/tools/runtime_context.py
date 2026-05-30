@@ -181,26 +181,26 @@ def clear_planner_content_callback() -> None:
 
 
 # ------------------------------------------------------------------
-# Reflection 内容回调 (用于 ReflectionNode → AgentCore 流式推送)
+# Observation 内容回调 (用于 ObservationNode → AgentCore 流式推送)
 # ------------------------------------------------------------------
 
-_REFLECTION_CONTENT_CALLBACK: local = local()
+_OBSERVATION_CONTENT_CALLBACK: local = local()
 
 
-def set_reflection_content_callback(callback: Callable[[str], None]) -> None:
-    """设置当前线程的 reflection 内容回调,供 ReflectionNode 在流式生成时逐 token 调用。"""
-    _REFLECTION_CONTENT_CALLBACK.callback = callback
+def set_observation_content_callback(callback: Callable[[str], None]) -> None:
+    """设置当前线程的 observation 内容回调,供 ObservationNode 在流式生成时逐 token 调用。"""
+    _OBSERVATION_CONTENT_CALLBACK.callback = callback
 
 
-def get_reflection_content_callback() -> Callable[[str], None] | None:
-    """获取当前线程的 reflection 内容回调。"""
-    return getattr(_REFLECTION_CONTENT_CALLBACK, "callback", None)
+def get_observation_content_callback() -> Callable[[str], None] | None:
+    """获取当前线程的 observation 内容回调。"""
+    return getattr(_OBSERVATION_CONTENT_CALLBACK, "callback", None)
 
 
-def clear_reflection_content_callback() -> None:
-    """清理当前线程的 reflection 内容回调。"""
-    if hasattr(_REFLECTION_CONTENT_CALLBACK, "callback"):
-        delattr(_REFLECTION_CONTENT_CALLBACK, "callback")
+def clear_observation_content_callback() -> None:
+    """清理当前线程的 observation 内容回调。"""
+    if hasattr(_OBSERVATION_CONTENT_CALLBACK, "callback"):
+        delattr(_OBSERVATION_CONTENT_CALLBACK, "callback")
 
 
 # ------------------------------------------------------------------

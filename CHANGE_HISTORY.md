@@ -1,7 +1,7 @@
 # CHANGE HISTORY
 
 ## 2026-05-17
-- 修复 Obs 面板在工具模式下所有卡片数据不完整的问题: `useObsData.js` 中 `currentMessageTraces` 原来只取最后一条 assistant 消息的 trace, 在工具模式下每个图节点 (planner/agent/action/reflection) 各自一条 assistant 消息, 导致语言轨迹、节点执行时间线、工具轨迹和运行时路径都只展示最后一个节点的数据。改为从尾部向前扫描, 收集最后一条 user 消息之后的所有 assistant trace, 使语言轨迹/节点时间线/工具轨迹/运行时路径在工具模式下正确聚合整个轮次的数据。(对话模式行为不变)
+- 修复 Obs 面板在工具模式下所有卡片数据不完整的问题: `useObsData.js` 中 `currentMessageTraces` 原来只取最后一条 assistant 消息的 trace, 在工具模式下每个图节点 (planner/agent/action/observation) 各自一条 assistant 消息, 导致语言轨迹、节点执行时间线、工具轨迹和运行时路径都只展示最后一个节点的数据。改为从尾部向前扫描, 收集最后一条 user 消息之后的所有 assistant trace, 使语言轨迹/节点时间线/工具轨迹/运行时路径在工具模式下正确聚合整个轮次的数据。(对话模式行为不变)
 - 修复 Obs 面板上下文拼装在流式过程中只显示用户 prompt 的问题: 后端 `agent_core.py` 的 `stream_session_prompt()` 在启动图执行前新增 `system_prompt` SSE 事件, 将 ContextBuilder 构建的完整系统提示 (含记忆索引、知识库索引、重要事实摘要、检索指标) 下发给前端; 前端 `chat.js` 接收该事件后将系统消息注入 `messages` 数组, `useObsData` 的 `contextAssembly` 和 `ragMetrics` 即可实时解析完整上下文拼装。
 - 新增上下文镜像机制, 让 Obs 面板 Raw 视图与可读格式视图均展示模型收到的真实完整消息列表: 后端在 `runtime_context.py` 新增 `context_mirror_callback`, `model_decision.py` 在流式调用 LLM 前将 `[system_message, *state["messages"]]` 序列化并通过回调推送到 `agent_core.py` 的主循环, 作为 `context_mirror` SSE 事件下发; 前端 `chat.js` 存入 `contextMirror` ref, `useObsData.js` 的 `contextAssembly` 优先使用镜像消息构建可读格式视图 (回退到旧解析逻辑), `LanguageTraceCard.vue` 的 Raw 视图优先展示镜像 JSON。
 - 修复长对话流式输出卡顿: 问题根因是每个 token (~30-60次/秒) 都直接写入响应式 `last.content`, 触发 `visibleMessages` 全量重算 (reduce 整个消息列表创建新对象)、模板全量重渲染和 vdom diff, 随消息累积导致 GC 压力持续增大。修复方案: `chat.js` 新增流式内容节流 (50ms 间隔), `updateStreamContent` 将最新内容存入非响应式缓冲, 按固定频率批量写入响应式对象, node/tool_calls/trace 等结构性字段仍立即写入; 流式中断/结束/异常时 `forceFlushContent` 确保最终内容不丢失。
@@ -14,10 +14,10 @@
   - Agent对话框:
     - 好的,先让我查一查海洋的知识库知识.                              (Planner节点的输出)
     - （agent调用了检索工具,并且展示了检索工具的输入和输出）
-    - 很好,我得到了海洋的知识库知识.这些知识很有用.                    (Reflection节点的输出)
+    - 很好,我得到了海洋的知识库知识.这些知识很有用.                    (Observation节点的输出)
     - 接下来我准备使用待办工具来添加待办:                             (Planner节点的输出)
     - （调用待办工具,并展示待办工具的输入和输出）
-    - 我已经完成了用户的任务,接下来进行最终回复.                       (Reflection节点的输出)
+    - 我已经完成了用户的任务,接下来进行最终回复.                       (Observation节点的输出)
     - 好的,我已经帮你查到了海洋相关的知识,并且立了一个待办,内容是....          (最终回复)
   - 这样用户就能清楚地看到agent的思考过程,而不是在等待中觉得agent没有反应或者卡住了,也能让用户更有信任地使用agent,因为他们能看到agent在做什么.
 - [x] 可观测面板,展示agent的决策过程,切换到可观测面板时对话面板不刷新且仍需继续接受后台信息,可以在对话时实时更新.以下几点需要同步化展示:
@@ -280,7 +280,7 @@
 
 - 为 `PlannerNode` 的所有 trace 事件增加 `human_readable` 字段,包含人类可读的规划描述（如"我需要分3步来完成这个任务"、"这是一个简单问题,直接作答"等）。
 - 为 `ToolCallNode` 拆分工具调用 trace：每个工具调用生成两条独立 trace（`tool_call_start` + `tool_call_end`）,分别描述正在调用哪个工具及参数摘要、以及工具返回结果摘要。同时为 fallback 路径（LangGraph ToolNode 和未注册工具）增加 `human_readable`。
-- 为 `ReflectionNode` 的所有 trace 事件增加 `human_readable` 字段,根据不同决策（answer/compress/continue）输出不同描述文本。
+- 为 `ObservationNode` 的所有 trace 事件增加 `human_readable` 字段,根据不同决策（answer/compress/continue）输出不同描述文本。
 - 为 `CompressNode` 的所有 trace 事件（`compression_skipped`、`compression_empty`、`compression_applied`）增加 `human_readable` 字段,描述当前 token 数量和压缩决策。
 - 为 `ModelDecisionNode` 增加 `human_readable` trace,根据模型是否产生 tool_calls 输出"模型决定调用工具：X"或"模型生成最终回复"。
 - 修改 `AgentCore._stream_events()` 在单轮对话中累积 `_turn_traces`,并在保存 assistant 消息时将累积 trace 注入 `metadata_json.trace`。同时修改 `_save_state_update_messages()` 和 `_message_to_create()` 传递 `turn_traces` 参数,使思考轨迹随消息持久化,支持前端历史回显。
@@ -309,13 +309,13 @@
 
 ### 后端 — ContextBuilder 从全文注入改为索引提示
 
-- 将 `ContextBuilder._build_retrieved_context()` 中长期记忆和知识库的检索结果从注入全文改为注入条数提示：`"系统中检索到 N 条与当前问题相关的长期记忆，如需查看具体内容请调用 get_long_term_memory 工具"`。重要事实摘要（CompressNode 输出的压缩上下文）保持全文注入不变。这解决了"模型看到预注入答案后直接复述、跳过工具调用"的问题，迫使模型在需要记忆/知识内容时主动调用工具，从而触发 Planner → ToolCall → Reflection 完整思考链路。
+- 将 `ContextBuilder._build_retrieved_context()` 中长期记忆和知识库的检索结果从注入全文改为注入条数提示：`"系统中检索到 N 条与当前问题相关的长期记忆，如需查看具体内容请调用 get_long_term_memory 工具"`。重要事实摘要（CompressNode 输出的压缩上下文）保持全文注入不变。这解决了"模型看到预注入答案后直接复述、跳过工具调用"的问题，迫使模型在需要记忆/知识内容时主动调用工具，从而触发 Planner → ToolCall → Observation 完整思考链路。
 - 同步更新 `retrieval_context_system_prompt`：从"参考材料 — 用自己的话总结"改为"上下文索引 — 使用工具获取详细内容"，明确告知模型哪些内容已直接提供、哪些需调工具获取。
 - 同步更新主 `system_prompt` 中【核心机制】段落：从"系统自动注入上下文"改为"系统预检索条目数量作为索引提示，详细内容需调工具获取"。
 
 ### 前端 — 修复 SSE 中 action 节点内容污染 assistant 气泡
 
-- 修复 `chat.js` 的 `send()` 中 SSE chunk 处理逻辑：当 `chunk.node === 'action'` 且有内容时，将工具返回结果写入独立的 `role: 'tool'` 消息，不再覆盖 assistant 占位气泡。同时 action 节点的 trace（工具调用开始/结束描述）仍附加到 assistant 消息的 trace 数组中供 ThinkingSteps 展示。planner/reflection/compress 等纯 trace 节点事件也改为仅附加 trace 而不触发 content 更新。解决了流式过程中工具返回全文在对话框主体闪现、重进后才正确归位到 tool 灰框的同步/异步渲染不一致问题。
+- 修复 `chat.js` 的 `send()` 中 SSE chunk 处理逻辑：当 `chunk.node === 'action'` 且有内容时，将工具返回结果写入独立的 `role: 'tool'` 消息，不再覆盖 assistant 占位气泡。同时 action 节点的 trace（工具调用开始/结束描述）仍附加到 assistant 消息的 trace 数组中供 ThinkingSteps 展示。planner/observation/compress 等纯 trace 节点事件也改为仅附加 trace 而不触发 content 更新。解决了流式过程中工具返回全文在对话框主体闪现、重进后才正确归位到 tool 灰框的同步/异步渲染不一致问题。
 
 ### 前端 — 聊天区流式滚动改为仅在贴底时自动跟随
 

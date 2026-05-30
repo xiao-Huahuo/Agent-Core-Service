@@ -8,7 +8,7 @@ Agent LangGraph 图构建模块。
 使用说明:
 外部通常不直接调用本模块,而是通过 `AgentCore(config=...)` 间接构建图。
 当前图结构:
-  safety_input -> planner -> agent -> action -> reflection
+  safety_input -> planner -> agent -> action -> observation
     ├── continue / answer → planner
     └── overflow → compress → planner
   agent (无 tool_calls) → safety_output → END
@@ -26,7 +26,7 @@ from agent_service.agent_core.nodes.base import AgentState
 from agent_service.agent_core.nodes.compress import CompressNode
 from agent_service.agent_core.nodes.model_decision import ModelDecisionNode
 from agent_service.agent_core.nodes.planner import PlannerNode
-from agent_service.agent_core.nodes.reflection import ReflectionNode
+from agent_service.agent_core.nodes.observation import ObservationNode
 from agent_service.agent_core.nodes.safety import SafetyInputNode, SafetyOutputNode
 from agent_service.agent_core.nodes.tool_call import ToolCallNode
 from agent_service.core.agent_config import AgentConfig
@@ -108,8 +108,8 @@ class AgentGraphBuilder:
             ToolCallNode(config=self.config, tools=self.tools, tool_executor=self.tool_executor),
         )
         workflow.add_node(
-            "reflection",
-            ReflectionNode(
+            "observation",
+            ObservationNode(
                 config=self.config,
                 task_scheduler=self.task_scheduler,
             ),
@@ -130,7 +130,7 @@ class AgentGraphBuilder:
             self._branch_labels[("safety_input", "__end__")] = "审核拦截"
         else:
             workflow.set_entry_point("planner")
-        # compress 仅在 reflection 判定上下文溢出时触发,压缩后回到 planner 重新规划
+        # compress 仅在 observation 判定上下文溢出时触发,压缩后回到 planner 重新规划
         workflow.add_edge("compress", "planner")
         workflow.add_edge("planner", "agent")
         if self.safety_service is not None:
@@ -149,23 +149,23 @@ class AgentGraphBuilder:
             )
             self._branch_labels[("agent", "action")] = "有 tool_calls"
             self._branch_labels[("agent", "__end__")] = "无 tool_calls → 结束"
-        workflow.add_edge("action", "reflection")
+        workflow.add_edge("action", "observation")
         if self.safety_service is not None:
             workflow.add_conditional_edges(
-                "reflection",
-                self._route_after_reflection,
+                "observation",
+                self._route_after_observation,
                 path_map={"planner": "planner", "compress": "compress"},
             )
-            self._branch_labels[("reflection", "planner")] = "continue / answer → 生成最终回复"
-            self._branch_labels[("reflection", "compress")] = "context overflow"
+            self._branch_labels[("observation", "planner")] = "continue / answer → 生成最终回复"
+            self._branch_labels[("observation", "compress")] = "context overflow"
         else:
             workflow.add_conditional_edges(
-                "reflection",
-                self._route_after_reflection,
+                "observation",
+                self._route_after_observation,
                 path_map={"planner": "planner", "compress": "compress"},
             )
-            self._branch_labels[("reflection", "planner")] = "continue / answer → 生成最终回复"
-            self._branch_labels[("reflection", "compress")] = "context overflow"
+            self._branch_labels[("observation", "planner")] = "continue / answer → 生成最终回复"
+            self._branch_labels[("observation", "compress")] = "context overflow"
         if self.safety_service is not None:
             workflow.add_edge("safety_output", END)
             self._branch_labels[("safety_output", "__end__")] = "审核结束"
@@ -183,7 +183,7 @@ class AgentGraphBuilder:
             return "action"
         return "safety_output" if self.safety_service is not None else "__end__"
 
-    def _route_after_reflection(self, state: AgentState) -> Literal["planner", "compress", "safety_output", "__end__"]:
+    def _route_after_observation(self, state: AgentState) -> Literal["planner", "compress", "safety_output", "__end__"]:
         """
         根据反思节点决策决定下一步。
         "continue" → planner(继续工具循环),
@@ -191,7 +191,7 @@ class AgentGraphBuilder:
         "answer" → planner(让 agent 模型看到工具结果后生成最终回复)。
         """
 
-        decision = state.get("reflection_decision", "continue")
+        decision = state.get("observation_decision", "continue")
         if decision == "continue":
             return "planner"
         if decision == "compress":
@@ -203,7 +203,7 @@ class AgentGraphBuilder:
     def _route_after_safety_input(state: AgentState) -> Literal["planner", "__end__"]:
         """安全输入审核通过 → planner,拦截 → 直接结束。"""
 
-        decision = state.get("reflection_decision")
+        decision = state.get("observation_decision")
         if decision == "blocked":
             return "__end__"
         return "planner"

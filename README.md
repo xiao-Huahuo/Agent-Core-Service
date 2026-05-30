@@ -195,7 +195,7 @@ flowchart TD
         compress["compress"]
         agent["agent"]
         action["action"]
-        reflection["reflection"]
+        observation["observation"]
     end
 
     safety_output["safety_output"]
@@ -205,9 +205,9 @@ flowchart TD
     planner --> agent
     agent -->|"工具调用"| action
     agent -->|"直接回复"| safety_output
-    action --> reflection
-    reflection -->|"继续/回答"| planner
-    reflection -->|"上下文溢出"| compress
+    action --> observation
+    observation -->|"继续/回答"| planner
+    observation -->|"上下文溢出"| compress
     compress --> planner
     safety_output --> E2((END))
 ```
@@ -449,7 +449,7 @@ flowchart TD
     subgraph session["同一 Session"]
         subgraph turn1["Turn N"]
             P1["planner<br/>分析进度给出建议"] -->|"plan 注入<br/>system prompt"| A1["agent<br/>自主决策"]
-            A1 -->|"工具调用"| T1["action → reflection"]
+            A1 -->|"工具调用"| T1["action → observation"]
             T1 -->|"继续探索"| P1
         end
 
@@ -475,7 +475,7 @@ flowchart TD
 flowchart TD
     subgraph large_pool["large 模型池"]
         L1["agent 决策节点"]
-        L2["reflection 反思节点"]
+        L2["observation 反思节点"]
     end
 
     subgraph small_pool["small 模型池"]
