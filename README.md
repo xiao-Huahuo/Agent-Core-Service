@@ -1,14 +1,14 @@
-# Agent-Core-Service 通用智能体微服务
+# MetaWeave 元织
 
 ## 产品定位
 
 ##### 项目目标
 
-本项目是一个独立的、可定制、可观测、可接MCP的通用智能体微服务 `Agent-Core-Service`。
+MetaWeave是智能文档问答系统，支持上传 PDF/Word，自动解析并建立索引。用户可用自然语言提问，系统结合 RAG 与 ChromaDB 生成答案，支持答案溯源、摘要, 提供Agent思考过程溯源与可视化,。
 
 ##### 主要服务人群
 
-不是给终端用户直接使用的，而是为能够写代码、追求高度自定义智能体、希望自己搭建智能体能力的开发者准备。
+快速建立本地化文件系统知识库,并为AI Agent开发者提供便携的可观测系统.
 
 ## 快速启动
 
@@ -32,7 +32,7 @@ AGENT\_SMALL\_MODEL\_API\_KEY=sk-yyyyyyyy
 
 ```bash
 # 安装后端依赖
-pip install -r agent\_service/requirements.txt
+pip install -r agent_service/requirements.txt
 
 # 启动服务（HTTP: 8002, gRPC: 50051）
 uvicorn main:app --host 0.0.0.0 --port 8002
