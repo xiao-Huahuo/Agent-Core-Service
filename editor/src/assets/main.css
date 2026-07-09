@@ -1,0 +1,268 @@
+/*
+ * Global editor front-end styles.
+ *
+ * Usage:
+ * Import once in main.ts. Page and component CSS should use variables from
+ * ui-system.css and keep layout responsive.
+ */
+
+@import './ui-system.css';
+@import 'vditor/dist/index.css';
+
+@font-face {
+  font-family: "Monocraft";
+  src: url("./fonts/Monocraft.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hack";
+  src: url("./fonts/Hack-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hack";
+  src: url("./fonts/Hack-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hack";
+  src: url("./fonts/Hack-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hack";
+  src: url("./fonts/Hack-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-width: 0;
+  min-height: 100%;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.icon-button:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+}
+
+.surface-panel {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.mono {
+  font-family: var(--font-code);
+}
+
+.vditor {
+  height: 100% !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--color-surface-raised) !important;
+  font-family: var(--font-ui) !important;
+}
+
+.vditor-toolbar,
+.vditor-content,
+.vditor-ir,
+.vditor-sv,
+.vditor-reset {
+  background: var(--color-surface-raised) !important;
+  color: var(--color-text) !important;
+}
+
+.vditor-host .vditor-content {
+  width: 100% !important;
+}
+
+.vditor-toolbar {
+  display: none !important;
+}
+
+.vditor-host {
+  position: relative;
+}
+
+.vditor-host.show-toolbar .vditor-toolbar {
+  position: absolute !important;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 4;
+  display: flex !important;
+  min-height: 32px;
+  border-bottom: 1px solid var(--color-border) !important;
+}
+
+.vditor-host.show-toolbar .vditor-content {
+  padding-top: 32px;
+}
+
+.vditor-ir pre,
+.vditor-ir code,
+.vditor-reset pre,
+.vditor-reset code {
+  font-family: var(--font-code) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* ==================================================================
+ * 滚动条
+ * ================================================================== */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* ==================================================================
+ * macOS 窗口卡片（仪表盘组件公用）
+ * ================================================================== */
+
+.macos-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  background: var(--color-bg-card);
+}
+
+.macos-card-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.macos-card-body {
+  padding: 16px;
+}
+
+/* 红绿灯按钮 */
+.traffic-lights {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.traffic-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.traffic-dot.red    { background: rgba(237, 106, 94, 0.8); }
+.traffic-dot.yellow { background: rgba(244, 191, 79, 0.8); }
+.traffic-dot.green  { background: rgba(97, 196, 84, 0.8); }
+
+.traffic-dot.sm { width: 8px; height: 8px; }
+
+.window-filename {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.window-status {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
