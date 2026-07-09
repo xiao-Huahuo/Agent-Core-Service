@@ -1,0 +1,349 @@
+<!--
+  Recursive file tree node.
+
+  Usage:
+  Used by FileTreePanel to render directories and files without noisy status
+  badges, keeping the tree focused on navigation.
+-->
+<script setup lang="ts">
+import { computed, nextTick, ref, watch } from 'vue'
+import {
+  ChevronDown,
+  ChevronRight,
+  FileArchive,
+  FileCode2,
+  FileImage,
+  FileJson,
+  FileSpreadsheet,
+  FileText,
+  Folder,
+  FolderOpen,
+} from 'lucide-vue-next'
+
+import type { KnowledgeFileNode } from '@/types/knowledge'
+
+defineOptions({ name: 'TreeNode' })
+
+const props = defineProps<{
+  node: KnowledgeFileNode
+  depth: number
+  expandedPaths: Set<string>
+  selectedPath: string
+  selectedPaths: Set<string>
+  dirtyPaths: Set<string>
+  editingPath: string
+  editingValue: string
+}>()
+
+const emit = defineEmits<{
+  select: [node: KnowledgeFileNode, event: MouseEvent | KeyboardEvent]
+  dropFiles: [node: KnowledgeFileNode, files: File[]]
+  dropNodes: [node: KnowledgeFileNode, paths: string[]]
+  nodeDragStart: [node: KnowledgeFileNode, event: DragEvent]
+  contextMenu: [node: KnowledgeFileNode, event: MouseEvent]
+  editInput: [value: string]
+  editCommit: [value: string]
+  editCancel: []
+}>()
+
+const inlineInput = ref<HTMLInputElement | null>(null)
+const dragOver = ref(false)
+
+const fileExtension = computed(() => {
+  const dotIndex = props.node.name.lastIndexOf('.')
+  return dotIndex > -1 ? props.node.name.slice(dotIndex + 1).toLowerCase() : ''
+})
+
+const fileIcon = computed(() => {
+  if (['js', 'jsx', 'ts', 'tsx', 'vue', 'html', 'css', 'scss', 'py', 'go', 'rs', 'java'].includes(fileExtension.value)) {
+    return FileCode2
+  }
+  if (['json', 'jsonl', 'yaml', 'yml', 'xml'].includes(fileExtension.value)) {
+    return FileJson
+  }
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(fileExtension.value)) {
+    return FileImage
+  }
+  if (['csv', 'xls', 'xlsx', 'tsv'].includes(fileExtension.value)) {
+    return FileSpreadsheet
+  }
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(fileExtension.value)) {
+    return FileArchive
+  }
+  return FileText
+})
+
+const fileIconClass = computed(() => {
+  if (['md', 'markdown'].includes(fileExtension.value)) {
+    return 'file-kind-markdown'
+  }
+  if (['js', 'jsx', 'ts', 'tsx', 'vue', 'html', 'css', 'scss'].includes(fileExtension.value)) {
+    return 'file-kind-web'
+  }
+  if (['py', 'go', 'rs', 'java'].includes(fileExtension.value)) {
+    return 'file-kind-code'
+  }
+  if (['json', 'jsonl', 'yaml', 'yml', 'xml'].includes(fileExtension.value)) {
+    return 'file-kind-data'
+  }
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(fileExtension.value)) {
+    return 'file-kind-image'
+  }
+  if (['csv', 'xls', 'xlsx', 'tsv'].includes(fileExtension.value)) {
+    return 'file-kind-sheet'
+  }
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(fileExtension.value)) {
+    return 'file-kind-archive'
+  }
+  return 'file-kind-default'
+})
+
+watch(
+  () => props.editingPath,
+  () => {
+    if (props.editingPath !== props.node.path) {
+      return
+    }
+    void nextTick(() => {
+      inlineInput.value?.focus()
+      inlineInput.value?.select()
+    })
+  },
+  { immediate: true },
+)
+
+function handleRowDragover(event: DragEvent) {
+  event.preventDefault()
+  dragOver.value = true
+}
+
+function handleRowDragLeave(event: DragEvent) {
+  const el = event.currentTarget as HTMLElement | null
+  const related = event.relatedTarget as HTMLElement | null
+  if (el && related && el.contains(related)) return
+  dragOver.value = false
+}
+
+function handleRowDrop(event: DragEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  dragOver.value = false
+  const files = Array.from(event.dataTransfer?.files ?? [])
+  if (files.length > 0) {
+    emit('dropFiles', props.node, files)
+    return
+  }
+  const rawPaths = event.dataTransfer?.getData('application/x-metaweave-tree-paths') ?? ''
+  if (!rawPaths) {
+    return
+  }
+  try {
+    const paths = JSON.parse(rawPaths) as string[]
+    emit('dropNodes', props.node, paths)
+  } catch {
+    // Ignore malformed drag payloads from outside the file tree.
+  }
+}
+</script>
+
+<template>
+  <li>
+    <div
+      class="tree-row"
+      :class="{ selected: selectedPath === node.path || selectedPaths.has(node.path), 'drag-over': dragOver }"
+      :style="{ paddingLeft: `${depth * 14 + 8}px` }"
+      role="button"
+      tabindex="0"
+      draggable="true"
+      @dragstart="emit('nodeDragStart', node, $event)"
+      @dragover="handleRowDragover"
+      @dragleave="handleRowDragLeave"
+      @drop="handleRowDrop"
+      @click="emit('select', node, $event)"
+      @keydown.enter="emit('select', node, $event)"
+      @contextmenu.prevent.stop="emit('contextMenu', node, $event)"
+    >
+      <ChevronDown v-if="node.isDir && expandedPaths.has(node.path)" :size="14" />
+      <ChevronRight v-else-if="node.isDir" :size="14" />
+      <span v-else class="spacer"></span>
+      <FolderOpen v-if="node.isDir && expandedPaths.has(node.path)" :size="15" />
+      <Folder v-else-if="node.isDir" :size="15" />
+      <component :is="fileIcon" v-else :size="15" class="file-icon" :class="fileIconClass" />
+      <input
+        v-if="editingPath === node.path"
+        ref="inlineInput"
+        class="node-editor"
+        :value="editingValue"
+        @click.stop
+        @input="emit('editInput', ($event.target as HTMLInputElement).value)"
+        @blur="emit('editCommit', editingValue)"
+        @keydown.enter.prevent.stop="emit('editCommit', editingValue)"
+        @keydown.esc.prevent.stop="emit('editCancel')"
+      />
+      <span v-else class="node-name">{{ node.name }}</span>
+      <i v-if="dirtyPaths.has(node.path)" class="node-dirty-dot"></i>
+    </div>
+    <ul v-if="node.isDir && expandedPaths.has(node.path) && node.children" class="tree-children">
+      <TreeNode
+        v-for="child in node.children"
+        :key="child.path"
+        :node="child"
+        :depth="depth + 1"
+        :expanded-paths="expandedPaths"
+        :selected-path="selectedPath"
+        :selected-paths="selectedPaths"
+        :dirty-paths="dirtyPaths"
+        :editing-path="editingPath"
+        :editing-value="editingValue"
+        @select="(targetNode, event) => emit('select', targetNode, event)"
+        @drop-files="(targetNode, files) => emit('dropFiles', targetNode, files)"
+        @drop-nodes="(targetNode, paths) => emit('dropNodes', targetNode, paths)"
+        @node-drag-start="(targetNode, event) => emit('nodeDragStart', targetNode, event)"
+        @context-menu="(targetNode, event) => emit('contextMenu', targetNode, event)"
+        @edit-input="emit('editInput', $event)"
+        @edit-commit="emit('editCommit', $event)"
+        @edit-cancel="emit('editCancel')"
+      />
+    </ul>
+  </li>
+</template>
+
+<style scoped>
+.tree-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px 16px minmax(0, 1fr) 14px;
+  align-items: center;
+  isolation: isolate;
+  gap: var(--space-6);
+  width: 100%;
+  min-height: 30px;
+  padding-right: var(--space-6);
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  text-align: left;
+  overflow: hidden;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.tree-row > * {
+  position: relative;
+  z-index: 1;
+}
+
+.tree-row:hover {
+  border-color: rgba(66, 36, 235, 0.34);
+  background: var(--color-selection-blue-soft);
+  color: var(--color-text);
+}
+
+.tree-row.selected {
+  border-color: rgba(66, 36, 235, 0.72);
+  background: rgba(66, 36, 235, 0.24);
+  color: var(--color-text);
+}
+
+.tree-row.selected::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(90deg, rgba(66, 36, 235, 0.3), transparent 68%);
+  content: "";
+  animation: tree-selection-slide 150ms ease-out;
+}
+
+.spacer {
+  width: 14px;
+}
+
+.node-name {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-editor {
+  width: 100%;
+  min-width: 0;
+  height: 22px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.node-dirty-dot {
+  justify-self: end;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.file-icon {
+  color: var(--color-text-muted);
+}
+
+.file-kind-markdown {
+  color: var(--color-primary);
+}
+
+.file-kind-web {
+  color: #e2a72e;
+}
+
+.file-kind-code {
+  color: #9a7cff;
+}
+
+.file-kind-data {
+  color: var(--color-primary);
+}
+
+.file-kind-image {
+  color: #26a269;
+}
+
+.file-kind-sheet {
+  color: #4fb477;
+}
+
+.file-kind-archive {
+  color: #c7945f;
+}
+
+.tree-row.drag-over {
+  border-color: var(--color-primary);
+  background: rgba(66, 36, 235, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(66, 36, 235, 0.5);
+}
+
+.tree-children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@keyframes tree-selection-slide {
+  from {
+    transform: translateX(-18px);
+    opacity: 0.35;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+</style>
