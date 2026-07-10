@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "skills": {
+    "architecture-diagram": {
+      "source": "Cocoon-AI/architecture-diagram-generator",
+      "sourceType": "github",
+      "computedHash": "444827daf7ae82537af12a052b4b838759739760f71f945d83ff9603d0fdba61"
+    },
+    "commit": {
+      "source": "openai/symphony",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/commit/SKILL.md",
+      "computedHash": "103cf139f2ed1abf5a0447a465822e72fb43ed601147fd6972f6c93648ce4d49"
+    },
+    "debug": {
+      "source": "openai/symphony",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/debug/SKILL.md",
+      "computedHash": "eee526252b13c906c85055967cdc76a68535ed9fb61c8000c1df4df542d7783f"
+    },
+    "design-md": {
+      "source": "google-labs-code/stitch-skills",
+      "sourceType": "github",
+      "skillPath": "skills/design-md/SKILL.md",
+      "computedHash": "44af3e6e89a42a765d9cebf943f1e2ff3cdf43d1958341eb43fb7b74116f6691"
+    },
+    "docx": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "150be87ff7b18f273ad07da303adb1cf2ca21cc3e76db7a2cf0373405178a278"
+    },
+    "enhance-prompt": {
+      "source": "google-labs-code/stitch-skills",
+      "sourceType": "github",
+      "skillPath": "skills/enhance-prompt/SKILL.md",
+      "computedHash": "28c47bcbc0e8d81f48fbbbe41d227efe4018a32c5d4674b0d052a70d215072d3"
+    },
+    "gpt-image": {
+      "source": "wuyoscar/gpt_image_2_skill",
+      "sourceType": "github",
+      "computedHash": "a49a3d00cd6aeec3fd7bb0371686aadbe38e6a9d83d8d0023d6828125d1d7d2f"
+    },
+    "humanizer-zh": {
+      "source": "op7418/Humanizer-zh",
+      "sourceType": "github",
+      "computedHash": "ad6b2b1f1433413c64f6403dc322d950da175a058f494291bd4399e77cb587c7"
+    },
+    "land": {
+      "source": "openai/symphony",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/land/SKILL.md",
+      "computedHash": "67d4c2c5c7006fee12341c8a86aeddaf431813bca3273d2c1cdac7bd30785588"
+    },
+    "linear": {
+      "source": "openai/symphony",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/linear/SKILL.md",
+      "computedHash": "3032c9dced1def4e8ae48263b37d403e1772172689d2422b3ab6a3c7683d8cc8"
+    },
+    "paper-writing": {
+      "source": "hirogoing/PolyStudio",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "backend/skills/custom/paper-writing/SKILL.md",
+      "computedHash": "fc36e05f5f8ce232ca43633aca54930cab94c30069a63c553c7fa7cda9948d80"
+    },
+    "pdf": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "37226d4220d844377e6b2a386c51a011df4cd130855ff0b80bcc22f9c28abd57"
+    },
+    "polystudio-client": {
+      "source": "hirogoing/PolyStudio",
+      "sourceType": "github",
+      "skillPath": "polystudio-client/SKILL.md",
+      "computedHash": "f5c496eeecf10ebb2dcabca175e94875211f3cd73c5d034ef1b3bce1b580e901"
+    },
+    "pptx": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "2275e4d8dba1790d52f6619b3e2fed04edc948beef545a2ad18e4a1be644426d"
+    },
+    "pull": {
+      "source": "openai/symphony",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/pull/SKILL.md",
+      "computedHash": "548dc13ca944387457e800a8b2a3993adaf84147127b7d2af2c1f0ca0f60d226"
+    },
+    "push": {
+      "source": "openai/symphony",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/push/SKILL.md",
+      "computedHash": "f5dfa67e1d586a8b4c9e09b2469ca352244b2a82342961eaea70e53511508343"
+    },
+    "react:components": {
+      "source": "google-labs-code/stitch-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-components/SKILL.md",
+      "computedHash": "5e786773a89012ae15b01b5c11942db30b09f935929283d8eb8a30b2da5fabf7"
+    },
+    "remotion": {
+      "source": "google-labs-code/stitch-skills",
+      "sourceType": "github",
+      "skillPath": "skills/remotion/SKILL.md",
+      "computedHash": "b3c84d4942732bcd17b47de0a89f9561c460d718b81e0970521077e809d3b990"
+    },
+    "remotion-best-practices": {
+      "source": "remotion-dev/skills",
+      "sourceType": "github",
+      "computedHash": "a6a79c92a109339759d7b465f2d45fe11ce955e307a3e2c03fbcf4f9b624b77a"
+    },
+    "shadcn-ui": {
+      "source": "google-labs-code/stitch-skills",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn-ui/SKILL.md",
+      "computedHash": "119a14a004bd30fa99d386df599bd0db8d057cca146f7ee08349daed48b2ea55"
+    },
+    "sketch-to-web": {
+      "source": "Alpha961/sketch-to-web",
+      "sourceType": "github",
+      "computedHash": "8cc794e33a8c34cffdd96e994b9ed57759b2a17b7fb83dcb09bf8076759fed2d"
+    },
+    "stitch-design": {
+      "source": "google-labs-code/stitch-skills",
+      "sourceType": "github",
+      "skillPath": "skills/stitch-design/SKILL.md",
+      "computedHash": "14d1deae897bc05a31c4e0d9fcf8c86e90cfe77bfbde2f22fafa0735bd0e861c"
+    },
+    "stitch-loop": {
+      "source": "google-labs-code/stitch-skills",
+      "sourceType": "github",
+      "skillPath": "skills/stitch-loop/SKILL.md",
+      "computedHash": "cf47da05045ce0c11f1a8b21dc4ef9bbfed0122d68548a48786cb1608257d574"
+    },
+    "taste-design": {
+      "source": "google-labs-code/stitch-skills",
+      "sourceType": "github",
+      "skillPath": "skills/taste-design/SKILL.md",
+      "computedHash": "3772ea408777070865890e10d693118baa1e1de14ee5bacdf6ab46fdea7359bb"
+    },
+    "web-access": {
+      "source": "eze-is/web-access",
+      "sourceType": "github",
+      "computedHash": "e974d9cd3f55c72e9240b1a4ff3ba2b8a669e1d8e4b75ca8f0ad79a459444aa0"
+    },
+    "xlsx": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "cb7fba2177d0d35d14b3244272b25d1b05246e99b3468a087fe06c84193dbd20"
+    }
+  }
+}
