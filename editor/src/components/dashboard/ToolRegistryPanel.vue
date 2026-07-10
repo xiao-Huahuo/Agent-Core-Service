@@ -1,0 +1,418 @@
+<!--
+  Agent tool registry panel.
+
+  Usage:
+  Shows the running Agent's final registered tools in the Obs dashboard. The
+  data comes from the backend registry after builtin and configured external
+  tools have been merged.
+-->
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { RefreshCw, Search } from 'lucide-vue-next'
+
+import { fetchAgentTools, type AgentToolInfo } from '@/api/tools'
+
+const tools = ref<AgentToolInfo[]>([])
+const loading = ref(false)
+const errorText = ref('')
+const query = ref('')
+const selectedName = ref('')
+
+const filteredTools = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  if (!q) return tools.value
+  return tools.value.filter((tool) => {
+    return `${tool.name} ${tool.display_name} ${tool.description}`.toLowerCase().includes(q)
+  })
+})
+
+const selectedTool = computed(() => {
+  return filteredTools.value.find((tool) => tool.name === selectedName.value) ?? filteredTools.value[0] ?? null
+})
+
+const totalArguments = computed(() => {
+  return tools.value.reduce((sum, tool) => sum + tool.argument_count, 0)
+})
+
+const requiredArgs = computed(() => {
+  return new Set(selectedTool.value?.args_schema?.required ?? [])
+})
+
+const selectedProperties = computed(() => {
+  const properties = selectedTool.value?.args_schema?.properties ?? {}
+  return Object.entries(properties).map(([name, schema]) => ({
+    name,
+    type: schema.type || 'unknown',
+    description: schema.description || '',
+    required: requiredArgs.value.has(name),
+  }))
+})
+
+async function loadTools() {
+  loading.value = true
+  errorText.value = ''
+  try {
+    const payload = await fetchAgentTools()
+    tools.value = payload.tools
+    if (!selectedName.value && payload.tools.length > 0) {
+      selectedName.value = payload.tools[0]!.name
+    }
+  } catch (error) {
+    errorText.value = error instanceof Error ? error.message : '工具注册表加载失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+function selectTool(tool: AgentToolInfo) {
+  selectedName.value = tool.name
+}
+
+onMounted(() => {
+  void loadTools()
+})
+</script>
+
+<template>
+  <div class="tool-registry-panel">
+    <div class="macos-card card-block">
+      <div class="macos-card-titlebar registry-titlebar">
+        <div class="traffic-lights">
+          <span class="traffic-dot sm red"></span>
+          <span class="traffic-dot sm yellow"></span>
+          <span class="traffic-dot sm green"></span>
+        </div>
+        <div class="title-summary">
+          <h2>工具注册表</h2>
+          <span>{{ tools.length }} tools</span>
+          <span>{{ totalArguments }} args</span>
+          <span>{{ filteredTools.length }} visible</span>
+        </div>
+        <div class="registry-search">
+          <Search :size="14" />
+          <input v-model="query" type="text" placeholder="搜索工具" />
+        </div>
+        <button class="icon-button" type="button" title="刷新工具注册表" :disabled="loading" @click="loadTools">
+          <RefreshCw :size="15" />
+        </button>
+      </div>
+
+      <p v-if="errorText" class="error-line">{{ errorText }}</p>
+
+      <div class="registry-grid">
+        <aside class="tool-list" aria-label="工具列表">
+          <button
+            v-for="tool in filteredTools"
+            :key="tool.name"
+            class="tool-row"
+            :class="{ active: selectedTool?.name === tool.name }"
+            type="button"
+            @click="selectTool(tool)"
+          >
+            <span class="tool-name">{{ tool.name }}</span>
+            <span class="tool-meta">{{ tool.argument_count }} args</span>
+          </button>
+          <div v-if="!loading && filteredTools.length === 0" class="empty-state">
+            <span>$ 没有匹配的工具</span>
+          </div>
+        </aside>
+
+        <main class="tool-detail">
+          <div v-if="loading" class="empty-state">
+            <span>$ 正在读取最终工具注册表</span>
+          </div>
+          <template v-else-if="selectedTool">
+            <div class="detail-title">
+              <span class="detail-display">{{ selectedTool.display_name || selectedTool.name }}</span>
+              <code>{{ selectedTool.name }}</code>
+            </div>
+            <p class="detail-description">{{ selectedTool.description }}</p>
+
+            <div class="arg-table">
+              <div class="arg-row arg-head">
+                <span>参数</span>
+                <span>类型</span>
+                <span>约束</span>
+              </div>
+              <div v-for="arg in selectedProperties" :key="arg.name" class="arg-row">
+                <span class="arg-name">{{ arg.name }}</span>
+                <span>{{ arg.type }}</span>
+                <span>{{ arg.required ? 'required' : 'optional' }}</span>
+                <p class="arg-desc">{{ arg.description || '无说明' }}</p>
+              </div>
+            </div>
+
+            <pre class="schema-block">{{ JSON.stringify(selectedTool.args_schema, null, 2) }}</pre>
+          </template>
+          <div v-else class="empty-state">
+            <span>$ 工具注册表为空</span>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.tool-registry-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--space-10);
+  overflow: hidden;
+}
+
+.card-block {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-shadow: none;
+}
+
+.registry-titlebar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(180px, 300px) auto;
+  gap: var(--space-8);
+}
+
+.title-summary,
+.tool-name,
+.tool-meta,
+.detail-title code,
+.arg-row,
+.schema-block,
+.empty-state,
+.error-line {
+  font-family: var(--font-mono);
+}
+
+.title-summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-10);
+  min-width: 0;
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+}
+
+h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.icon-button:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.icon-button:disabled {
+  opacity: 0.45;
+}
+
+.registry-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-canvas-soft);
+  color: var(--color-text-muted);
+}
+
+.registry-search input {
+  width: 100%;
+  height: 24px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+}
+
+.registry-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+  gap: var(--space-8);
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-10);
+}
+
+.tool-list,
+.tool-detail {
+  min-height: 0;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.02);
+  overflow: auto;
+}
+
+.tool-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.tool-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-8) var(--space-10);
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+
+.tool-row:hover,
+.tool-row.active {
+  background: var(--color-primary-softer);
+  color: var(--color-text);
+}
+
+.tool-row.active {
+  box-shadow: inset 2px 0 0 var(--color-primary);
+}
+
+.tool-name {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-meta {
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+}
+
+.tool-detail {
+  padding: var(--space-12);
+}
+
+.detail-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.detail-display {
+  color: var(--color-text);
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.detail-title code {
+  color: var(--color-primary);
+  font-size: 11px;
+}
+
+.detail-description {
+  margin: var(--space-10) 0 var(--space-12);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.arg-table {
+  border: 1px solid var(--color-border);
+}
+
+.arg-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(80px, 0.7fr) minmax(80px, 0.7fr);
+  gap: var(--space-8);
+  padding: var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+
+.arg-row:last-child {
+  border-bottom: 0;
+}
+
+.arg-head {
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+}
+
+.arg-name {
+  color: var(--color-primary);
+}
+
+.arg-desc {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-tertiary);
+  line-height: 1.5;
+}
+
+.schema-block {
+  margin: var(--space-12) 0 0;
+  padding: var(--space-10);
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.empty-state,
+.error-line {
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: var(--space-12);
+}
+
+.error-line {
+  flex-shrink: 0;
+  margin: var(--space-8) var(--space-10) 0;
+  padding: var(--space-8) var(--space-10);
+  border: 1px solid rgba(235, 36, 99, 0.34);
+  color: #f08aa9;
+}
+
+@media (max-width: 900px) {
+  .registry-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .registry-titlebar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .registry-search {
+    grid-column: 1 / -1;
+  }
+
+  .tool-list {
+    max-height: 240px;
+  }
+}
+</style>
