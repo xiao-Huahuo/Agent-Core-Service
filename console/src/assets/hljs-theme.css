@@ -1,0 +1,123 @@
+/*
+ * highlight.js 语法高亮配色 — 全局主题。
+ *
+ * 低饱和冷色工业风,匹配 Agent Console 设计系统。
+ * 从 MarkdownContent.vue 抽离为独立文件,确保 hljs 生成的
+ * 动态 HTML span 能正确匹配到全局样式。
+ */
+
+/* 通用 token */
+.hljs {
+  color: var(--color-text-primary);
+  background: transparent;
+}
+
+/* 注释 */
+.hljs-comment,
+.hljs-quote {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+/* 关键字 */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-type {
+  color: #c5866b;
+}
+
+/* 字符串 */
+.hljs-string,
+.hljs-addition {
+  color: #8ba888;
+}
+
+/* 数字 */
+.hljs-number,
+.hljs-literal {
+  color: #c5a566;
+}
+
+/* 函数名 */
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.function_ {
+  color: #7ea5c8;
+}
+
+/* 类/类型名 */
+.hljs-title.class_,
+.hljs-type {
+  color: #c5a566;
+}
+
+/* 属性/变量 */
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable {
+  color: #b8a0c8;
+}
+
+/* 内置对象 */
+.hljs-built_in,
+.hljs-symbol {
+  color: #c5866b;
+}
+
+/* 正则表达式 */
+.hljs-regexp {
+  color: #8ba888;
+}
+
+/* 链接/URL */
+.hljs-link {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+/* 删除/差异 */
+.hljs-deletion {
+  color: #c56565;
+}
+
+/* 元数据/参数 */
+.hljs-params {
+  color: var(--color-text-primary);
+}
+
+/* 标签/操作符/标点 */
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-selector-attr,
+.hljs-selector-pseudo,
+.hljs-operator,
+.hljs-punctuation {
+  color: var(--color-text-secondary);
+}
+
+/* meta/name/section */
+.hljs-meta,
+.hljs-name,
+.hljs-section {
+  color: #7ea5c8;
+}
+
+/* 强调 */
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* bullet / code (非代码块内) */
+.hljs-bullet,
+.hljs-code {
+  color: var(--color-text-secondary);
+}
+
+/* formula */
+.hljs-formula {
+  color: var(--color-text-primary);
+}
