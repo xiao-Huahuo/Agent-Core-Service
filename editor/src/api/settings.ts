@@ -1,0 +1,177 @@
+/*
+ * Editor settings API.
+ *
+ * Usage:
+ * User entry and future knowledge-root settings call these helpers instead of
+ * hard-coding settings endpoint paths inside components or stores.
+ */
+
+import { apiDelete, apiGet, apiPost, apiPut } from '@/api/client'
+import { API_ROUTES } from '@/router/api_routes'
+
+export interface SettingsProfileResponse {
+  user_id: string
+  knowledge_dir: string
+  active_library_id?: string
+  active_knowledge_library?: SettingsKnowledgeLibraryResponse | null
+  knowledge_libraries?: SettingsKnowledgeLibraryResponse[]
+  created_at: string
+  updated_at: string
+}
+
+export interface SettingsKnowledgeLibraryResponse {
+  library_id: string
+  user_id: string
+  name: string
+  knowledge_dir: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface KnowledgeRebuildResponse {
+  user_id: string
+  library_id: string
+  knowledge_dir: string
+  frontmatter_dir: string
+  frontmatter_files_seen: number
+  frontmatter_files_written: number
+  frontmatter_files_skipped: number
+  files_seen: number
+  files_ingested: number
+  files_skipped: number
+  chunks_created: number
+  chunks_deleted: number
+  uploaded_path: string
+}
+
+export function ensureSettingsProfile(userId: string): Promise<SettingsProfileResponse> {
+  return apiPost<SettingsProfileResponse>(API_ROUTES.SETTINGS_PROFILE, { user_id: userId })
+}
+
+export function updateSettingsKnowledgeDir(
+  userId: string,
+  knowledgeDir: string,
+  name?: string,
+): Promise<SettingsProfileResponse> {
+  const body: { user_id: string; knowledge_dir: string; name?: string } = {
+    user_id: userId,
+    knowledge_dir: knowledgeDir,
+  }
+  if (name !== undefined) {
+    body.name = name
+  }
+  return apiPut<SettingsProfileResponse>(API_ROUTES.SETTINGS_KNOWLEDGE_DIR, body)
+}
+
+export function rebuildKnowledgeRoot(
+  userId: string,
+  knowledgeDir?: string,
+): Promise<KnowledgeRebuildResponse> {
+  const body: { user_id: string; knowledge_dir?: string } = {
+    user_id: userId,
+  }
+  if (knowledgeDir) {
+    body.knowledge_dir = knowledgeDir
+  }
+  return apiPost<KnowledgeRebuildResponse>(API_ROUTES.KNOWLEDGE_REBUILD, body)
+}
+
+/* ---- System prompts ---- */
+
+export interface SystemPromptEntry {
+  prompt_id: string
+  user_id: string
+  content: string
+}
+
+export function fetchSystemPrompts(userId: string): Promise<{ entries: SystemPromptEntry[] }> {
+  return apiGet<{ entries: SystemPromptEntry[] }>(API_ROUTES.SETTINGS_SYSTEM_PROMPT, { user_id: userId })
+}
+
+export function addSystemPromptEntry(userId: string, content: string): Promise<SystemPromptEntry> {
+  return apiPost<SystemPromptEntry>(API_ROUTES.SETTINGS_SYSTEM_PROMPT_ENTRIES, { user_id: userId, content })
+}
+
+export function deleteSystemPromptEntry(promptId: string): Promise<{ ok: boolean }> {
+  return apiDelete<{ ok: boolean }>(`/settings/system-prompt/entries/${promptId}`)
+}
+
+/* ---- Web search config ---- */
+
+export interface WebSearchConfigResponse {
+  user_id: string
+  proxy_url: string
+  web_search_enabled: boolean
+}
+
+export function fetchWebSearchConfig(userId: string): Promise<WebSearchConfigResponse> {
+  return apiGet<WebSearchConfigResponse>(API_ROUTES.SETTINGS_WEB_SEARCH, { user_id: userId })
+}
+
+export function saveWebSearchConfig(
+  userId: string,
+  params: { proxyUrl?: string; webSearchEnabled?: boolean },
+): Promise<WebSearchConfigResponse> {
+  const body: Record<string, string | boolean> = { user_id: userId }
+  if (params.proxyUrl !== undefined) body.proxy_url = params.proxyUrl
+  if (params.webSearchEnabled !== undefined) body.web_search_enabled = params.webSearchEnabled
+  return apiPut<WebSearchConfigResponse>(API_ROUTES.SETTINGS_WEB_SEARCH, body)
+}
+
+/* ---- Custom long-term memories ---- */
+
+export interface MemoryEntry {
+  memory_id: string
+  content: string
+}
+
+export function fetchMemories(userId: string): Promise<MemoryEntry[]> {
+  return apiGet<MemoryEntry[]>(API_ROUTES.SETTINGS_MEMORIES, { user_id: userId })
+}
+
+export function addMemory(userId: string, content: string, importance?: number): Promise<MemoryEntry> {
+  return apiPost<MemoryEntry>(API_ROUTES.SETTINGS_MEMORIES, { user_id: userId, content, importance: importance ?? 0.5 })
+}
+
+export function deleteMemory(memoryId: string): Promise<{ ok: boolean }> {
+  return apiDelete<{ ok: boolean }>(`/settings/memories/${memoryId}`)
+}
+
+/* ---- LLM model config ---- */
+
+export interface LLMConfigResponse {
+  user_id: string
+  api_key: string
+  base_url: string
+  model_name: string
+  small_api_key: string
+  small_base_url: string
+  small_model_name: string
+  updated_at: string
+}
+
+export function fetchLLMConfig(userId: string): Promise<LLMConfigResponse> {
+  return apiGet<LLMConfigResponse>(API_ROUTES.SETTINGS_MODEL_CONFIG, { user_id: userId })
+}
+
+export function saveLLMConfig(
+  userId: string,
+  params: {
+    apiKey?: string
+    baseUrl?: string
+    modelName?: string
+    smallApiKey?: string
+    smallBaseUrl?: string
+    smallModelName?: string
+  },
+): Promise<LLMConfigResponse> {
+  const body: Record<string, string> = { user_id: userId }
+  if (params.apiKey !== undefined) body.api_key = params.apiKey
+  if (params.baseUrl !== undefined) body.base_url = params.baseUrl
+  if (params.modelName !== undefined) body.model_name = params.modelName
+  if (params.smallApiKey !== undefined) body.small_api_key = params.smallApiKey
+  if (params.smallBaseUrl !== undefined) body.small_base_url = params.smallBaseUrl
+  if (params.smallModelName !== undefined) body.small_model_name = params.smallModelName
+  return apiPut<LLMConfigResponse>(API_ROUTES.SETTINGS_MODEL_CONFIG, body)
+}
