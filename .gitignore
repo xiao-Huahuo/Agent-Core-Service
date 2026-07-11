@@ -1,0 +1,16 @@
+.agents
+.claude
+.codex
+skills-lock.json
+runtime/
+**/dist/
+**/build/
+**/__pycache__/
+.env
+console/node_modules/
+editor/node_modules/
+*.db
+*.exe
+.VSCodeCounter/
+resources/knowledge/
+.coverage

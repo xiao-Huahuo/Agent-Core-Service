@@ -1,0 +1,15 @@
+flowchart TD
+    internal_start["START"]
+    safety_input["safety_input"]
+    agent["agent"]
+    action["action"]
+    safety_output["safety_output"]
+    internal_end["END"]
+    internal_start --> safety_input
+    action --> agent
+    agent -. "conditional" .-> internal_end
+    agent -. "有 tool_calls" .-> action
+    agent -. "无 tool_calls" .-> safety_output
+    safety_input -. "审核拦截" .-> internal_end
+    safety_input -. "审核通过" .-> agent
+    safety_output --> internal_end
