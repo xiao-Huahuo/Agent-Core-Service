@@ -1,0 +1,456 @@
+syntax = "proto3";
+
+package agent_service;
+
+import "google/protobuf/struct.proto";
+
+// ---------------------------------------------------------------------------
+// AgentService — Agent 微服务 gRPC 接口定义
+//
+// 覆盖能力:
+//   - AgentCore 的 4 个方法（流式 / 非流式 × 有状态 / 无状态）
+//   - SessionService 的 5 个 CRUD 方法
+// ---------------------------------------------------------------------------
+
+service AgentService {
+  // ---- Agent 调用 ----
+
+  // 无状态流式运行（无长期记忆 / 知识库召回）。
+  rpc StreamRun(RunRequest) returns (stream ChunkMessage);
+
+  // 无状态单次运行，返回结构化结果。
+  rpc RunOnce(RunRequest) returns (RunResult);
+
+  // 带 session 上下文的流式运行（长期记忆召回 + 消息持久化 + 逐节点推送）。
+  rpc StreamSessionPrompt(RunRequest) returns (stream ChunkMessage);
+
+  // 带 session 上下文的单次运行，缓冲全部节点后返回结构化结果。
+  rpc RunSessionPrompt(RunRequest) returns (RunResult);
+
+  // ---- Session 管理 ----
+
+  rpc CreateSession(SessionCreateRequest) returns (SessionResponse);
+
+  rpc GetSession(SessionIdRequest) returns (SessionResponse);
+
+  rpc ListUserSessions(ListSessionsRequest) returns (ListSessionsResponse);
+
+  rpc UpdateSessionName(SessionUpdateRequest) returns (SessionResponse);
+
+  rpc DeleteSession(SessionIdRequest) returns (DeleteResponse);
+
+  rpc DeleteAllSessions(DeleteAllSessionsRequest) returns (DeleteResponse);
+
+  // ---- 消息历史 ----
+
+  rpc ListMessages(ListMessagesRequest) returns (ListMessagesResponse);
+
+  // ---- 取消执行 ----
+
+  // 取消指定 session 正在执行的图,中断后部分输出自动保存。
+  rpc CancelSession(CancelRequest) returns (CancelResponse);
+
+  // ---- 观测 / trace 事件 ----
+
+  rpc GetEvents(EventsRequest) returns (EventsResponse);
+  rpc GetRecallDetails(RecallDetailsRequest) returns (RecallDetailsResponse);
+  rpc GetRegisteredTools(ToolListRequest) returns (ToolListResponse);
+
+  // ---- 用户设置 ----
+
+  rpc EnsureUserProfile(UserProfileRequest) returns (UserProfileResponse);
+  rpc UpdateUserKnowledgeDir(UserKnowledgeDirUpdateRequest) returns (UserProfileResponse);
+
+  // 知识库重建与上传
+  rpc RebuildKnowledge(KnowledgeRebuildRequest) returns (KnowledgeRebuildResponse);
+  rpc UploadKnowledgeFile(KnowledgeFileUploadRequest) returns (KnowledgeRebuildResponse);
+  rpc ListKnowledgeFiles(KnowledgeFileTreeRequest) returns (KnowledgeFileTreeResponse);
+  rpc ReadKnowledgeFile(KnowledgeFileContentRequest) returns (KnowledgeFileContentResponse);
+  rpc WriteKnowledgeFile(KnowledgeFileWriteRequest) returns (KnowledgeFileNode);
+  rpc CreateKnowledgeFile(KnowledgeFileCreateRequest) returns (KnowledgeFileNode);
+  rpc CreateKnowledgeFolder(KnowledgeFolderCreateRequest) returns (KnowledgeFileNode);
+  rpc CopyKnowledgePath(KnowledgePathCopyRequest) returns (KnowledgeFileNode);
+  rpc DeleteKnowledgePath(KnowledgePathDeleteRequest) returns (DeleteResponse);
+  rpc RenameKnowledgePath(KnowledgePathRenameRequest) returns (KnowledgeFileNode);
+
+  // 系统提示词条目
+  rpc ListSystemPromptEntries(SystemPromptRequest) returns (SystemPromptEntriesResponse);
+  rpc AddSystemPromptEntry(SystemPromptAddRequest) returns (SystemPromptEntryResponse);
+  rpc DeleteSystemPromptEntry(SystemPromptDeleteRequest) returns (DeleteResponse);
+
+  // 自定义长期记忆
+  rpc ListCustomMemories(MemoryListRequest) returns (MemoryListResponse);
+  rpc AddCustomMemory(MemoryAddRequest) returns (MemoryEntryResponse);
+  rpc DeleteCustomMemory(MemoryDeleteRequest) returns (DeleteResponse);
+}
+
+// ---------------------------------------------------------------------------
+// 通用请求 / 响应
+// ---------------------------------------------------------------------------
+
+message RunRequest {
+  string prompt = 1;
+  string user_id = 2;
+  string session_id = 3;
+  // 用户从文档中明确引用、需要随问题送入上下文的文本。
+  string reference = 4;
+  // Agent Loop 模式: auto / simple / react / plan。
+  string agent_mode = 5;
+}
+
+message RunResult {
+  string graph_diagram = 1;
+  string final_output = 2;
+  repeated google.protobuf.Struct events = 3;
+  string graph_diagram_path = 4;
+}
+
+// ---------------------------------------------------------------------------
+// 流式推送块
+// ---------------------------------------------------------------------------
+
+message ToolCall {
+  string name = 1;
+  google.protobuf.Struct args = 2;
+  string id = 3;
+}
+
+message TraceEntry {
+  string node = 1;
+  string event = 2;
+  string error_type = 3;
+  string message = 4;
+}
+
+message ChunkMessage {
+  string node = 1;
+  string content = 2;
+  repeated ToolCall tool_calls = 3;
+  repeated TraceEntry trace = 4;
+  bool done = 5;
+  string model_name = 6;
+  string type = 7;
+  repeated google.protobuf.Struct context_messages = 8;
+  google.protobuf.Struct metadata = 9;
+  // error 事件携带的友好错误信息。
+  string error = 10;
+}
+
+// ---------------------------------------------------------------------------
+// Session 管理消息
+// ---------------------------------------------------------------------------
+
+message SessionCreateRequest {
+  string user_id = 1;
+  string session_name = 2;
+}
+
+message SessionIdRequest {
+  string session_id = 1;
+}
+
+message ListSessionsRequest {
+  string user_id = 1;
+}
+
+message SessionUpdateRequest {
+  string session_id = 1;
+  string session_name = 2;
+}
+
+message SessionResponse {
+  string session_id = 1;
+  string user_id = 2;
+  string session_name = 3;
+  // ISO 8601 格式 UTC 时间字符串。
+  string created_at = 4;
+  string updated_at = 5;
+}
+
+message ListSessionsResponse {
+  repeated SessionResponse sessions = 1;
+}
+
+message DeleteResponse {
+  bool ok = 1;
+  // deleted_count 仅在 DeleteAllSessions 时有意义。
+  int32 deleted_count = 2;
+}
+
+message DeleteAllSessionsRequest {
+  string user_id = 1;
+}
+
+// ---------------------------------------------------------------------------
+// 消息历史
+// ---------------------------------------------------------------------------
+
+message ListMessagesRequest {
+  string user_id = 1;
+  string session_id = 2;
+  int32 limit = 3;
+}
+
+message MessageEntry {
+  string message_id = 1;
+  string session_id = 2;
+  string user_id = 3;
+  string role = 4;
+  string content = 5;
+  repeated ToolCall tool_calls = 6;
+  google.protobuf.Struct metadata = 7;
+  // ISO 8601 格式 UTC 时间字符串。
+  string created_at = 8;
+}
+
+message ListMessagesResponse {
+  repeated MessageEntry messages = 1;
+}
+
+// ---------------------------------------------------------------------------
+// 观测 / trace 事件
+// ---------------------------------------------------------------------------
+
+message EventsRequest {
+  string user_id = 1;
+  string session_id = 2;
+}
+
+message EventEntry {
+  string message_id = 1;
+  string role = 2;
+  string node = 3;
+  string content = 4;
+  repeated ToolCall tool_calls = 5;
+  // ISO 8601 格式 UTC 时间字符串。
+  string created_at = 6;
+  google.protobuf.Struct metadata = 7;
+}
+
+message EventsResponse {
+  string session_id = 1;
+  string user_id = 2;
+  int32 event_count = 3;
+  repeated EventEntry events = 4;
+}
+
+message RecallDetailsRequest {
+  string user_id = 1;
+  string session_id = 2;
+}
+
+message RecallDetailsResponse {
+  string session_id = 1;
+  string user_id = 2;
+  string created_at = 3;
+  string query = 4;
+  google.protobuf.Struct rag_metrics = 5;
+  google.protobuf.Struct memory_recall = 6;
+  google.protobuf.Struct knowledge_recall = 7;
+}
+
+message ToolListRequest {
+}
+
+message ToolInfo {
+  string name = 1;
+  string display_name = 2;
+  string description = 3;
+  google.protobuf.Struct args_schema = 4;
+  int32 argument_count = 5;
+}
+
+message ToolListResponse {
+  int32 tool_count = 1;
+  repeated ToolInfo tools = 2;
+}
+
+// ---------------------------------------------------------------------------
+// 取消执行
+// ---------------------------------------------------------------------------
+
+message CancelRequest {
+  string session_id = 1;
+}
+
+message CancelResponse {
+  bool ok = 1;
+}
+
+// ---------------------------------------------------------------------------
+// 用户设置 — 系统提示词条目
+// ---------------------------------------------------------------------------
+
+message UserProfileRequest {
+  string user_id = 1;
+}
+
+message UserKnowledgeDirUpdateRequest {
+  string user_id = 1;
+  string knowledge_dir = 2;
+  string name = 3;
+}
+
+message UserProfileResponse {
+  string user_id = 1;
+  string knowledge_dir = 2;
+  string created_at = 3;
+  string updated_at = 4;
+  string active_library_id = 5;
+  KnowledgeLibraryEntry active_knowledge_library = 6;
+  repeated KnowledgeLibraryEntry knowledge_libraries = 7;
+}
+
+message KnowledgeLibraryEntry {
+  string library_id = 1;
+  string user_id = 2;
+  string name = 3;
+  string knowledge_dir = 4;
+  bool is_active = 5;
+  string created_at = 6;
+  string updated_at = 7;
+}
+
+message KnowledgeRebuildRequest {
+  string user_id = 1;
+  string knowledge_dir = 2;
+}
+
+message KnowledgeFileUploadRequest {
+  string user_id = 1;
+  string filename = 2;
+  string relative_dir = 3;
+  bytes content = 4;
+}
+
+message KnowledgeRebuildResponse {
+  string user_id = 1;
+  string knowledge_dir = 2;
+  string frontmatter_dir = 3;
+  int32 frontmatter_files_seen = 4;
+  int32 frontmatter_files_written = 5;
+  int32 frontmatter_files_skipped = 6;
+  int32 files_seen = 7;
+  int32 files_ingested = 8;
+  int32 files_skipped = 9;
+  int32 chunks_created = 10;
+  int32 chunks_deleted = 11;
+  string uploaded_path = 12;
+  string library_id = 13;
+}
+
+message KnowledgeFileTreeRequest {
+  string user_id = 1;
+}
+
+message KnowledgeFileNode {
+  string name = 1;
+  string path = 2;
+  bool is_dir = 3;
+  string mtime = 4;
+  string index_status = 5;
+  int64 size = 6;
+  repeated KnowledgeFileNode children = 7;
+}
+
+message KnowledgeFileTreeResponse {
+  repeated KnowledgeFileNode tree = 1;
+}
+
+message KnowledgeFileContentRequest {
+  string user_id = 1;
+  string path = 2;
+}
+
+message KnowledgeFileContentResponse {
+  string path = 1;
+  string content = 2;
+  string mtime = 3;
+  int64 size = 4;
+}
+
+message KnowledgeFileWriteRequest {
+  string user_id = 1;
+  string path = 2;
+  string content = 3;
+}
+
+message KnowledgeFileCreateRequest {
+  string user_id = 1;
+  string path = 2;
+  string content = 3;
+}
+
+message KnowledgeFolderCreateRequest {
+  string user_id = 1;
+  string path = 2;
+}
+
+message KnowledgePathCopyRequest {
+  string user_id = 1;
+  string source_path = 2;
+  string target_path = 3;
+}
+
+message KnowledgePathDeleteRequest {
+  string user_id = 1;
+  string path = 2;
+}
+
+message KnowledgePathRenameRequest {
+  string user_id = 1;
+  string source_path = 2;
+  string target_path = 3;
+}
+
+message SystemPromptRequest {
+  string user_id = 1;
+}
+
+message SystemPromptEntryResponse {
+  string prompt_id = 1;
+  string content = 2;
+  string created_at = 3;
+}
+
+message SystemPromptEntriesResponse {
+  repeated SystemPromptEntryResponse entries = 1;
+}
+
+message SystemPromptAddRequest {
+  string user_id = 1;
+  string content = 2;
+}
+
+message SystemPromptDeleteRequest {
+  string prompt_id = 1;
+}
+
+// ---------------------------------------------------------------------------
+// 用户设置 — 自定义长期记忆
+// ---------------------------------------------------------------------------
+
+message MemoryListRequest {
+  string user_id = 1;
+}
+
+message MemoryEntryResponse {
+  string memory_id = 1;
+  string content = 2;
+  double importance = 3;
+  string created_at = 4;
+}
+
+message MemoryListResponse {
+  repeated MemoryEntryResponse entries = 1;
+}
+
+message MemoryAddRequest {
+  string user_id = 1;
+  string content = 2;
+  double importance = 3;
+}
+
+message MemoryDeleteRequest {
+  string memory_id = 1;
+}
