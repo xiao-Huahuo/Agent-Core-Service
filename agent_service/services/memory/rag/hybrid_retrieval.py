@@ -116,7 +116,7 @@ class HybridRetrievalService:
         limit: int,
     ) -> list[HybridRetrievalCandidate]:
         """
-        按关键词召回长期记忆候选。
+        关键词召回长期记忆候选。
 
         query: 当前用户问题。
         user_id: 记忆所属用户 ID。
@@ -184,6 +184,7 @@ class HybridRetrievalService:
         session_id: 当前 session ID,用于标记当前会话命中。
         """
 
+        # 以memory_id为key的map,达到去重合并的效果
         merged_map: dict[str, HybridRetrievalCandidate] = {}
         for candidate in vector_candidates:
             merged_map[candidate.memory.memory_id] = HybridRetrievalCandidate(
@@ -212,6 +213,9 @@ class HybridRetrievalService:
             existing.matched_terms = tuple(sorted(set(existing.matched_terms) | set(candidate.matched_terms)))
             existing.source_channels = ("vector", "keyword")
         merged = list(merged_map.values())
+        # 计算合并分数
+        # 双通道同时命中时，merged_score=0.6*max(vector,keyword) + 0.4*average(vector,keyword) + 0.05(奖励)
+        # 单通道时：merged_score=max(vector,keyword)
         for candidate in merged:
             candidate.merged_score = self._compute_merged_score(candidate)
         merged.sort(

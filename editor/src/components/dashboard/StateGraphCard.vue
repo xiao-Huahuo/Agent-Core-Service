@@ -8,16 +8,21 @@
 import { computed, ref, watch, onMounted, nextTick } from 'vue'
 import mermaid from 'mermaid'
 import { useChatStore } from '@/stores/chat'
+import { useSettingsStore } from '@/stores/settings'
 import { useObsData } from '@/composable/useObsData'
+import type { AgentLoopMode } from '@/api/agent'
 
 const chatStore = useChatStore()
+const settingsStore = useSettingsStore()
 const obs = useObsData()
 const activeTab = ref<'graph' | 'queue'>('graph')
 const svgRef = ref<string | null>(null)
+const svgCache = ref<Partial<Record<AgentLoopMode, string>>>({})
 const graphContainerRef = ref<HTMLDivElement | null>(null)
 const lastTransition = ref<{ from: string; to: string } | null>(null)
 const activeNodeElements = ref<Element[]>([])
 const activeEdgeElements = ref<Element[]>([])
+const stableGraphMode = ref<Exclude<AgentLoopMode, 'auto'>>('react')
 
 /** 队列任务类型 */
 interface PoolTask {
@@ -30,6 +35,15 @@ interface PoolTask {
 /** 队列任务追踪：按模型池分组，基于 currentNode 变化触发进出队动效 */
 const LARGE_NODES = new Set(['agent'])
 const SMALL_NODES = new Set(['compress', 'planner', 'observation', 'summary'])
+const actualGraphMode = computed<AgentLoopMode>(() => {
+  if (chatStore.activeAgentMode === 'simple' || chatStore.activeAgentMode === 'react' || chatStore.activeAgentMode === 'plan') {
+    return chatStore.activeAgentMode
+  }
+  if (settingsStore.agentLoopMode === 'simple' || settingsStore.agentLoopMode === 'react' || settingsStore.agentLoopMode === 'plan') {
+    return settingsStore.agentLoopMode
+  }
+  return stableGraphMode.value
+})
 
 const poolTasks = ref<Record<string, PoolTask[]>>({
   large: [],
@@ -136,7 +150,29 @@ mermaid.initialize({
   },
 })
 
-const GRAPH_CODE = `flowchart TD
+const GRAPH_CODES: Record<'simple' | 'react' | 'plan', string> = {
+  simple: `flowchart TD
+    context_builder["context_builder"]
+    agent["agent"]
+    E1((END))
+
+    context_builder -->|"上下文构建"| agent
+    agent -->|"直接回复"| E1`,
+  react: `flowchart TD
+    safety_input["safety_input"]
+    agent["agent"]
+    action["action"]
+    safety_output["safety_output"]
+    E1((END))
+    E2((END))
+
+    safety_input -->|"通过"| agent
+    safety_input -->|"拦截"| E1
+    agent -->|"工具调用"| action
+    action -->|"工具结果"| agent
+    agent -->|"直接回复"| safety_output
+    safety_output --> E2`,
+  plan: `flowchart TD
     safety_input["safety_input"]
 
     subgraph loop["Agent 循环"]
@@ -158,16 +194,20 @@ const GRAPH_CODE = `flowchart TD
     observation -->|"继续/回答"| planner
     observation -->|"上下文溢出"| compress
     compress --> planner
-    safety_output --> E2((END))`
+    safety_output --> E2((END))`,
+}
 
 /**
  * 仅在没有缓存 SVG 时调用 Mermaid 渲染。
  * 图结构固定，后续状态变化只更新 DOM class。
  */
 async function ensureGraphSvg(): Promise<void> {
-  if (svgRef.value) return
-  const { svg } = await mermaid.render('langgraph-svg', GRAPH_CODE)
-  svgRef.value = svg
+  const mode = actualGraphMode.value === 'react' || actualGraphMode.value === 'simple' ? actualGraphMode.value : 'plan'
+  if (!svgCache.value[mode]) {
+    const { svg } = await mermaid.render(`langgraph-svg-${mode}`, GRAPH_CODES[mode])
+    svgCache.value[mode] = svg
+  }
+  svgRef.value = svgCache.value[mode] || null
 }
 
 /**
@@ -239,6 +279,18 @@ watch(activeTab, async (tab) => {
   syncGraphHighlights()
 })
 
+watch(actualGraphMode, async () => {
+  if (actualGraphMode.value === 'simple' || actualGraphMode.value === 'react' || actualGraphMode.value === 'plan') {
+    stableGraphMode.value = actualGraphMode.value
+  }
+  clearGraphHighlights()
+  svgRef.value = null
+  if (activeTab.value !== 'graph') return
+  await ensureGraphSvg()
+  await nextTick()
+  syncGraphHighlights()
+})
+
 onMounted(async () => {
   await ensureGraphSvg()
   await nextTick()
@@ -276,6 +328,7 @@ const queueStatusLabel = computed(() => {
         </button>
       </div>
       <span class="window-status">{{ chatStore.currentNode || queueStatusLabel }}</span>
+      <span class="window-mode">{{ actualGraphMode }}</span>
     </div>
 
     <!-- 状态转移图 -->
@@ -376,6 +429,19 @@ const queueStatusLabel = computed(() => {
   color: var(--color-accent);
   border-color: rgba(217, 145, 120, 0.3);
   background: var(--color-accent-muted);
+}
+
+.window-mode {
+  flex-shrink: 0;
+  margin-left: var(--space-6);
+  padding: 1px 7px;
+  border: 1px solid rgba(235, 36, 99, 0.35);
+  border-radius: 999px;
+  background: rgba(235, 36, 99, 0.08);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  text-transform: uppercase;
 }
 
 .graph-body {

@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import queue
+import threading
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -20,7 +22,12 @@ except ImportError:  # pragma: no cover - fallback only used when optional depen
     FileSystemEventHandler = object  # type: ignore[assignment]
     Observer = None  # type: ignore[assignment]
 
-from agent_service.api.rest.deps import _require_knowledge_library_service, _require_retrieval_service
+from agent_service.api.rest.deps import (
+    _require_knowledge_graph_service,
+    _require_knowledge_library_service,
+    _require_retrieval_service,
+    _require_settings_service,
+)
 
 router = APIRouter()
 
@@ -182,6 +189,10 @@ async def delete_knowledge_path(
         return await run_in_threadpool(svc.delete_path, user_id=user_id, path=path)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=f"无权限删除: {exc}") from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"删除文件时发生系统错误: {exc}") from exc
 
 
 @router.post("/knowledge/files/copy")
@@ -250,18 +261,42 @@ async def rebuild_knowledge(body: dict[str, Any]) -> dict[str, Any]:
     return result.to_dict()
 
 
+@router.post("/knowledge/rebuild/stream")
+async def rebuild_knowledge_stream(body: dict[str, Any]) -> StreamingResponse:
+    """Stream rebuild progress events while the blocking ingestion job runs."""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    knowledge_dir = body.get("knowledge_dir")
+    svc = _require_knowledge_library_service()
+
+    def run_job(progress_callback: Any) -> dict[str, Any]:
+        result = svc.rebuild_user_knowledge(
+            user_id=user_id,
+            knowledge_dir=str(knowledge_dir) if knowledge_dir else None,
+        )
+        return result.to_dict()
+
+    return StreamingResponse(_run_progress_job_stream(run_job), media_type="text/event-stream")
+
+
 @router.post("/knowledge/files/upload")
 async def upload_knowledge_file(
     user_id: Annotated[str, Form(min_length=1, description="用户 ID")],
-    file: Annotated[UploadFile, File(description="知识库文件,当前支持 .md/.txt")],
+    file: Annotated[UploadFile, File(description="知识库文件")],
     relative_dir: Annotated[str, Form(description="知识库内目标子目录")] = "",
+    auto_ingest: Annotated[bool | None, Form(description="是否上传后自动灌库;为空时使用用户设置")] = None,
+    conflict_strategy: Annotated[str, Form(description="同名冲突策略: overwrite / skip / rename")] = "overwrite",
 ) -> dict[str, Any]:
     """
-    上传文件到用户知识库目录并重新灌库。
+    上传文件到用户知识库目录。默认只落盘,不灌库。
 
     user_id: 用户 ID。
-    file: 上传文件,当前沿用现有 Markdown/TXT 解析链路。
+    file: 上传文件。
     relative_dir: 可选目标子目录,必须位于用户知识库根目录内。
+    auto_ingest: 为 true 时只灌库本次上传的单个文件;为空时读取用户设置。
+    conflict_strategy: 同名文件处理策略。
     """
 
     svc = _require_knowledge_library_service()
@@ -273,15 +308,93 @@ async def upload_knowledge_file(
             filename=file.filename or "",
             content=content,
             relative_dir=relative_dir,
+            conflict_strategy=conflict_strategy,
         )
-        result = await run_in_threadpool(
-            svc.rebuild_user_knowledge,
+        should_ingest = bool(auto_ingest) if auto_ingest is not None else await run_in_threadpool(
+            svc.should_auto_ingest_on_upload,
             user_id=user_id,
-            uploaded_path=str(uploaded_path),
         )
+        if should_ingest:
+            result = await run_in_threadpool(
+                svc.ingest_single_file,
+                user_id=user_id,
+                path=uploaded_path.relative_to(svc.get_active_root_path(user_id=user_id)).as_posix(),
+            )
+        else:
+            result = await run_in_threadpool(
+                svc.build_upload_only_result,
+                user_id=user_id,
+                uploaded_path=str(uploaded_path),
+            )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return result.to_dict()
+
+
+@router.post("/knowledge/files/ingest")
+async def ingest_knowledge_file(body: dict[str, Any]) -> dict[str, Any]:
+    """只灌库当前 active 知识库中的单个文件。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    path = str(body.get("path") or "").strip()
+    if not user_id or not path:
+        raise HTTPException(status_code=422, detail="user_id and path are required")
+    svc = _require_knowledge_library_service()
+    try:
+        result = await run_in_threadpool(svc.ingest_single_file, user_id=user_id, path=path)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result.to_dict()
+
+
+@router.post("/knowledge/files/ingest/stream")
+async def ingest_knowledge_file_stream(body: dict[str, Any]) -> StreamingResponse:
+    """Stream single-file ingestion progress events."""
+
+    user_id = str(body.get("user_id") or "").strip()
+    path = str(body.get("path") or "").strip()
+    if not user_id or not path:
+        raise HTTPException(status_code=422, detail="user_id and path are required")
+    svc = _require_knowledge_library_service()
+
+    def run_job(progress_callback: Any) -> dict[str, Any]:
+        result = svc.ingest_single_file(user_id=user_id, path=path)
+        return result.to_dict()
+
+    return StreamingResponse(_run_progress_job_stream(run_job), media_type="text/event-stream")
+
+
+@router.post("/knowledge/files/ingest-path")
+async def ingest_knowledge_path(body: dict[str, Any]) -> dict[str, Any]:
+    """灌库文件或文件夹:文件直接灌库,文件夹递归灌入其下所有支持的文件。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    path = str(body.get("path") or "").strip()
+    if not user_id or not path:
+        raise HTTPException(status_code=422, detail="user_id and path are required")
+    svc = _require_knowledge_library_service()
+    try:
+        result = await run_in_threadpool(svc.ingest_path, user_id=user_id, path=path)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result.to_dict()
+
+
+@router.post("/knowledge/files/ingest-path/stream")
+async def ingest_knowledge_path_stream(body: dict[str, Any]) -> StreamingResponse:
+    """Stream file-or-folder ingestion progress events."""
+
+    user_id = str(body.get("user_id") or "").strip()
+    path = str(body.get("path") or "").strip()
+    if not user_id or not path:
+        raise HTTPException(status_code=422, detail="user_id and path are required")
+    svc = _require_knowledge_library_service()
+
+    def run_job(progress_callback: Any) -> dict[str, Any]:
+        result = svc.ingest_path(user_id=user_id, path=path)
+        return result.to_dict()
+
+    return StreamingResponse(_run_progress_job_stream(run_job), media_type="text/event-stream")
 
 
 @router.get("/knowledge/search")
@@ -387,6 +500,41 @@ async def search_knowledge(
     }
 
 
+@router.get("/knowledge/graph")
+async def get_knowledge_graph(
+    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    limit: int = Query(default=500, ge=50, le=1200, description="返回节点上限"),
+) -> dict[str, Any]:
+    """返回当前 active 知识库的知识图谱点边数据。"""
+
+    settings_svc = _require_settings_service()
+    graph_svc = _require_knowledge_graph_service()
+    try:
+        profile = await run_in_threadpool(settings_svc.ensure_user_profile, user_id=user_id)
+        active_library = dict(profile["active_knowledge_library"])
+        return await run_in_threadpool(
+            graph_svc.get_graph,
+            user_id=str(profile["user_id"]),
+            library_id=str(active_library["library_id"]),
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/knowledge/graph/rebuild")
+async def rebuild_knowledge_graph(body: dict[str, Any]) -> dict[str, Any]:
+    """知识图谱入库已停用，直接返回空结果。"""
+    return {
+        "files_seen": 0,
+        "files_extracted": 0,
+        "files_skipped": 0,
+        "files_failed": 0,
+        "entities_written": 0,
+        "relations_written": 0,
+    }
+
+
 @router.get("/knowledge/files/events")
 async def stream_knowledge_file_events(
     user_id: str = Query(..., min_length=1, description="用户 ID"),
@@ -460,6 +608,33 @@ async def _polling_event_stream(*, svc: Any, user_id: str):
             continue
         previous_signature = current_signature
         yield _sse("tree_dirty", {"type": "tree_dirty", "path": ""})
+
+
+async def _run_progress_job_stream(run_job: Any):
+    """Run a blocking job in a thread and stream progress callback payloads."""
+
+    progress_queue: queue.Queue[dict[str, Any] | None] = queue.Queue()
+
+    def emit(payload: dict[str, Any]) -> None:
+        progress_queue.put({"type": "progress", **payload})
+
+    def worker() -> None:
+        try:
+            result = run_job(emit)
+            progress_queue.put({"type": "done", "result": result})
+        except Exception as exc:
+            progress_queue.put({"type": "error", "message": str(exc)})
+        finally:
+            progress_queue.put(None)
+
+    threading.Thread(target=worker, daemon=True).start()
+    yield _sse("progress", {"type": "started"})
+    while True:
+        payload = await asyncio.to_thread(progress_queue.get)
+        if payload is None:
+            break
+        event_name = str(payload.get("type") or "progress")
+        yield _sse(event_name, payload)
 
 
 def _sse(event: str, payload: dict[str, Any]) -> str:

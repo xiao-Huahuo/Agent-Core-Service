@@ -4,12 +4,15 @@
   Usage:
   Ported from console ChatBubble. Assistant thinking is deduplicated and can
   collapse once final content starts streaming.
+  Shows retrieved knowledge sources below assistant content.
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
+import KnowledgeSources from '@/components/editor_workspace/agent_chat/KnowledgeSources.vue'
 import MarkdownContent from '@/components/editor_workspace/agent_chat/MarkdownContent.vue'
 import ThinkingInline from '@/components/editor_workspace/agent_chat/ThinkingInline.vue'
+import { useWorkspaceStore } from '@/stores/workspace'
 import type { AgentChatMessage } from '@/stores/chat'
 
 const props = defineProps<{
@@ -18,7 +21,11 @@ const props = defineProps<{
   userAvatar: string
   agentAvatar: string
   showAvatar?: boolean
+  knowledgeSources?: Array<{source_uri: string; content: string}>
+  citationMap?: Record<string, {source_uri: string; content: string}>
 }>()
+
+const workspaceStore = useWorkspaceStore()
 
 const bubbleRadius = computed(() => {
   return props.message.role === 'user' ? '18px 4px 18px 18px' : '4px 18px 18px 18px'
@@ -42,7 +49,7 @@ watch(
     if (thinkingAutoCollapsed.value) {
       return
     }
-    if (props.isStreaming && thinkingRevealed.value && content && content !== '\u200b') {
+    if (props.isStreaming && thinkingRevealed.value && content && content !== '​') {
       thinkingRevealed.value = false
       thinkingAutoCollapsed.value = true
     }
@@ -61,20 +68,51 @@ const thinkingTraces = computed(() => {
   const seen = new Set<string>()
   return (props.message.trace ?? []).filter((trace) => {
     const humanReadable = typeof trace.human_readable === 'string' ? trace.human_readable : ''
+    const isChatVisible = trace.chat_visible === true || trace.event === 'tool_call_end'
     if (!humanReadable || seen.has(humanReadable)) {
+      return false
+    }
+    if (!isChatVisible) {
       return false
     }
     seen.add(humanReadable)
     return true
   })
 })
+
+const hasAssistantContent = computed(() => {
+  return Boolean(props.message.content && props.message.content !== '​')
+})
+
+const shouldRenderAssistant = computed(() => {
+  return props.message.role === 'assistant'
+    && (hasAssistantContent.value || thinkingTraces.value.length > 0 || props.isStreaming)
+})
+
+const shouldRenderAssistantBubble = computed(() => {
+  return hasAssistantContent.value || (props.isStreaming && thinkingTraces.value.length === 0)
+})
+
+function handleNavigateSource(uri: string) {
+  const flatNodes = workspaceStore.flatNodes ?? []
+  let node = flatNodes.find((n) => n.path === uri)
+  if (!node) {
+    const parts = uri.replace(/\\/g, '/').split('/').filter(Boolean)
+    const name = parts[parts.length - 1] ?? uri
+    node = flatNodes.find((n) => n.path.endsWith(`/${name}`) || n.name === name)
+  }
+  if (node) {
+    workspaceStore.setMainView('editor')
+    workspaceStore.selectFile(node)
+  }
+}
 </script>
 
 <template>
-  <div v-if="message.role === 'assistant'" class="bubble-row assistant">
+  <div v-if="shouldRenderAssistant" class="bubble-row assistant">
     <img :src="agentAvatar" class="avatar" alt="agent" />
     <div class="bubble-col">
-      <span v-if="message.node" class="node-label">{{ message.node }}</span>
+      <span v-if="message.node && message.node !== 'assistant'" class="node-label">{{ message.node }}</span>
       <Transition name="think-slide">
         <div v-if="thinkingTraces.length > 0 && (isStreaming || thinkingRevealed)" class="thinking-wrapper">
           <ThinkingInline
@@ -103,10 +141,20 @@ const thinkingTraces = computed(() => {
           思考过程
         </button>
       </Transition>
-      <div v-if="message.content || isStreaming" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
-        <MarkdownContent v-if="message.content" :content="message.content" :is-streaming="isStreaming" />
-        <span v-if="isStreaming" class="cursor">|</span>
+      <div v-if="shouldRenderAssistantBubble" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
+        <MarkdownContent
+          v-if="hasAssistantContent"
+          :content="message.content"
+          :is-streaming="isStreaming"
+          :citation-map="citationMap"
+          :on-navigate-source="handleNavigateSource"
+        />
+        <span v-if="isStreaming && !hasAssistantContent" class="cursor">|</span>
       </div>
+      <KnowledgeSources
+        v-if="knowledgeSources && knowledgeSources.length > 0"
+        :sources="knowledgeSources"
+      />
     </div>
   </div>
 

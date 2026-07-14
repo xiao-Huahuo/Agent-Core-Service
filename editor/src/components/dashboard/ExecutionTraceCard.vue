@@ -7,7 +7,7 @@
 import { ref } from 'vue'
 import { useObsData } from '@/composable/useObsData'
 
-const activeTab = ref<'node' | 'tool'>('node')
+const activeTab = ref<'node' | 'tool' | 'observation'>('node')
 const obs = useObsData()
 
 function nodeAccent(tier: string, isCurrent: boolean): string {
@@ -15,6 +15,13 @@ function nodeAccent(tier: string, isCurrent: boolean): string {
   if (tier === 'large') return 'var(--color-accent)'
   if (tier === 'small') return 'var(--color-blue)'
   return 'var(--color-text-tertiary)'
+}
+
+function decisionClass(decision: string): string {
+  if (['answer', 'abandon'].includes(decision)) return 'final'
+  if (decision === 'retry') return 'retry'
+  if (decision === 'compress') return 'compress'
+  return 'continue'
 }
 </script>
 
@@ -41,8 +48,23 @@ function nodeAccent(tier: string, isCurrent: boolean): string {
         >
           工具轨迹
         </button>
+        <button
+          class="titlebar-tab"
+          :class="{ active: activeTab === 'observation' }"
+          @click="activeTab = 'observation'"
+        >
+          观察决策
+        </button>
       </div>
-      <span class="window-status">{{ activeTab === 'node' ? obs.currentMessageRuntimePath.value.length + ' nodes' : obs.currentMessageToolRuns.value.length + ' tools' }}</span>
+      <span class="window-status">
+        {{
+          activeTab === 'node'
+            ? obs.currentMessageRuntimePath.value.length + ' nodes'
+            : activeTab === 'tool'
+              ? obs.currentMessageToolRuns.value.length + ' tools'
+              : obs.currentMessageObservationDecisions.value.length + ' decisions'
+        }}
+      </span>
     </div>
 
     <div v-if="activeTab === 'node'" class="card-scroll">
@@ -84,7 +106,7 @@ function nodeAccent(tier: string, isCurrent: boolean): string {
       </div>
     </div>
 
-    <div v-else class="card-scroll">
+    <div v-else-if="activeTab === 'tool'" class="card-scroll">
       <div v-if="obs.currentMessageToolRuns.value.length > 0" class="tool-list">
         <div
           v-for="tool in obs.currentMessageToolRuns.value"
@@ -109,6 +131,29 @@ function nodeAccent(tier: string, isCurrent: boolean): string {
 
       <div v-else class="empty-state">
         <span class="placeholder-text">$ 当前还没有工具调用轨迹</span>
+      </div>
+    </div>
+
+    <div v-else class="card-scroll">
+      <div v-if="obs.currentMessageObservationDecisions.value.length > 0" class="observation-list">
+        <div
+          v-for="item in obs.currentMessageObservationDecisions.value"
+          :key="item.id"
+          class="observation-item"
+          :class="decisionClass(item.decision)"
+        >
+          <div class="observation-header">
+            <span class="observation-index">#{{ item.index }}</span>
+            <span class="observation-decision">{{ item.decision }}</span>
+            <span class="observation-confidence">{{ Math.round(item.confidence * 100) }}%</span>
+          </div>
+          <p class="observation-reason">{{ item.reason || '无原因说明' }}</p>
+          <p v-if="item.nextAction" class="observation-next">next: {{ item.nextAction }}</p>
+        </div>
+      </div>
+
+      <div v-else class="empty-state">
+        <span class="placeholder-text">$ 当前还没有 observation 决策</span>
       </div>
     </div>
   </div>
@@ -189,7 +234,8 @@ function nodeAccent(tier: string, isCurrent: boolean): string {
 }
 
 .timeline-list,
-.tool-list {
+.tool-list,
+.observation-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-10);
@@ -316,6 +362,72 @@ function nodeAccent(tier: string, isCurrent: boolean): string {
   word-break: break-word;
   max-height: 140px;
   overflow: auto;
+}
+
+.observation-item {
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-blue);
+  background: rgba(255, 255, 255, 0.02);
+  padding: var(--space-8);
+}
+
+.observation-item.final {
+  border-left-color: var(--color-green);
+}
+
+.observation-item.retry {
+  border-left-color: var(--color-accent);
+}
+
+.observation-item.compress {
+  border-left-color: var(--color-warning);
+}
+
+.observation-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.observation-index,
+.observation-decision,
+.observation-confidence,
+.observation-reason,
+.observation-next {
+  font-family: var(--font-mono);
+}
+
+.observation-index {
+  color: var(--color-text-tertiary);
+  font-size: 9px;
+}
+
+.observation-decision {
+  color: var(--color-text-primary);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.observation-confidence {
+  margin-left: auto;
+  color: var(--color-text-tertiary);
+  font-size: 9px;
+}
+
+.observation-reason,
+.observation-next {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  line-height: var(--line-height-relaxed);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.observation-next {
+  margin-top: var(--space-4);
+  color: var(--color-text-tertiary);
 }
 
 .empty-state {

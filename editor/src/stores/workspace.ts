@@ -9,6 +9,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 
+import { ApiError } from '@/api/client'
 import { updateCurrentDocumentContext } from '@/api/agent'
 import {
   buildKnowledgeEventsUrl,
@@ -16,6 +17,8 @@ import {
   createKnowledgeFile,
   createKnowledgeFolder,
   deleteKnowledgePath,
+  ingestKnowledgeFileStream,
+  ingestKnowledgePathStream,
   listKnowledgeFiles,
   previewKnowledgeFile,
   readKnowledgeFile,
@@ -24,7 +27,8 @@ import {
   uploadKnowledgeFile,
   writeKnowledgeFile,
 } from '@/api/knowledge'
-import { rebuildKnowledgeRoot } from '@/api/settings'
+import { rebuildKnowledgeRootStream } from '@/api/settings'
+import type { KnowledgeIngestionProgressEvent } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
 import type {
   ChatMessage,
@@ -96,6 +100,8 @@ function splitExtension(name: string): { stem: string; extension: string } {
   return { stem: name.slice(0, dotIndex), extension: name.slice(dotIndex) }
 }
 
+type FileConflictStrategy = 'overwrite' | 'skip' | 'rename'
+
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown'])
 const CODE_EXTENSIONS = new Set([
   'c',
@@ -124,16 +130,11 @@ const CODE_EXTENSIONS = new Set([
 const PREVIEW_ONLY_EXTENSIONS = new Set([
   'csv',
   'docx',
-  'gif',
-  'jpeg',
-  'jpg',
-  'pdf',
-  'png',
   'svg',
   'tsv',
-  'webp',
   'xlsx',
 ])
+const IMAGE_EXTENSIONS = new Set(['gif', 'jpeg', 'jpg', 'png', 'webp'])
 
 function extensionOf(path: string): string {
   const name = getBaseName(path).toLowerCase()
@@ -295,7 +296,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** Header-level ingestion progress shown while uploads or rebuilds are running. */
   const ingestionProgressVisible = ref(false)
   const ingestionProgress = ref(0)
+  const ingestionProgressStats = ref({ succeeded: 0, total: 0, failed: 0 })
   let ingestionProgressTimer: ReturnType<typeof setTimeout> | null = null
+  let ingestionProgressPulseTimer: ReturnType<typeof setInterval> | null = null
 
   /** Toast notification message (empty = hidden). */
   const toastMessage = ref('')
@@ -310,6 +313,26 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   /** Pending copy/cut operation for context-menu paste and keyboard paste. */
   const fileClipboard = ref<{ mode: 'copy' | 'cut'; nodes: KnowledgeFileNode[] } | null>(null)
+
+  /**
+   * Conflict resolution dialog state.
+   *
+   * When importing files that have name collisions at the target directory,
+   * this dialog asks the user to pick a strategy: overwrite, skip, or rename.
+   * The resolve callback is stored so the promptConflictStrategy Promise can
+   * be settled from the template's button click handlers.
+   */
+  const conflictDialog = ref<{
+    open: boolean
+    targetDir: string
+    conflictingNames: string[]
+    resolve: ((strategy: FileConflictStrategy | null) => void) | null
+  }>({
+    open: false,
+    targetDir: '',
+    conflictingNames: [],
+    resolve: null,
+  })
 
   /** Whether the Agent sidebar is visible. Shared so child components can open it. */
   const agentSidebarOpen = ref(true)
@@ -355,16 +378,71 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     ingestionProgress.value = Math.max(0, Math.min(100, Math.round(value)))
   }
 
+  function stopIngestionProgressPulse() {
+    if (ingestionProgressPulseTimer !== null) {
+      clearInterval(ingestionProgressPulseTimer)
+      ingestionProgressPulseTimer = null
+    }
+  }
+
   function beginIngestionProgress(initialValue = 6) {
     if (ingestionProgressTimer !== null) {
       clearTimeout(ingestionProgressTimer)
       ingestionProgressTimer = null
     }
+    stopIngestionProgressPulse()
     ingestionProgressVisible.value = true
+    ingestionProgressStats.value = { succeeded: 0, total: 0, failed: 0 }
     setIngestionProgress(initialValue)
   }
 
-  function finishIngestionProgress() {
+  function setIngestionProgressStats(succeeded: number, total: number, failed: number) {
+    ingestionProgressStats.value = {
+      succeeded: Math.max(0, succeeded),
+      total: Math.max(0, total),
+      failed: Math.max(0, failed),
+    }
+  }
+
+  function applyIngestionProgressEvent(event: KnowledgeIngestionProgressEvent) {
+    if (event.type === 'done' && event.result) {
+      const total = Math.max(1, event.result.files_seen)
+      setIngestionProgressStats(event.result.files_ingested, total, event.result.files_skipped)
+      setIngestionProgress(98)
+      return
+    }
+    const total = Math.max(1, Number(event.total ?? 0))
+    const processed = Math.max(0, Math.min(total, Number(event.processed ?? 0)))
+    const ratio = total > 0 ? processed / total : 0
+    if (event.phase === 'frontmatter') {
+      setIngestionProgress(8 + ratio * 34)
+      setIngestionProgressStats(
+        Number(event.files_written ?? processed),
+        total,
+        Number(event.files_skipped ?? 0),
+      )
+      return
+    }
+    if (event.phase === 'ingestion') {
+      setIngestionProgress(42 + ratio * 50)
+      setIngestionProgressStats(
+        Number(event.files_ingested ?? processed),
+        total,
+        Number(event.files_skipped ?? 0),
+      )
+      return
+    }
+    if (event.phase === 'cleanup') {
+      setIngestionProgress(96)
+      return
+    }
+    if (event.phase === 'graph') {
+      setIngestionProgress(event.status === 'finished' ? 98 : 97)
+    }
+  }
+
+  function finishIngestionProgress(delay = 1000) {
+    stopIngestionProgressPulse()
     setIngestionProgress(100)
     if (ingestionProgressTimer !== null) {
       clearTimeout(ingestionProgressTimer)
@@ -373,7 +451,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       ingestionProgressVisible.value = false
       ingestionProgress.value = 0
       ingestionProgressTimer = null
-    }, 650)
+    }, delay)
   }
 
   const flatNodes = computed(() => flattenNodes(tree.value))
@@ -532,7 +610,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!openTabs.value.some((tab) => tab.path === node.path)) {
       openTabs.value.push({ path: node.path, title: node.name, dirty: false, mtime: node.mtime })
     }
-    if (shouldUsePreviewEndpoint(node.path)) {
+    if (shouldUsePreviewEndpoint(node.path) || extensionOf(node.path) === 'pdf' || IMAGE_EXTENSIONS.has(extensionOf(node.path))) {
       if (previewByPath.value[node.path] === undefined) {
         await loadFilePreview(node.path)
       }
@@ -626,40 +704,189 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return true
   }
 
-  async function importFilesToPath(files: File[], targetDirPath = '') {
+  function basenameOfPath(path: string): string {
+    return path.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? path
+  }
+
+  function childNamesInDirectory(targetDirPath: string): Set<string> {
+    const targetDir = normalizeTreePath(targetDirPath)
+    return new Set(
+      flatNodes.value
+        .filter((node) => getParentPath(node.path) === targetDir)
+        .map((node) => node.name),
+    )
+  }
+
+  function hasNameConflict(targetDirPath: string, names: string[]): boolean {
+    const existingNames = childNamesInDirectory(targetDirPath)
+    return names.some((name) => existingNames.has(name))
+  }
+
+  /**
+   * Checks whether ANY of the given names already exist in the target dir.
+   * If no conflict, returns immediately with 'overwrite' (no dialog needed).
+   * On conflict it opens the conflict dialog and returns a Promise that
+   * resolves with the user's choice when they click a button.
+   *
+   * The resolve callback is stored in conflictDialog.value.resolve so the
+   * FileTreePanel dialog template can settle it via resolveConflict().
+   */
+  function promptConflictStrategy(targetDirPath: string, names: string[]): Promise<FileConflictStrategy | null> {
+    return new Promise((resolve) => {
+      const targetDir = normalizeTreePath(targetDirPath)
+      if (!hasNameConflict(targetDir, names)) {
+        resolve('overwrite')
+        return
+      }
+      const existingNames = childNamesInDirectory(targetDir)
+      const conflictingNames = names.filter((name) => existingNames.has(name))
+      conflictDialog.value = {
+        open: true,
+        targetDir,
+        conflictingNames,
+        resolve,
+      }
+    })
+  }
+
+  /** Called by the conflict dialog's "覆盖" button. */
+  function resolveConflict(strategy: FileConflictStrategy) {
+    const resolve = conflictDialog.value.resolve
+    conflictDialog.value = {
+      open: false,
+      targetDir: '',
+      conflictingNames: [],
+      resolve: null,
+    }
+    resolve?.(strategy)
+  }
+
+  /** Called by the conflict dialog's "取消" / backdrop click. */
+  function cancelConflict() {
+    const resolve = conflictDialog.value.resolve
+    conflictDialog.value = {
+      open: false,
+      targetDir: '',
+      conflictingNames: [],
+      resolve: null,
+    }
+    resolve?.(null)
+  }
+
+  async function importFilesToPath(files: File[], targetDirPath = '', conflictStrategy?: FileConflictStrategy) {
     const targetPath = normalizeTreePath(targetDirPath)
-    const importedFiles = files.filter((file) => file.name)
+    let importedFiles = files.filter((file) => file.name)
     if (importedFiles.length === 0) {
       return
     }
+    const strategy = conflictStrategy ?? await promptConflictStrategy(targetPath, importedFiles.map((file) => file.name))
+    if (!strategy) {
+      return
+    }
+    if (strategy === 'skip') {
+      const existingNames = childNamesInDirectory(targetPath)
+      importedFiles = importedFiles.filter((file) => !existingNames.has(file.name))
+      if (importedFiles.length === 0) {
+        showToast('已跳过 — 所有选中文件已存在')
+        return
+      }
+    }
+    const existingNames = strategy === 'overwrite' ? childNamesInDirectory(targetPath) : new Set<string>()
     const settingsStore = useSettingsStore()
     ignoreNextTreeEvent.value += 3
     const uploaded: string[] = []
     const failed: string[] = []
-    beginIngestionProgress(8)
     try {
       for (const [index, file] of importedFiles.entries()) {
         try {
-          await uploadKnowledgeFile(settingsStore.profile.userId, file, targetPath)
+          // When overwriting, delete existing file first so the backend
+          // cleans up its vector-library entries before the new copy lands.
+          if (strategy === 'overwrite' && existingNames.has(file.name)) {
+            const existingPath = joinTreePath(targetPath, file.name)
+            ignoreNextTreeEvent.value += 1
+            await deleteKnowledgePath(settingsStore.profile.userId, existingPath)
+          }
+          await uploadKnowledgeFile(
+            settingsStore.profile.userId,
+            file,
+            targetPath,
+            Boolean(settingsStore.profile.autoIngestOnUpload),
+            strategy,
+          )
           uploaded.push(file.name)
         } catch {
           failed.push(file.name)
         }
-        setIngestionProgress(8 + ((index + 1) / importedFiles.length) * 82)
       }
       await loadKnowledgeTree()
-      setIngestionProgress(96)
       selectedTreePath.value = targetPath
       syncCurrentDocumentContext()
       if (failed.length === 0 && uploaded.length > 0) {
-        showToast(`Imported ${uploaded.length} file${uploaded.length > 1 ? 's' : ''} and re-indexed`)
+        const suffix = settingsStore.profile.autoIngestOnUpload ? '并已灌库' : ''
+        showToast(`已导入 ${uploaded.length} 个文件${suffix}`)
       } else if (failed.length > 0 && uploaded.length > 0) {
-        showToast(`Imported ${uploaded.length}, skipped ${failed.length} file${failed.length > 1 ? 's' : ''}`)
+        showToast(`已导入 ${uploaded.length} 个, 跳过 ${failed.length} 个`)
       } else if (failed.length > 0) {
-        showToast(`Import failed for ${failed.length} file${failed.length > 1 ? 's' : ''}`)
+        showToast(`导入失败 ${failed.length} 个文件`)
       }
-    } finally {
-      finishIngestionProgress()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '请检查连接'
+      showToast(`导入失败 — ${message}`)
+    }
+  }
+
+  async function importExternalPathsToPath(paths: string[], targetDirPath = '', conflictStrategy?: FileConflictStrategy) {
+    const desktop = window.agentEditorDesktop
+    if (!desktop?.copyExternalPathsIntoDirectory) {
+      return
+    }
+    const sourcePaths = paths.map((item) => item.trim()).filter(Boolean)
+    if (sourcePaths.length === 0) {
+      return
+    }
+    const targetPath = normalizeTreePath(targetDirPath)
+    const strategy = conflictStrategy ?? await promptConflictStrategy(targetPath, sourcePaths.map(basenameOfPath))
+    if (!strategy) {
+      return
+    }
+    const effectivePaths = strategy === 'skip'
+      ? sourcePaths.filter((item) => !childNamesInDirectory(targetPath).has(basenameOfPath(item)))
+      : sourcePaths
+    if (effectivePaths.length === 0) {
+      showToast('已跳过 — 所有选中文件已存在')
+      return
+    }
+    // When overwriting, delete existing files via backend first so
+    // the vector-library entries are cleaned up before the new copy lands.
+    if (strategy === 'overwrite') {
+      const settingsStore = useSettingsStore()
+      const existingNames = childNamesInDirectory(targetPath)
+      for (const item of effectivePaths) {
+        const name = basenameOfPath(item)
+        if (existingNames.has(name)) {
+          const existingPath = joinTreePath(targetPath, name)
+          ignoreNextTreeEvent.value += 1
+          await deleteKnowledgePath(settingsStore.profile.userId, existingPath).catch(() => {})
+        }
+      }
+    }
+    const targetAbsoluteDir = buildAbsoluteKnowledgePath(useSettingsStore().profile.knowledgeDir, targetPath)
+    ignoreNextTreeEvent.value += effectivePaths.length
+    try {
+      const result = await desktop.copyExternalPathsIntoDirectory(effectivePaths, targetAbsoluteDir, 'copy', strategy)
+      await loadKnowledgeTree()
+      if (result.paths.length > 0) {
+        const root = useSettingsStore().profile.knowledgeDir.replace(/[\\/]+$/g, '')
+        const relativePaths = result.paths.map((path) => normalizeTreePath(path.replace(root, '')))
+        setTreeSelection(relativePaths, relativePaths[relativePaths.length - 1] ?? '')
+        showToast(`已导入 ${result.paths.length} 项`)
+      } else {
+        showToast('导入已跳过')
+      }
+      syncCurrentDocumentContext()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '请检查连接'
+      showToast(`导入失败 — ${message}`)
     }
   }
 
@@ -771,20 +998,61 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     try {
       await loadKnowledgeTree()
-      setIngestionProgress(28)
-      if (activeTab.value) {
+      setIngestionProgress(22)
+      if (activeTab.value && !shouldUsePreviewEndpoint(activeTab.value.path)) {
         const tab = activeTab.value
         const response = await readKnowledgeFile(settingsStore.profile.userId, tab.path)
         contentByPath.value = { ...contentByPath.value, [tab.path]: response.content }
         tab.dirty = false
         tab.mtime = response.mtime
       }
-      setIngestionProgress(44)
-      const result = await rebuildKnowledgeRoot(settingsStore.profile.userId)
-      setIngestionProgress(92)
-      showToast(`Refresh complete — ${result.files_ingested} files re-indexed`)
-    } catch {
-      showToast('Refresh failed — check your connection')
+      setIngestionProgress(34)
+      const result = await rebuildKnowledgeRootStream(settingsStore.profile.userId, applyIngestionProgressEvent)
+      await loadKnowledgeTree()
+      setIngestionProgressStats(result.files_ingested, result.files_seen, result.files_skipped)
+      setIngestionProgress(98)
+      showToast(`灌库完成 — ${result.files_ingested} 个文件重新索引`)
+    } catch (error) {
+      setIngestionProgressStats(0, 1, 1)
+      const message = error instanceof Error ? error.message : '请检查连接'
+      showToast(`灌库失败 — ${message}`)
+    } finally {
+      refreshing.value = false
+      finishIngestionProgress()
+    }
+  }
+
+  async function ingestFile(node: KnowledgeFileNode) {
+    if (refreshing.value) return
+    const settingsStore = useSettingsStore()
+    if (!settingsStore.profile.userId) return
+    refreshing.value = true
+    beginIngestionProgress(12)
+    try {
+      const api = node.isDir ? ingestKnowledgePathStream : ingestKnowledgeFileStream
+      const result = await api(settingsStore.profile.userId, node.path, applyIngestionProgressEvent) as {
+        files_seen?: number
+        files_ingested?: number
+        files_skipped?: number
+        chunks_created?: number
+        skip_reason?: string
+        status_message?: string
+      }
+      const total = Math.max(1, result.files_seen ?? ((result.files_ingested ?? 0) + (result.files_skipped ?? 0)))
+      setIngestionProgressStats(result.files_ingested ?? 0, total, result.files_skipped ?? 0)
+      setIngestionProgress(98)
+      await loadKnowledgeTree()
+      if ((result.files_ingested ?? 0) > 0) {
+        showToast(`已灌库 ${result.files_ingested ?? 0} 个文件, ${result.chunks_created ?? 0} 个切片`)
+      } else if (result.status_message) {
+        showToast(result.status_message)
+      } else {
+        showToast('跳过不支持或已屏蔽的文件')
+      }
+    } catch (error) {
+      setIngestionProgressStats(0, 1, 1)
+      const message = error instanceof Error ? error.message : '未知错误'
+      showToast(`灌库失败 — ${message}`)
     } finally {
       refreshing.value = false
       finishIngestionProgress()
@@ -833,6 +1101,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await copyNodesToSystemClipboard(nodes, 'cut')
   }
 
+  /**
+   * Writes the absolute paths of selected tree nodes to the system clipboard.
+   *
+   * On Electron/Windows the main process writes a real FileDropList to the
+   * native clipboard, which File Explorer recognises as file paths for paste.
+   * When Electron is unavailable we fall back to writing plain text paths via
+   * the Web Clipboard API.
+   *
+   * IMPORTANT: we must NOT call both APIs — the second call would overwrite
+   * the formats set by the first, breaking external paste.
+   */
   async function copyNodesToSystemClipboard(nodes: KnowledgeFileNode[], mode: 'copy' | 'cut') {
     const settingsStore = useSettingsStore()
     const absolutePaths = nodes.map((node) => buildAbsoluteKnowledgePath(settingsStore.profile.knowledgeDir, node.path))
@@ -920,8 +1199,38 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     const targetDir = childDirectoryFor(targetNode)
     const targetAbsoluteDir = buildAbsoluteKnowledgePath(useSettingsStore().profile.knowledgeDir, targetDir)
-    ignoreNextTreeEvent.value += sourcePaths.length
-    const result = await desktop.copyExternalPathsIntoDirectory(sourcePaths, targetAbsoluteDir, clipboardFiles.mode)
+    const strategy = await promptConflictStrategy(targetDir, sourcePaths.map(basenameOfPath))
+    if (!strategy) {
+      return
+    }
+    const effectiveSourcePaths = strategy === 'skip'
+      ? sourcePaths.filter((item) => !childNamesInDirectory(targetDir).has(basenameOfPath(item)))
+      : sourcePaths
+    if (effectiveSourcePaths.length === 0) {
+      showToast('粘贴已跳过 — 所有文件已存在')
+      return
+    }
+    // When overwriting, delete existing files via backend first so
+    // the vector-library entries are cleaned up before the new copy.
+    if (strategy === 'overwrite') {
+      const settingsStore = useSettingsStore()
+      const existingNames = childNamesInDirectory(targetDir)
+      for (const item of effectiveSourcePaths) {
+        const name = basenameOfPath(item)
+        if (existingNames.has(name)) {
+          const existingPath = joinTreePath(targetDir, name)
+          ignoreNextTreeEvent.value += 1
+          await deleteKnowledgePath(settingsStore.profile.userId, existingPath).catch(() => {})
+        }
+      }
+    }
+    ignoreNextTreeEvent.value += effectiveSourcePaths.length
+    const result = await desktop.copyExternalPathsIntoDirectory(
+      effectiveSourcePaths,
+      targetAbsoluteDir,
+      clipboardFiles.mode,
+      strategy,
+    )
     await loadKnowledgeTree()
     if (result.paths.length > 0) {
       const root = useSettingsStore().profile.knowledgeDir.replace(/[\\/]+$/g, '')
@@ -952,7 +1261,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   async function deleteNode(node: KnowledgeFileNode) {
     const settingsStore = useSettingsStore()
     ignoreNextTreeEvent.value += 1
-    await deleteKnowledgePath(settingsStore.profile.userId, node.path)
+    try {
+      await deleteKnowledgePath(settingsStore.profile.userId, node.path)
+    } catch (err: unknown) {
+      ignoreNextTreeEvent.value -= 1
+      showToast(err instanceof ApiError ? err.message : '删除失败')
+      await loadKnowledgeTree()
+      return
+    }
     openTabs.value = openTabs.value.filter((tab) => !isSameOrChildPath(tab.path, node.path))
     Object.keys(contentByPath.value).forEach((path) => {
       if (isSameOrChildPath(path, node.path)) {
@@ -994,26 +1310,47 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   async function loadFileContent(path: string) {
-    const settingsStore = useSettingsStore()
-    const response = await readKnowledgeFile(settingsStore.profile.userId, path)
-    contentByPath.value = { ...contentByPath.value, [path]: response.content }
-    const nextPreview = { ...previewByPath.value }
-    delete nextPreview[path]
-    previewByPath.value = nextPreview
-    const tab = openTabs.value.find((t) => t.path === path)
-    if (tab) tab.mtime = response.mtime
+    try {
+      const settingsStore = useSettingsStore()
+      const response = await readKnowledgeFile(settingsStore.profile.userId, path)
+      contentByPath.value = { ...contentByPath.value, [path]: response.content }
+      const nextPreview = { ...previewByPath.value }
+      delete nextPreview[path]
+      previewByPath.value = nextPreview
+      const tab = openTabs.value.find((t) => t.path === path)
+      if (tab) tab.mtime = response.mtime
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : '读取文件内容失败'
+      showToast(msg)
+    }
     syncCurrentDocumentContext()
   }
 
   async function loadFilePreview(path: string) {
-    const settingsStore = useSettingsStore()
-    const response = await previewKnowledgeFile(settingsStore.profile.userId, path)
-    previewByPath.value = { ...previewByPath.value, [path]: response }
-    if (response.content !== undefined) {
-      contentByPath.value = { ...contentByPath.value, [path]: response.content }
+    try {
+      const settingsStore = useSettingsStore()
+      const response = await previewKnowledgeFile(settingsStore.profile.userId, path)
+      previewByPath.value = { ...previewByPath.value, [path]: response }
+      if (response.content !== undefined) {
+        contentByPath.value = { ...contentByPath.value, [path]: response.content }
+      }
+      const tab = openTabs.value.find((t) => t.path === path)
+      if (tab) tab.mtime = response.mtime
+    } catch (err: unknown) {
+      showToast(err instanceof ApiError ? err.message : '文件预览加载失败')
+      previewByPath.value = {
+        ...previewByPath.value,
+        [path]: {
+          path,
+          kind: 'unsupported',
+          message: '预览加载失败',
+          mtime: '',
+          size: 0,
+          extension: '',
+          readonly: true,
+        } satisfies FilePreviewPayload,
+      }
     }
-    const tab = openTabs.value.find((t) => t.path === path)
-    if (tab) tab.mtime = response.mtime
     syncCurrentDocumentContext()
   }
 
@@ -1074,8 +1411,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return firstPath
     }
     const { stem, extension } = splitExtension(safeName)
-    for (let index = 2; index < 1000; index += 1) {
-      const candidate = joinTreePath(parentDirPath, `${stem} ${index}${extension}`)
+    for (let index = 1; index < 1000; index += 1) {
+      const candidate = joinTreePath(parentDirPath, `${stem} (${index})${extension}`)
       if (!existingPaths.has(candidate)) {
         return candidate
       }
@@ -1139,12 +1476,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     commands,
     treeLoading,
     fileClipboard,
+    conflictDialog,
     refreshing,
     ingestionProgress,
+    ingestionProgressStats,
     ingestionProgressVisible,
     toastMessage,
     toastVisible,
     showToast,
+    resolveConflict,
+    cancelConflict,
     agentSidebarOpen,
     pendingAgentPrompt,
     pendingAgentReference,
@@ -1163,6 +1504,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     saveAllDirtyFiles,
     confirmSaveDirtyBeforeExit,
     importFilesToPath,
+    importExternalPathsToPath,
     scanKnowledgeRoot,
     openCommandPalette,
     closeCommandPalette,
@@ -1183,6 +1525,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     askAgent,
     syncCurrentDocumentContext,
     markIndexing,
+    ingestFile,
     createFileAt,
     createFolderAt,
     copyNode,

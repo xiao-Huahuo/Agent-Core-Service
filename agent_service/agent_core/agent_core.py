@@ -56,6 +56,7 @@ from agent_service.services.message_service import MessageService
 from agent_service.services.safety import SafetyService
 from agent_service.services.scheduler import (
     BACKGROUND_SUMMARY_TASK,
+    FOREGROUND_AGENT_TASK,
     SMALL_MODEL_TIER,
     LLMTaskScheduler,
     get_llm_task_scheduler,
@@ -81,6 +82,13 @@ from agent_service.tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+AGENT_LOOP_AUTO = "auto"
+AGENT_LOOP_SIMPLE = "simple"
+AGENT_LOOP_REACT = "react"
+AGENT_LOOP_PLAN = "plan"
+AGENT_LOOP_DEEP_ALIAS = "deep"
+AGENT_LOOP_MODES = {AGENT_LOOP_AUTO, AGENT_LOOP_SIMPLE, AGENT_LOOP_REACT, AGENT_LOOP_PLAN, AGENT_LOOP_DEEP_ALIAS}
 
 
 def _extract_friendly_error(error_message: str) -> str:
@@ -161,51 +169,93 @@ class AgentCore:
                 self.context_builder.retrieval_service.warmup()
                 logger.info("Embedding / ReRank 模型预加载完成")
         safety_service = SafetyService(config=config, task_scheduler=self.task_scheduler)
-        builder = AgentGraphBuilder(
+        plan_builder = AgentGraphBuilder(
             config=config,
             tools=self.tools,
             tool_executor=self.tool_executor,
             task_scheduler=self.task_scheduler,
             safety_service=safety_service,
         )
-        self.graph: CompiledStateGraph = graph or builder.build()
-        self.graph_diagram_path = draw_agent_graph(
-            compiled_graph=self.graph,
-            output_path=config.storage.project_root / "agent_graph.mmd",
-            branch_labels=builder.branch_labels,
+        react_builder = AgentGraphBuilder(
+            config=config,
+            tools=self.tools,
+            tool_executor=self.tool_executor,
+            task_scheduler=self.task_scheduler,
+            safety_service=safety_service,
         )
+        self.graph: CompiledStateGraph = graph or plan_builder.build(mode=AGENT_LOOP_PLAN)
+        self.graphs: dict[str, CompiledStateGraph] = {
+            AGENT_LOOP_PLAN: self.graph,
+            AGENT_LOOP_REACT: graph or react_builder.build(mode=AGENT_LOOP_REACT),
+        }
+        self.graph_diagram_paths = {
+            AGENT_LOOP_PLAN: draw_agent_graph(
+                compiled_graph=self.graphs[AGENT_LOOP_PLAN],
+                output_path=config.storage.project_root / "agent_graph.mmd",
+                branch_labels=plan_builder.branch_labels,
+            ),
+            AGENT_LOOP_REACT: draw_agent_graph(
+                compiled_graph=self.graphs[AGENT_LOOP_REACT],
+                output_path=config.storage.project_root / "agent_graph_react.mmd",
+                branch_labels=react_builder.branch_labels,
+            ),
+        }
+        self.graph_diagram_path = self.graph_diagram_paths[AGENT_LOOP_PLAN]
 
-    def stream_run(self, *, prompt: str, user_id: str, session_id: str) -> Iterator[dict[str, Any]]:
+    def stream_run(self, *, prompt: str, user_id: str, session_id: str, agent_mode: str = AGENT_LOOP_PLAN) -> Iterator[dict[str, Any]]:
         """
         运行一轮无状态 Agent 并逐节点产出 dict 事件。
 
         prompt: 用户本轮输入。
         user_id: 用户 ID。
         session_id: 会话 ID。
+        agent_mode: Agent Loop 模式,支持 react / plan。无状态入口不使用 simple。
         """
 
+        effective_mode = AGENT_LOOP_REACT if agent_mode == AGENT_LOOP_REACT else AGENT_LOOP_PLAN
         messages = [HumanMessage(content=prompt)]
-        logger.info("开始无状态流式运行 | user=%s session=%s", user_id, session_id)
-        yield from self._stream_events(messages=messages, user_id=user_id, session_id=session_id)
-        logger.debug("无状态流式运行完成 | user=%s session=%s", user_id, session_id)
+        logger.info("开始无状态流式运行 | user=%s session=%s mode=%s", user_id, session_id, effective_mode)
+        yield from self._stream_events(
+            messages=messages,
+            user_id=user_id,
+            session_id=session_id,
+            graph=self.graphs[effective_mode],
+            agent_mode=effective_mode,
+        )
+        logger.debug("无状态流式运行完成 | user=%s session=%s mode=%s", user_id, session_id, effective_mode)
 
-    def run_once(self, *, prompt: str, user_id: str, session_id: str) -> dict[str, Any]:
+    def run_once(self, *, prompt: str, user_id: str, session_id: str, agent_mode: str = AGENT_LOOP_PLAN) -> dict[str, Any]:
         """
         运行一轮无状态 Agent 并返回结构化结果。
 
         prompt: 用户本轮输入。
         user_id: 用户 ID。
         session_id: 会话 ID。
+        agent_mode: Agent Loop 模式,支持 react / plan。
         """
 
-        chunks = list(self.stream_run(prompt=prompt, user_id=user_id, session_id=session_id))
-        graph_diagram = self.graph_diagram_path.read_text(encoding="utf-8")
+        effective_mode = AGENT_LOOP_REACT if agent_mode == AGENT_LOOP_REACT else AGENT_LOOP_PLAN
+        chunks = list(self.stream_run(prompt=prompt, user_id=user_id, session_id=session_id, agent_mode=effective_mode))
+        graph_diagram_path = self.graph_diagram_paths[effective_mode]
+        graph_diagram = graph_diagram_path.read_text(encoding="utf-8")
         return {
-            "graph_diagram_path": str(self.graph_diagram_path),
+            "graph_diagram_path": str(graph_diagram_path),
             "graph_diagram": graph_diagram,
             "final_output": self.extract_final_output(chunks),
             "events": chunks,
         }
+
+    def graph_diagram_for_mode(self, agent_mode: str) -> str:
+        """返回指定 Agent Loop 模式对应的 Mermaid 图。"""
+
+        effective_mode = AGENT_LOOP_REACT if agent_mode == AGENT_LOOP_REACT else AGENT_LOOP_PLAN
+        return self.graph_diagram_paths[effective_mode].read_text(encoding="utf-8")
+
+    def graph_diagram_path_for_mode(self, agent_mode: str) -> str:
+        """返回指定 Agent Loop 模式对应的 Mermaid 文件路径。"""
+
+        effective_mode = AGENT_LOOP_REACT if agent_mode == AGENT_LOOP_REACT else AGENT_LOOP_PLAN
+        return str(self.graph_diagram_paths[effective_mode])
 
     def list_registered_tools(self) -> dict[str, Any]:
         """
@@ -253,6 +303,7 @@ class AgentCore:
         user_id: str,
         session_id: str,
         reference: str | None = None,
+        agent_mode: str = AGENT_LOOP_AUTO,
     ) -> dict[str, Any]:
         """
         运行带 session 上下文和消息持久化的一轮 Agent,返回结构化结果。
@@ -261,6 +312,7 @@ class AgentCore:
         user_id: 用户 ID。
         session_id: 会话 ID。
         reference: 用户明确引用的文档片段。
+        agent_mode: Agent Loop 模式,支持 auto / simple / react / plan。兼容 deep 旧别名。
         """
 
         chunks = list(
@@ -269,17 +321,30 @@ class AgentCore:
                 user_id=user_id,
                 session_id=session_id,
                 reference=reference,
+                agent_mode=agent_mode,
             )
         )
-        graph_diagram = self.graph_diagram_path.read_text(encoding="utf-8")
+        effective_mode = self._resolve_agent_loop_mode(agent_mode=agent_mode, prompt=prompt, reference=reference)
+        diagram_mode = AGENT_LOOP_REACT if effective_mode == AGENT_LOOP_REACT else AGENT_LOOP_PLAN
+        graph_diagram_path = self.graph_diagram_paths[diagram_mode]
+        graph_diagram = graph_diagram_path.read_text(encoding="utf-8")
         return {
-            "graph_diagram_path": str(self.graph_diagram_path),
+            "graph_diagram_path": str(graph_diagram_path),
             "graph_diagram": graph_diagram,
             "final_output": self.extract_final_output(chunks),
             "events": chunks,
+            "agent_mode": effective_mode,
         }
 
-    def stream_session_prompt(self, *, prompt: str, user_id: str, session_id: str, reference: str | None = None) -> Iterator[dict[str, Any]]:
+    def stream_session_prompt(
+        self,
+        *,
+        prompt: str,
+        user_id: str,
+        session_id: str,
+        reference: str | None = None,
+        agent_mode: str = AGENT_LOOP_AUTO,
+    ) -> Iterator[dict[str, Any]]:
         """
         运行带 session 上下文和消息持久化的一轮 Agent,逐节点产出 dict 事件。
 
@@ -287,21 +352,25 @@ class AgentCore:
         user_id: 用户 ID。
         session_id: 会话 ID。
         reference: 用户引用的文本,作为额外上下文注入。
+        agent_mode: Agent Loop 模式,支持 auto / simple / react / plan。兼容 deep 旧别名。
         """
 
         reference = reference.strip() if reference and reference.strip() else None
+        effective_mode = self._resolve_agent_loop_mode(agent_mode=agent_mode, prompt=prompt, reference=reference)
         message_service = self._get_message_service()
         context_builder = self._get_context_builder(message_service=message_service)
         logger.info(
-            "开始 session 流式运行 | user=%s session=%s prompt_len=%d",
+            "开始 session 流式运行 | user=%s session=%s prompt_len=%d mode=%s requested_mode=%s",
             user_id,
             session_id,
             len(prompt),
+            effective_mode,
+            agent_mode,
         )
         messages = context_builder.build_messages(user_id=user_id, session_id=session_id, current_prompt=prompt, reference=reference)
         logger.debug("上下文构建完成 | message_count=%d", len(messages))
 
-        initial_plan = self._load_session_plan(session_id)
+        initial_plan = self._load_session_plan(session_id) if effective_mode == AGENT_LOOP_PLAN else None
 
         for msg in messages:
             if isinstance(msg, SystemMessage):
@@ -332,11 +401,16 @@ class AgentCore:
             if isinstance(msg, SystemMessage):
                 rag_metrics = (getattr(msg, "additional_kwargs", {}) or {}).get("rag_metrics")
                 recall_details = (getattr(msg, "additional_kwargs", {}) or {}).get("recall_details")
+                citation_map = (recall_details or {}).get("citation_map", {})
                 system_meta = {}
                 if rag_metrics:
                     system_meta["rag_metrics"] = rag_metrics
                 if recall_details:
                     system_meta["recall_details"] = recall_details
+                if citation_map:
+                    system_meta["citation_map"] = citation_map
+                system_meta["agent_mode"] = effective_mode
+                system_meta["requested_agent_mode"] = agent_mode
                 yield {
                     "node": "context_builder",
                     "type": "system_prompt",
@@ -348,14 +422,28 @@ class AgentCore:
                 }
                 break
 
+        if effective_mode == AGENT_LOOP_SIMPLE:
+            yield from self._stream_simple_answer(
+                messages=messages,
+                user_id=user_id,
+                session_id=session_id,
+                message_service=message_service,
+            )
+            if self._has_renamable_assistant_reply(user_id=user_id, session_id=session_id):
+                _launch_auto_rename(self, user_id=user_id, session_id=session_id)
+            return
+
         yield from self._stream_events(
             messages=messages,
             user_id=user_id,
             session_id=session_id,
             message_service=message_service,
             initial_plan=initial_plan,
+            graph=self.graphs[effective_mode],
+            agent_mode=effective_mode,
         )
-        _launch_auto_rename(self, user_id=user_id, session_id=session_id)
+        if self._has_renamable_assistant_reply(user_id=user_id, session_id=session_id):
+            _launch_auto_rename(self, user_id=user_id, session_id=session_id)
 
     def cancel_session(self, session_id: str) -> None:
         """取消指定 session 正在执行的图,保存部分输出。"""
@@ -381,6 +469,8 @@ class AgentCore:
         session_id: str,
         message_service: MessageService | None = None,
         initial_plan: dict[str, Any] | None = None,
+        graph: CompiledStateGraph | None = None,
+        agent_mode: str = AGENT_LOOP_PLAN,
     ) -> Iterator[dict[str, Any]]:
         """
         使用给定 LangChain messages 执行图并逐节点产出 dict 事件。
@@ -394,6 +484,8 @@ class AgentCore:
         session_id: 会话 ID。
         message_service: 可选消息服务;传入时会持久化图节点新增消息。
         initial_plan: 可选上一轮的探索状态,跨轮注入。
+        graph: 本轮使用的 LangGraph 图。
+        agent_mode: 本轮 Agent Loop 模式。
         """
 
         # 在图启动前一次性读取用户 LLM 配置,存入 state 避免重入时重复查 DB
@@ -408,6 +500,7 @@ class AgentCore:
         if initial_plan is not None:
             inputs["plan"] = initial_plan
         runtime_config = {"configurable": {"thread_id": session_id}}
+        active_graph = graph or self.graphs.get(agent_mode) or self.graph
         retrieval_service = None
         if self.context_builder is not None:
             retrieval_service = self.context_builder.retrieval_service
@@ -490,7 +583,7 @@ class AgentCore:
             set_context_mirror_callback(on_context_mirror)
             set_plan_state(initial_plan)
             try:
-                for event in self.graph.stream(inputs, config=runtime_config, stream_mode="updates"):
+                for event in active_graph.stream(inputs, config=runtime_config, stream_mode="updates"):
                     if cancel_event.is_set():
                         break
                     token_queue.put({"type": "node", "event": event})
@@ -597,7 +690,7 @@ class AgentCore:
                 elif item_type == "planner_content":
                     yield {
                         "node": "planner",
-                        "content": item.get("content", ""),
+                        "content": "",
                         "tool_calls": [],
                         "trace": [],
                         "model_name": self._model_name_for_node("planner"),
@@ -606,7 +699,7 @@ class AgentCore:
                 elif item_type == "observation_content":
                     yield {
                         "node": "observation",
-                        "content": item.get("content", ""),
+                        "content": "",
                         "tool_calls": [],
                         "trace": [],
                         "model_name": self._model_name_for_node("observation"),
@@ -692,6 +785,322 @@ class AgentCore:
             self.context_builder = ContextBuilder(config=self.config, message_service=message_service)
         return self.context_builder
 
+    def _has_renamable_assistant_reply(self, *, user_id: str, session_id: str) -> bool:
+        """判断本轮是否有值得用于自动命名的真实助手回复。"""
+
+        try:
+            message_service = self._get_message_service()
+            recent = message_service.list_recent_messages(
+                user_id=user_id,
+                session_id=session_id,
+                limit=4,
+                include_summarized=True,
+            )
+        except Exception:
+            logger.debug("检查自动命名条件失败 | session=%s", session_id, exc_info=True)
+            return False
+        for message in reversed(recent):
+            if getattr(message, "role", "") != "assistant":
+                continue
+            content = (getattr(message, "content", "") or "").strip()
+            metadata = getattr(message, "metadata_json", None) or {}
+            if not content:
+                return False
+            if metadata.get("node") == "error":
+                return False
+            if "429 Too Many Requests" in content or "模型服务限流" in content:
+                return False
+            return True
+        return False
+
+    def _stream_simple_answer(
+        self,
+        *,
+        messages: list[BaseMessage],
+        user_id: str,
+        session_id: str,
+        message_service: MessageService,
+    ) -> Iterator[dict[str, Any]]:
+        """
+        对明显不需要工具的短输入走轻量直答路径。
+
+        这条路径仍然使用 ContextBuilder 的消息、用户自定义系统提示词和消息持久化,
+        但绕过 planner/action/observation graph loop,避免一次简单问候触发多次 LLM 请求。
+        """
+
+        system_content = self._build_runtime_system_prompt(user_id=user_id)
+        llm_config = self._get_user_llm_config(user_id) or {}
+        api_key = llm_config.get("api_key")
+        base_url = llm_config.get("base_url")
+        small_api_key = llm_config.get("small_api_key") or api_key
+        small_base_url = llm_config.get("small_base_url") or base_url
+        runtime_messages = [SystemMessage(content=system_content), *messages]
+        cumulative = ""
+        last_sent_content = ""
+        final_message: BaseMessage | None = None
+
+        try:
+            logger.info("启用短问直答路径 | user=%s session=%s msg_count=%d", user_id, session_id, len(runtime_messages))
+            yield {
+                "node": "agent",
+                "type": "context_mirror",
+                "content": "",
+                "tool_calls": [],
+                "trace": [],
+                "model_name": self._model_name_for_node("agent_simple"),
+                "context_messages": self._serialize_runtime_messages(runtime_messages),
+            }
+            for chunk in self.task_scheduler.stream_chat(
+                task_type=FOREGROUND_AGENT_TASK,
+                messages=runtime_messages,
+                tool_names=[],
+                model_tier=SMALL_MODEL_TIER,
+                api_key=api_key,
+                base_url=base_url,
+                small_api_key=small_api_key,
+                small_base_url=small_base_url,
+            ):
+                if chunk.get("status") == "complete":
+                    final_message = chunk.get("message")
+                    continue
+                delta = chunk.get("content_delta", "")
+                if not delta:
+                    continue
+                cumulative += delta
+                safe_content = AgentCore._sanitize_streaming_content(
+                    cumulative,
+                    min_chars=self.config.model.streaming_sanitize_min_chars,
+                )
+                safe_content = AgentCore._strip_html_tags(safe_content)
+                output_delta = safe_content[len(last_sent_content):] if len(safe_content) > len(last_sent_content) else safe_content
+                if not output_delta:
+                    last_sent_content = safe_content
+                    continue
+                last_sent_content = safe_content
+                yield {
+                    "type": "delta",
+                    "node": "agent",
+                    "content": output_delta,
+                    "tool_calls": [],
+                    "trace": [],
+                    "model_name": self._model_name_for_node("agent_simple"),
+                }
+
+            content = AgentCore._stringify_content(getattr(final_message, "content", "") if final_message is not None else cumulative)
+            content = AgentCore._sanitize_agent_output(content)
+            content = AgentCore._strip_html_tags(content)
+            message_service.create_message(
+                MessageCreate(
+                    session_id=session_id,
+                    user_id=user_id,
+                    role="assistant",
+                    content=content,
+                    metadata_json={
+                        "node": "agent",
+                        "source": "simple_answer_mode",
+                        "trace": [
+                            {
+                                "node": "agent",
+                                "event": "simple_answer",
+                                "human_readable": "短输入直接生成回复，未进入工具循环。",
+                                "model_tier": SMALL_MODEL_TIER,
+                            }
+                        ],
+                    },
+                )
+            )
+            yield {
+                "node": "agent",
+                "content": content,
+                "tool_calls": [],
+                "trace": [
+                    {
+                        "node": "agent",
+                        "event": "simple_answer",
+                        "human_readable": "短输入直接生成回复，未进入工具循环。",
+                        "model_tier": SMALL_MODEL_TIER,
+                    }
+                ],
+                "model_name": self._model_name_for_node("agent_simple"),
+            }
+        except GeneratorExit:
+            raise
+        except Exception as exc:
+            friendly_msg = _extract_friendly_error(str(exc))
+            logger.warning("短问直答出错 | user=%s session=%s error=%s", user_id, session_id, friendly_msg)
+            message_service.create_message(
+                MessageCreate(
+                    session_id=session_id,
+                    user_id=user_id,
+                    role="assistant",
+                    content=friendly_msg,
+                    metadata_json={"node": "error", "source": "simple_answer_mode"},
+                )
+            )
+            yield {
+                "node": "error",
+                "content": friendly_msg,
+                "error": friendly_msg,
+                "tool_calls": [],
+                "trace": [],
+                "model_name": "",
+            }
+
+    @staticmethod
+    def _should_use_simple_answer_mode(*, prompt: str, reference: str | None = None) -> bool:
+        """判断本轮是否可以跳过 Agent Loop,直接轻量回复。"""
+
+        if reference:
+            return False
+        text = (prompt or "").strip()
+        if not text:
+            return False
+        normalized = text.lower()
+        simple_exact = {
+            "hi",
+            "hello",
+            "hey",
+            "ok",
+            "okay",
+            "thanks",
+            "thank you",
+            "你好",
+            "您好",
+            "在吗",
+            "谢谢",
+            "好的",
+            "好",
+            "嗯",
+            "？",
+            "?",
+        }
+        if normalized in simple_exact:
+            return True
+        if len(text) > 16:
+            return False
+        toolish_keywords = (
+            "搜索",
+            "查找",
+            "查询",
+            "打开",
+            "读取",
+            "文件",
+            "知识库",
+            "图谱",
+            "记住",
+            "长期",
+            "规则",
+            "写入",
+            "删除",
+            "重命名",
+            "复制",
+            "剪切",
+            "粘贴",
+            "灌库",
+            "入库",
+            "总结文档",
+            "pdf",
+            "docx",
+            "xlsx",
+            "ppt",
+            "csv",
+            "代码",
+            "运行",
+            "工具",
+        )
+        return not any(keyword in normalized for keyword in toolish_keywords)
+
+    @staticmethod
+    def _should_use_plan_mode(*, prompt: str, reference: str | None = None) -> bool:
+        """判断 auto 模式下是否需要进入带 planner/observation 的规划图。"""
+
+        if reference:
+            return True
+        text = (prompt or "").strip()
+        if not text:
+            return False
+        normalized = text.lower()
+        if len(text) >= 80:
+            return True
+        plan_keywords = (
+            "计划",
+            "规划",
+            "方案",
+            "步骤",
+            "拆解",
+            "分析",
+            "比较",
+            "评估",
+            "调研",
+            "排查",
+            "诊断",
+            "设计",
+            "实现",
+            "重构",
+            "优化",
+            "修复",
+            "完成",
+            "整理",
+            "总结",
+            "写文档",
+            "多步骤",
+            "一步一步",
+            "从头到尾",
+            "先",
+            "然后",
+            "最后",
+            "todo",
+        )
+        return any(keyword in normalized for keyword in plan_keywords)
+
+    @staticmethod
+    def _resolve_agent_loop_mode(*, agent_mode: str | None, prompt: str, reference: str | None = None) -> str:
+        """把外部请求模式归一为本轮实际执行模式。"""
+
+        requested = (agent_mode or AGENT_LOOP_AUTO).strip().lower()
+        if requested == AGENT_LOOP_SIMPLE:
+            return AGENT_LOOP_SIMPLE
+        if requested == AGENT_LOOP_REACT:
+            return AGENT_LOOP_REACT
+        if requested in {AGENT_LOOP_PLAN, AGENT_LOOP_DEEP_ALIAS}:
+            return AGENT_LOOP_PLAN
+        if AgentCore._should_use_plan_mode(prompt=prompt, reference=reference):
+            return AGENT_LOOP_PLAN
+        if AgentCore._should_use_simple_answer_mode(prompt=prompt, reference=reference):
+            return AGENT_LOOP_SIMPLE
+        return AGENT_LOOP_REACT
+
+    def _build_runtime_system_prompt(self, *, user_id: str) -> str:
+        """构造运行时系统提示词,与模型决策节点保持一致。"""
+
+        system_content = self.config.model.system_prompt
+        if not user_id:
+            return system_content
+        try:
+            from agent_service.api.rest.deps import _settings_service
+            if _settings_service is not None:
+                custom_prompt = _settings_service.get_system_prompt(user_id=user_id)
+                if custom_prompt:
+                    system_content += f"\n\n【用户自定义指令】\n{custom_prompt}"
+        except Exception:
+            logger.debug("读取用户自定义系统提示词失败 | user=%s", user_id, exc_info=True)
+        return system_content
+
+    @staticmethod
+    def _serialize_runtime_messages(messages: list[BaseMessage]) -> list[dict[str, Any]]:
+        """序列化直答路径实际发送给模型的上下文,供观测面板展示。"""
+
+        role_map = {"system": "system", "human": "user", "ai": "assistant", "tool": "tool"}
+        result: list[dict[str, Any]] = []
+        for msg in messages:
+            result.append(
+                {
+                    "role": role_map.get(msg.type, msg.type),
+                    "content": AgentCore._stringify_content(getattr(msg, "content", "")),
+                }
+            )
+        return result
+
     def _save_state_update_messages(
         self,
         *,
@@ -714,6 +1123,8 @@ class AgentCore:
         """
 
         if not state_update:
+            return
+        if node_name in {"planner", "observation"}:
             return
         for message in state_update.get("messages", []):
             message_create = self._message_to_create(
@@ -752,11 +1163,14 @@ class AgentCore:
             reasoning_content = (message.additional_kwargs or {}).get("reasoning_content")
             if reasoning_content:
                 metadata["reasoning_content"] = reasoning_content
+            content = AgentCore._sanitize_agent_output(AgentCore._stringify_content(message.content))
+            if not content.strip() and not list(message.tool_calls or []):
+                return None
             return MessageCreate(
                 session_id=session_id,
                 user_id=user_id,
                 role="assistant",
-                content=AgentCore._stringify_content(message.content),
+                content=content,
                 tool_calls_json=list(message.tool_calls or []),
                 metadata_json=metadata,
             )
@@ -866,7 +1280,7 @@ class AgentCore:
 
     def _model_name_for_node(self, node_name: str) -> str:
         """根据节点名返回对应的模型名称，供前端展示。"""
-        small_nodes = {"planner"}
+        small_nodes = {"planner", "observation", "agent_simple"}
         if node_name in small_nodes and self.config.model.small_model_name:
             return self.config.model.small_model_name
         return self.config.model.model_name
@@ -895,6 +1309,9 @@ class AgentCore:
         last_message = messages[-1] if messages else None
         content = getattr(last_message, "content", "") if last_message is not None else ""
         tool_calls = getattr(last_message, "tool_calls", []) if last_message is not None else []
+        if node_name in {"planner", "observation", "action"}:
+            content = ""
+            tool_calls = []
         content = AgentCore._sanitize_agent_output(content or "")
         content = AgentCore._strip_html_tags(content)
         return {
@@ -982,7 +1399,6 @@ class AgentCore:
             return "（系统拦截了内部标记格式的输出，请用自然语言重新回答。）"
         return content
 
-
     def _load_session_plan(self, session_id: str) -> dict[str, Any] | None:
         """从 DB 加载会话的探索状态,跨轮恢复 planner 的上下文。"""
 
@@ -1021,6 +1437,15 @@ def _launch_auto_rename(agent: AgentCore, *, user_id: str, session_id: str) -> N
             )
             if len(recent) < 2:
                 return
+            for message in reversed(recent):
+                if getattr(message, "role", "") != "assistant":
+                    continue
+                content = (getattr(message, "content", "") or "").strip()
+                metadata = getattr(message, "metadata_json", None) or {}
+                if metadata.get("node") == "error" or "429 Too Many Requests" in content or "模型服务限流" in content:
+                    logger.info("跳过会话自动重命名 | session=%s reason=last_assistant_error", session_id)
+                    return
+                break
             lines: list[str] = []
             for m in recent[-6:]:
                 role_label = ""

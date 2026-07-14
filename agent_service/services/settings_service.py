@@ -46,6 +46,7 @@ class SettingsService:
         SQLModel.metadata.create_all(self.engine)
         self._ensure_llm_config_schema()
         self._ensure_user_settings_schema()
+        self._ensure_paddleocr_models_if_required()
 
     def _ensure_llm_config_schema(self) -> None:
         """Ensure user_llm_config table has the small_api_key / small_base_url / small_model_name columns."""
@@ -68,7 +69,7 @@ class SettingsService:
             pass  # Table may not exist yet; create_all handles it
 
     def _ensure_user_settings_schema(self) -> None:
-        """Ensure user_settings table has proxy_url / web_search_enabled columns."""
+        """Ensure user_settings table has current optional settings columns."""
         from sqlalchemy import inspect as sa_inspect
         try:
             inspector = sa_inspect(self.engine)
@@ -76,6 +77,9 @@ class SettingsService:
             migrations = {
                 "proxy_url": "VARCHAR(1024) NOT NULL DEFAULT ''",
                 "web_search_enabled": "BOOLEAN NOT NULL DEFAULT 0",
+                "auto_ingest_on_upload": "BOOLEAN NOT NULL DEFAULT 0",
+                "ocr_enabled": "BOOLEAN NOT NULL DEFAULT 0",
+                "knowledge_ignore_patterns": "TEXT NOT NULL DEFAULT ''",
             }
             with Session(self.engine) as db:
                 for col_name, col_type in migrations.items():
@@ -323,9 +327,24 @@ class SettingsService:
                 self._serialize_knowledge_library(active_library) if active_library else None
             ),
             "knowledge_libraries": [self._serialize_knowledge_library(item) for item in libraries],
+            "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
+            "ocr_enabled": bool(record.ocr_enabled),
+            "knowledge_ignore_patterns": record.knowledge_ignore_patterns,
             "created_at": record.created_at.isoformat(),
             "updated_at": record.updated_at.isoformat(),
         }
+
+    def list_knowledge_library_dirs(self) -> list[Path]:
+        """Return all configured user knowledge library directories."""
+
+        with Session(self.engine) as db:
+            records = list(db.exec(select(UserKnowledgeLibrary)).all())
+        dirs: list[Path] = []
+        for record in records:
+            raw_dir = str(record.knowledge_dir or "").strip()
+            if raw_dir:
+                dirs.append(Path(raw_dir).expanduser().resolve())
+        return dirs
 
     @staticmethod
     def _serialize_knowledge_library(record: UserKnowledgeLibrary) -> dict:
@@ -592,3 +611,96 @@ class SettingsService:
                 "proxy_url": record.proxy_url,
                 "web_search_enabled": record.web_search_enabled,
             }
+
+    # ---- 知识库灌库配置 ----
+
+    def get_knowledge_ingestion_config(self, *, user_id: str) -> dict:
+        """获取用户知识库灌库配置。默认上传不自动灌库。"""
+
+        normalized_user_id = user_id.strip()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                return {"auto_ingest_on_upload": False, "ocr_enabled": False, "knowledge_ignore_patterns": ""}
+            return {
+                "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
+                "ocr_enabled": bool(record.ocr_enabled),
+                "knowledge_ignore_patterns": record.knowledge_ignore_patterns,
+            }
+
+    def save_knowledge_ingestion_config(
+        self,
+        *,
+        user_id: str,
+        auto_ingest_on_upload: bool | None = None,
+        ocr_enabled: bool | None = None,
+        knowledge_ignore_patterns: str | None = None,
+    ) -> dict:
+        """保存用户知识库灌库配置。"""
+
+        normalized_user_id = user_id.strip()
+        now = self._utc_now()
+        restart_required = False
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                record = UserSettingsRecord(
+                    user_id=normalized_user_id,
+                    knowledge_dir=str(self.config.storage.knowledge_dir),
+                    auto_ingest_on_upload=bool(auto_ingest_on_upload),
+                    ocr_enabled=bool(ocr_enabled),
+                    knowledge_ignore_patterns=knowledge_ignore_patterns or "",
+                    created_at=now,
+                    updated_at=now,
+                )
+                restart_required = bool(ocr_enabled)
+            else:
+                if auto_ingest_on_upload is not None:
+                    record.auto_ingest_on_upload = bool(auto_ingest_on_upload)
+                if ocr_enabled is not None:
+                    next_ocr_enabled = bool(ocr_enabled)
+                    restart_required = bool(record.ocr_enabled) != next_ocr_enabled
+                    record.ocr_enabled = next_ocr_enabled
+                if knowledge_ignore_patterns is not None:
+                    record.knowledge_ignore_patterns = knowledge_ignore_patterns
+                record.updated_at = now
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            return {
+                "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
+                "ocr_enabled": bool(record.ocr_enabled),
+                "knowledge_ignore_patterns": record.knowledge_ignore_patterns,
+                "restart_required": restart_required,
+            }
+
+    def is_ocr_enabled_for_user(self, *, user_id: str) -> bool:
+        """返回用户保存的 OCR 开关状态。"""
+
+        normalized_user_id = user_id.strip()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            return bool(record and record.ocr_enabled)
+
+    def _ensure_paddleocr_models_if_required(self) -> None:
+        """当已有用户开启 OCR 时,启动阶段检查并预热 PaddleOCR 模型。"""
+
+        try:
+            with Session(self.engine) as db:
+                enabled_count = db.exec(
+                    select(UserSettingsRecord).where(UserSettingsRecord.ocr_enabled == True)  # noqa: E712
+                ).first()
+            if enabled_count is None:
+                return
+            from agent_service.scripts.download_model import ensure_paddleocr_models
+
+            ensure_paddleocr_models(
+                paddleocr_model_dir=self.config.storage.paddleocr_model_dir,
+                language=self.config.ocr.language,
+                text_detection_model_name=self.config.ocr.text_detection_model_name,
+                text_recognition_model_name=self.config.ocr.text_recognition_model_name,
+                device=self.config.ocr.device,
+            )
+            self.config.ocr.enabled = True
+        except Exception as exc:
+            logger.warning("PaddleOCR 模型检查失败: %s", exc)

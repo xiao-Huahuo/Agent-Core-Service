@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bot, Command, GitBranch, Maximize2, Minus, Moon, RefreshCw, Settings, Sun, X } from 'lucide-vue-next'
+import { Bot, Command, DatabaseZap, GitBranch, Maximize2, Minus, Moon, Settings, Sun, X } from 'lucide-vue-next'
 
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -43,6 +43,26 @@ async function handleCloseWindow() {
   <header class="topbar">
     <div class="brand">
       <strong>元织-{{ knowledgeTitle }}</strong>
+      <button
+        class="ingest-button"
+        :class="{ refreshing: workspaceStore.refreshing }"
+        type="button"
+        :disabled="workspaceStore.refreshing"
+        title="重新灌库"
+        @click="workspaceStore.markIndexing"
+      >
+        <DatabaseZap :size="14" />
+        <span>灌库</span>
+      </button>
+      <div v-if="workspaceStore.ingestionProgressVisible" class="ingestion-progress" aria-live="polite">
+        <span class="ingestion-progress-track" aria-hidden="true">
+          <span
+            class="ingestion-progress-fill"
+            :style="{ width: `${workspaceStore.ingestionProgress}%` }"
+          />
+        </span>
+        <span class="ingestion-progress-percent">{{ workspaceStore.ingestionProgress }}%</span>
+      </div>
     </div>
 
     <div class="search-center">
@@ -52,53 +72,40 @@ async function handleCloseWindow() {
     <div class="actions">
       <button class="command-button" type="button" @click="workspaceStore.openCommandPalette">
         <Command :size="14" />
-        <span>Command</span>
+        <span>命令</span>
         <kbd>Ctrl K</kbd>
       </button>
-      <button
-        class="icon-button"
-        :class="{ refreshing: workspaceStore.refreshing }"
-        type="button"
-        :disabled="workspaceStore.refreshing"
-        title="Refresh workspace"
-        @click="workspaceStore.markIndexing"
-      >
-        <RefreshCw :size="14" />
-      </button>
-      <button class="icon-button" type="button" title="Knowledge graph" @click="emit('toggleGraph')">
+      <button class="icon-button" type="button" title="知识图谱" @click="emit('toggleGraph')">
         <GitBranch :size="14" />
       </button>
-      <button class="icon-button" type="button" title="Settings" @click="emit('openSettings')">
+      <button class="icon-button" type="button" title="设置" @click="emit('openSettings')">
         <Settings :size="14" />
       </button>
-      <button class="console-link" type="button" title="Toggle Agent panel" @click="emit('toggleAgent')">
+      <button class="console-link" type="button" title="切换 Agent 面板" @click="emit('toggleAgent')">
         <Bot :size="14" />
-        <span>Console</span>
+        <span>Agent</span>
       </button>
       <button
         class="theme-button icon-button"
         :class="{ dark: settingsStore.isDark, light: !settingsStore.isDark }"
         type="button"
-        title="Toggle theme"
+        title="切换主题"
         @click="settingsStore.toggleTheme"
       >
         <Moon v-if="settingsStore.isDark" :size="14" />
         <Sun v-else :size="14" />
       </button>
       <div v-if="desktopApi?.isDesktop" class="window-controls" aria-label="Window controls">
-        <button type="button" title="Minimize" @click="desktopApi.minimize">
+        <button type="button" title="最小化" @click="desktopApi.minimize">
           <Minus :size="13" />
         </button>
-        <button type="button" title="Maximize" @click="desktopApi.toggleMaximize">
+        <button type="button" title="最大化" @click="desktopApi.toggleMaximize">
           <Maximize2 :size="13" />
         </button>
-        <button class="close-window" type="button" title="Close" @click="handleCloseWindow">
+        <button class="close-window" type="button" title="关闭" @click="handleCloseWindow">
           <X :size="13" />
         </button>
       </div>
-    </div>
-    <div v-if="workspaceStore.ingestionProgressVisible" class="ingestion-progress" aria-hidden="true">
-      <span :style="{ width: `${workspaceStore.ingestionProgress}%` }"></span>
     </div>
   </header>
   <Transition name="toast-slide">
@@ -127,10 +134,47 @@ async function handleCloseWindow() {
 .brand {
   display: flex;
   align-items: center;
+  gap: var(--space-8);
   min-width: 0;
   overflow: hidden;
   flex-shrink: 0;
   z-index: 1;
+}
+
+.ingest-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  background: rgba(235, 36, 99, 0.1);
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  -webkit-app-region: no-drag;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.ingest-button:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.ingest-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.ingest-button.refreshing :deep(svg) {
+  animation: refresh-spin 900ms linear infinite;
 }
 
 .search-center {
@@ -236,31 +280,44 @@ async function handleCloseWindow() {
   color: white;
 }
 
-.icon-button.refreshing {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-}
-
-.icon-button.refreshing :deep(svg) {
-  animation: refresh-spin 900ms linear infinite;
-}
-
 .ingestion-progress {
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 2px;
-  overflow: hidden;
-  background: transparent;
-  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: min(140px, 30vw);
+  height: 16px;
+  padding: 0 var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-canvas) 92%, var(--color-accent) 8%);
+  color: var(--color-accent);
+  font-family: var(--font-code);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  -webkit-app-region: no-drag;
 }
 
-.ingestion-progress span {
+.ingestion-progress-track {
+  display: block;
+  flex: 1 1 auto;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(235, 36, 99, 0.14);
+}
+
+.ingestion-progress-fill {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+  border-radius: inherit;
+  background: var(--color-accent);
   transition: width 140ms ease;
+}
+
+.ingestion-progress-percent {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 @keyframes refresh-spin {
@@ -275,13 +332,13 @@ async function handleCloseWindow() {
   transform: translateX(-50%);
   z-index: 999;
   padding: var(--space-8) var(--space-20);
-  border: 1px solid var(--color-primary);
+  border: 0;
   border-radius: var(--radius-lg);
-  background: var(--color-primary-soft);
-  color: var(--color-text);
+  background: #fff;
+  color: #333;
   font-size: 13px;
   font-weight: 600;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   pointer-events: none;
 }
 

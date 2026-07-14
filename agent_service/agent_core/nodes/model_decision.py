@@ -15,14 +15,14 @@ from __future__ import annotations
 import logging
 from typing import Any, Sequence
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
 from agent_service.tools import ToolExecutor
-from agent_service.tools.runtime_context import get_agent_token_callback, get_context_mirror_callback
+from agent_service.tools.runtime_context import get_agent_token_callback, get_context_mirror_callback, get_tool_trace_callback
 
 logger = logging.getLogger(__name__)
 
@@ -131,10 +131,20 @@ class ModelDecisionNode:
         if plan and plan.get("hint"):
             covered = plan.get("covered", [])
             suggested = plan.get("suggested", [])
+            sub_questions = plan.get("sub_questions", [])
+            current_index = int(plan.get("current_index", 0) or 0)
+            current_question = ""
+            if isinstance(sub_questions, list) and sub_questions:
+                current_index = max(0, min(current_index, len(sub_questions) - 1))
+                current_question = str(sub_questions[current_index])
             sufficient = plan.get("sufficient", False)
+            plan_status = plan.get("status", "running")
             status = "信息已充足，可以结束探索" if sufficient else "信息尚不充分，需继续探索"
             system_content += (
                 f"\n\n【探索状态 — 仅供参考，你自行决定下一步】\n"
+                f"计划状态: {plan_status}\n"
+                f"当前子问题: {current_question or '暂无'}\n"
+                f"子问题队列: {' | '.join(str(item) for item in sub_questions) if sub_questions else '暂无'}\n"
                 f"已覆盖: {', '.join(covered) if covered else '暂无'}\n"
                 f"建议方向: {', '.join(suggested) if suggested else '暂无'}\n"
                 f"当前判断: {status}\n"
@@ -152,9 +162,10 @@ class ModelDecisionNode:
             )
 
         user_api_key, user_base_url, user_small_api_key, user_small_base_url = self._get_user_model_overrides(state)
+        llm_messages = self._prepare_messages_for_llm(system_message, state["messages"])
         response = self.task_scheduler.invoke_chat(
             task_type=FOREGROUND_AGENT_TASK,
-            messages=[system_message, *state["messages"]],
+            messages=llm_messages,
             tool_names=self.tool_names,
             api_key=user_api_key,
             base_url=user_base_url,
@@ -171,6 +182,7 @@ class ModelDecisionNode:
                     "tool_call_count": len(tool_calls),
                     "has_content": bool(response.content),
                     "human_readable": self._make_agent_readable(tool_calls, bool(response.content)),
+                    "chat_visible": False,
                 }
             ],
         }
@@ -194,13 +206,22 @@ class ModelDecisionNode:
         final_message: Any = None
 
         context_callback = get_context_mirror_callback()
+        trace_callback = get_tool_trace_callback()
+        llm_messages = self._prepare_messages_for_llm(system_message, state["messages"])
         if context_callback is not None:
-            context_callback(self._serialize_messages([system_message, *state["messages"]]))
+            context_callback(self._serialize_messages(llm_messages))
+        if trace_callback is not None:
+            trace_callback({
+                "node": "agent",
+                "event": "model_request_start",
+                "human_readable": "模型正在决策下一步。",
+                "chat_visible": False,
+            })
 
         user_api_key, user_base_url, user_small_api_key, user_small_base_url = self._get_user_model_overrides(state)
         for chunk in self.task_scheduler.stream_chat(
             task_type=FOREGROUND_AGENT_TASK,
-            messages=[system_message, *state["messages"]],
+            messages=llm_messages,
             tool_names=self.tool_names,
             api_key=user_api_key,
             base_url=user_base_url,
@@ -229,6 +250,7 @@ class ModelDecisionNode:
                     "tool_call_count": len(tool_calls),
                     "has_content": has_content,
                     "human_readable": self._make_agent_readable(tool_calls, has_content),
+                    "chat_visible": False,
                 }
             ],
         }
@@ -252,6 +274,36 @@ class ModelDecisionNode:
             if definition is not None and definition.display_name:
                 return definition.display_name
         return tool_name
+
+    @staticmethod
+    def _prepare_messages_for_llm(system_message: SystemMessage, messages: list[BaseMessage]) -> list[BaseMessage]:
+        """压缩工具返回内容后再送入模型,避免文件/搜索结果撑爆上下文。"""
+
+        tool_seen_from_tail = 0
+        prepared_tail: list[BaseMessage] = []
+        for message in reversed(messages):
+            if isinstance(message, ToolMessage):
+                tool_seen_from_tail += 1
+                max_chars = 900 if tool_seen_from_tail <= 8 else 240
+                prepared_tail.append(ModelDecisionNode._compact_tool_message(message, max_chars=max_chars))
+            else:
+                prepared_tail.append(message)
+        prepared_tail.reverse()
+        return [system_message, *prepared_tail]
+
+    @staticmethod
+    def _compact_tool_message(message: ToolMessage, *, max_chars: int) -> ToolMessage:
+        """保留 tool_call_id,仅压缩工具返回内容。"""
+
+        content = str(getattr(message, "content", "") or "")
+        if len(content) <= max_chars:
+            return message
+        compacted = (
+            content[:max_chars]
+            + f"\n\n[工具返回内容已压缩: 原始长度 {len(content)} 字符, 当前仅保留前 {max_chars} 字符。"
+            "如需完整内容,请继续用更精确的文件路径、章节或关键词读取。]"
+        )
+        return ToolMessage(content=compacted, tool_call_id=message.tool_call_id)
 
     def _get_user_model_overrides(self, state: AgentState) -> tuple[str | None, str | None, str | None, str | None]:
         """从 SettingsService 读取用户的 LLM 配置，返回 (api_key, base_url, small_api_key, small_base_url)。"""

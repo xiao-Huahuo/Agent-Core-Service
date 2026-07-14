@@ -94,6 +94,8 @@ message RunRequest {
   string session_id = 3;
   // 用户从文档中明确引用、需要随问题送入上下文的文本。
   string reference = 4;
+  // Agent Loop 模式: auto / simple / react / plan。
+  string agent_mode = 5;
 }
 
 message RunResult {

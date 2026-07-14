@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
+import shutil
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,7 @@ MODEL_TOKENIZER_FILES = {
     "sentencepiece.bpe.model",
     "vocab.txt",
 }
+PADDLEOCR_MARKER_FILE = ".paddleocr_download_complete"
 
 
 def ensure_model(model_name: str, model_dir: Path | str) -> Path | None:
@@ -83,6 +86,119 @@ def ensure_models(
 
     ensure_model(embedding_model_name, embedding_model_dir)
     ensure_model(rerank_model_name, rerank_model_dir)
+
+
+def ensure_paddleocr_models(
+    *,
+    paddleocr_model_dir: Path | str,
+    language: str,
+    text_detection_model_name: str,
+    text_recognition_model_name: str,
+    device: str = "cpu",
+) -> Path:
+    """
+    预热 PaddleOCR 文本检测与识别模型。
+
+    paddleocr_model_dir: PaddleOCR 模型缓存根目录。
+    language: OCR 语言参数,中英文场景使用 ch。
+    text_detection_model_name: 文本检测模型名称。
+    text_recognition_model_name: 文本识别模型名称。
+    device: 推理设备,默认 cpu。
+    """
+
+    target_root = Path(paddleocr_model_dir).expanduser().resolve()
+    target_root.mkdir(parents=True, exist_ok=True)
+    _disable_paddleocr_mkldnn_by_default()
+    try:
+        from paddleocr import PaddleOCR  # type: ignore[import-untyped]
+    except ImportError as exc:
+        raise RuntimeError("缺少 paddleocr / paddlepaddle 依赖,无法自动准备 OCR 模型。") from exc
+
+    logger.info("开始准备 PaddleOCR 模型: det=%s rec=%s", text_detection_model_name, text_recognition_model_name)
+    _build_paddleocr_pipeline(
+        PaddleOCR=PaddleOCR,
+        language=language,
+        text_detection_model_name=text_detection_model_name,
+        text_recognition_model_name=text_recognition_model_name,
+        text_detection_model_dir=target_root / "text_detection",
+        text_recognition_model_dir=target_root / "text_recognition",
+        device=device,
+    )
+    _sync_paddlex_official_model(
+        model_name=text_detection_model_name,
+        target_dir=target_root / "text_detection",
+    )
+    _sync_paddlex_official_model(
+        model_name=text_recognition_model_name,
+        target_dir=target_root / "text_recognition",
+    )
+    marker_payload = "\n".join(
+        [
+            f"language={language}",
+            f"text_detection_model_name={text_detection_model_name}",
+            f"text_recognition_model_name={text_recognition_model_name}",
+            f"device={device}",
+        ]
+    )
+    (target_root / PADDLEOCR_MARKER_FILE).write_text(marker_payload, encoding="utf-8")
+    logger.info("PaddleOCR 模型准备完成: %s", target_root)
+    return target_root
+
+
+def _build_paddleocr_pipeline(
+    *,
+    PaddleOCR: object,
+    language: str,
+    text_detection_model_name: str,
+    text_recognition_model_name: str,
+    device: str,
+    text_detection_model_dir: Path | None = None,
+    text_recognition_model_dir: Path | None = None,
+) -> object:
+    """兼容 PaddleOCR 3.x 和旧版构造参数创建 OCR pipeline。"""
+
+    _disable_paddleocr_mkldnn_by_default()
+    detection_dir = _existing_paddle_model_dir(text_detection_model_dir)
+    recognition_dir = _existing_paddle_model_dir(text_recognition_model_dir)
+    try:
+        return PaddleOCR(
+            lang=language,
+            text_detection_model_name=text_detection_model_name,
+            text_recognition_model_name=text_recognition_model_name,
+            text_detection_model_dir=detection_dir,
+            text_recognition_model_dir=recognition_dir,
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+            device=device,
+        )
+    except TypeError:
+        return PaddleOCR(lang=language, use_angle_cls=False, show_log=False)
+
+
+def _disable_paddleocr_mkldnn_by_default() -> None:
+    """默认关闭 PaddleX MKLDNN,规避 Windows CPU 下部分 OCR 模型 oneDNN 推理异常。"""
+
+    os.environ.setdefault("PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT", "False")
+
+
+def _existing_paddle_model_dir(model_dir: Path | None) -> str | None:
+    """仅当本地 PaddleOCR 模型目录已经完整时才传给 PaddleOCR。"""
+
+    if model_dir is None:
+        return None
+    return str(model_dir) if (model_dir / "inference.yml").is_file() else None
+
+
+def _sync_paddlex_official_model(*, model_name: str, target_dir: Path) -> None:
+    """把 PaddleX 自动下载的官方模型同步到项目 runtime 模型目录。"""
+
+    source_dir = Path.home() / ".paddlex" / "official_models" / model_name
+    if not (source_dir / "inference.yml").is_file():
+        return
+    if target_dir.exists():
+        shutil.rmtree(target_dir)
+    shutil.copytree(source_dir, target_dir)
 
 
 def model_target_dir(model_name: str, model_dir: Path | str) -> Path:

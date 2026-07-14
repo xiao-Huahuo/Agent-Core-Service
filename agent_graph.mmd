@@ -14,8 +14,9 @@ flowchart TD
     agent -. "有 tool_calls" .-> action
     agent -. "无 tool_calls" .-> safety_output
     compress --> planner
+    observation -. "answer / retry / abandon → 交给 agent" .-> agent
     observation -. "context overflow" .-> compress
-    observation -. "continue / answer → 生成最终回复" .-> planner
+    observation -. "continue → 更新计划" .-> planner
     planner --> agent
     safety_input -. "审核拦截" .-> internal_end
     safety_input -. "审核通过" .-> planner

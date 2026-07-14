@@ -97,7 +97,8 @@ npm run build          # 输出 → console/dist/
 ```bash
 # 安装 PyInstaller
 pip install pyinstaller
-
+# 安装后端依赖
+pip install -r agent_service/requirements.txt
 # 打包（读取 AgentService.spec）
 pyinstaller AgentService.spec
 ```
@@ -153,7 +154,7 @@ AgentService.exe
 * 异步任务：asyncio
 * 知识库文件监听: watchdog
 * 联网搜索引擎: DuckDuckGo + ddgs
-* OCR引擎: Tesseract
+* OCR引擎: PaddleOCR
 * 日志与监控：logging / structlog + Prometheus + Grafana
 * 测试与质量：Pytest + Ruff + mypy
 
@@ -163,83 +164,106 @@ AgentService.exe
 
 各部分的设计如下：
 
-1. 智能体核心 `AgentCore` 设计：采用 ReAct 思考模式，节点流可配置、可展示、可定制。
+1. 智能体状态转移设计：在LangGraph状态转移图入口处有一个入口节点,调用一次小模型,按照用户提问内容区分三种模式的入口,用户在同一session前后提出简单和困难的问题时,会以小模型决策以下三种图的模式:
+      1. 简答模式: 对于明显不需要思考的短输入,不经过循环,只保留 RAG 上下文构建,用小模型直接输出.
+      2. ReAct模式: 不经过`planner`节点和`observation`节点,标准的ReAct图.agent节点同时充当观察者和决策者,一个循环只需要调用一次LLM.
+      3. 深度思考模式(Plan-and-Execute模式): 经过规划-执行-观察的循环,一个循环会调用2~3次LLM,适合长时间思考.
+   前端提供 `auto`/`simple`/`react`/`plan` 思考模式切换,Agent 观测面板状态图按实际执行模式切换.
 2. 节点设计：基础节点有以下几种：
-
-   * 启动/终止节点
-   * 决策/汇合节点
-   * 工具调用节点
-
+   * 启动/终止节点 `START`/`END`
+   * 决策/汇合节点 `agent`
+   * 工具调用节点 `action`
      * 跨会话记忆检索
      * 上下文压缩与事实持久化
      * 知识库检索
      * 其他内置工具
      * MCP外部工具
-   * 安全审核节点（输入/输出两阶段）
-
-     * `safety_input` 输入安全审核（入口）
-     * `safety_output` 输出安全审核（出口）
-   * 推理规划节点
-   * 反思节点
-   * 摘要节点
-   * 上下文压缩节点
-3. 工具系统设计：采用 **Function Calling** 模式，对接 **MCP 协议** 接入外部工具。系统自带默认工具，同时支持用户对工具的高度自定义。
-4. 数据库设计：关联库采用 SQLite 存储智能体会话与消息，向量库采用 ChromaDB。
-5. 服务间调用：采用 **gRPC 协议** 函数化接口，暴露智能体信息流、思考轨迹、数据库调用等对外接口。
-6. 配置管理：`AgentConfig` 类包含 `Constants`、`StorageConfig`、`ModelConfig`、`MemoryConfig` 等子配置类，通过 `AgentConfig.load_config(...)` 加载外部配置参数。配置通过 `agent = AgentCore(config=AgentConfig.load_config(...))` 显式传入 AgentCore。
-7. 可观测性：前端面板实时展示 Agent 行动轨迹，包括节点状态、上下文构建器 JSON、RAG 召回条目、召回筛选过程、会话摘要等。日志系统记录全部 Agent 行动，信息传递过程完全可视化。
-
-   * 前端轨迹面板消费 LangGraph 节点事件、工具调用事件和状态更新事件，还原智能体行动过程。
+   * 安全审核节点（输入/输出两阶段）,包括:
+     * 输入安全审核（入口）`safety_input` 
+     * 输出安全审核（出口）`safety_output` 
+   * 推理规划节点 `planner` : 具备全局规划思想,拆解问题, 跨轮保持计划 + sub_question 状态机 + 绕圈检测,成为agent执行节点的"调度者".
+   * 反思节点 `observation`: 根据观察选择路径,可选性的规划而不是每次都进入planner节点. 产出四种状态.
+      首次: planner（拆解问题，出 sub_questions）
+      agent → action → observation（精炼结果 + 提取事实 + 判方向）
+      │ 针对observation的不同输出
+      ├─ [continue] → planner（更新计划）→ agent（继续）
+      ├─ [answer]   → agent（出最终回复）
+      ├─ [retry]    → agent（换参数重试同一工具）
+      └─ [abandon]  → agent（承认查不到，给出已有信息）
+   * 摘要节点 `summary`
+   * 上下文压缩节点 `compress`
+3. 工具系统设计：采用 **Function Calling** 模式，对接 **MCP 协议** 接入外部工具。系统自带默认工具,包括记忆召回,知识库检索,规则创建,文件操作,联网搜索等。
+   * 注册与执行架构：工具注册器`ToolRegistry` 维护 `工具名 → 工具功能` 映射，支持 JSON Schema 参数校验并自动转换为工具体；工具执行器`ToolExecutor` 负责运行时调度，通过 `get_tool_runtime()` 注入当前用户/会话上下文，确保跨用户隔离与工具函数无状态复用。
+   * 可观测性执行流程：每步工具调用逐一执行，产生 start 与 end 双向 trace（含工具名、参数摘要、结果摘要与条目数），通过异步回调实时推送前端观测面板, 工具调用结果则写回消息历史供后续观察节点 `observation`/`agent` 审视，形成完整的可追溯闭合回路。
+    Agent可操作用户本地知识库文件.Agent既可以通过RAG获取用户指代的最相关文件,又可以通过通过文件管理系统API具体调查和操作任何所需的具体文档,实现了"中枢智能体"的理念.
+4. 数据库设计：
+   - 关联库采用 SQLite 存储智能体会话(`session`)与消息(`message`)，每次对话从关联库加载完整会话上下文, 实现多轮对话管理；
+   - 向量库采用 ChromaDB，多模态文件经格式解析与元数据提取后统一转为结构化 JSON，再按语义切片写入向量库，检索时通过混合检索（向量相似度 + 关键词覆盖）与 ReRank 重排序实现精准召回，每个切片携带源文件路径与偏移信息可追溯至原始文档.
+      - 已入库的文件,未入库或者格式不可识别的文件,屏蔽的文件,三类文件将以不同的索引状态图标(绿,红,灰)显示在文件树中.
+      - 惰性灌库: 默认在文件入库时不自动灌库,用户可手动将单文件灌入向量库,或点击header的灌库按钮时进行全知识库范围内的灌库.
+      - 屏蔽单个文件/建立屏蔽区: 用户可设置部分文件或者文件夹内文件的屏蔽,被屏蔽的文件将禁止入库,入了也要出库,文档被写入屏蔽区之后也会将以之为来源的切片删除.灌库函数自动忽略屏蔽的文档和屏蔽区子树全部文档.
+5. 服务间调用：采用 **gRPC 协议** 函数化接口，暴露智能体信息流、思考轨迹、数据库调用等对外接口。**项目内置Agent既能够调用内外业务工具,其输入输出又能通过gRPC协议被外部服务调用**,从而保持自身智能体的独立性.
+6. 配置管理：`AgentConfig` 类管理全部运行时参数，分为系统配置与用户配置两层：
+   - 系统配置：模型接入参数、存储路径、服务端口等，内建默认值，可通过 `.env` 文件按需覆盖，无需修改代码。
+   - 用户配置：各用户的模型偏好、知识库路径、联网搜索开关等个性化设置，持久化到数据库，通过前端设置页可视化编辑。
+7. 可观测性：
+   - Agent对话框分为"对话模式"和"工具模式":
+     - 对话模式: agent思考过程默认折叠,被归类为"深度思考",处理后最终得到统一输出.
+     - 工具模式: 显性展示模型思考过程和工具调用过程.
+   - Agent观测面板实时展示 Agent 行动轨迹，包括节点状态、上下文构建器 JSON、RAG 召回条目、召回筛选过程、会话摘要等。日志系统记录全部 Agent 行动，信息传递过程完全可视化。
 8. 记忆管理：分层长短记忆的算法和机制。
-
-   * 短期记忆：即会话内上下文管理，不超过上下文长度的直接追加到上下文构建器 `ContextBuilder`，超过 `summary_trigger_tokens` 阈值时会先进入 `compress` 节点,用小模型生成“重要事实摘要”,再把工作上下文重写为 `重要事实摘要 + 最近少量消息`。
-   * 会话管理：基于 Session 机制，每次连续提问从 SQLite 读取同 ID 会话并加载到上下文构建器。
-   * 长期记忆：采用 RAG 检索增强生成 + ChromaDB 向量库作为长期记忆提取方式。
-
-     * 跨对话记忆：Tag 为 `Memory`，每次发送 prompt 且内容有用时自动异步提取摘要，存储到用户会话向量库中。
-     * 知识库 / 大文本记忆：Tag 为 `Knowledge`，需包含切片来源和时效性有关字段。本地知识库文件采用哈希锁来锁定文件已读状态。原始数据会先进行 `frontmatter_bootstrap` 处理，提取元结构 JSON，然后再进行 `knowledge_bootstrap` 处理得到可操作对象，再进行后续切片。
-     * 重要事实摘要记忆：上下文压缩后生成的摘要会写入 `important_fact_summary` 长期记忆,供后续 `ContextBuilder` 优先注入。
+   * 短期记忆：即会话内上下文管理.
+     * 不超过上下文长度的直接追加到上下文，超过最大上下文阈值时会先进入 `compress` 节点,用小模型生成“重要事实摘要”,再把工作上下文重写为 `重要事实摘要 + 最近少量消息`。
+     * 上下文拼装优先级为 `短期历史消息 -> 压缩摘要 -> 历史摘要/事实 -> 外部知识库片段`，避免知识库内容覆盖用户刚刚明确给出的事实。
+   * 长期记忆：采用 RAG 检索增强生成（向量检索 + 关键词检索 + ReRank 精排）作为长期记忆提取方式。
+     * 跨对话记忆(`Memory`)：每次发送 prompt 且内容有用时自动异步提取摘要，存储到用户会话向量库中。
+     * 知识库 / 大文本记忆 (`Knowledge`)：包含切片来源和时效性有关字段。本地知识库文件采用哈希锁来锁定文件已读状态。原始数据会先进行针对不同模态的预处理，提取元结构 JSON，读取并得到可操作对象，再进行后续切片。
+     * 重要事实摘要记忆：上下文压缩后生成的摘要会写入对话内的长期记忆,后续注入上下文。
      * 长期规则(定制化系统提示词)：本质是追加用户自定义的系统提示词. 不经过 RAG 流程,用户可自行设置,Agent也可以帮助用户更新记忆. 如果用户说“记住一个东西”，默认应该写长期记忆；只有内容是“以后必须/永远/每次都按这个规则做”这种行为规则，才应该写长期规则（追加系统提示词）。
    * 提高 RAG 召回率：采用以下策略：
-
      * 分块策略：按照语义切块，标题、段落、表格、列表分开处理。
-     * 切片策略：采用重叠切片，`512 ~ 1024` 个 token 一个 chunk，重叠部分为 `128 ~ 256` 个 token。
-     * 混合检索：采用多路召回，RAG 模糊检索与关键词检索并行，各取相关度最高的 5 条（默认），然后合并去重。
-     * 重排序：引入本地 ReRank 模型 `Cross-Encoder`，进行相关度精排序。对于混合检索得到的所有条目，先做 ReRank，再叠加时效性与权威性得到最终 TopK。
-9. 注意力优化：上下文拼装优先级为 `短期历史消息 -> important_fact_summary -> 当前 session 的 session_fact / session_summary -> 外部知识库片段`，避免知识库内容覆盖用户刚刚明确给出的事实。
-10. 信息时效性：为了保证信息时效性，每条记忆都要含有内容有效性时间戳字段（`created_at`、`updated_at`、`valid_from`、`valid_until`），检索时采用优先新内容、旧内容降权、过期内容直接过滤的算法：
-
-    1. 过滤层：过滤 `valid_until < now` 的过时信息。
-    2. 排序层：先经过 score_threshold 过滤无关候选，再以**时间优先**策略排序。主排序键为 `updated_at DESC`（最新优先），次排序键为 `final_score DESC`（联合得分）。理由：通过阈值过滤的候选均已相关，在此集合中越新的信息越可能是当前事实，可避免查询中携带的旧关键词（如"1111111 还算当前值吗"）通过 BM25 带偏排序。联合得分公式（用于同级时间的次排序）：$$Score = 0.5 \\cdot relevance + 0.3 \\cdot freshness + 0.2 \\cdot authority$$
-    3. 时效状态管理：配置 `MemoryResolver` 作为独立记忆裁决层，先把自然语言摘要解析为结构化事实单元 `session_fact`，再为事实写入 `active / superseded / expired` 状态。
-    4. 事实更新策略：针对**单值强排他事实**执行**新值覆盖旧值**，针对**多值弱排他事实**执行**新值追加**，针对**时序事实**执行**到期失效处理**，不再仅依赖向量检索排序推断新旧关系。
-    5. 事实类型裁决：已知 `fact_key` 走 schema 固定类别，未知 `fact_key` 由 LLM 提供候选类别，最终由程序统一裁决，避免同一事实在不同轮次被判成不同类型。
-11. 多级队列与并发: 限流调度器 `LLMTaskScheduler` 统一管理所有 LLM 调用。内部多级队列按主 Agent、Summary、Fact Extraction 三个等级分配,同时设置 `large / small` 双模型池路由——主推理走大模型池,摘要/事实抽取/上下文压缩走小模型池,分别配备独立并发上限、超时、熔断与重试机制。
-
-    * 大小模型分流机制：调度器先按任务语义决定 `model_tier`,再按 `model_tier` 选择实际模型配置。主回答模型负责复杂推理与最终回答,小模型负责重要事实摘要、长期记忆摘要、事实抽取、分类与轻量语义压缩,以降低主模型的延迟与负载压力。
-    * 物理模型隔离：如果配置 `AGENT_SMALL_MODEL_NAME / AGENT_SMALL_MODEL_API_KEY / AGENT_SMALL_MODEL_BASE_URL`,则 `small` 任务会真正调用独立小模型;未配置时才会回退到主模型配置,但仍占用 `small pool` 的并发配额。
-12. 安全审核机制：采用**三层递进式**安全防线,在 Agent 输入和输出两个位置执行审核,阻断风险请求并清洗敏感输出。
-
-    * 第一层 — 敏感词初检（`services/safety/sensitive_word_checker.py`）：
-在请求进入 Agent 主循环前,使用分类词库（`resources/safety/sensitive_words.json`）执行快速的 `exact` 精确匹配 + `regex` 正则匹配。
-词库按 `politics / pornography / violence / illegal / spam_ad / prompt_injection / data_exfiltration` 七大类分组,
-每类标记 `risk_level`（high/medium/low）和 `block` 标记。high 级别命中直接拦截,medium 级别交由第二层进一步判断。
-    * 第二层 — 小模型意图审核（`services/safety/intent_auditor.py`）：
-敏感词初检通过后,使用小模型（通过 `LLMTaskScheduler` 路由到 `small` 模型池,`foreground_agent` 优先级）对用户意图做语义级安全判断。
-审核维度包括：恶意攻击（越狱/注入）、非法请求、信息窃取、骚扰滥用、正常请求。输出 `pass / block / suspect` 三态裁决。
-    * 第三层 — 输出审核（`services/safety/output_auditor.py`）：
-在 Agent 生成最终回复后、返回用户前,对输出内容执行敏感词扫描。命中拦截类敏感词（政治/色情/暴力/违法）直接替换为标准安全回复;
-命中清洗类敏感词（广告/Prompt注入/数据窃取）执行脱敏替换（`***`）。
-    * 拦截回复差异化生成（`SafetyService.generate_block_message()`）：
-被拦截的用户请求不是返回统一硬编码提示,而是根据拦截类型调用**小模型**生成两类差异化回复：
-
-      * 政治敏感：命中 `politics` 分类或意图审核判定"政治敏感" → 小模型生成立场正确的反驳性回复（如"这种说法是完全错误的。中国共产党始终坚持……"）。
-      * 一般拦截：色情/暴力/违法/注入/广告等其他类别 → 小模型生成脱敏的礼貌拒绝（如"对不起,我不能回答这个问题,因为[脱敏理由]。如需其他帮助请随时告诉我。"）。
-两项回复均通过 `SafetyService._get_block_message_prompt()` 选择对应系统提示词,经 `LLMTaskScheduler` → `small` 模型池生成;小模型不可用时回退到静态后备文案。
-13. 可定制性: 用户可自定义长期记忆和系统提示词并持久化.
+     * 切片策略：采用重叠切片，`512` 个字符一个 chunk，重叠部分为 `128` 个字符。
+     * 混合检索：采用多路召回，**向量召回**（优先 ChromaDB 余弦距离，失败时回退 SQLite JSON 向量余弦相似度）与**关键词召回**（SQL ILIKE 预筛 + Python 覆盖率/词频加权打分）并行，各取相关度最高的 5 条，然后合并去重。
+     * 重排序：引入本地 CrossEncoder 模型 `BAAI/bge-reranker-v2-m3`，对合并后的候选集做语义相关性精排。启用 ReRank 时相关性得分取ReRank打分和混合检索打分中的最大值，打分都高的语义会更相关,更有机会作为备选:$$相关性得分(Relevance)=\max{混合检索得分,ReRank得分}$$
+     * 加权联合排序: $$联合得分(FinalScore) = 0.5 \times 相关性得分(Relevance) + 0.3 \times 新鲜性 + 0.2 \times 权威性$$
+   * 信息时效性：为了保证信息时效性，每条记忆都含有内容有效性时间戳字段（`created_at`、`updated_at`、`valid_from`、`valid_until`），检索时采用**优先新内容、旧内容降权、过期内容直接过滤**的算法：
+       1. 过滤层：过滤截止时间在当前时间的过时信息。
+       2. 排序层：先过滤无关候选，再以**时间优先**策略排序。最新的优先,更新时间相同时则看联合得分(FinalScore),时间和分数都一样则看对话来源,来源一样则看相关性得分(Relevance).
+       3. 时效状态管理：配置记忆裁决层，先把自然语言摘要解析为结构化事实单元，再为事实写入 `active(活跃) / superseded(被覆盖) / expired(淘汰)` 状态。
+       4. 事实更新策略：
+          - **单值强排他事实**执行**新值覆盖旧值**.
+          - **多值弱排他事实**执行**新值追加**.
+          - **时序事实**执行**到期失效处理**.
+       5. 事实类型裁决：有些事实是程序定义的,如项目具体信息,具体所属模块,此时事实由程序决定,LLM由于其输出不稳定性只能作为补充. 
+            - 事实已经属于规则的 → LLM 的结果直接扔掉，用规则的结果
+            - 事实是全新的 → 才保留 LLM 的结果
+9. 多级队列与限流: **模型任务调度器**统一管理所有 LLM 调用。内部多级队列按主 Agent、Summary、Fact Extraction 三个等级分配,同时设置 `large / small` 双模型池路由——主推理走大模型池,摘要/事实抽取/上下文压缩走小模型池,分别配备独立并发上限、超时、熔断与重试机制。
+    * 大小模型分流机制：调度器按任务类别决定使用大模型还是小模型。
+      * 主回答模型负责复杂推理与最终高质量回答.
+      * 小模型负责重要事实摘要、长期记忆摘要、事实抽取、分类与轻量语义压缩,以降低主模型的延迟与负载压力。
+    * 物理模型隔离：
+      * 用户未配置两个模型的API-KEY时,无法使用;
+      * 用户配置了大模型API-KEY但没有配置小模型时,小模型任务会回退到大模型配置,但仍占用小模型池的并发配额;
+      * 大小模型都配置时才会真正调用独立小模型.
+10. 安全审核机制：采用**三层递进式**安全防线,在 Agent 输入和输出两个位置执行审核,阻断风险请求并清洗敏感输出。
+    * 第一层 — 敏感词初检：
+        在请求进入 Agent 主循环前,使用分类词库（`resources/safety/sensitive_words.json`）执行快速的"精确匹配 + 正则匹配"。
+       词库按 `政治危险/色情/暴力/非法/垃圾广告/提示词注入/数据窃取` 七大类分组,
+       每类标记风险等级（high/medium/low）, high 级别命中直接拦截,medium 级别交由第二层进一步判断。
+    * 第二层 — 小模型意图审核：
+       敏感词初检通过后,使用小模型对用户意图做语义级安全判断, 审核维度包括：恶意攻击（越狱/注入）、非法请求、信息窃取、骚扰滥用、正常请求。输出 `pass / block / suspect` 三态裁决。
+    * 第三层 — 输出审核：
+       在 Agent 生成最终回复后、返回用户前,对输出内容执行敏感词扫描。命中拦截类敏感词（政治/色情/暴力/违法）直接替换为标准安全回复;
+       命中清洗类敏感词（广告/Prompt注入/数据窃取）执行脱敏替换（`***`）。
+    * 拦截回复差异化生成：
+       被拦截的用户请求根据拦截类型调用**小模型**生成两类差异化回复：
+           * 政治敏感：命中"政治危险"分类或意图审核判定"政治敏感" → 小模型生成"立场正确的反驳性回复"（如"这种说法是完全错误的。中国共产党始终坚持……"）。(先有意识形态,再有意识这一块)
+           * 一般拦截：色情/暴力/违法/注入/广告等其他类别 → 小模型生成脱敏的礼貌拒绝（如"对不起,我不能回答这个问题,因为`[脱敏理由]`。如需其他帮助请随时告诉我。"）。
+       两项回复均有对应的内置系统提示词,经小模型生成最终回答;小模型不可用时回退到静态后备文案。
+11. 可定制性: 用户可自定义长期记忆和系统提示词并持久化.
 * 用户自定义长期记忆:用户可以管理长期记忆,可以增加新的自定义长期记忆注入到向量库,或者删除长期记忆.
 * 用户自定义系统提示词:用户可编辑"用户设置系统提示词",追加到原本的系统提示词中.
-14. 多模态知识库扫描: 用户可将Agent植入到个人知识库中,Agent会扫描知识库中的多模态文件,并将不同模态文件以不同方式转化为JSON(不同知识库隔离存入`runtime/frontmatter/{user_id}/{library_id}/`),切片入ChromaDB向量数据库,供Agent使用;Agent可操作用户本地知识库文件.Agent既可以通过RAG获取用户指代的最相关文件,又可以通过通过文件管理系统API具体调查和操作任何所需的具体文档,实现了"中枢智能体"的理念.
+12. 多模态知识库扫描: 系统会扫描知识库中的多模态文件,并将不同模态文件以不同方式转化为JSON(不同知识库隔离存入`runtime/frontmatter/{user_id}/{library_id}/`),切片入ChromaDB向量数据库,供Agent使用.
   按模态策略:
     1. `.md` / `.txt`：
     Markdown 按 heading 结构化，TXT 整体或按段落切。它们是最稳定的文本源。
@@ -267,7 +291,8 @@ AgentService.exe
     **大表**：只提 schema、表头、前 N 行样例、统计信息、sheet 摘要。
     **超大或不适合语义检索的表**：只索引元信息，比如 sheet 名、列名、数据范围、文件说明，不把全部单元格灌进向量库。
     9. 图片(`.jpg`,`.jpeg`,`.png`,`.webp`)：
-    采用内置的Tesseract作为OCR引擎,既轻量又便捷.
+    采用 PaddleOCR 作为 OCR 引擎,优先覆盖中英文文字和表格截图场景.
+    默认不启用ocr,当用户在设置中设置成开启ocr的时候,会要求重启后生效,然后重启再预热 PaddleOCR 中英文检测/识别模型,模型缓存放在`runtime/models/paddleocr/`里面,前端也根据是否夹带图片或者本身就是图片来重新加载索引状态.
     图片不要默认都重度处理。先做轻量判定：
     **有文字**：OCR，生成 text block。
     **是图表/截图/流程图**：视觉描述 + OCR + 可能的结构化摘要。
@@ -283,9 +308,16 @@ AgentService.exe
     图片本体不写入 JSON，也不写入向量库；只保存为可引用 asset, 然后在结构化 JSON 中记录引用和识别结果。
     图片提取为独立 asset 落盘，保存在`runtime/assets/users/{user_id}/{library_id}/{document_id}/images/{image_id}.png`.JSON 只保存 asset_path、位置和识别结果。
     对于图片 block,应把图片前后的标题、段落、表格编号、图注一起作为上下文.这样召回时既能搜到图片内容，也能知道它属于哪个文档、哪个章节、哪个原始位置。
-15. 多模态查看:
+13. 多模态查看:
   - editor编辑区不仅提供Markdown编辑器功能,还提供代码高亮功能(`textarea` + `highlight.js`),实现md模式(Vditor)和代码编辑模式(CodeEditor)的切换.可设置支持高亮的代码文件格式,如`cpp`,`c`,`py`,`java`等.
   - 可以查看图片(`.png`/`.jpg`/`.jpeg`/`.webp`/`.gif`/`.svg`,`<img>`标签)和PDF(`<iframe>`标签),EXCEL/CSV(后端解析成表格),甚至可以尝试查看WORD(后端用`mammoth`转换成HTML后查看)这样的二进制文档.
+14. 知识图谱:
+  知识库图谱消费 `StructuredKnowledgeDocument.sections`,在文档结构化之后、向量入库旁路执行。小模型按 section 分批抽取实体和关系:先抽实体,再限定关系两端必须来自已抽出的实体集合;关系类型使用白名单,避免模型自由编造边类型。(当前只处理文字 section,不处理图片、OCR 或视觉描述。)
+  小模型输出只作为**候选结果**,后端会校验证据片段是否来自原文,并过滤空实体、过泛实体、自环关系、低置信度关系和非法关系类型。通过校验的文档节点、实体节点和关系边写入 SQLite。多个文档命中同一规范实体时合并实体节点,从而形成跨文档联系。
+  图谱数据必须和知识库入库同源清理:单文件重新入库时清理以该文件作为来源的旧点边,全库重建时刷新本知识库范围内的点边,删除或屏蔽文件时同步清理图谱和向量库来源数据。抽取失败不阻塞向量入库,只记录图谱状态为 skipped 或 failed。
+  前端使用D3 + Canvas 图谱组件,文件树模式展示目录结构,知识库模式展示文档、实体和语义边;文档节点双击打开文件,实体节点展示来源文档和证据片段。
+
+
 
 ## 工作原理流程图
 ### 核心Agent结构设计
@@ -295,37 +327,66 @@ AgentService.exe
 ```mermaid
 flowchart TD
     长短记忆["长短记忆"] & 知识库RAG["知识库 RAG"] & 安全审核["安全审核"] & 上下文管理["上下文管理"] & 多模态文档处理["多模态文档处理"] --> agent
-    agent["Agent<br/>智能体核心"]
-    会话管理["会话管理"] & 规划与编排["本地文件操作"] & 可观测性["可观测性"] & 工具系统["工具系统"] 联网搜索["联网搜索"] --> agent
+    agent["MetaWeave<br/>Agent"]
+    会话管理["会话管理"] & 规划与编排["本地文件操作"] & 可观测性["可观测性"] & 工具系统["工具系统"] & 联网搜索["联网搜索"] --> agent
 ```
 
-##### Agent状态转移图
+#### Agent状态转移图
+##### Simple模式
+
+```mermaid
+flowchart LR
+    START -->|"小模型判别: 无需工具"| agent_simple["agent (直答)\n小模型直接生成回答"]
+    agent_simple --> END
+```
+
+Simple 模式走轻量直答路径。不经过 LangGraph 循环，直接用小模型输出回答。适用于问候、短答等明显无需调用工具的输入。
+
+##### ReAct模式
 
 ```mermaid
 flowchart TD
-    safety_input["safety_input"]
+    START --> safety_input["safety_input\n安全输入审核"]
 
-    subgraph loop["Agent 循环"]
-        planner["planner"]
-        compress["compress"]
-        agent["agent"]
-        action["action"]
-        observation["observation"]
-    end
+    safety_input -->|"审核通过"| agent_react["agent\n模型决策节点"]
+    safety_input -->|"审核拦截"| END_intercept["END"]
 
-    safety_output["safety_output"]
+    agent_react -->|"有 tool_calls"| action_react["action\n工具执行"]
+    agent_react -->|"无 tool_calls"| safety_output_react["safety_output\n安全输出审核"]
 
-    safety_input -->|"通过"| planner
-    safety_input -->|"拦截"| E1((END))
-    planner --> agent
-    agent -->|"工具调用"| action
-    agent -->|"直接回复"| safety_output
-    action --> observation
-    observation -->|"继续/回答"| planner
-    observation -->|"上下文溢出"| compress
-    compress --> planner
-    safety_output --> E2((END))
+    action_react -->|"工具结果返回"| agent_react
+    safety_output_react --> END_react["END"]
 ```
+
+ReAct 模式是标准的"思考-行动-观察"循环。agent 节点同时充当决策者和观察者，每轮只调用一次 LLM。有工具调用就执行并回到 agent，没有工具调用就输出审核后结束。
+
+##### Plan模式(Plan-and-Execute)
+
+```mermaid
+flowchart TD
+    START --> safety_input["safety_input\n安全输入审核"]
+
+    safety_input -->|"审核通过"| planner["planner\n全局推理规划"]
+    safety_input -->|"审核拦截"| END_intercept["END"]
+
+    planner -->|"拆解问题 + sub_question"| agent_plan["agent\n模型决策"]
+
+    agent_plan -->|"有 tool_calls"| action["action\n工具执行"]
+    agent_plan -->|"无 tool_calls"| safety_output["safety_output\n安全输出审核"]
+
+    action -->|"工具结果"| observation["observation\n反思节点"]
+
+    observation -->|"continue\n需要继续探索"| planner
+    observation -->|"answer / retry / abandon"| agent_plan
+    observation -->|"overflow\n上下文溢出"| compress["compress\n上下文压缩"]
+
+    compress -->|"压缩后"| planner
+    safety_output --> END["END"]
+```
+
+Plan 模式经过"规划→执行→观察"的循环，每轮会调用 2~3 次 LLM。planner 负责拆解问题，observation 根据工具结果判断要继续执行、重试、给出答案，还是先压缩上下文再接续规划。
+
+
 ### 记忆机制
 
 ##### 长期记忆 / 知识库入库流程
@@ -346,14 +407,23 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[长期记忆调用工具] --> B[ChromaDB 检索]
-    C[知识库检索工具] --> B
-    B -->|N 条| H{过滤过期记忆}
-    H -->|及时| D[混合检索 / 多路召回]
-    D -->|10 条| E[重排序]
-    E -->|3 条| F[时效优先排序]
-    F -->|updated_at DESC| I[最终召回]
-    H -->|过时| G[去除]
+    A["用户 query<br/>(进入 ContextBuilder)"] --> B["检索长期记忆<br/>retrieve_long_term_memory<br/>4 层: session_fact / important_fact /<br/>session_summary / user_custom"]
+    A --> C["检索知识库<br/>retrieve_knowledge<br/>knowledge_chunk"]
+
+    B --> D["逐 memory_type 执行召回<br/>_retrieve_with_debug()"]
+    C --> D
+
+    subgraph recall_pipeline["单路召回管线 (每路独立执行)"]
+        direction LR
+        E["向量召回<br/>ChromaDB → JSON 回退"] --> F["关键词召回<br/>SQL ILIKE → Python 打分"]
+        F --> G["去重合并 →<br/>merge_candidates"]
+        G --> H["ReRank 精排<br/>CrossEncoder"]
+        H --> I["联合排序<br/>freshness + relevance + authority"]
+    end
+
+    D --> recall_pipeline
+    I --> J["4 层记忆合并去重 →<br/>按 final_score 截断 topK"]
+    J --> K["系统提示词内注入<br/>(含 recall_details 供前端观测)"]
 ```
 
 ##### 记忆时效性机制
@@ -388,8 +458,11 @@ flowchart TD
     A --> C["关键词抽取<br/>(ASCII token + CJK 片段 + stopwords 过滤)"]
 
     subgraph vector_path["向量召回路径"]
-        B --> D["ChromaDB 余弦相似度检索<br/>(<=> operator)"]
-        D --> E["过滤 valid_until 过期的候选"]
+        B --> D["ChromaDB PersistentClient<br/>余弦距离检索"]
+        D --> DA{"ChromaDB 返回结果?"}
+        DA -->|"是"| E["过滤 valid_until 过期的候选"]
+        DA -->|"否/异常"| DB["回退: JSON 向量余弦相似度<br/>_retrieve_by_json_vectors"]
+        DB --> E
         E --> F["向量召回候选集<br/>(vector_top_k 条)"]
     end
 
@@ -409,11 +482,13 @@ flowchart TD
     M --> O["候选排序<br/>(merged_score → session_match → channel_count → updated_at)"]
     N --> O
 
-    O --> P["ReRank 精排<br/>(本地 ReRank 模型)"]
+    O --> P["ReRank 精排<br/>本地 CrossEncoder 模型<br/>(BAAI/bge-reranker-v2-m3)"]
 
-    P --> Q["计算 final_score<br/>= 0.5·relevance + 0.3·freshness + 0.2·authority"]
-    Q --> R["过滤 score_threshold 以下"]
-    R --> S["最终排序<br/>(session_match DESC → updated_at DESC → final_score DESC → importance DESC)"]
+    P --> Q1["relevance_score = max(rerank_score, merged_score)"]
+    Q1 --> Q2["freshness_score = 1 / (1 + age_days/30)"]
+    Q2 --> Q3["final_score = 0.5·relevance + 0.3·freshness + 0.2·authority"]
+    Q3 --> R["过滤 score_threshold 以下"]
+    R --> S["最终排序<br/>(updated_at DESC → final_score DESC →<br/> session_match DESC → relevance DESC → importance DESC)"]
     S --> T["返回 TopK 结果<br/>(rerank_top_k 条)"]
 ```
 
@@ -690,6 +765,8 @@ flowchart TD
 
     T --> U["前端三组结果 &lt;hr&gt; 分隔展示<br/>文件 / 内容匹配 / 语义匹配"]
 ```
+
+##### 图谱产生流程(文件树图谱+知识图谱)
 
 
 ## 接口设计

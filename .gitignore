@@ -12,3 +12,5 @@ editor/node_modules/
 *.db
 *.exe
 .VSCodeCounter/
+resources/knowledge/
+.coverage

@@ -12,15 +12,28 @@ import { useChatStore } from '../chat'
 const apiMocks = vi.hoisted(() => ({
   fetchMessages: vi.fn(),
   streamPrompt: vi.fn(),
+  listSessions: vi.fn(),
+  createSession: vi.fn(),
+  deleteSession: vi.fn(),
+  updateSessionName: vi.fn(),
+  clearAllSessions: vi.fn(),
 }))
 
-vi.mock('@/api/session', () => ({ fetchMessages: apiMocks.fetchMessages }))
+vi.mock('@/api/session', () => ({
+  fetchMessages: apiMocks.fetchMessages,
+  listSessions: apiMocks.listSessions,
+  createSession: apiMocks.createSession,
+  deleteSession: apiMocks.deleteSession,
+  updateSessionName: apiMocks.updateSessionName,
+  clearAllSessions: apiMocks.clearAllSessions,
+}))
 vi.mock('@/api/agent', () => ({ streamPrompt: apiMocks.streamPrompt }))
 
 describe('chat reference history', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    apiMocks.listSessions.mockResolvedValue([])
   })
 
   it('restores a persisted user reference from message metadata', async () => {
@@ -40,4 +53,5 @@ describe('chat reference history', () => {
     expect(store.messages).toHaveLength(1)
     expect(store.messages[0]?.reference).toBe('被引用的文档内容')
   })
+
 })

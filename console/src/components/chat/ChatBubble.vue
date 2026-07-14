@@ -60,20 +60,35 @@ const thinkingTraces = computed(() => {
   const traces = props.message.trace || []
   const seen = new Set()
   return traces.filter(t => {
+    const isChatVisible = t.chat_visible === true || t.event === 'tool_call_end'
     if (!t.human_readable) return false
+    if (!isChatVisible) return false
     if (seen.has(t.human_readable)) return false
     seen.add(t.human_readable)
     return true
   })
 })
+
+const hasAssistantContent = computed(() => {
+  return Boolean(props.message.content && props.message.content !== '​')
+})
+
+const shouldRenderAssistant = computed(() => {
+  return props.message.role === 'assistant'
+    && (hasAssistantContent.value || thinkingTraces.value.length > 0 || props.isStreaming)
+})
+
+const shouldRenderAssistantBubble = computed(() => {
+  return hasAssistantContent.value || (props.isStreaming && thinkingTraces.value.length === 0)
+})
 </script>
 
 <template>
   <!-- Agent 消息: 头像在左 -->
-  <div v-if="message.role === 'assistant'" class="bubble-row assistant">
+  <div v-if="shouldRenderAssistant" class="bubble-row assistant">
     <img :src="agentAvatar" class="avatar" alt="agent" />
     <div class="bubble-col">
-      <span v-if="message.node" class="node-label">{{ message.node }}</span>
+      <span v-if="message.node && message.node !== 'assistant'" class="node-label">{{ message.node }}</span>
       <Transition name="think-slide">
         <div v-if="thinkingTraces.length > 0 && (isStreaming || thinkingRevealed)" class="thinking-wrapper">
           <ThinkingInline :traces="thinkingTraces" :is-streaming="isStreaming" :default-expanded="thinkingRevealed" @collapse="thinkingRevealed = false" />
@@ -95,9 +110,9 @@ const thinkingTraces = computed(() => {
           思考过程
         </button>
       </Transition>
-      <div v-if="message.content || isStreaming" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
-        <MarkdownContent v-if="message.content" :content="message.content" :is-streaming="isStreaming" />
-        <span v-if="isStreaming" class="cursor">|</span>
+      <div v-if="shouldRenderAssistantBubble" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
+        <MarkdownContent v-if="hasAssistantContent" :content="message.content" :is-streaming="isStreaming" />
+        <span v-if="isStreaming && !hasAssistantContent" class="cursor">|</span>
       </div>
     </div>
   </div>

@@ -7,23 +7,39 @@
   above the input area.
 -->
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Globe, Send, X } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { BrainCircuit, Check, ChevronDown, Globe, Send, X } from 'lucide-vue-next'
+import type { AgentLoopMode } from '@/api/agent'
 
 const props = defineProps<{
   disabled?: boolean
   centered?: boolean
   webSearchEnabled?: boolean
+  agentMode?: AgentLoopMode
   reference?: string
 }>()
 
 const emit = defineEmits<{
   send: [text: string, reference?: string]
   'toggle-web-search': []
+  'set-agent-mode': [mode: AgentLoopMode]
   'clear-reference': []
 }>()
 
 const text = ref('')
+const loopModeMenu = ref<HTMLDetailsElement | null>(null)
+
+const loopModeOptions: Array<{ value: AgentLoopMode; label: string; hint: string }> = [
+  { value: 'auto', label: 'Auto', hint: '自动选择' },
+  { value: 'simple', label: 'Simple', hint: '直接回答' },
+  { value: 'react', label: 'ReAct', hint: '工具循环' },
+  { value: 'plan', label: 'Plan', hint: '规划执行' },
+]
+
+const selectedLoopMode = computed<AgentLoopMode>(() => props.agentMode || 'auto')
+const selectedLoopModeLabel = computed(() => {
+  return loopModeOptions.find((option) => option.value === selectedLoopMode.value)?.label || 'Auto'
+})
 
 function handleSend() {
   const trimmed = text.value.trim()
@@ -40,6 +56,19 @@ function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     handleSend()
+  }
+}
+
+function handleLoopModeSummaryClick(event: MouseEvent) {
+  if (props.disabled) {
+    event.preventDefault()
+  }
+}
+
+function selectLoopMode(mode: AgentLoopMode) {
+  emit('set-agent-mode', mode)
+  if (loopModeMenu.value) {
+    loopModeMenu.value.open = false
   }
 }
 </script>
@@ -75,6 +104,34 @@ function handleKeydown(event: KeyboardEvent) {
           </button>
           <span class="input-hint">Enter send · Shift Enter newline</span>
         </div>
+        <details ref="loopModeMenu" class="loop-mode-dropdown" :class="{ disabled }">
+          <summary
+            class="loop-mode-trigger"
+            title="Agent Loop 模式"
+            aria-label="Agent Loop 模式"
+            @click="handleLoopModeSummaryClick"
+          >
+            <BrainCircuit :size="13" />
+            <span class="loop-mode-label">{{ selectedLoopModeLabel }}</span>
+            <ChevronDown :size="12" class="loop-mode-caret" />
+          </summary>
+          <div class="loop-mode-menu" role="listbox" aria-label="Agent Loop 模式">
+            <button
+              v-for="option in loopModeOptions"
+              :key="option.value"
+              class="loop-mode-option"
+              :class="{ active: selectedLoopMode === option.value }"
+              type="button"
+              role="option"
+              :aria-selected="selectedLoopMode === option.value"
+              @click="selectLoopMode(option.value)"
+            >
+              <span class="loop-mode-option-label">{{ option.label }}</span>
+              <span class="loop-mode-option-hint">{{ option.hint }}</span>
+              <Check v-if="selectedLoopMode === option.value" :size="13" class="loop-mode-check" />
+            </button>
+          </div>
+        </details>
         <button class="send-btn" :disabled="disabled || !text.trim()" type="button" title="发送" @click="handleSend">
           <Send :size="15" />
         </button>
@@ -105,7 +162,7 @@ function handleKeydown(event: KeyboardEvent) {
 .input-container {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--input-border);
   border-radius: var(--radius-xl);
   background: var(--input-bg);
@@ -198,6 +255,7 @@ function handleKeydown(event: KeyboardEvent) {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .web-search-toggle {
@@ -232,6 +290,127 @@ function handleKeydown(event: KeyboardEvent) {
   color: var(--color-text-tertiary);
   font-family: var(--font-mono);
   font-size: 9px;
+}
+
+.loop-mode-dropdown {
+  position: relative;
+  margin-left: auto;
+}
+
+.loop-mode-dropdown.disabled {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.loop-mode-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-muted, #8b93a7);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  list-style: none;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.loop-mode-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.loop-mode-trigger::marker {
+  content: '';
+}
+
+.loop-mode-trigger:hover,
+.loop-mode-dropdown[open] .loop-mode-trigger {
+  background: transparent;
+  color: var(--color-text-secondary, #a8b0c1);
+}
+
+.loop-mode-label {
+  min-width: 36px;
+  color: inherit;
+}
+
+.loop-mode-caret {
+  color: inherit;
+  transition: transform 120ms ease;
+}
+
+.loop-mode-dropdown[open] .loop-mode-caret {
+  transform: rotate(180deg);
+}
+
+.loop-mode-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: 198px;
+  padding: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 10px;
+  background: var(--color-surface, #111827);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+}
+
+.loop-mode-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-secondary, #a8b0c1);
+  font-family: var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.loop-mode-option:hover,
+.loop-mode-option.active {
+  background: rgba(66, 36, 235, 0.14);
+  color: var(--color-text, #e5e7eb);
+}
+
+.loop-mode-option-label {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+.loop-mode-option-hint {
+  margin-left: auto;
+  color: var(--color-text-tertiary, #7c8496);
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.loop-mode-check {
+  flex-shrink: 0;
+  color: var(--color-accent, #4224eb);
 }
 
 .send-btn {

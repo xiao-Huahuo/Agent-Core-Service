@@ -26,6 +26,31 @@ const modeButtonRefs = ref<HTMLElement[]>([])
 const indicatorStyle = ref({ width: '0px', transform: 'translateX(0px)' })
 const vditorRef = ref<{ undo: () => void; redo: () => void } | null>(null)
 
+const splitRatio = ref(0.5)
+const splitBodyRef = ref<HTMLElement | null>(null)
+let isDragging = false
+
+function onSplitDividerPointerdown(event: PointerEvent) {
+  if (event.button !== 0) return
+  isDragging = true
+  event.preventDefault()
+  document.addEventListener('pointermove', onSplitDividerPointermove)
+  document.addEventListener('pointerup', onSplitDividerPointerup)
+}
+
+function onSplitDividerPointermove(event: PointerEvent) {
+  if (!isDragging || !splitBodyRef.value) return
+  const rect = splitBodyRef.value.getBoundingClientRect()
+  const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
+  splitRatio.value = x
+}
+
+function onSplitDividerPointerup() {
+  isDragging = false
+  document.removeEventListener('pointermove', onSplitDividerPointermove)
+  document.removeEventListener('pointerup', onSplitDividerPointerup)
+}
+
 const activeContent = computed({
   get: () => workspaceStore.activeContent,
   set: (value: string) => workspaceStore.updateActiveContent(value),
@@ -46,7 +71,19 @@ const activeLanguage = computed(() => {
 
 const isMarkdownViewer = computed(() => workspaceStore.activeViewerKind === 'markdown')
 const isCodeViewer = computed(() => ['code', 'text'].includes(workspaceStore.activeViewerKind))
-const isPreviewOnlyViewer = computed(() => !isMarkdownViewer.value && !isCodeViewer.value)
+const isPdfViewer = computed(() => workspaceStore.activeViewerKind === 'pdf')
+const isPdfTextViewer = computed(() => isPdfViewer.value && Boolean(workspaceStore.activePreview?.content))
+const isImageViewer = computed(() => workspaceStore.activeViewerKind === 'image')
+const isImageTextViewer = computed(() => isImageViewer.value && Boolean(workspaceStore.activePreview?.content))
+const isTextEditViewer = computed(() => isCodeViewer.value || isPdfTextViewer.value || isImageTextViewer.value)
+const isPreviewOnlyViewer = computed(() => !isMarkdownViewer.value && !isTextEditViewer.value)
+const effectiveEditorMode = computed<EditorViewMode>(() => isPreviewOnlyViewer.value ? 'preview' : editorMode.value)
+
+const splitBodyStyle = computed(() => {
+  if (effectiveEditorMode.value !== 'split') return {}
+  const r = Math.max(0.15, Math.min(0.85, splitRatio.value))
+  return { gridTemplateColumns: `${r * 100}% 6px ${(1 - r) * 100}%` } as const
+})
 
 const modeButtons: Array<{ mode: EditorViewMode; label: string; icon: typeof Pencil }> = [
   { mode: 'edit', label: 'Edit', icon: Pencil },
@@ -76,7 +113,7 @@ function moveSegmentedIndicatorToButton(activeButton: HTMLElement) {
 }
 
 function updateSegmentedIndicator() {
-  const activeIndex = modeButtons.findIndex((button) => button.mode === editorMode.value)
+  const activeIndex = modeButtons.findIndex((button) => button.mode === effectiveEditorMode.value)
   const activeButton = modeButtonRefs.value[activeIndex]
   if (!activeButton) {
     return
@@ -85,6 +122,9 @@ function updateSegmentedIndicator() {
 }
 
 function setEditorMode(mode: EditorViewMode, event?: MouseEvent | PointerEvent) {
+  if (isPreviewOnlyViewer.value && mode !== 'preview') {
+    return
+  }
   editorMode.value = mode
   if (event?.currentTarget instanceof HTMLElement) {
     moveSegmentedIndicatorToButton(event.currentTarget)
@@ -108,14 +148,14 @@ function handleModeClick(mode: EditorViewMode, event: MouseEvent) {
 }
 
 function handleUndo() {
-  if (!isMarkdownViewer.value) {
+  if (!isMarkdownViewer.value || workspaceStore.activeFileReadonly) {
     return
   }
   vditorRef.value?.undo()
 }
 
 function handleRedo() {
-  if (!isMarkdownViewer.value) {
+  if (!isMarkdownViewer.value || workspaceStore.activeFileReadonly) {
     return
   }
   vditorRef.value?.redo()
@@ -150,6 +190,13 @@ watch(
     void nextTick(updateSegmentedIndicator)
   },
 )
+
+watch(
+  isPreviewOnlyViewer,
+  () => {
+    void nextTick(updateSegmentedIndicator)
+  },
+)
 </script>
 
 <template>
@@ -177,7 +224,8 @@ watch(
             v-for="(button, index) in modeButtons"
             :key="button.mode"
             :ref="(element) => setModeButtonRef(element, index)"
-            :class="{ active: editorMode === button.mode }"
+            :class="{ active: effectiveEditorMode === button.mode }"
+            :disabled="isPreviewOnlyViewer && button.mode !== 'preview'"
             type="button"
             @pointerdown="handleModePointerdown(button.mode, $event)"
             @click="handleModeClick(button.mode, $event)"
@@ -191,7 +239,7 @@ watch(
             class="undo-button"
             type="button"
             title="撤销 Ctrl+Z"
-            :disabled="!isMarkdownViewer"
+            :disabled="!isMarkdownViewer || workspaceStore.activeFileReadonly"
             @click="handleUndo"
           >
             <ArrowLeft :size="14" />
@@ -200,7 +248,7 @@ watch(
             class="redo-button"
             type="button"
             title="重做 Ctrl+Y"
-            :disabled="!isMarkdownViewer"
+            :disabled="!isMarkdownViewer || workspaceStore.activeFileReadonly"
             @click="handleRedo"
           >
             <ArrowRight :size="14" />
@@ -220,12 +268,14 @@ watch(
 
     <div
       v-if="workspaceStore.openTabs.length > 0"
+      ref="splitBodyRef"
       class="editor-body"
-      :data-mode="isPreviewOnlyViewer ? 'preview' : editorMode"
+      :data-mode="effectiveEditorMode"
+      :style="splitBodyStyle"
     >
       <!-- Keep Edit and Preview as separate grid children. Split mode relies on
            this contract instead of Vditor's internal side-by-side preview. -->
-      <section v-if="!isPreviewOnlyViewer && editorMode !== 'preview'" class="editor-surface">
+      <section v-if="!isPreviewOnlyViewer && effectiveEditorMode !== 'preview'" class="editor-surface">
         <VditorEditor
           v-if="isMarkdownViewer"
           ref="vditorRef"
@@ -234,16 +284,22 @@ watch(
           @save="workspaceStore.saveActiveFile"
         />
         <CodeEditor
-          v-else
+          v-else-if="isTextEditViewer"
           v-model="activeContent"
-          :language="activeLanguage"
+          :language="isImageTextViewer ? 'ocr' : activeLanguage"
+          :readonly="workspaceStore.activeFileReadonly"
           @save="workspaceStore.saveActiveFile"
         />
       </section>
-      <section v-if="isPreviewOnlyViewer || editorMode !== 'edit'" class="preview-surface">
+      <div
+        v-if="effectiveEditorMode === 'split'"
+        class="split-divider"
+        @pointerdown="onSplitDividerPointerdown"
+      ></div>
+      <section v-if="isPreviewOnlyViewer || effectiveEditorMode !== 'edit'" class="preview-surface">
         <MarkdownPreview v-if="isMarkdownViewer" :content="activeContent" />
         <CodePreview
-          v-else-if="isCodeViewer"
+          v-else-if="isCodeViewer && !isPdfViewer"
           :content="activeContent"
           :language="activeLanguage"
         />
@@ -416,6 +472,11 @@ watch(
   color: white;
 }
 
+.segmented button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
 .save-button {
   padding: 0 var(--space-8);
   border: 1px solid var(--color-primary);
@@ -477,8 +538,21 @@ watch(
   background: var(--color-canvas-soft);
 }
 
+.split-divider {
+  cursor: col-resize;
+  border-radius: 3px;
+  background: var(--color-border);
+  transition: background 120ms ease;
+  min-height: 100%;
+}
+
+.split-divider:hover {
+  background: var(--color-primary);
+}
+
 .editor-body[data-mode='split'] {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0;
+  user-select: none;
 }
 
 .editor-body[data-mode='edit'],

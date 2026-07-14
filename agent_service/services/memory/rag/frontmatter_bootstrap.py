@@ -17,7 +17,7 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from agent_service.core.agent_config import AgentConfig
 
@@ -26,6 +26,7 @@ from agent_service.services.memory.rag.frontmatter_document import (
     StructuredKnowledgeDocument,
     StructuredKnowledgeSection,
 )
+from agent_service.services.memory.rag.image_ocr import ImageOcrService
 from agent_service.services.memory.rag.multimodal_cleaner import MultimodalDocumentCleaner
 
 
@@ -49,11 +50,15 @@ class FrontmatterBootstrapService:
     config: 全局配置对象,用于读取原始知识目录和结构化输出目录。
     """
 
-    def __init__(self, *, config: AgentConfig) -> None:
+    def __init__(self, *, config: AgentConfig, ocr_enabled: bool | None = None) -> None:
         """初始化原始知识源结构化服务。"""
 
         self.config = config
-        self.multimodal_cleaner = MultimodalDocumentCleaner()
+        self.ocr_enabled = config.ocr.enabled if ocr_enabled is None else bool(ocr_enabled)
+        self.multimodal_cleaner = MultimodalDocumentCleaner(
+            ocr_enabled=self.ocr_enabled,
+            image_ocr_service=ImageOcrService(config=config) if self.ocr_enabled else None,
+        )
 
     def build_frontmatter_dir(
         self,
@@ -61,6 +66,7 @@ class FrontmatterBootstrapService:
         knowledge_dir: Path | None = None,
         frontmatter_dir: Path | None = None,
         supported_suffixes: set[str] | None = None,
+        exclude_path: Callable[[Path], bool] | None = None,
     ) -> FrontmatterBootstrapResult:
         """
         扫描原始知识目录并输出结构化 JSON。
@@ -74,7 +80,10 @@ class FrontmatterBootstrapService:
         output_root = frontmatter_dir or self.config.storage.frontmatter_dir
         suffixes = supported_suffixes or set(self.config.constants.knowledge_supported_suffixes)
         result = FrontmatterBootstrapResult()
-        source_files = self._iter_source_files(source_root, suffixes)
+        source_files = [
+            path for path in self._iter_source_files(source_root, suffixes)
+            if not (exclude_path and exclude_path(path))
+        ]
         logger.info("Frontmatter 结构化开始 | 扫描到 %d 个文件", len(source_files))
         for source_path in source_files:
             result.files_seen += 1
@@ -110,6 +119,57 @@ class FrontmatterBootstrapService:
             result.files_skipped,
         )
         return result
+
+    def build_frontmatter_file(
+        self,
+        *,
+        source_path: Path,
+        knowledge_dir: Path | None = None,
+        frontmatter_dir: Path | None = None,
+        supported_suffixes: set[str] | None = None,
+    ) -> tuple[FrontmatterBootstrapResult, Path]:
+        """
+        只结构化单个源文件。
+
+        source_path: 原始知识文件绝对路径或相对路径。
+        knowledge_dir: 当前知识库根目录。
+        frontmatter_dir: 结构化 JSON 输出根目录。
+        supported_suffixes: 可灌库后缀白名单。
+        """
+
+        source_root = (knowledge_dir or self.config.storage.knowledge_dir).resolve()
+        output_root = frontmatter_dir or self.config.storage.frontmatter_dir
+        suffixes = supported_suffixes or set(self.config.constants.knowledge_supported_suffixes)
+        resolved_source = source_path.expanduser().resolve()
+        result = FrontmatterBootstrapResult(files_seen=1)
+        if not resolved_source.is_file():
+            raise ValueError("source file not found")
+        if resolved_source.suffix.lower() not in suffixes:
+            raise ValueError(f"unsupported knowledge file suffix: {resolved_source.suffix.lower()}")
+        try:
+            resolved_source.relative_to(source_root)
+        except ValueError as exc:
+            raise ValueError("source file escapes knowledge_dir") from exc
+
+        source_hash = self._hash_file(resolved_source)
+        document = self._build_document(
+            source_path=resolved_source,
+            source_hash=source_hash,
+            knowledge_dir=source_root,
+        )
+        output_path = self._resolve_output_path(
+            source_path=resolved_source,
+            knowledge_dir=source_root,
+            frontmatter_dir=output_root,
+        )
+        output_payload = json.dumps(document.to_dict(), ensure_ascii=False, indent=2)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if output_path.exists() and output_path.read_text(encoding="utf-8") == output_payload:
+            result.files_skipped = 1
+            return result, output_path
+        output_path.write_text(output_payload, encoding="utf-8")
+        result.files_written = 1
+        return result, output_path
 
     def _build_document(
         self,
@@ -156,6 +216,7 @@ class FrontmatterBootstrapService:
             "relative_path": relative_path.as_posix(),
             "frontmatter": metadata,
             **extra_metadata,
+            "ocr_enabled": self.ocr_enabled,
         }
         return StructuredKnowledgeDocument(
             document_id=self._build_document_id(relative_path),
@@ -418,7 +479,12 @@ class FrontmatterBootstrapService:
         relative_path: 原始知识文件相对知识库根目录的路径。
         """
 
-        return "doc_" + re.sub(r"[^a-zA-Z0-9]+", "_", relative_path.as_posix()).strip("_").lower()
+        normalized_path = relative_path.as_posix()
+        slug = re.sub(r"[^a-zA-Z0-9]+", "_", normalized_path).strip("_").lower()
+        path_hash = hashlib.sha256(normalized_path.encode("utf-8")).hexdigest()[:12]
+        if not slug:
+            slug = "file"
+        return f"doc_{slug}_{path_hash}"
 
     @staticmethod
     def _iter_source_files(knowledge_dir: Path, suffixes: set[str]) -> list[Path]:

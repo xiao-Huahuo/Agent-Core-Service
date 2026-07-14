@@ -609,7 +609,15 @@ def read_knowledge_file(path: str) -> str:
         result = service.read_file(user_id=runtime.user_id, path=path)
     except Exception as exc:
         return f"读取文件失败: {exc}"
-    return result["content"]
+    content = str(result.get("content", ""))
+    max_chars = 6000
+    if len(content) <= max_chars:
+        return content
+    return (
+        content[:max_chars]
+        + f"\n\n[文件内容已截断: 已返回前 {max_chars} 字符, 原文共 {len(content)} 字符。"
+        "如需后续部分,请更精确地说明要查看的章节或关键词。]"
+    )
 
 
 def read_multimodal_file_info(path: str) -> str:

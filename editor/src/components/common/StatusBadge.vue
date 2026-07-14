@@ -17,6 +17,7 @@ const labels: Record<IndexStatus, string> = {
   indexing: 'indexing',
   indexed: 'indexed',
   failed: 'failed',
+  ignored: 'ignored',
 }
 </script>
 
@@ -57,5 +58,9 @@ const labels: Record<IndexStatus, string> = {
 
 .status-badge[data-status='failed'] {
   color: var(--color-danger);
+}
+
+.status-badge[data-status='ignored'] {
+  color: var(--color-text-muted);
 }
 </style>

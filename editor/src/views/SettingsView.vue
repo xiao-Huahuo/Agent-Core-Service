@@ -4,14 +4,20 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchWebSearchConfig, saveWebSearchConfig } from '@/api/settings'
 import type { SystemPromptEntry, MemoryEntry } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
+import { useWorkspaceStore } from '@/stores/workspace'
 import type { ThemeMode } from '@/types/settings'
 
 const settingsStore = useSettingsStore()
+const workspaceStore = useWorkspaceStore()
 const libraryNameDraft = ref(settingsStore.activeKnowledgeLibrary?.name ?? '')
 const knowledgeDirDraft = ref(settingsStore.profile.knowledgeDir)
 const watchEnabledDraft = ref(settingsStore.profile.knowledgeWatchEnabled)
+const autoIngestOnUploadDraft = ref(Boolean(settingsStore.profile.autoIngestOnUpload))
+const ocrEnabledDraft = ref(Boolean(settingsStore.profile.ocrEnabled))
+const knowledgeIgnorePatternsDraft = ref(settingsStore.profile.knowledgeIgnorePatterns ?? '')
 const saving = ref(false)
 const saveError = ref('')
+const saveMessage = ref('')
 
 /* ---- System prompts ---- */
 
@@ -200,7 +206,10 @@ const hasChanges = computed(() => {
   return (
     knowledgeDirDraft.value !== settingsStore.profile.knowledgeDir ||
     libraryNameDraft.value !== (settingsStore.activeKnowledgeLibrary?.name ?? '') ||
-    watchEnabledDraft.value !== settingsStore.profile.knowledgeWatchEnabled
+    watchEnabledDraft.value !== settingsStore.profile.knowledgeWatchEnabled ||
+    autoIngestOnUploadDraft.value !== Boolean(settingsStore.profile.autoIngestOnUpload) ||
+    ocrEnabledDraft.value !== Boolean(settingsStore.profile.ocrEnabled) ||
+    knowledgeIgnorePatternsDraft.value !== (settingsStore.profile.knowledgeIgnorePatterns ?? '')
   )
 })
 
@@ -218,11 +227,35 @@ watch(
   },
 )
 
+watch(
+  () => settingsStore.profile.autoIngestOnUpload,
+  (value) => {
+    autoIngestOnUploadDraft.value = Boolean(value)
+  },
+)
+
+watch(
+  () => settingsStore.profile.ocrEnabled,
+  (value) => {
+    ocrEnabledDraft.value = Boolean(value)
+  },
+)
+
+watch(
+  () => settingsStore.profile.knowledgeIgnorePatterns,
+  (value) => {
+    knowledgeIgnorePatternsDraft.value = value ?? ''
+  },
+)
+
 async function saveProfile() {
   saving.value = true
   saveError.value = ''
+  saveMessage.value = ''
   const nextKnowledgeDir = knowledgeDirDraft.value.trim() || settingsStore.profile.knowledgeDir
   const nextLibraryName = libraryNameDraft.value.trim()
+  const ignorePatternsChanged = knowledgeIgnorePatternsDraft.value !== (settingsStore.profile.knowledgeIgnorePatterns ?? '')
+  const ocrEnabledChanged = ocrEnabledDraft.value !== Boolean(settingsStore.profile.ocrEnabled)
   try {
     settingsStore.updateProfile({ knowledgeWatchEnabled: watchEnabledDraft.value })
     if (nextKnowledgeDir !== settingsStore.profile.knowledgeDir) {
@@ -230,6 +263,23 @@ async function saveProfile() {
     }
     if (nextLibraryName && nextLibraryName !== (settingsStore.activeKnowledgeLibrary?.name ?? '')) {
       await settingsStore.renameActiveKnowledgeLibrary(nextLibraryName)
+    }
+    if (
+      autoIngestOnUploadDraft.value !== Boolean(settingsStore.profile.autoIngestOnUpload) ||
+      ocrEnabledChanged ||
+      ignorePatternsChanged
+    ) {
+      const result = await settingsStore.saveKnowledgeIngestionSettings({
+        autoIngestOnUpload: autoIngestOnUploadDraft.value,
+        ocrEnabled: ocrEnabledDraft.value,
+        knowledgeIgnorePatterns: knowledgeIgnorePatternsDraft.value,
+      })
+      if (result?.restart_required) {
+        saveMessage.value = 'OCR 设置已保存, 重启后生效'
+      }
+    }
+    if (ignorePatternsChanged || ocrEnabledChanged) {
+      await workspaceStore.loadKnowledgeTree()
     }
   } catch (error) {
     saveError.value = error instanceof Error ? error.message : '保存失败'
@@ -255,6 +305,32 @@ async function saveProfile() {
       <div class="setting-row toggle-row">
         <label>文件监听</label>
         <input v-model="watchEnabledDraft" type="checkbox" />
+      </div>
+      <div class="setting-row toggle-row">
+        <label>自动灌库</label>
+        <input v-model="autoIngestOnUploadDraft" type="checkbox" />
+        <span class="hint-text">关闭时上传只进入文件树,点击 header 刷新或文件按钮才灌库</span>
+      </div>
+      <div class="setting-row toggle-row">
+        <label>OCR</label>
+        <input v-model="ocrEnabledDraft" type="checkbox" />
+        <span class="hint-text">开启后需重启; 重启时会检查并预热 PaddleOCR 中英文模型</span>
+      </div>
+      <div class="setting-row ignore-row">
+        <label>屏蔽区</label>
+        <textarea
+          v-model="knowledgeIgnorePatternsDraft"
+          spellcheck="false"
+          placeholder="# gitignore-like&#10;private/&#10;*.tmp&#10;!private/keep.md"
+        ></textarea>
+      </div>
+      <p class="setting-hint">被屏蔽的文件不会入库; 已入库文件会在下次 Ingest 或单文件灌库时出库。</p>
+      <div class="model-actions">
+        <button class="save-model-btn" :disabled="saving || !hasChanges" @click="saveProfile">
+          {{ saving ? '保存中...' : '保存' }}
+        </button>
+        <span v-if="saveMessage" class="feedback">{{ saveMessage }}</span>
+        <span v-if="saveError" class="feedback error">{{ saveError }}</span>
       </div>
     </section>
 
@@ -470,6 +546,36 @@ async function saveProfile() {
   background: #fff;
 }
 
+.ignore-row {
+  align-items: flex-start;
+}
+
+.ignore-row textarea {
+  flex: 1;
+  min-height: 86px;
+  padding: var(--space-8) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-code);
+  font-size: 12px;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+}
+
+.ignore-row textarea:focus {
+  border-color: var(--color-primary);
+}
+
+.setting-hint {
+  margin: -2px 0 var(--space-8) 82px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 /* Theme */
 .theme-row {
   display: flex;
@@ -612,6 +718,16 @@ async function saveProfile() {
   display: flex;
   align-items: center;
   gap: var(--space-8);
+}
+
+.hint-text {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.feedback.error {
+  color: var(--color-danger);
 }
 
 .save-model-btn {

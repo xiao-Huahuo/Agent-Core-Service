@@ -176,7 +176,7 @@ class RerankService:
         top_k: int,
     ) -> list[HybridRetrievalCandidate]:
         """
-        对混合检索候选做精排。
+        对混合检索候选做ReRank精排。
 
         query: 当前用户问题。
         candidates: 混合召回候选集。
@@ -190,6 +190,7 @@ class RerankService:
         if not self.is_enabled():
             ranked = list(candidates)
             ranked.sort(key=self._fallback_rank_key, reverse=True)
+            # 取Top-K条作为候选项
             return ranked[:top_k]
         provider = self.provider or _get_shared_rerank_provider(self.config)
         self._cached_provider = provider

@@ -6,7 +6,7 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { Activity, Bot, Folder, GitBranch, Search, Settings, Share2 } from 'lucide-vue-next'
+import { Activity, Bot, Folder, Search, Settings, Share2 } from 'lucide-vue-next'
 
 defineProps<{
   fileOpen: boolean
@@ -39,9 +39,6 @@ const emit = defineEmits<{
       @click="emit('toggleFile')"
     >
       <Folder :size="18" />
-    </button>
-    <button class="activity-button" type="button" title="Git" aria-label="Git">
-      <GitBranch :size="18" />
     </button>
     <button
       class="activity-button"

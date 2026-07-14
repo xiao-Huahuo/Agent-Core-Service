@@ -15,24 +15,84 @@ from __future__ import annotations
 
 import base64
 import csv
+import fnmatch
 import html
 import io
 import json
+import logging
 import mimetypes
+import os
 import re
 import shutil
+import stat
+import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
 from xml.etree import ElementTree
 
+logger = logging.getLogger(__name__)
+
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 from agent_service.services.memory.rag.embedding import EmbeddingService
 from agent_service.services.memory.rag.frontmatter_bootstrap import FrontmatterBootstrapService
+from agent_service.services.memory.rag.image_ocr import ImageOcrService
 from agent_service.services.memory.rag.knowledge_ingestion import KnowledgeIngestionService
+from agent_service.services.memory.rag.pdf_cleaner import extract_pdf_text
 from agent_service.services.settings_service import SettingsService
+from agent_service.services.knowledge_graph_service import KnowledgeGraphService
+
+
+class KnowledgeIgnoreMatcher:
+    """知识库屏蔽规则匹配器,支持 gitignore 常用子集。"""
+
+    def __init__(self, patterns_text: str) -> None:
+        self.rules = self._parse(patterns_text)
+
+    def is_ignored(self, relative_path: str, *, is_dir: bool = False) -> bool:
+        """判断知识库相对路径是否被屏蔽。"""
+
+        path = relative_path.replace("\\", "/").strip("/")
+        if not path:
+            return False
+        parts = path.split("/")
+        ignored = False
+        for negate, pattern, directory_only in self.rules:
+            if directory_only and not (is_dir or "/" in path):
+                # 文件仍可能被目录规则的父目录命中,下面会按前缀判断。
+                pass
+            if self._matches(pattern=pattern, directory_only=directory_only, path=path, parts=parts, is_dir=is_dir):
+                ignored = not negate
+        return ignored
+
+    @classmethod
+    def _parse(cls, patterns_text: str) -> list[tuple[bool, str, bool]]:
+        rules: list[tuple[bool, str, bool]] = []
+        for raw_line in patterns_text.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            negate = line.startswith("!")
+            if negate:
+                line = line[1:].strip()
+            line = line.replace("\\", "/").strip()
+            directory_only = line.endswith("/")
+            line = line.strip("/")
+            if line:
+                rules.append((negate, line, directory_only))
+        return rules
+
+    @staticmethod
+    def _matches(*, pattern: str, directory_only: bool, path: str, parts: list[str], is_dir: bool) -> bool:
+        if directory_only:
+            return path == pattern or path.startswith(f"{pattern}/") or any(
+                "/".join(parts[:index]) == pattern for index in range(1, len(parts) + 1)
+            )
+        if "/" in pattern:
+            return fnmatch.fnmatchcase(path, pattern)
+        return any(fnmatch.fnmatchcase(part, pattern) for part in parts) or fnmatch.fnmatchcase(path, pattern)
 
 
 def _read_text_with_fallback(path: Path) -> str:
@@ -70,6 +130,8 @@ class KnowledgeLibraryRebuildResult:
     chunks_created: 创建的知识 chunk 数量。
     chunks_deleted: 因源文件删除而清理的旧 chunk 数量。
     uploaded_path: 可选上传文件落盘路径。
+    skip_reason: 单文件灌库跳过原因,用于前端区分屏蔽、不支持和无可入库文本。
+    status_message: 可直接展示给用户的状态说明。
     """
 
     user_id: str
@@ -85,6 +147,8 @@ class KnowledgeLibraryRebuildResult:
     chunks_created: int
     chunks_deleted: int
     uploaded_path: str = ""
+    skip_reason: str = ""
+    status_message: str = ""
 
     def to_dict(self) -> dict[str, int | str]:
         """转换为 REST/gRPC 可直接返回的字典。"""
@@ -103,6 +167,8 @@ class KnowledgeLibraryRebuildResult:
             "chunks_created": self.chunks_created,
             "chunks_deleted": self.chunks_deleted,
             "uploaded_path": self.uploaded_path,
+            "skip_reason": self.skip_reason,
+            "status_message": self.status_message,
         }
 
 
@@ -123,6 +189,7 @@ class KnowledgeLibraryService:
         memory_service: LongTermMemoryService,
         settings_service: SettingsService,
         embedding_service: EmbeddingService | None = None,
+        knowledge_graph_service: KnowledgeGraphService | None = None,
     ) -> None:
         """保存依赖服务。"""
 
@@ -130,6 +197,7 @@ class KnowledgeLibraryService:
         self.memory_service = memory_service
         self.settings_service = settings_service
         self.embedding_service = embedding_service
+        self.knowledge_graph_service = knowledge_graph_service or KnowledgeGraphService(config=config)
 
     @property
     def supported_suffixes(self) -> set[str]:
@@ -170,11 +238,21 @@ class KnowledgeLibraryService:
         source_root.mkdir(parents=True, exist_ok=True)
         frontmatter_root = self._resolve_user_frontmatter_dir(normalized_user_id, library_id)
         frontmatter_root.mkdir(parents=True, exist_ok=True)
+        ignore_matcher = self._build_ignore_matcher(user_id=normalized_user_id)
 
-        frontmatter_result = FrontmatterBootstrapService(config=self.config).build_frontmatter_dir(
+        ocr_enabled = self.settings_service.is_ocr_enabled_for_user(user_id=normalized_user_id)
+        frontmatter_result = FrontmatterBootstrapService(config=self.config, ocr_enabled=ocr_enabled).build_frontmatter_dir(
             knowledge_dir=source_root,
             frontmatter_dir=frontmatter_root,
             supported_suffixes=self.supported_suffixes,
+            exclude_path=lambda path: ignore_matcher.is_ignored(
+                self._relative_path(path=path, root=source_root),
+                is_dir=False,
+            ),
+        )
+        self._delete_ignored_frontmatter_files(
+            frontmatter_root=frontmatter_root,
+            ignore_matcher=ignore_matcher,
         )
         ingestion_service = KnowledgeIngestionService(
             config=self.config,
@@ -207,6 +285,278 @@ class KnowledgeLibraryService:
             uploaded_path=uploaded_path,
         )
 
+    def build_upload_only_result(self, *, user_id: str, uploaded_path: str) -> KnowledgeLibraryRebuildResult:
+        """构造“仅上传不灌库”的统一返回。"""
+
+        profile = self.settings_service.ensure_user_profile(user_id=user_id)
+        active_library = dict(profile["active_knowledge_library"])
+        normalized_user_id = str(profile["user_id"])
+        library_id = str(active_library["library_id"])
+        source_root = Path(str(active_library["knowledge_dir"])).expanduser().resolve()
+        frontmatter_root = self._resolve_user_frontmatter_dir(normalized_user_id, library_id)
+        return KnowledgeLibraryRebuildResult(
+            user_id=normalized_user_id,
+            library_id=library_id,
+            knowledge_dir=str(source_root),
+            frontmatter_dir=str(frontmatter_root),
+            frontmatter_files_seen=0,
+            frontmatter_files_written=0,
+            frontmatter_files_skipped=0,
+            files_seen=0,
+            files_ingested=0,
+            files_skipped=0,
+            chunks_created=0,
+            chunks_deleted=0,
+            uploaded_path=uploaded_path,
+        )
+
+    def should_auto_ingest_on_upload(self, *, user_id: str) -> bool:
+        """返回用户上传后是否自动灌库。默认关闭。"""
+
+        config = self.settings_service.get_knowledge_ingestion_config(user_id=user_id)
+        return bool(config.get("auto_ingest_on_upload"))
+
+    def cleanup_ignored_sources(self, *, user_id: str) -> dict[str, int]:
+        """按当前屏蔽规则立即删除已入库的屏蔽文件切片和 frontmatter。"""
+
+        profile = self.settings_service.ensure_user_profile(user_id=user_id)
+        active_library = dict(profile["active_knowledge_library"])
+        normalized_user_id = str(profile["user_id"])
+        library_id = str(active_library["library_id"])
+        source_root = Path(str(active_library["knowledge_dir"])).expanduser().resolve()
+        frontmatter_root = self._resolve_user_frontmatter_dir(normalized_user_id, library_id)
+        ignore_matcher = self._build_ignore_matcher(user_id=normalized_user_id)
+        ignored_paths = [
+            self._relative_path(path=path, root=source_root)
+            for path in source_root.rglob("*")
+            if path.is_file() and ignore_matcher.is_ignored(self._relative_path(path=path, root=source_root), is_dir=False)
+        ] if source_root.exists() else []
+        chunks_deleted = self._delete_index_artifacts(user_id=normalized_user_id, relative_paths=ignored_paths)
+        self._delete_ignored_frontmatter_files(
+            frontmatter_root=frontmatter_root,
+            ignore_matcher=ignore_matcher,
+        )
+        return {"files_seen": len(ignored_paths), "chunks_deleted": chunks_deleted}
+
+    def ingest_single_file(self, *, user_id: str, path: str) -> KnowledgeLibraryRebuildResult:
+        """
+        只灌库当前 active 知识库中的单个文件。
+
+        path: 知识库根目录内相对路径。该操作不会清理其他文件对应的向量切片。
+        """
+
+        profile = self.settings_service.ensure_user_profile(user_id=user_id)
+        active_library = dict(profile["active_knowledge_library"])
+        normalized_user_id = str(profile["user_id"])
+        library_id = str(active_library["library_id"])
+        knowledge_owner_id = self.settings_service.build_knowledge_owner_id(
+            user_id=normalized_user_id,
+            library_id=library_id,
+        )
+        source_root = Path(str(active_library["knowledge_dir"])).expanduser().resolve()
+        source_path = self._resolve_child_path(root=source_root, relative_path=path)
+        if not source_path.is_file():
+            raise ValueError("file not found")
+        frontmatter_root = self._resolve_user_frontmatter_dir(normalized_user_id, library_id)
+        frontmatter_root.mkdir(parents=True, exist_ok=True)
+        relative_path = self._relative_path(path=source_path, root=source_root)
+        source_id = FrontmatterBootstrapService._build_document_id(Path(relative_path))
+        ignore_matcher = self._build_ignore_matcher(user_id=normalized_user_id)
+        if ignore_matcher.is_ignored(relative_path, is_dir=False):
+            frontmatter_path = (frontmatter_root / relative_path).with_suffix(".json").resolve()
+            if self._is_relative_to(frontmatter_path, frontmatter_root) and frontmatter_path.exists():
+                frontmatter_path.unlink()
+            chunks_deleted = self.memory_service.delete_memories_for_source(
+                user_id=knowledge_owner_id,
+                tag=self.config.constants.knowledge_tag,
+                memory_type="knowledge_chunk",
+                source_id=source_id,
+            )
+            return KnowledgeLibraryRebuildResult(
+                user_id=normalized_user_id,
+                library_id=library_id,
+                knowledge_dir=str(source_root),
+                frontmatter_dir=str(frontmatter_root),
+                frontmatter_files_seen=1,
+                frontmatter_files_written=0,
+                frontmatter_files_skipped=1,
+                files_seen=1,
+                files_ingested=0,
+                files_skipped=1,
+                chunks_created=0,
+                chunks_deleted=chunks_deleted,
+                uploaded_path=str(source_path),
+                skip_reason="ignored",
+                status_message="文件命中知识库屏蔽规则,已跳过并清理旧索引。",
+            )
+        if source_path.suffix.lower() not in self.supported_suffixes:
+            return KnowledgeLibraryRebuildResult(
+                user_id=normalized_user_id,
+                library_id=library_id,
+                knowledge_dir=str(source_root),
+                frontmatter_dir=str(frontmatter_root),
+                frontmatter_files_seen=1,
+                frontmatter_files_written=0,
+                frontmatter_files_skipped=1,
+                files_seen=1,
+                files_ingested=0,
+                files_skipped=1,
+                chunks_created=0,
+                chunks_deleted=0,
+                uploaded_path=str(source_path),
+                skip_reason="unsupported_suffix",
+                status_message=f"当前后缀 {source_path.suffix.lower()} 不在知识库入库白名单中。",
+            )
+
+        ocr_enabled = self.settings_service.is_ocr_enabled_for_user(user_id=normalized_user_id)
+        frontmatter_result, frontmatter_path = FrontmatterBootstrapService(config=self.config, ocr_enabled=ocr_enabled).build_frontmatter_file(
+            source_path=source_path,
+            knowledge_dir=source_root,
+            frontmatter_dir=frontmatter_root,
+            supported_suffixes=self.supported_suffixes,
+        )
+        ingestion_result = KnowledgeIngestionService(
+            config=self.config,
+            embedding_service=self.embedding_service,
+            memory_service=self.memory_service,
+        ).ingest_frontmatter_file(
+            frontmatter_path=frontmatter_path,
+            user_id=knowledge_owner_id,
+        )
+        skip_reason, status_message = self._describe_single_file_ingestion_result(
+            source_path=source_path,
+            frontmatter_path=frontmatter_path,
+            files_ingested=ingestion_result.files_ingested,
+            chunks_created=ingestion_result.chunks_created,
+        )
+        if skip_reason:
+            logger.warning(
+                "单文件灌库未生成切片 | path=%s suffix=%s reason=%s message=%s",
+                relative_path,
+                source_path.suffix.lower(),
+                skip_reason,
+                status_message,
+            )
+        return KnowledgeLibraryRebuildResult(
+            user_id=normalized_user_id,
+            library_id=library_id,
+            knowledge_dir=str(source_root),
+            frontmatter_dir=str(frontmatter_root),
+            frontmatter_files_seen=frontmatter_result.files_seen,
+            frontmatter_files_written=frontmatter_result.files_written,
+            frontmatter_files_skipped=frontmatter_result.files_skipped,
+            files_seen=ingestion_result.files_seen,
+            files_ingested=ingestion_result.files_ingested,
+            files_skipped=ingestion_result.files_skipped,
+            chunks_created=ingestion_result.chunks_created,
+            chunks_deleted=ingestion_result.chunks_deleted,
+            uploaded_path=str(source_path),
+            skip_reason=skip_reason,
+            status_message=status_message,
+        )
+
+    def ingest_path(self, *, user_id: str, path: str) -> KnowledgeLibraryRebuildResult:
+        """
+        灌库文件或文件夹。文件直接灌库,文件夹递归灌入其下所有支持的文件。
+
+        path: 知识库根目录内相对路径。
+        """
+
+        profile = self.settings_service.ensure_user_profile(user_id=user_id)
+        active_library = dict(profile["active_knowledge_library"])
+        normalized_user_id = str(profile["user_id"])
+        library_id = str(active_library["library_id"])
+        source_root = Path(str(active_library["knowledge_dir"])).expanduser().resolve()
+        source_path = self._resolve_child_path(root=source_root, relative_path=path)
+        if not source_path.exists():
+            raise ValueError("path not found")
+        if source_path.is_file():
+            return self.ingest_single_file(user_id=user_id, path=path)
+        supported = self.supported_suffixes
+        file_paths = sorted(
+            p for p in source_path.rglob("*") if p.is_file() and p.suffix.lower() in supported
+        )
+        if not file_paths:
+            return KnowledgeLibraryRebuildResult(
+                user_id=normalized_user_id,
+                library_id=library_id,
+                knowledge_dir=str(source_root),
+                frontmatter_dir=str(self._resolve_user_frontmatter_dir(normalized_user_id, library_id)),
+                frontmatter_files_seen=0,
+                frontmatter_files_written=0,
+                frontmatter_files_skipped=0,
+                files_seen=0,
+                files_ingested=0,
+                files_skipped=0,
+                chunks_created=0,
+                chunks_deleted=0,
+                uploaded_path=str(source_path),
+                skip_reason="no_supported_files",
+                status_message="该文件夹中没有可灌库的知识文件。",
+            )
+        agg = KnowledgeLibraryRebuildResult(
+            user_id=normalized_user_id,
+            library_id=library_id,
+            knowledge_dir=str(source_root),
+            frontmatter_dir=str(self._resolve_user_frontmatter_dir(normalized_user_id, library_id)),
+            frontmatter_files_seen=0,
+            frontmatter_files_written=0,
+            frontmatter_files_skipped=0,
+            files_seen=0,
+            files_ingested=0,
+            files_skipped=0,
+            chunks_created=0,
+            chunks_deleted=0,
+        )
+        for fp in file_paths:
+            relative = self._relative_path(path=fp, root=source_root)
+            try:
+                result = self.ingest_single_file(user_id=user_id, path=relative)
+                agg.frontmatter_files_seen += result.frontmatter_files_seen
+                agg.frontmatter_files_written += result.frontmatter_files_written
+                agg.frontmatter_files_skipped += result.frontmatter_files_skipped
+                agg.files_seen += result.files_seen
+                agg.files_ingested += result.files_ingested
+                agg.files_skipped += result.files_skipped
+                agg.chunks_created += result.chunks_created
+                agg.chunks_deleted += result.chunks_deleted
+            except Exception:
+                logger.exception("灌库文件失败 | path=%s", relative)
+                agg.files_skipped += 1
+        agg.status_message = f"文件夹灌库完成,共 {agg.files_ingested} 个文件入库,{agg.chunks_created} 个切片。"
+        return agg
+
+    def _describe_single_file_ingestion_result(
+        self,
+        *,
+        source_path: Path,
+        frontmatter_path: Path,
+        files_ingested: int,
+        chunks_created: int,
+    ) -> tuple[str, str]:
+        """根据单文件 frontmatter 和入库统计生成跳过原因。"""
+
+        if files_ingested > 0:
+            return "", ""
+        try:
+            payload = json.loads(frontmatter_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return "no_chunks", "文件已结构化,但没有生成可入库切片。"
+        metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+        if source_path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+            ocr_status = str(metadata.get("ocr_status") or "")
+            if ocr_status == "no_text":
+                return "ocr_no_text", "图片已处理,但 OCR 未识别到可入库文字。"
+            if ocr_status == "engine_unavailable":
+                return "ocr_engine_unavailable", "图片需要 OCR,但当前 OCR 引擎不可用。"
+            if ocr_status == "disabled":
+                return "ocr_disabled", "图片需要 OCR,但当前用户未启用 OCR。"
+            if chunks_created <= 0:
+                return "ocr_no_chunks", "图片已 OCR,但识别结果没有形成可入库切片。"
+        if chunks_created <= 0:
+            return "no_chunks", "文件已处理,但没有生成可入库文本切片。"
+        return "", ""
+
     def write_uploaded_file(
         self,
         *,
@@ -214,6 +564,7 @@ class KnowledgeLibraryService:
         filename: str,
         content: bytes,
         relative_dir: str = "",
+        conflict_strategy: str = "overwrite",
     ) -> Path:
         """
         将前端上传的文件写入用户知识库目录。
@@ -222,6 +573,7 @@ class KnowledgeLibraryService:
         filename: 上传文件名。
         content: 文件二进制内容。
         relative_dir: 可选目标子目录,必须位于知识库根目录内。
+        conflict_strategy: 同名冲突策略,支持 overwrite / skip / rename。
         """
 
         active_library = self.settings_service.get_active_knowledge_library(user_id=user_id)
@@ -235,6 +587,14 @@ class KnowledgeLibraryService:
         target_path = (target_dir / safe_filename).resolve()
         if not self._is_relative_to(target_path, root):
             raise ValueError("upload path escapes knowledge_dir")
+        normalized_strategy = conflict_strategy.strip().lower()
+        if normalized_strategy not in {"overwrite", "skip", "rename"}:
+            raise ValueError("invalid conflict_strategy")
+        if target_path.exists():
+            if normalized_strategy == "skip":
+                return target_path
+            if normalized_strategy == "rename":
+                target_path = self._unique_child_path(target_dir=target_dir, preferred_name=safe_filename)
         target_path.write_bytes(content)
         return target_path
 
@@ -245,9 +605,35 @@ class KnowledgeLibraryService:
         user_id: 用户 ID。
         """
 
-        root = self._get_active_root(user_id=user_id)
+        profile = self.settings_service.ensure_user_profile(user_id=user_id)
+        active_library = dict(profile["active_knowledge_library"])
+        normalized_user_id = str(profile["user_id"])
+        library_id = str(active_library["library_id"])
+        knowledge_owner_id = self.settings_service.build_knowledge_owner_id(
+            user_id=normalized_user_id,
+            library_id=library_id,
+        )
+        root = Path(str(active_library["knowledge_dir"])).expanduser().resolve()
         root.mkdir(parents=True, exist_ok=True)
-        return [self._path_to_node(path=path, root=root) for path in sorted(root.iterdir(), key=self._sort_path)]
+        ignore_matcher = self._build_ignore_matcher(user_id=normalized_user_id)
+        ocr_enabled = self.settings_service.is_ocr_enabled_for_user(user_id=normalized_user_id)
+        frontmatter_root = self._resolve_user_frontmatter_dir(normalized_user_id, library_id).resolve()
+        indexed_source_ids = self.memory_service.list_source_ids(
+            user_id=knowledge_owner_id,
+            tag=self.config.constants.knowledge_tag,
+            memory_type="knowledge_chunk",
+        )
+        return [
+            self._path_to_node(
+                path=path,
+                root=root,
+                ignore_matcher=ignore_matcher,
+                indexed_source_ids=indexed_source_ids,
+                frontmatter_root=frontmatter_root,
+                ocr_enabled=ocr_enabled,
+            )
+            for path in sorted(root.iterdir(), key=self._sort_path)
+        ]
 
     def get_active_root_path(self, *, user_id: str) -> Path:
         """
@@ -350,19 +736,30 @@ class KnowledgeLibraryService:
         }
         if suffix in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
             mime_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+            image_preview = self._preview_image_ocr(user_id=user_id, path=target)
             return {
                 **base_payload,
                 "kind": "image",
                 "mime_type": mime_type,
                 "data_url": self._file_data_url(path=target, mime_type=mime_type),
+                **image_preview,
                 "readonly": True,
             }
         if suffix == ".pdf":
+            pdf_preview = self._preview_pdf(path=target)
+            if not pdf_preview.get("pdf_scanned", True):
+                return {
+                    **base_payload,
+                    "kind": "document",
+                    "html": self._preview_pdf_html(path=target),
+                    "readonly": True,
+                }
             return {
                 **base_payload,
                 "kind": "pdf",
                 "mime_type": "application/pdf",
                 "raw_url": self._raw_file_url(user_id=user_id, relative_path=str(base_payload["path"])),
+                **pdf_preview,
                 "readonly": True,
             }
         if suffix in {".csv", ".tsv"}:
@@ -519,6 +916,86 @@ class KnowledgeLibraryService:
             return "\n".join(paragraphs) or "<p>DOCX 中没有可预览文本。</p>"
 
     @staticmethod
+    def _preview_pdf(*, path: Path) -> dict:
+        """提取 PDF 文本层供 Edit 模式展示,Preview 模式仍使用原始 PDF。"""
+
+        try:
+            extracted = extract_pdf_text(path)
+        except Exception:
+            return {
+                "content": "",
+                "pdf_scanned": True,
+                "page_count": 0,
+                "image_count": 0,
+                "table_count": 0,
+            }
+        return {
+            "content": extracted.content,
+            "pdf_scanned": extracted.is_scanned,
+            "page_count": extracted.page_count,
+            "image_count": extracted.image_count,
+            "table_count": extracted.table_count,
+        }
+
+    @staticmethod
+    def _preview_pdf_html(*, path: Path) -> str:
+        """将非扫描 PDF 转换为含嵌入图片的 HTML,类似 DOCX 预览。"""
+
+        try:
+            import fitz  # type: ignore[import-untyped]
+        except ImportError:
+            return "<p>缺少 PyMuPDF 依赖,无法预览 PDF。</p>"
+
+        parts: list[str] = []
+        try:
+            document = fitz.open(path)
+        except Exception:
+            return "<p>无法打开 PDF 文件。</p>"
+
+        with document:
+            for page_index in range(document.page_count):
+                page = document[page_index]
+                parts.append(f"<h2>第 {page_index + 1} 页</h2>")
+
+                # 文本层 — 按双换行分段落
+                page_text = (page.get_text("text") or "").strip()
+                if page_text:
+                    for block in page_text.split("\n\n"):
+                        block = block.strip()
+                        if block:
+                            parts.append(f"<p>{html.escape(block)}</p>")
+
+                # 嵌入图片
+                try:
+                    images = page.get_images(full=True)
+                    for img in images:
+                        xref = int(img[0])
+                        payload = document.extract_image(xref)
+                        img_bytes = payload.get("image")
+                        img_ext = str(payload.get("ext", "png") or "png")
+                        if img_bytes:
+                            b64 = base64.b64encode(img_bytes).decode("ascii")
+                            parts.append(f'<p><img src="data:image/{img_ext};base64,{b64}" style="max-width:100%" /></p>')
+                except Exception:
+                    pass
+
+        return "\n".join(parts) or "<p>PDF 中没有可预览内容。</p>"
+
+    def _preview_image_ocr(self, *, user_id: str, path: Path) -> dict:
+        """对普通图片执行 OCR,供 Edit 模式展示识别文本。"""
+
+        if not self.settings_service.is_ocr_enabled_for_user(user_id=user_id):
+            return {"content": "", "ocr_status": "disabled", "ocr_word_count": 0}
+        result = ImageOcrService(config=self.config).extract_image_text(path)
+        return {
+            "content": result.content,
+            "ocr_status": "completed" if result.has_text else ("no_text" if result.engine_available else "engine_unavailable"),
+            "ocr_engine_available": result.engine_available,
+            "ocr_word_count": result.word_count,
+            "ocr_average_confidence": result.average_confidence,
+        }
+
+    @staticmethod
     def _read_xlsx_shared_strings(archive: zipfile.ZipFile) -> list[str]:
         """读取 XLSX sharedStrings 表。"""
 
@@ -621,6 +1098,20 @@ class KnowledgeLibraryService:
         target.mkdir(parents=True, exist_ok=True)
         return self._path_to_node(path=target, root=root)
 
+    @staticmethod
+    def _remove_readonly(func: Any, path: Path, exc_info: Any) -> None:
+        """shutil.rmtree onerror 回调: 清除只读属性后重试删除。"""
+
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+
+    @staticmethod
+    def _force_unlink(path: Path) -> None:
+        """先清除只读属性再删除文件,兼容 Windows 只读文件。"""
+
+        os.chmod(path, stat.S_IWRITE)
+        path.unlink()
+
     def delete_path(self, *, user_id: str, path: str) -> dict:
         """
         删除当前 active 知识库中的文件或文件夹。
@@ -633,10 +1124,15 @@ class KnowledgeLibraryService:
         target = self._resolve_child_path(root=root, relative_path=path)
         if not target.exists():
             raise ValueError("path not found")
+        affected_paths = self._collect_relative_file_paths(target=target, root=root)
+        try:
+            self._delete_index_artifacts(user_id=user_id, relative_paths=affected_paths)
+        except Exception:
+            logger.exception("删除知识库索引工件失败,继续删除文件")
         if target.is_dir():
-            shutil.rmtree(target)
+            shutil.rmtree(target, onerror=KnowledgeLibraryService._remove_readonly)
         else:
-            target.unlink()
+            self._force_unlink(target)
         return {"ok": True}
 
     def rename_path(self, *, user_id: str, source_path: str, target_path: str) -> dict:
@@ -656,6 +1152,8 @@ class KnowledgeLibraryService:
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
             raise ValueError("target path already exists")
+        affected_paths = self._collect_relative_file_paths(target=source, root=root)
+        self._delete_index_artifacts(user_id=user_id, relative_paths=affected_paths)
         source.replace(target)
         return self._path_to_node(path=target, root=root)
 
@@ -761,7 +1259,32 @@ class KnowledgeLibraryService:
             raise ValueError("path escapes knowledge_dir")
         return candidate
 
-    def _path_to_node(self, *, path: Path, root: Path) -> dict:
+    @classmethod
+    def _unique_child_path(cls, *, target_dir: Path, preferred_name: str) -> Path:
+        """返回 target_dir 中不冲突的子路径,命名格式为 `file (1).txt`。"""
+
+        safe_name = Path(preferred_name).name.strip() or "untitled"
+        first_path = (target_dir / safe_name).resolve()
+        if not first_path.exists():
+            return first_path
+        stem = first_path.stem
+        suffix = first_path.suffix
+        for index in range(1, 1000):
+            candidate = (target_dir / f"{stem} ({index}){suffix}").resolve()
+            if not candidate.exists():
+                return candidate
+        return (target_dir / f"{stem} ({int(time.time())}){suffix}").resolve()
+
+    def _path_to_node(
+        self,
+        *,
+        path: Path,
+        root: Path,
+        ignore_matcher: KnowledgeIgnoreMatcher | None = None,
+        indexed_source_ids: set[str] | None = None,
+        frontmatter_root: Path | None = None,
+        ocr_enabled: bool = False,
+    ) -> dict:
         """
         将文件系统路径转换为前端文件树节点。
 
@@ -771,21 +1294,152 @@ class KnowledgeLibraryService:
 
         is_dir = path.is_dir()
         stat = path.stat()
+        relative_path = self._relative_path(path=path, root=root)
+        ignored = bool(ignore_matcher and ignore_matcher.is_ignored(relative_path, is_dir=is_dir))
+        source_id = FrontmatterBootstrapService._build_document_id(Path(relative_path)) if not is_dir else ""
+        is_indexed = bool(source_id and source_id in (indexed_source_ids or set()))
+        if is_indexed and ocr_enabled and frontmatter_root and self._source_needs_ocr_reindex(
+            source_path=path,
+            relative_path=relative_path,
+            frontmatter_root=frontmatter_root,
+        ):
+            is_indexed = False
         node = {
             "name": path.name,
-            "path": self._relative_path(path=path, root=root),
+            "path": relative_path,
             "isDir": is_dir,
             "mtime": self._format_mtime(path),
-            "indexStatus": "dirty",
+            "indexStatus": "ignored" if ignored else ("indexed" if is_indexed else "dirty"),
         }
         if is_dir:
             node["children"] = [
-                self._path_to_node(path=child, root=root)
+                self._path_to_node(
+                    path=child,
+                    root=root,
+                    ignore_matcher=ignore_matcher,
+                    indexed_source_ids=indexed_source_ids,
+                    frontmatter_root=frontmatter_root,
+                    ocr_enabled=ocr_enabled,
+                )
                 for child in sorted(path.iterdir(), key=self._sort_path)
             ]
         else:
             node["size"] = stat.st_size
         return node
+
+    def _build_ignore_matcher(self, *, user_id: str) -> KnowledgeIgnoreMatcher:
+        """从用户设置构造知识库屏蔽规则匹配器。"""
+
+        config = self.settings_service.get_knowledge_ingestion_config(user_id=user_id)
+        return KnowledgeIgnoreMatcher(str(config.get("knowledge_ignore_patterns") or ""))
+
+    def _delete_ignored_frontmatter_files(
+        self,
+        *,
+        frontmatter_root: Path,
+        ignore_matcher: KnowledgeIgnoreMatcher,
+    ) -> None:
+        """删除已被屏蔽规则命中的旧 frontmatter JSON,确保后续入库扫描看不到它们。"""
+
+        if not frontmatter_root.exists():
+            return
+        for frontmatter_path in sorted(frontmatter_root.rglob("*.json")):
+            if not frontmatter_path.is_file():
+                continue
+            try:
+                payload = json.loads(frontmatter_path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+            relative_path = str(metadata.get("relative_path") or "")
+            if relative_path and ignore_matcher.is_ignored(relative_path, is_dir=False):
+                frontmatter_path.unlink(missing_ok=True)
+
+    def _collect_relative_file_paths(self, *, target: Path, root: Path) -> list[str]:
+        """收集文件或目录子树内的知识库相对文件路径。"""
+
+        if target.is_file():
+            return [self._relative_path(path=target, root=root)]
+        if target.is_dir():
+            return [
+                self._relative_path(path=path, root=root)
+                for path in target.rglob("*")
+                if path.is_file()
+            ]
+        return []
+
+    def _delete_index_artifacts(self, *, user_id: str, relative_paths: list[str]) -> int:
+        """删除给定来源文件对应的 frontmatter 和向量切片。"""
+
+        if not relative_paths:
+            return 0
+        profile = self.settings_service.ensure_user_profile(user_id=user_id)
+        active_library = dict(profile["active_knowledge_library"])
+        normalized_user_id = str(profile["user_id"])
+        library_id = str(active_library["library_id"])
+        knowledge_owner_id = self.settings_service.build_knowledge_owner_id(
+            user_id=normalized_user_id,
+            library_id=library_id,
+        )
+        frontmatter_root = self._resolve_user_frontmatter_dir(normalized_user_id, library_id).resolve()
+        chunks_deleted = 0
+        for relative_path in relative_paths:
+            normalized_path = relative_path.replace("\\", "/").strip("/")
+            if not normalized_path:
+                continue
+            source_id = FrontmatterBootstrapService._build_document_id(Path(normalized_path))
+            chunks_deleted += self.memory_service.delete_memories_for_source(
+                user_id=knowledge_owner_id,
+                tag=self.config.constants.knowledge_tag,
+                memory_type="knowledge_chunk",
+                source_id=source_id,
+            )
+            frontmatter_path = (frontmatter_root / normalized_path).with_suffix(".json").resolve()
+            if self._is_relative_to(frontmatter_path, frontmatter_root) and frontmatter_path.exists():
+                frontmatter_path.unlink()
+        return chunks_deleted
+
+    def _source_needs_ocr_reindex(
+        self,
+        *,
+        source_path: Path,
+        relative_path: str,
+        frontmatter_root: Path,
+    ) -> bool:
+        """判断 OCR 开启后当前文件的旧 frontmatter 是否需要重建。"""
+
+        if not self._source_may_contain_images(source_path):
+            return False
+        frontmatter_path = (frontmatter_root / relative_path).with_suffix(".json").resolve()
+        if not self._is_relative_to(frontmatter_path, frontmatter_root) or not frontmatter_path.is_file():
+            return True
+        try:
+            payload = json.loads(frontmatter_path.read_text(encoding="utf-8"))
+        except Exception:
+            return True
+        metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+        return not bool(metadata.get("ocr_enabled"))
+
+    @staticmethod
+    def _source_may_contain_images(source_path: Path) -> bool:
+        """快速判断文件是否可能需要 OCR 重新结构化。"""
+
+        suffix = source_path.suffix.lower()
+        if suffix in {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".pdf"}:
+            return True
+        media_prefixes = {
+            ".docx": "word/media/",
+            ".pptx": "ppt/media/",
+            ".xlsx": "xl/media/",
+        }
+        media_prefix = media_prefixes.get(suffix)
+        if not media_prefix:
+            return False
+        try:
+            with zipfile.ZipFile(source_path) as archive:
+                return any(name.startswith(media_prefix) for name in archive.namelist())
+        except (OSError, zipfile.BadZipFile):
+            return False
 
     @staticmethod
     def _relative_path(*, path: Path, root: Path) -> str:

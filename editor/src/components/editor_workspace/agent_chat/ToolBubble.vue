@@ -4,12 +4,15 @@
   Usage:
   Matches console ToolBubble: action node traces render as full-width tool call
   rows, while other assistant nodes render only their content without node labels.
+  Shows retrieved knowledge sources below assistant content.
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import KnowledgeSources from '@/components/editor_workspace/agent_chat/KnowledgeSources.vue'
 import MarkdownContent from '@/components/editor_workspace/agent_chat/MarkdownContent.vue'
 import ToolCallInline from '@/components/editor_workspace/agent_chat/ToolCallInline.vue'
+import { useWorkspaceStore } from '@/stores/workspace'
 import type { AgentChatMessage } from '@/stores/chat'
 
 const props = defineProps<{
@@ -18,31 +21,93 @@ const props = defineProps<{
   userAvatar: string
   agentAvatar: string
   showAvatar?: boolean
+  knowledgeSources?: Array<{source_uri: string; content: string}>
+  citationMap?: Record<string, {source_uri: string; content: string}>
 }>()
+
+const workspaceStore = useWorkspaceStore()
 
 const hasContent = computed(() => {
   const content = props.message.content
-  return content && content !== '\u200b'
+  return content && content !== '​'
+})
+
+const statusTraces = computed(() => {
+  const seen = new Set<string>()
+  return (props.message.trace ?? []).filter((trace) => {
+    const humanReadable = typeof trace.human_readable === 'string' ? trace.human_readable : ''
+    const isChatVisible = trace.chat_visible === true
+    if (!humanReadable || trace.event === 'tool_call_start' || trace.event === 'tool_call_end') return false
+    if (!isChatVisible) return false
+    if (seen.has(humanReadable)) return false
+    seen.add(humanReadable)
+    return true
+  })
+})
+
+const hasToolTrace = computed(() => {
+  return (props.message.trace ?? []).some((trace) => {
+    return trace.tool_name && (trace.event === 'tool_call_start' || trace.event === 'tool_call_end')
+  })
+})
+
+const shouldRenderAssistant = computed(() => {
+  return props.message.role === 'assistant'
+    && (hasContent.value || statusTraces.value.length > 0 || props.isStreaming)
 })
 
 const bubbleRadius = computed(() => {
   return props.message.role === 'user' ? '18px 4px 18px 18px' : '4px 18px 18px 18px'
 })
+
+function handleNavigateSource(uri: string) {
+  const flatNodes = workspaceStore.flatNodes ?? []
+  let node = flatNodes.find((n) => n.path === uri)
+  if (!node) {
+    const parts = uri.replace(/\\/g, '/').split('/').filter(Boolean)
+    const name = parts[parts.length - 1] ?? uri
+    node = flatNodes.find((n) => n.path.endsWith(`/${name}`) || n.name === name)
+  }
+  if (node) {
+    workspaceStore.setMainView('editor')
+    workspaceStore.selectFile(node)
+  }
+}
 </script>
 
 <template>
-  <div v-if="message.role === 'assistant' && message.node === 'action'" class="action-row">
+  <div v-if="message.role === 'assistant' && message.node === 'action' && hasToolTrace" class="action-row">
     <ToolCallInline :traces="message.trace ?? []" />
   </div>
 
-  <div v-else-if="message.role === 'assistant'" class="bubble-row assistant">
+  <div v-else-if="shouldRenderAssistant" class="bubble-row assistant">
     <img v-if="showAvatar" :src="agentAvatar" class="avatar" alt="agent" />
     <div v-else class="avatar-spacer"></div>
     <div class="bubble-col">
-      <div v-if="hasContent || isStreaming" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
-        <MarkdownContent v-if="hasContent" :content="message.content" :is-streaming="isStreaming" />
-        <span v-if="isStreaming" class="cursor">|</span>
+      <div v-if="statusTraces.length > 0 && !hasContent" class="status-lines">
+        <p
+          v-for="trace in statusTraces"
+          :key="`${trace.node}-${trace.event}-${trace.human_readable}`"
+          class="status-line"
+        >
+          {{ trace.human_readable }}
+        </p>
       </div>
+      <div v-if="hasContent || (isStreaming && statusTraces.length === 0)" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
+        <MarkdownContent
+          v-if="hasContent"
+          :content="message.content"
+          :is-streaming="isStreaming"
+          :citation-map="citationMap"
+          :on-navigate-source="handleNavigateSource"
+        />
+        <span v-if="isStreaming && !hasContent" class="cursor">|</span>
+      </div>
+      <KnowledgeSources
+        v-if="!isStreaming && knowledgeSources && knowledgeSources.length > 0"
+        :sources="knowledgeSources"
+        :citation-map="citationMap ?? {}"
+      />
     </div>
   </div>
 
@@ -58,12 +123,6 @@ const bubbleRadius = computed(() => {
     <img :src="userAvatar" class="avatar" alt="user" />
   </div>
 
-  <div v-else class="bubble-row system">
-    <div class="bubble system-bubble">
-      <span class="system-role">{{ message.role }}</span>
-      <pre class="content system-content">{{ message.content }}</pre>
-    </div>
-  </div>
 </template>
 
 <style scoped>
@@ -114,6 +173,21 @@ const bubbleRadius = computed(() => {
 
 .bubble-row.user .bubble-col {
   align-items: flex-end;
+}
+
+.status-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+}
+
+.status-line {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: var(--line-height-normal);
 }
 
 .reference-block {

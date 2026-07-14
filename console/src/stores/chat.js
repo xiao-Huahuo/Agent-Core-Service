@@ -69,6 +69,15 @@ export const useChatStore = defineStore('chat', () => {
     messages.value.push({ ...msg })
   }
 
+  function traceIdentity(trace) {
+    return [
+      trace?.node || '',
+      trace?.event || '',
+      trace?.tool_name || '',
+      trace?.human_readable || '',
+    ].join('|')
+  }
+
   function findLastAssistant() {
     for (let i = messages.value.length - 1; i >= 0; i--) {
       if (messages.value[i].role === 'assistant') return messages.value[i]
@@ -101,7 +110,8 @@ export const useChatStore = defineStore('chat', () => {
     _flushTimer = null
     if (!_pendingContent) return
     const last = findLastAssistant()
-    if (last) last.content = _pendingContent
+    if (last) last.content += _pendingContent
+    _pendingContent = ''
   }
 
   function scheduleContentFlush() {
@@ -110,8 +120,16 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function updateStreamContent(content) {
-    _pendingContent = content
+    _pendingContent += content
     scheduleContentFlush()
+  }
+
+  function replaceStreamContent(content) {
+    if (_flushTimer !== null) clearTimeout(_flushTimer)
+    _flushTimer = null
+    _pendingContent = ''
+    const last = findLastAssistant()
+    if (last) last.content = content
   }
 
   function forceFlushContent() {
@@ -208,6 +226,22 @@ export const useChatStore = defineStore('chat', () => {
       bufferedTraces.length = 0
     }
 
+    function appendTraceToCurrentAssistant(node, trace) {
+      ensureAssistant(node)
+      const la = findLastAssistant()
+      if (la) {
+        if (!la.trace) la.trace = []
+        const seen = new Set(la.trace.map(traceIdentity))
+        const fresh = trace.filter((item) => {
+          const key = traceIdentity(item)
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        la.trace.push(...fresh)
+      }
+    }
+
     try {
       if (!targetSessionId) {
         targetSessionId = await sessionStore.create(userId)
@@ -235,27 +269,20 @@ export const useChatStore = defineStore('chat', () => {
           continue
         }
 
-        /* tool_trace 事件(action 节点): 仅 tool_call_end 才创建/更新气泡,实现数字滚动 */
+        /* tool_trace 事件(action 节点): 开始和结束都立即写入消息,让观测面板实时更新。 */
         if (chunk.node === 'action' && !chunk.content && chunk.trace && chunk.trace.length > 0) {
-          const endTraces = chunk.trace.filter(t => t.event === 'tool_call_end')
-          if (endTraces.length > 0) {
-            ensureAssistant('action')
-            const la = findLastAssistant()
-            if (la) {
-              if (!la.trace) la.trace = []
-              la.trace.push(...bufferedTraces, ...chunk.trace)
-              bufferedTraces.length = 0
-            }
-          } else {
-            bufferedTraces.push(...chunk.trace)
-          }
+          appendTraceToCurrentAssistant('action', chunk.trace)
           continue
         }
 
         /* action 节点(有内容): 只更新内容,不追加 trace(node 事件的 trace 与 tool_trace 重复) */
         if (chunk.node === 'action' && chunk.content) {
           ensureAssistant(chunk.node)
-          updateStreamContent(chunk.content)
+          if (chunk.type === 'delta') {
+            updateStreamContent(chunk.content)
+          } else {
+            replaceStreamContent(chunk.content)
+          }
           updateLastMessage(undefined, chunk.node, undefined, undefined)
           continue
         }
@@ -263,19 +290,15 @@ export const useChatStore = defineStore('chat', () => {
         /* 有实质文本内容 → 确保 assistant 存在, 内容节流写入 */
         if (chunk.content) {
           ensureAssistant(chunk.node)
-          updateStreamContent(chunk.content)
+          if (chunk.type === 'delta') {
+            updateStreamContent(chunk.content)
+          } else {
+            replaceStreamContent(chunk.content)
+          }
           updateLastMessage(undefined, chunk.node, chunk.tool_calls, chunk.trace)
         } else if (chunk.trace && chunk.trace.length > 0) {
           /* 仅有 trace 的事件 */
-          if (assistantCreated) {
-            const la = findLastAssistant()
-            if (la) {
-              if (!la.trace) la.trace = []
-              la.trace.push(...chunk.trace)
-            }
-          } else {
-            bufferedTraces.push(...chunk.trace)
-          }
+          appendTraceToCurrentAssistant(chunk.node || chunk.trace[0]?.node || 'agent', chunk.trace)
         }
       }
     } catch (err) {

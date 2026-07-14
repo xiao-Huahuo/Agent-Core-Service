@@ -15,3 +15,7 @@ pyinstaller
 duckduckgo_search
 ddgs
 mammoth
+PyMuPDF
+Pillow
+paddlepaddle
+paddleocr

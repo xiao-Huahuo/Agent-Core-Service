@@ -13,6 +13,7 @@ import { FileSearch, Layers, List, Loader, Search, Sparkles, ToggleLeft, ToggleR
 import { highlightMatch } from '@/utils/highlight'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
+import SplitText from '@/components/editor_workspace/SplitText.vue'
 
 const workspaceStore = useWorkspaceStore()
 const settingsStore = useSettingsStore()
@@ -145,7 +146,7 @@ onMounted(() => {
     <div class="search-stage" :class="{ pinned: hasSearched }">
       <Transition name="title-fade">
         <div v-if="!hasSearched" class="hero-title">
-          <h1>知识库搜索</h1>
+          <SplitText text="知识库搜索" tag="h1" :trigger-on-mount="true" />
           <p>在知识库中搜索文件、内容和语义匹配</p>
         </div>
       </Transition>

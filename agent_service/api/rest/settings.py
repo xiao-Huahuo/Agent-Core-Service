@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
-from agent_service.api.rest.deps import _require_settings_service
+from agent_service.api.rest.deps import _require_knowledge_library_service, _require_settings_service
 
 router = APIRouter()
 
@@ -53,6 +53,37 @@ async def update_user_knowledge_dir(body: dict[str, Any]) -> dict[str, Any]:
         return svc.update_knowledge_dir(user_id=user_id, knowledge_dir=knowledge_dir, name=name)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/settings/knowledge-ingestion")
+async def get_knowledge_ingestion_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+    """获取知识库灌库配置。"""
+
+    svc = _require_settings_service()
+    return svc.get_knowledge_ingestion_config(user_id=user_id)
+
+
+@router.put("/settings/knowledge-ingestion")
+async def save_knowledge_ingestion_config(body: dict[str, Any]) -> dict[str, Any]:
+    """保存知识库灌库配置。body: user_id 必填,auto_ingest_on_upload/ocr_enabled 可选。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    svc = _require_settings_service()
+    result = svc.save_knowledge_ingestion_config(
+        user_id=user_id,
+        auto_ingest_on_upload=body.get("auto_ingest_on_upload"),
+        ocr_enabled=body.get("ocr_enabled"),
+        knowledge_ignore_patterns=body.get("knowledge_ignore_patterns"),
+    )
+    if "knowledge_ignore_patterns" in body:
+        try:
+            cleanup_result = _require_knowledge_library_service().cleanup_ignored_sources(user_id=user_id)
+            result["ignore_cleanup"] = cleanup_result
+        except RuntimeError:
+            result["ignore_cleanup"] = {"files_seen": 0, "chunks_deleted": 0}
+    return result
 
 @router.get("/settings/system-prompt")
 async def list_system_prompt_entries(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:

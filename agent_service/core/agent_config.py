@@ -107,6 +107,7 @@ class AgentConfig:
         vector_db_dir: 向量数据库运行数据目录 (chroma_persist_dir 父目录)。
         embedding_model_dir: Embedding 模型本地缓存目录。
         rerank_model_dir: ReRank 模型本地缓存目录。
+        paddleocr_model_dir: PaddleOCR 模型本地缓存目录。
         knowledge_dir: 本地知识库原始资源目录,用于 frontmatter 结构化预处理扫描。
         frontmatter_dir: 结构化知识文档 JSON 目录,用于 frontmatter_bootstrap 输出与 knowledge_bootstrap 输入。
         mcp_server_config_dir: MCP Server 配置文件目录,下辖 *.json 文件。
@@ -122,6 +123,7 @@ class AgentConfig:
         vector_db_dir: Path = field(default_factory=lambda: Path("db/vector"))
         embedding_model_dir: Path = field(default_factory=lambda: Path("models/embedding"))
         rerank_model_dir: Path = field(default_factory=lambda: Path("models/rerank"))
+        paddleocr_model_dir: Path = field(default_factory=lambda: Path("models/paddleocr"))
         knowledge_dir: Path = field(default_factory=lambda: Path("resources/knowledge"))
         frontmatter_dir: Path = field(default_factory=lambda: Path("frontmatter"))
         mcp_server_config_dir: Path = field(default_factory=lambda: Path("resources/mcp"))
@@ -138,6 +140,7 @@ class AgentConfig:
             self.vector_db_dir = self._resolve_runtime_path(self.vector_db_dir)
             self.embedding_model_dir = self._resolve_runtime_path(self.embedding_model_dir)
             self.rerank_model_dir = self._resolve_runtime_path(self.rerank_model_dir)
+            self.paddleocr_model_dir = self._resolve_runtime_path(self.paddleocr_model_dir)
             self.knowledge_dir = self._resolve_project_path(self.knowledge_dir)
             self.frontmatter_dir = self._resolve_runtime_path(self.frontmatter_dir)
             self.mcp_server_config_dir = self._resolve_project_path(self.mcp_server_config_dir)
@@ -184,6 +187,7 @@ class AgentConfig:
             self.vector_db_dir.mkdir(parents=True, exist_ok=True)
             self.embedding_model_dir.mkdir(parents=True, exist_ok=True)
             self.rerank_model_dir.mkdir(parents=True, exist_ok=True)
+            self.paddleocr_model_dir.mkdir(parents=True, exist_ok=True)
             self.knowledge_dir.mkdir(parents=True, exist_ok=True)
             self.frontmatter_dir.mkdir(parents=True, exist_ok=True)
             self.mcp_server_config_dir.mkdir(parents=True, exist_ok=True)
@@ -248,6 +252,7 @@ class AgentConfig:
             "5. 列举功能时用自然语言概括能力领域,禁止直接贴函数名或代码标识符。"
             "6. 禁止在输出中使用方括号标签格式(如 [Memory]、[Knowledge]、[来源: X] 等),"
             "   如果工具返回了此类格式,你必须用自己的话重新组织。"
+            "   【例外】引用知识库来源时允许使用 [1][2] 等编号格式标注来源。"
             "7. 不要在最终回答里反问用户(如'还有什么需要帮助的吗'),直接结束回复即可。"
             "8. 回答时直接给出结论和内容,不要向用户暴露你获取信息的过程。"
             "禁止使用以下说辞:"
@@ -261,16 +266,20 @@ class AgentConfig:
             "就在当前回复里完整输出,不要假设用户已经看过。"
         )
         retrieval_context_system_prompt: str = (
-            "【上下文索引 — 使用工具获取详细内容】\n"
+            "【上下文索引 — 知识库内容已附原文】\n"
             "以下是系统预检索到的内容索引。重要事实摘要是自动压缩的关键上下文,可直接参考。\n"
-            "对于长期记忆和知识库,系统只提供条目数量提示,不提供全文。\n"
+            "对于长期记忆,系统只提供条目数量提示,不提供全文。\n"
             "如果你需要查看长期记忆的详细内容,请调用 get_long_term_memory 工具。\n"
-            "如果你需要查看知识库的详细内容,请调用 get_knowledge_context 工具。\n"
+            "知识库片段已随附原文和来源编号 [1][2] 等,你可以直接引用。\n"
             "上下文优先级:\n"
             "- 第一优先级: 当前 session 的短期历史消息。\n"
             "- 第二优先级: 重要事实摘要(已直接提供)。\n"
             "- 第三优先级: 长期记忆(需调工具获取全文)。\n"
-            "- 第四优先级: 知识库片段(需调工具获取全文)。"
+            "- 第四优先级: 知识库片段(已附原文和来源编号)。\n"
+            "【引用规范】\n"
+            "当你在回答中引用上述知识库内容时,必须在其后标注来源编号,"
+            "格式为 [1][2] 等。例如: \"根据文档描述,该系统的设计原则是模块化[1]。\"\n"
+            "每个知识片段都有对应的来源编号,引用时保持编号一致。"
         )
         important_fact_summary_system_prompt: str = (
             "你负责把对话或工作上下文压缩成后续推理可直接使用的重要事实摘要。"
@@ -374,6 +383,28 @@ class AgentConfig:
         knowledge_hash_lock_enabled: bool = True
         context_compression_tail_messages: int = 6
         knowledge_search_semantic_top_k: int = 5
+
+    @dataclass(slots=True)
+    class OcrConfig:
+        """
+        管理 OCR 运行开关与 PaddleOCR 模型配置。
+
+        enabled: 进程级 OCR 开关,默认关闭;用户设置开启后需重启服务才会生效。
+        language: PaddleOCR 识别语言,中英文场景使用 ch。
+        text_detection_model_name: PaddleOCR 文本检测模型名称。
+        text_recognition_model_name: PaddleOCR 文本识别模型名称。
+        device: PaddleOCR 推理设备,默认 cpu。
+        min_confidence: OCR 文本行最低置信度。
+        timeout_seconds: 单张图片 OCR 超时时间。
+        """
+
+        enabled: bool = False
+        language: str = "ch"
+        text_detection_model_name: str = "PP-OCRv5_mobile_det"
+        text_recognition_model_name: str = "PP-OCRv5_mobile_rec"
+        device: str = "cpu"
+        min_confidence: float = 0.5
+        timeout_seconds: int = 30
 
     @dataclass(slots=True)
     class TaskScheduleConfig:
@@ -509,6 +540,7 @@ class AgentConfig:
     storage: StorageConfig = field(default_factory=StorageConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
+    ocr: OcrConfig = field(default_factory=OcrConfig)
     task_schedule: TaskScheduleConfig = field(default_factory=TaskScheduleConfig)
     mcp: MCPConfig = field(default_factory=MCPConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
@@ -548,6 +580,7 @@ class AgentConfig:
             storage=cls.StorageConfig(**data["storage"]),
             model=cls.ModelConfig(**data["model"]),
             memory=cls.MemoryConfig(**data["memory"]),
+            ocr=cls.OcrConfig(**data["ocr"]),
             task_schedule=cls.TaskScheduleConfig(**data["task_schedule"]),
             mcp=cls.MCPConfig(**data["mcp"]),
             logging=cls.LoggingConfig(**data["logging"]),
@@ -648,6 +681,7 @@ class AgentConfig:
             "AGENT_VECTOR_DB_DIR": ("storage", "vector_db_dir", str),
             "AGENT_EMBEDDING_MODEL_DIR": ("storage", "embedding_model_dir", str),
             "AGENT_RERANK_MODEL_DIR": ("storage", "rerank_model_dir", str),
+            "AGENT_PADDLEOCR_MODEL_DIR": ("storage", "paddleocr_model_dir", str),
             "AGENT_KNOWLEDGE_DIR": ("storage", "knowledge_dir", str),
             "AGENT_FRONTMATTER_DIR": ("storage", "frontmatter_dir", str),
             "AGENT_MCP_SERVER_CONFIG_DIR": ("storage", "mcp_server_config_dir", str),
@@ -670,6 +704,13 @@ class AgentConfig:
             "AGENT_RETRIEVAL_CONTEXT_SYSTEM_PROMPT": ("model", "retrieval_context_system_prompt", str),
             "AGENT_EMBEDDING_MODEL_NAME": ("model", "embedding_model_name", str),
             "AGENT_RERANK_MODEL_NAME": ("model", "rerank_model_name", str),
+            "AGENT_OCR_ENABLED": ("ocr", "enabled", AgentConfig._parse_bool),
+            "AGENT_OCR_LANGUAGE": ("ocr", "language", str),
+            "AGENT_PADDLEOCR_DET_MODEL_NAME": ("ocr", "text_detection_model_name", str),
+            "AGENT_PADDLEOCR_REC_MODEL_NAME": ("ocr", "text_recognition_model_name", str),
+            "AGENT_PADDLEOCR_DEVICE": ("ocr", "device", str),
+            "AGENT_OCR_MIN_CONFIDENCE": ("ocr", "min_confidence", float),
+            "AGENT_OCR_TIMEOUT_SECONDS": ("ocr", "timeout_seconds", int),
             "AGENT_IMPORTANT_FACT_SUMMARY_SYSTEM_PROMPT": (
                 "model",
                 "important_fact_summary_system_prompt",

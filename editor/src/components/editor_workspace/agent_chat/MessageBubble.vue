@@ -17,6 +17,8 @@ const props = defineProps<{
   userAvatar: string
   agentAvatar: string
   showAvatar?: boolean
+  knowledgeSources?: Array<{source_uri: string; content: string}>
+  citationMap?: Record<string, {source_uri: string; content: string}>
 }>()
 
 const settingsStore = useSettingsStore()

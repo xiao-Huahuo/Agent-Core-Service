@@ -10,7 +10,8 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, saveWebSearchConfig, updateSettingsKnowledgeDir } from '@/api/settings'
+import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, saveKnowledgeIngestionConfig, saveWebSearchConfig, updateSettingsKnowledgeDir } from '@/api/settings'
+import type { AgentLoopMode } from '@/api/agent'
 import type { SettingsKnowledgeLibraryResponse, SettingsProfileResponse } from '@/api/settings'
 import type { KnowledgeLibraryProfile } from '@/types/settings'
 import type { ThemeMode, UserSettingsProfile } from '@/types/settings'
@@ -18,6 +19,7 @@ import type { ThemeMode, UserSettingsProfile } from '@/types/settings'
 const THEME_KEY = 'agent_editor_theme_mode'
 const PROFILE_KEY = 'agent_editor_profile'
 const CHAT_MODE_KEY = 'agent_editor_chat_mode'
+const AGENT_LOOP_MODE_KEY = 'agent_editor_loop_mode'
 
 const DEFAULT_PROFILE: UserSettingsProfile = {
   userId: '',
@@ -27,6 +29,9 @@ const DEFAULT_PROFILE: UserSettingsProfile = {
   knowledgeWatchEnabled: true,
   proxyUrl: '',
   webSearchEnabled: false,
+  autoIngestOnUpload: false,
+  ocrEnabled: false,
+  knowledgeIgnorePatterns: '',
 }
 
 function normalizeProfile(profile: UserSettingsProfile): UserSettingsProfile {
@@ -57,6 +62,9 @@ function mapBackendProfile(profileResponse: SettingsProfileResponse): Partial<Us
     knowledgeDir: profileResponse.knowledge_dir,
     activeLibraryId: profileResponse.active_library_id ?? '',
     knowledgeLibraries: (profileResponse.knowledge_libraries ?? []).map(mapKnowledgeLibrary),
+    autoIngestOnUpload: Boolean(profileResponse.auto_ingest_on_upload),
+    ocrEnabled: Boolean(profileResponse.ocr_enabled),
+    knowledgeIgnorePatterns: profileResponse.knowledge_ignore_patterns ?? '',
   }
 }
 
@@ -65,6 +73,16 @@ function mapBackendWebSearchConfig(config: { proxy_url: string; web_search_enabl
     proxyUrl: config.proxy_url,
     webSearchEnabled: config.web_search_enabled,
   }
+}
+
+function normalizeAgentLoopMode(mode: string | null): AgentLoopMode {
+  if (mode === 'simple' || mode === 'react' || mode === 'plan') {
+    return mode
+  }
+  if (mode === 'deep') {
+    return 'plan'
+  }
+  return 'auto'
 }
 
 function loadProfile(): UserSettingsProfile {
@@ -91,6 +109,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /** Chat bubble rendering mode shared by the editor Agent panel. */
   const chatMode = ref<'chat' | 'tool'>((localStorage.getItem(CHAT_MODE_KEY) as 'chat' | 'tool' | null) ?? 'chat')
+
+  /** Agent execution loop mode shared by Agent panel and Obs graph. */
+  const agentLoopMode = ref<AgentLoopMode>(normalizeAgentLoopMode(localStorage.getItem(AGENT_LOOP_MODE_KEY)))
 
   /** Whether the editor shell can enter workspace routes. */
   const hasUserId = computed(() => profile.value.userId.trim().length > 0)
@@ -140,6 +161,11 @@ export const useSettingsStore = defineStore('settings', () => {
   function toggleChatMode() {
     chatMode.value = chatMode.value === 'chat' ? 'tool' : 'chat'
     localStorage.setItem(CHAT_MODE_KEY, chatMode.value)
+  }
+
+  function setAgentLoopMode(mode: AgentLoopMode) {
+    agentLoopMode.value = mode
+    localStorage.setItem(AGENT_LOOP_MODE_KEY, mode)
   }
 
   /** Update local profile values until backend settings are connected. */
@@ -224,10 +250,48 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  async function saveKnowledgeIngestionSettings(params: { autoIngestOnUpload?: boolean; ocrEnabled?: boolean; knowledgeIgnorePatterns?: string }) {
+    if (!hasUserId.value) {
+      updateProfile({
+        autoIngestOnUpload: params.autoIngestOnUpload ?? profile.value.autoIngestOnUpload,
+        ocrEnabled: params.ocrEnabled ?? profile.value.ocrEnabled,
+        knowledgeIgnorePatterns: params.knowledgeIgnorePatterns ?? profile.value.knowledgeIgnorePatterns,
+      })
+      return
+    }
+    const prev = {
+      autoIngestOnUpload: profile.value.autoIngestOnUpload,
+      ocrEnabled: profile.value.ocrEnabled,
+      knowledgeIgnorePatterns: profile.value.knowledgeIgnorePatterns,
+    }
+    updateProfile({
+      autoIngestOnUpload: params.autoIngestOnUpload ?? profile.value.autoIngestOnUpload,
+      ocrEnabled: params.ocrEnabled ?? profile.value.ocrEnabled,
+      knowledgeIgnorePatterns: params.knowledgeIgnorePatterns ?? profile.value.knowledgeIgnorePatterns,
+    })
+    try {
+      const result = await saveKnowledgeIngestionConfig(profile.value.userId, params)
+      updateProfile({
+        autoIngestOnUpload: result.auto_ingest_on_upload,
+        ocrEnabled: result.ocr_enabled,
+        knowledgeIgnorePatterns: result.knowledge_ignore_patterns,
+      })
+      return result
+    } catch {
+      updateProfile(prev)
+      throw new Error('保存灌库设置失败')
+    }
+  }
+
+  async function setAutoIngestOnUpload(enabled: boolean) {
+    await saveKnowledgeIngestionSettings({ autoIngestOnUpload: enabled })
+  }
+
   return {
     themeMode,
     colorScheme,
     chatMode,
+    agentLoopMode,
     profile,
     hasUserId,
     activeKnowledgeLibrary,
@@ -236,6 +300,7 @@ export const useSettingsStore = defineStore('settings', () => {
     setThemeMode,
     toggleTheme,
     toggleChatMode,
+    setAgentLoopMode,
     updateProfile,
     applyBackendProfile,
     setUserId,
@@ -246,5 +311,7 @@ export const useSettingsStore = defineStore('settings', () => {
     renameActiveKnowledgeLibrary,
     fetchWebSearchSettings,
     toggleWebSearch,
+    saveKnowledgeIngestionSettings,
+    setAutoIngestOnUpload,
   }
 })

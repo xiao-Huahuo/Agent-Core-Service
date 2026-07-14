@@ -6,7 +6,7 @@
   sessions for the current editor user_id.
 -->
 <script setup lang="ts">
-import { Bot, History, MessageSquarePlus, PanelLeft, Plus, Trash2, X } from 'lucide-vue-next'
+import { History, MessageSquarePlus, PanelLeft, Plus, Trash2, X } from 'lucide-vue-next'
 
 import { useSessionStore } from '@/stores/session'
 import type { SessionRecord } from '@/api/session'
@@ -58,12 +58,8 @@ async function clearAllSessions() {
   <aside class="session-drawer" :class="{ open, 'page-mode': mode === 'page' }">
     <div class="drawer-titlebar">
       <template v-if="mode === 'page'">
-        <div class="brand-mark">
-          <Bot :size="15" />
-        </div>
         <div class="brand-copy">
           <strong>MetaWeave</strong>
-          <span>Agent</span>
         </div>
       </template>
       <div v-else class="traffic-lights">
@@ -97,7 +93,7 @@ async function clearAllSessions() {
       </div>
     </div>
 
-    <div v-if="mode === 'page'" class="history-label">Recent chats</div>
+    <!-- history label removed per request -->
 
     <div class="session-list">
       <button
@@ -166,7 +162,6 @@ async function clearAllSessions() {
   --drawer-page-bg-solid: rgba(13, 17, 28, 0.86);
   --drawer-page-hover: rgba(255, 255, 255, 0.08);
   --drawer-page-active: rgba(255, 255, 255, 0.08);
-  --drawer-page-shadow: rgba(0, 0, 0, 0.22);
   top: 0;
   bottom: 0;
   left: 0;
@@ -177,7 +172,7 @@ async function clearAllSessions() {
   background:
     linear-gradient(180deg, var(--drawer-page-bg-top), var(--drawer-page-bg-bottom)),
     var(--drawer-page-bg-solid);
-  box-shadow: 20px 0 44px var(--drawer-page-shadow);
+  box-shadow: none;
   backdrop-filter: blur(18px);
   transform: translateX(calc(-100% + 10px));
 }
@@ -189,7 +184,6 @@ async function clearAllSessions() {
   --drawer-page-bg-solid: rgba(255, 255, 255, 0.88);
   --drawer-page-hover: rgba(66, 36, 235, 0.08);
   --drawer-page-active: rgba(66, 36, 235, 0.10);
-  --drawer-page-shadow: rgba(66, 36, 235, 0.10);
 }
 
 .session-drawer.page-mode.open {
@@ -208,23 +202,11 @@ async function clearAllSessions() {
 }
 
 .page-mode .drawer-titlebar {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   min-height: 58px;
   padding: 0 var(--space-20);
   border-bottom: 0;
   background: transparent;
-}
-
-.brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: 1px solid rgba(66, 36, 235, 0.35);
-  border-radius: 50%;
-  background: rgba(66, 36, 235, 0.18);
-  color: var(--color-primary);
 }
 
 .brand-copy {
@@ -236,16 +218,11 @@ async function clearAllSessions() {
 .brand-copy strong {
   overflow: hidden;
   color: var(--color-text-primary);
+  font-family: "Monocraft", var(--font-code);
   font-size: 14px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.brand-copy span {
-  color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 10px;
 }
 
 .traffic-lights {
@@ -345,27 +322,28 @@ async function clearAllSessions() {
 
 .page-mode .new-btn {
   justify-content: center;
-  flex: 1;
-  min-height: 42px;
-  padding: 0 var(--space-14);
-  border: 1px solid rgba(66, 36, 235, 0.28);
-  border-radius: 999px;
-  background: rgba(66, 36, 235, 0.16);
+  flex: 0 1 auto;
+  min-height: 36px;
+  padding: 0 var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-raised);
   color: var(--color-text-primary);
   font-family: var(--font-ui);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .page-mode .mode-btn {
   justify-content: center;
-  width: 42px;
-  min-width: 42px;
-  min-height: 42px;
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
   padding: 0;
-  border-color: rgba(66, 36, 235, 0.18);
-  border-radius: 50%;
-  background: rgba(66, 36, 235, 0.08);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
 }
 
 .page-mode .clear-all-btn {
@@ -387,14 +365,6 @@ async function clearAllSessions() {
   color: #c56565;
 }
 
-.history-label {
-  padding: 0 var(--space-16) var(--space-8);
-  color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-transform: uppercase;
-}
-
 .session-list {
   flex: 1;
   min-height: 0;
@@ -402,7 +372,7 @@ async function clearAllSessions() {
 }
 
 .page-mode .session-list {
-  padding: 0 var(--space-8) var(--space-8);
+  padding: var(--space-12) var(--space-12) var(--space-8);
 }
 
 .session-item {
@@ -421,13 +391,13 @@ async function clearAllSessions() {
 }
 
 .page-mode .session-item {
-  min-height: 38px;
+  min-height: 30px;
   margin-bottom: var(--space-2);
-  padding: 0 var(--space-10);
+  padding: 0 var(--space-8);
   border-left: 0;
-  border-radius: 999px;
+  border-radius: 6px;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .session-item:hover {

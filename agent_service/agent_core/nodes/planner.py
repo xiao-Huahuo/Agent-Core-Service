@@ -22,21 +22,30 @@ from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.agent_core.nodes.model_decision import get_user_llm_overrides
 from agent_service.core.agent_config import AgentConfig
-from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
+from agent_service.services.scheduler import (
+    FOREGROUND_AGENT_TASK,
+    SMALL_MODEL_TIER,
+    LLMTaskScheduler,
+    get_llm_task_scheduler,
+)
 from agent_service.tools import ToolExecutor
+from agent_service.tools.runtime_context import get_tool_trace_callback
 
 
 
 
 PLANNER_SYSTEM_PROMPT = (
-    "你是一个知识探索策略顾问。根据用户问题和当前已获取的信息，分析探索进度并给出建议。\n"
+    "你是一个多步骤任务规划器。根据用户问题、已有计划、工具结果和 observation 决策历史更新探索状态。\n"
     "输出格式（只输出 JSON，不要其他文字）：\n"
-    '{"covered": ["已覆盖的主题或方向"], "suggested": ["建议继续深挖的方向"], "sufficient": false, "hint": "给 agent 的一两句策略建议"}\n'
+    '{"covered":["已覆盖方向"],"suggested":["建议方向"],"sub_questions":["待解决子问题"],"current_index":0,"status":"planning|running|ready_to_answer","sufficient":false,"hint":"给 agent 的一两句策略建议"}\n'
     "字段说明:\n"
     "- covered: 目前已覆盖了哪些子话题/方向(可为空数组)\n"
     "- suggested: 建议 agent 下一步探索的方向(可为空数组)\n"
+    "- sub_questions: 为用户问题拆出的有序子问题,最多5个,已完成的也保留在列表里\n"
+    "- current_index: 当前最应该处理的子问题下标,从0开始\n"
+    "- status: planning 初始规划,running 正在探索,ready_to_answer 信息足够可回答\n"
     "- sufficient: 当前信息是否已经足够回答用户问题\n"
-    "- hint: 给 agent 的简短策略建议,一两句话即可,不要超过80字"
+    "- hint: 给 agent 的具体下一步建议,必须引用 current_index 对应子问题,不要超过80字"
 )
 
 
@@ -79,16 +88,25 @@ class PlannerNode:
             return {
                 "messages": [AIMessage(content="未找到用户消息，跳过策略分析。")],
                 "trace": [{
-                    "node": "planner",
-                    "event": "no_user_message",
-                    "human_readable": "未找到用户消息，跳过策略分析。",
-                }],
+                "node": "planner",
+                "event": "no_user_message",
+                "human_readable": "未找到用户消息，跳过策略分析。",
+                "chat_visible": False,
+            }],
             }
 
         existing_plan = state.get("plan")
         system_message = SystemMessage(content=PLANNER_SYSTEM_PROMPT)
         user_content = self._build_planning_prompt(original_prompt, existing_plan, state)
         user_message = SystemMessage(content=user_content)
+        trace_callback = get_tool_trace_callback()
+        if trace_callback is not None:
+            trace_callback({
+                "node": "planner",
+                "event": "planner_request_start",
+                "human_readable": "正在更新探索策略。",
+                "chat_visible": False,
+            })
         response = self._call_llm(system_message, user_message, state)
         plan = self._parse_plan(response.content)
         if plan is not None:
@@ -100,8 +118,12 @@ class PlannerNode:
                 "event": event,
                 "covered": plan.get("covered", []),
                 "suggested": plan.get("suggested", []),
+                "sub_questions": plan.get("sub_questions", []),
+                "current_index": plan.get("current_index", 0),
+                "status": plan.get("status", "running"),
                 "sufficient": plan.get("sufficient", False),
                 "human_readable": readable,
+                "chat_visible": False,
             }
             return {"messages": [AIMessage(content=readable)], "plan": plan, "trace": [trace]}
 
@@ -112,6 +134,7 @@ class PlannerNode:
                 "node": "planner",
                 "event": "no_plan_needed",
                 "human_readable": "策略分析未产出有效结果，直接进入决策。",
+                "chat_visible": False,
             }],
         }
 
@@ -126,6 +149,7 @@ class PlannerNode:
         return self.task_scheduler.invoke_chat(
             task_type=FOREGROUND_AGENT_TASK,
             messages=[system_message, user_message],
+            model_tier=SMALL_MODEL_TIER,
             api_key=api_key,
             base_url=base_url,
             small_api_key=small_api_key,
@@ -144,7 +168,7 @@ class PlannerNode:
         """
 
         if existing_plan is None:
-            return f"用户需求:\n{query}\n\n请分析这个需求涉及哪些子话题，给出初步探索建议。输出 JSON。"
+            return f"用户需求:\n{query}\n\n请拆解这个需求的关键子问题,给出当前最应该处理的一步。输出 JSON。"
 
         # 重入: 附带当前覆盖状态和执行历史
         parts: list[str] = [f"用户需求:\n{query}"]
@@ -154,7 +178,10 @@ class PlannerNode:
         history = self._build_execution_history(state, limit=6)
         if history:
             parts.append(f"\n最近探索结果:\n{history}")
-        parts.append("\n请根据以上信息更新探索状态，判断是否已经足够回答用户问题。输出 JSON。")
+        observation_history = self._build_observation_history(state, limit=6)
+        if observation_history:
+            parts.append(f"\nObservation 决策历史:\n{observation_history}")
+        parts.append("\n请根据以上信息更新 sub_questions/current_index/status,判断是否已经足够回答用户问题。输出 JSON。")
         return "\n".join(parts)
 
     def _build_execution_history(self, state: AgentState, limit: int = 6) -> str:
@@ -194,6 +221,21 @@ class PlannerNode:
         return "\n".join(lines)
 
     @staticmethod
+    def _build_observation_history(state: AgentState, limit: int = 6) -> str:
+        """从 trace 中提取 observation 的选择历史。"""
+
+        traces = state.get("trace", []) or []
+        lines: list[str] = []
+        for trace in traces:
+            if trace.get("node") != "observation":
+                continue
+            decision = trace.get("decision", "")
+            reason = trace.get("reason") or trace.get("human_readable") or ""
+            next_action = trace.get("next_action", "")
+            lines.append(f"- {decision}: {reason}；下一步: {next_action}")
+        return "\n".join(lines[-limit:])
+
+    @staticmethod
     def _extract_latest_user_message(state: AgentState) -> str:
         """从消息列表中提取最后一条用户消息。"""
 
@@ -224,7 +266,38 @@ class PlannerNode:
         content = content.strip()
         if content.startswith("{") and content.endswith("}"):
             try:
-                return json.loads(content)
+                data = json.loads(content)
+                covered = data.get("covered", [])
+                suggested = data.get("suggested", [])
+                sub_questions = data.get("sub_questions", [])
+                if not isinstance(covered, list):
+                    covered = []
+                if not isinstance(suggested, list):
+                    suggested = []
+                if not isinstance(sub_questions, list):
+                    sub_questions = []
+                current_index = data.get("current_index", 0)
+                try:
+                    current_index = int(current_index)
+                except (TypeError, ValueError):
+                    current_index = 0
+                if sub_questions:
+                    current_index = max(0, min(current_index, len(sub_questions) - 1))
+                status = str(data.get("status", "running") or "running")
+                if status not in {"planning", "running", "ready_to_answer"}:
+                    status = "running"
+                sufficient = bool(data.get("sufficient", status == "ready_to_answer"))
+                if sufficient:
+                    status = "ready_to_answer"
+                return {
+                    "covered": [str(item) for item in covered[:8]],
+                    "suggested": [str(item) for item in suggested[:8]],
+                    "sub_questions": [str(item) for item in sub_questions[:5]],
+                    "current_index": current_index,
+                    "status": status,
+                    "sufficient": sufficient,
+                    "hint": str(data.get("hint", "") or "")[:120],
+                }
             except json.JSONDecodeError:
                 return None
         return None

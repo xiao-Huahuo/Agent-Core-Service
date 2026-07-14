@@ -38,22 +38,36 @@ export function buildApiUrl(path: string, query?: Record<string, QueryValue>): s
   return url.origin === window.location.origin ? `${url.pathname}${url.search}` : url.toString()
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+const REQUEST_TIMEOUT = 30_000
+
+export type ApiRequestInit = RequestInit & {
+  timeoutMs?: number
+}
+
+async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), init?.timeoutMs ?? REQUEST_TIMEOUT)
   const isFormData = init?.body instanceof FormData
-  const response = await fetch(path, {
-    headers: isFormData
-      ? init?.headers
-      : {
-          'Content-Type': 'application/json',
-          ...init?.headers,
-        },
-    ...init,
-  })
-  if (!response.ok) {
-    const detail = await readErrorDetail(response)
-    throw new ApiError(response.status, `Request failed: ${response.status} ${detail || response.statusText}`)
+  const { timeoutMs: _timeoutMs, ...fetchInit } = init ?? {}
+  try {
+    const response = await fetch(path, {
+      headers: isFormData
+        ? fetchInit.headers
+        : {
+            'Content-Type': 'application/json',
+            ...fetchInit.headers,
+          },
+      signal: controller.signal,
+      ...fetchInit,
+    })
+    if (!response.ok) {
+      const detail = await readErrorDetail(response)
+      throw new ApiError(response.status, `Request failed: ${response.status} ${detail || response.statusText}`)
+    }
+    return response.json() as Promise<T>
+  } finally {
+    clearTimeout(timeoutId)
   }
-  return response.json() as Promise<T>
 }
 
 async function readErrorDetail(response: Response): Promise<string> {
@@ -74,12 +88,12 @@ async function readErrorDetail(response: Response): Promise<string> {
 export function apiGet<T>(
   path: string,
   query?: Record<string, QueryValue>,
-  init?: RequestInit,
+  init?: ApiRequestInit,
 ): Promise<T> {
   return request<T>(buildApiUrl(path, query), init)
 }
 
-export function apiPost<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
+export function apiPost<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
   return request<T>(buildApiUrl(path), {
     method: 'POST',
     body: JSON.stringify(body ?? {}),
@@ -87,7 +101,7 @@ export function apiPost<T>(path: string, body?: unknown, init?: RequestInit): Pr
   })
 }
 
-export function apiPut<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
+export function apiPut<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
   return request<T>(buildApiUrl(path), {
     method: 'PUT',
     body: JSON.stringify(body ?? {}),
@@ -95,7 +109,7 @@ export function apiPut<T>(path: string, body?: unknown, init?: RequestInit): Pro
   })
 }
 
-export function apiPatch<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
+export function apiPatch<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
   return request<T>(buildApiUrl(path), {
     method: 'PATCH',
     body: JSON.stringify(body ?? {}),
@@ -103,7 +117,7 @@ export function apiPatch<T>(path: string, body?: unknown, init?: RequestInit): P
   })
 }
 
-export function apiDelete<T>(path: string, query?: Record<string, QueryValue>, init?: RequestInit): Promise<T> {
+export function apiDelete<T>(path: string, query?: Record<string, QueryValue>, init?: ApiRequestInit): Promise<T> {
   return request<T>(buildApiUrl(path, query), {
     method: 'DELETE',
     ...init,

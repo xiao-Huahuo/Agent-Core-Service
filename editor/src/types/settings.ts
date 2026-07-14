@@ -25,6 +25,12 @@ export interface UserSettingsProfile {
   proxyUrl?: string
   /** Whether web search is enabled for the current user. */
   webSearchEnabled?: boolean
+  /** Whether uploaded files should be ingested immediately. Defaults to false. */
+  autoIngestOnUpload?: boolean
+  /** Whether OCR should be enabled after restarting the backend service. */
+  ocrEnabled?: boolean
+  /** Gitignore-like rules for files that must never enter the vector store. */
+  knowledgeIgnorePatterns?: string
 }
 
 /** Backend knowledge library config shown in settings/profile responses. */

@@ -141,6 +141,32 @@ def test_llm_task_scheduler_invoke_chat_uses_local_fallback_without_redis(monkey
     assert response.content == "chat-ok"
 
 
+def test_llm_task_scheduler_stream_chat_retries_connection_error_before_first_chunk(monkeypatch: object) -> None:
+    """流式 Chat 在首个 chunk 前遇到 Connection error 应按调度器退避重试。"""
+
+    scheduler = get_llm_task_scheduler(make_scheduler_test_config())
+    calls = {"count": 0}
+
+    def fake_stream_chat_request(_request: object):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("Connection error.")
+        yield {"content_delta": "ok"}
+        yield {"content_delta": "ok", "message": AIMessage(content="ok"), "status": "complete"}
+
+    monkeypatch.setattr(scheduler, "_stream_chat_request", fake_stream_chat_request)
+
+    chunks = list(
+        scheduler.stream_chat(
+            task_type=FOREGROUND_AGENT_TASK,
+            messages=[HumanMessage(content="hello")],
+        )
+    )
+
+    assert calls["count"] == 2
+    assert chunks[-1]["status"] == "complete"
+
+
 def test_llm_task_scheduler_submit_summary_job_uses_local_fallback_without_redis(monkeypatch: object) -> None:
     """验证未配置 Redis 时,Summary 业务任务会回退到本地队列执行。"""
 

@@ -3,17 +3,15 @@
 
   Usage:
   Rendered by EditorWorkspace when mainView === 'agent'. It reuses AgentPanel
-  in page mode and places it above a dynamic supercomponent background while
-  keeping the global header and left activity bar outside this page.
+  in page mode while keeping the global header and left activity bar outside
+  this page.
 -->
 <script setup lang="ts">
 import AgentPanel from '@/components/editor_workspace/AgentPanel.vue'
-import LightStringBackground from '@/supercomponents/LightStringBackground.vue'
 </script>
 
 <template>
   <section class="agent-page">
-    <LightStringBackground />
     <div class="agent-page-shell">
       <AgentPanel mode="page" class="agent-page-panel" />
     </div>
@@ -26,7 +24,7 @@ import LightStringBackground from '@/supercomponents/LightStringBackground.vue'
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-canvas-soft);
+  background: var(--color-canvas);
 }
 
 .agent-page-shell {

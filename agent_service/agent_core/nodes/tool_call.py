@@ -23,6 +23,8 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.tools import ToolExecutor
 from agent_service.tools.runtime_context import get_tool_trace_callback
 
+MAX_TOOL_CALLS_PER_TURN = 4
+
 
 class ToolCallNode:
     """
@@ -95,6 +97,8 @@ class ToolCallNode:
 
         last_message = state["messages"][-1]
         tool_calls = getattr(last_message, "tool_calls", []) or []
+        deferred_tool_calls = tool_calls[MAX_TOOL_CALLS_PER_TURN:]
+        tool_calls = tool_calls[:MAX_TOOL_CALLS_PER_TURN]
         messages: list[ToolMessage] = []
         traces: list[dict[str, Any]] = []
         trace_callback = get_tool_trace_callback()
@@ -115,6 +119,7 @@ class ToolCallNode:
                 "display_name": display_name,
                 "tool_args_summary": args_summary,
                 "human_readable": f"正在调用工具「{display_name}」，参数：{args_summary}",
+                "chat_visible": False,
             }
             traces.append(start_trace)
             if trace_callback is not None:
@@ -134,10 +139,33 @@ class ToolCallNode:
                 "result_summary": result_summary,
                 "human_readable": f"工具「{display_name}」返回：{result_summary}",
                 "result_count": result_count,
+                "chat_visible": True,
             }
             traces.append(end_trace)
             if trace_callback is not None:
                 trace_callback(end_trace)
+        for tool_call in deferred_tool_calls:
+            tool_call_id = tool_call.get("id")
+            if not tool_call_id:
+                continue
+            tool_name = tool_call.get("name", "")
+            display_name = self._lookup_display_name(tool_name)
+            content = (
+                f"工具 {display_name} 本轮暂未执行: 单轮最多执行 {MAX_TOOL_CALLS_PER_TURN} 个工具调用, "
+                "请根据已获得结果决定是否继续读取剩余文件。"
+            )
+            messages.append(ToolMessage(content=content, tool_call_id=tool_call_id))
+            deferred_trace = {
+                "node": "action",
+                "event": "tool_call_deferred",
+                "tool_name": tool_name,
+                "display_name": display_name,
+                "human_readable": content,
+                "chat_visible": True,
+            }
+            traces.append(deferred_trace)
+            if trace_callback is not None:
+                trace_callback(deferred_trace)
         return {"messages": messages, "trace": traces}
 
     def _lookup_display_name(self, tool_name: str) -> str:

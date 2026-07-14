@@ -84,6 +84,7 @@ from agent_service.services.memory.longterm_memory_service import LongTermMemory
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 from agent_service.services.settings_service import SettingsService
 from agent_service.services.knowledge_library_service import KnowledgeLibraryService
+from agent_service.services.knowledge_graph_service import KnowledgeGraphService
 from agent_service.services.memory.rag.knowledge_ingestion import KnowledgeIngestionService
 from agent_service.scripts.frontmatter_bootstrap import bootstrap_frontmatter
 import agent_service.api.rest.deps as rest_deps
@@ -130,20 +131,29 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
 
     memory_service = LongTermMemoryService(config=config)
     settings_service = SettingsService(config=config, memory_service=memory_service)
+    knowledge_graph_service = KnowledgeGraphService(config=config)
     knowledge_library_service = KnowledgeLibraryService(
         config=config,
         memory_service=memory_service,
         settings_service=settings_service,
+        knowledge_graph_service=knowledge_graph_service,
     )
     rest_deps._settings_service = settings_service
     rest_deps._knowledge_library_service = knowledge_library_service
+    rest_deps._knowledge_graph_service = knowledge_graph_service
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
     rest_deps._retrieval_service = retrieval_service
     logger.info("SettingsService 初始化完成")
 
     # 自动灌库: 扫描 resources/knowledge, 对已变更的文件执行 frontmatter 结构化 + Embedding + 入库
     try:
-        frontmatter_result = bootstrap_frontmatter(config=config)
+        frontmatter_result = bootstrap_frontmatter(
+            config=config,
+            exclude_path=_build_startup_frontmatter_exclude(
+                config=config,
+                settings_service=settings_service,
+            ),
+        )
         ingestion_service = KnowledgeIngestionService(config=config, memory_service=memory_service)
         ingestion_result = ingestion_service.ingest_frontmatter_dir()
         logger.info(
@@ -205,11 +215,85 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._message_service = None
         rest_deps._settings_service = None
         rest_deps._knowledge_library_service = None
+        rest_deps._knowledge_graph_service = None
         logger.info("AgentService 已关闭")
 
 
 app = FastAPI(title="Agent-Core-Service", lifespan=_lifespan)
 app.include_router(rest_router)
+
+_runtime_config = AgentConfig.load_config(ensure_directories=False, ensure_models=False)
+_knowledge_assets_dir = _runtime_config.storage.base_data_dir / "assets" / "knowledge"
+_knowledge_assets_dir.mkdir(parents=True, exist_ok=True)
+
+from fastapi.staticfiles import StaticFiles
+
+app.mount(
+    "/knowledge/assets",
+    StaticFiles(directory=str(_knowledge_assets_dir)),
+    name="knowledge_assets",
+)
+
+
+def _build_startup_frontmatter_exclude(
+    *,
+    config: AgentConfig,
+    settings_service: SettingsService,
+) -> Any:
+    """Exclude editor-managed user libraries from the global startup bootstrap."""
+
+    global_knowledge_dir = config.storage.knowledge_dir.resolve()
+    excluded_roots = [
+        library_dir
+        for library_dir in settings_service.list_knowledge_library_dirs()
+        if library_dir != global_knowledge_dir and _is_relative_to(library_dir, global_knowledge_dir)
+    ]
+    excluded_roots.extend(_startup_user_namespace_roots(config=config, base_dir=global_knowledge_dir))
+    excluded_roots = _deduplicate_paths(excluded_roots)
+    if not excluded_roots:
+        return None
+
+    def exclude_path(path: Path) -> bool:
+        resolved_path = path.resolve()
+        return any(_is_relative_to(resolved_path, root) for root in excluded_roots)
+
+    return exclude_path
+
+
+def _startup_user_namespace_roots(*, config: AgentConfig, base_dir: Path) -> list[Path]:
+    """Infer legacy editor-managed user namespace roots under a global directory."""
+
+    users_root = config.storage.frontmatter_dir / "users"
+    if not users_root.is_dir() or not base_dir.is_dir():
+        return []
+    roots: list[Path] = []
+    for user_dir in users_root.iterdir():
+        if not user_dir.is_dir():
+            continue
+        candidate = (base_dir / user_dir.name).resolve()
+        if candidate.is_dir():
+            roots.append(candidate)
+    return roots
+
+
+def _deduplicate_paths(paths: list[Path]) -> list[Path]:
+    seen: set[Path] = set()
+    result: list[Path] = []
+    for path in paths:
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        result.append(resolved)
+    return result
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
 
 
 def _resolve_static_dir() -> Path | None:

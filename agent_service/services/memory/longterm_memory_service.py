@@ -251,13 +251,21 @@ class LongTermMemoryService:
                 pass
         return len(memory_ids)
 
-    def has_source_hash(self, *, source_hash: str, memory_type: str, user_id: str | None = None) -> bool:
+    def has_source_hash(
+        self,
+        *,
+        source_hash: str,
+        memory_type: str,
+        user_id: str | None = None,
+        source_id: str | None = None,
+    ) -> bool:
         """
         判断指定来源哈希和记忆类型是否已经入库。
 
         source_hash: 来源内容哈希。
         memory_type: 记忆类型,例如 `knowledge_chunk`。
         user_id: 可选记忆归属用户;为空时保持旧的全局哈希判断。
+        source_id: 可选来源文档 ID;知识库哈希锁应传入该值,避免不同路径同内容或旧 ID 误跳过。
         """
 
         statement = (
@@ -268,8 +276,23 @@ class LongTermMemoryService:
         )
         if user_id is not None:
             statement = statement.where(LongTermMemorySpec.user_id == user_id)
+        if source_id is not None:
+            statement = statement.where(LongTermMemorySpec.source_id == source_id)
         with Session(self.engine) as db_session:
             return db_session.exec(statement).first() is not None
+
+    def list_source_ids(self, *, user_id: str, tag: str, memory_type: str) -> set[str]:
+        """列出指定用户和类型下已存在的来源 ID。"""
+
+        statement = (
+            select(LongTermMemorySpec.source_id)
+            .where(LongTermMemorySpec.user_id == user_id)
+            .where(LongTermMemorySpec.tag == tag)
+            .where(LongTermMemorySpec.memory_type == memory_type)
+            .where(LongTermMemorySpec.source_id.is_not(None))
+        )
+        with Session(self.engine) as db_session:
+            return {str(source_id) for source_id in db_session.exec(statement).all() if source_id}
 
     def has_memories(self, *, user_id: str, tag: str, memory_type: str) -> bool:
         """

@@ -7,14 +7,17 @@
   events upward; it intentionally does not own route navigation or file opening.
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { Crosshair, RotateCcw, Type } from 'lucide-vue-next'
+import { computed, onMounted, ref, watch } from 'vue'
+import { Crosshair, RefreshCw, RotateCcw, Type } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
+import { fetchKnowledgeGraph } from '@/api/knowledge'
 import KnowledgeGraphCanvas from '@/components/knowledge_graph/KnowledgeGraphCanvas.vue'
 import { buildFileTreeGraph } from '@/components/knowledge_graph/fileTreeGraphAdapter'
+import { buildSemanticKnowledgeGraph } from '@/components/knowledge_graph/semanticGraphAdapter'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
+import type { KnowledgeSemanticGraphResponse } from '@/types/knowledge'
 import type { KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graphTypes'
 
 const emit = defineEmits<{
@@ -27,6 +30,10 @@ const { tree, treeLoading } = storeToRefs(workspaceStore)
 const graphCanvasRef = ref<InstanceType<typeof KnowledgeGraphCanvas> | null>(null)
 const selectedNode = ref<KnowledgeGraphNodeEvent | null>(null)
 const showGraphLabels = ref(true)
+const graphMode = ref<'tree' | 'semantic'>('tree')
+const semanticGraph = ref<KnowledgeSemanticGraphResponse | null>(null)
+const semanticLoading = ref(false)
+const semanticError = ref('')
 
 function basename(path: string): string {
   return path.replace(/[\\/]+$/g, '').split(/[\\/]/).filter(Boolean).pop() ?? 'Knowledge Root'
@@ -37,16 +44,55 @@ const knowledgeTitle = computed(() => {
   return libraryName || basename(settingsStore.profile.knowledgeDir) || 'Knowledge Root'
 })
 
-const graphModel = computed(() => buildFileTreeGraph(tree.value, { rootLabel: knowledgeTitle.value }))
+const graphModel = computed(() => {
+  if (graphMode.value === 'semantic') {
+    return buildSemanticKnowledgeGraph(semanticGraph.value, knowledgeTitle.value)
+  }
+  return buildFileTreeGraph(tree.value, { rootLabel: knowledgeTitle.value })
+})
 
 const graphStats = computed(() => ({
   nodes: graphModel.value.nodes.length,
   links: graphModel.value.links.length,
 }))
 
+async function loadSemanticGraph() {
+  if (!settingsStore.profile.userId) {
+    return
+  }
+  semanticLoading.value = true
+  semanticError.value = ''
+  try {
+    semanticGraph.value = await fetchKnowledgeGraph(settingsStore.profile.userId)
+  } catch (error) {
+    semanticError.value = error instanceof Error ? error.message : 'failed to load graph'
+    semanticGraph.value = null
+  } finally {
+    semanticLoading.value = false
+  }
+}
+
 function handleNodeSelect(node: KnowledgeGraphNodeEvent) {
   selectedNode.value = node
-  emit('open-node', node)
+  if (node.path) {
+    emit('open-node', node)
+  }
+}
+
+function handleNodeOpen(node: KnowledgeGraphNodeEvent) {
+  selectedNode.value = node
+  if (node.path) {
+    emit('open-node', node)
+  }
+}
+
+function refreshGraph() {
+  selectedNode.value = null
+  if (graphMode.value === 'semantic') {
+    void loadSemanticGraph()
+    return
+  }
+  void workspaceStore.loadKnowledgeTree()
 }
 
 onMounted(() => {
@@ -54,6 +100,16 @@ onMounted(() => {
     void workspaceStore.loadKnowledgeTree()
   }
 })
+
+watch(
+  graphMode,
+  (mode) => {
+    selectedNode.value = null
+    if (mode === 'semantic') {
+      void loadSemanticGraph()
+    }
+  },
+)
 </script>
 
 <template>
@@ -79,6 +135,10 @@ onMounted(() => {
           <Crosshair :size="15" />
           <span>Fit</span>
         </button>
+        <button class="graph-action" type="button" title="Reload graph data" @click="refreshGraph">
+          <RefreshCw :size="15" />
+          <span>Refresh</span>
+        </button>
         <button class="graph-action" type="button" title="Reheat layout" @click="graphCanvasRef?.reheatLayout()">
           <RotateCcw :size="15" />
           <span>Layout</span>
@@ -92,14 +152,16 @@ onMounted(() => {
       :model="graphModel"
       :selected-node-id="selectedNode?.id ?? ''"
       :show-labels="showGraphLabels"
-      @node-open="emit('open-node', $event)"
+      @node-open="handleNodeOpen"
       @node-select="handleNodeSelect"
     />
 
     <footer class="graph-status">
-      <span v-if="treeLoading" class="mono">loading tree...</span>
+      <span v-if="graphMode === 'tree' && treeLoading" class="mono">loading tree...</span>
+      <span v-else-if="graphMode === 'semantic' && semanticLoading" class="mono">loading knowledge graph...</span>
+      <span v-else-if="graphMode === 'semantic' && semanticError" class="mono">{{ semanticError }}</span>
       <span v-else-if="selectedNode" class="mono">{{ selectedNode.path || selectedNode.label }}</span>
-      <span v-else class="mono">click a node to open it in the editor</span>
+      <span v-else class="mono">{{ graphMode === 'tree' ? 'click a node to open it in the editor' : 'click an entity to inspect its neighbors' }}</span>
     </footer>
   </section>
 </template>
@@ -180,6 +242,32 @@ onMounted(() => {
 
 .graph-action.active {
   border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
+.graph-mode {
+  display: inline-flex;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.graph-mode-button {
+  height: 22px;
+  padding: 0 var(--space-8);
+  border: 0;
+  border-right: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.graph-mode-button:last-child {
+  border-right: 0;
+}
+
+.graph-mode-button.active {
   background: var(--color-primary-softer);
   color: var(--color-primary);
 }

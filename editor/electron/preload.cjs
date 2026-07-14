@@ -7,7 +7,7 @@
  */
 /* eslint-disable @typescript-eslint/no-require-imports */
 
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 contextBridge.exposeInMainWorld('agentEditorDesktop', {
   isDesktop: true,
@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('agentEditorDesktop', {
     const payload = await ipcRenderer.invoke('clipboard:read-files')
     return Array.isArray(payload?.paths) ? payload.paths : []
   },
-  copyExternalPathsIntoDirectory: (paths, targetDir, mode) => ipcRenderer.invoke('files:copy-into-directory', paths, targetDir, mode),
+  copyExternalPathsIntoDirectory: (paths, targetDir, mode, conflictStrategy) => ipcRenderer.invoke('files:copy-into-directory', paths, targetDir, mode, conflictStrategy),
+  getPathForFile: (file) => webUtils?.getPathForFile ? webUtils.getPathForFile(file) : (file?.path || ''),
   writeClipboardText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
 })

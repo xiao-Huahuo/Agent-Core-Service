@@ -43,6 +43,12 @@ function nodeColor(node: KnowledgeGraphNode, theme: KnowledgeGraphRenderTheme): 
   if (node.kind === 'folder') {
     return theme.folder
   }
+  if (node.kind === 'document') {
+    return EXTENSION_COLORS.get('md') ?? theme.root
+  }
+  if (node.kind === 'entity') {
+    return theme.accent
+  }
   return EXTENSION_COLORS.get(node.extension ?? '') ?? theme.file
 }
 
@@ -51,7 +57,7 @@ function shouldShowLabel(node: KnowledgeGraphNode, state: KnowledgeGraphRenderSt
   if (!state.showLabels) {
     return node.id === state.hoveredNodeId
   }
-  if (node.kind === 'root' || node.kind === 'folder') {
+  if (node.kind === 'root' || node.kind === 'folder' || node.kind === 'document') {
     return true
   }
   return state.viewport.scale > 0.92 || isActive
@@ -153,7 +159,7 @@ function drawNode(
   }
   ctx.beginPath()
   ctx.arc(x, y, node.radius, 0, Math.PI * 2)
-  if (node.kind === 'folder') {
+  if (node.kind === 'folder' || node.kind === 'entity') {
     ctx.setLineDash([4, 3])
     ctx.fillStyle = theme.surface
     ctx.strokeStyle = color

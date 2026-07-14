@@ -35,6 +35,7 @@ class KnowledgeIngestionResult:
     files_ingested: 实际入库的结构化知识文档数量。
     files_skipped: 因哈希锁跳过的结构化知识文档数量。
     chunks_created: 创建的知识切片数量。
+    chunks_deleted: 删除的旧知识切片数量。
     source_ids_seen: 本轮扫描到的结构化文档 ID 集合,用于上层清理已删除文件。
     """
 
@@ -42,6 +43,7 @@ class KnowledgeIngestionResult:
     files_ingested: int = 0
     files_skipped: int = 0
     chunks_created: int = 0
+    chunks_deleted: int = 0
     source_ids_seen: set[str] | None = None
 
 
@@ -92,6 +94,7 @@ class KnowledgeIngestionService:
                 source_hash=document.source_hash,
                 memory_type="knowledge_chunk",
                 user_id=user_id,
+                source_id=document.document_id,
             ):
                 result.files_skipped += 1
                 logger.debug("  [跳过] %s (哈希未变更)", rel_path)
@@ -117,6 +120,50 @@ class KnowledgeIngestionService:
             result.files_skipped,
             result.chunks_created,
         )
+        return result
+
+    def ingest_frontmatter_file(
+        self,
+        *,
+        frontmatter_path: Path,
+        user_id: str = "system",
+    ) -> KnowledgeIngestionResult:
+        """
+        只入库单个结构化知识文档。仅清理该文档自己的旧 chunk,不影响其他文件。
+
+        frontmatter_path: 单个结构化 JSON 路径。
+        user_id: 知识切片归属用户。
+        """
+
+        resolved_path = frontmatter_path.expanduser().resolve()
+        if not resolved_path.is_file():
+            raise ValueError("frontmatter json not found")
+        result = KnowledgeIngestionResult(files_seen=1, source_ids_seen=set())
+        document = self._load_document(resolved_path)
+        result.source_ids_seen.add(document.document_id)
+        if self.config.memory.knowledge_hash_lock_enabled and self.memory_service.has_source_hash(
+            source_hash=document.source_hash,
+            memory_type="knowledge_chunk",
+            user_id=user_id,
+            source_id=document.document_id,
+        ):
+            result.files_skipped = 1
+            logger.debug("  [跳过] %s (哈希未变更)", resolved_path.name)
+            return result
+        result.chunks_deleted = self.memory_service.delete_memories_for_source(
+            user_id=user_id,
+            tag=self.config.constants.knowledge_tag,
+            memory_type="knowledge_chunk",
+            source_id=document.document_id,
+        )
+        chunks_created = self._ingest_document(document=document, user_id=user_id)
+        if chunks_created == 0:
+            result.files_skipped = 1
+            logger.warning("  [跳过] %s (0 chunk)", resolved_path.name)
+            return result
+        result.files_ingested = 1
+        result.chunks_created = chunks_created
+        logger.info("  [单文件入库] %s → %d chunks", document.title, chunks_created)
         return result
 
     def _ingest_document(self, *, document: StructuredKnowledgeDocument, user_id: str) -> int:
@@ -225,8 +272,7 @@ class KnowledgeIngestionService:
         payload = json.loads(frontmatter_path.read_text(encoding="utf-8"))
         return StructuredKnowledgeDocument.from_dict(payload)
 
-    @staticmethod
-    def _iter_frontmatter_files(frontmatter_dir: Path) -> list[Path]:
+    def _iter_frontmatter_files(self, frontmatter_dir: Path) -> list[Path]:
         """
         扫描可入库的结构化知识 JSON。
         frontmatter_dir: 结构化知识文档根目录。
@@ -234,4 +280,28 @@ class KnowledgeIngestionService:
 
         if not frontmatter_dir.exists():
             return []
-        return sorted(path for path in frontmatter_dir.rglob("*.json") if path.is_file())
+        source_root = frontmatter_dir.resolve()
+        return sorted(
+            path
+            for path in source_root.rglob("*.json")
+            if path.is_file() and not self._is_user_frontmatter_under_global_root(path=path, source_root=source_root)
+        )
+
+    def _is_user_frontmatter_under_global_root(self, *, path: Path, source_root: Path) -> bool:
+        """
+        全局启动灌库时跳过用户隔离 frontmatter。
+
+        `config.storage.frontmatter_dir` 是全局结构化目录,其 `users/<user>/<kb>/...`
+        子树由 editor 用户知识库灌库产生。启动灌库只应消费全局知识源 JSON,不能把用户
+        frontmatter 输出再次作为全局输入,否则会导致重复扫描和哈希锁误判。
+        当调用方显式传入 `frontmatter/users/<user>/<kb>` 作为 source_root 时,这里不会跳过。
+        """
+
+        global_root = self.config.storage.frontmatter_dir.resolve()
+        if source_root != global_root:
+            return False
+        try:
+            relative_parts = path.resolve().relative_to(global_root).parts
+        except ValueError:
+            return False
+        return bool(relative_parts) and relative_parts[0] == "users"

@@ -117,7 +117,7 @@ class MessageService:
             select(MessageRecord)
             .where(MessageRecord.user_id == user_id)
             .where(MessageRecord.session_id == session_id)
-            .order_by(MessageRecord.created_at.desc())
+            .order_by(MessageRecord.created_at.desc(), MessageRecord.message_id.desc())
             .limit(limit)
         )
         if not include_summarized:

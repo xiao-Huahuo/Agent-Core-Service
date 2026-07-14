@@ -27,9 +27,9 @@ function mergeConsecutiveAssistants(msgs) {
       const prev = acc[acc.length - 1]
       acc[acc.length - 1] = {
         ...prev,
-        content: msg.content || prev.content,
+        content: `${prev.content || ''}${msg.content || ''}`,
         node: msg.node || prev.node,
-        tool_calls: msg.tool_calls?.length ? msg.tool_calls : prev.tool_calls,
+        tool_calls: [...(prev.tool_calls || []), ...(msg.tool_calls || [])],
         trace: [...(prev.trace || []), ...(msg.trace || [])],
       }
     } else {
@@ -50,8 +50,8 @@ function mergeConsecutiveSameNode(msgs) {
     if (prev && prev.role === 'assistant' && prev.node === msg.node) {
       acc[acc.length - 1] = {
         ...prev,
-        content: msg.content || prev.content,
-        tool_calls: msg.tool_calls?.length ? msg.tool_calls : prev.tool_calls,
+        content: `${prev.content || ''}${msg.content || ''}`,
+        tool_calls: [...(prev.tool_calls || []), ...(msg.tool_calls || [])],
         trace: [...(prev.trace || []), ...(msg.trace || [])],
       }
     } else {

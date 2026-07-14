@@ -1,5 +1,92 @@
 # CHANGE HISTORY
 
+## 2026-07-14
+- 调整知识库灌库前端超时与进度条: `apiPost` 支持单请求 `timeoutMs`,全库/目录/单文件灌库请求超时放宽到 10 分钟,避免 OCR 长任务被 30 秒 Abort;灌库进度条改为等待期间缓慢推进到 86%-88%,完成后再跳到 100%,不再固定瞬跳 44%/92%。
+- 修复 PaddleOCR Windows CPU 推理异常被误判为“无文字”的问题: 图片 OCR 推理异常现在记录 warning 并返回 `engine_unavailable`;启动预热和图片 OCR 延迟导入 PaddleOCR 前默认设置 `PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT=False`,规避部分 PP-OCRv5 模型在 oneDNN/MKLDNN 路径下的 `ConvertPirAttribute2RuntimeAttribute` 异常。
+- 修复单文件图片灌库 0 chunk 时前端误报“不支持或已屏蔽”的问题: 后端 `KnowledgeLibraryRebuildResult` 新增 `skip_reason/status_message`,区分屏蔽、不支持后缀、OCR 未识别到文字、OCR 引擎不可用和无可入库切片;前端单文件灌库 toast 优先展示后端状态说明。
+- 修复 PaddleOCR 首次预热失败问题: PaddleOCR 的 `*_model_dir` 表示已存在的本地模型目录,空目录会直接查找 `inference.yml` 并失败;现在仅当本地模型目录完整时才传入目录参数,首次启动改为按模型名自动下载,下载后再尝试同步到 `runtime/models/paddleocr`。
+- 将图片 OCR 引擎整体迁移为 PaddleOCR: 移除运行时可执行体和语言数据下载逻辑,新增 `runtime/models/paddleocr` 模型缓存目录与 `ensure_paddleocr_models` 启动预热入口,检测/识别模型分别落在 `text_detection` 和 `text_recognition` 子目录;OCR 配置改为中英文检测/识别模型名、语言、设备和置信度阈值,图片 OCR 服务兼容 PaddleOCR 新旧输出结构并按行列位置重排表格截图文本。
+
+## 2026-07-13
+- 修正图片 OCR 状态语义: 当缺少 OCR 依赖或模型导致 OCR 引擎不可用时,图片 frontmatter/preview 返回 `ocr_status=engine_unavailable`,不再误标为 `no_text`,便于区分“确实无文字”和“OCR 没跑起来”。
+- 接入普通图片 OCR 基础链路: 新增 `ImageOcrService` 按用户 OCR 开关、模型目录、语言、置信度和超时配置识别图片文字;图片预览接口返回 OCR 文本、状态、词数和平均置信度;图片入库在识别到文字/表格文本时生成语义章节,无文字时不生成向量语义内容;editor 对有 OCR 文本的图片在 Edit/Split 显示只读识别文本,Preview 显示原图,无文字图片锁定为 Preview。
+- 增强非扫描型 PDF 处理: 新增 PyMuPDF 文本层提取工具,PDF 预览接口会返回提取到的正文、页数、图片数和基础表格数;多模态 cleaner 入库时优先使用 PDF 文本层,扫描型 PDF 继续标记为待 OCR;editor 打开有文本层的 PDF 时 Edit 显示只读提取文本,Preview/Split 继续使用浏览器内置 PDF 预览。
+- 新增 OCR 默认关闭与重启生效基础设施: 用户知识库灌库设置增加 `ocr_enabled`,保存变更返回 `restart_required`;服务启动后若发现已有用户开启 OCR,会检查并预热 OCR 模型;frontmatter 写入 `ocr_enabled` 元数据,文件树在 OCR 开启后会把图片/PDF/含内嵌 media 的 Office 旧索引标记为需重灌。
+- 隐藏 Agent 聊天区中的内部规划/审视硬编码状态文案: 后端 planner/agent/observation trace 标记为 `chat_visible: false`,工具结束 trace 标记为 `chat_visible: true`;editor/console 的 chat/tool 思考展示只渲染工具结果或显式可见 trace,避免“正在更新探索策略”“模型正在决策下一步”“正在审视工具结果”“已找到...”等内部状态句反复出现在工具模式输出中。
+- 重做 editor Agent 输入框右下角的思考模式选择下拉栏: `ChatInput.vue` 去掉原生 `select/option`,改为组件内自定义 dropdown trigger 与菜单项,保留 `set-agent-mode` 事件契约并显式控制暗色模式下文字、背景、hover 和选中态颜色。
+- 彻底移除 Agent tool 模式首尾异常出现的 `ASSISTANT` 兜底气泡: tool 气泡不再渲染任何非 user/assistant 可见消息和 role 标签,chat 气泡也隐藏 `node=assistant` 的节点标签;思考过程开关改为原生 `details/summary` 下拉栏,保留自定义灰色控制条样式并隐藏浏览器默认 marker。
+- 修复 tool 模式中无可见内容的 assistant 被兜底渲染成虚线 system 气泡的问题;美化 chat 模式思考过程折叠栏,改为紧凑灰色控制条并使用固定中性灰文字,避免暗色模式下文字发白。
+- 修复 Agent 聊天区流式过程中空气泡和虚空间距: chat 模式下只有思考 trace 时不再额外渲染空 assistant 气泡,仅显示思考过程;tool 模式下无内容的非 action 节点改为显示紧凑状态行,没有任何可见内容时整行不渲染;action 工具行只有存在工具 start/end trace 时才占位,避免每一步思考产生空白换行。
+- 修复 Agent 长时间无前端反馈后一次性蹦出大量思考过程的问题: 后端在 planner/agent/observation 进入阻塞 LLM 请求前即时下发轻量 trace,前端收到 trace-only SSE 时立即创建当前节点 assistant 消息并按 trace identity 去重,不再等到节点完成或最终回答才把 buffered trace 一次性挂载;工具模式在 `tool_call_start` 时先显示“正在调用工具”,工具结束后替换为结果摘要,让联网搜索等工具轨迹在执行阶段持续可见。
+- 修复 editor 开发环境 Agent SSE 被代理缓冲的问题: editor Vite `/agent` 代理改为与 console 一致,移除 `accept-encoding` 并补齐 `cache-control`、`x-accel-buffering` 和 `connection` 响应头,避免后端持续产出请求/响应时前端聊天区与 Agent 观测页一直转圈、只在流结束后一次性显示最终回答。
+- 修复 Agent 前端工具模式流式显示问题: console 对 `type: "delta"` 的 SSE 内容改为追加写入,对节点最终完整内容仍执行替换,避免后续 token 覆盖前文或最终内容重复;工具模式合并连续 assistant 消息时同步追加 content/tool_calls,工具调用条不再只识别记忆/知识两个工具,会优先展示后端 `human_readable/display_name` 并保留未知工具记录,修复“搜索到 N 个内容”等工具调用记录不显示的问题;editor 状态转移图在 auto 模式等待后端真实模式期间保持上一张稳定图,避免发送 prompt 瞬间闪成 plan 最大图;新增 console 单测覆盖 delta 追加、最终完整内容替换和搜索类工具记录显示。
+- 隐藏 Agent 对话框中的工具返回结果: action 节点 payload 不再携带工具返回 content,前端流式处理 action trace 时只缓存到观测数据,不再创建“阅读文件/搜索知识库/列出文件”等工具结果气泡,避免大块文档内容和工具列表导致对话区闪烁;同时 ModelDecisionNode 在入模前压缩 ToolMessage,最近工具结果最多保留 900 字符、旧工具结果最多 240 字符,降低长文件和联网搜索结果累积导致的模型 token limit 400 错误。
+- 修复 plan 模式信息收集时读多份文件后容易触发 `Connection error` 的问题: 调度器将 `Connection error.` 纳入可重试错误,流式 LLM 调用在首个 chunk 输出前支持按配置退避重试;工具节点限制单轮最多执行 4 个工具调用,超出的 tool_call 返回 deferred ToolMessage 供下一轮继续,避免一次性读取过多文件放大上下文和请求压力;`read_knowledge_file` 对超长文件返回前 6000 字符并提示精确续读。
+- 修复 plan 模式下 planner/observation 内部内容泄露到用户聊天流的问题: `planner_content` 和 `observation_content` 不再作为普通聊天内容下发,planner/observation 节点返回的内部 AIMessage 不再持久化为 assistant 消息,最终节点 payload 也会清空内部节点 content;前端历史加载同时过滤旧的 planner/observation assistant 消息,保留 trace 给 Agent 观测面板展示,避免用户看到 JSON 或 `Observation decision=...`。
+- 完成 Agent Loop 的 planner/observation 强化: plan 模式下 planner 输出 `sub_questions/current_index/status` 状态机并读取 observation 决策历史,observation 输出结构化 `continue/answer/retry/abandon` 决策;LangGraph 根据 observation 结果分别回到 planner、交给 agent 生成最终回复、重试工具或说明边界,前端 Agent 观测面板新增 observation 决策历史页展示每次选择、原因、下一步建议和置信度。
+- 调整 Agent Loop auto 路由: simple 只处理极短闲聊,react 成为默认轻量 Agent 模式,仅在引用、多步骤、分析、规划、设计、修复、重构等明显复杂任务时进入 plan 图;修复“你有哪些工具”这类简单请求误进 plan 的问题。
+- 修复 Agent 429 后台放大问题: simple/plan/react 对话结束后只有最近一条 assistant 是真实回复时才启动会话自动重命名,若本轮保存的是 error 或 429 限流提示则跳过后台小模型命名,避免主请求已限流后继续由后台命名任务追加多次小模型请求。
+- 完成 Agent Loop ReAct 模式和前端模式切换: 后端同时构建 plan 与 react 两张 LangGraph,react 图只保留 safety/agent/action/output 审核链路,工具结果直接回到 agent 节点继续决策,不再注册 planner 和 observation;REST/gRPC 的 RunRequest 增加 `agent_mode`,前端输入框新增 auto/simple/react/plan 胶囊选择器并持久化,Agent 观测面板状态图按实际执行模式切换为 simple/react/plan 三套图,并兼容旧的 deep 入参。
+- 新增 Agent Loop 短问直答路径: 对“你好”“你是谁?”等明显不需要工具的短输入,`stream_session_prompt` 在 ContextBuilder 完成后直接走一次 `FOREGROUND_AGENT_TASK + SMALL_MODEL_TIER` 流式回复,绕过 planner/action/observation 循环,保留用户自定义系统提示词、上下文观测和消息持久化,减少简单对话被多次 LLM 调用放大 429 的概率。
+- 修复 Agent Loop 中 planner 和 observation 节点误用大模型的问题: 两个节点的 LLM 调用都显式切换为 `SMALL_MODEL_TIER`,保留用户 small_api_key 为空时回退主模型配置的能力,并新增回归测试防止后续重新走 large tier。
+- [x] 修复tool模式下后面的输出取代了前面的输出而不是追加并列,而且还不显示工具调用的问题.
+- [x] 修复状态转移图在用户发送prompt的瞬间闪现为plan模式的最大图的问题.
+- [x] 修复工具调用记录(比如"搜索到N个内容")不显示的问题.
+- [x] 多模态查看:
+  - editor编辑区不仅提供Markdown编辑器功能,还提供代码高亮功能(`textarea` + `highlight.js`),实现md模式和代码编辑模式的切换.可设置支持高亮的代码文件格式,如`cpp`,`c`,`py`,`java`等.
+  - 可以查看图片(`.png`/`.jpg`/`.jpeg`/`.webp`/`.gif`/`.svg`,`<img>`标签)和PDF(`<iframe>`标签),EXCEL/CSV(后端解析成表格),甚至可以尝试查看WORD(后端用`mammoth`转换成HTML后查看)这样的二进制文档.
+
+- [x] 当前agent只能写可召回可不召回的"长期记忆",应该让agent再配备一个"写长期规则"的工具(即追加系统提示词,效果和用户手动去设置里面填写系统提示词的效果一样),这些规则不是RAG召回的,而是系统提示词,属于是agent必须遵守的.
+- [x] 给图谱右上角加个按钮,切换显示文字/不显示文字(当鼠标悬浮在某节点上才显示节点名).
+- [x] 给agent也提供读取多模态文件的信息的功能:若该文件已灌库则直接找到该文件对应的json文件,读json即可获取基本信息.
+- [x] 当有新文件灌库时在header上显示一个小小的进度条.
+- [x] 解决Agent Loop的问题:
+  - [x] planner和observation没有用小模型,这是个bug,属于代码错误.
+  - [x] 图太大,调用LLM次数太多,planner,agent,observation都要用LLM.
+    - 解决方案: 将当前图(ReAct + Plan-And-Execute 融合模式)视为"深度思考模式",即分为3个模式:
+      - [x] 简答模式: 对明显不需要工具的短输入不经过循环,只保留 RAG 上下文构建器`ContextBuilder`,然后用小模型直接输出.
+      - [x] ReAct模式: 不经过planner节点和observation节点,标准的ReAct图.agent节点同时充当观察者和决策者,一个循环只需要调用一次LLM.
+      - [x] 深度思考模式(Plan-and-Execute模式): 经过规划-执行-观察的循环,适合长时间思考.
+      - [x] 前端提供 auto/simple/react/plan 模式切换,Agent 观测面板状态图按实际执行模式切换.
+      在图之前添加一个入口节点,调用一次小模型,按照用户提问内容区分三种模式的入口,以达成用户在同一session前后提出简单和困难的问题的情形.
+  - [x] planner和observation真正发挥的用处并不大,planner每轮都调用,即使没必要,复杂问题并没有给出复杂的解决方案,反而容易背离原本的计划.
+    - 解决方案: 加强节点能力:
+      1. planner节点: 应具备全局规划思想,拆解问题, 跨轮保持计划 + sub_question 状态机 + 绕圈检测,成为agent执行节点的"调度者".
+      2. observation节点: 根据观察选择路径,可选性的规划而不是每次都进入planner节点. 产出四种状态.
+      首次: planner（拆解问题，出 sub_questions）
+      agent → action → observation（精炼结果 + 提取事实 + 判方向）
+      │ 针对observation的不同输出
+      ├─ [continue] → planner（更新计划）→ agent（继续）
+      ├─ [answer]   → agent（出最终回复）
+      ├─ [retry]    → agent（换参数重试同一工具）
+      └─ [abandon]  → agent（承认查不到，给出已有信息）
+- [x] **惰性灌库**: 用户应该要可设置是否在文件入库时自动灌库,默认关闭,点击header的刷新按钮时才进行主动灌库.用户也可以手动点击文件上的某个按钮让单个文件入库.
+- [x] (依赖于惰性灌库)增加功能: 屏蔽单个文件/建立屏蔽区.
+  - [x] 屏蔽的文档禁止入库,入了也要出库,文档被写入屏蔽区之后也要把以他为来源的切片删除.
+  - [x] 灌库函数自动忽略屏蔽的文档和屏蔽区子树全部文档.
+  - [x] 屏蔽区可以通过设置来进行配置,设置里面专门提供一块屏蔽区文本块来设置,写法类似于gitignore.
+  - [x] 应该在文件树的每个文件右边加上一个简单的入库状态图标,图标为绿色的的表示已经进入向量库,没有进库的图标为红色,屏蔽(不可进向量库)的为灰色.
+- [x] 将左侧agent点击效果从触发agent右边栏变为真正的一个页,此页包裹在左边栏和header里,但是不允许文件树或者agent侧边栏等其他的页或边栏出现,只允许自己一个页面存在.
+  - 主要组件和agent侧边栏相同,可复用,仅仅是扩展成一个单独页.对话历史也可以从左侧边抽屉伸缩.
+  - 背景和agent侧边栏不同,背景应该采用supercomponents里面的一种动态背景(比如光弦背景),这样就更高级.
+  - agent侧边栏新增一个扩展按钮,点击后将agent侧边栏平滑的扩展成agent页,排开其他的页.
+  - 这个对话页内部需要有隐藏的针对气泡的限宽,大约是最大屏幕宽度的1/3,对话只在这个宽度内进行,不要让气泡过左和过右.
+## 2026-07-12
+- 新增知识库惰性灌库流程: 上传文件默认只写入 active 知识库目录并刷新文件树,不再自动触发全量向量入库; 设置页新增“自动灌库”开关并默认关闭,开启后上传文件只灌库本次上传的单个文件; header 刷新按钮继续执行全量灌库; 文件树文件行和右键菜单新增“灌库此文件”,通过 `/knowledge/files/ingest` 只重建该文件的 frontmatter JSON 和 knowledge_chunk,不会误删其他文件切片。
+- 修复启动灌库重复扫描用户库 frontmatter 的问题: `KnowledgeIngestionService` 在扫描全局 `runtime/frontmatter` 时会跳过 `users/<user>/<kb>` 子树,避免把用户隔离 frontmatter 输出再次作为全局输入,导致已入库文档启动时重复入库; 显式扫描某个用户库 frontmatter 目录时仍正常生效。
+- 修复中文路径文档 ID 碰撞导致哈希锁失效的问题: frontmatter `document_id` 在可读 slug 后追加相对路径短 hash,避免“带图word.docx”“简单word.docx”等中文文件名被清洗成相同 source_id; 知识库哈希锁改为按 `source_id + source_hash + user_id` 判断,避免不同路径同内容或旧 document_id 记录造成误跳过/反复删除重建。
+- 调整 header 灌库入口与刷新流程: 原右侧刷新图标改为知识库标题右侧的红色 `Ingest` 胶囊按钮,图标换为数据库灌入语义; header 主动灌库前只刷新文本 tab 内容,当前打开 PDF/DOCX/图片等预览文件时不再调用文本读取接口,避免 415 导致 `Refresh failed`; 失败 toast 会显示真实错误信息。
+- 完善文件树便携操作: Electron 拖拽外部文件/文件夹时通过 `webUtils.getPathForFile` 获取真实路径并递归复制目录,修复拖入文件夹只得到占位文件的问题; 文件树复制/剪切写入系统文件剪贴板时过滤真实绝对路径并补写 Windows `FileName/FileNameW/Preferred DropEffect` 格式,提高粘贴到资源管理器的兼容性; 外部拖入、上传和粘贴遇到同名项时会询问覆盖/跳过/重命名,重命名格式统一为 `file (1).txt`。
+- 新增知识库屏蔽区: 用户设置中新增 gitignore-like 屏蔽规则文本块,支持注释、目录规则、通配符和 `!` 反向取消; 全量灌库会跳过屏蔽文件并删除旧 frontmatter,随后通过 stale-source 清理已入库切片; 单文件灌库遇到屏蔽文件时只执行出库; 文件删除/移动会同步清理旧来源切片; 文件树新增入库状态点,绿色表示已入库、红色表示未入库、灰色表示被屏蔽。
+- 调整文件树入库状态展示与屏蔽规则保存行为: 入库状态从小圆点改为明确图标,已入库显示绿色勾选、未入库显示红色提示、屏蔽显示灰色禁止; 保存屏蔽区规则时立即按新规则清理 active 知识库中已被屏蔽文件的 frontmatter 和向量切片,并刷新文件树状态。
+- 文件树右键菜单新增“屏蔽此文件/屏蔽此文件夹”: 点击后自动把文件相对路径或文件夹目录规则追加到知识库屏蔽区文本中,去重保存并刷新文件树,复用已有屏蔽清理流程删除对应入库切片。
+- 文件树右键菜单补齐反屏蔽: 已屏蔽节点显示“取消屏蔽此文件/文件夹”,若存在精确屏蔽规则则删除该规则,若是被父目录或通配符命中则追加 `!path` / `!path/` 反规则,保存后刷新文件树状态。
+- 优化文件树状态区布局: 将未保存红点和入库状态图标合并到独立的右侧状态簇,通过固定双列间距和细分隔线区分编辑保存状态与索引状态,避免二者看起来处于同一列或互相冲突。
+- 修复文件树复制到外部资源管理器无粘贴内容的问题: Electron 43 没有稳定的 `clipboard.writeFiles/readFiles` API,主进程改为在 Windows 下通过系统剪贴板 `FileDropList` 写入真实文件列表和 `Preferred DropEffect`,让资源管理器右键菜单能识别“粘贴”。
+- 覆盖策略先删旧文件再复制: 在 `importFilesToPath`、`importExternalPathsToPath` 和 `pasteExternalClipboardPaths` 中,策略为 `overwrite` 时先调用 `deleteKnowledgePath` 触发后端向量库切片清理,再写入新文件。避免旧文件的向量切片残留。
+- 修复主动灌库状态反馈: header `Ingest` 和单文件灌库完成后会重新拉取文件树状态; 不支持或被屏蔽的文件按 skipped 处理,不再显示 `File Indexing failed`; header 灌库进度改为红色细长胶囊,展示百分比、成功/总数和失败数,仅在主动灌库期间显示并在完成 1 秒后隐藏。
+  - 将冲突询问从 `window.prompt()` 替换为 Vue 模态对话框: `workspace.ts` 新增 `conflictDialog` 响应式状态和 `resolveConflict`/`cancelConflict` 方法,`promptConflictStrategy` 改为返回 Promise;`FileTreePanel.vue` 新增模态框显示冲突文件名列表,提供覆盖/跳过/重命名/取消四个按钮。
+
 ## 2026-07-11
 - 新增验收 Git 历史重建方案与脚本: `docs/Git验收历史重建方案.md` 说明如何从当前最终快照生成干净的功能分块提交历史,`scripts/rebuild_acceptance_history.ps1` 会创建备份分支和临时 worktree,按四位成员职责拆分 commit,用于验收前整理 main 分支历史。
 - 细化独立 Agent 页侧边栏交互: `New Chat` 胶囊内容居中,对话模式切换移到右侧圆形图标按钮并提供悬停提示,折叠侧栏图标替换为更轻量的左栏图标;光弦背景、Agent 页底色和页面模式会话侧边栏补齐亮/暗主题适配。
@@ -648,3 +735,9 @@
 - 将 `ContextBuilder` 升级为自动召回长期记忆和知识库片段并注入系统上下文,同时新增 `get_long_term_memory` 与 `get_knowledge_context` 两个 builtin 工具走同一检索链路。
 - 将 `main.py` 改为长期记忆与知识库召回验证脚本: 启动时自动灌知识库,首轮对话后同步生成 summary,第二轮调用前打印召回上下文预览以便确认 Memory 和 Knowledge 是否同时命中。
 - 调整聊天发送链路: 将新会话创建从 `ChatView.vue` 前移到 `chat.js` 的占位气泡渲染之后执行。现在用户发送首条消息时,前端会先立即插入 assistant 占位气泡并完成首帧绘制,再异步创建 session 和发起流式请求,避免首条消息在后端思考期间看起来像“没有回复”。
+- 实现知识库图谱基础闭环: 新增 SQLite 点边与抽取状态表、基于 frontmatter sections 的小模型候选抽取服务、证据/白名单校验、知识库入库旁路抽取、图谱 REST 查询接口和 editor 端知识库图谱模式。
+- 在 `README.md` 的知识库业务设计中补充知识图谱实体关系抽取方案,明确基于 frontmatter sections 的文字抽取、小模型两阶段候选生成、证据校验、SQLite 点边落库、前端 Canvas 复用和失败降级策略。
+- 让 PDF 清洗链路导出页面内图片资产并在 frontmatter section 写入 Markdown 图片: 记录图片顺序、页码、xref、格式、bbox、asset_path 与 public_url, 通过 `/knowledge/assets` 静态挂载供 editor 预览, 不启用 OCR 或图片语义抽取。
+- 修复启动全局灌库重复消费用户知识库的问题: 启动 frontmatter 生成和向量入库都会排除已登记在全局 `resources/knowledge` 下的用户知识库子树, 避免手动灌库后又被写入全局 frontmatter/Knowledge owner。
+- 兼容历史用户命名空间: 当 `runtime/frontmatter/users/<user>` 存在时, 启动全局灌库会额外跳过 `resources/knowledge/<user>` 和 `runtime/frontmatter/<user>`, 防止默认知识库仍指向全局根时重复消费 editor 用户文件。
+- 修复知识图谱未体现灌库规模的问题: 图谱抽取现在先同步 frontmatter 文档节点, 小模型实体关系抽取失败只影响语义边而不再导致文档节点缺失; editor 图谱面板新增 Refresh 按钮用于灌库后重新拉取 Knowledge 图谱。

@@ -10,6 +10,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { streamPrompt } from '@/api/agent'
+import type { AgentLoopMode } from '@/api/agent'
 import { fetchMessages } from '@/api/session'
 import { useSessionStore } from '@/stores/session'
 
@@ -23,6 +24,11 @@ export interface AgentChatMessage {
   trace?: Array<Record<string, unknown>>
   created_at?: string
   reference?: string
+}
+
+export interface SourceItem {
+  source_uri: string
+  content: string
 }
 
 function asString(value: unknown): string {
@@ -41,6 +47,15 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : []
 }
 
+function traceIdentity(trace: Record<string, unknown>): string {
+  return [
+    asString(trace.node),
+    asString(trace.event),
+    asString(trace.tool_name),
+    asString(trace.human_readable),
+  ].join('|')
+}
+
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<AgentChatMessage[]>([])
   const isStreaming = ref(false)
@@ -48,6 +63,9 @@ export const useChatStore = defineStore('chat', () => {
   const streamError = ref('')
   const loadedSessionId = ref('')
   const contextMirror = ref<unknown[]>([])
+  const activeAgentMode = ref<AgentLoopMode>('auto')
+  const currentKnowledgeSources = ref<SourceItem[]>([])
+  const currentCitationMap = ref<Record<string, SourceItem>>({})
 
   let streamAbortController: AbortController | null = null
   let historyAbortController: AbortController | null = null
@@ -146,6 +164,7 @@ export const useChatStore = defineStore('chat', () => {
       const history = await fetchMessages(sessionId, userId, limit, { signal: historyAbortController.signal })
       messages.value = history
         .filter((message) => message.role !== 'tool' || message.metadata?.node === 'action')
+        .filter((message) => message.metadata?.node !== 'planner' && message.metadata?.node !== 'observation')
         .filter((message) => {
           return message.role !== 'assistant'
             || message.content
@@ -174,7 +193,7 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function send(userId: string, sessionId: string | null, prompt: string, reference = '') {
+  async function send(userId: string, sessionId: string | null, prompt: string, reference = '', agentMode: AgentLoopMode = 'auto') {
     if (!prompt.trim()) {
       return
     }
@@ -197,6 +216,7 @@ export const useChatStore = defineStore('chat', () => {
     const signal = streamAbortController.signal
     isStreaming.value = true
     streamError.value = ''
+    activeAgentMode.value = agentMode
 
     const bufferedTraces: Array<Record<string, unknown>> = []
     let assistantCreated = false
@@ -219,22 +239,57 @@ export const useChatStore = defineStore('chat', () => {
       bufferedTraces.length = 0
     }
 
+    function appendTraceToCurrentAssistant(node: string, trace: Array<Record<string, unknown>>) {
+      ensureAssistant(node)
+      const lastAssistant = findLastAssistant()
+      if (lastAssistant) {
+        lastAssistant.trace ??= []
+        const seen = new Set(lastAssistant.trace.map(traceIdentity))
+        const fresh = trace.filter((item) => {
+          const key = traceIdentity(item)
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        lastAssistant.trace.push(...fresh)
+      }
+    }
+
     try {
       if (!targetSessionId) {
         targetSessionId = await sessionStore.create(userId)
         sessionStore.select(targetSessionId)
       }
 
-      for await (const rawChunk of streamPrompt(userId, targetSessionId, prompt, { signal, reference })) {
+      for await (const rawChunk of streamPrompt(userId, targetSessionId, prompt, { signal, reference, agentMode })) {
         const chunk = asRecord(rawChunk)
         const node = asString(chunk.node)
         const content = asString(chunk.content)
         const trace = asTrace(chunk.trace)
+        const metadata = asRecord(chunk.metadata)
+        const actualMode = asString(metadata.agent_mode)
+        if (actualMode === 'simple' || actualMode === 'react' || actualMode === 'plan') {
+          activeAgentMode.value = actualMode
+        }
         currentNode.value = node
 
         if (chunk.type === 'system_prompt' && content) {
           messages.value = messages.value.filter((message) => message.role !== 'system')
-          messages.value.push({ role: 'system', content, metadata: asRecord(chunk.metadata) })
+          messages.value.push({ role: 'system', content, metadata })
+          // Extract knowledge sources for citation display
+          currentKnowledgeSources.value = []
+          currentCitationMap.value = {}
+          if (metadata.citation_map && typeof metadata.citation_map === 'object') {
+            currentCitationMap.value = metadata.citation_map as Record<string, SourceItem>
+            // Populate knowledge sources list from citation_map
+            const seen = new Set<string>()
+            for (const [, source] of Object.entries(metadata.citation_map) as [string, SourceItem][]) {
+              if (source.source_uri && !seen.has(source.source_uri)) {
+                seen.add(source.source_uri)
+                currentKnowledgeSources.value.push(source)
+              }
+            }
+          }
           continue
         }
 
@@ -243,26 +298,10 @@ export const useChatStore = defineStore('chat', () => {
           continue
         }
 
-        if (node === 'action' && !content && trace.length > 0) {
-          const endTraces = trace.filter((item) => item.event === 'tool_call_end')
-          if (endTraces.length > 0) {
-            ensureAssistant('action')
-            const lastAssistant = findLastAssistant()
-            if (lastAssistant) {
-              lastAssistant.trace ??= []
-              lastAssistant.trace.push(...bufferedTraces, ...trace)
-              bufferedTraces.length = 0
-            }
-          } else {
-            bufferedTraces.push(...trace)
+        if (node === 'action') {
+          if (trace.length > 0) {
+            appendTraceToCurrentAssistant('action', trace)
           }
-          continue
-        }
-
-        if (node === 'action' && content) {
-          ensureAssistant(node)
-          appendStreamContent(content)
-          updateLastMessage(undefined, node)
           continue
         }
 
@@ -270,7 +309,9 @@ export const useChatStore = defineStore('chat', () => {
           ensureAssistant(node)
           if (chunk.type === 'delta') {
             const last = findLastAssistant()
-            if (last) last.content += content
+            if (last) {
+              last.content += content
+            }
           } else {
             cancelPendingFlush()
             const last = findLastAssistant()
@@ -284,15 +325,7 @@ export const useChatStore = defineStore('chat', () => {
           }
           updateLastMessage(undefined, node, asArray(chunk.tool_calls), trace)
         } else if (trace.length > 0) {
-          if (assistantCreated) {
-            const lastAssistant = findLastAssistant()
-            if (lastAssistant) {
-              lastAssistant.trace ??= []
-              lastAssistant.trace.push(...trace)
-            }
-          } else {
-            bufferedTraces.push(...trace)
-          }
+          appendTraceToCurrentAssistant(node || asString(trace[0]?.node) || 'agent', trace)
         }
       }
     } catch (error) {
@@ -328,10 +361,13 @@ export const useChatStore = defineStore('chat', () => {
     historyAbortController = null
     messages.value = []
     contextMirror.value = []
+    activeAgentMode.value = 'auto'
     isStreaming.value = false
     streamError.value = ''
     currentNode.value = ''
     loadedSessionId.value = ''
+    currentKnowledgeSources.value = []
+    currentCitationMap.value = {}
   }
 
   return {
@@ -341,10 +377,13 @@ export const useChatStore = defineStore('chat', () => {
     streamError,
     loadedSessionId,
     contextMirror,
+    activeAgentMode,
     lastMessage,
     canSend,
     loadHistory,
     send,
     clear,
+    currentKnowledgeSources,
+    currentCitationMap,
   }
 })

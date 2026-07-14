@@ -76,6 +76,17 @@ export interface ToolRun {
   status: 'success' | 'pending'
 }
 
+/** Observation 决策记录 */
+export interface ObservationDecisionItem {
+  id: string
+  index: number
+  decision: string
+  reason: string
+  nextAction: string
+  confidence: number
+  isCurrent: boolean
+}
+
 /** 带增强字段的 Trace 记录 */
 export interface EnrichedTrace extends Record<string, unknown> {
   traceKey: string
@@ -886,6 +897,20 @@ export function useObsData() {
 
   const currentMessageToolRuns = computed(() => buildToolRuns(currentMessageTraces.value as unknown as EnrichedTrace[]))
 
+  const currentMessageObservationDecisions = computed<ObservationDecisionItem[]>(() =>
+    currentMessageTraces.value
+      .filter((trace) => trace.node === 'observation' && trace.decision)
+      .map((trace, index) => ({
+        id: `observation-${index}-${trace.decision || 'decision'}`,
+        index: index + 1,
+        decision: String(trace.decision || 'continue'),
+        reason: String(trace.reason || trace.human_readable || ''),
+        nextAction: String(trace.next_action || ''),
+        confidence: Number(trace.confidence || 0),
+        isCurrent: currentNode.value === 'observation',
+      })),
+  )
+
   const currentMessageRuntimePath = computed(() => {
     const path: string[] = []
     const seen = new Set<string>()
@@ -913,6 +938,7 @@ export function useObsData() {
     toolRuns,
     currentMessageNodeTimeline,
     currentMessageToolRuns,
+    currentMessageObservationDecisions,
     currentMessageRuntimePath,
     currentMessageThinkingTraces,
     contextSources,

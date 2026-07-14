@@ -17,6 +17,8 @@ import { useChatStore } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
+import SplitText from './SplitText.vue'
+import type { AgentLoopMode } from '@/api/agent'
 
 const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
@@ -82,7 +84,7 @@ async function sendMessage(text: string, reference = '') {
   if (!userId.value) {
     return
   }
-  await chatStore.send(userId.value, sessionStore.currentSessionId, text, reference)
+  await chatStore.send(userId.value, sessionStore.currentSessionId, text, reference, settingsStore.agentLoopMode)
 }
 
 function clearReference() {
@@ -91,6 +93,10 @@ function clearReference() {
 
 function handleToggleWebSearch() {
   settingsStore.toggleWebSearch(!settingsStore.profile.webSearchEnabled)
+}
+
+function setAgentLoopMode(mode: AgentLoopMode) {
+  settingsStore.setAgentLoopMode(mode)
 }
 
 function openSessionDrawer() {
@@ -199,7 +205,7 @@ onMounted(() => {
     <main class="chat-body" :class="{ dimmed: isBootstrapping }">
       <Transition name="welcome-fade">
         <div v-if="!hasMessages && !chatStore.isStreaming" class="welcome-center">
-          <h1 class="welcome-title">MetaWeave</h1>
+          <SplitText text="MetaWeave" tag="h1" class="welcome-title" :trigger-on-mount="true" />
           <p class="welcome-subtitle">在知识库 {{ knowledgeTitle }} 中有什么问题?</p>
         </div>
       </Transition>
@@ -214,9 +220,11 @@ onMounted(() => {
         :disabled="!userId"
         :centered="!hasMessages && !chatStore.isStreaming"
         :web-search-enabled="settingsStore.profile.webSearchEnabled"
+        :agent-mode="settingsStore.agentLoopMode"
         :reference="referenceText"
         @send="sendMessage"
         @toggle-web-search="handleToggleWebSearch"
+        @set-agent-mode="setAgentLoopMode"
         @clear-reference="clearReference"
       />
     </main>

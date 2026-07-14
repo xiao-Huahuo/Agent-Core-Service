@@ -195,6 +195,22 @@ function filesFromEvent(event: DragEvent): File[] {
   return Array.from(event.dataTransfer?.files ?? [])
 }
 
+function desktopPathsFromFiles(files: File[]): string[] {
+  const getPathForFile = window.agentEditorDesktop?.getPathForFile
+  if (!getPathForFile) {
+    return []
+  }
+  return files
+    .map((file) => {
+      try {
+        return getPathForFile(file)
+      } catch {
+        return ''
+      }
+    })
+    .filter(Boolean)
+}
+
 function openMultiFilePicker() {
   uploadPicker.value?.click()
 }
@@ -213,6 +229,11 @@ async function handleRootDrop(event: DragEvent) {
   dragging.value = false
   const files = filesFromEvent(event)
   if (files.length > 0) {
+    const desktopPaths = desktopPathsFromFiles(files)
+    if (desktopPaths.length > 0) {
+      await workspaceStore.importExternalPathsToPath(desktopPaths)
+      return
+    }
     await workspaceStore.importFilesToPath(files)
     return
   }
@@ -231,6 +252,11 @@ async function handleMultiFileChange(event: Event) {
 async function handleFolderDrop(node: KnowledgeFileNode, files: File[]) {
   dragging.value = false
   const targetDir = node.isDir ? node.path : getParentPath(node.path)
+  const desktopPaths = desktopPathsFromFiles(files)
+  if (desktopPaths.length > 0) {
+    await workspaceStore.importExternalPathsToPath(desktopPaths, targetDir)
+    return
+  }
   await workspaceStore.importFilesToPath(files, targetDir)
 }
 
@@ -531,6 +557,76 @@ async function askAgentFromMenu() {
   }
 }
 
+async function ingestFromMenu() {
+  const node = contextMenu.value.node
+  closeContextMenu()
+  if (!node) return
+  await workspaceStore.ingestFile(node)
+}
+
+function ignorePatternForNode(node: KnowledgeFileNode): string {
+  const normalizedPath = normalizeTreePath(node.path)
+  return node.isDir ? `${normalizedPath}/` : normalizedPath
+}
+
+function normalizeIgnorePatternLine(line: string): string {
+  return line.replace(/\\/g, '/').trim()
+}
+
+function unignorePatternForNode(node: KnowledgeFileNode): string {
+  return `!${ignorePatternForNode(node)}`
+}
+
+function isSameIgnorePattern(line: string, pattern: string): boolean {
+  return normalizeIgnorePatternLine(line) === pattern
+}
+
+function isSameUnignorePattern(line: string, pattern: string): boolean {
+  return normalizeIgnorePatternLine(line) === `!${pattern}`
+}
+
+async function toggleIgnoreFromMenu() {
+  const node = contextMenu.value.node
+  closeContextMenu()
+  if (!node) {
+    return
+  }
+  const pattern = ignorePatternForNode(node)
+  const unignorePattern = unignorePatternForNode(node)
+  const currentPatterns = settingsStore.profile.knowledgeIgnorePatterns ?? ''
+  const currentLines = currentPatterns
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0)
+  const isCurrentlyIgnored = node.indexStatus === 'ignored'
+  const hasExactIgnore = currentLines.some((line) => isSameIgnorePattern(line, pattern))
+  const hasExactUnignore = currentLines.some((line) => isSameUnignorePattern(line, pattern))
+  let nextLines: string[]
+  if (isCurrentlyIgnored) {
+    nextLines = hasExactIgnore
+      ? currentLines.filter((line) => !isSameIgnorePattern(line, pattern))
+      : currentLines
+    if (!hasExactIgnore && !hasExactUnignore) {
+      nextLines = [...nextLines, unignorePattern]
+    }
+  } else {
+    nextLines = currentLines
+      .filter((line) => !isSameUnignorePattern(line, pattern))
+    if (!hasExactIgnore) {
+      nextLines = [...nextLines, pattern]
+    }
+  }
+  const nextPatterns = nextLines.join('\n')
+  actionError.value = ''
+  try {
+    await settingsStore.saveKnowledgeIngestionSettings({ knowledgeIgnorePatterns: nextPatterns })
+    await workspaceStore.loadKnowledgeTree()
+    workspaceStore.showToast(`${isCurrentlyIgnored ? '已取消屏蔽' : '已屏蔽'} ${node.isDir ? '文件夹' : '文件'}：${node.name}`)
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : '屏蔽规则保存失败。'
+  }
+}
+
 async function commitLibraryName() {
   const nextName = libraryNameDraft.value.trim()
   if (!nextName || nextName === activeLibraryName.value) {
@@ -699,6 +795,7 @@ onUnmounted(() => {
         @drop-nodes="handleNodeDrop"
         @node-drag-start="handleNodeDragStart"
         @context-menu="openContextMenu"
+        @ingest="workspaceStore.ingestFile"
         @edit-input="updateInlineValue"
         @edit-commit="commitInlineEdit"
         @edit-cancel="cancelInlineEdit"
@@ -742,6 +839,18 @@ onUnmounted(() => {
       <button type="button" :disabled="!contextMenu.node" @click="showInGraphFromMenu">
         <span>在图谱中显示</span><kbd>Ctrl+G</kbd>
       </button>
+      <button type="button" :disabled="!contextMenu.node" @click="ingestFromMenu">
+        <span>{{ contextMenu.node?.isDir ? '灌库此文件夹' : '灌库此文件' }}</span>
+      </button>
+      <button type="button" :disabled="!contextMenu.node" @click="toggleIgnoreFromMenu">
+        <span>
+          {{
+            contextMenu.node?.indexStatus === 'ignored'
+              ? (contextMenu.node?.isDir ? '取消屏蔽此文件夹' : '取消屏蔽此文件')
+              : (contextMenu.node?.isDir ? '屏蔽此文件夹' : '屏蔽此文件')
+          }}
+        </span>
+      </button>
       <button type="button" @click="askAgentFromMenu">
         <span>问问 Agent</span>
       </button>
@@ -752,6 +861,27 @@ onUnmounted(() => {
       <button type="button" :disabled="!contextMenu.node" @click="openWithDefaultFromMenu">
         <span>用默认程序打开</span>
       </button>
+    </div>
+
+    <!--
+      Conflict resolution dialog for drag-drop / paste duplicates.
+      Prompts the user to choose a strategy when a file with the same name
+      already exists at the target directory.
+    -->
+    <div v-if="workspaceStore.conflictDialog.open" class="delete-backdrop" @click.self="workspaceStore.cancelConflict()">
+      <section class="delete-dialog conflict-dialog" role="dialog" aria-modal="true" aria-labelledby="conflict-title">
+        <h2 id="conflict-title">发现重复文件</h2>
+        <p>目标文件夹中已有以下同名文件/文件夹，请选择处理方式：</p>
+        <ul class="conflict-file-list">
+          <li v-for="name in workspaceStore.conflictDialog.conflictingNames" :key="name">{{ name }}</li>
+        </ul>
+        <div class="conflict-actions">
+          <button type="button" @click="workspaceStore.resolveConflict('overwrite')">覆盖</button>
+          <button type="button" @click="workspaceStore.resolveConflict('skip')">跳过</button>
+          <button type="button" class="rename" @click="workspaceStore.resolveConflict('rename')">重命名</button>
+          <button type="button" class="cancel" @click="workspaceStore.cancelConflict()">取消</button>
+        </div>
+      </section>
     </div>
 
     <div v-if="deleteTarget" class="delete-backdrop" @click.self="deleteTarget = null">
@@ -1066,5 +1196,55 @@ onUnmounted(() => {
 .delete-actions .danger {
   border-color: var(--color-danger);
   color: var(--color-danger);
+}
+
+.conflict-dialog ul {
+  margin: var(--space-8) 0;
+  padding-left: var(--space-12);
+  color: var(--color-text);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-6);
+  margin-top: var(--space-12);
+}
+
+.conflict-actions button {
+  height: 30px;
+  padding: 0 var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.conflict-actions button:hover {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.conflict-actions .rename {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.conflict-actions .rename:hover {
+  background: rgba(66, 36, 235, 0.1);
+}
+
+.conflict-actions .cancel {
+  border-color: transparent;
+  color: var(--color-text-tertiary);
 }
 </style>

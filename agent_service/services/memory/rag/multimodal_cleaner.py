@@ -26,6 +26,8 @@ from typing import Any
 from xml.etree import ElementTree
 
 from agent_service.services.memory.rag.frontmatter_document import StructuredKnowledgeSection
+from agent_service.services.memory.rag.image_ocr import ImageOcrService
+from agent_service.services.memory.rag.pdf_cleaner import extract_pdf_text
 
 
 @dataclass(slots=True)
@@ -95,12 +97,27 @@ class MultimodalDocumentCleaner:
     max_table_rows: 表格类文件最多写入语义索引的样例行数。
     """
 
-    def __init__(self, *, max_table_rows: int = 80) -> None:
+    def __init__(
+        self,
+        *,
+        max_table_rows: int = 80,
+        ocr_enabled: bool = False,
+        image_ocr_service: ImageOcrService | None = None,
+    ) -> None:
         """保存清洗参数。"""
 
         self.max_table_rows = max_table_rows
+        self.ocr_enabled = ocr_enabled
+        self.image_ocr_service = image_ocr_service
 
-    def clean(self, *, source_path: Path, title: str) -> CleanedDocument:
+    def clean(
+        self,
+        *,
+        source_path: Path,
+        title: str,
+        asset_output_dir: Path | None = None,
+        asset_public_prefix: str = "",
+    ) -> CleanedDocument:
         """
         按文件后缀清洗知识源。
 
@@ -126,9 +143,14 @@ class MultimodalDocumentCleaner:
         if suffix == ".pptx":
             return self._clean_pptx(source_path=source_path, title=title)
         if suffix == ".pdf":
-            return self._clean_binary_placeholder(source_path=source_path, title=title, source_type="pdf")
-        if suffix in {".jpg", ".jpeg", ".png", ".webp"}:
-            return self._clean_binary_placeholder(source_path=source_path, title=title, source_type="image")
+            return self._clean_pdf(
+                source_path=source_path,
+                title=title,
+                asset_output_dir=asset_output_dir,
+                asset_public_prefix=asset_public_prefix,
+            )
+        if suffix in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+            return self._clean_image(source_path=source_path, title=title)
         return self._clean_binary_placeholder(source_path=source_path, title=title, source_type="asset")
 
     def _clean_json(self, *, source_path: Path, title: str) -> CleanedDocument:
@@ -230,7 +252,11 @@ class MultimodalDocumentCleaner:
                 sections = _renumber_sections(sections)
             if image_refs:
                 sections.append(_make_section(index=len(sections), heading=f"{title} 图片引用", content="\n".join(f"image relationship: {item}" for item in image_refs)))
-        return CleanedDocument(source_type="docx", sections=sections, metadata={"modality": "document", "image_refs": image_refs})
+        return CleanedDocument(
+            source_type="docx",
+            sections=sections,
+            metadata={"modality": "document", "image_refs": image_refs, "ocr_enabled": self.ocr_enabled},
+        )
 
     def _clean_xlsx(self, *, source_path: Path, title: str) -> CleanedDocument:
         """从 XLSX 中抽取工作表样例行。"""
@@ -262,6 +288,77 @@ class MultimodalDocumentCleaner:
                     sections.append(_make_section(index=len(sections), heading=f"{title} Slide {slide_index}", content=text))
         return CleanedDocument(source_type="presentation", sections=sections, metadata={"modality": "slide", "slide_count": len(sections)})
 
+    def _clean_pdf(
+        self,
+        *,
+        source_path: Path,
+        title: str,
+        asset_output_dir: Path | None = None,
+        asset_public_prefix: str = "",
+    ) -> CleanedDocument:
+        """优先从非扫描型 PDF 提取文本层;扫描型 PDF 暂登记为待 OCR。"""
+
+        try:
+            extracted = extract_pdf_text(
+                source_path,
+                image_output_dir=asset_output_dir,
+                image_public_prefix=asset_public_prefix,
+            )
+        except Exception:
+            return self._clean_binary_placeholder(source_path=source_path, title=title, source_type="pdf")
+        metadata = {
+            "modality": "document",
+            "ocr_enabled": self.ocr_enabled,
+            "pdf_scanned": extracted.is_scanned,
+            "page_count": extracted.page_count,
+            "image_count": extracted.image_count,
+            "image_refs": extracted.image_refs,
+            "table_count": extracted.table_count,
+            "ocr_status": "pending" if extracted.is_scanned else "not_required",
+        }
+        if not extracted.content.strip():
+            return _single_section_document(
+                source_type="pdf",
+                title=title,
+                content=(
+                    f"文件名: {source_path.name}\n"
+                    f"文件类型: {source_path.suffix.lower()}\n"
+                    f"页数: {extracted.page_count}\n"
+                    "状态: 未检测到可用文本层,需要 OCR 后才能提取正文。"
+                ),
+                metadata=metadata,
+            )
+        return _single_section_document(
+            source_type="pdf",
+            title=title,
+            content=extracted.content,
+            metadata=metadata,
+        )
+
+    def _clean_image(self, *, source_path: Path, title: str) -> CleanedDocument:
+        """对普通图片执行 OCR,无文本时仅登记为图片资产。"""
+
+        if not self.image_ocr_service:
+            return self._clean_binary_placeholder(source_path=source_path, title=title, source_type="image")
+        result = self.image_ocr_service.extract_image_text(source_path)
+        metadata = {
+            "modality": "image",
+            "ocr_enabled": self.ocr_enabled,
+            "ocr_status": "completed" if result.has_text else ("no_text" if result.engine_available else "engine_unavailable"),
+            "ocr_engine_available": result.engine_available,
+            "ocr_word_count": result.word_count,
+            "ocr_average_confidence": result.average_confidence,
+            "file_size": source_path.stat().st_size,
+        }
+        if not result.has_text:
+            return CleanedDocument(source_type="image", sections=[], metadata=metadata)
+        return _single_section_document(
+            source_type="image",
+            title=title,
+            content=result.content,
+            metadata=metadata,
+        )
+
     def _clean_binary_placeholder(self, *, source_path: Path, title: str, source_type: str) -> CleanedDocument:
         """为 PDF/图片等待 OCR 的二进制文件生成轻量元信息章节。"""
 
@@ -276,7 +373,12 @@ class MultimodalDocumentCleaner:
             source_type=source_type,
             title=title,
             content=content,
-            metadata={"modality": source_type, "ocr_status": "pending", "file_size": stat.st_size},
+            metadata={
+                "modality": source_type,
+                "ocr_enabled": self.ocr_enabled,
+                "ocr_status": "pending",
+                "file_size": stat.st_size,
+            },
         )
 
 

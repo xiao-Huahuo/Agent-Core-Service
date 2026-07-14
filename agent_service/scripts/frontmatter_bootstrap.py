@@ -10,17 +10,24 @@ python -m agent_service.scripts.frontmatter_bootstrap
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Callable
+
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.rag.frontmatter_bootstrap import FrontmatterBootstrapService
 
 
-def bootstrap_frontmatter(*, config: AgentConfig) -> dict[str, int]:
+def bootstrap_frontmatter(
+    *,
+    config: AgentConfig,
+    exclude_path: Callable[[Path], bool] | None = None,
+) -> dict[str, int]:
     """
     执行知识源结构化预处理并返回统计结果。
     config: 全局配置对象。
     """
 
-    result = FrontmatterBootstrapService(config=config).build_frontmatter_dir()
+    result = FrontmatterBootstrapService(config=config).build_frontmatter_dir(exclude_path=exclude_path)
     return {
         "files_seen": result.files_seen,
         "files_written": result.files_written,

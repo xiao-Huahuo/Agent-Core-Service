@@ -11,7 +11,10 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import LoaderCube from '@/components/editor_workspace/agent_chat/LoaderCube.vue'
 import MessageBubble from '@/components/editor_workspace/agent_chat/MessageBubble.vue'
 import { useAvatar } from '@/components/editor_workspace/agent_chat/useAvatar'
+import { useChatStore } from '@/stores/chat'
 import type { AgentChatMessage } from '@/stores/chat'
+
+const chatStore = useChatStore()
 
 const props = defineProps<{
   messages: AgentChatMessage[]
@@ -44,18 +47,15 @@ function mergeConsecutiveAssistants(messages: AgentChatMessage[]) {
 
 function mergeConsecutiveSameNode(messages: AgentChatMessage[]) {
   return messages.filter((message) => message.role !== 'system').reduce<AgentChatMessage[]>((acc, message) => {
-    if (message.role !== 'assistant') {
-      acc.push(message)
-      return acc
-    }
     const previous = acc[acc.length - 1]
-    if (previous && previous.role === 'assistant' && previous.node === message.node) {
-      acc[acc.length - 1] = {
+    if (message.role === 'assistant' && previous?.role === 'assistant' && previous.node === message.node) {
+      const merged: AgentChatMessage = {
         ...previous,
-        content: message.content || previous.content,
-        tool_calls: message.tool_calls?.length ? message.tool_calls : previous.tool_calls,
+        content: previous.content + message.content,
+        tool_calls: [...(previous.tool_calls ?? []), ...(message.tool_calls ?? [])],
         trace: [...(previous.trace ?? []), ...(message.trace ?? [])],
       }
+      acc[acc.length - 1] = merged
     } else {
       acc.push(message)
     }
@@ -135,6 +135,8 @@ onMounted(() => {
       :user-avatar="userAvatar"
       :agent-avatar="agentAvatar"
       :show-avatar="shouldShowAvatar(message, index)"
+      :knowledge-sources="message.role === 'assistant' ? chatStore.currentKnowledgeSources : []"
+      :citation-map="message.role === 'assistant' ? chatStore.currentCitationMap : {}"
     />
     <div v-if="showThinkingBubble" class="thinking-row">
       <img :src="agentAvatar" class="thinking-avatar" alt="agent" />
@@ -174,4 +176,5 @@ onMounted(() => {
   border-radius: 50%;
   object-fit: cover;
 }
+
 </style>

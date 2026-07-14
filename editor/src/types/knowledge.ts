@@ -7,7 +7,7 @@
  */
 
 /** Index lifecycle shown in the file tree and top status bar. */
-export type IndexStatus = 'clean' | 'dirty' | 'indexing' | 'indexed' | 'failed'
+export type IndexStatus = 'clean' | 'dirty' | 'indexing' | 'indexed' | 'failed' | 'ignored'
 
 /** Editor display mode controlled by the central toolbar. */
 export type EditorViewMode = 'edit' | 'preview' | 'split'
@@ -83,6 +83,22 @@ export interface FilePreviewPayload {
   sheets?: TablePreviewSheet[]
   /** Optional unsupported-file message. */
   message?: string
+  /** Whether a PDF appears to have no extractable text layer. */
+  pdf_scanned?: boolean
+  /** Optional PDF page count from the backend parser. */
+  page_count?: number
+  /** Optional count of images detected in a PDF or document. */
+  image_count?: number
+  /** Optional count of tables detected in a PDF or document. */
+  table_count?: number
+  /** Optional OCR lifecycle for image previews. */
+  ocr_status?: 'disabled' | 'completed' | 'no_text' | 'pending' | string
+  /** Optional count of OCR words accepted by the backend. */
+  ocr_word_count?: number
+  /** Optional average OCR confidence for accepted words. */
+  ocr_average_confidence?: number
+  /** Whether OCR engine was available when preview was generated. */
+  ocr_engine_available?: boolean
   /** Last modified timestamp from disk. */
   mtime: string
   /** File size in bytes. */
@@ -133,4 +149,33 @@ export interface SearchResults {
   filename_results: FilenameResult[]
   fulltext_results: FulltextResult[]
   semantic_results: Record<string, unknown>[]
+}
+
+export interface KnowledgeSemanticGraphNode {
+  id: string
+  label: string
+  kind: 'document' | 'entity' | string
+  entity_type?: string
+  document_id?: string
+  source_uri?: string
+  source_range?: Record<string, unknown>
+  metadata?: Record<string, unknown>
+}
+
+export interface KnowledgeSemanticGraphLink {
+  id: string
+  source: string
+  target: string
+  kind: string
+  weight?: number
+  evidence?: string
+  source_document_id?: string
+  source_section_id?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface KnowledgeSemanticGraphResponse {
+  nodes: KnowledgeSemanticGraphNode[]
+  links: KnowledgeSemanticGraphLink[]
+  stats: Record<string, number>
 }

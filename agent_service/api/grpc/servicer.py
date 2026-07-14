@@ -122,6 +122,7 @@ class AgentServiceServicer(BaseServicer):
                 prompt=request.prompt,
                 user_id=request.user_id,
                 session_id=request.session_id,
+                agent_mode=getattr(request, "agent_mode", "") or "plan",
             )
         )
 
@@ -134,6 +135,7 @@ class AgentServiceServicer(BaseServicer):
                 user_id=request.user_id,
                 session_id=request.session_id,
                 reference=request.reference or None,
+                agent_mode=getattr(request, "agent_mode", "") or "auto",
             )
         )
 
@@ -148,6 +150,7 @@ class AgentServiceServicer(BaseServicer):
             prompt=request.prompt,
             user_id=request.user_id,
             session_id=request.session_id,
+            agent_mode=getattr(request, "agent_mode", "") or "plan",
         )
         return self._build_run_result(result)
 
@@ -159,6 +162,7 @@ class AgentServiceServicer(BaseServicer):
             user_id=request.user_id,
             session_id=request.session_id,
             reference=request.reference or None,
+            agent_mode=getattr(request, "agent_mode", "") or "auto",
         )
         return self._build_run_result(result)
 

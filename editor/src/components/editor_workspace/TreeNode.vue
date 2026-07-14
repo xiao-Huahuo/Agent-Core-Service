@@ -8,8 +8,11 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import {
+  Ban,
   ChevronDown,
   ChevronRight,
+  CircleAlert,
+  CircleCheck,
   FileArchive,
   FileCode2,
   FileImage,
@@ -41,6 +44,7 @@ const emit = defineEmits<{
   dropNodes: [node: KnowledgeFileNode, paths: string[]]
   nodeDragStart: [node: KnowledgeFileNode, event: DragEvent]
   contextMenu: [node: KnowledgeFileNode, event: MouseEvent]
+  ingest: [node: KnowledgeFileNode]
   editInput: [value: string]
   editCommit: [value: string]
   editCancel: []
@@ -96,6 +100,26 @@ const fileIconClass = computed(() => {
     return 'file-kind-archive'
   }
   return 'file-kind-default'
+})
+
+const indexStatusClass = computed(() => {
+  if (props.node.indexStatus === 'indexed' || props.node.indexStatus === 'clean') return 'indexed'
+  if (props.node.indexStatus === 'ignored') return 'ignored'
+  if (props.node.indexStatus === 'failed') return 'failed'
+  return 'dirty'
+})
+
+const indexStatusTitle = computed(() => {
+  if (props.node.indexStatus === 'indexed' || props.node.indexStatus === 'clean') return '已进入向量库'
+  if (props.node.indexStatus === 'ignored') return '已屏蔽, 不进入向量库'
+  if (props.node.indexStatus === 'failed') return '入库失败'
+  return '未进入向量库'
+})
+
+const indexStatusIcon = computed(() => {
+  if (props.node.indexStatus === 'indexed' || props.node.indexStatus === 'clean') return CircleCheck
+  if (props.node.indexStatus === 'ignored') return Ban
+  return CircleAlert
 })
 
 watch(
@@ -181,7 +205,18 @@ function handleRowDrop(event: DragEvent) {
         @keydown.esc.prevent.stop="emit('editCancel')"
       />
       <span v-else class="node-name">{{ node.name }}</span>
-      <i v-if="dirtyPaths.has(node.path)" class="node-dirty-dot"></i>
+      <span class="node-status-cluster">
+        <i class="node-dirty-dot" :class="{ show: dirtyPaths.has(node.path) }"></i>
+        <component
+          v-if="!node.isDir"
+          :is="indexStatusIcon"
+          class="node-index-dot"
+          :class="indexStatusClass"
+          :size="13"
+          :title="indexStatusTitle"
+        />
+        <span v-else class="node-index-placeholder"></span>
+      </span>
     </div>
     <ul v-if="node.isDir && expandedPaths.has(node.path) && node.children" class="tree-children">
       <TreeNode
@@ -200,6 +235,7 @@ function handleRowDrop(event: DragEvent) {
         @drop-nodes="(targetNode, paths) => emit('dropNodes', targetNode, paths)"
         @node-drag-start="(targetNode, event) => emit('nodeDragStart', targetNode, event)"
         @context-menu="(targetNode, event) => emit('contextMenu', targetNode, event)"
+        @ingest="(targetNode) => emit('ingest', targetNode)"
         @edit-input="emit('editInput', $event)"
         @edit-commit="emit('editCommit', $event)"
         @edit-cancel="emit('editCancel')"
@@ -212,7 +248,7 @@ function handleRowDrop(event: DragEvent) {
 .tree-row {
   position: relative;
   display: grid;
-  grid-template-columns: 14px 16px minmax(0, 1fr) 14px;
+  grid-template-columns: 14px 16px minmax(0, 1fr) 34px;
   align-items: center;
   isolation: isolate;
   gap: var(--space-6);
@@ -282,12 +318,51 @@ function handleRowDrop(event: DragEvent) {
   outline: none;
 }
 
+.node-status-cluster {
+  display: inline-grid;
+  grid-template-columns: 8px 16px;
+  align-items: center;
+  justify-content: end;
+  gap: 8px;
+  min-width: 34px;
+  padding-left: 8px;
+}
+
 .node-dirty-dot {
-  justify-self: end;
+  justify-self: center;
+  align-self: center;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--color-accent);
+  visibility: hidden;
+}
+
+.node-dirty-dot.show {
+  visibility: visible;
+}
+
+.node-index-dot {
+  justify-self: center;
+  color: var(--color-danger);
+}
+
+.node-index-placeholder {
+  display: block;
+  width: 16px;
+  height: 1px;
+}
+
+.node-index-dot.indexed {
+  color: #2fb344;
+}
+
+.node-index-dot.ignored {
+  color: var(--color-text-muted);
+}
+
+.node-index-dot.failed {
+  color: #f59f00;
 }
 
 .file-icon {

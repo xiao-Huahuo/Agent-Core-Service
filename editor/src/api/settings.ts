@@ -6,7 +6,7 @@
  * hard-coding settings endpoint paths inside components or stores.
  */
 
-import { apiDelete, apiGet, apiPost, apiPut } from '@/api/client'
+import { apiDelete, apiGet, apiPost, apiPut, buildApiUrl, streamLines } from '@/api/client'
 import { API_ROUTES } from '@/router/api_routes'
 
 export interface SettingsProfileResponse {
@@ -15,6 +15,9 @@ export interface SettingsProfileResponse {
   active_library_id?: string
   active_knowledge_library?: SettingsKnowledgeLibraryResponse | null
   knowledge_libraries?: SettingsKnowledgeLibraryResponse[]
+  auto_ingest_on_upload?: boolean
+  ocr_enabled?: boolean
+  knowledge_ignore_patterns?: string
   created_at: string
   updated_at: string
 }
@@ -43,6 +46,8 @@ export interface KnowledgeRebuildResponse {
   chunks_created: number
   chunks_deleted: number
   uploaded_path: string
+  skip_reason?: string
+  status_message?: string
 }
 
 export function ensureSettingsProfile(userId: string): Promise<SettingsProfileResponse> {
@@ -64,6 +69,32 @@ export function updateSettingsKnowledgeDir(
   return apiPut<SettingsProfileResponse>(API_ROUTES.SETTINGS_KNOWLEDGE_DIR, body)
 }
 
+export interface KnowledgeIngestionConfigResponse {
+  auto_ingest_on_upload: boolean
+  ocr_enabled: boolean
+  knowledge_ignore_patterns: string
+  restart_required?: boolean
+  ignore_cleanup?: {
+    files_seen: number
+    chunks_deleted: number
+  }
+}
+
+export function fetchKnowledgeIngestionConfig(userId: string): Promise<KnowledgeIngestionConfigResponse> {
+  return apiGet<KnowledgeIngestionConfigResponse>(API_ROUTES.SETTINGS_KNOWLEDGE_INGESTION, { user_id: userId })
+}
+
+export function saveKnowledgeIngestionConfig(
+  userId: string,
+  params: { autoIngestOnUpload?: boolean; ocrEnabled?: boolean; knowledgeIgnorePatterns?: string },
+): Promise<KnowledgeIngestionConfigResponse> {
+  const body: Record<string, string | boolean> = { user_id: userId }
+  if (params.autoIngestOnUpload !== undefined) body.auto_ingest_on_upload = params.autoIngestOnUpload
+  if ('ocrEnabled' in params && params.ocrEnabled !== undefined) body.ocr_enabled = params.ocrEnabled
+  if (params.knowledgeIgnorePatterns !== undefined) body.knowledge_ignore_patterns = params.knowledgeIgnorePatterns
+  return apiPut<KnowledgeIngestionConfigResponse>(API_ROUTES.SETTINGS_KNOWLEDGE_INGESTION, body)
+}
+
 export function rebuildKnowledgeRoot(
   userId: string,
   knowledgeDir?: string,
@@ -74,7 +105,55 @@ export function rebuildKnowledgeRoot(
   if (knowledgeDir) {
     body.knowledge_dir = knowledgeDir
   }
-  return apiPost<KnowledgeRebuildResponse>(API_ROUTES.KNOWLEDGE_REBUILD, body)
+  return apiPost<KnowledgeRebuildResponse>(API_ROUTES.KNOWLEDGE_REBUILD, body, {
+    timeoutMs: 600_000,
+  })
+}
+
+export interface KnowledgeIngestionProgressEvent {
+  type?: string
+  phase?: 'frontmatter' | 'ingestion' | 'cleanup' | 'graph'
+  status?: string
+  processed?: number
+  total?: number
+  path?: string
+  files_written?: number
+  files_ingested?: number
+  files_skipped?: number
+  chunks_created?: number
+  chunks_deleted?: number
+  result?: KnowledgeRebuildResponse
+  message?: string
+}
+
+export async function rebuildKnowledgeRootStream(
+  userId: string,
+  onProgress: (event: KnowledgeIngestionProgressEvent) => void,
+  knowledgeDir?: string,
+): Promise<KnowledgeRebuildResponse> {
+  const body: { user_id: string; knowledge_dir?: string } = { user_id: userId }
+  if (knowledgeDir) {
+    body.knowledge_dir = knowledgeDir
+  }
+  let finalResult: KnowledgeRebuildResponse | null = null
+  for await (const event of streamLines(buildApiUrl(API_ROUTES.KNOWLEDGE_REBUILD_STREAM), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })) {
+    const typed = event as KnowledgeIngestionProgressEvent
+    if (typed.type === 'error') {
+      throw new Error(typed.message || 'Knowledge rebuild failed')
+    }
+    if (typed.type === 'done' && typed.result) {
+      finalResult = typed.result
+    }
+    onProgress(typed)
+  }
+  if (!finalResult) {
+    throw new Error('Knowledge rebuild stream finished without a result')
+  }
+  return finalResult
 }
 
 /* ---- System prompts ---- */

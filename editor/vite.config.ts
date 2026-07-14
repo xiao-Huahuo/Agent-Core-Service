@@ -38,7 +38,26 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '/agent': 'http://127.0.0.1:8002',
+      '/agent': {
+        target: 'http://127.0.0.1:8002',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            /*
+             * Agent SSE must stay uncompressed through the dev proxy.
+             * If the proxy asks for compressed responses, chunks can be
+             * buffered until the request completes, leaving the Agent panel
+             * and observability cards spinning with no intermediate updates.
+             */
+            proxyReq.removeHeader('accept-encoding')
+          })
+          proxy.on('proxyRes', (proxyRes) => {
+            proxyRes.headers['cache-control'] = 'no-cache'
+            proxyRes.headers['x-accel-buffering'] = 'no'
+            proxyRes.headers.connection = 'keep-alive'
+          })
+        },
+      },
       '/knowledge': 'http://127.0.0.1:8002',
       '/sessions': 'http://127.0.0.1:8002',
       '/settings': 'http://127.0.0.1:8002',

@@ -44,11 +44,11 @@ const FALLBACK_DISPLAY: Record<string, string> = {
   update_exploration_state: '更新探索状态',
 }
 
-function togglePanel() {
-  if (isExpanded.value) {
+function handleToggle(event: Event) {
+  const open = (event.target as HTMLDetailsElement).open
+  isExpanded.value = open
+  if (!open) {
     emit('collapse')
-  } else {
-    isExpanded.value = true
   }
 }
 
@@ -113,7 +113,11 @@ function entryText(trace: Record<string, unknown>) {
 
 const entries = computed(() => {
   const raw = (props.traces ?? [])
-    .filter((trace) => !skipEvents.has(asString(trace.event)) && asString(trace.human_readable))
+    .filter((trace) => {
+      const event = asString(trace.event)
+      const isChatVisible = trace.chat_visible === true || event === 'tool_call_end'
+      return isChatVisible && !skipEvents.has(event) && asString(trace.human_readable)
+    })
 
   // First pass: collect all tool_call_end events into groups by tool_name,
   // recording the position of the first occurrence.
@@ -193,13 +197,13 @@ const entries = computed(() => {
 </script>
 
 <template>
-  <div v-if="entries.length > 0" class="thinking-inline">
-    <div class="toggle-bar" @click="togglePanel">
+  <details v-if="entries.length > 0" class="thinking-inline" :open="isExpanded" @toggle="handleToggle">
+    <summary class="toggle-bar">
       <span class="bar-chevron" :class="{ expanded: isExpanded }">></span>
       <span v-if="!isExpanded && isStreaming" class="bar-label">思考中...</span>
       <span v-else-if="!isExpanded && !isStreaming" class="bar-label">思考完成</span>
       <span v-else class="bar-label">思考过程</span>
-    </div>
+    </summary>
 
     <Transition name="inline-list">
       <div v-if="isExpanded" class="entry-list">
@@ -214,7 +218,7 @@ const entries = computed(() => {
         </p>
       </div>
     </Transition>
-  </div>
+  </details>
 </template>
 
 <style scoped>
@@ -222,19 +226,43 @@ const entries = computed(() => {
   margin-bottom: var(--space-8);
 }
 
+.thinking-inline > summary {
+  list-style: none;
+}
+
+.thinking-inline > summary::-webkit-details-marker {
+  display: none;
+}
+
 .toggle-bar {
   display: flex;
   align-items: center;
   gap: var(--space-6);
-  padding: var(--space-4) 0;
+  width: fit-content;
+  min-height: 24px;
+  padding: var(--space-4) var(--space-8);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: var(--radius-sm);
+  background: rgba(148, 163, 184, 0.06);
+  color: #8a93a3;
   cursor: pointer;
   user-select: none;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.toggle-bar:hover {
+  border-color: rgba(148, 163, 184, 0.34);
+  background: rgba(148, 163, 184, 0.1);
+  color: #a3adbd;
 }
 
 .bar-chevron {
   display: inline-block;
   flex-shrink: 0;
-  color: var(--color-text-tertiary);
+  color: currentColor;
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
   transition: transform 0.25s ease;
@@ -245,15 +273,15 @@ const entries = computed(() => {
 }
 
 .bar-label {
-  color: var(--color-text-secondary);
+  color: currentColor;
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
-  opacity: 0.7;
+  opacity: 0.9;
   transition: opacity var(--transition-fast);
 }
 
 .toggle-bar:hover .bar-label {
-  opacity: 0.9;
+  opacity: 1;
 }
 
 .inline-list-enter-active {

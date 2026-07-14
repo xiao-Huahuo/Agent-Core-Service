@@ -367,7 +367,7 @@ class LLMTaskScheduler:
             messages=list(messages),
             tool_names=tool_names or [],
             timeout_seconds=timeout_seconds or self._resolve_timeout_seconds(task_type),
-            max_retries=0,
+            max_retries=max(self.task_config.max_retries, 0),
             dedup_key=None,
             temperature=temperature,
             model_tier=model_tier,
@@ -406,7 +406,7 @@ class LLMTaskScheduler:
                 pubsub.unsubscribe(request.stream_channel)
                 pubsub.close()
             return
-        yield from self._stream_chat_request(request)
+        yield from self._stream_chat_request_with_retries(request)
 
     def submit_chat(
         self,
@@ -911,6 +911,42 @@ class LLMTaskScheduler:
             raise
         breaker.record_success()
 
+    def _stream_chat_request_with_retries(self, request: SerializedChatRequest) -> Iterator[dict[str, Any]]:
+        """
+        流式执行 Chat 请求并在未输出任何 chunk 前对可恢复错误做退避重试。
+
+        流式响应一旦已经向前端输出内容就不能安全重试,否则会造成重复 token。
+        工具调用决策类响应通常在完成前不会输出自然语言 token,因此 429/Connection
+        error 发生在首个 chunk 前时可以安全重试。
+        """
+
+        attempt = 0
+        while True:
+            emitted_any_chunk = False
+            try:
+                for chunk in self._stream_chat_request(request):
+                    emitted_any_chunk = True
+                    yield chunk
+                return
+            except Exception as exc:  # noqa: BLE001
+                if emitted_any_chunk or attempt >= request.max_retries or not self._is_retryable_error(exc):
+                    raise
+                backoff_seconds = min(
+                    self.task_config.initial_backoff_seconds * (2**attempt),
+                    self.task_config.max_backoff_seconds,
+                )
+                jitter = random.uniform(0.0, backoff_seconds * 0.2)
+                logger.warning(
+                    "LLM Chat 流式调用失败,准备重试 | task_type=%s model_tier=%s attempt=%d/%d error=%s",
+                    request.task_type,
+                    request.model_tier,
+                    attempt + 1,
+                    request.max_retries,
+                    exc,
+                )
+                time.sleep(backoff_seconds + jitter)
+                attempt += 1
+
     def _run_summary_business_task(self, *, user_id: str, session_id: str) -> str | None:
         """执行 Summary 业务任务。"""
 
@@ -1176,6 +1212,7 @@ class LLMTaskScheduler:
             "timeout",
             "temporarily unavailable",
             "connection reset",
+            "connection error",
             "connection aborted",
             "server error",
             "bad gateway",

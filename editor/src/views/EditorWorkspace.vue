@@ -46,8 +46,10 @@ const fileWidth = ref(DEFAULT_FILE_WIDTH)
 const agentWidth = ref(DEFAULT_AGENT_WIDTH)
 const activeResizeTarget = ref<ResizeTarget | null>(null)
 const isAgentPage = computed(() => workspaceStore.mainView === 'agent')
-const visibleFileSidebarOpen = computed(() => fileSidebarOpen.value && !isAgentPage.value)
-const visibleAgentSidebarOpen = computed(() => agentSidebarOpen.value && !isAgentPage.value)
+const isGraphPage = computed(() => workspaceStore.mainView === 'graph')
+const sidebarHidden = computed(() => isAgentPage.value || isGraphPage.value)
+const visibleFileSidebarOpen = computed(() => fileSidebarOpen.value && !sidebarHidden.value)
+const visibleAgentSidebarOpen = computed(() => agentSidebarOpen.value && !sidebarHidden.value)
 
 // 双向同步: 允许子组件通过 store 打开 Agent 侧边栏
 watch(() => workspaceStore.agentSidebarOpen, (val) => {
@@ -81,7 +83,7 @@ function openFileSidebar() {
 }
 
 function toggleFileSidebar() {
-  if (isAgentPage.value) {
+  if (sidebarHidden.value) {
     workspaceStore.setMainView('editor')
     openFileSidebar()
     return
@@ -94,7 +96,7 @@ function toggleFileSidebar() {
 }
 
 function toggleAgentSidebar() {
-  if (isAgentPage.value) {
+  if (sidebarHidden.value) {
     workspaceStore.setMainView('editor')
     agentSidebarOpen.value = true
     agentWidth.value = Math.max(agentWidth.value, DEFAULT_AGENT_WIDTH)
@@ -222,6 +224,7 @@ onBeforeUnmount(() => {
         'file-sidebar-collapsed': !visibleFileSidebarOpen,
         'agent-sidebar-collapsed': !visibleAgentSidebarOpen,
         'agent-main-view': isAgentPage,
+        'graph-main-view': isGraphPage,
       }"
       :style="workspaceGridStyle"
     >

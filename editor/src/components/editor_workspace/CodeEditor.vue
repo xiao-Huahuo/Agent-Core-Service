@@ -10,6 +10,7 @@ const model = defineModel<string>({ required: true })
 
 defineProps<{
   language: string
+  readonly?: boolean
 }>()
 
 defineEmits<{
@@ -25,7 +26,9 @@ defineEmits<{
     <textarea
       v-model="model"
       class="code-editor-input"
+      :class="{ readonly }"
       spellcheck="false"
+      :readonly="readonly"
       @keydown.ctrl.s.prevent="$emit('save')"
       @keydown.meta.s.prevent="$emit('save')"
     ></textarea>
@@ -71,5 +74,10 @@ defineEmits<{
   line-height: 1.6;
   tab-size: 2;
   white-space: pre;
+}
+
+.code-editor-input.readonly {
+  cursor: default;
+  color: var(--color-text-secondary);
 }
 </style>

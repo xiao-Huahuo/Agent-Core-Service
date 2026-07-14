@@ -21,6 +21,27 @@ const hasContent = computed(() => {
   return c && c !== '​'
 })
 
+const statusTraces = computed(() => {
+  const seen = new Set()
+  return (props.message.trace || []).filter((trace) => {
+    const isChatVisible = trace.chat_visible === true
+    if (!trace.human_readable || trace.event === 'tool_call_start' || trace.event === 'tool_call_end') return false
+    if (!isChatVisible) return false
+    if (seen.has(trace.human_readable)) return false
+    seen.add(trace.human_readable)
+    return true
+  })
+})
+
+const hasToolTrace = computed(() => {
+  return (props.message.trace || []).some(trace => trace.tool_name && (trace.event === 'tool_call_start' || trace.event === 'tool_call_end'))
+})
+
+const shouldRenderAssistant = computed(() => {
+  return props.message.role === 'assistant'
+    && (hasContent.value || statusTraces.value.length > 0 || props.isStreaming)
+})
+
 const bubbleRadius = computed(() => {
   return props.message.role === 'user'
     ? '18px 4px 18px 18px'
@@ -32,18 +53,23 @@ const bubbleRadius = computed(() => {
 
 <template>
   <!-- action 节点: 整行宽度的工具条 -->
-  <div v-if="message.role === 'assistant' && message.node === 'action'" class="action-row">
+  <div v-if="message.role === 'assistant' && message.node === 'action' && hasToolTrace" class="action-row">
     <ToolCallInline :traces="message.trace || []" />
   </div>
 
   <!-- Agent 消息: 只在连续组首条显示头像 -->
-  <div v-else-if="message.role === 'assistant'" class="bubble-row assistant">
+  <div v-else-if="shouldRenderAssistant" class="bubble-row assistant">
     <img v-if="showAvatar" :src="agentAvatar" class="avatar" alt="agent" />
     <div v-else class="avatar-spacer" />
     <div class="bubble-col">
-      <div v-if="hasContent || isStreaming" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
+      <div v-if="statusTraces.length > 0 && !hasContent" class="status-lines">
+        <p v-for="trace in statusTraces" :key="`${trace.node}-${trace.event}-${trace.human_readable}`" class="status-line">
+          {{ trace.human_readable }}
+        </p>
+      </div>
+      <div v-if="hasContent || (isStreaming && statusTraces.length === 0)" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
         <MarkdownContent v-if="hasContent" :content="message.content" :is-streaming="isStreaming" />
-        <span v-if="isStreaming" class="cursor">|</span>
+        <span v-if="isStreaming && !hasContent" class="cursor">|</span>
       </div>
     </div>
   </div>
@@ -58,13 +84,6 @@ const bubbleRadius = computed(() => {
     <img :src="userAvatar" class="avatar" alt="user" />
   </div>
 
-  <!-- 系统消息: 居中灰显 -->
-  <div v-else-if="message.role === 'system'" class="bubble-row system">
-    <div class="bubble system-bubble">
-      <span class="system-role">{{ message.role }}</span>
-      <pre class="content system-content">{{ message.content }}</pre>
-    </div>
-  </div>
 </template>
 
 <style scoped>
@@ -121,6 +140,21 @@ const bubbleRadius = computed(() => {
 }
 .bubble-row.user .bubble-col {
   align-items: flex-end;
+}
+
+.status-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+}
+
+.status-line {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: var(--line-height-normal);
 }
 
 /* ---- 气泡 ---- */

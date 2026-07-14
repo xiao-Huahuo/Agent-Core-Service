@@ -7,11 +7,11 @@
  * providing the same node/link shape.
  */
 
-/** Supported graph node categories for the first file-tree graph. */
-export type KnowledgeGraphNodeKind = 'root' | 'folder' | 'file' | 'virtual-group'
+/** Supported graph node categories. */
+export type KnowledgeGraphNodeKind = 'root' | 'folder' | 'file' | 'virtual-group' | 'document' | 'entity'
 
-/** Supported graph edge categories. Future semantic links can extend this union. */
-export type KnowledgeGraphLinkKind = 'parent-child' | 'reference' | 'semantic'
+/** Supported graph edge categories. Semantic graph relation types may use domain-specific strings. */
+export type KnowledgeGraphLinkKind = 'parent-child' | 'reference' | 'semantic' | string
 
 /** One graph node with optional d3-force simulation fields. */
 export interface KnowledgeGraphNode {

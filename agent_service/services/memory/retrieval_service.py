@@ -325,6 +325,9 @@ class MemoryRetrievalService:
         self.embedding_service.warmup()
         self.rerank_service.warmup()
 
+    # -----------------------------------------------------------------------------------------
+    # 统一召回入口
+    # -----------------------------------------------------------------------------------------
     def _retrieve_with_debug(
         self,
         *,
@@ -336,8 +339,7 @@ class MemoryRetrievalService:
         top_k: int | None,
     ) -> RetrievalDebugSnapshot:
         """
-        执行统一检索。
-
+        统一召回入口,调用各个检索业务执行统一检索。
         query: 当前查询文本。
         user_id: 用户 ID。
         session_id: 可选会话 ID。
@@ -350,10 +352,12 @@ class MemoryRetrievalService:
         if not normalized_query:
             return RetrievalDebugSnapshot()
         final_top_k = top_k or self.config.memory.rerank_top_k
+        # 将用户提出的query向量化入库
         query_vector = self.embedding_service.embed_text(normalized_query)
         if not query_vector:
             return RetrievalDebugSnapshot()
-
+        # 双路召回
+        # 向量召回
         vector_candidates = self._retrieve_vector_candidates(
             query_vector=query_vector,
             user_id=user_id,
@@ -362,6 +366,7 @@ class MemoryRetrievalService:
             memory_type=memory_type,
             limit=max(final_top_k, self.config.memory.vector_top_k),
         )
+        # 关键词召回
         keyword_candidates = self.hybrid_retrieval_service.retrieve_keyword_candidates(
             query=normalized_query,
             user_id=user_id,
@@ -370,22 +375,24 @@ class MemoryRetrievalService:
             memory_type=memory_type,
             limit=max(final_top_k, self.config.memory.keyword_top_k),
         )
+        # 双路召回合并去重
         merged_candidates = self.hybrid_retrieval_service.merge_candidates(
             vector_candidates=vector_candidates,
             keyword_candidates=keyword_candidates,
             session_id=session_id,
         )
+        # rerank精排,取Top-K结果
         reranked_candidates = self.rerank_service.rerank(
             query=normalized_query,
             candidates=merged_candidates,
             top_k=max(final_top_k, self.config.memory.rerank_top_k),
         )
-
         now = datetime.now(timezone.utc)
         retrieved = [
             self._candidate_to_retrieved_memory(candidate=candidate, now=now, session_id=session_id)
             for candidate in reranked_candidates
         ]
+        # 最终排序（0.5*relevance + 0.3*freshness + 0.2*authority）
         for item in retrieved:
             item.final_score = self._final_score(item)
         retrieved = [item for item in retrieved if item.final_score >= self.config.memory.score_threshold]
@@ -524,6 +531,7 @@ class MemoryRetrievalService:
         limit: 召回数量上限。
         """
 
+        # 优先使用ChromaDB向量库召回,若查询无结果则回退到JSON向量余弦相似度计算.
         candidates = self._retrieve_by_chroma(
             query_vector=query_vector,
             user_id=user_id,
@@ -534,6 +542,7 @@ class MemoryRetrievalService:
         )
         if candidates and any(candidate.vector_score > 0.0 for candidate in candidates):
             return candidates
+        # 回退到cos相似度
         return self._retrieve_by_json_vectors(
             query_vector=query_vector,
             user_id=user_id,

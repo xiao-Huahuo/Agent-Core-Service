@@ -70,10 +70,16 @@ class AgentGraphBuilder:
 
         return dict(self._branch_labels)
 
-    def build(self) -> CompiledStateGraph:
-        """构建并编译 ReAct 循环图,包含安全审核、推理规划与反思节点。"""
+    def build(self, *, mode: str = "plan") -> CompiledStateGraph:
+        """构建并编译 Agent 图。
 
-        logger.info("开始构建 Agent 图...")
+        mode:
+        - plan: ReAct + planner + observation 的规划执行图。
+        - react: 标准 ReAct 图,agent 节点同时负责决策和观察,不进入 planner/observation。
+        """
+
+        normalized_mode = "react" if mode == "react" else "plan"
+        logger.info("开始构建 Agent 图 | mode=%s", normalized_mode)
         self._branch_labels.clear()
         workflow = StateGraph(AgentState)
         if self.safety_service and self.safety_service.supports_input_audit:
@@ -81,21 +87,22 @@ class AgentGraphBuilder:
                 "safety_input",
                 SafetyInputNode(config=self.config, safety_service=self.safety_service),
             )
-        workflow.add_node(
-            "compress",
-            CompressNode(
-                config=self.config,
-                task_scheduler=self.task_scheduler,
-            ),
-        )
-        workflow.add_node(
-            "planner",
-            PlannerNode(
-                config=self.config,
-                task_scheduler=self.task_scheduler,
-                tool_executor=self.tool_executor,
-            ),
-        )
+        if normalized_mode == "plan":
+            workflow.add_node(
+                "compress",
+                CompressNode(
+                    config=self.config,
+                    task_scheduler=self.task_scheduler,
+                ),
+            )
+            workflow.add_node(
+                "planner",
+                PlannerNode(
+                    config=self.config,
+                    task_scheduler=self.task_scheduler,
+                    tool_executor=self.tool_executor,
+                ),
+            )
         workflow.add_node(
             "agent",
             ModelDecisionNode(
@@ -109,14 +116,15 @@ class AgentGraphBuilder:
             "action",
             ToolCallNode(config=self.config, tools=self.tools, tool_executor=self.tool_executor),
         )
-        workflow.add_node(
-            "observation",
-            ObservationNode(
-                config=self.config,
-                task_scheduler=self.task_scheduler,
-                tool_executor=self.tool_executor,
-            ),
-        )
+        if normalized_mode == "plan":
+            workflow.add_node(
+                "observation",
+                ObservationNode(
+                    config=self.config,
+                    task_scheduler=self.task_scheduler,
+                    tool_executor=self.tool_executor,
+                ),
+            )
         if self.safety_service is not None:
             workflow.add_node(
                 "safety_output",
@@ -124,18 +132,20 @@ class AgentGraphBuilder:
             )
         if self.safety_service and self.safety_service.supports_input_audit:
             workflow.set_entry_point("safety_input")
+            safe_next = "agent" if normalized_mode == "react" else "planner"
             workflow.add_conditional_edges(
                 "safety_input",
                 self._route_after_safety_input,
-                path_map={"planner": "planner", "__end__": END},
+                path_map={"planner": safe_next, "__end__": END},
             )
-            self._branch_labels[("safety_input", "planner")] = "审核通过"
+            self._branch_labels[("safety_input", safe_next)] = "审核通过"
             self._branch_labels[("safety_input", "__end__")] = "审核拦截"
         else:
-            workflow.set_entry_point("planner")
+            workflow.set_entry_point("agent" if normalized_mode == "react" else "planner")
         # compress 仅在 observation 判定上下文溢出时触发,压缩后回到 planner 重新规划
-        workflow.add_edge("compress", "planner")
-        workflow.add_edge("planner", "agent")
+        if normalized_mode == "plan":
+            workflow.add_edge("compress", "planner")
+            workflow.add_edge("planner", "agent")
         if self.safety_service is not None:
             workflow.add_conditional_edges(
                 "agent",
@@ -152,29 +162,25 @@ class AgentGraphBuilder:
             )
             self._branch_labels[("agent", "action")] = "有 tool_calls"
             self._branch_labels[("agent", "__end__")] = "无 tool_calls → 结束"
-        workflow.add_edge("action", "observation")
-        if self.safety_service is not None:
-            workflow.add_conditional_edges(
-                "observation",
-                self._route_after_observation,
-                path_map={"planner": "planner", "compress": "compress"},
-            )
-            self._branch_labels[("observation", "planner")] = "continue / answer → 生成最终回复"
-            self._branch_labels[("observation", "compress")] = "context overflow"
+        if normalized_mode == "react":
+            workflow.add_edge("action", "agent")
+            self._branch_labels[("action", "agent")] = "工具结果 → 继续决策"
         else:
+            workflow.add_edge("action", "observation")
             workflow.add_conditional_edges(
                 "observation",
                 self._route_after_observation,
-                path_map={"planner": "planner", "compress": "compress"},
+                path_map={"planner": "planner", "agent": "agent", "compress": "compress"},
             )
-            self._branch_labels[("observation", "planner")] = "continue / answer → 生成最终回复"
+            self._branch_labels[("observation", "planner")] = "continue → 更新计划"
+            self._branch_labels[("observation", "agent")] = "answer / retry / abandon → 交给 agent"
             self._branch_labels[("observation", "compress")] = "context overflow"
         if self.safety_service is not None:
             workflow.add_edge("safety_output", END)
             self._branch_labels[("safety_output", "__end__")] = "审核结束"
         # Summary 节点不再在图中自动执行,写入长期记忆改为由 write_long_term_memory 工具主动触发
         compiled = workflow.compile()
-        logger.info("Agent 图构建完成 | 节点数=%d", len(compiled.get_graph().nodes))
+        logger.info("Agent 图构建完成 | mode=%s 节点数=%d", normalized_mode, len(compiled.get_graph().nodes))
         return compiled
 
     def _route_after_model(self, state: AgentState) -> Literal["action", "safety_output", "__end__"]:
@@ -186,12 +192,12 @@ class AgentGraphBuilder:
             return "action"
         return "safety_output" if self.safety_service is not None else "__end__"
 
-    def _route_after_observation(self, state: AgentState) -> Literal["planner", "compress", "safety_output", "__end__"]:
+    def _route_after_observation(self, state: AgentState) -> Literal["planner", "agent", "compress"]:
         """
         根据反思节点决策决定下一步。
-        "continue" → planner(继续工具循环),
+        "continue" → planner(更新计划后继续工具循环),
         "compress" → compress(上下文溢出,先压缩再进入 planner),
-        "answer" → planner(让 agent 模型看到工具结果后生成最终回复)。
+        "answer/retry/abandon" → agent(直接生成答案、换参数重试或承认已有边界)。
         """
 
         decision = state.get("observation_decision", "continue")
@@ -199,8 +205,7 @@ class AgentGraphBuilder:
             return "planner"
         if decision == "compress":
             return "compress"
-        # "answer": 回到 planner→agent,让模型基于工具结果生成最终回复
-        return "planner"
+        return "agent"
 
     @staticmethod
     def _route_after_safety_input(state: AgentState) -> Literal["planner", "__end__"]:

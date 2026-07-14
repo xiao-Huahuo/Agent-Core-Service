@@ -183,15 +183,25 @@ class ContextBuilder:
                 f"长期记忆索引: 系统中检索到 {memory_count} 条与当前问题相关的历史记忆。"
                 f"如果你需要查看具体内容,请调用 get_long_term_memory 工具来获取全文。"
             )
+        citation_map: dict[str, dict[str, str]] = {}
         if knowledge:
             sections.append(
-                f"知识库索引: 系统中检索到 {knowledge_count} 条与当前问题相关的知识库片段。"
-                f"如果你需要查看具体内容,请调用 get_knowledge_context 工具来获取全文。"
+                f"知识库片段(共 {knowledge_count} 条,可直接引用):"
             )
+            for i, item in enumerate(knowledge, 1):
+                source_uri = item.memory.source_uri or "未知来源"
+                content = item.memory.content
+                sections.append(f"[{i}] 来源: {source_uri}")
+                sections.append(f"    内容: {content}")
+                citation_map[str(i)] = {
+                    "source_uri": source_uri,
+                    "content": content,
+                }
         if has_refs:
             sections.append("--- 参考材料结束 ---")
         if len(sections) <= 4 and not has_history:
             return "", metrics, recall_details
+        recall_details["citation_map"] = citation_map
         return "\n".join(sections), metrics, recall_details
 
     def _rebuild_messages_for_compressed_context(
@@ -255,52 +265,15 @@ class ContextBuilder:
         历史加载窗口或上下文裁剪可能截断 AIMessage 而留下 ToolMessage,导致 API 400 错误。
         """
 
-        normalized: list[BaseMessage] = []
-        index = 0
-        total = len(messages)
+        valid_ids: set[str] = set()
+        for message in messages:
+            if isinstance(message, AIMessage):
+                for tool_call in getattr(message, "tool_calls", []) or []:
+                    tool_call_id = tool_call.get("id") if isinstance(tool_call, dict) else getattr(tool_call, "id", None)
+                    if tool_call_id:
+                        valid_ids.add(str(tool_call_id))
 
-        while index < total:
-            message = messages[index]
-
-            if isinstance(message, ToolMessage):
-                index += 1
-                continue
-
-            if not isinstance(message, AIMessage) or not getattr(message, "tool_calls", None):
-                normalized.append(message)
-                index += 1
-                continue
-
-            required_ids: list[str] = []
-            for tool_call in getattr(message, "tool_calls", []) or []:
-                tool_call_id = tool_call.get("id") if isinstance(tool_call, dict) else getattr(tool_call, "id", None)
-                if tool_call_id:
-                    required_ids.append(str(tool_call_id))
-
-            if not required_ids:
-                normalized.append(message)
-                index += 1
-                continue
-
-            next_index = index + 1
-            trailing_tool_messages: list[ToolMessage] = []
-            matched_ids: set[str] = set()
-            required_id_set = set(required_ids)
-
-            while next_index < total and isinstance(messages[next_index], ToolMessage):
-                tool_message = messages[next_index]
-                tool_call_id = getattr(tool_message, "tool_call_id", None)
-                if tool_call_id in required_id_set:
-                    trailing_tool_messages.append(tool_message)
-                    matched_ids.add(str(tool_call_id))
-                next_index += 1
-
-            if matched_ids == required_id_set:
-                normalized.append(message)
-                normalized.extend(trailing_tool_messages)
-            index = next_index
-
-        return normalized
+        return [m for m in messages if not (isinstance(m, ToolMessage) and getattr(m, "tool_call_id", None) not in valid_ids)]
 
     @staticmethod
     def _format_user_message_content(prompt: str, reference: str | None = None) -> str:

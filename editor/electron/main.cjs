@@ -11,6 +11,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } = require('electron')
+const childProcess = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
 const { handleEditShortcut } = require('./edit-shortcuts.cjs')
@@ -19,20 +20,59 @@ const DEV_SERVER_URL = process.env.ELECTRON_RENDERER_URL || 'http://127.0.0.1:51
 
 let mainWindow = null
 
-function buildWindowsFileListBuffer(filePaths) {
-  return Buffer.from(`${filePaths.join('\0')}\0\0`, 'utf16le')
-}
-
 function buildDropEffectBuffer(mode) {
   const effect = mode === 'cut' ? 2 : 1
   return Buffer.from([effect, 0, 0, 0])
 }
 
-function parseWindowsFileListBuffer(buffer) {
-  if (!buffer || buffer.length === 0) {
-    return []
-  }
-  return buffer.toString('utf16le').split('\0').map((item) => item.trim()).filter(Boolean)
+function writeWindowsFileClipboard(filePaths, mode) {
+  const payload = Buffer.from(JSON.stringify(filePaths), 'utf8').toString('base64')
+  const effect = mode === 'cut' ? 2 : 1
+  const script = `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Collections.Specialized
+$json = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($env:METAWEAVE_CLIPBOARD_FILES_B64))
+$paths = ConvertFrom-Json -InputObject $json
+$files = New-Object System.Collections.Specialized.StringCollection
+foreach ($item in $paths) {
+  if ([string]::IsNullOrWhiteSpace([string]$item)) { continue }
+  [void]$files.Add([string]$item)
+}
+if ($files.Count -le 0) { throw 'empty file drop list' }
+$data = New-Object System.Windows.Forms.DataObject
+$data.SetFileDropList($files)
+$effectBytes = [byte[]](${effect}, 0, 0, 0)
+$effectStream = New-Object System.IO.MemoryStream
+$effectStream.Write($effectBytes, 0, $effectBytes.Length)
+$effectStream.Position = 0
+$data.SetData('Preferred DropEffect', $effectStream)
+[System.Windows.Forms.Clipboard]::SetDataObject($data, $true)
+`
+  return new Promise((resolve) => {
+    const child = childProcess.spawn(
+      'powershell.exe',
+      ['-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      {
+        env: {
+          ...process.env,
+          METAWEAVE_CLIPBOARD_FILES_B64: payload,
+        },
+        windowsHide: true,
+      },
+    )
+    let stderr = ''
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk)
+    })
+    child.on('error', () => resolve(false))
+    child.on('close', (code) => {
+      if (code !== 0 && stderr.trim()) {
+        console.warn('writeWindowsFileClipboard failed:', stderr.trim())
+      }
+      resolve(code === 0)
+    })
+  })
 }
 
 function readClipboardDropEffect() {
@@ -56,8 +96,8 @@ function uniqueChildPath(targetDir, preferredName) {
     return firstPath
   }
   const { stem, extension } = splitNameExtension(safeName)
-  for (let index = 2; index < 1000; index += 1) {
-    const candidate = path.join(targetDir, `${stem} ${index}${extension}`)
+  for (let index = 1; index < 1000; index += 1) {
+    const candidate = path.join(targetDir, `${stem} (${index})${extension}`)
     if (!fs.existsSync(candidate)) {
       return candidate
     }
@@ -68,9 +108,9 @@ function uniqueChildPath(targetDir, preferredName) {
 async function copyOrMovePath(sourcePath, targetPath, mode) {
   const sourceStat = await fs.promises.stat(sourcePath)
   if (sourceStat.isDirectory()) {
-    await fs.promises.cp(sourcePath, targetPath, { recursive: true, errorOnExist: true })
+    await fs.promises.cp(sourcePath, targetPath, { recursive: true, force: true })
   } else {
-    await fs.promises.copyFile(sourcePath, targetPath, fs.constants.COPYFILE_EXCL)
+    await fs.promises.copyFile(sourcePath, targetPath)
   }
   if (mode === 'cut') {
     await fs.promises.rm(sourcePath, { recursive: true, force: true })
@@ -78,11 +118,28 @@ async function copyOrMovePath(sourcePath, targetPath, mode) {
 }
 
 function readClipboardFilePayload() {
-  const filePaths = process.platform === 'win32'
-    ? parseWindowsFileListBuffer(clipboard.readBuffer('FileNameW'))
-    : clipboard.readText().split(/\r?\n/u).map((item) => item.trim()).filter(Boolean)
+  let filePaths = []
+  let mode = 'copy'
+
+  // Electron 15+ native clipboard API reads CF_HDROP correctly.
+  if (typeof clipboard.readFiles === 'function') {
+    try {
+      const files = clipboard.readFiles()
+      filePaths = files.filter((f) => f.path).map((f) => f.path)
+    } catch {
+      filePaths = []
+    }
+  }
+
+  // Fallback: parse FileNameW buffer manually (older Electron or non-Windows).
+  if (filePaths.length === 0) {
+    filePaths = clipboard.readText().split(/\r?\n/u).map((item) => item.trim()).filter(Boolean)
+  }
+
+  mode = readClipboardDropEffect()
+
   return {
-    mode: readClipboardDropEffect(),
+    mode,
     paths: filePaths.filter((item) => fs.existsSync(item)),
   }
 }
@@ -245,21 +302,38 @@ ipcMain.handle('clipboard:write-files', async (_event, filePaths, mode) => {
   if (!Array.isArray(filePaths) || filePaths.length === 0) {
     return false
   }
-  const normalizedPaths = filePaths.filter((item) => typeof item === 'string' && item.trim())
+  const normalizedPaths = filePaths
+    .filter((item) => typeof item === 'string' && item.trim())
+    .map((item) => path.resolve(item))
+    .filter((item) => fs.existsSync(item))
   if (normalizedPaths.length === 0) {
     return false
   }
-  clipboard.writeText(normalizedPaths.join('\n'))
+
   if (process.platform === 'win32') {
-    clipboard.writeBuffer('FileNameW', buildWindowsFileListBuffer(normalizedPaths))
+    const ok = await writeWindowsFileClipboard(normalizedPaths, mode)
+    if (ok) {
+      return true
+    }
+  }
+
+  if (typeof clipboard.writeFiles === 'function') {
+    clipboard.writeFiles(normalizedPaths)
+  } else {
+    clipboard.writeText(normalizedPaths.join('\n'))
+  }
+
+  // PreferredDropEffect signals whether this was a copy or cut.
+  if (mode === 'cut') {
     clipboard.writeBuffer('Preferred DropEffect', buildDropEffectBuffer(mode))
   }
+
   return true
 })
 
 ipcMain.handle('clipboard:read-files', async () => readClipboardFilePayload())
 
-ipcMain.handle('files:copy-into-directory', async (_event, sourcePaths, targetDir, mode) => {
+ipcMain.handle('files:copy-into-directory', async (_event, sourcePaths, targetDir, mode, conflictStrategy = 'rename') => {
   if (!Array.isArray(sourcePaths) || typeof targetDir !== 'string' || !targetDir.trim()) {
     return { ok: false, paths: [] }
   }
@@ -269,7 +343,17 @@ ipcMain.handle('files:copy-into-directory', async (_event, sourcePaths, targetDi
     if (typeof sourcePath !== 'string' || !sourcePath.trim() || !fs.existsSync(sourcePath)) {
       continue
     }
-    const targetPath = uniqueChildPath(targetDir, path.basename(sourcePath))
+    const preferredPath = path.join(targetDir, path.basename(sourcePath))
+    const exists = fs.existsSync(preferredPath)
+    if (exists && conflictStrategy === 'skip') {
+      continue
+    }
+    const targetPath = exists && conflictStrategy === 'rename'
+      ? uniqueChildPath(targetDir, path.basename(sourcePath))
+      : preferredPath
+    if (exists && conflictStrategy === 'overwrite') {
+      await fs.promises.rm(targetPath, { recursive: true, force: true })
+    }
     await copyOrMovePath(sourcePath, targetPath, mode === 'cut' ? 'cut' : 'copy')
     copiedPaths.push(targetPath)
   }

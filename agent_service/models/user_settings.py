@@ -36,6 +36,9 @@ class UserSettingsRecord(SQLModel, table=True):
     knowledge_dir: str = Field(max_length=1024)
     proxy_url: str = Field(default="", max_length=1024)
     web_search_enabled: bool = Field(default=False)
+    auto_ingest_on_upload: bool = Field(default=False)
+    ocr_enabled: bool = Field(default=False)
+    knowledge_ignore_patterns: str = Field(default="", sa_column=Column(Text))
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

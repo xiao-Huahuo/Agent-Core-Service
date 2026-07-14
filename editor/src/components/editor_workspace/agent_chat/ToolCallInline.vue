@@ -98,11 +98,22 @@ function toolSummary(entry: ToolEntry) {
 }
 
 const toolEntries = computed(() => {
+  const pendingStarts = new Map<string, { key: string; text: string }>()
+  ;(props.traces ?? [])
+    .filter((trace) => trace.event === 'tool_call_start' && trace.tool_name)
+    .forEach((trace) => {
+      const toolName = asString(trace.tool_name)
+      pendingStarts.set(toolName, {
+        key: `${toolName}-pending`,
+        text: asString(trace.human_readable) || `正在调用工具「${asString(trace.display_name) || FALLBACK_DISPLAY[toolName] || toolName}」`,
+      })
+    })
   const merged = new Map<string, ToolEntry>()
   ;(props.traces ?? [])
     .filter((trace) => trace.event === 'tool_call_end' && trace.tool_name)
     .forEach((trace) => {
       const toolName = asString(trace.tool_name)
+      pendingStarts.delete(toolName)
       const existing = merged.get(toolName)
       const resultCount = asNumber(trace.result_count)
       const fn = extractFilename(trace, toolName)
@@ -124,12 +135,15 @@ const toolEntries = computed(() => {
         })
       }
     })
-  return Array.from(merged.values())
+  return [
+    ...Array.from(pendingStarts.values()),
+    ...Array.from(merged.values())
     .map((entry) => ({
       key: `${entry.tool_name}-${entry.call_count}`,
       text: toolSummary(entry),
     }))
-    .filter((entry): entry is { key: string; text: string } => Boolean(entry.text))
+    .filter((entry): entry is { key: string; text: string } => Boolean(entry.text)),
+  ]
 })
 </script>
 
