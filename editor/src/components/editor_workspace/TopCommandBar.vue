@@ -1,0 +1,422 @@
+<!--
+  Top command bar.
+
+  Usage:
+  Shows the active knowledge root, global actions, theme switch, and navigation
+  links between the editor, graph preview, settings, and existing console.
+-->
+<script setup lang="ts">
+import { computed } from 'vue'
+import { Bot, Command, DatabaseZap, GitBranch, Maximize2, Minus, Moon, Settings, Sun, X } from 'lucide-vue-next'
+
+import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
+import { useSettingsStore } from '@/stores/settings'
+import { useWorkspaceStore } from '@/stores/workspace'
+
+const settingsStore = useSettingsStore()
+const workspaceStore = useWorkspaceStore()
+const desktopApi = window.agentEditorDesktop
+const emit = defineEmits<{
+  toggleAgent: []
+  toggleGraph: []
+  openSettings: []
+}>()
+const knowledgeTitle = computed(() => {
+  const activeLibraryName = settingsStore.activeKnowledgeLibrary?.name?.trim()
+  if (activeLibraryName) {
+    return activeLibraryName
+  }
+  const normalizedPath = settingsStore.profile.knowledgeDir.replace(/\\/g, '/')
+  const pathParts = normalizedPath.split('/').filter(Boolean)
+  return pathParts[pathParts.length - 1] || '未命名'
+})
+
+async function handleCloseWindow() {
+  if (!(await workspaceStore.confirmSaveDirtyBeforeExit())) {
+    return
+  }
+  desktopApi?.close()
+}
+</script>
+
+<template>
+  <header class="topbar">
+    <div class="brand">
+      <strong>元织-{{ knowledgeTitle }}</strong>
+      <button
+        class="ingest-button"
+        :class="{ refreshing: workspaceStore.refreshing }"
+        type="button"
+        :disabled="workspaceStore.refreshing"
+        title="重新灌库"
+        @click="workspaceStore.markIndexing"
+      >
+        <DatabaseZap :size="14" />
+        <span>灌库</span>
+      </button>
+      <div v-if="workspaceStore.ingestionProgressVisible" class="ingestion-progress" aria-live="polite">
+        <span class="ingestion-progress-track" aria-hidden="true">
+          <span
+            class="ingestion-progress-fill"
+            :style="{ width: `${workspaceStore.ingestionProgress}%` }"
+          />
+        </span>
+        <span class="ingestion-progress-percent">{{ workspaceStore.ingestionProgress }}%</span>
+      </div>
+    </div>
+
+    <div class="search-center">
+      <SearchPalette />
+    </div>
+
+    <div class="actions">
+      <button class="command-button" type="button" @click="workspaceStore.openCommandPalette">
+        <Command :size="14" />
+        <span>命令</span>
+        <kbd>Ctrl K</kbd>
+      </button>
+      <button class="icon-button" type="button" title="知识图谱" @click="emit('toggleGraph')">
+        <GitBranch :size="14" />
+      </button>
+      <button class="icon-button" type="button" title="设置" @click="emit('openSettings')">
+        <Settings :size="14" />
+      </button>
+      <button class="console-link" type="button" title="切换 Agent 面板" @click="emit('toggleAgent')">
+        <Bot :size="14" />
+        <span>Agent</span>
+      </button>
+      <button
+        class="theme-button icon-button"
+        :class="{ dark: settingsStore.isDark, light: !settingsStore.isDark }"
+        type="button"
+        title="切换主题"
+        @click="settingsStore.toggleTheme"
+      >
+        <Moon v-if="settingsStore.isDark" :size="14" />
+        <Sun v-else :size="14" />
+      </button>
+      <div v-if="desktopApi?.isDesktop" class="window-controls" aria-label="Window controls">
+        <button type="button" title="最小化" @click="desktopApi.minimize">
+          <Minus :size="13" />
+        </button>
+        <button type="button" title="最大化" @click="desktopApi.toggleMaximize">
+          <Maximize2 :size="13" />
+        </button>
+        <button class="close-window" type="button" title="关闭" @click="handleCloseWindow">
+          <X :size="13" />
+        </button>
+      </div>
+    </div>
+  </header>
+  <Transition name="toast-slide">
+    <div v-if="workspaceStore.toastVisible" class="toast-banner">
+      {{ workspaceStore.toastMessage }}
+    </div>
+  </Transition>
+</template>
+
+<style scoped>
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  min-height: 30px;
+  padding: 2px var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-canvas);
+  -webkit-app-region: drag;
+  user-select: none;
+  position: relative;
+  z-index: 50;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.ingest-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  background: rgba(235, 36, 99, 0.1);
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  -webkit-app-region: no-drag;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.ingest-button:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.ingest-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.ingest-button.refreshing :deep(svg) {
+  animation: refresh-spin 900ms linear infinite;
+}
+
+.search-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 320px;
+  -webkit-app-region: no-drag;
+}
+
+.brand strong {
+  display: block;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  z-index: 1;
+}
+
+.topbar .icon-button {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+}
+
+.topbar .theme-button.light {
+  border-color: var(--color-accent);
+  background: #ffffff;
+  color: var(--color-accent);
+}
+
+.topbar .theme-button.light:hover {
+  border-color: var(--color-accent);
+  background: #fff5f8;
+  color: var(--color-accent);
+}
+
+.topbar .theme-button.dark {
+  border-color: #f5d77a;
+  background: #050506;
+  color: #f5d77a;
+}
+
+.topbar .theme-button.dark:hover {
+  border-color: #ffe391;
+  background: #0b0b0d;
+  color: #ffe391;
+}
+
+.topbar .theme-button.dark :deep(svg) {
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.command-button,
+.console-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 24px;
+  padding: 0 var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.command-button:hover,
+.console-link:hover {
+  border-color: var(--color-primary);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.console-link {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: white;
+}
+
+.console-link:hover {
+  border-color: var(--color-primary-hover);
+  background: var(--color-primary-hover);
+  color: white;
+}
+
+.ingestion-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: min(140px, 30vw);
+  height: 16px;
+  padding: 0 var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-canvas) 92%, var(--color-accent) 8%);
+  color: var(--color-accent);
+  font-family: var(--font-code);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  -webkit-app-region: no-drag;
+}
+
+.ingestion-progress-track {
+  display: block;
+  flex: 1 1 auto;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(235, 36, 99, 0.14);
+}
+
+.ingestion-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+  transition: width 140ms ease;
+}
+
+.ingestion-progress-percent {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@keyframes refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.toast-banner {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+  padding: var(--space-8) var(--space-20);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: #fff;
+  color: #333;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
+
+.toast-slide-enter-active {
+  transition: all 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast-slide-leave-active {
+  transition: all 220ms ease-in;
+}
+
+.toast-slide-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-12px);
+}
+
+.toast-slide-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px);
+}
+
+kbd {
+  padding: 0 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  font-family: var(--font-code);
+  font-size: 10px;
+}
+
+.window-controls {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.window-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 24px;
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.window-controls button:first-child {
+  border-left: 0;
+}
+
+.window-controls button:hover {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.window-controls .close-window:hover {
+  background: var(--color-accent);
+  color: white;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: var(--space-10);
+  }
+
+  .actions {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: var(--space-2);
+  }
+}
+</style>

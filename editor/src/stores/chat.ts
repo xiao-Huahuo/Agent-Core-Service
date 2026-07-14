@@ -1,0 +1,389 @@
+/*
+ * Agent chat message store.
+ *
+ * Usage:
+ * Owns streamed Agent messages for the editor right panel. The implementation
+ * mirrors console chat behavior while staying typed for the editor front-end.
+ */
+
+import { computed, ref } from 'vue'
+import { defineStore } from 'pinia'
+
+import { streamPrompt } from '@/api/agent'
+import type { AgentLoopMode } from '@/api/agent'
+import { fetchMessages } from '@/api/session'
+import { useSessionStore } from '@/stores/session'
+
+export interface AgentChatMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  message_id?: string
+  node?: string
+  tool_calls?: unknown[]
+  metadata?: Record<string, unknown>
+  trace?: Array<Record<string, unknown>>
+  created_at?: string
+  reference?: string
+}
+
+export interface SourceItem {
+  source_uri: string
+  content: string
+}
+
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function asTrace(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value) ? value.filter((item) => item && typeof item === 'object') as Array<Record<string, unknown>> : []
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+function traceIdentity(trace: Record<string, unknown>): string {
+  return [
+    asString(trace.node),
+    asString(trace.event),
+    asString(trace.tool_name),
+    asString(trace.human_readable),
+  ].join('|')
+}
+
+export const useChatStore = defineStore('chat', () => {
+  const messages = ref<AgentChatMessage[]>([])
+  const isStreaming = ref(false)
+  const currentNode = ref('')
+  const streamError = ref('')
+  const loadedSessionId = ref('')
+  const contextMirror = ref<unknown[]>([])
+  const activeAgentMode = ref<AgentLoopMode>('auto')
+  const currentKnowledgeSources = ref<SourceItem[]>([])
+  const currentCitationMap = ref<Record<string, SourceItem>>({})
+
+  let streamAbortController: AbortController | null = null
+  let historyAbortController: AbortController | null = null
+  let pendingContent = ''
+  let flushTimer: number | null = null
+  const contentFlushMs = 50
+
+  const lastMessage = computed(() => messages.value.length > 0 ? messages.value[messages.value.length - 1] : null)
+  const canSend = computed(() => !isStreaming.value)
+
+  function appendMessage(message: AgentChatMessage) {
+    messages.value.push({ ...message })
+  }
+
+  function findLastAssistant() {
+    for (let index = messages.value.length - 1; index >= 0; index -= 1) {
+      const message = messages.value[index]
+      if (message?.role === 'assistant') {
+        return message
+      }
+    }
+    return null
+  }
+
+  function updateLastMessage(
+    content?: string,
+    node?: string,
+    toolCalls?: unknown[],
+    trace?: Array<Record<string, unknown>>,
+  ) {
+    const last = findLastAssistant()
+    if (!last) {
+      return
+    }
+    if (content !== undefined) {
+      last.content = content
+    }
+    if (node !== undefined) {
+      last.node = node
+    }
+    if (toolCalls !== undefined) {
+      last.tool_calls = toolCalls
+    }
+    if (trace && trace.length > 0) {
+      last.trace ??= []
+      last.trace.push(...trace)
+    }
+  }
+
+  function flushStreamContent() {
+    flushTimer = null
+    if (!pendingContent) {
+      return
+    }
+    const last = findLastAssistant()
+    if (last) {
+      last.content += pendingContent
+    }
+    pendingContent = ''
+  }
+
+  function scheduleContentFlush() {
+    if (flushTimer !== null) {
+      return
+    }
+    flushTimer = window.setTimeout(flushStreamContent, contentFlushMs)
+  }
+
+  function appendStreamContent(content: string) {
+    pendingContent += content
+    scheduleContentFlush()
+  }
+
+  function cancelPendingFlush() {
+    if (flushTimer !== null) {
+      window.clearTimeout(flushTimer)
+      flushTimer = null
+    }
+    pendingContent = ''
+  }
+
+  function forceFlushContent() {
+    if (flushTimer !== null) {
+      window.clearTimeout(flushTimer)
+      flushTimer = null
+    }
+    flushStreamContent()
+    pendingContent = ''
+  }
+
+  async function loadHistory(sessionId: string, userId: string, limit = 50) {
+    historyAbortController?.abort()
+    historyAbortController = new AbortController()
+    messages.value = []
+    try {
+      const history = await fetchMessages(sessionId, userId, limit, { signal: historyAbortController.signal })
+      messages.value = history
+        .filter((message) => message.role !== 'tool' || message.metadata?.node === 'action')
+        .filter((message) => message.metadata?.node !== 'planner' && message.metadata?.node !== 'observation')
+        .filter((message) => {
+          return message.role !== 'assistant'
+            || message.content
+            || (message.tool_calls && message.tool_calls.length > 0)
+            || message.metadata?.node === 'action'
+        })
+        .map((message) => ({
+          role: message.role === 'tool' ? 'assistant' : message.role as AgentChatMessage['role'],
+          content: message.content,
+          message_id: message.message_id,
+          node: asString(message.metadata?.node),
+          tool_calls: message.tool_calls,
+          metadata: message.metadata ?? {},
+          trace: asTrace(message.metadata?.trace),
+          created_at: message.created_at,
+          reference: asString(message.metadata?.reference) || undefined,
+        }))
+      loadedSessionId.value = sessionId
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return
+      }
+      console.error('加载历史消息失败:', error)
+      messages.value = []
+      loadedSessionId.value = ''
+    }
+  }
+
+  async function send(userId: string, sessionId: string | null, prompt: string, reference = '', agentMode: AgentLoopMode = 'auto') {
+    if (!prompt.trim()) {
+      return
+    }
+    const sessionStore = useSessionStore()
+    let targetSessionId = sessionId || sessionStore.currentSessionId
+
+    if (isStreaming.value) {
+      streamAbortController?.abort()
+      forceFlushContent()
+      isStreaming.value = false
+      const lastAssistant = findLastAssistant()
+      if (lastAssistant) {
+        lastAssistant.node = 'interrupted'
+      }
+    }
+
+    appendMessage({ role: 'user', content: prompt, reference: reference || undefined, created_at: new Date().toISOString() })
+
+    streamAbortController = new AbortController()
+    const signal = streamAbortController.signal
+    isStreaming.value = true
+    streamError.value = ''
+    activeAgentMode.value = agentMode
+
+    const bufferedTraces: Array<Record<string, unknown>> = []
+    let assistantCreated = false
+    let activeNode = ''
+
+    function ensureAssistant(node: string) {
+      if (assistantCreated && activeNode === node) {
+        return
+      }
+      appendMessage({
+        role: 'assistant',
+        content: '',
+        node,
+        tool_calls: [],
+        trace: [...bufferedTraces],
+        created_at: new Date().toISOString(),
+      })
+      assistantCreated = true
+      activeNode = node
+      bufferedTraces.length = 0
+    }
+
+    function appendTraceToCurrentAssistant(node: string, trace: Array<Record<string, unknown>>) {
+      ensureAssistant(node)
+      const lastAssistant = findLastAssistant()
+      if (lastAssistant) {
+        lastAssistant.trace ??= []
+        const seen = new Set(lastAssistant.trace.map(traceIdentity))
+        const fresh = trace.filter((item) => {
+          const key = traceIdentity(item)
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        lastAssistant.trace.push(...fresh)
+      }
+    }
+
+    try {
+      if (!targetSessionId) {
+        targetSessionId = await sessionStore.create(userId)
+        sessionStore.select(targetSessionId)
+      }
+
+      for await (const rawChunk of streamPrompt(userId, targetSessionId, prompt, { signal, reference, agentMode })) {
+        const chunk = asRecord(rawChunk)
+        const node = asString(chunk.node)
+        const content = asString(chunk.content)
+        const trace = asTrace(chunk.trace)
+        const metadata = asRecord(chunk.metadata)
+        const actualMode = asString(metadata.agent_mode)
+        if (actualMode === 'simple' || actualMode === 'react' || actualMode === 'plan') {
+          activeAgentMode.value = actualMode
+        }
+        currentNode.value = node
+
+        if (chunk.type === 'system_prompt' && content) {
+          messages.value = messages.value.filter((message) => message.role !== 'system')
+          messages.value.push({ role: 'system', content, metadata })
+          // Extract knowledge sources for citation display
+          currentKnowledgeSources.value = []
+          currentCitationMap.value = {}
+          if (metadata.citation_map && typeof metadata.citation_map === 'object') {
+            currentCitationMap.value = metadata.citation_map as Record<string, SourceItem>
+            // Populate knowledge sources list from citation_map
+            const seen = new Set<string>()
+            for (const [, source] of Object.entries(metadata.citation_map) as [string, SourceItem][]) {
+              if (source.source_uri && !seen.has(source.source_uri)) {
+                seen.add(source.source_uri)
+                currentKnowledgeSources.value.push(source)
+              }
+            }
+          }
+          continue
+        }
+
+        if (chunk.type === 'context_mirror' && Array.isArray(chunk.context_messages)) {
+          contextMirror.value = chunk.context_messages
+          continue
+        }
+
+        if (node === 'action') {
+          if (trace.length > 0) {
+            appendTraceToCurrentAssistant('action', trace)
+          }
+          continue
+        }
+
+        if (content) {
+          ensureAssistant(node)
+          if (chunk.type === 'delta') {
+            const last = findLastAssistant()
+            if (last) {
+              last.content += content
+            }
+          } else {
+            cancelPendingFlush()
+            const last = findLastAssistant()
+            if (last) {
+              if (!last.content) {
+                last.content = content
+              } else {
+                last.content = content
+              }
+            }
+          }
+          updateLastMessage(undefined, node, asArray(chunk.tool_calls), trace)
+        } else if (trace.length > 0) {
+          appendTraceToCurrentAssistant(node || asString(trace[0]?.node) || 'agent', trace)
+        }
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return
+      }
+      forceFlushContent()
+      streamError.value = error instanceof Error ? error.message : 'Stream connection failed'
+      if (assistantCreated) {
+        updateLastMessage(streamError.value)
+      }
+    } finally {
+      if (!signal.aborted) {
+        forceFlushContent()
+        isStreaming.value = false
+        currentNode.value = ''
+        loadedSessionId.value = targetSessionId ?? ''
+        if (targetSessionId) {
+          try {
+            await sessionStore.load(userId)
+          } catch {
+            // Session reload is non-critical for the active stream result.
+          }
+        }
+      }
+    }
+  }
+
+  function clear() {
+    streamAbortController?.abort()
+    historyAbortController?.abort()
+    streamAbortController = null
+    historyAbortController = null
+    messages.value = []
+    contextMirror.value = []
+    activeAgentMode.value = 'auto'
+    isStreaming.value = false
+    streamError.value = ''
+    currentNode.value = ''
+    loadedSessionId.value = ''
+    currentKnowledgeSources.value = []
+    currentCitationMap.value = {}
+  }
+
+  return {
+    messages,
+    isStreaming,
+    currentNode,
+    streamError,
+    loadedSessionId,
+    contextMirror,
+    activeAgentMode,
+    lastMessage,
+    canSend,
+    loadHistory,
+    send,
+    clear,
+    currentKnowledgeSources,
+    currentCitationMap,
+  }
+})
