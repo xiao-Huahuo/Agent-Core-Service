@@ -1,0 +1,659 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="加了几个截图" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="CopilotPersistence">
+    <persistenceIdMap>
+      <entry key="_D:/Projects/Python/AgentService" value="3DZWzTJIcaSF2PEa39l91VsMoCl" />
+      <entry key="_D:/Projects/Python/MetaWeave" value="3GDxeULik0YbLfdXjRa09JBeJwT" />
+    </persistenceIdMap>
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="FastAPI main" />
+        <option value="FastAPI test_main" />
+        <option value="Python Script" />
+        <option value="Vue Composition API Component" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;xiao-Huahuo&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/xiao-Huahuo/MetaWeave.git&quot;,
+    &quot;accountId&quot;: &quot;78aa3bd9-d818-4d0c-816e-80fcdde45511&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 6
+}</component>
+  <component name="ProjectId" id="3DZWzTJIcaSF2PEa39l91VsMoCl" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.main.executor": "Run",
+    "Python.test_agent_core_service.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "aidebugger.tracer.lastRunConfigName": "main",
+    "dart.analysis.tool.window.visible": "false",
+    "git-widget-placeholder": "master",
+    "last_opened_file_path": "D:/Projects/Python/MetaWeave/docs",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "project.propVCSSupport.DirectoryMappings",
+    "ts.external.directory.path": "D:\\Softwares\\JetBrains\\PyCharm 2025.2.3\\plugins\\javascript-plugin\\jsLanguageServicesImpl\\external",
+    "vue.rearranger.settings.migration": "true"
+  },
+  "keyToStringList": {
+    "vue.recent.templates": [
+      "Vue Composition API Component"
+    ]
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="D:\Projects\Python\MetaWeave\docs" />
+      <recent name="D:\Projects\Python\MetaWeave\docs\assets" />
+      <recent name="D:\Projects\Python\MetaWeave\tests" />
+      <recent name="D:\Projects\Python\MetaWeave\tests\测试文件" />
+      <recent name="D:\Projects\Python\AgentService" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="D:\Projects\Python\MetaWeave\docs\api" />
+      <recent name="D:\Projects\Python\MetaWeave\docs" />
+      <recent name="D:\Projects\Python\AgentService\console\public\assets\components" />
+      <recent name="D:\Projects\Python\AgentService\agent_service\api\grpc" />
+      <recent name="D:\Projects\Python\AgentService\agent_service\services" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Python.main">
+    <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="MetaWeave" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="test_agent_core_service" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="MetaWeave" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/tests/test_agent_core_service.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="AgentService" type="Python.FastAPI">
+      <option name="file" value="$PROJECT_DIR$/main.py" />
+      <module name="MetaWeave" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="$PROJECT_DIR$/../../../Softwares/Python/Python312/python.exe" />
+      <option name="SDK_NAME" value="Python 3.12 (2)" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="launchJavascriptDebuger" value="false" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="FastAPI.AgentService" />
+      <item itemvalue="Python.main" />
+      <item itemvalue="Python.test_agent_core_service" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.main" />
+        <item itemvalue="Python.test_agent_core_service" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-3aa1da707db6-JavaScript-PY-252.26830.99" />
+        <option value="bundled-python-sdk-164cda30dcd9-0af03a5fa574-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.26830.99" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="" />
+      <created>1778490334949</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1778490334949</updated>
+      <workItem from="1778490336011" duration="19491000" />
+      <workItem from="1778551163387" duration="23101000" />
+      <workItem from="1778596047215" duration="25477000" />
+      <workItem from="1778660409334" duration="7687000" />
+      <workItem from="1778726834731" duration="6560000" />
+      <workItem from="1778752428139" duration="25465000" />
+      <workItem from="1778814303934" duration="5710000" />
+      <workItem from="1778829212711" duration="16597000" />
+      <workItem from="1778907470064" duration="72326000" />
+      <workItem from="1779877829239" duration="50000" />
+      <workItem from="1780148024731" duration="6407000" />
+      <workItem from="1780223697033" duration="1204000" />
+      <workItem from="1780240238570" duration="1394000" />
+      <workItem from="1781762404012" duration="26000" />
+      <workItem from="1783389316526" duration="9163000" />
+      <workItem from="1783410352590" duration="5550000" />
+      <workItem from="1783471707096" duration="4246000" />
+      <workItem from="1783494888874" duration="8225000" />
+      <workItem from="1783509487281" duration="9707000" />
+      <workItem from="1783520030323" duration="8628000" />
+      <workItem from="1783557210024" duration="30359000" />
+      <workItem from="1783594300328" duration="17942000" />
+      <workItem from="1783644116540" duration="28334000" />
+      <workItem from="1783694874920" duration="7333000" />
+      <workItem from="1783731229748" duration="26154000" />
+      <workItem from="1783823862079" duration="12883000" />
+      <workItem from="1783902671678" duration="9074000" />
+      <workItem from="1783940724953" duration="14854000" />
+      <workItem from="1783989234762" duration="23147000" />
+      <workItem from="1784017337720" duration="2643000" />
+    </task>
+    <task id="LOCAL-00080" summary="刷新按钮,文件复制和灌库白名单">
+      <option name="closed" value="true" />
+      <created>1783573676838</created>
+      <option name="number" value="00080" />
+      <option name="presentableId" value="LOCAL-00080" />
+      <option name="project" value="LOCAL" />
+      <updated>1783573676838</updated>
+    </task>
+    <task id="LOCAL-00081" summary="工具名称">
+      <option name="closed" value="true" />
+      <created>1783575824097</created>
+      <option name="number" value="00081" />
+      <option name="presentableId" value="LOCAL-00081" />
+      <option name="project" value="LOCAL" />
+      <updated>1783575824097</updated>
+    </task>
+    <task id="LOCAL-00082" summary="将console的所有内容都搬运到了editor中">
+      <option name="closed" value="true" />
+      <created>1783578979169</created>
+      <option name="number" value="00082" />
+      <option name="presentableId" value="LOCAL-00082" />
+      <option name="project" value="LOCAL" />
+      <updated>1783578979169</updated>
+    </task>
+    <task id="LOCAL-00083" summary="工具调用的代码避免">
+      <option name="closed" value="true" />
+      <created>1783582823089</created>
+      <option name="number" value="00083" />
+      <option name="presentableId" value="LOCAL-00083" />
+      <option name="project" value="LOCAL" />
+      <updated>1783582823089</updated>
+    </task>
+    <task id="LOCAL-00084" summary="修复了agent的connect error">
+      <option name="closed" value="true" />
+      <created>1783584423767</created>
+      <option name="number" value="00084" />
+      <option name="presentableId" value="LOCAL-00084" />
+      <option name="project" value="LOCAL" />
+      <updated>1783584423767</updated>
+    </task>
+    <task id="LOCAL-00085" summary="小搜索框">
+      <option name="closed" value="true" />
+      <created>1783588409441</created>
+      <option name="number" value="00085" />
+      <option name="presentableId" value="LOCAL-00085" />
+      <option name="project" value="LOCAL" />
+      <updated>1783588409441</updated>
+    </task>
+    <task id="LOCAL-00086" summary="小搜索框完成">
+      <option name="closed" value="true" />
+      <created>1783592078729</created>
+      <option name="number" value="00086" />
+      <option name="presentableId" value="LOCAL-00086" />
+      <option name="project" value="LOCAL" />
+      <updated>1783592078729</updated>
+    </task>
+    <task id="LOCAL-00087" summary="搜索页面和后台搜索服务完成">
+      <option name="closed" value="true" />
+      <created>1783597423299</created>
+      <option name="number" value="00087" />
+      <option name="presentableId" value="LOCAL-00087" />
+      <option name="project" value="LOCAL" />
+      <updated>1783597423299</updated>
+    </task>
+    <task id="LOCAL-00088" summary="readme">
+      <option name="closed" value="true" />
+      <created>1783607671814</created>
+      <option name="number" value="00088" />
+      <option name="presentableId" value="LOCAL-00088" />
+      <option name="project" value="LOCAL" />
+      <updated>1783607671814</updated>
+    </task>
+    <task id="LOCAL-00089" summary="修复了从系统配置转移到用户数据库配置的若干bug,如agent不可用">
+      <option name="closed" value="true" />
+      <created>1783615198628</created>
+      <option name="number" value="00089" />
+      <option name="presentableId" value="LOCAL-00089" />
+      <option name="project" value="LOCAL" />
+      <updated>1783615198629</updated>
+    </task>
+    <task id="LOCAL-00090" summary="修复了agent间歇性竞态歇菜的bug">
+      <option name="closed" value="true" />
+      <created>1783650072977</created>
+      <option name="number" value="00090" />
+      <option name="presentableId" value="LOCAL-00090" />
+      <option name="project" value="LOCAL" />
+      <updated>1783650072977</updated>
+    </task>
+    <task id="LOCAL-00091" summary="ddgs搜索引擎完成">
+      <option name="closed" value="true" />
+      <created>1783652907742</created>
+      <option name="number" value="00091" />
+      <option name="presentableId" value="LOCAL-00091" />
+      <option name="project" value="LOCAL" />
+      <updated>1783652907742</updated>
+    </task>
+    <task id="LOCAL-00092" summary="UI小调整">
+      <option name="closed" value="true" />
+      <created>1783654303793</created>
+      <option name="number" value="00092" />
+      <option name="presentableId" value="LOCAL-00092" />
+      <option name="project" value="LOCAL" />
+      <updated>1783654303793</updated>
+    </task>
+    <task id="LOCAL-00093" summary="修复了敏感词问题">
+      <option name="closed" value="true" />
+      <created>1783654328622</created>
+      <option name="number" value="00093" />
+      <option name="presentableId" value="LOCAL-00093" />
+      <option name="project" value="LOCAL" />
+      <updated>1783654328622</updated>
+    </task>
+    <task id="LOCAL-00094" summary="readme">
+      <option name="closed" value="true" />
+      <created>1783654529384</created>
+      <option name="number" value="00094" />
+      <option name="presentableId" value="LOCAL-00094" />
+      <option name="project" value="LOCAL" />
+      <updated>1783654529384</updated>
+    </task>
+    <task id="LOCAL-00095" summary="设置页小调整">
+      <option name="closed" value="true" />
+      <created>1783655369945</created>
+      <option name="number" value="00095" />
+      <option name="presentableId" value="LOCAL-00095" />
+      <option name="project" value="LOCAL" />
+      <updated>1783655369945</updated>
+    </task>
+    <task id="LOCAL-00096" summary="引用,修复了联网搜索的一系列小问题">
+      <option name="closed" value="true" />
+      <created>1783663915077</created>
+      <option name="number" value="00096" />
+      <option name="presentableId" value="LOCAL-00096" />
+      <option name="project" value="LOCAL" />
+      <updated>1783663915077</updated>
+    </task>
+    <task id="LOCAL-00097" summary="修复了搜索框按内容搜却搜不到的问题">
+      <option name="closed" value="true" />
+      <created>1783664377249</created>
+      <option name="number" value="00097" />
+      <option name="presentableId" value="LOCAL-00097" />
+      <option name="project" value="LOCAL" />
+      <updated>1783664377249</updated>
+    </task>
+    <task id="LOCAL-00098" summary="工具注册表页面">
+      <option name="closed" value="true" />
+      <created>1783666248591</created>
+      <option name="number" value="00098" />
+      <option name="presentableId" value="LOCAL-00098" />
+      <option name="project" value="LOCAL" />
+      <updated>1783666248591</updated>
+    </task>
+    <task id="LOCAL-00099" summary="扩展了文件树的多选和批量操作,粘贴剪切操作">
+      <option name="closed" value="true" />
+      <created>1783669842028</created>
+      <option name="number" value="00099" />
+      <option name="presentableId" value="LOCAL-00099" />
+      <option name="project" value="LOCAL" />
+      <updated>1783669842028</updated>
+    </task>
+    <task id="LOCAL-00100" summary="agent主动写长期规则">
+      <option name="closed" value="true" />
+      <created>1783697567693</created>
+      <option name="number" value="00100" />
+      <option name="presentableId" value="LOCAL-00100" />
+      <option name="project" value="LOCAL" />
+      <updated>1783697567693</updated>
+    </task>
+    <task id="LOCAL-00101" summary="多模态预览成功实现,修复了多模态入库的一些问题">
+      <option name="closed" value="true" />
+      <created>1783701632774</created>
+      <option name="number" value="00101" />
+      <option name="presentableId" value="LOCAL-00101" />
+      <option name="project" value="LOCAL" />
+      <updated>1783701632774</updated>
+    </task>
+    <task id="LOCAL-00102" summary="- [x] 给图谱右上角加个按钮,切换显示文字/不显示文字(当鼠标悬浮在某节点上才显示节点名).&#10;- [x] 给agent也提供读取多模态文件的信息的功能:若该文件已灌库则直接找到该文件对应的json文件,读json即可获取基本信息.&#10;- [x] 当有新文件灌库时在header上显示一个小小的进度条.">
+      <option name="closed" value="true" />
+      <created>1783702860235</created>
+      <option name="number" value="00102" />
+      <option name="presentableId" value="LOCAL-00102" />
+      <option name="project" value="LOCAL" />
+      <updated>1783702860235</updated>
+    </task>
+    <task id="LOCAL-00103" summary="独立agent页">
+      <option name="closed" value="true" />
+      <created>1783735640514</created>
+      <option name="number" value="00103" />
+      <option name="presentableId" value="LOCAL-00103" />
+      <option name="project" value="LOCAL" />
+      <updated>1783735640514</updated>
+    </task>
+    <task id="LOCAL-00104" summary="对TODO进行了一个排序">
+      <option name="closed" value="true" />
+      <created>1783759367723</created>
+      <option name="number" value="00104" />
+      <option name="presentableId" value="LOCAL-00104" />
+      <option name="project" value="LOCAL" />
+      <updated>1783759367723</updated>
+    </task>
+    <task id="LOCAL-00105" summary="加了点注释">
+      <option name="closed" value="true" />
+      <created>1783827099328</created>
+      <option name="number" value="00105" />
+      <option name="presentableId" value="LOCAL-00105" />
+      <option name="project" value="LOCAL" />
+      <updated>1783827099328</updated>
+    </task>
+    <task id="LOCAL-00106" summary="实现了惰性灌库,将灌库按钮放在header左边,修复了多模态文件重复入库的链路问题">
+      <option name="closed" value="true" />
+      <created>1783854105707</created>
+      <option name="number" value="00106" />
+      <option name="presentableId" value="LOCAL-00106" />
+      <option name="project" value="LOCAL" />
+      <updated>1783854105707</updated>
+    </task>
+    <task id="LOCAL-00107" summary="文件树操作修复">
+      <option name="closed" value="true" />
+      <created>1783855051675</created>
+      <option name="number" value="00107" />
+      <option name="presentableId" value="LOCAL-00107" />
+      <option name="project" value="LOCAL" />
+      <updated>1783855051675</updated>
+    </task>
+    <task id="LOCAL-00108" summary="增加了屏蔽文件的功能,修复了文件树操作部分问题">
+      <option name="closed" value="true" />
+      <created>1783858210738</created>
+      <option name="number" value="00108" />
+      <option name="presentableId" value="LOCAL-00108" />
+      <option name="project" value="LOCAL" />
+      <updated>1783858210738</updated>
+    </task>
+    <task id="LOCAL-00109" summary=".">
+      <option name="closed" value="true" />
+      <created>1783858885334</created>
+      <option name="number" value="00109" />
+      <option name="presentableId" value="LOCAL-00109" />
+      <option name="project" value="LOCAL" />
+      <updated>1783858885334</updated>
+    </task>
+    <task id="LOCAL-00110" summary="红点">
+      <option name="closed" value="true" />
+      <created>1783860759686</created>
+      <option name="number" value="00110" />
+      <option name="presentableId" value="LOCAL-00110" />
+      <option name="project" value="LOCAL" />
+      <updated>1783860759686</updated>
+    </task>
+    <task id="LOCAL-00111" summary="Agent三状态切换,但是Codex改坏了一点">
+      <option name="closed" value="true" />
+      <created>1783950228739</created>
+      <option name="number" value="00111" />
+      <option name="presentableId" value="LOCAL-00111" />
+      <option name="project" value="LOCAL" />
+      <updated>1783950228739</updated>
+    </task>
+    <task id="LOCAL-00112" summary="解决了Agent流式输出的Codex遗留问题">
+      <option name="closed" value="true" />
+      <created>1783952675575</created>
+      <option name="number" value="00112" />
+      <option name="presentableId" value="LOCAL-00112" />
+      <option name="project" value="LOCAL" />
+      <updated>1783952675575</updated>
+    </task>
+    <task id="LOCAL-00113" summary="去掉了奇怪的ASSISTANT">
+      <option name="closed" value="true" />
+      <created>1783953332014</created>
+      <option name="number" value="00113" />
+      <option name="presentableId" value="LOCAL-00113" />
+      <option name="project" value="LOCAL" />
+      <updated>1783953332014</updated>
+    </task>
+    <task id="LOCAL-00114" summary="思考模式选择下拉框">
+      <option name="closed" value="true" />
+      <created>1783953750210</created>
+      <option name="number" value="00114" />
+      <option name="presentableId" value="LOCAL-00114" />
+      <option name="project" value="LOCAL" />
+      <updated>1783953750210</updated>
+    </task>
+    <task id="LOCAL-00115" summary="优化了工具模式输出">
+      <option name="closed" value="true" />
+      <created>1783954317824</created>
+      <option name="number" value="00115" />
+      <option name="presentableId" value="LOCAL-00115" />
+      <option name="project" value="LOCAL" />
+      <updated>1783954317824</updated>
+    </task>
+    <task id="LOCAL-00116" summary="新增tesseract ocr基础设施,实现了更高质量的docx预览,实现了pdf的基础文本提取和预览的分离">
+      <option name="closed" value="true" />
+      <created>1783957120285</created>
+      <option name="number" value="00116" />
+      <option name="presentableId" value="LOCAL-00116" />
+      <option name="project" value="LOCAL" />
+      <updated>1783957120285</updated>
+    </task>
+    <task id="LOCAL-00117" summary="paddleocr的加入,但是有点小问题">
+      <option name="closed" value="true" />
+      <created>1783994100014</created>
+      <option name="number" value="00117" />
+      <option name="presentableId" value="LOCAL-00117" />
+      <option name="project" value="LOCAL" />
+      <updated>1783994100014</updated>
+    </task>
+    <task id="LOCAL-00118" summary="仍然无法实现图片的ocr">
+      <option name="closed" value="true" />
+      <created>1783994845032</created>
+      <option name="number" value="00118" />
+      <option name="presentableId" value="LOCAL-00118" />
+      <option name="project" value="LOCAL" />
+      <updated>1783994845032</updated>
+    </task>
+    <task id="LOCAL-00119" summary="解决了删除文件夹显示Request failed的问题(只读文件)">
+      <option name="closed" value="true" />
+      <created>1783995030129</created>
+      <option name="number" value="00119" />
+      <option name="presentableId" value="LOCAL-00119" />
+      <option name="project" value="LOCAL" />
+      <updated>1783995030129</updated>
+    </task>
+    <task id="LOCAL-00120" summary="改了一点agent页面UI">
+      <option name="closed" value="true" />
+      <created>1783996215001</created>
+      <option name="number" value="00120" />
+      <option name="presentableId" value="LOCAL-00120" />
+      <option name="project" value="LOCAL" />
+      <updated>1783996215001</updated>
+    </task>
+    <task id="LOCAL-00121" summary="知识图谱第一版">
+      <option name="closed" value="true" />
+      <created>1784003927275</created>
+      <option name="number" value="00121" />
+      <option name="presentableId" value="LOCAL-00121" />
+      <option name="project" value="LOCAL" />
+      <updated>1784003927275</updated>
+    </task>
+    <task id="LOCAL-00122" summary="知识图谱第一版">
+      <option name="closed" value="true" />
+      <created>1784003984211</created>
+      <option name="number" value="00122" />
+      <option name="presentableId" value="LOCAL-00122" />
+      <option name="project" value="LOCAL" />
+      <updated>1784003984211</updated>
+    </task>
+    <task id="LOCAL-00123" summary="知识图谱不能维护,把链路断掉了">
+      <option name="closed" value="true" />
+      <created>1784009663441</created>
+      <option name="number" value="00123" />
+      <option name="presentableId" value="LOCAL-00123" />
+      <option name="project" value="LOCAL" />
+      <updated>1784009663441</updated>
+    </task>
+    <task id="LOCAL-00124" summary="pdf预览">
+      <option name="closed" value="true" />
+      <created>1784011427141</created>
+      <option name="number" value="00124" />
+      <option name="presentableId" value="LOCAL-00124" />
+      <option name="project" value="LOCAL" />
+      <updated>1784011427141</updated>
+    </task>
+    <task id="LOCAL-00125" summary="屏蔽掉了知识库">
+      <option name="closed" value="true" />
+      <created>1784011452887</created>
+      <option name="number" value="00125" />
+      <option name="presentableId" value="LOCAL-00125" />
+      <option name="project" value="LOCAL" />
+      <updated>1784011452887</updated>
+    </task>
+    <task id="LOCAL-00126" summary="sprint2测试">
+      <option name="closed" value="true" />
+      <created>1784014819389</created>
+      <option name="number" value="00126" />
+      <option name="presentableId" value="LOCAL-00126" />
+      <option name="project" value="LOCAL" />
+      <updated>1784014819389</updated>
+    </task>
+    <task id="LOCAL-00127" summary=".">
+      <option name="closed" value="true" />
+      <created>1784015179698</created>
+      <option name="number" value="00127" />
+      <option name="presentableId" value="LOCAL-00127" />
+      <option name="project" value="LOCAL" />
+      <updated>1784015179698</updated>
+    </task>
+    <task id="LOCAL-00128" summary="加了几个截图">
+      <option name="closed" value="true" />
+      <created>1784019100286</created>
+      <option name="number" value="00128" />
+      <option name="presentableId" value="LOCAL-00128" />
+      <option name="project" value="LOCAL" />
+      <updated>1784019100287</updated>
+    </task>
+    <option name="localTasksCounter" value="129" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="- [x] 给图谱右上角加个按钮,切换显示文字/不显示文字(当鼠标悬浮在某节点上才显示节点名).&#10;- [x] 给agent也提供读取多模态文件的信息的功能:若该文件已灌库则直接找到该文件对应的json文件,读json即可获取基本信息.&#10;- [x] 当有新文件灌库时在header上显示一个小小的进度条." />
+    <MESSAGE value="独立agent页" />
+    <MESSAGE value="对TODO进行了一个排序" />
+    <MESSAGE value="加了点注释" />
+    <MESSAGE value="实现了惰性灌库,将灌库按钮放在header左边,修复了多模态文件重复入库的链路问题" />
+    <MESSAGE value="文件树操作修复" />
+    <MESSAGE value="增加了屏蔽文件的功能,修复了文件树操作部分问题" />
+    <MESSAGE value="红点" />
+    <MESSAGE value="Agent三状态切换,但是Codex改坏了一点" />
+    <MESSAGE value="解决了Agent流式输出的Codex遗留问题" />
+    <MESSAGE value="去掉了奇怪的ASSISTANT" />
+    <MESSAGE value="思考模式选择下拉框" />
+    <MESSAGE value="优化了工具模式输出" />
+    <MESSAGE value="新增tesseract ocr基础设施,实现了更高质量的docx预览,实现了pdf的基础文本提取和预览的分离" />
+    <MESSAGE value="paddleocr的加入,但是有点小问题" />
+    <MESSAGE value="仍然无法实现图片的ocr" />
+    <MESSAGE value="解决了删除文件夹显示Request failed的问题(只读文件)" />
+    <MESSAGE value="改了一点agent页面UI" />
+    <MESSAGE value="知识图谱第一版" />
+    <MESSAGE value="知识图谱不能维护,把链路断掉了" />
+    <MESSAGE value="pdf预览" />
+    <MESSAGE value="屏蔽掉了知识库" />
+    <MESSAGE value="sprint2测试" />
+    <MESSAGE value="." />
+    <MESSAGE value="加了几个截图" />
+    <option name="LAST_COMMIT_MESSAGE" value="加了几个截图" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/AgentService$main.coverage" NAME="main 覆盖结果" MODIFIED="1783512965618" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/AgentService$test_agent_core_service.coverage" NAME="test_agent_core_service 覆盖结果" MODIFIED="1778509217316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784017959933" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+  </component>
+  <component name="github-copilot-workspace">
+    <instructionFileLocations>
+      <option value=".github/instructions" />
+    </instructionFileLocations>
+    <promptFileLocations>
+      <option value=".github/prompts" />
+    </promptFileLocations>
+  </component>
+</project>
