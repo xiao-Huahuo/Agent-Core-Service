@@ -240,23 +240,9 @@ const entries = computed(() => {
   gap: var(--space-6);
   width: fit-content;
   min-height: 24px;
-  padding: var(--space-4) var(--space-8);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: var(--radius-sm);
-  background: rgba(148, 163, 184, 0.06);
   color: #8a93a3;
   cursor: pointer;
   user-select: none;
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.toggle-bar:hover {
-  border-color: rgba(148, 163, 184, 0.34);
-  background: rgba(148, 163, 184, 0.1);
-  color: #a3adbd;
 }
 
 .bar-chevron {

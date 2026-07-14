@@ -372,7 +372,7 @@ async function saveProfile() {
         </div>
       </div>
       <div class="model-actions">
-        <button v-if="!modelEditing && modelConfigSaved" class="edit-model-btn" type="button" @click="modelEditing = true">编辑</button>
+        <button v-if="!modelEditing" class="edit-model-btn" type="button" @click="modelEditing = true">{{ modelConfigSaved ? '编辑' : '配置' }}</button>
         <button v-if="modelEditing" class="save-model-btn" :disabled="modelSaving" @click="handleSaveModel">
           {{ modelSaving ? '保存中...' : '保存' }}
         </button>
