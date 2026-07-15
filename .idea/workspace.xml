@@ -4,7 +4,20 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="加了几个截图" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="加了几个截图">
+      <change afterPath="$PROJECT_DIR$/AI反思日志/AI反思日志-徐光修.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/AI反思日志/AI反思日志-陈宇豪.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/AI反思日志/AI反思日志-魏赞琪.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/Sprint2AI抗性挑战完成报告.docx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/Sprint2质量门禁完成报告.xlsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/assets/requests并发报告.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tests/requests_test.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/AI使用反思报告.md" beforeDir="false" afterPath="$PROJECT_DIR$/AI反思日志/AI反思日志-邵瑞熙.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/resources/knowledge/1/2/123123123.md" beforeDir="false" afterPath="$PROJECT_DIR$/resources/knowledge/1/2/123123123.md" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -21,8 +34,8 @@
       <list>
         <option value="FastAPI main" />
         <option value="FastAPI test_main" />
-        <option value="Python Script" />
         <option value="Vue Composition API Component" />
+        <option value="Python Script" />
       </list>
     </option>
   </component>
@@ -56,20 +69,21 @@
   "keyToString": {
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "Python.main.executor": "Run",
+    "Python.requests_test.executor": "Run",
     "Python.test_agent_core_service.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "aidebugger.tracer.lastRunConfigName": "main",
     "dart.analysis.tool.window.visible": "false",
     "git-widget-placeholder": "master",
-    "last_opened_file_path": "D:/Projects/Python/MetaWeave/docs",
+    "last_opened_file_path": "D:/Projects/Python/MetaWeave/AI反思日志",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
+    "prettierjs.PrettierConfiguration.Package": "D:\\Projects\\Python\\MetaWeave\\console\\node_modules\\prettier",
     "settings.editor.selected.configurable": "project.propVCSSupport.DirectoryMappings",
     "ts.external.directory.path": "D:\\Softwares\\JetBrains\\PyCharm 2025.2.3\\plugins\\javascript-plugin\\jsLanguageServicesImpl\\external",
     "vue.rearranger.settings.migration": "true"
@@ -82,21 +96,21 @@
 }]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
-      <recent name="D:\Projects\Python\MetaWeave\docs" />
+      <recent name="D:\Projects\Python\MetaWeave\AI反思日志" />
       <recent name="D:\Projects\Python\MetaWeave\docs\assets" />
+      <recent name="D:\Projects\Python\MetaWeave\docs\AI反思日志" />
+      <recent name="D:\Projects\Python\MetaWeave\docs" />
       <recent name="D:\Projects\Python\MetaWeave\tests" />
-      <recent name="D:\Projects\Python\MetaWeave\tests\测试文件" />
-      <recent name="D:\Projects\Python\AgentService" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="D:\Projects\Python\MetaWeave" />
+      <recent name="D:\Projects\Python\MetaWeave\docs\AI反思日志" />
       <recent name="D:\Projects\Python\MetaWeave\docs\api" />
       <recent name="D:\Projects\Python\MetaWeave\docs" />
       <recent name="D:\Projects\Python\AgentService\console\public\assets\components" />
-      <recent name="D:\Projects\Python\AgentService\agent_service\api\grpc" />
-      <recent name="D:\Projects\Python\AgentService\agent_service\services" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.main">
+  <component name="RunManager" selected="Python.requests_test">
     <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="MetaWeave" />
       <option name="ENV_FILES" value="" />
@@ -112,6 +126,29 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="requests_test" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="MetaWeave" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/tests/requests_test.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -161,11 +198,13 @@
     </configuration>
     <list>
       <item itemvalue="FastAPI.AgentService" />
+      <item itemvalue="Python.requests_test" />
       <item itemvalue="Python.main" />
       <item itemvalue="Python.test_agent_core_service" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.requests_test" />
         <item itemvalue="Python.main" />
         <item itemvalue="Python.test_agent_core_service" />
       </list>
@@ -215,7 +254,9 @@
       <workItem from="1783902671678" duration="9074000" />
       <workItem from="1783940724953" duration="14854000" />
       <workItem from="1783989234762" duration="23147000" />
-      <workItem from="1784017337720" duration="2643000" />
+      <workItem from="1784017337720" duration="3211000" />
+      <workItem from="1784077336989" duration="56000" />
+      <workItem from="1784077675033" duration="5312000" />
     </task>
     <task id="LOCAL-00080" summary="刷新按钮,文件复制和灌库白名单">
       <option name="closed" value="true" />
@@ -644,9 +685,10 @@
     <option name="LAST_COMMIT_MESSAGE" value="加了几个截图" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784082666356" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
     <SUITE FILE_PATH="coverage/AgentService$main.coverage" NAME="main 覆盖结果" MODIFIED="1783512965618" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/AgentService$test_agent_core_service.coverage" NAME="test_agent_core_service 覆盖结果" MODIFIED="1778509217316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
-    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784017959933" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784077903788" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>

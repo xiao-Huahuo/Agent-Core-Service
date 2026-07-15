@@ -19,3 +19,5 @@ PyMuPDF
 Pillow
 paddlepaddle
 paddleocr
+requests
+bandit
