@@ -1,5 +1,8 @@
 # CHANGE HISTORY
 
+## 2026-07-16
+- 修复 Agent 自动 RAG 注入的知识库作用域问题: `ContextBuilder._build_retrieved_context()` 调用 `retrieve_knowledge_with_debug()` 时传入当前 `user_id`,避免自动召回默认落到 `system` 知识库,并新增回归测试覆盖该调用参数。
+
 ## 2026-07-14
 - 调整知识库灌库前端超时与进度条: `apiPost` 支持单请求 `timeoutMs`,全库/目录/单文件灌库请求超时放宽到 10 分钟,避免 OCR 长任务被 30 秒 Abort;灌库进度条改为等待期间缓慢推进到 86%-88%,完成后再跳到 100%,不再固定瞬跳 44%/92%。
 - 修复 PaddleOCR Windows CPU 推理异常被误判为“无文字”的问题: 图片 OCR 推理异常现在记录 warning 并返回 `engine_unavailable`;启动预热和图片 OCR 延迟导入 PaddleOCR 前默认设置 `PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT=False`,规避部分 PP-OCRv5 模型在 oneDNN/MKLDNN 路径下的 `ConvertPirAttribute2RuntimeAttribute` 异常。

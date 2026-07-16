@@ -587,6 +587,47 @@ def test_context_builder_appends_current_prompt_and_converts_roles() -> None:
     assert messages[-1].content == "继续"
 
 
+def test_context_builder_passes_user_id_to_automatic_knowledge_retrieval() -> None:
+    """验证自动知识库召回使用当前用户范围,而不是默认 system 知识库。"""
+
+    config = AgentConfig.load_config(
+        {"memory": {"max_context_messages": 4}},
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    service = MessageService(config=config, engine=engine, create_tables=False)
+    empty_snapshot = SimpleNamespace(post_rerank_results=[])
+    knowledge_calls: list[dict[str, Any]] = []
+
+    def retrieve_knowledge_with_debug(**kwargs: Any) -> Any:
+        """记录自动知识库召回参数。"""
+
+        knowledge_calls.append(kwargs)
+        return empty_snapshot
+
+    retrieval_service = SimpleNamespace(
+        retrieve_long_term_memory_with_debug=lambda **_kwargs: empty_snapshot,
+        get_latest_session_summary=lambda **_kwargs: None,
+        retrieve_knowledge_with_debug=retrieve_knowledge_with_debug,
+        get_latest_important_fact_summary=lambda **_kwargs: None,
+        serialize_debug_snapshot=lambda _snapshot: {},
+    )
+    builder = ContextBuilder(config=config, message_service=service, retrieval_service=retrieval_service)
+
+    builder.build_messages(user_id="user_1", session_id="sess_scope", current_prompt="查找知识库内容")
+
+    assert knowledge_calls == [
+        {
+            "query": "查找知识库内容",
+            "user_id": "user_1",
+            "top_k": config.memory.rerank_top_k,
+        }
+    ]
+
+
 def test_context_builder_keeps_references_in_history_and_compressed_current_prompt() -> None:
     """引用应随历史恢复,并在当前上下文触发压缩后仍进入最终 HumanMessage。"""
 

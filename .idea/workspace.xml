@@ -5,18 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="加了几个截图">
-      <change afterPath="$PROJECT_DIR$/AI反思日志/AI反思日志-徐光修.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/AI反思日志/AI反思日志-陈宇豪.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/AI反思日志/AI反思日志-魏赞琪.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/Sprint2AI抗性挑战完成报告.docx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/Sprint2质量门禁完成报告.xlsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/assets/requests并发报告.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/requests_test.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/copilot.data.migration.ask2agent.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/assets/图标.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/assets/无底图标.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/AI使用反思报告.md" beforeDir="false" afterPath="$PROJECT_DIR$/AI反思日志/AI反思日志-邵瑞熙.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/resources/knowledge/1/2/123123123.md" beforeDir="false" afterPath="$PROJECT_DIR$/resources/knowledge/1/2/123123123.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/context_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/context_builder.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_agent_core_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_agent_core_service.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -74,10 +70,11 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "aidebugger.tracer.lastRunConfigName": "main",
     "dart.analysis.tool.window.visible": "false",
     "git-widget-placeholder": "master",
-    "last_opened_file_path": "D:/Projects/Python/MetaWeave/AI反思日志",
+    "last_opened_file_path": "D:/Projects/Python/MetaWeave/docs/assets",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -96,8 +93,8 @@
 }]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
-      <recent name="D:\Projects\Python\MetaWeave\AI反思日志" />
       <recent name="D:\Projects\Python\MetaWeave\docs\assets" />
+      <recent name="D:\Projects\Python\MetaWeave\AI反思日志" />
       <recent name="D:\Projects\Python\MetaWeave\docs\AI反思日志" />
       <recent name="D:\Projects\Python\MetaWeave\docs" />
       <recent name="D:\Projects\Python\MetaWeave\tests" />
@@ -110,7 +107,7 @@
       <recent name="D:\Projects\Python\AgentService\console\public\assets\components" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.requests_test">
+  <component name="RunManager" selected="Python.main">
     <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="MetaWeave" />
       <option name="ENV_FILES" value="" />
@@ -204,8 +201,8 @@
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.requests_test" />
         <item itemvalue="Python.main" />
+        <item itemvalue="Python.requests_test" />
         <item itemvalue="Python.test_agent_core_service" />
       </list>
     </recent_temporary>
@@ -256,7 +253,9 @@
       <workItem from="1783989234762" duration="23147000" />
       <workItem from="1784017337720" duration="3211000" />
       <workItem from="1784077336989" duration="56000" />
-      <workItem from="1784077675033" duration="5312000" />
+      <workItem from="1784077675033" duration="7167000" />
+      <workItem from="1784097250115" duration="3073000" />
+      <workItem from="1784161846234" duration="1668000" />
     </task>
     <task id="LOCAL-00080" summary="刷新按钮,文件复制和灌库白名单">
       <option name="closed" value="true" />

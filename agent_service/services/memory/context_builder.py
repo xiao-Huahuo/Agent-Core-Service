@@ -125,6 +125,7 @@ class ContextBuilder:
                 memories = [latest_summary]
         knowledge_snapshot = self.retrieval_service.retrieve_knowledge_with_debug(
             query=current_prompt,
+            user_id=user_id,
             top_k=self.config.memory.rerank_top_k,
         )
         knowledge = knowledge_snapshot.post_rerank_results
