@@ -731,6 +731,117 @@ def create_knowledge_folder(path: str) -> str:
     return f"已创建文件夹: {result['path']}"
 
 
+def save_uploaded_attachment_to_knowledge(
+    attachment: str = "",
+    target_path: str = "",
+    conflict_strategy: str = "rename",
+    ingest: bool = True,
+) -> str:
+    """
+    Promote one session-uploaded attachment into the active knowledge library.
+
+    attachment: Optional attachment_id, exact filename, or filename keyword. Empty means the latest session attachment.
+    target_path: Optional target relative path in the active knowledge library. Empty keeps the original filename at root.
+    conflict_strategy: overwrite, skip, or rename. Defaults to rename.
+    ingest: Whether to immediately ingest the copied file into the knowledge index.
+    """
+
+    from pathlib import Path
+
+    from sqlalchemy import desc
+    from sqlmodel import Session, create_engine, select
+
+    from agent_service.models.attachment import SessionAttachmentRecord
+
+    runtime = get_tool_runtime()
+    service = _build_knowledge_service()
+    normalized_attachment = attachment.strip()
+    engine = create_engine(f"sqlite:///{runtime.config.storage.sqlite_path}", pool_pre_ping=True)
+    statement = (
+        select(SessionAttachmentRecord)
+        .where(SessionAttachmentRecord.user_id == runtime.user_id)
+        .where(SessionAttachmentRecord.session_id == runtime.session_id)
+        .order_by(desc(SessionAttachmentRecord.created_at))
+    )
+    with Session(engine) as db_session:
+        attachments = list(db_session.exec(statement).all())
+    if not attachments:
+        return "No uploaded attachments were found in the current session."
+
+    if normalized_attachment:
+        lowered = normalized_attachment.casefold()
+        matches = [
+            item for item in attachments
+            if item.attachment_id == normalized_attachment
+            or item.filename.casefold() == lowered
+            or lowered in item.filename.casefold()
+        ]
+    else:
+        matches = [attachments[0]]
+
+    if not matches:
+        available = "\n".join(f"- {item.filename} ({item.attachment_id})" for item in attachments[:8])
+        return f"Attachment not found in this session. Available attachments:\n{available}"
+    if len(matches) > 1:
+        available = "\n".join(f"- {item.filename} ({item.attachment_id})" for item in matches[:8])
+        return f"Multiple uploaded attachments matched. Please specify one attachment_id:\n{available}"
+
+    record = matches[0]
+    source_path = Path(record.path).expanduser().resolve()
+    if not source_path.is_file():
+        return f"Attachment file is missing from runtime uploads: {record.filename}"
+
+    normalized_strategy = conflict_strategy.strip().lower() or "rename"
+    if normalized_strategy not in {"overwrite", "skip", "rename"}:
+        return "Invalid conflict_strategy. Use overwrite, skip, or rename."
+
+    raw_target = target_path.strip().replace("\\", "/").strip("/")
+    if raw_target:
+        target = Path(raw_target)
+        if raw_target.endswith("/"):
+            relative_dir = raw_target.rstrip("/")
+            target_filename = record.filename
+        else:
+            relative_dir = target.parent.as_posix() if str(target.parent) != "." else ""
+            target_filename = target.name or record.filename
+    else:
+        relative_dir = ""
+        target_filename = record.filename
+
+    try:
+        copied_path = service.write_uploaded_file(
+            user_id=runtime.user_id,
+            filename=target_filename,
+            content=source_path.read_bytes(),
+            relative_dir=relative_dir,
+            conflict_strategy=normalized_strategy,
+        )
+    except Exception as exc:
+        return f"Failed to copy attachment into the knowledge library: {exc}"
+
+    root = service.get_active_root_path(user_id=runtime.user_id)
+    try:
+        relative_path = copied_path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return f"Copied file escaped the active knowledge library: {copied_path}"
+
+    if not ingest:
+        return f"Saved uploaded attachment to knowledge library: {relative_path}. It was not ingested."
+
+    try:
+        result = service.ingest_single_file(user_id=runtime.user_id, path=relative_path)
+    except Exception as exc:
+        return f"Saved uploaded attachment to knowledge library as {relative_path}, but ingestion failed: {exc}"
+
+    status = result.status_message or "ingested"
+    return (
+        f"Saved uploaded attachment to knowledge library: {relative_path}\n"
+        f"Ingestion status: {status}\n"
+        f"Files ingested: {result.files_ingested}; chunks created: {result.chunks_created}; "
+        f"files skipped: {result.files_skipped}; skip reason: {result.skip_reason or 'none'}."
+    )
+
+
 def get_current_viewing_document() -> str:
     """
     获取当前用户在 editor 前端正在观看的文档基本信息。
@@ -1174,6 +1285,38 @@ KNOWLEDGE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         },
         function=search_knowledge,
         display_name="搜索知识库",
+    ),
+    BuiltinToolDefinition(
+        name="save_uploaded_attachment_to_knowledge",
+        description=(
+            "把当前会话中用户上传的附件复制到当前 active 知识库,并可立即灌库。"
+            "仅当用户明确要求把上传附件保存到知识库、加入知识库、灌库或长期保存时使用；"
+            "普通读取附件内容时不要使用。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "attachment": {
+                    "type": "string",
+                    "description": "可选。attachment_id、完整文件名或文件名关键词。为空时使用当前 session 最近上传的附件。",
+                },
+                "target_path": {
+                    "type": "string",
+                    "description": "可选。保存到知识库内的相对路径,例如 uploads/report.pdf 或 docs/。为空时保存到知识库根目录并保留原文件名。",
+                },
+                "conflict_strategy": {
+                    "type": "string",
+                    "description": "同名冲突策略: rename、overwrite 或 skip。默认 rename。",
+                },
+                "ingest": {
+                    "type": "boolean",
+                    "description": "是否保存后立即灌库。默认 true。",
+                },
+            },
+            "required": [],
+        },
+        function=save_uploaded_attachment_to_knowledge,
+        display_name="附件存入知识库",
     ),
 ]
 

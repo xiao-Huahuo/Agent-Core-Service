@@ -4,10 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="文件上传功能">
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/AttachmentBlocks.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/AttachmentBlocks.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatBubble.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatBubble.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolBubble.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolBubble.vue" afterDir="false" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="文件上传功能小改">
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/builtin.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/builtin.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageList.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageList.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -250,15 +249,7 @@
       <workItem from="1784077336989" duration="56000" />
       <workItem from="1784077675033" duration="7167000" />
       <workItem from="1784097250115" duration="3073000" />
-      <workItem from="1784161846234" duration="28194000" />
-    </task>
-    <task id="LOCAL-00093" summary="修复了敏感词问题">
-      <option name="closed" value="true" />
-      <created>1783654328622</created>
-      <option name="number" value="00093" />
-      <option name="presentableId" value="LOCAL-00093" />
-      <option name="project" value="LOCAL" />
-      <updated>1783654328622</updated>
+      <workItem from="1784161846234" duration="28642000" />
     </task>
     <task id="LOCAL-00094" summary="readme">
       <option name="closed" value="true" />
@@ -644,14 +635,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784195298891</updated>
     </task>
-    <option name="localTasksCounter" value="142" />
+    <task id="LOCAL-00142" summary="文件上传功能小改">
+      <option name="closed" value="true" />
+      <created>1784195656569</created>
+      <option name="number" value="00142" />
+      <option name="presentableId" value="LOCAL-00142" />
+      <option name="project" value="LOCAL" />
+      <updated>1784195656569</updated>
+    </task>
+    <option name="localTasksCounter" value="143" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="去掉了奇怪的ASSISTANT" />
     <MESSAGE value="思考模式选择下拉框" />
     <MESSAGE value="优化了工具模式输出" />
     <MESSAGE value="新增tesseract ocr基础设施,实现了更高质量的docx预览,实现了pdf的基础文本提取和预览的分离" />
@@ -676,7 +674,8 @@
     <MESSAGE value="美化!" />
     <MESSAGE value="monocraft字体" />
     <MESSAGE value="文件上传功能" />
-    <option name="LAST_COMMIT_MESSAGE" value="文件上传功能" />
+    <MESSAGE value="文件上传功能小改" />
+    <option name="LAST_COMMIT_MESSAGE" value="文件上传功能小改" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />

@@ -133,11 +133,18 @@ function shouldShowAvatar(message: AgentChatMessage, index: number) {
   return message.role !== 'assistant' || index === 0 || previous?.role !== 'assistant'
 }
 
+function hasCopyableAssistantContent(message: AgentChatMessage) {
+  return message.role === 'assistant' && Boolean(message.content?.trim())
+}
+
 function shouldShowActions(message: AgentChatMessage, index: number) {
   if (message.role !== 'assistant') {
     return true
   }
-  return !visibleMessages.value.slice(index + 1).some((item) => item.role === 'assistant')
+  if (!hasCopyableAssistantContent(message)) {
+    return false
+  }
+  return !visibleMessages.value.slice(index + 1).some(hasCopyableAssistantContent)
 }
 
 function asSourceMap(value: unknown): Record<string, SourceItem> {
