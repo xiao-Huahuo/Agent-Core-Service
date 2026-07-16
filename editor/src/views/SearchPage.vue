@@ -146,7 +146,7 @@ onMounted(() => {
     <div class="search-stage" :class="{ pinned: hasSearched }">
       <Transition name="title-fade">
         <div v-if="!hasSearched" class="hero-title">
-          <SplitText text="知识库搜索" tag="h1" :trigger-on-mount="true" />
+          <SplitText class="hero-title-text" text="知识库搜索" tag="h1" :trigger-on-mount="true" />
           <p>在知识库中搜索文件、内容和语义匹配</p>
         </div>
       </Transition>
@@ -339,13 +339,20 @@ onMounted(() => {
   pointer-events: none;
 }
 
-.hero-title h1 {
+.hero-title h1,
+.hero-title-text {
   margin: 0;
   color: var(--color-text);
-  font-family: "Monocraft", var(--font-code);
+  font-family: "Minecraft AE", "Monocraft", var(--font-code), "Microsoft YaHei UI", "Microsoft YaHei", "SimHei", sans-serif;
   font-size: 32px;
   font-weight: 750;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
+}
+
+.hero-title-text,
+.hero-title :deep(.split-text),
+.hero-title :deep(.split-char) {
+  font-family: "Minecraft AE", "Monocraft", var(--font-code), "Microsoft YaHei UI", "Microsoft YaHei", "SimHei", sans-serif !important;
 }
 
 .hero-title p {

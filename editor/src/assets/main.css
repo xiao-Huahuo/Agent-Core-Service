@@ -18,6 +18,18 @@
 }
 
 @font-face {
+  font-family: "Minecraft AE";
+  src:
+    url("./fonts/MinecraftAE-Pixel.ttf") format("truetype"),
+    local("Minecraft AE Pixel"),
+    local("MinecraftAE-Pixel"),
+    local("Minecraft AE");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: "Hack";
   src: url("./fonts/Hack-Regular.ttf") format("truetype");
   font-weight: 400;
@@ -169,6 +181,99 @@ a {
 .vditor-reset pre,
 .vditor-reset code {
   font-family: var(--font-code) !important;
+}
+
+.vditor table,
+.vditor-reset table,
+.vditor-wysiwyg table,
+.vditor-ir table,
+.vditor-sv table,
+.vditor-preview table {
+  border-collapse: collapse !important;
+  background: var(--color-surface-raised) !important;
+  color: var(--color-text) !important;
+}
+
+.vditor table tr,
+.vditor-reset table tr,
+.vditor-wysiwyg table tr,
+.vditor-ir table tr,
+.vditor-sv table tr,
+.vditor-preview table tr,
+.vditor table tbody tr,
+.vditor-reset table tbody tr,
+.vditor-wysiwyg table tbody tr,
+.vditor-ir table tbody tr,
+.vditor-sv table tbody tr,
+.vditor-preview table tbody tr {
+  border-color: var(--color-border) !important;
+  background: var(--color-surface-raised) !important;
+  background-color: var(--color-surface-raised) !important;
+  color: var(--color-text) !important;
+}
+
+.vditor table th,
+.vditor table td,
+.vditor-reset table th,
+.vditor-reset table td,
+.vditor-wysiwyg table th,
+.vditor-wysiwyg table td,
+.vditor-ir table th,
+.vditor-ir table td,
+.vditor-sv table th,
+.vditor-sv table td,
+.vditor-preview table th,
+.vditor-preview table td {
+  border: 1px solid var(--color-border) !important;
+  background: transparent !important;
+  color: var(--color-text) !important;
+}
+
+.vditor table th,
+.vditor-reset table th,
+.vditor-wysiwyg table th,
+.vditor-ir table th,
+.vditor-sv table th,
+.vditor-preview table th {
+  background: var(--color-surface-active) !important;
+  background-color: var(--color-surface-active) !important;
+  color: var(--color-text) !important;
+}
+
+.vditor table tbody tr:nth-child(2n),
+.vditor-reset table tbody tr:nth-child(2n),
+.vditor-wysiwyg table tbody tr:nth-child(2n),
+.vditor-ir table tbody tr:nth-child(2n),
+.vditor-sv table tbody tr:nth-child(2n),
+.vditor-preview table tbody tr:nth-child(2n) {
+  background: color-mix(in srgb, var(--color-surface-raised) 94%, var(--color-text) 6%) !important;
+  background-color: color-mix(in srgb, var(--color-surface-raised) 94%, var(--color-text) 6%) !important;
+}
+
+.vditor table tr:nth-child(2n) td,
+.vditor-reset table tr:nth-child(2n) td,
+.vditor-wysiwyg table tr:nth-child(2n) td,
+.vditor-ir table tr:nth-child(2n) td,
+.vditor-sv table tr:nth-child(2n) td,
+.vditor-preview table tr:nth-child(2n) td {
+  background: color-mix(in srgb, var(--color-surface-raised) 94%, var(--color-text) 6%) !important;
+  background-color: color-mix(in srgb, var(--color-surface-raised) 94%, var(--color-text) 6%) !important;
+}
+
+:root[data-theme="light"] .vditor table tbody tr:nth-child(2n),
+:root[data-theme="light"] .vditor-reset table tbody tr:nth-child(2n),
+:root[data-theme="light"] .vditor-wysiwyg table tbody tr:nth-child(2n),
+:root[data-theme="light"] .vditor-ir table tbody tr:nth-child(2n),
+:root[data-theme="light"] .vditor-sv table tbody tr:nth-child(2n),
+:root[data-theme="light"] .vditor-preview table tbody tr:nth-child(2n),
+:root[data-theme="light"] .vditor table tr:nth-child(2n) td,
+:root[data-theme="light"] .vditor-reset table tr:nth-child(2n) td,
+:root[data-theme="light"] .vditor-wysiwyg table tr:nth-child(2n) td,
+:root[data-theme="light"] .vditor-ir table tr:nth-child(2n) td,
+:root[data-theme="light"] .vditor-sv table tr:nth-child(2n) td,
+:root[data-theme="light"] .vditor-preview table tr:nth-child(2n) td {
+  background: color-mix(in srgb, var(--color-surface-raised) 97%, var(--color-text) 3%) !important;
+  background-color: color-mix(in srgb, var(--color-surface-raised) 97%, var(--color-text) 3%) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
