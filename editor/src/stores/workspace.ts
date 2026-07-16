@@ -581,7 +581,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       selectedTreePath.value = path
       return
     }
-    setTreeSelection([path], path)
+    selectedTreePaths.value = new Set()
+    selectionAnchorPath.value = path
     selectedTreePath.value = path
   }
 
@@ -603,7 +604,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   async function selectFile(node: KnowledgeFileNode) {
     selectedTreePath.value = node.path
     if (node.isDir) {
-      toggleDirectory(node.path)
       return
     }
     selectedPath.value = node.path

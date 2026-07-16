@@ -9,6 +9,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { FilePlus2, FolderPlus, FolderOpen } from 'lucide-vue-next'
 
+import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import TreeNode from '@/components/editor_workspace/TreeNode.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -30,7 +31,7 @@ const contextMenu = ref<{
   node: KnowledgeFileNode | null
 }>({ open: false, x: 0, y: 0, node: null })
 const contextMenuStyle = ref<Record<string, string>>({ left: '0px', top: '0px' })
-const contextMenuRef = ref<HTMLElement | null>(null)
+const contextMenuRef = ref<{ getBoundingClientRect: () => DOMRect } | null>(null)
 const inlineEdit = ref<{
   mode: 'create' | 'rename'
   kind: 'file' | 'folder'
@@ -309,8 +310,10 @@ function handleSelect(node: KnowledgeFileNode, event?: MouseEvent | KeyboardEven
     return
   }
   workspaceStore.selectTreeNode(node)
-  workspaceStore.setMainView('editor')
-  void workspaceStore.selectFile(node)
+  if (!node.isDir) {
+    workspaceStore.setMainView('editor')
+    void workspaceStore.selectFile(node)
+  }
 }
 
 async function openContextMenu(node: KnowledgeFileNode | null, event: MouseEvent) {
@@ -804,64 +807,29 @@ onUnmounted(() => {
 
     <p v-if="actionError" class="action-error">{{ actionError }}</p>
 
-    <div
+    <FileContextMenu
       v-if="contextMenu.open"
-      class="context-menu"
       ref="contextMenuRef"
-      :style="contextMenuStyle"
-      @click.stop
-    >
-      <button type="button" @click="createFileFromMenu"><span>New file</span><kbd>Ctrl+N</kbd></button>
-      <button type="button" @click="createFolderFromMenu"><span>New folder</span><kbd>Ctrl+Shift+N</kbd></button>
-      <button type="button" :disabled="!contextMenu.node" @click="copyFromMenu">
-        <span>澶嶅埗</span><kbd>Ctrl+C</kbd>
-      </button>
-      <button type="button" :disabled="!contextMenu.node" @click="cutFromMenu">
-        <span>鍓垏</span><kbd>Ctrl+X</kbd>
-      </button>
-      <button type="button" :disabled="!contextMenu.node" @click="copyNameFromMenu">
-        <span>Copy name</span>
-      </button>
-      <button type="button" :disabled="!contextMenu.node" @click="copyAbsolutePathFromMenu">
-        <span>澶嶅埗缁濆璺緞</span>
-      </button>
-      <button type="button" :disabled="!contextMenu.node" @click="copyRelativePathFromMenu">
-        <span>澶嶅埗鐩稿璺緞</span>
-      </button>
-      <button type="button" :disabled="!canPaste" @click="pasteFromMenu"><span>绮樿创</span><kbd>Ctrl+V</kbd></button>
-      <button type="button" :disabled="!contextMenu.node" @click="renameFromMenu">
-        <span>Rename</span><kbd>Ctrl+M</kbd>
-      </button>
-      <button type="button" :disabled="!contextMenu.node" class="danger" @click="deleteFromMenu">
-        <span>鍒犻櫎</span><kbd>Ctrl+D</kbd>
-      </button>
-      <hr class="context-separator" />
-      <button type="button" :disabled="!contextMenu.node" @click="showInGraphFromMenu">
-        <span>鍦ㄥ浘璋变腑鏄剧ず</span><kbd>Ctrl+G</kbd>
-      </button>
-      <button type="button" :disabled="!contextMenu.node" @click="ingestFromMenu">
-        <span>{{ contextMenu.node?.isDir ? 'Ingest folder' : 'Ingest file' }}</span>
-      </button>
-      <button type="button" :disabled="!contextMenu.node" @click="toggleIgnoreFromMenu">
-        <span>
-          {{
-            contextMenu.node?.indexStatus === 'ignored'
-              ? (contextMenu.node?.isDir ? 'Unignore folder' : 'Unignore file')
-              : (contextMenu.node?.isDir ? 'Ignore folder' : 'Ignore file')
-          }}
-        </span>
-      </button>
-      <button type="button" @click="askAgentFromMenu">
-        <span>闂棶 Agent</span>
-      </button>
-      <hr class="context-separator" />
-      <button type="button" @click="showInFolderFromMenu">
-        <span>{{ contextMenu.node ? 'Show in folder' : 'Open knowledge root' }}</span>
-      </button>
-      <button type="button" :disabled="!contextMenu.node" @click="openWithDefaultFromMenu">
-        <span>鐢ㄩ粯璁ょ▼搴忔墦寮€</span>
-      </button>
-    </div>
+      :node="contextMenu.node"
+      :can-paste="canPaste"
+      :menu-style="contextMenuStyle"
+      @create-file="createFileFromMenu"
+      @create-folder="createFolderFromMenu"
+      @copy="copyFromMenu"
+      @cut="cutFromMenu"
+      @copy-name="copyNameFromMenu"
+      @copy-absolute-path="copyAbsolutePathFromMenu"
+      @copy-relative-path="copyRelativePathFromMenu"
+      @paste="pasteFromMenu"
+      @rename="renameFromMenu"
+      @show-in-folder="showInFolderFromMenu"
+      @open-default="openWithDefaultFromMenu"
+      @show-in-graph="showInGraphFromMenu"
+      @ask-agent="askAgentFromMenu"
+      @ingest="ingestFromMenu"
+      @toggle-ignore="toggleIgnoreFromMenu"
+      @delete="deleteFromMenu"
+    />
 
     <!--
       Conflict resolution dialog for drag-drop / paste duplicates.
@@ -876,10 +844,10 @@ onUnmounted(() => {
           <li v-for="name in workspaceStore.conflictDialog.conflictingNames" :key="name">{{ name }}</li>
         </ul>
         <div class="conflict-actions">
-          <button type="button" @click="workspaceStore.resolveConflict('overwrite')">瑕嗙洊</button>
-          <button type="button" @click="workspaceStore.resolveConflict('skip')">璺宠繃</button>
+          <button type="button" @click="workspaceStore.resolveConflict('overwrite')">覆盖</button>
+          <button type="button" @click="workspaceStore.resolveConflict('skip')">跳过</button>
           <button type="button" class="rename" @click="workspaceStore.resolveConflict('rename')">Rename</button>
-          <button type="button" class="cancel" @click="workspaceStore.cancelConflict()">鍙栨秷</button>
+          <button type="button" class="cancel" @click="workspaceStore.cancelConflict()">取消</button>
         </div>
       </section>
     </div>
@@ -889,8 +857,8 @@ onUnmounted(() => {
         <h2 id="delete-title">Confirm delete</h2>
         <p>Delete {{ deleteTarget.name }} from the local knowledge directory.</p>
         <div class="delete-actions">
-          <button type="button" @click="deleteTarget = null">鍙栨秷</button>
-          <button type="button" class="danger" @click="confirmDelete">鍒犻櫎</button>
+          <button type="button" @click="deleteTarget = null">取消</button>
+          <button type="button" class="danger" @click="confirmDelete">删除</button>
         </div>
       </section>
     </div>

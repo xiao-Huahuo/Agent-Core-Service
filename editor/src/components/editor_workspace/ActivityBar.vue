@@ -6,11 +6,12 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { Activity, Bot, Folder, Search, Settings, Share2 } from 'lucide-vue-next'
+import { Activity, Bot, Files, Folder, Search, Settings, Share2 } from 'lucide-vue-next'
 
 defineProps<{
   fileOpen: boolean
   agentOpen: boolean
+  resourcesActive: boolean
   agentActive: boolean
   graphActive: boolean
   dashboardActive: boolean
@@ -20,6 +21,7 @@ defineProps<{
 
 const emit = defineEmits<{
   toggleFile: []
+  openResources: []
   toggleAgent: []
   toggleGraph: []
   openDashboard: []
@@ -39,6 +41,16 @@ const emit = defineEmits<{
       @click="emit('toggleFile')"
     >
       <Folder :size="18" />
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: resourcesActive }"
+      type="button"
+      title="File resources"
+      aria-label="File resources"
+      @click="emit('openResources')"
+    >
+      <Files :size="18" />
     </button>
     <button
       class="activity-button"

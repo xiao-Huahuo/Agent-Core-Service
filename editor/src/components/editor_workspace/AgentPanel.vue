@@ -186,7 +186,10 @@ async function handleDrop(event: DragEvent) {
       const response = await uploadAgentAttachment(userId.value, targetSessionId, file)
       chatStore.addPendingAttachment(response.attachment)
     }
-    uploadStatusText.value = files.length === 1 ? `Uploaded ${files[0].name}` : `Uploaded ${files.length} files`
+    const firstUploadedFile = files[0]
+    uploadStatusText.value = files.length === 1 && firstUploadedFile
+      ? `Uploaded ${firstUploadedFile.name}`
+      : `Uploaded ${files.length} files`
     window.setTimeout(() => {
       if (!isUploadingAttachment.value) uploadStatusText.value = ''
     }, 1600)

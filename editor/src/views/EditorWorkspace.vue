@@ -13,6 +13,7 @@ import AgentPanel from '@/components/editor_workspace/AgentPanel.vue'
 import CommandPalette from '@/components/editor_workspace/CommandPalette.vue'
 import EditorPane from '@/components/editor_workspace/EditorPane.vue'
 import FileTreePanel from '@/components/editor_workspace/FileTreePanel.vue'
+import FileResourceManager from '@/components/editor_workspace/FileResourceManager.vue'
 import SelectionToolbar from '@/components/editor_workspace/SelectionToolbar.vue'
 import TopCommandBar from '@/components/editor_workspace/TopCommandBar.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -78,6 +79,9 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function openFileSidebar() {
+  if (workspaceStore.mainView === 'resources') {
+    workspaceStore.setMainView('editor')
+  }
   fileSidebarOpen.value = true
   fileWidth.value = Math.max(fileWidth.value, DEFAULT_FILE_WIDTH)
 }
@@ -120,6 +124,15 @@ function toggleGraphView() {
 
 function openDashboard() {
   workspaceStore.setMainView(workspaceStore.mainView === 'dashboard' ? 'editor' : 'dashboard')
+}
+
+function openResources() {
+  if (workspaceStore.mainView === 'resources') {
+    workspaceStore.setMainView('editor')
+    return
+  }
+  fileSidebarOpen.value = false
+  workspaceStore.setMainView('resources')
 }
 
 function openSearch() {
@@ -232,12 +245,14 @@ onBeforeUnmount(() => {
         class="activity-col"
         :file-open="visibleFileSidebarOpen"
         :agent-open="visibleAgentSidebarOpen"
+        :resources-active="workspaceStore.mainView === 'resources'"
         :agent-active="workspaceStore.mainView === 'agent'"
         :graph-active="workspaceStore.mainView === 'graph'"
         :dashboard-active="workspaceStore.mainView === 'dashboard'"
         :search-active="workspaceStore.mainView === 'search'"
         :settings-active="workspaceStore.mainView === 'settings'"
         @toggle-file="toggleFileSidebar"
+        @open-resources="openResources"
         @toggle-agent="openAgentPage"
         @toggle-graph="toggleGraphView"
         @open-dashboard="openDashboard"
@@ -252,6 +267,7 @@ onBeforeUnmount(() => {
         @pointerdown="startResize('file', $event)"
       ></div>
       <EditorPane v-if="workspaceStore.mainView === 'editor'" class="editor-col ide-panel" />
+      <FileResourceManager v-else-if="workspaceStore.mainView === 'resources'" class="editor-col ide-panel" />
       <AgentPage v-else-if="workspaceStore.mainView === 'agent'" class="editor-col ide-panel" />
       <GraphPane v-else-if="workspaceStore.mainView === 'graph'" class="editor-col ide-panel" @open-node="openGraphNode" />
       <DashboardView v-else-if="workspaceStore.mainView === 'dashboard'" class="editor-col ide-panel" />
