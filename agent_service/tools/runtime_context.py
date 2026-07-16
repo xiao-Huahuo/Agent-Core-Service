@@ -42,6 +42,7 @@ class ToolRuntimeState:
     embedding_service: EmbeddingService | None = None
     citation_map: dict[str, dict[str, Any]] = field(default_factory=dict)
     tool_citation_counter: int = 0
+    network_citation_counter: int = 0
 
 
 _TOOL_RUNTIME = local()
@@ -261,6 +262,28 @@ def register_tool_citation(
         "source_uri": source_uri,
         "content": content,
         "source": "tool",
+        "adopted_by_default": adopted_by_default,
+    }
+    return citation_id
+
+
+def register_network_citation(
+    *,
+    source_uri: str,
+    content: str,
+    title: str = "",
+    adopted_by_default: bool = False,
+) -> str:
+    """Register one network search citation for the current tool runtime."""
+
+    state = get_tool_runtime()
+    state.network_citation_counter += 1
+    citation_id = f"N{state.network_citation_counter}"
+    state.citation_map[citation_id] = {
+        "source_uri": source_uri,
+        "content": content,
+        "source": "network",
+        "title": title,
         "adopted_by_default": adopted_by_default,
     }
     return citation_id

@@ -19,8 +19,20 @@ const workspaceStore = useWorkspaceStore()
 const expanded = ref(false)
 
 function baseName(uri: string): string {
+  if (/^https?:\/\//i.test(uri)) {
+    try {
+      const url = new URL(uri)
+      return `${url.hostname}${url.pathname === '/' ? '' : url.pathname}`
+    } catch {
+      return uri
+    }
+  }
   const parts = uri.replace(/\\/g, '/').split('/').filter(Boolean)
   return parts[parts.length - 1] ?? uri
+}
+
+function sourceName(source: SourceItem): string {
+  return source.title || baseName(source.source_uri)
 }
 
 function toggle() {
@@ -28,6 +40,14 @@ function toggle() {
 }
 
 function openSource(uri: string) {
+  if (/^https?:\/\//i.test(uri)) {
+    if (window.agentEditorDesktop?.openExternal) {
+      void window.agentEditorDesktop.openExternal(uri)
+    } else {
+      window.open(uri, '_blank', 'noopener,noreferrer')
+    }
+    return
+  }
   const flatNodes = workspaceStore.flatNodes ?? []
   let node = flatNodes.find((n) => n.path === uri)
   if (!node) {
@@ -57,7 +77,7 @@ function openSource(uri: string) {
         @click="openSource(source.source_uri)"
       >
         <span class="source-index">{{ source.citation_id ?? index + 1 }}</span>
-        <span class="source-name">{{ baseName(source.source_uri) }}</span>
+        <span class="source-name">{{ sourceName(source) }}</span>
         <ExternalLink :size="10" class="source-link-icon" />
       </button>
     </div>

@@ -31,6 +31,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from agent_service.tools.runtime_context import (
     get_plan_state,
     get_tool_runtime,
+    register_network_citation,
     register_tool_citation,
     set_plan_state,
 )
@@ -985,11 +986,20 @@ def web_search(
         title = item.get("title", "").strip()
         href = item.get("href", "").strip()
         body = item.get("body", "").strip()
+        citation_id = register_network_citation(
+            source_uri=href,
+            content=body,
+            title=title,
+            adopted_by_default=False,
+        )
         lines.append(f"{i}. {title}")
+        lines.append(f"   Citation ID: [{citation_id}]")
         lines.append(f"   URL: {href}")
         lines.append(f"   摘要: {body}")
         if i < len(filtered):
             lines.append("")
+    lines.append("")
+    lines.append("Citation rule: only cite a result with its exact [N#] id when facts from that result are used in the final answer.")
     return "\n".join(lines)
 
 

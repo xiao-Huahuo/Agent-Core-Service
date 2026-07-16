@@ -176,13 +176,18 @@ class ContextBuilder:
             "例如 [1] 或 [K1]; 未实际使用的来源不要标注。"
         )
         sections.append(
-            "Citation discipline: if a tool result includes `Citation ID: [Kx]`, cite that exact `[Kx]` "
-            "when you use facts from it. Never reuse one citation id for multiple different documents, "
+            "Citation discipline: if a tool result includes `Citation ID: [Kx]` or `Citation ID: [Nx]`, cite that exact id "
+            "when you use facts from it. `[Kx]` means a local knowledge/file source; `[Nx]` means a network source. "
+            "Never reuse one citation id for multiple different documents or URLs, "
             "and never invent citation ids that were not provided."
         )
         sections.append(
             "When summarizing multiple documents, cite each document or topic line separately with its own source id. "
             "Do not put all source ids together in a final citation-only line."
+        )
+        sections.append(
+            "When mentioning a cited local document by name, prefer the full `source_uri` path from the citation metadata "
+            "instead of only a bare filename, so the UI can link the document name."
         )
         if has_history:
             sections.append("短期上下文状态: 当前 session 已存在历史消息,回答时优先使用这些历史事实。")

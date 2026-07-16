@@ -157,9 +157,9 @@ async function clearAllSessions() {
 
 .session-drawer.page-mode {
   --drawer-page-border: rgba(255, 255, 255, 0.10);
-  --drawer-page-bg-top: rgba(15, 18, 31, 0.94);
-  --drawer-page-bg-bottom: rgba(12, 14, 24, 0.90);
-  --drawer-page-bg-solid: rgba(13, 17, 28, 0.86);
+  --drawer-page-bg-top: rgba(8, 8, 8, 0.96);
+  --drawer-page-bg-bottom: rgba(0, 0, 0, 0.94);
+  --drawer-page-bg-solid: rgba(0, 0, 0, 0.90);
   --drawer-page-hover: rgba(255, 255, 255, 0.08);
   --drawer-page-active: rgba(255, 255, 255, 0.08);
   top: 0;

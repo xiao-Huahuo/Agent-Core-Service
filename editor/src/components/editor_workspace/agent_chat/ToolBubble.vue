@@ -13,7 +13,7 @@ import KnowledgeSources from '@/components/editor_workspace/agent_chat/Knowledge
 import MarkdownContent from '@/components/editor_workspace/agent_chat/MarkdownContent.vue'
 import ToolCallInline from '@/components/editor_workspace/agent_chat/ToolCallInline.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
-import type { AgentChatMessage } from '@/stores/chat'
+import type { AgentChatMessage, SourceItem } from '@/stores/chat'
 
 const props = defineProps<{
   message: AgentChatMessage
@@ -21,8 +21,8 @@ const props = defineProps<{
   userAvatar: string
   agentAvatar: string
   showAvatar?: boolean
-  knowledgeSources?: Array<{source_uri: string; content: string}>
-  citationMap?: Record<string, {source_uri: string; content: string}>
+  knowledgeSources?: SourceItem[]
+  citationMap?: Record<string, SourceItem>
 }>()
 
 const workspaceStore = useWorkspaceStore()
@@ -61,6 +61,14 @@ const bubbleRadius = computed(() => {
 })
 
 function handleNavigateSource(uri: string) {
+  if (/^https?:\/\//i.test(uri)) {
+    if (window.agentEditorDesktop?.openExternal) {
+      void window.agentEditorDesktop.openExternal(uri)
+    } else {
+      window.open(uri, '_blank', 'noopener,noreferrer')
+    }
+    return
+  }
   const flatNodes = workspaceStore.flatNodes ?? []
   const normalizePath = (value: string) => value.replace(/\\/g, '/').replace(/^\/+/, '')
   const normalizedUri = normalizePath(uri)

@@ -21,6 +21,7 @@ import typescript from 'highlight.js/lib/languages/typescript'
 import xml from 'highlight.js/lib/languages/xml'
 import yaml from 'highlight.js/lib/languages/yaml'
 
+import { useWorkspaceStore } from '@/stores/workspace'
 import type { SourceItem } from '@/stores/chat'
 
 hljs.registerLanguage('bash', bash)
@@ -75,6 +76,7 @@ const props = defineProps<{
 }>()
 
 const contentRef = ref<HTMLDivElement | null>(null)
+const workspaceStore = useWorkspaceStore()
 
 function stripHtml(value: string): string {
   const container = document.createElement('div')
@@ -101,8 +103,27 @@ const sanitizedHtml = computed(() => {
   )
 })
 
+const sourceLinkSignature = computed(() => {
+  const citationSources = Object.entries(props.citationMap ?? {})
+    .map(([id, source]) => `${id}:${source.source_uri}`)
+    .join('|')
+  const workspaceSources = (workspaceStore.flatNodes ?? [])
+    .filter((node) => !node.isDir && node.path)
+    .map((node) => node.path)
+    .join('|')
+  return `${citationSources}::${workspaceSources}`
+})
+
 function handleClick(event: MouseEvent) {
   const target = event.target as HTMLElement
+  const sourceLink = target.closest('.source-file-link') as HTMLElement | null
+  if (sourceLink && props.onNavigateSource) {
+    const uri = sourceLink.getAttribute('data-source-uri')
+    if (uri) {
+      props.onNavigateSource(uri)
+    }
+    return
+  }
   const citation = target.closest('.citation-anchor') as HTMLElement | null
   if (!citation || !props.onNavigateSource) return
   const idx = citation.getAttribute('data-citation-idx')
@@ -112,8 +133,140 @@ function handleClick(event: MouseEvent) {
   props.onNavigateSource(map[idx].source_uri)
 }
 
+function sourceBaseName(uri: string): string {
+  const parts = uri.replace(/\\/g, '/').split('/').filter(Boolean)
+  return parts[parts.length - 1] ?? uri
+}
+
+function sourcePath(uri: string): string {
+  return uri.replace(/\\/g, '/')
+}
+
+function buildSourceLinkCandidates() {
+  const map = props.citationMap ?? {}
+  const basenameCounts = new Map<string, number>()
+  for (const source of Object.values(map)) {
+    if (!source.source_uri || /^https?:\/\//i.test(source.source_uri)) {
+      continue
+    }
+    const name = sourceBaseName(source.source_uri)
+    basenameCounts.set(name, (basenameCounts.get(name) ?? 0) + 1)
+  }
+  for (const node of workspaceStore.flatNodes ?? []) {
+    if (node.isDir || !node.path) {
+      continue
+    }
+    const name = sourceBaseName(node.path)
+    basenameCounts.set(name, (basenameCounts.get(name) ?? 0) + 1)
+  }
+
+  const candidates: Array<{ text: string; uri: string }> = []
+  const seen = new Set<string>()
+  function addCandidate(text: string, uri: string) {
+    if (text.length < 3) {
+      return
+    }
+    const key = `${text}\u0000${uri}`
+    if (!seen.has(key)) {
+      candidates.push({ text, uri })
+      seen.add(key)
+    }
+  }
+
+  for (const source of Object.values(map)) {
+    const uri = source.source_uri
+    if (!uri || /^https?:\/\//i.test(uri)) {
+      continue
+    }
+    const path = sourcePath(uri)
+    const name = sourceBaseName(uri)
+    for (const text of [path, basenameCounts.get(name) === 1 ? name : '']) {
+      addCandidate(text, uri)
+    }
+  }
+  for (const node of workspaceStore.flatNodes ?? []) {
+    if (node.isDir || !node.path) {
+      continue
+    }
+    const path = sourcePath(node.path)
+    const name = sourceBaseName(node.path)
+    for (const text of [path, basenameCounts.get(name) === 1 ? name : '']) {
+      addCandidate(text, node.path)
+    }
+  }
+  return candidates.sort((a, b) => b.text.length - a.text.length)
+}
+
+function shouldSkipSourceLinkNode(node: Node) {
+  const parent = node.parentElement
+  return !parent || Boolean(parent.closest('a, code, pre, button, .citation-anchor, .source-file-link'))
+}
+
+function findNextSourceMatch(text: string, candidates: Array<{ text: string; uri: string }>) {
+  let best: { index: number; candidate: { text: string; uri: string } } | null = null
+  for (const candidate of candidates) {
+    const index = text.indexOf(candidate.text)
+    if (index < 0) {
+      continue
+    }
+    if (!best || index < best.index || (index === best.index && candidate.text.length > best.candidate.text.length)) {
+      best = { index, candidate }
+    }
+  }
+  return best
+}
+
+function linkSourceNames() {
+  const root = contentRef.value
+  if (!root) {
+    return
+  }
+  const candidates = buildSourceLinkCandidates()
+  if (candidates.length === 0) {
+    return
+  }
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  const textNodes: Text[] = []
+  let node = walker.nextNode()
+  while (node) {
+    if (!shouldSkipSourceLinkNode(node)) {
+      textNodes.push(node as Text)
+    }
+    node = walker.nextNode()
+  }
+
+  for (const textNode of textNodes) {
+    const original = textNode.nodeValue ?? ''
+    let remaining = original
+    const fragment = document.createDocumentFragment()
+    let changed = false
+    while (remaining) {
+      const match = findNextSourceMatch(remaining, candidates)
+      if (!match) {
+        fragment.append(document.createTextNode(remaining))
+        break
+      }
+      if (match.index > 0) {
+        fragment.append(document.createTextNode(remaining.slice(0, match.index)))
+      }
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'source-file-link'
+      button.dataset.sourceUri = match.candidate.uri
+      button.textContent = match.candidate.text
+      fragment.append(button)
+      remaining = remaining.slice(match.index + match.candidate.text.length)
+      changed = true
+    }
+    if (changed) {
+      textNode.replaceWith(fragment)
+    }
+  }
+}
+
 async function highlightCodeBlocks() {
   await nextTick()
+  linkSourceNames()
   contentRef.value?.querySelectorAll('pre code').forEach((block) => {
     hljs.highlightElement(block as HTMLElement)
   })
@@ -127,7 +280,7 @@ onUnmounted(() => {
   contentRef.value?.removeEventListener('click', handleClick)
 })
 
-watch(sanitizedHtml, () => void highlightCodeBlocks(), { immediate: true })
+watch([sanitizedHtml, sourceLinkSignature], () => void highlightCodeBlocks(), { immediate: true })
 </script>
 
 <template>
@@ -253,5 +406,22 @@ watch(sanitizedHtml, () => void highlightCodeBlocks(), { immediate: true })
   background: var(--color-accent);
   color: #ffffff;
   opacity: 0.85;
+}
+
+.markdown-body :deep(.source-file-link) {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  font: inherit;
+  text-align: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-body :deep(.source-file-link:hover) {
+  color: var(--color-accent);
 }
 </style>

@@ -135,6 +135,7 @@ function asSourceMap(value: unknown): Record<string, SourceItem> {
         source_uri: sourceUri,
         content,
         source: typeof record.source === 'string' ? record.source : undefined,
+        title: typeof record.title === 'string' ? record.title : undefined,
       }
     }
   }

@@ -1316,6 +1316,57 @@ def test_read_knowledge_file_registers_tool_citation(monkeypatch: Any) -> None:
     assert citation_map["K1"]["adopted_by_default"] is True
 
 
+def test_web_search_registers_network_citations(monkeypatch: Any) -> None:
+    class FakeSettingsService:
+        def get_web_search_config(self, *, user_id: str) -> dict[str, Any]:
+            assert user_id == "user_1"
+            return {"web_search_enabled": True, "proxy_url": "http://127.0.0.1:7890"}
+
+    class FakeDDGS:
+        def __init__(self, **kwargs: Any) -> None:
+            assert kwargs["proxy"] == "http://127.0.0.1:7890"
+
+        def __enter__(self) -> "FakeDDGS":
+            return self
+
+        def __exit__(self, *_args: Any) -> None:
+            return None
+
+        def text(self, *_args: Any, **_kwargs: Any) -> list[dict[str, str]]:
+            return [
+                {
+                    "title": "GTA Online update",
+                    "href": "https://example.com/gta-update",
+                    "body": "New GTA Online content with enough detail.",
+                }
+            ]
+
+    from agent_service.tools.builtin import web_search
+
+    monkeypatch.setattr("agent_service.api.rest.deps._settings_service", FakeSettingsService())
+    monkeypatch.setitem(sys.modules, "ddgs", types.SimpleNamespace(DDGS=FakeDDGS))
+    config = AgentConfig.load_config(load_env=False, ensure_directories=False, ensure_models=False)
+    set_tool_runtime(
+        config=config,
+        user_id="user_1",
+        session_id="sess_tool",
+        retrieval_service=object(),
+        memory_service=object(),
+        embedding_service=object(),
+    )
+
+    result = web_search("GTA recent update", max_results=1)
+    citation_map = get_tool_citation_map()
+    clear_tool_runtime()
+
+    assert "Citation ID: [N1]" in result
+    assert "https://example.com/gta-update" in result
+    assert citation_map["N1"]["source_uri"] == "https://example.com/gta-update"
+    assert citation_map["N1"]["title"] == "GTA Online update"
+    assert citation_map["N1"]["source"] == "network"
+    assert citation_map["N1"]["adopted_by_default"] is False
+
+
 def test_write_long_term_rule_appends_system_prompt_entry() -> None:
     """验证长期规则工具会写入用户系统提示词,而不是写入可选召回的长期记忆。"""
 

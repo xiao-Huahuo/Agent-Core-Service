@@ -30,6 +30,7 @@ export interface SourceItem {
   source_uri: string
   content: string
   source?: string
+  title?: string
   citation_id?: string
 }
 
@@ -63,6 +64,7 @@ function asSourceMap(value: unknown): Record<string, SourceItem> {
       source_uri: asString(record.source_uri),
       content: asString(record.content),
       source: asString(record.source) || undefined,
+      title: asString(record.title) || undefined,
     }
   }
   return result
