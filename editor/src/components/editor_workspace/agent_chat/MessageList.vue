@@ -12,7 +12,7 @@ import LoaderCube from '@/components/editor_workspace/agent_chat/LoaderCube.vue'
 import MessageBubble from '@/components/editor_workspace/agent_chat/MessageBubble.vue'
 import { useAvatar } from '@/components/editor_workspace/agent_chat/useAvatar'
 import { useChatStore } from '@/stores/chat'
-import type { AgentChatMessage } from '@/stores/chat'
+import type { AgentChatMessage, SourceItem } from '@/stores/chat'
 
 const chatStore = useChatStore()
 
@@ -35,6 +35,7 @@ function mergeConsecutiveAssistants(messages: AgentChatMessage[]) {
         content: message.content || previous.content,
         node: message.node || previous.node,
         tool_calls: message.tool_calls?.length ? message.tool_calls : previous.tool_calls,
+        metadata: { ...(previous.metadata ?? {}), ...(message.metadata ?? {}) },
         trace: [...(previous.trace ?? []), ...(message.trace ?? [])],
       }
       acc[acc.length - 1] = merged
@@ -53,6 +54,7 @@ function mergeConsecutiveSameNode(messages: AgentChatMessage[]) {
         ...previous,
         content: previous.content + message.content,
         tool_calls: [...(previous.tool_calls ?? []), ...(message.tool_calls ?? [])],
+        metadata: { ...(previous.metadata ?? {}), ...(message.metadata ?? {}) },
         trace: [...(previous.trace ?? []), ...(message.trace ?? [])],
       }
       acc[acc.length - 1] = merged
@@ -116,6 +118,73 @@ function shouldShowAvatar(message: AgentChatMessage, index: number) {
   return message.role !== 'assistant' || index === 0 || previous?.role !== 'assistant'
 }
 
+function asSourceMap(value: unknown): Record<string, SourceItem> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  const result: Record<string, SourceItem> = {}
+  for (const [key, source] of Object.entries(value as Record<string, unknown>)) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) {
+      continue
+    }
+    const record = source as Record<string, unknown>
+    const sourceUri = typeof record.source_uri === 'string' ? record.source_uri : ''
+    const content = typeof record.content === 'string' ? record.content : ''
+    if (sourceUri || content) {
+      result[key] = {
+        source_uri: sourceUri,
+        content,
+        source: typeof record.source === 'string' ? record.source : undefined,
+      }
+    }
+  }
+  return result
+}
+
+function extractCitationIds(content: string) {
+  const ids: string[] = []
+  const seen = new Set<string>()
+  const pattern = /\[([A-Z]?\d+)\]/g
+  let match = pattern.exec(content)
+  while (match) {
+    const id = match[1]
+    if (id && !seen.has(id)) {
+      ids.push(id)
+      seen.add(id)
+    }
+    match = pattern.exec(content)
+  }
+  return ids
+}
+
+function citationMapForMessage(message: AgentChatMessage, index: number): Record<string, SourceItem> {
+  const messageMap = asSourceMap(message.metadata?.citation_map)
+  if (Object.keys(messageMap).length > 0) {
+    return messageMap
+  }
+  const isLiveLastMessage = Boolean(props.isStreaming && index === visibleMessages.value.length - 1)
+  return isLiveLastMessage ? chatStore.currentCitationMap : {}
+}
+
+function knowledgeSourcesForMessage(message: AgentChatMessage, index: number): SourceItem[] {
+  const citationMap = citationMapForMessage(message, index)
+  const metadataUsed = Array.isArray(message.metadata?.used_citations)
+    ? message.metadata.used_citations.filter((item): item is string => typeof item === 'string')
+    : []
+  const usedIds = metadataUsed.length > 0 ? metadataUsed : extractCitationIds(message.content)
+  const sources: SourceItem[] = []
+  const seen = new Set<string>()
+  for (const id of usedIds) {
+    const source = citationMap[id]
+    if (!source || !source.source_uri || seen.has(source.source_uri)) {
+      continue
+    }
+    seen.add(source.source_uri)
+    sources.push({ ...source, citation_id: id })
+  }
+  return sources
+}
+
 watch(() => props.messages.length, scheduleScrollIfNeeded)
 watch(getLastMessageContent, scheduleScrollIfNeeded)
 
@@ -135,8 +204,8 @@ onMounted(() => {
       :user-avatar="userAvatar"
       :agent-avatar="agentAvatar"
       :show-avatar="shouldShowAvatar(message, index)"
-      :knowledge-sources="message.role === 'assistant' ? chatStore.currentKnowledgeSources : []"
-      :citation-map="message.role === 'assistant' ? chatStore.currentCitationMap : {}"
+      :knowledge-sources="message.role === 'assistant' ? knowledgeSourcesForMessage(message, index) : []"
+      :citation-map="message.role === 'assistant' ? citationMapForMessage(message, index) : {}"
     />
     <div v-if="showThinkingBubble" class="thinking-row">
       <img :src="agentAvatar" class="thinking-avatar" alt="agent" />

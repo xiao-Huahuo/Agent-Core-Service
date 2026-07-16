@@ -168,6 +168,7 @@ AgentService.exe
       1. 简答模式: 对于明显不需要思考的短输入,不经过循环,只保留 RAG 上下文构建,用小模型直接输出.
       2. ReAct模式: 不经过`planner`节点和`observation`节点,标准的ReAct图.agent节点同时充当观察者和决策者,一个循环只需要调用一次LLM.
       3. 深度思考模式(Plan-and-Execute模式): 经过规划-执行-观察的循环,一个循环会调用2~3次LLM,适合长时间思考.
+   auto模式会先调用小模型路由器输出`simple/react/plan`,显式选择模式时不经过路由器;当小模型认为自己能力不足、不确定能否可靠回答、需要事实核验或外部信息时,至少进入`react`,不能选择`simple`;当小模型不可用或输出无法解析时,才回退到本地保守规则.
    前端提供 `auto`/`simple`/`react`/`plan` 思考模式切换,Agent 观测面板状态图按实际执行模式切换.
 2. 节点设计：基础节点有以下几种：
    * 启动/终止节点 `START`/`END`
@@ -311,11 +312,16 @@ AgentService.exe
 13. 多模态查看:
   - editor编辑区不仅提供Markdown编辑器功能,还提供代码高亮功能(`textarea` + `highlight.js`),实现md模式(Vditor)和代码编辑模式(CodeEditor)的切换.可设置支持高亮的代码文件格式,如`cpp`,`c`,`py`,`java`等.
   - 可以查看图片(`.png`/`.jpg`/`.jpeg`/`.webp`/`.gif`/`.svg`,`<img>`标签)和PDF(`<iframe>`标签),EXCEL/CSV(后端解析成表格),甚至可以尝试查看WORD(后端用`mammoth`转换成HTML后查看)这样的二进制文档.
-14. 知识图谱:
-  知识库图谱消费 `StructuredKnowledgeDocument.sections`,在文档结构化之后、向量入库旁路执行。小模型按 section 分批抽取实体和关系:先抽实体,再限定关系两端必须来自已抽出的实体集合;关系类型使用白名单,避免模型自由编造边类型。(当前只处理文字 section,不处理图片、OCR 或视觉描述。)
-  小模型输出只作为**候选结果**,后端会校验证据片段是否来自原文,并过滤空实体、过泛实体、自环关系、低置信度关系和非法关系类型。通过校验的文档节点、实体节点和关系边写入 SQLite。多个文档命中同一规范实体时合并实体节点,从而形成跨文档联系。
-  图谱数据必须和知识库入库同源清理:单文件重新入库时清理以该文件作为来源的旧点边,全库重建时刷新本知识库范围内的点边,删除或屏蔽文件时同步清理图谱和向量库来源数据。抽取失败不阻塞向量入库,只记录图谱状态为 skipped 或 failed。
-  前端使用D3 + Canvas 图谱组件,文件树模式展示目录结构,知识库模式展示文档、实体和语义边;文档节点双击打开文件,实体节点展示来源文档和证据片段。
+14. 引用溯源:
+  引用溯源只展示最终回答真正使用的来源,而不是把所有召回结果都挂在气泡下面。自动RAG召回的知识库片段使用数字编号,如`[1]`、`[2]`;Agent主动调用知识库工具得到的结果使用工具编号,如`[K1]`、`[K2]`.
+
+  一轮对话开始时,`ContextBuilder`会把自动RAG召回结果写入系统上下文,同时生成本轮初始`citation_map`。这些自动来源来自知识库切片,适合在模型直接使用预检索片段时标注。Agent如果继续主动调用`get_knowledge_context`、`search_knowledge`、`read_knowledge_file`或`read_multimodal_file_info`,工具运行时会通过`register_tool_citation()`把工具来源登记进同一个`citation_map`,并在工具返回文本中显式携带`Citation ID: [Kx]`或`[Kx]`提示模型引用.
+
+  工具来源分两类处理:`get_knowledge_context`、`read_knowledge_file`和`read_multimodal_file_info`属于明确读取/提供正文内容的来源,会标记为`adopted_by_default`;`search_knowledge`返回的是搜索候选列表,不会默认视为已采纳来源。这样模型漏写引用时,系统只会兜底处理已经被明确读入的文档,不会把搜索命中的全部候选都挂到气泡下面.
+
+  模型生成最终回答时应在具体断言、文档行或主题行末尾标注对应来源,例如`01_climate_change_nasa.md ... [K2]`。后端会先清理正文中无法映射到本轮`citation_map`的伪引用,再扫描正文中实际出现的`[1]`/`[K1]`锚点,只保留这些锚点对应的来源。如果模型完全漏写或漏写部分工具引用,后端只做保守的行级补锚点:根据文件名、去扩展名后的文件名或文档标题匹配回答中的具体行,匹配成功才把对应`[Kx]`补到该行末尾;匹配不到时不会在末尾硬塞一串来源,避免制造假的精确溯源.
+
+  最终保存消息时,assistant消息自己的`metadata.used_citations`记录本条回答实际采用的编号,`metadata.citation_map`只保存这些编号对应的`source_uri/content/source`等来源信息。前端渲染时优先读取当前消息自己的metadata:正文里的`[1]`/`[K1]`会变成可点击锚点,气泡下方的来源列表也只显示这些实际被引用的文档,并显示真实 citation id。历史消息依赖自己的metadata复现来源,不会复用当前轮的全局召回结果.
 
 
 
@@ -583,6 +589,7 @@ flowchart TD
     end
 
     subgraph small_pool["small 模型池"]
+        S0["auto 模式入口路由<br/>simple/react/plan 分类"]
         S1["planner 推理规划"]
         S2["compress 上下文压缩"]
         S3["summary 长期记忆摘要"]
@@ -766,8 +773,42 @@ flowchart TD
     T --> U["前端三组结果 &lt;hr&gt; 分隔展示<br/>文件 / 内容匹配 / 语义匹配"]
 ```
 
-##### 图谱产生流程(文件树图谱+知识图谱)
+##### 引用溯源
 
+```mermaid
+flowchart TD
+    A["用户提问"] --> B["自动RAG召回"]
+    B --> C["系统上下文注入<br/>[1]/[2] 来源 + 片段"]
+    B --> D["初始 citation_map<br/>数字编号 1/2/3..."]
+
+    A --> E["Agent 主动调用工具"]
+    E --> F["知识库工具<br/>get/read/search"]
+    F --> G["register_tool_citation()<br/>工具编号 K1/K2..."]
+    G --> H["工具返回文本携带<br/>Citation ID / [Kx]"]
+    G --> I["工具 trace.citation_map"]
+    F --> Q{"来源类型"}
+    Q -->|"get_knowledge_context<br/>read_knowledge_file<br/>read_multimodal_file_info"| R["adopted_by_default=true<br/>明确读入正文"]
+    Q -->|"search_knowledge"| S["仅搜索候选<br/>不默认采纳"]
+
+    D --> J["AgentCore 合并本轮 citation_map"]
+    I --> J
+    R --> J
+    S --> J
+    C --> K["LLM 最终回答"]
+    H --> K
+
+    K --> L["清理无映射伪引用<br/>删除不存在的 [x]"]
+    J --> L
+    L --> M{"正文是否已有<br/>有效 [1]/[K1]"}
+    M -->|"有"| N["按正文锚点过滤来源"]
+    M -->|"部分/全部漏写工具锚点"| O["保守行级补锚点<br/>匹配文件名/标题才补 [Kx]"]
+    O --> P["不做末尾 citation-only 堆叠"]
+    N --> T["保存 assistant metadata<br/>used_citations + citation_map"]
+    P --> T
+    T --> U["前端 Markdown 渲染<br/>[1]/[K1] 可点击"]
+    T --> V["气泡下方来源列表<br/>只显示实际引用文档"]
+    T --> W["历史消息使用自身 metadata<br/>不复用当前轮全局来源"]
+```
 
 ## 接口设计
 

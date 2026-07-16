@@ -21,7 +21,7 @@ from langgraph.prebuilt import ToolNode
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
 from agent_service.tools import ToolExecutor
-from agent_service.tools.runtime_context import get_tool_trace_callback
+from agent_service.tools.runtime_context import get_tool_citation_map, get_tool_trace_callback
 
 MAX_TOOL_CALLS_PER_TURN = 4
 
@@ -124,10 +124,17 @@ class ToolCallNode:
             traces.append(start_trace)
             if trace_callback is not None:
                 trace_callback(start_trace)
+            before_citations = get_tool_citation_map()
             try:
                 content = self.tool_executor.execute(tool_name, arguments)
             except Exception as exc:
                 content = f"工具 {tool_name} 执行失败: {exc}"
+            after_citations = get_tool_citation_map()
+            new_citations = {
+                key: value
+                for key, value in after_citations.items()
+                if key not in before_citations
+            }
             messages.append(ToolMessage(content=content, tool_call_id=tool_call_id))
             result_summary = self._summarize_result(content)
             result_count = self._count_results(content)
@@ -141,6 +148,8 @@ class ToolCallNode:
                 "result_count": result_count,
                 "chat_visible": True,
             }
+            if new_citations:
+                end_trace["citation_map"] = new_citations
             traces.append(end_trace)
             if trace_callback is not None:
                 trace_callback(end_trace)

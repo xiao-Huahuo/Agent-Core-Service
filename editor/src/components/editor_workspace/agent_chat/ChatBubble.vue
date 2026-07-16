@@ -95,11 +95,18 @@ const shouldRenderAssistantBubble = computed(() => {
 
 function handleNavigateSource(uri: string) {
   const flatNodes = workspaceStore.flatNodes ?? []
-  let node = flatNodes.find((n) => n.path === uri)
+  const normalizePath = (value: string) => value.replace(/\\/g, '/').replace(/^\/+/, '')
+  const normalizedUri = normalizePath(uri)
+  let node = flatNodes.find((n) => normalizePath(n.path) === normalizedUri)
   if (!node) {
-    const parts = uri.replace(/\\/g, '/').split('/').filter(Boolean)
+    const parts = normalizedUri.split('/').filter(Boolean)
     const name = parts[parts.length - 1] ?? uri
-    node = flatNodes.find((n) => n.path.endsWith(`/${name}`) || n.name === name)
+    node = flatNodes.find((n) => {
+      const normalizedPath = normalizePath(n.path)
+      return normalizedPath.endsWith(`/${normalizedUri}`)
+        || normalizedPath.endsWith(`/${name}`)
+        || n.name === name
+    })
   }
   if (node) {
     workspaceStore.setMainView('editor')

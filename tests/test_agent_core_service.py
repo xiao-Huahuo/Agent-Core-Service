@@ -56,6 +56,7 @@ from agent_service.services.message_service import MessageService
 from agent_service.services.session_service import SessionService
 from agent_service.services.settings_service import SettingsService
 from agent_service.tools import ToolExecutor, ToolRegistry, clear_tool_runtime, set_tool_runtime
+from agent_service.tools.runtime_context import get_tool_citation_map
 
 
 TEST_TEMP_DIR = Path(__file__).resolve().parents[1] / "runtime" / "test_tmp"
@@ -1153,10 +1154,166 @@ def test_builtin_memory_tools_use_runtime_context() -> None:
 
     memory_result = executor.execute("get_long_term_memory", {"query": "用户偏好是什么", "top_k": 1})
     knowledge_result = executor.execute("get_knowledge_context", {"query": "珊瑚礁有什么作用", "top_k": 1})
+    citation_map = get_tool_citation_map()
     clear_tool_runtime()
 
     assert "用户偏好直接给出结论" in memory_result
+    assert "[K1]" in knowledge_result
     assert "珊瑚礁会支持渔业和海岸防护" in knowledge_result
+    assert citation_map["K1"]["source_uri"] == "resources/knowledge/coral.txt"
+    assert "珊瑚礁会支持渔业和海岸防护" in citation_map["K1"]["content"]
+
+
+def test_agent_core_filters_citations_to_used_anchors() -> None:
+    citation_map = {
+        "1": {"source_uri": "knowledge/a.md", "content": "A"},
+        "2": {"source_uri": "knowledge/b.md", "content": "B"},
+        "K1": {"source_uri": "knowledge/tool.md", "content": "K"},
+    }
+
+    metadata = AgentCore._build_citation_metadata(
+        "最终回答只使用自动来源 [1] 和工具来源 [K1]。",
+        citation_map,
+    )
+
+    assert metadata["used_citations"] == ["1", "K1"]
+    assert set(metadata["citation_map"].keys()) == {"1", "K1"}
+
+
+def test_agent_core_falls_back_to_adopted_tool_citations_without_anchors() -> None:
+    citation_map = {
+        "K1": {
+            "source_uri": "knowledge/read.md",
+            "content": "Read file content",
+            "source": "tool",
+            "adopted_by_default": True,
+        },
+        "K2": {
+            "source_uri": "knowledge/search.md",
+            "content": "Search candidate",
+            "source": "tool",
+        },
+    }
+
+    metadata = AgentCore._build_citation_metadata("最终回答总结了已读取文件，但模型漏写了引用编号。", citation_map)
+
+    assert metadata["used_citations"] == ["K1"]
+    assert set(metadata["citation_map"].keys()) == {"K1"}
+
+
+def test_agent_core_inserts_missing_citation_anchors_inline_for_adopted_sources() -> None:
+    content = AgentCore._insert_missing_citation_anchors_inline(
+        "Documents:\n- read.md: contains the project summary\n- unrelated.md: search candidate only",
+        {
+            "K1": {
+                "source_uri": "knowledge/read.md",
+                "content": "Read file content",
+                "adopted_by_default": True,
+            },
+            "K2": {
+                "source_uri": "knowledge/search.md",
+                "content": "Search candidate",
+            },
+        },
+    )
+    unchanged = AgentCore._insert_missing_citation_anchors_inline(
+        "Answer already has citation [K1].",
+        {
+            "K1": {
+                "source_uri": "knowledge/read.md",
+                "content": "Read file content",
+                "adopted_by_default": True,
+            },
+        },
+    )
+
+    assert "- read.md: contains the project summary [K1]" in content
+    assert "[K2]" not in content
+    assert "\n\n来源:" not in content
+    assert unchanged == "Answer already has citation [K1]."
+
+
+def test_agent_core_inserts_citations_into_realistic_knowledge_overview_rows() -> None:
+    content = (
+        "主题 | 文件 | 来源\n"
+        "**气候变化证据** | 01_climate_change_nasa.md | NASA\n"
+        "**生物多样性** | 01_biodiversity_ipbes.txt | IPBES\n"
+        "**太阳能光伏** | special/03_solar_pv_iea.txt | IEA\n"
+        "\n"
+        "整体来看，这些资料覆盖气候、生态和能源。"
+    )
+    citation_map = {
+        "K1": {
+            "source_uri": "1/3/01_climate_change_nasa.md",
+            "content": "# 气候变化证据概览\nNASA content",
+            "adopted_by_default": True,
+        },
+        "K2": {
+            "source_uri": "1/3/01_biodiversity_ipbes.txt",
+            "content": "# 生物多样性\nIPBES content",
+            "adopted_by_default": True,
+        },
+        "K3": {
+            "source_uri": "1/3/special/03_solar_pv_iea.txt",
+            "content": "# 太阳能光伏\nIEA content",
+            "adopted_by_default": True,
+        },
+    }
+
+    result = AgentCore._insert_missing_citation_anchors_inline(content, citation_map)
+
+    assert "01_climate_change_nasa.md | NASA [K1]" in result
+    assert "01_biodiversity_ipbes.txt | IPBES [K2]" in result
+    assert "special/03_solar_pv_iea.txt | IEA [K3]" in result
+    assert "\n\n来源:" not in result
+
+
+def test_agent_core_drops_unmapped_citation_anchors() -> None:
+    content = AgentCore._drop_unmapped_citation_anchors(
+        "使用了有效来源 [1]，但不存在的来源 [K9] 应该被移除。",
+        {"1": {"source_uri": "knowledge/a.md", "content": "A"}},
+    )
+    empty_map_content = AgentCore._drop_unmapped_citation_anchors("没有合法来源时 [1] 也应移除。", {})
+
+    assert "[1]" in content
+    assert "[K9]" not in content
+    assert "[1]" not in empty_map_content
+
+
+def test_read_knowledge_file_registers_tool_citation(monkeypatch: Any) -> None:
+    class FakeKnowledgeService:
+        def read_file(self, *, user_id: str, path: str) -> dict[str, Any]:
+            assert user_id == "user_1"
+            assert path == "notes/a.md"
+            return {
+                "path": "notes/a.md",
+                "content": "Alpha content from a knowledge file.",
+            }
+
+    config = AgentConfig.load_config(load_env=False, ensure_directories=False, ensure_models=False)
+    monkeypatch.setattr(
+        "agent_service.tools.builtin._build_knowledge_service",
+        lambda: FakeKnowledgeService(),
+    )
+    set_tool_runtime(
+        config=config,
+        user_id="user_1",
+        session_id="sess_tool",
+        retrieval_service=object(),
+        memory_service=object(),
+        embedding_service=object(),
+    )
+    executor = ToolExecutor(registry=ToolRegistry.with_builtin_tools())
+
+    result = executor.execute("read_knowledge_file", {"path": "notes/a.md"})
+    citation_map = get_tool_citation_map()
+    clear_tool_runtime()
+
+    assert "Citation ID: [K1]" in result
+    assert "Alpha content from a knowledge file." in result
+    assert citation_map["K1"]["source_uri"] == "notes/a.md"
+    assert citation_map["K1"]["content"] == "Alpha content from a knowledge file."
+    assert citation_map["K1"]["adopted_by_default"] is True
 
 
 def test_write_long_term_rule_appends_system_prompt_entry() -> None:

@@ -29,6 +29,8 @@ export interface AgentChatMessage {
 export interface SourceItem {
   source_uri: string
   content: string
+  source?: string
+  citation_id?: string
 }
 
 function asString(value: unknown): string {
@@ -45,6 +47,25 @@ function asTrace(value: unknown): Array<Record<string, unknown>> {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : []
+}
+
+function asSourceMap(value: unknown): Record<string, SourceItem> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  const result: Record<string, SourceItem> = {}
+  for (const [key, source] of Object.entries(value as Record<string, unknown>)) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) {
+      continue
+    }
+    const record = source as Record<string, unknown>
+    result[key] = {
+      source_uri: asString(record.source_uri),
+      content: asString(record.content),
+      source: asString(record.source) || undefined,
+    }
+  }
+  return result
 }
 
 function traceIdentity(trace: Record<string, unknown>): string {
@@ -112,6 +133,31 @@ export const useChatStore = defineStore('chat', () => {
     if (trace && trace.length > 0) {
       last.trace ??= []
       last.trace.push(...trace)
+    }
+  }
+
+  function mergeCurrentCitationMap(value: unknown) {
+    const citationMap = asSourceMap(value)
+    if (Object.keys(citationMap).length === 0) {
+      return
+    }
+    currentCitationMap.value = {
+      ...currentCitationMap.value,
+      ...citationMap,
+    }
+  }
+
+  function attachMetadataToLastAssistant(metadata: Record<string, unknown>) {
+    if (Object.keys(metadata).length === 0) {
+      return
+    }
+    const last = findLastAssistant()
+    if (!last) {
+      return
+    }
+    last.metadata = {
+      ...(last.metadata ?? {}),
+      ...metadata,
     }
   }
 
@@ -272,6 +318,10 @@ export const useChatStore = defineStore('chat', () => {
           activeAgentMode.value = actualMode
         }
         currentNode.value = node
+        mergeCurrentCitationMap(metadata.citation_map)
+        for (const traceItem of trace) {
+          mergeCurrentCitationMap(traceItem.citation_map)
+        }
 
         if (chunk.type === 'system_prompt' && content) {
           messages.value = messages.value.filter((message) => message.role !== 'system')
@@ -279,11 +329,12 @@ export const useChatStore = defineStore('chat', () => {
           // Extract knowledge sources for citation display
           currentKnowledgeSources.value = []
           currentCitationMap.value = {}
-          if (metadata.citation_map && typeof metadata.citation_map === 'object') {
-            currentCitationMap.value = metadata.citation_map as Record<string, SourceItem>
+          const citationMap = asSourceMap(metadata.citation_map)
+          if (Object.keys(citationMap).length > 0) {
+            currentCitationMap.value = citationMap
             // Populate knowledge sources list from citation_map
             const seen = new Set<string>()
-            for (const [, source] of Object.entries(metadata.citation_map) as [string, SourceItem][]) {
+            for (const [, source] of Object.entries(citationMap)) {
               if (source.source_uri && !seen.has(source.source_uri)) {
                 seen.add(source.source_uri)
                 currentKnowledgeSources.value.push(source)
@@ -323,9 +374,11 @@ export const useChatStore = defineStore('chat', () => {
               }
             }
           }
+          attachMetadataToLastAssistant(metadata)
           updateLastMessage(undefined, node, asArray(chunk.tool_calls), trace)
         } else if (trace.length > 0) {
           appendTraceToCurrentAssistant(node || asString(trace[0]?.node) || 'agent', trace)
+          attachMetadataToLastAssistant(metadata)
         }
       }
     } catch (error) {

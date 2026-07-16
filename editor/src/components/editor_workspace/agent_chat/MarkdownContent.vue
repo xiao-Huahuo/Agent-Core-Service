@@ -44,13 +44,13 @@ marked.setOptions({
   breaks: true,
 })
 
-// Register marked extension for citation anchors [N]
+// Register marked extension for citation anchors [N] and [K1]
 const citationExtension = {
   name: 'citation',
   level: 'inline' as const,
   start(src: string) { return src.indexOf('[') },
   tokenizer(src: string) {
-    const match = src.match(/^\[(\d+)\]/)
+    const match = src.match(/^\[([A-Z]?\d+)\]/)
     if (match) {
       return {
         type: 'citation',

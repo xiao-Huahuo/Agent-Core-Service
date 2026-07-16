@@ -56,7 +56,7 @@ function openSource(uri: string) {
         type="button"
         @click="openSource(source.source_uri)"
       >
-        <span class="source-index">{{ index + 1 }}</span>
+        <span class="source-index">{{ source.citation_id ?? index + 1 }}</span>
         <span class="source-name">{{ baseName(source.source_uri) }}</span>
         <ExternalLink :size="10" class="source-link-icon" />
       </button>
@@ -160,8 +160,9 @@ function openSource(uri: string) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
+  min-width: 16px;
   height: 16px;
+  padding: 0 3px;
   border-radius: 3px;
   background: var(--color-primary);
   color: #fff;

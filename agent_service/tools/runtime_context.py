@@ -9,9 +9,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from threading import local
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
@@ -40,6 +40,8 @@ class ToolRuntimeState:
     retrieval_service: MemoryRetrievalService
     memory_service: LongTermMemoryService | None = None
     embedding_service: EmbeddingService | None = None
+    citation_map: dict[str, dict[str, Any]] = field(default_factory=dict)
+    tool_citation_counter: int = 0
 
 
 _TOOL_RUNTIME = local()
@@ -53,6 +55,7 @@ def set_tool_runtime(
     retrieval_service: MemoryRetrievalService | None = None,
     memory_service: LongTermMemoryService | None = None,
     embedding_service: EmbeddingService | None = None,
+    citation_map: dict[str, dict[str, Any]] | None = None,
 ) -> None:
     """
     设置当前线程的工具运行时状态。
@@ -75,6 +78,7 @@ def set_tool_runtime(
         retrieval_service=retrieval_service or MemoryRetrievalService(config=config),
         memory_service=memory_service or LongTermMemoryService(config=config),
         embedding_service=embedding_service or EmbeddingService(config=config),
+        citation_map=citation_map if citation_map is not None else {},
     )
 
 
@@ -124,8 +128,6 @@ def clear_agent_token_callback() -> None:
 # ------------------------------------------------------------------
 # 工具调用 Trace 回调 (用于 ToolCallNode → AgentCore 实时推送)
 # ------------------------------------------------------------------
-
-from typing import Any
 
 _TOOL_TRACE_CALLBACK: local = local()
 
@@ -242,6 +244,35 @@ def get_tool_runtime() -> ToolRuntimeState:
     if state is None:
         raise RuntimeError("当前工具调用缺少 Agent 运行时上下文。")
     return state
+
+
+def register_tool_citation(
+    *,
+    source_uri: str,
+    content: str,
+    adopted_by_default: bool = False,
+) -> str:
+    """Register one knowledge/tool citation for the current tool runtime."""
+
+    state = get_tool_runtime()
+    state.tool_citation_counter += 1
+    citation_id = f"K{state.tool_citation_counter}"
+    state.citation_map[citation_id] = {
+        "source_uri": source_uri,
+        "content": content,
+        "source": "tool",
+        "adopted_by_default": adopted_by_default,
+    }
+    return citation_id
+
+
+def get_tool_citation_map() -> dict[str, dict[str, Any]]:
+    """Return citations registered by tools in the current runtime."""
+
+    try:
+        return dict(get_tool_runtime().citation_map)
+    except RuntimeError:
+        return {}
 
 
 # ------------------------------------------------------------------

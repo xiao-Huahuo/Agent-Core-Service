@@ -171,6 +171,19 @@ class ContextBuilder:
         # ---- 构建上下文文本 ----
         sections: list[str] = []
         sections.extend(self.config.model.retrieval_context_system_prompt.splitlines())
+        sections.append(
+            "引用规则: 当你使用任何知识库片段或工具检索结果回答时,必须在对应句子末尾标注来源编号,"
+            "例如 [1] 或 [K1]; 未实际使用的来源不要标注。"
+        )
+        sections.append(
+            "Citation discipline: if a tool result includes `Citation ID: [Kx]`, cite that exact `[Kx]` "
+            "when you use facts from it. Never reuse one citation id for multiple different documents, "
+            "and never invent citation ids that were not provided."
+        )
+        sections.append(
+            "When summarizing multiple documents, cite each document or topic line separately with its own source id. "
+            "Do not put all source ids together in a final citation-only line."
+        )
         if has_history:
             sections.append("短期上下文状态: 当前 session 已存在历史消息,回答时优先使用这些历史事实。")
         has_refs = important_summary is not None or memories or knowledge

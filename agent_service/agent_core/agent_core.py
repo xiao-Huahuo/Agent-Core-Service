@@ -39,6 +39,7 @@ from __future__ import annotations
 import json
 import logging
 import queue as queue_module
+import re
 import threading
 import time
 from collections.abc import Iterator, Sequence
@@ -89,6 +90,7 @@ AGENT_LOOP_REACT = "react"
 AGENT_LOOP_PLAN = "plan"
 AGENT_LOOP_DEEP_ALIAS = "deep"
 AGENT_LOOP_MODES = {AGENT_LOOP_AUTO, AGENT_LOOP_SIMPLE, AGENT_LOOP_REACT, AGENT_LOOP_PLAN, AGENT_LOOP_DEEP_ALIAS}
+CITATION_ANCHOR_PATTERN = re.compile(r"\[([A-Z]?\d+)\]")
 
 
 def _extract_friendly_error(error_message: str) -> str:
@@ -324,7 +326,11 @@ class AgentCore:
                 agent_mode=agent_mode,
             )
         )
-        effective_mode = self._resolve_agent_loop_mode(agent_mode=agent_mode, prompt=prompt, reference=reference)
+        effective_mode = self._extract_agent_mode_from_events(chunks) or self._resolve_agent_loop_mode_fallback(
+            agent_mode=agent_mode,
+            prompt=prompt,
+            reference=reference,
+        )
         diagram_mode = AGENT_LOOP_REACT if effective_mode == AGENT_LOOP_REACT else AGENT_LOOP_PLAN
         graph_diagram_path = self.graph_diagram_paths[diagram_mode]
         graph_diagram = graph_diagram_path.read_text(encoding="utf-8")
@@ -356,7 +362,12 @@ class AgentCore:
         """
 
         reference = reference.strip() if reference and reference.strip() else None
-        effective_mode = self._resolve_agent_loop_mode(agent_mode=agent_mode, prompt=prompt, reference=reference)
+        effective_mode = self._resolve_agent_loop_mode(
+            agent_mode=agent_mode,
+            prompt=prompt,
+            reference=reference,
+            user_id=user_id,
+        )
         message_service = self._get_message_service()
         context_builder = self._get_context_builder(message_service=message_service)
         logger.info(
@@ -368,6 +379,7 @@ class AgentCore:
             agent_mode,
         )
         messages = context_builder.build_messages(user_id=user_id, session_id=session_id, current_prompt=prompt, reference=reference)
+        turn_citation_map: dict[str, Any] = {}
         logger.debug("上下文构建完成 | message_count=%d", len(messages))
 
         initial_plan = self._load_session_plan(session_id) if effective_mode == AGENT_LOOP_PLAN else None
@@ -402,6 +414,8 @@ class AgentCore:
                 rag_metrics = (getattr(msg, "additional_kwargs", {}) or {}).get("rag_metrics")
                 recall_details = (getattr(msg, "additional_kwargs", {}) or {}).get("recall_details")
                 citation_map = (recall_details or {}).get("citation_map", {})
+                if citation_map:
+                    turn_citation_map.update(citation_map)
                 system_meta = {}
                 if rag_metrics:
                     system_meta["rag_metrics"] = rag_metrics
@@ -428,6 +442,7 @@ class AgentCore:
                 user_id=user_id,
                 session_id=session_id,
                 message_service=message_service,
+                citation_map=turn_citation_map,
             )
             if self._has_renamable_assistant_reply(user_id=user_id, session_id=session_id):
                 _launch_auto_rename(self, user_id=user_id, session_id=session_id)
@@ -441,6 +456,7 @@ class AgentCore:
             initial_plan=initial_plan,
             graph=self.graphs[effective_mode],
             agent_mode=effective_mode,
+            citation_map=turn_citation_map,
         )
         if self._has_renamable_assistant_reply(user_id=user_id, session_id=session_id):
             _launch_auto_rename(self, user_id=user_id, session_id=session_id)
@@ -471,6 +487,7 @@ class AgentCore:
         initial_plan: dict[str, Any] | None = None,
         graph: CompiledStateGraph | None = None,
         agent_mode: str = AGENT_LOOP_PLAN,
+        citation_map: dict[str, Any] | None = None,
     ) -> Iterator[dict[str, Any]]:
         """
         使用给定 LangChain messages 执行图并逐节点产出 dict 事件。
@@ -512,6 +529,7 @@ class AgentCore:
         token_queue: queue_module.Queue[dict[str, Any]] = queue_module.Queue()
         _streamed_content: list[str] = [""]
         _turn_traces: list[dict[str, Any]] = []
+        _citation_map: dict[str, Any] = dict(citation_map or {})
         _token_blocked: list[bool] = [False]
         _latest_plan: dict[str, Any] | None = initial_plan
         _last_sent_content: list[str] = [""]
@@ -575,6 +593,7 @@ class AgentCore:
                 user_id=user_id,
                 session_id=session_id,
                 retrieval_service=retrieval_service,
+                citation_map=_citation_map,
             )
             set_agent_token_callback(on_token)
             set_tool_trace_callback(on_tool_trace)
@@ -676,6 +695,9 @@ class AgentCore:
                 elif item_type == "tool_trace":
                     trace = item.get("trace", {})
                     if trace:
+                        trace_citation_map = trace.get("citation_map")
+                        if isinstance(trace_citation_map, dict):
+                            _citation_map.update(trace_citation_map)
                         trace["model_name"] = self._model_name_for_node(trace.get("node", "action"))
                         trace["ts"] = time.time()
                         _turn_traces.append(trace)
@@ -685,6 +707,7 @@ class AgentCore:
                         "tool_calls": [],
                         "trace": [trace] if trace else [],
                         "model_name": self._model_name_for_node(trace.get("node", "action")),
+                        "metadata": {"citation_map": dict(_citation_map)} if _citation_map else {},
                     }
 
                 elif item_type == "planner_content":
@@ -724,6 +747,9 @@ class AgentCore:
                         if node_traces:
                             _now = time.time()
                             for t in node_traces:
+                                trace_citation_map = t.get("citation_map")
+                                if isinstance(trace_citation_map, dict):
+                                    _citation_map.update(trace_citation_map)
                                 t["model_name"] = self._model_name_for_node(node_name)
                                 t["ts"] = _now
                             _turn_traces.extend(node_traces)
@@ -737,8 +763,13 @@ class AgentCore:
                                 node_name=node_name,
                                 state_update=state_update,
                                 turn_traces=state_update.get("trace", []),
+                                citation_map=_citation_map,
                             )
-                        payload = self._build_stream_payload(node_name=node_name, state_update=state_update)
+                        payload = self._build_stream_payload(
+                            node_name=node_name,
+                            state_update=state_update,
+                            citation_map=_citation_map,
+                        )
                         payload["model_name"] = self._model_name_for_node(node_name)
                         yield payload
         except GeneratorExit:
@@ -820,6 +851,7 @@ class AgentCore:
         user_id: str,
         session_id: str,
         message_service: MessageService,
+        citation_map: dict[str, Any] | None = None,
     ) -> Iterator[dict[str, Any]]:
         """
         对明显不需要工具的短输入走轻量直答路径。
@@ -889,6 +921,9 @@ class AgentCore:
             content = AgentCore._stringify_content(getattr(final_message, "content", "") if final_message is not None else cumulative)
             content = AgentCore._sanitize_agent_output(content)
             content = AgentCore._strip_html_tags(content)
+            content = AgentCore._drop_unmapped_citation_anchors(content, citation_map)
+            content = AgentCore._insert_missing_citation_anchors_inline(content, citation_map)
+            citation_metadata = AgentCore._build_citation_metadata(content, citation_map)
             message_service.create_message(
                 MessageCreate(
                     session_id=session_id,
@@ -906,6 +941,7 @@ class AgentCore:
                                 "model_tier": SMALL_MODEL_TIER,
                             }
                         ],
+                        **citation_metadata,
                     },
                 )
             )
@@ -922,6 +958,7 @@ class AgentCore:
                     }
                 ],
                 "model_name": self._model_name_for_node("agent_simple"),
+                "metadata": citation_metadata,
             }
         except GeneratorExit:
             raise
@@ -1053,22 +1090,156 @@ class AgentCore:
         )
         return any(keyword in normalized for keyword in plan_keywords)
 
-    @staticmethod
-    def _resolve_agent_loop_mode(*, agent_mode: str | None, prompt: str, reference: str | None = None) -> str:
-        """把外部请求模式归一为本轮实际执行模式。"""
+    def _resolve_agent_loop_mode(
+        self,
+        *,
+        agent_mode: str | None,
+        prompt: str,
+        reference: str | None = None,
+        user_id: str = "",
+    ) -> str:
+        """把外部请求模式归一为本轮实际执行模式。auto 模式优先由小模型分类。"""
 
         requested = (agent_mode or AGENT_LOOP_AUTO).strip().lower()
+        explicit_mode = AgentCore._normalize_explicit_agent_loop_mode(requested)
+        if explicit_mode is not None:
+            return explicit_mode
+        classified_mode = self._classify_agent_loop_mode_with_small_model(
+            prompt=prompt,
+            reference=reference,
+            user_id=user_id,
+        )
+        if classified_mode is not None:
+            return classified_mode
+        return AgentCore._resolve_agent_loop_mode_fallback(
+            agent_mode=requested,
+            prompt=prompt,
+            reference=reference,
+        )
+
+    @staticmethod
+    def _normalize_explicit_agent_loop_mode(requested: str) -> str | None:
+        """返回用户显式指定的模式;auto 返回 None。"""
+
         if requested == AGENT_LOOP_SIMPLE:
             return AGENT_LOOP_SIMPLE
         if requested == AGENT_LOOP_REACT:
             return AGENT_LOOP_REACT
         if requested in {AGENT_LOOP_PLAN, AGENT_LOOP_DEEP_ALIAS}:
             return AGENT_LOOP_PLAN
+        return None
+
+    @staticmethod
+    def _resolve_agent_loop_mode_fallback(
+        *,
+        agent_mode: str | None,
+        prompt: str,
+        reference: str | None = None,
+    ) -> str:
+        """小模型路由不可用时的保守回退规则。"""
+
+        requested = (agent_mode or AGENT_LOOP_AUTO).strip().lower()
+        explicit_mode = AgentCore._normalize_explicit_agent_loop_mode(requested)
+        if explicit_mode is not None:
+            return explicit_mode
         if AgentCore._should_use_plan_mode(prompt=prompt, reference=reference):
             return AGENT_LOOP_PLAN
         if AgentCore._should_use_simple_answer_mode(prompt=prompt, reference=reference):
             return AGENT_LOOP_SIMPLE
         return AGENT_LOOP_REACT
+
+    def _classify_agent_loop_mode_with_small_model(
+        self,
+        *,
+        prompt: str,
+        reference: str | None = None,
+        user_id: str = "",
+    ) -> str | None:
+        """使用小模型判断 auto 模式下应进入 simple/react/plan 哪张图。"""
+
+        text = (prompt or "").strip()
+        if not text:
+            return None
+        llm_config = self._get_user_llm_config(user_id) or {}
+        api_key = llm_config.get("api_key")
+        base_url = llm_config.get("base_url")
+        small_api_key = llm_config.get("small_api_key") or api_key
+        small_base_url = llm_config.get("small_base_url") or base_url
+        system_prompt = (
+            "你是 Agent Loop 路由器。只输出 JSON,不要输出解释。\n"
+            "根据用户请求选择一个模式:\n"
+            "- simple: 只适合寒暄、确认、极短且你有把握直接回答的常识性闲聊。"
+            "必须同时满足: 不需要工具、不需要最新信息、不需要读文件、不需要事实核验、你自己能力足够。\n"
+            "- react: 需要调用工具、搜索、读取知识库/文件、获取最近/最新/当前信息,或一步到几步即可完成的任务。\n"
+            "- plan: 需要多步骤规划、复杂分析、调研、比较、排查、设计、实现、重构、修复或整理。\n"
+            "只要你不确定自己能否可靠回答,或可能需要外部信息/工具核验,就不要选择 simple,至少选择 react。\n"
+            "如果用户问最近、最新、今天、现在、当前发生了什么,即使句子很短也必须选择 react。\n"
+            "如果不确定,选择 react。输出格式: {\"mode\":\"simple|react|plan\",\"reason\":\"简短原因\"}"
+        )
+        user_prompt = (
+            f"用户请求:\n{text}\n\n"
+            f"是否带显式引用片段: {'是' if reference else '否'}\n"
+            "请给出路由 JSON。"
+        )
+        try:
+            response = self.task_scheduler.invoke_chat(
+                task_type=FOREGROUND_AGENT_TASK,
+                messages=[
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_prompt),
+                ],
+                tool_names=[],
+                model_tier=SMALL_MODEL_TIER,
+                temperature=0.0,
+                timeout_seconds=12,
+                api_key=api_key,
+                base_url=base_url,
+                small_api_key=small_api_key,
+                small_base_url=small_base_url,
+            )
+        except Exception:
+            logger.warning("小模型 Agent Loop 路由失败,回退到本地规则 | user=%s", user_id, exc_info=True)
+            return None
+        mode = AgentCore._parse_agent_loop_route_response(AgentCore._stringify_content(response.content))
+        if mode is None:
+            logger.warning("小模型 Agent Loop 路由输出无法解析,回退到本地规则 | output=%s", response.content)
+        return mode
+
+    @staticmethod
+    def _parse_agent_loop_route_response(content: str) -> str | None:
+        """解析小模型路由输出。"""
+
+        text = (content or "").strip()
+        if not text:
+            return None
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1]
+            text = text.rsplit("```", 1)[0].strip()
+        if "{" in text and "}" in text:
+            text = text[text.find("{"):text.rfind("}") + 1]
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            return None
+        mode = str(data.get("mode", "") or "").strip().lower()
+        if mode in {AGENT_LOOP_SIMPLE, AGENT_LOOP_REACT, AGENT_LOOP_PLAN}:
+            return mode
+        if mode == AGENT_LOOP_DEEP_ALIAS:
+            return AGENT_LOOP_PLAN
+        return None
+
+    @staticmethod
+    def _extract_agent_mode_from_events(events: list[dict[str, Any]]) -> str | None:
+        """从 stream_session_prompt 事件中读取本轮实际执行模式。"""
+
+        for event in events:
+            metadata = event.get("metadata")
+            if not isinstance(metadata, dict):
+                continue
+            mode = str(metadata.get("agent_mode", "") or "").strip().lower()
+            if mode in {AGENT_LOOP_SIMPLE, AGENT_LOOP_REACT, AGENT_LOOP_PLAN}:
+                return mode
+        return None
 
     def _build_runtime_system_prompt(self, *, user_id: str) -> str:
         """构造运行时系统提示词,与模型决策节点保持一致。"""
@@ -1110,6 +1281,7 @@ class AgentCore:
         node_name: str,
         state_update: dict[str, Any] | None,
         turn_traces: list[dict[str, Any]] | None = None,
+        citation_map: dict[str, Any] | None = None,
     ) -> None:
         """
         将图节点返回的新增消息保存为 MessageRecord。
@@ -1133,6 +1305,7 @@ class AgentCore:
                 session_id=session_id,
                 node_name=node_name,
                 turn_traces=turn_traces,
+                citation_map=citation_map,
             )
             if message_create is not None:
                 message_service.create_message(message_create)
@@ -1145,6 +1318,7 @@ class AgentCore:
         session_id: str,
         node_name: str,
         turn_traces: list[dict[str, Any]] | None = None,
+        citation_map: dict[str, Any] | None = None,
     ) -> MessageCreate | None:
         """
         将 LangChain message 转换为 MessageCreate。
@@ -1164,6 +1338,9 @@ class AgentCore:
             if reasoning_content:
                 metadata["reasoning_content"] = reasoning_content
             content = AgentCore._sanitize_agent_output(AgentCore._stringify_content(message.content))
+            content = AgentCore._drop_unmapped_citation_anchors(content, citation_map)
+            content = AgentCore._insert_missing_citation_anchors_inline(content, citation_map)
+            metadata.update(AgentCore._build_citation_metadata(content, citation_map))
             if not content.strip() and not list(message.tool_calls or []):
                 return None
             return MessageCreate(
@@ -1206,6 +1383,132 @@ class AgentCore:
                 metadata_json=metadata,
             )
         return None
+
+    @staticmethod
+    def _extract_used_citation_ids(content: str) -> list[str]:
+        """Extract citation anchors that appear in the final assistant text."""
+
+        used: list[str] = []
+        seen: set[str] = set()
+        for match in CITATION_ANCHOR_PATTERN.finditer(content or ""):
+            citation_id = match.group(1)
+            if citation_id not in seen:
+                used.append(citation_id)
+                seen.add(citation_id)
+        return used
+
+    @staticmethod
+    def _build_citation_metadata(
+        content: str,
+        citation_map: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Build per-message citation metadata from anchors actually used."""
+
+        if not citation_map:
+            return {}
+        used_citations = AgentCore._extract_used_citation_ids(content)
+        if not used_citations:
+            used_citations = [
+                citation_id
+                for citation_id, source in citation_map.items()
+                if isinstance(source, dict) and source.get("adopted_by_default") is True
+            ]
+        if not used_citations:
+            return {}
+        filtered_map = {
+            citation_id: citation_map[citation_id]
+            for citation_id in used_citations
+            if citation_id in citation_map
+        }
+        if not filtered_map:
+            return {}
+        return {
+            "used_citations": [citation_id for citation_id in used_citations if citation_id in filtered_map],
+            "citation_map": filtered_map,
+        }
+
+    @staticmethod
+    def _drop_unmapped_citation_anchors(
+        content: str,
+        citation_map: dict[str, Any] | None,
+    ) -> str:
+        """Remove citation anchors that do not resolve to this turn's citation map."""
+
+        if not content or citation_map is None:
+            return content
+
+        def replace_unmapped(match: re.Match[str]) -> str:
+            citation_id = match.group(1)
+            return match.group(0) if citation_id in citation_map else ""
+
+        return CITATION_ANCHOR_PATTERN.sub(replace_unmapped, content)
+
+    @staticmethod
+    def _insert_missing_citation_anchors_inline(
+        content: str,
+        citation_map: dict[str, Any] | None,
+    ) -> str:
+        """Insert omitted adopted citation anchors beside matching document lines."""
+
+        if not content or not citation_map:
+            return content
+        existing_ids = set(AgentCore._extract_used_citation_ids(content))
+        adopted_sources = [
+            (citation_id, source)
+            for citation_id, source in citation_map.items()
+            if isinstance(source, dict) and source.get("adopted_by_default") is True
+            and citation_id not in existing_ids
+        ]
+        if not adopted_sources:
+            return content
+        lines = content.splitlines()
+        changed = False
+        for citation_id, source in adopted_sources:
+            terms = AgentCore._citation_match_terms(source)
+            if not terms:
+                continue
+            for index, line in enumerate(lines):
+                if f"[{citation_id}]" in line:
+                    break
+                normalized_line = AgentCore._normalize_citation_match_text(line)
+                if any(term in normalized_line for term in terms):
+                    lines[index] = f"{line.rstrip()} [{citation_id}]"
+                    changed = True
+                    break
+        return "\n".join(lines) if changed else content
+
+    @staticmethod
+    def _citation_match_terms(source: dict[str, Any]) -> list[str]:
+        """Build conservative line-match terms for a citation source."""
+
+        terms: list[str] = []
+        source_uri = str(source.get("source_uri") or "")
+        basename = re.split(r"[\\/]", source_uri)[-1]
+        stem = re.sub(r"\.[^.]+$", "", basename)
+        raw_terms = [basename, stem]
+        if stem:
+            raw_terms.append(re.sub(r"^\d+[_\-\s]*", "", stem).replace("_", " ").replace("-", " "))
+            raw_terms.append(re.sub(r"^\d+[_\-\s]*", "", stem).replace("_", "").replace("-", ""))
+        content = str(source.get("content") or "")
+        for line in content.splitlines()[:12]:
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                raw_terms.append(stripped.lstrip("#").strip())
+                break
+        seen: set[str] = set()
+        for term in raw_terms:
+            normalized = AgentCore._normalize_citation_match_text(term)
+            if len(normalized) < 3 or normalized in seen:
+                continue
+            terms.append(normalized)
+            seen.add(normalized)
+        return terms
+
+    @staticmethod
+    def _normalize_citation_match_text(value: str) -> str:
+        """Normalize text for conservative source-line matching."""
+
+        return value.replace("\\_", "_").replace("`", "").strip().casefold()
 
     @staticmethod
     def _stringify_content(content: Any) -> str:
@@ -1299,7 +1602,12 @@ class AgentCore:
             return None
 
     @staticmethod
-    def _build_stream_payload(*, node_name: str, state_update: dict[str, Any] | None) -> dict[str, Any]:
+    def _build_stream_payload(
+        *,
+        node_name: str,
+        state_update: dict[str, Any] | None,
+        citation_map: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """把 LangGraph 节点更新转换为稳定的流式输出结构。"""
 
         if not state_update:
@@ -1314,11 +1622,15 @@ class AgentCore:
             tool_calls = []
         content = AgentCore._sanitize_agent_output(content or "")
         content = AgentCore._strip_html_tags(content)
+        content = AgentCore._drop_unmapped_citation_anchors(content, citation_map)
+        content = AgentCore._insert_missing_citation_anchors_inline(content, citation_map)
+        metadata = AgentCore._build_citation_metadata(content, citation_map)
         return {
             "node": node_name,
             "content": content,
             "tool_calls": tool_calls or [],
             "trace": state_update.get("trace", []),
+            "metadata": metadata,
         }
 
     @staticmethod

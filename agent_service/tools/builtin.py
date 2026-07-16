@@ -28,7 +28,12 @@ from typing import Any, Callable
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from agent_service.tools.runtime_context import get_plan_state, get_tool_runtime, set_plan_state
+from agent_service.tools.runtime_context import (
+    get_plan_state,
+    get_tool_runtime,
+    register_tool_citation,
+    set_plan_state,
+)
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
 
 
@@ -236,7 +241,12 @@ def get_knowledge_context(query: str, top_k: int = 3) -> str:
     lines = []
     for i, item in enumerate(results, 1):
         source = item.memory.source_uri or "未知来源"
-        lines.append(f"{i}. (来源: {source}) {item.memory.content}")
+        citation_id = register_tool_citation(
+            source_uri=source,
+            content=item.memory.content,
+            adopted_by_default=True,
+        )
+        lines.append(f"{i}. [{citation_id}] 来源: {source}\n   内容: {item.memory.content}")
     return "\n\n".join(lines)
 
 
@@ -386,7 +396,8 @@ def search_knowledge(query: str, fulltext: bool = True, semantic: bool = False) 
         for r in fulltext_results:
             uri = str(r.get("source_uri") or "")
             snippet = str(r.get("snippet") or "")
-            lines.append(f"  {_os.path.basename(uri)}")
+            citation_id = register_tool_citation(source_uri=uri or "未知来源", content=snippet)
+            lines.append(f"  [{citation_id}] {_os.path.basename(uri)}")
             if snippet:
                 lines.append(f"    片段: {snippet}")
     if semantic_results:
@@ -394,7 +405,8 @@ def search_knowledge(query: str, fulltext: bool = True, semantic: bool = False) 
         for r in semantic_results:
             uri = str(r.get("source_uri") or "")
             content = str(r.get("content") or "")
-            lines.append(f"  {_os.path.basename(uri)}")
+            citation_id = register_tool_citation(source_uri=uri or "未知来源", content=content)
+            lines.append(f"  [{citation_id}] {_os.path.basename(uri)}")
             if content:
                 brief = content[:200] + ("..." if len(content) > 200 else "")
                 lines.append(f"    摘要: {brief}")
@@ -610,11 +622,19 @@ def read_knowledge_file(path: str) -> str:
     except Exception as exc:
         return f"读取文件失败: {exc}"
     content = str(result.get("content", ""))
+    source_uri = str(result.get("path") or path)
+    citation_id = register_tool_citation(
+        source_uri=source_uri,
+        content=content,
+        adopted_by_default=True,
+    )
+    prefix = f"Citation ID: [{citation_id}]\nSource: {source_uri}\n\n"
     max_chars = 6000
     if len(content) <= max_chars:
-        return content
+        return prefix + content
     return (
-        content[:max_chars]
+        prefix
+        + content[:max_chars]
         + f"\n\n[文件内容已截断: 已返回前 {max_chars} 字符, 原文共 {len(content)} 字符。"
         "如需后续部分,请更精确地说明要查看的章节或关键词。]"
     )
@@ -633,7 +653,14 @@ def read_multimodal_file_info(path: str) -> str:
         result = service.read_multimodal_file_info(user_id=runtime.user_id, path=path)
     except Exception as exc:
         return f"读取多模态文件信息失败: {exc}"
-    return json.dumps(result, ensure_ascii=False, indent=2)
+    content = json.dumps(result, ensure_ascii=False, indent=2)
+    source_uri = str(result.get("path") or path) if isinstance(result, dict) else path
+    citation_id = register_tool_citation(
+        source_uri=source_uri,
+        content=content,
+        adopted_by_default=True,
+    )
+    return f"Citation ID: [{citation_id}]\nSource: {source_uri}\n\n{content}"
 
 
 def write_knowledge_file(path: str, content: str) -> str:

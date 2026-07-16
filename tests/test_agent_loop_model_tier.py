@@ -119,11 +119,42 @@ def test_simple_answer_mode_only_matches_short_non_tool_prompt() -> None:
     assert AgentCore._should_use_simple_answer_mode(prompt="你是谁?")
     assert not AgentCore._should_use_simple_answer_mode(prompt="搜索知识库里的文件")
     assert not AgentCore._should_use_simple_answer_mode(prompt="你好", reference="引用内容")
-    assert AgentCore._resolve_agent_loop_mode(agent_mode="deep", prompt="复杂问题") == "plan"
-    assert AgentCore._resolve_agent_loop_mode(agent_mode="auto", prompt="你有哪些工具") == "react"
-    assert AgentCore._resolve_agent_loop_mode(agent_mode="auto", prompt="读取一下当前文档") == "react"
-    assert AgentCore._resolve_agent_loop_mode(agent_mode="auto", prompt="帮我设计一个多步骤的实现方案") == "plan"
-    assert AgentCore._resolve_agent_loop_mode(agent_mode="auto", prompt="分析这个项目的架构并给出优化计划") == "plan"
+    assert AgentCore._resolve_agent_loop_mode_fallback(agent_mode="deep", prompt="复杂问题") == "plan"
+    assert AgentCore._resolve_agent_loop_mode_fallback(agent_mode="auto", prompt="你有哪些工具") == "react"
+    assert AgentCore._resolve_agent_loop_mode_fallback(agent_mode="auto", prompt="读取一下当前文档") == "react"
+    assert AgentCore._resolve_agent_loop_mode_fallback(agent_mode="auto", prompt="帮我设计一个多步骤的实现方案") == "plan"
+    assert AgentCore._resolve_agent_loop_mode_fallback(agent_mode="auto", prompt="分析这个项目的架构并给出优化计划") == "plan"
+
+
+def test_auto_agent_loop_mode_uses_small_model_router() -> None:
+    scheduler = _FakeScheduler('{"mode":"react","reason":"需要最新信息"}')
+    agent = AgentCore(config=AgentConfig(), tools=[], task_scheduler=scheduler)
+
+    mode = agent._resolve_agent_loop_mode(
+        agent_mode="auto",
+        prompt="GTA最近出了什么新内容吗?",
+        user_id="u1",
+    )
+
+    assert mode == "react"
+    assert scheduler.calls[0]["model_tier"] == SMALL_MODEL_TIER
+    assert scheduler.calls[0]["tool_names"] == []
+    router_prompt = scheduler.calls[0]["messages"][0].content
+    assert "你自己能力足够" in router_prompt
+    assert "不要选择 simple,至少选择 react" in router_prompt
+
+
+def test_auto_agent_loop_mode_falls_back_when_router_output_is_invalid() -> None:
+    scheduler = _FakeScheduler("not json")
+    agent = AgentCore(config=AgentConfig(), tools=[], task_scheduler=scheduler)
+
+    mode = agent._resolve_agent_loop_mode(
+        agent_mode="auto",
+        prompt="你好",
+        user_id="u1",
+    )
+
+    assert mode == "simple"
 
 
 def test_react_graph_skips_planner_and_observation_nodes() -> None:
