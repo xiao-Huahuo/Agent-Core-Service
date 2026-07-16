@@ -173,13 +173,25 @@ function knowledgeSourcesForMessage(message: AgentChatMessage, index: number): S
     : []
   const usedIds = metadataUsed.length > 0 ? metadataUsed : extractCitationIds(message.content)
   const sources: SourceItem[] = []
-  const seen = new Set<string>()
+  const sourceIndexByUri = new Map<string, number>()
   for (const id of usedIds) {
     const source = citationMap[id]
-    if (!source || !source.source_uri || seen.has(source.source_uri)) {
+    if (!source || !source.source_uri) {
       continue
     }
-    seen.add(source.source_uri)
+    const existingIndex = sourceIndexByUri.get(source.source_uri)
+    if (existingIndex !== undefined) {
+      const existing = sources[existingIndex]
+      if (!existing) {
+        continue
+      }
+      const existingIds = (existing.citation_id ?? '').split(',').map((item) => item.trim()).filter(Boolean)
+      if (!existingIds.includes(id)) {
+        existing.citation_id = [...existingIds, id].join(', ')
+      }
+      continue
+    }
+    sourceIndexByUri.set(source.source_uri, sources.length)
     sources.push({ ...source, citation_id: id })
   }
   return sources
