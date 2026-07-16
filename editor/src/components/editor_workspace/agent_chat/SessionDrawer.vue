@@ -104,14 +104,13 @@ async function clearAllSessions() {
         type="button"
         @click="selectSession(session.session_id)"
       >
-        <span class="session-icon">$</span>
         <span class="session-name">{{ displayName(session) }}</span>
         <span class="session-time">{{ session.updated_at?.slice(0, 10) }}</span>
         <span class="delete-btn" title="删除会话" @click="deleteSession(session.session_id, $event)">
           <X :size="12" />
         </span>
       </button>
-      <p v-if="!sessionStore.sessions.length" class="empty-hint">$ no sessions found</p>
+      <p v-if="!sessionStore.sessions.length" class="empty-hint">No sessions found</p>
     </div>
 
     <div v-if="mode === 'page' || sessionStore.sessions.length > 0" class="drawer-footer">
@@ -157,9 +156,9 @@ async function clearAllSessions() {
 
 .session-drawer.page-mode {
   --drawer-page-border: rgba(255, 255, 255, 0.10);
-  --drawer-page-bg-top: rgba(8, 8, 8, 0.96);
-  --drawer-page-bg-bottom: rgba(0, 0, 0, 0.94);
-  --drawer-page-bg-solid: rgba(0, 0, 0, 0.90);
+  --drawer-page-bg-top: var(--color-chrome-bg-top);
+  --drawer-page-bg-bottom: var(--color-chrome-bg-bottom);
+  --drawer-page-bg-solid: var(--color-chrome-bg-solid);
   --drawer-page-hover: rgba(255, 255, 255, 0.08);
   --drawer-page-active: rgba(255, 255, 255, 0.08);
   top: 0;
@@ -179,9 +178,6 @@ async function clearAllSessions() {
 
 :root[data-theme="light"] .session-drawer.page-mode {
   --drawer-page-border: rgba(66, 36, 235, 0.12);
-  --drawer-page-bg-top: rgba(255, 255, 255, 0.94);
-  --drawer-page-bg-bottom: rgba(244, 246, 255, 0.92);
-  --drawer-page-bg-solid: rgba(255, 255, 255, 0.88);
   --drawer-page-hover: rgba(66, 36, 235, 0.08);
   --drawer-page-active: rgba(66, 36, 235, 0.10);
 }
@@ -308,6 +304,12 @@ async function clearAllSessions() {
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
 }
 
 .primary-actions {
@@ -357,12 +359,22 @@ async function clearAllSessions() {
   border-color: var(--color-accent);
   background: var(--color-accent-muted);
   color: var(--color-text-primary);
+  box-shadow: 0 8px 22px rgba(66, 36, 235, 0.14);
+  transform: translateY(-1px);
 }
 
 .clear-all-btn:hover {
   border-color: rgba(197, 101, 101, 0.4);
   background: rgba(197, 101, 101, 0.08);
   color: #c56565;
+  box-shadow: 0 8px 22px rgba(197, 101, 101, 0.12);
+  transform: translateY(-1px);
+}
+
+.new-btn:active,
+.clear-all-btn:active {
+  box-shadow: none;
+  transform: translateY(0) scale(0.98);
 }
 
 .session-list {
@@ -415,7 +427,6 @@ async function clearAllSessions() {
   color: var(--color-text-primary);
 }
 
-.session-icon,
 .session-time {
   flex-shrink: 0;
   color: var(--color-text-tertiary);

@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   Top command bar.
 
   Usage:
@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bot, Command, DatabaseZap, GitBranch, Maximize2, Minus, Moon, Settings, Sun, X } from 'lucide-vue-next'
+import { Bot, DatabaseZap, GitBranch, Maximize2, Minus, Moon, Settings, Sun, X } from 'lucide-vue-next'
 
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -28,7 +28,7 @@ const knowledgeTitle = computed(() => {
   }
   const normalizedPath = settingsStore.profile.knowledgeDir.replace(/\\/g, '/')
   const pathParts = normalizedPath.split('/').filter(Boolean)
-  return pathParts[pathParts.length - 1] || '未命名'
+  return pathParts[pathParts.length - 1] || 'Untitled'
 })
 
 async function handleCloseWindow() {
@@ -43,17 +43,6 @@ async function handleCloseWindow() {
   <header class="topbar">
     <div class="brand">
       <strong>元织-{{ knowledgeTitle }}</strong>
-      <button
-        class="ingest-button"
-        :class="{ refreshing: workspaceStore.refreshing }"
-        type="button"
-        :disabled="workspaceStore.refreshing"
-        title="重新灌库"
-        @click="workspaceStore.markIndexing"
-      >
-        <DatabaseZap :size="14" />
-        <span>灌库</span>
-      </button>
       <div v-if="workspaceStore.ingestionProgressVisible" class="ingestion-progress" aria-live="polite">
         <span class="ingestion-progress-track" aria-hidden="true">
           <span
@@ -70,16 +59,21 @@ async function handleCloseWindow() {
     </div>
 
     <div class="actions">
-      <button class="command-button" type="button" @click="workspaceStore.openCommandPalette">
-        <Command :size="14" />
-        <span>命令</span>
-        <kbd>Ctrl K</kbd>
-      </button>
       <button class="icon-button" type="button" title="知识图谱" @click="emit('toggleGraph')">
         <GitBranch :size="14" />
       </button>
       <button class="icon-button" type="button" title="设置" @click="emit('openSettings')">
         <Settings :size="14" />
+      </button>
+      <button
+        class="ingest-button"
+        :class="{ refreshing: workspaceStore.refreshing }"
+        type="button"
+        :disabled="workspaceStore.refreshing"
+        title="重新灌库"
+        @click="workspaceStore.markIndexing"
+      >
+        <DatabaseZap :size="14" />
       </button>
       <button class="console-link" type="button" title="切换 Agent 面板" @click="emit('toggleAgent')">
         <Bot :size="14" />
@@ -121,10 +115,12 @@ async function handleCloseWindow() {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8);
-  min-height: 30px;
+  min-height: 45px;
   padding: 2px var(--space-8);
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-canvas);
+  background:
+    linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
+    var(--color-chrome-bg-solid);
   -webkit-app-region: drag;
   user-select: none;
   position: relative;
@@ -144,28 +140,25 @@ async function handleCloseWindow() {
 .ingest-button {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
-  flex: 0 0 auto;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
   height: 24px;
-  padding: 0 var(--space-10);
-  border: 1px solid var(--color-accent);
+  padding: 0;
+  border: 0;
   border-radius: 999px;
-  background: rgba(235, 36, 99, 0.1);
+  background: transparent;
   color: var(--color-accent);
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.01em;
   -webkit-app-region: no-drag;
   transition:
-    border-color var(--transition-fast),
     background var(--transition-fast),
     color var(--transition-fast),
     opacity var(--transition-fast);
 }
 
 .ingest-button:hover:not(:disabled) {
-  background: var(--color-accent);
-  color: #fff;
+  background: rgba(235, 36, 99, 0.12);
+  color: var(--color-accent);
 }
 
 .ingest-button:disabled {
@@ -243,7 +236,6 @@ async function handleCloseWindow() {
   stroke: currentColor;
 }
 
-.command-button,
 .console-link {
   display: inline-flex;
   align-items: center;
@@ -261,7 +253,6 @@ async function handleCloseWindow() {
     color var(--transition-fast);
 }
 
-.command-button:hover,
 .console-link:hover {
   border-color: var(--color-primary);
   background: var(--color-surface-raised);

@@ -103,7 +103,9 @@ const emit = defineEmits<{
   height: 100%;
   padding: var(--space-8) var(--space-4);
   border-right: 1px solid var(--color-border);
-  background: var(--color-canvas);
+  background:
+    linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
+    var(--color-chrome-bg-solid);
 }
 
 .activity-button {

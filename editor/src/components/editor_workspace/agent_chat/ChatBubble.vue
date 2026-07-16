@@ -22,6 +22,7 @@ const props = defineProps<{
   userAvatar: string
   agentAvatar: string
   showAvatar?: boolean
+  showActions?: boolean
   knowledgeSources?: SourceItem[]
   citationMap?: Record<string, SourceItem>
 }>()
@@ -213,7 +214,7 @@ function handleNavigateSource(uri: string) {
         />
         <span v-if="isStreaming && !hasAssistantContent" class="cursor">|</span>
       </div>
-      <div v-if="copyableContent" class="message-actions">
+      <div v-if="showActions !== false && copyableContent" class="message-actions">
         <button
           class="copy-action"
           type="button"

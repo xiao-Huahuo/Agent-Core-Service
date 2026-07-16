@@ -276,7 +276,9 @@ onBeforeUnmount(() => {
   grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
-  background: var(--color-canvas-soft);
+  background:
+    linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
+    var(--color-chrome-bg-solid);
 }
 
 .workspace-grid {

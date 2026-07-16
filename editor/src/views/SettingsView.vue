@@ -451,7 +451,9 @@ async function saveProfile() {
   height: 100%;
   overflow-y: auto;
   padding: var(--space-16) var(--space-20);
-  background: var(--color-canvas-soft);
+  background:
+    linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
+    var(--color-chrome-bg-solid);
   font-size: 13px;
 }
 

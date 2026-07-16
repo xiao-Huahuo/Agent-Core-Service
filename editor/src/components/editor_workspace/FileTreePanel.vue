@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   File tree panel.
 
   Usage:
@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { FilePlus2, Files, FolderOpen } from 'lucide-vue-next'
+import { FilePlus2, FolderPlus, FolderOpen } from 'lucide-vue-next'
 
 import TreeNode from '@/components/editor_workspace/TreeNode.vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -553,7 +553,7 @@ async function askAgentFromMenu() {
     await workspaceStore.selectFile(node)
     workspaceStore.syncCurrentDocumentContext()
     workspaceStore.agentSidebarOpen = true
-    workspaceStore.pendingAgentPrompt = '帮我看看当前打开的文件'
+    workspaceStore.pendingAgentPrompt = 'Help me review the currently open file.'
   }
 }
 
@@ -621,9 +621,9 @@ async function toggleIgnoreFromMenu() {
   try {
     await settingsStore.saveKnowledgeIngestionSettings({ knowledgeIgnorePatterns: nextPatterns })
     await workspaceStore.loadKnowledgeTree()
-    workspaceStore.showToast(`${isCurrentlyIgnored ? '已取消屏蔽' : '已屏蔽'} ${node.isDir ? '文件夹' : '文件'}：${node.name}`)
+    workspaceStore.showToast(`${isCurrentlyIgnored ? 'Unignored' : 'Ignored'} ${node.isDir ? 'folder' : 'file'}: ${node.name}`)
   } catch (error) {
-    actionError.value = error instanceof Error ? error.message : '屏蔽规则保存失败。'
+    actionError.value = error instanceof Error ? error.message : 'Failed to save ignore rules.'
   }
 }
 
@@ -756,11 +756,11 @@ onUnmounted(() => {
           {{ settingsStore.profile.knowledgeDir }}
         </span>
       </div>
-      <button class="header-action" type="button" title="新建文件 Ctrl+N" @click="beginCreate('file', '')">
+      <button class="header-action" type="button" title="New file" @click="beginCreate('file', '')">
         <FilePlus2 :size="18" />
       </button>
-      <button class="header-action" type="button" title="多选文件" @click="openMultiFilePicker">
-        <Files :size="18" />
+      <button class="header-action" type="button" title="New folder" @click="beginCreate('folder', '')">
+        <FolderPlus :size="18" />
       </button>
       <input
         ref="uploadPicker"
@@ -811,55 +811,55 @@ onUnmounted(() => {
       :style="contextMenuStyle"
       @click.stop
     >
-      <button type="button" @click="createFileFromMenu"><span>新建</span><kbd>Ctrl+N</kbd></button>
-      <button type="button" @click="createFolderFromMenu"><span>新建文件夹</span><kbd>Ctrl+Shift+N</kbd></button>
+      <button type="button" @click="createFileFromMenu"><span>New file</span><kbd>Ctrl+N</kbd></button>
+      <button type="button" @click="createFolderFromMenu"><span>New folder</span><kbd>Ctrl+Shift+N</kbd></button>
       <button type="button" :disabled="!contextMenu.node" @click="copyFromMenu">
-        <span>复制</span><kbd>Ctrl+C</kbd>
+        <span>澶嶅埗</span><kbd>Ctrl+C</kbd>
       </button>
       <button type="button" :disabled="!contextMenu.node" @click="cutFromMenu">
-        <span>剪切</span><kbd>Ctrl+X</kbd>
+        <span>鍓垏</span><kbd>Ctrl+X</kbd>
       </button>
       <button type="button" :disabled="!contextMenu.node" @click="copyNameFromMenu">
-        <span>复制文件名</span>
+        <span>Copy name</span>
       </button>
       <button type="button" :disabled="!contextMenu.node" @click="copyAbsolutePathFromMenu">
-        <span>复制绝对路径</span>
+        <span>澶嶅埗缁濆璺緞</span>
       </button>
       <button type="button" :disabled="!contextMenu.node" @click="copyRelativePathFromMenu">
-        <span>复制相对路径</span>
+        <span>澶嶅埗鐩稿璺緞</span>
       </button>
-      <button type="button" :disabled="!canPaste" @click="pasteFromMenu"><span>粘贴</span><kbd>Ctrl+V</kbd></button>
+      <button type="button" :disabled="!canPaste" @click="pasteFromMenu"><span>绮樿创</span><kbd>Ctrl+V</kbd></button>
       <button type="button" :disabled="!contextMenu.node" @click="renameFromMenu">
-        <span>重命名</span><kbd>Ctrl+M</kbd>
+        <span>Rename</span><kbd>Ctrl+M</kbd>
       </button>
       <button type="button" :disabled="!contextMenu.node" class="danger" @click="deleteFromMenu">
-        <span>删除</span><kbd>Ctrl+D</kbd>
+        <span>鍒犻櫎</span><kbd>Ctrl+D</kbd>
       </button>
       <hr class="context-separator" />
       <button type="button" :disabled="!contextMenu.node" @click="showInGraphFromMenu">
-        <span>在图谱中显示</span><kbd>Ctrl+G</kbd>
+        <span>鍦ㄥ浘璋变腑鏄剧ず</span><kbd>Ctrl+G</kbd>
       </button>
       <button type="button" :disabled="!contextMenu.node" @click="ingestFromMenu">
-        <span>{{ contextMenu.node?.isDir ? '灌库此文件夹' : '灌库此文件' }}</span>
+        <span>{{ contextMenu.node?.isDir ? 'Ingest folder' : 'Ingest file' }}</span>
       </button>
       <button type="button" :disabled="!contextMenu.node" @click="toggleIgnoreFromMenu">
         <span>
           {{
             contextMenu.node?.indexStatus === 'ignored'
-              ? (contextMenu.node?.isDir ? '取消屏蔽此文件夹' : '取消屏蔽此文件')
-              : (contextMenu.node?.isDir ? '屏蔽此文件夹' : '屏蔽此文件')
+              ? (contextMenu.node?.isDir ? 'Unignore folder' : 'Unignore file')
+              : (contextMenu.node?.isDir ? 'Ignore folder' : 'Ignore file')
           }}
         </span>
       </button>
       <button type="button" @click="askAgentFromMenu">
-        <span>问问 Agent</span>
+        <span>闂棶 Agent</span>
       </button>
       <hr class="context-separator" />
       <button type="button" @click="showInFolderFromMenu">
-        <span>{{ contextMenu.node ? '在文件管理器中显示' : '打开知识库目录' }}</span>
+        <span>{{ contextMenu.node ? 'Show in folder' : 'Open knowledge root' }}</span>
       </button>
       <button type="button" :disabled="!contextMenu.node" @click="openWithDefaultFromMenu">
-        <span>用默认程序打开</span>
+        <span>鐢ㄩ粯璁ょ▼搴忔墦寮€</span>
       </button>
     </div>
 
@@ -870,27 +870,27 @@ onUnmounted(() => {
     -->
     <div v-if="workspaceStore.conflictDialog.open" class="delete-backdrop" @click.self="workspaceStore.cancelConflict()">
       <section class="delete-dialog conflict-dialog" role="dialog" aria-modal="true" aria-labelledby="conflict-title">
-        <h2 id="conflict-title">发现重复文件</h2>
-        <p>目标文件夹中已有以下同名文件/文件夹，请选择处理方式：</p>
+        <h2 id="conflict-title">Duplicate files found</h2>
+        <p>The target folder already contains these names. Choose how to handle them.</p>
         <ul class="conflict-file-list">
           <li v-for="name in workspaceStore.conflictDialog.conflictingNames" :key="name">{{ name }}</li>
         </ul>
         <div class="conflict-actions">
-          <button type="button" @click="workspaceStore.resolveConflict('overwrite')">覆盖</button>
-          <button type="button" @click="workspaceStore.resolveConflict('skip')">跳过</button>
-          <button type="button" class="rename" @click="workspaceStore.resolveConflict('rename')">重命名</button>
-          <button type="button" class="cancel" @click="workspaceStore.cancelConflict()">取消</button>
+          <button type="button" @click="workspaceStore.resolveConflict('overwrite')">瑕嗙洊</button>
+          <button type="button" @click="workspaceStore.resolveConflict('skip')">璺宠繃</button>
+          <button type="button" class="rename" @click="workspaceStore.resolveConflict('rename')">Rename</button>
+          <button type="button" class="cancel" @click="workspaceStore.cancelConflict()">鍙栨秷</button>
         </div>
       </section>
     </div>
 
     <div v-if="deleteTarget" class="delete-backdrop" @click.self="deleteTarget = null">
       <section class="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-title">
-        <h2 id="delete-title">确认删除</h2>
-        <p>删除 {{ deleteTarget.name }} 后将从本地知识库目录移除。</p>
+        <h2 id="delete-title">Confirm delete</h2>
+        <p>Delete {{ deleteTarget.name }} from the local knowledge directory.</p>
         <div class="delete-actions">
-          <button type="button" @click="deleteTarget = null">取消</button>
-          <button type="button" class="danger" @click="confirmDelete">删除</button>
+          <button type="button" @click="deleteTarget = null">鍙栨秷</button>
+          <button type="button" class="danger" @click="confirmDelete">鍒犻櫎</button>
         </div>
       </section>
     </div>
@@ -902,7 +902,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--color-canvas-soft);
+  background:
+    linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
+    var(--color-chrome-bg-solid);
   border-left: 0;
 }
 

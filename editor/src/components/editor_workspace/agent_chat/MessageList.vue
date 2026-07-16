@@ -133,6 +133,13 @@ function shouldShowAvatar(message: AgentChatMessage, index: number) {
   return message.role !== 'assistant' || index === 0 || previous?.role !== 'assistant'
 }
 
+function shouldShowActions(message: AgentChatMessage, index: number) {
+  if (message.role !== 'assistant') {
+    return true
+  }
+  return !visibleMessages.value.slice(index + 1).some((item) => item.role === 'assistant')
+}
+
 function asSourceMap(value: unknown): Record<string, SourceItem> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {}
@@ -236,6 +243,7 @@ defineExpose({
       :user-avatar="userAvatar"
       :agent-avatar="agentAvatar"
       :show-avatar="shouldShowAvatar(message, index)"
+      :show-actions="shouldShowActions(message, index)"
       :knowledge-sources="message.role === 'assistant' ? knowledgeSourcesForMessage(message, index) : []"
       :citation-map="message.role === 'assistant' ? citationMapForMessage(message, index) : {}"
     />

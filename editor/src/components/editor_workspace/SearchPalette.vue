@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   Inline search bar + dropdown results.
 
   Usage:
@@ -90,7 +90,7 @@ function askAgentSearch() {
   const q = workspaceStore.searchQuery.trim()
   if (!q) return
   workspaceStore.agentSidebarOpen = true
-  workspaceStore.pendingAgentPrompt = `在知识库里面找一个文件,特征是${q}`
+  workspaceStore.pendingAgentPrompt = `在知识库里找一个文件，特征是：${q}`
 }
 
 function navigateToSearchPage() {
@@ -171,7 +171,7 @@ function toggleUnified() {
           <button
             class="ai-search-btn"
             type="button"
-            title="AI帮你搜"
+            title="AI 帮你搜索"
             @mousedown.prevent="askAgentSearch"
           >
             <Sparkles :size="12" />

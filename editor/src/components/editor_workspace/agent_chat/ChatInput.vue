@@ -102,7 +102,6 @@ function selectLoopMode(mode: AgentLoopMode) {
           >
             <Globe :size="14" />
           </button>
-          <span class="input-hint">Enter send · Shift Enter newline</span>
         </div>
         <details ref="loopModeMenu" class="loop-mode-dropdown" :class="{ disabled }">
           <summary
@@ -291,12 +290,6 @@ function selectLoopMode(mode: AgentLoopMode) {
   border-color: var(--color-primary-hover);
   color: #fff;
   background: var(--color-primary-hover);
-}
-
-.input-hint {
-  color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 9px;
 }
 
 .loop-mode-dropdown {

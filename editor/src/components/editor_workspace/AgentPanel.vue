@@ -41,6 +41,7 @@ const isBootstrapping = ref(false)
 const referenceText = ref('')
 const messageListRef = ref<MessageListApi | null>(null)
 const isMessageListAtBottom = ref(true)
+const welcomeIconUrl = new URL('../../assets/images/无底图标.png', import.meta.url).href
 
 const userId = computed(() => settingsStore.profile.userId)
 const isDark = computed(() => settingsStore.isDark)
@@ -266,6 +267,7 @@ onMounted(() => {
     <main class="chat-body" :class="{ dimmed: isBootstrapping }">
       <Transition name="welcome-fade">
         <div v-if="!hasMessages && !chatStore.isStreaming" class="welcome-center">
+          <img class="welcome-icon" :src="welcomeIconUrl" alt="" aria-hidden="true" />
           <SplitText text="MetaWeave" tag="h1" class="welcome-title" :trigger-on-mount="true" />
           <p class="welcome-subtitle">在知识库 {{ knowledgeTitle }} 中有什么问题?</p>
         </div>
@@ -357,7 +359,9 @@ onMounted(() => {
   border-right: 0;
   border-bottom: 0;
   border-radius: 0;
-  background: var(--color-canvas-soft);
+  background:
+    linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
+    var(--color-chrome-bg-solid);
 }
 
 .agent-panel.agent-page-mode {
@@ -402,7 +406,9 @@ onMounted(() => {
   padding: 0 var(--space-12);
   gap: var(--space-8);
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-canvas);
+  background:
+    linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
+    var(--color-chrome-bg-solid);
   flex-shrink: 0;
 }
 
@@ -705,6 +711,16 @@ onMounted(() => {
   z-index: 1;
 }
 
+.welcome-icon {
+  width: clamp(72px, 11vw, 112px);
+  height: auto;
+  margin-bottom: var(--space-14);
+  object-fit: contain;
+  opacity: 0;
+  filter: drop-shadow(0 16px 34px rgba(66, 36, 235, 0.22));
+  animation: welcome-icon-reveal 900ms cubic-bezier(0.22, 1, 0.36, 1) 120ms forwards;
+}
+
 .welcome-title {
   margin: 0;
   color: var(--color-text);
@@ -742,6 +758,20 @@ onMounted(() => {
   }
 }
 
+@keyframes welcome-icon-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.94);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (max-width: 820px) {
   .agent-panel.agent-page-mode {
     --agent-content-offset: 0px;
@@ -757,6 +787,11 @@ onMounted(() => {
 
   .mode-button span {
     display: none;
+  }
+
+  .welcome-icon {
+    width: 76px;
+    margin-bottom: var(--space-10);
   }
 }
 </style>
