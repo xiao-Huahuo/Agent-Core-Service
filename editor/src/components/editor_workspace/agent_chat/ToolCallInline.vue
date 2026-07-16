@@ -12,6 +12,12 @@ const props = defineProps<{
   traces?: Array<Record<string, unknown>>
 }>()
 
+interface ToolDisplayEntry {
+  key: string
+  text: string
+  pending: boolean
+}
+
 interface ToolEntry {
   tool_name: string
   display_name: string
@@ -136,19 +142,21 @@ const toolEntries = computed(() => {
       }
     })
   return [
-    ...Array.from(pendingStarts.values()),
+    ...Array.from(pendingStarts.values()).map((entry) => ({ ...entry, pending: true })),
     ...Array.from(merged.values())
     .map((entry) => ({
       key: `${entry.tool_name}-${entry.call_count}`,
       text: toolSummary(entry),
+      pending: false,
     }))
-    .filter((entry): entry is { key: string; text: string } => Boolean(entry.text)),
+    .filter((entry): entry is ToolDisplayEntry => Boolean(entry.text)),
   ]
 })
 </script>
 
 <template>
   <div v-for="entry in toolEntries" :key="entry.key" class="tool-call-box">
+    <span v-if="entry.pending" class="tool-loader" aria-hidden="true"></span>
     <span class="tool-text">{{ entry.text }}</span>
   </div>
 </template>
@@ -169,7 +177,17 @@ const toolEntries = computed(() => {
     linear-gradient(90deg, rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.07) 48%, transparent),
     rgba(255, 255, 255, 0.025);
   backdrop-filter: blur(10px);
-  animation: count-pop 0.35s ease;
+  animation: tool-slide-in 220ms ease-out;
+}
+
+.tool-loader {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border: 2px solid rgba(148, 163, 184, 0.22);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: tool-loader-spin 720ms linear infinite;
 }
 
 .tool-text {
@@ -182,14 +200,20 @@ const toolEntries = computed(() => {
   white-space: nowrap;
 }
 
-@keyframes count-pop {
+@keyframes tool-slide-in {
   0% {
-    opacity: 0.6;
-    transform: scaleY(0.95);
+    opacity: 0;
+    transform: translateY(-10px);
   }
   100% {
     opacity: 1;
-    transform: scaleY(1);
+    transform: translateY(0);
+  }
+}
+
+@keyframes tool-loader-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

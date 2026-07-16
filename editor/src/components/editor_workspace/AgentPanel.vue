@@ -108,6 +108,12 @@ function setAgentLoopMode(mode: AgentLoopMode) {
   settingsStore.setAgentLoopMode(mode)
 }
 
+function setChatRenderMode(mode: 'chat' | 'tool') {
+  if (settingsStore.chatMode !== mode) {
+    settingsStore.toggleChatMode()
+  }
+}
+
 function openSessionDrawer() {
   sessionDrawerOpen.value = true
 }
@@ -177,7 +183,30 @@ onMounted(() => {
         </button>
       </div>
       <span class="topbar-title">{{ sessionTitle }}</span>
-      <div class="topbar-right"></div>
+      <div class="topbar-right">
+        <div class="topbar-mode-switch" role="group" aria-label="Chat render mode">
+          <button
+            class="topbar-mode-option"
+            :class="{ active: settingsStore.chatMode === 'chat' }"
+            type="button"
+            aria-label="Chat mode"
+            :aria-pressed="settingsStore.chatMode === 'chat'"
+            @click="setChatRenderMode('chat')"
+          >
+            Chat
+          </button>
+          <button
+            class="topbar-mode-option"
+            :class="{ active: settingsStore.chatMode === 'tool' }"
+            type="button"
+            aria-label="Tool mode"
+            :aria-pressed="settingsStore.chatMode === 'tool'"
+            @click="setChatRenderMode('tool')"
+          >
+            Tool
+          </button>
+        </div>
+      </div>
     </header>
 
     <div class="agent-body">
@@ -260,6 +289,9 @@ onMounted(() => {
       >
         <ChevronDown :size="18" />
       </button>
+      <div v-if="chatStore.isStreaming" class="thinking-flow" aria-live="polite">
+        <span>正在思考</span>
+      </div>
       <ChatInput
         :disabled="!userId"
         :centered="!hasMessages && !chatStore.isStreaming"
@@ -394,8 +426,47 @@ onMounted(() => {
 .topbar-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-4);
-  min-width: 68px;
+  min-width: 128px;
+}
+
+.topbar-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+}
+
+.topbar-mode-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 22px;
+  padding: 0 var(--space-10);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.topbar-mode-option:hover {
+  color: var(--color-text-secondary);
+}
+
+.topbar-mode-option.active {
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
 }
 
 .agent-body {
@@ -543,6 +614,41 @@ onMounted(() => {
   left: calc(var(--agent-content-offset) + (100% - var(--agent-content-offset)) / 2);
 }
 
+.thinking-flow {
+  position: absolute;
+  left: var(--space-16);
+  bottom: 112px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  pointer-events: none;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.thinking-flow span {
+  background: linear-gradient(
+    90deg,
+    var(--color-text-tertiary) 0%,
+    var(--color-text-primary) 34%,
+    var(--color-accent) 50%,
+    var(--color-text-primary) 66%,
+    var(--color-text-tertiary) 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: thinking-shimmer 1.35s ease-in-out infinite alternate;
+}
+
+.agent-page-mode .thinking-flow {
+  left: max(var(--space-16), calc(var(--agent-content-offset) + (100% - var(--agent-content-offset) - var(--agent-input-max-width)) / 2));
+}
+
 .drawer-hover-zone {
   position: absolute;
   top: 0;
@@ -620,6 +726,15 @@ onMounted(() => {
 .welcome-fade-leave-to {
   opacity: 0;
   transform: translateY(-16px);
+}
+
+@keyframes thinking-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 @media (max-width: 820px) {

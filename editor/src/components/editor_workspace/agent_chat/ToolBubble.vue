@@ -130,8 +130,6 @@ function handleNavigateSource(uri: string) {
   </div>
 
   <div v-else-if="shouldRenderAssistant" class="bubble-row assistant">
-    <img v-if="showAvatar" :src="agentAvatar" class="avatar" alt="agent" />
-    <div v-else class="avatar-spacer"></div>
     <div class="bubble-col">
       <div v-if="statusTraces.length > 0 && !hasContent" class="status-lines">
         <p
@@ -213,15 +211,11 @@ function handleNavigateSource(uri: string) {
   align-self: flex-start;
 }
 
-.avatar,
-.avatar-spacer {
+.avatar {
   width: 36px;
   height: 36px;
   flex-shrink: 0;
   margin-top: 2px;
-}
-
-.avatar {
   border: 1px solid var(--color-border);
   border-radius: 50%;
   object-fit: cover;
