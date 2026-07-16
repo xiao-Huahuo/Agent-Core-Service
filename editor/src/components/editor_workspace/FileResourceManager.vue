@@ -477,6 +477,17 @@ function closeContextMenu() {
   contextMenu.value.open = false
 }
 
+function contextTargetNodes(): KnowledgeFileNode[] {
+  const node = contextMenu.value.node
+  if (!node) {
+    return []
+  }
+  if (!workspaceStore.selectedTreePaths.has(node.path)) {
+    return [node]
+  }
+  return workspaceStore.getSelectedTreeNodes(node)
+}
+
 async function writeClipboardText(text: string) {
   if (window.agentEditorDesktop?.writeClipboardText) {
     await window.agentEditorDesktop.writeClipboardText(text)
@@ -536,7 +547,7 @@ async function copyRelativePathFromMenu() {
 async function pasteFromMenu() {
   const node = contextMenu.value.node
   closeContextMenu()
-  await workspaceStore.pasteNode(node)
+  await workspaceStore.pasteNode(node, 'resources')
 }
 
 async function renameFromMenu() {
@@ -584,9 +595,11 @@ async function askAgentFromMenu() {
 }
 
 async function ingestFromMenu() {
-  const node = contextMenu.value.node
+  const nodes = contextTargetNodes()
   closeContextMenu()
-  if (node) await workspaceStore.ingestFile(node)
+  for (const node of nodes) {
+    await workspaceStore.ingestFile(node)
+  }
 }
 
 function ignorePatternForNode(node: KnowledgeFileNode): string {
@@ -599,27 +612,36 @@ function normalizeIgnorePatternLine(line: string): string {
 }
 
 async function toggleIgnoreFromMenu() {
-  const node = contextMenu.value.node
+  const nodes = contextTargetNodes()
   closeContextMenu()
-  if (!node) return
-  const pattern = ignorePatternForNode(node)
-  const currentLines = (settingsStore.profile.knowledgeIgnorePatterns ?? '')
+  if (nodes.length === 0) return
+  let currentLines = (settingsStore.profile.knowledgeIgnorePatterns ?? '')
     .split(/\r?\n/)
     .map((line) => line.trimEnd())
     .filter((line) => line.trim().length > 0)
-  const isCurrentlyIgnored = node.indexStatus === 'ignored'
-  const nextLines = isCurrentlyIgnored
-    ? currentLines.filter((line) => normalizeIgnorePatternLine(line) !== pattern)
-    : [...currentLines.filter((line) => normalizeIgnorePatternLine(line) !== `!${pattern}`), pattern]
-  await settingsStore.saveKnowledgeIngestionSettings({ knowledgeIgnorePatterns: nextLines.join('\n') })
+  for (const node of nodes) {
+    const pattern = ignorePatternForNode(node)
+    const isCurrentlyIgnored = node.indexStatus === 'ignored'
+    currentLines = isCurrentlyIgnored
+      ? currentLines.filter((line) => normalizeIgnorePatternLine(line) !== pattern)
+      : [...currentLines.filter((line) => normalizeIgnorePatternLine(line) !== `!${pattern}`), pattern]
+  }
+  await settingsStore.saveKnowledgeIngestionSettings({ knowledgeIgnorePatterns: currentLines.join('\n') })
   await workspaceStore.loadKnowledgeTree()
 }
 
 async function deleteFromMenu() {
-  const node = contextMenu.value.node
+  const nodes = contextTargetNodes()
   closeContextMenu()
-  if (node && window.confirm(`删除 ${node.name}?`)) {
-    await workspaceStore.deleteNode(node)
+  const firstNode = nodes[0]
+  if (nodes.length === 1 && firstNode && window.confirm(`删除 ${firstNode.name}?`)) {
+    await workspaceStore.deleteNode(firstNode)
+    return
+  }
+  if (nodes.length > 1 && window.confirm(`删除选中的 ${nodes.length} 项?`)) {
+    for (const node of nodes) {
+      await workspaceStore.deleteNode(node)
+    }
   }
 }
 
@@ -711,13 +733,13 @@ async function handleDrop(event: DragEvent, targetNode?: KnowledgeFileNode) {
   }
   const desktopPaths = desktopPathsFromFiles(files)
   if (desktopPaths.length > 0) {
-    await workspaceStore.importExternalPathsToPath(desktopPaths, targetDir)
+    await workspaceStore.importExternalPathsToPath(desktopPaths, targetDir, undefined, 'resources')
     multiSelectMode.value = false
     workspaceStore.clearTreeSelection()
     workspaceStore.selectedTreePath = targetDir
     return
   }
-  await workspaceStore.importFilesToPath(files, targetDir)
+  await workspaceStore.importFilesToPath(files, targetDir, undefined, 'resources')
   multiSelectMode.value = false
   workspaceStore.clearTreeSelection()
   workspaceStore.selectedTreePath = targetDir
@@ -746,7 +768,7 @@ onUnmounted(() => {
 <template>
   <section
     class="resource-manager"
-    :class="{ dragging }"
+    :class="{ dragging, 'theme-dark': settingsStore.isDark }"
     @dragenter.prevent="handleDragEnter()"
     @dragover.prevent="handleDragEnter()"
     @dragleave="handleDragLeave"
@@ -1261,6 +1283,12 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
+.resource-manager.theme-dark .multi-banner {
+  border-bottom-color: var(--color-border);
+  background: #151820;
+  color: var(--color-text);
+}
+
 .banner-close {
   width: 24px;
   height: 24px;
@@ -1643,7 +1671,7 @@ onUnmounted(() => {
 .drop-overlay {
   position: absolute;
   inset: 0;
-  z-index: 5;
+  z-index: 80;
   display: grid;
   place-items: center;
   pointer-events: none;
@@ -1659,9 +1687,16 @@ onUnmounted(() => {
   padding: var(--space-16);
   border: 1px solid var(--color-primary);
   border-radius: var(--radius-sm);
-  background: var(--color-panel-bg);
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: var(--shadow-floating);
   color: var(--color-text);
   text-align: center;
+}
+
+.resource-manager.theme-dark .drop-box {
+  background: rgba(21, 24, 32, 0.72);
 }
 
 .drop-box span {

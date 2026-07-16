@@ -12,6 +12,7 @@ import ActivityBar from '@/components/editor_workspace/ActivityBar.vue'
 import AgentPanel from '@/components/editor_workspace/AgentPanel.vue'
 import CommandPalette from '@/components/editor_workspace/CommandPalette.vue'
 import EditorPane from '@/components/editor_workspace/EditorPane.vue'
+import FileConflictDialog from '@/components/editor_workspace/FileConflictDialog.vue'
 import FileTreePanel from '@/components/editor_workspace/FileTreePanel.vue'
 import FileResourceManager from '@/components/editor_workspace/FileResourceManager.vue'
 import SelectionToolbar from '@/components/editor_workspace/SelectionToolbar.vue'
@@ -51,6 +52,9 @@ const isGraphPage = computed(() => workspaceStore.mainView === 'graph')
 const sidebarHidden = computed(() => isAgentPage.value || isGraphPage.value)
 const visibleFileSidebarOpen = computed(() => fileSidebarOpen.value && !sidebarHidden.value)
 const visibleAgentSidebarOpen = computed(() => agentSidebarOpen.value && !sidebarHidden.value)
+const showConflictDialog = computed(() => {
+  return workspaceStore.conflictDialog.open
+})
 
 // 双向同步: 允许子组件通过 store 打开 Agent 侧边栏
 watch(() => workspaceStore.agentSidebarOpen, (val) => {
@@ -283,6 +287,7 @@ onBeforeUnmount(() => {
     </div>
     <CommandPalette />
     <SelectionToolbar @ask="handleAskAgent" />
+    <FileConflictDialog v-if="showConflictDialog" />
   </div>
 </template>
 

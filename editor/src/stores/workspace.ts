@@ -101,6 +101,7 @@ function splitExtension(name: string): { stem: string; extension: string } {
 }
 
 type FileConflictStrategy = 'overwrite' | 'skip' | 'rename'
+type FileConflictDialogOwner = 'tree' | 'resources'
 
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown'])
 const CODE_EXTENSIONS = new Set([
@@ -324,11 +325,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
    */
   const conflictDialog = ref<{
     open: boolean
+    owner: FileConflictDialogOwner
     targetDir: string
     conflictingNames: string[]
     resolve: ((strategy: FileConflictStrategy | null) => void) | null
   }>({
     open: false,
+    owner: 'tree',
     targetDir: '',
     conflictingNames: [],
     resolve: null,
@@ -731,7 +734,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
    * The resolve callback is stored in conflictDialog.value.resolve so the
    * FileTreePanel dialog template can settle it via resolveConflict().
    */
-  function promptConflictStrategy(targetDirPath: string, names: string[]): Promise<FileConflictStrategy | null> {
+  function promptConflictStrategy(
+    targetDirPath: string,
+    names: string[],
+    owner: FileConflictDialogOwner = 'tree',
+  ): Promise<FileConflictStrategy | null> {
     return new Promise((resolve) => {
       const targetDir = normalizeTreePath(targetDirPath)
       if (!hasNameConflict(targetDir, names)) {
@@ -742,6 +749,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const conflictingNames = names.filter((name) => existingNames.has(name))
       conflictDialog.value = {
         open: true,
+        owner,
         targetDir,
         conflictingNames,
         resolve,
@@ -754,6 +762,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const resolve = conflictDialog.value.resolve
     conflictDialog.value = {
       open: false,
+      owner: 'tree',
       targetDir: '',
       conflictingNames: [],
       resolve: null,
@@ -766,6 +775,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const resolve = conflictDialog.value.resolve
     conflictDialog.value = {
       open: false,
+      owner: 'tree',
       targetDir: '',
       conflictingNames: [],
       resolve: null,
@@ -773,13 +783,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     resolve?.(null)
   }
 
-  async function importFilesToPath(files: File[], targetDirPath = '', conflictStrategy?: FileConflictStrategy) {
+  async function importFilesToPath(
+    files: File[],
+    targetDirPath = '',
+    conflictStrategy?: FileConflictStrategy,
+    conflictOwner: FileConflictDialogOwner = 'tree',
+  ) {
     const targetPath = normalizeTreePath(targetDirPath)
     let importedFiles = files.filter((file) => file.name)
     if (importedFiles.length === 0) {
       return
     }
-    const strategy = conflictStrategy ?? await promptConflictStrategy(targetPath, importedFiles.map((file) => file.name))
+    const strategy = conflictStrategy
+      ?? await promptConflictStrategy(targetPath, importedFiles.map((file) => file.name), conflictOwner)
     if (!strategy) {
       return
     }
@@ -835,7 +851,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
-  async function importExternalPathsToPath(paths: string[], targetDirPath = '', conflictStrategy?: FileConflictStrategy) {
+  async function importExternalPathsToPath(
+    paths: string[],
+    targetDirPath = '',
+    conflictStrategy?: FileConflictStrategy,
+    conflictOwner: FileConflictDialogOwner = 'tree',
+  ) {
     const desktop = window.agentEditorDesktop
     if (!desktop?.copyExternalPathsIntoDirectory) {
       return
@@ -845,7 +866,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return
     }
     const targetPath = normalizeTreePath(targetDirPath)
-    const strategy = conflictStrategy ?? await promptConflictStrategy(targetPath, sourcePaths.map(basenameOfPath))
+    const strategy = conflictStrategy
+      ?? await promptConflictStrategy(targetPath, sourcePaths.map(basenameOfPath), conflictOwner)
     if (!strategy) {
       return
     }
@@ -1128,10 +1150,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     showToast(mode === 'cut' ? `已复制路径 ${absolutePaths.length} 项` : `已复制路径 ${absolutePaths.length} 项`)
   }
 
-  async function pasteNode(targetNode?: KnowledgeFileNode | null) {
+  async function pasteNode(targetNode?: KnowledgeFileNode | null, conflictOwner: FileConflictDialogOwner = 'tree') {
     const pending = fileClipboard.value
     if (!pending || pending.nodes.length === 0) {
-      await pasteExternalClipboardPaths(targetNode)
+      await pasteExternalClipboardPaths(targetNode, conflictOwner)
       return
     }
     const settingsStore = useSettingsStore()
@@ -1191,7 +1213,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     syncCurrentDocumentContext()
   }
 
-  async function pasteExternalClipboardPaths(targetNode?: KnowledgeFileNode | null) {
+  async function pasteExternalClipboardPaths(
+    targetNode?: KnowledgeFileNode | null,
+    conflictOwner: FileConflictDialogOwner = 'tree',
+  ) {
     const desktop = window.agentEditorDesktop
     if (!desktop?.copyExternalPathsIntoDirectory) {
       return
@@ -1205,7 +1230,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     const targetDir = childDirectoryFor(targetNode)
     const targetAbsoluteDir = buildAbsoluteKnowledgePath(useSettingsStore().profile.knowledgeDir, targetDir)
-    const strategy = await promptConflictStrategy(targetDir, sourcePaths.map(basenameOfPath))
+    const strategy = await promptConflictStrategy(targetDir, sourcePaths.map(basenameOfPath), conflictOwner)
     if (!strategy) {
       return
     }

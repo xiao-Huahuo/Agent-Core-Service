@@ -831,27 +831,6 @@ onUnmounted(() => {
       @delete="deleteFromMenu"
     />
 
-    <!--
-      Conflict resolution dialog for drag-drop / paste duplicates.
-      Prompts the user to choose a strategy when a file with the same name
-      already exists at the target directory.
-    -->
-    <div v-if="workspaceStore.conflictDialog.open" class="delete-backdrop" @click.self="workspaceStore.cancelConflict()">
-      <section class="delete-dialog conflict-dialog" role="dialog" aria-modal="true" aria-labelledby="conflict-title">
-        <h2 id="conflict-title">Duplicate files found</h2>
-        <p>The target folder already contains these names. Choose how to handle them.</p>
-        <ul class="conflict-file-list">
-          <li v-for="name in workspaceStore.conflictDialog.conflictingNames" :key="name">{{ name }}</li>
-        </ul>
-        <div class="conflict-actions">
-          <button type="button" @click="workspaceStore.resolveConflict('overwrite')">覆盖</button>
-          <button type="button" @click="workspaceStore.resolveConflict('skip')">跳过</button>
-          <button type="button" class="rename" @click="workspaceStore.resolveConflict('rename')">Rename</button>
-          <button type="button" class="cancel" @click="workspaceStore.cancelConflict()">取消</button>
-        </div>
-      </section>
-    </div>
-
     <div v-if="deleteTarget" class="delete-backdrop" @click.self="deleteTarget = null">
       <section class="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-title">
         <h2 id="delete-title">Confirm delete</h2>
@@ -1168,53 +1147,4 @@ onUnmounted(() => {
   color: var(--color-danger);
 }
 
-.conflict-dialog ul {
-  margin: var(--space-8) 0;
-  padding-left: var(--space-12);
-  color: var(--color-text);
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.conflict-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--space-6);
-  margin-top: var(--space-12);
-}
-
-.conflict-actions button {
-  height: 30px;
-  padding: 0 var(--space-12);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  font-size: 12px;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast),
-    border-color var(--transition-fast);
-}
-
-.conflict-actions button:hover {
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-}
-
-.conflict-actions .rename {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.conflict-actions .rename:hover {
-  background: rgba(66, 36, 235, 0.1);
-}
-
-.conflict-actions .cancel {
-  border-color: transparent;
-  color: var(--color-text-tertiary);
-}
 </style>
