@@ -303,7 +303,8 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 }
 
 .message-attachments {
-  max-width: min(100%, 360px);
+  width: min(100%, 360px);
+  max-width: 100%;
   margin-bottom: var(--space-6);
   overflow-x: auto;
   overflow-y: hidden;

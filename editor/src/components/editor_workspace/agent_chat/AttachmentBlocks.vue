@@ -105,7 +105,11 @@ function toneFor(filename: string) {
   gap: var(--space-6);
   max-width: 100%;
   min-width: 0;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 6px;
+  scrollbar-width: thin;
+  scroll-padding-inline: 2px;
 }
 
 .attachment-blocks.align-left {
@@ -113,7 +117,7 @@ function toneFor(filename: string) {
 }
 
 .attachment-blocks.align-right {
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .attachment-blocks.align-center {
@@ -140,15 +144,12 @@ function toneFor(filename: string) {
     color-mix(in srgb, var(--color-surface) 44%, transparent);
   box-shadow:
     inset 0 1px 1px rgba(255, 255, 255, 0.45),
-    inset 0 -1px 2px rgba(0, 0, 0, 0.08),
-    0 8px 18px rgba(0, 0, 0, 0.08);
+    inset 0 -1px 2px rgba(0, 0, 0, 0.08);
   -webkit-backdrop-filter: blur(18px) saturate(1.5);
   backdrop-filter: blur(18px) saturate(1.5);
   isolation: isolate;
   transition:
-    transform var(--transition-fast),
     border-color var(--transition-fast),
-    box-shadow var(--transition-fast),
     background var(--transition-fast);
 }
 
@@ -166,12 +167,10 @@ function toneFor(filename: string) {
 }
 
 .attachment-card:hover {
-  transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--attachment-color) 36%, var(--color-border));
   box-shadow:
     inset 0 1px 1px rgba(255, 255, 255, 0.55),
-    inset 0 -1px 2px rgba(0, 0, 0, 0.1),
-    0 10px 22px rgba(0, 0, 0, 0.12);
+    inset 0 -1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .attachment-remove {
@@ -259,8 +258,7 @@ function toneFor(filename: string) {
     rgba(12, 14, 18, 0.34);
   box-shadow:
     inset 0 1px 1px rgba(255, 255, 255, 0.18),
-    inset 0 -1px 2px rgba(0, 0, 0, 0.28),
-    0 8px 20px rgba(0, 0, 0, 0.22);
+    inset 0 -1px 2px rgba(0, 0, 0, 0.28);
 }
 
 .tone-red { --attachment-color: #ef476f; }
