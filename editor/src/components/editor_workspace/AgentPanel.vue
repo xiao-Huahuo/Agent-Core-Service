@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { History, Maximize2, MessageSquarePlus, MessagesSquare } from 'lucide-vue-next'
+import { History, Maximize2, MessageSquarePlus, MessagesSquare, PanelLeft } from 'lucide-vue-next'
 
 import ChatInput from '@/components/editor_workspace/agent_chat/ChatInput.vue'
 import MessageList from '@/components/editor_workspace/agent_chat/MessageList.vue'
@@ -40,7 +40,10 @@ const userId = computed(() => settingsStore.profile.userId)
 const isDark = computed(() => settingsStore.isDark)
 const hasMessages = computed(() => chatStore.messages.filter((m) => m.role !== 'system').length > 0)
 const hasStreamingContent = computed(() => !!chatStore.lastMessage?.content)
-const sessionTitle = computed(() => sessionStore.currentSession?.session_name || 'new session')
+const sessionTitle = computed(() => {
+  const name = sessionStore.currentSession?.session_name || 'new session'
+  return name.replace(/^标题:/, '').trim()
+})
 const chatModeLabel = computed(() => settingsStore.chatMode === 'chat' ? 'chat' : 'tool')
 const knowledgeTitle = computed(() => {
   const name = settingsStore.activeKnowledgeLibrary?.name?.trim()
@@ -148,38 +151,51 @@ onMounted(() => {
       'agent-page-mode': props.mode === 'page',
     }"
   >
-    <SessionDrawer
-      :open="sessionDrawerOpen"
-      :mode="props.mode"
-      :user-id="userId"
-      :chat-mode-label="chatModeLabel"
-      @close="closeSessionDrawer"
-      @create="createSession"
-      @select="selectSession"
-      @toggle-chat-mode="settingsStore.toggleChatMode"
-    />
+    <header v-if="props.mode === 'page'" class="agent-topbar">
+      <div class="topbar-left">
+        <button class="icon-button" type="button" title="New session" @click="createSession">
+          <MessageSquarePlus :size="18" />
+        </button>
+        <button class="icon-button" type="button" title="Toggle sidebar" @click="sessionDrawerOpen = !sessionDrawerOpen">
+          <PanelLeft :size="18" />
+        </button>
+      </div>
+      <span class="topbar-title">{{ sessionTitle }}</span>
+      <div class="topbar-right"></div>
+    </header>
 
-    <button
-      v-if="props.mode === 'page' && !sessionDrawerOpen"
-      class="drawer-hover-zone"
-      type="button"
-      title="Open sessions"
-      aria-label="Open sessions"
-      @mouseenter="openSessionDrawer"
-      @focus="openSessionDrawer"
-    ></button>
+    <div class="agent-body">
+      <SessionDrawer
+        :open="sessionDrawerOpen"
+        :mode="props.mode"
+        :user-id="userId"
+        :chat-mode-label="chatModeLabel"
+        @close="closeSessionDrawer"
+        @create="createSession"
+        @select="selectSession"
+        @toggle-chat-mode="settingsStore.toggleChatMode"
+      />
 
-    <header v-if="props.mode === 'panel'" class="agent-titlebar">
+      <button
+        v-if="props.mode === 'page' && !sessionDrawerOpen"
+        class="drawer-hover-zone"
+        type="button"
+        title="Open sessions"
+        aria-label="Open sessions"
+        @mouseenter="openSessionDrawer"
+        @focus="openSessionDrawer"
+      ></button>
+
+      <header v-if="props.mode === 'panel'" class="agent-titlebar">
       <button
         class="icon-button drawer-toggle"
         type="button"
         title="Open sessions"
         @click="sessionDrawerOpen = !sessionDrawerOpen"
       >
-        <MessagesSquare :size="14" />
+        <MessagesSquare :size="16" />
       </button>
       <div class="title-meta">
-        <span class="window-filename">agent --{{ chatModeLabel }}</span>
         <strong>{{ sessionTitle }}</strong>
       </div>
       <div class="title-actions">
@@ -190,13 +206,13 @@ onMounted(() => {
           title="Expand Agent page"
           @click="emit('expand')"
         >
-          <Maximize2 :size="14" />
+          <Maximize2 :size="16" />
         </button>
         <button class="icon-button" type="button" title="New session" @click="createSession">
-          <MessageSquarePlus :size="14" />
+          <MessageSquarePlus :size="16" />
         </button>
         <button class="mode-button" type="button" title="Toggle chat render mode" @click="settingsStore.toggleChatMode">
-          <History :size="13" />
+          <History :size="15" />
           <span>{{ chatModeLabel }}</span>
         </button>
       </div>
@@ -228,6 +244,7 @@ onMounted(() => {
         @clear-reference="clearReference"
       />
     </main>
+    </div>
   </aside>
 </template>
 
@@ -285,6 +302,7 @@ onMounted(() => {
 
 .agent-panel.agent-page-mode {
   --agent-chat-max-width: min(34vw, 640px);
+  --agent-topbar-height: 48px;
   border: 0;
   background: transparent;
   backdrop-filter: none;
@@ -308,6 +326,50 @@ onMounted(() => {
   background: var(--color-bg-muted);
 }
 
+.agent-topbar {
+  display: flex;
+  align-items: center;
+  min-height: var(--agent-topbar-height, 48px);
+  padding: 0 var(--space-12);
+  gap: var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-canvas);
+  flex-shrink: 0;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.topbar-title {
+  flex: 1;
+  overflow: hidden;
+  text-align: center;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 68px;
+}
+
+.agent-body {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .drawer-toggle {
   width: 28px;
   height: 26px;
@@ -316,16 +378,6 @@ onMounted(() => {
 
 .title-meta {
   min-width: 0;
-}
-
-.window-filename {
-  display: block;
-  overflow: hidden;
-  color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .title-meta strong {
@@ -362,6 +414,7 @@ onMounted(() => {
 .icon-button {
   width: 28px;
   border-radius: 999px;
+  border: none;
 }
 
 .mode-button {

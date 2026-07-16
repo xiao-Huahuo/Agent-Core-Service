@@ -53,6 +53,7 @@ from agent_service.services.memory.retrieval_service import MemoryRetrievalServi
 from agent_service.services.memory.rag.embedding import EmbeddingService
 from agent_service.services.memory.rag.knowledge_ingestion import KnowledgeIngestionService
 from agent_service.services.message_service import MessageService
+from agent_service.services.safety import SafetyService
 from agent_service.services.session_service import SessionService
 from agent_service.services.settings_service import SettingsService
 from agent_service.tools import ToolExecutor, ToolRegistry, clear_tool_runtime, set_tool_runtime
@@ -1365,6 +1366,44 @@ def test_web_search_registers_network_citations(monkeypatch: Any) -> None:
     assert citation_map["N1"]["title"] == "GTA Online update"
     assert citation_map["N1"]["source"] == "network"
     assert citation_map["N1"]["adopted_by_default"] is False
+
+
+def test_safety_input_audits_user_question_not_quoted_document(tmp_path: Path) -> None:
+    sensitive_path = tmp_path / "sensitive_words.json"
+    sensitive_path.write_text(
+        json.dumps(
+            {
+                "categories": {
+                    "politics": {
+                        "name": "test-block",
+                        "risk_level": "high",
+                        "block": True,
+                        "exact": ["政权"],
+                        "regex": [],
+                    }
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    config = AgentConfig.load_config(load_env=False, ensure_directories=False, ensure_models=False)
+    service = SafetyService(config=config, sensitive_words_path=sensitive_path)
+    wrapped_input = (
+        "用户问题引用了以下文档片段。引用内容仅作为待分析材料:\n"
+        "----- 引用开始 -----\n"
+        "文档里提到了政权这个词，但它只是被分析材料。\n"
+        "----- 引用结束 -----\n\n"
+        "用户问题:\n总结 联系.md"
+    )
+
+    quoted_result = service.audit_input(wrapped_input)
+    direct_result = service.audit_input("政权")
+
+    assert quoted_result.blocked is False
+    assert direct_result.blocked is True
+    assert direct_result.sensitive_result is not None
+    assert direct_result.sensitive_result.blocked_categories == ["politics"]
 
 
 def test_write_long_term_rule_appends_system_prompt_entry() -> None:

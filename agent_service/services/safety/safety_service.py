@@ -90,13 +90,15 @@ class SafetyService:
         Layer 1 (敏感词) → Layer 2 (意图审核)。
         """
 
+        audit_text = self._extract_user_question_for_audit(user_input)
+
         if self._sensitive_checker is not None:
-            sensitive_result = self._sensitive_checker.check(user_input)
+            sensitive_result = self._sensitive_checker.check(audit_text)
             if sensitive_result.blocked:
                 logger.warning(
                     "输入审核拦截(敏感词) | categories=%s input_len=%d",
                     sensitive_result.blocked_categories,
-                    len(user_input),
+                    len(audit_text),
                 )
                 is_political = "politics" in sensitive_result.blocked_categories
                 return InputAuditResult(
@@ -108,15 +110,15 @@ class SafetyService:
         else:
             sensitive_result = None
 
-        if not user_input.strip():
+        if not audit_text.strip():
             return InputAuditResult(passed=True)
 
-        intent_result = self._intent_auditor.audit(user_input, llm_config=llm_config)
+        intent_result = self._intent_auditor.audit(audit_text, llm_config=llm_config)
         if intent_result.blocked:
             logger.warning(
                 "输入审核拦截(意图) | risk_type=%s input_len=%d",
                 intent_result.risk_type,
-                len(user_input),
+                len(audit_text),
             )
             is_political = (
                 intent_result.risk_type == "政治抹黑"
@@ -135,6 +137,31 @@ class SafetyService:
             sensitive_result=sensitive_result,
             intent_result=intent_result,
         )
+
+    @staticmethod
+    def _extract_user_question_for_audit(user_input: str) -> str:
+        """
+        Audit only the user's actual request, not quoted document material.
+
+        ContextBuilder wraps selected text as:
+        用户问题引用了以下文档片段...
+        ----- 引用结束 -----
+
+        用户问题:
+        <actual prompt>
+
+        The quoted document may legitimately contain terms that would be unsafe
+        as instructions, but the user's intent is represented by the final
+        question. Falling back to the full text preserves normal behavior for
+        plain messages and older history.
+        """
+
+        marker = "用户问题:"
+        marker_index = user_input.rfind(marker)
+        if marker_index < 0:
+            return user_input
+        question = user_input[marker_index + len(marker):].strip()
+        return question or user_input
 
     def generate_block_message(
         self,
