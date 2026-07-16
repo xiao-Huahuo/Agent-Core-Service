@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+from sqlalchemy import func
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -293,6 +294,30 @@ class LongTermMemoryService:
         )
         with Session(self.engine) as db_session:
             return {str(source_id) for source_id in db_session.exec(statement).all() if source_id}
+
+    def list_source_updated_at(self, *, user_id: str, tag: str, memory_type: str) -> dict[str, datetime]:
+        """列出指定用户和类型下每个来源 ID 最近一次入库更新时间。"""
+
+        statement = (
+            select(LongTermMemorySpec.source_id, func.max(LongTermMemorySpec.updated_at))
+            .where(LongTermMemorySpec.user_id == user_id)
+            .where(LongTermMemorySpec.tag == tag)
+            .where(LongTermMemorySpec.memory_type == memory_type)
+            .where(LongTermMemorySpec.source_id.is_not(None))
+            .group_by(LongTermMemorySpec.source_id)
+        )
+        with Session(self.engine) as db_session:
+            rows = db_session.exec(statement).all()
+        result: dict[str, datetime] = {}
+        for source_id, updated_at in rows:
+            if source_id and isinstance(updated_at, datetime):
+                result[str(source_id)] = updated_at
+            elif source_id and isinstance(updated_at, str):
+                try:
+                    result[str(source_id)] = datetime.fromisoformat(updated_at)
+                except ValueError:
+                    continue
+        return result
 
     def has_memories(self, *, user_id: str, tag: str, memory_type: str) -> bool:
         """

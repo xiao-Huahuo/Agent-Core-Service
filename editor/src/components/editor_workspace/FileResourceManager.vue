@@ -309,8 +309,8 @@ function displayMtime(node: KnowledgeFileNode): string {
 }
 
 function displayIngestedAt(node: KnowledgeFileNode): string {
-  if (node.indexStatus === 'indexed' || node.indexStatus === 'clean') {
-    return node.mtime || '-'
+  if (node.isDir || node.indexStatus === 'indexed' || node.indexStatus === 'clean') {
+    return node.ingestedAt || '-'
   }
   return '-'
 }

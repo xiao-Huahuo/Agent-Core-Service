@@ -28,6 +28,7 @@ import stat
 import time
 import zipfile
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 from xml.etree import ElementTree
@@ -623,12 +624,18 @@ class KnowledgeLibraryService:
             tag=self.config.constants.knowledge_tag,
             memory_type="knowledge_chunk",
         )
+        source_updated_at = self.memory_service.list_source_updated_at(
+            user_id=knowledge_owner_id,
+            tag=self.config.constants.knowledge_tag,
+            memory_type="knowledge_chunk",
+        )
         return [
             self._path_to_node(
                 path=path,
                 root=root,
                 ignore_matcher=ignore_matcher,
                 indexed_source_ids=indexed_source_ids,
+                source_updated_at=source_updated_at,
                 frontmatter_root=frontmatter_root,
                 ocr_enabled=ocr_enabled,
             )
@@ -1282,6 +1289,7 @@ class KnowledgeLibraryService:
         root: Path,
         ignore_matcher: KnowledgeIgnoreMatcher | None = None,
         indexed_source_ids: set[str] | None = None,
+        source_updated_at: dict[str, datetime] | None = None,
         frontmatter_root: Path | None = None,
         ocr_enabled: bool = False,
     ) -> dict:
@@ -1311,6 +1319,10 @@ class KnowledgeLibraryService:
             "mtime": self._format_mtime(path),
             "indexStatus": "ignored" if ignored else ("indexed" if is_indexed else "dirty"),
         }
+        if is_indexed and source_id and source_updated_at:
+            ingested_at = source_updated_at.get(source_id)
+            if ingested_at:
+                node["ingestedAt"] = self._format_datetime(ingested_at)
         if is_dir:
             node["children"] = [
                 self._path_to_node(
@@ -1318,11 +1330,19 @@ class KnowledgeLibraryService:
                     root=root,
                     ignore_matcher=ignore_matcher,
                     indexed_source_ids=indexed_source_ids,
+                    source_updated_at=source_updated_at,
                     frontmatter_root=frontmatter_root,
                     ocr_enabled=ocr_enabled,
                 )
                 for child in sorted(path.iterdir(), key=self._sort_path)
             ]
+            child_ingested_at = [
+                str(child.get("ingestedAt") or "")
+                for child in node["children"]
+                if child.get("ingestedAt")
+            ]
+            if child_ingested_at:
+                node["ingestedAt"] = max(child_ingested_at)
         else:
             node["size"] = stat.st_size
         return node
@@ -1473,6 +1493,14 @@ class KnowledgeLibraryService:
         from datetime import datetime
 
         return datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+
+    @staticmethod
+    def _format_datetime(value: datetime) -> str:
+        """格式化数据库时间为前端展示时间。"""
+
+        if value.tzinfo is None:
+            return value.strftime("%Y-%m-%d %H:%M")
+        return value.astimezone().strftime("%Y-%m-%d %H:%M")
 
     @staticmethod
     def _build_search_snippet(*, content: str, position: int, query_length: int) -> str:

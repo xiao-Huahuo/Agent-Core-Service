@@ -32,6 +32,8 @@ export interface KnowledgeFileNode {
   size?: number
   /** Last modified timestamp in display-ready form. */
   mtime?: string
+  /** Last successful ingestion timestamp in display-ready form. */
+  ingestedAt?: string
   /** Current indexing state for this file or directory. */
   indexStatus?: IndexStatus
 }
