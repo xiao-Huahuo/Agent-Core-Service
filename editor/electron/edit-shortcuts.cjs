@@ -5,9 +5,6 @@
  */
 
 const EDIT_COMMANDS = {
-  c: 'copy',
-  v: 'paste',
-  x: 'cut',
   a: 'selectAll',
 }
 

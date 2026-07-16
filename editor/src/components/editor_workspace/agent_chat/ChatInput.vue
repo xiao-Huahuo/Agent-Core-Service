@@ -264,10 +264,10 @@ function selectLoopMode(mode: AgentLoopMode) {
   justify-content: center;
   width: 26px;
   height: 26px;
-  border: 1px solid #38bdf8;
+  border: 1px solid var(--color-primary);
   border-radius: 50%;
   background: transparent;
-  color: #38bdf8;
+  color: var(--color-primary);
   cursor: pointer;
   transition:
     border-color var(--transition-fast),
@@ -276,14 +276,21 @@ function selectLoopMode(mode: AgentLoopMode) {
 }
 
 .web-search-toggle.active {
-  border-color: #38bdf8;
+  border-color: var(--color-primary);
   color: #fff;
-  background: #38bdf8;
+  background: var(--color-primary);
 }
 
 .web-search-toggle:hover {
-  border-color: #7dd3fc;
-  color: #7dd3fc;
+  border-color: var(--color-primary-hover);
+  color: var(--color-primary-hover);
+  background: var(--color-primary-softer);
+}
+
+.web-search-toggle.active:hover {
+  border-color: var(--color-primary-hover);
+  color: #fff;
+  background: var(--color-primary-hover);
 }
 
 .input-hint {

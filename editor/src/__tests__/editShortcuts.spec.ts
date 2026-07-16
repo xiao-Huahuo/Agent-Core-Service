@@ -43,7 +43,7 @@ describe('Electron edit shortcuts', () => {
     expect(webContents.redo).not.toHaveBeenCalled()
   })
 
-  it('keeps shell-level clipboard shortcuts working', () => {
+  it('leaves clipboard shortcuts for renderer-owned file tree and editors', () => {
     const preventDefault = vi.fn()
     const webContents = createWebContents()
 
@@ -54,8 +54,8 @@ describe('Electron edit shortcuts', () => {
       'control',
     )
 
-    expect(handled).toBe(true)
-    expect(webContents.copy).toHaveBeenCalledOnce()
-    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(handled).toBe(false)
+    expect(webContents.copy).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
   })
 })

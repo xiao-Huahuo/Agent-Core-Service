@@ -4,14 +4,32 @@
 - 将 Agent auto 模式路由从硬编码关键词判断改为小模型入口分类: auto 先调用 small tier 输出 `simple/react/plan`,显式模式保持直通,并要求小模型在自身能力不足、不确定、需要事实核验或外部信息时至少选择 `react`;小模型失败或输出不可解析时才回退本地规则,补充测试覆盖“GTA 最近新内容”这类时效短问题进入 `react`。
 - 完成 Agent 回答来源精确挂载: 自动 RAG 和知识库工具召回统一进入 `citation_map`,工具结果新增 `K1/K2` 引用号,最终 assistant 消息按正文实际出现的 `[1]`/`[K1]` 过滤并保存 `used_citations`;editor 聊天气泡改为按消息 metadata 与锚点渲染来源,历史消息不再复用当前轮全局来源。
 - 修复 Agent 自动 RAG 注入的知识库作用域问题: `ContextBuilder._build_retrieved_context()` 调用 `retrieve_knowledge_with_debug()` 时传入当前 `user_id`,避免自动召回默认落到 `system` 知识库,并新增回归测试覆盖该调用参数。
-
+- [x] 引用溯源: Agent检索知识库会产出TOP N,Agent对话框侧边栏和大对话页需要将这些块的文章来源指出并展示给用户,用户可以点击后跳转到这个文章(的这一段 if 是markdown).
+  - [x] 现在的状态是无论召回的来源是否真正被Agent采用,都会挂在气泡下面,这并不好.应该要让agent回答时提供来源中真正被用到的文档,只把这些被用到的文档挂在气泡上面.
+- [x] 引用锚点: 在前端实现像ChatGPT一样的"[1] [2]"这样的答案-来源锚定，需要做两件事：
+    1. 后端让模型在回答时携带 citation（可以在 system prompt
+    中要求每次引用知识库内容时标注来源序号，然后将序号映射回具体片段）
+    2. 前端解析这些标注并渲染为可点击的脚注
+    3. 点击后跳转到此文章(的这一段 if 是markdown)
+- [x] 添加agent对话时用户中断功能,在agent输出过程中发送按钮会变成圆中有方的"中断"图标,中断后agent的思考轨迹和用户的上个输入仍然会进入上下文.
+- [x] 修复文件树操作的一系列问题:
+  - [x] 修复拖拽文件夹到文件树不能正确复制的问题.
+  - [x] 修复从文件树中复制文件不能粘贴到外部去的问题.
 ## 2026-07-14
 - 调整知识库灌库前端超时与进度条: `apiPost` 支持单请求 `timeoutMs`,全库/目录/单文件灌库请求超时放宽到 10 分钟,避免 OCR 长任务被 30 秒 Abort;灌库进度条改为等待期间缓慢推进到 86%-88%,完成后再跳到 100%,不再固定瞬跳 44%/92%。
 - 修复 PaddleOCR Windows CPU 推理异常被误判为“无文字”的问题: 图片 OCR 推理异常现在记录 warning 并返回 `engine_unavailable`;启动预热和图片 OCR 延迟导入 PaddleOCR 前默认设置 `PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT=False`,规避部分 PP-OCRv5 模型在 oneDNN/MKLDNN 路径下的 `ConvertPirAttribute2RuntimeAttribute` 异常。
 - 修复单文件图片灌库 0 chunk 时前端误报“不支持或已屏蔽”的问题: 后端 `KnowledgeLibraryRebuildResult` 新增 `skip_reason/status_message`,区分屏蔽、不支持后缀、OCR 未识别到文字、OCR 引擎不可用和无可入库切片;前端单文件灌库 toast 优先展示后端状态说明。
 - 修复 PaddleOCR 首次预热失败问题: PaddleOCR 的 `*_model_dir` 表示已存在的本地模型目录,空目录会直接查找 `inference.yml` 并失败;现在仅当本地模型目录完整时才传入目录参数,首次启动改为按模型名自动下载,下载后再尝试同步到 `runtime/models/paddleocr`。
 - 将图片 OCR 引擎整体迁移为 PaddleOCR: 移除运行时可执行体和语言数据下载逻辑,新增 `runtime/models/paddleocr` 模型缓存目录与 `ensure_paddleocr_models` 启动预热入口,检测/识别模型分别落在 `text_detection` 和 `text_recognition` 子目录;OCR 配置改为中英文检测/识别模型名、语言、设备和置信度阈值,图片 OCR 服务兼容 PaddleOCR 新旧输出结构并按行列位置重排表格截图文本。
-
+- [x] 制作知识图谱可视化:
+  - 要美观均匀动态,针对同层子节点特别多的情形还可以自动分层力导分成几层,而不是一起被斥力挤在一圈.
+  - 点击图谱节点跳转到编辑区.当鼠标悬浮在文件图谱节点上的时候,要将此文件或文件夹进行高亮对比.
+  - 包含: 
+    - [x] 文件树的图谱,以根目录为根节点,文件夹节点为虚线球,文件为实心球,不同后缀名文件按照不同颜色分类. 
+    - [y] 知识库的图谱,展示各文档之间展示的隐藏联系.和文件树图谱展示方式有点不同,不同的节点之间可以孤立存在,相互吸引而相互排斥,点云看起来像圆形,像obsidian图谱一样.
+      - 完成方法: 不使用Neo4j(需要docker容器装着服务),直接使用SQLite建表(节点表+边表).
+      - 在多模态文档转化为Json之后,分成两路:一路是灌库流程,一路则是"实体关系解析"流程:调用小模型,从知识库文档（frontmatter JSON 里的 sections）中抽取实体和关系(排队抽取),存储到专门的知识图谱表,然后送到前端进行D3可视化.
+    
 ## 2026-07-13
 - 修正图片 OCR 状态语义: 当缺少 OCR 依赖或模型导致 OCR 引擎不可用时,图片 frontmatter/preview 返回 `ocr_status=engine_unavailable`,不再误标为 `no_text`,便于区分“确实无文字”和“OCR 没跑起来”。
 - 接入普通图片 OCR 基础链路: 新增 `ImageOcrService` 按用户 OCR 开关、模型目录、语言、置信度和超时配置识别图片文字;图片预览接口返回 OCR 文本、状态、词数和平均置信度;图片入库在识别到文字/表格文本时生成语义章节,无文字时不生成向量语义内容;editor 对有 OCR 文本的图片在 Edit/Split 显示只读识别文本,Preview 显示原图,无文字图片锁定为 Preview。

@@ -31,7 +31,6 @@ function writeWindowsFileClipboard(filePaths, mode) {
   const script = `
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Collections.Specialized
 $json = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($env:METAWEAVE_CLIPBOARD_FILES_B64))
 $paths = ConvertFrom-Json -InputObject $json
 $files = New-Object System.Collections.Specialized.StringCollection
@@ -47,7 +46,7 @@ $effectStream = New-Object System.IO.MemoryStream
 $effectStream.Write($effectBytes, 0, $effectBytes.Length)
 $effectStream.Position = 0
 $data.SetData('Preferred DropEffect', $effectStream)
-[System.Windows.Forms.Clipboard]::SetDataObject($data, $true)
+[System.Windows.Forms.Clipboard]::SetDataObject($data, $true, 10, 100)
 `
   return new Promise((resolve) => {
     const child = childProcess.spawn(

@@ -1116,10 +1116,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const settingsStore = useSettingsStore()
     const absolutePaths = nodes.map((node) => buildAbsoluteKnowledgePath(settingsStore.profile.knowledgeDir, node.path))
     if (window.agentEditorDesktop?.copyFilePaths) {
-      await window.agentEditorDesktop.copyFilePaths(absolutePaths, mode)
+      const copied = await window.agentEditorDesktop.copyFilePaths(absolutePaths, mode)
+      if (!copied) {
+        showToast('复制失败 — 无法写入系统文件剪贴板')
+        return
+      }
+      showToast(mode === 'cut' ? `已剪切 ${absolutePaths.length} 项` : `已复制 ${absolutePaths.length} 项`)
       return
     }
     await navigator.clipboard?.writeText(absolutePaths.join('\n'))
+    showToast(mode === 'cut' ? `已复制路径 ${absolutePaths.length} 项` : `已复制路径 ${absolutePaths.length} 项`)
   }
 
   async function pasteNode(targetNode?: KnowledgeFileNode | null) {
