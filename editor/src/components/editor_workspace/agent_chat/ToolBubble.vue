@@ -7,7 +7,8 @@
   Shows retrieved knowledge sources below assistant content.
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { Check, Copy } from 'lucide-vue-next'
 
 import KnowledgeSources from '@/components/editor_workspace/agent_chat/KnowledgeSources.vue'
 import MarkdownContent from '@/components/editor_workspace/agent_chat/MarkdownContent.vue'
@@ -26,6 +27,7 @@ const props = defineProps<{
 }>()
 
 const workspaceStore = useWorkspaceStore()
+const copied = ref(false)
 
 const hasContent = computed(() => {
   const content = props.message.content
@@ -59,6 +61,38 @@ const shouldRenderAssistant = computed(() => {
 const bubbleRadius = computed(() => {
   return props.message.role === 'user' ? '18px 4px 18px 18px' : '4px 18px 18px 18px'
 })
+
+const copyableContent = computed(() => {
+  return props.message.content?.trim() || ''
+})
+
+function fallbackCopy(text: string) {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
+}
+
+async function copyBubbleContent() {
+  const text = copyableContent.value
+  if (!text) {
+    return
+  }
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+  } else {
+    fallbackCopy(text)
+  }
+  copied.value = true
+  window.setTimeout(() => {
+    copied.value = false
+  }, 1200)
+}
 
 function handleNavigateSource(uri: string) {
   if (/^https?:\/\//i.test(uri)) {
@@ -118,6 +152,17 @@ function handleNavigateSource(uri: string) {
         />
         <span v-if="isStreaming && !hasContent" class="cursor">|</span>
       </div>
+      <button
+        v-if="copyableContent"
+        class="copy-action"
+        type="button"
+        :title="copied ? 'Copied' : 'Copy'"
+        :aria-label="copied ? 'Copied' : 'Copy message'"
+        @click="copyBubbleContent"
+      >
+        <Check v-if="copied" :size="12" />
+        <Copy v-else :size="12" />
+      </button>
       <KnowledgeSources
         v-if="!isStreaming && knowledgeSources && knowledgeSources.length > 0"
         :sources="knowledgeSources"
@@ -134,6 +179,17 @@ function handleNavigateSource(uri: string) {
       <div class="bubble user" :style="{ borderRadius: bubbleRadius }">
         <pre class="content">{{ message.content }}</pre>
       </div>
+      <button
+        v-if="copyableContent"
+        class="copy-action"
+        type="button"
+        :title="copied ? 'Copied' : 'Copy'"
+        :aria-label="copied ? 'Copied' : 'Copy message'"
+        @click="copyBubbleContent"
+      >
+        <Check v-if="copied" :size="12" />
+        <Copy v-else :size="12" />
+      </button>
     </div>
     <img :src="userAvatar" class="avatar" alt="user" />
   </div>
@@ -172,7 +228,11 @@ function handleNavigateSource(uri: string) {
 }
 
 .action-row {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  max-width: none;
   margin-bottom: var(--space-12);
 }
 
@@ -203,6 +263,30 @@ function handleNavigateSource(uri: string) {
   font-family: var(--font-mono);
   font-size: 11px;
   line-height: var(--line-height-normal);
+}
+
+.copy-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: var(--space-4);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  opacity: 0.56;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.copy-action:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--color-text-secondary);
+  opacity: 1;
 }
 
 .reference-block {

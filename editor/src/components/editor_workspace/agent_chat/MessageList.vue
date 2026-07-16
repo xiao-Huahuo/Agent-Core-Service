@@ -22,6 +22,10 @@ const props = defineProps<{
   mergeAssistants?: boolean
 }>()
 
+const emit = defineEmits<{
+  'bottom-change': [isAtBottom: boolean]
+}>()
+
 const { userAvatar, agentAvatar } = useAvatar()
 const containerRef = ref<HTMLDivElement | null>(null)
 const isPinnedToBottom = ref(true)
@@ -87,15 +91,26 @@ function isNearBottom() {
   return container.scrollHeight - container.scrollTop - container.clientHeight <= 24
 }
 
-function scrollToBottom() {
+function setPinnedToBottom(value: boolean) {
+  if (isPinnedToBottom.value === value) {
+    return
+  }
+  isPinnedToBottom.value = value
+  emit('bottom-change', value)
+}
+
+function scrollToBottom(options: ScrollToOptions = {}) {
   const container = containerRef.value
   if (container) {
-    container.scrollTop = container.scrollHeight
+    container.scrollTo({
+      top: container.scrollHeight,
+      ...options,
+    })
   }
 }
 
 function handleScroll() {
-  isPinnedToBottom.value = isNearBottom()
+  setPinnedToBottom(isNearBottom())
 }
 
 function scheduleScrollIfNeeded() {
@@ -103,7 +118,7 @@ function scheduleScrollIfNeeded() {
   void nextTick(() => {
     if (shouldAutoScroll) {
       scrollToBottom()
-      isPinnedToBottom.value = true
+      setPinnedToBottom(true)
     }
   })
 }
@@ -203,7 +218,11 @@ watch(getLastMessageContent, scheduleScrollIfNeeded)
 
 onMounted(() => {
   scrollToBottom()
-  isPinnedToBottom.value = true
+  setPinnedToBottom(true)
+})
+
+defineExpose({
+  scrollToBottom,
 })
 </script>
 

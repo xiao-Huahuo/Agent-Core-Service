@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { History, Maximize2, MessageSquarePlus, MessagesSquare, PanelLeft } from 'lucide-vue-next'
+import { ChevronDown, History, Maximize2, MessageSquarePlus, MessagesSquare, PanelLeft } from 'lucide-vue-next'
 
 import ChatInput from '@/components/editor_workspace/agent_chat/ChatInput.vue'
 import MessageList from '@/components/editor_workspace/agent_chat/MessageList.vue'
@@ -19,6 +19,10 @@ import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import SplitText from './SplitText.vue'
 import type { AgentLoopMode } from '@/api/agent'
+
+type MessageListApi = {
+  scrollToBottom: (options?: ScrollToOptions) => void
+}
 
 const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
@@ -35,6 +39,8 @@ const emit = defineEmits<{
 const sessionDrawerOpen = ref(props.mode === 'page')
 const isBootstrapping = ref(false)
 const referenceText = ref('')
+const messageListRef = ref<MessageListApi | null>(null)
+const isMessageListAtBottom = ref(true)
 
 const userId = computed(() => settingsStore.profile.userId)
 const isDark = computed(() => settingsStore.isDark)
@@ -110,6 +116,15 @@ function closeSessionDrawer() {
   sessionDrawerOpen.value = false
 }
 
+function handleMessageBottomChange(isAtBottom: boolean) {
+  isMessageListAtBottom.value = isAtBottom
+}
+
+function jumpToMessageBottom() {
+  messageListRef.value?.scrollToBottom({ behavior: 'smooth' })
+  isMessageListAtBottom.value = true
+}
+
 watch(userId, () => void reloadSessions())
 
 watch(
@@ -149,6 +164,7 @@ onMounted(() => {
       'theme-dark': isDark,
       'theme-light': !isDark,
       'agent-page-mode': props.mode === 'page',
+      'agent-drawer-open': props.mode === 'page' && sessionDrawerOpen,
     }"
   >
     <header v-if="props.mode === 'page'" class="agent-topbar">
@@ -226,12 +242,24 @@ onMounted(() => {
         </div>
       </Transition>
       <MessageList
+        ref="messageListRef"
         :messages="chatStore.messages"
         :is-streaming="chatStore.isStreaming"
         :merge-assistants="settingsStore.chatMode === 'chat'"
+        @bottom-change="handleMessageBottomChange"
       />
       <StreamingIndicator :is-streaming="chatStore.isStreaming" :has-content="hasStreamingContent" />
       <p v-if="chatStore.streamError" class="stream-error">{{ chatStore.streamError }}</p>
+      <button
+        v-if="hasMessages && !isMessageListAtBottom"
+        class="scroll-bottom-button"
+        type="button"
+        title="Scroll to bottom"
+        aria-label="Scroll to bottom"
+        @click="jumpToMessageBottom"
+      >
+        <ChevronDown :size="18" />
+      </button>
       <ChatInput
         :disabled="!userId"
         :centered="!hasMessages && !chatStore.isStreaming"
@@ -301,11 +329,20 @@ onMounted(() => {
 }
 
 .agent-panel.agent-page-mode {
-  --agent-chat-max-width: min(34vw, 640px);
+  --agent-drawer-width: 280px;
+  --agent-content-offset: 0px;
+  --agent-chat-max-width: min(72vw, 960px);
+  --agent-input-max-width: min(52vw, 720px);
   --agent-topbar-height: 48px;
   border: 0;
   background: transparent;
   backdrop-filter: none;
+}
+
+.agent-panel.agent-page-mode.agent-drawer-open {
+  --agent-content-offset: var(--agent-drawer-width);
+  --agent-chat-max-width: min(calc(100vw - var(--agent-content-offset) - 48px), 960px);
+  --agent-input-max-width: min(calc(100vw - var(--agent-content-offset) - 96px), 720px);
 }
 
 .agent-panel.theme-light {
@@ -442,24 +479,68 @@ onMounted(() => {
 }
 
 .agent-page-mode :deep(.message-list) {
-  width: min(100%, var(--agent-chat-max-width));
-  align-self: center;
-  padding-right: 0;
-  padding-left: 0;
+  box-sizing: border-box;
+  width: 100%;
+  align-self: stretch;
+  padding-right: max(var(--space-16), calc((100% - var(--agent-content-offset) - var(--agent-chat-max-width)) / 2));
+  padding-left: max(var(--space-16), calc(var(--agent-content-offset) + (100% - var(--agent-content-offset) - var(--agent-chat-max-width)) / 2));
+  transition:
+    padding-right 200ms ease,
+    padding-left 200ms ease;
 }
 
 .agent-page-mode :deep(.bubble-row) {
-  max-width: 100%;
+  max-width: min(100%, 760px);
 }
 
 .agent-page-mode :deep(.chat-input-wrap) {
-  max-width: var(--agent-chat-max-width);
+  left: calc(var(--agent-content-offset) + (100% - var(--agent-content-offset)) / 2);
+  max-width: var(--agent-input-max-width);
+  transition:
+    left 200ms ease,
+    bottom 350ms cubic-bezier(0.4, 0, 0.2, 1),
+    width 350ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .agent-page-mode .stream-error {
   width: min(100%, var(--agent-chat-max-width));
-  margin-right: auto;
-  margin-left: auto;
+  margin-right: max(var(--space-16), calc((100% - var(--agent-content-offset) - var(--agent-chat-max-width)) / 2));
+  margin-left: max(var(--space-16), calc(var(--agent-content-offset) + (100% - var(--agent-content-offset) - var(--agent-chat-max-width)) / 2));
+}
+
+.scroll-bottom-button {
+  position: absolute;
+  left: 50%;
+  bottom: 132px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+  transform: translateX(-50%);
+  transition:
+    left 200ms ease,
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.scroll-bottom-button:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-muted);
+  color: var(--color-text-primary);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.agent-page-mode .scroll-bottom-button {
+  left: calc(var(--agent-content-offset) + (100% - var(--agent-content-offset)) / 2);
 }
 
 .drawer-hover-zone {
@@ -479,10 +560,11 @@ onMounted(() => {
 }
 
 .agent-page-mode .welcome-center {
-  right: 50%;
+  right: calc((100% - var(--agent-content-offset)) / 2);
   left: auto;
   width: min(100%, var(--agent-chat-max-width));
   transform: translateX(50%);
+  transition: right 200ms ease;
 }
 
 .chat-body.dimmed {
@@ -542,7 +624,15 @@ onMounted(() => {
 
 @media (max-width: 820px) {
   .agent-panel.agent-page-mode {
+    --agent-content-offset: 0px;
     --agent-chat-max-width: min(92vw, 560px);
+    --agent-input-max-width: min(92vw, 560px);
+  }
+
+  .agent-panel.agent-page-mode.agent-drawer-open {
+    --agent-content-offset: 0px;
+    --agent-chat-max-width: min(92vw, 560px);
+    --agent-input-max-width: min(92vw, 560px);
   }
 
   .mode-button span {

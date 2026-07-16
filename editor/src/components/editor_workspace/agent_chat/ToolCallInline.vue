@@ -149,7 +149,6 @@ const toolEntries = computed(() => {
 
 <template>
   <div v-for="entry in toolEntries" :key="entry.key" class="tool-call-box">
-    <span class="tool-icon">$</span>
     <span class="tool-text">{{ entry.text }}</span>
   </div>
 </template>
@@ -158,21 +157,19 @@ const toolEntries = computed(() => {
 .tool-call-box {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--space-8);
+  box-sizing: border-box;
   width: 100%;
   margin-bottom: var(--space-6);
   padding: var(--space-8) var(--space-12);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.07) 48%, transparent),
+    rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(10px);
   animation: count-pop 0.35s ease;
-}
-
-.tool-icon {
-  flex-shrink: 0;
-  color: var(--color-accent);
-  font-family: var(--font-mono);
-  font-size: 12px;
 }
 
 .tool-text {
@@ -180,6 +177,9 @@ const toolEntries = computed(() => {
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: var(--line-height-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @keyframes count-pop {
