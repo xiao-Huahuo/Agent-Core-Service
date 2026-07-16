@@ -10,11 +10,11 @@ import queue
 import threading
 from typing import Any, Iterator
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, File, Form, Query, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from agent_service.api.recall_details import build_recall_details_payload
-from agent_service.api.rest.deps import _require_agent, _require_message_service
+from agent_service.api.rest.deps import _require_agent, _require_attachment_service, _require_message_service
 from agent_service.services.editor_context_service import editor_context_service
 
 router = APIRouter()
@@ -58,6 +58,41 @@ async def agent_tools() -> JSONResponse:
         _require_agent().list_registered_tools(),
         headers={"Access-Control-Allow-Origin": "*"},
     )
+
+
+@router.post("/agent/attachments/upload")
+async def upload_agent_attachment(
+    user_id: str = Form(..., min_length=1),
+    session_id: str = Form(..., min_length=1),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Upload a file into the current Agent session context without knowledge ingestion."""
+
+    content = await file.read()
+    attachment = _require_attachment_service().upload_file(
+        user_id=user_id,
+        session_id=session_id,
+        filename=file.filename or "upload.bin",
+        content=content,
+        mime_type=file.content_type or "",
+    )
+    return {"ok": True, "attachment": attachment}
+
+
+@router.delete("/agent/attachments/{attachment_id}")
+async def delete_agent_attachment(
+    attachment_id: str,
+    user_id: str = Query(..., min_length=1),
+    session_id: str = Query(..., min_length=1),
+) -> dict[str, Any]:
+    """Delete a session attachment and its runtime files."""
+
+    deleted = _require_attachment_service().delete_attachment(
+        user_id=user_id,
+        session_id=session_id,
+        attachment_id=attachment_id,
+    )
+    return {"ok": deleted, "deleted": deleted, "attachment_id": attachment_id}
 
 
 @router.options("/agent/tools")

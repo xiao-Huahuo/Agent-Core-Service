@@ -14,7 +14,7 @@ messages = builder.build_messages(user_id="u1", session_id="s1", current_prompt=
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 
@@ -22,6 +22,9 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.message import MessageOut
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 from agent_service.services.message_service import MessageService
+
+if TYPE_CHECKING:
+    from agent_service.services.session_attachment_service import SessionAttachmentService
 
 
 class ContextBuilder:
@@ -39,12 +42,14 @@ class ContextBuilder:
         config: AgentConfig,
         message_service: MessageService,
         retrieval_service: MemoryRetrievalService | None = None,
+        attachment_service: SessionAttachmentService | None = None,
     ) -> None:
         """保存配置、消息服务和长期记忆检索服务。"""
 
         self.config = config
         self.message_service = message_service
         self.retrieval_service = retrieval_service or MemoryRetrievalService(config=config)
+        self.attachment_service = attachment_service
 
     def build_messages(self, *, user_id: str, session_id: str, current_prompt: str, reference: str | None = None) -> list[BaseMessage]:
         """
@@ -133,6 +138,15 @@ class ContextBuilder:
             user_id=user_id,
             session_id=session_id,
         )
+        attachment_context = (
+            self.attachment_service.build_context(
+                user_id=user_id,
+                session_id=session_id,
+                current_prompt=current_prompt,
+            )
+            if self.attachment_service is not None
+            else None
+        )
 
         # ---- 计算 RAG 指标 ----
         top_k = max(self.config.memory.rerank_top_k, 1)
@@ -191,7 +205,7 @@ class ContextBuilder:
         )
         if has_history:
             sections.append("短期上下文状态: 当前 session 已存在历史消息,回答时优先使用这些历史事实。")
-        has_refs = important_summary is not None or memories or knowledge
+        has_refs = important_summary is not None or memories or knowledge or bool(attachment_context and attachment_context.content)
         if has_refs:
             sections.append("--- 参考材料开始 ---")
         if important_summary is not None:
@@ -216,6 +230,13 @@ class ContextBuilder:
                     "source_uri": source_uri,
                     "content": content,
                 }
+        if attachment_context and attachment_context.content:
+            sections.append(attachment_context.content)
+            citation_map.update(attachment_context.citation_map)
+            recall_details["attachment_context"] = {
+                "attachment_count": attachment_context.attachment_count,
+                "injected_count": attachment_context.injected_count,
+            }
         if has_refs:
             sections.append("--- 参考材料结束 ---")
         if len(sections) <= 4 and not has_history:

@@ -7,18 +7,20 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ChevronDown, History, Maximize2, MessageSquarePlus, MessagesSquare, PanelLeft } from 'lucide-vue-next'
+import { ChevronDown, History, Maximize2, MessageSquarePlus, MessagesSquare, PanelLeft, UploadCloud } from 'lucide-vue-next'
 
 import ChatInput from '@/components/editor_workspace/agent_chat/ChatInput.vue'
 import MessageList from '@/components/editor_workspace/agent_chat/MessageList.vue'
 import SessionDrawer from '@/components/editor_workspace/agent_chat/SessionDrawer.vue'
 import StreamingIndicator from '@/components/editor_workspace/agent_chat/StreamingIndicator.vue'
 import { useChatStore } from '@/stores/chat'
+import type { AgentUploadedAttachment } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import SplitText from './SplitText.vue'
 import type { AgentLoopMode } from '@/api/agent'
+import { uploadAgentAttachment } from '@/api/agent'
 
 type MessageListApi = {
   scrollToBottom: (options?: ScrollToOptions) => void
@@ -41,12 +43,16 @@ const isBootstrapping = ref(false)
 const referenceText = ref('')
 const messageListRef = ref<MessageListApi | null>(null)
 const isMessageListAtBottom = ref(true)
+const dragDepth = ref(0)
+const isUploadingAttachment = ref(false)
+const uploadStatusText = ref('')
 const welcomeIconUrl = new URL('../../assets/images/无底图标.png', import.meta.url).href
 
 const userId = computed(() => settingsStore.profile.userId)
 const isDark = computed(() => settingsStore.isDark)
 const hasMessages = computed(() => chatStore.messages.filter((m) => m.role !== 'system').length > 0)
 const hasStreamingContent = computed(() => !!chatStore.lastMessage?.content)
+const isAttachmentDropActive = computed(() => dragDepth.value > 0 || isUploadingAttachment.value)
 const sessionTitle = computed(() => {
   const name = sessionStore.currentSession?.session_name || 'new session'
   return name.replace(/^标题:/, '').trim()
@@ -132,6 +138,65 @@ function jumpToMessageBottom() {
   isMessageListAtBottom.value = true
 }
 
+function removeAttachment(attachment: AgentUploadedAttachment) {
+  void chatStore.deleteAttachment(attachment)
+}
+
+function containsFiles(event: DragEvent) {
+  return Array.from(event.dataTransfer?.types ?? []).includes('Files')
+}
+
+function handleDragEnter(event: DragEvent) {
+  if (!containsFiles(event)) return
+  event.preventDefault()
+  dragDepth.value += 1
+}
+
+function handleDragOver(event: DragEvent) {
+  if (!containsFiles(event)) return
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+  }
+}
+
+function handleDragLeave(event: DragEvent) {
+  if (!containsFiles(event)) return
+  event.preventDefault()
+  dragDepth.value = Math.max(0, dragDepth.value - 1)
+}
+
+async function handleDrop(event: DragEvent) {
+  if (!containsFiles(event)) return
+  event.preventDefault()
+  dragDepth.value = 0
+  const files = Array.from(event.dataTransfer?.files ?? [])
+  if (!files.length || !userId.value) {
+    return
+  }
+  let targetSessionId = sessionStore.currentSessionId
+  if (!targetSessionId) {
+    targetSessionId = await sessionStore.create(userId.value)
+    sessionStore.select(targetSessionId)
+  }
+  isUploadingAttachment.value = true
+  try {
+    for (const [index, file] of files.entries()) {
+      uploadStatusText.value = `Uploading ${index + 1}/${files.length}: ${file.name}`
+      const response = await uploadAgentAttachment(userId.value, targetSessionId, file)
+      chatStore.addPendingAttachment(response.attachment)
+    }
+    uploadStatusText.value = files.length === 1 ? `Uploaded ${files[0].name}` : `Uploaded ${files.length} files`
+    window.setTimeout(() => {
+      if (!isUploadingAttachment.value) uploadStatusText.value = ''
+    }, 1600)
+  } catch (error) {
+    uploadStatusText.value = error instanceof Error ? error.message : 'Upload failed'
+  } finally {
+    isUploadingAttachment.value = false
+  }
+}
+
 watch(userId, () => void reloadSessions())
 
 watch(
@@ -172,8 +237,20 @@ onMounted(() => {
       'theme-light': !isDark,
       'agent-page-mode': props.mode === 'page',
       'agent-drawer-open': props.mode === 'page' && sessionDrawerOpen,
+      'attachment-drop-active': isAttachmentDropActive,
     }"
+    @dragenter="handleDragEnter"
+    @dragover="handleDragOver"
+    @dragleave="handleDragLeave"
+    @drop="handleDrop"
   >
+    <Transition name="attachment-drop-fade">
+      <div v-if="isAttachmentDropActive" class="attachment-drop-overlay" aria-live="polite">
+        <UploadCloud :size="38" />
+        <span>{{ uploadStatusText || 'Drop files to attach to this session' }}</span>
+      </div>
+    </Transition>
+
     <header v-if="props.mode === 'page'" class="agent-topbar">
       <div class="topbar-left">
         <button class="icon-button" type="button" title="New session" @click="createSession">
@@ -300,10 +377,12 @@ onMounted(() => {
         :web-search-enabled="settingsStore.profile.webSearchEnabled"
         :agent-mode="settingsStore.agentLoopMode"
         :reference="referenceText"
+        :attachments="chatStore.pendingAttachments"
         @send="sendMessage"
         @toggle-web-search="handleToggleWebSearch"
         @set-agent-mode="setAgentLoopMode"
         @clear-reference="clearReference"
+        @remove-attachment="removeAttachment"
       />
     </main>
     </div>
@@ -369,7 +448,7 @@ onMounted(() => {
   --agent-content-offset: 0px;
   --agent-chat-max-width: min(72vw, 960px);
   --agent-input-max-width: min(52vw, 720px);
-  --agent-topbar-height: 48px;
+  --agent-topbar-height: 32px;
   border: 0;
   background: transparent;
   backdrop-filter: none;
@@ -388,12 +467,18 @@ onMounted(() => {
   --color-agent-bubble-glow: rgba(66, 36, 235, 0.08);
 }
 
+.agent-panel.attachment-drop-active {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 58%, transparent),
+    inset 0 0 80px color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
 .agent-titlebar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-8);
-  min-height: 42px;
+  min-height: 28px;
   padding: 0 var(--space-10);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg-muted);
@@ -402,7 +487,7 @@ onMounted(() => {
 .agent-topbar {
   display: flex;
   align-items: center;
-  min-height: var(--agent-topbar-height, 48px);
+  min-height: var(--agent-topbar-height, 32px);
   padding: 0 var(--space-12);
   gap: var(--space-8);
   border-bottom: 1px solid var(--color-border);
@@ -482,6 +567,49 @@ onMounted(() => {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+}
+
+.attachment-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-12);
+  border: 1px dashed color-mix(in srgb, var(--color-accent) 68%, transparent);
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--color-accent) 18%, transparent), transparent 38%),
+    color-mix(in srgb, var(--color-surface-raised) 90%, transparent);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 32%, transparent),
+    inset 0 0 120px rgba(0, 0, 0, 0.22),
+    0 24px 80px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(16px);
+}
+
+.attachment-drop-overlay svg {
+  color: var(--color-accent);
+}
+
+.attachment-drop-fade-enter-active,
+.attachment-drop-fade-leave-active {
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.attachment-drop-fade-enter-from,
+.attachment-drop-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
 }
 
 .drawer-toggle {

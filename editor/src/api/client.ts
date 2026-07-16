@@ -124,11 +124,12 @@ export function apiDelete<T>(path: string, query?: Record<string, QueryValue>, i
   })
 }
 
-export function apiPostForm<T>(path: string, body: FormData): Promise<T> {
+export function apiPostForm<T>(path: string, body: FormData, init?: ApiRequestInit): Promise<T> {
   return request<T>(buildApiUrl(path), {
     method: 'POST',
     headers: {},
     body,
+    ...init,
   })
 }
 

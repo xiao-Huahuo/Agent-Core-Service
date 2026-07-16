@@ -10,11 +10,13 @@
 import { computed, ref, watch } from 'vue'
 import { Check, Copy, ThumbsDown, ThumbsUp } from 'lucide-vue-next'
 
+import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import KnowledgeSources from '@/components/editor_workspace/agent_chat/KnowledgeSources.vue'
 import MarkdownContent from '@/components/editor_workspace/agent_chat/MarkdownContent.vue'
 import ThinkingInline from '@/components/editor_workspace/agent_chat/ThinkingInline.vue'
+import { useChatStore } from '@/stores/chat'
 import { useWorkspaceStore } from '@/stores/workspace'
-import type { AgentChatMessage, SourceItem } from '@/stores/chat'
+import type { AgentChatMessage, AgentUploadedAttachment, SourceItem } from '@/stores/chat'
 
 const props = defineProps<{
   message: AgentChatMessage
@@ -28,6 +30,7 @@ const props = defineProps<{
 }>()
 
 const workspaceStore = useWorkspaceStore()
+const chatStore = useChatStore()
 const copied = ref(false)
 const feedback = ref<'up' | 'down' | null>(null)
 const feedbackBurst = ref<'up' | 'down' | null>(null)
@@ -169,6 +172,10 @@ function handleNavigateSource(uri: string) {
     workspaceStore.selectFile(node)
   }
 }
+
+function removeAttachment(attachment: AgentUploadedAttachment) {
+  void chatStore.deleteAttachment(attachment)
+}
 </script>
 
 <template>
@@ -255,6 +262,13 @@ function handleNavigateSource(uri: string) {
 
   <div v-else-if="message.role === 'user'" class="bubble-row user">
     <div class="bubble-col">
+      <AttachmentBlocks
+        v-if="message.attachments?.length"
+        class="message-attachments"
+        :attachments="message.attachments"
+        align="right"
+        @remove="removeAttachment"
+      />
       <div v-if="message.reference" class="reference-block">
         <span class="reference-content">{{ message.reference }}</span>
       </div>
@@ -334,6 +348,14 @@ function handleNavigateSource(uri: string) {
 
 .bubble-row.user .bubble-col {
   align-items: flex-end;
+}
+
+.message-attachments {
+  max-width: min(100%, 360px);
+  margin-bottom: var(--space-6);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .node-label {

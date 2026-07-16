@@ -9,7 +9,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { BrainCircuit, Check, ChevronDown, Globe, Send, X } from 'lucide-vue-next'
+import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import type { AgentLoopMode } from '@/api/agent'
+import type { AgentUploadedAttachment } from '@/stores/chat'
 
 const props = defineProps<{
   disabled?: boolean
@@ -17,6 +19,7 @@ const props = defineProps<{
   webSearchEnabled?: boolean
   agentMode?: AgentLoopMode
   reference?: string
+  attachments?: AgentUploadedAttachment[]
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +27,7 @@ const emit = defineEmits<{
   'toggle-web-search': []
   'set-agent-mode': [mode: AgentLoopMode]
   'clear-reference': []
+  'remove-attachment': [attachment: AgentUploadedAttachment]
 }>()
 
 const text = ref('')
@@ -75,6 +79,13 @@ function selectLoopMode(mode: AgentLoopMode) {
 
 <template>
   <div class="chat-input-wrap" :class="{ centered }">
+    <AttachmentBlocks
+      v-if="!centered && attachments?.length"
+      class="input-attachments"
+      :attachments="attachments"
+      align="left"
+      @remove="emit('remove-attachment', $event)"
+    />
     <div class="input-container">
       <div v-if="reference" class="reference-bar">
         <span class="reference-text">{{ reference }}</span>
@@ -136,6 +147,13 @@ function selectLoopMode(mode: AgentLoopMode) {
         </button>
       </div>
     </div>
+    <AttachmentBlocks
+      v-if="centered && attachments?.length"
+      class="input-attachments centered-attachments"
+      :attachments="attachments"
+      align="left"
+      @remove="emit('remove-attachment', $event)"
+    />
   </div>
 </template>
 
@@ -156,6 +174,23 @@ function selectLoopMode(mode: AgentLoopMode) {
 .chat-input-wrap.centered {
   bottom: 50%;
   width: min(90%, 400px);
+}
+
+.input-attachments {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 0 var(--space-4);
+  scrollbar-width: thin;
+}
+
+.input-attachments.centered-attachments {
+  top: calc(100% + 8px);
+  bottom: auto;
 }
 
 .input-container {

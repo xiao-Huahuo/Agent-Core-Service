@@ -54,6 +54,7 @@ from agent_service.schemas.message import MessageCreate
 from agent_service.scripts.draw_agent_graph import draw_agent_graph
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.message_service import MessageService
+from agent_service.services.session_attachment_service import SessionAttachmentService
 from agent_service.services.safety import SafetyService
 from agent_service.services.scheduler import (
     BACKGROUND_SUMMARY_TASK,
@@ -146,6 +147,7 @@ class AgentCore:
         graph: CompiledStateGraph | None = None,
         message_service: MessageService | None = None,
         context_builder: ContextBuilder | None = None,
+        attachment_service: SessionAttachmentService | None = None,
         task_scheduler: LLMTaskScheduler | None = None,
         session_service: Any = None,
     ) -> None:
@@ -157,6 +159,7 @@ class AgentCore:
         logger.debug("本地模型检查完成")
         self.message_service = message_service
         self.context_builder = context_builder
+        self.attachment_service = attachment_service
         self.session_service = session_service
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.tool_registry = ToolRegistry.with_builtin_tools(config=config) if tools is None else None
@@ -813,7 +816,11 @@ class AgentCore:
         """获取或懒加载短期上下文构建器。"""
 
         if self.context_builder is None:
-            self.context_builder = ContextBuilder(config=self.config, message_service=message_service)
+            self.context_builder = ContextBuilder(
+                config=self.config,
+                message_service=message_service,
+                attachment_service=self.attachment_service,
+            )
         return self.context_builder
 
     def _has_renamable_assistant_reply(self, *, user_id: str, session_id: str) -> bool:

@@ -6,7 +6,7 @@
  * chat endpoint as the console front-end.
  */
 
-import { apiGet, apiPut, buildApiUrl, streamLines } from '@/api/client'
+import { apiDelete, apiGet, apiPostForm, apiPut, buildApiUrl, streamLines } from '@/api/client'
 import { API_ROUTES } from '@/router/api_routes'
 
 export interface AgentStreamChunk {
@@ -60,6 +60,51 @@ export function streamPrompt(
 
 export function updateCurrentDocumentContext(payload: CurrentDocumentContextPayload): Promise<unknown> {
   return apiPut(API_ROUTES.AGENT_CURRENT_DOCUMENT_CONTEXT, payload)
+}
+
+export interface AgentAttachmentUploadResponse {
+  ok: boolean
+  attachment: {
+    attachment_id: string
+    user_id: string
+    session_id: string
+    library_id: string
+    library_name: string
+    filename: string
+    stored_name: string
+    uri: string
+    mime_type: string
+    size: number
+    source_type: string
+    summary?: string
+    metadata?: Record<string, unknown>
+    created_at: string
+  }
+}
+
+export function uploadAgentAttachment(
+  userId: string,
+  sessionId: string,
+  file: File,
+): Promise<AgentAttachmentUploadResponse> {
+  const form = new FormData()
+  form.set('user_id', userId)
+  form.set('session_id', sessionId)
+  form.set('file', file)
+  return apiPostForm<AgentAttachmentUploadResponse>(API_ROUTES.AGENT_ATTACHMENTS_UPLOAD, form, {
+    timeoutMs: 600_000,
+  })
+}
+
+export function deleteAgentAttachment(
+  userId: string,
+  sessionId: string,
+  attachmentId: string,
+): Promise<{ ok: boolean; deleted: boolean; attachment_id: string }> {
+  return apiDelete(`${API_ROUTES.AGENT_ATTACHMENTS}/${encodeURIComponent(attachmentId)}`, {
+    user_id: userId,
+    session_id: sessionId,
+  })
 }
 
 export interface RecallDetailsResponse {

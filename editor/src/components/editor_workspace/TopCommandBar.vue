@@ -65,6 +65,10 @@ async function handleCloseWindow() {
       <button class="icon-button" type="button" title="设置" @click="emit('openSettings')">
         <Settings :size="14" />
       </button>
+      <button class="console-link" type="button" title="切换 Agent 面板" @click="emit('toggleAgent')">
+        <Bot :size="14" />
+        <span>Agent</span>
+      </button>
       <button
         class="ingest-button"
         :class="{ refreshing: workspaceStore.refreshing }"
@@ -75,10 +79,6 @@ async function handleCloseWindow() {
       >
         <DatabaseZap :size="14" />
       </button>
-      <button class="console-link" type="button" title="切换 Agent 面板" @click="emit('toggleAgent')">
-        <Bot :size="14" />
-        <span>Agent</span>
-      </button>
       <button
         class="theme-button icon-button"
         :class="{ dark: settingsStore.isDark, light: !settingsStore.isDark }"
@@ -87,7 +87,7 @@ async function handleCloseWindow() {
         @click="settingsStore.toggleTheme"
       >
         <Moon v-if="settingsStore.isDark" :size="14" />
-        <Sun v-else :size="14" />
+        <Sun v-else :size="18" />
       </button>
       <div v-if="desktopApi?.isDesktop" class="window-controls" aria-label="Window controls">
         <button type="button" title="最小化" @click="desktopApi.minimize">
@@ -115,7 +115,7 @@ async function handleCloseWindow() {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8);
-  min-height: 45px;
+  min-height: 38px;
   padding: 2px var(--space-8);
   border-bottom: 1px solid var(--color-border);
   background:

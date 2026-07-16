@@ -8,6 +8,7 @@
 """
 
 from agent_service.models.longterm_memory_spec import LongTermMemorySpec, LongTermMemorySpecBase
+from agent_service.models.attachment import SessionAttachmentRecord
 from agent_service.models.message import MessageBase, MessageRecord
 from agent_service.models.session import SessionBase, SessionRecord
 from agent_service.models.user_settings import UserSettingsRecord, UserSystemPromptEntry
@@ -15,6 +16,7 @@ from agent_service.models.user_settings import UserSettingsRecord, UserSystemPro
 __all__ = [
     "LongTermMemorySpec",
     "LongTermMemorySpecBase",
+    "SessionAttachmentRecord",
     "MessageBase",
     "MessageRecord",
     "SessionBase",

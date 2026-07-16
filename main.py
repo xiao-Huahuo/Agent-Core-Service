@@ -91,6 +91,7 @@ import agent_service.api.rest.deps as rest_deps
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.session_service import SessionService
 from agent_service.services.message_service import MessageService
+from agent_service.services.session_attachment_service import SessionAttachmentService
 from agent_service.services.logging_service import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -131,6 +132,10 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
 
     memory_service = LongTermMemoryService(config=config)
     settings_service = SettingsService(config=config, memory_service=memory_service)
+    attachment_service = SessionAttachmentService(config=config, settings_service=settings_service)
+    agent.attachment_service = attachment_service
+    if agent.context_builder is not None:
+        agent.context_builder.attachment_service = attachment_service
     knowledge_graph_service = KnowledgeGraphService(config=config)
     knowledge_library_service = KnowledgeLibraryService(
         config=config,
@@ -139,6 +144,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         knowledge_graph_service=knowledge_graph_service,
     )
     rest_deps._settings_service = settings_service
+    rest_deps._attachment_service = attachment_service
     rest_deps._knowledge_library_service = knowledge_library_service
     rest_deps._knowledge_graph_service = knowledge_graph_service
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
@@ -214,6 +220,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._session_service = None
         rest_deps._message_service = None
         rest_deps._settings_service = None
+        rest_deps._attachment_service = None
         rest_deps._knowledge_library_service = None
         rest_deps._knowledge_graph_service = None
         logger.info("AgentService 已关闭")

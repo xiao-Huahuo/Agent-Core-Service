@@ -824,6 +824,28 @@ flowchart TD
     T --> V["气泡下方来源列表<br/>只显示实际引用文档/网页"]
     T --> W["历史消息使用自身 metadata<br/>不复用当前轮全局来源"]
 ```
+##### 文件上传
+
+```mermaid
+flowchart TD
+    A["用户拖拽文件到 Agent 页面"] --> B["前端 FormData<br/>POST /agent/attachments/upload"]
+    B --> C["SessionAttachmentService<br/>校验 user_id/session_id/active library"]
+    C --> D["保存原文件<br/>runtime/uploads/{user_id}/{library}/{session_id}/"]
+    D --> E["统一解析器<br/>FrontmatterBootstrapService + MultimodalDocumentCleaner"]
+    E --> F["抽取结构化章节/正文<br/>写入 .attachments/{attachment_id}.txt"]
+    F --> G["SQLite: session_attachments<br/>保存 uri、路径、摘要、metadata"]
+    G --> H["ContextBuilder.build_messages()"]
+    H --> I{"当前问题是否指向上传附件?"}
+    I -->|"文件名/最近上传/这个文件"| J["注入相关附件正文片段"]
+    I -->|"无明确指向"| K["仅注入会话附件目录摘要"]
+    J --> L["Agent LLM 上下文"]
+    K --> L
+    D -. "不执行" .-> M["KnowledgeIngestionService / ChromaDB"]
+```
+
+- 上传附件是 session-scoped context asset, 不是知识库资产; 它不写入知识库目录, 不生成可灌库 frontmatter, 不进入 Embedding/ChromaDB。
+- 解析链路复用文件树/知识库的同一套结构化解析器。差别只在消费端: 知识库文件解析后进入灌库, 上传附件解析后只登记到会话附件表并供 ContextBuilder 注入。
+- 同一个 session 的后续提问会保留附件目录; 当用户说“这个文件”“刚才上传的文件”或直接提到文件名时, ContextBuilder 会把相关附件正文片段放进本轮 system context。
 
 ## 接口设计
 

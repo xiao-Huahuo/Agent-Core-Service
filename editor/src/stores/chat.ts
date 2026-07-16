@@ -9,8 +9,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { streamPrompt } from '@/api/agent'
-import type { AgentLoopMode } from '@/api/agent'
+import { deleteAgentAttachment, streamPrompt } from '@/api/agent'
+import type { AgentAttachmentUploadResponse, AgentLoopMode } from '@/api/agent'
 import { fetchMessages } from '@/api/session'
 import { useSessionStore } from '@/stores/session'
 
@@ -24,7 +24,10 @@ export interface AgentChatMessage {
   trace?: Array<Record<string, unknown>>
   created_at?: string
   reference?: string
+  attachments?: AgentUploadedAttachment[]
 }
+
+export type AgentUploadedAttachment = AgentAttachmentUploadResponse['attachment']
 
 export interface SourceItem {
   source_uri: string
@@ -89,6 +92,7 @@ export const useChatStore = defineStore('chat', () => {
   const activeAgentMode = ref<AgentLoopMode>('auto')
   const currentKnowledgeSources = ref<SourceItem[]>([])
   const currentCitationMap = ref<Record<string, SourceItem>>({})
+  const pendingAttachments = ref<AgentUploadedAttachment[]>([])
 
   let streamAbortController: AbortController | null = null
   let historyAbortController: AbortController | null = null
@@ -258,7 +262,15 @@ export const useChatStore = defineStore('chat', () => {
       }
     }
 
-    appendMessage({ role: 'user', content: prompt, reference: reference || undefined, created_at: new Date().toISOString() })
+    const attachmentsForTurn = [...pendingAttachments.value]
+    pendingAttachments.value = []
+    appendMessage({
+      role: 'user',
+      content: prompt,
+      reference: reference || undefined,
+      attachments: attachmentsForTurn,
+      created_at: new Date().toISOString(),
+    })
 
     streamAbortController = new AbortController()
     const signal = streamAbortController.signal
@@ -423,6 +435,43 @@ export const useChatStore = defineStore('chat', () => {
     loadedSessionId.value = ''
     currentKnowledgeSources.value = []
     currentCitationMap.value = {}
+    pendingAttachments.value = []
+  }
+
+  function addPendingAttachment(attachment: AgentUploadedAttachment) {
+    pendingAttachments.value.push(attachment)
+  }
+
+  function removeAttachmentLocal(attachmentId: string) {
+    pendingAttachments.value = pendingAttachments.value.filter((item) => item.attachment_id !== attachmentId)
+    messages.value = messages.value.map((message) => {
+      if (!message.attachments?.length) {
+        return message
+      }
+      return {
+        ...message,
+        attachments: message.attachments.filter((item) => item.attachment_id !== attachmentId),
+      }
+    })
+  }
+
+  async function deleteAttachment(attachment: AgentUploadedAttachment) {
+    const attachmentId = attachment.attachment_id
+    if (!attachmentId) {
+      return
+    }
+    removeAttachmentLocal(attachmentId)
+
+    const userId = attachment.user_id
+    const sessionId = attachment.session_id
+    if (!userId || !sessionId) {
+      return
+    }
+    try {
+      await deleteAgentAttachment(userId, sessionId, attachmentId)
+    } catch (error) {
+      console.error('删除上传附件失败:', error)
+    }
   }
 
   return {
@@ -433,11 +482,14 @@ export const useChatStore = defineStore('chat', () => {
     loadedSessionId,
     contextMirror,
     activeAgentMode,
+    pendingAttachments,
     lastMessage,
     canSend,
     loadHistory,
     send,
     clear,
+    addPendingAttachment,
+    deleteAttachment,
     currentKnowledgeSources,
     currentCitationMap,
   }
