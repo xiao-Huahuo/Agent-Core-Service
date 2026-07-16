@@ -331,11 +331,11 @@ onMounted(() => {
   --color-accent-hover: var(--color-primary-hover);
   --color-accent-muted: var(--color-primary-soft);
   --color-blue: var(--color-primary);
-  /* User bubble: red accent */
-  --color-user-bubble: rgba(235, 36, 99, 0.14);
-  --color-user-bubble-border: rgba(235, 36, 99, 0.42);
-  --color-user-bubble-highlight: rgba(255, 255, 255, 0.06);
-  --color-user-bubble-glow: rgba(235, 36, 99, 0.18);
+  /* User bubble: blue accent */
+  --color-user-bubble: rgba(66, 133, 244, 0.16);
+  --color-user-bubble-border: rgba(66, 133, 244, 0.46);
+  --color-user-bubble-highlight: rgba(255, 255, 255, 0.08);
+  --color-user-bubble-glow: rgba(66, 133, 244, 0.22);
   /* Agent bubble: blue primary */
   --color-agent-bubble: rgba(66, 36, 235, 0.12);
   --color-agent-bubble-border: rgba(66, 36, 235, 0.38);
@@ -378,8 +378,8 @@ onMounted(() => {
 }
 
 .agent-panel.theme-light {
-  --color-user-bubble: rgba(235, 36, 99, 0.10);
-  --color-user-bubble-glow: rgba(235, 36, 99, 0.10);
+  --color-user-bubble: rgba(66, 133, 244, 0.12);
+  --color-user-bubble-glow: rgba(66, 133, 244, 0.14);
   --color-agent-bubble: rgba(66, 36, 235, 0.08);
   --color-agent-bubble-glow: rgba(66, 36, 235, 0.08);
 }
@@ -562,6 +562,11 @@ onMounted(() => {
 
 .agent-page-mode :deep(.bubble-row) {
   max-width: min(100%, 760px);
+}
+
+.agent-page-mode :deep(.tool-assistant-row) {
+  width: 100%;
+  max-width: 100%;
 }
 
 .agent-page-mode :deep(.chat-input-wrap) {

@@ -385,12 +385,12 @@ watch([sanitizedHtml, sourceLinkSignature], () => void highlightCodeBlocks(), { 
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 16px;
-  height: 14px;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: var(--color-accent-muted);
-  color: var(--color-accent);
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-primary);
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 650;
@@ -398,14 +398,14 @@ watch([sanitizedHtml, sourceLinkSignature], () => void highlightCodeBlocks(), { 
   vertical-align: super;
   line-height: 1;
   transition:
-    background var(--transition-fast),
+    color var(--transition-fast),
     opacity var(--transition-fast);
 }
 
 .markdown-body :deep(.citation-anchor:hover) {
-  background: var(--color-accent);
-  color: #ffffff;
-  opacity: 0.85;
+  background: transparent;
+  color: var(--color-primary-hover);
+  opacity: 1;
 }
 
 .markdown-body :deep(.source-file-link) {

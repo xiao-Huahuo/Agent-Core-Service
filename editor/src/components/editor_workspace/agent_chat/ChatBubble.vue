@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Check, Copy } from 'lucide-vue-next'
+import { Check, Copy, ThumbsDown, ThumbsUp } from 'lucide-vue-next'
 
 import KnowledgeSources from '@/components/editor_workspace/agent_chat/KnowledgeSources.vue'
 import MarkdownContent from '@/components/editor_workspace/agent_chat/MarkdownContent.vue'
@@ -28,6 +28,8 @@ const props = defineProps<{
 
 const workspaceStore = useWorkspaceStore()
 const copied = ref(false)
+const feedback = ref<'up' | 'down' | null>(null)
+const feedbackBurst = ref<'up' | 'down' | null>(null)
 
 const bubbleRadius = computed(() => {
   return props.message.role === 'user' ? '18px 4px 18px 18px' : '4px 18px 18px 18px'
@@ -127,6 +129,17 @@ async function copyBubbleContent() {
   }, 1200)
 }
 
+function setFeedback(kind: 'up' | 'down') {
+  feedback.value = kind
+  feedbackBurst.value = null
+  window.requestAnimationFrame(() => {
+    feedbackBurst.value = kind
+    window.setTimeout(() => {
+      feedbackBurst.value = null
+    }, 420)
+  })
+}
+
 function handleNavigateSource(uri: string) {
   if (/^https?:\/\//i.test(uri)) {
     if (window.agentEditorDesktop?.openExternal) {
@@ -200,17 +213,38 @@ function handleNavigateSource(uri: string) {
         />
         <span v-if="isStreaming && !hasAssistantContent" class="cursor">|</span>
       </div>
-      <button
-        v-if="copyableContent"
-        class="copy-action"
-        type="button"
-        :title="copied ? 'Copied' : 'Copy'"
-        :aria-label="copied ? 'Copied' : 'Copy message'"
-        @click="copyBubbleContent"
-      >
-        <Check v-if="copied" :size="12" />
-        <Copy v-else :size="12" />
-      </button>
+      <div v-if="copyableContent" class="message-actions">
+        <button
+          class="copy-action"
+          type="button"
+          :title="copied ? 'Copied' : 'Copy'"
+          :aria-label="copied ? 'Copied' : 'Copy message'"
+          @click="copyBubbleContent"
+        >
+          <Check v-if="copied" :size="12" />
+          <Copy v-else :size="12" />
+        </button>
+        <button
+          class="feedback-action feedback-up"
+          :class="{ active: feedback === 'up', burst: feedbackBurst === 'up' }"
+          type="button"
+          title="Like"
+          aria-label="Like response"
+          @click="setFeedback('up')"
+        >
+          <ThumbsUp :size="12" />
+        </button>
+        <button
+          class="feedback-action feedback-down"
+          :class="{ active: feedback === 'down', burst: feedbackBurst === 'down' }"
+          type="button"
+          title="Dislike"
+          aria-label="Dislike response"
+          @click="setFeedback('down')"
+        >
+          <ThumbsDown :size="12" />
+        </button>
+      </div>
       <KnowledgeSources
         v-if="knowledgeSources && knowledgeSources.length > 0"
         :sources="knowledgeSources"
@@ -416,6 +450,61 @@ function handleNavigateSource(uri: string) {
   opacity: 1;
 }
 
+.message-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.message-actions .copy-action {
+  margin-top: 0;
+}
+
+.feedback-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  opacity: 0.56;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    opacity var(--transition-fast),
+    transform 120ms ease;
+}
+
+.feedback-action:hover {
+  background: rgba(148, 163, 184, 0.12);
+  opacity: 1;
+}
+
+.feedback-action.feedback-up:hover,
+.feedback-action.feedback-up.active {
+  color: #ef4b72;
+}
+
+.feedback-action.feedback-down:hover,
+.feedback-action.feedback-down.active {
+  color: #7f92b2;
+}
+
+.feedback-action.burst {
+  animation: feedback-pop 420ms cubic-bezier(0.2, 1.55, 0.35, 1);
+}
+
+@keyframes feedback-pop {
+  0% { transform: scale(1); }
+  42% { transform: scale(1.34) rotate(-8deg); }
+  68% { transform: scale(0.88) rotate(4deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
 .reference-block {
   max-width: 100%;
   margin-bottom: var(--space-4);
@@ -457,7 +546,7 @@ function handleNavigateSource(uri: string) {
 
 .bubble.assistant {
   border-color: var(--color-agent-bubble-border);
-  background: var(--color-agent-bubble);
+  background: transparent;
   box-shadow:
     inset 0 1px 0 var(--color-agent-bubble-highlight),
     0 0 0 1px rgba(255, 255, 255, 0.03),

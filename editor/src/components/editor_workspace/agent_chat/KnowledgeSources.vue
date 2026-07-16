@@ -157,9 +157,9 @@ function openSource(uri: string) {
   gap: var(--space-6);
   width: 100%;
   padding: var(--space-4) var(--space-8);
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  background: transparent;
   color: var(--color-text);
   font-family: var(--font-mono);
   font-size: 11px;
@@ -171,8 +171,7 @@ function openSource(uri: string) {
 }
 
 .source-item:hover {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
+  background: transparent;
   color: var(--color-primary);
 }
 
@@ -180,15 +179,20 @@ function openSource(uri: string) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: var(--color-primary);
-  color: #fff;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-primary);
   font-size: 9px;
   font-weight: 650;
   flex-shrink: 0;
+  transition: color var(--transition-fast);
+}
+
+.source-item:hover .source-index {
+  color: var(--color-primary-hover);
 }
 
 .source-name {
