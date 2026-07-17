@@ -38,8 +38,42 @@ function taskPool(node) {
   return 'background'
 }
 
+const cumulativePoolTasks = computed(() => {
+  const grouped = {
+    large: [],
+    small: [],
+    background: [],
+  }
+
+  for (const item of obs.nodeTimeline.value) {
+    const pool = taskPool(item.node)
+    grouped[pool].push({
+      id: item.id,
+      node: item.node,
+      active: item.isCurrent,
+      humanReadable: item.humanReadable || item.event || '',
+    })
+  }
+
+  if (chatStore.currentNode && !grouped[taskPool(chatStore.currentNode)].some((task) => task.active)) {
+    const pool = taskPool(chatStore.currentNode)
+    grouped[pool].push({
+      id: `live-${chatStore.currentNode}`,
+      node: chatStore.currentNode,
+      active: true,
+      humanReadable: latestTimelineText(),
+    })
+  }
+
+  for (const key of ['large', 'small', 'background']) {
+    grouped[key] = grouped[key].slice(-MAX_TASKS_PER_POOL)
+  }
+
+  return grouped
+})
+
 function latestTimelineText() {
-  const timeline = obs.currentMessageNodeTimeline.value
+  const timeline = obs.nodeTimeline.value
   if (!timeline || timeline.length === 0) return ''
   const last = timeline[timeline.length - 1]
   return last.humanReadable || last.event || ''
@@ -97,7 +131,7 @@ watch(() => chatStore.currentNode, (newNode, oldNode) => {
 
 // 流式过程中持续更新当前任务的描述文本
 watch(
-  () => obs.currentMessageNodeTimeline.value.length,
+  () => obs.nodeTimeline.value.length,
   () => {
     const current = chatStore.currentNode
     if (!current) return
@@ -304,7 +338,7 @@ const queueStatusLabel = computed(() => {
             class="task-list"
           >
             <div
-              v-for="task in poolTasks[pool.id]"
+              v-for="task in cumulativePoolTasks[pool.id]"
               :key="task.id"
               class="task-item"
               :class="{ 'task-current': task.active }"
@@ -315,7 +349,7 @@ const queueStatusLabel = computed(() => {
               <span class="task-tip">{{ task.humanReadable || task.node }}</span>
             </div>
           </TransitionGroup>
-          <div v-if="!poolTasks[pool.id] || poolTasks[pool.id].length === 0" class="task-empty">
+          <div v-if="!cumulativePoolTasks[pool.id] || cumulativePoolTasks[pool.id].length === 0" class="task-empty">
             <span v-if="pool.state === 'active'">等待任务…</span>
             <span v-else>空闲</span>
           </div>

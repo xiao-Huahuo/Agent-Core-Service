@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -26,6 +27,10 @@ from agent_service.services.safety.safety_service import SafetyService
 BLOCKED_OUTPUT_MESSAGE = AIMessage(
     content="抱歉,当前回复因安全原因无法显示。如需帮助请重新描述您的问题。"
 )
+
+
+def _elapsed_ms(started_at: float) -> float:
+    return max(0.01, round((time.perf_counter() - started_at) * 1000, 2))
 
 
 class SafetyInputNode:
@@ -43,6 +48,7 @@ class SafetyInputNode:
     def __call__(self, state: AgentState) -> dict[str, Any]:
         """从最新 HumanMessage 提取用户输入并执行审核。"""
 
+        started_at = time.perf_counter()
         user_input = self._extract_user_input(state)
         if not user_input:
             return {}
@@ -60,8 +66,12 @@ class SafetyInputNode:
                 "trace": [{
                     "node": "safety_input",
                     "event": "blocked",
+                    "model_tier": "runtime",
                     "category": "political" if result.is_political else "general",
                     "message": result.block_reason,
+                    "human_readable": result.block_reason or "输入安全审核拦截。",
+                    "duration_ms": _elapsed_ms(started_at),
+                    "chat_visible": False,
                 }],
                 "observation_decision": "blocked",
             }
@@ -69,7 +79,11 @@ class SafetyInputNode:
             "trace": [{
                 "node": "safety_input",
                 "event": "passed",
+                "model_tier": "runtime",
                 "message": "输入安全审核通过",
+                "human_readable": "输入安全审核通过。",
+                "duration_ms": _elapsed_ms(started_at),
+                "chat_visible": False,
             }],
         }
 
@@ -105,6 +119,7 @@ class SafetyOutputNode:
     def __call__(self, state: AgentState) -> dict[str, Any]:
         """从最新 AIMessage 提取输出并执行审核。"""
 
+        started_at = time.perf_counter()
         output_text = self._extract_output(state)
         user_input = SafetyInputNode._extract_user_input(state)
         if not output_text:
@@ -118,14 +133,22 @@ class SafetyOutputNode:
                 "trace": [{
                     "node": "safety_output",
                     "event": result.verdict,
+                    "model_tier": "runtime",
                     "message": result.reason,
+                    "human_readable": result.reason or "输出安全审核已改写回复。",
+                    "duration_ms": _elapsed_ms(started_at),
+                    "chat_visible": False,
                 }],
             }
         return {
             "trace": [{
                 "node": "safety_output",
                 "event": "passed",
+                "model_tier": "runtime",
                 "message": "输出安全审核通过",
+                "human_readable": "输出安全审核通过。",
+                "duration_ms": _elapsed_ms(started_at),
+                "chat_visible": False,
             }],
         }
 

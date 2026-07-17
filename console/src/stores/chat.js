@@ -155,7 +155,13 @@ export const useChatStore = defineStore('chat', () => {
       const history = await fetchMessages(sessionId, userId, limit, { signal })
       messages.value = history
         .filter(m => m.role !== 'tool' || m.metadata?.node === 'action')
-        .filter(m => m.role !== 'assistant' || m.content || (m.tool_calls && m.tool_calls.length > 0) || m.metadata?.node === 'action')
+        .filter(m =>
+          m.role !== 'assistant'
+          || m.content
+          || (m.tool_calls && m.tool_calls.length > 0)
+          || (m.metadata?.trace && m.metadata.trace.length > 0)
+          || m.metadata?.node === 'action'
+        )
         .map(m => ({
           role: m.role === 'tool' ? 'assistant' : m.role,
           content: m.content,
@@ -254,7 +260,6 @@ export const useChatStore = defineStore('chat', () => {
         /* 系统提示事件: 将 system prompt 注入消息列表供 Obs 面板上下文拼装使用。
            每轮只保留最新一条, 避免旧轮次系统消息污染当前上下文拼装视图。 */
         if (chunk.type === 'system_prompt' && chunk.content) {
-          messages.value = messages.value.filter(m => m.role !== 'system')
           messages.value.push({
             role: 'system',
             content: chunk.content,

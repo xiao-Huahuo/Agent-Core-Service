@@ -15,25 +15,22 @@ const chartMode = ref<'line' | 'bar'>('line')
 const CURVE_COLORS = ['#4da6ff', '#d99178', '#6ee7b7', '#a78bfa', '#f59e0b']
 const BORDER = 'rgba(255,255,255,0.08)'
 const TXT_LABEL = '#777'
+const TOKEN_MODEL_LABELS = ['\u5927\u6a21\u578b', '\u5c0f\u6a21\u578b']
 
 function curveColor(_name: string, i: number): string {
   return CURVE_COLORS[i % CURVE_COLORS.length] || CURVE_COLORS[0] || '#888'
 }
 
 const modelNames = computed(() => {
-  const names: string[] = []
-  const seen = new Set<string>()
-  for (const item of obs.tokenSeries.value) {
-    for (const name of Object.keys(item.modelTokens)) {
-      if (!seen.has(name)) { seen.add(name); names.push(name) }
-    }
-  }
-  return names
+  return TOKEN_MODEL_LABELS.filter((name) =>
+    obs.tokenSeries.value.some((item) => Number(item.modelTokens?.[name] || 0) > 0)
+  )
 })
 
 const modelTotals = computed(() => {
   const last = obs.tokenSeries.value[obs.tokenSeries.value.length - 1]
-  return last?.modelTotals || ({} as Record<string, number>)
+  const totals = last?.modelTotals || {}
+  return Object.fromEntries(TOKEN_MODEL_LABELS.map((name) => [name, totals[name] || 0])) as Record<string, number>
 })
 
 /** 折线图 option */

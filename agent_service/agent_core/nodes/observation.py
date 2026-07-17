@@ -19,7 +19,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, SystemMessage
 
 from agent_service.agent_core.nodes.base import AgentState
-from agent_service.agent_core.nodes.model_decision import get_user_llm_overrides
+from agent_service.agent_core.nodes.model_decision import extract_token_usage, get_user_llm_overrides
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.scheduler import (
@@ -110,6 +110,7 @@ class ObservationNode:
                 "chat_visible": False,
             })
         response = self._call_llm(system_message, context_message, state)
+        token_usage = extract_token_usage(response)
         parsed = self._parse_decision(response.content)
         llm_decision = parsed["decision"]
         forced_decision = self._force_convergence_decision(state, llm_decision)
@@ -131,6 +132,7 @@ class ObservationNode:
             "reason": parsed["reason"],
             "next_action": parsed["next_action"],
             "confidence": parsed["confidence"],
+            "token_usage": token_usage,
             "human_readable": readable,
             "chat_visible": False,
         }

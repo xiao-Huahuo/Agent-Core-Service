@@ -1,6 +1,6 @@
 <!--
   RagMetricsCard —— RAG 召回率、命中率、置信度展示卡片。
-  可切换 donut(本轮) / line(全会话历史)。
+  可切换 donut(累计) / line(全会话历史)。
   ECharts 渲染，弹性布局。
 -->
 
@@ -128,7 +128,7 @@ const lineOption = computed(() => {
         <span class="traffic-dot sm green"></span>
       </div>
       <span class="window-filename">RAG 召回率 / 命中率 / 置信度</span>
-      <span class="window-status">{{ chartMode === 'donut' ? '本轮' : '历史' }}</span>
+      <span class="window-status">{{ chartMode === 'donut' ? '累计' : '历史' }}</span>
     </div>
 
     <div class="card-body">

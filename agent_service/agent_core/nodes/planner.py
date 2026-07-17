@@ -20,7 +20,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 
 from agent_service.agent_core.nodes.base import AgentState
-from agent_service.agent_core.nodes.model_decision import get_user_llm_overrides
+from agent_service.agent_core.nodes.model_decision import extract_token_usage, get_user_llm_overrides
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.scheduler import (
     FOREGROUND_AGENT_TASK,
@@ -108,6 +108,7 @@ class PlannerNode:
                 "chat_visible": False,
             })
         response = self._call_llm(system_message, user_message, state)
+        token_usage = extract_token_usage(response)
         plan = self._parse_plan(response.content)
         if plan is not None:
             event = "strategy_updated" if existing_plan else "strategy_generated"
@@ -122,6 +123,7 @@ class PlannerNode:
                 "current_index": plan.get("current_index", 0),
                 "status": plan.get("status", "running"),
                 "sufficient": plan.get("sufficient", False),
+                "token_usage": token_usage,
                 "human_readable": readable,
                 "chat_visible": False,
             }
@@ -133,6 +135,7 @@ class PlannerNode:
             "trace": [{
                 "node": "planner",
                 "event": "no_plan_needed",
+                "token_usage": token_usage,
                 "human_readable": "策略分析未产出有效结果，直接进入决策。",
                 "chat_visible": False,
             }],

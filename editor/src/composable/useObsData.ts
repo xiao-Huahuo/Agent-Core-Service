@@ -141,6 +141,8 @@ export interface TokenSeriesItem {
 export interface NodeBreakdownItem {
   node: string
   count: number
+  durationMs: number
+  seconds: number
   share: number
 }
 
@@ -151,6 +153,7 @@ export interface LatencyTurn {
   userPrompt: string
   assistantOutput: string
   seconds: number
+  cumulativeSeconds: number
   estimated: boolean
   traceCount: number
   toolCount: number
@@ -175,6 +178,17 @@ export interface SessionStats {
 
 const SMALL_MODEL_NODES = new Set(['compress', 'planner', 'observation', 'summary'])
 const LARGE_MODEL_NODES = new Set(['agent'])
+const MODEL_TOKEN_NODES = new Set([...SMALL_MODEL_NODES, ...LARGE_MODEL_NODES])
+const MODEL_TIER_LABELS: Record<'large' | 'small', string> = {
+  large: '\u5927\u6a21\u578b',
+  small: '\u5c0f\u6a21\u578b',
+}
+const KNOWLEDGE_RECALL_TOOLS = new Set([
+  'get_knowledge_context',
+  'search_knowledge',
+  'read_knowledge_file',
+  'read_multimodal_file_info',
+])
 
 /* ---- 工具函数 ---- */
 
@@ -186,10 +200,6 @@ function estimateTextTokens(text: unknown): number {
   return Math.max(0, Math.ceil(String(text || '').length / 4))
 }
 
-function estimateToolTokens(toolCalls: unknown): number {
-  return estimateTextTokens(JSON.stringify(safeArray(toolCalls)))
-}
-
 function parseDate(value: unknown): Date | null {
   if (!value) return null
   const date = new Date(value as string)
@@ -198,6 +208,221 @@ function parseDate(value: unknown): Date | null {
 
 function roundNumber(value: unknown, digits = 1): number {
   return Number.parseFloat(Number(value || 0).toFixed(digits))
+}
+
+function modelTierForTrace(trace: Record<string, unknown>): 'small' | 'large' | 'runtime' {
+  if (trace.model_tier === 'small' || trace.model_tier === 'large' || trace.model_tier === 'runtime') {
+    return trace.model_tier
+  }
+  if (SMALL_MODEL_NODES.has(trace.node as string)) return 'small'
+  if (LARGE_MODEL_NODES.has(trace.node as string)) return 'large'
+  return 'runtime'
+}
+
+function normalizeTokenUsage(usage: unknown): { inputTokens: number; outputTokens: number; totalTokens: number } {
+  if (!usage || typeof usage !== 'object') {
+    return { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
+  }
+  const source = usage as Record<string, unknown>
+  const inputTokens = Number(source.input_tokens || source.prompt_tokens || 0)
+  const outputTokens = Number(source.output_tokens || source.completion_tokens || 0)
+  const totalTokens = Number(source.total_tokens || inputTokens + outputTokens || 0)
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+  }
+}
+
+export function buildTokenSeries(
+  messages: Array<{ role: string; trace?: unknown; created_at?: unknown }>,
+): TokenSeriesItem[] {
+  const assistantMessages = safeArray<{ role: string; trace?: unknown; created_at?: unknown }>(messages)
+    .filter((message) => message.role === 'assistant')
+  const modelTotals: Record<string, number> = {}
+
+  return assistantMessages.map((message, index) => {
+    const traces = safeArray<Record<string, unknown>>(message.trace)
+    const modelTokens: Record<string, number> = {}
+    for (const trace of traces) {
+      const usage = normalizeTokenUsage(trace.token_usage)
+      if (usage.totalTokens <= 0) continue
+      const tier = modelTierForTrace(trace)
+      if (tier === 'runtime') continue
+      if (!MODEL_TOKEN_NODES.has(trace.node as string)) continue
+      const name = MODEL_TIER_LABELS[tier]
+      if (!name) continue
+      modelTokens[name] = (modelTokens[name] || 0) + usage.totalTokens
+      modelTotals[name] = (modelTotals[name] || 0) + usage.totalTokens
+    }
+    const totalTokens = Object.values(modelTokens).reduce((sum, value) => sum + value, 0)
+
+    let label = `#${index + 1}`
+    if (message.created_at) {
+      const d = new Date(message.created_at as string)
+      label = d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    }
+
+    return {
+      id: `token-${index}`,
+      label,
+      modelTokens,
+      totalTokens,
+      modelTotals: { ...modelTotals },
+    }
+  }).filter((item) => item.totalTokens > 0)
+}
+
+function extractTopKFromArgs(summary: unknown, fallback = 3): number {
+  const text = String(summary || '')
+  const match = text.match(/top_k\s*[:=]\s*(\d+)/i) || text.match(/"top_k"\s*:\s*(\d+)/i)
+  const value = match ? Number(match[1]) : fallback
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function extractConfidenceFromText(text: unknown, fallback: number): number {
+  const source = String(text || '')
+  const match = source.match(/(?:confidence|rerank|score|merged_score|final_score)\D*(\d+(?:\.\d+)?)/i)
+  if (!match) return fallback
+  const raw = Number(match[1])
+  if (!Number.isFinite(raw)) return fallback
+  return roundNumber(raw <= 1 ? raw * 100 : Math.min(raw, 100), 1)
+}
+
+function isEmptyToolResult(text: unknown): boolean {
+  const source = String(text || '').trim().toLowerCase()
+  if (!source) return true
+  return [
+    '未找到',
+    '没有找到',
+    '无相关',
+    'no result',
+    'not found',
+    '执行失败',
+    '失败',
+    'error',
+  ].some((pattern) => source.includes(pattern))
+}
+
+function inferKnowledgeResultCount(trace: Record<string, unknown>, toolName: string): number {
+  const explicit = Number(trace.result_count || 0)
+  if (explicit > 0) return explicit
+  const summary = String(trace.result_summary || '')
+  if (isEmptyToolResult(summary)) return 0
+
+  const citationMatches = summary.match(/\[[A-Z]?\d+\]/g)
+  if (citationMatches?.length) return citationMatches.length
+  const numberedMatches = summary.match(/(?:^|\n)\s*\d+\.\s+/g)
+  if (numberedMatches?.length) return numberedMatches.length
+  const fileMatches = summary.match(/(?:^|\n)\s*(?:[-*]\s*)?[\w./\\\-\u4e00-\u9fa5]+\.(?:md|txt|pdf|docx?|xlsx?|csv|png|jpe?g)\b/gi)
+  if (fileMatches?.length) return fileMatches.length
+
+  return toolName.startsWith('read_') || toolName === 'search_knowledge' ? 1 : 0
+}
+
+function metricSampleFromKnowledgeTool(trace: Record<string, unknown>, startTrace?: Record<string, unknown>): Record<string, unknown> | null {
+  const toolName = String(trace.tool_name || '')
+  if (trace.event !== 'tool_call_end' || !KNOWLEDGE_RECALL_TOOLS.has(toolName)) return null
+  const resultCount = inferKnowledgeResultCount(trace, toolName)
+  const topK = toolName.startsWith('read_') ? 1 : extractTopKFromArgs(startTrace?.tool_args_summary, 3)
+  const hitRate = resultCount > 0 ? 100 : 0
+  return {
+    recall: roundNumber(Math.min((resultCount / topK) * 100, 100), 1),
+    hit_rate: hitRate,
+    confidence: extractConfidenceFromText(trace.result_summary, hitRate),
+    memory_count: 0,
+    knowledge_count: resultCount,
+    important_count: 0,
+  }
+}
+
+function collectRagMetrics(
+  messages: Array<{ role: string; metadata?: unknown; trace?: unknown }>,
+): Array<Record<string, unknown>> {
+  const metrics: Array<Record<string, unknown>> = []
+  for (const message of safeArray<{ role: string; metadata?: unknown; trace?: unknown }>(messages)) {
+    if (message.role === 'system') {
+      const systemMetrics = (message.metadata as Record<string, unknown> | undefined)?.rag_metrics as Record<string, unknown> | undefined
+      if (systemMetrics) metrics.push(systemMetrics)
+      continue
+    }
+    if (message.role !== 'assistant') continue
+    const starts = new Map<string, Record<string, unknown>>()
+    for (const trace of safeArray<Record<string, unknown>>(message.trace)) {
+      const callId = String(trace.tool_call_id || '')
+      if (trace.event === 'tool_call_start' && callId) {
+        starts.set(callId, trace)
+        continue
+      }
+      const toolMetrics = metricSampleFromKnowledgeTool(trace, starts.get(callId))
+      if (toolMetrics) metrics.push(toolMetrics)
+    }
+  }
+  return metrics
+}
+
+export function buildRagMetrics(messages: Array<{ role: string; metadata?: unknown; trace?: unknown }>): RagMetrics {
+  const metrics = collectRagMetrics(messages)
+  if (metrics.length === 0) {
+    return {
+      recall: 0,
+      hitRate: 0,
+      confidence: 0,
+      memoryCount: 0,
+      knowledgeCount: 0,
+      importantCount: 0,
+      turnCount: 0,
+    }
+  }
+
+  const totals = metrics.reduce((acc, metric) => ({
+    recall: acc.recall + Number(metric.recall || 0),
+    hitRate: acc.hitRate + Number(metric.hit_rate || 0),
+    confidence: acc.confidence + Number(metric.confidence || 0),
+    memoryCount: acc.memoryCount + Number(metric.memory_count || 0),
+    knowledgeCount: acc.knowledgeCount + Number(metric.knowledge_count || 0),
+    importantCount: acc.importantCount + Number(metric.important_count || 0),
+  }), {
+    recall: 0,
+    hitRate: 0,
+    confidence: 0,
+    memoryCount: 0,
+    knowledgeCount: 0,
+    importantCount: 0,
+  })
+
+  return {
+    recall: roundNumber(totals.recall / metrics.length, 1),
+    hitRate: roundNumber(totals.hitRate / metrics.length, 1),
+    confidence: roundNumber(totals.confidence / metrics.length, 1),
+    memoryCount: totals.memoryCount,
+    knowledgeCount: totals.knowledgeCount,
+    importantCount: totals.importantCount,
+    turnCount: metrics.length,
+  }
+}
+
+export function buildRagHistory(messages: Array<{ role: string; metadata?: unknown; trace?: unknown }>): RagHistoryPoint[] {
+  const points: RagHistoryPoint[] = []
+  let turnIndex = 0
+  let recallTotal = 0
+  let hitRateTotal = 0
+  let confidenceTotal = 0
+
+  for (const metric of collectRagMetrics(messages)) {
+    turnIndex += 1
+    recallTotal += Number(metric.recall || 0)
+    hitRateTotal += Number(metric.hit_rate || 0)
+    confidenceTotal += Number(metric.confidence || 0)
+    points.push({
+      turn: turnIndex,
+      recall: roundNumber(recallTotal / turnIndex, 1),
+      hitRate: roundNumber(hitRateTotal / turnIndex, 1),
+      confidence: roundNumber(confidenceTotal / turnIndex, 1),
+    })
+  }
+
+  return points
 }
 
 function toTitle(type: string): string {
@@ -456,13 +681,15 @@ function isAssistantRenderable(message: { role: string; content?: unknown; trace
   return Boolean(message.node)
 }
 
-function buildLatencyTurns(
+export function buildLatencyTurns(
   messages: { role: string; content?: unknown; created_at?: unknown; trace?: unknown; tool_calls?: unknown; node?: unknown }[],
   isStreaming = false,
 ): LatencyTurn[] {
   const turns: LatencyTurn[] = []
   let pendingUser: { content?: unknown; created_at?: unknown } | null = null
   let pendingAssistants: { content?: unknown; created_at?: unknown; trace?: unknown; tool_calls?: unknown; node?: unknown }[] = []
+  const cumulativeTraces: Record<string, unknown>[] = []
+  let cumulativeSeconds = 0
   let turnIndex = 0
 
   function flushTurn(): void {
@@ -478,11 +705,15 @@ function buildLatencyTurns(
       .pop() || ''
     const traceCount = allTraces.length
     const toolCount = allToolCalls.length
+    const durationMs = sumTraceDuration(allTraces)
     let seconds = 0
     let estimated = false
 
-    if (userTime && assistantTime) {
+    if (durationMs > 0) {
+      seconds = Math.max(0.01, durationMs / 1000)
+    } else if (userTime && assistantTime) {
       seconds = Math.max(0.1, (assistantTime.getTime() - userTime.getTime()) / 1000)
+      estimated = true
     } else {
       seconds = Math.max(
         0.8,
@@ -490,6 +721,8 @@ function buildLatencyTurns(
       )
       estimated = true
     }
+    cumulativeSeconds += seconds
+    cumulativeTraces.push(...allTraces)
 
     turns.push({
       id: `turn-${turnIndex}`,
@@ -497,10 +730,11 @@ function buildLatencyTurns(
       userPrompt: (pendingUser.content as string) || '',
       assistantOutput: combinedOutput,
       seconds: roundNumber(seconds, 2),
+      cumulativeSeconds: roundNumber(cumulativeSeconds, 2),
       estimated,
       traceCount,
       toolCount,
-      nodeBreakdown: summarizeNodeBreakdown(allTraces),
+      nodeBreakdown: summarizeNodeBreakdown(cumulativeTraces),
     })
     turnIndex += 1
   }
@@ -526,19 +760,22 @@ function buildLatencyTurns(
     const lastAssistant = [...messages].reverse().find((message) => message.role === 'assistant')
     const traceCount = safeArray(lastAssistant?.trace).length
     const toolCount = safeArray(lastAssistant?.tool_calls).length
+    const streamingSeconds = Math.max(
+      0.8,
+      traceCount * 0.45 + toolCount * 0.35 + estimateTextTokens(lastAssistant?.content || '') / 25,
+    )
+    const streamingTraces = safeArray<Record<string, unknown>>(lastAssistant?.trace)
     turns.push({
       id: `turn-${turnIndex}`,
       index: turnIndex + 1,
       userPrompt: (pendingUser.content as string) || '',
       assistantOutput: (lastAssistant?.content as string) || '',
-      seconds: roundNumber(
-        Math.max(0.8, traceCount * 0.45 + toolCount * 0.35 + estimateTextTokens(lastAssistant?.content || '') / 25),
-        2,
-      ),
+      seconds: roundNumber(streamingSeconds, 2),
+      cumulativeSeconds: roundNumber(cumulativeSeconds + streamingSeconds, 2),
       estimated: true,
       traceCount,
       toolCount,
-      nodeBreakdown: summarizeNodeBreakdown((lastAssistant?.trace) as Array<Record<string, unknown>> | undefined),
+      nodeBreakdown: summarizeNodeBreakdown([...cumulativeTraces, ...streamingTraces]),
     })
   }
 
@@ -547,6 +784,27 @@ function buildLatencyTurns(
 
 function summarizeNodeBreakdown(traces: Array<Record<string, unknown>> | undefined): NodeBreakdownItem[] {
   const list = safeArray<Record<string, unknown>>(traces)
+  const durationByNode: Record<string, number> = {}
+  const counts: Record<string, number> = {}
+  for (const trace of list) {
+    const node = (trace.node as string) || 'unknown'
+    counts[node] = (counts[node] || 0) + 1
+    const duration = Number(trace.duration_ms || 0)
+    if (duration > 0) {
+      durationByNode[node] = (durationByNode[node] || 0) + duration
+    }
+  }
+  const durationTotal = Object.values(durationByNode).reduce((sum, value) => sum + value, 0)
+  if (durationTotal > 0) {
+    return Object.entries(durationByNode).map(([node, durationMs]) => ({
+      node,
+      count: counts[node] || 0,
+      durationMs: roundNumber(durationMs, 2),
+      seconds: roundNumber(durationMs / 1000, 2),
+      share: roundNumber((durationMs / durationTotal) * 100, 1),
+    }))
+  }
+
   const timed = list
     .filter((t) => typeof t.ts === 'number')
     .sort((a, b) => (a.ts as number) - (b.ts as number))
@@ -571,22 +829,28 @@ function summarizeNodeBreakdown(traces: Array<Record<string, unknown>> | undefin
       return Object.entries(nodeElapsed).map(([node, elapsed]) => ({
         node,
         count: counts[node] || 0,
+        durationMs: roundNumber(elapsed, 2),
+        seconds: roundNumber(elapsed / 1000, 2),
         share: roundNumber((elapsed / totalElapsed) * 100, 1),
       }))
     }
   }
 
-  const counts: Record<string, number> = {}
-  for (const trace of list) {
-    const node = (trace.node as string) || 'unknown'
-    counts[node] = (counts[node] || 0) + 1
-  }
   const total = Object.values(counts).reduce((sum, value) => sum + value, 0) || 1
   return Object.entries(counts).map(([node, count]) => ({
     node,
     count,
+    durationMs: 0,
+    seconds: 0,
     share: roundNumber((count / total) * 100, 1),
   }))
+}
+
+function sumTraceDuration(traces: Array<Record<string, unknown>> | undefined): number {
+  return safeArray<Record<string, unknown>>(traces).reduce((sum, trace) => {
+    const duration = Number(trace.duration_ms || 0)
+    return duration > 0 ? sum + duration : sum
+  }, 0)
 }
 
 function buildToolRuns(traces: EnrichedTrace[]): ToolRun[] {
@@ -737,88 +1001,12 @@ export function useObsData() {
     }
   })
 
-  const ragMetrics = computed<RagMetrics>(() => {
-    const latestSystem = [...messages.value].reverse().find((m) => m.role === 'system')
-    const m = (latestSystem?.metadata as Record<string, unknown> | undefined)?.rag_metrics as Record<string, number> | undefined || {}
-
-    return {
-      recall: roundNumber(m.recall || 0, 1),
-      hitRate: roundNumber(m.hit_rate || 0, 1),
-      confidence: roundNumber(m.confidence || 0, 1),
-      memoryCount: m.memory_count || 0,
-      knowledgeCount: m.knowledge_count || 0,
-      importantCount: m.important_count || 0,
-      turnCount: messages.value.filter((msg) => msg.role === 'system').length,
-    }
-  })
+  const ragMetrics = computed<RagMetrics>(() => buildRagMetrics(messages.value))
 
   /** 会话级 RAG 历史：每轮的三率，供曲线图使用 */
-  const ragHistory = computed<RagHistoryPoint[]>(() => {
-    const points: RagHistoryPoint[] = []
-    let turnIndex = 0
-    for (const msg of messages.value) {
-      if (msg.role !== 'system') continue
-      const m = (msg.metadata as Record<string, unknown> | undefined)?.rag_metrics as Record<string, number> | undefined
-      if (!m) continue
-      turnIndex++
-      points.push({
-        turn: turnIndex,
-        recall: roundNumber(m.recall || 0, 1),
-        hitRate: roundNumber(m.hit_rate || 0, 1),
-        confidence: roundNumber(m.confidence || 0, 1),
-      })
-    }
-    return points
-  })
+  const ragHistory = computed<RagHistoryPoint[]>(() => buildRagHistory(messages.value))
 
-  const tokenSeries = computed<TokenSeriesItem[]>(() => {
-    const assistantMessages = messages.value.filter((message) => message.role === 'assistant')
-    const modelTotals: Record<string, number> = {}
-
-    return assistantMessages.map((message, index) => {
-      const traces = safeArray<Record<string, unknown>>(message.trace)
-      const baseTokens = estimateTextTokens(message.content || '') + estimateToolTokens(message.tool_calls)
-
-      /* 从 trace 中收集模型名,去重;无 model_name 时回退到 node 名 */
-      const modelNames: string[] = []
-      const seen = new Set<string>()
-      for (const trace of traces) {
-        const name = (trace.model_name || trace.node) as string
-        if (name && !seen.has(name)) {
-          seen.add(name)
-          modelNames.push(name)
-        }
-      }
-
-      /* 将 token 均分给参与的各模型 */
-      const modelTokens: Record<string, number> = {}
-      if (modelNames.length === 0) {
-        modelTokens['--'] = baseTokens
-        modelTotals['--'] = (modelTotals['--'] || 0) + baseTokens
-      } else {
-        const perModel = Math.max(1, Math.round(baseTokens / modelNames.length))
-        for (const name of modelNames) {
-          modelTokens[name] = perModel
-          modelTotals[name] = (modelTotals[name] || 0) + perModel
-        }
-      }
-
-      /* 时间轴标签 */
-      let label = `#${index + 1}`
-      if (message.created_at) {
-        const d = new Date(message.created_at as string)
-        label = d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-      }
-
-      return {
-        id: `token-${index}`,
-        label,
-        modelTokens,
-        totalTokens: baseTokens,
-        modelTotals: { ...modelTotals },
-      }
-    })
-  })
+  const tokenSeries = computed<TokenSeriesItem[]>(() => buildTokenSeries(messages.value))
 
   const latencyTurns = computed(() => buildLatencyTurns(messages.value, chatStore.isStreaming))
 

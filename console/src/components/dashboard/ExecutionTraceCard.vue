@@ -42,13 +42,13 @@ function nodeAccent(tier, isCurrent) {
           工具轨迹
         </button>
       </div>
-      <span class="window-status">{{ activeTab === 'node' ? obs.currentMessageRuntimePath.value.length + ' nodes' : obs.currentMessageToolRuns.value.length + ' tools' }}</span>
+      <span class="window-status">{{ activeTab === 'node' ? obs.runtimePath.value.length + ' nodes' : obs.toolRuns.value.length + ' tools' }}</span>
     </div>
 
     <div v-if="activeTab === 'node'" class="card-scroll">
-      <div class="path-strip" v-if="obs.currentMessageRuntimePath.value.length > 0">
+      <div class="path-strip" v-if="obs.runtimePath.value.length > 0">
         <span
-          v-for="(node, index) in obs.currentMessageRuntimePath.value"
+          v-for="(node, index) in obs.runtimePath.value"
           :key="`${node}-${index}`"
           class="path-node"
         >
@@ -56,16 +56,16 @@ function nodeAccent(tier, isCurrent) {
         </span>
       </div>
 
-      <div v-if="obs.currentMessageNodeTimeline.value.length > 0" class="timeline-list">
+      <div v-if="obs.nodeTimeline.value.length > 0" class="timeline-list">
         <div
-          v-for="item in obs.currentMessageNodeTimeline.value"
+          v-for="item in obs.nodeTimeline.value"
           :key="item.id"
           class="timeline-item"
           :style="{ '--node-accent': nodeAccent(item.modelTier, item.isCurrent) }"
         >
           <div class="timeline-axis">
             <span class="timeline-dot"></span>
-            <span v-if="item.index !== obs.currentMessageNodeTimeline.value.length" class="timeline-line"></span>
+            <span v-if="item.index !== obs.nodeTimeline.value.length" class="timeline-line"></span>
           </div>
           <div class="timeline-content">
             <div class="timeline-header">
@@ -85,9 +85,9 @@ function nodeAccent(tier, isCurrent) {
     </div>
 
     <div v-else class="card-scroll">
-      <div v-if="obs.currentMessageToolRuns.value.length > 0" class="tool-list">
+      <div v-if="obs.toolRuns.value.length > 0" class="tool-list">
         <div
-          v-for="tool in obs.currentMessageToolRuns.value"
+          v-for="tool in obs.toolRuns.value"
           :key="tool.id"
           class="tool-item"
           :class="tool.status"

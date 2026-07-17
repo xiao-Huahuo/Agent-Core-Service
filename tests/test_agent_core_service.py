@@ -1669,3 +1669,11 @@ def test_tool_call_node_uses_project_executor() -> None:
     assert result["messages"][0].content == "node-ok"
     assert result["trace"][0]["event"] == "tool_call_start"
     assert result["trace"][0]["tool_name"] == "echo_text"
+
+
+def test_tool_call_node_counts_knowledge_search_results() -> None:
+    """知识库搜索输出不是纯编号列表时,也应能统计召回条目数。"""
+
+    content = "=== 内容匹配 ===\n  [K1] 崩铁.md\n  [K2] docs/区别.md\n\n=== 语义匹配 ===\n  docs/联系.md"
+
+    assert ToolCallNode._count_results(content) == 2

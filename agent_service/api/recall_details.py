@@ -31,6 +31,7 @@ def empty_recall_payload(*, session_id: str, user_id: str) -> dict[str, Any]:
         "rag_metrics": {},
         "memory_recall": {"pre_rerank": [], "post_rerank": []},
         "knowledge_recall": {"pre_rerank": [], "post_rerank": []},
+        "recall_history": [],
     }
 
 
@@ -71,8 +72,9 @@ def _payload_from_persisted_metadata(
     user_id: str,
     session_id: str,
 ) -> dict[str, Any] | None:
-    """从已持久化的 system message metadata 还原召回详情。"""
+    """从已持久化的 system message metadata 还原会话累计召回详情。"""
 
+    history: list[dict[str, Any]] = []
     for message in reversed(messages):
         if message.role != "system":
             continue
@@ -80,16 +82,54 @@ def _payload_from_persisted_metadata(
         recall_details = metadata.get("recall_details")
         if not recall_details:
             continue
-        return {
-            "session_id": session_id,
-            "user_id": user_id,
-            "created_at": message.created_at.isoformat(),
-            "query": recall_details.get("query", ""),
-            "rag_metrics": metadata.get("rag_metrics", {}),
-            "memory_recall": recall_details.get("memory_recall", {"pre_rerank": [], "post_rerank": []}),
-            "knowledge_recall": recall_details.get("knowledge_recall", {"pre_rerank": [], "post_rerank": []}),
-        }
-    return None
+        history.append(
+            {
+                "created_at": message.created_at.isoformat(),
+                "query": recall_details.get("query", ""),
+                "rag_metrics": metadata.get("rag_metrics", {}),
+                "memory_recall": recall_details.get("memory_recall", {"pre_rerank": [], "post_rerank": []}),
+                "knowledge_recall": recall_details.get("knowledge_recall", {"pre_rerank": [], "post_rerank": []}),
+            }
+        )
+    if not history:
+        return None
+    history.reverse()
+    latest = history[-1]
+    return {
+        "session_id": session_id,
+        "user_id": user_id,
+        "created_at": latest["created_at"],
+        "query": latest["query"],
+        "rag_metrics": latest["rag_metrics"],
+        "memory_recall": _merge_recall_history(history, "memory_recall"),
+        "knowledge_recall": _merge_recall_history(history, "knowledge_recall"),
+        "recall_history": history,
+    }
+
+
+def _merge_recall_history(history: list[dict[str, Any]], key: str) -> dict[str, list[dict[str, Any]]]:
+    """把多轮召回快照按会话累计合并,保留每条命中的来源轮次。"""
+
+    merged: dict[str, list[dict[str, Any]]] = {"pre_rerank": [], "post_rerank": []}
+    seen: dict[str, set[str]] = {"pre_rerank": set(), "post_rerank": set()}
+    for turn_index, entry in enumerate(history, start=1):
+        snapshot = entry.get(key) or {}
+        for phase in ("pre_rerank", "post_rerank"):
+            for item in snapshot.get(phase, []) or []:
+                item_key = str(item.get("memory_id") or item.get("source_uri") or item.get("content") or "")
+                if not item_key:
+                    item_key = f"{phase}-{turn_index}-{len(merged[phase])}"
+                if item_key in seen[phase]:
+                    continue
+                seen[phase].add(item_key)
+                merged_item = {
+                    **item,
+                    "turn": turn_index,
+                    "query": entry.get("query", ""),
+                    "created_at": entry.get("created_at", ""),
+                }
+                merged[phase].append(merged_item)
+    return merged
 
 
 def _payload_from_live_retrieval(
@@ -132,6 +172,7 @@ def _payload_from_live_retrieval(
         "rag_metrics": rag_metrics,
         "memory_recall": retrieval_service.serialize_debug_snapshot(memory_snapshot),
         "knowledge_recall": retrieval_service.serialize_debug_snapshot(knowledge_snapshot),
+        "recall_history": [],
     }
 
 

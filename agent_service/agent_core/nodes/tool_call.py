@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any, Sequence
 
 from langchain_core.messages import ToolMessage
@@ -115,6 +116,7 @@ class ToolCallNode:
             start_trace = {
                 "node": "action",
                 "event": "tool_call_start",
+                "tool_call_id": tool_call_id,
                 "tool_name": tool_name,
                 "display_name": display_name,
                 "tool_args_summary": args_summary,
@@ -125,10 +127,12 @@ class ToolCallNode:
             if trace_callback is not None:
                 trace_callback(start_trace)
             before_citations = get_tool_citation_map()
+            started_at = time.perf_counter()
             try:
                 content = self.tool_executor.execute(tool_name, arguments)
             except Exception as exc:
                 content = f"工具 {tool_name} 执行失败: {exc}"
+            duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
             after_citations = get_tool_citation_map()
             new_citations = {
                 key: value
@@ -141,9 +145,11 @@ class ToolCallNode:
             end_trace = {
                 "node": "action",
                 "event": "tool_call_end",
+                "tool_call_id": tool_call_id,
                 "tool_name": tool_name,
                 "display_name": display_name,
                 "result_summary": result_summary,
+                "duration_ms": duration_ms,
                 "human_readable": f"工具「{display_name}」返回：{result_summary}",
                 "result_count": result_count,
                 "chat_visible": True,
@@ -167,8 +173,10 @@ class ToolCallNode:
             deferred_trace = {
                 "node": "action",
                 "event": "tool_call_deferred",
+                "tool_call_id": tool_call_id,
                 "tool_name": tool_name,
                 "display_name": display_name,
+                "duration_ms": 0,
                 "human_readable": content,
                 "chat_visible": True,
             }
@@ -210,8 +218,17 @@ class ToolCallNode:
     @staticmethod
     def _count_results(content: str) -> int | None:
         """从工具输出中统计条目数,供前端展示"检索到 X 条知识"等。"""
+        text = str(content).strip()
+        if not text:
+            return None
+        empty_markers = ("未找到", "没有找到", "无相关", "no result", "not found")
+        if any(marker in text.lower() for marker in empty_markers):
+            return None
+
         lines = str(content).strip().split("\n")
         count = 0
+        citation_ids: set[str] = set()
+        file_like_count = 0
         for line in lines:
             stripped = line.lstrip()
             # 匹配 "1. " "2. " 等编号行
@@ -219,4 +236,10 @@ class ToolCallNode:
                 dot_pos = stripped.find(". ")
                 if dot_pos > 0 and stripped[:dot_pos].isdigit():
                     count += 1
-        return count if count > 0 else None
+                    continue
+            if stripped.startswith("[") and "]" in stripped:
+                citation_ids.add(stripped[1:stripped.find("]")])
+                continue
+            if any(suffix in stripped.lower() for suffix in (".md", ".txt", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv")):
+                file_like_count += 1
+        return count or len(citation_ids) or file_like_count or None

@@ -84,6 +84,38 @@ def _normalize_optional_str(value: Any) -> str | None:
     return text or None
 
 
+def extract_token_usage(message: Any) -> dict[str, int]:
+    """从 LangChain message 中标准化提取模型真实 token 用量。"""
+
+    usage = getattr(message, "usage_metadata", None) or {}
+    response_metadata = getattr(message, "response_metadata", None) or {}
+    token_usage = response_metadata.get("token_usage", {}) if isinstance(response_metadata, dict) else {}
+    candidates = [usage, token_usage]
+
+    def read_int(*keys: str) -> int:
+        for source in candidates:
+            if not isinstance(source, dict):
+                continue
+            for key in keys:
+                value = source.get(key)
+                if isinstance(value, int | float):
+                    return int(value)
+        return 0
+
+    input_tokens = read_int("input_tokens", "prompt_tokens")
+    output_tokens = read_int("output_tokens", "completion_tokens")
+    total_tokens = read_int("total_tokens")
+    if total_tokens <= 0:
+        total_tokens = input_tokens + output_tokens
+    if input_tokens <= 0 and output_tokens <= 0 and total_tokens > 0:
+        input_tokens = total_tokens
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+    }
+
+
 class ModelDecisionNode:
     """
     调用大模型进行 Agent 决策的 LangGraph 节点。
@@ -173,6 +205,7 @@ class ModelDecisionNode:
             small_base_url=user_small_base_url,
         )
         tool_calls = getattr(response, "tool_calls", []) or []
+        token_usage = extract_token_usage(response)
         return {
             "messages": [response],
             "trace": [
@@ -181,6 +214,7 @@ class ModelDecisionNode:
                     "event": "model_response",
                     "tool_call_count": len(tool_calls),
                     "has_content": bool(response.content),
+                    "token_usage": token_usage,
                     "human_readable": self._make_agent_readable(tool_calls, bool(response.content)),
                     "chat_visible": False,
                 }
@@ -241,6 +275,7 @@ class ModelDecisionNode:
             final_message = AIMessage(content=cumulative)
         tool_calls = getattr(final_message, "tool_calls", []) or []
         has_content = bool(getattr(final_message, "content", None))
+        token_usage = extract_token_usage(final_message)
         return {
             "messages": [final_message],
             "trace": [
@@ -249,6 +284,7 @@ class ModelDecisionNode:
                     "event": "model_response",
                     "tool_call_count": len(tool_calls),
                     "has_content": has_content,
+                    "token_usage": token_usage,
                     "human_readable": self._make_agent_readable(tool_calls, has_content),
                     "chat_visible": False,
                 }

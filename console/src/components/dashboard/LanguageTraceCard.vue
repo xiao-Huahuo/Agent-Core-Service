@@ -110,12 +110,12 @@ const rawContextJson = computed(() => {
         </div>
         <div class="summary-chip">
           <span class="summary-label">轨迹步数</span>
-          <span class="summary-value">{{ obs.currentMessageThinkingTraces.value.length }}</span>
+          <span class="summary-value">{{ obs.thinkingTraces.value.length }}</span>
         </div>
       </div>
       <ThinkingSteps
-        v-if="obs.currentMessageThinkingTraces.value.length > 0"
-        :traces="obs.currentMessageThinkingTraces.value"
+        v-if="obs.thinkingTraces.value.length > 0"
+        :traces="obs.thinkingTraces.value"
         :is-streaming="obs.isStreaming.value"
         :default-expanded="true"
       />

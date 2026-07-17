@@ -49,6 +49,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.graph.state import CompiledStateGraph
 
 from agent_service.agent_core.graph import AgentGraphBuilder
+from agent_service.agent_core.nodes.model_decision import extract_token_usage
 from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.message import MessageCreate
 from agent_service.scripts.draw_agent_graph import draw_agent_graph
@@ -174,6 +175,7 @@ class AgentCore:
                 self.context_builder.retrieval_service.warmup()
                 logger.info("Embedding / ReRank 模型预加载完成")
         safety_service = SafetyService(config=config, task_scheduler=self.task_scheduler)
+        self.safety_service = safety_service
         plan_builder = AgentGraphBuilder(
             config=config,
             tools=self.tools,
@@ -536,6 +538,7 @@ class AgentCore:
         _token_blocked: list[bool] = [False]
         _latest_plan: dict[str, Any] | None = initial_plan
         _last_sent_content: list[str] = [""]
+        _last_node_completed_at: list[float] = [time.perf_counter()]
 
 
         def on_token(cumulative_text: str) -> None:
@@ -701,14 +704,21 @@ class AgentCore:
                         trace_citation_map = trace.get("citation_map")
                         if isinstance(trace_citation_map, dict):
                             _citation_map.update(trace_citation_map)
-                        trace["model_name"] = self._model_name_for_node(trace.get("node", "action"))
+                        if "model_name" not in trace:
+                            trace["model_name"] = self._model_name_for_node(trace.get("node", "action"))
                         trace["ts"] = time.time()
+                        trace["_streamed_trace"] = True
                         _turn_traces.append(trace)
+                    public_trace = (
+                        {key: value for key, value in trace.items() if not key.startswith("_")}
+                        if trace
+                        else {}
+                    )
                     yield {
                         "node": trace.get("node", "action"),
                         "content": "",
                         "tool_calls": [],
-                        "trace": [trace] if trace else [],
+                        "trace": [public_trace] if public_trace else [],
                         "model_name": self._model_name_for_node(trace.get("node", "action")),
                         "metadata": {"citation_map": dict(_citation_map)} if _citation_map else {},
                     }
@@ -745,32 +755,59 @@ class AgentCore:
                 elif item_type == "node":
                     event = item["event"]
                     for node_name, state_update in event.items():
+                        completed_at = time.perf_counter()
+                        duration_ms = max(0.01, round(max(0.0, completed_at - _last_node_completed_at[0]) * 1000, 2))
+                        _last_node_completed_at[0] = completed_at
                         logger.debug("图节点执行 | node=%s user=%s session=%s", node_name, user_id, session_id)
                         node_traces = state_update.get("trace", []) if state_update else []
+                        fresh_traces: list[dict[str, Any]] = []
                         if node_traces:
                             _now = time.time()
                             for t in node_traces:
+                                if t.get("node") != node_name:
+                                    continue
+                                already_streamed = bool(t.get("_streamed_trace"))
+                                if "ts" in t and not (already_streamed and not t.get("_persisted_trace")):
+                                    continue
                                 trace_citation_map = t.get("citation_map")
                                 if isinstance(trace_citation_map, dict):
                                     _citation_map.update(trace_citation_map)
-                                t["model_name"] = self._model_name_for_node(node_name)
-                                t["ts"] = _now
-                            _turn_traces.extend(node_traces)
+                                if "model_name" not in t:
+                                    t["model_name"] = self._model_name_for_node(node_name)
+                                if "ts" not in t:
+                                    t["ts"] = _now
+                                if not already_streamed:
+                                    if t.get("event") == "tool_call_start":
+                                        t["duration_ms"] = 0
+                                    elif "duration_ms" not in t:
+                                        t["duration_ms"] = duration_ms
+                                t["_persisted_trace"] = True
+                                fresh_traces.append(t)
+                            _turn_traces.extend(fresh_traces)
                         if isinstance(state_update, dict) and "plan" in state_update:
                             _latest_plan = state_update["plan"]
+                        public_fresh_traces = [
+                            {key: value for key, value in trace.items() if not key.startswith("_")}
+                            for trace in fresh_traces
+                        ]
+                        output_state_update = (
+                            {**state_update, "trace": public_fresh_traces}
+                            if isinstance(state_update, dict)
+                            else state_update
+                        )
                         if message_service is not None:
                             self._save_state_update_messages(
                                 message_service=message_service,
                                 user_id=user_id,
                                 session_id=session_id,
                                 node_name=node_name,
-                                state_update=state_update,
-                                turn_traces=state_update.get("trace", []),
+                                state_update=output_state_update,
+                                turn_traces=public_fresh_traces,
                                 citation_map=_citation_map,
                             )
                         payload = self._build_stream_payload(
                             node_name=node_name,
-                            state_update=state_update,
+                            state_update=output_state_update,
                             citation_map=_citation_map,
                         )
                         payload["model_name"] = self._model_name_for_node(node_name)
@@ -877,9 +914,74 @@ class AgentCore:
         cumulative = ""
         last_sent_content = ""
         final_message: BaseMessage | None = None
+        user_prompt = ""
+        for msg in reversed(messages):
+            if isinstance(msg, HumanMessage):
+                user_prompt = AgentCore._stringify_content(msg.content)
+                break
 
         try:
             logger.info("启用短问直答路径 | user=%s session=%s msg_count=%d", user_id, session_id, len(runtime_messages))
+            safety_started_at = time.perf_counter()
+            input_audit = self.safety_service.audit_input(user_prompt, llm_config=llm_config)
+            safety_input_trace = {
+                "node": "safety_input",
+                "event": "blocked" if input_audit.blocked else "passed",
+                "model_tier": "runtime",
+                "category": "political" if input_audit.is_political else "general",
+                "message": input_audit.block_reason if input_audit.blocked else "输入安全审核通过",
+                "human_readable": input_audit.block_reason if input_audit.blocked else "输入安全审核通过。",
+                "duration_ms": max(0.01, round((time.perf_counter() - safety_started_at) * 1000, 2)),
+                "chat_visible": False,
+            }
+            message_service.create_message(
+                MessageCreate(
+                    session_id=session_id,
+                    user_id=user_id,
+                    role="assistant",
+                    content="",
+                    metadata_json={
+                        "node": "safety_input",
+                        "source": "simple_answer_safety",
+                        "trace": [safety_input_trace],
+                    },
+                )
+            )
+            yield {
+                "node": "safety_input",
+                "content": "",
+                "tool_calls": [],
+                "trace": [safety_input_trace],
+                "model_name": "",
+            }
+            if input_audit.blocked:
+                block_message = self.safety_service.generate_block_message(
+                    input_audit,
+                    user_prompt,
+                    llm_config=llm_config,
+                )
+                message_service.create_message(
+                    MessageCreate(
+                        session_id=session_id,
+                        user_id=user_id,
+                        role="assistant",
+                        content=block_message,
+                        metadata_json={
+                            "node": "safety_input",
+                            "source": "simple_answer_safety_block",
+                            "trace": [safety_input_trace],
+                        },
+                    )
+                )
+                yield {
+                    "node": "safety_input",
+                    "content": block_message,
+                    "tool_calls": [],
+                    "trace": [],
+                    "model_name": "",
+                }
+                return
+            started_at = time.perf_counter()
             yield {
                 "node": "agent",
                 "type": "context_mirror",
@@ -931,6 +1033,31 @@ class AgentCore:
             content = AgentCore._drop_unmapped_citation_anchors(content, citation_map)
             content = AgentCore._insert_missing_citation_anchors_inline(content, citation_map)
             citation_metadata = AgentCore._build_citation_metadata(content, citation_map)
+            duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+            token_usage = extract_token_usage(final_message)
+            simple_trace = {
+                "node": "agent",
+                "event": "simple_answer",
+                "human_readable": "短输入直接生成回复，未进入工具循环。",
+                "model_tier": SMALL_MODEL_TIER,
+                "model_name": self._model_name_for_node("agent_simple"),
+                "duration_ms": duration_ms,
+                "token_usage": token_usage,
+            }
+            output_safety_started_at = time.perf_counter()
+            output_audit = self.safety_service.audit_output(content, user_input=user_prompt)
+            if output_audit.blocked or output_audit.sanitized:
+                content = output_audit.safe_output
+                citation_metadata = AgentCore._build_citation_metadata(content, citation_map)
+            safety_output_trace = {
+                "node": "safety_output",
+                "event": output_audit.verdict if (output_audit.blocked or output_audit.sanitized) else "passed",
+                "model_tier": "runtime",
+                "message": output_audit.reason if (output_audit.blocked or output_audit.sanitized) else "输出安全审核通过",
+                "human_readable": output_audit.reason if (output_audit.blocked or output_audit.sanitized) else "输出安全审核通过。",
+                "duration_ms": max(0.01, round((time.perf_counter() - output_safety_started_at) * 1000, 2)),
+                "chat_visible": False,
+            }
             message_service.create_message(
                 MessageCreate(
                     session_id=session_id,
@@ -940,14 +1067,7 @@ class AgentCore:
                     metadata_json={
                         "node": "agent",
                         "source": "simple_answer_mode",
-                        "trace": [
-                            {
-                                "node": "agent",
-                                "event": "simple_answer",
-                                "human_readable": "短输入直接生成回复，未进入工具循环。",
-                                "model_tier": SMALL_MODEL_TIER,
-                            }
-                        ],
+                        "trace": [simple_trace, safety_output_trace],
                         **citation_metadata,
                     },
                 )
@@ -956,14 +1076,7 @@ class AgentCore:
                 "node": "agent",
                 "content": content,
                 "tool_calls": [],
-                "trace": [
-                    {
-                        "node": "agent",
-                        "event": "simple_answer",
-                        "human_readable": "短输入直接生成回复，未进入工具循环。",
-                        "model_tier": SMALL_MODEL_TIER,
-                    }
-                ],
+                "trace": [simple_trace, safety_output_trace],
                 "model_name": self._model_name_for_node("agent_simple"),
                 "metadata": citation_metadata,
             }
@@ -1303,9 +1416,23 @@ class AgentCore:
 
         if not state_update:
             return
-        if node_name in {"planner", "observation"}:
+        messages = state_update.get("messages", [])
+        if (not messages or node_name in {"planner", "observation", "compress"}) and turn_traces:
+            message_service.create_message(
+                MessageCreate(
+                    session_id=session_id,
+                    user_id=user_id,
+                    role="assistant",
+                    content="",
+                    metadata_json={
+                        "node": node_name,
+                        "source": "agent_graph_trace",
+                        "trace": turn_traces,
+                    },
+                )
+            )
             return
-        for message in state_update.get("messages", []):
+        for message in messages:
             message_create = self._message_to_create(
                 message=message,
                 user_id=user_id,
@@ -1590,7 +1717,10 @@ class AgentCore:
 
     def _model_name_for_node(self, node_name: str) -> str:
         """根据节点名返回对应的模型名称，供前端展示。"""
-        small_nodes = {"planner", "observation", "agent_simple"}
+        small_nodes = {"planner", "observation", "agent_simple", "compress", "summary"}
+        runtime_nodes = {"action", "context_builder", "safety_input", "safety_output", "error", "interrupted"}
+        if node_name in runtime_nodes:
+            return ""
         if node_name in small_nodes and self.config.model.small_model_name:
             return self.config.model.small_model_name
         return self.config.model.model_name

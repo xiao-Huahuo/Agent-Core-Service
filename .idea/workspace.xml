@@ -4,11 +4,37 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="文件资源管理器">
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/workspace.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/workspace.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="文件资源管理器v3">
+      <change afterPath="$PROJECT_DIR$/docs/assets/海报3.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/nodes/model_decision.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/nodes/model_decision.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/nodes/observation.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/nodes/observation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/nodes/planner.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/nodes/planner.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/nodes/safety.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/nodes/safety.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/nodes/tool_call.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/nodes/tool_call.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/recall_details.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/recall_details.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/scheduler/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/scheduler/scheduler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/ExecutionTraceCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/console/src/components/dashboard/ExecutionTraceCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/LanguageTraceCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/console/src/components/dashboard/LanguageTraceCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/LatencyCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/console/src/components/dashboard/LatencyCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/RagMetricsCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/console/src/components/dashboard/RagMetricsCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/StateGraphCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/console/src/components/dashboard/StateGraphCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/TokenUsageCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/console/src/components/dashboard/TokenUsageCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/console/src/composable/useObsData.js" beforeDir="false" afterPath="$PROJECT_DIR$/console/src/composable/useObsData.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/console/src/stores/chat.js" beforeDir="false" afterPath="$PROJECT_DIR$/console/src/stores/chat.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/LatencyCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/LatencyCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/TokenUsageCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/TokenUsageCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/composable/useObsData.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/composable/useObsData.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_agent_core_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_agent_core_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/周报/.gitkeep" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/周报/徐光修-项目第一周周报.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/周报/邵瑞熙-第一周项目周报.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/周报/陈宇豪-第一周项目周报.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/周报/魏赞琪-第一周项目周报.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/开发规范.md" beforeDir="false" afterPath="$PROJECT_DIR$/开发规范.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -70,7 +96,7 @@
     &quot;aidebugger.tracer.lastRunConfigName&quot;: &quot;main&quot;,
     &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
     &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;last_opened_file_path&quot;: &quot;D:/Projects/Python/MetaWeave/editor/src/assets/images&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/Projects/Python/MetaWeave/docs/assets&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
@@ -89,8 +115,8 @@
 }</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
-      <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\images" />
       <recent name="D:\Projects\Python\MetaWeave\docs\assets" />
+      <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\images" />
       <recent name="D:\Projects\Python\MetaWeave\AI反思日志" />
       <recent name="D:\Projects\Python\MetaWeave\docs\AI反思日志" />
       <recent name="D:\Projects\Python\MetaWeave\docs" />
@@ -252,23 +278,8 @@
       <workItem from="1784077675033" duration="7167000" />
       <workItem from="1784097250115" duration="3073000" />
       <workItem from="1784161846234" duration="28642000" />
-      <workItem from="1784197660142" duration="7563000" />
-    </task>
-    <task id="LOCAL-00095" summary="设置页小调整">
-      <option name="closed" value="true" />
-      <created>1783655369945</created>
-      <option name="number" value="00095" />
-      <option name="presentableId" value="LOCAL-00095" />
-      <option name="project" value="LOCAL" />
-      <updated>1783655369945</updated>
-    </task>
-    <task id="LOCAL-00096" summary="引用,修复了联网搜索的一系列小问题">
-      <option name="closed" value="true" />
-      <created>1783663915077</created>
-      <option name="number" value="00096" />
-      <option name="presentableId" value="LOCAL-00096" />
-      <option name="project" value="LOCAL" />
-      <updated>1783663915077</updated>
+      <workItem from="1784197660142" duration="15843000" />
+      <workItem from="1784255315269" duration="1020000" />
     </task>
     <task id="LOCAL-00097" summary="修复了搜索框按内容搜却搜不到的问题">
       <option name="closed" value="true" />
@@ -646,15 +657,29 @@
       <option name="project" value="LOCAL" />
       <updated>1784208658423</updated>
     </task>
-    <option name="localTasksCounter" value="144" />
+    <task id="LOCAL-00144" summary="文件资源管理器v2">
+      <option name="closed" value="true" />
+      <created>1784209714619</created>
+      <option name="number" value="00144" />
+      <option name="presentableId" value="LOCAL-00144" />
+      <option name="project" value="LOCAL" />
+      <updated>1784209714619</updated>
+    </task>
+    <task id="LOCAL-00145" summary="文件资源管理器v3">
+      <option name="closed" value="true" />
+      <created>1784210160862</created>
+      <option name="number" value="00145" />
+      <option name="presentableId" value="LOCAL-00145" />
+      <option name="project" value="LOCAL" />
+      <updated>1784210160862</updated>
+    </task>
+    <option name="localTasksCounter" value="146" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="优化了工具模式输出" />
-    <MESSAGE value="新增tesseract ocr基础设施,实现了更高质量的docx预览,实现了pdf的基础文本提取和预览的分离" />
     <MESSAGE value="paddleocr的加入,但是有点小问题" />
     <MESSAGE value="仍然无法实现图片的ocr" />
     <MESSAGE value="解决了删除文件夹显示Request failed的问题(只读文件)" />
@@ -678,13 +703,15 @@
     <MESSAGE value="文件上传功能" />
     <MESSAGE value="文件上传功能小改" />
     <MESSAGE value="文件资源管理器" />
-    <option name="LAST_COMMIT_MESSAGE" value="文件资源管理器" />
+    <MESSAGE value="文件资源管理器v2" />
+    <MESSAGE value="文件资源管理器v3" />
+    <option name="LAST_COMMIT_MESSAGE" value="文件资源管理器v3" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
     <SUITE FILE_PATH="coverage/AgentService$main.coverage" NAME="main 覆盖结果" MODIFIED="1783512965618" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/AgentService$test_agent_core_service.coverage" NAME="test_agent_core_service 覆盖结果" MODIFIED="1778509217316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
-    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784203113236" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784255320536" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>

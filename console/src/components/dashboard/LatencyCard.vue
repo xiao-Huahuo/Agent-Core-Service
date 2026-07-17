@@ -77,7 +77,7 @@ const lineOption = computed(() => {
       data: items.map((t, i) => {
         const isSel = i === sel
         return {
-          value: t.seconds,
+          value: t.cumulativeSeconds,
           symbol: items.length === 1 ? 'pin' : 'circle',
           symbolSize: items.length === 1 ? 14 : (isSel ? 10 : 6),
           itemStyle: {
@@ -108,7 +108,8 @@ const lineOption = computed(() => {
       trigger: 'axis',
       formatter: (params) => {
         const p = params[0]
-        return `Turn ${p.dataIndex + 1}<br/>${p.value}s`
+        const turn = items[p.dataIndex]
+        return `Turn ${p.dataIndex + 1}<br/>cumulative ${p.value}s<br/>turn ${turn?.seconds || 0}s`
       },
     },
   }
@@ -230,7 +231,7 @@ function onLineClick(params) {
       <div v-if="selectedTurn" class="detail-panel">
         <div class="detail-summary">
           <span class="detail-title">Turn {{ selectedTurn.index }}</span>
-          <span class="detail-time">{{ selectedTurn.seconds }}s{{ selectedTurn.estimated ? ' (est.)' : '' }}</span>
+          <span class="detail-time">{{ selectedTurn.seconds }}s / total {{ selectedTurn.cumulativeSeconds }}s{{ selectedTurn.estimated ? ' (est.)' : '' }}</span>
         </div>
         <p class="detail-prompt">{{ selectedTurn.userPrompt }}</p>
 
