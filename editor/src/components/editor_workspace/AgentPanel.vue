@@ -179,11 +179,25 @@ async function handleDrop(event: DragEvent) {
     targetSessionId = await sessionStore.create(userId.value)
     sessionStore.select(targetSessionId)
   }
+  await uploadFiles(files, targetSessionId)
+}
+
+async function handleFileSelect(file: File) {
+  if (!userId.value) return
+  let targetSessionId = sessionStore.currentSessionId
+  if (!targetSessionId) {
+    targetSessionId = await sessionStore.create(userId.value)
+    sessionStore.select(targetSessionId)
+  }
+  await uploadFiles([file], targetSessionId)
+}
+
+async function uploadFiles(files: File[], sessionId: string) {
   isUploadingAttachment.value = true
   try {
     for (const [index, file] of files.entries()) {
       uploadStatusText.value = `Uploading ${index + 1}/${files.length}: ${file.name}`
-      const response = await uploadAgentAttachment(userId.value, targetSessionId, file)
+      const response = await uploadAgentAttachment(userId.value!, sessionId, file)
       chatStore.addPendingAttachment(response.attachment)
     }
     const firstUploadedFile = files[0]
@@ -386,6 +400,7 @@ onMounted(() => {
         @set-agent-mode="setAgentLoopMode"
         @clear-reference="clearReference"
         @remove-attachment="removeAttachment"
+        @file-select="handleFileSelect"
       />
     </main>
     </div>

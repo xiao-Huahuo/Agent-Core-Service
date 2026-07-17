@@ -777,6 +777,30 @@ class KnowledgeLibraryService:
                 "readonly": True,
             }
         if suffix in {".ppt", ".pptx"}:
+            # Try to convert PPTX → PDF for native iframe preview
+            if suffix == ".pptx":
+                pdf_output = target.with_name(target.name + ".pdf")
+                if self._can_generate_pptx_pdf():
+                    if not pdf_output.exists() or pdf_output.stat().st_mtime < target.stat().st_mtime:
+                        try:
+                            self._generate_pdf_from_pptx(path=target, output_path=pdf_output)
+                        except Exception as exc:
+                            logger.warning("PPTX→PDF generation failed: %s", exc)
+                    if pdf_output.exists():
+                        pdf_preview = self._preview_pdf(path=pdf_output)
+                        # Merge parsed PPTX text content into the PDF preview
+                        # so Edit mode shows readable text, not empty scanned metadata.
+                        pptx_content = self._preview_pptx(path=target).get("content", "")
+                        return {
+                            **base_payload,
+                            **pdf_preview,
+                            "content": pptx_content,
+                            "kind": "pdf",
+                            "mime_type": "application/pdf",
+                            "raw_url": self._raw_file_url(user_id=user_id, relative_path=str(base_payload["path"]) + ".pdf"),
+                            "readonly": True,
+                        }
+            # Fallback: HTML-based preview
             return {
                 **base_payload,
                 **self._preview_pptx(path=target),
@@ -838,6 +862,23 @@ class KnowledgeLibraryService:
             results.append({"source_uri": str(path), "snippet": snippet})
         return results
 
+    @staticmethod
+    def _resolve_raw_mime_type(path: Path) -> str:
+        """解析原始文件正确的 MIME 类型,特别处理 Office 格式。"""
+        OFFICE_MIME_TYPES: dict[str, str] = {
+            ".pdf": "application/pdf",
+            ".ppt": "application/vnd.ms-powerpoint",
+            ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".doc": "application/msword",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xls": "application/vnd.ms-excel",
+            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }
+        suffix = path.suffix.lower()
+        if suffix in OFFICE_MIME_TYPES:
+            return OFFICE_MIME_TYPES[suffix]
+        return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
     def resolve_file_for_raw_response(self, *, user_id: str, path: str) -> tuple[Path, str]:
         """
         解析可供浏览器预览的原始文件响应路径。
@@ -850,7 +891,7 @@ class KnowledgeLibraryService:
         target = self._resolve_child_path(root=root, relative_path=path)
         if not target.is_file():
             raise ValueError("file not found")
-        mime_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+        mime_type = self._resolve_raw_mime_type(target)
         return target, mime_type
 
     @staticmethod
@@ -921,6 +962,174 @@ class KnowledgeLibraryService:
                 if text:
                     paragraphs.append(f"<p>{html.escape(text)}</p>")
             return "\n".join(paragraphs) or "<p>DOCX 中没有可预览文本。</p>"
+
+    @staticmethod
+    def _can_generate_pptx_pdf() -> bool:
+        """检查是否可用内建渲染引擎生成 PPTX PDF 预览。需要 Pillow 和可用中文字体。"""
+        try:
+            from PIL import Image, ImageDraw, ImageFont  # noqa: F401
+        except ImportError:
+            return False
+        return not not KnowledgeLibraryService._find_cjk_font_path()
+
+    @staticmethod
+    def _find_cjk_font_path() -> str | None:
+        """查找系统中可用的中文字体路径。"""
+        candidates = [
+            "C:/Windows/Fonts/msyh.ttc",
+            "C:/Windows/Fonts/msyhbd.ttc",
+            "C:/Windows/Fonts/simsun.ttc",
+            "C:/Windows/Fonts/simsunb.ttf",
+            "C:/Windows/Fonts/SimsunExtG.ttf",
+            "C:/Windows/Fonts/yahei.ttf",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+            "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+        ]
+        for candidate in candidates:
+            if Path(candidate).exists():
+                return candidate
+        return None
+
+    @staticmethod
+    def _generate_pdf_from_pptx(*, path: Path, output_path: Path) -> None:
+        """用 Pillow 渲染每个幻灯片为图像页并生成多页 PDF,无需外部依赖。"""
+        from PIL import Image, ImageDraw, ImageFont
+
+        ns = {
+            "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+            "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+            "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
+        }
+
+        slides: list[dict] = []
+        with zipfile.ZipFile(path) as archive:
+            slide_paths = sorted(
+                name for name in archive.namelist()
+                if name.startswith("ppt/slides/slide") and name.endswith(".xml")
+            )
+            if not slide_paths:
+                raise ValueError("no slides found")
+
+            for slide_index, slide_path in enumerate(slide_paths, start=1):
+                xml_text = archive.read(slide_path).decode("utf-8", errors="ignore")
+                slide_root = ElementTree.fromstring(xml_text)
+
+                text_parts: list[str] = []
+                for text_elem in slide_root.iter(f"{{{ns['a']}}}t"):
+                    if text_elem.text:
+                        text_parts.append(text_elem.text.strip())
+                slide_text = "\n".join(part for part in text_parts if part)
+
+                rels_path = f"ppt/slides/_rels/{Path(slide_path).name}.rels"
+                rels_map: dict[str, str] = {}
+                try:
+                    rels_xml = archive.read(rels_path).decode("utf-8", errors="ignore")
+                    rels_root = ElementTree.fromstring(rels_xml)
+                    for rel in rels_root:
+                        rid = rel.get("Id", "")
+                        target = rel.get("Target", "")
+                        if rid and target and "image" in str(rel.get("Type", "")):
+                            media_path = str(Path("ppt/slides") / target).replace("\\", "/")
+                            rels_map[rid] = media_path
+                except KeyError:
+                    pass
+
+                slide_images: list[bytes] = []
+                for blip in slide_root.iter(f"{{{ns['a']}}}blip"):
+                    rid = blip.get(f"{{{ns['r']}}}embed") or blip.get(f"{{{ns['r']}}}link") or ""
+                    media_path = rels_map.get(rid)
+                    if media_path and media_path in archive.namelist():
+                        slide_images.append(archive.read(media_path))
+
+                slides.append({"text": slide_text, "images": slide_images, "index": slide_index})
+
+        # Render each slide as a Pillow image page
+        font_path = KnowledgeLibraryService._find_cjk_font_path()
+        page_w, page_h = 1280, 720  # 16:9
+        margin = 48
+        title_size, body_size = 36, 22
+        title_font = ImageFont.truetype(font_path, title_size) if font_path else ImageFont.load_default()
+        body_font = ImageFont.truetype(font_path, body_size) if font_path else ImageFont.load_default()
+
+        pages: list[Image.Image] = []
+        for slide in slides:
+            img = Image.new("RGB", (page_w, page_h), (255, 255, 255))
+            draw = ImageDraw.Draw(img)
+            y = margin
+
+            # Slide title
+            draw.text((margin, y), f"Slide {slide['index']}", font=title_font, fill=(80, 80, 80))
+            y += 60
+
+            # Text lines
+            if slide["text"]:
+                for line in slide["text"].split("\n"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    # Manual line wrapping for long text
+                    while len(line) > 0:
+                        bbox = draw.textbbox((0, 0), line[:100], font=body_font)
+                        avail_w = page_w - 2 * margin
+                        # Binary search for the longest substring that fits
+                        if bbox[2] - bbox[0] > avail_w:
+                            lo, hi = 1, min(len(line), 80)
+                            while lo < hi:
+                                mid = (lo + hi + 1) // 2
+                                b = draw.textbbox((0, 0), line[:mid], font=body_font)
+                                if b[2] - b[0] <= avail_w:
+                                    lo = mid
+                                else:
+                                    hi = mid - 1
+                            wrapped = line[:lo]
+                            line = line[lo:]
+                        else:
+                            wrapped = line
+                            line = ""
+                        draw.text((margin, y), wrapped, font=body_font, fill=(30, 30, 30))
+                        y += body_size + 6
+                        if y > page_h - margin:
+                            y = margin
+                            pages.append(img)
+                            img = Image.new("RGB", (page_w, page_h), (255, 255, 255))
+                            draw = ImageDraw.Draw(img)
+
+            # Embedded images
+            for img_bytes in slide["images"]:
+                if y > page_h - 200:
+                    pages.append(img)
+                    img = Image.new("RGB", (page_w, page_h), (255, 255, 255))
+                    draw = ImageDraw.Draw(img)
+                    y = margin
+                try:
+                    slide_img = Image.open(io.BytesIO(img_bytes))
+                    max_img_w = page_w - 2 * margin
+                    max_img_h = 400
+                    if slide_img.width > max_img_w or slide_img.height > max_img_h:
+                        ratio = min(max_img_w / slide_img.width, max_img_h / slide_img.height)
+                        slide_img = slide_img.resize(
+                            (int(slide_img.width * ratio), int(slide_img.height * ratio))
+                        )
+                    img.paste(slide_img, (margin, y))
+                    y += slide_img.height + 16
+                except Exception:
+                    pass
+
+            pages.append(img)
+
+        if pages:
+            from fpdf import FPDF
+            pdf = FPDF(unit='pt', format=(page_w, page_h))
+            for page_img in pages:
+                buf = io.BytesIO()
+                page_img.save(buf, format='PNG')
+                pdf.add_page()
+                pdf.image(buf, x=0, y=0, w=page_w, h=page_h)
+            pdf.output(str(output_path))
+        else:
+            raise ValueError("no pages to render")
 
     @staticmethod
     def _preview_pptx(*, path: Path) -> dict:
@@ -1030,16 +1239,17 @@ class KnowledgeLibraryService:
                         if line:
                             html_parts.append(f"<p>{html.escape(line)}</p>")
                 html_parts.extend(slide["images"])
-            html = "\n".join(html_parts) or "<p>PPTX 中没有可预览内容。</p>"
+            final_html = "\n".join(html_parts) or "<p>PPTX 中没有可预览内容。</p>"
 
             image_count = sum(len(s["images"]) for s in slides)
             return {
                 "content": content,
-                "html": html,
+                "html": final_html,
                 "image_count": image_count,
                 "slide_count": len(slides),
             }
-        except Exception:
+        except Exception as exc:
+            logger.warning("PPTX preview failed for %s: %s: %s", path, type(exc).__name__, exc)
             return {
                 "content": "",
                 "html": "<p>PPTX 解析失败。</p>",

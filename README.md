@@ -322,8 +322,15 @@ AgentService.exe
     图片提取为独立 asset 落盘，保存在`runtime/assets/users/{user_id}/{library_id}/{document_id}/images/{image_id}.png`.JSON 只保存 asset_path、位置和识别结果。
     对于图片 block,应把图片前后的标题、段落、表格编号、图注一起作为上下文.这样召回时既能搜到图片内容，也能知道它属于哪个文档、哪个章节、哪个原始位置。
 13. 多模态查看:
-  - editor编辑区不仅提供Markdown编辑器功能,还提供代码高亮功能(`textarea` + `highlight.js`),实现md模式(Vditor)和代码编辑模式(CodeEditor)的切换.可设置支持高亮的代码文件格式,如`cpp`,`c`,`py`,`java`等.
-  - 可以查看图片(`.png`/`.jpg`/`.jpeg`/`.webp`/`.gif`/`.svg`,`<img>`标签)和PDF(`<iframe>`标签),EXCEL/CSV(后端解析成表格),甚至可以尝试查看WORD(后端用`mammoth`转换成HTML后查看)这样的二进制文档.
+  - editor编辑区不仅提供Markdown编辑器功能,还对多种代码文件提供代码高亮功能(`textarea` + `highlight.js`),实现md模式(Vditor)和代码编辑模式(CodeEditor)的切换,如`cpp`,`c`,`py`,`java`等.
+  - 预览多种格式:
+    - MD(直接用Markdown渲染)
+    - HTML/XML(直接渲染)
+    - 图片(`.png`/`.jpg`/`.jpeg`/`.webp`/`.gif`/`.svg`,`<img>`标签)
+    - PDF(`<iframe>`标签)
+    - EXCEL/CSV(后端解析成表格)
+    - WORD(后端用`mammoth`拆掉OOXML,转换成HTML后带图查看)
+    - PPTX(后端用`mammoth`拆掉OOXML,`pillow`渲染成图片,`fpdf2`组合成PDF,最后走PDF渲染)
 14. 引用溯源:
   引用溯源只展示最终回答真正使用的来源,而不是把所有召回结果都挂在气泡下面。自动RAG召回的知识库片段使用数字编号,如`[1]`、`[2]`;Agent主动调用知识库工具得到的结果使用工具编号,如`[K1]`、`[K2]`;联网搜索得到的网页来源使用网络编号,如`[N1]`、`[N2]`.
 

@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { BrainCircuit, Check, ChevronDown, Globe, Send, X } from 'lucide-vue-next'
+import { BrainCircuit, Check, ChevronDown, Globe, Plus, Send, X } from 'lucide-vue-next'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import type { AgentLoopMode } from '@/api/agent'
 import type { AgentUploadedAttachment } from '@/stores/chat'
@@ -28,10 +28,12 @@ const emit = defineEmits<{
   'set-agent-mode': [mode: AgentLoopMode]
   'clear-reference': []
   'remove-attachment': [attachment: AgentUploadedAttachment]
+  'file-select': [file: File]
 }>()
 
 const text = ref('')
 const loopModeMenu = ref<HTMLDetailsElement | null>(null)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const loopModeOptions: Array<{ value: AgentLoopMode; label: string; hint: string }> = [
   { value: 'auto', label: 'Auto', hint: '自动选择' },
@@ -75,6 +77,19 @@ function selectLoopMode(mode: AgentLoopMode) {
     loopModeMenu.value.open = false
   }
 }
+
+function triggerFilePicker() {
+  fileInput.value?.click()
+}
+
+function handleFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (file) {
+    emit('file-select', file)
+  }
+  input.value = ''
+}
 </script>
 
 <template>
@@ -105,10 +120,26 @@ function selectLoopMode(mode: AgentLoopMode) {
       <div class="input-toolbar">
         <div class="toolbar-left">
           <button
+            class="attach-file-btn"
+            type="button"
+            title="上传文件"
+            :disabled="disabled"
+            @click="triggerFilePicker"
+          >
+            <Plus :size="14" />
+          </button>
+          <input
+            ref="fileInput"
+            type="file"
+            class="file-input-hidden"
+            @change="handleFileChange"
+          />
+          <button
             class="web-search-toggle"
             :class="{ active: webSearchEnabled }"
             type="button"
             title="联网搜索"
+            :disabled="disabled"
             @click="emit('toggle-web-search')"
           >
             <Globe :size="14" />
@@ -292,6 +323,33 @@ function selectLoopMode(mode: AgentLoopMode) {
   min-width: 0;
 }
 
+.attach-file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.attach-file-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-softer);
+}
+
+.file-input-hidden {
+  display: none;
+}
+
 .web-search-toggle {
   display: inline-flex;
   align-items: center;
@@ -309,19 +367,24 @@ function selectLoopMode(mode: AgentLoopMode) {
     background var(--transition-fast);
 }
 
+.web-search-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
 .web-search-toggle.active {
   border-color: var(--color-primary);
   color: #fff;
   background: var(--color-primary);
 }
 
-.web-search-toggle:hover {
+.web-search-toggle:hover:not(:disabled) {
   border-color: var(--color-primary-hover);
   color: var(--color-primary-hover);
   background: var(--color-primary-softer);
 }
 
-.web-search-toggle.active:hover {
+.web-search-toggle.active:hover:not(:disabled) {
   border-color: var(--color-primary-hover);
   color: #fff;
   background: var(--color-primary-hover);
