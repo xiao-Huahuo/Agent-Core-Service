@@ -198,7 +198,8 @@ function citationMapForMessage(message: AgentChatMessage, index: number): Record
 
 function knowledgeSourcesForMessage(message: AgentChatMessage, index: number): SourceItem[] {
   const citationMap = citationMapForMessage(message, index)
-  const metadataUsed = Array.isArray(message.metadata?.used_citations)
+  const isLastMessage = index === visibleMessages.value.length - 1
+  const metadataUsed = !isLastMessage && Array.isArray(message.metadata?.used_citations)
     ? message.metadata.used_citations.filter((item): item is string => typeof item === 'string')
     : []
   const usedIds = metadataUsed.length > 0 ? metadataUsed : extractCitationIds(message.content)

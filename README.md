@@ -330,7 +330,7 @@ AgentService.exe
     - PDF(`<iframe>`标签)
     - EXCEL/CSV(后端解析成表格)
     - WORD(后端用`mammoth`拆掉OOXML,转换成HTML后带图查看)
-    - PPTX(后端用`mammoth`拆掉OOXML,`pillow`渲染成图片,`fpdf2`组合成PDF,最后走PDF渲染)
+    - PPTX(半成品,后端用`mammoth`拆掉OOXML,`pillow`渲染成图片,`fpdf2`组合成PDF,最后走PDF渲染)
 14. 引用溯源:
   引用溯源只展示最终回答真正使用的来源,而不是把所有召回结果都挂在气泡下面。自动RAG召回的知识库片段使用数字编号,如`[1]`、`[2]`;Agent主动调用知识库工具得到的结果使用工具编号,如`[K1]`、`[K2]`;联网搜索得到的网页来源使用网络编号,如`[N1]`、`[N2]`.
 

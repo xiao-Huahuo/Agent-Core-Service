@@ -161,9 +161,17 @@ export const useChatStore = defineStore('chat', () => {
     if (!last) {
       return
     }
+    const existing = last.metadata ?? {}
+    const existingCitationMap = existing.citation_map as Record<string, unknown> | undefined
+    const newCitationMap = metadata.citation_map as Record<string, unknown> | undefined
+    const mergedCitationMap =
+      existingCitationMap && newCitationMap
+        ? { ...existingCitationMap, ...newCitationMap }
+        : undefined
     last.metadata = {
-      ...(last.metadata ?? {}),
+      ...existing,
       ...metadata,
+      ...(mergedCitationMap ? { citation_map: mergedCitationMap } : {}),
     }
   }
 
