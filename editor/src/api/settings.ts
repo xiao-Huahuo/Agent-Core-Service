@@ -254,3 +254,31 @@ export function saveLLMConfig(
   if (params.smallModelName !== undefined) body.small_model_name = params.smallModelName
   return apiPut<LLMConfigResponse>(API_ROUTES.SETTINGS_MODEL_CONFIG, body)
 }
+
+/* ---- Tool management ---- */
+
+export interface ToolEntry {
+  name: string
+  display_name: string
+  description: string
+  enabled: boolean
+}
+
+export interface AvailableToolsResponse {
+  tools: ToolEntry[]
+}
+
+export function fetchAvailableTools(userId: string): Promise<AvailableToolsResponse> {
+  return apiGet<AvailableToolsResponse>(API_ROUTES.SETTINGS_AVAILABLE_TOOLS, { user_id: userId })
+}
+
+export interface DisabledToolsResponse {
+  disabled_tools: string[]
+}
+
+export function saveDisabledTools(userId: string, toolNames: string[]): Promise<DisabledToolsResponse> {
+  return apiPut<DisabledToolsResponse>(API_ROUTES.SETTINGS_DISABLED_TOOLS, {
+    user_id: userId,
+    tool_names: toolNames,
+  })
+}

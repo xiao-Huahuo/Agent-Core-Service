@@ -4,15 +4,26 @@
   Usage:
   Shows the running Agent's final registered tools in the Obs dashboard. The
   data comes from the backend registry after builtin and configured external
-  tools have been merged.
+  tools have been merged. Disabled tools are sorted to the bottom with a
+  toggle switch to enable/disable them directly.
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RefreshCw, Search } from 'lucide-vue-next'
 
 import { fetchAgentTools, type AgentToolInfo } from '@/api/tools'
+import { fetchAvailableTools, saveDisabledTools } from '@/api/settings'
+import type { ToolEntry } from '@/api/settings'
+import { useSettingsStore } from '@/stores/settings'
+
+const settingsStore = useSettingsStore()
+
+interface AugmentedTool extends AgentToolInfo {
+  enabled: boolean
+}
 
 const tools = ref<AgentToolInfo[]>([])
+const enabledMap = ref<Record<string, boolean>>({})
 const loading = ref(false)
 const errorText = ref('')
 const query = ref('')
@@ -20,10 +31,24 @@ const selectedName = ref('')
 
 const filteredTools = computed(() => {
   const q = query.value.trim().toLowerCase()
-  if (!q) return tools.value
-  return tools.value.filter((tool) => {
-    return `${tool.name} ${tool.display_name} ${tool.description}`.toLowerCase().includes(q)
+  let list = augmentedTools.value
+  if (q) {
+    list = list.filter((tool) => {
+      return `${tool.name} ${tool.display_name} ${tool.description}`.toLowerCase().includes(q)
+    })
+  }
+  // 已启用的排在前面，未启用的排在下面
+  return [...list].sort((a, b) => {
+    if (a.enabled !== b.enabled) return a.enabled ? -1 : 1
+    return a.display_name.localeCompare(b.display_name)
   })
+})
+
+const augmentedTools = computed<AugmentedTool[]>(() => {
+  return tools.value.map(t => ({
+    ...t,
+    enabled: enabledMap.value[t.name] !== false,
+  }))
 })
 
 const selectedTool = computed(() => {
@@ -52,10 +77,18 @@ async function loadTools() {
   loading.value = true
   errorText.value = ''
   try {
-    const payload = await fetchAgentTools()
-    tools.value = payload.tools
-    if (!selectedName.value && payload.tools.length > 0) {
-      selectedName.value = payload.tools[0]!.name
+    const [agentPayload, settingsPayload] = await Promise.all([
+      fetchAgentTools(),
+      fetchAvailableTools(settingsStore.profile.userId || ''),
+    ])
+    tools.value = agentPayload.tools
+    const map: Record<string, boolean> = {}
+    for (const t of settingsPayload.tools ?? []) {
+      map[t.name] = t.enabled
+    }
+    enabledMap.value = map
+    if (!selectedName.value && agentPayload.tools.length > 0) {
+      selectedName.value = agentPayload.tools[0]!.name
     }
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : '工具注册表加载失败'
@@ -64,7 +97,25 @@ async function loadTools() {
   }
 }
 
-function selectTool(tool: AgentToolInfo) {
+async function handleToggleTool(toolName: string) {
+  const current = enabledMap.value[toolName]
+  const wasEnabled = current !== false
+  // Optimistic toggle
+  enabledMap.value = { ...enabledMap.value, [toolName]: !wasEnabled }
+  try {
+    const userId = settingsStore.profile.userId
+    if (!userId) return
+    const disabled = Object.entries(enabledMap.value)
+      .filter(([, enabled]) => !enabled)
+      .map(([name]) => name)
+    await saveDisabledTools(userId, disabled)
+  } catch {
+    // Revert on failure
+    enabledMap.value = { ...enabledMap.value, [toolName]: wasEnabled }
+  }
+}
+
+function selectTool(tool: AugmentedTool) {
   selectedName.value = tool.name
 }
 
@@ -101,17 +152,36 @@ onMounted(() => {
 
       <div class="registry-grid">
         <aside class="tool-list" aria-label="工具列表">
-          <button
+          <div
             v-for="tool in filteredTools"
             :key="tool.name"
-            class="tool-row"
-            :class="{ active: selectedTool?.name === tool.name }"
-            type="button"
-            @click="selectTool(tool)"
+            class="tool-list-item"
+            :class="{
+              active: selectedTool?.name === tool.name,
+              disabled: !tool.enabled,
+            }"
           >
-            <span class="tool-name">{{ tool.display_name || tool.name }}</span>
-            <span class="tool-meta">{{ tool.argument_count }} args</span>
-          </button>
+            <button
+              class="tool-row"
+              type="button"
+              @click="selectTool(tool)"
+            >
+              <span class="tool-name">{{ tool.display_name || tool.name }}</span>
+              <span class="tool-meta">{{ tool.argument_count }} args</span>
+            </button>
+            <label
+              class="tool-toggle-label"
+              :title="tool.enabled ? '点击关闭' : '点击启用'"
+              @click.stop
+            >
+              <input
+                :checked="tool.enabled"
+                type="checkbox"
+                @change="handleToggleTool(tool.name)"
+              />
+              <span v-if="!tool.enabled" class="disabled-badge">未启用</span>
+            </label>
+          </div>
           <div v-if="!loading && filteredTools.length === 0" class="empty-state">
             <span>$ 没有匹配的工具</span>
           </div>
@@ -125,6 +195,7 @@ onMounted(() => {
             <div class="detail-title">
               <span class="detail-display">{{ selectedTool.display_name || selectedTool.name }}</span>
               <code>{{ selectedTool.name }}</code>
+              <span v-if="!selectedTool.enabled" class="detail-disabled-badge">未启用</span>
             </div>
             <p class="detail-description">{{ selectedTool.description }}</p>
 
@@ -266,27 +337,47 @@ h2 {
   flex-direction: column;
 }
 
+.tool-list-item {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  transition: opacity 150ms;
+}
+
+.tool-list-item.disabled {
+  opacity: 0.5;
+}
+
+.tool-list-item.disabled .tool-name {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.tool-list-item.active {
+  background: var(--color-primary-softer);
+}
+
+.tool-list-item.active .tool-row {
+  box-shadow: inset 2px 0 0 var(--color-primary);
+}
+
 .tool-row {
+  flex: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-8);
   width: 100%;
   padding: var(--space-8) var(--space-10);
   border: 0;
-  border-bottom: 1px solid var(--color-border);
   background: transparent;
   color: var(--color-text-secondary);
   text-align: left;
+  cursor: pointer;
 }
 
-.tool-row:hover,
-.tool-row.active {
+.tool-row:hover {
   background: var(--color-primary-softer);
   color: var(--color-text);
-}
-
-.tool-row.active {
-  box-shadow: inset 2px 0 0 var(--color-primary);
 }
 
 .tool-name {
@@ -299,6 +390,58 @@ h2 {
 .tool-meta {
   color: var(--color-text-tertiary);
   font-size: 10px;
+}
+
+.tool-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 var(--space-6) 0 0;
+  cursor: pointer;
+}
+
+.tool-toggle-label input[type="checkbox"] {
+  position: relative;
+  width: 22px;
+  height: 12px;
+  margin: 0;
+  flex: none;
+  appearance: none;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: background 200ms, border-color 200ms;
+  flex-shrink: 0;
+}
+
+.tool-toggle-label input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  top: 1.5px;
+  left: 1.5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-text-muted);
+  transition: transform 200ms, background 200ms;
+}
+
+.tool-toggle-label input[type="checkbox"]:checked {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.tool-toggle-label input[type="checkbox"]:checked::before {
+  transform: translateX(10px);
+  background: #fff;
+}
+
+.disabled-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .tool-detail {
@@ -321,6 +464,15 @@ h2 {
 .detail-title code {
   color: var(--color-primary);
   font-size: 11px;
+}
+
+.detail-disabled-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  padding: 2px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
 }
 
 .detail-description {

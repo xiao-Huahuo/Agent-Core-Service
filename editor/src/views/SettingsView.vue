@@ -1,14 +1,27 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
-import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchWebSearchConfig, saveWebSearchConfig } from '@/api/settings'
-import type { SystemPromptEntry, MemoryEntry } from '@/api/settings'
+import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchWebSearchConfig, saveWebSearchConfig, fetchAvailableTools, saveDisabledTools } from '@/api/settings'
+import type { SystemPromptEntry, MemoryEntry, ToolEntry } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { ThemeMode } from '@/types/settings'
 
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
+
+const activeTab = ref<'basic' | 'llm' | 'tools' | 'web' | 'memory'>('basic')
+
+const tabs = [
+  { key: 'basic' as const, label: '基础设置' },
+  { key: 'llm' as const, label: 'LLM 配置' },
+  { key: 'tools' as const, label: '工具配置' },
+  { key: 'web' as const, label: '联网配置' },
+  { key: 'memory' as const, label: '记忆与指令' },
+]
+
+/* ---- Basic settings ---- */
+
 const libraryNameDraft = ref(settingsStore.activeKnowledgeLibrary?.name ?? '')
 const knowledgeDirDraft = ref(settingsStore.profile.knowledgeDir)
 const watchEnabledDraft = ref(settingsStore.profile.knowledgeWatchEnabled)
@@ -18,6 +31,88 @@ const knowledgeIgnorePatternsDraft = ref(settingsStore.profile.knowledgeIgnorePa
 const saving = ref(false)
 const saveError = ref('')
 const saveMessage = ref('')
+
+const hasChanges = computed(() => {
+  return (
+    knowledgeDirDraft.value !== settingsStore.profile.knowledgeDir ||
+    libraryNameDraft.value !== (settingsStore.activeKnowledgeLibrary?.name ?? '') ||
+    watchEnabledDraft.value !== settingsStore.profile.knowledgeWatchEnabled ||
+    autoIngestOnUploadDraft.value !== Boolean(settingsStore.profile.autoIngestOnUpload) ||
+    ocrEnabledDraft.value !== Boolean(settingsStore.profile.ocrEnabled) ||
+    knowledgeIgnorePatternsDraft.value !== (settingsStore.profile.knowledgeIgnorePatterns ?? '')
+  )
+})
+
+watch(
+  () => settingsStore.activeKnowledgeLibrary?.name ?? '',
+  (value) => { libraryNameDraft.value = value },
+)
+
+watch(
+  () => settingsStore.profile.knowledgeDir,
+  (value) => { knowledgeDirDraft.value = value },
+)
+
+watch(
+  () => settingsStore.profile.autoIngestOnUpload,
+  (value) => { autoIngestOnUploadDraft.value = Boolean(value) },
+)
+
+watch(
+  () => settingsStore.profile.ocrEnabled,
+  (value) => { ocrEnabledDraft.value = Boolean(value) },
+)
+
+watch(
+  () => settingsStore.profile.knowledgeIgnorePatterns,
+  (value) => { knowledgeIgnorePatternsDraft.value = value ?? '' },
+)
+
+async function saveProfile() {
+  saving.value = true
+  saveError.value = ''
+  saveMessage.value = ''
+  const nextKnowledgeDir = knowledgeDirDraft.value.trim() || settingsStore.profile.knowledgeDir
+  const nextLibraryName = libraryNameDraft.value.trim()
+  const ignorePatternsChanged = knowledgeIgnorePatternsDraft.value !== (settingsStore.profile.knowledgeIgnorePatterns ?? '')
+  const ocrEnabledChanged = ocrEnabledDraft.value !== Boolean(settingsStore.profile.ocrEnabled)
+  try {
+    settingsStore.updateProfile({ knowledgeWatchEnabled: watchEnabledDraft.value })
+    if (nextKnowledgeDir !== settingsStore.profile.knowledgeDir) {
+      await settingsStore.switchKnowledgeRoot(nextKnowledgeDir)
+    }
+    if (nextLibraryName && nextLibraryName !== (settingsStore.activeKnowledgeLibrary?.name ?? '')) {
+      await settingsStore.renameActiveKnowledgeLibrary(nextLibraryName)
+    }
+    if (
+      autoIngestOnUploadDraft.value !== Boolean(settingsStore.profile.autoIngestOnUpload) ||
+      ocrEnabledChanged ||
+      ignorePatternsChanged
+    ) {
+      const result = await settingsStore.saveKnowledgeIngestionSettings({
+        autoIngestOnUpload: autoIngestOnUploadDraft.value,
+        ocrEnabled: ocrEnabledDraft.value,
+        knowledgeIgnorePatterns: knowledgeIgnorePatternsDraft.value,
+      })
+      if (result?.restart_required) {
+        saveMessage.value = 'OCR 设置已保存, 重启后生效'
+      }
+    }
+    if (ignorePatternsChanged || ocrEnabledChanged) {
+      await workspaceStore.loadKnowledgeTree()
+    }
+  } catch (error) {
+    saveError.value = error instanceof Error ? error.message : '保存失败'
+  } finally {
+    saving.value = false
+  }
+}
+
+const themeOptions: Array<{ value: ThemeMode; label: string }> = [
+  { value: 'dark', label: '深色' },
+  { value: 'light', label: '浅色' },
+  { value: 'system', label: '跟随系统' },
+]
 
 /* ---- System prompts ---- */
 
@@ -101,12 +196,6 @@ async function handleDeleteMemory(memoryId: string) {
     showMessage(memoryMsg, '删除失败')
   }
 }
-
-onMounted(() => {
-  loadAgentSettings()
-  loadModelConfig()
-  loadWebSearchConfig()
-})
 
 /* ---- Web search config ---- */
 
@@ -196,274 +285,292 @@ async function handleSaveModel() {
   }
 }
 
-const themeOptions: Array<{ value: ThemeMode; label: string }> = [
-  { value: 'dark', label: '深色' },
-  { value: 'light', label: '浅色' },
-  { value: 'system', label: '跟随系统' },
-]
+/* ---- Tool management ---- */
 
-const hasChanges = computed(() => {
-  return (
-    knowledgeDirDraft.value !== settingsStore.profile.knowledgeDir ||
-    libraryNameDraft.value !== (settingsStore.activeKnowledgeLibrary?.name ?? '') ||
-    watchEnabledDraft.value !== settingsStore.profile.knowledgeWatchEnabled ||
-    autoIngestOnUploadDraft.value !== Boolean(settingsStore.profile.autoIngestOnUpload) ||
-    ocrEnabledDraft.value !== Boolean(settingsStore.profile.ocrEnabled) ||
-    knowledgeIgnorePatternsDraft.value !== (settingsStore.profile.knowledgeIgnorePatterns ?? '')
-  )
-})
+const tools = ref<ToolEntry[]>([])
+const toolsMsg = ref('')
 
-watch(
-  () => settingsStore.activeKnowledgeLibrary?.name ?? '',
-  (value) => {
-    libraryNameDraft.value = value
-  },
-)
-
-watch(
-  () => settingsStore.profile.knowledgeDir,
-  (value) => {
-    knowledgeDirDraft.value = value
-  },
-)
-
-watch(
-  () => settingsStore.profile.autoIngestOnUpload,
-  (value) => {
-    autoIngestOnUploadDraft.value = Boolean(value)
-  },
-)
-
-watch(
-  () => settingsStore.profile.ocrEnabled,
-  (value) => {
-    ocrEnabledDraft.value = Boolean(value)
-  },
-)
-
-watch(
-  () => settingsStore.profile.knowledgeIgnorePatterns,
-  (value) => {
-    knowledgeIgnorePatternsDraft.value = value ?? ''
-  },
-)
-
-async function saveProfile() {
-  saving.value = true
-  saveError.value = ''
-  saveMessage.value = ''
-  const nextKnowledgeDir = knowledgeDirDraft.value.trim() || settingsStore.profile.knowledgeDir
-  const nextLibraryName = libraryNameDraft.value.trim()
-  const ignorePatternsChanged = knowledgeIgnorePatternsDraft.value !== (settingsStore.profile.knowledgeIgnorePatterns ?? '')
-  const ocrEnabledChanged = ocrEnabledDraft.value !== Boolean(settingsStore.profile.ocrEnabled)
+async function loadTools() {
+  if (!settingsStore.profile.userId) return
   try {
-    settingsStore.updateProfile({ knowledgeWatchEnabled: watchEnabledDraft.value })
-    if (nextKnowledgeDir !== settingsStore.profile.knowledgeDir) {
-      await settingsStore.switchKnowledgeRoot(nextKnowledgeDir)
-    }
-    if (nextLibraryName && nextLibraryName !== (settingsStore.activeKnowledgeLibrary?.name ?? '')) {
-      await settingsStore.renameActiveKnowledgeLibrary(nextLibraryName)
-    }
-    if (
-      autoIngestOnUploadDraft.value !== Boolean(settingsStore.profile.autoIngestOnUpload) ||
-      ocrEnabledChanged ||
-      ignorePatternsChanged
-    ) {
-      const result = await settingsStore.saveKnowledgeIngestionSettings({
-        autoIngestOnUpload: autoIngestOnUploadDraft.value,
-        ocrEnabled: ocrEnabledDraft.value,
-        knowledgeIgnorePatterns: knowledgeIgnorePatternsDraft.value,
-      })
-      if (result?.restart_required) {
-        saveMessage.value = 'OCR 设置已保存, 重启后生效'
-      }
-    }
-    if (ignorePatternsChanged || ocrEnabledChanged) {
-      await workspaceStore.loadKnowledgeTree()
-    }
-  } catch (error) {
-    saveError.value = error instanceof Error ? error.message : '保存失败'
-  } finally {
-    saving.value = false
+    const res = await fetchAvailableTools(settingsStore.profile.userId)
+    tools.value = res.tools ?? []
+  } catch {
+    tools.value = []
   }
 }
+
+async function handleToggleTool(toolName: string) {
+  if (!settingsStore.profile.userId) return
+  const tool = tools.value.find(t => t.name === toolName)
+  if (tool) tool.enabled = !tool.enabled
+  try {
+    const disabled = tools.value.filter(t => !t.enabled).map(t => t.name)
+    await saveDisabledTools(settingsStore.profile.userId, disabled)
+  } catch {
+    if (tool) tool.enabled = !tool.enabled
+    showMessage(toolsMsg, '保存失败')
+  }
+}
+
+const sortedTools = computed(() => {
+  return [...tools.value].sort((a, b) => {
+    if (a.enabled !== b.enabled) return a.enabled ? -1 : 1
+    return a.display_name.localeCompare(b.display_name)
+  })
+})
+
+onMounted(() => {
+  loadAgentSettings()
+  loadModelConfig()
+  loadWebSearchConfig()
+  loadTools()
+})
 </script>
 
 <template>
   <div class="settings-page">
-    <!-- 知识库 -->
-    <section class="setting-section">
-      <h3>知识库</h3>
-      <div class="setting-row">
-        <label>库名称</label>
-        <input v-model="libraryNameDraft" spellcheck="false" />
-      </div>
-      <div class="setting-row">
-        <label>知识目录</label>
-        <input v-model="knowledgeDirDraft" spellcheck="false" />
-      </div>
-      <div class="setting-row toggle-row">
-        <label>文件监听</label>
-        <input v-model="watchEnabledDraft" type="checkbox" />
-      </div>
-      <div class="setting-row toggle-row">
-        <label>自动灌库</label>
-        <input v-model="autoIngestOnUploadDraft" type="checkbox" />
-        <span class="hint-text">关闭时上传只进入文件树,点击 header 刷新或文件按钮才灌库</span>
-      </div>
-      <div class="setting-row toggle-row">
-        <label>OCR</label>
-        <input v-model="ocrEnabledDraft" type="checkbox" />
-        <span class="hint-text">开启后需重启; 重启时会检查并预热 PaddleOCR 中英文模型</span>
-      </div>
-      <div class="setting-row ignore-row">
-        <label>屏蔽区</label>
-        <textarea
-          v-model="knowledgeIgnorePatternsDraft"
-          spellcheck="false"
-          placeholder="# gitignore-like&#10;private/&#10;*.tmp&#10;!private/keep.md"
-        ></textarea>
-      </div>
-      <p class="setting-hint">被屏蔽的文件不会入库; 已入库文件会在下次 Ingest 或单文件灌库时出库。</p>
-      <div class="model-actions">
-        <button class="save-model-btn" :disabled="saving || !hasChanges" @click="saveProfile">
-          {{ saving ? '保存中...' : '保存' }}
-        </button>
-        <span v-if="saveMessage" class="feedback">{{ saveMessage }}</span>
-        <span v-if="saveError" class="feedback error">{{ saveError }}</span>
-      </div>
-    </section>
+    <aside class="settings-sidebar">
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        class="sidebar-tab"
+        :class="{ active: activeTab === tab.key }"
+        type="button"
+        @click="activeTab = tab.key"
+      >
+        {{ tab.label }}
+      </button>
+    </aside>
 
-    <!-- 主题 -->
-    <section class="setting-section">
-      <h3>主题</h3>
-      <div class="theme-row">
-        <button
-          v-for="option in themeOptions"
-          :key="option.value"
-          :class="['theme-'+option.value, { active: settingsStore.themeMode === option.value }]"
-          type="button"
-          @click="settingsStore.setThemeMode(option.value)"
-        >
-          {{ option.label }}
-        </button>
-      </div>
-      <div class="setting-row toggle-row">
-        <label>索引状态</label>
-        <input :checked="settingsStore.showIndexColumn" type="checkbox" @change="settingsStore.setShowIndexColumn(($event.target as HTMLInputElement).checked)" />
-        <span class="hint-text">在文件树和文件资源管理器中显示入库状态</span>
-      </div>
-    </section>
+    <div class="settings-body">
+      <!-- 基础设置 -->
+      <div v-if="activeTab === 'basic'" class="setting-section">
+        <h3>知识库</h3>
+        <div class="setting-row">
+          <label>库名称</label>
+          <input v-model="libraryNameDraft" spellcheck="false" />
+        </div>
+        <div class="setting-row">
+          <label>知识目录</label>
+          <input v-model="knowledgeDirDraft" spellcheck="false" />
+        </div>
+        <div class="setting-row toggle-row">
+          <label>文件监听</label>
+          <input v-model="watchEnabledDraft" type="checkbox" />
+        </div>
+        <div class="setting-row toggle-row">
+          <label>自动灌库</label>
+          <input v-model="autoIngestOnUploadDraft" type="checkbox" />
+          <span class="hint-text">关闭时上传只进入文件树,点击 header 刷新或文件按钮才灌库</span>
+        </div>
+        <div class="setting-row toggle-row">
+          <label>OCR</label>
+          <input v-model="ocrEnabledDraft" type="checkbox" />
+          <span class="hint-text">开启后需重启; 重启时会检查并预热 PaddleOCR 中英文模型</span>
+        </div>
+        <div class="setting-row ignore-row">
+          <label>屏蔽区</label>
+          <textarea
+            v-model="knowledgeIgnorePatternsDraft"
+            spellcheck="false"
+            placeholder="# gitignore-like&#10;private/&#10;*.tmp&#10;!private/keep.md"
+          ></textarea>
+        </div>
+        <p class="setting-hint">被屏蔽的文件不会入库; 已入库文件会在下次 Ingest 或单文件灌库时出库。</p>
+        <div class="model-actions">
+          <button class="save-model-btn" :disabled="saving || !hasChanges" @click="saveProfile">
+            {{ saving ? '保存中...' : '保存' }}
+          </button>
+          <span v-if="saveMessage" class="feedback">{{ saveMessage }}</span>
+          <span v-if="saveError" class="feedback error">{{ saveError }}</span>
+        </div>
 
-    <!-- 语言模型 -->
-    <section class="setting-section">
-      <h3>语言模型</h3>
-      <div class="model-block">
-        <h4>大模型</h4>
-        <input v-model="largeModelName" placeholder="deepseek-v4-flash" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
-        <input v-model="largeBaseUrl" placeholder="https://api.deepseek.com" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
-        <div class="key-row">
-          <input v-model="largeApiKey" :type="showLargeKey ? 'text' : 'password'" placeholder="API Key" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
-          <button class="toggle-key" @click="showLargeKey = !showLargeKey">{{ showLargeKey ? '隐藏' : '显示' }}</button>
+        <h3 style="margin-top: 20px">主题</h3>
+        <div class="theme-row">
+          <button
+            v-for="option in themeOptions"
+            :key="option.value"
+            :class="['theme-'+option.value, { active: settingsStore.themeMode === option.value }]"
+            type="button"
+            @click="settingsStore.setThemeMode(option.value)"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+        <div class="setting-row toggle-row">
+          <label>索引状态</label>
+          <input :checked="settingsStore.showIndexColumn" type="checkbox" @change="settingsStore.setShowIndexColumn(($event.target as HTMLInputElement).checked)" />
+          <span class="hint-text">在文件树和文件资源管理器中显示入库状态</span>
         </div>
       </div>
-      <div class="model-block">
-        <h4>小模型</h4>
-        <input v-model="smallModelName" placeholder="moonshot-v1-8k" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
-        <input v-model="smallBaseUrl" placeholder="https://api.moonshot.cn/v1" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
-        <div class="key-row">
-          <input v-model="smallApiKey" :type="showSmallKey ? 'text' : 'password'" placeholder="API Key" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
-          <button class="toggle-key" @click="showSmallKey = !showSmallKey">{{ showSmallKey ? '隐藏' : '显示' }}</button>
+
+      <!-- LLM 配置 -->
+      <div v-if="activeTab === 'llm'" class="setting-section">
+        <h3>大模型</h3>
+        <div class="model-block">
+          <input v-model="largeModelName" placeholder="deepseek-v4-flash" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
+          <input v-model="largeBaseUrl" placeholder="https://api.deepseek.com" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
+          <div class="key-row">
+            <input v-model="largeApiKey" :type="showLargeKey ? 'text' : 'password'" placeholder="API Key" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
+            <button class="toggle-key" @click="showLargeKey = !showLargeKey">{{ showLargeKey ? '隐藏' : '显示' }}</button>
+          </div>
+        </div>
+        <h3>小模型</h3>
+        <div class="model-block">
+          <input v-model="smallModelName" placeholder="moonshot-v1-8k" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
+          <input v-model="smallBaseUrl" placeholder="https://api.moonshot.cn/v1" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
+          <div class="key-row">
+            <input v-model="smallApiKey" :type="showSmallKey ? 'text' : 'password'" placeholder="API Key" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
+            <button class="toggle-key" @click="showSmallKey = !showSmallKey">{{ showSmallKey ? '隐藏' : '显示' }}</button>
+          </div>
+        </div>
+        <div class="model-actions">
+          <button v-if="!modelEditing" class="edit-model-btn" type="button" @click="modelEditing = true">{{ modelConfigSaved ? '编辑' : '配置' }}</button>
+          <button v-if="modelEditing" class="save-model-btn" :disabled="modelSaving" @click="handleSaveModel">
+            {{ modelSaving ? '保存中...' : '保存' }}
+          </button>
+          <button v-if="modelEditing" class="cancel-model-btn" type="button" @click="modelEditing = false; loadModelConfig()">取消</button>
+          <span v-if="modelMsg" class="feedback">{{ modelMsg }}</span>
         </div>
       </div>
-      <div class="model-actions">
-        <button v-if="!modelEditing" class="edit-model-btn" type="button" @click="modelEditing = true">{{ modelConfigSaved ? '编辑' : '配置' }}</button>
-        <button v-if="modelEditing" class="save-model-btn" :disabled="modelSaving" @click="handleSaveModel">
-          {{ modelSaving ? '保存中...' : '保存' }}
-        </button>
-        <button v-if="modelEditing" class="cancel-model-btn" type="button" @click="modelEditing = false; loadModelConfig()">取消</button>
-        <span v-if="modelMsg" class="feedback">{{ modelMsg }}</span>
-      </div>
-    </section>
 
-    <!-- 联网搜索 -->
-    <section class="setting-section">
-      <h3>联网搜索</h3>
-      <div class="setting-row toggle-row">
-        <label>启用搜索</label>
-        <input v-model="webSearchEnabledDraft" type="checkbox" />
+      <!-- 工具配置 -->
+      <div v-if="activeTab === 'tools'" class="setting-section">
+        <h3>工具开关</h3>
+        <p class="setting-hint toggle-hint">关闭后该工具将不会出现在 Agent 的工具列表中</p>
+        <div class="tool-list">
+          <div v-for="tool in sortedTools" :key="tool.name" class="tool-row" :class="{ disabled: !tool.enabled }">
+            <div class="tool-info">
+              <span class="tool-name">{{ tool.display_name }}</span>
+              <span class="tool-desc">{{ tool.description }}</span>
+            </div>
+            <input
+              :checked="tool.enabled"
+              type="checkbox"
+              @change="handleToggleTool(tool.name)"
+            />
+          </div>
+          <p v-if="!tools.length" class="empty-hint">暂无可用工具</p>
+        </div>
+        <span v-if="toolsMsg" class="feedback">{{ toolsMsg }}</span>
       </div>
-      <div class="setting-row">
-        <label>代理地址</label>
-        <input v-model="proxyUrlDraft" placeholder="http://127.0.0.1:7890" spellcheck="false" />
-      </div>
-      <div class="model-actions">
-        <button class="save-model-btn" :disabled="webSearchSaving" @click="handleSaveWebSearch">
-          {{ webSearchSaving ? '保存中...' : '保存' }}
-        </button>
-        <span v-if="webSearchMsg" class="feedback">{{ webSearchMsg }}</span>
-      </div>
-    </section>
 
-    <!-- 系统提示 -->
-    <section class="setting-section">
-      <h3>系统提示</h3>
-      <div class="input-row">
-        <input
-          v-model="newPromptContent"
-          placeholder="输入系统指令"
-          @keydown.enter="handleAddPrompt"
-        />
-        <button class="add-btn" :disabled="addingPrompt || !newPromptContent.trim()" @click="handleAddPrompt">
-          {{ addingPrompt ? '...' : '添加' }}
-        </button>
+      <!-- 联网配置 -->
+      <div v-if="activeTab === 'web'" class="setting-section">
+        <h3>联网搜索</h3>
+        <div class="setting-row toggle-row">
+          <label>启用搜索</label>
+          <input v-model="webSearchEnabledDraft" type="checkbox" />
+        </div>
+        <div class="setting-row">
+          <label>代理地址</label>
+          <input v-model="proxyUrlDraft" placeholder="http://127.0.0.1:7890" spellcheck="false" />
+        </div>
+        <div class="model-actions">
+          <button class="save-model-btn" :disabled="webSearchSaving" @click="handleSaveWebSearch">
+            {{ webSearchSaving ? '保存中...' : '保存' }}
+          </button>
+          <span v-if="webSearchMsg" class="feedback">{{ webSearchMsg }}</span>
+        </div>
       </div>
-      <p v-if="promptMsg" class="feedback">{{ promptMsg }}</p>
-      <ul v-if="promptEntries.length" class="entry-list">
-        <li v-for="entry in promptEntries" :key="entry.prompt_id" class="entry-row">
-          <span class="entry-text">{{ entry.content }}</span>
-          <button class="entry-del" title="删除" @click="handleDeletePrompt(entry.prompt_id)">&times;</button>
-        </li>
-      </ul>
-    </section>
 
-    <!-- 长期记忆 -->
-    <section class="setting-section">
-      <h3>长期记忆</h3>
-      <div class="input-row">
-        <input
-          v-model="newMemoryContent"
-          placeholder="输入记忆内容"
-          @keydown.enter="handleAddMemory"
-        />
-        <button class="add-btn" :disabled="addingMemory || !newMemoryContent.trim()" @click="handleAddMemory">
-          {{ addingMemory ? '...' : '添加' }}
-        </button>
+      <!-- 记忆与指令 -->
+      <div v-if="activeTab === 'memory'" class="setting-section">
+        <h3>系统提示</h3>
+        <div class="input-row">
+          <input
+            v-model="newPromptContent"
+            placeholder="输入系统指令"
+            @keydown.enter="handleAddPrompt"
+          />
+          <button class="add-btn" :disabled="addingPrompt || !newPromptContent.trim()" @click="handleAddPrompt">
+            {{ addingPrompt ? '...' : '添加' }}
+          </button>
+        </div>
+        <p v-if="promptMsg" class="feedback">{{ promptMsg }}</p>
+        <ul v-if="promptEntries.length" class="entry-list">
+          <li v-for="entry in promptEntries" :key="entry.prompt_id" class="entry-row">
+            <span class="entry-text">{{ entry.content }}</span>
+            <button class="entry-del" title="删除" @click="handleDeletePrompt(entry.prompt_id)">&times;</button>
+          </li>
+        </ul>
+
+        <h3 style="margin-top: 20px">长期记忆</h3>
+        <div class="input-row">
+          <input
+            v-model="newMemoryContent"
+            placeholder="输入记忆内容"
+            @keydown.enter="handleAddMemory"
+          />
+          <button class="add-btn" :disabled="addingMemory || !newMemoryContent.trim()" @click="handleAddMemory">
+            {{ addingMemory ? '...' : '添加' }}
+          </button>
+        </div>
+        <p v-if="memoryMsg" class="feedback">{{ memoryMsg }}</p>
+        <ul v-if="memories.length" class="entry-list">
+          <li v-for="entry in memories" :key="entry.memory_id" class="entry-row">
+            <span class="entry-text">{{ entry.content }}</span>
+            <button class="entry-del" title="删除" @click="handleDeleteMemory(entry.memory_id)">&times;</button>
+          </li>
+        </ul>
       </div>
-      <p v-if="memoryMsg" class="feedback">{{ memoryMsg }}</p>
-      <ul v-if="memories.length" class="entry-list">
-        <li v-for="entry in memories" :key="entry.memory_id" class="entry-row">
-          <span class="entry-text">{{ entry.content }}</span>
-          <button class="entry-del" title="删除" @click="handleDeleteMemory(entry.memory_id)">&times;</button>
-        </li>
-      </ul>
-    </section>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .settings-page {
+  display: flex;
   height: 100%;
-  overflow-y: auto;
-  padding: var(--space-16) var(--space-20);
+  overflow: hidden;
   background:
     linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
     var(--color-chrome-bg-solid);
-  font-size: 13px;
 }
 
-.setting-section {
-  margin-bottom: var(--space-20);
+.settings-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 120px;
+  flex-shrink: 0;
+  padding: var(--space-12) var(--space-8);
+  border-right: 1px solid var(--color-border);
+  overflow-y: auto;
+}
+
+.sidebar-tab {
+  display: block;
+  width: 100%;
+  padding: var(--space-8) var(--space-10);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 150ms, color 150ms;
+}
+
+.sidebar-tab:hover {
+  background: var(--color-primary-softer);
+  color: var(--color-text-primary);
+}
+
+.sidebar-tab.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.settings-body {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--space-16) var(--space-20);
+  font-size: 13px;
 }
 
 .setting-section h3 {
@@ -639,13 +746,6 @@ async function saveProfile() {
 /* Model */
 .model-block {
   margin-bottom: var(--space-10);
-}
-
-.model-block h4 {
-  margin: 0 0 var(--space-6);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-primary);
 }
 
 .model-block > input {
@@ -892,5 +992,97 @@ async function saveProfile() {
   color: var(--color-danger);
   border-color: rgba(255, 95, 95, 0.4);
   background: rgba(255, 95, 95, 0.08);
+}
+
+/* Tool management */
+.tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.tool-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+  transition: opacity 150ms;
+}
+
+.tool-row.disabled {
+  opacity: 0.55;
+}
+
+.tool-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tool-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.tool-desc {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-row input[type="checkbox"] {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  margin: 0;
+  flex: none;
+  appearance: none;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: background 200ms, border-color 200ms;
+  flex-shrink: 0;
+}
+
+.tool-row input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-text-muted);
+  transition: transform 200ms, background 200ms;
+}
+
+.tool-row input[type="checkbox"]:checked {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.tool-row input[type="checkbox"]:checked::before {
+  transform: translateX(12px);
+  background: #fff;
+}
+
+.toggle-hint {
+  margin: -2px 0 var(--space-8) 0 !important;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin: var(--space-4) 0;
 }
 </style>

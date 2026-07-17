@@ -145,10 +145,27 @@ class ModelDecisionNode:
     def __call__(self, state: AgentState) -> dict[str, Any]:
         """读取当前消息状态,调用模型,并把模型响应追加回 `messages`。"""
 
+        user_id = state.get("user_id")
+
+        # 从 state 或数据库读取已关闭的工具列表
+        active_tool_names: list[str] = list(self.tool_names)
+        _disabled_tools_state = state.get("disabled_tools")
+        if isinstance(_disabled_tools_state, list):
+            disabled_set = set(str(t) for t in _disabled_tools_state)
+            active_tool_names = [t for t in active_tool_names if t not in disabled_set]
+        elif user_id:
+            try:
+                from agent_service.api.rest.deps import _settings_service
+                if _settings_service is not None:
+                    disabled_tools = _settings_service.get_disabled_tools(user_id=user_id)
+                    disabled_set = set(disabled_tools)
+                    active_tool_names = [t for t in active_tool_names if t not in disabled_set]
+            except Exception:
+                pass
+
         system_content = self.config.model.system_prompt
 
         # 追加用户自定义系统提示词(数据库持久化,每次对话自动加载)
-        user_id = state.get("user_id")
         if user_id:
             try:
                 from agent_service.api.rest.deps import _settings_service
@@ -198,7 +215,7 @@ class ModelDecisionNode:
         response = self.task_scheduler.invoke_chat(
             task_type=FOREGROUND_AGENT_TASK,
             messages=llm_messages,
-            tool_names=self.tool_names,
+            tool_names=active_tool_names,
             api_key=user_api_key,
             base_url=user_base_url,
             small_api_key=user_small_api_key,
@@ -256,7 +273,7 @@ class ModelDecisionNode:
         for chunk in self.task_scheduler.stream_chat(
             task_type=FOREGROUND_AGENT_TASK,
             messages=llm_messages,
-            tool_names=self.tool_names,
+            tool_names=active_tool_names,
             api_key=user_api_key,
             base_url=user_base_url,
             small_api_key=user_small_api_key,

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import hashlib
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -80,6 +81,7 @@ class SettingsService:
                 "auto_ingest_on_upload": "BOOLEAN NOT NULL DEFAULT 0",
                 "ocr_enabled": "BOOLEAN NOT NULL DEFAULT 0",
                 "knowledge_ignore_patterns": "TEXT NOT NULL DEFAULT ''",
+                "disabled_tools": "TEXT NOT NULL DEFAULT ''",
             }
             with Session(self.engine) as db:
                 for col_name, col_type in migrations.items():
@@ -611,6 +613,57 @@ class SettingsService:
                 "proxy_url": record.proxy_url,
                 "web_search_enabled": record.web_search_enabled,
             }
+
+    # ---- 可开关工具 ----
+
+    def get_disabled_tools(self, *, user_id: str) -> list[str]:
+        """获取用户关闭的工具列表。"""
+        normalized_user_id = user_id.strip()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None or not record.disabled_tools:
+                return []
+            try:
+                return json.loads(record.disabled_tools)
+            except (json.JSONDecodeError, TypeError):
+                return []
+
+    def save_disabled_tools(self, *, user_id: str, tool_names: list[str]) -> list[str]:
+        """保存用户关闭的工具列表。"""
+        normalized_user_id = user_id.strip()
+        now = self._utc_now()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                record = UserSettingsRecord(
+                    user_id=normalized_user_id,
+                    knowledge_dir=str(self.config.storage.knowledge_dir),
+                    disabled_tools=json.dumps(tool_names, ensure_ascii=False),
+                    created_at=now,
+                    updated_at=now,
+                )
+            else:
+                record.disabled_tools = json.dumps(tool_names, ensure_ascii=False)
+                record.updated_at = now
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            return json.loads(record.disabled_tools)
+
+    def list_available_tools(self, *, user_id: str) -> list[dict]:
+        """列出全部可用的内置工具及每项在当前用户的开关状态。"""
+        from agent_service.tools.builtin import BUILTIN_TOOL_DEFINITIONS
+
+        disabled = set(self.get_disabled_tools(user_id=user_id))
+        result = []
+        for definition in BUILTIN_TOOL_DEFINITIONS:
+            result.append({
+                "name": definition.name,
+                "display_name": getattr(definition, "display_name", "") or definition.name,
+                "description": definition.description,
+                "enabled": definition.name not in disabled,
+            })
+        return result
 
     # ---- 知识库灌库配置 ----
 

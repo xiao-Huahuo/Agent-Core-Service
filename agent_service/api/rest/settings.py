@@ -177,6 +177,33 @@ async def save_web_search_config(body: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+# ---- 可开关工具 ----
+
+@router.get("/settings/disabled-tools")
+async def get_disabled_tools(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+    """获取用户关闭的工具名称列表。"""
+    svc = _require_settings_service()
+    return {"disabled_tools": svc.get_disabled_tools(user_id=user_id)}
+
+
+@router.put("/settings/disabled-tools")
+async def save_disabled_tools(body: dict[str, Any]) -> dict[str, Any]:
+    """保存用户关闭的工具列表。body: user_id 必填, tool_names 为关闭的工具名称数组。"""
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    raw_tool_names = body.get("tool_names", [])
+    tool_names = [str(name) for name in raw_tool_names if isinstance(name, str) and name.strip()]
+    svc = _require_settings_service()
+    return {"disabled_tools": svc.save_disabled_tools(user_id=user_id, tool_names=tool_names)}
+
+
+@router.get("/settings/available-tools")
+async def list_available_tools(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+    """列出全部内置工具及当前用户的开关状态。"""
+    svc = _require_settings_service()
+    return {"tools": svc.list_available_tools(user_id=user_id)}
+
 # ---- 自定义长期记忆 ----
 
 @router.get("/settings/memories")

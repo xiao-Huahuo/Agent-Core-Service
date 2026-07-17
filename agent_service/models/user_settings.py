@@ -39,6 +39,7 @@ class UserSettingsRecord(SQLModel, table=True):
     auto_ingest_on_upload: bool = Field(default=False)
     ocr_enabled: bool = Field(default=False)
     knowledge_ignore_patterns: str = Field(default="", sa_column=Column(Text))
+    disabled_tools: str = Field(default="", sa_column=Column(Text))
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
