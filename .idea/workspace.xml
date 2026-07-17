@@ -7,22 +7,6 @@
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="去掉了一些边框">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/sessions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/sessions.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/session_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/session_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/api/session.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/session.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/MultimodalPreview.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/MultimodalPreview.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatBubble.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatBubble.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatInput.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatInput.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageList.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageList.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/SessionDrawer.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/SessionDrawer.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/useAvatar.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/useAvatar.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/chat.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/chat.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/session.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/session.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
