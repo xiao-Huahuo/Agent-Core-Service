@@ -776,6 +776,13 @@ class KnowledgeLibraryService:
                 "sheets": self._preview_xlsx(path=target),
                 "readonly": True,
             }
+        if suffix in {".ppt", ".pptx"}:
+            return {
+                **base_payload,
+                **self._preview_pptx(path=target),
+                "kind": "document",
+                "readonly": True,
+            }
         if suffix == ".docx":
             return {
                 **base_payload,
@@ -914,6 +921,131 @@ class KnowledgeLibraryService:
                 if text:
                     paragraphs.append(f"<p>{html.escape(text)}</p>")
             return "\n".join(paragraphs) or "<p>DOCX 中没有可预览文本。</p>"
+
+    @staticmethod
+    def _preview_pptx(*, path: Path) -> dict:
+        """提取 PPTX 按幻灯片文本内容供 Edit 模式展示,同时生成 HTML 预览。"""
+
+        if path.suffix.lower() == ".ppt":
+            return {
+                "content": "",
+                "html": "<p>旧版 .ppt 暂不支持预览,请转换为 .pptx 格式。</p>",
+                "image_count": 0,
+                "slide_count": 0,
+            }
+
+        try:
+            import xml.etree.ElementTree as ET
+
+            ns = {
+                "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+                "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+                "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
+            }
+
+            slides: list[dict] = []
+            with zipfile.ZipFile(path) as archive:
+                slide_paths = sorted(
+                    name for name in archive.namelist()
+                    if name.startswith("ppt/slides/slide") and name.endswith(".xml")
+                )
+                if not slide_paths:
+                    return {
+                        "content": "",
+                        "html": "<p>PPTX 中没有找到幻灯片。</p>",
+                        "image_count": 0,
+                        "slide_count": 0,
+                    }
+
+                # Build an image cache: rId -> base64 data URL per slide
+                for slide_index, slide_path in enumerate(slide_paths, start=1):
+                    xml_text = archive.read(slide_path).decode("utf-8", errors="ignore")
+                    slide_root = ET.fromstring(xml_text)
+
+                    # Extract text
+                    text_parts: list[str] = []
+                    for text_elem in slide_root.iter(f"{{{ns['a']}}}t"):
+                        if text_elem.text:
+                            text_parts.append(text_elem.text.strip())
+                    slide_text = "\n".join(part for part in text_parts if part)
+
+                    # Extract images via relationships
+                    rels_path = f"ppt/slides/_rels/{Path(slide_path).name}.rels"
+                    rels_map: dict[str, str] = {}
+                    try:
+                        rels_xml = archive.read(rels_path).decode("utf-8", errors="ignore")
+                        rels_root = ET.fromstring(rels_xml)
+                        for rel in rels_root:
+                            rid = rel.get("Id", "")
+                            target = rel.get("Target", "")
+                            if rid and target and "image" in str(rel.get("Type", "")):
+                                # Resolve relative to ppt/slides/
+                                media_path = str(Path("ppt/slides") / target).replace("\\", "/")
+                                rels_map[rid] = media_path
+                    except KeyError:
+                        pass
+
+                    # Find blip references in the slide
+                    slide_images: list[str] = []
+                    for blip in slide_root.iter(f"{{{ns['a']}}}blip"):
+                        rid = blip.get(f"{{{ns['r']}}}embed") or blip.get(f"{{{ns['r']}}}link") or ""
+                        media_path = rels_map.get(rid)
+                        if media_path and media_path in archive.namelist():
+                            img_bytes = archive.read(media_path)
+                            ext = Path(media_path).suffix.lstrip(".") or "png"
+                            if ext.lower() == "jpg":
+                                ext = "jpeg"
+                            b64 = base64.b64encode(img_bytes).decode("ascii")
+                            slide_images.append(
+                                f'<p><img src="data:image/{ext};base64,{b64}" style="max-width:100%" /></p>'
+                            )
+
+                    slides.append({
+                        "text": slide_text,
+                        "images": slide_images,
+                        "index": slide_index,
+                    })
+
+            if not slides:
+                return {
+                    "content": "",
+                    "html": "<p>PPTX 中没有可预览内容。</p>",
+                    "image_count": 0,
+                    "slide_count": 0,
+                }
+
+            # Build content (for Edit mode - plain text)
+            content_parts: list[str] = []
+            for slide in slides:
+                content_parts.append(f"## Slide {slide['index']}\n\n{slide['text']}")
+            content = "\n\n".join(content_parts).strip()
+
+            # Build HTML (for Preview mode - rendered)
+            html_parts: list[str] = []
+            for slide in slides:
+                html_parts.append(f"<h2>第 {slide['index']} 页</h2>")
+                if slide["text"]:
+                    for line in slide["text"].split("\n"):
+                        line = line.strip()
+                        if line:
+                            html_parts.append(f"<p>{html.escape(line)}</p>")
+                html_parts.extend(slide["images"])
+            html = "\n".join(html_parts) or "<p>PPTX 中没有可预览内容。</p>"
+
+            image_count = sum(len(s["images"]) for s in slides)
+            return {
+                "content": content,
+                "html": html,
+                "image_count": image_count,
+                "slide_count": len(slides),
+            }
+        except Exception:
+            return {
+                "content": "",
+                "html": "<p>PPTX 解析失败。</p>",
+                "image_count": 0,
+                "slide_count": 0,
+            }
 
     @staticmethod
     def _preview_pdf(*, path: Path) -> dict:

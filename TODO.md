@@ -16,7 +16,6 @@
   - 灌库进度条应该要根据灌库队列实时进度来计算,而不是做样子到88%.
   - 无论是文件树,还是文件资源管理器页,都要实时渲染索引状态图标.
 - [ ] (依赖于文件资源管理器页)删除的文件不应该直接删除,而是应该进入项目内回收站,并且被隐性的屏蔽.用户可以在文件资源管理器页查看他们,且可以恢复.
-
 - [ ] 尝试使用[OpenDataloader-PDF](https://github.com/opendataloader-project/opendataloader-pdf)代替OCR进行PDF解析?
 - [ ] 添加内置终端,可选cmd/Windows系统终端/powershell/bash.
 - [ ] 增加多模态文档的Json结构化-切片-入库全流程观测面板.
@@ -24,11 +23,12 @@
 ### BUGs
 - [x] 修复 Agent 自动 RAG 注入未传递 user_id 的问题
 - [ ] 解决agent输出的代码块没渲染和HTML高亮乱码问题,尤其是修复输出大量含有这种乱码渲染导致页面卡死的问题.(&amp?,span?)
-- [x] 解决几轮对话之后agent对话越来越卡的问题
+- [ ] 解决几轮对话之后agent对话越来越卡,流式输出越来越大块的问题
 - [ ] 修理安全审核节点不明原因的抽风把正常内容拦截的问题.
 - [ ] 解决:在文件树中快速切换文件,文件预览有时候会卡死,并且导致其他文件也打不开,甚至其他功能都被阻塞打不开的问题.
 - [x] 解决删除文件夹显示Request failed: 500 Internal Server Error的问题.
 - [ ] 解决思考过长导致"HTTP/1.1 400 Bad Request"禁止访问的问题(可能需要彻底的优化上下文构建机制)
+- [ ]
 ### 验收
 Git仓库地址: http://csgitlab.whu.edu.cn/2025-2026-3-advancedprograming/2024-se-7-metaweave.git
 AI使用日志: `CHANGE_HISTORY.md`

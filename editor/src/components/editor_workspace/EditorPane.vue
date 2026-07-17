@@ -73,9 +73,11 @@ const isMarkdownViewer = computed(() => workspaceStore.activeViewerKind === 'mar
 const isCodeViewer = computed(() => ['code', 'text'].includes(workspaceStore.activeViewerKind))
 const isPdfViewer = computed(() => workspaceStore.activeViewerKind === 'pdf')
 const isPdfTextViewer = computed(() => isPdfViewer.value && Boolean(workspaceStore.activePreview?.content))
+const isDocumentViewer = computed(() => workspaceStore.activeViewerKind === 'document')
+const isDocumentTextViewer = computed(() => isDocumentViewer.value && Boolean(workspaceStore.activePreview?.content))
 const isImageViewer = computed(() => workspaceStore.activeViewerKind === 'image')
 const isImageTextViewer = computed(() => isImageViewer.value && Boolean(workspaceStore.activePreview?.content))
-const isTextEditViewer = computed(() => isCodeViewer.value || isPdfTextViewer.value || isImageTextViewer.value)
+const isTextEditViewer = computed(() => isCodeViewer.value || isPdfTextViewer.value || isDocumentTextViewer.value || isImageTextViewer.value)
 const isPreviewOnlyViewer = computed(() => !isMarkdownViewer.value && !isTextEditViewer.value)
 const effectiveEditorMode = computed<EditorViewMode>(() => isPreviewOnlyViewer.value ? 'preview' : editorMode.value)
 

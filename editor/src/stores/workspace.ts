@@ -131,6 +131,8 @@ const CODE_EXTENSIONS = new Set([
 const PREVIEW_ONLY_EXTENSIONS = new Set([
   'csv',
   'docx',
+  'ppt',
+  'pptx',
   'svg',
   'tsv',
   'xlsx',
