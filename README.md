@@ -227,28 +227,47 @@ AgentService.exe
    * 短期记忆：即会话内上下文管理.
      * 不超过上下文长度的直接追加到上下文，超过最大上下文阈值时会先进入 `compress` 节点,用小模型生成“重要事实摘要”,再把工作上下文重写为 `重要事实摘要 + 最近少量消息`。
      * 上下文拼装优先级为 `短期历史消息 -> 压缩摘要 -> 历史摘要/事实 -> 外部知识库片段`，避免知识库内容覆盖用户刚刚明确给出的事实。
-   * 长期记忆：采用 RAG 检索增强生成（向量检索 + 关键词检索 + ReRank 精排）作为长期记忆提取方式。
-     * 跨对话记忆(`Memory`)：每次发送 prompt 且内容有用时自动异步提取摘要，存储到用户会话向量库中。
-     * 知识库 / 大文本记忆 (`Knowledge`)：包含切片来源和时效性有关字段。本地知识库文件采用哈希锁来锁定文件已读状态。原始数据会先进行针对不同模态的预处理，提取元结构 JSON，读取并得到可操作对象，再进行后续切片。
-     * 重要事实摘要记忆：上下文压缩后生成的摘要会写入对话内的长期记忆,后续注入上下文。
-     * 长期规则(定制化系统提示词)：本质是追加用户自定义的系统提示词. 不经过 RAG 流程,用户可自行设置,Agent也可以帮助用户更新记忆. 如果用户说“记住一个东西”，默认应该写长期记忆；只有内容是“以后必须/永远/每次都按这个规则做”这种行为规则，才应该写长期规则（追加系统提示词）。
-   * 提高 RAG 召回率：采用以下策略：
-     * 分块策略：按照语义切块，标题、段落、表格、列表分开处理。
-     * 切片策略：采用重叠切片，`512` 个字符一个 chunk，重叠部分为 `128` 个字符。
-     * 混合检索：采用多路召回，**向量召回**（优先 ChromaDB 余弦距离，失败时回退 SQLite JSON 向量余弦相似度）与**关键词召回**（SQL ILIKE 预筛 + Python 覆盖率/词频加权打分）并行，各取相关度最高的 5 条，然后合并去重。
-     * 重排序：引入本地 CrossEncoder 模型 `BAAI/bge-reranker-v2-m3`，对合并后的候选集做语义相关性精排。启用 ReRank 时相关性得分取ReRank打分和混合检索打分中的最大值，打分都高的语义会更相关,更有机会作为备选:$$相关性得分(Relevance)=\max{混合检索得分,ReRank得分}$$
-     * 加权联合排序: $$联合得分(FinalScore) = 0.5 \times 相关性得分(Relevance) + 0.3 \times 新鲜性 + 0.2 \times 权威性$$
-   * 信息时效性：为了保证信息时效性，每条记忆都含有内容有效性时间戳字段（`created_at`、`updated_at`、`valid_from`、`valid_until`），检索时采用**优先新内容、旧内容降权、过期内容直接过滤**的算法：
-       1. 过滤层：过滤截止时间在当前时间的过时信息。
-       2. 排序层：先过滤无关候选，再以**时间优先**策略排序。最新的优先,更新时间相同时则看联合得分(FinalScore),时间和分数都一样则看对话来源,来源一样则看相关性得分(Relevance).
-       3. 时效状态管理：配置记忆裁决层，先把自然语言摘要解析为结构化事实单元，再为事实写入 `active(活跃) / superseded(被覆盖) / expired(淘汰)` 状态。
-       4. 事实更新策略：
-          - **单值强排他事实**执行**新值覆盖旧值**.
-          - **多值弱排他事实**执行**新值追加**.
-          - **时序事实**执行**到期失效处理**.
-       5. 事实类型裁决：有些事实是程序定义的,如项目具体信息,具体所属模块,此时事实由程序决定,LLM由于其输出不稳定性只能作为补充. 
-            - 事实已经属于规则的 → LLM 的结果直接扔掉，用规则的结果
-            - 事实是全新的 → 才保留 LLM 的结果
+   * 长期记忆/语义召回：采用 **RAG 检索增强生成**作为提取方式。底层数据分为以下类型：
+     - `会话摘要(session_summary)`：每轮异步摘要，记录对话要点。
+     - `会话事实(session_fact)`：从摘要中提取的结构化事实单元，由 MemoryResolver 裁决并维护 active/superseded/expired 状态。
+     - `重要事实摘要(important_fact_summary)`：ContextBuilder 内 compress 节点生成的跨会话重要事实。
+     - `知识切片(knowledge_chunk)`：知识库文件的语义切片。
+     - `自定义记忆(user_custom)`：用户手动写入的自定义记忆。
+     - `用户规则(user_rule)`：用户自定义的长期规则，不经过 RAG 检索，以系统提示词形式直接注入。
+
+   * 长期记忆/语义召回管线完整流程：
+
+     1. **向量召回** — 使用 ChromaDB 余弦距离检索，`vector_score = clamp(1.0 - distance)`。若 ChromaDB 不可用或返回零得分，回退到 SQLite 内嵌 JSON 向量的余弦相似度（归一化到 [0,1]）。
+
+     2. **关键词召回** — 从 query 提取英文 token + 中文 2~4 字子串，过停用词后以 SQL ILIKE 预筛出候选 doc，再用 Python 覆盖率 + 词频加权打分：每个词按长度加权（`weight = min(max(len, 2), 6) / 6`），出现次数加成（`+ min(occ-1, 2) * 0.08 * weight`），最终 `keyword_score = coverage_score + phrase_bonus`（phrase_bonus 为 `min(matched_terms, 4) * 0.03`）。
+
+     3. **merge_candidates 合并去重** — 以 `memory_id` 为 key 去重。两路都命中的候选：`merged_score = 0.6 × max(v, k) + 0.4 × avg(v, k) + 0.05`（通道奖励）；仅一路命中：`merged_score = max(v, k)`。
+
+     4. **CrossEncoder ReRank** — 使用本地 CrossEncoder 模型 `BAAI/bge-reranker-v2-m3` 对 `(query, document)` 对做语义精排，原始 logit 通过 sigmoid 归一化到 [0,1]。未配置 ReRank 模型时回退到 merged_score + 通道数 + importance 排序。
+
+     5. **最终联合评分** — 对 ReRank 后的每条结果计算三维分数：
+        $$
+        relevance\_score = \max(rerank\_score, merged\_score)
+        $$
+        $$
+        freshness\_score = \frac{1}{1 + age\_days / 30}
+        $$
+        $$
+        final\_score = 0.5 \times relevance + 0.3 \times freshness + 0.2 \times authority
+        $$
+        权重来自配置项 `relevance_weight=0.5, freshness_weight=0.3, authority_weight=0.2`。
+
+     6. **阈值过滤** — `final_score < score_threshold` 的直接丢弃。阈值可配置，默认约 0.3。
+
+     7. **最终排序** — **以 `updated_at DESC（最新优先）为首要维度**，同等新度下按 `final_score DESC` → `current_session_match DESC` → `relevance DESC` → `importance DESC` 排列。理由是 score_threshold 已经过滤了无关内容，候选集内越新的信息越可能反映当前事实，而非 pure relevance。
+
+     8. **四层合并 & topK 截断** — `会话事实` / `重要事实摘要` / `会话摘要` / `自定义记忆` 四路记忆按 `memory_type` 独立执行上述 1~7 步，各自返回 topK（`rerank_top_k`，默认 5），再跨类型合并去重，按 final_score 截断总条数上限，最终注入系统提示词的检索上下文。
+
+   * 信息时效性：每条记忆携带 `created_at` / `updated_at` / `valid_from` / `valid_until` 时间戳，以及 `fact_status: active | superseded | expired`。检索时在过滤层先排除 `expired` 和 `superseded` 条目；排序层内优先召回新内容。事实更新策略：
+     - 单值强排他事实：新值覆盖旧值，旧事实标记 superseded。
+     - 多值弱排他事实：新值追加并去重。
+     - 时序事实：到期自动失效，标记 expired。
+     - 程序定义事实（如项目规则配置）：以规则为准，LLM 的输出仅作为全新事实的补充。
 9. 多级队列与限流: **模型任务调度器**统一管理所有 LLM 调用。内部多级队列按主 Agent、Summary、Fact Extraction 三个等级分配,同时设置 `large / small` 双模型池路由——主推理走大模型池,摘要/事实抽取/上下文压缩走小模型池,分别配备独立并发上限、超时、熔断与重试机制。
     * 大小模型分流机制：调度器按任务类别决定使用大模型还是小模型。
       * 主回答模型负责复杂推理与最终高质量回答.
@@ -332,7 +351,7 @@ AgentService.exe
     - WORD(后端用`mammoth`拆掉OOXML,转换成HTML后带图查看)
     - PPTX(半成品,后端用`mammoth`拆掉OOXML,`pillow`渲染成图片,`fpdf2`组合成PDF,最后走PDF渲染)
 14. 引用溯源:
-  引用溯源只展示最终回答真正使用的来源,而不是把所有召回结果都挂在气泡下面。自动RAG召回的知识库片段使用数字编号,如`[1]`、`[2]`;Agent主动调用知识库工具得到的结果使用工具编号,如`[K1]`、`[K2]`;联网搜索得到的网页来源使用网络编号,如`[N1]`、`[N2]`.
+  引用溯源只展示最终回答真正使用的来源,而不是把所有召回结果都挂在气泡下面。自动RAG召回的知识库片段使用数字编号,如`[1]`、`[2]`;Agent主动调用知识库工具得到的结果使用工具编号,如`[K1]`、`[K2]`;联网搜索得到的网页来源使用网络编号,如`[N1]`、`[N2]`;用户上传文件的引用则使用上传编号,如`[A1]`、`[A2]`.
 
   一轮对话开始时,`ContextBuilder`会把自动RAG召回结果写入系统上下文,同时生成本轮初始`citation_map`。这些自动来源来自知识库切片,适合在模型直接使用预检索片段时标注。Agent如果继续主动调用`get_knowledge_context`、`search_knowledge`、`read_knowledge_file`或`read_multimodal_file_info`,工具运行时会通过`register_tool_citation()`把工具来源登记进同一个`citation_map`,并在工具返回文本中显式携带`Citation ID: [Kx]`或`[Kx]`提示模型引用. Agent调用`web_search`时,搜索结果会通过`register_network_citation()`登记为`[N1]`、`[N2]`这类网络来源,`source_uri`保存网页URL,`title/content/source=network`写入同一个`citation_map`.
 
@@ -413,6 +432,35 @@ Plan 模式经过"规划→执行→观察"的循环，每轮会调用 2~3 次 L
 
 
 ### 记忆机制
+##### 多模态文件的完整生命周期
+**一个文件的完整生命周期**: 入文件夹,多模态解析,json化,语义切块,重叠切片,入向量库,混合检索向量库,合并去重,rerank,联合评分,阈值过滤,最新优先排序,四路记忆合并,注入系统提示词.
+
+```mermaid
+flowchart LR
+    subgraph ingest["入库阶段"]
+        direction LR
+        A["文件入知识库"] --> B["多模态解析<br/>按格式提取结构化内容"]
+        B --> C["结构化 JSON 落盘"]
+        C --> D["语义切块<br/>section 级别分割"]
+        D --> E["重叠切片<br/>512/128 char"]
+        E --> F["Embedding 向量化"]
+        F --> G["ChromaDB 入库"]
+    end
+
+    subgraph recall["召回阶段"]
+        direction LR
+        G --> H_vector["向量召回<br/>ChromaDB 余弦距离"]
+        G --> H_keyword["关键词召回<br/>ILIKE + 词频加权"]
+        H_vector --> H_merge["合并去重<br/>merge_candidates"]
+        H_keyword --> H_merge
+        H_merge --> I["CrossEncoder ReRank<br/>BAAI/bge-reranker-v2-m3"]
+        I --> J["三维联合评分<br/>0.5rel + 0.3fresh + 0.2auth"]
+        J --> K["阈值过滤<br/>score_threshold"]
+        K --> L["最新优先排序<br/>updated_at DESC"]
+        L --> M["四路记忆合并截断 topK"]
+        M --> N["注入系统提示词"]
+    end
+```
 
 ##### 长期记忆 / 知识库入库流程
 
@@ -472,6 +520,8 @@ flowchart TD
     L --> N
     M --> O[未命中时回退 session_summary]
 ```
+
+
 
 
 
