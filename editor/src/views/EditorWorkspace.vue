@@ -387,6 +387,11 @@ onBeforeUnmount(() => {
 
 .editor-col {
   border-left: 0;
+  border-right: 0;
+}
+
+.agent-col {
+  border-right: 0;
 }
 
 .resize-handle {

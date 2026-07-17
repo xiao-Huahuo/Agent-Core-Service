@@ -114,10 +114,7 @@ const emit = defineEmits<{
   width: 100%;
   height: 100%;
   padding: var(--space-8) var(--space-4);
-  border-right: 1px solid var(--color-border);
-  background:
-    linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
-    var(--color-chrome-bg-solid);
+  background: var(--color-chrome-bg-solid);
 }
 
 .activity-button {
@@ -126,20 +123,21 @@ const emit = defineEmits<{
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 0;
-  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  border-radius: 50%;
   background: transparent;
   color: var(--color-text-muted);
 }
 
-.activity-button:hover,
-.activity-button.active {
-  background: var(--color-primary-softer);
+.activity-button:hover {
+  border-color: var(--color-primary);
   color: var(--color-primary);
 }
 
 .activity-button.active {
-  color: var(--color-selection-blue);
+  border-color: var(--color-primary);
+  background: transparent;
+  color: var(--color-primary);
 }
 
 .bottom-button {

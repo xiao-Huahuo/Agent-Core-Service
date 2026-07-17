@@ -20,6 +20,7 @@ const THEME_KEY = 'agent_editor_theme_mode'
 const PROFILE_KEY = 'agent_editor_profile'
 const CHAT_MODE_KEY = 'agent_editor_chat_mode'
 const AGENT_LOOP_MODE_KEY = 'agent_editor_loop_mode'
+const SHOW_INDEX_COLUMN_KEY = 'agent_editor_show_index_column'
 
 const DEFAULT_PROFILE: UserSettingsProfile = {
   userId: '',
@@ -113,6 +114,9 @@ export const useSettingsStore = defineStore('settings', () => {
   /** Agent execution loop mode shared by Agent panel and Obs graph. */
   const agentLoopMode = ref<AgentLoopMode>(normalizeAgentLoopMode(localStorage.getItem(AGENT_LOOP_MODE_KEY)))
 
+  /** Whether to show index status column/icons in file tree and file resource manager. */
+  const showIndexColumn = ref(localStorage.getItem(SHOW_INDEX_COLUMN_KEY) !== 'false')
+
   /** Whether the editor shell can enter workspace routes. */
   const hasUserId = computed(() => profile.value.userId.trim().length > 0)
 
@@ -161,6 +165,11 @@ export const useSettingsStore = defineStore('settings', () => {
   function toggleChatMode() {
     chatMode.value = chatMode.value === 'chat' ? 'tool' : 'chat'
     localStorage.setItem(CHAT_MODE_KEY, chatMode.value)
+  }
+
+  function setShowIndexColumn(value: boolean) {
+    showIndexColumn.value = value
+    localStorage.setItem(SHOW_INDEX_COLUMN_KEY, String(value))
   }
 
   function setAgentLoopMode(mode: AgentLoopMode) {
@@ -313,5 +322,7 @@ export const useSettingsStore = defineStore('settings', () => {
     toggleWebSearch,
     saveKnowledgeIngestionSettings,
     setAutoIngestOnUpload,
+    showIndexColumn,
+    setShowIndexColumn,
   }
 })

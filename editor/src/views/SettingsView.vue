@@ -348,6 +348,11 @@ async function saveProfile() {
           {{ option.label }}
         </button>
       </div>
+      <div class="setting-row toggle-row">
+        <label>索引状态</label>
+        <input :checked="settingsStore.showIndexColumn" type="checkbox" @change="settingsStore.setShowIndexColumn(($event.target as HTMLInputElement).checked)" />
+        <span class="hint-text">在文件树和文件资源管理器中显示入库状态</span>
+      </div>
     </section>
 
     <!-- 语言模型 -->

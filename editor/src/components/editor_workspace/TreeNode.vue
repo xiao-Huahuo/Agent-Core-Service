@@ -23,8 +23,11 @@ import {
 } from 'lucide-vue-next'
 
 import type { KnowledgeFileNode } from '@/types/knowledge'
+import { useSettingsStore } from '@/stores/settings'
 
 defineOptions({ name: 'TreeNode' })
+
+const settingsStore = useSettingsStore()
 
 const props = defineProps<{
   node: KnowledgeFileNode
@@ -233,14 +236,14 @@ function handleRowDrop(event: DragEvent) {
       <span class="node-status-cluster">
         <i class="node-dirty-dot" :class="{ show: dirtyPaths.has(node.path) }"></i>
         <component
-          v-if="!node.isDir"
+          v-if="!node.isDir && settingsStore.showIndexColumn"
           :is="indexStatusIcon"
           class="node-index-dot"
           :class="indexStatusClass"
           :size="13"
           :title="indexStatusTitle"
         />
-        <span v-else class="node-index-placeholder"></span>
+        <span v-if="node.isDir && settingsStore.showIndexColumn" class="node-index-placeholder"></span>
       </span>
     </div>
     <Transition
@@ -306,13 +309,11 @@ function handleRowDrop(event: DragEvent) {
 }
 
 .tree-row:hover {
-  border-color: rgba(66, 36, 235, 0.34);
   background: var(--color-selection-blue-soft);
   color: var(--color-text);
 }
 
 .tree-row.selected {
-  border-color: rgba(66, 36, 235, 0.72);
   background: rgba(66, 36, 235, 0.24);
   color: var(--color-text);
 }

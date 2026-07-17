@@ -452,13 +452,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-top: 0;
-  border-right: 0;
-  border-bottom: 0;
+  border: 0;
   border-radius: 0;
-  background:
-    linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
-    var(--color-chrome-bg-solid);
+  background: var(--color-chrome-bg-solid);
 }
 
 .agent-panel.agent-page-mode {
@@ -498,7 +494,6 @@ onMounted(() => {
   gap: var(--space-8);
   min-height: 28px;
   padding: 0 var(--space-10);
-  border-bottom: 1px solid var(--color-border);
   background: var(--color-bg-muted);
 }
 
@@ -508,10 +503,7 @@ onMounted(() => {
   min-height: var(--agent-topbar-height, 32px);
   padding: 0 var(--space-12);
   gap: var(--space-8);
-  border-bottom: 1px solid var(--color-border);
-  background:
-    linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
-    var(--color-chrome-bg-solid);
+  background: var(--color-chrome-bg-solid);
   flex-shrink: 0;
 }
 

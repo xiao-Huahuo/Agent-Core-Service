@@ -129,7 +129,8 @@ const visibleItems = computed(() => {
 
 const listGridColumns = computed(() => {
   const selectionColumn = isMultiSelecting.value ? '28px ' : ''
-  return `${selectionColumn}minmax(240px, 1fr) 168px 168px 112px 96px 118px`
+  const indexColumn = settingsStore.showIndexColumn ? '118px' : ''
+  return `${selectionColumn}minmax(240px, 1fr) 168px 168px 112px 96px${indexColumn ? ` ${indexColumn}` : ''}`
 })
 
 watch(
@@ -894,7 +895,7 @@ onUnmounted(() => {
           <span>入库日期</span>
           <span>类型</span>
           <span>大小</span>
-          <span>入库状态</span>
+          <span v-if="settingsStore.showIndexColumn">入库状态</span>
         </div>
         <button
           v-for="(node, index) in visibleItems"
@@ -925,7 +926,7 @@ onUnmounted(() => {
           <span>{{ displayIngestedAt(node) }}</span>
           <span>{{ fileKind(node) }}</span>
           <span>{{ formatSize(nodeSize(node)) }}</span>
-          <span class="index-status-cell" :class="indexStatusClass(node)">
+          <span v-if="settingsStore.showIndexColumn" class="index-status-cell" :class="indexStatusClass(node)">
             <component v-if="!node.isDir" :is="indexStatusIcon(node)" :size="13" />
             <span>{{ node.isDir ? '-' : indexStatusTitle(node) }}</span>
           </span>
@@ -1384,12 +1385,6 @@ onUnmounted(() => {
   color: var(--color-text);
 }
 
-.resource-row.selected,
-.content-item.selected,
-.icon-tile.selected {
-  outline: 1px solid rgba(66, 36, 235, 0.72);
-  outline-offset: -1px;
-}
 
 .name-cell {
   display: inline-flex;
@@ -1636,6 +1631,11 @@ onUnmounted(() => {
   border-color: rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.07);
   backdrop-filter: blur(14px) saturate(140%);
+}
+
+.icon-tile.glass:hover,
+.icon-tile.glass.selected {
+  background: var(--color-selection-blue-soft);
 }
 
 .tile-art {

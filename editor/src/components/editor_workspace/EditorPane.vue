@@ -298,7 +298,6 @@ watch(
   gap: var(--space-4);
   min-height: 27px;
   padding: var(--space-4) var(--space-6) 0;
-  border-bottom: 1px solid var(--color-border);
   background: var(--color-canvas);
 }
 

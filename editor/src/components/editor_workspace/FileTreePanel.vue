@@ -852,10 +852,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
-    var(--color-chrome-bg-solid);
+  background: var(--color-chrome-bg-solid);
   border-left: 0;
+  border-right: 0;
 }
 
 .file-panel.dragging {
@@ -868,7 +867,6 @@ onUnmounted(() => {
   gap: var(--space-6);
   min-height: 44px;
   padding: var(--space-6) var(--space-8);
-  border-bottom: 1px solid var(--color-border);
 }
 
 .root-button {

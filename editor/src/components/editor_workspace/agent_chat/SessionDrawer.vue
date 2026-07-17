@@ -33,9 +33,6 @@ function displayName(session: SessionRecord) {
 
 function selectSession(sessionId: string) {
   emit('select', sessionId)
-  if (props.mode !== 'page') {
-    emit('close')
-  }
 }
 
 async function deleteSession(sessionId: string, event: MouseEvent) {
@@ -57,32 +54,21 @@ async function clearAllSessions() {
 <template>
   <aside class="session-drawer" :class="{ open, 'page-mode': mode === 'page' }">
     <div class="drawer-titlebar">
-      <template v-if="mode === 'page'">
-        <div class="brand-copy">
-          <strong>MetaWeave</strong>
-        </div>
-      </template>
-      <div v-else class="traffic-lights">
-        <span class="traffic-dot red"></span>
-        <span class="traffic-dot yellow"></span>
-        <span class="traffic-dot green"></span>
+      <div class="brand-copy">
+        <strong>MetaWeave</strong>
       </div>
-      <span v-if="mode !== 'page'" class="window-filename">sessions --list</span>
-      <button class="close-button" type="button" :title="mode === 'page' ? '收起侧边栏' : 'Close sessions'" @click="emit('close')">
-        <PanelLeft v-if="mode === 'page'" :size="15" />
-        <X v-else :size="13" />
+      <button class="close-button" type="button" title="收起侧边栏" @click="emit('close')">
+        <PanelLeft :size="15" />
       </button>
     </div>
 
     <div class="drawer-toolbar">
       <div class="primary-actions">
         <button class="new-btn" type="button" @click="emit('create')">
-          <MessageSquarePlus v-if="mode === 'page'" :size="15" />
-          <Plus v-else :size="12" />
+          <MessageSquarePlus :size="15" />
           <span>New Chat</span>
         </button>
         <button
-          v-if="mode === 'page'"
           class="mode-btn"
           type="button"
           :title="`切换对话模式: 当前 ${chatModeLabel || 'chat'}`"
@@ -113,12 +99,12 @@ async function clearAllSessions() {
       <p v-if="!sessionStore.sessions.length" class="empty-hint">No sessions found</p>
     </div>
 
-    <div v-if="mode === 'page' || sessionStore.sessions.length > 0" class="drawer-footer">
+    <div class="drawer-footer">
       <button v-if="sessionStore.sessions.length > 0" class="clear-all-btn" type="button" @click="clearAllSessions">
         <Trash2 :size="12" />
         <span>Clear All Sessions</span>
       </button>
-      <div v-if="mode === 'page'" class="user-strip">
+      <div class="user-strip">
         <span class="user-dot"></span>
         <div>
           <span class="user-label">User</span>
@@ -131,6 +117,8 @@ async function clearAllSessions() {
 
 <style scoped>
 .session-drawer {
+  --drawer-page-hover: var(--color-bg-hover);
+  --drawer-page-active: var(--color-accent-muted);
   position: absolute;
   top: 12px;
   bottom: 12px;
@@ -141,6 +129,7 @@ async function clearAllSessions() {
   width: min(290px, calc(100% - 24px));
   overflow: hidden;
   border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   background: var(--color-bg-elevated);
   transform: translateX(calc(-100% - 16px));
   transition:
@@ -155,7 +144,6 @@ async function clearAllSessions() {
 }
 
 .session-drawer.page-mode {
-  --drawer-page-border: rgba(255, 255, 255, 0.10);
   --drawer-page-bg-top: var(--color-chrome-bg-top);
   --drawer-page-bg-bottom: var(--color-chrome-bg-bottom);
   --drawer-page-bg-solid: var(--color-chrome-bg-solid);
@@ -167,7 +155,7 @@ async function clearAllSessions() {
   width: 280px;
   max-width: min(280px, 80vw);
   border: 0;
-  border-right: 1px solid var(--drawer-page-border);
+  border-radius: 0;
   background:
     linear-gradient(180deg, var(--drawer-page-bg-top), var(--drawer-page-bg-bottom)),
     var(--drawer-page-bg-solid);
@@ -177,7 +165,6 @@ async function clearAllSessions() {
 }
 
 :root[data-theme="light"] .session-drawer.page-mode {
-  --drawer-page-border: rgba(66, 36, 235, 0.12);
   --drawer-page-hover: rgba(66, 36, 235, 0.08);
   --drawer-page-active: rgba(66, 36, 235, 0.10);
 }
@@ -187,18 +174,10 @@ async function clearAllSessions() {
 }
 
 .drawer-titlebar {
+  grid-template-columns: minmax(0, 1fr) auto;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-8);
-  min-height: 34px;
-  padding: 0 var(--space-10);
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-muted);
-}
-
-.page-mode .drawer-titlebar {
-  grid-template-columns: minmax(0, 1fr) auto;
   min-height: 58px;
   padding: 0 var(--space-20);
   border-bottom: 0;
@@ -249,57 +228,83 @@ async function clearAllSessions() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   border: 0;
+  border-radius: 999px;
   background: transparent;
   color: var(--color-text-tertiary);
 }
 
-.page-mode .close-button {
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-}
-
-.page-mode .close-button:hover {
+.close-button:hover {
   background: var(--drawer-page-hover);
   color: var(--color-text-primary);
 }
 
-.drawer-toolbar,
-.drawer-footer {
-  padding: var(--space-8) var(--space-12);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.drawer-footer {
-  border-top: 1px solid var(--color-border);
-  border-bottom: 0;
-}
-
-.page-mode .drawer-toolbar {
+.drawer-toolbar {
   padding: 0 0 var(--space-14);
   border-bottom: 0;
 }
 
-.page-mode .drawer-footer {
+.drawer-footer {
   display: grid;
   gap: var(--space-10);
   padding: var(--space-12);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 0;
 }
 
-.new-btn,
-.clear-all-btn,
+.new-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 36px;
+  padding: 0 var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
 .mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.clear-all-btn {
   display: flex;
   align-items: center;
   gap: var(--space-6);
   width: 100%;
+  min-height: 34px;
   padding: var(--space-8) var(--space-12);
-  border: 1px solid var(--color-border);
-  border-radius: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
   background: transparent;
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
@@ -316,43 +321,7 @@ async function clearAllSessions() {
   display: flex;
   align-items: center;
   gap: var(--space-8);
-}
-
-.page-mode .primary-actions {
   margin: 0 var(--space-20);
-}
-
-.page-mode .new-btn {
-  justify-content: center;
-  flex: 0 1 auto;
-  min-height: 36px;
-  padding: 0 var(--space-12);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-surface-raised);
-  color: var(--color-text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.page-mode .mode-btn {
-  justify-content: center;
-  width: 36px;
-  min-width: 36px;
-  min-height: 36px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-}
-
-.page-mode .clear-all-btn {
-  min-height: 34px;
-  border-color: transparent;
-  border-radius: 999px;
-  background: transparent;
 }
 
 .new-btn:hover {
@@ -381,9 +350,6 @@ async function clearAllSessions() {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-}
-
-.page-mode .session-list {
   padding: var(--space-12) var(--space-12) var(--space-8);
 }
 
@@ -392,24 +358,16 @@ async function clearAllSessions() {
   align-items: center;
   gap: var(--space-8);
   width: 100%;
-  padding: var(--space-8) var(--space-12);
-  border: 0;
-  border-left: 2px solid transparent;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  text-align: left;
-}
-
-.page-mode .session-item {
   min-height: 30px;
   margin-bottom: var(--space-2);
-  padding: 0 var(--space-8);
-  border-left: 0;
-  border-radius: 6px;
+  padding: 0 var(--space-12);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
   font-family: var(--font-ui);
   font-size: 12px;
+  text-align: left;
 }
 
 .session-item:hover {
@@ -418,11 +376,6 @@ async function clearAllSessions() {
 }
 
 .session-item.active {
-  background: var(--color-accent-muted);
-  color: var(--color-accent);
-}
-
-.page-mode .session-item.active {
   background: var(--drawer-page-active);
   color: var(--color-text-primary);
 }
