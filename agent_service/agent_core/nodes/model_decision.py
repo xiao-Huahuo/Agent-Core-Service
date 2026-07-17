@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Sequence
 
-from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 
 from agent_service.agent_core.nodes.base import AgentState
@@ -313,11 +313,36 @@ class ModelDecisionNode:
 
     @staticmethod
     def _prepare_messages_for_llm(system_message: SystemMessage, messages: list[BaseMessage]) -> list[BaseMessage]:
-        """压缩工具返回内容后再送入模型,避免文件/搜索结果撑爆上下文。"""
+        """
+        压缩工具返回内容后再送入模型,避免文件/搜索结果撑爆上下文。
+
+        同时裁掉本轮内冗余的中间 AI 消息(planner/observation 等中间节点输出),
+        只保留所有 ToolMessage(工具结果)和最后一条 AIMessage(最终/当前回答),
+        降低逐次 LLM 调用的上下文压力,改善流式输出的连续性。
+        """
+
+        # 找到最后一条 HumanMessage(当前用户输入),以此分界
+        last_human_idx = -1
+        for i, msg in enumerate(messages):
+            if isinstance(msg, HumanMessage):
+                last_human_idx = i
+
+        if last_human_idx >= 0:
+            tail = messages[last_human_idx + 1:]
+            last_ai_idx = -1
+            for i, msg in enumerate(tail):
+                if isinstance(msg, AIMessage):
+                    last_ai_idx = i
+            filtered: list[BaseMessage] = list(messages[:last_human_idx + 1])
+            for i, msg in enumerate(tail):
+                if isinstance(msg, ToolMessage) or i == last_ai_idx:
+                    filtered.append(msg)
+        else:
+            filtered = messages
 
         tool_seen_from_tail = 0
         prepared_tail: list[BaseMessage] = []
-        for message in reversed(messages):
+        for message in reversed(filtered):
             if isinstance(message, ToolMessage):
                 tool_seen_from_tail += 1
                 max_chars = 900 if tool_seen_from_tail <= 8 else 240

@@ -280,7 +280,16 @@ onUnmounted(() => {
   contentRef.value?.removeEventListener('click', handleClick)
 })
 
-watch([sanitizedHtml, sourceLinkSignature], () => void highlightCodeBlocks(), { immediate: true })
+watch([sanitizedHtml, sourceLinkSignature], () => {
+  if (props.isStreaming) return
+  void highlightCodeBlocks()
+}, { immediate: true })
+
+watch(() => props.isStreaming, (streaming, wasStreaming) => {
+  if (wasStreaming && !streaming) {
+    void highlightCodeBlocks()
+  }
+})
 </script>
 
 <template>
@@ -291,7 +300,7 @@ watch([sanitizedHtml, sourceLinkSignature], () => void highlightCodeBlocks(), { 
 .markdown-body {
   color: var(--color-text-primary);
   font-family: var(--font-chat);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
   line-height: var(--line-height-relaxed);
   word-break: break-word;
 }

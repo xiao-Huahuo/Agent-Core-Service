@@ -13,62 +13,99 @@
     <div></div>
     <div></div>
     <div></div>
+    <div></div>
+    <div></div>
+    <div></div>
+    <div></div>
   </div>
 </template>
 
 <style scoped>
 .spinner {
-  width: 14px;
-  height: 14px;
-  animation: spinner-y0fdc1 2s infinite ease;
-  transform-style: preserve-3d;
+  position: relative;
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  flex-shrink: 0;
+  transform: translate(5px, -2px);
 }
 
-.spinner > div {
+.spinner div {
   position: absolute;
-  width: 100%;
-  height: 100%;
-  border: 1px solid rgba(66, 36, 235, 0.3);
-  background-color: rgba(66, 36, 235, 0.08);
+  width: 50%;
+  height: 150%;
+  background: #474bff;
+  transform: rotate(calc(var(--rotation) * 1deg)) translate(0, calc(var(--translation) * 1%));
+  animation: spinner-fzua35 1s calc(var(--delay) * 1s) infinite ease;
 }
 
-.spinner div:nth-of-type(1) {
-  transform: translateZ(-7px) rotateY(180deg);
+.spinner div:nth-child(1) {
+  --delay: 0.1;
+  --rotation: 36;
+  --translation: 150;
 }
 
-.spinner div:nth-of-type(2) {
-  transform: rotateY(-270deg) translateX(50%);
-  transform-origin: top right;
+.spinner div:nth-child(2) {
+  --delay: 0.2;
+  --rotation: 72;
+  --translation: 150;
 }
 
-.spinner div:nth-of-type(3) {
-  transform: rotateY(270deg) translateX(-50%);
-  transform-origin: center left;
+.spinner div:nth-child(3) {
+  --delay: 0.3;
+  --rotation: 108;
+  --translation: 150;
 }
 
-.spinner div:nth-of-type(4) {
-  transform: rotateX(90deg) translateY(-50%);
-  transform-origin: top center;
+.spinner div:nth-child(4) {
+  --delay: 0.4;
+  --rotation: 144;
+  --translation: 150;
 }
 
-.spinner div:nth-of-type(5) {
-  transform: rotateX(-90deg) translateY(50%);
-  transform-origin: bottom center;
+.spinner div:nth-child(5) {
+  --delay: 0.5;
+  --rotation: 180;
+  --translation: 150;
 }
 
-.spinner div:nth-of-type(6) {
-  transform: translateZ(7px);
+.spinner div:nth-child(6) {
+  --delay: 0.6;
+  --rotation: 216;
+  --translation: 150;
 }
 
-@keyframes spinner-y0fdc1 {
-  0% {
-    transform: rotate(45deg) rotateX(-25deg) rotateY(25deg);
+.spinner div:nth-child(7) {
+  --delay: 0.7;
+  --rotation: 252;
+  --translation: 150;
+}
+
+.spinner div:nth-child(8) {
+  --delay: 0.8;
+  --rotation: 288;
+  --translation: 150;
+}
+
+.spinner div:nth-child(9) {
+  --delay: 0.9;
+  --rotation: 324;
+  --translation: 150;
+}
+
+.spinner div:nth-child(10) {
+  --delay: 1;
+  --rotation: 360;
+  --translation: 150;
+}
+
+@keyframes spinner-fzua35 {
+  0%, 10%, 20%, 30%, 50%, 60%, 70%, 80%, 90%, 100% {
+    transform: rotate(calc(var(--rotation) * 1deg)) translate(0, calc(var(--translation) * 1%));
   }
+
   50% {
-    transform: rotate(45deg) rotateX(-385deg) rotateY(25deg);
-  }
-  100% {
-    transform: rotate(45deg) rotateX(-385deg) rotateY(385deg);
+    transform: rotate(calc(var(--rotation) * 1deg)) translate(0, calc(var(--translation) * 1.5%));
   }
 }
 </style>

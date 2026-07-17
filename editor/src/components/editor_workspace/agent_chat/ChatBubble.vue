@@ -221,7 +221,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
         />
         <span v-if="isStreaming && !hasAssistantContent" class="cursor">|</span>
       </div>
-      <div v-if="showActions !== false && copyableContent" class="message-actions">
+      <div v-if="showActions !== false && !isStreaming && copyableContent" class="message-actions">
         <button
           class="copy-action"
           type="button"
@@ -229,8 +229,8 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           :aria-label="copied ? 'Copied' : 'Copy message'"
           @click="copyBubbleContent"
         >
-          <Check v-if="copied" :size="12" />
-          <Copy v-else :size="12" />
+          <Check v-if="copied" :size="16" />
+          <Copy v-else :size="16" />
         </button>
         <button
           class="feedback-action feedback-up"
@@ -240,7 +240,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           aria-label="Like response"
           @click="setFeedback('up')"
         >
-          <ThumbsUp :size="12" />
+          <ThumbsUp :size="16" />
         </button>
         <button
           class="feedback-action feedback-down"
@@ -250,7 +250,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           aria-label="Dislike response"
           @click="setFeedback('down')"
         >
-          <ThumbsDown :size="12" />
+          <ThumbsDown :size="16" />
         </button>
       </div>
       <KnowledgeSources

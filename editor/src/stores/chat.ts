@@ -389,10 +389,7 @@ export const useChatStore = defineStore('chat', () => {
         if (content) {
           ensureAssistant(node)
           if (chunk.type === 'delta') {
-            const last = findLastAssistant()
-            if (last) {
-              last.content += content
-            }
+            appendStreamContent(content)
           } else {
             cancelPendingFlush()
             const last = findLastAssistant()
