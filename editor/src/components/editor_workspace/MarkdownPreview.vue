@@ -7,12 +7,20 @@
   including headings, code block previews, diagrams, and math blocks.
 -->
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from 'vue'
 import Vditor from 'vditor'
+
+import { buildApiUrl } from '@/api/client'
+import { useSettingsStore } from '@/stores/settings'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 const props = defineProps<{
   content: string
+  path?: string
 }>()
+
+const settingsStore = useSettingsStore()
+const workspaceStore = useWorkspaceStore()
 
 type VditorPreviewInternals = Vditor & {
   vditor?: {
@@ -27,6 +35,100 @@ const previewHost = ref<HTMLDivElement | null>(null)
 let instance: Vditor | null = null
 let mounted = false
 let renderVersion = 0
+
+function splitUrlReference(src: string) {
+  const normalizedSrc = src.trim().replace(/^<|>$/g, '')
+  const hashIndex = normalizedSrc.indexOf('#')
+  const queryIndex = normalizedSrc.indexOf('?')
+  const indexes = [hashIndex, queryIndex].filter((index) => index >= 0)
+  const splitAt = indexes.length > 0 ? Math.min(...indexes) : -1
+  return splitAt >= 0 ? normalizedSrc.slice(0, splitAt) : normalizedSrc
+}
+
+function decodeUrlPath(path: string) {
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
+  }
+}
+
+function normalizeKnowledgePath(path: string) {
+  const parts: string[] = []
+  for (const part of path.replace(/\\/g, '/').split('/')) {
+    if (!part || part === '.') {
+      continue
+    }
+    if (part === '..') {
+      parts.pop()
+      continue
+    }
+    parts.push(part)
+  }
+  return parts.join('/')
+}
+
+function resolveMarkdownAssetPath(currentFilePath: string, rawSrc: string) {
+  const srcPath = decodeUrlPath(splitUrlReference(rawSrc)).replace(/\\/g, '/')
+  if (!srcPath) {
+    return ''
+  }
+  if (srcPath.startsWith('/')) {
+    return normalizeKnowledgePath(srcPath)
+  }
+  const normalizedFilePath = currentFilePath.replace(/\\/g, '/')
+  const parentDir = normalizedFilePath.includes('/')
+    ? normalizedFilePath.substring(0, normalizedFilePath.lastIndexOf('/') + 1)
+    : ''
+  return normalizeKnowledgePath(parentDir + srcPath)
+}
+
+function isBrowserHandledAssetUrl(src: string) {
+  return /^(https?:|data:|blob:|file:|about:|\/\/|#)/i.test(src)
+}
+
+function isRootRelativeAssetUrl(src: string) {
+  return src.startsWith('/') && !src.startsWith('//')
+}
+
+function isKnowledgeRawUrl(src: string) {
+  return src.includes('/knowledge/files/raw')
+}
+
+function buildRawFileUrl(rawSrc: string) {
+  const filePath = props.path || workspaceStore.selectedPath
+  const userId = settingsStore.profile.userId
+  if (!filePath || !userId || isKnowledgeRawUrl(rawSrc)) {
+    return rawSrc
+  }
+  if (isBrowserHandledAssetUrl(rawSrc) && !isRootRelativeAssetUrl(rawSrc)) {
+    return rawSrc
+  }
+  const rawPath = resolveMarkdownAssetPath(filePath, rawSrc)
+  if (!rawPath) {
+    return rawSrc
+  }
+  return buildApiUrl('/knowledge/files/raw', {
+    user_id: userId,
+    path: rawPath,
+  })
+}
+
+function rewriteMarkdownImageUrls(content: string) {
+  let nextContent = content.replace(
+    /(!\[[^\]]*]\(\s*)(<[^>]+>|[^)\n]+?)(\s+(?:"[^"]*"|'[^']*'))?\s*\)/g,
+    (_match, prefix: string, rawSrc: string, suffix: string) => {
+      return `${prefix}${buildRawFileUrl(rawSrc)}${suffix ?? ''})`
+    },
+  )
+  nextContent = nextContent.replace(
+    /(<img\b[^>]*\bsrc=["'])([^"']+)(["'][^>]*>)/gi,
+    (_match, prefix: string, rawSrc: string, suffix: string) => {
+      return `${prefix}${buildRawFileUrl(rawSrc)}${suffix}`
+    },
+  )
+  return nextContent
+}
 
 function getPreviewElement() {
   const internalPreview = (instance as VditorPreviewInternals | null)?.vditor?.preview?.element
@@ -44,16 +146,93 @@ function ensurePreviewPaneIsRenderable() {
   previewElement.style.display = 'block'
 }
 
+function fixImageUrls() {
+  const previewEl = getPreviewElement()
+  if (!previewEl) {
+    return
+  }
+  const filePath = props.path || workspaceStore.selectedPath
+  const userId = settingsStore.profile.userId
+  if (!filePath || !userId) {
+    return
+  }
+  const imgs = previewEl.querySelectorAll<HTMLImageElement>('img[src]')
+  for (const img of imgs) {
+    const src = img.getAttribute('src') || ''
+    if ((isBrowserHandledAssetUrl(src) && !isRootRelativeAssetUrl(src)) || isKnowledgeRawUrl(src)) {
+      continue
+    }
+    img.src = buildRawFileUrl(src)
+  }
+}
+
+function getAnchorHash(link: HTMLAnchorElement) {
+  const href = link.getAttribute('href') || ''
+  if (href.startsWith('#')) {
+    return href
+  }
+  try {
+    const url = new URL(href, window.location.href)
+    if (!url.hash) {
+      return ''
+    }
+    const currentWithoutHash = `${window.location.origin}${window.location.pathname}${window.location.search}`
+    const targetWithoutHash = `${url.origin}${url.pathname}${url.search}`
+    return targetWithoutHash === currentWithoutHash ? url.hash : ''
+  } catch {
+    return ''
+  }
+}
+
+function findAnchorTarget(root: HTMLElement, hash: string) {
+  const decoded = decodeUrlPath(hash.slice(1))
+  if (!decoded) {
+    return null
+  }
+  const escaped = CSS.escape(decoded)
+  const rawEscaped = CSS.escape(hash.slice(1))
+  const byIdOrName = (
+    root.querySelector<HTMLElement>(`#${escaped}`)
+    ?? root.querySelector<HTMLElement>(`[name="${escaped}"]`)
+    ?? root.querySelector<HTMLElement>(`#${rawEscaped}`)
+    ?? root.querySelector<HTMLElement>(`[name="${rawEscaped}"]`)
+  )
+  if (byIdOrName) {
+    return byIdOrName
+  }
+  const normalizedTargetText = decoded.replace(/[-_\s]+/g, '').toLowerCase()
+  const headings = root.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6')
+  return [...headings].find((heading) => {
+    const headingText = (heading.textContent ?? '').trim()
+    return headingText === decoded
+      || headingText.replace(/[-_\s]+/g, '').toLowerCase() === normalizedTargetText
+  }) ?? null
+}
+
+function getPreviewScrollContainer(target: HTMLElement) {
+  const previewEl = getPreviewElement()
+  if (previewEl?.contains(target)) {
+    return previewEl
+  }
+  const resetEl = previewHost.value?.querySelector<HTMLElement>('.vditor-reset')
+  if (resetEl?.contains(target)) {
+    return resetEl
+  }
+  return null
+}
+
 function syncPreviewContent() {
   if (!instance) {
     return
   }
   try {
-    if (instance.getValue() !== props.content) {
-      instance.setValue(props.content, true)
+    const renderContent = rewriteMarkdownImageUrls(props.content)
+    if (instance.getValue() !== renderContent) {
+      instance.setValue(renderContent, true)
     }
     ensurePreviewPaneIsRenderable()
     instance.renderPreview()
+    fixImageUrls()
   } catch (err) {
     console.warn('[MarkdownPreview] syncPreviewContent failed:', err)
   }
@@ -75,13 +254,45 @@ async function queuePreviewRender() {
   syncPreviewContent()
 }
 
+function handleClick(event: MouseEvent) {
+  const eventTarget = event.target instanceof Element ? event.target : null
+  const link = eventTarget?.closest<HTMLAnchorElement>('a[href]')
+  if (!link) {
+    return
+  }
+  const hash = getAnchorHash(link)
+  if (!hash || hash === '#') {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  const root = previewHost.value
+  if (!root) {
+    return
+  }
+  const target = findAnchorTarget(root, hash)
+  if (!target) {
+    return
+  }
+  const previewEl = getPreviewScrollContainer(target)
+  if (previewEl) {
+    const previewRect = previewEl.getBoundingClientRect()
+    const targetRect = target.getBoundingClientRect()
+    const top = previewEl.scrollTop + targetRect.top - previewRect.top - 12
+    previewEl.scrollTo({ top, behavior: 'smooth' })
+    return
+  }
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 onMounted(() => {
   if (!previewHost.value) {
     return
   }
+  previewHost.value.addEventListener('click', handleClick, { capture: true })
   try {
     instance = new Vditor(previewHost.value, {
-      value: props.content,
+      value: rewriteMarkdownImageUrls(props.content),
       height: '100%',
       mode: 'sv',
       cache: { enable: false },
@@ -106,8 +317,12 @@ onMounted(() => {
   }
 })
 
+onUnmounted(() => {
+  previewHost.value?.removeEventListener('click', handleClick, { capture: true })
+})
+
 watch(
-  () => props.content,
+  () => [props.content, props.path],
   () => {
     if (!mounted) {
       return

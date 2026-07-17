@@ -9,7 +9,7 @@ const EDITOR_CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: http://127.0.0.1:8002 http://localhost:8002",
   "font-src 'self' data:",
   "connect-src 'self' http://127.0.0.1:8002 http://localhost:8002",
   "worker-src 'self' blob:",

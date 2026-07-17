@@ -4,12 +4,16 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="pptx预览,有点粗糙">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="修复了Agent回答中K链接和N链接不能同时出现的bug.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageList.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageList.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/chat.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/chat.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/assets/ui-system.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/ui-system.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/vite.config.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -256,15 +260,7 @@
       <workItem from="1784197660142" duration="15843000" />
       <workItem from="1784255315269" duration="1020000" />
       <workItem from="1784260225005" duration="700000" />
-      <workItem from="1784269885122" duration="7684000" />
-    </task>
-    <task id="LOCAL-00102" summary="- [x] 给图谱右上角加个按钮,切换显示文字/不显示文字(当鼠标悬浮在某节点上才显示节点名).&#10;- [x] 给agent也提供读取多模态文件的信息的功能:若该文件已灌库则直接找到该文件对应的json文件,读json即可获取基本信息.&#10;- [x] 当有新文件灌库时在header上显示一个小小的进度条.">
-      <option name="closed" value="true" />
-      <created>1783702860235</created>
-      <option name="number" value="00102" />
-      <option name="presentableId" value="LOCAL-00102" />
-      <option name="project" value="LOCAL" />
-      <updated>1783702860235</updated>
+      <workItem from="1784269885122" duration="10315000" />
     </task>
     <task id="LOCAL-00103" summary="独立agent页">
       <option name="closed" value="true" />
@@ -650,14 +646,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784277140569</updated>
     </task>
-    <option name="localTasksCounter" value="151" />
+    <task id="LOCAL-00151" summary="修复了Agent回答中K链接和N链接不能同时出现的bug.">
+      <option name="closed" value="true" />
+      <created>1784277785509</created>
+      <option name="number" value="00151" />
+      <option name="presentableId" value="LOCAL-00151" />
+      <option name="project" value="LOCAL" />
+      <updated>1784277785509</updated>
+    </task>
+    <option name="localTasksCounter" value="152" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="知识图谱不能维护,把链路断掉了" />
     <MESSAGE value="pdf预览" />
     <MESSAGE value="屏蔽掉了知识库" />
     <MESSAGE value="sprint2测试" />
@@ -682,13 +685,14 @@
     <MESSAGE value="周报和实训个人总结" />
     <MESSAGE value="修了在文件树中快速切换文件,文件预览有时候会卡死,并且导致其他文件也打不开,甚至其他功能都被阻塞打不开的问题." />
     <MESSAGE value="pptx预览,有点粗糙" />
-    <option name="LAST_COMMIT_MESSAGE" value="pptx预览,有点粗糙" />
+    <MESSAGE value="修复了Agent回答中K链接和N链接不能同时出现的bug." />
+    <option name="LAST_COMMIT_MESSAGE" value="修复了Agent回答中K链接和N链接不能同时出现的bug." />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
     <SUITE FILE_PATH="coverage/AgentService$main.coverage" NAME="main 覆盖结果" MODIFIED="1783512965618" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/AgentService$test_agent_core_service.coverage" NAME="test_agent_core_service 覆盖结果" MODIFIED="1778509217316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
-    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784276999315" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784278294346" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>

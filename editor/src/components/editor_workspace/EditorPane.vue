@@ -7,14 +7,13 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onErrorCaptured, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ArrowLeft, ArrowRight, Columns2, Eye, Pencil, Save, X } from 'lucide-vue-next'
+import { Columns2, Eye, Pencil, Save, X } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
 import CodeEditor from '@/components/editor_workspace/CodeEditor.vue'
 import CodePreview from '@/components/editor_workspace/CodePreview.vue'
 import MarkdownPreview from '@/components/editor_workspace/MarkdownPreview.vue'
 import MultimodalPreview from '@/components/editor_workspace/MultimodalPreview.vue'
-import VditorEditor from '@/components/editor_workspace/VditorEditor.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { EditorViewMode } from '@/types/knowledge'
 import type { ComponentPublicInstance } from 'vue'
@@ -24,7 +23,6 @@ const { editorMode } = storeToRefs(workspaceStore)
 const segmentedRef = ref<HTMLElement | null>(null)
 const modeButtonRefs = ref<HTMLElement[]>([])
 const indicatorStyle = ref({ width: '0px', transform: 'translateX(0px)' })
-const vditorRef = ref<{ undo: () => void; redo: () => void } | null>(null)
 
 const splitRatio = ref(0.5)
 const splitBodyRef = ref<HTMLElement | null>(null)
@@ -149,20 +147,6 @@ function handleModeClick(mode: EditorViewMode, event: MouseEvent) {
   setEditorMode(mode, event)
 }
 
-function handleUndo() {
-  if (!isMarkdownViewer.value || workspaceStore.activeFileReadonly) {
-    return
-  }
-  vditorRef.value?.undo()
-}
-
-function handleRedo() {
-  if (!isMarkdownViewer.value || workspaceStore.activeFileReadonly) {
-    return
-  }
-  vditorRef.value?.redo()
-}
-
 function handleBeforeUnload(event: BeforeUnloadEvent) {
   if (!workspaceStore.hasDirtyTabs) {
     return
@@ -243,26 +227,6 @@ watch(
             <span>{{ button.label }}</span>
           </button>
         </div>
-        <div class="undo-group">
-          <button
-            class="undo-button"
-            type="button"
-            title="撤销 Ctrl+Z"
-            :disabled="!isMarkdownViewer || workspaceStore.activeFileReadonly"
-            @click="handleUndo"
-          >
-            <ArrowLeft :size="14" />
-          </button>
-          <button
-            class="redo-button"
-            type="button"
-            title="重做 Ctrl+Y"
-            :disabled="!isMarkdownViewer || workspaceStore.activeFileReadonly"
-            @click="handleRedo"
-          >
-            <ArrowRight :size="14" />
-          </button>
-        </div>
         <button
           class="save-button"
           type="button"
@@ -285,15 +249,8 @@ watch(
       <!-- Keep Edit and Preview as separate grid children. Split mode relies on
            this contract instead of Vditor's internal side-by-side preview. -->
       <section v-if="!isPreviewOnlyViewer && effectiveEditorMode !== 'preview'" class="editor-surface">
-        <VditorEditor
-          v-if="isMarkdownViewer"
-          ref="vditorRef"
-          v-model="activeContent"
-          :toolbar-visible="false"
-          @save="workspaceStore.saveActiveFile"
-        />
         <CodeEditor
-          v-else-if="isTextEditViewer"
+          v-if="isMarkdownViewer || isTextEditViewer"
           v-model="activeContent"
           :language="isImageTextViewer ? 'ocr' : activeLanguage"
           :readonly="workspaceStore.activeFileReadonly"
@@ -306,7 +263,12 @@ watch(
         @pointerdown="onSplitDividerPointerdown"
       ></div>
       <section v-if="isPreviewOnlyViewer || effectiveEditorMode !== 'edit'" class="preview-surface">
-        <MarkdownPreview v-if="isMarkdownViewer" :key="workspaceStore.selectedPath" :content="activeContent" />
+        <MarkdownPreview
+          v-if="isMarkdownViewer"
+          :key="workspaceStore.selectedPath"
+          :content="activeContent"
+          :path="workspaceStore.selectedPath"
+        />
         <CodePreview
           v-else-if="isCodeViewer && !isPdfViewer"
           :content="activeContent"
@@ -492,48 +454,12 @@ watch(
   color: var(--color-text);
 }
 
-.undo-group {
-  display: inline-flex;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.undo-button,
-.redo-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: 0;
-  background: transparent;
-  color: var(--color-text-muted);
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.undo-button {
-  border-right: 1px solid var(--color-border);
-}
-
-.undo-button:hover,
-.redo-button:hover {
-  background: var(--color-surface-active);
-  color: var(--color-text);
-}
-
-.save-button:disabled,
-.undo-button:disabled,
-.redo-button:disabled {
+.save-button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
 
-.save-button:disabled:hover,
-.undo-button:disabled:hover,
-.redo-button:disabled:hover {
+.save-button:disabled:hover {
   background: transparent;
   color: var(--color-text-muted);
 }

@@ -9,7 +9,6 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import {
   Ban,
-  ChevronDown,
   ChevronRight,
   CircleAlert,
   CircleCheck,
@@ -141,6 +140,33 @@ function handleRowDragover(event: DragEvent) {
   dragOver.value = true
 }
 
+function collapseEnter(el: HTMLElement) {
+  el.style.height = '0px'
+  el.style.overflow = 'hidden'
+  requestAnimationFrame(() => {
+    const height = el.scrollHeight
+    el.style.height = height + 'px'
+  })
+}
+
+function collapseAfterEnter(el: HTMLElement) {
+  el.style.height = ''
+  el.style.overflow = ''
+}
+
+function collapseLeave(el: HTMLElement) {
+  el.style.height = el.scrollHeight + 'px'
+  el.style.overflow = 'hidden'
+  requestAnimationFrame(() => {
+    el.style.height = '0px'
+  })
+}
+
+function collapseAfterLeave(el: HTMLElement) {
+  el.style.height = ''
+  el.style.overflow = ''
+}
+
 function handleRowDragLeave(event: DragEvent) {
   const el = event.currentTarget as HTMLElement | null
   const related = event.relatedTarget as HTMLElement | null
@@ -187,8 +213,7 @@ function handleRowDrop(event: DragEvent) {
       @keydown.enter="emit('select', node, $event)"
       @contextmenu.prevent.stop="emit('contextMenu', node, $event)"
     >
-      <ChevronDown v-if="node.isDir && expandedPaths.has(node.path)" :size="14" />
-      <ChevronRight v-else-if="node.isDir" :size="14" />
+      <ChevronRight v-if="node.isDir" :size="14" class="chevron" :class="{ expanded: expandedPaths.has(node.path) }" />
       <span v-else class="spacer"></span>
       <FolderOpen v-if="node.isDir && expandedPaths.has(node.path)" :size="15" />
       <Folder v-else-if="node.isDir" :size="15" />
@@ -218,8 +243,15 @@ function handleRowDrop(event: DragEvent) {
         <span v-else class="node-index-placeholder"></span>
       </span>
     </div>
-    <ul v-if="node.isDir && expandedPaths.has(node.path) && node.children" class="tree-children">
-      <TreeNode
+    <Transition
+      name="tree-collapse"
+      @enter="collapseEnter"
+      @after-enter="collapseAfterEnter"
+      @leave="collapseLeave"
+      @after-leave="collapseAfterLeave"
+    >
+      <ul v-if="node.isDir && expandedPaths.has(node.path) && node.children" class="tree-children">
+        <TreeNode
         v-for="child in node.children"
         :key="child.path"
         :node="child"
@@ -240,7 +272,8 @@ function handleRowDrop(event: DragEvent) {
         @edit-commit="emit('editCommit', $event)"
         @edit-cancel="emit('editCancel')"
       />
-    </ul>
+      </ul>
+    </Transition>
   </li>
 </template>
 
@@ -293,8 +326,29 @@ function handleRowDrop(event: DragEvent) {
   animation: tree-selection-slide 150ms ease-out;
 }
 
+.chevron {
+  transition: transform 200ms ease;
+}
+
+.chevron.expanded {
+  transform: rotate(90deg);
+}
+
 .spacer {
   width: 14px;
+}
+
+.tree-children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+}
+
+.tree-collapse-enter-active,
+.tree-collapse-leave-active {
+  overflow: hidden;
+  transition: height 200ms ease;
 }
 
 .node-name {
@@ -401,12 +455,6 @@ function handleRowDrop(event: DragEvent) {
   border-color: var(--color-primary);
   background: rgba(66, 36, 235, 0.18);
   box-shadow: inset 0 0 0 1px rgba(66, 36, 235, 0.5);
-}
-
-.tree-children {
-  margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
 @keyframes tree-selection-slide {

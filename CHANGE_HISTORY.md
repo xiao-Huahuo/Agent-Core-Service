@@ -1,5 +1,16 @@
 # CHANGE HISTORY
 
+## 2026-07-17
+- [x] 暗色模式下编辑区底色改为彻底黑色: `--color-surface-raised` 从 `#202026` 改为 `#000000`，使编辑区与周围 chrome 背景一致。
+- [x] 修复 markdown 预览中嵌入图片破碎的问题: 改用 Vditor 渲染后的 DOM 遍历修复图片 URL（相对路径重写为 `/knowledge/files/raw` 端点），替换了原先的 markdown 文本级替换方案。
+- [x] 编辑模式改为纯文本: 移除 VditorEditor（WYSIWYG），markdown 在 edit/split 模式下统一用 CodeEditor 纯 textarea，preview 模式仍用 Vditor 完整渲染。
+- [x] 文件树展开/折叠修复和动画: `handleSelect` 增加 `toggleDirectory()` 调用；`ChevronRight` 旋转动画（200ms ease）；子列表用 `<Transition>` + JS 高度测量实现高度动态动画。
+- [x] 修复Agent回答中K链接和N链接不能同时出现的bug: `attachMetadataToLastAssistant` 改为深合并 `citation_map`；`knowledgeSourcesForMessage` 最后一条消息不依赖 `used_citations`。
+- [x] (依赖于文件树操作问题修复之后,依赖于屏蔽区)给知识库配置一个真正的文件资源管理器页,而不是区区的文件树.
+- [x] 修复 Agent 自动 RAG 注入未传递 user_id 的问题
+- [x] 解决删除文件夹显示Request failed: 500 Internal Server Error的问题.
+- [x] 解决:在文件树中快速切换文件,文件预览有时候会卡死,并且导致其他文件也打不开,甚至其他功能都被阻塞打不开的问题.
+
 ## 2026-07-16
 - 完成知识库文件资源管理器中心页: 新增列表/内容预览/小中大图标模式,列表显示最后修改日期、入库日期、类型和递归目录大小;列表和小图标模式使用与文件树一致的 Lucide 文件图标,中大图标保留玻璃态,大图标对图片加载预览;单击文件夹只选中不进入,Shift/Ctrl 多选与文件树一致,多选横幅提供关闭按钮,外部拖拽导入时显示目标范围提示。
 - 将 Agent auto 模式路由从硬编码关键词判断改为小模型入口分类: auto 先调用 small tier 输出 `simple/react/plan`,显式模式保持直通,并要求小模型在自身能力不足、不确定、需要事实核验或外部信息时至少选择 `react`;小模型失败或输出不可解析时才回退本地规则,补充测试覆盖“GTA 最近新内容”这类时效短问题进入 `react`。
