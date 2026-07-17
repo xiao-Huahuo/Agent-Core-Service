@@ -102,7 +102,6 @@ function maxColumns(rows: string[][]): number {
   min-width: 0;
   min-height: 0;
   border: 0;
-  background: var(--color-canvas);
 }
 
 .table-preview,

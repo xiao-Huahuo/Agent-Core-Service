@@ -120,14 +120,26 @@ function toggleAgentSidebar() {
 
 function openAgentPage() {
   workspaceStore.setMainView('agent')
+  fileSidebarOpen.value = false
+  agentSidebarOpen.value = false
 }
 
 function toggleGraphView() {
-  workspaceStore.setMainView(workspaceStore.mainView === 'graph' ? 'editor' : 'graph')
+  const next = workspaceStore.mainView === 'graph' ? 'editor' : 'graph'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
 }
 
 function openDashboard() {
-  workspaceStore.setMainView(workspaceStore.mainView === 'dashboard' ? 'editor' : 'dashboard')
+  const next = workspaceStore.mainView === 'dashboard' ? 'editor' : 'dashboard'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
 }
 
 function openResources() {
@@ -135,16 +147,27 @@ function openResources() {
     workspaceStore.setMainView('editor')
     return
   }
-  fileSidebarOpen.value = false
   workspaceStore.setMainView('resources')
+  fileSidebarOpen.value = false
+  agentSidebarOpen.value = false
 }
 
 function openSearch() {
-  workspaceStore.setMainView(workspaceStore.mainView === 'search' ? 'editor' : 'search')
+  const next = workspaceStore.mainView === 'search' ? 'editor' : 'search'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
 }
 
 function openSettings() {
-  workspaceStore.setMainView(workspaceStore.mainView === 'settings' ? 'editor' : 'settings')
+  const next = workspaceStore.mainView === 'settings' ? 'editor' : 'settings'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
 }
 
 async function openGraphNode(node: KnowledgeGraphNodeEvent) {
@@ -388,6 +411,7 @@ onBeforeUnmount(() => {
 .editor-col {
   border-left: 0;
   border-right: 0;
+  border-radius: var(--radius-lg);
 }
 
 .agent-col {

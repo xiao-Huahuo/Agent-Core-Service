@@ -116,7 +116,7 @@ watch(
   <section class="graph-pane">
     <header class="graph-toolbar">
       <div class="graph-title">
-        <span class="eyebrow mono">knowledge graph</span>
+        <span class="eyebrow mono">知识图谱</span>
         <strong>{{ knowledgeTitle }}</strong>
       </div>
       <div class="graph-actions">
@@ -129,19 +129,19 @@ watch(
           @click="showGraphLabels = !showGraphLabels"
         >
           <Type :size="15" />
-          <span>{{ showGraphLabels ? 'Text' : 'Hover' }}</span>
+          <span>{{ showGraphLabels ? '标签' : '悬停' }}</span>
         </button>
         <button class="graph-action" type="button" title="Fit view" @click="graphCanvasRef?.fitToView()">
           <Crosshair :size="15" />
-          <span>Fit</span>
+          <span>适应</span>
         </button>
         <button class="graph-action" type="button" title="Reload graph data" @click="refreshGraph">
           <RefreshCw :size="15" />
-          <span>Refresh</span>
+          <span>刷新</span>
         </button>
         <button class="graph-action" type="button" title="Reheat layout" @click="graphCanvasRef?.reheatLayout()">
           <RotateCcw :size="15" />
-          <span>Layout</span>
+          <span>重排</span>
         </button>
       </div>
     </header>
@@ -157,11 +157,11 @@ watch(
     />
 
     <footer class="graph-status">
-      <span v-if="graphMode === 'tree' && treeLoading" class="mono">loading tree...</span>
-      <span v-else-if="graphMode === 'semantic' && semanticLoading" class="mono">loading knowledge graph...</span>
+      <span v-if="graphMode === 'tree' && treeLoading" class="mono">加载文件树...</span>
+      <span v-else-if="graphMode === 'semantic' && semanticLoading" class="mono">加载知识图谱...</span>
       <span v-else-if="graphMode === 'semantic' && semanticError" class="mono">{{ semanticError }}</span>
       <span v-else-if="selectedNode" class="mono">{{ selectedNode.path || selectedNode.label }}</span>
-      <span v-else class="mono">{{ graphMode === 'tree' ? 'click a node to open it in the editor' : 'click an entity to inspect its neighbors' }}</span>
+      <span v-else class="mono">{{ graphMode === 'tree' ? '点击节点在编辑器中打开' : '点击节点查看关联' }}</span>
     </footer>
   </section>
 </template>

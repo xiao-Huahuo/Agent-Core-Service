@@ -28,6 +28,7 @@
 - [ ] 解决几轮对话之后agent对话越来越卡,流式输出越来越大块的问题
 - [ ] 修理安全审核节点不明原因的抽风把正常内容拦截的问题.
 - [ ] 解决思考过长导致"HTTP/1.1 400 Bad Request"禁止访问的问题(可能需要彻底的优化上下文构建机制)
+- [ ] 修复agent的session有时候没有恰当的重命名的问题.
 ### 验收
 Git仓库地址: http://csgitlab.whu.edu.cn/2025-2026-3-advancedprograming/2024-se-7-metaweave.git
 AI使用日志: `CHANGE_HISTORY.md`

@@ -371,6 +371,14 @@ export const useChatStore = defineStore('chat', () => {
           continue
         }
 
+        if (chunk.type === 'session_renamed') {
+          const newName = asString(chunk.session_name)
+          if (newName) {
+            sessionStore.renameLocal(targetSessionId ?? '', newName)
+          }
+          continue
+        }
+
         if (node === 'action') {
           if (trace.length > 0) {
             appendTraceToCurrentAssistant('action', trace)

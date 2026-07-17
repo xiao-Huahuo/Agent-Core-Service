@@ -14,6 +14,7 @@ import {
   createSession,
   deleteSession,
   listSessions,
+  pruneEmptySessions,
   updateSessionName,
   type SessionRecord,
 } from '@/api/session'
@@ -81,6 +82,22 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
+  function renameLocal(sessionId: string, sessionName: string) {
+    const session = sessions.value.find((item) => item.session_id === sessionId)
+    if (session) {
+      session.session_name = sessionName
+    }
+  }
+
+  async function pruneEmpty(userId: string) {
+    try {
+      await pruneEmptySessions(userId)
+      await load(userId)
+    } catch {
+      // non-critical
+    }
+  }
+
   return {
     sessions,
     currentSessionId,
@@ -94,5 +111,7 @@ export const useSessionStore = defineStore('session', () => {
     remove,
     clearAll,
     rename,
+    renameLocal,
+    pruneEmpty,
   }
 })

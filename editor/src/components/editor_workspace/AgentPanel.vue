@@ -47,6 +47,13 @@ const dragDepth = ref(0)
 const isUploadingAttachment = ref(false)
 const uploadStatusText = ref('')
 const welcomeIconUrl = new URL('../../assets/images/无底图标.png', import.meta.url).href
+const modeSwitchRef = ref<HTMLElement | null>(null)
+const modeIndicatorStyle = computed(() => {
+  if (settingsStore.chatMode === 'chat') {
+    return { width: 'calc(50% - 2px)', transform: 'translateX(0)' }
+  }
+  return { width: 'calc(50% - 2px)', transform: 'translateX(calc(100% + 0px))' }
+})
 
 const userId = computed(() => settingsStore.profile.userId)
 const isDark = computed(() => settingsStore.isDark)
@@ -83,8 +90,18 @@ async function createSession() {
   if (!userId.value) {
     return
   }
+  // 当前对话没有任何消息时不创建新对话，只收起侧边栏
+  if (!chatStore.messages.some((m) => m.role !== 'system')) {
+    if (props.mode !== 'page') {
+      sessionDrawerOpen.value = false
+    }
+    return
+  }
   const sessionId = await sessionStore.create(userId.value)
   await selectSession(sessionId)
+
+  // 清理所有空会话(无消息)
+  sessionStore.pruneEmpty(userId.value)
   if (props.mode !== 'page') {
     sessionDrawerOpen.value = false
   }
@@ -279,7 +296,8 @@ onMounted(() => {
       </div>
       <span class="topbar-title">{{ sessionTitle }}</span>
       <div class="topbar-right">
-        <div class="topbar-mode-switch" role="group" aria-label="Chat render mode">
+        <div ref="modeSwitchRef" class="topbar-mode-switch" role="group" aria-label="Chat render mode">
+          <span class="mode-indicator" :style="modeIndicatorStyle"></span>
           <button
             class="topbar-mode-option"
             :class="{ active: settingsStore.chatMode === 'chat' }"
@@ -309,11 +327,9 @@ onMounted(() => {
         :open="sessionDrawerOpen"
         :mode="props.mode"
         :user-id="userId"
-        :chat-mode-label="chatModeLabel"
         @close="closeSessionDrawer"
         @create="createSession"
         @select="selectSession"
-        @toggle-chat-mode="settingsStore.toggleChatMode"
       />
 
       <button
@@ -533,6 +549,7 @@ onMounted(() => {
 }
 
 .topbar-mode-switch {
+  position: relative;
   display: inline-flex;
   align-items: center;
   height: 28px;
@@ -542,11 +559,27 @@ onMounted(() => {
   background: var(--color-surface);
 }
 
+.mode-indicator {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  height: calc(100% - 4px);
+  border-radius: 999px;
+  background: var(--color-primary);
+  transition:
+    transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
 .topbar-mode-option {
+  position: relative;
+  z-index: 1;
+  flex: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 48px;
+  min-width: 0;
   height: 22px;
   padding: 0 var(--space-10);
   border: 0;
@@ -556,8 +589,8 @@ onMounted(() => {
   font-family: var(--font-mono);
   font-size: 10px;
   line-height: 1;
+  cursor: pointer;
   transition:
-    background var(--transition-fast),
     color var(--transition-fast);
 }
 
@@ -566,8 +599,7 @@ onMounted(() => {
 }
 
 .topbar-mode-option.active {
-  background: var(--color-surface-raised);
-  color: var(--color-text-primary);
+  color: #ffffff;
 }
 
 .agent-body {

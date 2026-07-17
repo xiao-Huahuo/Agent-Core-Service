@@ -8,7 +8,7 @@
 
 import { ref } from 'vue'
 
-import agentAvatar from '@/assets/images/avatar/兵王.jpg'
+import agentAvatar from '@/assets/images/无底图标.png'
 import avatar1 from '@/assets/images/avatar/乌萨奇.jpg'
 import avatar2 from '@/assets/images/avatar/吉伊.jpg'
 import avatar3 from '@/assets/images/avatar/小八.jpg'

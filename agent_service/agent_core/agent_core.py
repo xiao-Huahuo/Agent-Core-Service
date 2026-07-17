@@ -449,8 +449,16 @@ class AgentCore:
                 message_service=message_service,
                 citation_map=turn_citation_map,
             )
+            rename_queue: queue_module.Queue | None = None
             if self._has_renamable_assistant_reply(user_id=user_id, session_id=session_id):
-                _launch_auto_rename(self, user_id=user_id, session_id=session_id)
+                _rename_thread, rename_queue = _launch_auto_rename(self, user_id=user_id, session_id=session_id)
+            if rename_queue is not None:
+                try:
+                    title = rename_queue.get(timeout=10.0)
+                    if title:
+                        yield {"type": "session_renamed", "session_id": session_id, "session_name": title}
+                except queue_module.Empty:
+                    pass
             return
 
         yield from self._stream_events(
@@ -464,7 +472,13 @@ class AgentCore:
             citation_map=turn_citation_map,
         )
         if self._has_renamable_assistant_reply(user_id=user_id, session_id=session_id):
-            _launch_auto_rename(self, user_id=user_id, session_id=session_id)
+            _rename_thread, rename_queue = _launch_auto_rename(self, user_id=user_id, session_id=session_id)
+            try:
+                title = rename_queue.get(timeout=10.0)
+                if title:
+                    yield {"type": "session_renamed", "session_id": session_id, "session_name": title}
+            except queue_module.Empty:
+                pass
 
     def cancel_session(self, session_id: str) -> None:
         """取消指定 session 正在执行的图,保存部分输出。"""
@@ -1874,77 +1888,86 @@ class AgentCore:
         self.session_service.update_session_state(session_id, state_json)
 
 
-def _launch_auto_rename(agent: AgentCore, *, user_id: str, session_id: str) -> None:
-    """Fire-and-forget: 用小模型根据对话内容生成并更新会话标题。"""
+def _rename_session_worker(agent: AgentCore, *, user_id: str, session_id: str) -> str | None:
+    """Run the small-model rename and persist the new title. Returns the title or None."""
+    try:
+        message_service = agent._get_message_service()
+        recent = message_service.list_recent_messages(
+            user_id=user_id, session_id=session_id, limit=6,
+            include_summarized=True,
+        )
+        if len(recent) < 2:
+            return None
+        for message in reversed(recent):
+            if getattr(message, "role", "") != "assistant":
+                continue
+            content = (getattr(message, "content", "") or "").strip()
+            metadata = getattr(message, "metadata_json", None) or {}
+            if metadata.get("node") == "error" or "429 Too Many Requests" in content or "模型服务限流" in content:
+                logger.info("跳过会话自动重命名 | session=%s reason=last_assistant_error", session_id)
+                return None
+            break
+        lines: list[str] = []
+        for m in recent[-6:]:
+            role_label = ""
+            if m.role == "user":
+                role_label = "用户"
+            elif m.role == "assistant":
+                role_label = "助手"
+            if not role_label:
+                continue
+            content_preview = (m.content or "")[:200].replace("\n", " ")
+            lines.append(f"{role_label}: {content_preview}")
+        if not lines:
+            return None
+        conversation = "\n".join(lines)
+        rename_prompt = (
+            "根据以下对话内容,为这个会话生成一个简洁的标题(15字以内,中文):\n\n"
+            f"{conversation}\n\n标题:"
+        )
+        llm_config = agent._get_user_llm_config(user_id)
+        api_key = llm_config.get("api_key") if llm_config else None
+        base_url = llm_config.get("base_url") if llm_config else None
+        small_api_key = llm_config.get("small_api_key") if llm_config else None
+        small_base_url = llm_config.get("small_base_url") if llm_config else None
+        response = agent.task_scheduler.invoke_chat(
+            task_type=BACKGROUND_SUMMARY_TASK,
+            messages=[HumanMessage(content=rename_prompt)],
+            tool_names=[],
+            model_tier=SMALL_MODEL_TIER,
+            temperature=0.3,
+            api_key=api_key,
+            base_url=base_url,
+            small_api_key=small_api_key,
+            small_base_url=small_base_url,
+        )
+        title = (getattr(response, "content", "") or "").strip()
+        if not title:
+            return None
+        title = title[:30]
+        from agent_service.services.session_service import SessionService
+        from agent_service.schemas.session import SessionUpdate
+        session_service = SessionService(config=agent.config)
+        session_service.update_session_name(
+            session_id, SessionUpdate(session_name=title)
+        )
+        return title
+    except Exception:
+        logger.debug("会话自动重命名失败 | session=%s", session_id, exc_info=True)
+        return None
 
-    def _rename_worker() -> None:
+
+def _launch_auto_rename(agent: AgentCore, *, user_id: str, session_id: str) -> tuple[threading.Thread, queue_module.Queue]:
+    """Fire rename worker in background thread. Caller can wait on the queue for the result."""
+    q: queue_module.Queue = queue_module.Queue(maxsize=1)
+
+    def _worker() -> None:
         try:
-            message_service = agent._get_message_service()
-            recent = message_service.list_recent_messages(
-                user_id=user_id, session_id=session_id, limit=6,
-                include_summarized=True,
-            )
-            if len(recent) < 2:
-                return
-            for message in reversed(recent):
-                if getattr(message, "role", "") != "assistant":
-                    continue
-                content = (getattr(message, "content", "") or "").strip()
-                metadata = getattr(message, "metadata_json", None) or {}
-                if metadata.get("node") == "error" or "429 Too Many Requests" in content or "模型服务限流" in content:
-                    logger.info("跳过会话自动重命名 | session=%s reason=last_assistant_error", session_id)
-                    return
-                break
-            lines: list[str] = []
-            for m in recent[-6:]:
-                role_label = ""
-                if m.role == "user":
-                    role_label = "用户"
-                elif m.role == "assistant":
-                    role_label = "助手"
-                if not role_label:
-                    continue
-                content_preview = (m.content or "")[:200].replace("\n", " ")
-                lines.append(f"{role_label}: {content_preview}")
-            if not lines:
-                return
-            conversation = "\n".join(lines)
-            rename_prompt = (
-                "根据以下对话内容,为这个会话生成一个简洁的标题(15字以内,中文):\n\n"
-                f"{conversation}\n\n标题:"
-            )
-            llm_config = agent._get_user_llm_config(user_id)
-            api_key = llm_config.get("api_key") if llm_config else None
-            base_url = llm_config.get("base_url") if llm_config else None
-            small_api_key = llm_config.get("small_api_key") if llm_config else None
-            small_base_url = llm_config.get("small_base_url") if llm_config else None
-            response = agent.task_scheduler.invoke_chat(
-                task_type=BACKGROUND_SUMMARY_TASK,
-                messages=[HumanMessage(content=rename_prompt)],
-                tool_names=[],
-                model_tier=SMALL_MODEL_TIER,
-                temperature=0.3,
-                api_key=api_key,
-                base_url=base_url,
-                small_api_key=small_api_key,
-                small_base_url=small_base_url,
-            )
-            title = (getattr(response, "content", "") or "").strip()
-            if not title:
-                return
-            title = title[:30]
-            from agent_service.services.session_service import SessionService
-            from agent_service.schemas.session import SessionUpdate
-            session_service = SessionService(config=agent.config)
-            session_service.update_session_name(
-                session_id, SessionUpdate(session_name=title)
-            )
+            title = _rename_session_worker(agent, user_id=user_id, session_id=session_id)
+            q.put(title)
         except Exception:
-            logger.debug("会话自动重命名失败 | session=%s", session_id, exc_info=True)
+            q.put(None)
 
-    thread = threading.Thread(
-        target=_rename_worker,
-        daemon=True,
-        name=f"rename-{session_id[:12]}",
-    )
+    thread = threading.Thread(target=_worker, daemon=True, name=f"rename-{session_id[:12]}")
     thread.start()
+    return thread, q

@@ -463,6 +463,7 @@ function handleFileChange(event: Event) {
   border-radius: 10px;
   background: var(--color-surface, #111827);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  animation: loop-menu-pop 140ms ease-out both;
 }
 
 .loop-mode-option {
@@ -479,10 +480,18 @@ function handleFileChange(event: Event) {
   font-family: var(--font-mono);
   text-align: left;
   cursor: pointer;
+  opacity: 0;
+  transform: translateY(-4px);
+  animation: loop-option-drop 150ms ease-out both;
   transition:
     background var(--transition-fast),
     color var(--transition-fast);
 }
+
+.loop-mode-menu .loop-mode-option:nth-of-type(1) { animation-delay: 20ms; }
+.loop-mode-menu .loop-mode-option:nth-of-type(2) { animation-delay: 38ms; }
+.loop-mode-menu .loop-mode-option:nth-of-type(3) { animation-delay: 56ms; }
+.loop-mode-menu .loop-mode-option:nth-of-type(4) { animation-delay: 74ms; }
 
 .loop-mode-option:hover,
 .loop-mode-option.active {
@@ -524,6 +533,16 @@ function handleFileChange(event: Event) {
   transition:
     background var(--transition-fast),
     color var(--transition-fast);
+}
+
+@keyframes loop-menu-pop {
+  from { transform: translateY(6px); }
+  to { transform: translateY(0); }
+}
+
+@keyframes loop-option-drop {
+  from { transform: translateY(-4px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 .send-btn:hover:not(:disabled) {

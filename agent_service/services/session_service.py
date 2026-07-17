@@ -19,6 +19,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from sqlalchemy import func
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -118,6 +119,26 @@ class SessionService:
                 db_session.delete(record)
             db_session.commit()
             return count
+
+    def prune_empty_sessions(self, user_id: str) -> int:
+        """Delete sessions that have zero messages for the given user. Returns the count pruned."""
+
+        with Session(self.engine) as db_session:
+            records = db_session.exec(
+                select(SessionRecord).where(SessionRecord.user_id == user_id)
+            ).all()
+            pruned = 0
+            for record in records:
+                count = db_session.exec(
+                    select(func.count(MessageRecord.message_id)).where(
+                        MessageRecord.session_id == record.session_id
+                    )
+                ).one()
+                if count == 0:
+                    db_session.delete(record)
+                    pruned += 1
+            db_session.commit()
+            return pruned
 
     def update_session_name(self, session_id: str, session_update: SessionUpdate) -> SessionOut | None:
         """

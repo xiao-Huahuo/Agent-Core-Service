@@ -83,6 +83,17 @@ async def clear_all_sessions(user_id: str = Query(..., min_length=1, description
     return {"ok": True, "deleted_count": count}
 
 
+@router.post("/sessions/prune")
+async def delete_empty_sessions(body: dict[str, Any]) -> dict[str, Any]:
+    """删除指定用户的所有空会话(无消息)。body: user_id。"""
+    user_id = body.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    service = _require_session_service()
+    count = service.prune_empty_sessions(str(user_id))
+    return {"ok": True, "pruned_count": count}
+
+
 @router.put("/sessions/{session_id}/name")
 async def update_session_name(session_id: str, body: dict[str, Any]) -> dict[str, Any]:
     """更新会话显示名称。body: session_name 字段。"""

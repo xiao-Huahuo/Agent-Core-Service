@@ -145,7 +145,7 @@ async function handleCloseWindow() {
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--color-accent);
+  color: var(--color-text-secondary);
   -webkit-app-region: no-drag;
   transition:
     background var(--transition-fast),
@@ -154,8 +154,8 @@ async function handleCloseWindow() {
 }
 
 .ingest-button:hover:not(:disabled) {
-  background: rgba(235, 36, 99, 0.12);
-  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
 }
 
 .ingest-button:disabled {
@@ -277,8 +277,8 @@ async function handleCloseWindow() {
   padding: 0 var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-canvas) 92%, var(--color-accent) 8%);
-  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-canvas) 92%, var(--color-primary) 8%);
+  color: var(--color-primary);
   font-family: var(--font-code);
   font-size: 9px;
   font-weight: 700;
@@ -292,14 +292,14 @@ async function handleCloseWindow() {
   height: 5px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(235, 36, 99, 0.14);
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
 }
 
 .ingestion-progress-fill {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--color-accent);
+  background: var(--color-primary);
   transition: width 140ms ease;
 }
 

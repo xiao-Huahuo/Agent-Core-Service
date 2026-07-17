@@ -331,7 +331,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   height: 36px;
   flex-shrink: 0;
   margin-top: 2px;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: 50%;
   object-fit: cover;
 }

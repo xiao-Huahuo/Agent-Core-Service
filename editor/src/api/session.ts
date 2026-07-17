@@ -55,6 +55,10 @@ export function clearAllSessions(userId: string): Promise<{ ok: boolean; deleted
   return apiDelete<{ ok: boolean; deleted_count: number }>('/sessions', { user_id: userId })
 }
 
+export function pruneEmptySessions(userId: string): Promise<{ ok: boolean; pruned_count: number }> {
+  return apiPost<{ ok: boolean; pruned_count: number }>('/sessions/prune', { user_id: userId })
+}
+
 export function updateSessionName(
   sessionId: string,
   sessionName: string,

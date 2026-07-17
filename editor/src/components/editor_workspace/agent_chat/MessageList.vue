@@ -289,7 +289,7 @@ defineExpose({
 .thinking-avatar {
   width: 36px;
   height: 36px;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: 50%;
   object-fit: cover;
 }

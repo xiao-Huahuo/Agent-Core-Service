@@ -6,7 +6,8 @@
   sessions for the current editor user_id.
 -->
 <script setup lang="ts">
-import { History, MessageSquarePlus, PanelLeft, Plus, Trash2, X } from 'lucide-vue-next'
+import { PanelLeft, Plus, Trash2, X } from 'lucide-vue-next'
+import logoSrc from '@/assets/images/无底图标.png'
 
 import { useSessionStore } from '@/stores/session'
 import type { SessionRecord } from '@/api/session'
@@ -15,14 +16,12 @@ const props = defineProps<{
   open: boolean
   userId: string
   mode?: 'panel' | 'page'
-  chatModeLabel?: string
 }>()
 
 const emit = defineEmits<{
   close: []
   create: []
   select: [sessionId: string]
-  'toggle-chat-mode': []
 }>()
 
 const sessionStore = useSessionStore()
@@ -54,9 +53,10 @@ async function clearAllSessions() {
 <template>
   <aside class="session-drawer" :class="{ open, 'page-mode': mode === 'page' }">
     <div class="drawer-titlebar">
-      <div class="brand-copy">
+      <button class="brand-copy" type="button" @click="emit('create')">
+        <img :src="logoSrc" class="brand-logo" alt="" />
         <strong>MetaWeave</strong>
-      </div>
+      </button>
       <button class="close-button" type="button" title="收起侧边栏" @click="emit('close')">
         <PanelLeft :size="15" />
       </button>
@@ -65,16 +65,7 @@ async function clearAllSessions() {
     <div class="drawer-toolbar">
       <div class="primary-actions">
         <button class="new-btn" type="button" @click="emit('create')">
-          <MessageSquarePlus :size="15" />
-          <span>New Chat</span>
-        </button>
-        <button
-          class="mode-btn"
-          type="button"
-          :title="`切换对话模式: 当前 ${chatModeLabel || 'chat'}`"
-          @click="emit('toggle-chat-mode')"
-        >
-          <History :size="15" />
+          <span>新对话</span>
         </button>
       </div>
     </div>
@@ -102,7 +93,7 @@ async function clearAllSessions() {
     <div class="drawer-footer">
       <button v-if="sessionStore.sessions.length > 0" class="clear-all-btn" type="button" @click="clearAllSessions">
         <Trash2 :size="12" />
-        <span>Clear All Sessions</span>
+        <span>清空全部</span>
       </button>
       <div class="user-strip">
         <span class="user-dot"></span>
@@ -186,8 +177,21 @@ async function clearAllSessions() {
 
 .brand-copy {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
   min-width: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+}
+
+.brand-logo {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .brand-copy strong {
