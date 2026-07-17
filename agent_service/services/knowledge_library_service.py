@@ -754,19 +754,12 @@ class KnowledgeLibraryService:
             }
         if suffix == ".pdf":
             pdf_preview = self._preview_pdf(path=target)
-            if not pdf_preview.get("pdf_scanned", True):
-                return {
-                    **base_payload,
-                    "kind": "document",
-                    "html": self._preview_pdf_html(path=target),
-                    "readonly": True,
-                }
             return {
                 **base_payload,
+                **pdf_preview,
                 "kind": "pdf",
                 "mime_type": "application/pdf",
                 "raw_url": self._raw_file_url(user_id=user_id, relative_path=str(base_payload["path"])),
-                **pdf_preview,
                 "readonly": True,
             }
         if suffix in {".csv", ".tsv"}:
@@ -943,50 +936,6 @@ class KnowledgeLibraryService:
             "image_count": extracted.image_count,
             "table_count": extracted.table_count,
         }
-
-    @staticmethod
-    def _preview_pdf_html(*, path: Path) -> str:
-        """将非扫描 PDF 转换为含嵌入图片的 HTML,类似 DOCX 预览。"""
-
-        try:
-            import fitz  # type: ignore[import-untyped]
-        except ImportError:
-            return "<p>缺少 PyMuPDF 依赖,无法预览 PDF。</p>"
-
-        parts: list[str] = []
-        try:
-            document = fitz.open(path)
-        except Exception:
-            return "<p>无法打开 PDF 文件。</p>"
-
-        with document:
-            for page_index in range(document.page_count):
-                page = document[page_index]
-                parts.append(f"<h2>第 {page_index + 1} 页</h2>")
-
-                # 文本层 — 按双换行分段落
-                page_text = (page.get_text("text") or "").strip()
-                if page_text:
-                    for block in page_text.split("\n\n"):
-                        block = block.strip()
-                        if block:
-                            parts.append(f"<p>{html.escape(block)}</p>")
-
-                # 嵌入图片
-                try:
-                    images = page.get_images(full=True)
-                    for img in images:
-                        xref = int(img[0])
-                        payload = document.extract_image(xref)
-                        img_bytes = payload.get("image")
-                        img_ext = str(payload.get("ext", "png") or "png")
-                        if img_bytes:
-                            b64 = base64.b64encode(img_bytes).decode("ascii")
-                            parts.append(f'<p><img src="data:image/{img_ext};base64,{b64}" style="max-width:100%" /></p>')
-                except Exception:
-                    pass
-
-        return "\n".join(parts) or "<p>PDF 中没有可预览内容。</p>"
 
     def _preview_image_ocr(self, *, user_id: str, path: Path) -> dict:
         """对普通图片执行 OCR,供 Edit 模式展示识别文本。"""
