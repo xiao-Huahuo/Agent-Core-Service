@@ -109,7 +109,7 @@ onMounted(() => {
             type="button"
             @click="selectTool(tool)"
           >
-            <span class="tool-name">{{ tool.name }}</span>
+            <span class="tool-name">{{ tool.display_name || tool.name }}</span>
             <span class="tool-meta">{{ tool.argument_count }} args</span>
           </button>
           <div v-if="!loading && filteredTools.length === 0" class="empty-state">
@@ -291,7 +291,7 @@ h2 {
 
 .tool-name {
   overflow: hidden;
-  font-size: 11px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -367,7 +367,6 @@ h2 {
 .schema-block {
   margin: var(--space-12) 0 0;
   padding: var(--space-10);
-  max-height: 240px;
   overflow: auto;
   border: 1px solid var(--color-border);
   background: rgba(0, 0, 0, 0.16);

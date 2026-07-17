@@ -6,7 +6,8 @@
   the console display contract.
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { ChevronDown } from 'lucide-vue-next'
 
 const props = defineProps<{
   traces?: Array<Record<string, unknown>>
@@ -16,6 +17,7 @@ interface ToolDisplayEntry {
   key: string
   text: string
   pending: boolean
+  resultSummaries: string[]
 }
 
 interface ToolEntry {
@@ -24,6 +26,19 @@ interface ToolEntry {
   result_count?: number
   call_count: number
   filenames: string[]
+  result_summaries: string[]
+}
+
+const expanded = ref(new Set<string>())
+
+function toggleExpand(key: string) {
+  const next = new Set(expanded.value)
+  if (next.has(key)) {
+    next.delete(key)
+  } else {
+    next.add(key)
+  }
+  expanded.value = next
 }
 
 const FALLBACK_DISPLAY: Record<string, string> = {
@@ -131,6 +146,10 @@ const toolEntries = computed(() => {
         if (fn && !existing.filenames.includes(fn)) {
           existing.filenames.push(fn)
         }
+        const rs = asString(trace.result_summary)
+        if (rs && !existing.result_summaries.includes(rs)) {
+          existing.result_summaries.push(rs)
+        }
       } else {
         merged.set(toolName, {
           tool_name: toolName,
@@ -138,16 +157,18 @@ const toolEntries = computed(() => {
           result_count: resultCount,
           call_count: 1,
           filenames: fn ? [fn] : [],
+          result_summaries: asString(trace.result_summary) ? [asString(trace.result_summary)] : [],
         })
       }
     })
   return [
-    ...Array.from(pendingStarts.values()).map((entry) => ({ ...entry, pending: true })),
+    ...Array.from(pendingStarts.values()).map((entry) => ({ ...entry, pending: true, resultSummaries: [] })),
     ...Array.from(merged.values())
     .map((entry) => ({
       key: `${entry.tool_name}-${entry.call_count}`,
       text: toolSummary(entry),
       pending: false,
+      resultSummaries: entry.result_summaries,
     }))
     .filter((entry): entry is ToolDisplayEntry => Boolean(entry.text)),
   ]
@@ -155,18 +176,41 @@ const toolEntries = computed(() => {
 </script>
 
 <template>
-  <div v-for="entry in toolEntries" :key="entry.key" class="tool-call-box">
-    <span v-if="entry.pending" class="tool-loader" aria-hidden="true"></span>
-    <span class="tool-text">{{ entry.text }}</span>
+  <div v-for="entry in toolEntries" :key="entry.key" class="tool-call-box" :class="{ expandable: !entry.pending && entry.resultSummaries.length > 0 }">
+    <div class="tool-call-header">
+      <span v-if="entry.pending" class="tool-loader" aria-hidden="true"></span>
+      <span class="tool-text">{{ entry.text }}</span>
+      <button
+        v-if="!entry.pending && entry.resultSummaries.length > 0"
+        class="tool-expand-btn"
+        type="button"
+        :class="{ expanded: expanded.has(entry.key) }"
+        :aria-label="expanded.has(entry.key) ? '收起结果' : '展开结果'"
+        @click="toggleExpand(entry.key)"
+      >
+        <ChevronDown :size="16" />
+      </button>
+    </div>
+    <div
+      v-if="!entry.pending && entry.resultSummaries.length > 0"
+      class="tool-result-collapse"
+      :class="{ open: expanded.has(entry.key) }"
+    >
+      <div class="tool-result-content">
+        <pre
+          v-for="(summary, idx) in entry.resultSummaries"
+          :key="idx"
+          class="tool-result-text"
+        >{{ summary }}</pre>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .tool-call-box {
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: var(--space-8);
+  flex-direction: column;
   box-sizing: border-box;
   width: 100%;
   margin-bottom: var(--space-6);
@@ -180,6 +224,18 @@ const toolEntries = computed(() => {
   animation: tool-slide-in 220ms ease-out;
 }
 
+.tool-call-box.expandable {
+  padding: 0;
+}
+
+.tool-call-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  min-height: 32px;
+}
+
 .tool-loader {
   width: 12px;
   height: 12px;
@@ -191,6 +247,8 @@ const toolEntries = computed(() => {
 }
 
 .tool-text {
+  flex: 1;
+  min-width: 0;
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
   font-size: 12px;
@@ -198,6 +256,69 @@ const toolEntries = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tool-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.tool-expand-btn:hover {
+  color: var(--color-text-secondary);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.tool-expand-btn svg {
+  transition: transform 220ms ease;
+}
+
+.tool-expand-btn.expanded svg {
+  transform: rotate(180deg);
+}
+
+.tool-result-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tool-result-collapse.open {
+  grid-template-rows: 1fr;
+}
+
+.tool-result-content {
+  overflow: hidden;
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.tool-result-text {
+  margin: 0;
+  padding: var(--space-8) var(--space-12);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 600px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.tool-result-text + .tool-result-text {
+  border-top: 1px dashed rgba(148, 163, 184, 0.08);
 }
 
 @keyframes tool-slide-in {
