@@ -201,7 +201,8 @@ function drawLabel(
   const label = node.label.length > 34 ? `${node.label.slice(0, 31)}...` : node.label
   ctx.save()
   ctx.globalAlpha = hasHover && !isRelated ? 0.4 : 1
-  ctx.font = `${node.kind === 'root' || node.id === state.hoveredNodeId ? 13 : 11}px system-ui, sans-serif`
+  const baseFontSize = node.kind === 'root' || node.id === state.hoveredNodeId ? 13 : 11
+  ctx.font = `${Math.round(baseFontSize / Math.max(state.viewport.scale, 0.1))}px system-ui, sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'top'
   ctx.fillStyle = node.id === state.hoveredNodeId || node.id === state.selectedNodeId ? theme.text : theme.mutedText
