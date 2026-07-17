@@ -103,7 +103,6 @@ function toneFor(filename: string) {
   display: flex;
   flex-wrap: nowrap;
   gap: var(--space-6);
-  max-width: 100%;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -118,10 +117,16 @@ function toneFor(filename: string) {
 
 .attachment-blocks.align-right {
   justify-content: flex-start;
+  direction: rtl;
 }
 
 .attachment-blocks.align-center {
   justify-content: center;
+}
+
+/* 在 rtl 下卡片内容需要重新 ltr，否则文件名会反向 */
+.attachment-blocks.align-right .attachment-card {
+  direction: ltr;
 }
 
 .attachment-card {

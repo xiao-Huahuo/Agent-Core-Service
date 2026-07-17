@@ -72,10 +72,12 @@ class RetrievalDebugSnapshot:
 
     pre_rerank_candidates: 混合召回并去重后的候选列表,尚未经过 ReRank 精排。
     post_rerank_results: ReRank 与最终过滤后的结果列表。
+    request_limit: 本通道请求的返回条数上限,即 final_top_k。
     """
 
     pre_rerank_candidates: list[HybridRetrievalCandidate] = field(default_factory=list)
     post_rerank_results: list[RetrievedMemory] = field(default_factory=list)
+    request_limit: int = 0
 
 
 class MemoryRetrievalService:
@@ -216,6 +218,7 @@ class MemoryRetrievalService:
         return RetrievalDebugSnapshot(
             pre_rerank_candidates=merged_pre[: max(final_top_k, self.config.memory.rerank_top_k)],
             post_rerank_results=merged_post[:final_top_k],
+            request_limit=final_top_k,
         )
 
     def retrieve_knowledge_with_debug(
@@ -400,6 +403,7 @@ class MemoryRetrievalService:
         return RetrievalDebugSnapshot(
             pre_rerank_candidates=merged_candidates,
             post_rerank_results=retrieved[:final_top_k],
+            request_limit=final_top_k,
         )
 
     @staticmethod
@@ -465,6 +469,7 @@ class MemoryRetrievalService:
         return {
             "pre_rerank": [cls.serialize_candidate(item) for item in snapshot.pre_rerank_candidates],
             "post_rerank": [cls.serialize_retrieved_memory(item) for item in snapshot.post_rerank_results],
+            "request_limit": snapshot.request_limit,
         }
 
     def _get_latest_memory_by_type(

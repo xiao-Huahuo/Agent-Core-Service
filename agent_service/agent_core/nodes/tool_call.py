@@ -140,17 +140,17 @@ class ToolCallNode:
                 if key not in before_citations
             }
             messages.append(ToolMessage(content=content, tool_call_id=tool_call_id))
-            result_summary = self._summarize_result(content)
             result_count = self._count_results(content)
+            summary_text = (str(content).strip()[:200] + "…") if len(str(content).strip()) > 200 else content.strip()
             end_trace = {
                 "node": "action",
                 "event": "tool_call_end",
                 "tool_call_id": tool_call_id,
                 "tool_name": tool_name,
                 "display_name": display_name,
-                "result_summary": result_summary,
+                "raw_content": content,
                 "duration_ms": duration_ms,
-                "human_readable": f"工具「{display_name}」返回：{result_summary}",
+                "human_readable": f"工具「{display_name}」返回：{summary_text}",
                 "result_count": result_count,
                 "chat_visible": True,
             }
@@ -205,15 +205,6 @@ class ToolCallNode:
             parts.append(f"{k}={v_str}")
         summary = ", ".join(parts) if parts else "无参数"
         return summary[:200]
-
-    @staticmethod
-    def _summarize_result(content: str) -> str:
-        """将工具返回结果截断为摘要文本。"""
-
-        text = str(content).strip()
-        if len(text) <= 200:
-            return text
-        return text[:200] + "…"
 
     @staticmethod
     def _count_results(content: str) -> int | None:

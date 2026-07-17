@@ -1,9 +1,10 @@
 <!--
-  Inline tool call summary.
+  Inline tool call summary with per-tool expandable detail.
 
   Usage:
   Tool mode consumes action-node traces and merges each tool by name, matching
-  the console display contract.
+  the console display contract. Each completed tool shows an expand button that
+  reveals its full return content, rendered per tool type.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
@@ -17,7 +18,8 @@ interface ToolDisplayEntry {
   key: string
   text: string
   pending: boolean
-  resultSummaries: string[]
+  rawContents: string[]
+  toolName: string
 }
 
 interface ToolEntry {
@@ -26,7 +28,7 @@ interface ToolEntry {
   result_count?: number
   call_count: number
   filenames: string[]
-  result_summaries: string[]
+  raw_contents: string[]
 }
 
 const expanded = ref(new Set<string>())
@@ -74,21 +76,21 @@ function asNumber(value: unknown) {
 }
 
 function extractFilename(trace: Record<string, unknown>, toolName: string) {
-  const resultSummary = asString(trace.result_summary)
+  const rawContent = asString(trace.raw_content)
   if (toolName === 'write_knowledge_file') {
-    const m = resultSummary.match(/已保存文件:\s*(.+?)\s*\(/)
+    const m = rawContent.match(/已保存文件:\s*(.+?)\s*\(/)
     return m ? m[1] : null
   }
   if (toolName === 'delete_knowledge_file') {
-    const m = resultSummary.match(/已删除:\s*(.+)/)
+    const m = rawContent.match(/已删除:\s*(.+)/)
     return m ? m[1] : null
   }
   if (toolName === 'rename_knowledge_file') {
-    const m = resultSummary.match(/已重命名:\s*(.+)/)
+    const m = rawContent.match(/已重命名:\s*(.+)/)
     return m ? m[1] : null
   }
   if (toolName === 'create_knowledge_folder') {
-    const m = resultSummary.match(/已创建文件夹:\s*(.+)/)
+    const m = rawContent.match(/已创建文件夹:\s*(.+)/)
     return m ? m[1] : null
   }
   return null
@@ -118,6 +120,46 @@ function toolSummary(entry: ToolEntry) {
   return displayName
 }
 
+function parseSearchResults(content: string) {
+  const lines = content.split('\n').filter((l) => l.trim())
+  const items: { index: number; source: string; content: string }[] = []
+  let current: { index: number; source: string; content: string[] } | null = null
+  for (const line of lines) {
+    const m = line.match(/^(\d+)\.\s*\[([^\]]+)\]\s*来源:\s*(.+)/)
+    if (m) {
+      if (current) {
+        items.push({ index: current.index, source: current.source, content: current.content.join('\n').trim() })
+      }
+      current = { index: parseInt(m[1], 10), source: m[2]!.trim(), content: [] }
+      const afterSource = m[3]!.trim()
+      if (afterSource) current.content.push(afterSource)
+    } else if (current) {
+      current.content.push(line)
+    }
+  }
+  if (current) {
+    items.push({ index: current.index, source: current.source, content: current.content.join('\n').trim() })
+  }
+  if (items.length === 0) {
+    // fallback: just treat whole content as text
+    return null
+  }
+  return items
+}
+
+function parseFileList(content: string) {
+  const lines = content.split('\n').filter((l) => l.trim())
+  const result: { type: 'dir' | 'file'; name: string; indent: number }[] = []
+  for (const line of lines) {
+    if (line.startsWith('[DIR] ')) {
+      result.push({ type: 'dir', name: line.slice(6), indent: 0 })
+    } else if (line.startsWith('[FILE] ')) {
+      result.push({ type: 'file', name: line.slice(7), indent: 0 })
+    }
+  }
+  return result.length > 0 ? result : null
+}
+
 const toolEntries = computed(() => {
   const pendingStarts = new Map<string, { key: string; text: string }>()
   ;(props.traces ?? [])
@@ -138,6 +180,7 @@ const toolEntries = computed(() => {
       const existing = merged.get(toolName)
       const resultCount = asNumber(trace.result_count)
       const fn = extractFilename(trace, toolName)
+      const rawContent = asString(trace.raw_content)
       if (existing) {
         if (resultCount !== undefined) {
           existing.result_count = (existing.result_count ?? 0) + resultCount
@@ -146,9 +189,8 @@ const toolEntries = computed(() => {
         if (fn && !existing.filenames.includes(fn)) {
           existing.filenames.push(fn)
         }
-        const rs = asString(trace.result_summary)
-        if (rs && !existing.result_summaries.includes(rs)) {
-          existing.result_summaries.push(rs)
+        if (rawContent && !existing.raw_contents.includes(rawContent)) {
+          existing.raw_contents.push(rawContent)
         }
       } else {
         merged.set(toolName, {
@@ -157,18 +199,24 @@ const toolEntries = computed(() => {
           result_count: resultCount,
           call_count: 1,
           filenames: fn ? [fn] : [],
-          result_summaries: asString(trace.result_summary) ? [asString(trace.result_summary)] : [],
+          raw_contents: rawContent ? [rawContent] : [],
         })
       }
     })
   return [
-    ...Array.from(pendingStarts.values()).map((entry) => ({ ...entry, pending: true, resultSummaries: [] })),
+    ...Array.from(pendingStarts.values()).map((entry) => ({
+      ...entry,
+      pending: true,
+      rawContents: [],
+      toolName: '',
+    })),
     ...Array.from(merged.values())
     .map((entry) => ({
       key: `${entry.tool_name}-${entry.call_count}`,
       text: toolSummary(entry),
       pending: false,
-      resultSummaries: entry.result_summaries,
+      rawContents: entry.raw_contents,
+      toolName: entry.tool_name,
     }))
     .filter((entry): entry is ToolDisplayEntry => Boolean(entry.text)),
   ]
@@ -176,12 +224,12 @@ const toolEntries = computed(() => {
 </script>
 
 <template>
-  <div v-for="entry in toolEntries" :key="entry.key" class="tool-call-box" :class="{ expandable: !entry.pending && entry.resultSummaries.length > 0 }">
+  <div v-for="entry in toolEntries" :key="entry.key" class="tool-call-box" :class="{ expandable: !entry.pending && entry.rawContents.length > 0 }">
     <div class="tool-call-header">
       <span v-if="entry.pending" class="tool-loader" aria-hidden="true"></span>
       <span class="tool-text">{{ entry.text }}</span>
       <button
-        v-if="!entry.pending && entry.resultSummaries.length > 0"
+        v-if="!entry.pending && entry.rawContents.length > 0"
         class="tool-expand-btn"
         type="button"
         :class="{ expanded: expanded.has(entry.key) }"
@@ -192,16 +240,53 @@ const toolEntries = computed(() => {
       </button>
     </div>
     <div
-      v-if="!entry.pending && entry.resultSummaries.length > 0"
+      v-if="!entry.pending && entry.rawContents.length > 0"
       class="tool-result-collapse"
       :class="{ open: expanded.has(entry.key) }"
     >
       <div class="tool-result-content">
-        <pre
-          v-for="(summary, idx) in entry.resultSummaries"
-          :key="idx"
-          class="tool-result-text"
-        >{{ summary }}</pre>
+        <template v-for="(rawContent, idx) in entry.rawContents" :key="idx">
+          <!-- Search results: numbered items with source -->
+          <div v-if="(entry.toolName === 'search_knowledge' || entry.toolName === 'get_knowledge_context') && parseSearchResults(rawContent)" class="search-results">
+            <div v-for="item in parseSearchResults(rawContent)!" :key="item.index" class="search-result-item">
+              <span class="search-result-citation">[{{ item.source }}]</span>
+              <span class="search-result-source">{{ item.index }}.</span>
+              <pre class="search-result-body">{{ item.content }}</pre>
+            </div>
+          </div>
+          <!-- File list -->
+          <div v-else-if="entry.toolName === 'list_knowledge_files' && parseFileList(rawContent)" class="file-tree">
+            <div v-for="(item, fi) in parseFileList(rawContent)!" :key="fi" class="file-tree-row" :class="item.type">
+              <span v-if="item.type === 'dir'" class="tree-icon tree-dir">▸</span>
+              <span v-else class="tree-icon tree-file">·</span>
+              <span class="tree-name">{{ item.name }}</span>
+            </div>
+          </div>
+          <!-- File read: code block -->
+          <div v-else-if="entry.toolName === 'read_knowledge_file'">
+            <pre class="tool-result-code">{{ rawContent }}</pre>
+          </div>
+          <!-- JSON parse/pick: formatted -->
+          <div v-else-if="entry.toolName === 'json_parse' || entry.toolName === 'json_pick'">
+            <pre class="tool-result-text">{{ rawContent }}</pre>
+          </div>
+          <!-- Calculate / time / UUID / echo: simple result -->
+          <div v-else-if="entry.toolName === 'calculate' || entry.toolName === 'get_current_time' || entry.toolName === 'get_current_utc_time' || entry.toolName === 'generate_uuid' || entry.toolName === 'echo_text' || entry.toolName === 'text_stats'">
+            <pre class="tool-result-text">{{ rawContent }}</pre>
+          </div>
+          <!-- File operations: write/delete/rename/create folder -->
+          <div v-else-if="entry.toolName === 'write_knowledge_file' || entry.toolName === 'delete_knowledge_file' || entry.toolName === 'rename_knowledge_file' || entry.toolName === 'create_knowledge_folder'">
+            <pre class="tool-result-text">{{ rawContent }}</pre>
+          </div>
+          <!-- Long-term memory -->
+          <div v-else-if="entry.toolName === 'get_long_term_memory'">
+            <pre class="tool-result-text">{{ rawContent }}</pre>
+          </div>
+          <!-- Default: raw text -->
+          <div v-else>
+            <pre class="tool-result-text">{{ rawContent }}</pre>
+          </div>
+        </template>
       </div>
     </div>
   </div>
@@ -319,6 +404,120 @@ const toolEntries = computed(() => {
 
 .tool-result-text + .tool-result-text {
   border-top: 1px dashed rgba(148, 163, 184, 0.08);
+}
+
+/* Code block for file content */
+.tool-result-code {
+  margin: 0;
+  padding: var(--space-10) var(--space-12);
+  background: rgba(0, 0, 0, 0.12);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+  max-height: 600px;
+  scrollbar-width: thin;
+}
+
+/* Search results list */
+.search-results {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-6) 0;
+}
+
+.search-result-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-4) var(--space-8);
+  padding: var(--space-6) var(--space-12);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+}
+
+.search-result-item:last-child {
+  border-bottom: 0;
+}
+
+.search-result-citation {
+  grid-column: 1;
+  grid-row: 1;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 var(--space-4);
+  border-radius: 3px;
+  background: rgba(66, 36, 235, 0.12);
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.search-result-source {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  align-self: center;
+}
+
+.search-result-body {
+  grid-column: 2;
+  grid-row: 2;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* File tree */
+.file-tree {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-6) 0;
+}
+
+.file-tree-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-3) var(--space-12);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.tree-icon {
+  flex-shrink: 0;
+  width: 10px;
+  text-align: center;
+}
+
+.tree-dir {
+  color: var(--color-primary);
+}
+
+.tree-file {
+  color: var(--color-text-muted);
+}
+
+.tree-name {
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree-row.dir .tree-name {
+  color: var(--color-primary);
+  font-weight: 600;
 }
 
 @keyframes tool-slide-in {

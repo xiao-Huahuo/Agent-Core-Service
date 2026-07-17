@@ -111,8 +111,8 @@ export interface SchedulerSnapshot {
 
 /** RAG 指标 */
 export interface RagMetrics {
-  recall: number
-  hitRate: number
+  fillRate: number
+  avgRelevance: number
   confidence: number
   memoryCount: number
   knowledgeCount: number
@@ -123,8 +123,8 @@ export interface RagMetrics {
 /** RAG 历史数据点 */
 export interface RagHistoryPoint {
   turn: number
-  recall: number
-  hitRate: number
+  fillRate: number
+  avgRelevance: number
   confidence: number
 }
 
@@ -307,14 +307,14 @@ function isEmptyToolResult(text: unknown): boolean {
 function inferKnowledgeResultCount(trace: Record<string, unknown>, toolName: string): number {
   const explicit = Number(trace.result_count || 0)
   if (explicit > 0) return explicit
-  const summary = String(trace.result_summary || '')
-  if (isEmptyToolResult(summary)) return 0
+  const text = String(trace.raw_content || '')
+  if (isEmptyToolResult(text)) return 0
 
-  const citationMatches = summary.match(/\[[A-Z]?\d+\]/g)
+  const citationMatches = text.match(/\[[A-Z]?\d+\]/g)
   if (citationMatches?.length) return citationMatches.length
-  const numberedMatches = summary.match(/(?:^|\n)\s*\d+\.\s+/g)
+  const numberedMatches = text.match(/(?:^|\n)\s*\d+\.\s+/g)
   if (numberedMatches?.length) return numberedMatches.length
-  const fileMatches = summary.match(/(?:^|\n)\s*(?:[-*]\s*)?[\w./\\\-\u4e00-\u9fa5]+\.(?:md|txt|pdf|docx?|xlsx?|csv|png|jpe?g)\b/gi)
+  const fileMatches = text.match(/(?:^|\n)\s*(?:[-*]\s*)?[\w./\\\-\u4e00-\u9fa5]+\.(?:md|txt|pdf|docx?|xlsx?|csv|png|jpe?g)\b/gi)
   if (fileMatches?.length) return fileMatches.length
 
   return toolName.startsWith('read_') || toolName === 'search_knowledge' ? 1 : 0
@@ -325,11 +325,12 @@ function metricSampleFromKnowledgeTool(trace: Record<string, unknown>, startTrac
   if (trace.event !== 'tool_call_end' || !KNOWLEDGE_RECALL_TOOLS.has(toolName)) return null
   const resultCount = inferKnowledgeResultCount(trace, toolName)
   const topK = toolName.startsWith('read_') ? 1 : extractTopKFromArgs(startTrace?.tool_args_summary, 3)
-  const hitRate = resultCount > 0 ? 100 : 0
+  const hasResults = resultCount > 0
+  const baseConfidence = hasResults ? 100 : 0
   return {
-    recall: roundNumber(Math.min((resultCount / topK) * 100, 100), 1),
-    hit_rate: hitRate,
-    confidence: extractConfidenceFromText(trace.result_summary, hitRate),
+    fill_rate: roundNumber(Math.min((resultCount / topK) * 100, 100), 1),
+    avg_relevance: extractConfidenceFromText(trace.raw_content, 0),
+    confidence: extractConfidenceFromText(trace.raw_content, baseConfidence),
     memory_count: 0,
     knowledge_count: resultCount,
     important_count: 0,
@@ -365,8 +366,8 @@ export function buildRagMetrics(messages: Array<{ role: string; metadata?: unkno
   const metrics = collectRagMetrics(messages)
   if (metrics.length === 0) {
     return {
-      recall: 0,
-      hitRate: 0,
+      fillRate: 0,
+      avgRelevance: 0,
       confidence: 0,
       memoryCount: 0,
       knowledgeCount: 0,
@@ -376,15 +377,15 @@ export function buildRagMetrics(messages: Array<{ role: string; metadata?: unkno
   }
 
   const totals = metrics.reduce((acc, metric) => ({
-    recall: acc.recall + Number(metric.recall || 0),
-    hitRate: acc.hitRate + Number(metric.hit_rate || 0),
+    fillRate: acc.fillRate + Number(metric.fill_rate || 0),
+    avgRelevance: acc.avgRelevance + Number(metric.avg_relevance || 0),
     confidence: acc.confidence + Number(metric.confidence || 0),
     memoryCount: acc.memoryCount + Number(metric.memory_count || 0),
     knowledgeCount: acc.knowledgeCount + Number(metric.knowledge_count || 0),
     importantCount: acc.importantCount + Number(metric.important_count || 0),
   }), {
-    recall: 0,
-    hitRate: 0,
+    fillRate: 0,
+    avgRelevance: 0,
     confidence: 0,
     memoryCount: 0,
     knowledgeCount: 0,
@@ -392,8 +393,8 @@ export function buildRagMetrics(messages: Array<{ role: string; metadata?: unkno
   })
 
   return {
-    recall: roundNumber(totals.recall / metrics.length, 1),
-    hitRate: roundNumber(totals.hitRate / metrics.length, 1),
+    fillRate: roundNumber(totals.fillRate / metrics.length, 1),
+    avgRelevance: roundNumber(totals.avgRelevance / metrics.length, 1),
     confidence: roundNumber(totals.confidence / metrics.length, 1),
     memoryCount: totals.memoryCount,
     knowledgeCount: totals.knowledgeCount,
@@ -405,19 +406,19 @@ export function buildRagMetrics(messages: Array<{ role: string; metadata?: unkno
 export function buildRagHistory(messages: Array<{ role: string; metadata?: unknown; trace?: unknown }>): RagHistoryPoint[] {
   const points: RagHistoryPoint[] = []
   let turnIndex = 0
-  let recallTotal = 0
-  let hitRateTotal = 0
+  let fillRateTotal = 0
+  let avgRelevanceTotal = 0
   let confidenceTotal = 0
 
   for (const metric of collectRagMetrics(messages)) {
     turnIndex += 1
-    recallTotal += Number(metric.recall || 0)
-    hitRateTotal += Number(metric.hit_rate || 0)
+    fillRateTotal += Number(metric.fill_rate || 0)
+    avgRelevanceTotal += Number(metric.avg_relevance || 0)
     confidenceTotal += Number(metric.confidence || 0)
     points.push({
       turn: turnIndex,
-      recall: roundNumber(recallTotal / turnIndex, 1),
-      hitRate: roundNumber(hitRateTotal / turnIndex, 1),
+      fillRate: roundNumber(fillRateTotal / turnIndex, 1),
+      avgRelevance: roundNumber(avgRelevanceTotal / turnIndex, 1),
       confidence: roundNumber(confidenceTotal / turnIndex, 1),
     })
   }

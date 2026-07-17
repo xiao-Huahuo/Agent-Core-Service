@@ -84,21 +84,21 @@ function aggregatedToolSummary(displayName: string, count: number, filenames: st
 }
 
 function extractFilename(trace: Record<string, unknown>, toolName: string) {
-  const resultSummary = asString(trace.result_summary)
+  const rawContent = asString(trace.raw_content)
   if (toolName === 'write_knowledge_file') {
-    const m = resultSummary.match(/已保存文件:\s*(.+?)\s*\(/)
+    const m = rawContent.match(/已保存文件:\s*(.+?)\s*\(/)
     return m ? m[1] : null
   }
   if (toolName === 'delete_knowledge_file') {
-    const m = resultSummary.match(/已删除:\s*(.+)/)
+    const m = rawContent.match(/已删除:\s*(.+)/)
     return m ? m[1] : null
   }
   if (toolName === 'rename_knowledge_file') {
-    const m = resultSummary.match(/已重命名:\s*(.+)/)
+    const m = rawContent.match(/已重命名:\s*(.+)/)
     return m ? m[1] : null
   }
   if (toolName === 'create_knowledge_folder') {
-    const m = resultSummary.match(/已创建文件夹:\s*(.+)/)
+    const m = rawContent.match(/已创建文件夹:\s*(.+)/)
     return m ? m[1] : null
   }
   return null

@@ -13,6 +13,8 @@ import { useObsData } from '@/composable/useObsData'
 const obs = useObsData()
 const chartMode = ref<'donut' | 'line'>('donut')
 
+const METRIC_TOOLTIP = 'fill rate：槽位填充率 = 返回条数 / 请求上限 × 100\navg relevance：平均相关性 = 各条目 final_score 均值 × 100\nconfidence：置信度，与 avg_relevance 同值'
+
 const GREEN = '#6ee7b7'
 const BLUE = '#4da6ff'
 const ACCENT = '#d99178'
@@ -28,21 +30,32 @@ interface MetricConfig {
 }
 
 const metricConfigs: MetricConfig[] = [
-  { key: 'recall', label: 'recall', color: GREEN },
-  { key: 'hitRate', label: 'hit rate', color: BLUE },
+  { key: 'fillRate', label: 'fill rate', color: GREEN },
+  { key: 'avgRelevance', label: 'avg relevance', color: BLUE },
   { key: 'confidence', label: 'confidence', color: ACCENT },
 ]
 
 /** 三个环形指标 */
-const gaugeOption = (value: number, color: string) => ({
+const gaugeOption = (value: number, color: string, label: string) => ({
   backgroundColor: 'transparent',
+  tooltip: {
+    trigger: 'item',
+    formatter: () => `${label}: <strong>${value}%</strong>`,
+    backgroundColor: 'rgba(30,30,40,0.92)',
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    textStyle: { color: '#ccc', fontSize: 12 },
+  },
   series: [
     {
       type: 'pie',
       radius: ['52%', '72%'],
       center: ['50%', '50%'],
-      silent: true,
-      emphasis: { disabled: true },
+      silent: false,
+      emphasis: {
+        scale: false,
+        label: { show: false },
+      },
       label: { show: false },
       labelLine: { show: false },
       data: [
@@ -64,13 +77,14 @@ const donutItems = computed<DonutItem[]>(() => {
   return metricConfigs.map((item) => ({
     ...item,
     value: m[item.key as keyof typeof m] as number,
-    option: gaugeOption(m[item.key as keyof typeof m] as number, item.color),
+    option: gaugeOption(m[item.key as keyof typeof m] as number, item.color, item.label),
   }))
 })
 
 /** 曲线图：会话级三率历史 */
 const lineOption = computed(() => {
   const rows = obs.ragHistory.value
+
   return {
     backgroundColor: 'transparent',
     grid: { top: 12, right: 16, bottom: 24, left: 36 },
@@ -90,24 +104,24 @@ const lineOption = computed(() => {
     },
     series: [
       {
-        name: 'recall',
+        name: 'fill rate',
         type: 'line',
-        data: rows.map((r) => r.recall),
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        lineStyle: { color: BLUE, width: 1.5 },
-        itemStyle: { color: BLUE },
-      },
-      {
-        name: 'hit rate',
-        type: 'line',
-        data: rows.map((r) => r.hitRate),
+        data: rows.map((r) => r.fillRate),
         smooth: true,
         symbol: 'circle',
         symbolSize: 6,
         lineStyle: { color: GREEN, width: 1.5 },
         itemStyle: { color: GREEN },
+      },
+      {
+        name: 'avg relevance',
+        type: 'line',
+        data: rows.map((r) => r.avgRelevance),
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        lineStyle: { color: BLUE, width: 1.5 },
+        itemStyle: { color: BLUE },
       },
       {
         name: 'confidence',
@@ -140,7 +154,7 @@ const lineOption = computed(() => {
         <span class="traffic-dot sm yellow"></span>
         <span class="traffic-dot sm green"></span>
       </div>
-      <span class="window-filename">RAG 召回率 / 命中率 / 置信度</span>
+      <span class="window-filename" :title="METRIC_TOOLTIP">RAG 填充率 / 平均相关性 / 置信度</span>
       <span class="window-status">{{ chartMode === 'donut' ? '本轮' : '历史' }}</span>
     </div>
 

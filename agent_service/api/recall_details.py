@@ -160,9 +160,9 @@ def _payload_from_live_retrieval(
         top_k=top_k,
     )
     rag_metrics = _build_rag_metrics(
-        top_k=max(top_k, 1),
         memory_snapshot=memory_snapshot,
         knowledge_snapshot=knowledge_snapshot,
+        fallback_top_k=max(top_k, 1),
     )
     return {
         "session_id": session_id,
@@ -178,9 +178,9 @@ def _payload_from_live_retrieval(
 
 def _build_rag_metrics(
     *,
-    top_k: int,
     memory_snapshot: RetrievalDebugSnapshot,
     knowledge_snapshot: RetrievalDebugSnapshot,
+    fallback_top_k: int = 3,
 ) -> dict[str, float | int]:
     """根据实时召回快照计算 Obs 面板使用的 RAG 指标。"""
 
@@ -188,17 +188,22 @@ def _build_rag_metrics(
     knowledge_results = knowledge_snapshot.post_rerank_results
     memory_count = len(memory_results)
     knowledge_count = len(knowledge_results)
-    recall = round((((memory_count / top_k) * 100) + ((knowledge_count / top_k) * 100)) / 2, 1)
-    hit_rate = round((((1 if memory_results else 0) + (1 if knowledge_results else 0)) / 2) * 100, 1)
+
+    memory_request = memory_snapshot.request_limit or fallback_top_k
+    knowledge_request = knowledge_snapshot.request_limit or fallback_top_k
+    total_request = memory_request + knowledge_request
+    fill_rate = round((memory_count + knowledge_count) / max(total_request, 1) * 100, 1)
+
     all_results: list[RetrievedMemory] = [*memory_results, *knowledge_results]
-    confidence = (
+    avg_relevance = (
         round(sum(item.final_score for item in all_results) / len(all_results) * 100, 1)
         if all_results
         else 0.0
     )
+    confidence = avg_relevance
     return {
-        "recall": min(recall, 100.0),
-        "hit_rate": hit_rate,
+        "fill_rate": min(fill_rate, 100.0),
+        "avg_relevance": avg_relevance,
         "confidence": confidence,
         "memory_count": memory_count,
         "knowledge_count": knowledge_count,

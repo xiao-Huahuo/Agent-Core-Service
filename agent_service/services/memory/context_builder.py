@@ -149,28 +149,26 @@ class ContextBuilder:
         )
 
         # ---- 计算 RAG 指标 ----
-        top_k = max(self.config.memory.rerank_top_k, 1)
         memory_count = len(memories)
         knowledge_count = len(knowledge)
         important_count = 1 if important_summary is not None else 0
 
-        recall_memory = (memory_count / top_k) * 100
-        recall_knowledge = (knowledge_count / top_k) * 100
-        recall = round((recall_memory + recall_knowledge) / 2, 1)
-
-        hit_memory = 1 if memories else 0
-        hit_knowledge = 1 if knowledge else 0
-        hit_rate = round(((hit_memory + hit_knowledge) / 2) * 100, 1)
+        memory_request = memory_snapshot.request_limit or max(self.config.memory.rerank_top_k, 1)
+        knowledge_request = knowledge_snapshot.request_limit or max(self.config.memory.rerank_top_k, 1)
+        total_request = memory_request + knowledge_request
+        fill_rate = round((memory_count + knowledge_count) / max(total_request, 1) * 100, 1)
 
         all_scored = list(memories) + list(knowledge)
         if all_scored:
-            confidence = round(sum(item.final_score for item in all_scored) / len(all_scored) * 100, 1)
+            avg_relevance = round(sum(item.final_score for item in all_scored) / len(all_scored) * 100, 1)
+            confidence = avg_relevance
         else:
+            avg_relevance = 0.0
             confidence = 0.0
 
         metrics: dict[str, float | int] = {
-            "recall": min(recall, 100.0),
-            "hit_rate": hit_rate,
+            "fill_rate": min(fill_rate, 100.0),
+            "avg_relevance": avg_relevance,
             "confidence": confidence,
             "memory_count": memory_count,
             "knowledge_count": knowledge_count,

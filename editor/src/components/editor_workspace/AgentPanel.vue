@@ -97,11 +97,11 @@ async function createSession() {
     }
     return
   }
+  // 先清理之前堆积的空会话，再创建新的
+  await sessionStore.pruneEmpty(userId.value)
   const sessionId = await sessionStore.create(userId.value)
   await selectSession(sessionId)
 
-  // 清理所有空会话(无消息)
-  sessionStore.pruneEmpty(userId.value)
   if (props.mode !== 'page') {
     sessionDrawerOpen.value = false
   }

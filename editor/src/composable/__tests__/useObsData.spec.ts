@@ -76,8 +76,8 @@ describe('buildRagMetrics', () => {
         role: 'system',
         metadata: {
           rag_metrics: {
-            recall: 50,
-            hit_rate: 80,
+            fill_rate: 50,
+            avg_relevance: 80,
             confidence: 70,
             memory_count: 1,
             knowledge_count: 2,
@@ -89,8 +89,8 @@ describe('buildRagMetrics', () => {
         role: 'system',
         metadata: {
           rag_metrics: {
-            recall: 100,
-            hit_rate: 60,
+            fill_rate: 100,
+            avg_relevance: 60,
             confidence: 90,
             memory_count: 3,
             knowledge_count: 4,
@@ -101,8 +101,8 @@ describe('buildRagMetrics', () => {
     ]
 
     expect(buildRagMetrics(messages)).toEqual({
-      recall: 75,
-      hitRate: 70,
+      fillRate: 75,
+      avgRelevance: 70,
       confidence: 80,
       memoryCount: 4,
       knowledgeCount: 6,
@@ -110,8 +110,8 @@ describe('buildRagMetrics', () => {
       turnCount: 2,
     })
     expect(buildRagHistory(messages)).toEqual([
-      { turn: 1, recall: 50, hitRate: 80, confidence: 70 },
-      { turn: 2, recall: 75, hitRate: 70, confidence: 80 },
+      { turn: 1, fillRate: 50, avgRelevance: 80, confidence: 70 },
+      { turn: 2, fillRate: 75, avgRelevance: 70, confidence: 80 },
     ])
   })
 
@@ -121,8 +121,8 @@ describe('buildRagMetrics', () => {
         role: 'system',
         metadata: {
           rag_metrics: {
-            recall: 50,
-            hit_rate: 80,
+            fill_rate: 50,
+            avg_relevance: 80,
             confidence: 70,
             memory_count: 1,
             knowledge_count: 2,
@@ -146,15 +146,15 @@ describe('buildRagMetrics', () => {
             tool_call_id: 'call_1',
             tool_name: 'get_knowledge_context',
             result_count: 2,
-            result_summary: '1. [K1] source\\n2. [K2] source',
+            raw_content: '1. [K1] source\\n2. [K2] source',
           },
         ],
       },
     ]
 
     expect(buildRagMetrics(messages)).toEqual({
-      recall: 50,
-      hitRate: 90,
+      fillRate: 50,
+      avgRelevance: 40,
       confidence: 85,
       memoryCount: 1,
       knowledgeCount: 4,
@@ -162,8 +162,8 @@ describe('buildRagMetrics', () => {
       turnCount: 2,
     })
     expect(buildRagHistory(messages)).toEqual([
-      { turn: 1, recall: 50, hitRate: 80, confidence: 70 },
-      { turn: 2, recall: 50, hitRate: 90, confidence: 85 },
+      { turn: 1, fillRate: 50, avgRelevance: 80, confidence: 70 },
+      { turn: 2, fillRate: 50, avgRelevance: 40, confidence: 85 },
     ])
   })
 
@@ -173,8 +173,8 @@ describe('buildRagMetrics', () => {
         role: 'system',
         metadata: {
           rag_metrics: {
-            recall: 50,
-            hit_rate: 100,
+            fill_rate: 50,
+            avg_relevance: 100,
             confidence: 80,
             memory_count: 1,
             knowledge_count: 1,
@@ -197,22 +197,22 @@ describe('buildRagMetrics', () => {
             event: 'tool_call_end',
             tool_call_id: 'search_1',
             tool_name: 'search_knowledge',
-            result_summary: '=== 内容匹配 ===\\n  [K1] 崩铁.md\\n  [K2] docs/区别.md',
+            raw_content: '=== 内容匹配 ===\\n  [K1] 崩铁.md\\n  [K2] docs/区别.md',
           },
           {
             node: 'action',
             event: 'tool_call_end',
             tool_call_id: 'read_1',
             tool_name: 'read_knowledge_file',
-            result_summary: '## 崩铁\\n完整文件内容',
+            raw_content: '## 崩铁\\n完整文件内容',
           },
         ],
       },
     ]
 
     expect(buildRagMetrics(messages)).toEqual({
-      recall: 72.2,
-      hitRate: 100,
+      fillRate: 72.2,
+      avgRelevance: 33.3,
       confidence: 93.3,
       memoryCount: 1,
       knowledgeCount: 4,
@@ -220,9 +220,9 @@ describe('buildRagMetrics', () => {
       turnCount: 3,
     })
     expect(buildRagHistory(messages)).toEqual([
-      { turn: 1, recall: 50, hitRate: 100, confidence: 80 },
-      { turn: 2, recall: 58.4, hitRate: 100, confidence: 90 },
-      { turn: 3, recall: 72.2, hitRate: 100, confidence: 93.3 },
+      { turn: 1, fillRate: 50, avgRelevance: 100, confidence: 80 },
+      { turn: 2, fillRate: 58.4, avgRelevance: 50, confidence: 90 },
+      { turn: 3, fillRate: 72.2, avgRelevance: 33.3, confidence: 93.3 },
     ])
   })
 })
