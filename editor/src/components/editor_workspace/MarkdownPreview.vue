@@ -48,13 +48,15 @@ function syncPreviewContent() {
   if (!instance) {
     return
   }
-  if (instance.getValue() !== props.content) {
-    instance.setValue(props.content, true)
+  try {
+    if (instance.getValue() !== props.content) {
+      instance.setValue(props.content, true)
+    }
+    ensurePreviewPaneIsRenderable()
+    instance.renderPreview()
+  } catch (err) {
+    console.warn('[MarkdownPreview] syncPreviewContent failed:', err)
   }
-  ensurePreviewPaneIsRenderable()
-  // Guardrail: do not pass props.content to renderPreview(markdown). Vditor's
-  // stable path is setValue(..., true) first, then render from its internal value.
-  instance.renderPreview()
 }
 
 function waitForAnimationFrame() {
@@ -77,32 +79,31 @@ onMounted(() => {
   if (!previewHost.value) {
     return
   }
-  instance = new Vditor(previewHost.value, {
-    value: props.content,
-    height: '100%',
-    // Keep a hidden source-view editor as Vditor's backing store. Preview/Split
-    // must reuse Vditor's own pipeline for headings, diagrams, math, and code.
-    mode: 'sv',
-    cache: { enable: false },
-    preview: {
-      delay: 0,
-      // Do not change this to "editor" or static Vditor.preview(). "both"
-      // creates the preview pane that this component exposes as read-only UI.
-      mode: 'both',
-      // Keep this empty; otherwise Vditor injects Desktop/Wechat/知乎 buttons.
-      actions: [],
-      markdown: {
-        codeBlockPreview: true,
-        mathBlockPreview: true,
+  try {
+    instance = new Vditor(previewHost.value, {
+      value: props.content,
+      height: '100%',
+      mode: 'sv',
+      cache: { enable: false },
+      preview: {
+        delay: 0,
+        mode: 'both',
+        actions: [],
+        markdown: {
+          codeBlockPreview: true,
+          mathBlockPreview: true,
+        },
       },
-    },
-    after() {
-      mounted = true
-      instance?.disabledCache()
-      instance?.clearCache()
-      void queuePreviewRender()
-    },
-  })
+      after() {
+        mounted = true
+        try { instance?.disabledCache() } catch { /* best-effort */ }
+        try { instance?.clearCache() } catch { /* best-effort */ }
+        void queuePreviewRender()
+      },
+    })
+  } catch (err) {
+    console.warn('[MarkdownPreview] Vditor init failed:', err)
+  }
 })
 
 watch(
@@ -117,7 +118,11 @@ watch(
 
 onBeforeUnmount(() => {
   mounted = false
-  instance?.destroy()
+  try {
+    instance?.destroy()
+  } catch (err) {
+    console.warn('[MarkdownPreview] destroy failed:', err)
+  }
   instance = null
 })
 </script>

@@ -116,12 +116,20 @@ watch(
     if (!instance || internalUpdate || instance.getValue() === value) {
       return
     }
-    instance.setValue(value)
+    try {
+      instance.setValue(value)
+    } catch (err) {
+      console.warn('[VditorEditor] setValue failed:', err)
+    }
   },
 )
 
 onBeforeUnmount(() => {
-  instance?.destroy()
+  try {
+    instance?.destroy()
+  } catch (err) {
+    console.warn('[VditorEditor] destroy failed:', err)
+  }
   instance = null
 })
 </script>

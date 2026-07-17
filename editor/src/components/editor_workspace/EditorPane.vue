@@ -6,7 +6,7 @@
   save/view-mode controls.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onErrorCaptured, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ArrowLeft, ArrowRight, Columns2, Eye, Pencil, Save, X } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
@@ -186,6 +186,13 @@ onUnmounted(() => {
   resizeObserver = null
 })
 
+onErrorCaptured((err, vm, info) => {
+  console.warn(`[EditorPane] Caught error (${info}):`, err)
+  // Prevent child-component errors (e.g. Vditor destruction during rapid file
+  // switching) from taking down the entire editor pane.
+  return false
+})
+
 watch(
   editorMode,
   () => {
@@ -299,7 +306,7 @@ watch(
         @pointerdown="onSplitDividerPointerdown"
       ></div>
       <section v-if="isPreviewOnlyViewer || effectiveEditorMode !== 'edit'" class="preview-surface">
-        <MarkdownPreview v-if="isMarkdownViewer" :content="activeContent" />
+        <MarkdownPreview v-if="isMarkdownViewer" :key="workspaceStore.selectedPath" :content="activeContent" />
         <CodePreview
           v-else-if="isCodeViewer && !isPdfViewer"
           :content="activeContent"

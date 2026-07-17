@@ -272,6 +272,21 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** Backend-generated multimodal preview cache for binary/table/document files. */
   const previewByPath = ref<Record<string, FilePreviewPayload>>({})
 
+  /** Abort controller for the current preview fetch — cancels stale in-flight requests. */
+  let _previewAbort: AbortController | null = null
+
+  /** Abort controller for the current text-content fetch — cancels stale in-flight requests. */
+  let _contentAbort: AbortController | null = null
+
+  /** Paths currently being loaded via loadFilePreview (prevents duplicate concurrent loads). */
+  const _pendingPreviewLoads = new Set<string>()
+
+  /** Paths currently being loaded via loadFileContent (prevents duplicate concurrent loads). */
+  const _pendingContentLoads = new Set<string>()
+
+  /** Whether any file load is currently in-flight (for UI loading indicator). */
+  const isFileLoading = ref(false)
+
   /** Command palette visibility. */
   const commandPaletteOpen = ref(false)
 
@@ -615,12 +630,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!openTabs.value.some((tab) => tab.path === node.path)) {
       openTabs.value.push({ path: node.path, title: node.name, dirty: false, mtime: node.mtime })
     }
+    // Fire-and-forget: loads run in background so rapid file switching
+    // never blocks the UI or exhausts the browser connection pool.
     if (shouldUsePreviewEndpoint(node.path) || extensionOf(node.path) === 'pdf' || IMAGE_EXTENSIONS.has(extensionOf(node.path))) {
       if (previewByPath.value[node.path] === undefined) {
-        await loadFilePreview(node.path)
+        loadFilePreview(node.path)
       }
     } else if (contentByPath.value[node.path] === undefined) {
-      await loadFileContent(node.path)
+      loadFileContent(node.path)
     }
     queueCurrentDocumentContextSync()
   }
@@ -1342,10 +1359,24 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
-  async function loadFileContent(path: string) {
+  async function loadFileContent(path: string): Promise<void> {
+    if (_pendingContentLoads.has(path)) return
+    _pendingContentLoads.add(path)
+    isFileLoading.value = true
+    // Abort previous content fetch — user switched to a different file.
+    _contentAbort?.abort()
+    const controller = new AbortController()
+    _contentAbort = controller
+    let timedOut = false
+    const timeoutTimer = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 8_000)
     try {
       const settingsStore = useSettingsStore()
-      const response = await readKnowledgeFile(settingsStore.profile.userId, path)
+      const response = await readKnowledgeFile(settingsStore.profile.userId, path, controller.signal)
+      // Stale guard: if user switched away while this request was in-flight, skip.
+      if (selectedPath.value !== path) return
       contentByPath.value = { ...contentByPath.value, [path]: response.content }
       const nextPreview = { ...previewByPath.value }
       delete nextPreview[path]
@@ -1353,16 +1384,44 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const tab = openTabs.value.find((t) => t.path === path)
       if (tab) tab.mtime = response.mtime
     } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        if (timedOut) {
+          showToast(`文件加载超时 (${path})`)
+          contentByPath.value = { ...contentByPath.value, [path]: '' }
+        }
+        return
+      }
       const msg = err instanceof ApiError ? err.message : '读取文件内容失败'
       showToast(msg)
+    } finally {
+      clearTimeout(timeoutTimer)
+      _pendingContentLoads.delete(path)
+      if (_contentAbort === controller) {
+        _contentAbort = null
+        isFileLoading.value = false
+      }
     }
     syncCurrentDocumentContext()
   }
 
-  async function loadFilePreview(path: string) {
+  async function loadFilePreview(path: string): Promise<void> {
+    if (_pendingPreviewLoads.has(path)) return
+    _pendingPreviewLoads.add(path)
+    isFileLoading.value = true
+    // Abort previous preview fetch — user switched to a different file.
+    _previewAbort?.abort()
+    const controller = new AbortController()
+    _previewAbort = controller
+    let timedOut = false
+    const timeoutTimer = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 15_000)
     try {
       const settingsStore = useSettingsStore()
-      const response = await previewKnowledgeFile(settingsStore.profile.userId, path)
+      const response = await previewKnowledgeFile(settingsStore.profile.userId, path, controller.signal)
+      // Stale guard: if user switched away while this request was in-flight, skip.
+      if (selectedPath.value !== path) return
       previewByPath.value = { ...previewByPath.value, [path]: response }
       if (response.content !== undefined) {
         contentByPath.value = { ...contentByPath.value, [path]: response.content }
@@ -1370,18 +1429,44 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const tab = openTabs.value.find((t) => t.path === path)
       if (tab) tab.mtime = response.mtime
     } catch (err: unknown) {
+      // Silent abort — user navigated away from this file.
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        if (timedOut) {
+          showToast(`文件预览超时 (${path})`)
+          previewByPath.value = {
+            ...previewByPath.value,
+            [path]: {
+              path,
+              kind: 'unsupported' as const,
+              message: '预览加载超时',
+              mtime: '',
+              size: 0,
+              extension: '',
+              readonly: true,
+            },
+          }
+        }
+        return
+      }
       showToast(err instanceof ApiError ? err.message : '文件预览加载失败')
       previewByPath.value = {
         ...previewByPath.value,
         [path]: {
           path,
-          kind: 'unsupported',
+          kind: 'unsupported' as const,
           message: '预览加载失败',
           mtime: '',
           size: 0,
           extension: '',
           readonly: true,
-        } satisfies FilePreviewPayload,
+        },
+      }
+    } finally {
+      clearTimeout(timeoutTimer)
+      _pendingPreviewLoads.delete(path)
+      if (_previewAbort === controller) {
+        _previewAbort = null
+        isFileLoading.value = false
       }
     }
     syncCurrentDocumentContext()
@@ -1504,6 +1589,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     activeTab,
     dirtyFilePaths,
     hasDirtyTabs,
+    isFileLoading,
     commandPaletteOpen,
     chatMessages,
     commands,

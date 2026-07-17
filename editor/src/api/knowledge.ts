@@ -32,18 +32,18 @@ export function listKnowledgeFiles(userId: string): Promise<KnowledgeTreeRespons
   return apiGet<KnowledgeTreeResponse>(API_ROUTES.KNOWLEDGE_FILES, { user_id: userId })
 }
 
-export function readKnowledgeFile(userId: string, path: string): Promise<KnowledgeFileContentResponse> {
-  return apiGet<KnowledgeFileContentResponse>(API_ROUTES.KNOWLEDGE_FILE_CONTENT, {
-    user_id: userId,
-    path,
-  })
-}
-
-export function previewKnowledgeFile(userId: string, path: string): Promise<FilePreviewPayload> {
+export function previewKnowledgeFile(userId: string, path: string, signal?: AbortSignal): Promise<FilePreviewPayload> {
   return apiGet<FilePreviewPayload>(API_ROUTES.KNOWLEDGE_FILE_PREVIEW, {
     user_id: userId,
     path,
-  })
+  }, { signal })
+}
+
+export function readKnowledgeFile(userId: string, path: string, signal?: AbortSignal): Promise<KnowledgeFileContentResponse> {
+  return apiGet<KnowledgeFileContentResponse>(API_ROUTES.KNOWLEDGE_FILE_CONTENT, {
+    user_id: userId,
+    path,
+  }, { signal })
 }
 
 export function writeKnowledgeFile(
