@@ -84,6 +84,8 @@ class SettingsService:
                 "disabled_tools": "TEXT NOT NULL DEFAULT ''",
                 "ui_font_families": "TEXT NOT NULL DEFAULT ''",
                 "text_font_families": "TEXT NOT NULL DEFAULT ''",
+                "theme_primary_color": "VARCHAR(16) NOT NULL DEFAULT ''",
+                "theme_soft_color": "VARCHAR(16) NOT NULL DEFAULT ''",
             }
             with Session(self.engine) as db:
                 for col_name, col_type in migrations.items():
@@ -336,6 +338,8 @@ class SettingsService:
             "knowledge_ignore_patterns": record.knowledge_ignore_patterns,
             "ui_font_families": self._load_font_families(record.ui_font_families),
             "text_font_families": self._load_font_families(record.text_font_families),
+            "theme_primary_color": record.theme_primary_color,
+            "theme_soft_color": record.theme_soft_color,
             "created_at": record.created_at.isoformat(),
             "updated_at": record.updated_at.isoformat(),
         }
@@ -407,6 +411,58 @@ class SettingsService:
                 "user_id": record.user_id,
                 "ui_font_families": self._load_font_families(record.ui_font_families),
                 "text_font_families": self._load_font_families(record.text_font_families),
+                "updated_at": record.updated_at.isoformat(),
+            }
+
+    @staticmethod
+    def _normalize_theme_color(value: str | None) -> str:
+        color = str(value or "").strip()
+        if not color:
+            return ""
+        if len(color) == 4 and color.startswith("#"):
+            return "#" + "".join(ch * 2 for ch in color[1:])
+        if len(color) == 7 and color.startswith("#"):
+            try:
+                int(color[1:], 16)
+            except ValueError as exc:
+                raise ValueError("theme color must be a hex color") from exc
+            return color.lower()
+        raise ValueError("theme color must be a hex color")
+
+    def save_appearance_config(
+        self,
+        *,
+        user_id: str,
+        theme_primary_color: str | None = None,
+        theme_soft_color: str | None = None,
+    ) -> dict:
+        """Persist the user's editor appearance colors."""
+
+        normalized_user_id = user_id.strip()
+        if not normalized_user_id:
+            raise ValueError("user_id is required")
+        now = self._utc_now()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                record = UserSettingsRecord(
+                    user_id=normalized_user_id,
+                    knowledge_dir=str(self.config.storage.knowledge_dir),
+                    created_at=now,
+                    updated_at=now,
+                )
+            if theme_primary_color is not None:
+                record.theme_primary_color = self._normalize_theme_color(theme_primary_color)
+            if theme_soft_color is not None:
+                record.theme_soft_color = self._normalize_theme_color(theme_soft_color)
+            record.updated_at = now
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            return {
+                "user_id": record.user_id,
+                "theme_primary_color": record.theme_primary_color,
+                "theme_soft_color": record.theme_soft_color,
                 "updated_at": record.updated_at.isoformat(),
             }
 

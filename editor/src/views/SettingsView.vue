@@ -38,6 +38,8 @@ const ocrEnabledDraft = ref(Boolean(settingsStore.profile.ocrEnabled))
 const knowledgeIgnorePatternsDraft = ref(settingsStore.profile.knowledgeIgnorePatterns ?? '')
 const uiFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.uiFontFamilies ?? [])])
 const textFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.textFontFamilies ?? [])])
+const themePrimaryColorDraft = ref(settingsStore.profile.themePrimaryColor || '#4224eb')
+const themeSoftColorDraft = ref(settingsStore.profile.themeSoftColor || '#4224eb')
 const availableFontFamilies = ref<string[]>([])
 const fontsLoading = ref(false)
 const saving = ref(false)
@@ -90,6 +92,16 @@ watch(
   (value) => { textFontFamiliesDraft.value = [...(value ?? [])] },
 )
 
+watch(
+  () => settingsStore.profile.themePrimaryColor,
+  (value) => { themePrimaryColorDraft.value = value || '#4224eb' },
+)
+
+watch(
+  () => settingsStore.profile.themeSoftColor,
+  (value) => { themeSoftColorDraft.value = value || '#4224eb' },
+)
+
 async function loadAvailableFonts() {
   fontsLoading.value = true
   const fallbackFonts = [
@@ -129,6 +141,35 @@ async function handleSaveFontFamilies(payload: { target: 'ui' | 'text'; families
   } catch (error) {
     saveError.value = error instanceof Error ? error.message : '保存字体设置失败'
   }
+}
+
+async function handleSaveThemeColors() {
+  try {
+    await settingsStore.saveAppearanceSettings({
+      themePrimaryColor: themePrimaryColorDraft.value,
+      themeSoftColor: themeSoftColorDraft.value,
+    })
+    saveError.value = ''
+    saveMessage.value = '外观设置已保存'
+  } catch (error) {
+    saveError.value = error instanceof Error ? error.message : '保存外观设置失败'
+  }
+}
+
+function handlePreviewThemeColors() {
+  settingsStore.previewAppearanceColors({
+    themePrimaryColor: themePrimaryColorDraft.value,
+    themeSoftColor: themeSoftColorDraft.value,
+  })
+}
+
+async function handleResetThemeColors() {
+  themePrimaryColorDraft.value = ''
+  themeSoftColorDraft.value = ''
+  handlePreviewThemeColors()
+  await handleSaveThemeColors()
+  themePrimaryColorDraft.value = '#4224eb'
+  themeSoftColorDraft.value = '#4224eb'
 }
 
 async function saveProfile() {
@@ -419,12 +460,17 @@ onMounted(() => {
       <AppearanceSettingsSection
         v-if="activeTab === 'appearance'"
         v-model:text-font-families-draft="textFontFamiliesDraft"
+        v-model:theme-primary-color-draft="themePrimaryColorDraft"
+        v-model:theme-soft-color-draft="themeSoftColorDraft"
         v-model:ui-font-families-draft="uiFontFamiliesDraft"
         :available-font-families="availableFontFamilies"
         :fonts-loading="fontsLoading"
         :theme-mode="settingsStore.themeMode"
         :theme-options="themeOptions"
+        @preview-theme-colors="handlePreviewThemeColors"
+        @reset-theme-colors="handleResetThemeColors"
         @save-font-families="handleSaveFontFamilies"
+        @save-theme-colors="handleSaveThemeColors"
         @set-theme-mode="settingsStore.setThemeMode"
       />
 
@@ -813,6 +859,68 @@ onMounted(() => {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
+}
+
+.color-control {
+  margin-top: var(--space-10);
+  padding-left: 82px;
+}
+
+.color-control-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  margin-bottom: var(--space-6);
+}
+
+.color-control-header label {
+  width: 72px;
+  margin-left: -82px;
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+.color-control-header span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.color-picker {
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+  cursor: pointer;
+}
+
+.color-text {
+  width: 110px;
+  height: 28px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  outline: none;
+}
+
+.color-text:focus {
+  border-color: var(--color-primary);
+}
+
+.appearance-actions {
+  margin-top: var(--space-10);
+  padding-left: 82px;
 }
 
 /* Model */

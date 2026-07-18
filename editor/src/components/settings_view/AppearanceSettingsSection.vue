@@ -11,6 +11,8 @@ import type { ThemeMode } from '@/types/settings'
 
 const uiFontFamiliesDraft = defineModel<string[]>('uiFontFamiliesDraft', { required: true })
 const textFontFamiliesDraft = defineModel<string[]>('textFontFamiliesDraft', { required: true })
+const themePrimaryColorDraft = defineModel<string>('themePrimaryColorDraft', { required: true })
+const themeSoftColorDraft = defineModel<string>('themeSoftColorDraft', { required: true })
 
 const props = defineProps<{
   themeOptions: Array<{ value: ThemeMode; label: string }>
@@ -22,6 +24,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   setThemeMode: [mode: ThemeMode]
   saveFontFamilies: [payload: { target: 'ui' | 'text'; families: string[] }]
+  previewThemeColors: []
+  saveThemeColors: []
+  resetThemeColors: []
 }>()
 
 const activeFontPicker = ref<'ui' | 'text' | null>(null)
@@ -30,6 +35,32 @@ const textFontQuery = ref('')
 
 function normalizeFontFamily(value: string): string {
   return value.replace(/[;{}]/g, '').trim()
+}
+
+function normalizeThemeColor(value: string): string {
+  const color = value.trim()
+  if (/^#[0-9a-fA-F]{6}$/u.test(color)) return color.toLowerCase()
+  return ''
+}
+
+function handleThemeColorTextInput(target: 'primary' | 'soft', value: string) {
+  const normalized = normalizeThemeColor(value)
+  if (!normalized) return
+  if (target === 'primary') {
+    themePrimaryColorDraft.value = normalized
+  } else {
+    themeSoftColorDraft.value = normalized
+  }
+  emit('previewThemeColors')
+}
+
+function handleThemeColorPickerInput(target: 'primary' | 'soft', value: string) {
+  if (target === 'primary') {
+    themePrimaryColorDraft.value = value
+  } else {
+    themeSoftColorDraft.value = value
+  }
+  emit('previewThemeColors')
 }
 
 function activeFamilies(target: 'ui' | 'text'): string[] {
@@ -116,6 +147,53 @@ onBeforeUnmount(() => {
       >
         {{ option.label }}
       </button>
+    </div>
+
+    <div class="color-control">
+      <div class="color-control-header">
+        <label>主主题色</label>
+        <span>按钮、选中态和 header Agent 入口</span>
+      </div>
+      <div class="color-row">
+        <input
+          :value="themePrimaryColorDraft"
+          class="color-picker"
+          type="color"
+          @input="handleThemeColorPickerInput('primary', ($event.target as HTMLInputElement).value)"
+        />
+        <input
+          :value="themePrimaryColorDraft"
+          class="color-text"
+          spellcheck="false"
+          @change="handleThemeColorTextInput('primary', ($event.target as HTMLInputElement).value)"
+        />
+      </div>
+    </div>
+
+    <div class="color-control">
+      <div class="color-control-header">
+        <label>柔和主题色</label>
+        <span>浅紫背景、hover 和弱选中态</span>
+      </div>
+      <div class="color-row">
+        <input
+          :value="themeSoftColorDraft"
+          class="color-picker"
+          type="color"
+          @input="handleThemeColorPickerInput('soft', ($event.target as HTMLInputElement).value)"
+        />
+        <input
+          :value="themeSoftColorDraft"
+          class="color-text"
+          spellcheck="false"
+          @change="handleThemeColorTextInput('soft', ($event.target as HTMLInputElement).value)"
+        />
+      </div>
+    </div>
+
+    <div class="model-actions appearance-actions">
+      <button class="save-model-btn" type="button" @click="$emit('saveThemeColors')">保存主题色</button>
+      <button class="cancel-model-btn" type="button" @click="$emit('resetThemeColors')">重置默认色</button>
     </div>
 
     <h3 style="margin-top: 20px">字体</h3>

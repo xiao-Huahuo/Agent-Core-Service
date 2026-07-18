@@ -20,6 +20,8 @@ export interface SettingsProfileResponse {
   knowledge_ignore_patterns?: string
   ui_font_families?: string[]
   text_font_families?: string[]
+  theme_primary_color?: string
+  theme_soft_color?: string
   created_at: string
   updated_at: string
 }
@@ -88,6 +90,25 @@ export function saveFontConfig(
   if (params.uiFontFamilies !== undefined) body.ui_font_families = params.uiFontFamilies
   if (params.textFontFamilies !== undefined) body.text_font_families = params.textFontFamilies
   return apiPut<FontConfigResponse>(API_ROUTES.SETTINGS_FONT_CONFIG, body)
+}
+
+export interface AppearanceConfigResponse {
+  user_id: string
+  theme_primary_color: string
+  theme_soft_color: string
+  updated_at: string
+}
+
+export function saveAppearanceConfig(
+  userId: string,
+  params: { themePrimaryColor?: string; themeSoftColor?: string },
+): Promise<AppearanceConfigResponse> {
+  const body: { user_id: string; theme_primary_color?: string; theme_soft_color?: string } = {
+    user_id: userId,
+  }
+  if (params.themePrimaryColor !== undefined) body.theme_primary_color = params.themePrimaryColor
+  if (params.themeSoftColor !== undefined) body.theme_soft_color = params.themeSoftColor
+  return apiPut<AppearanceConfigResponse>(API_ROUTES.SETTINGS_APPEARANCE_CONFIG, body)
 }
 
 export interface KnowledgeIngestionConfigResponse {

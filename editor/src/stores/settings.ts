@@ -11,7 +11,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { ApiError } from '@/api/client'
-import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, saveFontConfig, saveKnowledgeIngestionConfig, saveWebSearchConfig, updateSettingsKnowledgeDir } from '@/api/settings'
+import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, saveAppearanceConfig, saveFontConfig, saveKnowledgeIngestionConfig, saveWebSearchConfig, updateSettingsKnowledgeDir } from '@/api/settings'
 import type { AgentLoopMode } from '@/api/agent'
 import type { SettingsKnowledgeLibraryResponse, SettingsProfileResponse } from '@/api/settings'
 import type { KnowledgeLibraryProfile } from '@/types/settings'
@@ -25,6 +25,9 @@ const SHOW_INDEX_COLUMN_KEY = 'agent_editor_show_index_column'
 
 const DEFAULT_UI_FONT_STACK = 'var(--font-ui-default)'
 const DEFAULT_TEXT_FONT_STACK = 'var(--font-text-default)'
+const DEFAULT_THEME_PRIMARY_COLOR = '#4224eb'
+const DEFAULT_THEME_SOFT_COLOR = '#4224eb'
+const APPEARANCE_PREVIEW_EVENT = 'metaweave:appearance-preview'
 
 const DEFAULT_PROFILE: UserSettingsProfile = {
   userId: '',
@@ -39,6 +42,47 @@ const DEFAULT_PROFILE: UserSettingsProfile = {
   knowledgeIgnorePatterns: '',
   uiFontFamilies: [],
   textFontFamilies: [],
+  themePrimaryColor: '',
+  themeSoftColor: '',
+}
+
+function normalizeThemeColor(value: string | undefined): string {
+  const color = (value ?? '').trim()
+  if (!color) return ''
+  if (/^#[0-9a-fA-F]{3}$/u.test(color)) {
+    return `#${color.slice(1).split('').map((item) => item + item).join('')}`.toLowerCase()
+  }
+  if (/^#[0-9a-fA-F]{6}$/u.test(color)) {
+    return color.toLowerCase()
+  }
+  return ''
+}
+
+function hexToRgb(value: string): { r: number; g: number; b: number } {
+  const color = normalizeThemeColor(value) || DEFAULT_THEME_PRIMARY_COLOR
+  return {
+    r: Number.parseInt(color.slice(1, 3), 16),
+    g: Number.parseInt(color.slice(3, 5), 16),
+    b: Number.parseInt(color.slice(5, 7), 16),
+  }
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  return `#${[r, g, b].map((item) => Math.round(Math.max(0, Math.min(255, item))).toString(16).padStart(2, '0')).join('')}`
+}
+
+function mixWithWhite(value: string, amount: number): string {
+  const color = hexToRgb(value)
+  return rgbToHex(
+    color.r + (255 - color.r) * amount,
+    color.g + (255 - color.g) * amount,
+    color.b + (255 - color.b) * amount,
+  )
+}
+
+function rgbaFromHex(value: string, alpha: number): string {
+  const color = hexToRgb(value)
+  return `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`
 }
 
 function normalizeFontFamily(value: string | undefined): string {
@@ -82,6 +126,8 @@ function normalizeProfile(profile: UserSettingsProfile): UserSettingsProfile {
     knowledgeLibraries: profile.knowledgeLibraries ?? [],
     uiFontFamilies: normalizeFontFamilies(profile.uiFontFamilies ?? profile.uiFontFamily),
     textFontFamilies: normalizeFontFamilies(profile.textFontFamilies ?? profile.textFontFamily),
+    themePrimaryColor: normalizeThemeColor(profile.themePrimaryColor),
+    themeSoftColor: normalizeThemeColor(profile.themeSoftColor),
   }
   if (nextProfile.userId === 'local-user') {
     nextProfile.userId = ''
@@ -109,6 +155,8 @@ function mapBackendProfile(profileResponse: SettingsProfileResponse): Partial<Us
     knowledgeIgnorePatterns: profileResponse.knowledge_ignore_patterns ?? '',
     uiFontFamilies: profileResponse.ui_font_families ?? [],
     textFontFamilies: profileResponse.text_font_families ?? [],
+    themePrimaryColor: profileResponse.theme_primary_color ?? '',
+    themeSoftColor: profileResponse.theme_soft_color ?? '',
   }
 }
 
@@ -193,6 +241,48 @@ export const useSettingsStore = defineStore('settings', () => {
     )
   }
 
+  function applyAppearanceColorValues(themePrimaryColor?: string, themeSoftColor?: string) {
+    const rootStyle = document.documentElement.style
+    const primaryColor = normalizeThemeColor(themePrimaryColor)
+    const softColor = normalizeThemeColor(themeSoftColor)
+    if (primaryColor) {
+      rootStyle.setProperty('--color-primary', primaryColor)
+      rootStyle.setProperty('--color-primary-hover', mixWithWhite(primaryColor, 0.12))
+      rootStyle.setProperty('--color-selection-blue', primaryColor)
+      rootStyle.setProperty('--color-blue', primaryColor)
+    } else {
+      rootStyle.removeProperty('--color-primary')
+      rootStyle.removeProperty('--color-primary-hover')
+      rootStyle.removeProperty('--color-selection-blue')
+      rootStyle.removeProperty('--color-blue')
+    }
+    if (softColor) {
+      rootStyle.setProperty('--color-primary-soft', rgbaFromHex(softColor, 0.16))
+      rootStyle.setProperty('--color-primary-softer', rgbaFromHex(softColor, 0.1))
+      rootStyle.setProperty('--color-selection-blue-soft', rgbaFromHex(softColor, 0.16))
+      rootStyle.setProperty('--color-agent-bubble', rgbaFromHex(softColor, 0.12))
+      rootStyle.setProperty('--color-agent-bubble-border', rgbaFromHex(softColor, 0.38))
+      rootStyle.setProperty('--color-agent-bubble-glow', rgbaFromHex(softColor, 0.14))
+    } else {
+      rootStyle.removeProperty('--color-primary-soft')
+      rootStyle.removeProperty('--color-primary-softer')
+      rootStyle.removeProperty('--color-selection-blue-soft')
+      rootStyle.removeProperty('--color-agent-bubble')
+      rootStyle.removeProperty('--color-agent-bubble-border')
+      rootStyle.removeProperty('--color-agent-bubble-glow')
+    }
+  }
+
+  function applyAppearanceColors() {
+    applyAppearanceColorValues(profile.value.themePrimaryColor, profile.value.themeSoftColor)
+    window.dispatchEvent(new CustomEvent(APPEARANCE_PREVIEW_EVENT))
+  }
+
+  function previewAppearanceColors(params: { themePrimaryColor?: string; themeSoftColor?: string }) {
+    applyAppearanceColorValues(params.themePrimaryColor, params.themeSoftColor)
+    window.dispatchEvent(new CustomEvent(APPEARANCE_PREVIEW_EVENT))
+  }
+
   function persistProfile() {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile.value))
   }
@@ -201,6 +291,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function initTheme() {
     applyTheme()
     applyFonts()
+    applyAppearanceColors()
     window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', applyTheme)
   }
 
@@ -237,6 +328,7 @@ export const useSettingsStore = defineStore('settings', () => {
     profile.value = normalizeProfile({ ...profile.value, ...nextProfile })
     persistProfile()
     applyFonts()
+    applyAppearanceColors()
   }
 
   function setUiFontFamilies(fontFamilies: string[]) {
@@ -272,6 +364,34 @@ export const useSettingsStore = defineStore('settings', () => {
         throw new Error('保存字体设置失败: 后端尚未加载字体配置接口,请重启后端服务')
       }
       throw new Error('保存字体设置失败')
+    }
+  }
+
+  async function saveAppearanceSettings(params: { themePrimaryColor?: string; themeSoftColor?: string }) {
+    const nextThemePrimaryColor = normalizeThemeColor(params.themePrimaryColor ?? profile.value.themePrimaryColor)
+    const nextThemeSoftColor = normalizeThemeColor(params.themeSoftColor ?? profile.value.themeSoftColor)
+    updateProfile({
+      themePrimaryColor: nextThemePrimaryColor,
+      themeSoftColor: nextThemeSoftColor,
+    })
+    if (!hasUserId.value) {
+      return null
+    }
+    try {
+      const result = await saveAppearanceConfig(profile.value.userId, {
+        themePrimaryColor: nextThemePrimaryColor,
+        themeSoftColor: nextThemeSoftColor,
+      })
+      updateProfile({
+        themePrimaryColor: result.theme_primary_color,
+        themeSoftColor: result.theme_soft_color,
+      })
+      return result
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 405) {
+        throw new Error('保存外观设置失败: 后端尚未加载外观配置接口,请重启后端服务')
+      }
+      throw new Error('保存外观设置失败')
     }
   }
 
@@ -407,6 +527,8 @@ export const useSettingsStore = defineStore('settings', () => {
     setUiFontFamilies,
     setTextFontFamilies,
     saveFontSettings,
+    previewAppearanceColors,
+    saveAppearanceSettings,
     applyBackendProfile,
     setUserId,
     clearUserId,

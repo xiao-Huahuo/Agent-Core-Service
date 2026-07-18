@@ -318,7 +318,7 @@ function handleRowDrop(event: DragEvent) {
 }
 
 .tree-row.selected {
-  background: rgba(66, 36, 235, 0.24);
+  background: var(--color-primary-soft);
   color: var(--color-text);
 }
 
@@ -326,7 +326,7 @@ function handleRowDrop(event: DragEvent) {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: linear-gradient(90deg, rgba(66, 36, 235, 0.3), transparent 68%);
+  background: linear-gradient(90deg, var(--color-primary-soft), transparent 68%);
   content: "";
   animation: tree-selection-slide 150ms ease-out;
 }
@@ -458,8 +458,8 @@ function handleRowDrop(event: DragEvent) {
 
 .tree-row.drag-over {
   border-color: var(--color-primary);
-  background: rgba(66, 36, 235, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(66, 36, 235, 0.5);
+  background: var(--color-primary-softer);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 50%, transparent);
 }
 
 @keyframes tree-selection-slide {

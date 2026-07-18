@@ -16,8 +16,6 @@ import type {
 } from './graphTypes'
 
 const EXTENSION_COLORS = new Map<string, string>([
-  ['md', '#4224eb'],
-  ['markdown', '#4224eb'],
   ['txt', '#6f63f6'],
   ['json', '#e2a72e'],
   ['yaml', '#e2a72e'],
@@ -51,12 +49,16 @@ function nodeColor(node: KnowledgeGraphNode, theme: KnowledgeGraphRenderTheme): 
     return theme.folder
   }
   if (node.kind === 'document') {
-    return EXTENSION_COLORS.get('md') ?? theme.root
+    return theme.root
   }
   if (node.kind === 'entity') {
     return theme.accent
   }
-  return EXTENSION_COLORS.get(node.extension ?? '') ?? theme.file
+  const extension = node.extension ?? ''
+  if (extension === 'md' || extension === 'markdown') {
+    return theme.root
+  }
+  return EXTENSION_COLORS.get(extension) ?? theme.file
 }
 
 function shouldShowLabel(node: KnowledgeGraphNode, state: KnowledgeGraphRenderState): boolean {

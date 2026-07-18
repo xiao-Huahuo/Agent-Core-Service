@@ -35,6 +35,10 @@ export interface UserSettingsProfile {
   uiFontFamilies?: string[]
   /** Optional font families prepended to markdown/text document surfaces. */
   textFontFamilies?: string[]
+  /** Optional primary UI color applied to action and selection surfaces. */
+  themePrimaryColor?: string
+  /** Optional soft UI color applied to muted primary backgrounds. */
+  themeSoftColor?: string
   /** Legacy single-value localStorage field, normalized into uiFontFamilies. */
   uiFontFamily?: string
   /** Legacy single-value localStorage field, normalized into textFontFamilies. */

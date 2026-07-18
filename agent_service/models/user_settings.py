@@ -42,6 +42,8 @@ class UserSettingsRecord(SQLModel, table=True):
     disabled_tools: str = Field(default="", sa_column=Column(Text))
     ui_font_families: str = Field(default="", sa_column=Column(Text))
     text_font_families: str = Field(default="", sa_column=Column(Text))
+    theme_primary_color: str = Field(default="", max_length=16)
+    theme_soft_color: str = Field(default="", max_length=16)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

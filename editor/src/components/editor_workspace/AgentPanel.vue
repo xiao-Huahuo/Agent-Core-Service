@@ -437,7 +437,7 @@ onMounted(() => {
   --font-weight-semibold: 650;
   --color-bg-elevated: var(--color-canvas-soft);
   --color-bg-muted: var(--color-canvas);
-  --color-bg-hover: rgba(66, 36, 235, 0.13);
+  --color-bg-hover: var(--color-primary-soft);
   --color-text-primary: var(--color-text);
   --color-text-secondary: var(--color-text-secondary);
   --color-text-tertiary: var(--color-text-muted);
@@ -452,10 +452,10 @@ onMounted(() => {
   --color-user-bubble-highlight: rgba(255, 255, 255, 0.08);
   --color-user-bubble-glow: rgba(66, 133, 244, 0.22);
   /* Agent bubble: blue primary */
-  --color-agent-bubble: rgba(66, 36, 235, 0.12);
-  --color-agent-bubble-border: rgba(66, 36, 235, 0.38);
+  --color-agent-bubble: var(--color-primary-soft);
+  --color-agent-bubble-border: color-mix(in srgb, var(--color-primary) 38%, transparent);
   --color-agent-bubble-highlight: rgba(255, 255, 255, 0.08);
-  --color-agent-bubble-glow: rgba(66, 36, 235, 0.14);
+  --color-agent-bubble-glow: var(--color-primary-softer);
   --input-bg: var(--color-surface-raised);
   --input-border: var(--color-border);
   --input-text: var(--color-text);
@@ -493,8 +493,8 @@ onMounted(() => {
 .agent-panel.theme-light {
   --color-user-bubble: rgba(66, 133, 244, 0.12);
   --color-user-bubble-glow: rgba(66, 133, 244, 0.14);
-  --color-agent-bubble: rgba(66, 36, 235, 0.08);
-  --color-agent-bubble-glow: rgba(66, 36, 235, 0.08);
+  --color-agent-bubble: var(--color-primary-softer);
+  --color-agent-bubble-glow: var(--color-primary-softer);
 }
 
 .agent-panel.attachment-drop-active {
@@ -838,7 +838,7 @@ onMounted(() => {
   z-index: 3;
   width: 18px;
   border: 0;
-  background: linear-gradient(90deg, rgba(66, 36, 235, 0.18), transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 18%, transparent), transparent);
   opacity: 0.18;
 }
 
@@ -887,7 +887,7 @@ onMounted(() => {
   margin-bottom: var(--space-14);
   object-fit: contain;
   opacity: 0;
-  filter: drop-shadow(0 16px 34px rgba(66, 36, 235, 0.22));
+  filter: drop-shadow(0 16px 34px color-mix(in srgb, var(--color-primary) 22%, transparent));
   animation: welcome-icon-reveal 900ms cubic-bezier(0.22, 1, 0.36, 1) 120ms forwards;
 }
 

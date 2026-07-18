@@ -88,7 +88,7 @@ function readTheme(): KnowledgeGraphRenderTheme {
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light'
   return {
     canvas: cssVar('--color-canvas-soft', isDark ? '#151517' : '#ffffff'),
-    grid: isDark ? 'rgba(66, 36, 235, 0.08)' : 'rgba(66, 36, 235, 0.07)',
+    grid: cssVar('--color-primary-softer', isDark ? 'rgba(66, 36, 235, 0.08)' : 'rgba(66, 36, 235, 0.07)'),
     text: cssVar('--color-text', isDark ? '#f4f4f6' : '#171721'),
     mutedText: cssVar('--color-text-muted', isDark ? '#8f93a3' : '#707486'),
     edge: isDark ? 'rgba(143, 147, 163, 0.32)' : 'rgba(112, 116, 134, 0.34)',
@@ -306,6 +306,7 @@ function handleDoubleClick(event: MouseEvent) {
 }
 
 onMounted(() => {
+  window.addEventListener('metaweave:appearance-preview', requestDraw)
   resizeObserver = new ResizeObserver(() => {
     resizeCanvas()
     startSimulation(false)
@@ -320,6 +321,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('metaweave:appearance-preview', requestDraw)
   resizeObserver?.disconnect()
   resizeObserver = null
   stopSimulation()
