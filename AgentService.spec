@@ -67,7 +67,7 @@ exe = EXE(
     a.datas,
     a.zipfiles,
     name='AgentService',
-    icon=None,
+    icon='editor/src/assets/icons/app.ico',
     console=True,
     debug=False,
 )

@@ -17,6 +17,7 @@ const path = require('node:path')
 const { handleEditShortcut } = require('./edit-shortcuts.cjs')
 
 const DEV_SERVER_URL = process.env.ELECTRON_RENDERER_URL || 'http://127.0.0.1:5173'
+const APP_ICON_PATH = path.join(__dirname, '..', 'src', 'assets', 'icons', 'app.ico')
 
 let mainWindow = null
 
@@ -234,6 +235,7 @@ function createMainWindow() {
     show: false,
     backgroundColor: '#101010',
     title: 'AgentService Editor',
+    icon: APP_ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

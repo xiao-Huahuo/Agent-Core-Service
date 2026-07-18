@@ -1,6 +1,7 @@
 # CHANGE HISTORY
 
 ## 2026-07-18
+- [x] 更新桌面应用图标: 将 `docs/assets/无底图标.png` 转换为多尺寸 `editor/src/assets/icons/app.ico`,并接入 Electron `BrowserWindow` 与 PyInstaller `AgentService.spec` 图标配置.
 - [x] 文件树选中条目接入柔和主题色: 移除 `TreeNode.vue` 选中态/拖拽态蓝紫 rgba 硬编码,改用 `--color-primary-soft`、`--color-primary-softer` 与主色派生边框.
 - [x] 知识图谱 Markdown 节点接入主题主色: 移除 md/markdown 节点 `#4224eb` 硬编码,图谱网格接入柔和主题色,主题色预览/保存时主动通知 canvas 重绘.
 - [x] 修复自定义主题色预览不可见的问题: 调色板输入改为显式读取最新颜色后实时预览,自定义色同步覆盖 `--color-blue`,并移除 Agent 面板对蓝紫气泡/hover 颜色的局部硬编码遮蔽.
