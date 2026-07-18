@@ -143,7 +143,8 @@ function handleRowDragover(event: DragEvent) {
   dragOver.value = true
 }
 
-function collapseEnter(el: HTMLElement) {
+function collapseEnter(el: Element) {
+  if (!(el instanceof HTMLElement)) return
   el.style.height = '0px'
   el.style.overflow = 'hidden'
   requestAnimationFrame(() => {
@@ -152,12 +153,14 @@ function collapseEnter(el: HTMLElement) {
   })
 }
 
-function collapseAfterEnter(el: HTMLElement) {
+function collapseAfterEnter(el: Element) {
+  if (!(el instanceof HTMLElement)) return
   el.style.height = ''
   el.style.overflow = ''
 }
 
-function collapseLeave(el: HTMLElement) {
+function collapseLeave(el: Element) {
+  if (!(el instanceof HTMLElement)) return
   el.style.height = el.scrollHeight + 'px'
   el.style.overflow = 'hidden'
   requestAnimationFrame(() => {
@@ -165,7 +168,8 @@ function collapseLeave(el: HTMLElement) {
   })
 }
 
-function collapseAfterLeave(el: HTMLElement) {
+function collapseAfterLeave(el: Element) {
+  if (!(el instanceof HTMLElement)) return
   el.style.height = ''
   el.style.overflow = ''
 }

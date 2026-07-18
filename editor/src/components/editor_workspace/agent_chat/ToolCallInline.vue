@@ -130,8 +130,8 @@ function parseSearchResults(content: string) {
       if (current) {
         items.push({ index: current.index, source: current.source, content: current.content.join('\n').trim() })
       }
-      current = { index: parseInt(m[1], 10), source: m[2]!.trim(), content: [] }
-      const afterSource = m[3]!.trim()
+      current = { index: parseInt(m[1] ?? '0', 10), source: (m[2] ?? '').trim(), content: [] }
+      const afterSource = (m[3] ?? '').trim()
       if (afterSource) current.content.push(afterSource)
     } else if (current) {
       current.content.push(line)

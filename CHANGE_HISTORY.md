@@ -1,5 +1,9 @@
 # CHANGE HISTORY
 
+## 2026-07-18
+- [x] 彻底删除了console前端文件夹, 移除已废弃前端的文档与打包入口: README 改为只描述 editor 启动、验证和构建流程; 开发规范删除旧前端专属设计约束; PyInstaller 与后端静态资源定位统一使用 `editor/dist`。
+- [x] 第一批超长文件治理: `SettingsView.vue` 拆出 settings_view 子组件; `FileTreePanel.vue` 与 `FileResourceManager.vue` 抽离样式和纯 helper; `useObsData.ts` 拆出 RAG 指标派生; `scheduler.py` 拆出调度共享类型与运行时 mixin; `builtin.py` 拆出工具定义列表和数学求值 helper; 顺手修复 editor 类型检查中 ToolCallInline 与 TreeNode 的既有类型错误。
+
 ## 2026-07-17
 - [x] 暗色模式下编辑区底色改为彻底黑色: `--color-surface-raised` 从 `#202026` 改为 `#000000`，使编辑区与周围 chrome 背景一致。
 - [x] 修复 markdown 预览中嵌入图片破碎的问题: 改用 Vditor 渲染后的 DOM 遍历修复图片 URL（相对路径重写为 `/knowledge/files/raw` 端点），替换了原先的 markdown 文本级替换方案。

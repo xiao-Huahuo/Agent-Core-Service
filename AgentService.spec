@@ -2,7 +2,7 @@
 """PyInstaller 构建配置 — 将后端、前端静态资源和默认资源打包为单个 exe。
 
 使用说明:
-先分别构建 console/dist 与 editor/dist,再执行 `pyinstaller AgentService.spec`。
+先构建 editor/dist,再执行 `pyinstaller AgentService.spec`。
 构建产物输出到项目根目录的 dist/AgentService.exe。
 """
 
@@ -31,7 +31,6 @@ a = Analysis(
     pathex=[str(_project_root)],
     binaries=[],
     datas=[
-        _required_data_dir('console/dist'),
         _required_data_dir('editor/dist'),
         _required_data_dir('resources'),
     ],

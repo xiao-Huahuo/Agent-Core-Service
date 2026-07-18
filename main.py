@@ -200,11 +200,11 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         logger.warning("gRPC server 启动失败，HTTP 服务继续运行 | address=%s error=%s", grpc_address, exc)
         _grpc_server = None
 
-    # 前端端口: 打包模式下后端托管静态文件(8002), 开发模式下 Vite dev server(8003)
+    # 前端端口: 打包模式下后端托管静态文件(8002), 开发模式下 editor Vite dev server(5173)
     if _static_dir is not None:
         logger.info("前端静态文件已挂载 | path=%s", _static_dir)
     else:
-        logger.info("未找到前端静态文件,开发时请单独启动 Vite dev server (npm run dev --prefix console)")
+        logger.info("未找到前端静态文件,开发时请单独启动 editor Vite dev server (npm run dev:electron --prefix editor)")
 
     try:
         yield
@@ -307,24 +307,23 @@ def _resolve_static_dir() -> Path | None:
     """定位前端静态资源目录。
 
     优先级:
-    1. PyInstaller 打包环境: _MEIPASS/console/dist
-    2. 开发环境: 项目根目录/console/dist
+    1. PyInstaller 打包环境: _MEIPASS/editor/dist
+    2. 开发环境: 项目根目录/editor/dist
     如果目录不存在则返回 None,跳过静态文件挂载。
     """
     if getattr(sys, "frozen", False):
-        candidate = Path(sys._MEIPASS) / "console" / "dist"
+        candidate = Path(sys._MEIPASS) / "editor" / "dist"
         # 尝试修正: datas 有时展平到 _MEIPASS 根目录
         if not candidate.is_dir():
             alt = Path(sys._MEIPASS) / "dist"
             if alt.is_dir():
                 candidate = alt
     else:
-        candidate = Path(__file__).resolve().parent / "console" / "dist"
+        candidate = Path(__file__).resolve().parent / "editor" / "dist"
     return candidate if candidate.is_dir() else None
 
 
 _static_dir = _resolve_static_dir()
-_editor_static_dir = Path(__file__).resolve().parent / "editor" / "dist"
 
 if _static_dir is not None:
     from fastapi.staticfiles import StaticFiles
@@ -343,11 +342,6 @@ if _static_dir is not None:
         if file_path.is_file():
             return FileResponse(file_path)
         return FileResponse(_static_dir / "index.html")
-
-if _editor_static_dir.is_dir():
-    from fastapi.staticfiles import StaticFiles
-    logger.info("Editor 静态文件已挂载 | path=%s", _editor_static_dir)
-    app.mount("/editor", StaticFiles(directory=str(_editor_static_dir), html=True), name="editor")
 
 if __name__ == "__main__":
     import uvicorn

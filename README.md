@@ -48,9 +48,7 @@ uvicorn main:app --host 0.0.0.0 --port 8002
 ```
 后端默认将项目目录下的`resources/knowledge/`作为知识库根目录,用户可在前端自行重新选择知识库目录,更换知识库时库内将进行多模态文档扫描,进入向量数据库供Agent使用.
 
-### 3. 启动前端（Vite + Vue 3）
-
-本项目配置双前端,分为编辑器(Editor)与控制台(Console),两者可同时运行,也可单独运行.
+### 3. 启动前端（Electron + Vite + Vue 3）
 
 ##### 编辑器(Editor)--主要关注知识库与图谱的可视化
 ```bash
@@ -59,21 +57,9 @@ npm i --verbose
 npm run dev:electron # 开发模式 → http://localhost:5173
 ```
 
-##### 控制台(Console)--主要关注Agent对话与可视化追溯
-```bash
-cd console
-npm i --verbose
-npm run dev          # 开发模式 → http://localhost:8003
-```
-
-
-
-
 ### 4. 验证
 
 编辑器: `npm run dev:electron`时Electron自动打开浏览器内核窗口.或者在浏览器中访问 `http://localhost:5173`,但浏览器模式下可能某些文件服务不兼容.
-
-控制台: 浏览器访问 `http://localhost:8003`，在控制台输入问题即可测试 Agent。
 
 后端健康检查：`curl http://localhost:8002/health`
 
@@ -92,12 +78,6 @@ cd editor
 npm i --verbose
 npm run build:electron # 输出 → editor/dist/
 ```
-##### 控制台(Console)
-```bash
-cd console
-npm i --verbose
-npm run build          # 输出 → console/dist/
-```
 
 ### 后端 — 单文件 exe
 
@@ -110,7 +90,7 @@ pip install -r agent_service/requirements.txt
 pyinstaller AgentService.spec
 ```
 
-产物为 `dist/AgentService.exe`。`.spec` 配置将 `console/dist/`,`editor/dist/`（前端静态资源）和 `resources/`（知识库、MCP 配置、安全词库）一并打包进 exe。
+产物为 `dist/AgentService.exe`。`.spec` 配置将 `editor/dist/`（前端静态资源）和 `resources/`（知识库、MCP 配置、安全词库）一并打包进 exe。
 
 ### 部署结构
 

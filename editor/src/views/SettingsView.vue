@@ -3,6 +3,13 @@ import { computed, onMounted, ref, watch } from 'vue'
 
 import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchWebSearchConfig, saveWebSearchConfig, fetchAvailableTools, saveDisabledTools } from '@/api/settings'
 import type { SystemPromptEntry, MemoryEntry, ToolEntry } from '@/api/settings'
+import BasicSettingsSection from '@/components/settings_view/BasicSettingsSection.vue'
+import LlmSettingsSection from '@/components/settings_view/LlmSettingsSection.vue'
+import MemorySettingsSection from '@/components/settings_view/MemorySettingsSection.vue'
+import SettingsSidebar from '@/components/settings_view/SettingsSidebar.vue'
+import type { SettingsTabKey } from '@/components/settings_view/SettingsSidebar.vue'
+import ToolsSettingsSection from '@/components/settings_view/ToolsSettingsSection.vue'
+import WebSearchSettingsSection from '@/components/settings_view/WebSearchSettingsSection.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { ThemeMode } from '@/types/settings'
@@ -10,7 +17,7 @@ import type { ThemeMode } from '@/types/settings'
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 
-const activeTab = ref<'basic' | 'llm' | 'tools' | 'web' | 'memory'>('basic')
+const activeTab = ref<SettingsTabKey>('basic')
 
 const tabs = [
   { key: 'basic' as const, label: '基础设置' },
@@ -330,196 +337,87 @@ onMounted(() => {
 
 <template>
   <div class="settings-page">
-    <aside class="settings-sidebar">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        class="sidebar-tab"
-        :class="{ active: activeTab === tab.key }"
-        type="button"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
-    </aside>
+    <SettingsSidebar
+      :active-tab="activeTab"
+      :tabs="tabs"
+      @select="activeTab = $event"
+    />
 
     <div class="settings-body">
-      <!-- 基础设置 -->
-      <div v-if="activeTab === 'basic'" class="setting-section">
-        <h3>知识库</h3>
-        <div class="setting-row">
-          <label>库名称</label>
-          <input v-model="libraryNameDraft" spellcheck="false" />
-        </div>
-        <div class="setting-row">
-          <label>知识目录</label>
-          <input v-model="knowledgeDirDraft" spellcheck="false" />
-        </div>
-        <div class="setting-row toggle-row">
-          <label>文件监听</label>
-          <input v-model="watchEnabledDraft" type="checkbox" />
-        </div>
-        <div class="setting-row toggle-row">
-          <label>自动灌库</label>
-          <input v-model="autoIngestOnUploadDraft" type="checkbox" />
-          <span class="hint-text">关闭时上传只进入文件树,点击 header 刷新或文件按钮才灌库</span>
-        </div>
-        <div class="setting-row toggle-row">
-          <label>OCR</label>
-          <input v-model="ocrEnabledDraft" type="checkbox" />
-          <span class="hint-text">开启后需重启; 重启时会检查并预热 PaddleOCR 中英文模型</span>
-        </div>
-        <div class="setting-row ignore-row">
-          <label>屏蔽区</label>
-          <textarea
-            v-model="knowledgeIgnorePatternsDraft"
-            spellcheck="false"
-            placeholder="# gitignore-like&#10;private/&#10;*.tmp&#10;!private/keep.md"
-          ></textarea>
-        </div>
-        <p class="setting-hint">被屏蔽的文件不会入库; 已入库文件会在下次 Ingest 或单文件灌库时出库。</p>
-        <div class="model-actions">
-          <button class="save-model-btn" :disabled="saving || !hasChanges" @click="saveProfile">
-            {{ saving ? '保存中...' : '保存' }}
-          </button>
-          <span v-if="saveMessage" class="feedback">{{ saveMessage }}</span>
-          <span v-if="saveError" class="feedback error">{{ saveError }}</span>
-        </div>
+      <BasicSettingsSection
+        v-if="activeTab === 'basic'"
+        v-model:auto-ingest-on-upload-draft="autoIngestOnUploadDraft"
+        v-model:knowledge-dir-draft="knowledgeDirDraft"
+        v-model:knowledge-ignore-patterns-draft="knowledgeIgnorePatternsDraft"
+        v-model:library-name-draft="libraryNameDraft"
+        v-model:ocr-enabled-draft="ocrEnabledDraft"
+        v-model:watch-enabled-draft="watchEnabledDraft"
+        :has-changes="hasChanges"
+        :save-error="saveError"
+        :save-message="saveMessage"
+        :saving="saving"
+        :show-index-column="settingsStore.showIndexColumn"
+        :theme-mode="settingsStore.themeMode"
+        :theme-options="themeOptions"
+        @save="saveProfile"
+        @set-show-index-column="settingsStore.setShowIndexColumn"
+        @set-theme-mode="settingsStore.setThemeMode"
+      />
 
-        <h3 style="margin-top: 20px">主题</h3>
-        <div class="theme-row">
-          <button
-            v-for="option in themeOptions"
-            :key="option.value"
-            :class="['theme-'+option.value, { active: settingsStore.themeMode === option.value }]"
-            type="button"
-            @click="settingsStore.setThemeMode(option.value)"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-        <div class="setting-row toggle-row">
-          <label>索引状态</label>
-          <input :checked="settingsStore.showIndexColumn" type="checkbox" @change="settingsStore.setShowIndexColumn(($event.target as HTMLInputElement).checked)" />
-          <span class="hint-text">在文件树和文件资源管理器中显示入库状态</span>
-        </div>
-      </div>
+      <LlmSettingsSection
+        v-if="activeTab === 'llm'"
+        v-model:large-api-key="largeApiKey"
+        v-model:large-base-url="largeBaseUrl"
+        v-model:large-model-name="largeModelName"
+        v-model:model-editing="modelEditing"
+        v-model:show-large-key="showLargeKey"
+        v-model:show-small-key="showSmallKey"
+        v-model:small-api-key="smallApiKey"
+        v-model:small-base-url="smallBaseUrl"
+        v-model:small-model-name="smallModelName"
+        :model-config-saved="modelConfigSaved"
+        :model-msg="modelMsg"
+        :model-saving="modelSaving"
+        @cancel="modelEditing = false; loadModelConfig()"
+        @save="handleSaveModel"
+      />
 
-      <!-- LLM 配置 -->
-      <div v-if="activeTab === 'llm'" class="setting-section">
-        <h3>大模型</h3>
-        <div class="model-block">
-          <input v-model="largeModelName" placeholder="deepseek-v4-flash" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
-          <input v-model="largeBaseUrl" placeholder="https://api.deepseek.com" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
-          <div class="key-row">
-            <input v-model="largeApiKey" :type="showLargeKey ? 'text' : 'password'" placeholder="API Key" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
-            <button class="toggle-key" @click="showLargeKey = !showLargeKey">{{ showLargeKey ? '隐藏' : '显示' }}</button>
-          </div>
-        </div>
-        <h3>小模型</h3>
-        <div class="model-block">
-          <input v-model="smallModelName" placeholder="moonshot-v1-8k" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
-          <input v-model="smallBaseUrl" placeholder="https://api.moonshot.cn/v1" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
-          <div class="key-row">
-            <input v-model="smallApiKey" :type="showSmallKey ? 'text' : 'password'" placeholder="API Key" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
-            <button class="toggle-key" @click="showSmallKey = !showSmallKey">{{ showSmallKey ? '隐藏' : '显示' }}</button>
-          </div>
-        </div>
-        <div class="model-actions">
-          <button v-if="!modelEditing" class="edit-model-btn" type="button" @click="modelEditing = true">{{ modelConfigSaved ? '编辑' : '配置' }}</button>
-          <button v-if="modelEditing" class="save-model-btn" :disabled="modelSaving" @click="handleSaveModel">
-            {{ modelSaving ? '保存中...' : '保存' }}
-          </button>
-          <button v-if="modelEditing" class="cancel-model-btn" type="button" @click="modelEditing = false; loadModelConfig()">取消</button>
-          <span v-if="modelMsg" class="feedback">{{ modelMsg }}</span>
-        </div>
-      </div>
+      <ToolsSettingsSection
+        v-if="activeTab === 'tools'"
+        :tools="sortedTools"
+        :tools-msg="toolsMsg"
+        @toggle-tool="handleToggleTool"
+      />
 
-      <!-- 工具配置 -->
-      <div v-if="activeTab === 'tools'" class="setting-section">
-        <h3>工具开关</h3>
-        <p class="setting-hint toggle-hint">关闭后该工具将不会出现在 Agent 的工具列表中</p>
-        <div class="tool-list">
-          <div v-for="tool in sortedTools" :key="tool.name" class="tool-row" :class="{ disabled: !tool.enabled }">
-            <div class="tool-info">
-              <span class="tool-name">{{ tool.display_name }}</span>
-              <span class="tool-desc">{{ tool.description }}</span>
-            </div>
-            <input
-              :checked="tool.enabled"
-              type="checkbox"
-              @change="handleToggleTool(tool.name)"
-            />
-          </div>
-          <p v-if="!tools.length" class="empty-hint">暂无可用工具</p>
-        </div>
-        <span v-if="toolsMsg" class="feedback">{{ toolsMsg }}</span>
-      </div>
+      <WebSearchSettingsSection
+        v-if="activeTab === 'web'"
+        v-model:proxy-url-draft="proxyUrlDraft"
+        v-model:web-search-enabled-draft="webSearchEnabledDraft"
+        :web-search-msg="webSearchMsg"
+        :web-search-saving="webSearchSaving"
+        @save="handleSaveWebSearch"
+      />
 
-      <!-- 联网配置 -->
-      <div v-if="activeTab === 'web'" class="setting-section">
-        <h3>联网搜索</h3>
-        <div class="setting-row toggle-row">
-          <label>启用搜索</label>
-          <input v-model="webSearchEnabledDraft" type="checkbox" />
-        </div>
-        <div class="setting-row">
-          <label>代理地址</label>
-          <input v-model="proxyUrlDraft" placeholder="http://127.0.0.1:7890" spellcheck="false" />
-        </div>
-        <div class="model-actions">
-          <button class="save-model-btn" :disabled="webSearchSaving" @click="handleSaveWebSearch">
-            {{ webSearchSaving ? '保存中...' : '保存' }}
-          </button>
-          <span v-if="webSearchMsg" class="feedback">{{ webSearchMsg }}</span>
-        </div>
-      </div>
-
-      <!-- 记忆与指令 -->
-      <div v-if="activeTab === 'memory'" class="setting-section">
-        <h3>系统提示</h3>
-        <div class="input-row">
-          <input
-            v-model="newPromptContent"
-            placeholder="输入系统指令"
-            @keydown.enter="handleAddPrompt"
-          />
-          <button class="add-btn" :disabled="addingPrompt || !newPromptContent.trim()" @click="handleAddPrompt">
-            {{ addingPrompt ? '...' : '添加' }}
-          </button>
-        </div>
-        <p v-if="promptMsg" class="feedback">{{ promptMsg }}</p>
-        <ul v-if="promptEntries.length" class="entry-list">
-          <li v-for="entry in promptEntries" :key="entry.prompt_id" class="entry-row">
-            <span class="entry-text">{{ entry.content }}</span>
-            <button class="entry-del" title="删除" @click="handleDeletePrompt(entry.prompt_id)">&times;</button>
-          </li>
-        </ul>
-
-        <h3 style="margin-top: 20px">长期记忆</h3>
-        <div class="input-row">
-          <input
-            v-model="newMemoryContent"
-            placeholder="输入记忆内容"
-            @keydown.enter="handleAddMemory"
-          />
-          <button class="add-btn" :disabled="addingMemory || !newMemoryContent.trim()" @click="handleAddMemory">
-            {{ addingMemory ? '...' : '添加' }}
-          </button>
-        </div>
-        <p v-if="memoryMsg" class="feedback">{{ memoryMsg }}</p>
-        <ul v-if="memories.length" class="entry-list">
-          <li v-for="entry in memories" :key="entry.memory_id" class="entry-row">
-            <span class="entry-text">{{ entry.content }}</span>
-            <button class="entry-del" title="删除" @click="handleDeleteMemory(entry.memory_id)">&times;</button>
-          </li>
-        </ul>
-      </div>
+      <MemorySettingsSection
+        v-if="activeTab === 'memory'"
+        v-model:new-memory-content="newMemoryContent"
+        v-model:new-prompt-content="newPromptContent"
+        :adding-memory="addingMemory"
+        :adding-prompt="addingPrompt"
+        :memories="memories"
+        :memory-msg="memoryMsg"
+        :prompt-entries="promptEntries"
+        :prompt-msg="promptMsg"
+        @add-memory="handleAddMemory"
+        @add-prompt="handleAddPrompt"
+        @delete-memory="handleDeleteMemory"
+        @delete-prompt="handleDeletePrompt"
+      />
     </div>
   </div>
 </template>
 
-<style scoped>
+<style>
 .settings-page {
   display: flex;
   height: 100%;
