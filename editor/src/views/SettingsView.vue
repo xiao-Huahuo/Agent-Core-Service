@@ -1,8 +1,9 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchWebSearchConfig, saveWebSearchConfig, fetchAvailableTools, saveDisabledTools } from '@/api/settings'
 import type { SystemPromptEntry, MemoryEntry, ToolEntry } from '@/api/settings'
+import AppearanceSettingsSection from '@/components/settings_view/AppearanceSettingsSection.vue'
 import BasicSettingsSection from '@/components/settings_view/BasicSettingsSection.vue'
 import LlmSettingsSection from '@/components/settings_view/LlmSettingsSection.vue'
 import MemorySettingsSection from '@/components/settings_view/MemorySettingsSection.vue'
@@ -21,12 +22,12 @@ const activeTab = ref<SettingsTabKey>('basic')
 
 const tabs = [
   { key: 'basic' as const, label: '基础设置' },
+  { key: 'appearance' as const, label: '外观' },
   { key: 'llm' as const, label: 'LLM 配置' },
   { key: 'tools' as const, label: '工具配置' },
   { key: 'web' as const, label: '联网配置' },
   { key: 'memory' as const, label: '记忆与指令' },
 ]
-
 /* ---- Basic settings ---- */
 
 const libraryNameDraft = ref(settingsStore.activeKnowledgeLibrary?.name ?? '')
@@ -407,21 +408,23 @@ onMounted(() => {
         v-model:knowledge-ignore-patterns-draft="knowledgeIgnorePatternsDraft"
         v-model:library-name-draft="libraryNameDraft"
         v-model:ocr-enabled-draft="ocrEnabledDraft"
-        v-model:text-font-families-draft="textFontFamiliesDraft"
-        v-model:ui-font-families-draft="uiFontFamiliesDraft"
         v-model:watch-enabled-draft="watchEnabledDraft"
-        :available-font-families="availableFontFamilies"
-        :fonts-loading="fontsLoading"
         :has-changes="hasChanges"
         :save-error="saveError"
         :save-message="saveMessage"
         :saving="saving"
-        :show-index-column="settingsStore.showIndexColumn"
+        @save="saveProfile"
+      />
+
+      <AppearanceSettingsSection
+        v-if="activeTab === 'appearance'"
+        v-model:text-font-families-draft="textFontFamiliesDraft"
+        v-model:ui-font-families-draft="uiFontFamiliesDraft"
+        :available-font-families="availableFontFamilies"
+        :fonts-loading="fontsLoading"
         :theme-mode="settingsStore.themeMode"
         :theme-options="themeOptions"
-        @save="saveProfile"
         @save-font-families="handleSaveFontFamilies"
-        @set-show-index-column="settingsStore.setShowIndexColumn"
         @set-theme-mode="settingsStore.setThemeMode"
       />
 
@@ -469,10 +472,12 @@ onMounted(() => {
         :memory-msg="memoryMsg"
         :prompt-entries="promptEntries"
         :prompt-msg="promptMsg"
+        :show-index-column="settingsStore.showIndexColumn"
         @add-memory="handleAddMemory"
         @add-prompt="handleAddPrompt"
         @delete-memory="handleDeleteMemory"
         @delete-prompt="handleDeletePrompt"
+        @set-show-index-column="settingsStore.setShowIndexColumn"
       />
     </div>
   </div>
@@ -1153,3 +1158,4 @@ onMounted(() => {
   margin: var(--space-4) 0;
 }
 </style>
+

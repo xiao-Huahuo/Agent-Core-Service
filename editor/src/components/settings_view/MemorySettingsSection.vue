@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   Memory and prompt settings section.
 
   Usage:
@@ -18,6 +18,7 @@ defineProps<{
   memories: MemoryEntry[]
   addingMemory: boolean
   memoryMsg: string
+  showIndexColumn: boolean
 }>()
 
 defineEmits<{
@@ -25,6 +26,7 @@ defineEmits<{
   deletePrompt: [promptId: string]
   addMemory: []
   deleteMemory: [memoryId: string]
+  setShowIndexColumn: [value: boolean]
 }>()
 </script>
 
@@ -67,5 +69,16 @@ defineEmits<{
         <button class="entry-del" title="删除" @click="$emit('deleteMemory', entry.memory_id)">&times;</button>
       </li>
     </ul>
+    <h3 style="margin-top: 20px">显示</h3>
+    <div class="setting-row toggle-row">
+      <label>索引状态</label>
+      <input
+        :checked="showIndexColumn"
+        type="checkbox"
+        @change="$emit('setShowIndexColumn', ($event.target as HTMLInputElement).checked)"
+      />
+      <span class="hint-text">在文件树和文件资源管理器中显示入库状态</span>
+    </div>
   </div>
 </template>
+
