@@ -55,6 +55,31 @@ async def update_user_knowledge_dir(body: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.post("/settings/font-config")
+@router.put("/settings/font-config")
+async def save_font_config(body: dict[str, Any]) -> dict[str, Any]:
+    """保存用户 editor 字体家族配置。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    ui_font_families = body.get("ui_font_families")
+    text_font_families = body.get("text_font_families")
+    if ui_font_families is not None and not isinstance(ui_font_families, list):
+        raise HTTPException(status_code=422, detail="ui_font_families must be a list")
+    if text_font_families is not None and not isinstance(text_font_families, list):
+        raise HTTPException(status_code=422, detail="text_font_families must be a list")
+    svc = _require_settings_service()
+    try:
+        return svc.save_font_config(
+            user_id=user_id,
+            ui_font_families=ui_font_families,
+            text_font_families=text_font_families,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/settings/knowledge-ingestion")
 async def get_knowledge_ingestion_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
     """获取知识库灌库配置。"""

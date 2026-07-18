@@ -19,6 +19,7 @@ interface AgentEditorDesktopApi {
     mode: 'copy' | 'cut',
     conflictStrategy?: 'overwrite' | 'skip' | 'rename',
   ) => Promise<{ ok: boolean; paths: string[] }>
+  listFontFamilies: () => Promise<string[]>
   getPathForFile: (file: File) => string
   writeClipboardText: (text: string) => Promise<boolean>
   openPath: (path: string) => Promise<string>

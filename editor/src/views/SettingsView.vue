@@ -35,6 +35,10 @@ const watchEnabledDraft = ref(settingsStore.profile.knowledgeWatchEnabled)
 const autoIngestOnUploadDraft = ref(Boolean(settingsStore.profile.autoIngestOnUpload))
 const ocrEnabledDraft = ref(Boolean(settingsStore.profile.ocrEnabled))
 const knowledgeIgnorePatternsDraft = ref(settingsStore.profile.knowledgeIgnorePatterns ?? '')
+const uiFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.uiFontFamilies ?? [])])
+const textFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.textFontFamilies ?? [])])
+const availableFontFamilies = ref<string[]>([])
+const fontsLoading = ref(false)
 const saving = ref(false)
 const saveError = ref('')
 const saveMessage = ref('')
@@ -74,6 +78,57 @@ watch(
   () => settingsStore.profile.knowledgeIgnorePatterns,
   (value) => { knowledgeIgnorePatternsDraft.value = value ?? '' },
 )
+
+watch(
+  () => settingsStore.profile.uiFontFamilies,
+  (value) => { uiFontFamiliesDraft.value = [...(value ?? [])] },
+)
+
+watch(
+  () => settingsStore.profile.textFontFamilies,
+  (value) => { textFontFamiliesDraft.value = [...(value ?? [])] },
+)
+
+async function loadAvailableFonts() {
+  fontsLoading.value = true
+  const fallbackFonts = [
+    'Microsoft YaHei UI',
+    'Microsoft YaHei',
+    'PingFang SC',
+    'Noto Sans SC',
+    'JetBrains Mono',
+    'Hack',
+    'Cascadia Code',
+    'Arial',
+    'Segoe UI',
+    'system-ui',
+  ]
+  try {
+    const desktopFonts = await window.agentEditorDesktop?.listFontFamilies?.()
+    const fonts = desktopFonts?.length ? desktopFonts : fallbackFonts
+    availableFontFamilies.value = [...new Set(fonts.map((item) => item.trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b))
+  } catch {
+    availableFontFamilies.value = fallbackFonts
+  } finally {
+    fontsLoading.value = false
+  }
+}
+
+async function handleSaveFontFamilies(payload: { target: 'ui' | 'text'; families: string[] }) {
+  const nextUiFontFamilies = payload.target === 'ui' ? payload.families : uiFontFamiliesDraft.value
+  const nextTextFontFamilies = payload.target === 'text' ? payload.families : textFontFamiliesDraft.value
+  uiFontFamiliesDraft.value = [...nextUiFontFamilies]
+  textFontFamiliesDraft.value = [...nextTextFontFamilies]
+  try {
+    await settingsStore.saveFontSettings({
+      uiFontFamilies: nextUiFontFamilies,
+      textFontFamilies: nextTextFontFamilies,
+    })
+  } catch (error) {
+    saveError.value = error instanceof Error ? error.message : '保存字体设置失败'
+  }
+}
 
 async function saveProfile() {
   saving.value = true
@@ -328,6 +383,7 @@ const sortedTools = computed(() => {
 })
 
 onMounted(() => {
+  loadAvailableFonts()
   loadAgentSettings()
   loadModelConfig()
   loadWebSearchConfig()
@@ -351,7 +407,11 @@ onMounted(() => {
         v-model:knowledge-ignore-patterns-draft="knowledgeIgnorePatternsDraft"
         v-model:library-name-draft="libraryNameDraft"
         v-model:ocr-enabled-draft="ocrEnabledDraft"
+        v-model:text-font-families-draft="textFontFamiliesDraft"
+        v-model:ui-font-families-draft="uiFontFamiliesDraft"
         v-model:watch-enabled-draft="watchEnabledDraft"
+        :available-font-families="availableFontFamilies"
+        :fonts-loading="fontsLoading"
         :has-changes="hasChanges"
         :save-error="saveError"
         :save-message="saveMessage"
@@ -360,6 +420,7 @@ onMounted(() => {
         :theme-mode="settingsStore.themeMode"
         :theme-options="themeOptions"
         @save="saveProfile"
+        @save-font-families="handleSaveFontFamilies"
         @set-show-index-column="settingsStore.setShowIndexColumn"
         @set-theme-mode="settingsStore.setThemeMode"
       />
@@ -586,6 +647,114 @@ onMounted(() => {
   color: var(--color-text-muted);
   font-size: 11px;
   line-height: 1.45;
+}
+
+.font-family-control {
+  position: relative;
+  margin-bottom: var(--space-10);
+  padding-left: 82px;
+}
+
+.font-family-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  margin-bottom: var(--space-6);
+}
+
+.font-family-header label {
+  width: 72px;
+  margin-left: -82px;
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+.font-family-header span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.font-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.font-chip,
+.font-add-button {
+  min-height: 28px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.font-chip:hover,
+.font-add-button:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.font-picker-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 82px;
+  z-index: 30;
+  width: min(360px, calc(100vw - 180px));
+  padding: var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-window);
+}
+
+.font-picker-popover input {
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.font-picker-popover input:focus {
+  border-color: var(--color-primary);
+}
+
+.font-option-list {
+  display: grid;
+  gap: 2px;
+  max-height: 260px;
+  margin-top: var(--space-6);
+  overflow: auto;
+}
+
+.font-option-list button {
+  min-height: 28px;
+  padding: 0 var(--space-8);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  text-align: left;
+}
+
+.font-option-list button:hover {
+  background: var(--color-primary-softer);
+  color: var(--color-text);
+}
+
+.font-empty {
+  margin: var(--space-8);
+  color: var(--color-text-muted);
+  font-size: 12px;
 }
 
 /* Theme */

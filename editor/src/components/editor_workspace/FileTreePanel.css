@@ -5,6 +5,7 @@
   background: var(--color-chrome-bg-solid);
   border-left: 0;
   border-right: 0;
+  font-family: var(--font-ui);
 }
 
 .file-panel.dragging {

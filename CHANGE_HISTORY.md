@@ -1,6 +1,7 @@
 # CHANGE HISTORY
 
 ## 2026-07-18
+- [x] 新增全局字体切换基础设施: 设置页基础配置增加界面字体与文字字体家族管理,支持读取本机字体、增删字体家族并持久化到 `user_settings`; `settings` store 统一写入 `--font-ui`/`--font-text` 并保留默认字体栈 fallback; 文件树显式消费界面字体变量,开发规范补充全局字体切换规则.
 - [x] 彻底删除了console前端文件夹, 移除已废弃前端的文档与打包入口: README 改为只描述 editor 启动、验证和构建流程; 开发规范删除旧前端专属设计约束; PyInstaller 与后端静态资源定位统一使用 `editor/dist`。
 - [x] 第一批超长文件治理: `SettingsView.vue` 拆出 settings_view 子组件; `FileTreePanel.vue` 与 `FileResourceManager.vue` 抽离样式和纯 helper; `useObsData.ts` 拆出 RAG 指标派生; `scheduler.py` 拆出调度共享类型与运行时 mixin; `builtin.py` 拆出工具定义列表和数学求值 helper; 顺手修复 editor 类型检查中 ToolCallInline 与 TreeNode 的既有类型错误。
 

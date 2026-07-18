@@ -8,8 +8,12 @@
  */
 
 :root {
-  --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-ui-default: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-text-default: "JetBrains Mono", "Hack", "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --font-code: "JetBrains Mono", "Hack", "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-ui: var(--font-ui-default);
+  --font-text: var(--font-text-default);
+  --font-chat: var(--font-ui);
   --font-mono: var(--font-code);
 
   --font-size-xs: 0.75rem;    /* 12px */

@@ -10,7 +10,8 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, saveKnowledgeIngestionConfig, saveWebSearchConfig, updateSettingsKnowledgeDir } from '@/api/settings'
+import { ApiError } from '@/api/client'
+import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, saveFontConfig, saveKnowledgeIngestionConfig, saveWebSearchConfig, updateSettingsKnowledgeDir } from '@/api/settings'
 import type { AgentLoopMode } from '@/api/agent'
 import type { SettingsKnowledgeLibraryResponse, SettingsProfileResponse } from '@/api/settings'
 import type { KnowledgeLibraryProfile } from '@/types/settings'
@@ -21,6 +22,9 @@ const PROFILE_KEY = 'agent_editor_profile'
 const CHAT_MODE_KEY = 'agent_editor_chat_mode'
 const AGENT_LOOP_MODE_KEY = 'agent_editor_loop_mode'
 const SHOW_INDEX_COLUMN_KEY = 'agent_editor_show_index_column'
+
+const DEFAULT_UI_FONT_STACK = 'var(--font-ui-default)'
+const DEFAULT_TEXT_FONT_STACK = 'var(--font-text-default)'
 
 const DEFAULT_PROFILE: UserSettingsProfile = {
   userId: '',
@@ -33,6 +37,41 @@ const DEFAULT_PROFILE: UserSettingsProfile = {
   autoIngestOnUpload: false,
   ocrEnabled: false,
   knowledgeIgnorePatterns: '',
+  uiFontFamilies: [],
+  textFontFamilies: [],
+}
+
+function normalizeFontFamily(value: string | undefined): string {
+  return (value ?? '').replace(/[;{}]/g, '').trim()
+}
+
+function normalizeFontFamilies(values: string[] | string | undefined): string[] {
+  const sourceValues = Array.isArray(values) ? values : (values ? [values] : [])
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  for (const value of sourceValues) {
+    const family = normalizeFontFamily(value)
+    if (!family) continue
+    const key = family.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    normalized.push(family)
+  }
+  return normalized
+}
+
+function quoteFontFamily(value: string): string {
+  if (value.startsWith('var(') || /^[-_a-zA-Z][-_a-zA-Z0-9]*$/u.test(value)) {
+    return value
+  }
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
+function buildFontStack(values: string[] | undefined, fallback: string): string {
+  const normalized = normalizeFontFamilies(values)
+  return normalized.length > 0
+    ? `${normalized.map(quoteFontFamily).join(', ')}, ${fallback}`
+    : fallback
 }
 
 function normalizeProfile(profile: UserSettingsProfile): UserSettingsProfile {
@@ -41,6 +80,8 @@ function normalizeProfile(profile: UserSettingsProfile): UserSettingsProfile {
     ...profile,
     userId: profile.userId.trim(),
     knowledgeLibraries: profile.knowledgeLibraries ?? [],
+    uiFontFamilies: normalizeFontFamilies(profile.uiFontFamilies ?? profile.uiFontFamily),
+    textFontFamilies: normalizeFontFamilies(profile.textFontFamilies ?? profile.textFontFamily),
   }
   if (nextProfile.userId === 'local-user') {
     nextProfile.userId = ''
@@ -66,6 +107,8 @@ function mapBackendProfile(profileResponse: SettingsProfileResponse): Partial<Us
     autoIngestOnUpload: Boolean(profileResponse.auto_ingest_on_upload),
     ocrEnabled: Boolean(profileResponse.ocr_enabled),
     knowledgeIgnorePatterns: profileResponse.knowledge_ignore_patterns ?? '',
+    uiFontFamilies: profileResponse.ui_font_families ?? [],
+    textFontFamilies: profileResponse.text_font_families ?? [],
   }
 }
 
@@ -139,6 +182,17 @@ export const useSettingsStore = defineStore('settings', () => {
     document.documentElement.setAttribute('data-color-scheme', colorScheme.value)
   }
 
+  function applyFonts() {
+    document.documentElement.style.setProperty(
+      '--font-ui',
+      buildFontStack(profile.value.uiFontFamilies, DEFAULT_UI_FONT_STACK),
+    )
+    document.documentElement.style.setProperty(
+      '--font-text',
+      buildFontStack(profile.value.textFontFamilies, DEFAULT_TEXT_FONT_STACK),
+    )
+  }
+
   function persistProfile() {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile.value))
   }
@@ -146,6 +200,7 @@ export const useSettingsStore = defineStore('settings', () => {
   /** Restore persisted theme and attach system color-scheme listener. */
   function initTheme() {
     applyTheme()
+    applyFonts()
     window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', applyTheme)
   }
 
@@ -181,6 +236,43 @@ export const useSettingsStore = defineStore('settings', () => {
   function updateProfile(nextProfile: Partial<UserSettingsProfile>) {
     profile.value = normalizeProfile({ ...profile.value, ...nextProfile })
     persistProfile()
+    applyFonts()
+  }
+
+  function setUiFontFamilies(fontFamilies: string[]) {
+    updateProfile({ uiFontFamilies: fontFamilies })
+  }
+
+  function setTextFontFamilies(fontFamilies: string[]) {
+    updateProfile({ textFontFamilies: fontFamilies })
+  }
+
+  async function saveFontSettings(params: { uiFontFamilies?: string[]; textFontFamilies?: string[] }) {
+    const nextUiFontFamilies = params.uiFontFamilies ?? profile.value.uiFontFamilies
+    const nextTextFontFamilies = params.textFontFamilies ?? profile.value.textFontFamilies
+    updateProfile({
+      uiFontFamilies: nextUiFontFamilies,
+      textFontFamilies: nextTextFontFamilies,
+    })
+    if (!hasUserId.value) {
+      return null
+    }
+    try {
+      const result = await saveFontConfig(profile.value.userId, {
+        uiFontFamilies: nextUiFontFamilies,
+        textFontFamilies: nextTextFontFamilies,
+      })
+      updateProfile({
+        uiFontFamilies: result.ui_font_families,
+        textFontFamilies: result.text_font_families,
+      })
+      return result
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 405) {
+        throw new Error('保存字体设置失败: 后端尚未加载字体配置接口,请重启后端服务')
+      }
+      throw new Error('保存字体设置失败')
+    }
   }
 
   /** Replace local profile fields with a backend settings response. */
@@ -306,11 +398,15 @@ export const useSettingsStore = defineStore('settings', () => {
     activeKnowledgeLibrary,
     isDark,
     initTheme,
+    applyFonts,
     setThemeMode,
     toggleTheme,
     toggleChatMode,
     setAgentLoopMode,
     updateProfile,
+    setUiFontFamilies,
+    setTextFontFamilies,
+    saveFontSettings,
     applyBackendProfile,
     setUserId,
     clearUserId,

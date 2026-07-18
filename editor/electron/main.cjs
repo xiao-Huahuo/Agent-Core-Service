@@ -143,6 +143,67 @@ function readClipboardFilePayload() {
   }
 }
 
+function listWindowsFontFamilies() {
+  const script = `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Drawing
+$fonts = (New-Object System.Drawing.Text.InstalledFontCollection).Families |
+  ForEach-Object { $_.Name } |
+  Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+  Sort-Object -Unique
+$json = $fonts | ConvertTo-Json -Compress
+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
+`
+  return new Promise((resolve) => {
+    const child = childProcess.spawn(
+      'powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      { windowsHide: true },
+    )
+    let stdout = ''
+    child.stdout.on('data', (chunk) => {
+      stdout += String(chunk)
+    })
+    child.on('error', () => resolve([]))
+    child.on('close', (code) => {
+      if (code !== 0 || !stdout.trim()) {
+        resolve([])
+        return
+      }
+      try {
+        const json = Buffer.from(stdout.trim(), 'base64').toString('utf8')
+        const payload = JSON.parse(json)
+        resolve(Array.isArray(payload) ? payload : [payload])
+      } catch {
+        resolve([])
+      }
+    })
+  })
+}
+
+function listUnixFontFamilies() {
+  return new Promise((resolve) => {
+    const child = childProcess.spawn('fc-list', [':', 'family'], { windowsHide: true })
+    let stdout = ''
+    child.stdout.on('data', (chunk) => {
+      stdout += String(chunk)
+    })
+    child.on('error', () => resolve([]))
+    child.on('close', (code) => {
+      if (code !== 0) {
+        resolve([])
+        return
+      }
+      const fonts = stdout
+        .split(/\r?\n/u)
+        .flatMap((line) => line.split(','))
+        .map((item) => item.trim())
+        .filter(Boolean)
+      resolve([...new Set(fonts)].sort((a, b) => a.localeCompare(b)))
+    })
+  })
+}
+
 function isDevelopment() {
   return !app.isPackaged && process.env.ELECTRON_FORCE_PROD !== 'true'
 }
@@ -246,6 +307,15 @@ ipcMain.handle('window:toggle-maximize', () => {
   }
   mainWindow.maximize()
   return true
+})
+
+ipcMain.handle('system:list-font-families', async () => {
+  const fonts = process.platform === 'win32'
+    ? await listWindowsFontFamilies()
+    : await listUnixFontFamilies()
+  return fonts
+    .map((item) => String(item).trim())
+    .filter(Boolean)
 })
 
 ipcMain.on('window:close', () => {

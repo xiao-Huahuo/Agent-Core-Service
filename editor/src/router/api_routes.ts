@@ -9,6 +9,7 @@
 export const API_ROUTES = {
   SETTINGS_PROFILE: '/settings/profile',
   SETTINGS_KNOWLEDGE_DIR: '/settings/profile/knowledge-dir',
+  SETTINGS_FONT_CONFIG: '/settings/font-config',
   SETTINGS_KNOWLEDGE_INGESTION: '/settings/knowledge-ingestion',
   SETTINGS_SYSTEM_PROMPT: '/settings/system-prompt',
   SETTINGS_SYSTEM_PROMPT_ENTRIES: '/settings/system-prompt/entries',

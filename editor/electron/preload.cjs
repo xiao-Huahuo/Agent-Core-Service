@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('agentEditorDesktop', {
     return Array.isArray(payload?.paths) ? payload.paths : []
   },
   copyExternalPathsIntoDirectory: (paths, targetDir, mode, conflictStrategy) => ipcRenderer.invoke('files:copy-into-directory', paths, targetDir, mode, conflictStrategy),
+  listFontFamilies: () => ipcRenderer.invoke('system:list-font-families'),
   getPathForFile: (file) => webUtils?.getPathForFile ? webUtils.getPathForFile(file) : (file?.path || ''),
   writeClipboardText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
 })

@@ -82,6 +82,8 @@ class SettingsService:
                 "ocr_enabled": "BOOLEAN NOT NULL DEFAULT 0",
                 "knowledge_ignore_patterns": "TEXT NOT NULL DEFAULT ''",
                 "disabled_tools": "TEXT NOT NULL DEFAULT ''",
+                "ui_font_families": "TEXT NOT NULL DEFAULT ''",
+                "text_font_families": "TEXT NOT NULL DEFAULT ''",
             }
             with Session(self.engine) as db:
                 for col_name, col_type in migrations.items():
@@ -332,9 +334,81 @@ class SettingsService:
             "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
             "ocr_enabled": bool(record.ocr_enabled),
             "knowledge_ignore_patterns": record.knowledge_ignore_patterns,
+            "ui_font_families": self._load_font_families(record.ui_font_families),
+            "text_font_families": self._load_font_families(record.text_font_families),
             "created_at": record.created_at.isoformat(),
             "updated_at": record.updated_at.isoformat(),
         }
+
+    @staticmethod
+    def _load_font_families(raw_value: str | None) -> list[str]:
+        if not raw_value:
+            return []
+        try:
+            payload = json.loads(raw_value)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(payload, list):
+            return []
+        return [
+            str(item).strip()
+            for item in payload
+            if isinstance(item, str) and str(item).strip()
+        ]
+
+    @staticmethod
+    def _dump_font_families(families: list[str] | None) -> str:
+        if not families:
+            return ""
+        seen: set[str] = set()
+        normalized: list[str] = []
+        for item in families:
+            family = str(item).replace(";", "").replace("{", "").replace("}", "").strip()
+            if not family:
+                continue
+            key = family.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(family)
+        return json.dumps(normalized, ensure_ascii=False)
+
+    def save_font_config(
+        self,
+        *,
+        user_id: str,
+        ui_font_families: list[str] | None = None,
+        text_font_families: list[str] | None = None,
+    ) -> dict:
+        """Persist the user's editor font family stacks."""
+
+        normalized_user_id = user_id.strip()
+        if not normalized_user_id:
+            raise ValueError("user_id is required")
+        now = self._utc_now()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                record = UserSettingsRecord(
+                    user_id=normalized_user_id,
+                    knowledge_dir=str(self.config.storage.knowledge_dir),
+                    created_at=now,
+                    updated_at=now,
+                )
+            if ui_font_families is not None:
+                record.ui_font_families = self._dump_font_families(ui_font_families)
+            if text_font_families is not None:
+                record.text_font_families = self._dump_font_families(text_font_families)
+            record.updated_at = now
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            return {
+                "user_id": record.user_id,
+                "ui_font_families": self._load_font_families(record.ui_font_families),
+                "text_font_families": self._load_font_families(record.text_font_families),
+                "updated_at": record.updated_at.isoformat(),
+            }
 
     def list_knowledge_library_dirs(self) -> list[Path]:
         """Return all configured user knowledge library directories."""

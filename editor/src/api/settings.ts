@@ -18,6 +18,8 @@ export interface SettingsProfileResponse {
   auto_ingest_on_upload?: boolean
   ocr_enabled?: boolean
   knowledge_ignore_patterns?: string
+  ui_font_families?: string[]
+  text_font_families?: string[]
   created_at: string
   updated_at: string
 }
@@ -67,6 +69,25 @@ export function updateSettingsKnowledgeDir(
     body.name = name
   }
   return apiPut<SettingsProfileResponse>(API_ROUTES.SETTINGS_KNOWLEDGE_DIR, body)
+}
+
+export interface FontConfigResponse {
+  user_id: string
+  ui_font_families: string[]
+  text_font_families: string[]
+  updated_at: string
+}
+
+export function saveFontConfig(
+  userId: string,
+  params: { uiFontFamilies?: string[]; textFontFamilies?: string[] },
+): Promise<FontConfigResponse> {
+  const body: { user_id: string; ui_font_families?: string[]; text_font_families?: string[] } = {
+    user_id: userId,
+  }
+  if (params.uiFontFamilies !== undefined) body.ui_font_families = params.uiFontFamilies
+  if (params.textFontFamilies !== undefined) body.text_font_families = params.textFontFamilies
+  return apiPut<FontConfigResponse>(API_ROUTES.SETTINGS_FONT_CONFIG, body)
 }
 
 export interface KnowledgeIngestionConfigResponse {

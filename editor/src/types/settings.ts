@@ -31,6 +31,14 @@ export interface UserSettingsProfile {
   ocrEnabled?: boolean
   /** Gitignore-like rules for files that must never enter the vector store. */
   knowledgeIgnorePatterns?: string
+  /** Optional font families prepended to the global UI font stack. */
+  uiFontFamilies?: string[]
+  /** Optional font families prepended to markdown/text document surfaces. */
+  textFontFamilies?: string[]
+  /** Legacy single-value localStorage field, normalized into uiFontFamilies. */
+  uiFontFamily?: string
+  /** Legacy single-value localStorage field, normalized into textFontFamilies. */
+  textFontFamily?: string
 }
 
 /** Backend knowledge library config shown in settings/profile responses. */
