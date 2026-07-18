@@ -335,7 +335,7 @@ const toolEntries = computed(() => {
   flex: 1;
   min-width: 0;
   color: var(--color-text-secondary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: var(--line-height-normal);
   overflow: hidden;
@@ -392,7 +392,7 @@ const toolEntries = computed(() => {
   margin: 0;
   padding: var(--space-8) var(--space-12);
   color: var(--color-text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-text);
   font-size: 11px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -412,7 +412,7 @@ const toolEntries = computed(() => {
   padding: var(--space-10) var(--space-12);
   background: rgba(0, 0, 0, 0.12);
   color: var(--color-text-secondary);
-  font-family: var(--font-mono);
+  font-family: var(--font-text);
   font-size: 11px;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -451,7 +451,7 @@ const toolEntries = computed(() => {
   border-radius: 3px;
   background: rgba(66, 36, 235, 0.12);
   color: var(--color-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
   font-weight: 600;
 }
@@ -460,7 +460,7 @@ const toolEntries = computed(() => {
   grid-column: 2;
   grid-row: 1;
   color: var(--color-text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 10px;
   align-self: center;
 }
@@ -470,7 +470,7 @@ const toolEntries = computed(() => {
   grid-row: 2;
   margin: 0;
   color: var(--color-text-secondary);
-  font-family: var(--font-mono);
+  font-family: var(--font-text);
   font-size: 11px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -489,7 +489,7 @@ const toolEntries = computed(() => {
   align-items: center;
   gap: var(--space-6);
   padding: var(--space-3) var(--space-12);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 11px;
   line-height: 1.5;
 }

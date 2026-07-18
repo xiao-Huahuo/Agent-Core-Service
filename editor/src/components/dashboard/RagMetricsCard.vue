@@ -210,7 +210,7 @@ const lineOption = computed(() => {
 }
 
 .chart-mode-btn {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
   color: var(--color-text-tertiary);
   background: transparent;
@@ -260,13 +260,13 @@ const lineOption = computed(() => {
 }
 
 .gauge-value {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1;
 }
 
 .gauge-label {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 8px;
   line-height: 1.3;
   color: var(--color-text-tertiary);

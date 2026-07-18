@@ -563,7 +563,7 @@ onMounted(() => {
   border-radius: 999px;
   background: var(--color-canvas);
   color: var(--color-text);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 12px;
   outline: none;
 }
@@ -631,7 +631,7 @@ onMounted(() => {
   border-radius: var(--radius-md);
   background: var(--color-canvas);
   color: var(--color-text);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.5;
   outline: none;
@@ -825,7 +825,7 @@ onMounted(() => {
   border-radius: 999px;
   background: var(--color-canvas);
   color: var(--color-text);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 12px;
   outline: none;
   box-sizing: border-box;
@@ -854,7 +854,7 @@ onMounted(() => {
   border-radius: 999px;
   background: var(--color-canvas);
   color: var(--color-text);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 12px;
   outline: none;
   box-sizing: border-box;
@@ -878,7 +878,7 @@ onMounted(() => {
   border-radius: 999px;
   background: var(--color-canvas);
   color: var(--color-text-muted);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 11px;
   cursor: pointer;
 }
@@ -911,7 +911,7 @@ onMounted(() => {
   border-radius: 999px;
   background: transparent;
   color: var(--color-primary);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 12px;
   cursor: pointer;
 }
@@ -971,7 +971,7 @@ onMounted(() => {
   border-radius: 999px;
   background: var(--color-canvas);
   color: var(--color-text);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 12px;
   outline: none;
 }
@@ -988,7 +988,7 @@ onMounted(() => {
   border-radius: 999px;
   background: transparent;
   color: var(--color-primary);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
@@ -1032,7 +1032,7 @@ onMounted(() => {
 
 .entry-text {
   flex: 1;
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 12px;
   color: var(--color-text);
   overflow: hidden;

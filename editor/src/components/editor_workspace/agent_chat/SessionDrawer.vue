@@ -197,7 +197,7 @@ async function clearAllSessions() {
 .brand-copy strong {
   overflow: hidden;
   color: var(--color-text-primary);
-  font-family: "Monocraft", var(--font-code);
+  font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 700;
   text-overflow: ellipsis;
@@ -222,7 +222,7 @@ async function clearAllSessions() {
 .window-filename {
   overflow: hidden;
   color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -311,7 +311,7 @@ async function clearAllSessions() {
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-secondary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   transition:
     border-color 180ms ease,
@@ -424,7 +424,7 @@ async function clearAllSessions() {
 .empty-hint {
   padding: var(--space-20);
   color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   text-align: center;
 }
@@ -454,7 +454,7 @@ async function clearAllSessions() {
 .user-label {
   display: block;
   color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
 }
 

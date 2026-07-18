@@ -244,7 +244,7 @@ const rawContextJson = computed(() => {
 
 .titlebar-tab,
 .mode-button {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
   color: var(--color-text-tertiary);
   background: transparent;
@@ -289,10 +289,13 @@ const rawContextJson = computed(() => {
 .summary-value,
 .source-title,
 .source-count,
-.source-text,
-.raw-context,
 .placeholder-text {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+}
+
+.source-text,
+.raw-context {
+  font-family: var(--font-text);
 }
 
 .summary-label {
@@ -376,7 +379,7 @@ const rawContextJson = computed(() => {
 .assembly-title,
 .assembly-kind,
 .assembly-count {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
 }
 
 .assembly-order {

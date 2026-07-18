@@ -131,7 +131,7 @@ defineExpose({
 
 .context-menu kbd {
   color: var(--color-text-muted);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 11px;
 }
 

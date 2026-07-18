@@ -249,7 +249,7 @@ const entries = computed(() => {
   display: inline-block;
   flex-shrink: 0;
   color: currentColor;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   transition: transform 0.25s ease;
 }
@@ -260,7 +260,7 @@ const entries = computed(() => {
 
 .bar-label {
   color: currentColor;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   opacity: 0.9;
   transition: opacity var(--transition-fast);
@@ -308,7 +308,7 @@ const entries = computed(() => {
   gap: var(--space-6);
   margin: 0;
   color: var(--color-text-secondary);
-  font-family: var(--font-mono);
+  font-family: var(--font-text);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-relaxed);
 }

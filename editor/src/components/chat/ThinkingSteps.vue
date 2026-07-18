@@ -132,7 +132,7 @@ function traceKey(trace: TraceRecord, idx: number): string {
   padding: var(--space-8) var(--space-10);
   cursor: pointer;
   user-select: none;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   transition: background var(--transition-fast);
 }
 
@@ -237,7 +237,7 @@ function traceKey(trace: TraceRecord, idx: number): string {
 }
 
 .step-chevron {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
   flex-shrink: 0;
@@ -250,7 +250,7 @@ function traceKey(trace: TraceRecord, idx: number): string {
 }
 
 .step-node {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -259,7 +259,7 @@ function traceKey(trace: TraceRecord, idx: number): string {
 }
 
 .step-summary {
-  font-family: var(--font-mono);
+  font-family: var(--font-text);
   font-size: 10px;
   color: var(--color-text-secondary);
   line-height: var(--line-height-relaxed);
@@ -270,7 +270,7 @@ function traceKey(trace: TraceRecord, idx: number): string {
 }
 
 .step-tool-tag {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 8px;
   color: var(--color-blue);
   background: rgba(48, 128, 255, 0.1);
@@ -317,7 +317,7 @@ function traceKey(trace: TraceRecord, idx: number): string {
 }
 
 .detail-label {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
   color: var(--color-text-tertiary);
   text-transform: uppercase;
@@ -327,7 +327,7 @@ function traceKey(trace: TraceRecord, idx: number): string {
 }
 
 .detail-value {
-  font-family: var(--font-mono);
+  font-family: var(--font-text);
   font-size: 10px;
   color: var(--color-text-secondary);
   white-space: pre-wrap;

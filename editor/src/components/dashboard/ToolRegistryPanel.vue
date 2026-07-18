@@ -251,11 +251,14 @@ onMounted(() => {
 .tool-name,
 .tool-meta,
 .detail-title code,
-.arg-row,
-.schema-block,
 .empty-state,
 .error-line {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+}
+
+.arg-row,
+.schema-block {
+  font-family: var(--font-text);
 }
 
 .title-summary {
@@ -438,7 +441,7 @@ h2 {
 }
 
 .disabled-badge {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
   color: var(--color-text-muted);
   white-space: nowrap;
@@ -467,7 +470,7 @@ h2 {
 }
 
 .detail-disabled-badge {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 10px;
   color: var(--color-text-tertiary);
   padding: 2px 6px;

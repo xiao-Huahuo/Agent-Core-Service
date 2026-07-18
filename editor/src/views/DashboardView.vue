@@ -116,7 +116,7 @@ onMounted(() => {
 }
 
 .obs-tab {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   background: transparent;

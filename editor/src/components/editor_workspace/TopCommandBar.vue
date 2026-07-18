@@ -279,7 +279,7 @@ async function handleCloseWindow() {
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-canvas) 92%, var(--color-primary) 8%);
   color: var(--color-primary);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 9px;
   font-weight: 700;
   line-height: 1;
@@ -353,7 +353,7 @@ kbd {
   border: 1px solid var(--color-border);
   border-radius: 999px;
   color: var(--color-text-muted);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 10px;
 }
 

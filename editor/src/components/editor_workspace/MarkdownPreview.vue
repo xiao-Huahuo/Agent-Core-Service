@@ -403,6 +403,7 @@ onBeforeUnmount(() => {
   margin: 0 !important;
   padding: var(--space-20) !important;
   color: var(--color-text-secondary) !important;
+  font-family: var(--font-text) !important;
 }
 
 .markdown-preview :deep(h1),

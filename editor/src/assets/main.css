@@ -140,6 +140,14 @@ a {
   font-family: var(--font-ui) !important;
 }
 
+.vditor-wysiwyg,
+.vditor-ir,
+.vditor-sv,
+.vditor-preview,
+.vditor-reset {
+  font-family: var(--font-text) !important;
+}
+
 .vditor-toolbar,
 .vditor-content,
 .vditor-ir,
@@ -359,14 +367,14 @@ a {
 .traffic-dot.sm { width: 8px; height: 8px; }
 
 .window-filename {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   flex-shrink: 0;
 }
 
 .window-status {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
   flex-shrink: 0;

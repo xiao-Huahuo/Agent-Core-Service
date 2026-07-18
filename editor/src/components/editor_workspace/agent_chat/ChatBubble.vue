@@ -362,7 +362,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 .node-label {
   margin-bottom: var(--space-4);
   color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -433,7 +433,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   background: transparent;
   color: var(--color-text-tertiary);
   cursor: pointer;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
   opacity: 0.45;
   transition:
@@ -604,7 +604,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 
 .system-role {
   color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 8px;
   letter-spacing: 0.5px;
   text-transform: uppercase;

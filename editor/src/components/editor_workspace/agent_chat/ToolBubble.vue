@@ -327,7 +327,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 .status-line {
   margin: 0;
   color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 11px;
   line-height: var(--line-height-normal);
 }
@@ -490,7 +490,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 
 .system-role {
   color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 8px;
   letter-spacing: 0.5px;
   text-transform: uppercase;

@@ -183,7 +183,7 @@ function decisionClass(decision: string): string {
 }
 
 .titlebar-tab {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
   color: var(--color-text-tertiary);
   background: transparent;
@@ -216,14 +216,17 @@ function decisionClass(decision: string): string {
 .timeline-node,
 .timeline-event,
 .timeline-state,
-.timeline-text,
-.timeline-sub,
 .tool-name,
 .tool-status,
 .tool-label,
-.tool-value,
 .placeholder-text {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+}
+
+.timeline-text,
+.timeline-sub,
+.tool-value {
+  font-family: var(--font-text);
 }
 
 .path-node {
@@ -392,10 +395,13 @@ function decisionClass(decision: string): string {
 
 .observation-index,
 .observation-decision,
-.observation-confidence,
+.observation-confidence {
+  font-family: var(--font-ui);
+}
+
 .observation-reason,
 .observation-next {
-  font-family: var(--font-mono);
+  font-family: var(--font-text);
 }
 
 .observation-index {

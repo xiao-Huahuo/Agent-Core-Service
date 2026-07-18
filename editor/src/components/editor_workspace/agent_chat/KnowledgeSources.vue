@@ -99,7 +99,7 @@ function openSource(uri: string) {
   background: transparent;
   color: var(--color-text-tertiary);
   cursor: pointer;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 10px;
   letter-spacing: 0.3px;
   text-transform: uppercase;
@@ -161,7 +161,7 @@ function openSource(uri: string) {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 11px;
   cursor: pointer;
   text-align: left;

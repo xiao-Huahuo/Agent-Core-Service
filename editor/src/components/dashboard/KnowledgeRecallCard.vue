@@ -134,10 +134,13 @@ function formatScore(value: number | undefined): string {
 .knowledge-type,
 .knowledge-score,
 .knowledge-meta-item,
-.knowledge-text,
 .chart-mode-btn,
 .placeholder-text {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+}
+
+.knowledge-text {
+  font-family: var(--font-text);
 }
 
 .chart-toolbar {

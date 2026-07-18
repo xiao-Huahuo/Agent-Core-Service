@@ -137,10 +137,13 @@ function formatScore(value: number | undefined): string {
 .memory-type,
 .memory-score,
 .memory-meta-item,
-.memory-text,
 .chart-mode-btn,
 .placeholder-text {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+}
+
+.memory-text {
+  font-family: var(--font-text);
 }
 
 .chart-toolbar {

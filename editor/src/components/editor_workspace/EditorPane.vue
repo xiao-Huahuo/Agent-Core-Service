@@ -289,6 +289,7 @@ watch(
   flex-direction: column;
   overflow: hidden;
   background: var(--color-canvas-soft);
+  font-family: var(--font-ui);
 }
 
 .tab-strip {

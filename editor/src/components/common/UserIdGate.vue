@@ -108,7 +108,7 @@ input {
   outline: 0;
   background: var(--color-canvas-soft);
   color: var(--color-text);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 13px;
 }
 

@@ -186,7 +186,7 @@ const barOption = computed(() => {
 }
 
 .chart-mode-btn {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
   color: var(--color-text-tertiary);
   background: transparent;
@@ -212,7 +212,7 @@ const barOption = computed(() => {
 
 .total-label {
   display: block;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 8px;
   margin-bottom: var(--space-4);
   overflow: hidden;
@@ -221,7 +221,7 @@ const barOption = computed(() => {
 }
 
 .total-value {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 13px;
   color: var(--color-text-primary);
 }
@@ -245,7 +245,7 @@ const barOption = computed(() => {
 }
 
 .placeholder-text {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
 }

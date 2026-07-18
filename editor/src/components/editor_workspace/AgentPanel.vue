@@ -586,7 +586,7 @@ onMounted(() => {
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 10px;
   line-height: 1;
   cursor: pointer;
@@ -626,7 +626,7 @@ onMounted(() => {
     radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--color-accent) 18%, transparent), transparent 38%),
     color-mix(in srgb, var(--color-surface-raised) 90%, transparent);
   color: var(--color-text-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 13px;
   text-align: center;
   pointer-events: none;
@@ -705,7 +705,7 @@ onMounted(() => {
   gap: var(--space-4);
   padding: 0 var(--space-8);
   border-radius: 999px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 10px;
 }
 
@@ -805,7 +805,7 @@ onMounted(() => {
   height: 24px;
   pointer-events: none;
   color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 13px;
   letter-spacing: 0;
 }
@@ -865,7 +865,7 @@ onMounted(() => {
   border: 1px solid rgba(235, 36, 99, 0.36);
   background: rgba(235, 36, 99, 0.08);
   color: #f08aa9;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--font-size-xs);
 }
 
@@ -894,7 +894,7 @@ onMounted(() => {
 .welcome-title {
   margin: 0;
   color: var(--color-text);
-  font-family: "Monocraft", var(--font-code);
+  font-family: var(--font-ui);
   font-size: 32px;
   font-weight: 750;
   letter-spacing: -0.02em;

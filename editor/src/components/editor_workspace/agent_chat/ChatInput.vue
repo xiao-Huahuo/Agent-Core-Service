@@ -257,7 +257,7 @@ function handleFileChange(event: Event) {
   flex: 1;
   overflow: hidden;
   color: var(--color-text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 11px;
   line-height: 1.4;
   text-overflow: ellipsis;
@@ -294,7 +294,7 @@ function handleFileChange(event: Event) {
   resize: none;
   background: transparent;
   color: var(--input-text);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--font-size-sm);
   line-height: 1.5;
 }
@@ -411,7 +411,7 @@ function handleFileChange(event: Event) {
   border-radius: 0;
   background: transparent;
   color: var(--color-text-muted, #8b93a7);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 10px;
   line-height: 1;
   list-style: none;
@@ -477,7 +477,7 @@ function handleFileChange(event: Event) {
   border-radius: 7px;
   background: transparent;
   color: var(--color-text-secondary, #a8b0c1);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   text-align: left;
   cursor: pointer;
   opacity: 0;

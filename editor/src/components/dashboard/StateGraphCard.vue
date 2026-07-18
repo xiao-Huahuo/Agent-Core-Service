@@ -139,6 +139,7 @@ mermaid.initialize({
     primaryTextColor: '#9ca3af',
     primaryBorderColor: '#3a3a3a',
     lineColor: '#4a4a4a',
+    fontFamily: 'var(--font-ui)',
     fontSize: '11px',
     clusterBkg: 'transparent',
     clusterBorder: '#3a3a3a',
@@ -409,7 +410,7 @@ const queueStatusLabel = computed(() => {
 }
 
 .titlebar-tab {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
   color: var(--color-text-tertiary);
   background: transparent;
@@ -439,7 +440,7 @@ const queueStatusLabel = computed(() => {
   border-radius: 999px;
   background: rgba(235, 36, 99, 0.08);
   color: var(--color-accent);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 8px;
   text-transform: uppercase;
 }
@@ -516,7 +517,7 @@ const queueStatusLabel = computed(() => {
 .task-node,
 .task-summary,
 .queue-meta-item {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
 }
 
 .queue-name {
@@ -591,7 +592,7 @@ const queueStatusLabel = computed(() => {
   position: absolute;
   bottom: 2px;
   right: 3px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 7px;
   color: var(--color-text-tertiary);
   text-transform: uppercase;
@@ -604,7 +605,7 @@ const queueStatusLabel = computed(() => {
   bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
   color: var(--color-text-primary);
   background: rgba(30, 30, 30, 0.95);
@@ -629,7 +630,7 @@ const queueStatusLabel = computed(() => {
   align-items: center;
   justify-content: center;
   padding: var(--space-10) 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
   color: var(--color-text-tertiary);
 }
@@ -687,6 +688,13 @@ const queueStatusLabel = computed(() => {
   height: auto;
   display: block;
   pointer-events: none;
+}
+
+.graph-svg :deep(svg text),
+.graph-svg :deep(.nodeLabel),
+.graph-svg :deep(.edgeLabel),
+.graph-svg :deep(.label) {
+  font-family: var(--font-ui) !important;
 }
 
 .graph-svg :deep(.graph-node-active .nodeLabel),
@@ -763,7 +771,7 @@ const queueStatusLabel = computed(() => {
 }
 
 .placeholder-text {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
   text-align: center;

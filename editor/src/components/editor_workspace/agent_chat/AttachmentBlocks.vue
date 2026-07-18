@@ -232,7 +232,7 @@ function toneFor(filename: string) {
   max-width: 28px;
   overflow: hidden;
   color: var(--attachment-color);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 6px;
   font-weight: 800;
   line-height: 1;

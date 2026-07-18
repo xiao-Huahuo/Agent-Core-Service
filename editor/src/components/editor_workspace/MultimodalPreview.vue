@@ -88,6 +88,7 @@ function maxColumns(rows: string[][]): number {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-canvas);
+  font-family: var(--font-ui);
 }
 
 .image-preview {
@@ -120,6 +121,7 @@ function maxColumns(rows: string[][]): number {
 .table-sheet h3 {
   margin: 0 0 var(--space-8);
   color: var(--color-text);
+  font-family: var(--font-ui);
   font-size: 13px;
 }
 
@@ -133,6 +135,7 @@ function maxColumns(rows: string[][]): number {
   min-width: 100%;
   border-collapse: collapse;
   color: var(--color-text);
+  font-family: var(--font-text);
   font-size: 12px;
 }
 
@@ -147,6 +150,7 @@ function maxColumns(rows: string[][]): number {
   max-width: 880px;
   margin: 0 auto;
   color: var(--color-text);
+  font-family: var(--font-text);
   line-height: 1.7;
 }
 
@@ -157,7 +161,7 @@ function maxColumns(rows: string[][]): number {
 .text-preview {
   margin: 0;
   color: var(--color-text);
-  font-family: var(--font-code);
+  font-family: var(--font-text);
   font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -167,6 +171,7 @@ function maxColumns(rows: string[][]): number {
   display: grid;
   place-items: center;
   color: var(--color-text-muted);
+  font-family: var(--font-ui);
   font-size: 13px;
 }
 </style>

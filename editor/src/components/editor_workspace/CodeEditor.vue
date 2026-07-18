@@ -55,7 +55,7 @@ defineEmits<{
   padding: 0 var(--space-10);
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text-muted);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 11px;
 }
 
@@ -69,7 +69,7 @@ defineEmits<{
   outline: 0;
   background: transparent;
   color: var(--color-text);
-  font-family: var(--font-code);
+  font-family: var(--font-text);
   font-size: 13px;
   line-height: 1.6;
   tab-size: 2;

@@ -35,7 +35,7 @@ const labels: Record<IndexStatus, string> = {
   padding: 0 var(--space-6);
   border: 1px solid currentColor;
   border-radius: var(--radius-sm);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 11px;
   line-height: 1;
 }

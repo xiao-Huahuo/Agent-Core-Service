@@ -321,7 +321,7 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
 .markdown-body :deep(h6) {
   margin: var(--space-16) 0 var(--space-8);
   color: var(--color-text-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-chat);
   font-weight: 650;
   line-height: var(--line-height-tight);
 }
@@ -400,7 +400,7 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
   border-radius: 0;
   background: transparent;
   color: var(--color-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 9px;
   font-weight: 650;
   cursor: pointer;

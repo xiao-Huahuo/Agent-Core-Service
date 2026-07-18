@@ -343,7 +343,7 @@ onMounted(() => {
 .hero-title-text {
   margin: 0;
   color: var(--color-text);
-  font-family: "Minecraft AE", "Monocraft", var(--font-code), "Microsoft YaHei UI", "Microsoft YaHei", "SimHei", sans-serif;
+  font-family: var(--font-ui);
   font-size: 32px;
   font-weight: 750;
   letter-spacing: 0;
@@ -352,7 +352,7 @@ onMounted(() => {
 .hero-title-text,
 .hero-title :deep(.split-text),
 .hero-title :deep(.split-char) {
-  font-family: "Minecraft AE", "Monocraft", var(--font-code), "Microsoft YaHei UI", "Microsoft YaHei", "SimHei", sans-serif !important;
+  font-family: var(--font-ui) !important;
 }
 
 .hero-title p {
@@ -663,7 +663,7 @@ onMounted(() => {
 .card-path {
   font-size: 11px;
   color: var(--color-text-muted);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

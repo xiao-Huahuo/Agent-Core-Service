@@ -32,6 +32,13 @@ const EXTENSION_COLORS = new Map<string, string>([
   ['xlsx', '#26a269'],
 ])
 
+function currentUiFont(): string {
+  if (typeof document === 'undefined') {
+    return 'system-ui, sans-serif'
+  }
+  return getComputedStyle(document.documentElement).getPropertyValue('--font-ui').trim() || 'system-ui, sans-serif'
+}
+
 function linkNode(endpoint: string | KnowledgeGraphNode, nodesById: Map<string, KnowledgeGraphNode>) {
   return typeof endpoint === 'string' ? nodesById.get(endpoint) : endpoint
 }
@@ -202,7 +209,7 @@ function drawLabel(
   ctx.save()
   ctx.globalAlpha = hasHover && !isRelated ? 0.4 : 1
   const baseFontSize = node.kind === 'root' || node.id === state.hoveredNodeId ? 13 : 11
-  ctx.font = `${Math.round(baseFontSize / Math.max(state.viewport.scale, 0.1))}px system-ui, sans-serif`
+  ctx.font = `${Math.round(baseFontSize / Math.max(state.viewport.scale, 0.1))}px ${currentUiFont()}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'top'
   ctx.fillStyle = node.id === state.hoveredNodeId || node.id === state.selectedNodeId ? theme.text : theme.mutedText

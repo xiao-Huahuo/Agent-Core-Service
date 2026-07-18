@@ -4,25 +4,47 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="开发规范调整">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="字体变换v1">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/models/user_settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/models/user_settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/settings_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/settings_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/electron/main.cjs" beforeDir="false" afterPath="$PROJECT_DIR$/editor/electron/main.cjs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/electron/preload.cjs" beforeDir="false" afterPath="$PROJECT_DIR$/editor/electron/preload.cjs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/env.d.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/env.d.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/api/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/settings.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/ui-system.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/ui-system.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/assets/main.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/main.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/chat/ThinkingSteps.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/chat/ThinkingSteps.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/common/StatusBadge.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/common/StatusBadge.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/common/UserIdGate.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/common/UserIdGate.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/ExecutionTraceCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/ExecutionTraceCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/KnowledgeRecallCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/KnowledgeRecallCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/LanguageTraceCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/LanguageTraceCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/LatencyCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/LatencyCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/LongTermMemoryCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/LongTermMemoryCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/RagMetricsCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/RagMetricsCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/StateGraphCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/StateGraphCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/TokenUsageCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/TokenUsageCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/ToolRegistryPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/ToolRegistryPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/CodeEditor.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/CodeEditor.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/CommandPalette.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/CommandPalette.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileContextMenu.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileContextMenu.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/BasicSettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/BasicSettingsSection.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/settings.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/types/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/types/settings.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/MultimodalPreview.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/MultimodalPreview.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/AttachmentBlocks.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/AttachmentBlocks.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatBubble.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatBubble.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatInput.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatInput.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/KnowledgeSources.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/KnowledgeSources.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MarkdownContent.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MarkdownContent.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/SessionDrawer.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/SessionDrawer.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/StreamingIndicator.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/StreamingIndicator.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ThinkingInline.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ThinkingInline.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolBubble.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolBubble.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/graphRenderer.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/graphRenderer.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/DashboardView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/DashboardView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/SearchPage.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SearchPage.vue" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/开发规范.md" beforeDir="false" afterPath="$PROJECT_DIR$/开发规范.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -274,15 +296,7 @@
       <workItem from="1784285049115" duration="4472000" />
       <workItem from="1784335623951" duration="2482000" />
       <workItem from="1784338941374" duration="1273000" />
-      <workItem from="1784375929012" duration="5723000" />
-    </task>
-    <task id="LOCAL-00115" summary="优化了工具模式输出">
-      <option name="closed" value="true" />
-      <created>1783954317824</created>
-      <option name="number" value="00115" />
-      <option name="presentableId" value="LOCAL-00115" />
-      <option name="project" value="LOCAL" />
-      <updated>1783954317824</updated>
+      <workItem from="1784375929012" duration="7300000" />
     </task>
     <task id="LOCAL-00116" summary="新增tesseract ocr基础设施,实现了更高质量的docx预览,实现了pdf的基础文本提取和预览的分离">
       <option name="closed" value="true" />
@@ -668,14 +682,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784380068169</updated>
     </task>
-    <option name="localTasksCounter" value="164" />
+    <task id="LOCAL-00164" summary="字体变换v1">
+      <option name="closed" value="true" />
+      <created>1784382625928</created>
+      <option name="number" value="00164" />
+      <option name="presentableId" value="LOCAL-00164" />
+      <option name="project" value="LOCAL" />
+      <updated>1784382625928</updated>
+    </task>
+    <option name="localTasksCounter" value="165" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="美化!" />
     <MESSAGE value="monocraft字体" />
     <MESSAGE value="文件上传功能" />
     <MESSAGE value="文件上传功能小改" />
@@ -700,7 +721,8 @@
     <MESSAGE value="todo" />
     <MESSAGE value="物理消除了console" />
     <MESSAGE value="开发规范调整" />
-    <option name="LAST_COMMIT_MESSAGE" value="开发规范调整" />
+    <MESSAGE value="字体变换v1" />
+    <option name="LAST_COMMIT_MESSAGE" value="字体变换v1" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />

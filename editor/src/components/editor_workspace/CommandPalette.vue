@@ -149,7 +149,7 @@ kbd {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-muted);
-  font-family: var(--font-code);
+  font-family: var(--font-ui);
   font-size: 11px;
 }
 </style>
