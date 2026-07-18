@@ -1,6 +1,13 @@
 # CHANGE HISTORY
 
 ## 2026-07-18
+- [x] 修正 API schema 展示形态: 移除扁平路径表展示,后端改传 schema tree,前端用可展开 object/array/message 树逐层展示字段.
+- [x] 增强 API 调试页结构展示: API 外壳改为随工作区伸缩滚动;REST/gRPC 展开详情可完整列出 object、array、嵌套字段、必填、默认值、枚举与消息字段信息.
+- [x] 增强调试页 API 详情: API 页拆分 REST/gRPC 子页,每个接口可点击展开;REST 详情来自 OpenAPI 参数、请求体与响应定义,gRPC 详情来自 protobuf descriptor 的消息字段与流式标志,并移除旧端口展示接口.
+- [x] 调试页 API 展示改为真实接口清单: 后端新增 `/debug/runtime-apis` 统一返回 FastAPI REST 路由与 proto gRPC 方法,前端按 REST/gRPC 分组渲染接口.
+- [x] 修复调试页端口接口跨源读取: `/debug/runtime-ports` 响应补充 CORS header,避免开发模式直连后端时前端显示 Failed to fetch.
+- [x] 修复调试页 API 端口加载: 开发模式下端口接口命中前端 HTML 时自动回退到后端 `127.0.0.1:8002`,避免 JSON 解析失败.
+- [x] 新增调试页: 左侧活动栏加入 Debug 入口,调试页内承载工具注册表与后端运行时 API 端口列表;工具注册表从 Agent 观测页移出.
 - [x] 更新桌面应用图标: 将 `docs/assets/无底图标.png` 转换为多尺寸 `editor/src/assets/icons/app.ico`,并接入 Electron `BrowserWindow` 与 PyInstaller `AgentService.spec` 图标配置.
 - [x] 文件树选中条目接入柔和主题色: 移除 `TreeNode.vue` 选中态/拖拽态蓝紫 rgba 硬编码,改用 `--color-primary-soft`、`--color-primary-softer` 与主色派生边框.
 - [x] 知识图谱 Markdown 节点接入主题主色: 移除 md/markdown 节点 `#4224eb` 硬编码,图谱网格接入柔和主题色,主题色预览/保存时主动通知 canvas 重绘.
@@ -20,6 +27,10 @@
   - 界面字体: 文件树,已打开的文件顶栏,Agent和用户气泡,所有按钮和鼠标悬停提示,搜索结果条目,总之除了文字字体之外的所有字体都属于界面字体..
   - 文字字体: markdown编辑区,docx文字提取结果
   - 注意: 添加UI字体设置功能的时候原本的字体不要丢了,可以作为没字体时的备选.
+- [x] 外观设置中提供用户自定义主题色功能,自定义后持久化.
+- [x] 左侧边栏新增调试页面,页面内可以切换两个页面:
+  - 工具注册表页面,把agent观测页里面的工具注册表直接搬过来,原来的页面删掉.
+  - API端口展示页面(需要是后端真实传来的实际所有端口),包括REST端口和gRPC端口两种.
 ## 2026-07-17
 - [x] 暗色模式下编辑区底色改为彻底黑色: `--color-surface-raised` 从 `#202026` 改为 `#000000`，使编辑区与周围 chrome 背景一致。
 - [x] 修复 markdown 预览中嵌入图片破碎的问题: 改用 Vditor 渲染后的 DOM 遍历修复图片 URL（相对路径重写为 `/knowledge/files/raw` 端点），替换了原先的 markdown 文本级替换方案。

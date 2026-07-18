@@ -11,9 +11,8 @@ import { useSessionStore } from '@/stores/session'
 import { useChatStore } from '@/stores/chat'
 import AgentTracePanel from '@/components/dashboard/AgentTracePanel.vue'
 import MemoryKnowledgePanel from '@/components/dashboard/MemoryKnowledgePanel.vue'
-import ToolRegistryPanel from '@/components/dashboard/ToolRegistryPanel.vue'
 
-const activeTab = ref<'trace' | 'mk' | 'tools'>('trace')
+const activeTab = ref<'trace' | 'mk'>('trace')
 const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
@@ -72,19 +71,11 @@ onMounted(() => {
       >
         记忆与知识
       </button>
-      <button
-        class="obs-tab"
-        :class="{ active: activeTab === 'tools' }"
-        @click="activeTab = 'tools'"
-      >
-        工具注册表
-      </button>
     </div>
 
     <div class="dashboard-content">
       <AgentTracePanel v-if="activeTab === 'trace'" />
       <MemoryKnowledgePanel v-if="activeTab === 'mk'" />
-      <ToolRegistryPanel v-if="activeTab === 'tools'" />
     </div>
   </div>
 </template>

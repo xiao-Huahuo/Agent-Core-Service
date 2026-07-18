@@ -2,7 +2,7 @@
  * Agent tool registry API client.
  *
  * Usage:
- * Dashboard components call fetchAgentTools() to display the final Agent tool
+ * Debug components call fetchAgentTools() to display the final Agent tool
  * registry exposed by the running backend.
  */
 

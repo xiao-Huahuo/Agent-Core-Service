@@ -2,7 +2,7 @@
   Agent tool registry panel.
 
   Usage:
-  Shows the running Agent's final registered tools in the Obs dashboard. The
+  Shows the running Agent's final registered tools in the Debug page. The
   data comes from the backend registry after builtin and configured external
   tools have been merged. Disabled tools are sorted to the bottom with a
   toggle switch to enable/disable them directly.

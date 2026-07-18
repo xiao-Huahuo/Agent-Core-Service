@@ -6,7 +6,7 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { Activity, Bot, Files, Folder, Search, Settings, Share2 } from 'lucide-vue-next'
+import { Activity, Bot, Bug, Files, Folder, Search, Settings, Share2 } from 'lucide-vue-next'
 
 defineProps<{
   fileOpen: boolean
@@ -15,6 +15,7 @@ defineProps<{
   agentActive: boolean
   graphActive: boolean
   dashboardActive: boolean
+  debugActive: boolean
   searchActive: boolean
   settingsActive: boolean
 }>()
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   toggleAgent: []
   toggleGraph: []
   openDashboard: []
+  openDebug: []
   openSearch: []
   openSettings: []
 }>()
@@ -91,6 +93,16 @@ const emit = defineEmits<{
       @click="emit('openDashboard')"
     >
       <Activity :size="18" />
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: debugActive }"
+      type="button"
+      title="Debug"
+      aria-label="Debug"
+      @click="emit('openDebug')"
+    >
+      <Bug :size="18" />
     </button>
     <button
       class="activity-button bottom-button"

@@ -40,6 +40,7 @@ export const API_ROUTES = {
   AGENT_TOOLS: '/agent/tools',
   AGENT_EVENTS: '/agent/events',
   AGENT_RECALL_DETAILS: '/agent/recall-details',
+  DEBUG_RUNTIME_APIS: '/debug/runtime-apis',
   KNOWLEDGE_SEARCH: '/knowledge/search',
   KNOWLEDGE_GRAPH: '/knowledge/graph',
   KNOWLEDGE_GRAPH_REBUILD: '/knowledge/graph/rebuild',

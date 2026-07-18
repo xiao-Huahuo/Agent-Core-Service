@@ -16,7 +16,7 @@ export type EditorViewMode = 'edit' | 'preview' | 'split'
 export type FileViewerKind = 'markdown' | 'code' | 'image' | 'pdf' | 'table' | 'document' | 'text' | 'unsupported'
 
 /** Main center workspace surface controlled by activity bar and commands. */
-export type WorkspaceMainView = 'editor' | 'resources' | 'graph' | 'dashboard' | 'search' | 'settings' | 'agent'
+export type WorkspaceMainView = 'editor' | 'resources' | 'graph' | 'dashboard' | 'debug' | 'search' | 'settings' | 'agent'
 
 /** One file or directory in the knowledge tree. */
 export interface KnowledgeFileNode {

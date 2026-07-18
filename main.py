@@ -195,10 +195,12 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         add_AgentServiceServicer_to_server(_grpc_servicer, _grpc_server)
         _grpc_server.add_insecure_port(grpc_address)
         _grpc_server.start()
+        rest_deps._grpc_running = True
         logger.info("gRPC server 已启动 | address=%s", grpc_address)
     except RuntimeError as exc:
         logger.warning("gRPC server 启动失败，HTTP 服务继续运行 | address=%s error=%s", grpc_address, exc)
         _grpc_server = None
+        rest_deps._grpc_running = False
 
     # 前端端口: 打包模式下后端托管静态文件(8002), 开发模式下 editor Vite dev server(5173)
     if _static_dir is not None:
@@ -212,6 +214,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         logger.info("AgentService 正在关闭...")
         if _grpc_server is not None:
             _grpc_server.stop(0)
+            rest_deps._grpc_running = False
             logger.info("gRPC server 已停止")
         if _grpc_servicer is not None:
             _grpc_servicer.shutdown()

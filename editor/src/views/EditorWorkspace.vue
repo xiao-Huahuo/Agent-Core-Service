@@ -24,6 +24,7 @@ const workspaceStore = useWorkspaceStore()
 const AgentPage = defineAsyncComponent(() => import('@/views/AgentPage.vue'))
 const GraphPane = defineAsyncComponent(() => import('@/components/editor_workspace/GraphPane.vue'))
 const DashboardView = defineAsyncComponent(() => import('@/views/DashboardView.vue'))
+const DebugView = defineAsyncComponent(() => import('@/views/DebugView.vue'))
 const SearchPage = defineAsyncComponent(() => import('@/views/SearchPage.vue'))
 import SettingsView from '@/views/SettingsView.vue'
 
@@ -135,6 +136,15 @@ function toggleGraphView() {
 
 function openDashboard() {
   const next = workspaceStore.mainView === 'dashboard' ? 'editor' : 'dashboard'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
+}
+
+function openDebug() {
+  const next = workspaceStore.mainView === 'debug' ? 'editor' : 'debug'
   workspaceStore.setMainView(next)
   if (next !== 'editor') {
     fileSidebarOpen.value = false
@@ -276,6 +286,7 @@ onBeforeUnmount(() => {
         :agent-active="workspaceStore.mainView === 'agent'"
         :graph-active="workspaceStore.mainView === 'graph'"
         :dashboard-active="workspaceStore.mainView === 'dashboard'"
+        :debug-active="workspaceStore.mainView === 'debug'"
         :search-active="workspaceStore.mainView === 'search'"
         :settings-active="workspaceStore.mainView === 'settings'"
         @toggle-file="toggleFileSidebar"
@@ -283,6 +294,7 @@ onBeforeUnmount(() => {
         @toggle-agent="openAgentPage"
         @toggle-graph="toggleGraphView"
         @open-dashboard="openDashboard"
+        @open-debug="openDebug"
         @open-search="openSearch"
         @open-settings="openSettings"
       />
@@ -298,6 +310,7 @@ onBeforeUnmount(() => {
       <AgentPage v-else-if="workspaceStore.mainView === 'agent'" class="editor-col ide-panel" />
       <GraphPane v-else-if="workspaceStore.mainView === 'graph'" class="editor-col ide-panel" @open-node="openGraphNode" />
       <DashboardView v-else-if="workspaceStore.mainView === 'dashboard'" class="editor-col ide-panel" />
+      <DebugView v-else-if="workspaceStore.mainView === 'debug'" class="editor-col ide-panel" />
       <SearchPage v-else-if="workspaceStore.mainView === 'search'" class="editor-col ide-panel" />
       <SettingsView v-else-if="workspaceStore.mainView === 'settings'" class="editor-col ide-panel" />
       <div

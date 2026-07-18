@@ -26,6 +26,7 @@ _knowledge_library_service: KnowledgeLibraryService | None = None
 _knowledge_graph_service: KnowledgeGraphService | None = None
 _retrieval_service: MemoryRetrievalService | None = None
 _attachment_service: SessionAttachmentService | None = None
+_grpc_running = False
 
 
 def _require_agent() -> AgentCore:
