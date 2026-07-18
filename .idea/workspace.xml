@@ -4,112 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="todo">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/AgentService.spec" beforeDir="false" afterPath="$PROJECT_DIR$/AgentService.spec" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/scheduler/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/scheduler/scheduler.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/tools/builtin.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/builtin.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/.editorconfig" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/.gitattributes" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/.oxlintrc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/.prettierrc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/.vscode/extensions.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/__tmp_mermaid_inspect.mjs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/e2e/vue.spec.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/eslint.config.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/index.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/jsconfig.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/package-lock.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/package.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/playwright.config.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/public/assets/components/Logout.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/public/assets/components/PoweredByDeepSeek按钮.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/public/assets/components/input.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/public/assets/components/loader.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/public/assets/components/双层滚动小方块.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/public/assets/components/垃圾桶.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/public/assets/components/新增.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/public/assets/components/明暗切换.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/public/assets/components/超级start按钮.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/public/assets/pages/MacOS面板灵感.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/public/favicon.ico" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/App.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/__tests__/App.spec.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/api/agent.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/api/client.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/api/session.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/api/settings.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/assets/hljs-theme.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/assets/images/avatar/乌萨奇.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/assets/images/avatar/兵王.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/assets/images/avatar/吉伊.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/assets/images/avatar/小八.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/assets/main.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/assets/ui-system.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/chat/ChatBubble.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/chat/ChatInput.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/chat/LoaderCube.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/chat/MarkdownContent.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/chat/MessageBubble.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/chat/MessageList.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/chat/StreamingIndicator.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/chat/ThinkingInline.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/chat/ThinkingSteps.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/chat/ToolBubble.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/chat/ToolCallInline.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/chat/__tests__/ToolCallInline.spec.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/common/AppTopBar.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/common/LogoutButton.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/common/ThemeSwitch.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/common/ThemeToggle.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/AgentTracePanel.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/ExecutionTraceCard.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/KnowledgeRecallCard.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/LanguageTraceCard.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/LatencyCard.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/LongTermMemoryCard.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/MemoryKnowledgePanel.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/RagMetricsCard.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/StateGraphCard.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/dashboard/TokenUsageCard.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/session/AddButton.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/session/SessionDrawer.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/session/SessionItem.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/components/session/TrashButton.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/composable/__tests__/useObsData.spec.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/composable/useAvatar.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/composable/useObsData.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/composable/useUserId.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/main.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/router/api_routes.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/router/index.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/stores/__tests__/chat.spec.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/stores/chat.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/stores/session.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/stores/settings.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/views/ChatView.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/views/DashboardView.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/src/views/SettingsView.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/test_highlight.mjs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/vite.config.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/vitest.config.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/composable/useObsData.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/composable/useObsData.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/summary_pdf_render/page-1.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/summary_pdf_render/page-2.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/summary_pdf_render/page-3.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/summary_pdf_render/page-4.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/开发规范.md" beforeDir="false" afterPath="$PROJECT_DIR$/开发规范.md" afterDir="false" />
-    </list>
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="物理消除了console" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -360,15 +255,7 @@
       <workItem from="1784285049115" duration="4472000" />
       <workItem from="1784335623951" duration="2482000" />
       <workItem from="1784338941374" duration="1273000" />
-      <workItem from="1784375929012" duration="2864000" />
-    </task>
-    <task id="LOCAL-00113" summary="去掉了奇怪的ASSISTANT">
-      <option name="closed" value="true" />
-      <created>1783953332014</created>
-      <option name="number" value="00113" />
-      <option name="presentableId" value="LOCAL-00113" />
-      <option name="project" value="LOCAL" />
-      <updated>1783953332014</updated>
+      <workItem from="1784375929012" duration="3713000" />
     </task>
     <task id="LOCAL-00114" summary="思考模式选择下拉框">
       <option name="closed" value="true" />
@@ -754,14 +641,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784377275581</updated>
     </task>
-    <option name="localTasksCounter" value="162" />
+    <task id="LOCAL-00162" summary="物理消除了console">
+      <option name="closed" value="true" />
+      <created>1784379187072</created>
+      <option name="number" value="00162" />
+      <option name="presentableId" value="LOCAL-00162" />
+      <option name="project" value="LOCAL" />
+      <updated>1784379187072</updated>
+    </task>
+    <option name="localTasksCounter" value="163" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="工具条美化v2" />
     <MESSAGE value="agent工具模式美化" />
     <MESSAGE value="美化!" />
     <MESSAGE value="monocraft字体" />
@@ -786,13 +680,14 @@
     <MESSAGE value="工具可选注册,重构设置页面" />
     <MESSAGE value="去除了小学期不必要的文档" />
     <MESSAGE value="todo" />
-    <option name="LAST_COMMIT_MESSAGE" value="todo" />
+    <MESSAGE value="物理消除了console" />
+    <option name="LAST_COMMIT_MESSAGE" value="物理消除了console" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
     <SUITE FILE_PATH="coverage/AgentService$main.coverage" NAME="main 覆盖结果" MODIFIED="1783512965618" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/AgentService$test_agent_core_service.coverage" NAME="test_agent_core_service 覆盖结果" MODIFIED="1778509217316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
-    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784376879107" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784379002006" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>
