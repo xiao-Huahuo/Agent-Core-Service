@@ -4,177 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="工具可选注册,重构设置页面">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/AI反思日志/AI反思日志-徐光修.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/AI反思日志/AI反思日志-邵瑞熙.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/AI反思日志/AI反思日志-陈宇豪.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/AI反思日志/AI反思日志-魏赞琪.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/airbnb/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/airbnb/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/airtable/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/airtable/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/apple/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/apple/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/binance/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/binance/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/bmw-m/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/bmw-m/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/bmw/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/bmw/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/bugatti/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/bugatti/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/cal/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/cal/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/claude/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/claude/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/clay/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/clay/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/clickhouse/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/clickhouse/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/cohere/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/cohere/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/coinbase/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/coinbase/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/composio/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/composio/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/cursor/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/cursor/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/elevenlabs/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/elevenlabs/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/expo/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/expo/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/ferrari/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/ferrari/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/figma/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/figma/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/framer/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/framer/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/hashicorp/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/hashicorp/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/ibm/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/ibm/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/intercom/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/intercom/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/kraken/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/kraken/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/lamborghini/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/lamborghini/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/linear.app/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/linear.app/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/lovable/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/lovable/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/mastercard/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/mastercard/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/meta/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/meta/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/minimax/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/minimax/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/mintlify/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/mintlify/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/miro/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/miro/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/mistral.ai/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/mistral.ai/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/mongodb/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/mongodb/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/nike/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/nike/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/notion/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/notion/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/nvidia/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/nvidia/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/ollama/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/ollama/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/opencode.ai/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/opencode.ai/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/pinterest/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/pinterest/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/playstation/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/playstation/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/posthog/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/posthog/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/raycast/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/raycast/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/renault/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/renault/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/replicate/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/replicate/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/resend/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/resend/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/revolut/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/revolut/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/runwayml/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/runwayml/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/sanity/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/sanity/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/sentry/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/sentry/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/shopify/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/shopify/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/slack/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/spacex/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/spacex/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/spotify/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/spotify/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/starbucks/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/starbucks/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/stripe/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/stripe/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/supabase/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/supabase/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/superhuman/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/superhuman/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/tesla/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/tesla/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/theverge/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/theverge/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/together.ai/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/together.ai/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/uber/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/uber/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/vercel/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/vercel/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/vodafone/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/vodafone/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/voltagent/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/voltagent/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/warp/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/warp/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/webflow/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/webflow/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/wired/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/wired/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/wise/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/wise/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/x.ai/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/x.ai/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/zapier/DESIGN.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/awesome-design-md/zapier/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/Sprint 2 阶段验收 要求.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/Sprint2AI抗性挑战完成报告.docx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/Sprint2质量门禁完成报告.xlsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/assets/requests并发报告.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/assets/security_scan.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/assets/性能1.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/assets/性能2.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/assets/海报.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/assets/海报2.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/assets/海报3.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/metaweave_2026_7_11.openapi.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/团队创建报告.docx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/周报/第一周/徐光修-项目第一周周报.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/周报/第一周/邵瑞熙-第一周项目周报.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/周报/第一周/陈宇豪-第一周项目周报.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/周报/第一周/魏赞琪-第一周项目周报.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/周报/第二周/徐光修-第二周项目周报.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/周报/第二周/邵瑞熙-第二周项目周报.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/周报/第二周/陈宇豪-第二周项目周报.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/周报/第二周/魏赞琪-第二周项目周报.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/实训个人总结/鸽鸽+徐光修+2024302111280+实训个人总结模板 高级项目实践.docx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/实训个人总结/鸽鸽+邵瑞熙+2024302111239+实训个人总结 高级项目实践.docx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/实训个人总结/鸽鸽+魏赞琪+2024302111407+实训个人总结 高级项目实践.docx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/实训个人总结/鸽鸽-陈宇豪-2024302111240+实训个人总结 高级项目实践.docx" beforeDir="false" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="去除了小学期不必要的文档">
+      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -426,15 +257,7 @@
       <workItem from="1784285049115" duration="4472000" />
       <workItem from="1784335623951" duration="2482000" />
       <workItem from="1784338941374" duration="1273000" />
-      <workItem from="1784375929012" duration="773000" />
-    </task>
-    <task id="LOCAL-00111" summary="Agent三状态切换,但是Codex改坏了一点">
-      <option name="closed" value="true" />
-      <created>1783950228739</created>
-      <option name="number" value="00111" />
-      <option name="presentableId" value="LOCAL-00111" />
-      <option name="project" value="LOCAL" />
-      <updated>1783950228739</updated>
+      <workItem from="1784375929012" duration="1267000" />
     </task>
     <task id="LOCAL-00112" summary="解决了Agent流式输出的Codex遗留问题">
       <option name="closed" value="true" />
@@ -820,14 +643,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784301517856</updated>
     </task>
-    <option name="localTasksCounter" value="160" />
+    <task id="LOCAL-00160" summary="去除了小学期不必要的文档">
+      <option name="closed" value="true" />
+      <created>1784376874699</created>
+      <option name="number" value="00160" />
+      <option name="presentableId" value="LOCAL-00160" />
+      <option name="project" value="LOCAL" />
+      <updated>1784376874699</updated>
+    </task>
+    <option name="localTasksCounter" value="161" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="引用溯源v3_联网溯源" />
     <MESSAGE value="工具条美化" />
     <MESSAGE value="工具条美化v2" />
     <MESSAGE value="agent工具模式美化" />
@@ -852,13 +682,14 @@
     <MESSAGE value="UI小调整" />
     <MESSAGE value="readme" />
     <MESSAGE value="工具可选注册,重构设置页面" />
-    <option name="LAST_COMMIT_MESSAGE" value="工具可选注册,重构设置页面" />
+    <MESSAGE value="去除了小学期不必要的文档" />
+    <option name="LAST_COMMIT_MESSAGE" value="去除了小学期不必要的文档" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
     <SUITE FILE_PATH="coverage/AgentService$main.coverage" NAME="main 覆盖结果" MODIFIED="1783512965618" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/AgentService$test_agent_core_service.coverage" NAME="test_agent_core_service 覆盖结果" MODIFIED="1778509217316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
-    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784339088914" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784376879107" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>
