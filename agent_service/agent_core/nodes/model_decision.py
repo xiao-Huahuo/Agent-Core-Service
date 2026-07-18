@@ -208,6 +208,7 @@ class ModelDecisionNode:
                 system_message=system_message,
                 state=state,
                 token_callback=token_callback,
+                active_tool_names=active_tool_names,
             )
 
         user_api_key, user_base_url, user_small_api_key, user_small_base_url = self._get_user_model_overrides(state)
@@ -244,6 +245,7 @@ class ModelDecisionNode:
         system_message: SystemMessage,
         state: AgentState,
         token_callback: Any,
+        active_tool_names: list[str],
     ) -> dict[str, Any]:
         """
         流式调用模型,逐 token 通过 callback 推送,最终返回完整消息。
@@ -251,6 +253,7 @@ class ModelDecisionNode:
         system_message: 系统提示消息。
         state: 当前 AgentState。
         token_callback: 接收累积文本内容的回调。
+        active_tool_names: 当前可用的工具名称列表。
         """
 
         cumulative = ""
@@ -333,9 +336,8 @@ class ModelDecisionNode:
         """
         压缩工具返回内容后再送入模型,避免文件/搜索结果撑爆上下文。
 
-        同时裁掉本轮内冗余的中间 AI 消息(planner/observation 等中间节点输出),
-        只保留所有 ToolMessage(工具结果)和最后一条 AIMessage(最终/当前回答),
-        降低逐次 LLM 调用的上下文压力,改善流式输出的连续性。
+        保留本轮内所有消息以保证 tool_call → tool_message 顺序完整,
+        工具返回内容由 _compact_tool_message 截断(保留所有消息,仅压缩内容)。
         """
 
         # 找到最后一条 HumanMessage(当前用户输入),以此分界
@@ -345,15 +347,7 @@ class ModelDecisionNode:
                 last_human_idx = i
 
         if last_human_idx >= 0:
-            tail = messages[last_human_idx + 1:]
-            last_ai_idx = -1
-            for i, msg in enumerate(tail):
-                if isinstance(msg, AIMessage):
-                    last_ai_idx = i
-            filtered: list[BaseMessage] = list(messages[:last_human_idx + 1])
-            for i, msg in enumerate(tail):
-                if isinstance(msg, ToolMessage) or i == last_ai_idx:
-                    filtered.append(msg)
+            filtered = list(messages)  # 保留全部消息序列，确保 tool_call → tool_result 顺序不被破坏
         else:
             filtered = messages
 
