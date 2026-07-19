@@ -1,24 +1,21 @@
 <!--
-  Agent 轨迹观测面板 — 三栏布局容器。
-  左: StateGraphCard, 中: LanguageTraceCard, 右: ExecutionTraceCard。
+  Agent trace dashboard panel.
+
+  Usage:
+  Shows the human-readable thinking trace beside the context assembly view.
 -->
 
 <script setup lang="ts">
-import StateGraphCard from '@/components/dashboard/StateGraphCard.vue'
 import LanguageTraceCard from '@/components/dashboard/LanguageTraceCard.vue'
-import ExecutionTraceCard from '@/components/dashboard/ExecutionTraceCard.vue'
 </script>
 
 <template>
   <div class="trace-panel">
-    <div class="col-left">
-      <StateGraphCard />
+    <div class="trace-col">
+      <LanguageTraceCard mode="trace" />
     </div>
-    <div class="col-mid">
-      <LanguageTraceCard />
-    </div>
-    <div class="col-right">
-      <ExecutionTraceCard />
+    <div class="context-col">
+      <LanguageTraceCard mode="context" />
     </div>
   </div>
 </template>
@@ -26,7 +23,7 @@ import ExecutionTraceCard from '@/components/dashboard/ExecutionTraceCard.vue'
 <style scoped>
 .trace-panel {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr) 260px;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
   gap: var(--space-10);
   flex: 1;
   min-height: 0;
@@ -34,7 +31,8 @@ import ExecutionTraceCard from '@/components/dashboard/ExecutionTraceCard.vue'
   padding: var(--space-10);
 }
 
-.col-left {
+.trace-col,
+.context-col {
   position: relative;
   z-index: 1;
   width: 100%;
@@ -43,71 +41,21 @@ import ExecutionTraceCard from '@/components/dashboard/ExecutionTraceCard.vue'
   overflow: hidden;
 }
 
-.col-mid {
-  position: relative;
-  z-index: 3;
+.trace-col > *,
+.context-col > * {
   width: 100%;
   min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.col-right {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.col-left > *,
-.col-mid > *,
-.col-right > * {
-  width: 100%;
-  min-width: 0;
-}
-
-@media (min-width: 1600px) and (min-aspect-ratio: 6/5) {
-  .trace-panel {
-    grid-template-columns: clamp(320px, calc(100dvh - 340px), 460px) minmax(0, 1fr) 260px;
-  }
 }
 
 @media (max-width: 1440px) {
   .trace-panel {
-    grid-template-columns: 280px minmax(0, 1fr) 240px;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
   }
 }
 
-@media (max-width: 1200px) {
-  .trace-panel {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas:
-      'left left'
-      'mid right';
-  }
-
-  .col-left {
-    grid-area: left;
-  }
-
-  .col-mid {
-    grid-area: mid;
-  }
-
-  .col-right {
-    grid-area: right;
-  }
-}
-
-@media (max-width: 768px) {
+@media (max-width: 980px) {
   .trace-panel {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      'left'
-      'mid'
-      'right';
     flex: none;
     overflow: visible;
     padding: var(--space-8);
