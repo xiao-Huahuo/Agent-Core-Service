@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
+import json
+import tempfile
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
+from starlette.concurrency import run_in_threadpool
 
 from agent_service.api.grpc import agent_service_pb2
 import agent_service.api.rest.deps as rest_deps
-from agent_service.api.rest.deps import _require_agent
+from agent_service.api.rest.deps import _require_agent, _require_knowledge_library_service
+from agent_service.services.memory.rag.chunk import chunk_text
+from agent_service.services.memory.rag.frontmatter_bootstrap import FrontmatterBootstrapService
+from agent_service.services.memory.rag.frontmatter_document import StructuredKnowledgeDocument
+from agent_service.services.memory.rag.knowledge_ingestion import KnowledgeIngestionService
 
 router = APIRouter()
 
@@ -36,6 +44,123 @@ async def runtime_apis(request: Request) -> JSONResponse:
         },
         headers={"Access-Control-Allow-Origin": "*"},
     )
+
+
+@router.get("/debug/multimodal-ingestion")
+async def multimodal_ingestion_observation(
+    user_id: str = Query(..., min_length=1, description="User ID"),
+    path: str = Query(..., min_length=1, description="Path relative to the active knowledge library"),
+) -> JSONResponse:
+    """Return the single-file multimodal ingestion observation without writing vector records."""
+
+    try:
+        payload = await run_in_threadpool(_build_multimodal_ingestion_observation, user_id=user_id, relative_path=path)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return JSONResponse(payload, headers={"Access-Control-Allow-Origin": "*"})
+
+
+def _build_multimodal_ingestion_observation(*, user_id: str, relative_path: str) -> dict[str, Any]:
+    library_service = _require_knowledge_library_service()
+    config = _require_agent().config
+    source_root = library_service.get_active_root_path(user_id=user_id).resolve()
+    source_path = (source_root / relative_path.replace("\\", "/").strip("/")).resolve()
+    try:
+        normalized_relative_path = source_path.relative_to(source_root).as_posix()
+    except ValueError as exc:
+        raise ValueError("path escapes knowledge_dir") from exc
+    if not source_path.is_file():
+        raise ValueError("source file not found")
+
+    ocr_enabled = True
+    if hasattr(library_service, "settings_service"):
+        settings_service = library_service.settings_service
+        if hasattr(settings_service, "is_ocr_enabled_for_user"):
+            ocr_enabled = bool(settings_service.is_ocr_enabled_for_user(user_id=user_id))
+
+    with tempfile.TemporaryDirectory(prefix="metaweave_multimodal_observe_") as temp_dir:
+        frontmatter_root = Path(temp_dir)
+        _, output_path = FrontmatterBootstrapService(config=config, ocr_enabled=ocr_enabled).build_frontmatter_file(
+            source_path=source_path,
+            knowledge_dir=source_root,
+            frontmatter_dir=frontmatter_root,
+            supported_suffixes=set(config.constants.knowledge_supported_suffixes),
+        )
+        structured_payload = json.loads(output_path.read_text(encoding="utf-8"))
+        document = StructuredKnowledgeDocument.from_dict(structured_payload)
+
+    semantic_chunks: list[dict[str, Any]] = []
+    overlap_chunks: list[dict[str, Any]] = []
+    global_chunk_index = 0
+    for section_index, section in enumerate(structured_payload.get("sections", [])):
+        if not isinstance(section, dict):
+            continue
+        content = str(section.get("content") or "")
+        semantic_chunks.append(
+            {
+                "index": section_index,
+                "section_id": str(section.get("section_id") or ""),
+                "heading": str(section.get("heading") or ""),
+                "title_path": section.get("title_path", []),
+                "start_char": int(section.get("start_char") or 0),
+                "end_char": int(section.get("end_char") or 0),
+                "char_count": len(content),
+                "content": content,
+            }
+        )
+        previous_end = 0
+        for chunk in chunk_text(
+            text=content,
+            chunk_size=config.memory.chunk_size,
+            chunk_overlap=config.memory.chunk_overlap,
+        ):
+            overlap_chars = max(0, previous_end - chunk.start_char) if chunk.index > 0 else 0
+            overlap_chunks.append(
+                {
+                    "index": global_chunk_index,
+                    "section_index": section_index,
+                    "section_id": str(section.get("section_id") or ""),
+                    "section_heading": str(section.get("heading") or ""),
+                    "local_chunk_index": chunk.index,
+                    "chunk_start_char": chunk.start_char,
+                    "chunk_end_char": chunk.end_char,
+                    "char_count": len(chunk.content),
+                    "overlap_chars": overlap_chars,
+                    "overlap_preview": chunk.content[:overlap_chars],
+                    "content": chunk.content,
+                    "ingestion_content": KnowledgeIngestionService._build_chunk_content(
+                        document=document,
+                        section_heading=str(section.get("heading") or ""),
+                        chunk_text=chunk.content,
+                    ),
+                    "source_range": {
+                        "section_id": str(section.get("section_id") or ""),
+                        "chunk_index": chunk.index,
+                        "section_start_char": int(section.get("start_char") or 0),
+                        "section_end_char": int(section.get("end_char") or 0),
+                        "chunk_start_char": chunk.start_char,
+                        "chunk_end_char": chunk.end_char,
+                    },
+                }
+            )
+            previous_end = chunk.end_char
+            global_chunk_index += 1
+
+    return {
+        "path": normalized_relative_path,
+        "name": source_path.name,
+        "source_size": source_path.stat().st_size,
+        "chunk_size": config.memory.chunk_size,
+        "chunk_overlap": config.memory.chunk_overlap,
+        "json_result": structured_payload,
+        "semantic_chunks": semantic_chunks,
+        "overlap_chunks": overlap_chunks,
+        "stats": {
+            "section_count": len(semantic_chunks),
+            "overlap_chunk_count": len(overlap_chunks),
+            "ocr_enabled": ocr_enabled,
+        },
+    }
 
 
 def _request_base_url(request: Request) -> str:

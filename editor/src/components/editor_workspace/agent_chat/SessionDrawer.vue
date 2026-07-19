@@ -135,9 +135,6 @@ async function clearAllSessions() {
 }
 
 .session-drawer.page-mode {
-  --drawer-page-bg-top: var(--color-chrome-bg-top);
-  --drawer-page-bg-bottom: var(--color-chrome-bg-bottom);
-  --drawer-page-bg-solid: var(--color-chrome-bg-solid);
   --drawer-page-hover: var(--color-primary-softer);
   --drawer-page-active: var(--color-primary-soft);
   top: 0;
@@ -147,11 +144,9 @@ async function clearAllSessions() {
   max-width: min(280px, 80vw);
   border: 0;
   border-radius: 0;
-  background:
-    linear-gradient(180deg, var(--drawer-page-bg-top), var(--drawer-page-bg-bottom)),
-    var(--drawer-page-bg-solid);
+  background: var(--color-canvas-soft);
   box-shadow: none;
-  backdrop-filter: blur(18px);
+  backdrop-filter: none;
   transform: translateX(calc(-100% + 10px));
 }
 

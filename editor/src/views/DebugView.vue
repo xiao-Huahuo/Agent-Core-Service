@@ -10,12 +10,13 @@ import { onMounted, ref, watch } from 'vue'
 import AgentTracePanel from '@/components/dashboard/AgentTracePanel.vue'
 import MemoryKnowledgePanel from '@/components/dashboard/MemoryKnowledgePanel.vue'
 import ToolRegistryPanel from '@/components/dashboard/ToolRegistryPanel.vue'
+import MultimodalIngestionPanel from '@/components/debug/MultimodalIngestionPanel.vue'
 import RuntimeApisPanel from '@/components/debug/RuntimeApisPanel.vue'
 import { useChatStore } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 
-const activeTab = ref<'trace' | 'mk' | 'tools' | 'apis'>('trace')
+const activeTab = ref<'trace' | 'multimodal' | 'mk' | 'tools' | 'apis'>('trace')
 const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
@@ -65,6 +66,14 @@ onMounted(() => {
       </button>
       <button
         class="debug-tab"
+        :class="{ active: activeTab === 'multimodal' }"
+        type="button"
+        @click="activeTab = 'multimodal'"
+      >
+        多模态入库
+      </button>
+      <button
+        class="debug-tab"
         :class="{ active: activeTab === 'mk' }"
         type="button"
         @click="activeTab = 'mk'"
@@ -91,6 +100,7 @@ onMounted(() => {
 
     <div class="debug-content">
       <AgentTracePanel v-if="activeTab === 'trace'" />
+      <MultimodalIngestionPanel v-else-if="activeTab === 'multimodal'" />
       <MemoryKnowledgePanel v-else-if="activeTab === 'mk'" />
       <ToolRegistryPanel v-else-if="activeTab === 'tools'" />
       <RuntimeApisPanel v-else />

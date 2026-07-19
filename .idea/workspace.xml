@@ -4,13 +4,18 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="华丽的图谱动画">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="Material图标">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/editor/package-lock.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/editor/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/debug.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/debug.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/api/debug.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/debug.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/SessionDrawer.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/SessionDrawer.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/AgentPage.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/AgentPage.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/DebugView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/DebugView.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -263,15 +268,7 @@
       <workItem from="1784335623951" duration="2482000" />
       <workItem from="1784338941374" duration="1273000" />
       <workItem from="1784375929012" duration="13746000" />
-      <workItem from="1784443638650" duration="13235000" />
-    </task>
-    <task id="LOCAL-00128" summary="加了几个截图">
-      <option name="closed" value="true" />
-      <created>1784019100286</created>
-      <option name="number" value="00128" />
-      <option name="presentableId" value="LOCAL-00128" />
-      <option name="project" value="LOCAL" />
-      <updated>1784019100287</updated>
+      <workItem from="1784443638650" duration="15814000" />
     </task>
     <task id="LOCAL-00129" summary=".">
       <option name="closed" value="true" />
@@ -657,14 +654,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784457581048</updated>
     </task>
-    <option name="localTasksCounter" value="177" />
+    <task id="LOCAL-00177" summary="Material图标">
+      <option name="closed" value="true" />
+      <created>1784458370026</created>
+      <option name="number" value="00177" />
+      <option name="presentableId" value="LOCAL-00177" />
+      <option name="project" value="LOCAL" />
+      <updated>1784458370026</updated>
+    </task>
+    <option name="localTasksCounter" value="178" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="ui小改" />
     <MESSAGE value="准备进行工具观测" />
     <MESSAGE value="工具观测增强" />
     <MESSAGE value="UI小调整" />
@@ -689,13 +693,14 @@
     <MESSAGE value="最近删除页面" />
     <MESSAGE value="修复了入库历史显示问题;添加二进制检测" />
     <MESSAGE value="华丽的图谱动画" />
-    <option name="LAST_COMMIT_MESSAGE" value="华丽的图谱动画" />
+    <MESSAGE value="Material图标" />
+    <option name="LAST_COMMIT_MESSAGE" value="Material图标" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
     <SUITE FILE_PATH="coverage/AgentService$main.coverage" NAME="main 覆盖结果" MODIFIED="1783512965618" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/AgentService$test_agent_core_service.coverage" NAME="test_agent_core_service 覆盖结果" MODIFIED="1778509217316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
-    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784458280472" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784460261781" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>

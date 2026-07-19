@@ -24,9 +24,7 @@ import AgentPanel from '@/components/editor_workspace/AgentPanel.vue'
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
-    var(--color-chrome-bg-solid);
+  background: var(--color-canvas-soft);
 }
 
 .agent-page-shell {

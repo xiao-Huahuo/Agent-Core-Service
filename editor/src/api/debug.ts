@@ -95,6 +95,49 @@ export interface RuntimeApisResponse {
   groups: RuntimeApiGroup[]
 }
 
+export interface MultimodalSemanticChunk {
+  index: number
+  section_id: string
+  heading: string
+  title_path: string[]
+  start_char: number
+  end_char: number
+  char_count: number
+  content: string
+}
+
+export interface MultimodalOverlapChunk {
+  index: number
+  section_index: number
+  section_id: string
+  section_heading: string
+  local_chunk_index: number
+  chunk_start_char: number
+  chunk_end_char: number
+  char_count: number
+  overlap_chars: number
+  overlap_preview: string
+  content: string
+  ingestion_content: string
+  source_range: Record<string, unknown>
+}
+
+export interface MultimodalIngestionObservation {
+  path: string
+  name: string
+  source_size: number
+  chunk_size: number
+  chunk_overlap: number
+  json_result: Record<string, unknown>
+  semantic_chunks: MultimodalSemanticChunk[]
+  overlap_chunks: MultimodalOverlapChunk[]
+  stats: {
+    section_count: number
+    overlap_chunk_count: number
+    ocr_enabled: boolean
+  }
+}
+
 export async function fetchRuntimeApis(): Promise<RuntimeApisResponse> {
   try {
     return await apiGet<RuntimeApisResponse>(API_ROUTES.DEBUG_RUNTIME_APIS)
@@ -112,4 +155,39 @@ async function fetchRuntimeApisFromBackendOrigin(): Promise<RuntimeApisResponse>
     throw new Error(`Request failed: ${response.status} ${response.statusText}`)
   }
   return response.json() as Promise<RuntimeApisResponse>
+}
+
+export async function fetchMultimodalIngestionObservation(
+  userId: string,
+  path: string,
+  signal?: AbortSignal,
+): Promise<MultimodalIngestionObservation> {
+  try {
+    return await apiGet<MultimodalIngestionObservation>(
+      API_ROUTES.DEBUG_MULTIMODAL_INGESTION,
+      { user_id: userId, path },
+      { signal, timeoutMs: 600_000 },
+    )
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return fetchMultimodalIngestionObservationFromBackendOrigin(userId, path, signal)
+    }
+    throw error
+  }
+}
+
+async function fetchMultimodalIngestionObservationFromBackendOrigin(
+  userId: string,
+  path: string,
+  signal?: AbortSignal,
+): Promise<MultimodalIngestionObservation> {
+  const url = new URL(`http://127.0.0.1:8002${API_ROUTES.DEBUG_MULTIMODAL_INGESTION}`)
+  url.searchParams.set('user_id', userId)
+  url.searchParams.set('path', path)
+
+  const response = await fetch(url, { signal })
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status} ${response.statusText}`)
+  }
+  return response.json() as Promise<MultimodalIngestionObservation>
 }

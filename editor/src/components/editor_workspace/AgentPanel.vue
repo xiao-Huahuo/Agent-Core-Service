@@ -470,7 +470,7 @@ onMounted(() => {
   overflow: hidden;
   border: 0;
   border-radius: 0;
-  background: var(--color-chrome-bg-solid);
+  background: var(--color-canvas-soft);
 }
 
 .agent-panel.agent-page-mode {
@@ -480,7 +480,7 @@ onMounted(() => {
   --agent-input-max-width: min(52vw, 720px);
   --agent-topbar-height: 32px;
   border: 0;
-  background: transparent;
+  background: var(--color-canvas-soft);
   backdrop-filter: none;
 }
 
@@ -519,7 +519,7 @@ onMounted(() => {
   min-height: var(--agent-topbar-height, 32px);
   padding: 0 var(--space-12);
   gap: var(--space-8);
-  background: var(--color-chrome-bg-solid);
+  background: var(--color-canvas-soft);
   flex-shrink: 0;
 }
 
