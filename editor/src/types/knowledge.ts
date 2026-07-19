@@ -16,7 +16,16 @@ export type EditorViewMode = 'edit' | 'preview' | 'split'
 export type FileViewerKind = 'markdown' | 'code' | 'image' | 'pdf' | 'table' | 'document' | 'text' | 'unsupported'
 
 /** Main center workspace surface controlled by activity bar and commands. */
-export type WorkspaceMainView = 'editor' | 'resources' | 'graph' | 'dashboard' | 'debug' | 'search' | 'settings' | 'agent'
+export type WorkspaceMainView =
+  | 'editor'
+  | 'resources'
+  | 'ingestion'
+  | 'graph'
+  | 'dashboard'
+  | 'debug'
+  | 'search'
+  | 'settings'
+  | 'agent'
 
 /** One file or directory in the knowledge tree. */
 export interface KnowledgeFileNode {
@@ -36,6 +45,39 @@ export interface KnowledgeFileNode {
   ingestedAt?: string
   /** Current indexing state for this file or directory. */
   indexStatus?: IndexStatus
+}
+
+export type IngestionQueueStatus = 'running' | 'waiting'
+
+export type IngestionHistoryStatus = 'finished' | 'failed' | 'skipped'
+
+export interface IngestionQueueItem {
+  id: string
+  name: string
+  path: string
+  isDir: boolean
+  size?: number
+  mtime?: string
+  status: IngestionQueueStatus
+  progress: number
+  queuedAt: string
+  message?: string
+}
+
+export interface IngestionHistoryItem {
+  id: string
+  name: string
+  path: string
+  isDir: boolean
+  size?: number
+  mtime?: string
+  status: IngestionHistoryStatus
+  finishedAt: string
+  filesSeen?: number
+  filesIngested?: number
+  filesSkipped?: number
+  chunksCreated?: number
+  message?: string
 }
 
 /** Runtime events expected from the future watchdog/SSE endpoint. */

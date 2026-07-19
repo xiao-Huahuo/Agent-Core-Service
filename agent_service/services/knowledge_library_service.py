@@ -30,6 +30,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Callable
 from urllib.parse import quote
 from xml.etree import ElementTree
 
@@ -215,6 +216,7 @@ class KnowledgeLibraryService:
         user_id: str,
         knowledge_dir: str | None = None,
         uploaded_path: str = "",
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> KnowledgeLibraryRebuildResult:
         """
         重新扫描用户知识库并写入向量库。
@@ -250,6 +252,7 @@ class KnowledgeLibraryService:
                 self._relative_path(path=path, root=source_root),
                 is_dir=False,
             ),
+            progress_callback=progress_callback,
         )
         self._delete_ignored_frontmatter_files(
             frontmatter_root=frontmatter_root,
@@ -263,6 +266,7 @@ class KnowledgeLibraryService:
         ingestion_result = ingestion_service.ingest_frontmatter_dir(
             frontmatter_dir=frontmatter_root,
             user_id=knowledge_owner_id,
+            progress_callback=progress_callback,
         )
         chunks_deleted = self.memory_service.delete_memories_except_sources(
             user_id=knowledge_owner_id,
@@ -339,7 +343,13 @@ class KnowledgeLibraryService:
         )
         return {"files_seen": len(ignored_paths), "chunks_deleted": chunks_deleted}
 
-    def ingest_single_file(self, *, user_id: str, path: str) -> KnowledgeLibraryRebuildResult:
+    def ingest_single_file(
+        self,
+        *,
+        user_id: str,
+        path: str,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    ) -> KnowledgeLibraryRebuildResult:
         """
         只灌库当前 active 知识库中的单个文件。
 
@@ -364,6 +374,13 @@ class KnowledgeLibraryService:
         source_id = FrontmatterBootstrapService._build_document_id(Path(relative_path))
         ignore_matcher = self._build_ignore_matcher(user_id=normalized_user_id)
         if ignore_matcher.is_ignored(relative_path, is_dir=False):
+            self._emit_manual_ingestion_progress(
+                progress_callback,
+                status="started",
+                relative_path=relative_path,
+                processed=0,
+                total=1,
+            )
             frontmatter_path = (frontmatter_root / relative_path).with_suffix(".json").resolve()
             if self._is_relative_to(frontmatter_path, frontmatter_root) and frontmatter_path.exists():
                 frontmatter_path.unlink()
@@ -372,6 +389,16 @@ class KnowledgeLibraryService:
                 tag=self.config.constants.knowledge_tag,
                 memory_type="knowledge_chunk",
                 source_id=source_id,
+            )
+            self._emit_manual_ingestion_progress(
+                progress_callback,
+                status="skipped",
+                relative_path=relative_path,
+                processed=1,
+                total=1,
+                files_skipped=1,
+                chunks_deleted=chunks_deleted,
+                message="ignored",
             )
             return KnowledgeLibraryRebuildResult(
                 user_id=normalized_user_id,
@@ -391,6 +418,22 @@ class KnowledgeLibraryService:
                 status_message="文件命中知识库屏蔽规则,已跳过并清理旧索引。",
             )
         if source_path.suffix.lower() not in self.supported_suffixes:
+            self._emit_manual_ingestion_progress(
+                progress_callback,
+                status="started",
+                relative_path=relative_path,
+                processed=0,
+                total=1,
+            )
+            self._emit_manual_ingestion_progress(
+                progress_callback,
+                status="skipped",
+                relative_path=relative_path,
+                processed=1,
+                total=1,
+                files_skipped=1,
+                message="unsupported suffix",
+            )
             return KnowledgeLibraryRebuildResult(
                 user_id=normalized_user_id,
                 library_id=library_id,
@@ -415,6 +458,7 @@ class KnowledgeLibraryService:
             knowledge_dir=source_root,
             frontmatter_dir=frontmatter_root,
             supported_suffixes=self.supported_suffixes,
+            progress_callback=progress_callback,
         )
         ingestion_result = KnowledgeIngestionService(
             config=self.config,
@@ -423,6 +467,7 @@ class KnowledgeLibraryService:
         ).ingest_frontmatter_file(
             frontmatter_path=frontmatter_path,
             user_id=knowledge_owner_id,
+            progress_callback=progress_callback,
         )
         skip_reason, status_message = self._describe_single_file_ingestion_result(
             source_path=source_path,
@@ -456,7 +501,13 @@ class KnowledgeLibraryService:
             status_message=status_message,
         )
 
-    def ingest_path(self, *, user_id: str, path: str) -> KnowledgeLibraryRebuildResult:
+    def ingest_path(
+        self,
+        *,
+        user_id: str,
+        path: str,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    ) -> KnowledgeLibraryRebuildResult:
         """
         灌库文件或文件夹。文件直接灌库,文件夹递归灌入其下所有支持的文件。
 
@@ -472,7 +523,7 @@ class KnowledgeLibraryService:
         if not source_path.exists():
             raise ValueError("path not found")
         if source_path.is_file():
-            return self.ingest_single_file(user_id=user_id, path=path)
+            return self.ingest_single_file(user_id=user_id, path=path, progress_callback=progress_callback)
         supported = self.supported_suffixes
         file_paths = sorted(
             p for p in source_path.rglob("*") if p.is_file() and p.suffix.lower() in supported
@@ -509,10 +560,19 @@ class KnowledgeLibraryService:
             chunks_created=0,
             chunks_deleted=0,
         )
-        for fp in file_paths:
+        for file_index, fp in enumerate(file_paths):
             relative = self._relative_path(path=fp, root=source_root)
+
+            def scoped_progress(payload: dict[str, Any], *, index: int = file_index) -> None:
+                if not progress_callback:
+                    return
+                next_payload = dict(payload)
+                next_payload["total"] = len(file_paths)
+                next_payload["processed"] = index + (1 if int(payload.get("processed") or 0) > 0 else 0)
+                progress_callback(next_payload)
+
             try:
-                result = self.ingest_single_file(user_id=user_id, path=relative)
+                result = self.ingest_single_file(user_id=user_id, path=relative, progress_callback=scoped_progress)
                 agg.frontmatter_files_seen += result.frontmatter_files_seen
                 agg.frontmatter_files_written += result.frontmatter_files_written
                 agg.frontmatter_files_skipped += result.frontmatter_files_skipped
@@ -524,8 +584,50 @@ class KnowledgeLibraryService:
             except Exception:
                 logger.exception("灌库文件失败 | path=%s", relative)
                 agg.files_skipped += 1
+                self._emit_manual_ingestion_progress(
+                    progress_callback,
+                    status="failed",
+                    relative_path=relative,
+                    processed=file_index + 1,
+                    total=len(file_paths),
+                    files_skipped=agg.files_skipped,
+                    message="file ingestion failed",
+                )
         agg.status_message = f"文件夹灌库完成,共 {agg.files_ingested} 个文件入库,{agg.chunks_created} 个切片。"
         return agg
+
+    @staticmethod
+    def _emit_manual_ingestion_progress(
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        *,
+        status: str,
+        relative_path: str,
+        processed: int,
+        total: int,
+        files_ingested: int = 0,
+        files_skipped: int = 0,
+        chunks_created: int = 0,
+        chunks_deleted: int = 0,
+        message: str = "",
+    ) -> None:
+        if not progress_callback:
+            return
+        normalized_path = relative_path.replace("\\", "/").strip("/")
+        payload: dict[str, Any] = {
+            "phase": "ingestion",
+            "status": status,
+            "path": normalized_path,
+            "name": Path(normalized_path).name,
+            "processed": processed,
+            "total": total,
+            "files_ingested": files_ingested,
+            "files_skipped": files_skipped,
+            "chunks_created": chunks_created,
+            "chunks_deleted": chunks_deleted,
+        }
+        if message:
+            payload["message"] = message
+        progress_callback(payload)
 
     def _describe_single_file_ingestion_result(
         self,

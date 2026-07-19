@@ -25,6 +25,7 @@ const AgentPage = defineAsyncComponent(() => import('@/views/AgentPage.vue'))
 const GraphPane = defineAsyncComponent(() => import('@/components/editor_workspace/GraphPane.vue'))
 const DashboardView = defineAsyncComponent(() => import('@/views/DashboardView.vue'))
 const DebugView = defineAsyncComponent(() => import('@/views/DebugView.vue'))
+const IngestionProgressView = defineAsyncComponent(() => import('@/views/IngestionProgressView.vue'))
 const SearchPage = defineAsyncComponent(() => import('@/views/SearchPage.vue'))
 import SettingsView from '@/views/SettingsView.vue'
 
@@ -162,6 +163,15 @@ function openResources() {
   agentSidebarOpen.value = false
 }
 
+function openIngestion() {
+  const next = workspaceStore.mainView === 'ingestion' ? 'editor' : 'ingestion'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
+}
+
 function openSearch() {
   const next = workspaceStore.mainView === 'search' ? 'editor' : 'search'
   workspaceStore.setMainView(next)
@@ -283,6 +293,7 @@ onBeforeUnmount(() => {
         :file-open="visibleFileSidebarOpen"
         :agent-open="visibleAgentSidebarOpen"
         :resources-active="workspaceStore.mainView === 'resources'"
+        :ingestion-active="workspaceStore.mainView === 'ingestion'"
         :agent-active="workspaceStore.mainView === 'agent'"
         :graph-active="workspaceStore.mainView === 'graph'"
         :dashboard-active="workspaceStore.mainView === 'dashboard'"
@@ -291,6 +302,7 @@ onBeforeUnmount(() => {
         :settings-active="workspaceStore.mainView === 'settings'"
         @toggle-file="toggleFileSidebar"
         @open-resources="openResources"
+        @open-ingestion="openIngestion"
         @toggle-agent="openAgentPage"
         @toggle-graph="toggleGraphView"
         @open-dashboard="openDashboard"
@@ -307,6 +319,7 @@ onBeforeUnmount(() => {
       ></div>
       <EditorPane v-if="workspaceStore.mainView === 'editor'" class="editor-col ide-panel" />
       <FileResourceManager v-else-if="workspaceStore.mainView === 'resources'" class="editor-col ide-panel" />
+      <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="editor-col ide-panel" />
       <AgentPage v-else-if="workspaceStore.mainView === 'agent'" class="editor-col ide-panel" />
       <GraphPane v-else-if="workspaceStore.mainView === 'graph'" class="editor-col ide-panel" @open-node="openGraphNode" />
       <DashboardView v-else-if="workspaceStore.mainView === 'dashboard'" class="editor-col ide-panel" />

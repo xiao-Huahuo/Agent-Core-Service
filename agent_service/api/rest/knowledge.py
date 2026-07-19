@@ -275,6 +275,7 @@ async def rebuild_knowledge_stream(body: dict[str, Any]) -> StreamingResponse:
         result = svc.rebuild_user_knowledge(
             user_id=user_id,
             knowledge_dir=str(knowledge_dir) if knowledge_dir else None,
+            progress_callback=progress_callback,
         )
         return result.to_dict()
 
@@ -358,7 +359,7 @@ async def ingest_knowledge_file_stream(body: dict[str, Any]) -> StreamingRespons
     svc = _require_knowledge_library_service()
 
     def run_job(progress_callback: Any) -> dict[str, Any]:
-        result = svc.ingest_single_file(user_id=user_id, path=path)
+        result = svc.ingest_single_file(user_id=user_id, path=path, progress_callback=progress_callback)
         return result.to_dict()
 
     return StreamingResponse(_run_progress_job_stream(run_job), media_type="text/event-stream")
@@ -391,7 +392,7 @@ async def ingest_knowledge_path_stream(body: dict[str, Any]) -> StreamingRespons
     svc = _require_knowledge_library_service()
 
     def run_job(progress_callback: Any) -> dict[str, Any]:
-        result = svc.ingest_path(user_id=user_id, path=path)
+        result = svc.ingest_path(user_id=user_id, path=path, progress_callback=progress_callback)
         return result.to_dict()
 
     return StreamingResponse(_run_progress_job_stream(run_job), media_type="text/event-stream")

@@ -67,6 +67,7 @@ class FrontmatterBootstrapService:
         frontmatter_dir: Path | None = None,
         supported_suffixes: set[str] | None = None,
         exclude_path: Callable[[Path], bool] | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> FrontmatterBootstrapResult:
         """
         扫描原始知识目录并输出结构化 JSON。
@@ -85,9 +86,19 @@ class FrontmatterBootstrapService:
             if not (exclude_path and exclude_path(path))
         ]
         logger.info("Frontmatter 结构化开始 | 扫描到 %d 个文件", len(source_files))
+        total = len(source_files)
         for source_path in source_files:
             result.files_seen += 1
             rel_path = source_path.relative_to(source_root)
+            self._emit_progress(
+                progress_callback,
+                status="started",
+                source_path=source_path,
+                relative_path=rel_path,
+                processed=result.files_seen - 1,
+                total=total,
+                result=result,
+            )
             try:
                 source_hash = self._hash_file(source_path)
                 document = self._build_document(
@@ -104,13 +115,43 @@ class FrontmatterBootstrapService:
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 if output_path.exists() and output_path.read_text(encoding="utf-8") == output_payload:
                     result.files_skipped += 1
+                    self._emit_progress(
+                        progress_callback,
+                        status="skipped",
+                        source_path=source_path,
+                        relative_path=rel_path,
+                        processed=result.files_seen,
+                        total=total,
+                        result=result,
+                        message="frontmatter unchanged",
+                    )
                     logger.debug("  [跳过] %s (未变更)", rel_path)
                     continue
                 output_path.write_text(output_payload, encoding="utf-8")
                 result.files_written += 1
+                self._emit_progress(
+                    progress_callback,
+                    status="written",
+                    source_path=source_path,
+                    relative_path=rel_path,
+                    processed=result.files_seen,
+                    total=total,
+                    result=result,
+                    sections=len(document.sections),
+                )
                 logger.info("  [写入] %s → %d sections", rel_path, len(document.sections))
             except Exception as exc:
                 result.files_skipped += 1
+                self._emit_progress(
+                    progress_callback,
+                    status="failed",
+                    source_path=source_path,
+                    relative_path=rel_path,
+                    processed=result.files_seen,
+                    total=total,
+                    result=result,
+                    message=str(exc),
+                )
                 logger.warning("  [跳过] %s (结构化失败: %s)", rel_path, exc)
         logger.info(
             "Frontmatter 结构化完成 | %d 文件: %d 写入, %d 跳过",
@@ -127,6 +168,7 @@ class FrontmatterBootstrapService:
         knowledge_dir: Path | None = None,
         frontmatter_dir: Path | None = None,
         supported_suffixes: set[str] | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> tuple[FrontmatterBootstrapResult, Path]:
         """
         只结构化单个源文件。
@@ -147,9 +189,18 @@ class FrontmatterBootstrapService:
         if resolved_source.suffix.lower() not in suffixes:
             raise ValueError(f"unsupported knowledge file suffix: {resolved_source.suffix.lower()}")
         try:
-            resolved_source.relative_to(source_root)
+            relative_path = resolved_source.relative_to(source_root)
         except ValueError as exc:
             raise ValueError("source file escapes knowledge_dir") from exc
+        self._emit_progress(
+            progress_callback,
+            status="started",
+            source_path=resolved_source,
+            relative_path=relative_path,
+            processed=0,
+            total=1,
+            result=result,
+        )
 
         source_hash = self._hash_file(resolved_source)
         document = self._build_document(
@@ -166,10 +217,61 @@ class FrontmatterBootstrapService:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         if output_path.exists() and output_path.read_text(encoding="utf-8") == output_payload:
             result.files_skipped = 1
+            self._emit_progress(
+                progress_callback,
+                status="skipped",
+                source_path=resolved_source,
+                relative_path=relative_path,
+                processed=1,
+                total=1,
+                result=result,
+                message="frontmatter unchanged",
+            )
             return result, output_path
         output_path.write_text(output_payload, encoding="utf-8")
         result.files_written = 1
+        self._emit_progress(
+            progress_callback,
+            status="written",
+            source_path=resolved_source,
+            relative_path=relative_path,
+            processed=1,
+            total=1,
+            result=result,
+            sections=len(document.sections),
+        )
         return result, output_path
+
+    @staticmethod
+    def _emit_progress(
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        *,
+        status: str,
+        source_path: Path,
+        relative_path: Path,
+        processed: int,
+        total: int,
+        result: FrontmatterBootstrapResult,
+        message: str = "",
+        sections: int | None = None,
+    ) -> None:
+        if not progress_callback:
+            return
+        payload: dict[str, Any] = {
+            "phase": "frontmatter",
+            "status": status,
+            "path": relative_path.as_posix(),
+            "name": source_path.name,
+            "processed": processed,
+            "total": total,
+            "files_written": result.files_written,
+            "files_skipped": result.files_skipped,
+        }
+        if message:
+            payload["message"] = message
+        if sections is not None:
+            payload["sections"] = sections
+        progress_callback(payload)
 
     def _build_document(
         self,

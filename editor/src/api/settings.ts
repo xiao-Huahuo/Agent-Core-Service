@@ -159,11 +159,14 @@ export interface KnowledgeIngestionProgressEvent {
   processed?: number
   total?: number
   path?: string
+  name?: string
   files_written?: number
   files_ingested?: number
   files_skipped?: number
   chunks_created?: number
   chunks_deleted?: number
+  file_chunks_created?: number
+  sections?: number
   result?: KnowledgeRebuildResponse
   message?: string
 }

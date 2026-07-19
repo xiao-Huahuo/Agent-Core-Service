@@ -6,12 +6,13 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { Activity, Bot, Bug, Files, Folder, Search, Settings, Share2 } from 'lucide-vue-next'
+import { Activity, Bot, Bug, DatabaseZap, Files, Folder, Search, Settings, Share2 } from 'lucide-vue-next'
 
 defineProps<{
   fileOpen: boolean
   agentOpen: boolean
   resourcesActive: boolean
+  ingestionActive: boolean
   agentActive: boolean
   graphActive: boolean
   dashboardActive: boolean
@@ -23,6 +24,7 @@ defineProps<{
 const emit = defineEmits<{
   toggleFile: []
   openResources: []
+  openIngestion: []
   toggleAgent: []
   toggleGraph: []
   openDashboard: []
@@ -53,6 +55,16 @@ const emit = defineEmits<{
       @click="emit('openResources')"
     >
       <Files :size="18" />
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: ingestionActive }"
+      type="button"
+      title="入库进度"
+      aria-label="入库进度"
+      @click="emit('openIngestion')"
+    >
+      <DatabaseZap :size="18" />
     </button>
     <button
       class="activity-button"

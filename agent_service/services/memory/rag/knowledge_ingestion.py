@@ -16,6 +16,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Callable
 
 from agent_service.core.agent_config import AgentConfig
 
@@ -73,6 +74,7 @@ class KnowledgeIngestionService:
         *,
         frontmatter_dir: Path | None = None,
         user_id: str = "system",
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> KnowledgeIngestionResult:
         """
         扫描并入库结构化知识文档目录。
@@ -85,11 +87,22 @@ class KnowledgeIngestionService:
         result = KnowledgeIngestionResult(source_ids_seen=set())
         frontmatter_files = self._iter_frontmatter_files(source_root)
         logger.info("知识库向量灌库开始 | 扫描到 %d 个结构化文档", len(frontmatter_files))
+        total = len(frontmatter_files)
         for frontmatter_path in frontmatter_files:
             result.files_seen += 1
             rel_path = frontmatter_path.relative_to(source_root)
             document = self._load_document(frontmatter_path)
             result.source_ids_seen.add(document.document_id)
+            self._emit_progress(
+                progress_callback,
+                status="started",
+                document=document,
+                frontmatter_path=frontmatter_path,
+                fallback_path=rel_path,
+                processed=result.files_seen - 1,
+                total=total,
+                result=result,
+            )
             if self.config.memory.knowledge_hash_lock_enabled and self.memory_service.has_source_hash(
                 source_hash=document.source_hash,
                 memory_type="knowledge_chunk",
@@ -97,6 +110,17 @@ class KnowledgeIngestionService:
                 source_id=document.document_id,
             ):
                 result.files_skipped += 1
+                self._emit_progress(
+                    progress_callback,
+                    status="skipped",
+                    document=document,
+                    frontmatter_path=frontmatter_path,
+                    fallback_path=rel_path,
+                    processed=result.files_seen,
+                    total=total,
+                    result=result,
+                    message="source hash unchanged",
+                )
                 logger.debug("  [跳过] %s (哈希未变更)", rel_path)
                 continue
             self.memory_service.delete_memories_for_source(
@@ -108,10 +132,32 @@ class KnowledgeIngestionService:
             chunks_created = self._ingest_document(document=document, user_id=user_id)
             if chunks_created == 0:
                 result.files_skipped += 1
+                self._emit_progress(
+                    progress_callback,
+                    status="skipped",
+                    document=document,
+                    frontmatter_path=frontmatter_path,
+                    fallback_path=rel_path,
+                    processed=result.files_seen,
+                    total=total,
+                    result=result,
+                    message="0 chunks",
+                )
                 logger.warning("  [跳过] %s (0 chunk)", rel_path)
                 continue
             result.files_ingested += 1
             result.chunks_created += chunks_created
+            self._emit_progress(
+                progress_callback,
+                status="ingested",
+                document=document,
+                frontmatter_path=frontmatter_path,
+                fallback_path=rel_path,
+                processed=result.files_seen,
+                total=total,
+                result=result,
+                chunks_created=chunks_created,
+            )
             logger.info("  [入库] %s → %d chunks", document.title, chunks_created)
         logger.info(
             "知识库向量灌库完成 | %d 文档: %d 入库, %d 跳过, 共 %d chunks",
@@ -127,6 +173,7 @@ class KnowledgeIngestionService:
         *,
         frontmatter_path: Path,
         user_id: str = "system",
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> KnowledgeIngestionResult:
         """
         只入库单个结构化知识文档。仅清理该文档自己的旧 chunk,不影响其他文件。
@@ -141,6 +188,16 @@ class KnowledgeIngestionService:
         result = KnowledgeIngestionResult(files_seen=1, source_ids_seen=set())
         document = self._load_document(resolved_path)
         result.source_ids_seen.add(document.document_id)
+        self._emit_progress(
+            progress_callback,
+            status="started",
+            document=document,
+            frontmatter_path=resolved_path,
+            fallback_path=resolved_path.name,
+            processed=0,
+            total=1,
+            result=result,
+        )
         if self.config.memory.knowledge_hash_lock_enabled and self.memory_service.has_source_hash(
             source_hash=document.source_hash,
             memory_type="knowledge_chunk",
@@ -148,6 +205,17 @@ class KnowledgeIngestionService:
             source_id=document.document_id,
         ):
             result.files_skipped = 1
+            self._emit_progress(
+                progress_callback,
+                status="skipped",
+                document=document,
+                frontmatter_path=resolved_path,
+                fallback_path=resolved_path.name,
+                processed=1,
+                total=1,
+                result=result,
+                message="source hash unchanged",
+            )
             logger.debug("  [跳过] %s (哈希未变更)", resolved_path.name)
             return result
         result.chunks_deleted = self.memory_service.delete_memories_for_source(
@@ -159,12 +227,68 @@ class KnowledgeIngestionService:
         chunks_created = self._ingest_document(document=document, user_id=user_id)
         if chunks_created == 0:
             result.files_skipped = 1
+            self._emit_progress(
+                progress_callback,
+                status="skipped",
+                document=document,
+                frontmatter_path=resolved_path,
+                fallback_path=resolved_path.name,
+                processed=1,
+                total=1,
+                result=result,
+                message="0 chunks",
+            )
             logger.warning("  [跳过] %s (0 chunk)", resolved_path.name)
             return result
         result.files_ingested = 1
         result.chunks_created = chunks_created
+        self._emit_progress(
+            progress_callback,
+            status="ingested",
+            document=document,
+            frontmatter_path=resolved_path,
+            fallback_path=resolved_path.name,
+            processed=1,
+            total=1,
+            result=result,
+            chunks_created=chunks_created,
+        )
         logger.info("  [单文件入库] %s → %d chunks", document.title, chunks_created)
         return result
+
+    @staticmethod
+    def _emit_progress(
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        *,
+        status: str,
+        document: StructuredKnowledgeDocument,
+        frontmatter_path: Path,
+        fallback_path: Path | str,
+        processed: int,
+        total: int,
+        result: KnowledgeIngestionResult,
+        message: str = "",
+        chunks_created: int = 0,
+    ) -> None:
+        if not progress_callback:
+            return
+        relative_path = str(document.metadata.get("relative_path") or Path(fallback_path).with_suffix("").as_posix())
+        payload: dict[str, Any] = {
+            "phase": "ingestion",
+            "status": status,
+            "path": relative_path.replace("\\", "/"),
+            "name": Path(relative_path).name or frontmatter_path.stem,
+            "processed": processed,
+            "total": total,
+            "files_ingested": result.files_ingested,
+            "files_skipped": result.files_skipped,
+            "chunks_created": result.chunks_created,
+        }
+        if chunks_created:
+            payload["file_chunks_created"] = chunks_created
+        if message:
+            payload["message"] = message
+        progress_callback(payload)
 
     def _ingest_document(self, *, document: StructuredKnowledgeDocument, user_id: str) -> int:
         """
