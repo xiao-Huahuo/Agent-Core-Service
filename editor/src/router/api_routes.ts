@@ -29,6 +29,7 @@ export const API_ROUTES = {
   KNOWLEDGE_FILE_FOLDER: '/knowledge/files/folder',
   KNOWLEDGE_FILE_COPY: '/knowledge/files/copy',
   KNOWLEDGE_FILE_RENAME: '/knowledge/files/rename',
+  KNOWLEDGE_FILE_TRASH: '/knowledge/files/trash',
   KNOWLEDGE_FILE_EVENTS: '/knowledge/files/events',
   KNOWLEDGE_INDEX_RUN: '/knowledge/index/run',
   KNOWLEDGE_INDEX_STATUS: '/knowledge/index/status',

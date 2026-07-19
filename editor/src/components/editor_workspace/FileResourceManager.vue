@@ -32,6 +32,8 @@ import {
   List,
   ListChecks,
   RefreshCw,
+  RotateCcw,
+  Trash2,
   X,
 } from 'lucide-vue-next'
 
@@ -51,10 +53,11 @@ import {
 import { previewKnowledgeFile, readKnowledgeFile } from '@/api/knowledge'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
-import type { FilePreviewPayload, KnowledgeFileNode } from '@/types/knowledge'
+import type { FilePreviewPayload, KnowledgeFileNode, KnowledgeTrashEntry } from '@/types/knowledge'
 
 defineOptions({ name: 'FileResourceManager' })
 
+type ResourcePage = 'files' | 'trash'
 type ResourceViewMode = 'list' | 'content' | 'small' | 'medium' | 'large'
 type SortKey = 'name' | 'mtime' | 'ingested' | 'size'
 type SortDirection = 'asc' | 'desc'
@@ -62,6 +65,7 @@ type SortDirection = 'asc' | 'desc'
 const workspaceStore = useWorkspaceStore()
 const settingsStore = useSettingsStore()
 const currentDir = ref('')
+const resourcePage = ref<ResourcePage>('files')
 const directoryBackStack = ref<string[]>([])
 const directoryForwardStack = ref<string[]>([])
 const viewMode = ref<ResourceViewMode>('list')
@@ -144,6 +148,7 @@ const listGridColumns = computed(() => {
   const indexColumn = settingsStore.showIndexColumn ? '118px' : ''
   return `${selectionColumn}minmax(240px, 1fr) 168px 168px 112px 96px${indexColumn ? ` ${indexColumn}` : ''}`
 })
+const trashGridColumns = 'minmax(220px, 1fr) minmax(260px, 1.2fr) 156px 156px 96px 96px 132px'
 
 watch(
   () => workspaceStore.selectedTreePath,
@@ -271,9 +276,20 @@ function goUpDirectory() {
 }
 
 async function refreshResources() {
+  if (resourcePage.value === 'trash') {
+    await workspaceStore.loadKnowledgeTrash()
+    return
+  }
   await workspaceStore.loadKnowledgeTree()
   if (!flatNodes.value.some((node) => node.path === currentDir.value) && currentDir.value) {
     navigateToDirectory('', false)
+  }
+}
+
+async function switchResourcePage(page: ResourcePage) {
+  resourcePage.value = page
+  if (page === 'trash') {
+    await workspaceStore.loadKnowledgeTrash()
   }
 }
 
@@ -699,8 +715,33 @@ function previewSummary(node: KnowledgeFileNode): string {
   return `${fileKind(node)} | ${formatSize(nodeSize(node))}`
 }
 
+function displayTrashDate(value: string): string {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value.replace('T', ' ').slice(0, 16)
+  const pad = (input: number) => input.toString().padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function trashKind(entry: { is_dir: boolean; name: string }): string {
+  return entry.is_dir ? '文件夹' : fileKind({ name: entry.name, path: entry.name, isDir: false })
+}
+
+async function restoreTrash(entry: KnowledgeTrashEntry) {
+  await workspaceStore.restoreTrashEntry(entry)
+  resourcePage.value = 'files'
+}
+
+async function deleteTrash(entry: KnowledgeTrashEntry) {
+  if (!window.confirm(`彻底删除 ${entry.name}? 此操作不能恢复。`)) {
+    return
+  }
+  await workspaceStore.deleteTrashEntry(entry)
+}
+
 onMounted(() => {
   document.addEventListener('click', closeContextMenu)
+  void workspaceStore.loadKnowledgeTrash()
 })
 
 onUnmounted(() => {
@@ -712,13 +753,32 @@ onUnmounted(() => {
   <section
     class="resource-manager"
     :class="{ dragging, 'theme-dark': settingsStore.isDark }"
-    @dragenter.prevent="handleDragEnter()"
-    @dragover.prevent="handleDragEnter()"
+    @dragenter.prevent="resourcePage === 'files' && handleDragEnter()"
+    @dragover.prevent="resourcePage === 'files' && handleDragEnter()"
     @dragleave="handleDragLeave"
-    @drop.prevent="handleDrop"
-    @contextmenu.prevent="openContextMenu(null, $event)"
+    @drop.prevent="resourcePage === 'files' && handleDrop($event)"
+    @contextmenu.prevent="resourcePage === 'files' && openContextMenu(null, $event)"
   >
     <header class="resource-toolbar">
+      <div class="resource-page-switch" aria-label="Resource pages">
+        <button
+          class="page-switch-button"
+          :class="{ active: resourcePage === 'files' }"
+          type="button"
+          @click="switchResourcePage('files')"
+        >
+          文件
+        </button>
+        <button
+          class="page-switch-button"
+          :class="{ active: resourcePage === 'trash' }"
+          type="button"
+          @click="switchResourcePage('trash')"
+        >
+          最近删除
+        </button>
+      </div>
+      <span class="toolbar-separator"></span>
       <div class="nav-controls" aria-label="Folder navigation">
         <button class="tool-button" type="button" title="回退" :disabled="!canGoBack" @click="goBackDirectory">
           <ArrowLeft :size="15" />
@@ -743,7 +803,7 @@ onUnmounted(() => {
       >
         <FolderOpen :size="18" />
       </button>
-      <div class="path-capsule" aria-label="Current path">
+      <div v-if="resourcePage === 'files'" class="path-capsule" aria-label="Current path">
         <button
           v-for="part in pathCapsuleParts"
           :key="part.path || '__root'"
@@ -754,7 +814,12 @@ onUnmounted(() => {
           {{ part.label }}
         </button>
       </div>
+      <div v-else class="path-capsule trash-path-capsule" aria-label="Current page">
+        <Trash2 :size="15" />
+        <span>最近删除</span>
+      </div>
       <button
+        v-if="resourcePage === 'files'"
         class="tool-button"
         :class="{ active: multiSelectMode }"
         type="button"
@@ -764,7 +829,7 @@ onUnmounted(() => {
       >
         <ListChecks :size="15" />
       </button>
-      <div class="sort-control">
+      <div v-if="resourcePage === 'files'" class="sort-control">
         <button
           class="tool-button"
           :class="{ active: sortMenuOpen }"
@@ -802,7 +867,7 @@ onUnmounted(() => {
           </button>
         </div>
       </div>
-      <div class="view-switch" aria-label="View mode">
+      <div v-if="resourcePage === 'files'" class="view-switch" aria-label="View mode">
         <button
           v-for="mode in viewModes"
           :key="mode.value"
@@ -821,15 +886,61 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <div v-if="isMultiSelecting" class="multi-banner">
+    <div v-if="resourcePage === 'files' && isMultiSelecting" class="multi-banner">
       <span>{{ selectedPaths.size > 0 ? `已选择 ${selectedPaths.size} 项` : '多选模式' }}</span>
       <button class="banner-close" type="button" title="取消多选" @click="cancelMultiSelection">
         <X :size="15" />
       </button>
     </div>
 
-    <div class="content-shell" :class="`mode-${viewMode}`">
-      <div v-if="viewMode === 'list'" class="list-view">
+    <div class="content-shell" :class="resourcePage === 'files' ? `mode-${viewMode}` : 'mode-trash'">
+      <div v-if="resourcePage === 'trash'" class="trash-view">
+        <div class="trash-list">
+          <div class="trash-header" :style="{ gridTemplateColumns: trashGridColumns }">
+            <span>名称</span>
+            <span>原路径</span>
+            <span>删除时间</span>
+            <span>保留到</span>
+            <span>类型</span>
+            <span>大小</span>
+            <span>操作</span>
+          </div>
+          <div v-if="workspaceStore.trashLoading" class="trash-empty">正在加载最近删除</div>
+          <div v-else-if="workspaceStore.trashEntries.length === 0" class="trash-empty">最近删除为空</div>
+          <div
+            v-for="(entry, index) in workspaceStore.trashEntries"
+            v-else
+            :key="entry.trash_id"
+            class="trash-row"
+            :style="{
+              gridTemplateColumns: trashGridColumns,
+              animationDelay: `${Math.min(index, 24) * 18}ms`,
+            }"
+          >
+            <span class="name-cell">
+              <Folder v-if="entry.is_dir" :size="16" class="kind-icon kind-folder" />
+              <component v-else :is="iconForNode({ name: entry.name, path: entry.name, isDir: false })" :size="16" class="kind-icon" />
+              <span class="file-name">{{ entry.name }}</span>
+            </span>
+            <span>{{ entry.original_relative_path }}</span>
+            <span>{{ displayTrashDate(entry.deleted_at) }}</span>
+            <span>{{ displayTrashDate(entry.expires_at) }}</span>
+            <span>{{ trashKind(entry) }}</span>
+            <span>{{ formatSize(entry.size) }}</span>
+            <span class="trash-actions">
+              <button class="trash-action-button" type="button" title="恢复" @click="restoreTrash(entry)">
+                <RotateCcw :size="14" />
+                <span>恢复</span>
+              </button>
+              <button class="trash-action-button danger" type="button" title="彻底删除" @click="deleteTrash(entry)">
+                <Trash2 :size="14" />
+              </button>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="viewMode === 'list'" class="list-view">
         <div class="list-header" :style="{ gridTemplateColumns: listGridColumns }">
           <span v-if="isMultiSelecting" class="selection-column-header"></span>
           <span>名称</span>

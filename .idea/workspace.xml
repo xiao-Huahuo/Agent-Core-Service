@@ -4,19 +4,25 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="编辑区顶栏">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="可视化的入库进度页面">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/agent_service/api/rest/knowledge.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/knowledge.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/rag/frontmatter_bootstrap.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/rag/frontmatter_bootstrap.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/rag/knowledge_ingestion.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/rag/knowledge_ingestion.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/api/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/settings.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/api/knowledge.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/knowledge.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/DashboardCardFrame.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/DashboardCardFrame.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/InjectedEntriesCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/InjectedEntriesCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/KnowledgeRecallCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/KnowledgeRecallCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/LongTermMemoryCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/LongTermMemoryCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/ToolRegistryPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/ToolRegistryPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/debug/RuntimeApisPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/debug/RuntimeApisPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/debug/SchemaTree.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/debug/SchemaTree.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/stores/workspace.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/workspace.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/types/knowledge.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/types/knowledge.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -269,15 +275,7 @@
       <workItem from="1784335623951" duration="2482000" />
       <workItem from="1784338941374" duration="1273000" />
       <workItem from="1784375929012" duration="13746000" />
-      <workItem from="1784443638650" duration="8035000" />
-    </task>
-    <task id="LOCAL-00124" summary="pdf预览">
-      <option name="closed" value="true" />
-      <created>1784011427141</created>
-      <option name="number" value="00124" />
-      <option name="presentableId" value="LOCAL-00124" />
-      <option name="project" value="LOCAL" />
-      <updated>1784011427141</updated>
+      <workItem from="1784443638650" duration="10227000" />
     </task>
     <task id="LOCAL-00125" summary="屏蔽掉了知识库">
       <option name="closed" value="true" />
@@ -663,14 +661,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784448798022</updated>
     </task>
-    <option name="localTasksCounter" value="173" />
+    <task id="LOCAL-00173" summary="可视化的入库进度页面">
+      <option name="closed" value="true" />
+      <created>1784452793468</created>
+      <option name="number" value="00173" />
+      <option name="presentableId" value="LOCAL-00173" />
+      <option name="project" value="LOCAL" />
+      <updated>1784452793468</updated>
+    </task>
+    <option name="localTasksCounter" value="174" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="pptx预览,有点粗糙" />
     <MESSAGE value="修复了Agent回答中K链接和N链接不能同时出现的bug." />
     <MESSAGE value="修复了markdown模式点击`[执行摘要](#执行摘要)`这种跳转链接时会打开新窗口的问题." />
     <MESSAGE value="去掉了一些边框" />
@@ -695,13 +700,14 @@
     <MESSAGE value="agent观测重构v3" />
     <MESSAGE value="观测页面外观重构" />
     <MESSAGE value="编辑区顶栏" />
-    <option name="LAST_COMMIT_MESSAGE" value="编辑区顶栏" />
+    <MESSAGE value="可视化的入库进度页面" />
+    <option name="LAST_COMMIT_MESSAGE" value="可视化的入库进度页面" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
     <SUITE FILE_PATH="coverage/AgentService$main.coverage" NAME="main 覆盖结果" MODIFIED="1783512965618" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/AgentService$test_agent_core_service.coverage" NAME="test_agent_core_service 覆盖结果" MODIFIED="1778509217316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
-    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784452595262" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784454461727" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>

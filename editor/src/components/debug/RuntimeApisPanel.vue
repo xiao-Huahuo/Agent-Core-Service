@@ -332,7 +332,7 @@ onMounted(() => {
   padding: 2px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-raised);
 }
 
 .protocol-tab {
@@ -431,7 +431,7 @@ onMounted(() => {
   top: 0;
   z-index: 2;
   color: var(--color-text-muted);
-  background: var(--color-bg-primary);
+  background: var(--color-surface-raised);
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
 }
@@ -500,7 +500,7 @@ code {
   padding: var(--space-12);
   border: 1px solid var(--color-border);
   border-bottom: 0;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-raised);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
@@ -584,7 +584,7 @@ code {
 
 .mini-head {
   color: var(--color-text-muted);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-raised);
 }
 
 .parameter-table .mini-row {

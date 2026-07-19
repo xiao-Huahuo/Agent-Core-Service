@@ -163,7 +163,7 @@ function formatScore(value: number | undefined): string {
 
 .knowledge-item {
   border: 1px solid rgba(96, 182, 122, 0.35);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-raised);
   border-radius: 6px;
   padding: var(--space-8);
 }

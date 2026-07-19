@@ -103,7 +103,7 @@ defineEmits<{
   border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 0 var(--space-8);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-raised);
   color: var(--color-text-primary);
   font-family: var(--font-ui);
   font-size: var(--font-size-xs);
@@ -174,7 +174,7 @@ defineEmits<{
   border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: var(--space-8);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-raised);
 }
 
 .entry-content {

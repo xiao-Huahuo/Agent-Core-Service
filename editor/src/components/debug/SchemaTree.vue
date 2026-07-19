@@ -122,7 +122,7 @@ function formatValue(value: unknown): string {
 
 .schema-head {
   color: var(--color-text-muted);
-  background: var(--color-surface-muted);
+  background: var(--color-surface-raised);
 }
 
 .schema-node:hover {

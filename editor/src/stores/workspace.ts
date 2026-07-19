@@ -17,12 +17,15 @@ import {
   createKnowledgeFile,
   createKnowledgeFolder,
   deleteKnowledgePath,
+  deleteKnowledgeTrashEntry,
   ingestKnowledgeFileStream,
   ingestKnowledgePathStream,
   listKnowledgeFiles,
+  listKnowledgeTrash,
   previewKnowledgeFile,
   readKnowledgeFile,
   renameKnowledgePath,
+  restoreKnowledgeTrashEntry,
   searchKnowledge,
   uploadKnowledgeFile,
   writeKnowledgeFile,
@@ -41,6 +44,7 @@ import type {
   IngestionHistoryStatus,
   IngestionQueueItem,
   KnowledgeFileNode,
+  KnowledgeTrashEntry,
   SearchResults,
   WorkspaceMainView,
 } from '@/types/knowledge'
@@ -54,7 +58,12 @@ function flattenNodes(nodes: KnowledgeFileNode[]): KnowledgeFileNode[] {
 }
 
 function flattenIngestibleNodes(nodes: KnowledgeFileNode[]): KnowledgeFileNode[] {
-  return flattenNodes(nodes).filter((node) => !node.isDir && node.indexStatus !== 'ignored')
+  return flattenNodes(nodes).filter((node) => {
+    if (node.isDir || node.indexStatus === 'ignored') {
+      return false
+    }
+    return !node.indexStatus || node.indexStatus === 'dirty' || node.indexStatus === 'failed'
+  })
 }
 
 function collectDirectoryPaths(nodes: KnowledgeFileNode[]): string[] {
@@ -311,6 +320,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   /** File tree loading state. */
   const treeLoading = ref(false)
+
+  /** Recently deleted knowledge files loaded from backend trash metadata. */
+  const trashEntries = ref<KnowledgeTrashEntry[]>([])
+  const trashLoading = ref(false)
 
   /** Tracks how many pending tree_dirty events should suppress tab-dirty marking. */
   const ignoreNextTreeEvent = ref(0)
@@ -1564,6 +1577,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     selectedTreePath.value = selectedPath.value
     await loadKnowledgeTree()
+    await loadKnowledgeTrash()
+    showToast('已移入最近删除')
     syncCurrentDocumentContext()
   }
 
@@ -1585,6 +1600,52 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       syncCurrentDocumentContext()
     } finally {
       treeLoading.value = false
+    }
+  }
+
+  async function loadKnowledgeTrash() {
+    const settingsStore = useSettingsStore()
+    if (!settingsStore.profile.userId) {
+      trashEntries.value = []
+      return
+    }
+    trashLoading.value = true
+    try {
+      const response = await listKnowledgeTrash(settingsStore.profile.userId)
+      trashEntries.value = response.entries
+    } catch (err: unknown) {
+      showToast(err instanceof ApiError ? err.message : '最近删除加载失败')
+    } finally {
+      trashLoading.value = false
+    }
+  }
+
+  async function restoreTrashEntry(entry: KnowledgeTrashEntry) {
+    const settingsStore = useSettingsStore()
+    if (!settingsStore.profile.userId) return
+    ignoreNextTreeEvent.value += 1
+    try {
+      const result = await restoreKnowledgeTrashEntry(settingsStore.profile.userId, entry.trash_id)
+      await loadKnowledgeTree()
+      await loadKnowledgeTrash()
+      selectedTreePath.value = result.restored_path
+      setTreeSelection([result.restored_path], result.restored_path)
+      showToast(`已恢复 ${entry.name}`)
+    } catch (err: unknown) {
+      ignoreNextTreeEvent.value -= 1
+      showToast(err instanceof ApiError ? err.message : '恢复失败')
+    }
+  }
+
+  async function deleteTrashEntry(entry: KnowledgeTrashEntry) {
+    const settingsStore = useSettingsStore()
+    if (!settingsStore.profile.userId) return
+    try {
+      await deleteKnowledgeTrashEntry(settingsStore.profile.userId, entry.trash_id)
+      await loadKnowledgeTrash()
+      showToast(`已彻底删除 ${entry.name}`)
+    } catch (err: unknown) {
+      showToast(err instanceof ApiError ? err.message : '彻底删除失败')
     }
   }
 
@@ -1831,6 +1892,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     ingestionProgressVisible,
     ingestionQueue,
     ingestionHistory,
+    trashEntries,
+    trashLoading,
     toastMessage,
     toastVisible,
     showToast,
@@ -1886,6 +1949,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     renameNode,
     deleteNode,
     loadKnowledgeTree,
+    loadKnowledgeTrash,
+    restoreTrashEntry,
+    deleteTrashEntry,
     startFileWatcher,
     stopFileWatcher,
     restartFileWatcher,

@@ -260,7 +260,7 @@ onMounted(() => {
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: var(--color-bg-primary);
+  background: var(--color-surface-raised);
 }
 
 .title-summary,
@@ -324,7 +324,7 @@ h2 {
   padding: 0 var(--space-10);
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-raised);
   color: var(--color-text-tertiary);
 }
 
@@ -352,7 +352,7 @@ h2 {
   min-height: 0;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-raised);
   overflow: auto;
 }
 
@@ -548,7 +548,7 @@ h2 {
   overflow: auto;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-raised);
   color: var(--color-text-secondary);
   font-size: 11px;
   line-height: 1.5;

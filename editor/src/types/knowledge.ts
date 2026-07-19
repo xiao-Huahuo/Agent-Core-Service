@@ -47,6 +47,20 @@ export interface KnowledgeFileNode {
   indexStatus?: IndexStatus
 }
 
+export interface KnowledgeTrashEntry {
+  trash_id: string
+  user_id: string
+  library_id: string
+  original_relative_path: string
+  name: string
+  stored_name: string
+  is_dir: boolean
+  size: number
+  deleted_at: string
+  expires_at: string
+  chunks_deleted?: number
+}
+
 export type IngestionQueueStatus = 'running' | 'waiting'
 
 export type IngestionHistoryStatus = 'finished' | 'failed' | 'skipped'

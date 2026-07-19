@@ -8,12 +8,16 @@
 
 import { apiDelete, apiGet, apiPost, apiPostForm, buildApiUrl, streamLines } from '@/api/client'
 import { API_ROUTES } from '@/router/api_routes'
-import type { KnowledgeFileNode, KnowledgeSemanticGraphResponse, SearchResults } from '@/types/knowledge'
+import type { KnowledgeFileNode, KnowledgeSemanticGraphResponse, KnowledgeTrashEntry, SearchResults } from '@/types/knowledge'
 import type { FilePreviewPayload } from '@/types/knowledge'
 import type { KnowledgeIngestionProgressEvent, KnowledgeRebuildResponse } from '@/api/settings'
 
 export interface KnowledgeTreeResponse {
   tree: KnowledgeFileNode[]
+}
+
+export interface KnowledgeTrashResponse {
+  entries: KnowledgeTrashEntry[]
 }
 
 export interface KnowledgeFileContentResponse {
@@ -177,11 +181,30 @@ export function renameKnowledgePath(
   })
 }
 
-export function deleteKnowledgePath(userId: string, path: string): Promise<{ ok: boolean }> {
+export function deleteKnowledgePath(userId: string, path: string): Promise<{ ok: boolean; trash_id?: string }> {
   const encodedUser = encodeURIComponent(userId)
   const encodedPath = encodeURIComponent(path)
-  return apiDelete<{ ok: boolean }>(
+  return apiDelete<{ ok: boolean; trash_id?: string }>(
     `${API_ROUTES.KNOWLEDGE_FILES}?user_id=${encodedUser}&path=${encodedPath}`,
+  )
+}
+
+export function listKnowledgeTrash(userId: string): Promise<KnowledgeTrashResponse> {
+  return apiGet<KnowledgeTrashResponse>(API_ROUTES.KNOWLEDGE_FILE_TRASH, { user_id: userId })
+}
+
+export function restoreKnowledgeTrashEntry(
+  userId: string,
+  trashId: string,
+): Promise<{ ok: boolean; restored_path: string; node: KnowledgeFileNode }> {
+  return apiPost(`${API_ROUTES.KNOWLEDGE_FILE_TRASH}/${encodeURIComponent(trashId)}/restore`, {
+    user_id: userId,
+  })
+}
+
+export function deleteKnowledgeTrashEntry(userId: string, trashId: string): Promise<{ ok: boolean }> {
+  return apiDelete<{ ok: boolean }>(
+    `${API_ROUTES.KNOWLEDGE_FILE_TRASH}/${encodeURIComponent(trashId)}?user_id=${encodeURIComponent(userId)}`,
   )
 }
 

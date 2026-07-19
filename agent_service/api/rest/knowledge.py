@@ -195,6 +195,50 @@ async def delete_knowledge_path(
         raise HTTPException(status_code=500, detail=f"删除文件时发生系统错误: {exc}") from exc
 
 
+@router.get("/knowledge/files/trash")
+async def list_knowledge_trash(user_id: str = Query(..., min_length=1, description="鐢ㄦ埛 ID")) -> dict[str, Any]:
+    """List files moved into the current active knowledge-library trash."""
+
+    svc = _require_knowledge_library_service()
+    try:
+        entries = await run_in_threadpool(svc.list_deleted_paths, user_id=user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"entries": entries}
+
+
+@router.post("/knowledge/files/trash/{trash_id}/restore")
+async def restore_knowledge_trash_entry(trash_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Restore one file or directory from the current active knowledge-library trash."""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    svc = _require_knowledge_library_service()
+    try:
+        return await run_in_threadpool(svc.restore_deleted_path, user_id=user_id, trash_id=trash_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"restore failed: {exc}") from exc
+
+
+@router.delete("/knowledge/files/trash/{trash_id}")
+async def delete_knowledge_trash_entry(
+    trash_id: str,
+    user_id: str = Query(..., min_length=1, description="鐢ㄦ埛 ID"),
+) -> dict[str, Any]:
+    """Permanently delete one entry from the current active knowledge-library trash."""
+
+    svc = _require_knowledge_library_service()
+    try:
+        return await run_in_threadpool(svc.delete_trash_entry, user_id=user_id, trash_id=trash_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"permanent delete failed: {exc}") from exc
+
+
 @router.post("/knowledge/files/copy")
 async def copy_knowledge_path(body: dict[str, Any]) -> dict[str, Any]:
     """复制当前 active 知识库中的文件/文件夹。"""
