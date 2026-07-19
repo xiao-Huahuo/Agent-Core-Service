@@ -9,6 +9,7 @@ import { computed, ref } from 'vue'
 import VChart from 'vue-echarts'
 import 'echarts'
 import { useObsData } from '@/composable/useObsData'
+import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
 
 const obs = useObsData()
 const chartMode = ref<'donut' | 'line'>('donut')
@@ -147,17 +148,11 @@ const lineOption = computed(() => {
 </script>
 
 <template>
-  <div class="macos-card card-block">
-    <div class="macos-card-titlebar">
-      <div class="traffic-lights">
-        <span class="traffic-dot sm red"></span>
-        <span class="traffic-dot sm yellow"></span>
-        <span class="traffic-dot sm green"></span>
-      </div>
-      <span class="window-filename" :title="METRIC_TOOLTIP">RAG 填充率 / 平均相关性 / 置信度</span>
-      <span class="window-status">{{ chartMode === 'donut' ? '本轮' : '历史' }}</span>
-    </div>
-
+  <DashboardCardFrame
+    title="RAG 填充率 / 平均相关性 / 置信度"
+    :title-hint="METRIC_TOOLTIP"
+    :status="chartMode === 'donut' ? '本轮' : '历史'"
+  >
     <div class="card-body">
       <div class="chart-toolbar">
         <button class="chart-mode-btn" :class="{ active: chartMode === 'donut' }" @click="chartMode = 'donut'">饼图</button>
@@ -182,17 +177,10 @@ const lineOption = computed(() => {
         <v-chart :option="lineOption" autoresize class="line-chart" />
       </div>
     </div>
-  </div>
+  </DashboardCardFrame>
 </template>
 
 <style scoped>
-.card-block {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  box-shadow: var(--shadow-window);
-}
-
 .card-body {
   flex: 1;
   min-height: 0;
@@ -218,9 +206,14 @@ const lineOption = computed(() => {
   border-radius: var(--radius-sm);
   padding: 2px 8px;
   cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
 }
 .chart-mode-btn:hover { color: var(--color-text-secondary); background: var(--color-bg-hover); }
-.chart-mode-btn.active { color: var(--color-accent); border-color: rgba(217,145,120,0.3); background: var(--color-accent-muted); }
+.chart-mode-btn.active {
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
+  background: var(--color-primary-soft);
+}
 
 .gauges-row {
   display: grid;

@@ -5,6 +5,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
 
 /** 知识召回条目 */
 interface KnowledgeRecallItem {
@@ -60,17 +61,7 @@ function formatScore(value: number | undefined): string {
 </script>
 
 <template>
-  <div class="macos-card card-block">
-    <div class="macos-card-titlebar">
-      <div class="traffic-lights">
-        <span class="traffic-dot sm red"></span>
-        <span class="traffic-dot sm yellow"></span>
-        <span class="traffic-dot sm green"></span>
-      </div>
-      <span class="window-filename">知识库召回</span>
-      <span class="window-status">{{ windowStatus }}</span>
-    </div>
-
+  <DashboardCardFrame title="知识库召回" :status="windowStatus">
     <div class="card-body">
       <div class="chart-toolbar">
         <button class="chart-mode-btn" :class="{ active: activeTab === 'pre' }" @click="activeTab = 'pre'">ReRank 前</button>
@@ -110,17 +101,10 @@ function formatScore(value: number | undefined): string {
         <span class="placeholder-text">$ 当前会话还没有知识库召回结果</span>
       </div>
     </div>
-  </div>
+  </DashboardCardFrame>
 </template>
 
 <style scoped>
-.card-block {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  box-shadow: var(--shadow-window);
-}
-
 .card-body {
   flex: 1;
   min-height: 0;
@@ -154,6 +138,7 @@ function formatScore(value: number | undefined): string {
   color: var(--color-text-tertiary);
   background: transparent;
   border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   padding: 2px 8px;
   cursor: pointer;
   transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
@@ -165,9 +150,9 @@ function formatScore(value: number | undefined): string {
 }
 
 .chart-mode-btn.active {
-  color: var(--color-accent);
-  border-color: rgba(217, 145, 120, 0.3);
-  background: var(--color-accent-muted);
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
+  background: var(--color-primary-soft);
 }
 
 .knowledge-list {
@@ -179,6 +164,7 @@ function formatScore(value: number | undefined): string {
 .knowledge-item {
   border: 1px solid rgba(96, 182, 122, 0.35);
   background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
   padding: var(--space-8);
 }
 

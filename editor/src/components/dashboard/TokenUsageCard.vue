@@ -8,6 +8,7 @@ import { computed, ref } from 'vue'
 import VChart from 'vue-echarts'
 import 'echarts'
 import { useObsData } from '@/composable/useObsData'
+import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
 
 const obs = useObsData()
 const chartMode = ref<'line' | 'bar'>('line')
@@ -120,17 +121,10 @@ const barOption = computed(() => {
 </script>
 
 <template>
-  <div class="macos-card card-block">
-    <div class="macos-card-titlebar">
-      <div class="traffic-lights">
-        <span class="traffic-dot sm red"></span>
-        <span class="traffic-dot sm yellow"></span>
-        <span class="traffic-dot sm green"></span>
-      </div>
-      <span class="window-filename">按时刻和模型的 token 用量变化</span>
-      <span class="window-status">{{ modelNames.join(' + ') || 'idle' }}</span>
-    </div>
-
+  <DashboardCardFrame
+    title="按时刻和模型的 token 用量变化"
+    :status="modelNames.join(' + ') || 'idle'"
+  >
     <div class="card-body">
       <div class="chart-toolbar">
         <button class="chart-mode-btn" :class="{ active: chartMode === 'bar' }" @click="chartMode = 'bar'">柱状图</button>
@@ -158,17 +152,10 @@ const barOption = computed(() => {
         <span class="placeholder-text">$ 等待消息生成 token 统计</span>
       </div>
     </div>
-  </div>
+  </DashboardCardFrame>
 </template>
 
 <style scoped>
-.card-block {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  box-shadow: var(--shadow-window);
-}
-
 .card-body {
   flex: 1;
   min-height: 0;
@@ -194,9 +181,14 @@ const barOption = computed(() => {
   border-radius: var(--radius-sm);
   padding: 2px 8px;
   cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
 }
 .chart-mode-btn:hover { color: var(--color-text-secondary); background: var(--color-bg-hover); }
-.chart-mode-btn.active { color: var(--color-blue); border-color: rgba(77,166,255,0.3); background: rgba(77,166,255,0.08); }
+.chart-mode-btn.active {
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
+  background: var(--color-primary-soft);
+}
 
 .totals {
   display: grid;
@@ -205,25 +197,33 @@ const barOption = computed(() => {
 }
 
 .total-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
   border: 1px solid var(--color-border);
+  border-radius: 6px;
   padding: var(--space-8);
   background: rgba(255,255,255,0.02);
 }
 
 .total-label {
   display: block;
+  min-width: 0;
   font-family: var(--font-ui);
   font-size: 8px;
-  margin-bottom: var(--space-4);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .total-value {
+  flex-shrink: 0;
   font-family: var(--font-ui);
-  font-size: 13px;
-  color: var(--color-text-primary);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1;
 }
 
 .chart-area {

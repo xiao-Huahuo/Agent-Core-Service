@@ -9,6 +9,7 @@ import { computed, ref, watch } from 'vue'
 import VChart from 'vue-echarts'
 import 'echarts'
 import { useObsData } from '@/composable/useObsData'
+import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
 
 const obs = useObsData()
 const selectedIdx = ref(-1)
@@ -187,17 +188,7 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
 </script>
 
 <template>
-  <div class="macos-card card-block">
-    <div class="macos-card-titlebar">
-      <div class="traffic-lights">
-        <span class="traffic-dot sm red"></span>
-        <span class="traffic-dot sm yellow"></span>
-        <span class="traffic-dot sm green"></span>
-      </div>
-      <span class="window-filename">每次 message 思考耗时</span>
-      <span class="window-status">{{ summaryLabel }}</span>
-    </div>
-
+  <DashboardCardFrame title="每次 message 思考耗时" :status="summaryLabel">
     <div class="card-body">
       <div class="line-chart-wrap">
         <v-chart
@@ -256,17 +247,10 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
         <span class="placeholder-text">{{ emptyHint }}</span>
       </div>
     </div>
-  </div>
+  </DashboardCardFrame>
 </template>
 
 <style scoped>
-.card-block {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  box-shadow: var(--shadow-window);
-}
-
 .card-body {
   flex: 1;
   min-height: 0;
