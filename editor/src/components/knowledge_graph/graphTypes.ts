@@ -119,6 +119,16 @@ export interface KnowledgeGraphRenderTheme {
   surface: string
 }
 
+/** Hover highlight spread animation state. */
+export interface KnowledgeGraphHoverAnimation {
+  /** Node where the glow starts. */
+  centerNodeId: string
+  /** Elapsed animation time in milliseconds. */
+  elapsedMs: number
+  /** Full spread duration in milliseconds. */
+  durationMs: number
+}
+
 /** Current renderer interaction state. */
 export interface KnowledgeGraphRenderState {
   viewport: KnowledgeGraphViewport
@@ -126,6 +136,8 @@ export interface KnowledgeGraphRenderState {
   selectedNodeId: string
   /** Whether labels should be rendered by default. Disabled mode only shows active labels. */
   showLabels: boolean
+  /** Optional hover/drag spread animation progress. */
+  hoverAnimation?: KnowledgeGraphHoverAnimation
 }
 
 /** Public node interaction event emitted by the Vue shell. */

@@ -41,9 +41,14 @@ const selectedNodeId = ref(props.selectedNodeId ?? '')
 const viewport = ref<KnowledgeGraphViewport>({ x: 0, y: 0, scale: 1 })
 const canvasSize = ref({ width: 1, height: 1 })
 
+const HOVER_SPREAD_DURATION_MS = 720
+
 let simulation: Simulation<KnowledgeGraphNode, KnowledgeGraphLink> | null = null
 let resizeObserver: ResizeObserver | null = null
 let animationFrame = 0
+let hoverAnimationFrame = 0
+let hoverAnimationNodeId = ''
+let hoverAnimationStartedAt = 0
 let pointerMode: 'none' | 'pan' | 'node' = 'none'
 let activePointerId = 0
 let draggedNode: KnowledgeGraphNode | null = null
@@ -112,6 +117,35 @@ function requestDraw() {
   })
 }
 
+function requestHoverAnimationFrame() {
+  if (!hoverAnimationNodeId || hoverAnimationFrame) {
+    return
+  }
+  hoverAnimationFrame = window.requestAnimationFrame(() => {
+    hoverAnimationFrame = 0
+    requestDraw()
+    if (hoverAnimationNodeId && performance.now() - hoverAnimationStartedAt < HOVER_SPREAD_DURATION_MS) {
+      requestHoverAnimationFrame()
+    }
+  })
+}
+
+function setHighlightNode(nodeId: string) {
+  if (nodeId === hoveredNodeId.value) {
+    return
+  }
+  hoveredNodeId.value = nodeId
+  hoverAnimationNodeId = nodeId
+  hoverAnimationStartedAt = nodeId ? performance.now() : 0
+  if (nodeId) {
+    requestHoverAnimationFrame()
+  } else if (hoverAnimationFrame) {
+    window.cancelAnimationFrame(hoverAnimationFrame)
+    hoverAnimationFrame = 0
+  }
+  requestDraw()
+}
+
 function draw() {
   const canvas = canvasRef.value
   const context = canvas?.getContext('2d')
@@ -119,15 +153,24 @@ function draw() {
     return
   }
   const pixelRatio = window.devicePixelRatio || 1
+  const highlightNodeId = draggedNode?.id ?? hoveredNodeId.value
+  const hoverAnimation = hoverAnimationNodeId && hoverAnimationNodeId === highlightNodeId
+    ? {
+        centerNodeId: hoverAnimationNodeId,
+        elapsedMs: Math.max(0, performance.now() - hoverAnimationStartedAt),
+        durationMs: HOVER_SPREAD_DURATION_MS,
+      }
+    : undefined
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
   drawKnowledgeGraph(
     context,
     runtimeModel.value,
     {
       viewport: viewport.value,
-      hoveredNodeId: hoveredNodeId.value,
+      hoveredNodeId: highlightNodeId,
       selectedNodeId: selectedNodeId.value,
       showLabels: props.showLabels ?? true,
+      hoverAnimation,
     },
     readTheme(),
     canvasSize.value.width,
@@ -229,6 +272,7 @@ function handlePointerDown(event: PointerEvent) {
   if (node) {
     pointerMode = 'node'
     draggedNode = node
+    setHighlightNode(node.id)
     node.fx = node.x ?? node.targetX
     node.fy = node.y ?? node.targetY
     simulation?.alphaTarget(0.22).restart()
@@ -244,6 +288,9 @@ function handlePointerMove(event: PointerEvent) {
     draggedNode.fx = world.x
     draggedNode.fy = world.y
     movedDuringPointer = true
+    if (hoveredNodeId.value !== draggedNode.id) {
+      setHighlightNode(draggedNode.id)
+    }
     requestDraw()
     return
   }
@@ -258,10 +305,7 @@ function handlePointerMove(event: PointerEvent) {
     return
   }
   const nextHover = hitTestNode(runtimeModel.value, world)?.id ?? ''
-  if (nextHover !== hoveredNodeId.value) {
-    hoveredNodeId.value = nextHover
-    requestDraw()
-  }
+  setHighlightNode(nextHover)
 }
 
 function handlePointerUp(event: PointerEvent) {
@@ -281,6 +325,7 @@ function handlePointerUp(event: PointerEvent) {
   pointerMode = 'none'
   activePointerId = 0
   draggedNode = null
+  setHighlightNode(hitTestNode(runtimeModel.value, screenToWorld(point, viewport.value))?.id ?? '')
   requestDraw()
 }
 
@@ -288,8 +333,7 @@ function handlePointerLeave() {
   if (pointerMode !== 'none') {
     return
   }
-  hoveredNodeId.value = ''
-  requestDraw()
+  setHighlightNode('')
 }
 
 function handleDoubleClick(event: MouseEvent) {
@@ -327,6 +371,9 @@ onBeforeUnmount(() => {
   stopSimulation()
   if (animationFrame) {
     window.cancelAnimationFrame(animationFrame)
+  }
+  if (hoverAnimationFrame) {
+    window.cancelAnimationFrame(hoverAnimationFrame)
   }
 })
 

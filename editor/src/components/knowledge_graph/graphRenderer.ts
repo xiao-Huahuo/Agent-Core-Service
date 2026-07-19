@@ -76,6 +76,35 @@ function endpointId(endpoint: string | KnowledgeGraphNode): string {
   return typeof endpoint === 'string' ? endpoint : endpoint.id
 }
 
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value))
+}
+
+function easeOutCubic(value: number): number {
+  const clamped = clamp01(value)
+  return 1 - Math.pow(1 - clamped, 3)
+}
+
+function hoverSpreadRatio(state: KnowledgeGraphRenderState): number {
+  const animation = state.hoverAnimation
+  if (!animation || animation.centerNodeId !== state.hoveredNodeId || animation.durationMs <= 0) {
+    return state.hoveredNodeId ? 1 : 0
+  }
+  return clamp01(animation.elapsedMs / animation.durationMs)
+}
+
+function centerGlowProgress(state: KnowledgeGraphRenderState): number {
+  return easeOutCubic(hoverSpreadRatio(state) / 0.28)
+}
+
+function edgeSpreadProgress(state: KnowledgeGraphRenderState): number {
+  return clamp01((hoverSpreadRatio(state) - 0.18) / 0.52)
+}
+
+function neighborGlowProgress(state: KnowledgeGraphRenderState): number {
+  return easeOutCubic((hoverSpreadRatio(state) - 0.68) / 0.32)
+}
+
 function collectRelatedNodeIds(model: KnowledgeGraphModel, state: KnowledgeGraphRenderState): Set<string> {
   const baseNodeIds = new Set([state.hoveredNodeId, state.selectedNodeId].filter(Boolean))
   const relatedNodeIds = new Set(baseNodeIds)
@@ -90,6 +119,45 @@ function collectRelatedNodeIds(model: KnowledgeGraphModel, state: KnowledgeGraph
     }
   }
   return relatedNodeIds
+}
+
+function nodeGlowProgress(node: KnowledgeGraphNode, state: KnowledgeGraphRenderState, relatedNodeIds: Set<string>): number {
+  if (node.id === state.selectedNodeId) {
+    return 1
+  }
+  if (!state.hoveredNodeId || !relatedNodeIds.has(node.id)) {
+    return 0
+  }
+  if (node.id === state.hoveredNodeId) {
+    return centerGlowProgress(state)
+  }
+  return neighborGlowProgress(state)
+}
+
+function drawGlowCircle(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  color: string,
+  progress: number,
+) {
+  if (progress <= 0) {
+    return
+  }
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(x, y, radius + 7 + 5 * progress, 0, Math.PI * 2)
+  ctx.fillStyle = color
+  ctx.globalAlpha = 0.16 * progress
+  ctx.fill()
+  ctx.globalAlpha = 1
+  ctx.shadowColor = color
+  ctx.shadowBlur = 14 * progress
+  ctx.strokeStyle = color
+  ctx.lineWidth = 0.9 + 0.5 * progress
+  ctx.stroke()
+  ctx.restore()
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, theme: KnowledgeGraphRenderTheme) {
@@ -125,18 +193,52 @@ function drawLink(
   if (!source || !target) {
     return
   }
-  const sourceActive = source.id === state.hoveredNodeId || source.id === state.selectedNodeId
-  const targetActive = target.id === state.hoveredNodeId || target.id === state.selectedNodeId
+  const sourceSelected = source.id === state.selectedNodeId
+  const targetSelected = target.id === state.selectedNodeId
+  const touchesHovered = Boolean(state.hoveredNodeId) && (source.id === state.hoveredNodeId || target.id === state.hoveredNodeId)
+  const selectedActive = sourceSelected || targetSelected
+  const hoverProgress = touchesHovered ? edgeSpreadProgress(state) : 0
   const hasHover = Boolean(state.hoveredNodeId)
   const isRelated = relatedNodeIds.has(source.id) && relatedNodeIds.has(target.id)
+  const sourceX = source.x ?? source.targetX
+  const sourceY = source.y ?? source.targetY
+  const targetX = target.x ?? target.targetX
+  const targetY = target.y ?? target.targetY
   ctx.save()
   ctx.globalAlpha = hasHover && !isRelated ? 0.2 : 1
   ctx.beginPath()
-  ctx.moveTo(source.x ?? source.targetX, source.y ?? source.targetY)
-  ctx.lineTo(target.x ?? target.targetX, target.y ?? target.targetY)
-  ctx.strokeStyle = sourceActive || targetActive ? theme.edgeActive : theme.edge
-  ctx.lineWidth = sourceActive || targetActive ? 2 : 0.85
+  ctx.moveTo(sourceX, sourceY)
+  ctx.lineTo(targetX, targetY)
+  ctx.strokeStyle = selectedActive ? theme.edgeActive : theme.edge
+  ctx.lineWidth = selectedActive ? 2 : 0.85
   ctx.stroke()
+  ctx.restore()
+  if (!touchesHovered || hoverProgress <= 0) {
+    return
+  }
+  const spreadSource = source.id === state.hoveredNodeId ? source : target
+  const spreadTarget = source.id === state.hoveredNodeId ? target : source
+  const startX = spreadSource.x ?? spreadSource.targetX
+  const startY = spreadSource.y ?? spreadSource.targetY
+  const endX = spreadTarget.x ?? spreadTarget.targetX
+  const endY = spreadTarget.y ?? spreadTarget.targetY
+  const glowEndX = startX + (endX - startX) * hoverProgress
+  const glowEndY = startY + (endY - startY) * hoverProgress
+  ctx.save()
+  ctx.globalAlpha = 0.2 + 0.8 * hoverProgress
+  ctx.shadowColor = theme.edgeActive
+  ctx.shadowBlur = 10 * hoverProgress
+  ctx.strokeStyle = theme.edgeActive
+  ctx.lineWidth = 1.2 + 1.3 * hoverProgress
+  ctx.beginPath()
+  ctx.moveTo(startX, startY)
+  ctx.lineTo(glowEndX, glowEndY)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.arc(glowEndX, glowEndY, 2.2 + 1.8 * hoverProgress, 0, Math.PI * 2)
+  ctx.fillStyle = theme.edgeActive
+  ctx.globalAlpha = 0.18 + 0.28 * hoverProgress
+  ctx.fill()
   ctx.restore()
 }
 
@@ -151,20 +253,16 @@ function drawNode(
   const y = node.y ?? node.targetY
   const isSelected = node.id === state.selectedNodeId
   const isHovered = node.id === state.hoveredNodeId
+  const glowProgress = nodeGlowProgress(node, state, relatedNodeIds)
   const hasHover = Boolean(state.hoveredNodeId)
   const isRelated = relatedNodeIds.has(node.id)
   const color = nodeColor(node, theme)
   ctx.save()
   ctx.globalAlpha = hasHover && !isRelated ? 0.38 : 1
-  if (isHovered) {
-    ctx.beginPath()
-    ctx.arc(x, y, node.radius + 12, 0, Math.PI * 2)
-    ctx.fillStyle = theme.edgeActive
-    ctx.globalAlpha = 0.18
-    ctx.fill()
-    ctx.globalAlpha = 1
-    ctx.shadowColor = theme.edgeActive
-    ctx.shadowBlur = 16
+  if (glowProgress > 0) {
+    drawGlowCircle(ctx, x, y, node.radius, isSelected ? theme.selected : theme.edgeActive, glowProgress)
+    ctx.shadowColor = isSelected ? theme.selected : theme.edgeActive
+    ctx.shadowBlur = 8 + 8 * glowProgress
   }
   ctx.beginPath()
   ctx.arc(x, y, node.radius, 0, Math.PI * 2)
@@ -172,22 +270,23 @@ function drawNode(
     ctx.setLineDash([4, 3])
     ctx.fillStyle = theme.surface
     ctx.strokeStyle = color
-    ctx.lineWidth = isHovered ? 3 : isSelected ? 2.4 : 1.4
+    ctx.lineWidth = 1.4 + 1.6 * glowProgress
     ctx.fill()
     ctx.stroke()
   } else {
     ctx.fillStyle = color
-    ctx.strokeStyle = isSelected || isHovered ? theme.selected : theme.surface
-    ctx.lineWidth = isHovered ? 4 : isSelected ? 3 : 1.5
+    ctx.strokeStyle = isSelected ? theme.selected : isHovered ? theme.edgeActive : theme.surface
+    ctx.lineWidth = 1.5 + 2.5 * glowProgress
     ctx.fill()
     ctx.stroke()
   }
-  if (isSelected || isHovered) {
+  if (glowProgress > 0) {
     ctx.beginPath()
     ctx.setLineDash([])
     ctx.arc(x, y, node.radius + 7, 0, Math.PI * 2)
     ctx.strokeStyle = isSelected ? theme.selected : theme.edgeActive
-    ctx.lineWidth = 1.2
+    ctx.globalAlpha = hasHover && !isRelated ? 0.38 : glowProgress
+    ctx.lineWidth = 0.8 + 0.4 * glowProgress
     ctx.stroke()
   }
   ctx.restore()
