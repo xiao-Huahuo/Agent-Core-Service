@@ -18,16 +18,8 @@ import {
   Check,
   CircleAlert,
   CircleCheck,
-  FileArchive,
-  FileCode2,
-  FileImage,
-  FileJson,
-  FileSpreadsheet,
-  FileText,
-  Folder,
   FolderOpen,
   Grid2X2,
-  Image as ImageIcon,
   LayoutList,
   List,
   ListChecks,
@@ -42,7 +34,6 @@ import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import {
   displayIngestedAt,
   displayMtime,
-  extensionOf,
   fileKind,
   formatSize,
   isImageNode,
@@ -51,6 +42,7 @@ import {
   parentPath,
   timestampOf,
 } from '@/components/editor_workspace/fileResourceManagerUtils'
+import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import { previewKnowledgeFile, readKnowledgeFile } from '@/api/knowledge'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -294,28 +286,12 @@ async function switchResourcePage(page: ResourcePage) {
   }
 }
 
-function iconForNode(node: KnowledgeFileNode) {
-  if (node.isDir) return Folder
-  const ext = extensionOf(node.name)
-  if (['js', 'jsx', 'ts', 'tsx', 'vue', 'html', 'css', 'scss', 'py', 'go', 'rs', 'java'].includes(ext)) return FileCode2
-  if (['json', 'jsonl', 'yaml', 'yml', 'xml'].includes(ext)) return FileJson
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return FileImage
-  if (['csv', 'xls', 'xlsx', 'tsv'].includes(ext)) return FileSpreadsheet
-  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return FileArchive
-  return FileText
-}
-
-function iconClassForNode(node: KnowledgeFileNode): string {
-  if (node.isDir) return 'kind-folder'
-  const ext = extensionOf(node.name)
-  if (['md', 'markdown'].includes(ext)) return 'kind-markdown'
-  if (['js', 'jsx', 'ts', 'tsx', 'vue', 'html', 'css', 'scss'].includes(ext)) return 'kind-web'
-  if (['py', 'go', 'rs', 'java'].includes(ext)) return 'kind-code'
-  if (['json', 'jsonl', 'yaml', 'yml', 'xml'].includes(ext)) return 'kind-data'
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return 'kind-image'
-  if (['csv', 'xls', 'xlsx', 'tsv'].includes(ext)) return 'kind-sheet'
-  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'kind-archive'
-  return 'kind-default'
+function materialIconForEntry(entry: KnowledgeTrashEntry) {
+  return materialFileIconForNode({
+    name: entry.name,
+    path: entry.original_relative_path || entry.name,
+    isDir: entry.is_dir,
+  })
 }
 
 function indexStatusIcon(node: KnowledgeFileNode) {
@@ -930,8 +906,7 @@ onUnmounted(() => {
             }"
           >
             <span class="name-cell">
-              <Folder v-if="entry.is_dir" :size="16" class="kind-icon kind-folder" />
-              <component v-else :is="iconForNode({ name: entry.name, path: entry.name, isDir: false })" :size="16" class="kind-icon" />
+              <img class="material-file-icon" :src="materialIconForEntry(entry).src" alt="" aria-hidden="true" />
               <span class="file-name">{{ entry.name }}</span>
             </span>
             <span>{{ entry.original_relative_path }}</span>
@@ -984,7 +959,7 @@ onUnmounted(() => {
             <Check v-if="selectedPaths.has(node.path)" :size="12" />
           </span>
           <span class="name-cell">
-            <component :is="iconForNode(node)" :size="16" class="kind-icon" :class="iconClassForNode(node)" />
+            <img class="material-file-icon" :src="materialFileIconForNode(node).src" alt="" aria-hidden="true" />
             <span class="file-name">{{ node.name }}</span>
           </span>
           <span>{{ displayMtime(node) }}</span>
@@ -1010,7 +985,7 @@ onUnmounted(() => {
             @dblclick="handleItemDblClick(node)"
             @contextmenu.prevent.stop="openContextMenu(node, $event)"
           >
-            <component :is="iconForNode(node)" :size="24" class="kind-icon" :class="iconClassForNode(node)" />
+            <img class="material-file-icon material-file-icon-content" :src="materialFileIconForNode(node).src" alt="" aria-hidden="true" />
             <span class="content-text">
               <strong>{{ node.name }}</strong>
               <small>{{ previewSummary(node) }}</small>
@@ -1060,13 +1035,17 @@ onUnmounted(() => {
               :src="imagePreviewUrls[node.path]"
               :alt="node.name"
             />
-            <ImageIcon v-else-if="viewMode === 'large' && isImageNode(node)" :size="54" class="kind-icon kind-image" />
-            <component
+            <img
               v-else
-              :is="iconForNode(node)"
-              :size="viewMode === 'small' ? 18 : (viewMode === 'large' ? 54 : 36)"
-              class="kind-icon"
-              :class="iconClassForNode(node)"
+              class="material-file-icon"
+              :class="{
+                'material-file-icon-small': viewMode === 'small',
+                'material-file-icon-medium': viewMode === 'medium',
+                'material-file-icon-large': viewMode === 'large',
+              }"
+              :src="materialFileIconForNode(node).src"
+              alt=""
+              aria-hidden="true"
             />
           </span>
           <span class="tile-name">{{ node.name }}</span>

@@ -12,16 +12,9 @@ import {
   ChevronRight,
   CircleAlert,
   CircleCheck,
-  FileArchive,
-  FileCode2,
-  FileImage,
-  FileJson,
-  FileSpreadsheet,
-  FileText,
-  Folder,
-  FolderOpen,
 } from 'lucide-vue-next'
 
+import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -55,54 +48,7 @@ const emit = defineEmits<{
 const inlineInput = ref<HTMLInputElement | null>(null)
 const dragOver = ref(false)
 
-const fileExtension = computed(() => {
-  const dotIndex = props.node.name.lastIndexOf('.')
-  return dotIndex > -1 ? props.node.name.slice(dotIndex + 1).toLowerCase() : ''
-})
-
-const fileIcon = computed(() => {
-  if (['js', 'jsx', 'ts', 'tsx', 'vue', 'html', 'css', 'scss', 'py', 'go', 'rs', 'java'].includes(fileExtension.value)) {
-    return FileCode2
-  }
-  if (['json', 'jsonl', 'yaml', 'yml', 'xml'].includes(fileExtension.value)) {
-    return FileJson
-  }
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(fileExtension.value)) {
-    return FileImage
-  }
-  if (['csv', 'xls', 'xlsx', 'tsv'].includes(fileExtension.value)) {
-    return FileSpreadsheet
-  }
-  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(fileExtension.value)) {
-    return FileArchive
-  }
-  return FileText
-})
-
-const fileIconClass = computed(() => {
-  if (['md', 'markdown'].includes(fileExtension.value)) {
-    return 'file-kind-markdown'
-  }
-  if (['js', 'jsx', 'ts', 'tsx', 'vue', 'html', 'css', 'scss'].includes(fileExtension.value)) {
-    return 'file-kind-web'
-  }
-  if (['py', 'go', 'rs', 'java'].includes(fileExtension.value)) {
-    return 'file-kind-code'
-  }
-  if (['json', 'jsonl', 'yaml', 'yml', 'xml'].includes(fileExtension.value)) {
-    return 'file-kind-data'
-  }
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(fileExtension.value)) {
-    return 'file-kind-image'
-  }
-  if (['csv', 'xls', 'xlsx', 'tsv'].includes(fileExtension.value)) {
-    return 'file-kind-sheet'
-  }
-  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(fileExtension.value)) {
-    return 'file-kind-archive'
-  }
-  return 'file-kind-default'
-})
+const materialIcon = computed(() => materialFileIconForNode(props.node, props.node.isDir && props.expandedPaths.has(props.node.path)))
 
 const indexStatusClass = computed(() => {
   if (props.node.indexStatus === 'indexed' || props.node.indexStatus === 'clean') return 'indexed'
@@ -222,9 +168,7 @@ function handleRowDrop(event: DragEvent) {
     >
       <ChevronRight v-if="node.isDir" :size="14" class="chevron" :class="{ expanded: expandedPaths.has(node.path) }" />
       <span v-else class="spacer"></span>
-      <FolderOpen v-if="node.isDir && expandedPaths.has(node.path)" :size="15" />
-      <Folder v-else-if="node.isDir" :size="15" />
-      <component :is="fileIcon" v-else :size="15" class="file-icon" :class="fileIconClass" />
+      <img class="material-file-icon" :src="materialIcon.src" :alt="materialIcon.alt" aria-hidden="true" />
       <input
         v-if="editingPath === node.path"
         ref="inlineInput"
@@ -424,36 +368,12 @@ function handleRowDrop(event: DragEvent) {
   color: #f59f00;
 }
 
-.file-icon {
-  color: var(--color-text-muted);
-}
-
-.file-kind-markdown {
-  color: var(--color-primary);
-}
-
-.file-kind-web {
-  color: #e2a72e;
-}
-
-.file-kind-code {
-  color: #9a7cff;
-}
-
-.file-kind-data {
-  color: var(--color-primary);
-}
-
-.file-kind-image {
-  color: #26a269;
-}
-
-.file-kind-sheet {
-  color: #4fb477;
-}
-
-.file-kind-archive {
-  color: #c7945f;
+.material-file-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 .tree-row.drag-over {

@@ -496,34 +496,32 @@
   color: #f59f00;
 }
 
-.kind-folder {
-  color: #d8a03d;
+.material-file-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  pointer-events: none;
 }
 
-.kind-markdown,
-.kind-data {
-  color: var(--color-primary);
+.material-file-icon-small {
+  width: 18px;
+  height: 18px;
 }
 
-.kind-web {
-  color: #e2a72e;
+.material-file-icon-content {
+  width: 24px;
+  height: 24px;
 }
 
-.kind-code {
-  color: #9a7cff;
+.material-file-icon-medium {
+  width: 36px;
+  height: 36px;
 }
 
-.kind-image,
-.kind-sheet {
-  color: #26a269;
-}
-
-.kind-archive {
-  color: #c7945f;
-}
-
-.kind-default {
-  color: var(--color-text-muted);
+.material-file-icon-large {
+  width: 54px;
+  height: 54px;
 }
 
 .content-view {
