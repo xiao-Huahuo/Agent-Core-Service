@@ -1,20 +1,25 @@
 <!--
-  记忆与知识机制观测面板 — 双层不对称布局容器。
-  上层: RagMetricsCard + TokenUsageCard
-  下层: LongTermMemoryCard + KnowledgeRecallCard + LatencyCard
+  MemoryKnowledgePanel —— 长期记忆与知识库召回观测页。
 -->
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { fetchRecallDetails } from '@/api/agent'
+import {
+  addMemory,
+  addSystemPromptEntry,
+  deleteMemory,
+  deleteSystemPromptEntry,
+  fetchMemories,
+  fetchSystemPrompts,
+} from '@/api/settings'
+import type { MemoryEntry, SystemPromptEntry } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
 import { useSessionStore } from '@/stores/session'
 import { useChatStore } from '@/stores/chat'
-import RagMetricsCard from '@/components/dashboard/RagMetricsCard.vue'
-import TokenUsageCard from '@/components/dashboard/TokenUsageCard.vue'
+import InjectedEntriesCard from '@/components/dashboard/InjectedEntriesCard.vue'
 import LongTermMemoryCard from '@/components/dashboard/LongTermMemoryCard.vue'
 import KnowledgeRecallCard from '@/components/dashboard/KnowledgeRecallCard.vue'
-import LatencyCard from '@/components/dashboard/LatencyCard.vue'
 
 const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
@@ -73,8 +78,25 @@ function createEmptyRecallPayload(): RecallPayload {
 
 const recallPayload = ref<RecallPayload>(createEmptyRecallPayload())
 const isRecallLoading = ref(false)
+const promptEntries = ref<SystemPromptEntry[]>([])
+const memories = ref<MemoryEntry[]>([])
+const newPromptContent = ref('')
+const newMemoryContent = ref('')
+const isInjectionLoading = ref(false)
+const addingPrompt = ref(false)
+const addingMemory = ref(false)
+const promptMsg = ref('')
+const memoryMsg = ref('')
 
 const userId = computed(() => settingsStore.profile.userId)
+const promptInjectionEntries = computed(() => promptEntries.value.map((entry) => ({
+  id: entry.prompt_id,
+  content: entry.content,
+})))
+const memoryInjectionEntries = computed(() => memories.value.map((entry) => ({
+  id: entry.memory_id,
+  content: entry.content,
+})))
 
 const recallRefreshKey = computed(() => {
   const lastAssistant = [...chatStore.messages].reverse().find((message) => message.role === 'assistant')
@@ -109,6 +131,90 @@ async function loadRecallPayload(): Promise<void> {
   }
 }
 
+function showMessage(target: typeof promptMsg, text: string, duration = 2000): void {
+  target.value = text
+  window.setTimeout(() => {
+    if (target.value === text) {
+      target.value = ''
+    }
+  }, duration)
+}
+
+async function loadInjectedEntries(): Promise<void> {
+  if (!userId.value) {
+    promptEntries.value = []
+    memories.value = []
+    return
+  }
+
+  isInjectionLoading.value = true
+  try {
+    const [promptRes, memoryRes] = await Promise.all([
+      fetchSystemPrompts(userId.value),
+      fetchMemories(userId.value),
+    ])
+    promptEntries.value = promptRes.entries ?? []
+    memories.value = memoryRes ?? []
+  } catch (error) {
+    console.error('加载长期注入内容失败:', error)
+    showMessage(promptMsg, '加载失败')
+  } finally {
+    isInjectionLoading.value = false
+  }
+}
+
+async function handleAddPrompt(): Promise<void> {
+  const content = newPromptContent.value.trim()
+  if (!content || !userId.value) return
+  addingPrompt.value = true
+  try {
+    await addSystemPromptEntry(userId.value, content)
+    newPromptContent.value = ''
+    await loadInjectedEntries()
+    showMessage(promptMsg, '已添加')
+  } catch {
+    showMessage(promptMsg, '添加失败')
+  } finally {
+    addingPrompt.value = false
+  }
+}
+
+async function handleDeletePrompt(promptId: string): Promise<void> {
+  try {
+    await deleteSystemPromptEntry(promptId)
+    await loadInjectedEntries()
+    showMessage(promptMsg, '已删除')
+  } catch {
+    showMessage(promptMsg, '删除失败')
+  }
+}
+
+async function handleAddMemory(): Promise<void> {
+  const content = newMemoryContent.value.trim()
+  if (!content || !userId.value) return
+  addingMemory.value = true
+  try {
+    await addMemory(userId.value, content)
+    newMemoryContent.value = ''
+    await loadInjectedEntries()
+    showMessage(memoryMsg, '已添加')
+  } catch {
+    showMessage(memoryMsg, '添加失败')
+  } finally {
+    addingMemory.value = false
+  }
+}
+
+async function handleDeleteMemory(memoryId: string): Promise<void> {
+  try {
+    await deleteMemory(memoryId)
+    await loadInjectedEntries()
+    showMessage(memoryMsg, '已删除')
+  } catch {
+    showMessage(memoryMsg, '删除失败')
+  }
+}
+
 watch(
   () => [userId.value, sessionStore.currentSessionId, recallRefreshKey.value],
   () => {
@@ -116,33 +222,56 @@ watch(
   },
   { immediate: true },
 )
+
+watch(
+  () => userId.value,
+  () => {
+    loadInjectedEntries()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <div class="mk-panel">
-    <div class="row-upper">
-      <div class="col-rag">
-        <RagMetricsCard />
-      </div>
-      <div class="col-token">
-        <TokenUsageCard />
-      </div>
-    </div>
-    <div class="row-lower">
-      <div class="col-memory">
+    <div class="memory-knowledge-layout">
+      <KnowledgeRecallCard
+        class="knowledge-card"
+        :recall-snapshot="recallPayload.knowledge_recall"
+        :is-loading="isRecallLoading"
+      />
+      <div class="memory-column">
         <LongTermMemoryCard
+          class="memory-recall-card"
           :recall-snapshot="recallPayload.memory_recall"
           :is-loading="isRecallLoading"
         />
-      </div>
-      <div class="col-knowledge">
-        <KnowledgeRecallCard
-          :recall-snapshot="recallPayload.knowledge_recall"
-          :is-loading="isRecallLoading"
-        />
-      </div>
-      <div class="col-latency">
-        <LatencyCard />
+        <div class="injection-grid">
+          <InjectedEntriesCard
+            v-model:new-content="newPromptContent"
+            title="长期规则注入"
+            placeholder="输入长期规则"
+            empty-text="暂无长期规则注入"
+            :entries="promptInjectionEntries"
+            :is-adding="addingPrompt"
+            :is-loading="isInjectionLoading"
+            :message="promptMsg"
+            @add="handleAddPrompt"
+            @delete="handleDeletePrompt"
+          />
+          <InjectedEntriesCard
+            v-model:new-content="newMemoryContent"
+            title="长期记忆注入"
+            placeholder="输入长期记忆"
+            empty-text="暂无长期记忆注入"
+            :entries="memoryInjectionEntries"
+            :is-adding="addingMemory"
+            :is-loading="isInjectionLoading"
+            :message="memoryMsg"
+            @add="handleAddMemory"
+            @delete="handleDeleteMemory"
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -152,73 +281,40 @@ watch(
 .mk-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-10);
   flex: 1;
   min-height: 0;
   overflow: hidden;
   padding: var(--space-10);
 }
 
-.row-upper {
-  display: flex;
-  gap: var(--space-10);
-  min-height: 0;
-  height: 240px;
-  align-items: stretch;
-}
-
-.row-lower {
+.memory-knowledge-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-10);
   flex: 1;
   min-height: 0;
 }
 
-.col-rag {
-  flex: 0 0 auto;
-  min-width: 200px;
-  max-width: 340px;
-  min-height: 0;
-}
-
-.col-rag > * {
-  height: 100%;
-}
-
-.col-token {
-  width: 100%;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-
-.col-memory {
-  width: 100%;
-  min-width: 0;
-  min-height: 0;
-}
-
-.col-knowledge {
-  width: 100%;
-  min-width: 0;
-  min-height: 0;
-}
-
-.col-latency {
-  width: 100%;
-  min-width: 0;
-  min-height: 0;
-}
-
-.col-rag > *,
-.col-token > *,
-.col-memory > *,
-.col-knowledge > *,
-.col-latency > * {
+.knowledge-card,
+.memory-column,
+.memory-recall-card,
+.injection-grid > * {
   height: 100%;
   width: 100%;
   min-width: 0;
+  min-height: 0;
+}
+
+.memory-column {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-10);
+}
+
+.injection-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-10);
   min-height: 0;
 }
 
@@ -227,40 +323,12 @@ watch(
 }
 
 @media (max-width: 1200px) {
-  .row-upper {
-    flex-direction: column;
-    height: auto;
+  .memory-knowledge-layout {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   }
 
-  .col-rag {
-    flex: 1 1 auto;
-    max-width: none;
-    min-height: 180px;
-    max-height: none;
-  }
-
-  .col-token {
-    flex: none;
-    height: 300px;
-  }
-
-  .row-lower {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas:
-      'memory knowledge'
-      'latency latency';
-  }
-
-  .col-memory {
-    grid-area: memory;
-  }
-
-  .col-knowledge {
-    grid-area: knowledge;
-  }
-
-  .col-latency {
-    grid-area: latency;
+  .injection-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -271,20 +339,16 @@ watch(
     padding: var(--space-8);
   }
 
-  .row-upper,
-  .row-lower {
+  .memory-knowledge-layout,
+  .memory-column,
+  .injection-grid {
     display: flex;
     flex-direction: column;
   }
 
-  .col-token {
-    flex: none;
-    height: 320px;
-  }
-
-  .col-memory,
-  .col-knowledge,
-  .col-latency {
+  .knowledge-card,
+  .memory-recall-card,
+  .injection-grid > * {
     height: 320px;
     flex: none;
   }

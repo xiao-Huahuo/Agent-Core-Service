@@ -1,5 +1,5 @@
 <!--
-  观测面板主视图 — 两个可切换子页面。
+  观测面板主视图 — 多个可切换子页面。
   页面切换通过本地 tab 实现,不依赖路由。
   进入面板时会自动同步当前选中会话的历史消息，确保 Obs 卡片有数据源可读。
 -->
@@ -10,9 +10,10 @@ import { useSettingsStore } from '@/stores/settings'
 import { useSessionStore } from '@/stores/session'
 import { useChatStore } from '@/stores/chat'
 import AgentTracePanel from '@/components/dashboard/AgentTracePanel.vue'
+import TimeConsumptionPanel from '@/components/dashboard/TimeConsumptionPanel.vue'
 import MemoryKnowledgePanel from '@/components/dashboard/MemoryKnowledgePanel.vue'
 
-const activeTab = ref<'trace' | 'mk'>('trace')
+const activeTab = ref<'trace' | 'time' | 'mk'>('trace')
 const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
@@ -59,6 +60,7 @@ onMounted(() => {
     <div class="obs-tabs">
       <button
         class="obs-tab"
+        type="button"
         :class="{ active: activeTab === 'trace' }"
         @click="activeTab = 'trace'"
       >
@@ -66,6 +68,15 @@ onMounted(() => {
       </button>
       <button
         class="obs-tab"
+        type="button"
+        :class="{ active: activeTab === 'time' }"
+        @click="activeTab = 'time'"
+      >
+        时间与消耗
+      </button>
+      <button
+        class="obs-tab"
+        type="button"
         :class="{ active: activeTab === 'mk' }"
         @click="activeTab = 'mk'"
       >
@@ -75,6 +86,7 @@ onMounted(() => {
 
     <div class="dashboard-content">
       <AgentTracePanel v-if="activeTab === 'trace'" />
+      <TimeConsumptionPanel v-if="activeTab === 'time'" />
       <MemoryKnowledgePanel v-if="activeTab === 'mk'" />
     </div>
   </div>
@@ -119,14 +131,14 @@ onMounted(() => {
 }
 
 .obs-tab:hover {
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
   background: var(--color-bg-hover);
 }
 
 .obs-tab.active {
-  color: var(--color-accent);
-  border-color: rgba(217, 145, 120, 0.35);
-  background: var(--color-accent-muted);
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
+  background: var(--color-primary-soft);
 }
 
 @media (max-width: 900px) {
@@ -161,7 +173,7 @@ onMounted(() => {
   }
 
   .obs-tab {
-    flex: 1 1 calc(50% - 2px);
+    flex: 1 1 calc(33.333% - 2px);
     min-width: 0;
     text-align: center;
   }

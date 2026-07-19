@@ -194,16 +194,19 @@ const barOption = computed(() => {
   display: grid;
   gap: var(--space-8);
   flex-shrink: 0;
+  min-height: 58px;
 }
 
 .total-box {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-8);
+  gap: var(--space-10);
+  min-height: 58px;
+  min-width: 0;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  padding: var(--space-8);
+  padding: var(--space-10) var(--space-12);
   background: rgba(255,255,255,0.02);
 }
 
@@ -211,7 +214,8 @@ const barOption = computed(() => {
   display: block;
   min-width: 0;
   font-family: var(--font-ui);
-  font-size: 8px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -220,8 +224,8 @@ const barOption = computed(() => {
 .total-value {
   flex-shrink: 0;
   font-family: var(--font-ui);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-primary);
   line-height: 1;
 }
