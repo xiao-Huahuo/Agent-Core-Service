@@ -22,8 +22,3 @@
 - [ ] 修理安全审核节点不明原因的抽风把正常内容拦截的问题.
 - [ ] 解决思考过长导致"HTTP/1.1 400 Bad Request"禁止访问的问题(可能需要彻底的优化上下文构建机制)
 - [ ] 修复agent的session有时候没有恰当的重命名的问题.
-### 验收
-Git仓库地址: http://csgitlab.whu.edu.cn/2025-2026-3-advancedprograming/2024-se-7-metaweave.git
-AI使用日志: `CHANGE_HISTORY.md`
-AI使用反思报告
-AI禁飞区代码: ①知识图谱的实体关系抽取(还没有做知识图谱,只做了文件树图谱) ②RAG检索的相关性排序 ③问答答案的来源溯源 
