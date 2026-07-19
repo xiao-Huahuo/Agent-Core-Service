@@ -197,16 +197,15 @@ watch(
     <div class="tab-strip">
       <div class="tab-list">
         <button
-          v-for="tab in workspaceStore.openTabs"
-          :key="tab.path"
+          v-if="workspaceStore.activeTab"
+          :key="workspaceStore.activeTab.path"
           class="tab-item"
-          :class="{ active: tab.path === workspaceStore.selectedPath }"
           type="button"
-          @click="workspaceStore.activateTab(tab.path)"
+          @click="workspaceStore.activateTab(workspaceStore.activeTab.path)"
         >
-          <span class="tab-title">{{ tab.title }}</span>
-          <i v-if="tab.dirty" class="dirty-dot"></i>
-          <X class="tab-close" :size="13" @click.stop="workspaceStore.closeTab(tab.path)" />
+          <span class="tab-title">{{ workspaceStore.activeTab.title }}</span>
+          <i v-if="workspaceStore.activeTab.dirty" class="dirty-dot"></i>
+          <X class="tab-close" :size="13" @click.stop="workspaceStore.closeTab(workspaceStore.activeTab.path)" />
         </button>
       </div>
 
@@ -296,57 +295,41 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
-  min-height: 27px;
-  padding: var(--space-4) var(--space-6) 0;
-  background: var(--color-canvas);
+  gap: var(--space-8);
+  min-height: 34px;
+  padding: var(--space-8) var(--space-10) 0;
+  background: var(--color-canvas-soft);
 }
 
 .tab-list {
   display: flex;
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-border) var(--color-canvas);
-}
-
-.tab-list::-webkit-scrollbar {
-  height: 4px;
-}
-
-.tab-list::-webkit-scrollbar-track {
-  background: var(--color-canvas);
-}
-
-.tab-list::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 2px;
-}
-
-.tab-list::-webkit-scrollbar-thumb:hover {
-  background: var(--color-border-strong);
 }
 
 .tab-item {
+  position: relative;
+  z-index: 2;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 8px 16px;
   align-items: center;
   gap: var(--space-6);
   min-width: 0;
-  width: 160px;
-  max-width: 160px;
-  height: 22px;
-  padding: 0 var(--space-8);
-  border: 1px solid transparent;
+  width: min(260px, 45vw);
+  max-width: min(260px, 45vw);
+  height: 28px;
+  transform: translateY(2px);
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
   border-bottom: 0;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  background: transparent;
-  color: var(--color-text-muted);
+  border-radius: 8px 8px 0 0;
+  background: var(--color-canvas);
+  color: var(--color-text);
   font-size: 12px;
   text-align: left;
-  flex: 0 0 160px;
+  flex: 0 1 min(260px, 45vw);
 }
 
 .tab-title {
@@ -356,12 +339,6 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.tab-item.active {
-  border-color: var(--color-border);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
 }
 
 .dirty-dot {
@@ -390,7 +367,7 @@ watch(
   align-items: center;
   gap: var(--space-6);
   flex-shrink: 0;
-  padding-bottom: var(--space-4);
+  padding-bottom: var(--space-6);
 }
 
 .segmented {
@@ -469,8 +446,12 @@ watch(
   flex: 1;
   min-height: 0;
   gap: var(--space-10);
-  padding: var(--space-10);
-  background: var(--color-canvas-soft);
+  margin: 0 var(--space-10) var(--space-10);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 0 8px 8px 8px;
+  background: var(--color-canvas);
 }
 
 .split-divider {
@@ -510,6 +491,14 @@ watch(
   flex: 1;
   min-width: 0;
   min-height: 0;
+}
+
+.editor-body :deep(.code-editor),
+.editor-body :deep(.code-preview),
+.editor-body :deep(.markdown-preview),
+.editor-body :deep(.multimodal-preview) {
+  border: 0;
+  border-radius: 0;
 }
 
 .editor-empty {

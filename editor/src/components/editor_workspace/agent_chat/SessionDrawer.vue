@@ -108,8 +108,8 @@ async function clearAllSessions() {
 
 <style scoped>
 .session-drawer {
-  --drawer-page-hover: var(--color-bg-hover);
-  --drawer-page-active: var(--color-accent-muted);
+  --drawer-page-hover: var(--color-primary-softer);
+  --drawer-page-active: var(--color-primary-soft);
   position: absolute;
   top: 12px;
   bottom: 12px;
@@ -138,8 +138,8 @@ async function clearAllSessions() {
   --drawer-page-bg-top: var(--color-chrome-bg-top);
   --drawer-page-bg-bottom: var(--color-chrome-bg-bottom);
   --drawer-page-bg-solid: var(--color-chrome-bg-solid);
-  --drawer-page-hover: rgba(255, 255, 255, 0.08);
-  --drawer-page-active: rgba(255, 255, 255, 0.08);
+  --drawer-page-hover: var(--color-primary-softer);
+  --drawer-page-active: var(--color-primary-soft);
   top: 0;
   bottom: 0;
   left: 0;
@@ -156,8 +156,8 @@ async function clearAllSessions() {
 }
 
 :root[data-theme="light"] .session-drawer.page-mode {
-  --drawer-page-hover: rgba(66, 36, 235, 0.08);
-  --drawer-page-active: rgba(66, 36, 235, 0.10);
+  --drawer-page-hover: var(--color-primary-softer);
+  --drawer-page-active: var(--color-primary-soft);
 }
 
 .session-drawer.page-mode.open {
@@ -365,7 +365,7 @@ async function clearAllSessions() {
   min-height: 30px;
   margin-bottom: var(--space-2);
   padding: 0 var(--space-12);
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-secondary);
@@ -380,8 +380,9 @@ async function clearAllSessions() {
 }
 
 .session-item.active {
+  border-color: color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
   background: var(--drawer-page-active);
-  color: var(--color-text-primary);
+  color: var(--color-primary);
 }
 
 .session-time {
