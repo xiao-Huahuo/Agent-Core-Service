@@ -229,6 +229,7 @@ defineExpose({
       :key="message.message_id ?? `${message.role}-${index}`"
       :message="message"
       :is-streaming="isStreaming && index === visibleMessages.length - 1"
+      :is-thinking-active="isThinkingActive"
       :user-avatar="userAvatar"
       :agent-avatar="agentAvatar"
       :show-avatar="shouldShowAvatar(message, index)"

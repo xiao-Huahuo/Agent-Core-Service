@@ -14,6 +14,7 @@ import type { AgentChatMessage } from '@/stores/chat'
 const props = defineProps<{
   message: AgentChatMessage
   isStreaming?: boolean
+  isThinkingActive?: boolean
   userAvatar: string
   agentAvatar: string
   showAvatar?: boolean

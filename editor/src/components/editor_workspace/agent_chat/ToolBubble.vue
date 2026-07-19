@@ -21,6 +21,7 @@ import type { AgentChatMessage, AgentUploadedAttachment, SourceItem } from '@/st
 const props = defineProps<{
   message: AgentChatMessage
   isStreaming?: boolean
+  isThinkingActive?: boolean
   userAvatar: string
   agentAvatar: string
   showAvatar?: boolean

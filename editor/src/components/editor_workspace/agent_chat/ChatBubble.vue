@@ -21,6 +21,7 @@ import type { AgentChatMessage, AgentUploadedAttachment, SourceItem } from '@/st
 const props = defineProps<{
   message: AgentChatMessage
   isStreaming?: boolean
+  isThinkingActive?: boolean
   userAvatar: string
   agentAvatar: string
   showAvatar?: boolean
@@ -43,9 +44,9 @@ const thinkingRevealed = ref(true)
 const thinkingAutoCollapsed = ref(false)
 
 watch(
-  () => props.isStreaming,
-  (streaming) => {
-    if (!streaming) {
+  () => props.isThinkingActive,
+  (thinkingActive) => {
+    if (!thinkingActive) {
       thinkingRevealed.value = false
     }
   },
@@ -184,15 +185,15 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
     <div class="bubble-col">
       <span v-if="message.node && message.node !== 'assistant'" class="node-label">{{ message.node }}</span>
       <Transition name="think-slide">
-        <div v-if="thinkingTraces.length > 0 && (isStreaming || thinkingRevealed)" class="thinking-wrapper">
+        <div v-if="thinkingTraces.length > 0 && (isThinkingActive || thinkingRevealed)" class="thinking-wrapper">
           <ThinkingInline
             :traces="thinkingTraces"
-            :is-streaming="isStreaming"
+            :is-streaming="isThinkingActive"
             :default-expanded="thinkingRevealed"
             @collapse="thinkingRevealed = false"
           />
           <button
-            v-if="!isStreaming && thinkingRevealed"
+            v-if="!isThinkingActive && thinkingRevealed"
             class="thinking-toggle thinking-close"
             type="button"
             @click="thinkingRevealed = false"
@@ -203,7 +204,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
       </Transition>
       <Transition name="think-fade">
         <button
-          v-if="thinkingTraces.length > 0 && !isStreaming && !thinkingRevealed"
+          v-if="thinkingTraces.length > 0 && !isThinkingActive && !thinkingRevealed"
           class="thinking-toggle"
           type="button"
           @click="thinkingRevealed = true"
