@@ -11,10 +11,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import LoaderCube from '@/components/editor_workspace/agent_chat/LoaderCube.vue'
 import MessageBubble from '@/components/editor_workspace/agent_chat/MessageBubble.vue'
 import { useAvatar } from '@/components/editor_workspace/agent_chat/useAvatar'
-import { useChatStore } from '@/stores/chat'
 import type { AgentChatMessage, SourceItem } from '@/stores/chat'
-
-const chatStore = useChatStore()
 
 const props = defineProps<{
   messages: AgentChatMessage[]
@@ -29,26 +26,7 @@ const emit = defineEmits<{
 const { userAvatar, agentAvatar } = useAvatar()
 const containerRef = ref<HTMLDivElement | null>(null)
 const isPinnedToBottom = ref(true)
-
-function mergeConsecutiveAssistants(messages: AgentChatMessage[]) {
-  return messages.filter((message) => message.role !== 'system').reduce<AgentChatMessage[]>((acc, message) => {
-    const previous = acc[acc.length - 1]
-    if (message.role === 'assistant' && previous?.role === 'assistant') {
-      const merged: AgentChatMessage = {
-        ...previous,
-        content: message.content || previous.content,
-        node: message.node || previous.node,
-        tool_calls: message.tool_calls?.length ? message.tool_calls : previous.tool_calls,
-        metadata: { ...(previous.metadata ?? {}), ...(message.metadata ?? {}) },
-        trace: [...(previous.trace ?? []), ...(message.trace ?? [])],
-      }
-      acc[acc.length - 1] = merged
-    } else {
-      acc.push(message)
-    }
-    return acc
-  }, [])
-}
+const isThinkingActive = computed(() => Boolean(props.isStreaming))
 
 function mergeConsecutiveSameNode(messages: AgentChatMessage[]) {
   return messages.filter((message) => message.role !== 'system').reduce<AgentChatMessage[]>((acc, message) => {
@@ -71,7 +49,7 @@ function mergeConsecutiveSameNode(messages: AgentChatMessage[]) {
 
 const visibleMessages = computed(() => {
   const base = props.messages.filter((message) => message.role !== 'system')
-  return props.mergeAssistants ? mergeConsecutiveAssistants(base) : mergeConsecutiveSameNode(base)
+  return mergeConsecutiveSameNode(base)
 })
 
 const showThinkingBubble = computed(() => {
@@ -137,14 +115,20 @@ function hasCopyableAssistantContent(message: AgentChatMessage) {
   return message.role === 'assistant' && Boolean(message.content?.trim())
 }
 
-function shouldShowActions(message: AgentChatMessage, index: number) {
+function isFinalAnswerNode(message: AgentChatMessage) {
+  const node = String(message.node || message.metadata?.node || '')
+  return node === 'agent' || node === 'error' || node === 'interrupted' || node === ''
+}
+
+function isCompletedAssistantContentMessage(message: AgentChatMessage) {
+  return hasCopyableAssistantContent(message) && isFinalAnswerNode(message)
+}
+
+function shouldShowActions(message: AgentChatMessage) {
   if (message.role !== 'assistant') {
     return true
   }
-  if (!hasCopyableAssistantContent(message)) {
-    return false
-  }
-  return !visibleMessages.value.slice(index + 1).some(hasCopyableAssistantContent)
+  return !isThinkingActive.value && isCompletedAssistantContentMessage(message)
 }
 
 function asSourceMap(value: unknown): Record<string, SourceItem> {
@@ -187,19 +171,16 @@ function extractCitationIds(content: string) {
   return ids
 }
 
-function citationMapForMessage(message: AgentChatMessage, index: number): Record<string, SourceItem> {
-  const messageMap = asSourceMap(message.metadata?.citation_map)
-  if (Object.keys(messageMap).length > 0) {
-    return messageMap
+function citationMapForMessage(message: AgentChatMessage): Record<string, SourceItem> {
+  if (isThinkingActive.value || !isCompletedAssistantContentMessage(message)) {
+    return {}
   }
-  const isLiveLastMessage = Boolean(props.isStreaming && index === visibleMessages.value.length - 1)
-  return isLiveLastMessage ? chatStore.currentCitationMap : {}
+  return asSourceMap(message.metadata?.citation_map)
 }
 
-function knowledgeSourcesForMessage(message: AgentChatMessage, index: number): SourceItem[] {
-  const citationMap = citationMapForMessage(message, index)
-  const isLastMessage = index === visibleMessages.value.length - 1
-  const metadataUsed = !isLastMessage && Array.isArray(message.metadata?.used_citations)
+function knowledgeSourcesForMessage(message: AgentChatMessage): SourceItem[] {
+  const citationMap = citationMapForMessage(message)
+  const metadataUsed = Array.isArray(message.metadata?.used_citations)
     ? message.metadata.used_citations.filter((item): item is string => typeof item === 'string')
     : []
   const usedIds = metadataUsed.length > 0 ? metadataUsed : extractCitationIds(message.content)
@@ -251,9 +232,9 @@ defineExpose({
       :user-avatar="userAvatar"
       :agent-avatar="agentAvatar"
       :show-avatar="shouldShowAvatar(message, index)"
-      :show-actions="shouldShowActions(message, index)"
-      :knowledge-sources="message.role === 'assistant' ? knowledgeSourcesForMessage(message, index) : []"
-      :citation-map="message.role === 'assistant' ? citationMapForMessage(message, index) : {}"
+      :show-actions="shouldShowActions(message)"
+      :knowledge-sources="message.role === 'assistant' ? knowledgeSourcesForMessage(message) : []"
+      :citation-map="message.role === 'assistant' ? citationMapForMessage(message) : {}"
     />
     <div v-if="showThinkingBubble" class="thinking-row">
       <img :src="agentAvatar" class="thinking-avatar" alt="agent" />

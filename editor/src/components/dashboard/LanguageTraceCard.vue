@@ -481,7 +481,6 @@ const rawContextJson = computed(() => {
   align-items: center;
   justify-content: center;
   min-height: 180px;
-  border: 1px dashed var(--color-border);
   border-radius: 6px;
 }
 

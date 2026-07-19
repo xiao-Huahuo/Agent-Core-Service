@@ -117,6 +117,20 @@ export const useChatStore = defineStore('chat', () => {
     return null
   }
 
+  function findLastFinalAssistant() {
+    for (let index = messages.value.length - 1; index >= 0; index -= 1) {
+      const message = messages.value[index]
+      if (message?.role !== 'assistant' || !message.content?.trim()) {
+        continue
+      }
+      const node = asString(message.node) || asString(message.metadata?.node)
+      if (node === 'agent' || node === 'error' || node === 'interrupted' || !node) {
+        return message
+      }
+    }
+    return null
+  }
+
   function updateLastMessage(
     content?: string,
     node?: string,
@@ -172,6 +186,25 @@ export const useChatStore = defineStore('chat', () => {
       ...existing,
       ...metadata,
       ...(mergedCitationMap ? { citation_map: mergedCitationMap } : {}),
+    }
+  }
+
+  function attachCitationMapToLastFinalAssistant() {
+    if (Object.keys(currentCitationMap.value).length === 0) {
+      return
+    }
+    const last = findLastFinalAssistant()
+    if (!last) {
+      return
+    }
+    const existing = last.metadata ?? {}
+    const existingCitationMap = asSourceMap(existing.citation_map)
+    last.metadata = {
+      ...existing,
+      citation_map: {
+        ...existingCitationMap,
+        ...currentCitationMap.value,
+      },
     }
   }
 
@@ -285,6 +318,8 @@ export const useChatStore = defineStore('chat', () => {
     isStreaming.value = true
     streamError.value = ''
     activeAgentMode.value = agentMode
+    currentKnowledgeSources.value = []
+    currentCitationMap.value = {}
 
     const bufferedTraces: Array<Record<string, unknown>> = []
     let assistantCreated = false
@@ -420,6 +455,7 @@ export const useChatStore = defineStore('chat', () => {
     } finally {
       if (!signal.aborted) {
         forceFlushContent()
+        attachCitationMapToLastFinalAssistant()
         isStreaming.value = false
         currentNode.value = ''
         loadedSessionId.value = targetSessionId ?? ''

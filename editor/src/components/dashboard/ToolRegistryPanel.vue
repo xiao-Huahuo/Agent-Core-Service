@@ -338,6 +338,10 @@ h2 {
   font: inherit;
 }
 
+.registry-search input::placeholder {
+  font-size: 11px;
+}
+
 .registry-grid {
   display: grid;
   grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
@@ -382,7 +386,7 @@ h2 {
 }
 
 .tool-list-item.active .tool-row {
-  box-shadow: inset 2px 0 0 var(--color-primary);
+  box-shadow: none;
 }
 
 .tool-row {

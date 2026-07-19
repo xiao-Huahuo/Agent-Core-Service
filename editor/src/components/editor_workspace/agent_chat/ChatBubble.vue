@@ -570,7 +570,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 
 .bubble.assistant {
   border-color: var(--color-agent-bubble-border);
-  background: transparent;
+  background: var(--color-agent-bubble);
   box-shadow:
     inset 0 1px 0 var(--color-agent-bubble-highlight),
     0 0 0 1px rgba(255, 255, 255, 0.03),

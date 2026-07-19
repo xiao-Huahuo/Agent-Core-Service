@@ -202,7 +202,6 @@ defineEmits<{
   justify-content: center;
   flex: 1;
   min-height: 0;
-  border: 1px dashed var(--color-border);
   border-radius: 6px;
   text-align: center;
 }

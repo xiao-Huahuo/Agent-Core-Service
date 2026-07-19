@@ -213,7 +213,6 @@ function formatScore(value: number | undefined): string {
   align-items: center;
   justify-content: center;
   min-height: 160px;
-  border: 1px dashed var(--color-border);
 }
 
 .placeholder-text {
