@@ -4,12 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="agent观测重构v2">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="agent观测重构v3">
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/MemoryKnowledgePanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/MemoryKnowledgePanel.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/TokenUsageCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/TokenUsageCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/ToolRegistryPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/ToolRegistryPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/debug/RuntimeApisPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/debug/RuntimeApisPanel.vue" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/views/DashboardView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/DashboardView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/DebugView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/DebugView.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -262,15 +262,7 @@
       <workItem from="1784335623951" duration="2482000" />
       <workItem from="1784338941374" duration="1273000" />
       <workItem from="1784375929012" duration="13746000" />
-      <workItem from="1784443638650" duration="4592000" />
-    </task>
-    <task id="LOCAL-00123" summary="知识图谱不能维护,把链路断掉了">
-      <option name="closed" value="true" />
-      <created>1784009663441</created>
-      <option name="number" value="00123" />
-      <option name="presentableId" value="LOCAL-00123" />
-      <option name="project" value="LOCAL" />
-      <updated>1784009663441</updated>
+      <workItem from="1784443638650" duration="5290000" />
     </task>
     <task id="LOCAL-00124" summary="pdf预览">
       <option name="closed" value="true" />
@@ -656,14 +648,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784447565488</updated>
     </task>
-    <option name="localTasksCounter" value="172" />
+    <task id="LOCAL-00172" summary="agent观测重构v3">
+      <option name="closed" value="true" />
+      <created>1784448798022</created>
+      <option name="number" value="00172" />
+      <option name="presentableId" value="LOCAL-00172" />
+      <option name="project" value="LOCAL" />
+      <updated>1784448798022</updated>
+    </task>
+    <option name="localTasksCounter" value="173" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="修复了pdf预览打不开的bug" />
     <MESSAGE value="周报和实训个人总结" />
     <MESSAGE value="修了在文件树中快速切换文件,文件预览有时候会卡死,并且导致其他文件也打不开,甚至其他功能都被阻塞打不开的问题." />
     <MESSAGE value="pptx预览,有点粗糙" />
@@ -688,7 +687,8 @@
     <MESSAGE value="." />
     <MESSAGE value="agent观测重构v1" />
     <MESSAGE value="agent观测重构v2" />
-    <option name="LAST_COMMIT_MESSAGE" value="agent观测重构v2" />
+    <MESSAGE value="agent观测重构v3" />
+    <option name="LAST_COMMIT_MESSAGE" value="agent观测重构v3" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />

@@ -126,13 +126,8 @@ onMounted(() => {
 
 <template>
   <div class="tool-registry-panel">
-    <div class="macos-card card-block">
-      <div class="macos-card-titlebar registry-titlebar">
-        <div class="traffic-lights">
-          <span class="traffic-dot sm red"></span>
-          <span class="traffic-dot sm yellow"></span>
-          <span class="traffic-dot sm green"></span>
-        </div>
+    <section class="registry-card">
+      <div class="panel-heading registry-heading">
         <div class="title-summary">
           <h2>工具注册表</h2>
           <span>{{ tools.length }} tools</span>
@@ -148,79 +143,81 @@ onMounted(() => {
         </button>
       </div>
 
-      <p v-if="errorText" class="error-line">{{ errorText }}</p>
+      <div class="panel-surface">
+        <p v-if="errorText" class="error-line">{{ errorText }}</p>
 
-      <div class="registry-grid">
-        <aside class="tool-list" aria-label="工具列表">
-          <div
-            v-for="tool in filteredTools"
-            :key="tool.name"
-            class="tool-list-item"
-            :class="{
-              active: selectedTool?.name === tool.name,
-              disabled: !tool.enabled,
-            }"
-          >
-            <button
-              class="tool-row"
-              type="button"
-              @click="selectTool(tool)"
+        <div class="registry-grid">
+          <aside class="tool-list" aria-label="工具列表">
+            <div
+              v-for="tool in filteredTools"
+              :key="tool.name"
+              class="tool-list-item"
+              :class="{
+                active: selectedTool?.name === tool.name,
+                disabled: !tool.enabled,
+              }"
             >
-              <span class="tool-name">{{ tool.display_name || tool.name }}</span>
-              <span class="tool-meta">{{ tool.argument_count }} args</span>
-            </button>
-            <label
-              class="tool-toggle-label"
-              :title="tool.enabled ? '点击关闭' : '点击启用'"
-              @click.stop
-            >
-              <input
-                :checked="tool.enabled"
-                type="checkbox"
-                @change="handleToggleTool(tool.name)"
-              />
-              <span v-if="!tool.enabled" class="disabled-badge">未启用</span>
-            </label>
-          </div>
-          <div v-if="!loading && filteredTools.length === 0" class="empty-state">
-            <span>$ 没有匹配的工具</span>
-          </div>
-        </aside>
-
-        <main class="tool-detail">
-          <div v-if="loading" class="empty-state">
-            <span>$ 正在读取最终工具注册表</span>
-          </div>
-          <template v-else-if="selectedTool">
-            <div class="detail-title">
-              <span class="detail-display">{{ selectedTool.display_name || selectedTool.name }}</span>
-              <code>{{ selectedTool.name }}</code>
-              <span v-if="!selectedTool.enabled" class="detail-disabled-badge">未启用</span>
+              <button
+                class="tool-row"
+                type="button"
+                @click="selectTool(tool)"
+              >
+                <span class="tool-name">{{ tool.display_name || tool.name }}</span>
+                <span class="tool-meta">{{ tool.argument_count }} args</span>
+              </button>
+              <label
+                class="tool-toggle-label"
+                :title="tool.enabled ? '点击关闭' : '点击启用'"
+                @click.stop
+              >
+                <input
+                  :checked="tool.enabled"
+                  type="checkbox"
+                  @change="handleToggleTool(tool.name)"
+                />
+                <span v-if="!tool.enabled" class="disabled-badge">未启用</span>
+              </label>
             </div>
-            <p class="detail-description">{{ selectedTool.description }}</p>
-
-            <div class="arg-table">
-              <div class="arg-row arg-head">
-                <span>参数</span>
-                <span>类型</span>
-                <span>约束</span>
-              </div>
-              <div v-for="arg in selectedProperties" :key="arg.name" class="arg-row">
-                <span class="arg-name">{{ arg.name }}</span>
-                <span>{{ arg.type }}</span>
-                <span>{{ arg.required ? 'required' : 'optional' }}</span>
-                <p class="arg-desc">{{ arg.description || '无说明' }}</p>
-              </div>
+            <div v-if="!loading && filteredTools.length === 0" class="empty-state">
+              <span>$ 没有匹配的工具</span>
             </div>
+          </aside>
 
-            <pre class="schema-block">{{ JSON.stringify(selectedTool.args_schema, null, 2) }}</pre>
-          </template>
-          <div v-else class="empty-state">
-            <span>$ 工具注册表为空</span>
-          </div>
-        </main>
+          <main class="tool-detail">
+            <div v-if="loading" class="empty-state">
+              <span>$ 正在读取最终工具注册表</span>
+            </div>
+            <template v-else-if="selectedTool">
+              <div class="detail-title">
+                <span class="detail-display">{{ selectedTool.display_name || selectedTool.name }}</span>
+                <code>{{ selectedTool.name }}</code>
+                <span v-if="!selectedTool.enabled" class="detail-disabled-badge">未启用</span>
+              </div>
+              <p class="detail-description">{{ selectedTool.description }}</p>
+
+              <div class="arg-table">
+                <div class="arg-row arg-head">
+                  <span>参数</span>
+                  <span>类型</span>
+                  <span>约束</span>
+                </div>
+                <div v-for="arg in selectedProperties" :key="arg.name" class="arg-row">
+                  <span class="arg-name">{{ arg.name }}</span>
+                  <span>{{ arg.type }}</span>
+                  <span>{{ arg.required ? 'required' : 'optional' }}</span>
+                  <p class="arg-desc">{{ arg.description || '无说明' }}</p>
+                </div>
+              </div>
+
+              <pre class="schema-block">{{ JSON.stringify(selectedTool.args_schema, null, 2) }}</pre>
+            </template>
+            <div v-else class="empty-state">
+              <span>$ 工具注册表为空</span>
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </section>
   </div>
 </template>
 
@@ -234,17 +231,36 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.card-block {
+.registry-card {
   display: flex;
   flex-direction: column;
   height: 100%;
-  box-shadow: none;
+  min-height: 0;
+  gap: var(--space-6);
 }
 
-.registry-titlebar {
+.panel-heading {
+  min-height: 24px;
+  padding: 0 2px;
+}
+
+.registry-heading {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(180px, 300px) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 300px) auto;
+  align-items: center;
   gap: var(--space-8);
+}
+
+.panel-surface {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-primary);
 }
 
 .title-summary,
@@ -272,7 +288,7 @@ onMounted(() => {
 
 h2 {
   margin: 0;
-  color: var(--color-text);
+  color: var(--color-text-primary);
   font-size: 14px;
   line-height: 1.2;
 }
@@ -283,14 +299,18 @@ h2 {
   justify-content: center;
   width: 30px;
   height: 30px;
-  border: 1px solid var(--color-border);
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
 }
 
 .icon-button:hover:not(:disabled) {
-  border-color: var(--color-primary);
   color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
+  background: var(--color-primary-soft);
 }
 
 .icon-button:disabled {
@@ -304,8 +324,8 @@ h2 {
   padding: 0 var(--space-10);
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: var(--color-canvas-soft);
-  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--color-text-tertiary);
 }
 
 .registry-search input {
@@ -314,7 +334,7 @@ h2 {
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--color-text);
+  color: var(--color-text-primary);
   font: inherit;
 }
 
@@ -331,6 +351,7 @@ h2 {
 .tool-detail {
   min-height: 0;
   border: 1px solid var(--color-border);
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.02);
   overflow: auto;
 }
@@ -380,7 +401,7 @@ h2 {
 
 .tool-row:hover {
   background: var(--color-primary-softer);
-  color: var(--color-text);
+  color: var(--color-text-primary);
 }
 
 .tool-name {
@@ -437,7 +458,7 @@ h2 {
 
 .tool-toggle-label input[type="checkbox"]:checked::before {
   transform: translateX(10px);
-  background: #fff;
+  background: var(--color-bg-card);
 }
 
 .disabled-badge {
@@ -459,7 +480,7 @@ h2 {
 }
 
 .detail-display {
-  color: var(--color-text);
+  color: var(--color-text-primary);
   font-size: 18px;
   font-weight: 650;
 }
@@ -487,6 +508,8 @@ h2 {
 
 .arg-table {
   border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .arg-row {
@@ -524,7 +547,8 @@ h2 {
   padding: var(--space-10);
   overflow: auto;
   border: 1px solid var(--color-border);
-  background: rgba(0, 0, 0, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
   color: var(--color-text-secondary);
   font-size: 11px;
   line-height: 1.5;
@@ -548,8 +572,9 @@ h2 {
   flex-shrink: 0;
   margin: var(--space-8) var(--space-10) 0;
   padding: var(--space-8) var(--space-10);
-  border: 1px solid rgba(235, 36, 99, 0.34);
-  color: #f08aa9;
+  border: 1px solid color-mix(in srgb, var(--color-danger, #ff6b6b) 38%, var(--color-border));
+  border-radius: 6px;
+  color: var(--color-danger, #ff6b6b);
 }
 
 @media (max-width: 900px) {
@@ -557,8 +582,8 @@ h2 {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .registry-titlebar {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+  .registry-heading {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .registry-search {

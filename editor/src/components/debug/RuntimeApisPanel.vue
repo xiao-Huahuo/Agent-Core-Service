@@ -82,8 +82,8 @@ onMounted(() => {
 
 <template>
   <section class="runtime-apis-panel">
-    <div class="debug-card">
-      <header class="debug-card-titlebar">
+    <div class="api-card">
+      <header class="panel-heading api-heading">
         <div class="title-summary">
           <h2>API</h2>
           <span>{{ visibleApis.length }} / {{ apis.length }} endpoints</span>
@@ -101,151 +101,153 @@ onMounted(() => {
         </button>
       </header>
 
-      <p v-if="errorText" class="error-line">{{ errorText }}</p>
-      <div v-if="loading" class="empty-state">$ 正在读取后端 API</div>
-      <div v-else class="api-table">
-        <div class="api-row api-head">
-          <span></span>
-          <span>接口</span>
-          <span>方法</span>
-          <span>路径</span>
-          <span>请求</span>
-          <span>响应</span>
-          <span>状态</span>
-        </div>
+      <div class="panel-surface">
+        <p v-if="errorText" class="error-line">{{ errorText }}</p>
+        <div v-if="loading" class="empty-state">$ 正在读取后端 API</div>
+        <div v-else class="api-table">
+          <div class="api-row api-head">
+            <span></span>
+            <span>接口</span>
+            <span>方法</span>
+            <span>路径</span>
+            <span>请求</span>
+            <span>响应</span>
+            <span>状态</span>
+          </div>
 
-        <template v-for="api in visibleApis" :key="apiKey(api)">
-          <button class="api-row api-button" type="button" @click="toggleApi(api)">
-            <ChevronDown class="chevron" :class="{ expanded: isExpanded(api) }" :size="14" />
-            <span class="api-name">{{ api.name }}</span>
-            <code>{{ streamLabel(api) }}</code>
-            <code class="path-cell">{{ api.path }}</code>
-            <code class="type-cell">{{ api.request }}</code>
-            <code class="type-cell">{{ api.response }}</code>
-            <span class="status-pill" :class="api.status">{{ api.status }}</span>
-          </button>
+          <template v-for="api in visibleApis" :key="apiKey(api)">
+            <button class="api-row api-button" type="button" @click="toggleApi(api)">
+              <ChevronDown class="chevron" :class="{ expanded: isExpanded(api) }" :size="14" />
+              <span class="api-name">{{ api.name }}</span>
+              <code>{{ streamLabel(api) }}</code>
+              <code class="path-cell">{{ api.path }}</code>
+              <code class="type-cell">{{ api.request }}</code>
+              <code class="type-cell">{{ api.response }}</code>
+              <span class="status-pill" :class="api.status">{{ api.status }}</span>
+            </button>
 
-          <Transition name="expand">
-            <div v-if="isExpanded(api)" class="api-detail">
-              <div class="detail-grid">
-                <div class="detail-item">
-                  <span>服务</span>
-                  <code>{{ api.service }}</code>
+            <Transition name="expand">
+              <div v-if="isExpanded(api)" class="api-detail">
+                <div class="detail-grid">
+                  <div class="detail-item">
+                    <span>服务</span>
+                    <code>{{ api.service }}</code>
+                  </div>
+                  <div class="detail-item">
+                    <span>调用目标</span>
+                    <code>{{ api.call?.url || api.call?.method || api.path }}</code>
+                  </div>
+                  <div v-if="api.operation_id" class="detail-item">
+                    <span>Operation ID</span>
+                    <code>{{ api.operation_id }}</code>
+                  </div>
+                  <div v-if="api.tags?.length" class="detail-item">
+                    <span>Tags</span>
+                    <code>{{ api.tags.join(', ') }}</code>
+                  </div>
                 </div>
-                <div class="detail-item">
-                  <span>调用目标</span>
-                  <code>{{ api.call?.url || api.call?.method || api.path }}</code>
-                </div>
-                <div v-if="api.operation_id" class="detail-item">
-                  <span>Operation ID</span>
-                  <code>{{ api.operation_id }}</code>
-                </div>
-                <div v-if="api.tags?.length" class="detail-item">
-                  <span>Tags</span>
-                  <code>{{ api.tags.join(', ') }}</code>
-                </div>
+
+                <p v-if="api.summary || api.description" class="summary-line">
+                  {{ api.summary || api.description }}
+                </p>
+
+                <template v-if="api.kind === 'rest'">
+                  <section class="detail-section">
+                    <h4>参数</h4>
+                    <div v-if="api.parameters?.length" class="mini-table parameter-table">
+                      <div class="mini-row mini-head">
+                        <span>名称</span>
+                        <span>位置</span>
+                        <span>必填</span>
+                        <span>类型</span>
+                        <span>说明</span>
+                      </div>
+                      <div v-for="parameter in api.parameters" :key="`${parameter.in}:${parameter.name}`" class="mini-row">
+                        <code>{{ parameter.name }}</code>
+                        <span>{{ parameter.in }}</span>
+                        <span>{{ parameter.required ? 'yes' : 'no' }}</span>
+                        <code>{{ parameter.schema_tree?.type || '-' }}</code>
+                        <span>{{ parameter.description || '-' }}</span>
+                      </div>
+                    </div>
+                    <div v-for="parameter in api.parameters?.filter((item) => item.schema_tree?.children?.length)" :key="`tree:${parameter.in}:${parameter.name}`" class="parameter-schema-block">
+                      <h5>{{ parameter.name }}</h5>
+                      <SchemaTree :nodes="schemaNodes(parameter.schema_tree)" />
+                    </div>
+                    <div v-if="!api.parameters?.length" class="empty-detail">无参数</div>
+                  </section>
+
+                  <section class="detail-section">
+                    <h4>请求体</h4>
+                    <div v-if="api.request_body" class="detail-grid">
+                      <div class="detail-item">
+                        <span>Content-Type</span>
+                        <code>{{ contentTypes(api.request_body.content) }}</code>
+                      </div>
+                      <div class="detail-item">
+                        <span>必填</span>
+                        <code>{{ api.request_body.required ? 'yes' : 'no' }}</code>
+                      </div>
+                    </div>
+                    <div v-else class="empty-detail">无请求体</div>
+                    <SchemaTree v-if="api.request_schema_tree" :nodes="schemaNodes(api.request_schema_tree)" />
+                  </section>
+
+                  <section class="detail-section">
+                    <h4>返回</h4>
+                    <div class="mini-table response-table">
+                      <div class="mini-row mini-head">
+                        <span>状态码</span>
+                        <span>Content-Type</span>
+                        <span>Schema</span>
+                        <span>说明</span>
+                      </div>
+                      <div v-for="(response, status) in api.responses" :key="status" class="mini-row">
+                        <code>{{ status }}</code>
+                        <span>{{ contentTypes(response.content) }}</span>
+                        <code>{{ contentSchemaType(response.content) }}</code>
+                        <span>{{ response.description || '-' }}</span>
+                      </div>
+                    </div>
+                    <SchemaTree v-if="api.response_schema_tree?.length" :nodes="api.response_schema_tree" />
+                  </section>
+                </template>
+
+                <template v-else>
+                  <section class="detail-section">
+                    <h4>gRPC 调用</h4>
+                    <div class="detail-grid">
+                      <div class="detail-item">
+                        <span>Target</span>
+                        <code>{{ api.call?.target || api.base_url }}</code>
+                      </div>
+                      <div class="detail-item">
+                        <span>Method</span>
+                        <code>{{ api.call?.method || api.path }}</code>
+                      </div>
+                      <div class="detail-item">
+                        <span>Streaming</span>
+                        <code>{{ streamLabel(api) }}</code>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="detail-section">
+                    <h4>请求消息 {{ api.input_type }}</h4>
+                    <SchemaTree v-if="api.input_schema_tree" :nodes="schemaNodes(api.input_schema_tree)" />
+                  </section>
+
+                  <section class="detail-section">
+                    <h4>返回消息 {{ api.output_type }}</h4>
+                    <SchemaTree v-if="api.output_schema_tree" :nodes="schemaNodes(api.output_schema_tree)" />
+                  </section>
+                </template>
               </div>
+            </Transition>
+          </template>
 
-              <p v-if="api.summary || api.description" class="summary-line">
-                {{ api.summary || api.description }}
-              </p>
-
-              <template v-if="api.kind === 'rest'">
-                <section class="detail-section">
-                  <h4>参数</h4>
-                  <div v-if="api.parameters?.length" class="mini-table parameter-table">
-                    <div class="mini-row mini-head">
-                      <span>名称</span>
-                      <span>位置</span>
-                      <span>必填</span>
-                      <span>类型</span>
-                      <span>说明</span>
-                    </div>
-                    <div v-for="parameter in api.parameters" :key="`${parameter.in}:${parameter.name}`" class="mini-row">
-                      <code>{{ parameter.name }}</code>
-                      <span>{{ parameter.in }}</span>
-                      <span>{{ parameter.required ? 'yes' : 'no' }}</span>
-                      <code>{{ parameter.schema_tree?.type || '-' }}</code>
-                      <span>{{ parameter.description || '-' }}</span>
-                    </div>
-                  </div>
-                  <div v-for="parameter in api.parameters?.filter((item) => item.schema_tree?.children?.length)" :key="`tree:${parameter.in}:${parameter.name}`" class="parameter-schema-block">
-                    <h5>{{ parameter.name }}</h5>
-                    <SchemaTree :nodes="schemaNodes(parameter.schema_tree)" />
-                  </div>
-                  <div v-if="!api.parameters?.length" class="empty-detail">无参数</div>
-                </section>
-
-                <section class="detail-section">
-                  <h4>请求体</h4>
-                  <div v-if="api.request_body" class="detail-grid">
-                    <div class="detail-item">
-                      <span>Content-Type</span>
-                      <code>{{ contentTypes(api.request_body.content) }}</code>
-                    </div>
-                    <div class="detail-item">
-                      <span>必填</span>
-                      <code>{{ api.request_body.required ? 'yes' : 'no' }}</code>
-                    </div>
-                  </div>
-                  <div v-else class="empty-detail">无请求体</div>
-                  <SchemaTree v-if="api.request_schema_tree" :nodes="schemaNodes(api.request_schema_tree)" />
-                </section>
-
-                <section class="detail-section">
-                  <h4>返回</h4>
-                  <div class="mini-table response-table">
-                    <div class="mini-row mini-head">
-                      <span>状态码</span>
-                      <span>Content-Type</span>
-                      <span>Schema</span>
-                      <span>说明</span>
-                    </div>
-                    <div v-for="(response, status) in api.responses" :key="status" class="mini-row">
-                      <code>{{ status }}</code>
-                      <span>{{ contentTypes(response.content) }}</span>
-                      <code>{{ contentSchemaType(response.content) }}</code>
-                      <span>{{ response.description || '-' }}</span>
-                    </div>
-                  </div>
-                  <SchemaTree v-if="api.response_schema_tree?.length" :nodes="api.response_schema_tree" />
-                </section>
-              </template>
-
-              <template v-else>
-                <section class="detail-section">
-                  <h4>gRPC 调用</h4>
-                  <div class="detail-grid">
-                    <div class="detail-item">
-                      <span>Target</span>
-                      <code>{{ api.call?.target || api.base_url }}</code>
-                    </div>
-                    <div class="detail-item">
-                      <span>Method</span>
-                      <code>{{ api.call?.method || api.path }}</code>
-                    </div>
-                    <div class="detail-item">
-                      <span>Streaming</span>
-                      <code>{{ streamLabel(api) }}</code>
-                    </div>
-                  </div>
-                </section>
-
-                <section class="detail-section">
-                  <h4>请求消息 {{ api.input_type }}</h4>
-                  <SchemaTree v-if="api.input_schema_tree" :nodes="schemaNodes(api.input_schema_tree)" />
-                </section>
-
-                <section class="detail-section">
-                  <h4>返回消息 {{ api.output_type }}</h4>
-                  <SchemaTree v-if="api.output_schema_tree" :nodes="schemaNodes(api.output_schema_tree)" />
-                </section>
-              </template>
-            </div>
-          </Transition>
-        </template>
-
-        <div v-if="visibleApis.length === 0" class="empty-state">$ 没有后端 API 信息</div>
+          <div v-if="visibleApis.length === 0" class="empty-state">$ 没有后端 API 信息</div>
+        </div>
       </div>
     </div>
   </section>
@@ -263,26 +265,36 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.debug-card {
+.api-card {
   display: flex;
   flex: 1;
   width: 100%;
   min-height: 0;
   min-width: 0;
   flex-direction: column;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  gap: var(--space-6);
 }
 
-.debug-card-titlebar {
+.panel-heading {
+  min-height: 24px;
+  padding: 0 2px;
+}
+
+.api-heading {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-8);
-  min-height: 42px;
-  padding: 0 var(--space-10);
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-muted);
+}
+
+.panel-surface {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: transparent;
 }
 
 .title-summary {
@@ -319,20 +331,56 @@ onMounted(() => {
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .protocol-tab {
   min-width: 56px;
   height: 24px;
-  border: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.protocol-tab:hover {
+  color: var(--color-text-secondary);
+  background: var(--color-bg-hover);
 }
 
 .protocol-tab.active {
-  background: var(--color-primary-soft);
   color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
+  background: var(--color-primary-soft);
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.icon-button:hover:not(:disabled) {
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
+  background: var(--color-primary-soft);
+}
+
+.icon-button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .error-line {
@@ -353,7 +401,8 @@ onMounted(() => {
   min-height: 0;
   min-width: 0;
   align-content: start;
-  padding: var(--space-10);
+  padding: 0;
+  border-radius: 8px;
   overflow: auto;
 }
 
@@ -373,17 +422,25 @@ onMounted(() => {
 
 .api-row:last-child {
   border-bottom: 1px solid var(--color-border);
+  border-bottom-right-radius: 8px;
+  border-bottom-left-radius: 8px;
 }
 
 .api-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   color: var(--color-text-muted);
-  background: var(--color-bg-subtle);
+  background: var(--color-bg-primary);
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
 }
 
 .api-button {
   width: 100%;
-  background: var(--color-surface);
+  background: transparent;
   cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
 }
 
 .api-button:hover {
@@ -427,7 +484,7 @@ code {
   width: fit-content;
   padding: 2px 8px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   color: var(--color-text-muted);
 }
 
@@ -443,9 +500,15 @@ code {
   padding: var(--space-12);
   border: 1px solid var(--color-border);
   border-bottom: 0;
-  background: var(--color-bg-subtle);
+  background: rgba(255, 255, 255, 0.02);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
+}
+
+.api-detail:last-child {
+  border-bottom: 1px solid var(--color-border);
+  border-bottom-right-radius: 8px;
+  border-bottom-left-radius: 8px;
 }
 
 .detail-grid {
@@ -502,6 +565,8 @@ code {
 .mini-table {
   display: grid;
   border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .mini-row {
@@ -519,7 +584,7 @@ code {
 
 .mini-head {
   color: var(--color-text-muted);
-  background: var(--color-surface-muted);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .parameter-table .mini-row {
