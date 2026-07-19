@@ -426,7 +426,7 @@ class KnowledgeLibraryService:
                 skip_reason="ignored",
                 status_message="文件命中知识库屏蔽规则,已跳过并清理旧索引。",
             )
-        if source_path.suffix.lower() not in self.supported_suffixes:
+        if not self._can_ingest_source_file(source_path):
             self._emit_manual_ingestion_progress(
                 progress_callback,
                 status="started",
@@ -441,7 +441,7 @@ class KnowledgeLibraryService:
                 processed=1,
                 total=1,
                 files_skipped=1,
-                message="unsupported suffix",
+                message="unsupported binary",
             )
             return KnowledgeLibraryRebuildResult(
                 user_id=normalized_user_id,
@@ -457,8 +457,8 @@ class KnowledgeLibraryService:
                 chunks_created=0,
                 chunks_deleted=0,
                 uploaded_path=str(source_path),
-                skip_reason="unsupported_suffix",
-                status_message=f"当前后缀 {source_path.suffix.lower()} 不在知识库入库白名单中。",
+                skip_reason="unsupported_binary",
+                status_message="unsupported binary file",
             )
 
         ocr_enabled = self.settings_service.is_ocr_enabled_for_user(user_id=normalized_user_id)
@@ -533,9 +533,8 @@ class KnowledgeLibraryService:
             raise ValueError("path not found")
         if source_path.is_file():
             return self.ingest_single_file(user_id=user_id, path=path, progress_callback=progress_callback)
-        supported = self.supported_suffixes
         file_paths = sorted(
-            p for p in source_path.rglob("*") if p.is_file() and p.suffix.lower() in supported
+            p for p in source_path.rglob("*") if p.is_file() and self._can_ingest_source_file(p)
         )
         if not file_paths:
             return KnowledgeLibraryRebuildResult(
@@ -1789,6 +1788,8 @@ class KnowledgeLibraryService:
         stat = path.stat()
         relative_path = self._relative_path(path=path, root=root)
         ignored = bool(ignore_matcher and ignore_matcher.is_ignored(relative_path, is_dir=is_dir))
+        if not is_dir and not self._can_ingest_source_file(path):
+            ignored = True
         source_id = FrontmatterBootstrapService._build_document_id(Path(relative_path)) if not is_dir else ""
         is_indexed = bool(source_id and source_id in (indexed_source_ids or set()))
         if is_indexed and ocr_enabled and frontmatter_root and self._source_needs_ocr_reindex(
@@ -1837,6 +1838,11 @@ class KnowledgeLibraryService:
 
         config = self.settings_service.get_knowledge_ingestion_config(user_id=user_id)
         return KnowledgeIgnoreMatcher(str(config.get("knowledge_ignore_patterns") or ""))
+
+    def _can_ingest_source_file(self, path: Path) -> bool:
+        """Return whether a file can enter the knowledge ingestion pipeline."""
+
+        return FrontmatterBootstrapService._can_structure_source_file(path, self.supported_suffixes)
 
     def _delete_ignored_frontmatter_files(
         self,

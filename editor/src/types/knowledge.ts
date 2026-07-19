@@ -75,6 +75,7 @@ export interface IngestionQueueItem {
   status: IngestionQueueStatus
   progress: number
   queuedAt: string
+  chunksCreated?: number
   message?: string
 }
 

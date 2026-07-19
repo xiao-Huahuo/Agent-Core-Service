@@ -38,7 +38,7 @@ class _MemoryServiceStub:
 def _service(tmp_path: Path, knowledge_dir: Path) -> tuple[KnowledgeLibraryService, _MemoryServiceStub]:
     memory_service = _MemoryServiceStub()
     config = SimpleNamespace(
-        constants=SimpleNamespace(knowledge_tag="knowledge"),
+        constants=SimpleNamespace(knowledge_tag="knowledge", knowledge_supported_suffixes=[".md", ".txt"]),
         storage=SimpleNamespace(
             base_data_dir=tmp_path / "runtime",
             frontmatter_dir=tmp_path / "runtime" / "frontmatter",

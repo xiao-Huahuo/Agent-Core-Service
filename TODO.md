@@ -1,6 +1,6 @@
 ### TODOs
 - [ ] 系统性的真正打通多模态解析链,包括图片解析,扫描件pdf的图片渲染,pptx的渲染与预览,markdown无法真正渲染图片等.
-- [ ] 优化不支持格式文件的入库检测: 如果是不支持的格式,检测是不是二进制,如果不是二进制则按普通文本入库,二进制忽略.
+- [x] 优化不支持格式文件的入库检测: 如果是不支持的格式,检测是不是二进制,如果不是二进制则按普通文本入库,二进制忽略.
 - [ ] 尝试使用[OpenDataloader-PDF](https://github.com/opendataloader-project/opendataloader-pdf)代替OCR进行PDF解析?
 - [ ] 添加内置终端,可选cmd/Windows系统终端/powershell/bash.
 - [ ] 增加多模态文档的 Json结构化结果观测-语义切块观测-重叠切片观测 全流程观测面板,.

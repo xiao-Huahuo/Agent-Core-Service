@@ -29,6 +29,8 @@ from agent_service.services.memory.rag.frontmatter_document import (
 from agent_service.services.memory.rag.image_ocr import ImageOcrService
 from agent_service.services.memory.rag.multimodal_cleaner import MultimodalDocumentCleaner
 
+TEXT_FALLBACK_ENCODINGS = ("utf-8", "utf-8-sig", "gb18030")
+
 
 @dataclass(slots=True)
 class FrontmatterBootstrapResult:
@@ -186,8 +188,8 @@ class FrontmatterBootstrapService:
         result = FrontmatterBootstrapResult(files_seen=1)
         if not resolved_source.is_file():
             raise ValueError("source file not found")
-        if resolved_source.suffix.lower() not in suffixes:
-            raise ValueError(f"unsupported knowledge file suffix: {resolved_source.suffix.lower()}")
+        if not self._can_structure_source_file(resolved_source, suffixes):
+            raise ValueError(f"unsupported binary knowledge file suffix: {resolved_source.suffix.lower()}")
         try:
             relative_path = resolved_source.relative_to(source_root)
         except ValueError as exc:
@@ -290,15 +292,15 @@ class FrontmatterBootstrapService:
         metadata: dict[str, Any] = {}
         title = self._resolve_title(source_path=source_path, metadata=metadata)
         if source_path.suffix.lower() == ".md":
-            raw_text = source_path.read_text(encoding="utf-8")
+            raw_text = self._read_text_with_fallback(source_path)
             metadata, body_text = self._extract_frontmatter(raw_text)
             title = self._resolve_title(source_path=source_path, metadata=metadata)
             sections = self._build_sections(source_path=source_path, title=title, body_text=body_text)
             source_type = self._resolve_source_type(source_path)
             extra_metadata: dict[str, Any] = {"modality": "document"}
             summary = str(metadata.get("summary") or "")
-        elif source_path.suffix.lower() == ".txt":
-            body_text = source_path.read_text(encoding="utf-8")
+        elif source_path.suffix.lower() == ".txt" or source_path.suffix.lower() not in self.config.constants.knowledge_supported_suffixes:
+            body_text = self._read_text_with_fallback(source_path)
             sections = self._build_sections(source_path=source_path, title=title, body_text=body_text)
             source_type = self._resolve_source_type(source_path)
             extra_metadata = {"modality": "text"}
@@ -516,6 +518,17 @@ class FrontmatterBootstrapService:
         return "text"
 
     @staticmethod
+    def _read_text_with_fallback(source_path: Path) -> str:
+        """Read a likely-text source with common local encodings before replacing invalid bytes."""
+
+        for encoding in TEXT_FALLBACK_ENCODINGS:
+            try:
+                return source_path.read_text(encoding=encoding)
+            except UnicodeDecodeError:
+                continue
+        return source_path.read_text(encoding="utf-8", errors="replace")
+
+    @staticmethod
     def _normalize_tags(raw_tags: Any) -> list[str]:
         """
         归一化 tags 字段。
@@ -603,8 +616,42 @@ class FrontmatterBootstrapService:
         return sorted(
             path
             for path in knowledge_dir.rglob("*")
-            if path.is_file() and path.suffix.lower() in suffixes
+            if path.is_file() and FrontmatterBootstrapService._can_structure_source_file(path, suffixes)
         )
+
+    @staticmethod
+    def _can_structure_source_file(path: Path, suffixes: set[str]) -> bool:
+        """Supported files are handled by parsers; unsupported files must be plain text."""
+
+        if path.suffix.lower() in suffixes:
+            return True
+        return not FrontmatterBootstrapService._is_binary_file(path)
+
+    @staticmethod
+    def _is_binary_file(path: Path, sample_size: int = 8192) -> bool:
+        """Detect likely binary files from a small sample."""
+
+        try:
+            data = path.read_bytes()[:sample_size]
+        except OSError:
+            return True
+        if not data:
+            return False
+        if b"\0" in data:
+            return True
+        for encoding in TEXT_FALLBACK_ENCODINGS:
+            try:
+                text = data.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                text = ""
+        else:
+            return True
+        control_chars = sum(
+            1 for char in text
+            if ord(char) < 32 and char not in "\n\r\t\f\b"
+        )
+        return control_chars / max(len(text), 1) > 0.30
 
     @staticmethod
     def _hash_file(source_path: Path) -> str:

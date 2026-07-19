@@ -1,6 +1,10 @@
 # CHANGE HISTORY
 
 ## 2026-07-19
+- [x] 修正入库历史切片数记录: 历史行优先使用逐文件入库完成事件的 `file_chunks_created`,不再把整批总切片数或批次级“已生成 N 个切片”消息复制到每个文件;旧的错误批次历史会在前端加载时清洗掉错误切片摘要.
+- [x] 修正 header 灌库进度条语义: 进度条改为当前计划入库队列中已完成文件数/计划文件总数,不再使用 frontmatter 或单文件阶段 processed/total 计算,避免进度从高数值回退到低数值.
+- [x] 入库状态列接入逐文件进度刷新: 前端根据 SSE 入库事件局部更新文件树节点 `indexStatus`,队列中的文件会实时从 dirty/failed 切到 indexing/indexed/ignored/failed,已入库且不在队列中的文件不会因全库扫描事件闪烁.
+- [x] 优化不支持格式文件入库检测: 支持白名单内格式继续走原解析器;白名单外文件先做二进制采样检测,非二进制按普通文本生成 frontmatter 并入库,二进制文件跳过且在文件树中标记为 ignored.
 - [x] 新增知识库项目回收站: 删除文件/文件夹时先清理来源切片与 frontmatter,再移动到按用户和知识库隔离的 `runtime/trash` 回收站并记录原路径、删除时间和 90 天过期时间;新增最近删除列表、恢复与彻底删除接口,文件资源管理器加入“最近删除”页面.
 - [x] 调整亮色模式 Debug/观测页底色: 记忆与知识卡片、工具注册表、API 表格与 schema 展开区域不再使用灰色 `--color-bg-primary` 或透明白叠加,统一切换为亮色下纯白的 `--color-surface-raised`.
 - [x] 提升灌库进度粒度: 后端 frontmatter 与向量入库阶段通过 SSE 逐文件返回 `phase/status/path/processed/total` 等进度事件,目录灌库按整目录总文件数计算进度;前端入库队列按后端 path 精确切换正在/等待/出队,header 灌库进度条同步使用后端 processed/total.

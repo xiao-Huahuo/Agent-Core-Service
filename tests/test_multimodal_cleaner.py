@@ -241,6 +241,56 @@ def test_frontmatter_bootstrap_writes_multimodal_json(tmp_path: Path) -> None:
     assert "alpha | beta" in payload["sections"][0]["content"]
 
 
+def test_frontmatter_bootstrap_ingests_unknown_text_suffix(tmp_path: Path) -> None:
+    """Unknown suffix text files should still enter the text ingestion path."""
+
+    knowledge_dir = tmp_path / "knowledge"
+    frontmatter_dir = tmp_path / "frontmatter"
+    knowledge_dir.mkdir()
+    (knowledge_dir / ".env").write_text("METAWEAVE_MODE=dev\n", encoding="utf-8")
+    (knowledge_dir / "image.unknown").write_bytes(b"\x00\x01\x02\x03")
+    config = AgentConfig.load_config(load_env=False, ensure_directories=False, ensure_models=False)
+    service = FrontmatterBootstrapService(config=config)
+
+    result = service.build_frontmatter_dir(
+        knowledge_dir=knowledge_dir,
+        frontmatter_dir=frontmatter_dir,
+        supported_suffixes={".md"},
+    )
+
+    payload = json.loads((frontmatter_dir / ".env.json").read_text(encoding="utf-8"))
+    assert result.files_seen == 1
+    assert result.files_written == 1
+    assert payload["source_type"] == "text"
+    assert payload["metadata"]["modality"] == "text"
+    assert "METAWEAVE_MODE=dev" in payload["sections"][0]["content"]
+    assert not (frontmatter_dir / "image.json").exists()
+
+
+def test_frontmatter_bootstrap_rejects_unknown_binary_single_file(tmp_path: Path) -> None:
+    """Single-file ingestion should skip unknown binary formats instead of parsing them."""
+
+    knowledge_dir = tmp_path / "knowledge"
+    frontmatter_dir = tmp_path / "frontmatter"
+    knowledge_dir.mkdir()
+    binary_path = knowledge_dir / "archive.weird"
+    binary_path.write_bytes(b"PK\x00\x01\x02\x03")
+    config = AgentConfig.load_config(load_env=False, ensure_directories=False, ensure_models=False)
+    service = FrontmatterBootstrapService(config=config)
+
+    try:
+        service.build_frontmatter_file(
+            source_path=binary_path,
+            knowledge_dir=knowledge_dir,
+            frontmatter_dir=frontmatter_dir,
+            supported_suffixes={".md"},
+        )
+    except ValueError as exc:
+        assert "unsupported binary" in str(exc)
+    else:
+        raise AssertionError("unknown binary file should be rejected")
+
+
 def test_global_frontmatter_bootstrap_excludes_user_library_subtree(tmp_path: Path) -> None:
     """启动全局结构化不应重复扫描 editor 用户知识库子树。"""
 

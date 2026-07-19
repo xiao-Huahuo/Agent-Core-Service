@@ -43,6 +43,7 @@ import type {
   IngestionHistoryItem,
   IngestionHistoryStatus,
   IngestionQueueItem,
+  IndexStatus,
   KnowledgeFileNode,
   KnowledgeTrashEntry,
   SearchResults,
@@ -343,6 +344,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   let ingestionProgressPulseTimer: ReturnType<typeof setInterval> | null = null
   let completedIngestionQueueItems: IngestionQueueItem[] = []
   let lastIngestionQueueProcessed = 0
+  let ingestionQueuePlannedTotal = 0
+  let ingestionFileChunksByPath = new Map<string, number>()
 
   /** Toast notification message (empty = hidden). */
   const toastMessage = ref('')
@@ -408,7 +411,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   try {
     const raw = localStorage.getItem(INGESTION_HISTORY_KEY)
-    if (raw) ingestionHistory.value = JSON.parse(raw) as IngestionHistoryItem[]
+    if (raw) ingestionHistory.value = normalizeStoredIngestionHistory(JSON.parse(raw) as IngestionHistoryItem[])
   } catch { /* ignore corrupt data */ }
 
   function addSearchHistory(query: string) {
@@ -435,6 +438,28 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     } catch { /* ignore storage failures */ }
   }
 
+  function normalizeStoredIngestionHistory(rows: IngestionHistoryItem[]): IngestionHistoryItem[] {
+    const groups = new Map<string, number>()
+    rows.forEach((row) => {
+      const key = `${row.finishedAt}:${row.filesSeen ?? ''}:${row.filesIngested ?? ''}:${row.filesSkipped ?? ''}:${row.chunksCreated ?? ''}`
+      groups.set(key, (groups.get(key) ?? 0) + 1)
+    })
+    return rows.map((row) => {
+      const key = `${row.finishedAt}:${row.filesSeen ?? ''}:${row.filesIngested ?? ''}:${row.filesSkipped ?? ''}:${row.chunksCreated ?? ''}`
+      if (row.chunksCreated !== undefined && (row.filesSeen ?? 0) > 1 && (groups.get(key) ?? 0) > 1) {
+        return {
+          ...row,
+          chunksCreated: undefined,
+          message: row.message?.startsWith('已生成 ') ? undefined : row.message,
+        }
+      }
+      if ((row.filesSeen ?? 0) > 1 && row.message?.startsWith('已生成 ')) {
+        return { ...row, message: undefined }
+      }
+      return row
+    })
+  }
+
   function nodeToQueueItem(node: KnowledgeFileNode, status: IngestionQueueItem['status'], index: number): IngestionQueueItem {
     return {
       id: `${node.path}:${Date.now().toString(36)}:${index}`,
@@ -453,7 +478,89 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const sourceNodes = nodes.length > 0 ? nodes : (fallback ? [fallback] : [])
     completedIngestionQueueItems = []
     lastIngestionQueueProcessed = 0
+    ingestionQueuePlannedTotal = sourceNodes.length
+    ingestionFileChunksByPath = new Map()
     ingestionQueue.value = sourceNodes.map((node, index) => nodeToQueueItem(node, index === 0 ? 'running' : 'waiting', index))
+    sourceNodes.forEach((node) => updateTreeNodeIndexStatus(node.path, 'indexing', { force: true }))
+    setIngestionProgressFromQueue()
+  }
+
+  function findFlatNode(path: string): KnowledgeFileNode | undefined {
+    const normalizedPath = normalizeTreePath(path)
+    return flatNodes.value.find((node) => normalizeTreePath(node.path) === normalizedPath)
+  }
+
+  function shouldApplyIndexEventToTree(path: string): boolean {
+    const normalizedPath = normalizeTreePath(path)
+    if (!normalizedPath) {
+      return false
+    }
+    const activeQueueHasPath = ingestionQueue.value.some((item) => normalizeTreePath(item.path) === normalizedPath)
+    const completedQueueHasPath = completedIngestionQueueItems.some((item) => normalizeTreePath(item.path) === normalizedPath)
+    if (activeQueueHasPath || completedQueueHasPath) {
+      return true
+    }
+    const node = findFlatNode(normalizedPath)
+    return !node?.indexStatus || ['dirty', 'failed', 'indexing'].includes(node.indexStatus)
+  }
+
+  function updateTreeNodeIndexStatus(path: string, status: IndexStatus, options: { force?: boolean } = {}) {
+    const normalizedPath = normalizeTreePath(path)
+    if (!normalizedPath || (!options.force && !shouldApplyIndexEventToTree(normalizedPath))) {
+      return
+    }
+    const visit = (nodes: KnowledgeFileNode[]): KnowledgeFileNode[] => nodes.map((node) => {
+      const nodePath = normalizeTreePath(node.path)
+      if (nodePath === normalizedPath) {
+        return { ...node, indexStatus: status }
+      }
+      if (node.children && normalizedPath.startsWith(`${nodePath}/`)) {
+        return { ...node, children: visit(node.children) }
+      }
+      return node
+    })
+    tree.value = visit(tree.value)
+  }
+
+  function indexStatusFromIngestionEvent(event: KnowledgeIngestionProgressEvent): IndexStatus | null {
+    const status = String(event.status ?? '')
+    const message = String(event.message ?? '').toLowerCase()
+    if (status === 'failed') {
+      return 'failed'
+    }
+    if (status === 'started' || event.phase === 'frontmatter') {
+      return 'indexing'
+    }
+    if (event.phase !== 'ingestion') {
+      return null
+    }
+    if (status === 'ingested') {
+      return 'indexed'
+    }
+    if (status === 'skipped') {
+      return message.includes('ignored') || message.includes('unsupported') ? 'ignored' : 'indexed'
+    }
+    return null
+  }
+
+  function updateTreeIndexStatusFromEvent(event: KnowledgeIngestionProgressEvent) {
+    const path = normalizeTreePath(String(event.path ?? ''))
+    const status = indexStatusFromIngestionEvent(event)
+    if (!path || !status) {
+      return
+    }
+    updateTreeNodeIndexStatus(path, status)
+  }
+
+  function setIngestionProgressFromQueue() {
+    const total = Math.max(0, ingestionQueuePlannedTotal)
+    if (total <= 0) {
+      setIngestionProgress(0)
+      return
+    }
+    const completed = Math.min(total, completedIngestionQueueItems.length)
+    setIngestionProgress((completed / total) * 100)
+    setIngestionProgressStats(completed, total, Math.max(0, total - completed - ingestionQueue.value.length))
   }
 
   function syncIngestionQueueProgress(processed: number, total: number) {
@@ -462,21 +569,24 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     const deltaProcessed = Math.max(0, processed - lastIngestionQueueProcessed)
     lastIngestionQueueProcessed = Math.max(lastIngestionQueueProcessed, processed)
-    const rowsToDequeue = Math.max(0, Math.min(deltaProcessed, ingestionQueue.value.length - 1))
+    const rowsToDequeue = Math.max(0, Math.min(deltaProcessed, ingestionQueue.value.length))
     if (rowsToDequeue > 0) {
       completedIngestionQueueItems = [
         ...completedIngestionQueueItems,
-        ...ingestionQueue.value.slice(0, rowsToDequeue),
+        ...ingestionQueue.value.slice(0, rowsToDequeue).map((item) => ({
+          ...item,
+          chunksCreated: ingestionFileChunksByPath.get(normalizeTreePath(item.path)) ?? item.chunksCreated,
+        })),
       ]
     }
-    const activeProgress = total > 0 ? Math.max(8, Math.min(96, Math.round((processed / total) * 100))) : ingestionProgress.value
     ingestionQueue.value = ingestionQueue.value
       .slice(rowsToDequeue)
       .map((item, index) => ({
         ...item,
         status: index === 0 ? 'running' : 'waiting',
-        progress: index === 0 ? activeProgress : 0,
+        progress: index === 0 ? Math.max(0, Math.min(96, Math.round(((processed % Math.max(1, total)) / Math.max(1, total)) * 100))) : 0,
       }))
+    setIngestionProgressFromQueue()
   }
 
   function updateIngestionQueueFromEvent(event: KnowledgeIngestionProgressEvent, progress: number) {
@@ -485,12 +595,27 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       syncIngestionQueueProgress(Math.max(0, Number(event.processed ?? 0)), Math.max(1, Number(event.total ?? 0)))
       return
     }
-    const rowIndex = ingestionQueue.value.findIndex((item) => normalizeTreePath(item.path) === normalizedPath)
-    if (rowIndex < 0) {
-      return
-    }
     const status = String(event.status ?? '')
     const isTerminal = event.phase === 'ingestion' && ['ingested', 'skipped', 'failed'].includes(status)
+    if (isTerminal) {
+      ingestionFileChunksByPath.set(normalizedPath, Number(event.file_chunks_created ?? 0))
+    }
+    const rowIndex = ingestionQueue.value.findIndex((item) => normalizeTreePath(item.path) === normalizedPath)
+    if (rowIndex < 0) {
+      if (isTerminal) {
+        completedIngestionQueueItems = completedIngestionQueueItems.map((item) => {
+          if (normalizeTreePath(item.path) !== normalizedPath) {
+            return item
+          }
+          return {
+            ...item,
+            chunksCreated: ingestionFileChunksByPath.get(normalizedPath),
+            message: event.message ?? item.message,
+          }
+        })
+      }
+      return
+    }
     if (isTerminal) {
       const [completed] = ingestionQueue.value.slice(rowIndex, rowIndex + 1)
       if (completed) {
@@ -499,6 +624,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           {
             ...completed,
             progress: 100,
+            chunksCreated: ingestionFileChunksByPath.get(normalizedPath) ?? 0,
             message: event.message,
           },
         ]
@@ -509,6 +635,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         status: index === 0 ? 'running' : 'waiting',
         progress: index === 0 ? progress : 0,
       }))
+      setIngestionProgressFromQueue()
       return
     }
     ingestionQueue.value = ingestionQueue.value.map((item, index) => {
@@ -553,14 +680,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         filesSeen: result?.files_seen,
         filesIngested: result?.files_ingested,
         filesSkipped: result?.files_skipped,
-        chunksCreated: result?.chunks_created,
-        message: message ?? result?.status_message,
+        chunksCreated: item.chunksCreated ?? ingestionFileChunksByPath.get(normalizeTreePath(item.path)) ?? (rows.length === 1 ? result?.chunks_created : undefined),
+        message: item.message ?? (rows.length === 1 ? (message ?? result?.status_message) : undefined),
       }))
       ingestionHistory.value = [...nextRows, ...ingestionHistory.value].slice(0, INGESTION_HISTORY_LIMIT)
       persistIngestionHistory()
     }
     completedIngestionQueueItems = []
     lastIngestionQueueProcessed = 0
+    ingestionQueuePlannedTotal = 0
+    ingestionFileChunksByPath = new Map()
     ingestionQueue.value = []
   }
 
@@ -596,10 +725,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   function applyIngestionProgressEvent(event: KnowledgeIngestionProgressEvent) {
+    updateTreeIndexStatusFromEvent(event)
     if (event.type === 'done' && event.result) {
-      const total = Math.max(1, event.result.files_seen)
-      setIngestionProgressStats(event.result.files_ingested, total, event.result.files_skipped)
-      setIngestionProgress(98)
+      setIngestionProgressFromQueue()
       return
     }
     const total = Math.max(1, Number(event.total ?? 0))
@@ -607,34 +735,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const ratio = total > 0 ? processed / total : 0
     if (event.phase === 'frontmatter') {
       const progress = 8 + ratio * 34
-      setIngestionProgress(progress)
       if (event.path) {
         updateIngestionQueueFromEvent(event, progress)
       }
-      setIngestionProgressStats(
-        Number(event.files_written ?? processed),
-        total,
-        Number(event.files_skipped ?? 0),
-      )
       return
     }
     if (event.phase === 'ingestion') {
       const progress = 42 + ratio * 50
-      setIngestionProgress(progress)
       updateIngestionQueueFromEvent(event, progress)
-      setIngestionProgressStats(
-        Number(event.files_ingested ?? processed),
-        total,
-        Number(event.files_skipped ?? 0),
-      )
       return
     }
     if (event.phase === 'cleanup') {
-      setIngestionProgress(96)
+      setIngestionProgressFromQueue()
       return
     }
     if (event.phase === 'graph') {
-      setIngestionProgress(event.status === 'finished' ? 98 : 97)
+      setIngestionProgressFromQueue()
     }
   }
 
@@ -1254,7 +1370,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     try {
       await loadKnowledgeTree()
       beginIngestionQueue(flattenIngestibleNodes(tree.value))
-      setIngestionProgress(22)
       if (activeTab.value && !shouldUsePreviewEndpoint(activeTab.value.path)) {
         const tab = activeTab.value
         const response = await readKnowledgeFile(settingsStore.profile.userId, tab.path)
@@ -1262,11 +1377,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         tab.dirty = false
         tab.mtime = response.mtime
       }
-      setIngestionProgress(34)
       const result = await rebuildKnowledgeRootStream(settingsStore.profile.userId, applyIngestionProgressEvent)
       await loadKnowledgeTree()
-      setIngestionProgressStats(result.files_ingested, result.files_seen, result.files_skipped)
-      setIngestionProgress(98)
+      setIngestionProgressFromQueue()
       finalResult = result
       finalStatus = result.files_ingested > 0 ? 'finished' : 'skipped'
       finalMessage = result.files_ingested > 0 ? '全库重建完成' : '没有文件进入向量库'
@@ -1312,9 +1425,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         status_message?: string
       }
       finalResult = result
-      const total = Math.max(1, result.files_seen ?? ((result.files_ingested ?? 0) + (result.files_skipped ?? 0)))
-      setIngestionProgressStats(result.files_ingested ?? 0, total, result.files_skipped ?? 0)
-      setIngestionProgress(98)
+      setIngestionProgressFromQueue()
       await loadKnowledgeTree()
       if ((result.files_ingested ?? 0) > 0) {
         finalStatus = 'finished'

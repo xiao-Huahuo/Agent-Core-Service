@@ -31,6 +31,7 @@ import {
   LayoutList,
   List,
   ListChecks,
+  ListFilter,
   RefreshCw,
   RotateCcw,
   Trash2,
@@ -818,6 +819,17 @@ onUnmounted(() => {
         <Trash2 :size="15" />
         <span>最近删除</span>
       </div>
+      <button
+        v-if="resourcePage === 'files'"
+        class="tool-button"
+        :class="{ active: settingsStore.showIndexColumn }"
+        type="button"
+        :title="settingsStore.showIndexColumn ? '隐藏索引状态' : '显示索引状态'"
+        :aria-label="settingsStore.showIndexColumn ? '隐藏索引状态' : '显示索引状态'"
+        @click="settingsStore.setShowIndexColumn(!settingsStore.showIndexColumn)"
+      >
+        <ListFilter :size="15" />
+      </button>
       <button
         v-if="resourcePage === 'files'"
         class="tool-button"
