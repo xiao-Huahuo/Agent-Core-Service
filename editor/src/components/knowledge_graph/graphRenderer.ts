@@ -239,11 +239,12 @@ function drawLink(
   const endY = spreadTarget.y ?? spreadTarget.targetY
   const glowEndX = startX + (endX - startX) * hoverProgress
   const glowEndY = startY + (endY - startY) * hoverProgress
+  const hoverColor = nodeColor(spreadSource, theme)
   ctx.save()
   ctx.globalAlpha = 0.2 + 0.8 * hoverProgress
-  ctx.shadowColor = theme.edgeActive
+  ctx.shadowColor = hoverColor
   ctx.shadowBlur = 10 * hoverProgress
-  ctx.strokeStyle = theme.edgeActive
+  ctx.strokeStyle = hoverColor
   ctx.lineWidth = 1.2 + 1.3 * hoverProgress
   ctx.beginPath()
   ctx.moveTo(startX, startY)
@@ -251,7 +252,7 @@ function drawLink(
   ctx.stroke()
   ctx.beginPath()
   ctx.arc(glowEndX, glowEndY, 2.2 + 1.8 * hoverProgress, 0, Math.PI * 2)
-  ctx.fillStyle = theme.edgeActive
+  ctx.fillStyle = hoverColor
   ctx.globalAlpha = 0.18 + 0.28 * hoverProgress
   ctx.fill()
   ctx.restore()
@@ -275,8 +276,8 @@ function drawNode(
   ctx.save()
   ctx.globalAlpha = hasHover && !isRelated ? 0.38 : 1
   if (glowProgress > 0) {
-    drawGlowCircle(ctx, x, y, node.radius, isSelected ? theme.selected : theme.edgeActive, glowProgress)
-    ctx.shadowColor = isSelected ? theme.selected : theme.edgeActive
+    drawGlowCircle(ctx, x, y, node.radius, color, glowProgress)
+    ctx.shadowColor = color
     ctx.shadowBlur = 8 + 8 * glowProgress
   }
   ctx.beginPath()
@@ -290,7 +291,7 @@ function drawNode(
     ctx.stroke()
   } else {
     ctx.fillStyle = color
-    ctx.strokeStyle = isSelected ? theme.selected : isHovered ? theme.edgeActive : theme.surface
+    ctx.strokeStyle = isSelected ? theme.selected : isHovered ? color : theme.surface
     ctx.lineWidth = 1.5 + 2.5 * glowProgress
     ctx.fill()
     ctx.stroke()
@@ -299,7 +300,7 @@ function drawNode(
     ctx.beginPath()
     ctx.setLineDash([])
     ctx.arc(x, y, node.radius + 7, 0, Math.PI * 2)
-    ctx.strokeStyle = isSelected ? theme.selected : theme.edgeActive
+    ctx.strokeStyle = isSelected ? theme.selected : color
     ctx.globalAlpha = hasHover && !isRelated ? 0.38 : glowProgress
     ctx.lineWidth = 0.8 + 0.4 * glowProgress
     ctx.stroke()
