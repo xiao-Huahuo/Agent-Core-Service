@@ -40,6 +40,7 @@ const hoveredNodeId = ref('')
 const selectedNodeId = ref(props.selectedNodeId ?? '')
 const viewport = ref<KnowledgeGraphViewport>({ x: 0, y: 0, scale: 1 })
 const canvasSize = ref({ width: 1, height: 1 })
+const loadingOverlay = ref(false)
 
 const HOVER_SPREAD_DURATION_MS = 720
 
@@ -215,9 +216,11 @@ function startSimulation(shouldFit = true) {
   )
   simulation.on('tick', requestDraw)
   if (shouldFit) {
+    loadingOverlay.value = true
     viewport.value = fitGraphToViewport(runtimeModel.value, canvasSize.value.width, canvasSize.value.height)
     setTimeout(() => {
       viewport.value = fitGraphToViewport(runtimeModel.value, canvasSize.value.width, canvasSize.value.height)
+      loadingOverlay.value = false
       requestDraw()
     }, 600)
   }
@@ -408,6 +411,10 @@ defineExpose({
 
 <template>
   <div ref="hostRef" class="knowledge-graph-canvas">
+    <div v-if="loadingOverlay" class="graph-loading-overlay">
+      <span class="loading-spinner" />
+      <span>加载中...</span>
+    </div>
     <canvas
       ref="canvasRef"
       :class="{ hovering: hoveredNodeId }"
@@ -448,5 +455,36 @@ canvas:active {
 
 canvas.hovering {
   cursor: pointer;
+}
+
+.graph-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: color-mix(in srgb, var(--color-canvas) 70%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.loading-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: graph-loading-spin 700ms linear infinite;
+}
+
+@keyframes graph-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
