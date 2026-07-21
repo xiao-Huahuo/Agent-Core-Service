@@ -183,6 +183,8 @@ watch(
     selectedNode.value = null
     if (mode === 'semantic') {
       void loadSemanticGraph()
+    } else {
+      void workspaceStore.loadKnowledgeTree()
     }
   },
 )

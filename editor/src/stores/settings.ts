@@ -228,6 +228,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function applyTheme() {
     document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light')
     document.documentElement.setAttribute('data-color-scheme', colorScheme.value)
+    window.dispatchEvent(new CustomEvent(APPEARANCE_PREVIEW_EVENT))
   }
 
   function applyFonts() {

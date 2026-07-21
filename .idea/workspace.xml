@@ -4,9 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="语义知识图谱v1">
-      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/layeredForceLayout.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/layeredForceLayout.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/semanticGraphAdapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/semanticGraphAdapter.ts" afterDir="false" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="语义知识图谱v2">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/settings.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -260,15 +261,7 @@
       <workItem from="1784338941374" duration="1273000" />
       <workItem from="1784375929012" duration="13746000" />
       <workItem from="1784443638650" duration="19303000" />
-      <workItem from="1784615003592" duration="8957000" />
-    </task>
-    <task id="LOCAL-00135" summary="工具条美化">
-      <option name="closed" value="true" />
-      <created>1784182437437</created>
-      <option name="number" value="00135" />
-      <option name="presentableId" value="LOCAL-00135" />
-      <option name="project" value="LOCAL" />
-      <updated>1784182437437</updated>
+      <workItem from="1784615003592" duration="9908000" />
     </task>
     <task id="LOCAL-00136" summary="工具条美化v2">
       <option name="closed" value="true" />
@@ -654,14 +647,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784623581323</updated>
     </task>
-    <option name="localTasksCounter" value="184" />
+    <task id="LOCAL-00184" summary="语义知识图谱v2">
+      <option name="closed" value="true" />
+      <created>1784624576217</created>
+      <option name="number" value="00184" />
+      <option name="presentableId" value="LOCAL-00184" />
+      <option name="project" value="LOCAL" />
+      <updated>1784624576217</updated>
+    </task>
+    <option name="localTasksCounter" value="185" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="去除了小学期不必要的文档" />
     <MESSAGE value="todo" />
     <MESSAGE value="物理消除了console" />
     <MESSAGE value="开发规范调整" />
@@ -686,7 +686,8 @@
     <MESSAGE value="修复了agent不输出中间内容的问题" />
     <MESSAGE value="写作规范" />
     <MESSAGE value="语义知识图谱v1" />
-    <option name="LAST_COMMIT_MESSAGE" value="语义知识图谱v1" />
+    <MESSAGE value="语义知识图谱v2" />
+    <option name="LAST_COMMIT_MESSAGE" value="语义知识图谱v2" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
