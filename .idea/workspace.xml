@@ -6,8 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="语义知识图谱v2">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/settings.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/写作规范.md" beforeDir="false" afterPath="$PROJECT_DIR$/写作规范.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -261,15 +261,7 @@
       <workItem from="1784338941374" duration="1273000" />
       <workItem from="1784375929012" duration="13746000" />
       <workItem from="1784443638650" duration="19303000" />
-      <workItem from="1784615003592" duration="9908000" />
-    </task>
-    <task id="LOCAL-00136" summary="工具条美化v2">
-      <option name="closed" value="true" />
-      <created>1784183826550</created>
-      <option name="number" value="00136" />
-      <option name="presentableId" value="LOCAL-00136" />
-      <option name="project" value="LOCAL" />
-      <updated>1784183826550</updated>
+      <workItem from="1784615003592" duration="13294000" />
     </task>
     <task id="LOCAL-00137" summary="agent工具模式美化">
       <option name="closed" value="true" />
@@ -655,7 +647,15 @@
       <option name="project" value="LOCAL" />
       <updated>1784624576217</updated>
     </task>
-    <option name="localTasksCounter" value="185" />
+    <task id="LOCAL-00185" summary="语义知识图谱v2">
+      <option name="closed" value="true" />
+      <created>1784624949871</created>
+      <option name="number" value="00185" />
+      <option name="presentableId" value="LOCAL-00185" />
+      <option name="project" value="LOCAL" />
+      <updated>1784624949871</updated>
+    </task>
+    <option name="localTasksCounter" value="186" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

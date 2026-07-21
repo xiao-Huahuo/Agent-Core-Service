@@ -118,7 +118,7 @@ AgentService.exe
 启动时自动启动默认浏览器访问 `http://localhost:8002`，后端同时提供 API 和前端界面。`runtime/` 和 `resources/` 目录和 `.env` 空文件首次启动自动生成。
 首次启动时无法使用.需要在`.env`里面配置大小模型API-KEY,然后才能启动exe.
 
-## 项目设计
+## 技术与要求
 
 
 
@@ -144,19 +144,20 @@ AgentService.exe
 * 日志与监控：logging / structlog + Prometheus + Grafana
 * 测试与质量：Pytest + Ruff + mypy
 
-### Agent功能与设计
+## 功能与设计
 
-后端服务设计遵循分布式设计原则，形成可插拔、可定制的独立微服务。
+后端服务设计遵循分布式设计原则，配备 REST + gRPC 两套对外接口,形成可插拔、可定制的独立微服务。
 
-各部分的设计如下：
-
-1. 智能体状态转移设计：在LangGraph状态转移图入口处有一个入口节点,调用一次小模型,按照用户提问内容区分三种模式的入口,用户在同一session前后提出简单和困难的问题时,会以小模型决策以下三种图的模式:
+### Agent设计
+#### 智能体状态转移设计
+在LangGraph状态转移图入口处有一个入口节点,调用一次小模型,按照用户提问内容区分三种模式的入口,用户在同一session前后提出简单和困难的问题时,会以小模型决策以下三种图的模式:
       1. 简答模式: 对于明显不需要思考的短输入,不经过循环,只保留 RAG 上下文构建,用小模型直接输出.
       2. ReAct模式: 不经过`planner`节点和`observation`节点,标准的ReAct图.agent节点同时充当观察者和决策者,一个循环只需要调用一次LLM.
       3. 深度思考模式(Plan-and-Execute模式): 经过规划-执行-观察的循环,一个循环会调用2~3次LLM,适合长时间思考.
    auto模式会先调用小模型路由器输出`simple/react/plan`,显式选择模式时不经过路由器;当小模型认为自己能力不足、不确定能否可靠回答、需要事实核验或外部信息时,至少进入`react`,不能选择`simple`;当小模型不可用或输出无法解析时,才回退到本地保守规则.
    前端提供 `auto`/`simple`/`react`/`plan` 思考模式切换,Agent 观测面板状态图按实际执行模式切换.
-2. 节点设计：基础节点有以下几种：
+#### 节点设计
+节点有以下几种：
    * 启动/终止节点 `START`/`END`
    * 决策/汇合节点 `agent`
    * 工具调用节点 `action`
@@ -179,93 +180,82 @@ AgentService.exe
       └─ [abandon]  → agent（承认查不到，给出已有信息）
    * 摘要节点 `summary`
    * 上下文压缩节点 `compress`
-3. 工具系统设计：采用 **Function Calling** 模式，对接 **MCP 协议** 接入外部工具。系统自带默认工具,包括记忆召回,知识库检索,规则创建,文件操作,联网搜索等。
+#### 工具系统设计
+采用 **Function Calling** 模式，对接 **MCP 协议** 接入外部工具。系统自带默认工具,包括记忆召回,知识库检索,规则创建,文件操作,联网搜索等。
    * 注册与执行架构：工具注册器`ToolRegistry` 维护 `工具名 → 工具功能` 映射，支持 JSON Schema 参数校验并自动转换为工具体；工具执行器`ToolExecutor` 负责运行时调度，通过 `get_tool_runtime()` 注入当前用户/会话上下文，确保跨用户隔离与工具函数无状态复用。
    * 工具可开关: 用户可在设置中对Agent可使用的工具进行开关,或者直接在Agent观测页面的工具注册表进行工具开关.
    * 可观测性执行流程：每步工具调用逐一执行，产生 start 与 end 双向 trace（含工具名、参数摘要、结果摘要与条目数），通过异步回调实时推送前端观测面板, 工具调用结果则写回消息历史供后续观察节点 `observation`/`agent` 审视，形成完整的可追溯闭合回路。
     Agent可操作用户本地知识库文件.Agent既可以通过RAG获取用户指代的最相关文件,又可以通过通过文件管理系统API具体调查和操作任何所需的具体文档,实现了"中枢智能体"的理念.
-4. 数据库设计：
-   - 关联库采用 SQLite 存储智能体会话(`session`)与消息(`message`)，每次对话从关联库加载完整会话上下文, 实现多轮对话管理；
-   - 向量库采用 ChromaDB，多模态文件经格式解析与元数据提取后统一转为结构化 JSON，再按语义切片写入向量库，检索时通过混合检索（向量相似度 + 关键词覆盖）与 ReRank 重排序实现精准召回，每个切片携带源文件路径与偏移信息可追溯至原始文档.
-      - 已入库的文件,未入库或者格式不可识别的文件,屏蔽的文件,三类文件将以不同的索引状态图标(绿,红,灰)显示在文件树中.
-      - 惰性灌库: 默认在文件入库时不自动灌库,用户可手动将单文件灌入向量库,或点击header的灌库按钮时进行全知识库范围内的灌库.
-      - 屏蔽单个文件/建立屏蔽区: 用户可设置部分文件或者文件夹内文件的屏蔽,被屏蔽的文件将禁止入库,入了也要出库,文档被写入屏蔽区之后也会将以之为来源的切片删除.灌库函数自动忽略屏蔽的文档和屏蔽区子树全部文档.
-5. 服务间调用：采用 **gRPC 协议** 函数化接口，暴露智能体信息流、思考轨迹、数据库调用等对外接口。**项目内置Agent既能够调用内外业务工具,其输入输出又能通过gRPC协议被外部服务调用**,从而保持自身智能体的独立性.
-6. 配置管理：`AgentConfig` 类管理全部运行时参数，分为系统配置与用户配置两层：
-   - 系统配置：模型接入参数、存储路径、服务端口等，内建默认值，可通过 `.env` 文件按需覆盖，无需修改代码。
-   - 用户配置：各用户的模型偏好、知识库路径、联网搜索开关等个性化设置，持久化到数据库，通过前端设置页可视化编辑。
-7. 可观测性：
-   - Agent对话框分为"对话模式"和"工具模式":
-     - 对话模式: agent思考过程默认折叠,被归类为"深度思考",处理后最终得到统一输出.
-     - 工具模式: 显性展示模型思考过程和工具调用过程.
-   - Agent观测面板实时展示 Agent 行动轨迹，包括节点状态、上下文构建器、RAG 召回条目、召回筛选过程、会话摘要等。日志系统记录全部 Agent 行动，信息传递过程完全可视化。观测面板不重新推理业务结果，而是从会话消息、系统上下文快照、工具轨迹与模型返回元数据中派生统计值；统计口径按会话累计，同一 session 内不会因为图循环或单个节点结束而清零。
-     * 数据采集流程：后端在每个节点执行时记录轨迹。模型节点记录真实 token 用量，工具节点记录开始、结束、参数摘要、结果摘要、结果条数与耗时；RAG 上下文构建器记录自动召回的指标和召回明细。前端观测层只做归并、过滤和累计，不二次生成业务结论。
-     * RAG 三率：统计来源包括两类，一类是上下文自动召回，另一类是知识库工具返回的召回条目。每次召回形成一个样本点，会话级指标取累计均值：$$FillRate_t=\frac{1}{t}\sum_{i=1}^{t} fill_i,\quad AvgRelevance_t=\frac{1}{t}\sum_{i=1}^{t} relevance_i,\quad Confidence_t=\frac{1}{t}\sum_{i=1}^{t} confidence_i$$ 知识库工具召回没有显式分数时用 0 作为相关性兜底；填充率按返回条数与请求上限估算，平均相关性取各召回条目重排序分数的均值。请求上限在各通道检索时记录（$memory\\_limit$ + $knowledge\\_limit$），而非硬编码 $top\\_k \\times 2$：$$fill_i=\min(\frac{memory\\_count_i + knowledge\\_count_i}{memory\\_limit_i + knowledge\\_limit_i}\times100,100),\quad relevance_i=\frac{1}{n}\sum_{j=1}^{n} final\\_score_j\times100$$ 上下文自动召回时 $final\\_score_j$ 为 ReRank 精排结果；工具召回时从返回文本中尝试提取重排序分数，提取失败则兜底为 $0$。
-     * Token 用量：只统计真实模型调用返回的 token 用量，不按文本长度估算，也不把工具执行、安全审核等运行时节点计入模型用量。模型节点按池归并为大模型和小模型：$$TokenPool_t(p)=\sum_{i=1}^{t}\sum_{调用\in p} tokens(调用)$$ 其中 $p\in\{大模型,小模型\}$，前端图表只展示“大模型 / 小模型”两类。
-     * 思考耗时：优先使用节点记录的真实耗时；缺失时才回退到相邻轨迹时间戳或消息时间差估计。每轮耗时为该轮节点耗时之和：$$Latency_k=\sum_{节点\in 第k轮} duration(节点)$$ 折线图展示累计耗时：$$CumulativeLatency_t=\sum_{k=1}^{t}Latency_k$$ 节点饼图和柱状图展示截至当前轮次的累计节点占比：$$Share_t(节点)=\frac{\sum_{k=1}^{t}duration_k(节点)}{\sum_{k=1}^{t}\sum_{n}duration_k(n)}\times100$$
-     * 召回条目与上下文：长期记忆召回、知识库片段召回和上下文拼装视图都按当前会话累计展示，自动召回与工具召回分别保留来源、分数、重排序前后状态和引用映射，便于追溯最终回答引用了哪些材料。
-8. 记忆管理：分层长短记忆的算法和机制。
-   * 短期记忆：即会话内上下文管理.
-     * 不超过上下文长度的直接追加到上下文，超过最大上下文阈值时会先进入 `compress` 节点,用小模型生成“重要事实摘要”,再把工作上下文重写为 `重要事实摘要 + 最近少量消息`。
-     * 上下文拼装优先级为 `短期历史消息 -> 压缩摘要 -> 历史摘要/事实 -> 外部知识库片段`，避免知识库内容覆盖用户刚刚明确给出的事实。
-   * 长期记忆/语义召回：采用 **RAG 检索增强生成**作为提取方式。底层数据分为以下类型：
-     - `会话摘要(session_summary)`：每轮异步摘要，记录对话要点。
-     - `会话事实(session_fact)`：从摘要中提取的结构化事实单元，由 MemoryResolver 裁决并维护 active/superseded/expired 状态。
-     - `重要事实摘要(important_fact_summary)`：ContextBuilder 内 compress 节点生成的跨会话重要事实。
-     - `知识切片(knowledge_chunk)`：知识库文件的语义切片。
-     - `自定义记忆(user_custom)`：用户手动写入的自定义记忆。
-     - `用户规则(user_rule)`：用户自定义的长期规则，不经过 RAG 检索，以系统提示词形式直接注入。
+#### 可观测性
+##### 对话内观测
+Agent对话框分为"对话模式"和"工具模式":
+  - 对话模式: agent思考过程默认折叠,被归类为"深度思考",处理后最终得到统一输出.
+  - 工具模式: 显性展示模型思考过程和工具调用过程.
+##### 观测面板
+Agent观测面板实时展示 Agent 行动轨迹，包括节点状态、上下文构建器、RAG 召回条目、召回筛选过程、会话摘要等。日志系统记录全部 Agent 行动，信息传递过程完全可视化。观测面板不重新推理业务结果，而是从会话消息、系统上下文快照、工具轨迹与模型返回元数据中派生统计值；统计口径按会话累计，同一 session 内不会因为图循环或单个节点结束而清零。
+  * 数据采集流程：后端在每个节点执行时记录轨迹。模型节点记录真实 token 用量，工具节点记录开始、结束、参数摘要、结果摘要、结果条数与耗时；RAG 上下文构建器记录自动召回的指标和召回明细。前端观测层只做归并、过滤和累计，不二次生成业务结论。
+  * RAG 三率：统计来源包括两类，一类是上下文自动召回，另一类是知识库工具返回的召回条目。每次召回形成一个样本点，会话级指标取累计均值：$$FillRate_t=\frac{1}{t}\sum_{i=1}^{t} fill_i,\quad AvgRelevance_t=\frac{1}{t}\sum_{i=1}^{t} relevance_i,\quad Confidence_t=\frac{1}{t}\sum_{i=1}^{t} confidence_i$$ 知识库工具召回没有显式分数时用 0 作为相关性兜底；填充率按返回条数与请求上限估算，平均相关性取各召回条目重排序分数的均值。请求上限在各通道检索时记录（$memory\\_limit$ + $knowledge\\_limit$），而非硬编码 $top\\_k \\times 2$：$$fill_i=\min(\frac{memory\\_count_i + knowledge\\_count_i}{memory\\_limit_i + knowledge\\_limit_i}\times100,100),\quad relevance_i=\frac{1}{n}\sum_{j=1}^{n} final\\_score_j\times100$$ 上下文自动召回时 $final\\_score_j$ 为 ReRank 精排结果；工具召回时从返回文本中尝试提取重排序分数，提取失败则兜底为 $0$。
+  * Token 用量：只统计真实模型调用返回的 token 用量，不按文本长度估算，也不把工具执行、安全审核等运行时节点计入模型用量。模型节点按池归并为大模型和小模型：$$TokenPool_t(p)=\sum_{i=1}^{t}\sum_{调用\in p} tokens(调用)$$ 其中 $p\in\{大模型,小模型\}$，前端图表只展示“大模型 / 小模型”两类。
+  * 思考耗时：优先使用节点记录的真实耗时；缺失时才回退到相邻轨迹时间戳或消息时间差估计。每轮耗时为该轮节点耗时之和：$$Latency_k=\sum_{节点\in 第k轮} duration(节点)$$ 折线图展示累计耗时：$$CumulativeLatency_t=\sum_{k=1}^{t}Latency_k$$ 节点饼图和柱状图展示截至当前轮次的累计节点占比：$$Share_t(节点)=\frac{\sum_{k=1}^{t}duration_k(节点)}{\sum_{k=1}^{t}\sum_{n}duration_k(n)}\times100$$
+  * 召回条目与上下文：长期记忆召回、知识库片段召回和上下文拼装视图都按当前会话累计展示，自动召回与工具召回分别保留来源、分数、重排序前后状态和引用映射，便于追溯最终回答引用了哪些材料。
+#### 记忆系统
+##### 短期记忆
+即会话内上下文管理.
+* 不超过上下文长度的直接追加到上下文，超过最大上下文阈值时会先进入 `compress` 节点,用小模型生成“重要事实摘要”,再把工作上下文重写为 `重要事实摘要 + 最近少量消息`。
+* 上下文拼装优先级为 `短期历史消息 -> 压缩摘要 -> 历史摘要/事实 -> 外部知识库片段`，避免知识库内容覆盖用户刚刚明确给出的事实。
+##### 长期记忆/语义召回
+采用 **RAG 检索增强生成**作为提取方式。底层数据分为以下类型：
+- `会话摘要(session_summary)`：每轮异步摘要，记录对话要点。
+- `会话事实(session_fact)`：从摘要中提取的结构化事实单元，由 MemoryResolver 裁决并维护 active/superseded/expired 状态。
+- `重要事实摘要(important_fact_summary)`：ContextBuilder 内 compress 节点生成的跨会话重要事实。
+- `知识切片(knowledge_chunk)`：知识库文件的语义切片。
+- `自定义记忆(user_custom)`：用户手动写入的自定义记忆。
+- `用户规则(user_rule)`：用户自定义的长期规则，不经过 RAG 检索，以系统提示词形式直接注入。
 
-   * 长期记忆/语义召回管线完整流程：
+##### 长期记忆/语义召回管线完整流程
 
-     1. **向量召回** — 使用 ChromaDB 余弦距离检索，`vector_score = clamp(1.0 - distance)`。若 ChromaDB 不可用或返回零得分，回退到 SQLite 内嵌 JSON 向量的余弦相似度（归一化到 [0,1]）。
+1. **向量召回** — 使用 ChromaDB 余弦距离检索，`vector_score = clamp(1.0 - distance)`。若 ChromaDB 不可用或返回零得分，回退到 SQLite 内嵌 JSON 向量的余弦相似度（归一化到 [0,1]）。
 
-     2. **关键词召回** — 从 query 提取英文 token + 中文 2~4 字子串，过停用词后以 SQL ILIKE 预筛出候选 doc，再用 Python 覆盖率 + 词频加权打分：每个词按长度加权（`weight = min(max(len, 2), 6) / 6`），出现次数加成（`+ min(occ-1, 2) * 0.08 * weight`），最终 `keyword_score = coverage_score + phrase_bonus`（phrase_bonus 为 `min(matched_terms, 4) * 0.03`）。
+2. **关键词召回** — 从 query 提取英文 token + 中文 2~4 字子串，过停用词后以 SQL ILIKE 预筛出候选 doc，再用 Python 覆盖率 + 词频加权打分：每个词按长度加权（`weight = min(max(len, 2), 6) / 6`），出现次数加成（`+ min(occ-1, 2) * 0.08 * weight`），最终 `keyword_score = coverage_score + phrase_bonus`（phrase_bonus 为 `min(matched_terms, 4) * 0.03`）。
 
-     3. **merge_candidates 合并去重** — 以 `memory_id` 为 key 去重。两路都命中的候选：`merged_score = 0.6 × max(v, k) + 0.4 × avg(v, k) + 0.05`（通道奖励）；仅一路命中：`merged_score = max(v, k)`。
+3. **合并去重** — 以 `memory_id` 为 key 去重。两路都命中的候选：`merged_score = 0.6 × max(v, k) + 0.4 × avg(v, k) + 0.05`（通道奖励）；仅一路命中：`merged_score = max(v, k)`。
 
-     4. **CrossEncoder ReRank** — 使用本地 CrossEncoder 模型 `BAAI/bge-reranker-v2-m3` 对 `(query, document)` 对做语义精排，原始 logit 通过 sigmoid 归一化到 [0,1]。未配置 ReRank 模型时回退到 merged_score + 通道数 + importance 排序。
+4. **CrossEncoder ReRank** — 使用本地 CrossEncoder 模型 `BAAI/bge-reranker-v2-m3` 对 `(query, document)` 对做语义精排，原始 logit 通过 sigmoid 归一化到 [0,1]。未配置 ReRank 模型时回退到 merged_score + 通道数 + importance 排序。
 
-     5. **最终联合评分** — 对 ReRank 后的每条结果计算三维分数：
-        $$
-        relevance\_score = \max(rerank\_score, merged\_score)
-        $$
-        $$
-        freshness\_score = \frac{1}{1 + age\_days / 30}
-        $$
-        $$
-        final\_score = 0.5 \times relevance + 0.3 \times freshness + 0.2 \times authority
-        $$
-        权重来自配置项 `relevance_weight=0.5, freshness_weight=0.3, authority_weight=0.2`。
+5. **最终联合评分** — 对 ReRank 后的每条结果计算三维分数：
+   $$
+   relevance\_score = \max(rerank\_score, merged\_score)
+   $$
+   $$
+   freshness\_score = \frac{1}{1 + age\_days / 30}
+   $$
+   $$
+   final\_score = 0.5 \times relevance + 0.3 \times freshness + 0.2 \times authority
+   $$
+   权重来自配置项 `relevance_weight=0.5, freshness_weight=0.3, authority_weight=0.2`。
 
-     6. **阈值过滤** — `final_score < score_threshold` 的直接丢弃。阈值可配置，默认约 0.3。
+6. **阈值过滤** — `final_score < score_threshold` 的直接丢弃。阈值可配置，默认约 0.3。
 
-     7. **最终排序** — **以 `updated_at DESC（最新优先）为首要维度**，同等新度下按 `final_score DESC` → `current_session_match DESC` → `relevance DESC` → `importance DESC` 排列。理由是 score_threshold 已经过滤了无关内容，候选集内越新的信息越可能反映当前事实，而非 pure relevance。
+7. **最终排序** — **以 `updated_at DESC（最新优先）为首要维度**，同等新度下按 `final_score DESC` → `current_session_match DESC` → `relevance DESC` → `importance DESC` 排列。理由是 score_threshold 已经过滤了无关内容，候选集内越新的信息越可能反映当前事实，而非 pure relevance。
 
-     8. **四层合并 & topK 截断** — `会话事实` / `重要事实摘要` / `会话摘要` / `自定义记忆` 四路记忆按 `memory_type` 独立执行上述 1~7 步，各自返回 topK（`rerank_top_k`，默认 5），再跨类型合并去重，按 final_score 截断总条数上限，最终注入系统提示词的检索上下文。
+8. **四层合并 & topK 截断** — `会话事实` / `重要事实摘要` / `会话摘要` / `自定义记忆` 四路记忆按 `memory_type` 独立执行上述 1~7 步，各自返回 topK（`rerank_top_k`，默认 5），再跨类型合并去重，按 final_score 截断总条数上限，最终注入系统提示词的检索上下文。
 
-   * 信息时效性：每条记忆携带 `created_at` / `updated_at` / `valid_from` / `valid_until` 时间戳，以及 `fact_status: active | superseded | expired`。检索时在过滤层先排除 `expired` 和 `superseded` 条目；排序层内优先召回新内容。事实更新策略：
-     - 单值强排他事实：新值覆盖旧值，旧事实标记 superseded。
-     - 多值弱排他事实：新值追加并去重。
-     - 时序事实：到期自动失效，标记 expired。
-     - 程序定义事实（如项目规则配置）：以规则为准，LLM 的输出仅作为全新事实的补充。
-9. 多级队列与限流: **模型任务调度器**统一管理所有 LLM 调用。内部多级队列按主 Agent、Summary、Fact Extraction 三个等级分配,同时设置 `large / small` 双模型池路由——主推理走大模型池,摘要/事实抽取/上下文压缩走小模型池,分别配备独立并发上限、超时、熔断与重试机制。
-    * 大小模型分流机制：调度器按任务类别决定使用大模型还是小模型。
-      * 主回答模型负责复杂推理与最终高质量回答.
-      * 小模型负责重要事实摘要、长期记忆摘要、事实抽取、分类与轻量语义压缩,以降低主模型的延迟与负载压力。
-    * 物理模型隔离：
-      * 用户未配置两个模型的API-KEY时,无法使用;
-      * 用户配置了大模型API-KEY但没有配置小模型时,小模型任务会回退到大模型配置,但仍占用小模型池的并发配额;
-      * 大小模型都配置时才会真正调用独立小模型.
-10. 安全审核机制：采用**三层递进式**安全防线,在 Agent 输入和输出两个位置执行审核,阻断风险请求并清洗敏感输出。
+##### 信息时效性
+每条记忆携带 `created_at` / `updated_at` / `valid_from` / `valid_until` 时间戳，以及 `fact_status: active | superseded | expired`。检索时在过滤层先排除 `expired` 和 `superseded` 条目；排序层内优先召回新内容。事实更新策略：
+- 单值强排他事实：新值覆盖旧值，旧事实标记 superseded。
+- 多值弱排他事实：新值追加并去重。
+- 时序事实：到期自动失效，标记 expired。
+- 程序定义事实（如项目规则配置）：以规则为准，LLM 的输出仅作为全新事实的补充。
+#### 安全审核机制
+采用**三层递进式**安全防线,在 Agent 输入和输出两个位置执行审核,阻断风险请求并清洗敏感输出。
     * 输入审核范围：`safety_input`只审核用户真实问题本身。当前端或`ContextBuilder`把“引用文档片段 + 用户问题”组合成一条`HumanMessage`时,安全审核会先抽取`用户问题:`之后的真实 prompt,不会把引用材料正文当作用户意图来拦截。这样总结、阅读、分析知识库文件时,文档正文中的敏感词不会误伤正常文件问答;如果用户问题本身命中风险规则,仍然会正常拦截。
-    * 第一层 — 敏感词初检：
+    * 第一层 — **敏感词初检**：
         在请求进入 Agent 主循环前,使用分类词库（`resources/safety/sensitive_words.json`）执行快速的"精确匹配 + 正则匹配"。
        词库按 `政治危险/色情/暴力/非法/垃圾广告/提示词注入/数据窃取` 七大类分组,
        每类标记风险等级（high/medium/low）, high 级别命中直接拦截,medium 级别交由第二层进一步判断。
-    * 第二层 — 小模型意图审核：
+    * 第二层 — **小模型意图审核**：
        敏感词初检通过后,使用小模型对用户意图做语义级安全判断, 审核维度包括：恶意攻击（越狱/注入）、非法请求、信息窃取、骚扰滥用、正常请求。输出 `pass / block / suspect` 三态裁决。
-    * 第三层 — 输出审核：
+    * 第三层 — **输出审核**：
        在 Agent 生成最终回复后、返回用户前,对输出内容执行敏感词扫描。命中拦截类敏感词（政治/色情/暴力/违法）直接替换为标准安全回复;
        命中清洗类敏感词（广告/Prompt注入/数据窃取）执行脱敏替换（`***`）。
     * 拦截回复差异化生成：
@@ -273,75 +263,136 @@ AgentService.exe
            * 政治敏感：命中"政治危险"分类或意图审核判定"政治敏感" → 小模型生成"立场正确的反驳性回复"（如"这种说法是完全错误的。中国共产党始终坚持……"）。(先有意识形态,再有意识这一块)
            * 一般拦截：色情/暴力/违法/注入/广告等其他类别 → 小模型生成脱敏的礼貌拒绝（如"对不起,我不能回答这个问题,因为`[脱敏理由]`。如需其他帮助请随时告诉我。"）。
        两项回复均有对应的内置系统提示词,经小模型生成最终回答;小模型不可用时回退到静态后备文案。
-11. 可定制性: 用户可自定义长期记忆和系统提示词并持久化.
+#### 可定制性: 用户可自定义长期记忆和系统提示词并持久化.
 * 用户自定义长期记忆:用户可以管理长期记忆,可以增加新的自定义长期记忆注入到向量库,或者删除长期记忆.
 * 用户自定义系统提示词:用户可编辑"用户设置系统提示词",追加到原本的系统提示词中.
-12. 多模态知识库扫描: 系统会扫描知识库中的多模态文件,并将不同模态文件以不同方式转化为JSON(不同知识库隔离存入`runtime/frontmatter/{user_id}/{library_id}/`),切片入ChromaDB向量数据库,供Agent使用.
-  按模态策略:
-    1. `.md` / `.txt`：
-    Markdown 按 heading 结构化，TXT 整体或按段落切。它们是最稳定的文本源。
-    2. `.json` / `.jsonl`：
-    用`json.loads`后格式化为可检索文本.
-    3. `.csv` / `.tsv`：
-    Python `csv` 模块读取成表格行.
-    4. `.html` / `.htm`：
-    Python `html.parser.HTMLParser` 提取正文文本，跳过 `script/style`标签.
-    5. `.xml`：
-    `xml.etree.ElementTree` 解析节点路径和值.
-    6. `.docx`：
-    要分成文本、表格、图片三类 block。
-    把 docx 当 zip 包读，然后解析 `word/document.xml`，再抽取段落、表格和图片关系引用,从而实现排版的保留.
-    **段落**：按标题样式或段落结构生成 text block。
-    **表格**：保留结构化表格，同时生成一段可检索摘要。
-    **图片**：如果图片有 alt text，先用 alt text；否则走 OCR/视觉描述。
-    7. `.ppt` / `.pptx`  ：
-    PPT和DOCX类似,把 PPT 当 zip 包读，解析 `ppt/slides/slide*.xml`.
-    8. `.xlsx`：
-    把 xlsx 当 zip 包读，解析 `xl/sharedStrings.xml` 和 `xl/worksheets/sheet*.xml`.
-    不可简单转纯文本，否则会丢掉表格语义。
-    可以分三档：
-    **小表**：完整提取 rows/columns，生成 table block。
-    **大表**：只提 schema、表头、前 N 行样例、统计信息、sheet 摘要。
-    **超大或不适合语义检索的表**：只索引元信息，比如 sheet 名、列名、数据范围、文件说明，不把全部单元格灌进向量库。
-    9. 图片(`.jpg`,`.jpeg`,`.png`,`.webp`)：
-    采用 PaddleOCR 作为 OCR 引擎,优先覆盖中英文文字和表格截图场景.
-    默认不启用ocr,当用户在设置中设置成开启ocr的时候,会要求重启后生效,然后重启再预热 PaddleOCR 中英文检测/识别模型,模型缓存放在`runtime/models/paddleocr/`里面,前端也根据是否夹带图片或者本身就是图片来重新加载索引状态.
-    图片不要默认都重度处理。先做轻量判定：
-    **有文字**：OCR，生成 text block。
-    **是图表/截图/流程图**：视觉描述 + OCR + 可能的结构化摘要。
-    **是普通照片**：生成 caption，但置信度标低。
-    **无意义图片、装饰图、logo、小图标**：只记录 asset metadata，不入语义库或低权重入库。
-    10. `.pdf`：
-    PDF 必须先分类，因为“文档型 PDF”和“扫描型 PDF”完全不同。
-    **文档型 PDF**：优先直接提取 text layout、表格、图片。
-    **扫描型 PDF**：先按页渲染图片，再 OCR；必要时对整页做视觉描述。
-    **混合型 PDF**：每页判断，有文本层就直接提文本，没有文本层就 OCR。
-    **表格 PDF**：能识别表格时输出 table block，不能稳定识别时至少输出 text block + page range。
-    11. 文档内嵌图片（`.docx` / `.pdf` 等内部）：
-    图片本体不写入 JSON，也不写入向量库；只保存为可引用 asset, 然后在结构化 JSON 中记录引用和识别结果。
-    图片提取为独立 asset 落盘，保存在`runtime/assets/users/{user_id}/{library_id}/{document_id}/images/{image_id}.png`.JSON 只保存 asset_path、位置和识别结果。
-    对于图片 block,应把图片前后的标题、段落、表格编号、图注一起作为上下文.这样召回时既能搜到图片内容，也能知道它属于哪个文档、哪个章节、哪个原始位置。
-13. 多模态查看:
-  - editor编辑区不仅提供Markdown编辑器功能,还对多种代码文件提供代码高亮功能(`textarea` + `highlight.js`),实现md模式(Vditor)和代码编辑模式(CodeEditor)的切换,如`cpp`,`c`,`py`,`java`等.
-  - 预览多种格式:
-    - MD(直接用Markdown渲染)
-    - HTML/XML(直接渲染)
-    - 图片(`.png`/`.jpg`/`.jpeg`/`.webp`/`.gif`/`.svg`,`<img>`标签)
-    - PDF(`<iframe>`标签)
-    - EXCEL/CSV(后端解析成表格)
-    - WORD(后端用`mammoth`拆掉OOXML,转换成HTML后带图查看)
-    - PPTX(半成品,后端用`mammoth`拆掉OOXML,`pillow`渲染成图片,`fpdf2`组合成PDF,最后走PDF渲染)
-14. 引用溯源:
-  引用溯源只展示最终回答真正使用的来源,而不是把所有召回结果都挂在气泡下面。自动RAG召回的知识库片段使用数字编号,如`[1]`、`[2]`;Agent主动调用知识库工具得到的结果使用工具编号,如`[K1]`、`[K2]`;联网搜索得到的网页来源使用网络编号,如`[N1]`、`[N2]`;用户上传文件的引用则使用上传编号,如`[A1]`、`[A2]`.
 
-  一轮对话开始时,`ContextBuilder`会把自动RAG召回结果写入系统上下文,同时生成本轮初始`citation_map`。这些自动来源来自知识库切片,适合在模型直接使用预检索片段时标注。Agent如果继续主动调用`get_knowledge_context`、`search_knowledge`、`read_knowledge_file`或`read_multimodal_file_info`,工具运行时会通过`register_tool_citation()`把工具来源登记进同一个`citation_map`,并在工具返回文本中显式携带`Citation ID: [Kx]`或`[Kx]`提示模型引用. Agent调用`web_search`时,搜索结果会通过`register_network_citation()`登记为`[N1]`、`[N2]`这类网络来源,`source_uri`保存网页URL,`title/content/source=network`写入同一个`citation_map`.
+#### 引用溯源
+**引用溯源**只展示最终回答真正使用的来源,而不是把所有召回结果都挂在气泡下面。自动RAG召回的知识库片段使用数字编号,如`[1]`、`[2]`;Agent主动调用知识库工具得到的结果使用工具编号,如`[K1]`、`[K2]`;联网搜索得到的网页来源使用网络编号,如`[N1]`、`[N2]`;用户上传文件的引用则使用上传编号,如`[A1]`、`[A2]`.
+一轮对话开始时,`ContextBuilder`会把自动RAG召回结果写入系统上下文,同时生成本轮初始`citation_map`。这些自动来源来自知识库切片,适合在模型直接使用预检索片段时标注。Agent如果继续主动调用`get_knowledge_context`、`search_knowledge`、`read_knowledge_file`或`read_multimodal_file_info`,工具运行时会通过`register_tool_citation()`把工具来源登记进同一个`citation_map`,并在工具返回文本中显式携带`Citation ID: [Kx]`或`[Kx]`提示模型引用. Agent调用`web_search`时,搜索结果会通过`register_network_citation()`登记为`[N1]`、`[N2]`这类网络来源,`source_uri`保存网页URL,`title/content/source=network`写入同一个`citation_map`.
+工具来源分两类处理:`get_knowledge_context`、`read_knowledge_file`和`read_multimodal_file_info`属于明确读取/提供正文内容的来源,会标记为`adopted_by_default`;`search_knowledge`返回的是搜索候选列表,不会默认视为已采纳来源。联网搜索结果同样不会默认采纳,只有最终回答正文里真正使用并标注了对应`[N1]`/`[N2]`的网页,才会进入本条消息的`used_citations`和气泡下方来源列表。这样模型漏写引用时,系统只会兜底处理已经被明确读入的本地文档,不会把搜索命中的全部候选或联网结果都挂到气泡下面.
+模型生成最终回答时应在具体断言、文档行、主题行或联网事实句末尾标注对应来源,例如`01_climate_change_nasa.md ... [K2]`或`某网页报道了最新更新 ... [N1]`。后端会先清理正文中无法映射到本轮`citation_map`的伪引用,再扫描正文中实际出现的`[1]`/`[K1]`/`[N1]`锚点,只保留这些锚点对应的来源。如果模型完全漏写或漏写部分工具引用,后端只做保守的行级补锚点:根据文件名、去扩展名后的文件名或文档标题匹配回答中的具体行,匹配成功才把对应`[Kx]`补到该行末尾;匹配不到时不会在末尾硬塞一串来源,避免制造假的精确溯源. 网络来源不会被自动补锚点,必须由模型在使用网页事实的位置显式写出`[N#]`.
+最终保存消息时,assistant消息自己的`metadata.used_citations`记录本条回答实际采用的编号,`metadata.citation_map`只保存这些编号对应的`source_uri/content/source/title`等来源信息。前端渲染时优先读取当前消息自己的metadata:正文里的`[1]`/`[K1]`会跳转本地知识库文件,`[N1]`会使用默认浏览器打开对应网页URL;气泡下方的来源列表也只显示这些实际被引用的文档或网页,并显示真实 citation id。历史消息依赖自己的metadata复现来源,不会复用当前轮的全局召回结果.
 
-  工具来源分两类处理:`get_knowledge_context`、`read_knowledge_file`和`read_multimodal_file_info`属于明确读取/提供正文内容的来源,会标记为`adopted_by_default`;`search_knowledge`返回的是搜索候选列表,不会默认视为已采纳来源。联网搜索结果同样不会默认采纳,只有最终回答正文里真正使用并标注了对应`[N1]`/`[N2]`的网页,才会进入本条消息的`used_citations`和气泡下方来源列表。这样模型漏写引用时,系统只会兜底处理已经被明确读入的本地文档,不会把搜索命中的全部候选或联网结果都挂到气泡下面.
 
-  模型生成最终回答时应在具体断言、文档行、主题行或联网事实句末尾标注对应来源,例如`01_climate_change_nasa.md ... [K2]`或`某网页报道了最新更新 ... [N1]`。后端会先清理正文中无法映射到本轮`citation_map`的伪引用,再扫描正文中实际出现的`[1]`/`[K1]`/`[N1]`锚点,只保留这些锚点对应的来源。如果模型完全漏写或漏写部分工具引用,后端只做保守的行级补锚点:根据文件名、去扩展名后的文件名或文档标题匹配回答中的具体行,匹配成功才把对应`[Kx]`补到该行末尾;匹配不到时不会在末尾硬塞一串来源,避免制造假的精确溯源. 网络来源不会被自动补锚点,必须由模型在使用网页事实的位置显式写出`[N#]`.
+### 软件设计
+#### 数据库设计
+##### 关联库
+关联库采用 SQLite 存储智能体会话(`session`)与消息(`message`)，每次对话从关联库加载完整会话上下文, 实现多轮对话管理；
+##### 向量库
+向量库采用 ChromaDB，多模态文件经格式解析与元数据提取后统一转为结构化 JSON，再按语义切片写入向量库，检索时通过混合检索（向量相似度 + 关键词覆盖）与 ReRank 重排序实现精准召回，每个切片携带源文件路径与偏移信息可追溯至原始文档.
+   - 已入库的文件,未入库或者格式不可识别的文件,屏蔽的文件,三类文件将以不同的索引状态图标(绿,红,灰)显示在文件树中.
+   - 惰性灌库: 默认在文件入库时不自动灌库,用户可手动将单文件灌入向量库,或点击header的灌库按钮时进行全知识库范围内的灌库.
+   - 屏蔽单个文件/建立屏蔽区: 用户可设置部分文件或者文件夹内文件的屏蔽,被屏蔽的文件将禁止入库,入了也要出库,文档被写入屏蔽区之后也会将以之为来源的切片删除.灌库函数自动忽略屏蔽的文档和屏蔽区子树全部文档.
+#### 文件入库全流程
+##### 第一步: 多模态扫描
+系统会扫描知识库中的多模态文件,并将不同模态文件以不同方式转化为JSON(不同知识库隔离存入`runtime/frontmatter/{user_id}/{library_id}/`),切片入ChromaDB向量数据库,供Agent使用.
+- `.md` / `.txt`：
+Markdown 按 heading 结构化，TXT 整体或按段落切。它们是最稳定的文本源。
+- `.json` / `.jsonl`：
+用`json.loads`后格式化为可检索文本.
+- `.csv` / `.tsv`：
+Python `csv` 模块读取成表格行.
+- `.html` / `.htm`：
+Python `html.parser.HTMLParser` 提取正文文本，跳过 `script/style`标签.
+- `.xml`：
+`xml.etree.ElementTree` 解析节点路径和值.
+- `.docx`：
+要分成文本、表格、图片三类 block。
+把 docx 当 zip 包读，然后解析 `word/document.xml`，再抽取段落、表格和图片关系引用,从而实现排版的保留.
+**段落**：按标题样式或段落结构生成 text block。
+**表格**：保留结构化表格，同时生成一段可检索摘要。
+**图片**：如果图片有 alt text，先用 alt text；否则走 OCR/视觉描述。
+- `.ppt` / `.pptx`  ：
+PPT和DOCX类似,把 PPT 当 zip 包读，解析 `ppt/slides/slide*.xml`.
+- `.xlsx`：
+把 xlsx 当 zip 包读，解析 `xl/sharedStrings.xml` 和 `xl/worksheets/sheet*.xml`.
+不可简单转纯文本，否则会丢掉表格语义。
+可以分三档：
+**小表**：完整提取 rows/columns，生成 table block。
+**大表**：只提 schema、表头、前 N 行样例、统计信息、sheet 摘要。
+**超大或不适合语义检索的表**：只索引元信息，比如 sheet 名、列名、数据范围、文件说明，不把全部单元格灌进向量库。
+- 图片(`.jpg`,`.jpeg`,`.png`,`.webp`)：
+采用 PaddleOCR 作为 OCR 引擎,优先覆盖中英文文字和表格截图场景.
+默认不启用ocr,当用户在设置中设置成开启ocr的时候,会要求重启后生效,然后重启再预热 PaddleOCR 中英文检测/识别模型,模型缓存放在`runtime/models/paddleocr/`里面,前端也根据是否夹带图片或者本身就是图片来重新加载索引状态.
+图片不要默认都重度处理。先做轻量判定：
+**有文字**：OCR，生成 text block。
+**是图表/截图/流程图**：视觉描述 + OCR + 可能的结构化摘要。
+**是普通照片**：生成 caption，但置信度标低。
+**无意义图片、装饰图、logo、小图标**：只记录 asset metadata，不入语义库或低权重入库。
+- `.pdf`：
+PDF 必须先分类，因为“文档型 PDF”和“扫描型 PDF”完全不同。
+**文档型 PDF**：优先直接提取 text layout、表格、图片。
+**扫描型 PDF**：先按页渲染图片，再 OCR；必要时对整页做视觉描述。
+**混合型 PDF**：每页判断，有文本层就直接提文本，没有文本层就 OCR。
+**表格 PDF**：能识别表格时输出 table block，不能稳定识别时至少输出 text block + page range。
+- 文档内嵌图片（`.docx` / `.pdf` 等内部）：
+图片本体不写入 JSON，也不写入向量库；只保存为可引用 asset, 然后在结构化 JSON 中记录引用和识别结果。
+图片提取为独立 asset 落盘，保存在`runtime/assets/users/{user_id}/{library_id}/{document_id}/images/{image_id}.png`.JSON 只保存 asset_path、位置和识别结果。
+对于图片 block,应把图片前后的标题、段落、表格编号、图注一起作为上下文.这样召回时既能搜到图片内容，也能知道它属于哪个文档、哪个章节、哪个原始位置。
+  - 其他不支持格式
+  首先判定文件是否为二进制:
+  1. 第一层：后缀白名单,配置里有一个 knowledge_supported_suffixes 列表，包含 .md、.txt、.json、.csv、.html、.docx、.xlsx、.pptx、.pdf 等。如果文件后缀在这个列表里，直接按对应解析器走，不判断二进制。
+  2. 第二层：内容探测,如果后缀不在白名单里，系统读取文件前 8192 字节做四项判断：有 \0 空字节直接视为二进制；尝试用多种编码（UTF-8、GBK 等）解码，全失败则视为二进制；统计控制字符（码点小于 32 且不属于 \n\r\t\f\b 的字符）占比，超过 30% 也视为二进制。三项检测全过则认定为纯文本，虽然没专用解析器，仍然会做基础结构化处理。
+  判定结果有三种：
+  - 后缀在白名单内 → 走专用解析器
+  - 后缀不在白名单内但内容探测判定为文本 → 做基础文本处理
+  - 后缀不在白名单内且内容探测判定为二进制 → 登记为资产占位，不做实质解析
+  如果既不是受到支持的格式,又判定为二进制文件,则自动被多模态扫描器屏蔽,禁止入库.
+  否则即为普通文件,默认按txt纯文本来处理.
+##### 第二步: 语义切块与重叠切片
 
-  最终保存消息时,assistant消息自己的`metadata.used_citations`记录本条回答实际采用的编号,`metadata.citation_map`只保存这些编号对应的`source_uri/content/source/title`等来源信息。前端渲染时优先读取当前消息自己的metadata:正文里的`[1]`/`[K1]`会跳转本地知识库文件,`[N1]`会使用默认浏览器打开对应网页URL;气泡下方的来源列表也只显示这些实际被引用的文档或网页,并显示真实 citation id。历史消息依赖自己的metadata复现来源,不会复用当前轮的全局召回结果.
+入库服务遍历每个文档的节（section），对每节的正文做切块，默认以 512 字符为窗口大小、128 字符为窗口重叠。算法维护一个游标从文本起始位置向前滑动，每次截取 chunk_size 个字符作为初始窗口。如果窗口终点不在文本末尾，就从终点往回找段落分隔符 `\n\n`，当找到的分隔符离游标超过 80 个字符（或 chunk_size 的三分之一，取较大值）时就切在段落边界上而非字符边界上，避免把一个段落腰斩成两片。没有合适段落分隔符时直接在字符边界切断。当前切片落定后游标移动到 `max(end - chunk_overlap, cursor + 1)`，重复这个过程直到走完全文。每个切片记录它在当前节正文中的起始和结束字符偏移，与该节在完整文档中的偏移组合后可以精确定位任意切片在原始文件中的字符范围。
 
+切片正文在送入 Embedding 之前要经过内容构造器包装，每片正文前加两行前缀，分别是文档标题和章节标题路径。原因是 ChromaDB 按向量相似度召回时只看到片段文本，缺少文档级上下文，前缀可以把文档归属信息注入向量空间，让同源切片自然聚类。包装后的文本以 `knowledge_chunk` 类型写入长期记忆的元数据表，同时记录 `source_hash` 供增量入库的哈希锁使用。切片入库后，文件完成了从原始二进制到可语义检索的知识切片的转换。
+
+#### 多级队列与限流
+**模型任务调度器**统一管理所有 LLM 调用。内部多级队列按主 Agent、Summary、Fact Extraction 三个等级分配,同时设置 `large / small` 双模型池路由——主推理走大模型池,摘要/事实抽取/上下文压缩走小模型池,分别配备独立并发上限、超时、熔断与重试机制。
+    * 大小模型分流机制：调度器按任务类别决定使用大模型还是小模型。
+      * 主回答模型负责复杂推理与最终高质量回答.
+      * 小模型负责重要事实摘要、长期记忆摘要、事实抽取、分类与轻量语义压缩,以降低主模型的延迟与负载压力。
+    * 物理模型隔离：
+      * 用户未配置两个模型的API-KEY时,无法使用;
+      * 用户配置了大模型API-KEY但没有配置小模型时,小模型任务会回退到大模型配置,但仍占用小模型池的并发配额;
+      * 大小模型都配置时才会真正调用独立小模型.
+
+#### 多模态查看
+editor编辑区不仅提供Markdown编辑器功能,还对多种代码文件提供代码高亮功能(`textarea` + `highlight.js`),实现md模式(Vditor)和代码编辑模式(CodeEditor)的自动切换,如`cpp`,`c`,`py`,`java`等.
+预览多种格式:
+  - MD(直接用Markdown渲染)
+  - HTML/XML(直接渲染)
+  - 图片(`.png`/`.jpg`/`.jpeg`/`.webp`/`.gif`/`.svg`,`<img>`标签)
+  - PDF(`<iframe>`标签)
+  - EXCEL/CSV(后端解析成表格)
+  - WORD(后端用`mammoth`拆掉OOXML,转换成HTML后带图查看)
+  - PPTX(半成品,后端用`mammoth`拆掉OOXML,`pillow`渲染成图片,`fpdf2`组合成PDF,最后走PDF渲染)
+
+#### 语义知识图谱
+在多模态文件入库的路径中,当文档被解析为JSON后,一路进行切片入向量库,另一路则进行异步的小模型实体关系提取.
+语义知识图谱提取各文档内的实体,用LLM(小模型)异步解析**文档内各实体**的关联,将知识库多模态文件的结构化 JSON 转译为实体-关系图,最终持久化到 SQLite,前端通过 D3.js Canvas 实时渲染.
+
+**关系类型**: `defines`,`contains`,`depends_on`,`produces`,`consumes`,`calls`,`configures`,`mentions`,`related_to`。
+**实体类型**: `person`,`organization`,`project`,`module`,`class`,`function`,`file`,`concept`,`config`,`data`,`other`。
+
+**入库模型**:
+
+抽取结果写入 `runtime/db/relation/agent_service.db` 三张表:
+- `knowledge_graph_nodes` — 全部节点(文档 + 实体)
+- `knowledge_graph_edges` — 全部边,分为两种:
+- **实体-实体边**: LLM 从同一个 section 文本中抽取的语义关系,携带 `evidence`(原文短语)
+- **文档-实体边**: 程序自动生成的 `mentions` 边,连接文档节点与该文档 section 中出现的所有实体,`weight` 由 entity confidence 决定
+- `knowledge_graph_document_status` — 每篇文档的抽取状态(completed/failed/skipped)
+
+图谱特点是**文档内通过 LLM 输出的语义关系进行关联, 不同文档通过共享实体节点间接连接**,形成隐式的跨文档语义网络.抽取时不做跨文档关系发现,保证每篇文档的独立性,同时共享实体节点在外图中自然实现了桥接.
+重建时按 `source_hash` 增量执行,仅对新增或内容变更的文档重新调用 LLM 抽取,已抽取且未变化的文档直接跳过.
+
+**前端渲染**:
+
+- 语义图谱无根节点,实体和文档节点根据 d3-force 力导向布局自动散开
+- 实体节点按类型着色(person→粉色, organization→靛蓝, project→青色, concept→橙色 等)
+- 实体节点为实心球,文档节点为虚线空心球
+- 拖拽节点时暂时固定位置,松手后力布局重新演算
+- 文件树图谱(父子层级)与语义图谱(自由网状)通过前端按钮切换,共享同一个 Canvas 渲染器
 
 
 ## 工作原理流程图
@@ -893,6 +944,30 @@ flowchart TD
 - 解析链路复用文件树/知识库的同一套结构化解析器。差别只在消费端: 知识库文件解析后进入灌库, 上传附件解析后只登记到会话附件表并供 ContextBuilder 注入。
 - 同一个 session 的后续提问会保留附件目录; 当用户说“这个文件”“刚才上传的文件”或直接提到文件名时, ContextBuilder 会把相关附件正文片段放进本轮 system context。
 
+##### 知识图谱实体提取
+
+```mermaid
+flowchart TD
+    A["多模态入库"] --> B["Frontmatter JSON<br/>(runtime/frontmatter/*.json)"]
+    B --> C["POST /knowledge/graph/rebuild"]
+    C --> D["后台线程异步执行<br/>独立并发池(最大2并发)"]
+    D --> E{"遍历每篇 JSON 文档"}
+    E --> F{"按 source_hash<br/>是否已抽取?"}
+    F -->|"是"| G["跳过 skip"]
+    F -->|"否"| H["逐 section 调用小模型<br/>(moonshot-v1-8k)"]
+    H --> I["输入: 文档标题 + section 文本(至多6000字)"]
+    I --> J["输出: entities + relations"]
+    J --> K["限流 sleep(0.5s/section)"]
+    K --> L["每文档后 sleep(1.0s)"]
+    L --> M["写入 SQLite"]
+    M --> N["knowledge_graph_nodes"]
+    M --> O["knowledge_graph_edges"]
+    M --> P["knowledge_graph_document_status"]
+    E --> Q{"检测熔断<br/>(余额不足/配额超限)?"}
+    Q -->|"是"| R["停止抽取,输出部分结果"]
+    Q -->|"否"| E
+
+```
 ## 接口设计
 
 本服务同时提供 **REST (FastAPI)** 和 **gRPC (protobuf)** 两套接口，二者功能完全等价、返回结构一致，可根据客户端需求任选其一。
