@@ -44,14 +44,15 @@ export function buildSemanticKnowledgeGraph(
   // Spread nodes in a circle as initial positions so d3-force doesn't
   // pile everything at the canvas center.  The force simulation will
   // pull related nodes together naturally.
-  const radius = Math.max(120, nodeCount * 16)
+  // Start nodes in a compact cluster.  The gentle semantic repulsion will
+  // spread them apart naturally; starting too wide makes the link force
+  // struggle to pull connected nodes together.
+  const radius = Math.min(500, Math.max(180, nodeCount * 5))
   const nodes: KnowledgeGraphNode[] = backendNodes.map((node, index) => {
     const angle = (index / Math.max(1, nodeCount)) * Math.PI * 2
     return {
       id: node.id,
-      label: node.kind === 'entity' && node.entity_type
-        ? `${node.entity_type}: ${node.label}`
-        : node.label,
+      label: node.label,
       path: node.kind === 'document' ? documentPath(node) : '',
       kind: graphNodeKind(node.kind),
       extension: node.entity_type,

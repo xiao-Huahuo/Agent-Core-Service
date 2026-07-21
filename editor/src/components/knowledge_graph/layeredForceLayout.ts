@@ -36,8 +36,8 @@ export const SEMANTIC_FORCE_OPTIONS: LayeredForceLayoutOptions = {
   baseRingRadius: 96,
   ringGap: 68,
   collisionPadding: 7,
-  anchorStrength: 0.25,
-  chargeStrength: -28,
+  anchorStrength: 0.025,
+  chargeStrength: -80,
 }
 
 function mergedOptions(options?: Partial<LayeredForceLayoutOptions>): LayeredForceLayoutOptions {
@@ -124,24 +124,29 @@ export function createLayeredForceSimulation(
 ): Simulation<KnowledgeGraphNode, KnowledgeGraphLink> {
   const semantic = isSemanticGraph(model)
   const options = { ...(semantic ? SEMANTIC_FORCE_OPTIONS : DEFAULT_LAYERED_FORCE_OPTIONS), ...partialOptions }
-  prepareLayeredTargets(model, width, height, options)
+
+  // Semantic graph adapter already sets circular target positions.
+  // Only prepare layered targets for file-tree graphs with parent-child links.
+  if (!semantic) {
+    prepareLayeredTargets(model, width, height, options)
+  }
   return forceSimulation<KnowledgeGraphNode>(model.nodes)
     .force(
       'link',
       forceLink<KnowledgeGraphNode, KnowledgeGraphLink>(model.links)
         .id((node) => node.id)
         .distance((link) => {
-          if (semantic) return (link.weight ? 40 + link.weight * 8 : 50)
+          if (semantic) return (link.weight ? 20 + link.weight * 5 : 28)
           const sourceId = linkEndpointId(link.source)
           const targetId = linkEndpointId(link.target)
           return sourceId === '' || targetId === '' ? 120 : 86
         })
-        .strength((link) => (link.kind === 'parent-child' ? 0.58 : semantic ? Math.min(0.6, (link.weight ?? 0.5) * 0.8) : 0.18)),
+        .strength((link) => (link.kind === 'parent-child' ? 0.58 : semantic ? Math.min(0.8, (link.weight ?? 0.5) * 0.5 + 0.3) : 0.18)),
     )
     .force(
       'charge',
       forceManyBody<KnowledgeGraphNode>().strength((node) => {
-        if (semantic) return options.chargeStrength
+        if (semantic) return node.kind === 'entity' ? options.chargeStrength * 3.5 : options.chargeStrength * 0.08
         if (node.kind === 'root') {
           return options.chargeStrength * 2.3
         }
@@ -155,6 +160,6 @@ export function createLayeredForceSimulation(
     .force('x', forceX<KnowledgeGraphNode>((node) => node.targetX).strength(options.anchorStrength))
     .force('y', forceY<KnowledgeGraphNode>((node) => node.targetY).strength(options.anchorStrength))
     .force('center', forceCenter(width / 2, height / 2))
-    .alpha(0.95)
-    .alphaDecay(0.035)
+    .alpha(semantic ? 0.45 : 0.95)
+    .alphaDecay(semantic ? 0.018 : 0.035)
 }

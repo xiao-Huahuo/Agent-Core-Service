@@ -30,6 +30,21 @@ const EXTENSION_COLORS = new Map<string, string>([
   ['xlsx', '#26a269'],
 ])
 
+/** Entity-type color palette for semantic graph nodes. */
+const ENTITY_TYPE_COLORS: Record<string, string> = {
+  person: '#eb2463',
+  organization: '#6366f1',
+  project: '#14b8a6',
+  module: '#a855f7',
+  class: '#ec4899',
+  function: '#f59e0b',
+  file: '#3b82f6',
+  concept: '#f97316',
+  config: '#6b7280',
+  data: '#06b6d4',
+  other: '#94a3b8',
+}
+
 function currentUiFont(): string {
   if (typeof document === 'undefined') {
     return 'system-ui, sans-serif'
@@ -52,7 +67,7 @@ function nodeColor(node: KnowledgeGraphNode, theme: KnowledgeGraphRenderTheme): 
     return theme.root
   }
   if (node.kind === 'entity') {
-    return theme.accent
+    return (node.extension && ENTITY_TYPE_COLORS[node.extension]) ?? theme.accent
   }
   const extension = node.extension ?? ''
   if (extension === 'md' || extension === 'markdown') {
@@ -266,7 +281,7 @@ function drawNode(
   }
   ctx.beginPath()
   ctx.arc(x, y, node.radius, 0, Math.PI * 2)
-  if (node.kind === 'folder' || node.kind === 'entity') {
+  if (node.kind === 'folder' || node.kind === 'document') {
     ctx.setLineDash([4, 3])
     ctx.fillStyle = theme.surface
     ctx.strokeStyle = color
