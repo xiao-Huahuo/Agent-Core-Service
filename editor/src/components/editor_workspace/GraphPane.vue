@@ -211,10 +211,6 @@ watch(
           语义
         </button>
       </div>
-      <div class="graph-title">
-        <span class="eyebrow mono">知识图谱</span>
-        <strong>{{ knowledgeTitle }}</strong>
-      </div>
       <div class="graph-actions">
         <span class="graph-stat mono">{{ graphStats.nodes }} nodes / {{ graphStats.links }} links</span>
         <button
@@ -308,27 +304,6 @@ watch(
   padding: 0 var(--space-10);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-canvas);
-}
-
-.graph-title {
-  min-width: 0;
-}
-
-.graph-title strong {
-  display: block;
-  overflow: hidden;
-  color: var(--color-text);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.eyebrow {
-  display: block;
-  color: var(--color-text-muted);
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .graph-actions {
