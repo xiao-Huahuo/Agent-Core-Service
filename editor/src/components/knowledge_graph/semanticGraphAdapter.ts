@@ -2,15 +2,15 @@
  * Semantic knowledge graph adapter.
  *
  * Usage:
- * Convert backend knowledge graph nodes/links into the reusable Canvas graph
- * protocol used by KnowledgeGraphCanvas.
+ * Convert backend knowledge graph nodes/links into a flat, free-form graph
+ * model suitable for the d3-force visualization. Unlike the file-tree adapter,
+ * the semantic graph has no root node — entities and documents float freely
+ * and are connected only by their semantic relation edges.
  */
 
 import type { KnowledgeSemanticGraphResponse } from '@/types/knowledge'
 
 import type { KnowledgeGraphLink, KnowledgeGraphModel, KnowledgeGraphNode, KnowledgeGraphNodeKind } from './graphTypes'
-
-const ROOT_ID = '__semantic_graph_root__'
 
 function nodeRadius(kind: string): number {
   if (kind === 'document') {
@@ -34,61 +34,46 @@ function documentPath(node: { metadata?: Record<string, unknown>; source_uri?: s
   return ''
 }
 
-/** Build a Canvas graph model from backend semantic graph payload. */
+/** Build a flat, rootless graph model from backend semantic graph payload. */
 export function buildSemanticKnowledgeGraph(
   payload: KnowledgeSemanticGraphResponse | null,
-  rootLabel: string,
 ): KnowledgeGraphModel {
   const backendNodes = payload?.nodes ?? []
-  const rootNode: KnowledgeGraphNode = {
-    id: ROOT_ID,
-    label: rootLabel || 'Knowledge Graph',
-    path: '',
-    kind: 'root',
-    depth: 0,
-    siblingIndex: 0,
-    siblingCount: 1,
-    ringIndex: 0,
-    radius: 20,
-    targetX: 0,
-    targetY: 0,
-  }
-  const siblingCount = Math.max(backendNodes.length, 1)
-  const nodes: KnowledgeGraphNode[] = [
-    rootNode,
-    ...backendNodes.map((node, index) => ({
+  const nodeCount = backendNodes.length
+
+  // Spread nodes in a circle as initial positions so d3-force doesn't
+  // pile everything at the canvas center.  The force simulation will
+  // pull related nodes together naturally.
+  const radius = Math.max(120, nodeCount * 16)
+  const nodes: KnowledgeGraphNode[] = backendNodes.map((node, index) => {
+    const angle = (index / Math.max(1, nodeCount)) * Math.PI * 2
+    return {
       id: node.id,
-      label: node.label,
+      label: node.kind === 'entity' && node.entity_type
+        ? `${node.entity_type}: ${node.label}`
+        : node.label,
       path: node.kind === 'document' ? documentPath(node) : '',
       kind: graphNodeKind(node.kind),
       extension: node.entity_type,
-      depth: 1,
-      parentId: ROOT_ID,
+      depth: 0,
       siblingIndex: index,
-      siblingCount,
+      siblingCount: nodeCount,
       ringIndex: 0,
       radius: nodeRadius(node.kind),
-      targetX: 0,
-      targetY: 0,
-    })),
-  ]
-  const links: KnowledgeGraphLink[] = [
-    ...backendNodes
-      .filter((node) => node.kind === 'document')
-      .map((node) => ({
-        id: `${ROOT_ID}->${node.id}`,
-        source: ROOT_ID,
-        target: node.id,
-        kind: 'parent-child',
-        weight: 0.2,
-      })),
-    ...(payload?.links ?? []).map((link) => ({
-      id: link.id,
-      source: link.source,
-      target: link.target,
-      kind: link.kind || 'semantic',
-      weight: link.weight,
-    })),
-  ]
+      targetX: Math.cos(angle) * radius,
+      targetY: Math.sin(angle) * radius,
+      x: Math.cos(angle) * radius,
+      y: Math.sin(angle) * radius,
+    }
+  })
+
+  const links: KnowledgeGraphLink[] = (payload?.links ?? []).map((link) => ({
+    id: link.id,
+    source: link.source,
+    target: link.target,
+    kind: link.kind || 'semantic',
+    weight: link.weight,
+  }))
+
   return { nodes, links }
 }

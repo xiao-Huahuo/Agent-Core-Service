@@ -16,6 +16,8 @@ import hashlib
 import json
 import logging
 import re
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -893,3 +895,262 @@ class KnowledgeGraphService:
 
         digest = hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()[:40]
         return f"{prefix}_{digest}"
+
+
+# ---------------------------------------------------------------------------
+# 后台图谱抽取进度追踪
+# ---------------------------------------------------------------------------
+
+_graph_extraction_progress: dict[tuple[str, str], dict[str, Any]] = {}
+_graph_progress_lock = threading.Lock()
+
+
+def get_graph_extraction_progress(user_id: str, library_id: str) -> dict[str, Any]:
+    """返回给定用户/知识库的图谱抽取进度。"""
+    with _graph_progress_lock:
+        state = _graph_extraction_progress.get((user_id, library_id))
+        if state is None:
+            return {"status": "idle", "total": 0, "current": 0, "message": ""}
+        return dict(state)
+
+
+def _update_graph_progress(
+    user_id: str,
+    library_id: str,
+    *,
+    status: str,
+    total: int = 0,
+    current: int = 0,
+    message: str = "",
+    result_json: str = "",
+) -> None:
+    """线程安全地更新进度状态。"""
+    with _graph_progress_lock:
+        _graph_extraction_progress[(user_id, library_id)] = {
+            "status": status,
+            "total": total,
+            "current": current,
+            "message": message,
+            "result": result_json,
+        }
+
+
+def _build_llm_config(
+    config: AgentConfig,
+    user_llm_config: dict[str, Any] | None = None,
+) -> dict[str, str | None]:
+    """从 config 构造抽取器可用的 llm_config 字典。
+
+    优先级: user_llm_config（用户设置页）> AgentConfig（env/默认值）。
+    当小模型 API Key 未配置时，整体降级使用主模型配置（key + base_url 一起切换），
+    避免将主模型的 key 发送到小模型默认端点导致鉴权失败。
+    """
+    base = {
+        "api_key": config.model.api_key.strip() or None,
+        "base_url": config.model.base_url.strip() or None,
+        "small_api_key": config.model.small_model_api_key.strip() or None,
+        "small_base_url": config.model.small_model_base_url.strip() or None,
+    }
+    if user_llm_config:
+        for key in ("api_key", "base_url", "small_api_key", "small_base_url"):
+            val = user_llm_config.get(key)
+            if val and isinstance(val, str) and val.strip():
+                base[key] = val.strip()
+
+    small_key = base.get("small_api_key")
+    small_url = base.get("small_base_url")
+    if not small_key:
+        small_key = base.get("api_key")
+        small_url = base.get("base_url")
+    return {
+        "api_key": base.get("api_key"),
+        "base_url": base.get("base_url"),
+        "small_api_key": small_key,
+        "small_base_url": small_url,
+    }
+
+
+def _run_graph_extraction(
+    *,
+    config: AgentConfig,
+    user_id: str,
+    library_id: str,
+    frontmatter_dir: Path,
+    user_llm_config: dict[str, Any] | None = None,
+) -> None:
+    """在后台线程中执行图谱抽取并更新进度。"""
+    try:
+        llm_config = _build_llm_config(config, user_llm_config=user_llm_config)
+        if not llm_config.get("small_api_key"):
+            _update_graph_progress(
+                user_id, library_id,
+                status="failed",
+                message="小模型 API Key 未配置，无法进行 LLM 语义抽取。请在「模型设置」中配置小模型的 API Key，或在 .env 中设置 AGENT_SMALL_MODEL_API_KEY。",
+            )
+            return
+
+        svc = KnowledgeGraphService(config=config)
+        paths = sorted(path for path in frontmatter_dir.rglob("*.json") if path.is_file()) if frontmatter_dir.exists() else []
+        total = len(paths)
+        print(f"\n{'='*60}")
+        print(f"  知识图谱抽取开始 | 共 {total} 个文档")
+        print(f"  frontmatter_dir={frontmatter_dir}")
+        print(f"{'='*60}\n")
+        _update_graph_progress(user_id, library_id, status="running", total=total, current=0, message=f"扫描到 {total} 个文档")
+
+        svc.sync_document_nodes_frontmatter_dir(
+            user_id=user_id,
+            library_id=library_id,
+            frontmatter_dir=frontmatter_dir,
+        )
+        print(f"  [同步] 文档节点同步完成, 开始 LLM 抽取\n")
+
+        extractor = LLMKnowledgeGraphExtractor(config=config, llm_config=llm_config)
+        document_ids_seen: set[str] = set()
+        circuit_breaker_hit = False
+        completed_count = 0
+        failed_count = 0
+        skipped_count = 0
+        total_entities = 0
+        total_relations = 0
+
+        for index, path in enumerate(paths):
+            if circuit_breaker_hit:
+                print(f"\n  [BREAKER] circuit breaker hit, stopping")
+                break
+            document = KnowledgeGraphService._load_document(path)
+            document_ids_seen.add(document.document_id)
+            _update_graph_progress(
+                user_id, library_id,
+                status="running",
+                total=total,
+                current=index + 1,
+                message=f"处理文档 {index + 1}/{total}: {document.title}",
+            )
+
+            title_display = document.title or path.name
+            if svc._is_document_current(
+                user_id=user_id,
+                library_id=library_id,
+                document_id=document.document_id,
+                source_hash=document.source_hash,
+            ):
+                skipped_count += 1
+                print(f"  [{index+1:3d}/{total}] SKIP {title_display[:60]:60s} [hash not changed]")
+                continue
+
+            print(f"  [{index+1:3d}/{total}] --> {title_display[:60]:60s} "
+                  f"(sections: {len(document.sections)})")
+
+            try:
+                svc.delete_document_graph(user_id=user_id, library_id=library_id, document_id=document.document_id)
+                svc._write_document_node(user_id=user_id, library_id=library_id, document=document)
+                entities_by_key: dict[tuple[str, str], EntityCandidate] = {}
+                relations: list[tuple[RelationCandidate, StructuredKnowledgeSection]] = []
+                for si, section in enumerate(document.sections):
+                    section_title = section.title_path[-1] if section.title_path else f"section_{si}"
+                    print(f"    |-- section {si+1}/{len(document.sections)}: {section_title[:50]} -> LLM...", end="")
+                    payload = extractor.extract(document=document, section=section)
+                    time.sleep(0.5)  # 限流: 每段间等待 500ms 避免 429
+                    section_entities = svc._sanitize_entities(payload.get("entities"))
+                    for entity in section_entities:
+                        entities_by_key[(svc._normalize_label(entity.name), entity.entity_type)] = entity
+                    section_entity_names = {entity.name for entity in section_entities}
+                    section_relations = svc._sanitize_relations(
+                        payload.get("relations"),
+                        section_text=section.content,
+                        allowed_entity_names=section_entity_names,
+                    )
+                    relations.extend(
+                        (relation, section)
+                        for relation in section_relations
+                    )
+                    print(f" entities={len(section_entities)} relations={len(section_relations)}")
+
+                written_entities, written_relations = svc._write_graph(
+                    user_id=user_id,
+                    library_id=library_id,
+                    document=document,
+                    entities=list(entities_by_key.values()),
+                    relations=relations,
+                )
+                svc._write_status(
+                    user_id=user_id,
+                    library_id=library_id,
+                    document=document,
+                    status="completed" if written_entities or written_relations else "skipped",
+                    message="" if written_entities or written_relations else "no valid graph candidates",
+                    entity_count=written_entities,
+                    relation_count=written_relations,
+                )
+                if written_entities or written_relations:
+                    completed_count += 1
+                    total_entities += written_entities
+                    total_relations += written_relations
+                    print(f"    ++ DONE: {written_entities} entities, {written_relations} relations")
+                else:
+                    skipped_count += 1
+                    print(f"    -- SKIP: no valid entities/relations")
+
+            except Exception as exc:
+                exc_msg = str(exc)
+                failed_count += 1
+                logger.warning("知识图谱抽取失败 | document=%s error=%s", document.document_id, exc_msg)
+                svc._write_status(
+                    user_id=user_id,
+                    library_id=library_id,
+                    document=document,
+                    status="failed",
+                    message=exc_msg[:1000],
+                    entity_count=0,
+                    relation_count=0,
+                )
+                print(f"    !! FAIL: {exc_msg[:120]}")
+                if "熔断" in exc_msg or "circuit breaker" in exc_msg.lower() or "MISSING API KEY" in exc_msg or "insufficient balance" in exc_msg.lower() or "exceeded_current_quota" in exc_msg or "suspended" in exc_msg.lower():
+                    circuit_breaker_hit = True
+
+            # 限流: 每文档间等待 1s,让 API 有喘息时间
+            time.sleep(1.0)
+
+        svc.delete_graph_except_documents(
+            user_id=user_id,
+            library_id=library_id,
+            keep_document_ids=document_ids_seen,
+        )
+
+        print(f"\n{'='*60}")
+        print(f"  图谱抽取完成!")
+        print(f"  |-- total docs: {total}")
+        print(f"  |-- completed:  {completed_count}")
+        print(f"  |-- failed:     {failed_count}")
+        print(f"  |-- skipped:    {skipped_count}")
+        print(f"  |-- entities:   {total_entities}")
+        print(f"  |-- relations:  {total_relations}")
+        if circuit_breaker_hit:
+            print(f"  !! some docs skipped due to circuit breaker")
+        print(f"{'='*60}\n")
+
+        if circuit_breaker_hit:
+            _update_graph_progress(
+                user_id, library_id,
+                status="completed",
+                total=total,
+                current=total,
+                message="图谱抽取完成（部分文档因模型调用限流或熔断已跳过）",
+            )
+        else:
+            _update_graph_progress(
+                user_id, library_id,
+                status="completed",
+                total=total,
+                current=total,
+                message="图谱抽取完成",
+            )
+    except Exception as exc:
+        logger.exception("图谱抽取整体失败")
+        print(f"\n  !! Graph extraction failed: {exc}\n")
+        _update_graph_progress(
+            user_id, library_id,
+            status="failed",
+            message=f"抽取失败: {exc}",
+        )

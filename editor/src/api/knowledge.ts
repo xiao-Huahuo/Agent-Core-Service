@@ -229,6 +229,22 @@ export function fetchKnowledgeGraph(userId: string, limit = 500): Promise<Knowle
   })
 }
 
+export interface GraphRebuildStatus {
+  status: 'idle' | 'running' | 'completed' | 'failed'
+  total: number
+  current: number
+  message: string
+  result?: Record<string, unknown> | null
+}
+
+export function rebuildKnowledgeGraph(userId: string): Promise<{ status: string; message: string }> {
+  return apiPost(API_ROUTES.KNOWLEDGE_GRAPH_REBUILD, { user_id: userId })
+}
+
+export function getKnowledgeGraphStatus(userId: string): Promise<GraphRebuildStatus> {
+  return apiGet<GraphRebuildStatus>(API_ROUTES.KNOWLEDGE_GRAPH_REBUILD_STATUS, { user_id: userId })
+}
+
 export function buildKnowledgeEventsUrl(userId: string): string {
   return buildApiUrl(API_ROUTES.KNOWLEDGE_FILE_EVENTS, { user_id: userId })
 }

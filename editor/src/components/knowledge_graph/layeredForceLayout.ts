@@ -30,6 +30,16 @@ export const DEFAULT_LAYERED_FORCE_OPTIONS: LayeredForceLayoutOptions = {
   chargeStrength: -72,
 }
 
+/** Semantic graph has no parent-child hierarchy; use gentler forces. */
+export const SEMANTIC_FORCE_OPTIONS: LayeredForceLayoutOptions = {
+  maxNodesPerRing: 14,
+  baseRingRadius: 96,
+  ringGap: 68,
+  collisionPadding: 7,
+  anchorStrength: 0.25,
+  chargeStrength: -28,
+}
+
 function mergedOptions(options?: Partial<LayeredForceLayoutOptions>): LayeredForceLayoutOptions {
   return { ...DEFAULT_LAYERED_FORCE_OPTIONS, ...options }
 }
@@ -101,6 +111,10 @@ export function prepareLayeredTargets(
   assignChildTargets(root, childrenByParent, options)
 }
 
+function isSemanticGraph(model: KnowledgeGraphModel): boolean {
+  return model.links.every((link) => link.kind !== 'parent-child')
+}
+
 /** Create a d3-force simulation over the reusable graph model. */
 export function createLayeredForceSimulation(
   model: KnowledgeGraphModel,
@@ -108,7 +122,8 @@ export function createLayeredForceSimulation(
   height: number,
   partialOptions?: Partial<LayeredForceLayoutOptions>,
 ): Simulation<KnowledgeGraphNode, KnowledgeGraphLink> {
-  const options = mergedOptions(partialOptions)
+  const semantic = isSemanticGraph(model)
+  const options = { ...(semantic ? SEMANTIC_FORCE_OPTIONS : DEFAULT_LAYERED_FORCE_OPTIONS), ...partialOptions }
   prepareLayeredTargets(model, width, height, options)
   return forceSimulation<KnowledgeGraphNode>(model.nodes)
     .force(
@@ -116,15 +131,17 @@ export function createLayeredForceSimulation(
       forceLink<KnowledgeGraphNode, KnowledgeGraphLink>(model.links)
         .id((node) => node.id)
         .distance((link) => {
+          if (semantic) return (link.weight ? 40 + link.weight * 8 : 50)
           const sourceId = linkEndpointId(link.source)
           const targetId = linkEndpointId(link.target)
           return sourceId === '' || targetId === '' ? 120 : 86
         })
-        .strength((link) => (link.kind === 'parent-child' ? 0.58 : 0.18)),
+        .strength((link) => (link.kind === 'parent-child' ? 0.58 : semantic ? Math.min(0.6, (link.weight ?? 0.5) * 0.8) : 0.18)),
     )
     .force(
       'charge',
       forceManyBody<KnowledgeGraphNode>().strength((node) => {
+        if (semantic) return options.chargeStrength
         if (node.kind === 'root') {
           return options.chargeStrength * 2.3
         }

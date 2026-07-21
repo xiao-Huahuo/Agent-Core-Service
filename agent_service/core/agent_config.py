@@ -456,8 +456,8 @@ class AgentConfig:
         max_retries: int = 2
         initial_backoff_seconds: float = 1.0
         max_backoff_seconds: float = 8.0
-        circuit_breaker_failure_threshold: int = 5
-        circuit_breaker_recovery_seconds: int = 30
+        circuit_breaker_failure_threshold: int = 15
+        circuit_breaker_recovery_seconds: int = 120
         summary_deduplicate_by_session: bool = True
         drop_low_priority_when_overloaded: bool = False
         redis_consumer_group: str = "agent_service_llm_workers"
@@ -468,7 +468,7 @@ class AgentConfig:
         redis_block_timeout_ms: int = 1000
         redis_result_poll_interval_seconds: float = 0.2
         large_model_max_concurrency: int = 4
-        small_model_max_concurrency: int = 4
+        small_model_max_concurrency: int = 2
 
     @dataclass(slots=True)
     class MCPConfig:

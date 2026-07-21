@@ -7,17 +7,18 @@
   events upward; it intentionally does not own route navigation or file opening.
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { Crosshair, RefreshCw, RotateCcw, Type } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Crosshair, RefreshCw, RotateCcw, Type, BrainCircuit, AlertCircle } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
-import { fetchKnowledgeGraph } from '@/api/knowledge'
+import { fetchKnowledgeGraph, getKnowledgeGraphStatus, rebuildKnowledgeGraph } from '@/api/knowledge'
 import KnowledgeGraphCanvas from '@/components/knowledge_graph/KnowledgeGraphCanvas.vue'
 import { buildFileTreeGraph } from '@/components/knowledge_graph/fileTreeGraphAdapter'
 import { buildSemanticKnowledgeGraph } from '@/components/knowledge_graph/semanticGraphAdapter'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeSemanticGraphResponse } from '@/types/knowledge'
+import type { GraphRebuildStatus } from '@/api/knowledge'
 import type { KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graphTypes'
 
 const emit = defineEmits<{
@@ -35,6 +36,11 @@ const semanticGraph = ref<KnowledgeSemanticGraphResponse | null>(null)
 const semanticLoading = ref(false)
 const semanticError = ref('')
 
+// Graph rebuild progress state
+const rebuildStatus = ref<GraphRebuildStatus | null>(null)
+const isRebuilding = ref(false)
+const pollingTimer = ref<ReturnType<typeof setInterval> | null>(null)
+
 function basename(path: string): string {
   return path.replace(/[\\/]+$/g, '').split(/[\\/]/).filter(Boolean).pop() ?? 'Knowledge Root'
 }
@@ -46,7 +52,7 @@ const knowledgeTitle = computed(() => {
 
 const graphModel = computed(() => {
   if (graphMode.value === 'semantic') {
-    return buildSemanticKnowledgeGraph(semanticGraph.value, knowledgeTitle.value)
+    return buildSemanticKnowledgeGraph(semanticGraph.value)
   }
   return buildFileTreeGraph(tree.value, { rootLabel: knowledgeTitle.value })
 })
@@ -55,6 +61,21 @@ const graphStats = computed(() => ({
   nodes: graphModel.value.nodes.length,
   links: graphModel.value.links.length,
 }))
+
+const rebuildProgressPercent = computed(() => {
+  const s = rebuildStatus.value
+  if (!s || s.total <= 0) return 0
+  return Math.round((s.current / s.total) * 100)
+})
+
+const statusMessage = computed(() => {
+  const s = rebuildStatus.value
+  if (!s || s.status === 'idle') return ''
+  if (s.status === 'running') return s.message || `处理中 ${s.current}/${s.total}`
+  if (s.status === 'completed') return s.message || '图谱重建完成'
+  if (s.status === 'failed') return s.message || '图谱重建失败'
+  return ''
+})
 
 async function loadSemanticGraph() {
   if (!settingsStore.profile.userId) {
@@ -65,10 +86,61 @@ async function loadSemanticGraph() {
   try {
     semanticGraph.value = await fetchKnowledgeGraph(settingsStore.profile.userId)
   } catch (error) {
-    semanticError.value = error instanceof Error ? error.message : 'failed to load graph'
+    semanticError.value = error instanceof Error ? error.message : '加载图谱失败'
     semanticGraph.value = null
   } finally {
     semanticLoading.value = false
+  }
+}
+
+function startPolling() {
+  stopPolling()
+  pollingTimer.value = setInterval(async () => {
+    if (!settingsStore.profile.userId) return
+    try {
+      const status = await getKnowledgeGraphStatus(settingsStore.profile.userId)
+      rebuildStatus.value = status
+      if (status.status === 'completed' || status.status === 'failed') {
+        stopPolling()
+        isRebuilding.value = false
+        if (status.status === 'completed') {
+          await loadSemanticGraph()
+        }
+      }
+    } catch {
+      stopPolling()
+      isRebuilding.value = false
+    }
+  }, 2000)
+}
+
+function stopPolling() {
+  if (pollingTimer.value !== null) {
+    clearInterval(pollingTimer.value)
+    pollingTimer.value = null
+  }
+}
+
+async function startRebuild() {
+  if (!settingsStore.profile.userId || isRebuilding.value) {
+    return
+  }
+  isRebuilding.value = true
+  rebuildStatus.value = { status: 'running', total: 1, current: 0, message: '启动中...' }
+  try {
+    const result = await rebuildKnowledgeGraph(settingsStore.profile.userId)
+    if (result.status === 'already_running') {
+      rebuildStatus.value = { status: 'running', total: 1, current: 0, message: '已有一个抽取任务在运行' }
+    }
+    startPolling()
+  } catch (error) {
+    isRebuilding.value = false
+    rebuildStatus.value = {
+      status: 'failed',
+      total: 0,
+      current: 0,
+      message: error instanceof Error ? error.message : '启动失败',
+    }
   }
 }
 
@@ -101,6 +173,10 @@ onMounted(() => {
   }
 })
 
+onBeforeUnmount(() => {
+  stopPolling()
+})
+
 watch(
   graphMode,
   (mode) => {
@@ -121,6 +197,36 @@ watch(
       </div>
       <div class="graph-actions">
         <span class="graph-stat mono">{{ graphStats.nodes }} nodes / {{ graphStats.links }} links</span>
+        <div class="graph-mode">
+          <button
+            class="graph-mode-button"
+            :class="{ active: graphMode === 'tree' }"
+            type="button"
+            @click="graphMode = 'tree'"
+          >
+            文件树
+          </button>
+          <button
+            class="graph-mode-button"
+            :class="{ active: graphMode === 'semantic' }"
+            type="button"
+            @click="graphMode = 'semantic'"
+          >
+            语义
+          </button>
+        </div>
+        <button
+          v-if="graphMode === 'semantic'"
+          class="graph-action"
+          :class="{ loading: isRebuilding }"
+          type="button"
+          :disabled="isRebuilding"
+          :title="isRebuilding ? '重建中...' : '重建语义图谱'"
+          @click="startRebuild"
+        >
+          <BrainCircuit :size="15" />
+          <span>{{ isRebuilding ? '重建中' : '重建' }}</span>
+        </button>
         <button
           class="graph-action"
           :class="{ active: showGraphLabels }"
@@ -146,6 +252,28 @@ watch(
       </div>
     </header>
 
+    <!-- Progress bar for semantic graph rebuild -->
+    <div
+      v-if="rebuildStatus && (rebuildStatus.status === 'running' || rebuildStatus.status === 'failed' || rebuildStatus.status === 'completed')"
+      class="graph-rebuild-progress"
+      :class="{
+        failed: rebuildStatus.status === 'failed',
+        completed: rebuildStatus.status === 'completed',
+      }"
+    >
+      <div class="progress-bar-track">
+        <div
+          class="progress-bar-fill"
+          :class="{ indeterminate: rebuildStatus.total <= 0 }"
+          :style="{ width: rebuildStatus.total > 0 ? rebuildProgressPercent + '%' : undefined }"
+        />
+      </div>
+      <div class="progress-message mono">
+        <AlertCircle v-if="rebuildStatus.status === 'failed'" :size="12" class="icon-error" />
+        {{ statusMessage }}
+      </div>
+    </div>
+
     <KnowledgeGraphCanvas
       ref="graphCanvasRef"
       class="embedded-graph"
@@ -156,20 +284,13 @@ watch(
       @node-select="handleNodeSelect"
     />
 
-    <footer class="graph-status">
-      <span v-if="graphMode === 'tree' && treeLoading" class="mono">加载文件树...</span>
-      <span v-else-if="graphMode === 'semantic' && semanticLoading" class="mono">加载知识图谱...</span>
-      <span v-else-if="graphMode === 'semantic' && semanticError" class="mono">{{ semanticError }}</span>
-      <span v-else-if="selectedNode" class="mono">{{ selectedNode.path || selectedNode.label }}</span>
-      <span v-else class="mono">{{ graphMode === 'tree' ? '点击节点在编辑器中打开' : '点击节点查看关联' }}</span>
-    </footer>
   </section>
 </template>
 
 <style scoped>
 .graph-pane {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -246,6 +367,15 @@ watch(
   color: var(--color-primary);
 }
 
+.graph-action.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.graph-action:disabled {
+  opacity: 0.5;
+}
+
 .graph-mode {
   display: inline-flex;
   height: 24px;
@@ -272,26 +402,72 @@ watch(
   color: var(--color-primary);
 }
 
-.embedded-graph {
-  min-width: 0;
-  min-height: 0;
-}
-
-.graph-status {
+.graph-rebuild-progress {
   display: flex;
   align-items: center;
-  min-height: 24px;
+  gap: var(--space-8);
+  flex-shrink: 0;
+  min-height: 26px;
   padding: 0 var(--space-10);
-  border-top: 1px solid var(--color-border);
-  background: var(--color-canvas);
-  color: var(--color-text-muted);
-  font-size: 10px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-primary-softer);
+}
+
+.graph-rebuild-progress.failed {
+  background: var(--color-danger-softer, rgba(220, 38, 38, 0.08));
+}
+
+.graph-rebuild-progress.completed {
+  background: var(--color-success-softer, rgba(22, 163, 74, 0.08));
+}
+
+.progress-bar-track {
+  flex: 1;
+  min-width: 60px;
+  max-width: 200px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
   overflow: hidden;
 }
 
-.graph-status span {
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--color-primary);
+  transition: width 0.3s ease;
+}
+
+.progress-bar-fill.indeterminate {
+  width: 30% !important;
+  animation: progress-indeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+.progress-message {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.icon-error {
+  flex-shrink: 0;
+  color: var(--color-danger, #dc2626);
+}
+
+.embedded-graph {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 </style>

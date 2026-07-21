@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import json
 import queue
+import re
 import threading
 from pathlib import Path
 from typing import Annotated, Any
@@ -567,16 +568,80 @@ async def get_knowledge_graph(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+from agent_service.services.knowledge_graph_service import (
+    _run_graph_extraction,
+    get_graph_extraction_progress,
+)
+
+_graph_extraction_threads: dict[tuple[str, str], threading.Thread] = {}
+
+
 @router.post("/knowledge/graph/rebuild")
 async def rebuild_knowledge_graph(body: dict[str, Any]) -> dict[str, Any]:
-    """知识图谱入库已停用，直接返回空结果。"""
+    """
+    在后台启动语义知识图谱重建。
+    使用源文件的 source_hash 做增量标记，已抽取且未变更的文档自动跳过。
+    """
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    settings_svc = _require_settings_service()
+    config = settings_svc.config if hasattr(settings_svc, "config") else None
+    if config is None:
+        from agent_service.core.agent_config import AgentConfig
+        config = AgentConfig.load_config(ensure_models=False)
+
+    profile = await run_in_threadpool(settings_svc.ensure_user_profile, user_id=user_id)
+    active_library = dict(profile["active_knowledge_library"])
+    normalized_user_id = str(profile["user_id"])
+    library_id = str(active_library["library_id"])
+
+    safe_user_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", normalized_user_id).strip("_") or "default"
+    safe_library_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", library_id).strip("_") or "default"
+    frontmatter_dir = config.storage.frontmatter_dir / "users" / safe_user_id / safe_library_id
+
+    user_llm_config = settings_svc.get_llm_config(user_id=normalized_user_id)
+
+    key = (normalized_user_id, library_id)
+    current_progress = get_graph_extraction_progress(normalized_user_id, library_id)
+    if current_progress.get("status") == "running":
+        return {"status": "already_running", "message": "图谱抽取已在运行中"}
+
+    thread = threading.Thread(
+        target=_run_graph_extraction,
+        kwargs={
+            "config": config,
+            "user_id": normalized_user_id,
+            "library_id": library_id,
+            "frontmatter_dir": frontmatter_dir,
+            "user_llm_config": user_llm_config,
+        },
+        daemon=True,
+    )
+    _graph_extraction_threads[key] = thread
+    thread.start()
+    return {"status": "started", "message": "图谱抽取已在后台启动"}
+
+
+@router.get("/knowledge/graph/rebuild/status")
+async def get_graph_rebuild_status(
+    user_id: str = Query(..., min_length=1, description="用户 ID"),
+) -> dict[str, Any]:
+    """返回当前图谱抽取进度。"""
+    settings_svc = _require_settings_service()
+    profile = await run_in_threadpool(settings_svc.ensure_user_profile, user_id=user_id)
+    active_library = dict(profile["active_knowledge_library"])
+    normalized_user_id = str(profile["user_id"])
+    library_id = str(active_library["library_id"])
+    progress = get_graph_extraction_progress(normalized_user_id, library_id)
+    result_str = progress.get("result", "")
+    result_data = json.loads(result_str) if result_str else None
     return {
-        "files_seen": 0,
-        "files_extracted": 0,
-        "files_skipped": 0,
-        "files_failed": 0,
-        "entities_written": 0,
-        "relations_written": 0,
+        "status": progress.get("status", "idle"),
+        "total": progress.get("total", 0),
+        "current": progress.get("current", 0),
+        "message": progress.get("message", ""),
+        "result": result_data,
     }
 
 

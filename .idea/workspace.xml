@@ -4,7 +4,19 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="样式小调整,codex把三按钮和来源修了一部分,但是产生了agent不输出中间内容的问题" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="写作规范">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/knowledge.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/knowledge.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/core/agent_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/core/agent_config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/knowledge_graph_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/knowledge_graph_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/api/knowledge.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/knowledge.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/layeredForceLayout.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/layeredForceLayout.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/semanticGraphAdapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/semanticGraphAdapter.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/开发规范.md" beforeDir="false" afterPath="$PROJECT_DIR$/开发规范.md" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -256,23 +268,8 @@
       <workItem from="1784335623951" duration="2482000" />
       <workItem from="1784338941374" duration="1273000" />
       <workItem from="1784375929012" duration="13746000" />
-      <workItem from="1784443638650" duration="18401000" />
-    </task>
-    <task id="LOCAL-00132" summary="小改">
-      <option name="closed" value="true" />
-      <created>1784174229632</created>
-      <option name="number" value="00132" />
-      <option name="presentableId" value="LOCAL-00132" />
-      <option name="project" value="LOCAL" />
-      <updated>1784174229632</updated>
-    </task>
-    <task id="LOCAL-00133" summary="引用溯源v3_联网溯源">
-      <option name="closed" value="true" />
-      <created>1784176482262</created>
-      <option name="number" value="00133" />
-      <option name="presentableId" value="LOCAL-00133" />
-      <option name="project" value="LOCAL" />
-      <updated>1784176482262</updated>
+      <workItem from="1784443638650" duration="19303000" />
+      <workItem from="1784615003592" duration="8536000" />
     </task>
     <task id="LOCAL-00134" summary="引用溯源v3_联网溯源">
       <option name="closed" value="true" />
@@ -650,15 +647,29 @@
       <option name="project" value="LOCAL" />
       <updated>1784463968717</updated>
     </task>
-    <option name="localTasksCounter" value="181" />
+    <task id="LOCAL-00181" summary="修复了agent不输出中间内容的问题">
+      <option name="closed" value="true" />
+      <created>1784464566402</created>
+      <option name="number" value="00181" />
+      <option name="presentableId" value="LOCAL-00181" />
+      <option name="project" value="LOCAL" />
+      <updated>1784464566402</updated>
+    </task>
+    <task id="LOCAL-00182" summary="写作规范">
+      <option name="closed" value="true" />
+      <created>1784621137086</created>
+      <option name="number" value="00182" />
+      <option name="presentableId" value="LOCAL-00182" />
+      <option name="project" value="LOCAL" />
+      <updated>1784621137086</updated>
+    </task>
+    <option name="localTasksCounter" value="183" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="UI小调整" />
-    <MESSAGE value="readme" />
     <MESSAGE value="工具可选注册,重构设置页面" />
     <MESSAGE value="去除了小学期不必要的文档" />
     <MESSAGE value="todo" />
@@ -682,13 +693,15 @@
     <MESSAGE value="Material图标" />
     <MESSAGE value="入库观测页面" />
     <MESSAGE value="样式小调整,codex把三按钮和来源修了一部分,但是产生了agent不输出中间内容的问题" />
-    <option name="LAST_COMMIT_MESSAGE" value="样式小调整,codex把三按钮和来源修了一部分,但是产生了agent不输出中间内容的问题" />
+    <MESSAGE value="修复了agent不输出中间内容的问题" />
+    <MESSAGE value="写作规范" />
+    <option name="LAST_COMMIT_MESSAGE" value="写作规范" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
     <SUITE FILE_PATH="coverage/AgentService$main.coverage" NAME="main 覆盖结果" MODIFIED="1783512965618" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/AgentService$test_agent_core_service.coverage" NAME="test_agent_core_service 覆盖结果" MODIFIED="1778509217316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
-    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784460261781" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784623154486" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>
