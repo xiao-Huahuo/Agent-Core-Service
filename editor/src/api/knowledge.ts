@@ -229,12 +229,21 @@ export function fetchKnowledgeGraph(userId: string, limit = 500): Promise<Knowle
   })
 }
 
+export interface GraphDocStatus {
+  path: string
+  name: string
+  status: 'pending' | 'processing' | 'done' | 'skipped' | 'failed'
+  progress?: number
+  total_sections?: number
+}
+
 export interface GraphRebuildStatus {
   status: 'idle' | 'running' | 'completed' | 'failed'
   total: number
   current: number
   message: string
   result?: Record<string, unknown> | null
+  docs?: GraphDocStatus[]
 }
 
 export function rebuildKnowledgeGraph(userId: string): Promise<{ status: string; message: string }> {

@@ -79,6 +79,8 @@ export interface IngestionQueueItem {
   message?: string
 }
 
+export type HistorySourceType = 'ingestion' | 'graph'
+
 export interface IngestionHistoryItem {
   id: string
   name: string
@@ -93,6 +95,7 @@ export interface IngestionHistoryItem {
   filesSkipped?: number
   chunksCreated?: number
   message?: string
+  sourceType?: HistorySourceType
 }
 
 /** Runtime events expected from the future watchdog/SSE endpoint. */

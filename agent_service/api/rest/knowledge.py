@@ -636,12 +636,15 @@ async def get_graph_rebuild_status(
     progress = get_graph_extraction_progress(normalized_user_id, library_id)
     result_str = progress.get("result", "")
     result_data = json.loads(result_str) if result_str else None
+    docs_raw = progress.get("docs")
+    docs = docs_raw if isinstance(docs_raw, list) else []
     return {
         "status": progress.get("status", "idle"),
         "total": progress.get("total", 0),
         "current": progress.get("current", 0),
         "message": progress.get("message", ""),
         "result": result_data,
+        "docs": docs,
     }
 
 

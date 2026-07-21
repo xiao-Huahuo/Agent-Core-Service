@@ -923,16 +923,20 @@ def _update_graph_progress(
     current: int = 0,
     message: str = "",
     result_json: str = "",
+    docs: list[dict] | None = None,
 ) -> None:
     """线程安全地更新进度状态。"""
     with _graph_progress_lock:
-        _graph_extraction_progress[(user_id, library_id)] = {
+        entry: dict[str, Any] = {
             "status": status,
             "total": total,
             "current": current,
             "message": message,
             "result": result_json,
         }
+        if docs is not None:
+            entry["docs"] = docs
+        _graph_extraction_progress[(user_id, library_id)] = entry
 
 
 def _build_llm_config(
@@ -996,7 +1000,38 @@ def _run_graph_extraction(
         print(f"  知识图谱抽取开始 | 共 {total} 个文档")
         print(f"  frontmatter_dir={frontmatter_dir}")
         print(f"{'='*60}\n")
-        _update_graph_progress(user_id, library_id, status="running", total=total, current=0, message=f"扫描到 {total} 个文档")
+
+        docs: list[dict] = []
+        need_extract = 0
+        for path in paths:
+            doc_data = KnowledgeGraphService._load_document(path)
+            total_sections = len(doc_data.sections) if doc_data.sections else 0
+            is_current = svc._is_document_current(
+                user_id=user_id,
+                library_id=library_id,
+                document_id=doc_data.document_id,
+                source_hash=doc_data.source_hash,
+            )
+            if is_current:
+                docs.append({"path": path.name, "name": doc_data.title or path.stem, "status": "skipped", "progress": 100, "total_sections": total_sections})
+            else:
+                docs.append({"path": path.name, "name": doc_data.title or path.stem, "status": "pending", "progress": 0, "total_sections": total_sections})
+                need_extract += 1
+
+        all_paths = list(paths)
+        paths.clear()
+        for i, d in enumerate(docs):
+            if d["status"] != "skipped":
+                paths.append(all_paths[i])
+
+        _update_graph_progress(
+            user_id, library_id,
+            status="running",
+            total=need_extract,
+            current=0,
+            message=f"需抽取 {need_extract}/{total} 个文档",
+            docs=docs,
+        )
 
         svc.sync_document_nodes_frontmatter_dir(
             user_id=user_id,
@@ -1013,33 +1048,33 @@ def _run_graph_extraction(
         skipped_count = 0
         total_entities = 0
         total_relations = 0
+        doc_index = 0
 
-        for index, path in enumerate(paths):
+        for di, doc_entry in enumerate(docs):
             if circuit_breaker_hit:
                 print(f"\n  [BREAKER] circuit breaker hit, stopping")
                 break
+            path = all_paths[di]
             document = KnowledgeGraphService._load_document(path)
             document_ids_seen.add(document.document_id)
+
+            if doc_entry["status"] == "skipped":
+                skipped_count += 1
+                print(f"  [{di+1:3d}/{total}] SKIP {document.title or path.name} [hash not changed]")
+                continue
+
+            docs[di]["status"] = "processing"
             _update_graph_progress(
                 user_id, library_id,
                 status="running",
-                total=total,
-                current=index + 1,
-                message=f"处理文档 {index + 1}/{total}: {document.title}",
+                total=need_extract,
+                current=doc_index + 1,
+                message=f"处理文档 {doc_index + 1}/{need_extract}: {document.title}",
+                docs=docs,
             )
 
             title_display = document.title or path.name
-            if svc._is_document_current(
-                user_id=user_id,
-                library_id=library_id,
-                document_id=document.document_id,
-                source_hash=document.source_hash,
-            ):
-                skipped_count += 1
-                print(f"  [{index+1:3d}/{total}] SKIP {title_display[:60]:60s} [hash not changed]")
-                continue
-
-            print(f"  [{index+1:3d}/{total}] --> {title_display[:60]:60s} "
+            print(f"  [{di+1:3d}/{total}] --> {title_display[:60]:60s} "
                   f"(sections: {len(document.sections)})")
 
             try:
@@ -1048,6 +1083,15 @@ def _run_graph_extraction(
                 entities_by_key: dict[tuple[str, str], EntityCandidate] = {}
                 relations: list[tuple[RelationCandidate, StructuredKnowledgeSection]] = []
                 for si, section in enumerate(document.sections):
+                    docs[di]["progress"] = int((si + 1) / len(document.sections) * 100)
+                    _update_graph_progress(
+                        user_id, library_id,
+                        status="running",
+                        total=need_extract,
+                        current=doc_index,
+                        message=f"处理文档 {doc_index + 1}/{need_extract} 第 {si + 1}/{len(document.sections)} 段",
+                        docs=docs,
+                    )
                     section_title = section.title_path[-1] if section.title_path else f"section_{si}"
                     print(f"    |-- section {si+1}/{len(document.sections)}: {section_title[:50]} -> LLM...", end="")
                     payload = extractor.extract(document=document, section=section)
@@ -1087,14 +1131,20 @@ def _run_graph_extraction(
                     completed_count += 1
                     total_entities += written_entities
                     total_relations += written_relations
+                    docs[di]["status"] = "done"
+                    docs[di]["progress"] = 100
                     print(f"    ++ DONE: {written_entities} entities, {written_relations} relations")
                 else:
                     skipped_count += 1
+                    docs[di]["status"] = "skipped"
+                    docs[di]["progress"] = 100
                     print(f"    -- SKIP: no valid entities/relations")
 
             except Exception as exc:
                 exc_msg = str(exc)
                 failed_count += 1
+                docs[di]["status"] = "failed"
+                docs[di]["progress"] = 100
                 logger.warning("知识图谱抽取失败 | document=%s error=%s", document.document_id, exc_msg)
                 svc._write_status(
                     user_id=user_id,
@@ -1109,6 +1159,15 @@ def _run_graph_extraction(
                 if "熔断" in exc_msg or "circuit breaker" in exc_msg.lower() or "MISSING API KEY" in exc_msg or "insufficient balance" in exc_msg.lower() or "exceeded_current_quota" in exc_msg or "suspended" in exc_msg.lower():
                     circuit_breaker_hit = True
 
+            doc_index += 1
+            _update_graph_progress(
+                user_id, library_id,
+                status="running",
+                total=need_extract,
+                current=doc_index,
+                message=f"处理完成 {doc_index}/{need_extract}: {document.title}",
+                docs=docs,
+            )
             # 限流: 每文档间等待 1s,让 API 有喘息时间
             time.sleep(1.0)
 
@@ -1134,16 +1193,16 @@ def _run_graph_extraction(
             _update_graph_progress(
                 user_id, library_id,
                 status="completed",
-                total=total,
-                current=total,
+                total=need_extract,
+                current=need_extract,
                 message="图谱抽取完成（部分文档因模型调用限流或熔断已跳过）",
             )
         else:
             _update_graph_progress(
                 user_id, library_id,
                 status="completed",
-                total=total,
-                current=total,
+                total=need_extract,
+                current=need_extract,
                 message="图谱抽取完成",
             )
     except Exception as exc:

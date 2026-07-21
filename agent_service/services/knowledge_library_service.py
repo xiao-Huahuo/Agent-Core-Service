@@ -2012,7 +2012,7 @@ class KnowledgeLibraryService:
         return []
 
     def _delete_index_artifacts(self, *, user_id: str, relative_paths: list[str]) -> int:
-        """删除给定来源文件对应的 frontmatter 和向量切片。"""
+        """删除给定来源文件对应的 frontmatter、向量切片和图谱点边。"""
 
         if not relative_paths:
             return 0
@@ -2040,6 +2040,12 @@ class KnowledgeLibraryService:
             frontmatter_path = (frontmatter_root / normalized_path).with_suffix(".json").resolve()
             if self._is_relative_to(frontmatter_path, frontmatter_root) and frontmatter_path.exists():
                 frontmatter_path.unlink()
+            # 同时删除该文档产生的图谱点边和状态记录
+            self.knowledge_graph_service.delete_document_graph(
+                user_id=normalized_user_id,
+                library_id=library_id,
+                document_id=source_id,
+            )
         return chunks_deleted
 
     def _source_needs_ocr_reindex(

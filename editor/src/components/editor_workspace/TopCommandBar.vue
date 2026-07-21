@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bot, DatabaseZap, GitBranch, Maximize2, Minus, Moon, Settings, Sun, X } from 'lucide-vue-next'
+import { Bot, DatabaseZap, Maximize2, Minus, Moon, Network, Settings, Sun, X } from 'lucide-vue-next'
 
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -18,7 +18,6 @@ const workspaceStore = useWorkspaceStore()
 const desktopApi = window.agentEditorDesktop
 const emit = defineEmits<{
   toggleAgent: []
-  toggleGraph: []
   openSettings: []
 }>()
 const knowledgeTitle = computed(() => {
@@ -30,6 +29,8 @@ const knowledgeTitle = computed(() => {
   const pathParts = normalizedPath.split('/').filter(Boolean)
   return pathParts[pathParts.length - 1] || 'Untitled'
 })
+
+const graphRebuilding = computed(() => workspaceStore.graphQueue.length > 0)
 
 async function handleCloseWindow() {
   if (!(await workspaceStore.confirmSaveDirtyBeforeExit())) {
@@ -52,6 +53,15 @@ async function handleCloseWindow() {
         </span>
         <span class="ingestion-progress-percent">{{ workspaceStore.ingestionProgress }}%</span>
       </div>
+      <div v-if="workspaceStore.graphProgressVisible" class="ingestion-progress graph-progress" aria-live="polite">
+        <span class="ingestion-progress-track" aria-hidden="true">
+          <span
+            class="ingestion-progress-fill"
+            :style="{ width: `${workspaceStore.graphProgress}%` }"
+          />
+        </span>
+        <span class="ingestion-progress-percent">{{ workspaceStore.graphProgress }}%</span>
+      </div>
     </div>
 
     <div class="search-center">
@@ -59,15 +69,22 @@ async function handleCloseWindow() {
     </div>
 
     <div class="actions">
-      <button class="icon-button" type="button" title="知识图谱" @click="emit('toggleGraph')">
-        <GitBranch :size="14" />
-      </button>
       <button class="icon-button" type="button" title="设置" @click="emit('openSettings')">
         <Settings :size="14" />
       </button>
       <button class="console-link" type="button" title="切换 Agent 面板" @click="emit('toggleAgent')">
         <Bot :size="14" />
         <span>Agent</span>
+      </button>
+      <button
+        class="ingest-button graph-btn"
+        :class="{ refreshing: graphRebuilding }"
+        type="button"
+        :disabled="graphRebuilding"
+        title="图谱抽取"
+        @click="workspaceStore.startGraphRebuild"
+      >
+        <Network :size="14" />
       </button>
       <button
         class="ingest-button"
@@ -306,6 +323,20 @@ async function handleCloseWindow() {
 .ingestion-progress-percent {
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+.graph-progress {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, #14b8a6 50%);
+  background: color-mix(in srgb, var(--color-canvas) 92%, #14b8a6 8%);
+  color: #14b8a6;
+}
+
+.graph-progress .ingestion-progress-track {
+  background: color-mix(in srgb, #14b8a6 14%, transparent);
+}
+
+.graph-progress .ingestion-progress-fill {
+  background: #14b8a6;
 }
 
 @keyframes refresh-spin {

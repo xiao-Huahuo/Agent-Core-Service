@@ -1,9 +1,9 @@
 <!--
-  Visual ingestion progress page.
+  Visual ingestion and graph progress page.
 
   Usage:
-  Shows active ingestion rows and persisted ingestion history in Explorer-like
-  list views.
+  Shows active ingestion rows, active graph extraction row, and merged
+  ingestion/graph history with source-type filtering.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
@@ -20,17 +20,42 @@ import {
 } from 'lucide-vue-next'
 
 import { useWorkspaceStore } from '@/stores/workspace'
-import type { IngestionHistoryItem, IngestionQueueItem } from '@/types/knowledge'
+import type { HistorySourceType, IngestionHistoryItem, IngestionQueueItem } from '@/types/knowledge'
 
-type IngestionTab = 'queue' | 'history'
+type IngestionTab = 'queue' | 'graph-queue' | 'history'
 
 const workspaceStore = useWorkspaceStore()
 const activeTab = ref<IngestionTab>('queue')
+const historyFilter = ref<HistorySourceType | 'all'>('all')
 
 const queueRows = computed(() => workspaceStore.ingestionQueue)
-const historyRows = computed(() => workspaceStore.ingestionHistory)
+const graphQueueRows = computed(() => workspaceStore.graphQueue)
+
+const allHistoryRows = computed(() => {
+  const items: (IngestionHistoryItem & { sourceSort: number })[] = [
+    ...workspaceStore.ingestionHistory.map((item, i) => ({
+      ...item,
+      sourceType: (item.sourceType ?? 'ingestion') as HistorySourceType,
+      sourceSort: i,
+    })),
+    ...workspaceStore.graphHistory.map((item, i) => ({
+      ...item,
+      sourceType: 'graph' as HistorySourceType,
+      sourceSort: i + 100000,
+    })),
+  ]
+  items.sort((a, b) => new Date(b.finishedAt).getTime() - new Date(a.finishedAt).getTime())
+  return items
+})
+
+const historyRows = computed(() => {
+  if (historyFilter.value === 'all') return allHistoryRows.value
+  return allHistoryRows.value.filter((row) => row.sourceType === historyFilter.value)
+})
+
 const queueColumns = 'minmax(220px, 2fr) 150px 150px 120px 132px'
-const historyColumns = 'minmax(220px, 2fr) 140px 132px 160px 1fr'
+const graphQueueColumns = 'minmax(220px, 2fr) 150px 150px 120px 120px 132px'
+const historyColumns = 'minmax(220px, 2fr) 80px 140px 132px 160px 1fr'
 
 async function refresh() {
   await workspaceStore.loadKnowledgeTree()
@@ -49,7 +74,7 @@ function formatSize(size?: number): string {
   return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`
 }
 
-function fileKind(row: IngestionQueueItem | IngestionHistoryItem): string {
+function fileKind(row: IngestionQueueItem | (IngestionHistoryItem & { sourceType: HistorySourceType })): string {
   if (row.isDir) return '文件夹'
   const dotIndex = row.name.lastIndexOf('.')
   if (dotIndex < 0 || dotIndex === row.name.length - 1) return '文件'
@@ -73,6 +98,10 @@ function historyStatusLabel(status: IngestionHistoryItem['status']): string {
   return '失败'
 }
 
+function historySourceLabel(sourceType: HistorySourceType): string {
+  return sourceType === 'graph' ? '图谱' : '灌库'
+}
+
 function historySummary(row: IngestionHistoryItem): string {
   if (row.message) return row.message
   const pieces = [
@@ -88,8 +117,10 @@ function historySummary(row: IngestionHistoryItem): string {
   <section class="ingestion-page">
     <header class="page-heading">
       <div>
-        <h1>入库进度</h1>
-        <p>{{ activeTab === 'queue' ? `${queueRows.length} 个文件正在或等待灌库` : `${historyRows.length} 条历史记录` }}</p>
+        <h1>加载队列</h1>
+        <p v-if="activeTab === 'queue'">{{ queueRows.length }} 个文件正在或等待灌库</p>
+        <p v-else-if="activeTab === 'graph-queue'">{{ graphQueueRows.length > 0 ? `${graphQueueRows.length} 个文档待抽取` : '无正在抽取的任务' }}</p>
+        <p v-else>{{ historyRows.length }} 条历史记录</p>
       </div>
       <div class="heading-actions">
         <div class="tab-switch" role="tablist" aria-label="入库进度子页">
@@ -102,6 +133,16 @@ function historySummary(row: IngestionHistoryItem): string {
           >
             <CircleDashed :size="15" />
             <span>入库队列</span>
+          </button>
+          <button
+            class="tab-button"
+            :class="{ active: activeTab === 'graph-queue' }"
+            type="button"
+            role="tab"
+            @click="activeTab = 'graph-queue'"
+          >
+            <BrainCircuit :size="15" />
+            <span>图谱抽取队列</span>
           </button>
           <button
             class="tab-button"
@@ -123,13 +164,14 @@ function historySummary(row: IngestionHistoryItem): string {
           type="button"
           title="清空历史"
           aria-label="清空历史"
-          @click="workspaceStore.clearIngestionHistory()"
+          @click="workspaceStore.clearIngestionHistory(); workspaceStore.clearGraphHistory()"
         >
           <Trash2 :size="16" />
         </button>
       </div>
     </header>
 
+    <!-- Ingestion Queue Tab -->
     <div v-if="activeTab === 'queue'" class="file-table">
       <div class="file-table-head" :style="{ gridTemplateColumns: queueColumns }">
         <span>名称</span>
@@ -166,26 +208,96 @@ function historySummary(row: IngestionHistoryItem): string {
       </div>
     </div>
 
+    <!-- Graph Queue Tab -->
+    <div v-else-if="activeTab === 'graph-queue'" class="file-table">
+      <div class="file-table-head" :style="{ gridTemplateColumns: graphQueueColumns }">
+        <span>名称</span>
+        <span>最后修改日期</span>
+        <span>类型</span>
+        <span>大小</span>
+        <span>进度</span>
+        <span>状态</span>
+      </div>
+      <TransitionGroup name="ingestion-row" tag="div" class="file-table-body">
+        <div
+          v-for="row in graphQueueRows"
+          :key="row.id"
+          class="file-row"
+          :class="row.status"
+          :style="{ gridTemplateColumns: graphQueueColumns }"
+        >
+          <span class="name-cell">
+            <FileText :size="16" class="kind-icon file" />
+            <span class="file-name" :title="row.path">{{ row.name }}</span>
+          </span>
+          <span>{{ row.mtime ?? '-' }}</span>
+          <span>{{ fileKind(row) }}</span>
+          <span>{{ formatSize(row.size) }}</span>
+          <span class="progress-cell">
+            <div v-if="row.status === 'running' && row.progress !== undefined" class="progress-bar-wrap">
+              <div class="progress-bar-fill" :style="{ width: `${row.progress}%` }" />
+              <span class="progress-pct">{{ row.progress }}%</span>
+            </div>
+            <span v-else class="progress-na">-</span>
+          </span>
+          <span class="status-cell">
+            <Loader2 v-if="row.status === 'running'" :size="14" class="spin" />
+            <CircleDashed v-else :size="14" />
+            <span class="status-pill" :class="row.status">{{ row.status === 'running' ? '正在抽取' : '等待抽取' }}</span>
+          </span>
+        </div>
+      </TransitionGroup>
+      <div v-if="graphQueueRows.length === 0" class="empty-state">
+        当前没有正在或等待抽取的任务
+      </div>
+    </div>
+
+    <!-- Merged History Tab -->
     <div v-else class="file-table">
       <div class="file-table-head" :style="{ gridTemplateColumns: historyColumns }">
         <span>名称</span>
+        <span>来源</span>
         <span>类型</span>
         <span>结果</span>
         <span>完成时间</span>
         <span>摘要</span>
       </div>
       <div class="file-table-body">
+        <div class="history-filter-bar">
+          <button
+            class="filter-chip"
+            :class="{ active: historyFilter === 'all' }"
+            type="button"
+            @click="historyFilter = 'all'"
+          >全部</button>
+          <button
+            class="filter-chip"
+            :class="{ active: historyFilter === 'ingestion' }"
+            type="button"
+            @click="historyFilter = 'ingestion'"
+          >灌库</button>
+          <button
+            class="filter-chip"
+            :class="{ active: historyFilter === 'graph' }"
+            type="button"
+            @click="historyFilter = 'graph'"
+          >图谱</button>
+        </div>
         <div
           v-for="row in historyRows"
-          :key="row.id"
+          :key="`${row.sourceType}-${row.id}`"
           class="file-row"
           :class="row.status"
           :style="{ gridTemplateColumns: historyColumns }"
         >
           <span class="name-cell">
             <Folder v-if="row.isDir" :size="16" class="kind-icon folder" />
-            <FileText v-else :size="16" class="kind-icon file" />
-            <span class="file-name" :title="row.path">{{ row.name }}</span>
+            <FileText v-else-if="row.sourceType !== 'graph'" :size="16" class="kind-icon file" />
+            <BrainCircuit v-else :size="16" class="kind-icon graph" />
+            <span class="file-name" :title="row.path || row.name">{{ row.name }}</span>
+          </span>
+          <span class="history-source-cell">
+            <span class="source-chip" :class="row.sourceType">{{ historySourceLabel(row.sourceType) }}</span>
           </span>
           <span>{{ fileKind(row) }}</span>
           <span class="status-cell">
@@ -199,7 +311,7 @@ function historySummary(row: IngestionHistoryItem): string {
         </div>
       </div>
       <div v-if="historyRows.length === 0" class="empty-state">
-        还没有入库历史
+        还没有历史记录
       </div>
     </div>
   </section>
@@ -338,7 +450,8 @@ function historySummary(row: IngestionHistoryItem): string {
 }
 
 .name-cell,
-.status-cell {
+.status-cell,
+.history-source-cell {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -358,6 +471,10 @@ function historySummary(row: IngestionHistoryItem): string {
 
 .kind-icon.file {
   color: var(--color-text-muted);
+}
+
+.kind-icon.graph {
+  color: var(--color-primary);
 }
 
 .status-pill {
@@ -385,6 +502,62 @@ function historySummary(row: IngestionHistoryItem): string {
   color: #dc2626;
 }
 
+.history-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-12);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-canvas);
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.filter-chip:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.filter-chip.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.source-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.source-chip.ingestion {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.source-chip.graph {
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
 .empty-state {
   display: grid;
   place-items: center;
@@ -395,6 +568,47 @@ function historySummary(row: IngestionHistoryItem): string {
 
 .spin {
   animation: spin 900ms linear infinite;
+}
+
+.progress-cell {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.progress-bar-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  height: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  background: var(--color-primary);
+  transition: width 300ms ease;
+}
+
+.progress-pct {
+  position: relative;
+  z-index: 1;
+  margin: 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 18px;
+}
+
+.progress-na {
+  color: var(--color-text-muted);
+  font-size: 12px;
 }
 
 .ingestion-row-enter-active,

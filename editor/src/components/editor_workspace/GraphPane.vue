@@ -193,30 +193,30 @@ watch(
 <template>
   <section class="graph-pane">
     <header class="graph-toolbar">
+      <div class="graph-mode">
+        <button
+          class="graph-mode-button"
+          :class="{ active: graphMode === 'tree' }"
+          type="button"
+          @click="graphMode = 'tree'"
+        >
+          文件树
+        </button>
+        <button
+          class="graph-mode-button"
+          :class="{ active: graphMode === 'semantic' }"
+          type="button"
+          @click="graphMode = 'semantic'"
+        >
+          语义
+        </button>
+      </div>
       <div class="graph-title">
         <span class="eyebrow mono">知识图谱</span>
         <strong>{{ knowledgeTitle }}</strong>
       </div>
       <div class="graph-actions">
         <span class="graph-stat mono">{{ graphStats.nodes }} nodes / {{ graphStats.links }} links</span>
-        <div class="graph-mode">
-          <button
-            class="graph-mode-button"
-            :class="{ active: graphMode === 'tree' }"
-            type="button"
-            @click="graphMode = 'tree'"
-          >
-            文件树
-          </button>
-          <button
-            class="graph-mode-button"
-            :class="{ active: graphMode === 'semantic' }"
-            type="button"
-            @click="graphMode = 'semantic'"
-          >
-            语义
-          </button>
-        </div>
         <button
           v-if="graphMode === 'semantic'"
           class="graph-action"
@@ -380,28 +380,35 @@ watch(
 
 .graph-mode {
   display: inline-flex;
-  height: 24px;
+  gap: 4px;
+  padding: 3px;
   border: 1px solid var(--color-border);
+  border-radius: 999px;
   background: var(--color-surface);
 }
 
 .graph-mode-button {
-  height: 22px;
-  padding: 0 var(--space-8);
-  border: 0;
-  border-right: 1px solid var(--color-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
-.graph-mode-button:last-child {
-  border-right: 0;
+.graph-mode-button:hover,
+.graph-mode-button.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .graph-mode-button.active {
-  background: var(--color-primary-softer);
-  color: var(--color-primary);
+  background: var(--color-primary-soft);
 }
 
 .graph-rebuild-progress {

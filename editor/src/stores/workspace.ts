@@ -11,6 +11,7 @@ import { computed, ref, watch } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { updateCurrentDocumentContext } from '@/api/agent'
+import type { GraphDocStatus } from '@/api/knowledge'
 import {
   buildKnowledgeEventsUrl,
   copyKnowledgePath,
@@ -18,12 +19,14 @@ import {
   createKnowledgeFolder,
   deleteKnowledgePath,
   deleteKnowledgeTrashEntry,
+  getKnowledgeGraphStatus,
   ingestKnowledgeFileStream,
   ingestKnowledgePathStream,
   listKnowledgeFiles,
   listKnowledgeTrash,
   previewKnowledgeFile,
   readKnowledgeFile,
+  rebuildKnowledgeGraph,
   renameKnowledgePath,
   restoreKnowledgeTrashEntry,
   searchKnowledge,
@@ -346,6 +349,237 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   let lastIngestionQueueProcessed = 0
   let ingestionQueuePlannedTotal = 0
   let ingestionFileChunksByPath = new Map<string, number>()
+
+  /** Header-level graph extraction progress shown while graph rebuild runs. */
+  const graphProgressVisible = ref(false)
+  const graphProgress = ref(0)
+  const graphQueue = ref<IngestionQueueItem[]>([])
+  const graphRebuildPending = ref(false)
+  let graphPollingTimer: ReturnType<typeof setInterval> | null = null
+  let graphProgressTimer: ReturnType<typeof setTimeout> | null = null
+  let graphQueuePlannedTotal = 0
+
+  /** Graph extraction history (persisted to localStorage). */
+  const GRAPH_HISTORY_KEY = 'metaweave_graph_history'
+  const GRAPH_HISTORY_LIMIT = 120
+  const graphHistory = ref<IngestionHistoryItem[]>([])
+  try {
+    const raw = localStorage.getItem(GRAPH_HISTORY_KEY)
+    if (raw) graphHistory.value = JSON.parse(raw) as IngestionHistoryItem[]
+  } catch { /* ignore corrupt data */ }
+
+  function persistGraphHistory() {
+    try {
+      localStorage.setItem(GRAPH_HISTORY_KEY, JSON.stringify(graphHistory.value))
+    } catch { /* ignore storage failures */ }
+  }
+
+  function setGraphProgress(value: number) {
+    graphProgress.value = Math.max(0, Math.min(100, Math.round(value)))
+  }
+
+  function beginGraphProgress(initialValue = 6) {
+    graphProgressVisible.value = true
+    setGraphProgress(initialValue)
+  }
+
+  function finishGraphProgress(delay = 1000) {
+    setGraphProgress(100)
+  }
+
+  function stopGraphPolling() {
+    if (graphPollingTimer !== null) {
+      clearInterval(graphPollingTimer)
+      graphPollingTimer = null
+    }
+  }
+
+  function finishGraphProgress(message: string, isError = false) {
+    setGraphProgress(100)
+    showToast(message, isError ? 5000 : 3000)
+    if (graphProgressTimer !== null) {
+      clearTimeout(graphProgressTimer)
+    }
+    graphProgressTimer = setTimeout(() => {
+      graphProgressVisible.value = false
+      graphProgress.value = 0
+      graphProgressTimer = null
+    }, 1500)
+  }
+
+  function completeGraphQueue(
+    status: IngestionHistoryStatus,
+    total: number,
+    current: number,
+    message?: string,
+  ) {
+    const finishedAt = new Date().toISOString()
+    if (graphQueue.value.length > 0) {
+      const allFinished = graphQueue.value.map((item) => ({
+        ...item,
+        status: status as IngestionQueueItem['status'],
+      }))
+      const historyItem: IngestionHistoryItem = {
+        id: createId('graph_history'),
+        name: `图谱抽取 ${finishedAt.slice(0, 16).replace('T', ' ')}`,
+        path: '',
+        isDir: false,
+        status,
+        finishedAt,
+        filesSeen: total,
+        filesIngested: current,
+        filesSkipped: total - current,
+        message: message ?? allFinished[0]?.message,
+        sourceType: 'graph',
+      }
+      graphHistory.value = [historyItem, ...graphHistory.value].slice(0, GRAPH_HISTORY_LIMIT)
+      persistGraphHistory()
+    }
+    graphQueue.value = []
+    graphQueuePlannedTotal = 0
+    graphRebuildPending.value = false
+    stopGraphPolling()
+    if (status === 'finished') {
+      finishGraphProgress(message ?? '图谱抽取完成')
+    } else {
+      finishGraphProgress(message ?? '图谱抽取失败', true)
+    }
+  }
+
+  function syncGraphQueueFromDocs(docs: GraphDocStatus[], message?: string) {
+    const queueMap = new Map<string, IngestionQueueItem>()
+    for (const item of graphQueue.value) {
+      queueMap.set(item.path, item)
+    }
+
+    for (const doc of docs) {
+      if (doc.status === 'done' || doc.status === 'skipped' || doc.status === 'failed') {
+        queueMap.delete(doc.path)
+        continue
+      }
+      const existing = queueMap.get(doc.path)
+      if (existing) {
+        queueMap.set(doc.path, {
+          ...existing,
+          status: doc.status === 'processing' ? 'running' as const : 'waiting' as const,
+          progress: doc.progress ?? existing.progress,
+          message: doc.status === 'processing' ? (message || existing.message) : undefined,
+        })
+      } else if (doc.status === 'pending' || doc.status === 'processing') {
+        queueMap.set(doc.path, {
+          id: `graph_doc_${doc.path}`,
+          name: doc.name,
+          path: doc.path,
+          isDir: false,
+          status: doc.status === 'processing' ? 'running' as const : 'waiting' as const,
+          progress: doc.progress ?? 0,
+          queuedAt: new Date().toISOString(),
+          message: doc.status === 'processing' ? (message || undefined) : undefined,
+        })
+      }
+    }
+
+    graphQueue.value = [...queueMap.values()]
+    graphQueuePlannedTotal = docs.filter((d) => d.status === 'pending' || d.status === 'processing' || d.status === 'done').length
+  }
+
+  async function pollGraphStatus() {
+    const userId = useSettingsStore().profile.userId
+    if (!userId) return
+    try {
+      const status = await getKnowledgeGraphStatus(userId)
+      const docs = status.docs ?? []
+      if (status.status === 'running' || status.status === 'idle') {
+        if (docs.length > 0) {
+          syncGraphQueueFromDocs(docs, status.message)
+          const remainingPending = docs.filter(
+            (d) => d.status === 'pending' || d.status === 'processing'
+          ).length
+          const progress = status.total > 0
+            ? Math.round(((status.total - remainingPending) / status.total) * 100)
+            : 0
+          setGraphProgress(progress)
+        }
+        return
+      }
+      if (status.status === 'completed') {
+        graphQueue.value = []
+        setGraphProgress(100)
+        completeGraphQueue('finished', status.total, status.current, status.message || '图谱抽取完成')
+        return
+      }
+      if (status.status === 'failed') {
+        completeGraphQueue('failed', status.total, status.current, status.message || '图谱抽取失败')
+      }
+    } catch {
+      stopGraphPolling()
+      graphQueue.value = []
+      graphQueuePlannedTotal = 0
+      finishGraphProgress('轮询图谱状态失败', true)
+    }
+  }
+
+  function startGraphPolling() {
+    stopGraphPolling()
+    graphPollingTimer = setInterval(pollGraphStatus, 2000)
+  }
+
+  async function _triggerGraphExtraction() {
+    const userId = useSettingsStore().profile.userId
+    if (!userId || graphQueue.value.length > 0) {
+      return
+    }
+    beginGraphProgress(6)
+    graphQueuePlannedTotal = 0
+    try {
+      const result = await rebuildKnowledgeGraph(userId)
+      if (result.status === 'already_running') {
+        showToast('已有一个图谱抽取任务在运行')
+      }
+      startGraphPolling()
+    } catch (error) {
+      graphRebuildPending.value = false
+      completeGraphQueue('failed', 0, 0, error instanceof Error ? error.message : '启动失败')
+    }
+  }
+
+  async function startGraphRebuild() {
+    const userId = useSettingsStore().profile.userId
+    if (!userId || graphQueue.value.length > 0 || graphRebuildPending.value) {
+      return
+    }
+
+    graphRebuildPending.value = true
+
+    // If ingestion already queued or running, wait for it to finish
+    if (ingestionQueue.value.length > 0 || refreshing.value) {
+      showToast('等待灌库完成后再进行图谱抽取')
+      if (refreshing.value) {
+        await new Promise<void>((resolve) => {
+          const unwatch = watch(refreshing, (val) => {
+            if (!val) {
+              unwatch()
+              resolve()
+            }
+          })
+        })
+      }
+      // Small delay for tree settle after ingestion completes
+      await new Promise((r) => setTimeout(r, 500))
+    } else {
+      // Trigger ingestion first, then graph
+      showToast('开始灌库后自动进行图谱抽取')
+      await markIndexing()
+    }
+
+    graphRebuildPending.value = false
+    await _triggerGraphExtraction()
+  }
+
+  function clearGraphHistory() {
+    graphHistory.value = []
+    try { localStorage.removeItem(GRAPH_HISTORY_KEY) } catch { /* ignore */ }
+  }
 
   /** Toast notification message (empty = hidden). */
   const toastMessage = ref('')
@@ -2046,6 +2280,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     addSearchHistory,
     clearSearchHistory,
     clearIngestionHistory,
+    graphProgressVisible,
+    graphProgress,
+    graphQueue,
+    graphHistory,
+    graphRebuildPending,
+    startGraphRebuild,
+    clearGraphHistory,
     performSearch,
     askAgent,
     syncCurrentDocumentContext,

@@ -276,7 +276,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="workspace-page" :class="{ resizing: activeResizeTarget }">
-    <TopCommandBar @toggle-agent="toggleAgentSidebar" @toggle-graph="toggleGraphView" @open-settings="openSettings" />
+    <TopCommandBar @toggle-agent="toggleAgentSidebar" @open-settings="openSettings" />
     <div
       ref="workspaceGrid"
       class="workspace-grid"
