@@ -5,8 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="语义知识图谱v3-实现了知识图谱队列">
-      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/KnowledgeGraphCanvas.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/KnowledgeGraphCanvas.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/graphRenderer.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/graphRenderer.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -260,23 +262,8 @@
       <workItem from="1784338941374" duration="1273000" />
       <workItem from="1784375929012" duration="13746000" />
       <workItem from="1784443638650" duration="19303000" />
-      <workItem from="1784615003592" duration="21343000" />
-    </task>
-    <task id="LOCAL-00141" summary="文件上传功能">
-      <option name="closed" value="true" />
-      <created>1784195298891</created>
-      <option name="number" value="00141" />
-      <option name="presentableId" value="LOCAL-00141" />
-      <option name="project" value="LOCAL" />
-      <updated>1784195298891</updated>
-    </task>
-    <task id="LOCAL-00142" summary="文件上传功能小改">
-      <option name="closed" value="true" />
-      <created>1784195656569</created>
-      <option name="number" value="00142" />
-      <option name="presentableId" value="LOCAL-00142" />
-      <option name="project" value="LOCAL" />
-      <updated>1784195656569</updated>
+      <workItem from="1784615003592" duration="22715000" />
+      <workItem from="1784638422280" duration="888000" />
     </task>
     <task id="LOCAL-00143" summary="文件资源管理器">
       <option name="closed" value="true" />
@@ -654,7 +641,23 @@
       <option name="project" value="LOCAL" />
       <updated>1784636375502</updated>
     </task>
-    <option name="localTasksCounter" value="190" />
+    <task id="LOCAL-00190" summary="语义知识图谱v3-实现了知识图谱队列">
+      <option name="closed" value="true" />
+      <created>1784637061630</created>
+      <option name="number" value="00190" />
+      <option name="presentableId" value="LOCAL-00190" />
+      <option name="project" value="LOCAL" />
+      <updated>1784637061630</updated>
+    </task>
+    <task id="LOCAL-00191" summary="语义知识图谱v3-实现了知识图谱队列">
+      <option name="closed" value="true" />
+      <created>1784637158252</created>
+      <option name="number" value="00191" />
+      <option name="presentableId" value="LOCAL-00191" />
+      <option name="project" value="LOCAL" />
+      <updated>1784637158252</updated>
+    </task>
+    <option name="localTasksCounter" value="192" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -692,7 +695,7 @@
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
     <SUITE FILE_PATH="coverage/AgentService$main.coverage" NAME="main 覆盖结果" MODIFIED="1783512965618" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/AgentService$test_agent_core_service.coverage" NAME="test_agent_core_service 覆盖结果" MODIFIED="1778509217316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
-    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784635226931" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784638498933" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>

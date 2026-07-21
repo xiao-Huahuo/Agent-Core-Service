@@ -246,7 +246,11 @@ function pointerPoint(event: MouseEvent | PointerEvent | WheelEvent) {
 }
 
 function selectNode(node: KnowledgeGraphNode) {
-  selectedNodeId.value = node.id
+  if (selectedNodeId.value === node.id) {
+    selectedNodeId.value = ''
+  } else {
+    selectedNodeId.value = node.id
+  }
   emit('node-select', toNodeEvent(node))
   requestDraw()
 }

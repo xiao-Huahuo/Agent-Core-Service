@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Crosshair, RefreshCw, RotateCcw, Type, AlertCircle } from 'lucide-vue-next'
+import { AlertCircle, Crosshair, RefreshCw, RotateCcw, Search, Type, X } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
 import { fetchKnowledgeGraph, getKnowledgeGraphStatus, rebuildKnowledgeGraph } from '@/api/knowledge'
@@ -19,7 +19,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeSemanticGraphResponse } from '@/types/knowledge'
 import type { GraphRebuildStatus } from '@/api/knowledge'
-import type { KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graphTypes'
+import type { KnowledgeGraphNode, KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graphTypes'
 
 const emit = defineEmits<{
   'open-node': [node: KnowledgeGraphNodeEvent]
@@ -35,6 +35,10 @@ const graphMode = ref<'tree' | 'semantic'>('tree')
 const semanticGraph = ref<KnowledgeSemanticGraphResponse | null>(null)
 const semanticLoading = ref(false)
 const semanticError = ref('')
+
+// Sidebar state
+const sidebarOpen = ref(false)
+const searchQuery = ref('')
 
 // Graph rebuild progress state
 const rebuildStatus = ref<GraphRebuildStatus | null>(null)
@@ -77,10 +81,72 @@ const statusMessage = computed(() => {
   return ''
 })
 
-async function loadSemanticGraph() {
-  if (!settingsStore.profile.userId) {
+// Search: partial-match node labels (exclude root node, case-insensitive)
+const searchResults = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return []
+  return graphModel.value.nodes.filter(
+    (n) => n.label.toLowerCase().includes(q) && n.kind !== 'root',
+  )
+})
+
+// Connected nodes helper
+function getConnectedNodeIds(nodeId: string): string[] {
+  const ids = new Set<string>()
+  for (const link of graphModel.value.links) {
+    const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+    const targetId = typeof link.target === 'string' ? link.target : link.target.id
+    if (sourceId === nodeId) ids.add(targetId)
+    if (targetId === nodeId) ids.add(sourceId)
+  }
+  return [...ids]
+}
+
+const connectedNodes = computed(() => {
+  if (!selectedNode.value?.id) return []
+  const ids = getConnectedNodeIds(selectedNode.value.id)
+  return graphModel.value.nodes.filter((n) => ids.includes(n.id))
+})
+
+function selectNodeById(id: string) {
+  const node = graphModel.value.nodes.find((n) => n.id === id)
+  if (!node) return
+  handleNodeSelect({
+    id: node.id,
+    label: node.label,
+    path: node.path,
+    kind: node.kind,
+  })
+}
+
+function handleNodeSelect(node: KnowledgeGraphNodeEvent) {
+  // Toggle: clicking same node deselects
+  if (selectedNode.value?.id === node.id) {
+    selectedNode.value = null
+    // Sync to canvas via prop change
     return
   }
+  selectedNode.value = node
+  sidebarOpen.value = true
+  searchQuery.value = ''
+}
+
+function handleNodeOpen(node: KnowledgeGraphNodeEvent) {
+  selectedNode.value = node
+  emit('open-node', node)
+}
+
+function refreshGraph() {
+  selectedNode.value = null
+  if (graphMode.value === 'semantic') {
+    void loadSemanticGraph()
+    return
+  }
+  void workspaceStore.loadKnowledgeTree()
+}
+
+async function loadSemanticGraph() {
+  if (!settingsStore.profile.userId) return
   semanticLoading.value = true
   semanticError.value = ''
   try {
@@ -122,9 +188,7 @@ function stopPolling() {
 }
 
 async function startRebuild() {
-  if (!settingsStore.profile.userId || isRebuilding.value) {
-    return
-  }
+  if (!settingsStore.profile.userId || isRebuilding.value) return
   isRebuilding.value = true
   rebuildStatus.value = { status: 'running', total: 1, current: 0, message: '启动中...' }
   try {
@@ -144,27 +208,13 @@ async function startRebuild() {
   }
 }
 
-function handleNodeSelect(node: KnowledgeGraphNodeEvent) {
-  selectedNode.value = node
-  if (node.path) {
-    emit('open-node', node)
-  }
-}
-
-function handleNodeOpen(node: KnowledgeGraphNodeEvent) {
-  selectedNode.value = node
-  if (node.path) {
-    emit('open-node', node)
-  }
-}
-
-function refreshGraph() {
-  selectedNode.value = null
-  if (graphMode.value === 'semantic') {
-    void loadSemanticGraph()
-    return
-  }
-  void workspaceStore.loadKnowledgeTree()
+function kindLabel(kind: string): string {
+  if (kind === 'root') return '根'
+  if (kind === 'folder') return '文件夹'
+  if (kind === 'file') return '文件'
+  if (kind === 'document') return '文档'
+  if (kind === 'entity') return '实体'
+  return kind
 }
 
 onMounted(() => {
@@ -181,6 +231,8 @@ watch(
   graphMode,
   (mode) => {
     selectedNode.value = null
+    sidebarOpen.value = false
+    searchQuery.value = ''
     if (mode === 'semantic') {
       void loadSemanticGraph()
     } else {
@@ -260,16 +312,97 @@ watch(
       </div>
     </div>
 
-    <KnowledgeGraphCanvas
-      ref="graphCanvasRef"
-      class="embedded-graph"
-      :model="graphModel"
-      :selected-node-id="selectedNode?.id ?? ''"
-      :show-labels="showGraphLabels"
-      @node-open="handleNodeOpen"
-      @node-select="handleNodeSelect"
-    />
+    <div class="graph-body">
+      <KnowledgeGraphCanvas
+        ref="graphCanvasRef"
+        class="embedded-graph"
+        :model="graphModel"
+        :selected-node-id="selectedNode?.id ?? ''"
+        :show-labels="showGraphLabels"
+        @node-open="handleNodeOpen"
+        @node-select="handleNodeSelect"
+      />
 
+      <!-- Sidebar toggle tab -->
+      <button
+        class="sidebar-tab"
+        :class="{ open: sidebarOpen }"
+        type="button"
+        :title="sidebarOpen ? '关闭节点面板' : '节点面板'"
+        @click="sidebarOpen = !sidebarOpen"
+      >
+        <Search :size="14" />
+      </button>
+
+      <!-- Sidebar -->
+      <aside class="graph-sidebar" :class="{ open: sidebarOpen }">
+        <div class="sidebar-header">
+          <span class="sidebar-title">节点搜索</span>
+          <button class="sidebar-close" type="button" @click="sidebarOpen = false">
+            <X :size="14" />
+          </button>
+        </div>
+
+        <!-- Search input -->
+        <div class="sidebar-search">
+          <Search :size="14" class="search-icon" />
+          <input
+            v-model="searchQuery"
+            class="search-input"
+            type="text"
+            placeholder="搜索节点名称..."
+          />
+        </div>
+
+        <!-- Search results -->
+        <div v-if="searchQuery && searchResults.length > 0" class="sidebar-section">
+          <div class="sidebar-label">搜索结果</div>
+          <div class="search-tags">
+            <button
+              v-for="node in searchResults"
+              :key="node.id"
+              class="search-tag"
+              :class="{ active: node.id === selectedNode?.id }"
+              type="button"
+              @click="selectNodeById(node.id)"
+            >
+              {{ node.label }}
+            </button>
+          </div>
+        </div>
+        <div v-else-if="searchQuery && searchResults.length === 0" class="sidebar-empty">
+          无匹配节点
+        </div>
+
+        <!-- Selected node info -->
+        <div v-if="selectedNode" class="sidebar-section">
+          <div class="sidebar-label">选中节点</div>
+          <div class="selected-node-name">
+            <span class="selected-node-kind-tag" :class="selectedNode.kind">{{ kindLabel(selectedNode.kind) }}</span>
+            {{ selectedNode.label }}
+          </div>
+        </div>
+
+        <!-- Connected nodes -->
+        <div v-if="connectedNodes.length > 0" class="sidebar-section sidebar-section-grow">
+          <div class="sidebar-label">关联节点 ({{ connectedNodes.length }})</div>
+          <div class="connected-list">
+            <button
+              v-for="node in connectedNodes"
+              :key="node.id"
+              class="connected-item"
+              :class="{ active: node.id === selectedNode?.id }"
+              :title="node.path || node.label"
+              type="button"
+              @click="selectNodeById(node.id)"
+            >
+              <span class="connected-kind-tag" :class="node.kind">{{ kindLabel(node.kind) }}</span>
+              <span class="connected-name">{{ node.label }}</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+    </div>
   </section>
 </template>
 
@@ -441,5 +574,260 @@ watch(
   flex: 1;
   min-width: 0;
   min-height: 0;
+}
+
+.graph-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Sidebar toggle pill on the right edge */
+.sidebar-tab {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  transform: translateY(-50%);
+}
+.sidebar-tab:hover,
+.sidebar-tab.open {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* Sidebar panel */
+.graph-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  min-width: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface);
+  transform: translateX(100%);
+  transition: transform 250ms ease;
+}
+.graph-sidebar.open {
+  transform: translateX(0);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-8) var(--space-12);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sidebar-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.sidebar-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+.sidebar-close:hover {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+/* Search */
+.sidebar-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin: var(--space-8) var(--space-12);
+  padding: var(--space-4) var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-raised);
+}
+
+.search-icon {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12px;
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Sections */
+.sidebar-section {
+  padding: var(--space-4) var(--space-12);
+}
+
+.sidebar-section-grow {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-label {
+  margin-bottom: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sidebar-empty {
+  padding: var(--space-8) var(--space-12);
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+/* Search result pills */
+.search-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.search-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: 11px;
+  white-space: nowrap;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.search-tag:hover {
+  border-color: var(--color-primary);
+}
+.search-tag.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+/* Selected node */
+.selected-node-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-6) 0;
+  font-size: 12px;
+  color: var(--color-text);
+}
+
+.selected-node-kind-tag,
+.connected-kind-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.selected-node-kind-tag.entity,
+.connected-kind-tag.entity {
+  border: 1px solid var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
+}
+
+.selected-node-kind-tag.document,
+.connected-kind-tag.document {
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.selected-node-kind-tag.file,
+.connected-kind-tag.file {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+}
+
+.selected-node-kind-tag.folder,
+.connected-kind-tag.folder {
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+/* Connected nodes list */
+.connected-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.connected-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  padding: var(--space-4) var(--space-6);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.connected-item:hover {
+  background: var(--color-primary-softer);
+  color: var(--color-text);
+}
+.connected-item.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.connected-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

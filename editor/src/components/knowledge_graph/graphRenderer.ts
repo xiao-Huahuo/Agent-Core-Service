@@ -140,6 +140,10 @@ function nodeGlowProgress(node: KnowledgeGraphNode, state: KnowledgeGraphRenderS
   if (node.id === state.selectedNodeId) {
     return 1
   }
+  if (!state.hoveredNodeId && state.selectedNodeId) {
+    // Selection glow: only the selected node itself glows, neighbors don't
+    return 0
+  }
   if (!state.hoveredNodeId || !relatedNodeIds.has(node.id)) {
     return 0
   }
@@ -208,24 +212,21 @@ function drawLink(
   if (!source || !target) {
     return
   }
-  const sourceSelected = source.id === state.selectedNodeId
-  const targetSelected = target.id === state.selectedNodeId
   const touchesHovered = Boolean(state.hoveredNodeId) && (source.id === state.hoveredNodeId || target.id === state.hoveredNodeId)
-  const selectedActive = sourceSelected || targetSelected
   const hoverProgress = touchesHovered ? edgeSpreadProgress(state) : 0
-  const hasHover = Boolean(state.hoveredNodeId)
+  const hasActive = Boolean(state.hoveredNodeId || state.selectedNodeId)
   const isRelated = relatedNodeIds.has(source.id) && relatedNodeIds.has(target.id)
   const sourceX = source.x ?? source.targetX
   const sourceY = source.y ?? source.targetY
   const targetX = target.x ?? target.targetX
   const targetY = target.y ?? target.targetY
   ctx.save()
-  ctx.globalAlpha = hasHover && !isRelated ? 0.2 : 1
+  ctx.globalAlpha = hasActive && !isRelated ? 0.2 : 1
   ctx.beginPath()
   ctx.moveTo(sourceX, sourceY)
   ctx.lineTo(targetX, targetY)
-  ctx.strokeStyle = selectedActive ? theme.edgeActive : theme.edge
-  ctx.lineWidth = selectedActive ? 2 : 0.85
+  ctx.strokeStyle = theme.edge
+  ctx.lineWidth = 0.85
   ctx.stroke()
   ctx.restore()
   if (!touchesHovered || hoverProgress <= 0) {
@@ -270,11 +271,11 @@ function drawNode(
   const isSelected = node.id === state.selectedNodeId
   const isHovered = node.id === state.hoveredNodeId
   const glowProgress = nodeGlowProgress(node, state, relatedNodeIds)
-  const hasHover = Boolean(state.hoveredNodeId)
+  const hasActive = Boolean(state.hoveredNodeId || state.selectedNodeId)
   const isRelated = relatedNodeIds.has(node.id)
   const color = nodeColor(node, theme)
   ctx.save()
-  ctx.globalAlpha = hasHover && !isRelated ? 0.38 : 1
+  ctx.globalAlpha = hasActive && !isRelated ? 0.38 : 1
   if (glowProgress > 0) {
     drawGlowCircle(ctx, x, y, node.radius, color, glowProgress)
     ctx.shadowColor = color
@@ -291,7 +292,7 @@ function drawNode(
     ctx.stroke()
   } else {
     ctx.fillStyle = color
-    ctx.strokeStyle = isSelected ? theme.selected : isHovered ? color : theme.surface
+    ctx.strokeStyle = isHovered ? color : theme.surface
     ctx.lineWidth = 1.5 + 2.5 * glowProgress
     ctx.fill()
     ctx.stroke()
@@ -300,8 +301,8 @@ function drawNode(
     ctx.beginPath()
     ctx.setLineDash([])
     ctx.arc(x, y, node.radius + 7, 0, Math.PI * 2)
-    ctx.strokeStyle = isSelected ? theme.selected : color
-    ctx.globalAlpha = hasHover && !isRelated ? 0.38 : glowProgress
+    ctx.strokeStyle = color
+    ctx.globalAlpha = isRelated ? glowProgress : hasActive ? 0.08 : 0.38
     ctx.lineWidth = 0.8 + 0.4 * glowProgress
     ctx.stroke()
   }
@@ -320,11 +321,11 @@ function drawLabel(
   }
   const x = node.x ?? node.targetX
   const y = node.y ?? node.targetY
-  const hasHover = Boolean(state.hoveredNodeId)
+  const hasActive = Boolean(state.hoveredNodeId || state.selectedNodeId)
   const isRelated = relatedNodeIds.has(node.id)
   const label = node.label.length > 34 ? `${node.label.slice(0, 31)}...` : node.label
   ctx.save()
-  ctx.globalAlpha = hasHover && !isRelated ? 0.4 : 1
+  ctx.globalAlpha = hasActive && !isRelated ? 0.4 : 1
   const baseFontSize = node.kind === 'root' || node.id === state.hoveredNodeId ? 13 : 11
   ctx.font = `${Math.round(baseFontSize / Math.max(state.viewport.scale, 0.1))}px ${currentUiFont()}`
   ctx.textAlign = 'center'
