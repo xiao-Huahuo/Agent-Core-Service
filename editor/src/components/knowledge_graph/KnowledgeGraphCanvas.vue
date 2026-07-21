@@ -216,6 +216,10 @@ function startSimulation(shouldFit = true) {
   simulation.on('tick', requestDraw)
   if (shouldFit) {
     viewport.value = fitGraphToViewport(runtimeModel.value, canvasSize.value.width, canvasSize.value.height)
+    setTimeout(() => {
+      viewport.value = fitGraphToViewport(runtimeModel.value, canvasSize.value.width, canvasSize.value.height)
+      requestDraw()
+    }, 600)
   }
   requestDraw()
 }

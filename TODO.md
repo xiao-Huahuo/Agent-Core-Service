@@ -1,7 +1,7 @@
 ### TODOs
 - [ ] 系统性的真正打通多模态解析链,包括图片解析,扫描件pdf的图片渲染,pptx的渲染与预览,markdown无法真正渲染图片等.
 - [ ] 尝试使用[OpenDataloader-PDF](https://github.com/opendataloader-project/opendataloader-pdf)代替OCR进行PDF解析?
-- [ ] 语义知识图谱: 提取实体关系,形成语义图谱.
+- [x] 语义知识图谱: 提取实体关系,形成语义图谱.
 - [ ] 添加内置三终端;为agent配备终端能力.
 - [ ] 任务推荐功能: 提问完agent之后,自动异步调用小模型基于当前对话的所有上下文提出三个最有可能下一步问的问题或完成的任务,并挂在输入框上.点击后自动发送提问agent.
 ### BUGs

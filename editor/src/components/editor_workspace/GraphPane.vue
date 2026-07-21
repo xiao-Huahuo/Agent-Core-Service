@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Crosshair, RefreshCw, RotateCcw, Type, BrainCircuit, AlertCircle } from 'lucide-vue-next'
+import { Crosshair, RefreshCw, RotateCcw, Type, AlertCircle } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
 import { fetchKnowledgeGraph, getKnowledgeGraphStatus, rebuildKnowledgeGraph } from '@/api/knowledge'
@@ -213,18 +213,6 @@ watch(
       </div>
       <div class="graph-actions">
         <span class="graph-stat mono">{{ graphStats.nodes }} nodes / {{ graphStats.links }} links</span>
-        <button
-          v-if="graphMode === 'semantic'"
-          class="graph-action"
-          :class="{ loading: isRebuilding }"
-          type="button"
-          :disabled="isRebuilding"
-          :title="isRebuilding ? '重建中...' : '重建语义图谱'"
-          @click="startRebuild"
-        >
-          <BrainCircuit :size="15" />
-          <span>{{ isRebuilding ? '重建中' : '重建' }}</span>
-        </button>
         <button
           class="graph-action"
           :class="{ active: showGraphLabels }"
