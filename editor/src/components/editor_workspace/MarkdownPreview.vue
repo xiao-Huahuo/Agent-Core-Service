@@ -10,7 +10,10 @@
 import { nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from 'vue'
 import Vditor from 'vditor'
 
-import { buildApiUrl } from '@/api/client'
+import {
+  decorateRenderedMarkdownImages,
+  rewriteMarkdownImageUrls,
+} from '@/components/editor_workspace/markdownImageUrls'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -36,15 +39,6 @@ let instance: Vditor | null = null
 let mounted = false
 let renderVersion = 0
 
-function splitUrlReference(src: string) {
-  const normalizedSrc = src.trim().replace(/^<|>$/g, '')
-  const hashIndex = normalizedSrc.indexOf('#')
-  const queryIndex = normalizedSrc.indexOf('?')
-  const indexes = [hashIndex, queryIndex].filter((index) => index >= 0)
-  const splitAt = indexes.length > 0 ? Math.min(...indexes) : -1
-  return splitAt >= 0 ? normalizedSrc.slice(0, splitAt) : normalizedSrc
-}
-
 function decodeUrlPath(path: string) {
   try {
     return decodeURIComponent(path)
@@ -53,81 +47,10 @@ function decodeUrlPath(path: string) {
   }
 }
 
-function normalizeKnowledgePath(path: string) {
-  const parts: string[] = []
-  for (const part of path.replace(/\\/g, '/').split('/')) {
-    if (!part || part === '.') {
-      continue
-    }
-    if (part === '..') {
-      parts.pop()
-      continue
-    }
-    parts.push(part)
-  }
-  return parts.join('/')
-}
-
-function resolveMarkdownAssetPath(currentFilePath: string, rawSrc: string) {
-  const srcPath = decodeUrlPath(splitUrlReference(rawSrc)).replace(/\\/g, '/')
-  if (!srcPath) {
-    return ''
-  }
-  if (srcPath.startsWith('/')) {
-    return normalizeKnowledgePath(srcPath)
-  }
-  const normalizedFilePath = currentFilePath.replace(/\\/g, '/')
-  const parentDir = normalizedFilePath.includes('/')
-    ? normalizedFilePath.substring(0, normalizedFilePath.lastIndexOf('/') + 1)
-    : ''
-  return normalizeKnowledgePath(parentDir + srcPath)
-}
-
-function isBrowserHandledAssetUrl(src: string) {
-  return /^(https?:|data:|blob:|file:|about:|\/\/|#)/i.test(src)
-}
-
-function isRootRelativeAssetUrl(src: string) {
-  return src.startsWith('/') && !src.startsWith('//')
-}
-
-function isKnowledgeRawUrl(src: string) {
-  return src.includes('/knowledge/files/raw')
-}
-
-function buildRawFileUrl(rawSrc: string) {
+function getImageUrlContext() {
   const filePath = props.path || workspaceStore.selectedPath
   const userId = settingsStore.profile.userId
-  if (!filePath || !userId || isKnowledgeRawUrl(rawSrc)) {
-    return rawSrc
-  }
-  if (isBrowserHandledAssetUrl(rawSrc) && !isRootRelativeAssetUrl(rawSrc)) {
-    return rawSrc
-  }
-  const rawPath = resolveMarkdownAssetPath(filePath, rawSrc)
-  if (!rawPath) {
-    return rawSrc
-  }
-  return buildApiUrl('/knowledge/files/raw', {
-    user_id: userId,
-    path: rawPath,
-  })
-}
-
-function rewriteMarkdownImageUrls(content: string) {
-  let nextContent = content.replace(
-    /(!\[[^\]]*]\(\s*)(<[^>]+>|[^)\n]+?)(\s+(?:"[^"]*"|'[^']*'))?\s*\)/g,
-    (_match, prefix: string, rawSrc: string, suffix: string) => {
-      return `${prefix}${buildRawFileUrl(rawSrc)}${suffix ?? ''})`
-    },
-  )
-  nextContent = nextContent.replace(
-    /(<img\b[^>]*\bsrc=["'])([^"']+)(["'][^>]*>)/gi,
-    (_match, prefix: string, rawSrc: string, suffix: string) => {
-      return `${prefix}${buildRawFileUrl(rawSrc)}${suffix}`
-    },
-  )
-  return nextContent
+  return { currentFilePath: filePath, userId }
 }
 
 function getPreviewElement() {
@@ -151,19 +74,11 @@ function fixImageUrls() {
   if (!previewEl) {
     return
   }
-  const filePath = props.path || workspaceStore.selectedPath
-  const userId = settingsStore.profile.userId
-  if (!filePath || !userId) {
+  const context = getImageUrlContext()
+  if (!context.currentFilePath || !context.userId) {
     return
   }
-  const imgs = previewEl.querySelectorAll<HTMLImageElement>('img[src]')
-  for (const img of imgs) {
-    const src = img.getAttribute('src') || ''
-    if ((isBrowserHandledAssetUrl(src) && !isRootRelativeAssetUrl(src)) || isKnowledgeRawUrl(src)) {
-      continue
-    }
-    img.src = buildRawFileUrl(src)
-  }
+  decorateRenderedMarkdownImages(previewEl, context)
 }
 
 function getAnchorHash(link: HTMLAnchorElement) {
@@ -226,7 +141,7 @@ function syncPreviewContent() {
     return
   }
   try {
-    const renderContent = rewriteMarkdownImageUrls(props.content)
+    const renderContent = rewriteMarkdownImageUrls(props.content, getImageUrlContext())
     if (instance.getValue() !== renderContent) {
       instance.setValue(renderContent, true)
     }
@@ -292,7 +207,7 @@ onMounted(() => {
   previewHost.value.addEventListener('click', handleClick, { capture: true })
   try {
     instance = new Vditor(previewHost.value, {
-      value: rewriteMarkdownImageUrls(props.content),
+      value: rewriteMarkdownImageUrls(props.content, getImageUrlContext()),
       height: '100%',
       mode: 'sv',
       cache: { enable: false },
@@ -423,6 +338,26 @@ onBeforeUnmount(() => {
 
 .markdown-preview :deep(a) {
   color: var(--color-primary) !important;
+}
+
+.markdown-preview :deep(img.markdown-image) {
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+
+.markdown-preview :deep(p.markdown-image-block) {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-16) 0;
+}
+
+.markdown-preview :deep(p.markdown-image-block > img.markdown-image) {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: min(72vh, 960px);
+  object-fit: contain;
 }
 
 .markdown-preview :deep(blockquote) {

@@ -1092,9 +1092,13 @@ def _run_graph_extraction(
         print(f"{'='*60}\n")
 
         docs: list[dict] = []
+        pending_paths: list[Path] = []
+        document_ids_seen: set[str] = set()
         need_extract = 0
+        skipped_count = 0
         for path in paths:
             doc_data = KnowledgeGraphService._load_document(path)
+            document_ids_seen.add(doc_data.document_id)
             total_sections = len(doc_data.sections) if doc_data.sections else 0
             is_current = svc._is_document_current(
                 user_id=user_id,
@@ -1103,16 +1107,12 @@ def _run_graph_extraction(
                 source_hash=doc_data.source_hash,
             )
             if is_current:
-                docs.append({"path": path.name, "name": doc_data.title or path.stem, "status": "skipped", "progress": 100, "total_sections": total_sections})
+                skipped_count += 1
+                print(f"  SKIP {doc_data.title or path.name} [hash not changed]")
             else:
                 docs.append({"path": path.name, "name": doc_data.title or path.stem, "status": "pending", "progress": 0, "total_sections": total_sections})
+                pending_paths.append(path)
                 need_extract += 1
-
-        all_paths = list(paths)
-        paths.clear()
-        for i, d in enumerate(docs):
-            if d["status"] != "skipped":
-                paths.append(all_paths[i])
 
         _update_graph_progress(
             user_id, library_id,
@@ -1136,11 +1136,9 @@ def _run_graph_extraction(
             user_id=user_id,
             library_id=library_id,
         )
-        document_ids_seen: set[str] = set()
         circuit_breaker_hit = False
         completed_count = 0
         failed_count = 0
-        skipped_count = 0
         total_entities = 0
         total_relations = 0
         doc_index = 0
@@ -1149,14 +1147,8 @@ def _run_graph_extraction(
             if circuit_breaker_hit:
                 print(f"\n  [BREAKER] circuit breaker hit, stopping")
                 break
-            path = all_paths[di]
+            path = pending_paths[di]
             document = KnowledgeGraphService._load_document(path)
-            document_ids_seen.add(document.document_id)
-
-            if doc_entry["status"] == "skipped":
-                skipped_count += 1
-                print(f"  [{di+1:3d}/{total}] SKIP {document.title or path.name} [hash not changed]")
-                continue
 
             docs[di]["status"] = "processing"
             _update_graph_progress(
