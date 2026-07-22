@@ -179,6 +179,16 @@ function drawGlowCircle(
   ctx.restore()
 }
 
+function applyAmbientNodeGlow(ctx: CanvasRenderingContext2D, color: string, theme: KnowledgeGraphRenderTheme) {
+  if (!theme.isDark) {
+    return
+  }
+  ctx.shadowColor = color
+  ctx.shadowBlur = 7
+  ctx.shadowOffsetX = 0
+  ctx.shadowOffsetY = 0
+}
+
 function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, theme: KnowledgeGraphRenderTheme) {
   const step = 32
   ctx.save()
@@ -280,6 +290,8 @@ function drawNode(
     drawGlowCircle(ctx, x, y, node.radius, color, glowProgress)
     ctx.shadowColor = color
     ctx.shadowBlur = 8 + 8 * glowProgress
+  } else {
+    applyAmbientNodeGlow(ctx, color, theme)
   }
   ctx.beginPath()
   ctx.arc(x, y, node.radius, 0, Math.PI * 2)
@@ -292,10 +304,12 @@ function drawNode(
     ctx.stroke()
   } else {
     ctx.fillStyle = color
-    ctx.strokeStyle = isHovered ? color : theme.surface
-    ctx.lineWidth = 1.5 + 2.5 * glowProgress
     ctx.fill()
-    ctx.stroke()
+    if (glowProgress > 0 || isHovered || isSelected) {
+      ctx.strokeStyle = color
+      ctx.lineWidth = 1 + 2 * glowProgress
+      ctx.stroke()
+    }
   }
   if (glowProgress > 0) {
     ctx.beginPath()

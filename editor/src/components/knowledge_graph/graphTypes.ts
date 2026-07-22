@@ -105,6 +105,8 @@ export interface LayeredForceLayoutOptions {
 
 /** Visual theme passed into the Canvas renderer. */
 export interface KnowledgeGraphRenderTheme {
+  /** Whether the current editor theme is dark, used for subtle canvas glow. */
+  isDark: boolean
   canvas: string
   grid: string
   text: string

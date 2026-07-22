@@ -93,6 +93,7 @@ function cssVar(name: string, fallback: string): string {
 function readTheme(): KnowledgeGraphRenderTheme {
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light'
   return {
+    isDark,
     canvas: cssVar('--color-canvas-soft', isDark ? '#151517' : '#ffffff'),
     grid: cssVar('--color-primary-softer', isDark ? 'rgba(66, 36, 235, 0.08)' : 'rgba(66, 36, 235, 0.07)'),
     text: cssVar('--color-text', isDark ? '#f4f4f6' : '#171721'),
