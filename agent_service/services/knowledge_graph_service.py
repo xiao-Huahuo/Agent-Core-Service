@@ -393,14 +393,15 @@ class KnowledgeGraphService:
 
         safe_limit = max(50, min(int(limit or 500), 1200))
         with Session(self.engine) as db:
-            nodes = db.exec(
+            raw_nodes = list(db.exec(
                 select(KnowledgeGraphNode)
                 .where(KnowledgeGraphNode.user_id == user_id)
                 .where(KnowledgeGraphNode.library_id == library_id)
                 .limit(safe_limit)
-            ).all()
-            node_ids = {node.node_id for node in nodes}
-            edges = [
+            ).all())
+            nodes, node_id_aliases = self._coalesce_entity_nodes(raw_nodes)
+            node_ids = {node.node_id for node in nodes} | set(node_id_aliases)
+            raw_edges = [
                 edge
                 for edge in db.exec(
                     select(KnowledgeGraphEdge)
@@ -410,6 +411,7 @@ class KnowledgeGraphService:
                 ).all()
                 if edge.source_node_id in node_ids and edge.target_node_id in node_ids
             ]
+            edges = self._coalesce_edges(raw_edges, node_id_aliases)
             statuses = db.exec(
                 select(KnowledgeGraphDocumentStatus)
                 .where(KnowledgeGraphDocumentStatus.user_id == user_id)
@@ -531,6 +533,7 @@ class KnowledgeGraphService:
         now = utc_now()
         document_node_id = self._document_node_id(user_id=user_id, library_id=library_id, document_id=document.document_id)
         entity_node_ids: dict[str, str] = {}
+        written_entity_node_ids: set[str] = set()
         with Session(self.engine) as db:
             db.merge(self._build_document_node(user_id=user_id, library_id=library_id, document=document, now=now))
             for entity in entities:
@@ -541,6 +544,8 @@ class KnowledgeGraphService:
                     label=entity.name,
                 )
                 entity_node_ids[entity.name] = node_id
+                entity_node_ids[self._normalize_label(entity.name)] = node_id
+                written_entity_node_ids.add(node_id)
                 db.merge(
                     KnowledgeGraphNode(
                         node_id=node_id,
@@ -588,8 +593,8 @@ class KnowledgeGraphService:
                 )
             written_relations = 0
             for relation, section in relations:
-                source_id = entity_node_ids.get(relation.source)
-                target_id = entity_node_ids.get(relation.target)
+                source_id = entity_node_ids.get(relation.source) or entity_node_ids.get(self._normalize_label(relation.source))
+                target_id = entity_node_ids.get(relation.target) or entity_node_ids.get(self._normalize_label(relation.target))
                 if not source_id or not target_id:
                     continue
                 db.merge(
@@ -619,7 +624,7 @@ class KnowledgeGraphService:
                 )
                 written_relations += 1
             db.commit()
-        return len(entities), written_relations
+        return len(written_entity_node_ids), written_relations
 
     def _write_document_node(self, *, user_id: str, library_id: str, document: StructuredKnowledgeDocument) -> None:
         """Persist a document node before best-effort semantic extraction."""
@@ -816,6 +821,60 @@ class KnowledgeGraphService:
             "metadata": edge.metadata_json,
         }
 
+    @classmethod
+    def _coalesce_entity_nodes(
+        cls,
+        nodes: list[KnowledgeGraphNode],
+    ) -> tuple[list[KnowledgeGraphNode], dict[str, str]]:
+        """按规范化实体名合并历史同名实体节点并返回旧 ID 到规范 ID 的映射。"""
+
+        result: list[KnowledgeGraphNode] = []
+        entity_by_label: dict[str, KnowledgeGraphNode] = {}
+        aliases: dict[str, str] = {}
+        for node in nodes:
+            if node.node_type != "entity":
+                result.append(node)
+                continue
+            key = cls._normalize_label(node.label)
+            canonical = entity_by_label.get(key)
+            if canonical is None:
+                entity_by_label[key] = node
+                result.append(node)
+                continue
+            aliases[node.node_id] = canonical.node_id
+            if canonical.entity_type in {"", "other"} and node.entity_type not in {"", "other"}:
+                canonical.entity_type = node.entity_type
+        return result, aliases
+
+    @staticmethod
+    def _coalesce_edges(
+        edges: list[KnowledgeGraphEdge],
+        node_id_aliases: dict[str, str],
+    ) -> list[KnowledgeGraphEdge]:
+        """把边两端映射到合并后的实体节点,并删除合并后重复或自环的边。"""
+
+        result: list[KnowledgeGraphEdge] = []
+        seen: set[tuple[str, str, str, str, str]] = set()
+        for edge in edges:
+            source_id = node_id_aliases.get(edge.source_node_id, edge.source_node_id)
+            target_id = node_id_aliases.get(edge.target_node_id, edge.target_node_id)
+            if source_id == target_id:
+                continue
+            key = (
+                source_id,
+                target_id,
+                edge.relation_type,
+                edge.source_document_id,
+                edge.source_section_id,
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            edge.source_node_id = source_id
+            edge.target_node_id = target_id
+            result.append(edge)
+        return result
+
     @staticmethod
     def _relation_weight(relation: RelationCandidate) -> float:
         """根据关系类型和置信度计算边权重。"""
@@ -866,7 +925,7 @@ class KnowledgeGraphService:
     def _entity_node_id(cls, *, user_id: str, library_id: str, entity_type: str, label: str) -> str:
         """生成稳定实体节点 ID。"""
 
-        return cls._hashed_id("kgent", user_id, library_id, entity_type, cls._normalize_label(label))
+        return cls._hashed_id("kgent", user_id, library_id, cls._normalize_label(label))
 
     @classmethod
     def _edge_id(

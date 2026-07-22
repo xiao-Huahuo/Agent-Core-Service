@@ -12,6 +12,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from sqlmodel import Session, select
@@ -82,6 +83,7 @@ class SettingsService:
                 "ocr_enabled": "BOOLEAN NOT NULL DEFAULT 0",
                 "knowledge_ignore_patterns": "TEXT NOT NULL DEFAULT ''",
                 "disabled_tools": "TEXT NOT NULL DEFAULT ''",
+                "terminal_sandbox_config": "TEXT NOT NULL DEFAULT ''",
                 "ui_font_families": "TEXT NOT NULL DEFAULT ''",
                 "text_font_families": "TEXT NOT NULL DEFAULT ''",
                 "theme_primary_color": "VARCHAR(16) NOT NULL DEFAULT ''",
@@ -336,6 +338,7 @@ class SettingsService:
             "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
             "ocr_enabled": bool(record.ocr_enabled),
             "knowledge_ignore_patterns": record.knowledge_ignore_patterns,
+            "terminal_sandbox": self._load_terminal_sandbox_payload(record.terminal_sandbox_config),
             "ui_font_families": self._load_font_families(record.ui_font_families),
             "text_font_families": self._load_font_families(record.text_font_families),
             "theme_primary_color": record.theme_primary_color,
@@ -793,6 +796,123 @@ class SettingsService:
                 "description": definition.description,
                 "enabled": definition.name not in disabled,
             })
+        return result
+
+    # ---- 终端沙盒配置 ----
+
+    def get_terminal_sandbox_config(self, *, user_id: str) -> dict:
+        """获取用户的 Agent 终端沙盒配置和三类终端支持的指令段目录。"""
+
+        from agent_service.services.terminal.command_sandbox import (
+            TerminalSandboxSettings,
+            build_default_terminal_sandbox_payload,
+            build_terminal_segment_catalog,
+        )
+
+        normalized_user_id = user_id.strip()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                now = self._utc_now()
+                record = UserSettingsRecord(
+                    user_id=normalized_user_id,
+                    knowledge_dir=str(self.config.storage.knowledge_dir),
+                    created_at=now,
+                    updated_at=now,
+                )
+                db.add(record)
+                db.flush()
+            raw_payload = self._load_terminal_sandbox_payload(record.terminal_sandbox_config) if record else {}
+            active_library = self._ensure_active_library(db=db, record=record)
+        raw_payload = self._with_active_terminal_workspace_root(
+            payload=raw_payload,
+            active_knowledge_dir=active_library.knowledge_dir if active_library else "",
+        )
+        if not raw_payload:
+            raw_payload = build_default_terminal_sandbox_payload(self.config)
+        settings = TerminalSandboxSettings.from_config_payload(config=self.config, payload=raw_payload)
+        return {
+            "user_id": normalized_user_id,
+            "config": settings.to_dict(),
+            "segment_catalog": build_terminal_segment_catalog(settings),
+        }
+
+    def save_terminal_sandbox_config(self, *, user_id: str, config_payload: dict[str, Any]) -> dict:
+        """保存用户的 Agent 终端沙盒配置。"""
+
+        from agent_service.services.terminal.command_sandbox import (
+            TerminalSandboxSettings,
+            build_terminal_segment_catalog,
+        )
+
+        normalized_user_id = user_id.strip()
+        if not normalized_user_id:
+            raise ValueError("user_id is required")
+        now = self._utc_now()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                record = UserSettingsRecord(
+                    user_id=normalized_user_id,
+                    knowledge_dir=str(self.config.storage.knowledge_dir),
+                    created_at=now,
+                    updated_at=now,
+                )
+                db.add(record)
+                db.flush()
+            active_library = self._ensure_active_library(db=db, record=record)
+            config_payload = self._with_active_terminal_workspace_root(
+                payload=config_payload,
+                active_knowledge_dir=active_library.knowledge_dir,
+            )
+            settings = TerminalSandboxSettings.from_config_payload(config=self.config, payload=config_payload)
+            record.terminal_sandbox_config = json.dumps(settings.to_dict(), ensure_ascii=False)
+            record.updated_at = now
+            db.add(record)
+            db.commit()
+        return {
+            "user_id": normalized_user_id,
+            "config": settings.to_dict(),
+            "segment_catalog": build_terminal_segment_catalog(settings),
+        }
+
+    @staticmethod
+    def _load_terminal_sandbox_payload(raw_value: str | None) -> dict[str, Any]:
+        """从数据库 JSON 字段中读取终端沙盒配置。"""
+
+        if not raw_value:
+            return {}
+        try:
+            payload = json.loads(raw_value)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    def _with_active_terminal_workspace_root(
+        self,
+        *,
+        payload: dict[str, Any],
+        active_knowledge_dir: str,
+    ) -> dict[str, Any]:
+        """把空白或旧项目根终端沙盒工作区迁移为 active 知识库目录。"""
+
+        resolved_active_dir = Path(active_knowledge_dir or str(self.config.storage.knowledge_dir)).expanduser().resolve()
+        result = dict(payload or {})
+        raw_workspace_root = str(result.get("workspace_root") or "").strip()
+        if not raw_workspace_root:
+            result["workspace_root"] = str(resolved_active_dir)
+            return result
+        workspace_root = Path(raw_workspace_root).expanduser()
+        if not workspace_root.is_absolute():
+            workspace_root = (self.config.storage.project_root / workspace_root).resolve()
+        else:
+            workspace_root = workspace_root.resolve()
+        legacy_roots = {
+            self.config.storage.project_root.resolve(),
+            self.config.storage.knowledge_dir.resolve(),
+        }
+        if workspace_root in legacy_roots:
+            result["workspace_root"] = str(resolved_active_dir)
         return result
 
     # ---- 知识库灌库配置 ----

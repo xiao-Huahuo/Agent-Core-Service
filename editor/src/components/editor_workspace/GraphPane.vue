@@ -19,7 +19,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeSemanticGraphResponse } from '@/types/knowledge'
 import type { GraphRebuildStatus } from '@/api/knowledge'
-import type { KnowledgeGraphNode, KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graphTypes'
+import type { KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graphTypes'
 
 const emit = defineEmits<{
   'open-node': [node: KnowledgeGraphNodeEvent]
@@ -279,9 +279,28 @@ watch(
           <Crosshair :size="15" />
           <span>适应</span>
         </button>
-        <button class="graph-action" type="button" title="Reload graph data" @click="refreshGraph">
+        <button
+          class="graph-action"
+          :class="{ loading: treeLoading || semanticLoading }"
+          type="button"
+          title="Reload graph data"
+          :disabled="treeLoading || semanticLoading"
+          @click="refreshGraph"
+        >
           <RefreshCw :size="15" />
           <span>刷新</span>
+        </button>
+        <button
+          v-if="graphMode === 'semantic'"
+          class="graph-action"
+          :class="{ loading: isRebuilding }"
+          type="button"
+          title="Rebuild semantic graph"
+          :disabled="isRebuilding"
+          @click="startRebuild"
+        >
+          <RefreshCw :size="15" />
+          <span>抽取</span>
         </button>
         <button class="graph-action" type="button" title="Reheat layout" @click="graphCanvasRef?.reheatLayout()">
           <RotateCcw :size="15" />
@@ -614,16 +633,18 @@ watch(
 .graph-sidebar {
   display: flex;
   flex-direction: column;
-  width: 280px;
+  width: 0;
   min-width: 0;
   overflow: hidden;
-  border-left: 1px solid var(--color-border);
+  border-left: 0;
   background: var(--color-surface);
-  transform: translateX(100%);
-  transition: transform 250ms ease;
+  transition:
+    width 250ms ease,
+    border-left-color 250ms ease;
 }
 .graph-sidebar.open {
-  transform: translateX(0);
+  width: 280px;
+  border-left: 1px solid var(--color-border);
 }
 
 .sidebar-header {

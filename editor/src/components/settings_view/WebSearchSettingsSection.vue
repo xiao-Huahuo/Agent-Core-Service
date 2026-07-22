@@ -24,16 +24,14 @@ defineEmits<{
     <h3>联网搜索</h3>
     <div class="setting-row toggle-row">
       <label>启用搜索</label>
-      <input v-model="webSearchEnabledDraft" type="checkbox" />
+      <input v-model="webSearchEnabledDraft" type="checkbox" @change="$emit('save')" />
     </div>
     <div class="setting-row">
       <label>代理地址</label>
-      <input v-model="proxyUrlDraft" placeholder="http://127.0.0.1:7890" spellcheck="false" />
+      <input v-model="proxyUrlDraft" placeholder="http://127.0.0.1:7890" spellcheck="false" @blur="$emit('save')" />
     </div>
     <div class="model-actions">
-      <button class="save-model-btn" :disabled="webSearchSaving" @click="$emit('save')">
-        {{ webSearchSaving ? '保存中...' : '保存' }}
-      </button>
+      <span v-if="webSearchSaving" class="feedback">保存中...</span>
       <span v-if="webSearchMsg" class="feedback">{{ webSearchMsg }}</span>
     </div>
   </div>

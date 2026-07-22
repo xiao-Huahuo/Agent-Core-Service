@@ -486,6 +486,158 @@ class AgentConfig:
         servers: list[dict[str, Any]] = field(default_factory=list)
 
     @dataclass(slots=True)
+    class TerminalSandboxConfig:
+        """
+        管理 Agent 终端沙盒的进程级默认值。
+
+        enabled: 是否允许 Agent 调用终端工具。
+        default_workspace_root: 默认项目沙盒根目录;为空时使用 storage.project_root。
+        enabled_shells: 允许使用的终端策略名。
+        allowed_programs: 每类终端策略允许的外部程序段名称。
+        blocked_programs: 无论配置如何都禁止嵌套调用的 shell/系统高危程序。
+        default_timeout_seconds: 单段命令默认超时时间。
+        max_timeout_seconds: 用户设置允许的最大超时时间。
+        max_output_chars: 返回给 Agent 的最大输出字符数。
+        max_segments_per_call: 单次工具调用允许的最大指令段数。
+        """
+
+        enabled: bool = False
+        default_workspace_root: str = ""
+        enabled_shells: list[str] = field(default_factory=lambda: ["cmd", "powershell", "bash"])
+        allowed_programs: dict[str, list[str]] = field(
+            default_factory=lambda: {
+                "cmd": [
+                    "python",
+                    "py",
+                    "pytest",
+                    "pip",
+                    "pip3",
+                    "uv",
+                    "ruff",
+                    "mypy",
+                    "pyright",
+                    "git",
+                    "rg",
+                    "grep",
+                    "findstr",
+                    "npm",
+                    "npx",
+                    "pnpm",
+                    "yarn",
+                    "node",
+                    "eslint",
+                    "prettier",
+                    "tsc",
+                    "vue-tsc",
+                    "vite",
+                    "vitest",
+                    "playwright",
+                    "go",
+                    "cargo",
+                    "rustc",
+                    "dotnet",
+                    "java",
+                    "javac",
+                    "mvn",
+                    "gradle",
+                    "where",
+                ],
+                "powershell": [
+                    "python",
+                    "py",
+                    "pytest",
+                    "pip",
+                    "pip3",
+                    "uv",
+                    "ruff",
+                    "mypy",
+                    "pyright",
+                    "git",
+                    "rg",
+                    "grep",
+                    "findstr",
+                    "npm",
+                    "npx",
+                    "pnpm",
+                    "yarn",
+                    "node",
+                    "eslint",
+                    "prettier",
+                    "tsc",
+                    "vue-tsc",
+                    "vite",
+                    "vitest",
+                    "playwright",
+                    "go",
+                    "cargo",
+                    "rustc",
+                    "dotnet",
+                    "java",
+                    "javac",
+                    "mvn",
+                    "gradle",
+                    "where",
+                ],
+                "bash": [
+                    "python",
+                    "py",
+                    "pytest",
+                    "pip",
+                    "pip3",
+                    "uv",
+                    "ruff",
+                    "mypy",
+                    "pyright",
+                    "git",
+                    "rg",
+                    "grep",
+                    "findstr",
+                    "npm",
+                    "npx",
+                    "pnpm",
+                    "yarn",
+                    "node",
+                    "eslint",
+                    "prettier",
+                    "tsc",
+                    "vue-tsc",
+                    "vite",
+                    "vitest",
+                    "playwright",
+                    "go",
+                    "cargo",
+                    "rustc",
+                    "dotnet",
+                    "java",
+                    "javac",
+                    "mvn",
+                    "gradle",
+                    "which",
+                ],
+            }
+        )
+        blocked_programs: list[str] = field(
+            default_factory=lambda: [
+                "cmd",
+                "cmd.exe",
+                "powershell",
+                "powershell.exe",
+                "pwsh",
+                "pwsh.exe",
+                "bash",
+                "bash.exe",
+                "sh",
+                "sh.exe",
+                "wt",
+                "wt.exe",
+            ]
+        )
+        default_timeout_seconds: int = 30
+        max_timeout_seconds: int = 120
+        max_output_chars: int = 20000
+        max_segments_per_call: int = 3
+
+    @dataclass(slots=True)
     class LoggingConfig:
         """
         管理全局日志系统的输出目标、格式、级别与轮转策略。
@@ -543,6 +695,7 @@ class AgentConfig:
     ocr: OcrConfig = field(default_factory=OcrConfig)
     task_schedule: TaskScheduleConfig = field(default_factory=TaskScheduleConfig)
     mcp: MCPConfig = field(default_factory=MCPConfig)
+    terminal_sandbox: TerminalSandboxConfig = field(default_factory=TerminalSandboxConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
 
@@ -583,6 +736,7 @@ class AgentConfig:
             ocr=cls.OcrConfig(**data["ocr"]),
             task_schedule=cls.TaskScheduleConfig(**data["task_schedule"]),
             mcp=cls.MCPConfig(**data["mcp"]),
+            terminal_sandbox=cls.TerminalSandboxConfig(**data["terminal_sandbox"]),
             logging=cls.LoggingConfig(**data["logging"]),
             server=cls.ServerConfig(**data["server"]),
         )
@@ -875,6 +1029,43 @@ class AgentConfig:
             "AGENT_MCP_ENABLED": ("mcp", "enabled", AgentConfig._parse_bool),
             "AGENT_MCP_TOOL_NAME_PREFIX": ("mcp", "tool_name_prefix", str),
             "AGENT_MCP_SERVERS_JSON": ("mcp", "servers", AgentConfig._parse_json),
+            "AGENT_TERMINAL_SANDBOX_ENABLED": ("terminal_sandbox", "enabled", AgentConfig._parse_bool),
+            "AGENT_TERMINAL_SANDBOX_WORKSPACE_ROOT": ("terminal_sandbox", "default_workspace_root", str),
+            "AGENT_TERMINAL_SANDBOX_ENABLED_SHELLS": (
+                "terminal_sandbox",
+                "enabled_shells",
+                AgentConfig._parse_comma_list,
+            ),
+            "AGENT_TERMINAL_SANDBOX_ALLOWED_PROGRAMS_JSON": (
+                "terminal_sandbox",
+                "allowed_programs",
+                AgentConfig._parse_json,
+            ),
+            "AGENT_TERMINAL_SANDBOX_BLOCKED_PROGRAMS": (
+                "terminal_sandbox",
+                "blocked_programs",
+                AgentConfig._parse_comma_list,
+            ),
+            "AGENT_TERMINAL_SANDBOX_TIMEOUT_SECONDS": (
+                "terminal_sandbox",
+                "default_timeout_seconds",
+                int,
+            ),
+            "AGENT_TERMINAL_SANDBOX_MAX_TIMEOUT_SECONDS": (
+                "terminal_sandbox",
+                "max_timeout_seconds",
+                int,
+            ),
+            "AGENT_TERMINAL_SANDBOX_MAX_OUTPUT_CHARS": (
+                "terminal_sandbox",
+                "max_output_chars",
+                int,
+            ),
+            "AGENT_TERMINAL_SANDBOX_MAX_SEGMENTS_PER_CALL": (
+                "terminal_sandbox",
+                "max_segments_per_call",
+                int,
+            ),
             "AGENT_LOG_LEVEL": ("logging", "level", str),
             "AGENT_LOG_ENABLE_CONSOLE": ("logging", "enable_console", AgentConfig._parse_bool),
             "AGENT_LOG_CONSOLE_LEVEL": ("logging", "console_level", str),

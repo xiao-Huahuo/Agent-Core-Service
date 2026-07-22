@@ -40,6 +40,7 @@ class UserSettingsRecord(SQLModel, table=True):
     ocr_enabled: bool = Field(default=False)
     knowledge_ignore_patterns: str = Field(default="", sa_column=Column(Text))
     disabled_tools: str = Field(default="", sa_column=Column(Text))
+    terminal_sandbox_config: str = Field(default="", sa_column=Column(Text))
     ui_font_families: str = Field(default="", sa_column=Column(Text))
     text_font_families: str = Field(default="", sa_column=Column(Text))
     theme_primary_color: str = Field(default="", max_length=16)

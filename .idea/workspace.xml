@@ -4,11 +4,28 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="语义知识图谱v3-实现了知识图谱队列">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="语义知识图谱v4-图谱侧边栏">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/nodes/tool_call.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/nodes/tool_call.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/core/agent_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/core/agent_config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/models/user_settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/models/user_settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/settings_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/settings_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/builtin.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/builtin.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/definitions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/definitions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/tool_registry.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/tool_registry.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/api/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/settings.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/KnowledgeGraphCanvas.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/KnowledgeGraphCanvas.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/graphRenderer.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/graphRenderer.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ThinkingInline.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ThinkingInline.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/BasicSettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/BasicSettingsSection.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/SettingsSidebar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/SettingsSidebar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/WebSearchSettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/WebSearchSettingsSection.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/types/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/types/settings.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -263,15 +280,8 @@
       <workItem from="1784375929012" duration="13746000" />
       <workItem from="1784443638650" duration="19303000" />
       <workItem from="1784615003592" duration="22715000" />
-      <workItem from="1784638422280" duration="888000" />
-    </task>
-    <task id="LOCAL-00143" summary="文件资源管理器">
-      <option name="closed" value="true" />
-      <created>1784208658423</created>
-      <option name="number" value="00143" />
-      <option name="presentableId" value="LOCAL-00143" />
-      <option name="project" value="LOCAL" />
-      <updated>1784208658423</updated>
+      <workItem from="1784638422280" duration="912000" />
+      <workItem from="1784688429981" duration="5546000" />
     </task>
     <task id="LOCAL-00144" summary="文件资源管理器v2">
       <option name="closed" value="true" />
@@ -657,14 +667,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784637158252</updated>
     </task>
-    <option name="localTasksCounter" value="192" />
+    <task id="LOCAL-00192" summary="语义知识图谱v4-图谱侧边栏">
+      <option name="closed" value="true" />
+      <created>1784639321281</created>
+      <option name="number" value="00192" />
+      <option name="presentableId" value="LOCAL-00192" />
+      <option name="project" value="LOCAL" />
+      <updated>1784639321281</updated>
+    </task>
+    <option name="localTasksCounter" value="193" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="字体变换v1" />
     <MESSAGE value="字体变换完成" />
     <MESSAGE value="外观设置" />
     <MESSAGE value="全局主题色切换" />
@@ -689,13 +706,14 @@
     <MESSAGE value="readme" />
     <MESSAGE value="图谱动画" />
     <MESSAGE value="语义知识图谱v3-实现了知识图谱队列" />
-    <option name="LAST_COMMIT_MESSAGE" value="语义知识图谱v3-实现了知识图谱队列" />
+    <MESSAGE value="语义知识图谱v4-图谱侧边栏" />
+    <option name="LAST_COMMIT_MESSAGE" value="语义知识图谱v4-图谱侧边栏" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
     <SUITE FILE_PATH="coverage/AgentService$main.coverage" NAME="main 覆盖结果" MODIFIED="1783512965618" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/AgentService$test_agent_core_service.coverage" NAME="test_agent_core_service 覆盖结果" MODIFIED="1778509217316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
-    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784638498933" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784694443915" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>

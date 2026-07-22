@@ -18,12 +18,39 @@ export interface SettingsProfileResponse {
   auto_ingest_on_upload?: boolean
   ocr_enabled?: boolean
   knowledge_ignore_patterns?: string
+  terminal_sandbox?: TerminalSandboxConfig
   ui_font_families?: string[]
   text_font_families?: string[]
   theme_primary_color?: string
   theme_soft_color?: string
   created_at: string
   updated_at: string
+}
+
+export type TerminalShellKey = 'cmd' | 'powershell' | 'bash'
+
+export interface TerminalSegmentInfo {
+  type: string
+  program: string
+  usage: string
+}
+
+export interface TerminalSandboxConfig {
+  enabled: boolean
+  workspace_root: string
+  enabled_shells: TerminalShellKey[]
+  allowed_programs: Record<TerminalShellKey, string[]>
+  blocked_programs: string[]
+  default_timeout_seconds: number
+  max_timeout_seconds: number
+  max_output_chars: number
+  max_segments_per_call: number
+}
+
+export interface TerminalSandboxConfigResponse {
+  user_id: string
+  config: TerminalSandboxConfig
+  segment_catalog: Record<TerminalShellKey, TerminalSegmentInfo[]>
 }
 
 export interface SettingsKnowledgeLibraryResponse {
@@ -325,5 +352,19 @@ export function saveDisabledTools(userId: string, toolNames: string[]): Promise<
   return apiPut<DisabledToolsResponse>(API_ROUTES.SETTINGS_DISABLED_TOOLS, {
     user_id: userId,
     tool_names: toolNames,
+  })
+}
+
+export function fetchTerminalSandboxConfig(userId: string): Promise<TerminalSandboxConfigResponse> {
+  return apiGet<TerminalSandboxConfigResponse>(API_ROUTES.SETTINGS_TERMINAL_SANDBOX, { user_id: userId })
+}
+
+export function saveTerminalSandboxConfig(
+  userId: string,
+  config: TerminalSandboxConfig,
+): Promise<TerminalSandboxConfigResponse> {
+  return apiPut<TerminalSandboxConfigResponse>(API_ROUTES.SETTINGS_TERMINAL_SANDBOX, {
+    user_id: userId,
+    config,
   })
 }

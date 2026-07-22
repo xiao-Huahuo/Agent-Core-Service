@@ -113,6 +113,7 @@ class ToolCallNode:
             if not isinstance(arguments, dict):
                 arguments = {}
             args_summary = self._summarize_args(arguments)
+            terminal_command = self._build_terminal_command(arguments) if tool_name == "run_terminal_command" else ""
             start_trace = {
                 "node": "action",
                 "event": "tool_call_start",
@@ -123,6 +124,8 @@ class ToolCallNode:
                 "human_readable": f"正在调用工具「{display_name}」，参数：{args_summary}",
                 "chat_visible": False,
             }
+            if terminal_command:
+                start_trace["terminal_command"] = terminal_command
             traces.append(start_trace)
             if trace_callback is not None:
                 trace_callback(start_trace)
@@ -148,12 +151,15 @@ class ToolCallNode:
                 "tool_call_id": tool_call_id,
                 "tool_name": tool_name,
                 "display_name": display_name,
+                "tool_args_summary": args_summary,
                 "raw_content": content,
                 "duration_ms": duration_ms,
                 "human_readable": f"工具「{display_name}」返回：{summary_text}",
                 "result_count": result_count,
                 "chat_visible": True,
             }
+            if terminal_command:
+                end_trace["terminal_command"] = terminal_command
             if new_citations:
                 end_trace["citation_map"] = new_citations
             traces.append(end_trace)
@@ -205,6 +211,34 @@ class ToolCallNode:
             parts.append(f"{k}={v_str}")
         summary = ", ".join(parts) if parts else "无参数"
         return summary[:200]
+
+    @classmethod
+    def _build_terminal_command(cls, arguments: dict[str, Any]) -> str:
+        """从终端工具结构化 segments 中拼接完整命令串。"""
+
+        raw_segments = arguments.get("segments")
+        if not isinstance(raw_segments, list):
+            return ""
+        commands: list[str] = []
+        for segment in raw_segments:
+            if not isinstance(segment, dict):
+                continue
+            program = str(segment.get("program") or segment.get("command") or "").strip()
+            raw_args = segment.get("args") or []
+            if not program or not isinstance(raw_args, list):
+                continue
+            args = [cls._quote_terminal_arg(str(arg)) for arg in raw_args]
+            commands.append(" ".join([cls._quote_terminal_arg(program), *args]).strip())
+        return " && ".join(command for command in commands if command)
+
+    @staticmethod
+    def _quote_terminal_arg(value: str) -> str:
+        """为展示用途保留可读命令参数,含空白时加双引号。"""
+
+        normalized = value.replace('"', '\\"')
+        if normalized == "" or any(ch.isspace() for ch in normalized):
+            return f'"{normalized}"'
+        return normalized
 
     @staticmethod
     def _count_results(content: str) -> int | None:

@@ -1,14 +1,15 @@
 ﻿<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
-import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchWebSearchConfig, saveWebSearchConfig, fetchAvailableTools, saveDisabledTools } from '@/api/settings'
-import type { SystemPromptEntry, MemoryEntry, ToolEntry } from '@/api/settings'
+import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchWebSearchConfig, saveWebSearchConfig, fetchAvailableTools, saveDisabledTools, fetchTerminalSandboxConfig, saveTerminalSandboxConfig } from '@/api/settings'
+import type { SystemPromptEntry, MemoryEntry, ToolEntry, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
 import AppearanceSettingsSection from '@/components/settings_view/AppearanceSettingsSection.vue'
 import BasicSettingsSection from '@/components/settings_view/BasicSettingsSection.vue'
 import LlmSettingsSection from '@/components/settings_view/LlmSettingsSection.vue'
 import MemorySettingsSection from '@/components/settings_view/MemorySettingsSection.vue'
 import SettingsSidebar from '@/components/settings_view/SettingsSidebar.vue'
 import type { SettingsTabKey } from '@/components/settings_view/SettingsSidebar.vue'
+import TerminalSandboxSettingsSection from '@/components/settings_view/TerminalSandboxSettingsSection.vue'
 import ToolsSettingsSection from '@/components/settings_view/ToolsSettingsSection.vue'
 import WebSearchSettingsSection from '@/components/settings_view/WebSearchSettingsSection.vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -25,6 +26,7 @@ const tabs = [
   { key: 'appearance' as const, label: '外观' },
   { key: 'llm' as const, label: 'LLM 配置' },
   { key: 'tools' as const, label: '工具配置' },
+  { key: 'terminal' as const, label: '终端沙盒' },
   { key: 'web' as const, label: '联网配置' },
   { key: 'memory' as const, label: '记忆与指令' },
 ]
@@ -173,6 +175,7 @@ async function handleResetThemeColors() {
 }
 
 async function saveProfile() {
+  if (saving.value || !hasChanges.value) return
   saving.value = true
   saveError.value = ''
   saveMessage.value = ''
@@ -318,7 +321,7 @@ async function loadWebSearchConfig() {
 }
 
 async function handleSaveWebSearch() {
-  if (!settingsStore.profile.userId) return
+  if (!settingsStore.profile.userId || webSearchSaving.value) return
   webSearchSaving.value = true
   webSearchMsg.value = ''
   try {
@@ -424,12 +427,52 @@ const sortedTools = computed(() => {
   })
 })
 
+/* ---- Terminal sandbox ---- */
+
+const terminalSandboxConfig = ref<TerminalSandboxConfig | null>(null)
+const terminalSegmentCatalog = ref<Record<TerminalShellKey, TerminalSegmentInfo[]>>({
+  cmd: [],
+  powershell: [],
+  bash: [],
+})
+const terminalSandboxSaving = ref(false)
+const terminalSandboxMsg = ref('')
+
+function applyTerminalSandboxResponse(response: TerminalSandboxConfigResponse) {
+  terminalSandboxConfig.value = response.config
+  terminalSegmentCatalog.value = response.segment_catalog
+}
+
+async function loadTerminalSandboxConfig() {
+  if (!settingsStore.profile.userId) return
+  try {
+    applyTerminalSandboxResponse(await fetchTerminalSandboxConfig(settingsStore.profile.userId))
+  } catch {
+    terminalSandboxMsg.value = '加载失败'
+  }
+}
+
+async function handleSaveTerminalSandbox(config: TerminalSandboxConfig) {
+  if (!settingsStore.profile.userId || terminalSandboxSaving.value) return
+  terminalSandboxSaving.value = true
+  terminalSandboxMsg.value = ''
+  try {
+    applyTerminalSandboxResponse(await saveTerminalSandboxConfig(settingsStore.profile.userId, config))
+    showMessage(terminalSandboxMsg, '已保存')
+  } catch {
+    showMessage(terminalSandboxMsg, '保存失败')
+  } finally {
+    terminalSandboxSaving.value = false
+  }
+}
+
 onMounted(() => {
   loadAvailableFonts()
   loadAgentSettings()
   loadModelConfig()
   loadWebSearchConfig()
   loadTools()
+  loadTerminalSandboxConfig()
 })
 </script>
 
@@ -497,6 +540,15 @@ onMounted(() => {
         :tools="sortedTools"
         :tools-msg="toolsMsg"
         @toggle-tool="handleToggleTool"
+      />
+
+      <TerminalSandboxSettingsSection
+        v-if="activeTab === 'terminal' && terminalSandboxConfig"
+        :config="terminalSandboxConfig"
+        :saving="terminalSandboxSaving"
+        :segment-catalog="terminalSegmentCatalog"
+        :status-message="terminalSandboxMsg"
+        @save="handleSaveTerminalSandbox"
       />
 
       <WebSearchSettingsSection
@@ -691,6 +743,88 @@ onMounted(() => {
 
 .ignore-row textarea:focus {
   border-color: var(--color-primary);
+}
+
+.terminal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-8) var(--space-12);
+  margin-bottom: var(--space-8);
+}
+
+.terminal-grid .compact-row {
+  margin-bottom: 0;
+}
+
+.terminal-grid .compact-row label {
+  width: 72px;
+}
+
+.terminal-pages {
+  display: flex;
+  gap: var(--space-4);
+  margin: var(--space-12) 0 var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.terminal-page-tab {
+  height: 30px;
+  padding: 0 var(--space-12);
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.terminal-page-tab:hover,
+.terminal-page-tab.active {
+  border-color: var(--color-border);
+  color: var(--color-primary);
+}
+
+.terminal-page-body {
+  padding-top: var(--space-4);
+}
+
+.segment-list {
+  display: grid;
+  gap: var(--space-6);
+  margin: var(--space-8) 0 var(--space-12) 82px;
+}
+
+.segment-row {
+  display: grid;
+  grid-template-columns: 132px 96px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 30px;
+  padding: 0 var(--space-8);
+  border: 1px solid var(--color-border);
+  background: var(--color-canvas);
+}
+
+.segment-row code {
+  color: var(--color-text-muted);
+  font-family: var(--font-code);
+  font-size: 11px;
+}
+
+.segment-row strong {
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.segment-row span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-family: var(--font-code);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .setting-hint {

@@ -42,6 +42,7 @@ const FALLBACK_DISPLAY: Record<string, string> = {
   rename_knowledge_file: '重命名文件',
   create_knowledge_folder: '创建文件夹',
   update_exploration_state: '更新探索状态',
+  run_terminal_command: '终端命令',
 }
 
 function handleToggle(event: Event) {
@@ -65,6 +66,9 @@ function resolveDisplayName(trace: Record<string, unknown>) {
 }
 
 function toolSummary(trace: Record<string, unknown>) {
+  if (asString(trace.tool_name) === 'run_terminal_command') {
+    return terminalCommandSummary(asString(trace.tool_args_summary), asString(trace.terminal_command))
+  }
   const displayName = resolveDisplayName(trace)
   const resultCount = asNumber(trace.result_count)
   if (resultCount !== null) {
@@ -73,7 +77,33 @@ function toolSummary(trace: Record<string, unknown>) {
   return displayName
 }
 
-function aggregatedToolSummary(displayName: string, count: number, filenames: string[]) {
+function extractQuotedListItems(value: string) {
+  return Array.from(value.matchAll(/['"]([^'"]+)['"]/g)).map((match) => match[1] ?? '').filter(Boolean)
+}
+
+function terminalCommandSummary(argsSummary: string, terminalCommand = '') {
+  const shell = (argsSummary.match(/(?:^|,\s*)shell=([^,]+)/)?.[1] ?? '').trim()
+  if (terminalCommand) {
+    return `运行了${shell || '终端'}命令: ${terminalCommand}`
+  }
+  const program = (argsSummary.match(/['"]?program['"]?\s*:\s*['"]([^'"]+)['"]/)?.[1] ?? '').trim()
+  const rawArgs = argsSummary.match(/['"]?args['"]?\s*:\s*\[([^\]]*)\]/)?.[1] ?? ''
+  const args = extractQuotedListItems(rawArgs)
+  const command = [program, ...args].filter(Boolean).join(' ').trim()
+  if (!shell && !command) {
+    return '运行了终端命令'
+  }
+  if (!command) {
+    return `运行了${shell || '终端'}命令`
+  }
+  return `运行了${shell || '终端'}命令: ${command}`
+}
+
+function aggregatedToolSummary(displayName: string, count: number, filenames: string[], argsSummary = '', terminalCommand = '') {
+  if (displayName === '终端命令') {
+    const summary = terminalCommandSummary(argsSummary, terminalCommand)
+    return count > 1 ? `${summary} × ${count}` : summary
+  }
   if (filenames.length === 1) {
     return `${displayName}：${filenames[0]}`
   }
@@ -122,7 +152,7 @@ const entries = computed(() => {
   // First pass: collect all tool_call_end events into groups by tool_name,
   // recording the position of the first occurrence.
   const toolGroupOrder: string[] = []
-  const toolGroups = new Map<string, { displayName: string; count: number; filenames: string[]; firstIdx: number }>()
+  const toolGroups = new Map<string, { displayName: string; count: number; filenames: string[]; firstIdx: number; argsSummary: string; terminalCommand: string }>()
   const nonToolEntries: Array<{ idx: number; key: string; text: string; isTool: boolean }> = []
 
   raw.forEach((trace, idx) => {
@@ -151,7 +181,14 @@ const entries = computed(() => {
 
     let group = toolGroups.get(toolName)
     if (!group) {
-      group = { displayName, count: 0, filenames: [], firstIdx: idx }
+      group = {
+        displayName,
+        count: 0,
+        filenames: [],
+        firstIdx: idx,
+        argsSummary: asString(trace.tool_args_summary),
+        terminalCommand: asString(trace.terminal_command),
+      }
       toolGroups.set(toolName, group)
       toolGroupOrder.push(toolName)
     }
@@ -172,11 +209,19 @@ const entries = computed(() => {
 
   // Build combined sorted list
   const ordered: Array<
-    { type: 'tool'; name: string; count: number; filenames: string[]; idx: number }
+    { type: 'tool'; name: string; count: number; filenames: string[]; idx: number; argsSummary: string; terminalCommand: string }
     | { type: 'entry'; idx: number; key: string; text: string; isTool: boolean }
   > = [
     ...nonToolEntries.map((e) => ({ type: 'entry' as const, idx: e.idx, key: e.key, text: e.text, isTool: e.isTool })),
-    ...toolPositions.map((g) => ({ type: 'tool' as const, idx: g.firstIdx, name: g.name, count: g.count, filenames: g.filenames })),
+    ...toolPositions.map((g) => ({
+      type: 'tool' as const,
+      idx: g.firstIdx,
+      name: g.name,
+      count: g.count,
+      filenames: g.filenames,
+      argsSummary: g.argsSummary,
+      terminalCommand: g.terminalCommand,
+    })),
   ]
   ordered.sort((a, b) => a.idx - b.idx)
 
@@ -186,7 +231,7 @@ const entries = computed(() => {
     } else {
       result.push({
         key: `agg-tool-${item.name}-${item.count}`,
-        text: aggregatedToolSummary(item.name, item.count, item.filenames),
+        text: aggregatedToolSummary(item.name, item.count, item.filenames, item.argsSummary, item.terminalCommand),
         isTool: true,
       })
     }

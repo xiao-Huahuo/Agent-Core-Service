@@ -1,5 +1,21 @@
 # CHANGE HISTORY
 
+## 2026-07-22
+- [x] 为 Agent 新增项目终端沙盒能力: 新增 `run_terminal_command` 内置工具,只接受 `shell + cwd + segments` 结构化参数,通过 `TerminalSandbox` 使用 `subprocess.run(..., shell=False)` 执行外部程序段,避免整条 shell 字符串注入;沙盒校验 cwd、程序 allowlist/denylist、程序级安全子命令、参数路径、超时、输出截断和单次段数上限,并禁止 `python -c`、`node -e` 等内联代码入口。
+- [x] 新增终端沙盒用户配置: `AgentConfig` 增加进程级默认终端沙盒配置和环境变量覆盖;`user_settings` 增加 `terminal_sandbox_config` JSON 字段及自动迁移;REST 新增 `/settings/terminal-sandbox` 读取/保存接口,返回 `cmd`、`powershell`、`bash` 三类终端当前支持的指令段目录。
+- [x] 设置页新增“终端沙盒”分页配置页面: 前端新增终端沙盒 API 类型和子组件,支持编辑启用状态、工作区、超时、输出上限、单次段数、禁止程序、三类终端各自 allowlist,并分页展示三类终端支持的结构化 `external_program` 指令段。
+- [x] 补充终端沙盒测试: 覆盖允许的结构化程序段执行、cwd 越界拦截、参数路径越界拦截和嵌套 shell 程序拦截。
+- [x] 优化 Agent 前端终端工具条文案: `run_terminal_command` 的工具调用条和思考过程摘要不再显示泛化的“终端命令”,而是根据 trace 参数显示“运行了[终端类型]命令: [程序 参数]”;后端工具结束 trace 同步携带 `tool_args_summary`,保证流式完成态和历史态展示一致。
+- [x] 修正终端工具条命令展示不完整的问题: 后端从 `segments` 拼接完整 `terminal_command` trace 字段,多个指令段用 `&&` 连接;前端优先展示该完整命令,不再从截断的参数摘要里只提取首个程序或局部参数。
+- [x] 调整设置页保存交互: 基础设置、终端沙盒、联网配置三个页面移除保存按钮;开关点击后立即保存,文本、数字和多行配置项在失焦后自动保存,保留保存中/保存结果反馈。
+- [x] 扩展 Agent 终端沙盒默认命令集: 在保持结构化参数、工作区路径校验和高风险子命令拦截的前提下,新增 rg/grep/findstr、pip/uv/ruff/mypy/pyright、npx/pnpm/yarn/eslint/prettier/tsc/vue-tsc/vite/vitest/playwright、go/cargo/dotnet/java/mvn/gradle 等常见开发诊断、构建和测试入口;历史保存的旧默认 allowlist 会自动升级为新默认命令集,自定义 allowlist 保持不变。
+- [x] 为 Agent 终端沙盒新增基础系统内部指令段: 新增 `internal_command` 类型,由后端直接实现 pwd、ls/dir、cat/type、head、tail、stat、wc,不通过 `cmd /c` 或 shell 内建命令执行;这些内部指令继续复用工作区路径校验、输出截断和多段执行结果格式,并同步更新工具描述、设置页指令段目录和终端工具条命令拼接。
+- [x] 优化 Agent 工具条展开详情: `run_terminal_command` 的展开区域不再直接展示 JSON,前端会解析执行结果并显示成功状态、终端类型、工作目录、每段命令、退出码、stdout/stderr、超时和截断状态,让终端工具结果更接近人类可读的执行记录。
+- [x] 修复内部系统指令参数解析: `internal_command` 不再在通用层把所有 args 预先当路径解析;`ls/dir` 新增 `-a`、`-l`、`-la/-al`、`-1`、`/a`、`/l` 和可选目录路径解析,未知选项返回清晰错误;`cat/type 文件` 增加回归测试,内部命令路径越界继续作为沙盒级拦截。
+- [x] 修正终端沙盒默认工作区边界: 终端沙盒配置读取和保存时,会把空白或旧项目根目录工作区自动迁移到当前 active 知识库目录,避免 Agent 从 `MetaWeave` 项目根越权查看知识库外的项目文件;同时终端工具条按完整终端命令分组,不再把不同命令合并成一个 `× N` 展开项。
+- [x] 修复知识图谱侧边栏折叠布局: 图谱侧边栏关闭时宽度收缩为 0,不再仅用 transform 隐藏而保留 280px 空白轨道,使画布区域在折叠后自动弹性填满剩余空间;同时接回语义图谱抽取按钮并让刷新按钮消费 loading 状态,保证组件 lint 通过。
+- [x] 修复语义图谱同名实体重复节点: 实体稳定 ID 从 `实体类型 + 名称` 改为按规范化名称归一,避免同一实体在不同文档中被模型抽成不同类型时生成多个节点;查询图谱时会兼容合并历史旧实体节点并重映射关系边,两个文档共享“原神”等同名实体时前端只显示一个实体节点。
+
 ## 2026-07-21
 - [x] 新增图谱抽取队列页面: 入库进度页增加"图谱抽取队列"子页,通过轮询后端 `getKnowledgeGraphStatus` 获取实时抽取状态,使用 TransitionGroup 实现入队/出队动效,与入库队列布局一致。
 - [x] 新增 header 图谱抽取按钮与进度条: 灌库按钮左侧增加图谱抽取按钮(BrainCircuit 图标),点击触发 `rebuildKnowledgeGraph` 后轮询进度;header 增加青色系的图谱进度条,按 `current/total` 计算百分比实时更新。

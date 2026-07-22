@@ -32,6 +32,7 @@ from agent_service.tools.builtin import (
     read_multimodal_file_info,
     rebuild_knowledge_base,
     rename_knowledge_file,
+    run_terminal_command,
     save_uploaded_attachment_to_knowledge,
     search_knowledge,
     text_stats,
@@ -137,6 +138,32 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         args_schema={"type": "object", "properties": {}, "required": []},
         function=list_builtin_tools,
         display_name="列出工具",
+    ),
+    BuiltinToolDefinition(
+        name="run_terminal_command",
+        description=(
+            "在项目终端沙盒中执行一个或多个结构化指令段。必须传 shell、segments、cwd; "
+            "禁止传整条 shell 字符串。支持 external_program 外部程序段,以及 pwd/ls/dir/cat/type/head/tail/stat/wc "
+            "等 internal_command 内部系统指令段。所有 cwd 和参数中的路径都会被校验必须位于工作区内。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "shell": {"type": "string", "description": "终端策略名: cmd、powershell 或 bash。"},
+                "segments": {
+                    "type": "array",
+                    "description": (
+                        "指令段数组。外部程序段格式为 {type:'external_program', program:'python', args:['-m','pytest']};"
+                        "内部系统指令段格式为 {type:'internal_command', command:'ls', args:['.']}。"
+                    ),
+                },
+                "cwd": {"type": "string", "description": "相对沙盒工作区的工作目录,默认当前工作区根目录。"},
+                "timeout_seconds": {"type": "integer", "description": "可选单段超时时间,受沙盒最大值限制。"},
+            },
+            "required": ["shell", "segments"],
+        },
+        function=run_terminal_command,
+        display_name="终端命令",
     ),
 ]
 

@@ -248,6 +248,31 @@ async def list_available_tools(user_id: str = Query(..., min_length=1, descripti
     svc = _require_settings_service()
     return {"tools": svc.list_available_tools(user_id=user_id)}
 
+
+@router.get("/settings/terminal-sandbox")
+async def get_terminal_sandbox_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+    """获取用户的 Agent 终端沙盒配置和支持的结构化指令段目录。"""
+
+    svc = _require_settings_service()
+    return svc.get_terminal_sandbox_config(user_id=user_id)
+
+
+@router.put("/settings/terminal-sandbox")
+async def save_terminal_sandbox_config(body: dict[str, Any]) -> dict[str, Any]:
+    """保存用户的 Agent 终端沙盒配置。body: user_id 必填,config 为配置对象。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    config_payload = body.get("config")
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    if not isinstance(config_payload, dict):
+        raise HTTPException(status_code=422, detail="config must be an object")
+    svc = _require_settings_service()
+    try:
+        return svc.save_terminal_sandbox_config(user_id=user_id, config_payload=config_payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
 # ---- 自定义长期记忆 ----
 
 @router.get("/settings/memories")

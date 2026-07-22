@@ -31,6 +31,8 @@ export interface UserSettingsProfile {
   ocrEnabled?: boolean
   /** Gitignore-like rules for files that must never enter the vector store. */
   knowledgeIgnorePatterns?: string
+  /** Agent terminal sandbox configuration cached from backend settings. */
+  terminalSandbox?: unknown
   /** Optional font families prepended to the global UI font stack. */
   uiFontFamilies?: string[]
   /** Optional font families prepended to markdown/text document surfaces. */

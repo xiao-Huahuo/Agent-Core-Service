@@ -62,6 +62,21 @@ class FailingGraphExtractor:
         raise RuntimeError("small model unavailable")
 
 
+class SameEntityDifferentTypeExtractor:
+    """模拟不同文档把同名实体抽成不同类型。"""
+
+    def extract(self, *, document: StructuredKnowledgeDocument, section: StructuredKnowledgeSection) -> dict[str, Any]:
+        """返回同名但类型可能不同的实体候选。"""
+
+        entity_type = "project" if document.document_id == "doc_a" else "concept"
+        return {
+            "entities": [
+                {"name": "原神", "type": entity_type, "confidence": 0.9},
+            ],
+            "relations": [],
+        }
+
+
 def test_knowledge_graph_service_extracts_validated_edges(tmp_path: Path) -> None:
     """验证服务只写入通过证据和白名单校验的点边。"""
 
@@ -223,3 +238,88 @@ def test_knowledge_graph_service_keeps_document_node_when_extraction_fails(tmp_p
         status = db.exec(select(KnowledgeGraphDocumentStatus)).one()
     assert status.status == "failed"
     assert status.message == "small model unavailable"
+
+
+def test_knowledge_graph_service_coalesces_same_named_entities_across_documents(tmp_path: Path) -> None:
+    """同名实体即使被抽成不同类型,语义图谱中也应归并为同一个实体节点。"""
+
+    config = AgentConfig.load_config(
+        {"storage": {"project_root": str(tmp_path), "base_data_dir": str(tmp_path / "runtime")}},
+        load_env=False,
+        load_dotenv=False,
+        ensure_models=False,
+    )
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    service = KnowledgeGraphService(config=config, engine=engine, extractor=SameEntityDifferentTypeExtractor())
+    documents = [
+        StructuredKnowledgeDocument(
+            document_id="doc_a",
+            source_type="markdown",
+            source_path=str(tmp_path / "a.md"),
+            source_uri=str(tmp_path / "a.md"),
+            source_hash="hash-a",
+            title="文档 A",
+            summary="",
+            tags=[],
+            authority=0.7,
+            valid_from=None,
+            valid_until=None,
+            metadata={"relative_path": "a.md"},
+            sections=[
+                StructuredKnowledgeSection(
+                    section_id="sec_0000",
+                    heading="a",
+                    title_path=["a"],
+                    content="原神 是一个项目。",
+                    start_char=0,
+                    end_char=9,
+                )
+            ],
+        ),
+        StructuredKnowledgeDocument(
+            document_id="doc_b",
+            source_type="markdown",
+            source_path=str(tmp_path / "b.md"),
+            source_uri=str(tmp_path / "b.md"),
+            source_hash="hash-b",
+            title="文档 B",
+            summary="",
+            tags=[],
+            authority=0.7,
+            valid_from=None,
+            valid_until=None,
+            metadata={"relative_path": "b.md"},
+            sections=[
+                StructuredKnowledgeSection(
+                    section_id="sec_0000",
+                    heading="b",
+                    title_path=["b"],
+                    content="原神 是一个概念。",
+                    start_char=0,
+                    end_char=9,
+                )
+            ],
+        ),
+    ]
+
+    for document in documents:
+        service.extract_document(user_id="u1", library_id="lib1", document=document)
+    graph = service.get_graph(user_id="u1", library_id="lib1")
+
+    genshin_nodes = [
+        node
+        for node in graph["nodes"]
+        if node["kind"] == "entity" and node["label"] == "原神"
+    ]
+    assert len(genshin_nodes) == 1
+    mention_edges = [
+        edge
+        for edge in graph["links"]
+        if edge["kind"] == "mentions" and edge["target"] == genshin_nodes[0]["id"]
+    ]
+    assert graph["stats"]["entities"] == 1
+    assert len(mention_edges) == 2

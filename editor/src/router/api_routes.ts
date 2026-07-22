@@ -51,4 +51,5 @@ export const API_ROUTES = {
   SETTINGS_WEB_SEARCH: '/settings/web-search',
   SETTINGS_DISABLED_TOOLS: '/settings/disabled-tools',
   SETTINGS_AVAILABLE_TOOLS: '/settings/available-tools',
+  SETTINGS_TERMINAL_SANDBOX: '/settings/terminal-sandbox',
 } as const

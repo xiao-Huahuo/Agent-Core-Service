@@ -25,10 +25,30 @@ interface ToolDisplayEntry {
 interface ToolEntry {
   tool_name: string
   display_name: string
+  args_summary: string
+  terminal_command: string
   result_count?: number
   call_count: number
   filenames: string[]
   raw_contents: string[]
+}
+
+interface TerminalSegmentResult {
+  index: number
+  command: string
+  exitCode: number
+  timedOut: boolean
+  stdout: string
+  stderr: string
+  truncated: boolean
+}
+
+interface TerminalResultDisplay {
+  ok: boolean
+  shell: string
+  cwd: string
+  truncated: boolean
+  segments: TerminalSegmentResult[]
 }
 
 const expanded = ref(new Set<string>())
@@ -65,6 +85,7 @@ const FALLBACK_DISPLAY: Record<string, string> = {
   rename_knowledge_file: '重命名文件',
   create_knowledge_folder: '创建文件夹',
   update_exploration_state: '更新探索状态',
+  run_terminal_command: '终端命令',
 }
 
 function asString(value: unknown) {
@@ -96,7 +117,34 @@ function extractFilename(trace: Record<string, unknown>, toolName: string) {
   return null
 }
 
+function extractQuotedListItems(value: string) {
+  return Array.from(value.matchAll(/['"]([^'"]+)['"]/g)).map((match) => match[1] ?? '').filter(Boolean)
+}
+
+function terminalCommandSummary(argsSummary: string, terminalCommand = '', fallbackShell = '') {
+  const shell = (argsSummary.match(/(?:^|,\s*)shell=([^,]+)/)?.[1] ?? fallbackShell).trim()
+  if (terminalCommand) {
+    return `运行了${shell || '终端'}命令: ${terminalCommand}`
+  }
+  const program = (argsSummary.match(/['"]?program['"]?\s*:\s*['"]([^'"]+)['"]/)?.[1] ?? '').trim()
+  const rawArgs = argsSummary.match(/['"]?args['"]?\s*:\s*\[([^\]]*)\]/)?.[1] ?? ''
+  const args = extractQuotedListItems(rawArgs)
+  const command = [program, ...args].filter(Boolean).join(' ').trim()
+  if (!shell && !command) {
+    return '运行了终端命令'
+  }
+  if (!command) {
+    return `运行了${shell || '终端'}命令`
+  }
+  return `运行了${shell || '终端'}命令: ${command}`
+}
+
 function toolSummary(entry: ToolEntry) {
+  if (entry.tool_name === 'run_terminal_command') {
+    const summary = terminalCommandSummary(entry.args_summary, entry.terminal_command)
+    return entry.call_count > 1 ? `${summary} × ${entry.call_count}` : summary
+  }
+
   const displayName = entry.display_name || entry.tool_name
   if (!displayName) return null
 
@@ -118,6 +166,13 @@ function toolSummary(entry: ToolEntry) {
     return `${displayName}：${entry.filenames[0]}`
   }
   return displayName
+}
+
+function toolMergeKey(toolName: string, argsSummary: string, terminalCommand: string) {
+  if (toolName !== 'run_terminal_command') {
+    return toolName
+  }
+  return `${toolName}:${terminalCommand || argsSummary || 'terminal'}`
 }
 
 function parseSearchResults(content: string) {
@@ -160,15 +215,64 @@ function parseFileList(content: string) {
   return result.length > 0 ? result : null
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+}
+
+function parseTerminalResult(content: string): TerminalResultDisplay | null {
+  try {
+    const parsed = asRecord(JSON.parse(content))
+    if (!parsed || !Array.isArray(parsed.results)) {
+      return null
+    }
+    const segments = parsed.results
+      .map((item) => {
+        const result = asRecord(item)
+        if (!result) return null
+        const rawArgs = Array.isArray(result.args) ? result.args.map((arg) => String(arg)) : []
+        const program = asString(result.program)
+        return {
+          index: asNumber(result.index) ?? 0,
+          command: [program, ...rawArgs].filter(Boolean).join(' '),
+          exitCode: asNumber(result.exit_code) ?? -1,
+          timedOut: result.timed_out === true,
+          stdout: asString(result.stdout),
+          stderr: asString(result.stderr),
+          truncated: result.truncated === true,
+        }
+      })
+      .filter((item): item is TerminalSegmentResult => item !== null)
+    return {
+      ok: parsed.ok === true,
+      shell: asString(parsed.shell) || '终端',
+      cwd: asString(parsed.cwd) || '-',
+      truncated: parsed.truncated === true,
+      segments,
+    }
+  } catch {
+    return null
+  }
+}
+
 const toolEntries = computed(() => {
-  const pendingStarts = new Map<string, { key: string; text: string }>()
+  const pendingStarts = new Map<string, { key: string; text: string; argsSummary: string }>()
+  const startArgsByToolName = new Map<string, string>()
+  const startCommandByToolName = new Map<string, string>()
   ;(props.traces ?? [])
     .filter((trace) => trace.event === 'tool_call_start' && trace.tool_name)
     .forEach((trace) => {
       const toolName = asString(trace.tool_name)
-      pendingStarts.set(toolName, {
-        key: `${toolName}-pending`,
-        text: asString(trace.human_readable) || `正在调用工具「${asString(trace.display_name) || FALLBACK_DISPLAY[toolName] || toolName}」`,
+      const argsSummary = asString(trace.tool_args_summary)
+      const terminalCommand = asString(trace.terminal_command)
+      const mergeKey = toolMergeKey(toolName, argsSummary, terminalCommand)
+      startArgsByToolName.set(mergeKey, argsSummary)
+      startCommandByToolName.set(mergeKey, terminalCommand)
+      pendingStarts.set(mergeKey, {
+        key: `${mergeKey}-pending`,
+        text: toolName === 'run_terminal_command'
+          ? terminalCommandSummary(argsSummary, terminalCommand)
+          : asString(trace.human_readable) || `正在调用工具「${asString(trace.display_name) || FALLBACK_DISPLAY[toolName] || toolName}」`,
+        argsSummary,
       })
     })
   const merged = new Map<string, ToolEntry>()
@@ -176,8 +280,11 @@ const toolEntries = computed(() => {
     .filter((trace) => trace.event === 'tool_call_end' && trace.tool_name)
     .forEach((trace) => {
       const toolName = asString(trace.tool_name)
-      pendingStarts.delete(toolName)
-      const existing = merged.get(toolName)
+      const argsSummary = asString(trace.tool_args_summary)
+      const terminalCommand = asString(trace.terminal_command)
+      const mergeKey = toolMergeKey(toolName, argsSummary, terminalCommand)
+      pendingStarts.delete(mergeKey)
+      const existing = merged.get(mergeKey)
       const resultCount = asNumber(trace.result_count)
       const fn = extractFilename(trace, toolName)
       const rawContent = asString(trace.raw_content)
@@ -193,9 +300,11 @@ const toolEntries = computed(() => {
           existing.raw_contents.push(rawContent)
         }
       } else {
-        merged.set(toolName, {
+        merged.set(mergeKey, {
           tool_name: toolName,
           display_name: asString(trace.display_name) || FALLBACK_DISPLAY[toolName] || toolName,
+          args_summary: startArgsByToolName.get(mergeKey) || argsSummary,
+          terminal_command: terminalCommand || startCommandByToolName.get(mergeKey) || '',
           result_count: resultCount,
           call_count: 1,
           filenames: fn ? [fn] : [],
@@ -212,7 +321,7 @@ const toolEntries = computed(() => {
     })),
     ...Array.from(merged.values())
     .map((entry) => ({
-      key: `${entry.tool_name}-${entry.call_count}`,
+      key: `${entry.tool_name}-${entry.terminal_command || entry.call_count}`,
       text: toolSummary(entry),
       pending: false,
       rawContents: entry.raw_contents,
@@ -281,6 +390,41 @@ const toolEntries = computed(() => {
           <!-- Long-term memory -->
           <div v-else-if="entry.toolName === 'get_long_term_memory'">
             <pre class="tool-result-text">{{ rawContent }}</pre>
+          </div>
+          <!-- Terminal command result -->
+          <div v-else-if="entry.toolName === 'run_terminal_command' && parseTerminalResult(rawContent)" class="terminal-result">
+            <div class="terminal-summary">
+              <span class="terminal-status" :class="{ ok: parseTerminalResult(rawContent)!.ok, failed: !parseTerminalResult(rawContent)!.ok }">
+                {{ parseTerminalResult(rawContent)!.ok ? '执行成功' : '执行失败' }}
+              </span>
+              <span>终端: {{ parseTerminalResult(rawContent)!.shell }}</span>
+              <span>工作目录: {{ parseTerminalResult(rawContent)!.cwd }}</span>
+              <span v-if="parseTerminalResult(rawContent)!.truncated">输出已截断</span>
+            </div>
+            <div
+              v-for="segment in parseTerminalResult(rawContent)!.segments"
+              :key="segment.index"
+              class="terminal-segment"
+            >
+              <div class="terminal-segment-head">
+                <span>第 {{ segment.index }} 段</span>
+                <code>{{ segment.command || '内部指令' }}</code>
+                <span :class="{ 'exit-ok': segment.exitCode === 0, 'exit-failed': segment.exitCode !== 0 }">
+                  退出码 {{ segment.exitCode }}
+                </span>
+                <span v-if="segment.timedOut">已超时</span>
+                <span v-if="segment.truncated">本段输出已截断</span>
+              </div>
+              <div v-if="segment.stdout" class="terminal-stream">
+                <div class="terminal-stream-label">标准输出</div>
+                <pre>{{ segment.stdout }}</pre>
+              </div>
+              <div v-if="segment.stderr" class="terminal-stream error">
+                <div class="terminal-stream-label">错误输出</div>
+                <pre>{{ segment.stderr }}</pre>
+              </div>
+              <div v-if="!segment.stdout && !segment.stderr" class="terminal-empty">没有输出</div>
+            </div>
           </div>
           <!-- Default: raw text -->
           <div v-else>
@@ -518,6 +662,104 @@ const toolEntries = computed(() => {
 .file-tree-row.dir .tree-name {
   color: var(--color-primary);
   font-weight: 600;
+}
+
+.terminal-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-10) var(--space-12);
+}
+
+.terminal-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.terminal-status,
+.terminal-segment-head span {
+  color: var(--color-text-secondary);
+}
+
+.terminal-status.ok,
+.exit-ok {
+  color: var(--color-success);
+}
+
+.terminal-status.failed,
+.exit-failed {
+  color: var(--color-error);
+}
+
+.terminal-segment {
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.terminal-segment-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  padding: var(--space-6) var(--space-8);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  background: rgba(148, 163, 184, 0.05);
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+
+.terminal-segment-head code {
+  max-width: 100%;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.terminal-stream {
+  padding: var(--space-8);
+}
+
+.terminal-stream + .terminal-stream {
+  border-top: 1px dashed rgba(148, 163, 184, 0.08);
+}
+
+.terminal-stream-label {
+  margin-bottom: var(--space-4);
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
+  font-size: 10px;
+}
+
+.terminal-stream pre {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-text);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 420px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.terminal-stream.error pre {
+  color: var(--color-error);
+}
+
+.terminal-empty {
+  padding: var(--space-8);
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
 }
 
 @keyframes tool-slide-in {

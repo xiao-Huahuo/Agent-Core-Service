@@ -116,5 +116,7 @@ class ToolRegistry:
             "integer": int,
             "number": float,
             "boolean": bool,
+            "array": list,
+            "object": dict,
         }
         return mapping.get(schema_type, str)
