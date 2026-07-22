@@ -220,8 +220,10 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
         model_tier: str = LARGE_MODEL_TIER,
         api_key: str | None = None,
         base_url: str | None = None,
+        model_name: str | None = None,
         small_api_key: str | None = None,
         small_base_url: str | None = None,
+        small_model_name: str | None = None,
     ) -> BaseMessage:
         """提交并同步等待一个可序列化的 LLM Chat 请求。"""
 
@@ -242,8 +244,10 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
             model_tier=model_tier,
             api_key=api_key,
             base_url=base_url,
+            model_name=model_name,
             small_api_key=small_api_key,
             small_base_url=small_base_url,
+            small_model_name=small_model_name,
         )
         return handle.wait(timeout=timeout_seconds)
 
@@ -258,8 +262,10 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
         model_tier: str = LARGE_MODEL_TIER,
         api_key: str | None = None,
         base_url: str | None = None,
+        model_name: str | None = None,
         small_api_key: str | None = None,
         small_base_url: str | None = None,
+        small_model_name: str | None = None,
     ) -> Iterator[dict[str, Any]]:
         """
         流式调用 LLM Chat,逐 token 产出增量内容。
@@ -301,8 +307,10 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
             model_tier=model_tier,
             api_key=api_key,
             base_url=base_url,
+            model_name=model_name,
             small_api_key=small_api_key,
             small_base_url=small_base_url,
+            small_model_name=small_model_name,
         )
         if self._backend is not None:
             request.stream_channel = f"stream:{request.task_id}"
@@ -348,8 +356,10 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
         model_tier: str = LARGE_MODEL_TIER,
         api_key: str | None = None,
         base_url: str | None = None,
+        model_name: str | None = None,
         small_api_key: str | None = None,
         small_base_url: str | None = None,
+        small_model_name: str | None = None,
     ) -> LLMTaskHandle:
         """提交一个可序列化的 LLM Chat 请求。"""
 
@@ -370,8 +380,10 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
             model_tier=model_tier,
             api_key=api_key,
             base_url=base_url,
+            model_name=model_name,
             small_api_key=small_api_key,
             small_base_url=small_base_url,
+            small_model_name=small_model_name,
         )
         if self._backend is None:
             return self._submit_local_chat_request(request)
@@ -768,8 +780,10 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
             model_tier=request.model_tier,
             api_key=request.api_key,
             base_url=request.base_url,
+            model_name=request.model_name,
             small_api_key=request.small_api_key,
             small_base_url=request.small_base_url,
+            small_model_name=request.small_model_name,
         )
         with self._acquire_model_pool(request.model_tier):
             response = model.invoke(messages)
@@ -795,8 +809,10 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
             model_tier=request.model_tier,
             api_key=request.api_key,
             base_url=request.base_url,
+            model_name=request.model_name,
             small_api_key=request.small_api_key,
             small_base_url=request.small_base_url,
+            small_model_name=request.small_model_name,
         )
         breaker = self._circuit_breakers[request.task_type]
         try:

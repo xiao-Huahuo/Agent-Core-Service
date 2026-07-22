@@ -148,15 +148,17 @@ class PlannerNode:
         前端看到逐 token 拼接的原始 JSON。
         """
 
-        api_key, base_url, small_api_key, small_base_url = get_user_llm_overrides(state)
+        api_key, base_url, model_name, small_api_key, small_base_url, small_model_name = get_user_llm_overrides(state)
         return self.task_scheduler.invoke_chat(
             task_type=FOREGROUND_AGENT_TASK,
             messages=[system_message, user_message],
             model_tier=SMALL_MODEL_TIER,
             api_key=api_key,
             base_url=base_url,
+            model_name=model_name,
             small_api_key=small_api_key,
             small_base_url=small_base_url,
+            small_model_name=small_model_name,
         )
 
     def _build_planning_prompt(

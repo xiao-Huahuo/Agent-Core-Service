@@ -221,13 +221,13 @@ class AgentConfig:
         """
 
         provider: str = "openai-compatible"
-        model_name: str = "deepseek-v4-flash"
+        model_name: str = ""
         api_key: str = ""
-        base_url: str = "https://api.deepseek.com"
+        base_url: str = ""
         small_model_provider: str = "openai-compatible"
-        small_model_name: str = "moonshot-v1-8k"
+        small_model_name: str = ""
         small_model_api_key: str = ""
-        small_model_base_url: str = "https://api.moonshot.cn/v1"
+        small_model_base_url: str = ""
         small_model_temperature: float = 0.0
         small_model_timeout_seconds: int = 120
         temperature: float = 0.0

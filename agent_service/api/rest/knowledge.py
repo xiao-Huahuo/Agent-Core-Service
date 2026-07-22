@@ -570,6 +570,7 @@ async def get_knowledge_graph(
 
 from agent_service.services.knowledge_graph_service import (
     _run_graph_extraction,
+    _update_graph_progress,
     get_graph_extraction_progress,
 )
 
@@ -595,6 +596,20 @@ async def rebuild_knowledge_graph(body: dict[str, Any]) -> dict[str, Any]:
     active_library = dict(profile["active_knowledge_library"])
     normalized_user_id = str(profile["user_id"])
     library_id = str(active_library["library_id"])
+    target_source_path: Path | None = None
+    target_is_dir = False
+    target_path = str(body.get("path") or "").replace("\\", "/").strip().strip("/")
+    if target_path:
+        knowledge_root = Path(str(active_library["knowledge_dir"])).resolve(strict=False)
+        candidate_path = (knowledge_root / target_path).resolve(strict=False)
+        try:
+            candidate_path.relative_to(knowledge_root)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="path escapes knowledge root") from exc
+        if not candidate_path.exists():
+            raise HTTPException(status_code=404, detail="target path not found")
+        target_source_path = candidate_path
+        target_is_dir = candidate_path.is_dir()
 
     safe_user_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", normalized_user_id).strip("_") or "default"
     safe_library_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", library_id).strip("_") or "default"
@@ -607,6 +622,16 @@ async def rebuild_knowledge_graph(body: dict[str, Any]) -> dict[str, Any]:
     if current_progress.get("status") == "running":
         return {"status": "already_running", "message": "图谱抽取已在运行中"}
 
+    _update_graph_progress(
+        normalized_user_id,
+        library_id,
+        status="running",
+        total=0,
+        current=0,
+        message="正在检查需要抽取的文件",
+        docs=[],
+    )
+
     thread = threading.Thread(
         target=_run_graph_extraction,
         kwargs={
@@ -615,6 +640,8 @@ async def rebuild_knowledge_graph(body: dict[str, Any]) -> dict[str, Any]:
             "library_id": library_id,
             "frontmatter_dir": frontmatter_dir,
             "user_llm_config": user_llm_config,
+            "target_source_path": target_source_path,
+            "target_is_dir": target_is_dir,
         },
         daemon=True,
     )

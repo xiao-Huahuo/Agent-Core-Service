@@ -7,16 +7,20 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class RunRequest(_message.Message):
-    __slots__ = ("prompt", "user_id", "session_id", "reference")
+    __slots__ = ("prompt", "user_id", "session_id", "reference", "agent_mode", "agent_access_mode")
     PROMPT_FIELD_NUMBER: _ClassVar[int]
     USER_ID_FIELD_NUMBER: _ClassVar[int]
     SESSION_ID_FIELD_NUMBER: _ClassVar[int]
     REFERENCE_FIELD_NUMBER: _ClassVar[int]
+    AGENT_MODE_FIELD_NUMBER: _ClassVar[int]
+    AGENT_ACCESS_MODE_FIELD_NUMBER: _ClassVar[int]
     prompt: str
     user_id: str
     session_id: str
     reference: str
-    def __init__(self, prompt: _Optional[str] = ..., user_id: _Optional[str] = ..., session_id: _Optional[str] = ..., reference: _Optional[str] = ...) -> None: ...
+    agent_mode: str
+    agent_access_mode: str
+    def __init__(self, prompt: _Optional[str] = ..., user_id: _Optional[str] = ..., session_id: _Optional[str] = ..., reference: _Optional[str] = ..., agent_mode: _Optional[str] = ..., agent_access_mode: _Optional[str] = ...) -> None: ...
 
 class RunResult(_message.Message):
     __slots__ = ("graph_diagram", "final_output", "events", "graph_diagram_path")
@@ -238,6 +242,32 @@ class RecallDetailsResponse(_message.Message):
     knowledge_recall: _struct_pb2.Struct
     def __init__(self, session_id: _Optional[str] = ..., user_id: _Optional[str] = ..., created_at: _Optional[str] = ..., query: _Optional[str] = ..., rag_metrics: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ..., memory_recall: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ..., knowledge_recall: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ...) -> None: ...
 
+class TaskSuggestionsRequest(_message.Message):
+    __slots__ = ("user_id", "session_id")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    session_id: str
+    def __init__(self, user_id: _Optional[str] = ..., session_id: _Optional[str] = ...) -> None: ...
+
+class TaskSuggestionsResponse(_message.Message):
+    __slots__ = ("suggestions",)
+    SUGGESTIONS_FIELD_NUMBER: _ClassVar[int]
+    suggestions: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, suggestions: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class TokenUsageRequest(_message.Message):
+    __slots__ = ("user_id", "session_id", "interval", "limit")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    INTERVAL_FIELD_NUMBER: _ClassVar[int]
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    session_id: str
+    interval: str
+    limit: int
+    def __init__(self, user_id: _Optional[str] = ..., session_id: _Optional[str] = ..., interval: _Optional[str] = ..., limit: _Optional[int] = ...) -> None: ...
+
 class ToolListRequest(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
@@ -309,6 +339,102 @@ class UserProfileResponse(_message.Message):
     active_knowledge_library: KnowledgeLibraryEntry
     knowledge_libraries: _containers.RepeatedCompositeFieldContainer[KnowledgeLibraryEntry]
     def __init__(self, user_id: _Optional[str] = ..., knowledge_dir: _Optional[str] = ..., created_at: _Optional[str] = ..., updated_at: _Optional[str] = ..., active_library_id: _Optional[str] = ..., active_knowledge_library: _Optional[_Union[KnowledgeLibraryEntry, _Mapping]] = ..., knowledge_libraries: _Optional[_Iterable[_Union[KnowledgeLibraryEntry, _Mapping]]] = ...) -> None: ...
+
+class LLMConfigRequest(_message.Message):
+    __slots__ = ("user_id",)
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    def __init__(self, user_id: _Optional[str] = ...) -> None: ...
+
+class LLMConfigSaveRequest(_message.Message):
+    __slots__ = ("user_id", "api_key", "base_url", "model_name", "small_api_key", "small_base_url", "small_model_name")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    API_KEY_FIELD_NUMBER: _ClassVar[int]
+    BASE_URL_FIELD_NUMBER: _ClassVar[int]
+    MODEL_NAME_FIELD_NUMBER: _ClassVar[int]
+    SMALL_API_KEY_FIELD_NUMBER: _ClassVar[int]
+    SMALL_BASE_URL_FIELD_NUMBER: _ClassVar[int]
+    SMALL_MODEL_NAME_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    api_key: str
+    base_url: str
+    model_name: str
+    small_api_key: str
+    small_base_url: str
+    small_model_name: str
+    def __init__(self, user_id: _Optional[str] = ..., api_key: _Optional[str] = ..., base_url: _Optional[str] = ..., model_name: _Optional[str] = ..., small_api_key: _Optional[str] = ..., small_base_url: _Optional[str] = ..., small_model_name: _Optional[str] = ...) -> None: ...
+
+class LLMConfigResponse(_message.Message):
+    __slots__ = ("user_id", "api_key", "base_url", "model_name", "small_api_key", "small_base_url", "small_model_name", "effective_small_api_key", "effective_small_base_url", "effective_small_model_name", "updated_at")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    API_KEY_FIELD_NUMBER: _ClassVar[int]
+    BASE_URL_FIELD_NUMBER: _ClassVar[int]
+    MODEL_NAME_FIELD_NUMBER: _ClassVar[int]
+    SMALL_API_KEY_FIELD_NUMBER: _ClassVar[int]
+    SMALL_BASE_URL_FIELD_NUMBER: _ClassVar[int]
+    SMALL_MODEL_NAME_FIELD_NUMBER: _ClassVar[int]
+    EFFECTIVE_SMALL_API_KEY_FIELD_NUMBER: _ClassVar[int]
+    EFFECTIVE_SMALL_BASE_URL_FIELD_NUMBER: _ClassVar[int]
+    EFFECTIVE_SMALL_MODEL_NAME_FIELD_NUMBER: _ClassVar[int]
+    UPDATED_AT_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    api_key: str
+    base_url: str
+    model_name: str
+    small_api_key: str
+    small_base_url: str
+    small_model_name: str
+    effective_small_api_key: str
+    effective_small_base_url: str
+    effective_small_model_name: str
+    updated_at: str
+    def __init__(self, user_id: _Optional[str] = ..., api_key: _Optional[str] = ..., base_url: _Optional[str] = ..., model_name: _Optional[str] = ..., small_api_key: _Optional[str] = ..., small_base_url: _Optional[str] = ..., small_model_name: _Optional[str] = ..., effective_small_api_key: _Optional[str] = ..., effective_small_base_url: _Optional[str] = ..., effective_small_model_name: _Optional[str] = ..., updated_at: _Optional[str] = ...) -> None: ...
+
+class LLMConfigPresetSaveRequest(_message.Message):
+    __slots__ = ("user_id", "label", "api_key", "base_url", "model_name")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    LABEL_FIELD_NUMBER: _ClassVar[int]
+    API_KEY_FIELD_NUMBER: _ClassVar[int]
+    BASE_URL_FIELD_NUMBER: _ClassVar[int]
+    MODEL_NAME_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    label: str
+    api_key: str
+    base_url: str
+    model_name: str
+    def __init__(self, user_id: _Optional[str] = ..., label: _Optional[str] = ..., api_key: _Optional[str] = ..., base_url: _Optional[str] = ..., model_name: _Optional[str] = ...) -> None: ...
+
+class LLMConfigPresetDeleteRequest(_message.Message):
+    __slots__ = ("config_id",)
+    CONFIG_ID_FIELD_NUMBER: _ClassVar[int]
+    config_id: str
+    def __init__(self, config_id: _Optional[str] = ...) -> None: ...
+
+class LLMConfigPresetResponse(_message.Message):
+    __slots__ = ("config_id", "user_id", "label", "api_key", "base_url", "model_name", "created_at", "updated_at")
+    CONFIG_ID_FIELD_NUMBER: _ClassVar[int]
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    LABEL_FIELD_NUMBER: _ClassVar[int]
+    API_KEY_FIELD_NUMBER: _ClassVar[int]
+    BASE_URL_FIELD_NUMBER: _ClassVar[int]
+    MODEL_NAME_FIELD_NUMBER: _ClassVar[int]
+    CREATED_AT_FIELD_NUMBER: _ClassVar[int]
+    UPDATED_AT_FIELD_NUMBER: _ClassVar[int]
+    config_id: str
+    user_id: str
+    label: str
+    api_key: str
+    base_url: str
+    model_name: str
+    created_at: str
+    updated_at: str
+    def __init__(self, config_id: _Optional[str] = ..., user_id: _Optional[str] = ..., label: _Optional[str] = ..., api_key: _Optional[str] = ..., base_url: _Optional[str] = ..., model_name: _Optional[str] = ..., created_at: _Optional[str] = ..., updated_at: _Optional[str] = ...) -> None: ...
+
+class LLMConfigPresetListResponse(_message.Message):
+    __slots__ = ("configs",)
+    CONFIGS_FIELD_NUMBER: _ClassVar[int]
+    configs: _containers.RepeatedCompositeFieldContainer[LLMConfigPresetResponse]
+    def __init__(self, configs: _Optional[_Iterable[_Union[LLMConfigPresetResponse, _Mapping]]] = ...) -> None: ...
 
 class KnowledgeLibraryEntry(_message.Message):
     __slots__ = ("library_id", "user_id", "name", "knowledge_dir", "is_active", "created_at", "updated_at")
@@ -385,7 +511,7 @@ class KnowledgeFileTreeRequest(_message.Message):
     def __init__(self, user_id: _Optional[str] = ...) -> None: ...
 
 class KnowledgeFileNode(_message.Message):
-    __slots__ = ("name", "path", "is_dir", "mtime", "index_status", "size", "children")
+    __slots__ = ("name", "path", "is_dir", "mtime", "index_status", "size", "children", "graph_status")
     NAME_FIELD_NUMBER: _ClassVar[int]
     PATH_FIELD_NUMBER: _ClassVar[int]
     IS_DIR_FIELD_NUMBER: _ClassVar[int]
@@ -393,6 +519,7 @@ class KnowledgeFileNode(_message.Message):
     INDEX_STATUS_FIELD_NUMBER: _ClassVar[int]
     SIZE_FIELD_NUMBER: _ClassVar[int]
     CHILDREN_FIELD_NUMBER: _ClassVar[int]
+    GRAPH_STATUS_FIELD_NUMBER: _ClassVar[int]
     name: str
     path: str
     is_dir: bool
@@ -400,7 +527,8 @@ class KnowledgeFileNode(_message.Message):
     index_status: str
     size: int
     children: _containers.RepeatedCompositeFieldContainer[KnowledgeFileNode]
-    def __init__(self, name: _Optional[str] = ..., path: _Optional[str] = ..., is_dir: bool = ..., mtime: _Optional[str] = ..., index_status: _Optional[str] = ..., size: _Optional[int] = ..., children: _Optional[_Iterable[_Union[KnowledgeFileNode, _Mapping]]] = ...) -> None: ...
+    graph_status: str
+    def __init__(self, name: _Optional[str] = ..., path: _Optional[str] = ..., is_dir: bool = ..., mtime: _Optional[str] = ..., index_status: _Optional[str] = ..., size: _Optional[int] = ..., children: _Optional[_Iterable[_Union[KnowledgeFileNode, _Mapping]]] = ..., graph_status: _Optional[str] = ...) -> None: ...
 
 class KnowledgeFileTreeResponse(_message.Message):
     __slots__ = ("tree",)

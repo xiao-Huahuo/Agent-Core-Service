@@ -1,8 +1,8 @@
 ﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchWebSearchConfig, saveWebSearchConfig, fetchAvailableTools, saveDisabledTools, fetchTerminalSandboxConfig, saveTerminalSandboxConfig } from '@/api/settings'
-import type { SystemPromptEntry, MemoryEntry, ToolEntry, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
+import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchSavedLLMConfigs, saveLLMConfigPreset, deleteLLMConfigPreset, fetchWebSearchConfig, saveWebSearchConfig, fetchAvailableTools, saveDisabledTools, fetchTerminalSandboxConfig, saveTerminalSandboxConfig } from '@/api/settings'
+import type { SystemPromptEntry, MemoryEntry, ToolEntry, SavedLLMConfig, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
 import AppearanceSettingsSection from '@/components/settings_view/AppearanceSettingsSection.vue'
 import BasicSettingsSection from '@/components/settings_view/BasicSettingsSection.vue'
 import LlmSettingsSection from '@/components/settings_view/LlmSettingsSection.vue'
@@ -19,7 +19,8 @@ import type { ThemeMode } from '@/types/settings'
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 
-const activeTab = ref<SettingsTabKey>('basic')
+const SETTINGS_ACTIVE_TAB_KEY = 'agent_editor_settings_active_tab'
+const activeTab = ref<SettingsTabKey>((localStorage.getItem(SETTINGS_ACTIVE_TAB_KEY) as SettingsTabKey | null) ?? 'basic')
 
 const tabs = [
   { key: 'basic' as const, label: '基础设置' },
@@ -30,6 +31,17 @@ const tabs = [
   { key: 'web' as const, label: '联网配置' },
   { key: 'memory' as const, label: '记忆与指令' },
 ]
+
+watch(activeTab, (tab) => {
+  localStorage.setItem(SETTINGS_ACTIVE_TAB_KEY, tab)
+})
+
+function handleExternalSettingsTab(event: Event) {
+  const tab = (event as CustomEvent<SettingsTabKey>).detail
+  if (tabs.some((item) => item.key === tab)) {
+    activeTab.value = tab
+  }
+}
 /* ---- Basic settings ---- */
 
 const libraryNameDraft = ref(settingsStore.activeKnowledgeLibrary?.name ?? '')
@@ -114,10 +126,11 @@ watch(
 async function loadAvailableFonts() {
   fontsLoading.value = true
   const fallbackFonts = [
+    'Google Sans',
+    'Noto Sans SC',
     'Microsoft YaHei UI',
     'Microsoft YaHei',
     'PingFang SC',
-    'Noto Sans SC',
     'JetBrains Mono',
     'Hack',
     'Cascadia Code',
@@ -243,6 +256,11 @@ async function saveProfile() {
   } finally {
     saving.value = false
   }
+}
+
+function handleLogout() {
+  workspaceStore.setMainView('editor')
+  settingsStore.clearUserId()
 }
 
 const themeOptions: Array<{ value: ThemeMode; label: string }> = [
@@ -385,6 +403,7 @@ const modelSaving = ref(false)
 const modelMsg = ref('')
 const modelEditing = ref(false)
 const modelConfigSaved = computed(() => !!(largeModelName.value || largeBaseUrl.value || largeApiKey.value))
+const savedModelConfigs = ref<SavedLLMConfig[]>([])
 
 async function loadModelConfig() {
   if (!settingsStore.profile.userId) return
@@ -400,25 +419,79 @@ async function loadModelConfig() {
   } catch { /* ignore */ }
 }
 
+async function loadSavedModelConfigs() {
+  if (!settingsStore.profile.userId) return
+  try {
+    const response = await fetchSavedLLMConfigs(settingsStore.profile.userId)
+    savedModelConfigs.value = response.configs ?? []
+  } catch {
+    savedModelConfigs.value = []
+  }
+}
+
 async function handleSaveModel() {
   if (!settingsStore.profile.userId) return
   modelSaving.value = true
   modelMsg.value = ''
   try {
     await saveLLMConfig(settingsStore.profile.userId, {
-      apiKey: largeApiKey.value || undefined,
-      baseUrl: largeBaseUrl.value || undefined,
-      modelName: largeModelName.value || undefined,
-      smallApiKey: smallApiKey.value || undefined,
-      smallBaseUrl: smallBaseUrl.value || undefined,
-      smallModelName: smallModelName.value || undefined,
+      apiKey: largeApiKey.value,
+      baseUrl: largeBaseUrl.value,
+      modelName: largeModelName.value,
+      smallApiKey: smallApiKey.value,
+      smallBaseUrl: smallBaseUrl.value,
+      smallModelName: smallModelName.value,
     })
     modelEditing.value = false
+    await loadSavedModelConfigs()
+    window.dispatchEvent(new CustomEvent('agent-model-config-updated', { detail: { modelName: largeModelName.value } }))
     showMessage(modelMsg, '已保存')
   } catch {
     showMessage(modelMsg, '保存失败')
   } finally {
     modelSaving.value = false
+  }
+}
+
+async function handleSaveModelPreset(target: 'large' | 'small') {
+  if (!settingsStore.profile.userId) return
+  const source = target === 'large'
+    ? { modelName: largeModelName.value, baseUrl: largeBaseUrl.value, apiKey: largeApiKey.value, label: '大模型配置' }
+    : { modelName: smallModelName.value, baseUrl: smallBaseUrl.value, apiKey: smallApiKey.value, label: '小模型配置' }
+  try {
+    await saveLLMConfigPreset(settingsStore.profile.userId, {
+      label: source.modelName || source.baseUrl || source.label,
+      modelName: source.modelName || undefined,
+      baseUrl: source.baseUrl || undefined,
+      apiKey: source.apiKey || undefined,
+    })
+    await loadSavedModelConfigs()
+    showMessage(modelMsg, '已保存配置')
+  } catch {
+    showMessage(modelMsg, '保存配置失败')
+  }
+}
+
+function importSavedModelConfig(config: SavedLLMConfig, target: 'large' | 'small') {
+  if (target === 'large') {
+    largeModelName.value = config.model_name || ''
+    largeBaseUrl.value = config.base_url || ''
+    largeApiKey.value = config.api_key || ''
+  } else {
+    smallModelName.value = config.model_name || ''
+    smallBaseUrl.value = config.base_url || ''
+    smallApiKey.value = config.api_key || ''
+  }
+  modelEditing.value = true
+}
+
+async function handleDeleteSavedModelConfig(configId: string) {
+  try {
+    await deleteLLMConfigPreset(configId)
+    savedModelConfigs.value = savedModelConfigs.value.filter(config => config.config_id !== configId)
+    showMessage(modelMsg, '已删除配置')
+  } catch {
+    showMessage(modelMsg, '删除配置失败')
   }
 }
 
@@ -497,15 +570,18 @@ async function handleSaveTerminalSandbox(config: TerminalSandboxConfig) {
 }
 
 onMounted(() => {
+  window.addEventListener('agent-settings-tab', handleExternalSettingsTab as EventListener)
   loadAvailableFonts()
   loadAgentSettings()
   loadModelConfig()
+  loadSavedModelConfigs()
   loadWebSearchConfig()
   loadTools()
   loadTerminalSandboxConfig()
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('agent-settings-tab', handleExternalSettingsTab as EventListener)
   if (fontSizeSaveTimer) {
     window.clearTimeout(fontSizeSaveTimer)
     fontSizeSaveTimer = null
@@ -535,6 +611,7 @@ onBeforeUnmount(() => {
         :save-error="saveError"
         :save-message="saveMessage"
         :saving="saving"
+        @logout="handleLogout"
         @save="saveProfile"
       />
 
@@ -571,8 +648,12 @@ onBeforeUnmount(() => {
         :model-config-saved="modelConfigSaved"
         :model-msg="modelMsg"
         :model-saving="modelSaving"
+        :saved-configs="savedModelConfigs"
         @cancel="modelEditing = false; loadModelConfig()"
+        @delete-saved-config="handleDeleteSavedModelConfig"
+        @import-saved-config="importSavedModelConfig"
         @save="handleSaveModel"
+        @save-preset="handleSaveModelPreset"
       />
 
       <ToolsSettingsSection
@@ -610,11 +691,13 @@ onBeforeUnmount(() => {
         :memory-msg="memoryMsg"
         :prompt-entries="promptEntries"
         :prompt-msg="promptMsg"
+        :show-graph-column="settingsStore.showGraphColumn"
         :show-index-column="settingsStore.showIndexColumn"
         @add-memory="handleAddMemory"
         @add-prompt="handleAddPrompt"
         @delete-memory="handleDeleteMemory"
         @delete-prompt="handleDeletePrompt"
+        @set-show-graph-column="settingsStore.setShowGraphColumn"
         @set-show-index-column="settingsStore.setShowIndexColumn"
       />
     </div>
@@ -1213,7 +1296,80 @@ onBeforeUnmount(() => {
 .model-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-8);
+}
+
+.saved-model-section {
+  margin-top: var(--space-16);
+}
+
+.saved-model-grid {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.saved-model-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+}
+
+.saved-model-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.saved-model-main strong,
+.saved-model-main span,
+.saved-model-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-model-main strong {
+  color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.saved-model-main span,
+.saved-model-main small {
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
+}
+
+.saved-model-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.saved-model-actions button {
+  height: 26px;
+  padding: 0 var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: calc(11px * var(--font-scale));
+}
+
+.saved-model-actions button:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.saved-model-actions button.danger:hover {
+  border-color: rgba(255, 95, 95, 0.5);
+  color: var(--color-danger);
 }
 
 .hint-text {

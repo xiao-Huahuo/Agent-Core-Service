@@ -957,8 +957,10 @@ class AgentCore:
         llm_config = self._get_user_llm_config(user_id) or {}
         api_key = llm_config.get("api_key")
         base_url = llm_config.get("base_url")
+        model_name = llm_config.get("model_name")
         small_api_key = llm_config.get("small_api_key") or api_key
         small_base_url = llm_config.get("small_base_url") or base_url
+        small_model_name = llm_config.get("small_model_name") or model_name
         runtime_messages = [SystemMessage(content=system_content), *messages]
         cumulative = ""
         last_sent_content = ""
@@ -1047,8 +1049,10 @@ class AgentCore:
                 model_tier=SMALL_MODEL_TIER,
                 api_key=api_key,
                 base_url=base_url,
+                model_name=model_name,
                 small_api_key=small_api_key,
                 small_base_url=small_base_url,
+                small_model_name=small_model_name,
             ):
                 if chunk.get("status") == "complete":
                     final_message = chunk.get("message")
@@ -1332,8 +1336,10 @@ class AgentCore:
         llm_config = self._get_user_llm_config(user_id) or {}
         api_key = llm_config.get("api_key")
         base_url = llm_config.get("base_url")
+        model_name = llm_config.get("model_name")
         small_api_key = llm_config.get("small_api_key") or api_key
         small_base_url = llm_config.get("small_base_url") or base_url
+        small_model_name = llm_config.get("small_model_name") or model_name
         system_prompt = (
             "你是 Agent Loop 路由器。只输出 JSON,不要输出解释。\n"
             "根据用户请求选择一个模式:\n"
@@ -1363,8 +1369,10 @@ class AgentCore:
                 timeout_seconds=12,
                 api_key=api_key,
                 base_url=base_url,
+                model_name=model_name,
                 small_api_key=small_api_key,
                 small_base_url=small_base_url,
+                small_model_name=small_model_name,
             )
         except Exception:
             logger.warning("小模型 Agent Loop 路由失败,回退到本地规则 | user=%s", user_id, exc_info=True)
@@ -1963,8 +1971,10 @@ def _rename_session_worker(agent: AgentCore, *, user_id: str, session_id: str) -
         llm_config = agent._get_user_llm_config(user_id)
         api_key = llm_config.get("api_key") if llm_config else None
         base_url = llm_config.get("base_url") if llm_config else None
-        small_api_key = llm_config.get("small_api_key") if llm_config else None
-        small_base_url = llm_config.get("small_base_url") if llm_config else None
+        model_name = llm_config.get("model_name") if llm_config else None
+        small_api_key = (llm_config.get("small_api_key") or api_key) if llm_config else None
+        small_base_url = (llm_config.get("small_base_url") or base_url) if llm_config else None
+        small_model_name = (llm_config.get("small_model_name") or model_name) if llm_config else None
         response = agent.task_scheduler.invoke_chat(
             task_type=BACKGROUND_SUMMARY_TASK,
             messages=[HumanMessage(content=rename_prompt)],
@@ -1973,8 +1983,10 @@ def _rename_session_worker(agent: AgentCore, *, user_id: str, session_id: str) -
             temperature=0.3,
             api_key=api_key,
             base_url=base_url,
+            model_name=model_name,
             small_api_key=small_api_key,
             small_base_url=small_base_url,
+            small_model_name=small_model_name,
         )
         title = (getattr(response, "content", "") or "").strip()
         if not title:

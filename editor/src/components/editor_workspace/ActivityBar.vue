@@ -138,7 +138,7 @@ const emit = defineEmits<{
   width: 100%;
   height: 100%;
   padding: var(--space-8) var(--space-4);
-  background: var(--color-canvas-soft);
+  background: var(--color-chrome-rail-bg);
 }
 
 .activity-button {

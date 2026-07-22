@@ -246,8 +246,8 @@ export interface GraphRebuildStatus {
   docs?: GraphDocStatus[]
 }
 
-export function rebuildKnowledgeGraph(userId: string): Promise<{ status: string; message: string }> {
-  return apiPost(API_ROUTES.KNOWLEDGE_GRAPH_REBUILD, { user_id: userId })
+export function rebuildKnowledgeGraph(userId: string, path?: string): Promise<{ status: string; message: string }> {
+  return apiPost(API_ROUTES.KNOWLEDGE_GRAPH_REBUILD, { user_id: userId, path })
 }
 
 export function getKnowledgeGraphStatus(userId: string): Promise<GraphRebuildStatus> {

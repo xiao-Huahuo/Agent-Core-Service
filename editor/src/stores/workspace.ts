@@ -49,6 +49,7 @@ import type {
   IndexStatus,
   KnowledgeFileNode,
   KnowledgeTrashEntry,
+  GraphStatus,
   SearchResults,
   WorkspaceMainView,
 } from '@/types/knowledge'
@@ -450,6 +451,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     for (const doc of docs) {
       if (doc.status === 'done' || doc.status === 'skipped' || doc.status === 'failed') {
+        updateTreeNodeGraphStatus(doc.path, graphStatusFromGraphDoc(doc))
         queueMap.delete(doc.path)
         continue
       }
@@ -479,15 +481,42 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     graphQueuePlannedTotal = docs.filter((d) => d.status === 'pending' || d.status === 'processing' || d.status === 'done').length
   }
 
+  function graphStatusFromGraphDoc(doc: GraphDocStatus): GraphStatus {
+    if (doc.status === 'done' || doc.status === 'skipped') {
+      return 'graphed'
+    }
+    return 'dirty'
+  }
+
+  function updateTreeNodeGraphStatus(path: string, status: GraphStatus) {
+    const normalizedPath = normalizeTreePath(path)
+    if (!normalizedPath) {
+      return
+    }
+    const visit = (nodes: KnowledgeFileNode[]): KnowledgeFileNode[] => nodes.map((node) => {
+      const nodePath = normalizeTreePath(node.path)
+      if (nodePath === normalizedPath) {
+        return { ...node, graphStatus: node.indexStatus === 'ignored' ? 'ignored' : status }
+      }
+      if (node.children && normalizedPath.startsWith(`${nodePath}/`)) {
+        return { ...node, children: visit(node.children) }
+      }
+      return node
+    })
+    tree.value = visit(tree.value)
+  }
+
   async function pollGraphStatus() {
     const userId = useSettingsStore().profile.userId
     if (!userId) return
     try {
       const status = await getKnowledgeGraphStatus(userId)
       const docs = status.docs ?? []
+      if (docs.length > 0) {
+        syncGraphQueueFromDocs(docs, status.message)
+      }
       if (status.status === 'running' || status.status === 'idle') {
         if (docs.length > 0) {
-          syncGraphQueueFromDocs(docs, status.message)
           const remainingPending = docs.filter(
             (d) => d.status === 'pending' || d.status === 'processing'
           ).length
@@ -520,7 +549,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     graphPollingTimer = setInterval(pollGraphStatus, 2000)
   }
 
-  async function _triggerGraphExtraction() {
+  async function _triggerGraphExtraction(targetPath?: string) {
     const userId = useSettingsStore().profile.userId
     if (!userId || graphQueue.value.length > 0) {
       return
@@ -528,7 +557,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     beginGraphProgress(6)
     graphQueuePlannedTotal = 0
     try {
-      const result = await rebuildKnowledgeGraph(userId)
+      const result = await rebuildKnowledgeGraph(userId, targetPath)
       if (result.status === 'already_running') {
         showToast('已有一个图谱抽取任务在运行')
       }
@@ -570,6 +599,21 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     graphRebuildPending.value = false
     await _triggerGraphExtraction()
+  }
+
+  async function extractGraphForNode(node: KnowledgeFileNode) {
+    const userId = useSettingsStore().profile.userId
+    if (!userId || graphQueue.value.length > 0 || graphRebuildPending.value) {
+      return
+    }
+    graphRebuildPending.value = true
+    try {
+      showToast(node.isDir ? '开始灌库后抽取文件夹图谱' : '开始灌库后抽取文件图谱')
+      await ingestFile(node)
+    } finally {
+      graphRebuildPending.value = false
+    }
+    await _triggerGraphExtraction(node.path)
   }
 
   function clearGraphHistory() {
@@ -2282,6 +2326,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     graphHistory,
     graphRebuildPending,
     startGraphRebuild,
+    extractGraphForNode,
     clearGraphHistory,
     performSearch,
     askAgent,

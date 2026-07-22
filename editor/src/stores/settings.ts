@@ -23,6 +23,7 @@ const CHAT_MODE_KEY = 'agent_editor_chat_mode'
 const AGENT_LOOP_MODE_KEY = 'agent_editor_loop_mode'
 const AGENT_ACCESS_MODE_KEY = 'agent_editor_access_mode'
 const SHOW_INDEX_COLUMN_KEY = 'agent_editor_show_index_column'
+const SHOW_GRAPH_COLUMN_KEY = 'agent_editor_show_graph_column'
 
 const DEFAULT_UI_FONT_STACK = 'var(--font-ui-default)'
 const DEFAULT_TEXT_FONT_STACK = 'var(--font-text-default)'
@@ -228,6 +229,9 @@ export const useSettingsStore = defineStore('settings', () => {
   /** Whether to show index status column/icons in file tree and file resource manager. */
   const showIndexColumn = ref(localStorage.getItem(SHOW_INDEX_COLUMN_KEY) !== 'false')
 
+  /** Whether to show semantic graph status column/icons in file tree and file resource manager. */
+  const showGraphColumn = ref(localStorage.getItem(SHOW_GRAPH_COLUMN_KEY) !== 'false')
+
   /** Whether the editor shell can enter workspace routes. */
   const hasUserId = computed(() => profile.value.userId.trim().length > 0)
 
@@ -347,6 +351,11 @@ export const useSettingsStore = defineStore('settings', () => {
   function setShowIndexColumn(value: boolean) {
     showIndexColumn.value = value
     localStorage.setItem(SHOW_INDEX_COLUMN_KEY, String(value))
+  }
+
+  function setShowGraphColumn(value: boolean) {
+    showGraphColumn.value = value
+    localStorage.setItem(SHOW_GRAPH_COLUMN_KEY, String(value))
   }
 
   function setAgentLoopMode(mode: AgentLoopMode) {
@@ -591,5 +600,7 @@ export const useSettingsStore = defineStore('settings', () => {
     setAutoIngestOnUpload,
     showIndexColumn,
     setShowIndexColumn,
+    showGraphColumn,
+    setShowGraphColumn,
   }
 })

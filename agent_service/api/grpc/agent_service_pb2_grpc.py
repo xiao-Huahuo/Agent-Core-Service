@@ -139,6 +139,31 @@ class AgentServiceStub(object):
                 request_serializer=agent__service__pb2.UserKnowledgeDirUpdateRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.UserProfileResponse.FromString,
                 _registered_method=True)
+        self.GetLLMConfig = channel.unary_unary(
+                '/agent_service.AgentService/GetLLMConfig',
+                request_serializer=agent__service__pb2.LLMConfigRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.LLMConfigResponse.FromString,
+                _registered_method=True)
+        self.SaveLLMConfig = channel.unary_unary(
+                '/agent_service.AgentService/SaveLLMConfig',
+                request_serializer=agent__service__pb2.LLMConfigSaveRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.LLMConfigResponse.FromString,
+                _registered_method=True)
+        self.ListLLMConfigPresets = channel.unary_unary(
+                '/agent_service.AgentService/ListLLMConfigPresets',
+                request_serializer=agent__service__pb2.LLMConfigRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.LLMConfigPresetListResponse.FromString,
+                _registered_method=True)
+        self.SaveLLMConfigPreset = channel.unary_unary(
+                '/agent_service.AgentService/SaveLLMConfigPreset',
+                request_serializer=agent__service__pb2.LLMConfigPresetSaveRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.LLMConfigPresetResponse.FromString,
+                _registered_method=True)
+        self.DeleteLLMConfigPreset = channel.unary_unary(
+                '/agent_service.AgentService/DeleteLLMConfigPreset',
+                request_serializer=agent__service__pb2.LLMConfigPresetDeleteRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.DeleteResponse.FromString,
+                _registered_method=True)
         self.RebuildKnowledge = channel.unary_unary(
                 '/agent_service.AgentService/RebuildKnowledge',
                 request_serializer=agent__service__pb2.KnowledgeRebuildRequest.SerializeToString,
@@ -362,6 +387,36 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetLLMConfig(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SaveLLMConfig(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListLLMConfigPresets(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SaveLLMConfigPreset(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteLLMConfigPreset(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def RebuildKnowledge(self, request, context):
         """知识库重建与上传
         """
@@ -558,6 +613,31 @@ def add_AgentServiceServicer_to_server(servicer, server):
                     servicer.UpdateUserKnowledgeDir,
                     request_deserializer=agent__service__pb2.UserKnowledgeDirUpdateRequest.FromString,
                     response_serializer=agent__service__pb2.UserProfileResponse.SerializeToString,
+            ),
+            'GetLLMConfig': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetLLMConfig,
+                    request_deserializer=agent__service__pb2.LLMConfigRequest.FromString,
+                    response_serializer=agent__service__pb2.LLMConfigResponse.SerializeToString,
+            ),
+            'SaveLLMConfig': grpc.unary_unary_rpc_method_handler(
+                    servicer.SaveLLMConfig,
+                    request_deserializer=agent__service__pb2.LLMConfigSaveRequest.FromString,
+                    response_serializer=agent__service__pb2.LLMConfigResponse.SerializeToString,
+            ),
+            'ListLLMConfigPresets': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListLLMConfigPresets,
+                    request_deserializer=agent__service__pb2.LLMConfigRequest.FromString,
+                    response_serializer=agent__service__pb2.LLMConfigPresetListResponse.SerializeToString,
+            ),
+            'SaveLLMConfigPreset': grpc.unary_unary_rpc_method_handler(
+                    servicer.SaveLLMConfigPreset,
+                    request_deserializer=agent__service__pb2.LLMConfigPresetSaveRequest.FromString,
+                    response_serializer=agent__service__pb2.LLMConfigPresetResponse.SerializeToString,
+            ),
+            'DeleteLLMConfigPreset': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteLLMConfigPreset,
+                    request_deserializer=agent__service__pb2.LLMConfigPresetDeleteRequest.FromString,
+                    response_serializer=agent__service__pb2.DeleteResponse.SerializeToString,
             ),
             'RebuildKnowledge': grpc.unary_unary_rpc_method_handler(
                     servicer.RebuildKnowledge,
@@ -1162,6 +1242,141 @@ class AgentService(object):
             '/agent_service.AgentService/UpdateUserKnowledgeDir',
             agent__service__pb2.UserKnowledgeDirUpdateRequest.SerializeToString,
             agent__service__pb2.UserProfileResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetLLMConfig(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetLLMConfig',
+            agent__service__pb2.LLMConfigRequest.SerializeToString,
+            agent__service__pb2.LLMConfigResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SaveLLMConfig(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/SaveLLMConfig',
+            agent__service__pb2.LLMConfigSaveRequest.SerializeToString,
+            agent__service__pb2.LLMConfigResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListLLMConfigPresets(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/ListLLMConfigPresets',
+            agent__service__pb2.LLMConfigRequest.SerializeToString,
+            agent__service__pb2.LLMConfigPresetListResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SaveLLMConfigPreset(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/SaveLLMConfigPreset',
+            agent__service__pb2.LLMConfigPresetSaveRequest.SerializeToString,
+            agent__service__pb2.LLMConfigPresetResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteLLMConfigPreset(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/DeleteLLMConfigPreset',
+            agent__service__pb2.LLMConfigPresetDeleteRequest.SerializeToString,
+            agent__service__pb2.DeleteResponse.FromString,
             options,
             channel_credentials,
             insecure,

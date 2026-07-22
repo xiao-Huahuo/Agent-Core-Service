@@ -9,6 +9,9 @@
 /** Index lifecycle shown in the file tree and top status bar. */
 export type IndexStatus = 'clean' | 'dirty' | 'indexing' | 'indexed' | 'failed' | 'ignored'
 
+/** Graph lifecycle shown next to index status in file browsers. */
+export type GraphStatus = 'graphed' | 'dirty' | 'ignored'
+
 /** Editor display mode controlled by the central toolbar. */
 export type EditorViewMode = 'edit' | 'preview' | 'split'
 
@@ -45,6 +48,8 @@ export interface KnowledgeFileNode {
   ingestedAt?: string
   /** Current indexing state for this file or directory. */
   indexStatus?: IndexStatus
+  /** Current semantic graph state for this file or directory. */
+  graphStatus?: GraphStatus
 }
 
 export interface KnowledgeTrashEntry {

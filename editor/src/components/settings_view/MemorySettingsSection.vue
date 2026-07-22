@@ -19,6 +19,7 @@ defineProps<{
   addingMemory: boolean
   memoryMsg: string
   showIndexColumn: boolean
+  showGraphColumn: boolean
 }>()
 
 defineEmits<{
@@ -27,6 +28,7 @@ defineEmits<{
   addMemory: []
   deleteMemory: [memoryId: string]
   setShowIndexColumn: [value: boolean]
+  setShowGraphColumn: [value: boolean]
 }>()
 </script>
 
@@ -78,6 +80,15 @@ defineEmits<{
         @change="$emit('setShowIndexColumn', ($event.target as HTMLInputElement).checked)"
       />
       <span class="hint-text">在文件树和文件资源管理器中显示入库状态</span>
+    </div>
+    <div class="setting-row toggle-row">
+      <label>图谱状态</label>
+      <input
+        :checked="showGraphColumn"
+        type="checkbox"
+        @change="$emit('setShowGraphColumn', ($event.target as HTMLInputElement).checked)"
+      />
+      <span class="hint-text">在文件树和文件资源管理器中显示语义图谱状态</span>
     </div>
   </div>
 </template>

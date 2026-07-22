@@ -552,6 +552,13 @@ function showInGraphFromMenu() {
   workspaceStore.setMainView('graph')
 }
 
+async function extractGraphFromMenu() {
+  const node = contextMenu.value.node
+  closeContextMenu()
+  if (!node) return
+  await workspaceStore.extractGraphForNode(node)
+}
+
 async function askAgentFromMenu() {
   const node = contextMenu.value.node
   closeContextMenu()
@@ -839,6 +846,7 @@ onUnmounted(() => {
       @show-in-folder="showInFolderFromMenu"
       @open-default="openWithDefaultFromMenu"
       @show-in-graph="showInGraphFromMenu"
+      @extract-graph="extractGraphFromMenu"
       @ask-agent="askAgentFromMenu"
       @ingest="ingestFromMenu"
       @toggle-ignore="toggleIgnoreFromMenu"

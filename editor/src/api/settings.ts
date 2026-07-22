@@ -307,6 +307,9 @@ export interface LLMConfigResponse {
   small_api_key: string
   small_base_url: string
   small_model_name: string
+  effective_small_api_key?: string
+  effective_small_base_url?: string
+  effective_small_model_name?: string
   updated_at: string
 }
 
@@ -333,6 +336,37 @@ export function saveLLMConfig(
   if (params.smallBaseUrl !== undefined) body.small_base_url = params.smallBaseUrl
   if (params.smallModelName !== undefined) body.small_model_name = params.smallModelName
   return apiPut<LLMConfigResponse>(API_ROUTES.SETTINGS_MODEL_CONFIG, body)
+}
+
+export interface SavedLLMConfig {
+  config_id: string
+  user_id: string
+  label: string
+  api_key: string
+  base_url: string
+  model_name: string
+  created_at: string
+  updated_at: string
+}
+
+export function fetchSavedLLMConfigs(userId: string): Promise<{ configs: SavedLLMConfig[] }> {
+  return apiGet<{ configs: SavedLLMConfig[] }>(API_ROUTES.SETTINGS_MODEL_CONFIG_SAVED, { user_id: userId })
+}
+
+export function saveLLMConfigPreset(
+  userId: string,
+  params: { label?: string; apiKey?: string; baseUrl?: string; modelName?: string },
+): Promise<SavedLLMConfig> {
+  const body: Record<string, string> = { user_id: userId }
+  if (params.label !== undefined) body.label = params.label
+  if (params.apiKey !== undefined) body.api_key = params.apiKey
+  if (params.baseUrl !== undefined) body.base_url = params.baseUrl
+  if (params.modelName !== undefined) body.model_name = params.modelName
+  return apiPost<SavedLLMConfig>(API_ROUTES.SETTINGS_MODEL_CONFIG_SAVED, body)
+}
+
+export function deleteLLMConfigPreset(configId: string): Promise<{ ok: boolean }> {
+  return apiDelete<{ ok: boolean }>(`${API_ROUTES.SETTINGS_MODEL_CONFIG_SAVED}/${encodeURIComponent(configId)}`)
 }
 
 /* ---- Tool management ---- */

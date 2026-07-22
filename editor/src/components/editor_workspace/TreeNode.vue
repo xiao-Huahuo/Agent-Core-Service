@@ -12,6 +12,8 @@ import {
   ChevronRight,
   CircleAlert,
   CircleCheck,
+  GitBranch,
+  Network,
 } from 'lucide-vue-next'
 
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
@@ -68,6 +70,24 @@ const indexStatusIcon = computed(() => {
   if (props.node.indexStatus === 'indexed' || props.node.indexStatus === 'clean') return CircleCheck
   if (props.node.indexStatus === 'ignored') return Ban
   return CircleAlert
+})
+
+const graphStatusClass = computed(() => {
+  if (props.node.graphStatus === 'graphed') return 'graphed'
+  if (props.node.graphStatus === 'ignored') return 'ignored'
+  return 'dirty'
+})
+
+const graphStatusTitle = computed(() => {
+  if (props.node.graphStatus === 'graphed') return '已入图谱'
+  if (props.node.graphStatus === 'ignored') return '已屏蔽, 不进入图谱'
+  return '未入图谱'
+})
+
+const graphStatusIcon = computed(() => {
+  if (props.node.graphStatus === 'graphed') return Network
+  if (props.node.graphStatus === 'ignored') return Ban
+  return GitBranch
 })
 
 watch(
@@ -192,6 +212,15 @@ function handleRowDrop(event: DragEvent) {
           :title="indexStatusTitle"
         />
         <span v-if="node.isDir && settingsStore.showIndexColumn" class="node-index-placeholder"></span>
+        <component
+          v-if="!node.isDir && settingsStore.showGraphColumn"
+          :is="graphStatusIcon"
+          class="node-graph-dot"
+          :class="graphStatusClass"
+          :size="13"
+          :title="graphStatusTitle"
+        />
+        <span v-if="node.isDir && settingsStore.showGraphColumn" class="node-index-placeholder"></span>
       </span>
     </div>
     <Transition
@@ -232,7 +261,7 @@ function handleRowDrop(event: DragEvent) {
 .tree-row {
   position: relative;
   display: grid;
-  grid-template-columns: 14px 16px minmax(0, 1fr) 34px;
+  grid-template-columns: 14px 16px minmax(0, 1fr) 58px;
   align-items: center;
   isolation: isolate;
   gap: var(--space-6);
@@ -323,11 +352,11 @@ function handleRowDrop(event: DragEvent) {
 
 .node-status-cluster {
   display: inline-grid;
-  grid-template-columns: 8px 16px;
+  grid-template-columns: 8px 16px 16px;
   align-items: center;
   justify-content: end;
   gap: 8px;
-  min-width: 34px;
+  min-width: 58px;
   padding-left: 8px;
 }
 
@@ -366,6 +395,23 @@ function handleRowDrop(event: DragEvent) {
 
 .node-index-dot.failed {
   color: #f59f00;
+}
+
+.node-graph-dot {
+  justify-self: center;
+  color: #4dabf7;
+}
+
+.node-graph-dot.graphed {
+  color: #15aabf;
+}
+
+.node-graph-dot.dirty {
+  color: var(--color-danger);
+}
+
+.node-graph-dot.ignored {
+  color: #748ffc;
 }
 
 .material-file-icon {

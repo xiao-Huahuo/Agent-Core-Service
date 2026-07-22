@@ -85,8 +85,10 @@ class TaskSuggestionService:
                 timeout_seconds=20,
                 api_key=llm_config.get("api_key"),
                 base_url=llm_config.get("base_url"),
+                model_name=llm_config.get("model_name"),
                 small_api_key=llm_config.get("small_api_key") or llm_config.get("api_key"),
                 small_base_url=llm_config.get("small_base_url") or llm_config.get("base_url"),
+                small_model_name=llm_config.get("small_model_name") or llm_config.get("model_name"),
             )
             self._record_token_usage(
                 user_id=user_id,
@@ -131,6 +133,7 @@ class TaskSuggestionService:
                 timeout_seconds=20,
                 api_key=llm_config.get("api_key"),
                 base_url=llm_config.get("base_url"),
+                model_name=llm_config.get("model_name"),
             )
             self._record_token_usage(
                 user_id=user_id,

@@ -62,6 +62,11 @@ service AgentService {
 
   rpc EnsureUserProfile(UserProfileRequest) returns (UserProfileResponse);
   rpc UpdateUserKnowledgeDir(UserKnowledgeDirUpdateRequest) returns (UserProfileResponse);
+  rpc GetLLMConfig(LLMConfigRequest) returns (LLMConfigResponse);
+  rpc SaveLLMConfig(LLMConfigSaveRequest) returns (LLMConfigResponse);
+  rpc ListLLMConfigPresets(LLMConfigRequest) returns (LLMConfigPresetListResponse);
+  rpc SaveLLMConfigPreset(LLMConfigPresetSaveRequest) returns (LLMConfigPresetResponse);
+  rpc DeleteLLMConfigPreset(LLMConfigPresetDeleteRequest) returns (DeleteResponse);
 
   // 知识库重建与上传
   rpc RebuildKnowledge(KnowledgeRebuildRequest) returns (KnowledgeRebuildResponse);
@@ -321,6 +326,61 @@ message UserProfileResponse {
   repeated KnowledgeLibraryEntry knowledge_libraries = 7;
 }
 
+message LLMConfigRequest {
+  string user_id = 1;
+}
+
+message LLMConfigSaveRequest {
+  string user_id = 1;
+  string api_key = 2;
+  string base_url = 3;
+  string model_name = 4;
+  string small_api_key = 5;
+  string small_base_url = 6;
+  string small_model_name = 7;
+}
+
+message LLMConfigResponse {
+  string user_id = 1;
+  string api_key = 2;
+  string base_url = 3;
+  string model_name = 4;
+  string small_api_key = 5;
+  string small_base_url = 6;
+  string small_model_name = 7;
+  string effective_small_api_key = 8;
+  string effective_small_base_url = 9;
+  string effective_small_model_name = 10;
+  string updated_at = 11;
+}
+
+message LLMConfigPresetSaveRequest {
+  string user_id = 1;
+  string label = 2;
+  string api_key = 3;
+  string base_url = 4;
+  string model_name = 5;
+}
+
+message LLMConfigPresetDeleteRequest {
+  string config_id = 1;
+}
+
+message LLMConfigPresetResponse {
+  string config_id = 1;
+  string user_id = 2;
+  string label = 3;
+  string api_key = 4;
+  string base_url = 5;
+  string model_name = 6;
+  string created_at = 7;
+  string updated_at = 8;
+}
+
+message LLMConfigPresetListResponse {
+  repeated LLMConfigPresetResponse configs = 1;
+}
+
 message KnowledgeLibraryEntry {
   string library_id = 1;
   string user_id = 2;
@@ -371,6 +431,7 @@ message KnowledgeFileNode {
   string index_status = 5;
   int64 size = 6;
   repeated KnowledgeFileNode children = 7;
+  string graph_status = 8;
 }
 
 message KnowledgeFileTreeResponse {

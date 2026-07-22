@@ -27,52 +27,71 @@ from agent_service.tools.runtime_context import get_agent_token_callback, get_co
 logger = logging.getLogger(__name__)
 
 
-def get_user_llm_overrides(state: AgentState) -> tuple[str | None, str | None, str | None, str | None]:
-    """从 SettingsService 读取用户的 LLM 配置，返回 (api_key, base_url, small_api_key, small_base_url)。
+def get_user_llm_overrides(
+    state: AgentState,
+) -> tuple[str | None, str | None, str | None, str | None, str | None, str | None]:
+    """从 SettingsService 读取用户的 LLM 配置。
 
-    优先从 state.llm_config 读取（一次读取，图重入不重复查 DB），
-    回退到直接查询 _settings_service。
+    返回 `(api_key, base_url, model_name, small_api_key, small_base_url, small_model_name)`。
+    小模型字段为空时继承大模型字段。
     """
+
     user_id = state.get("user_id")
     if not user_id:
         logger.warning("get_user_llm_overrides: state has no user_id")
-        return None, None, None, None
+        return None, None, None, None, None, None
 
-    # 优先使用 state 中预存的 llm_config
     llm_config = state.get("llm_config")
     if llm_config:
         api_key = _normalize_optional_str(llm_config.get("api_key"))
         base_url = _normalize_optional_str(llm_config.get("base_url"))
+        model_name = _normalize_optional_str(llm_config.get("model_name"))
         small_api_key = _normalize_optional_str(llm_config.get("small_api_key")) or api_key
         small_base_url = _normalize_optional_str(llm_config.get("small_base_url")) or base_url
-        logger.info("get_user_llm_overrides: user=%s from state has_api_key=True api_key_len=%d", user_id, len(api_key or ""))
+        small_model_name = _normalize_optional_str(llm_config.get("small_model_name")) or model_name
+        logger.info(
+            "get_user_llm_overrides: user=%s from state has_api_key=True api_key_len=%d",
+            user_id,
+            len(api_key or ""),
+        )
         return (
             api_key,
             base_url,
+            model_name,
             small_api_key,
             small_base_url,
+            small_model_name,
         )
 
     try:
         from agent_service.api.rest.deps import _settings_service
         if _settings_service is None:
             logger.warning("get_user_llm_overrides: _settings_service is None")
-            return None, None, None, None
+            return None, None, None, None, None, None
         config = _settings_service.get_llm_config(user_id=user_id)
         api_key = _normalize_optional_str(config.get("api_key"))
         base_url = _normalize_optional_str(config.get("base_url"))
+        model_name = _normalize_optional_str(config.get("model_name"))
         small_api_key = _normalize_optional_str(config.get("small_api_key")) or api_key
         small_base_url = _normalize_optional_str(config.get("small_base_url")) or base_url
-        logger.info("get_user_llm_overrides: user=%s from db has_api_key=%s api_key_len=%d", user_id, bool(api_key), len(api_key or ""))
+        small_model_name = _normalize_optional_str(config.get("small_model_name")) or model_name
+        logger.info(
+            "get_user_llm_overrides: user=%s from db has_api_key=%s api_key_len=%d",
+            user_id,
+            bool(api_key),
+            len(api_key or ""),
+        )
         return (
             api_key,
             base_url,
+            model_name,
             small_api_key,
             small_base_url,
+            small_model_name,
         )
     except Exception as exc:
         logger.error("get_user_llm_overrides: exception user=%s err=%s", user_id, exc)
-        return None, None, None, None
+        return None, None, None, None, None, None
 
 
 def _normalize_optional_str(value: Any) -> str | None:
@@ -211,7 +230,14 @@ class ModelDecisionNode:
                 active_tool_names=active_tool_names,
             )
 
-        user_api_key, user_base_url, user_small_api_key, user_small_base_url = self._get_user_model_overrides(state)
+        (
+            user_api_key,
+            user_base_url,
+            user_model_name,
+            user_small_api_key,
+            user_small_base_url,
+            user_small_model_name,
+        ) = self._get_user_model_overrides(state)
         llm_messages = self._prepare_messages_for_llm(system_message, state["messages"])
         response = self.task_scheduler.invoke_chat(
             task_type=FOREGROUND_AGENT_TASK,
@@ -219,8 +245,10 @@ class ModelDecisionNode:
             tool_names=active_tool_names,
             api_key=user_api_key,
             base_url=user_base_url,
+            model_name=user_model_name,
             small_api_key=user_small_api_key,
             small_base_url=user_small_base_url,
+            small_model_name=user_small_model_name,
         )
         tool_calls = getattr(response, "tool_calls", []) or []
         token_usage = extract_token_usage(response)
@@ -272,15 +300,24 @@ class ModelDecisionNode:
                 "chat_visible": False,
             })
 
-        user_api_key, user_base_url, user_small_api_key, user_small_base_url = self._get_user_model_overrides(state)
+        (
+            user_api_key,
+            user_base_url,
+            user_model_name,
+            user_small_api_key,
+            user_small_base_url,
+            user_small_model_name,
+        ) = self._get_user_model_overrides(state)
         for chunk in self.task_scheduler.stream_chat(
             task_type=FOREGROUND_AGENT_TASK,
             messages=llm_messages,
             tool_names=active_tool_names,
             api_key=user_api_key,
             base_url=user_base_url,
+            model_name=user_model_name,
             small_api_key=user_small_api_key,
             small_base_url=user_small_base_url,
+            small_model_name=user_small_model_name,
         ):
             is_complete = chunk.get("status") == "complete"
             if not is_complete:
@@ -377,8 +414,12 @@ class ModelDecisionNode:
         )
         return ToolMessage(content=compacted, tool_call_id=message.tool_call_id)
 
-    def _get_user_model_overrides(self, state: AgentState) -> tuple[str | None, str | None, str | None, str | None]:
-        """从 SettingsService 读取用户的 LLM 配置，返回 (api_key, base_url, small_api_key, small_base_url)。"""
+    def _get_user_model_overrides(
+        self,
+        state: AgentState,
+    ) -> tuple[str | None, str | None, str | None, str | None, str | None, str | None]:
+        """从 SettingsService 读取用户的 LLM 配置。"""
+
         return get_user_llm_overrides(state)
 
     @staticmethod

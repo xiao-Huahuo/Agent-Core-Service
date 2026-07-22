@@ -54,8 +54,10 @@ class SerializedChatRequest:
     stream_channel: str | None = None
     api_key: str | None = None
     base_url: str | None = None
+    model_name: str | None = None
     small_api_key: str | None = None
     small_base_url: str | None = None
+    small_model_name: str | None = None
 
     @classmethod
     def from_messages(
@@ -72,8 +74,10 @@ class SerializedChatRequest:
         model_tier: str = "large",
         api_key: str | None = None,
         base_url: str | None = None,
+        model_name: str | None = None,
         small_api_key: str | None = None,
         small_base_url: str | None = None,
+        small_model_name: str | None = None,
     ) -> "SerializedChatRequest":
         """从 LangChain messages 构造可序列化请求。"""
 
@@ -89,8 +93,10 @@ class SerializedChatRequest:
             model_tier=model_tier,
             api_key=api_key,
             base_url=base_url,
+            model_name=model_name,
             small_api_key=small_api_key,
             small_base_url=small_base_url,
+            small_model_name=small_model_name,
         )
 
     def to_stream_fields(self) -> dict[str, str]:
@@ -114,8 +120,10 @@ class SerializedChatRequest:
             "stream_channel": self.stream_channel,
             "api_key": self.api_key,
             "base_url": self.base_url,
+            "model_name": self.model_name,
             "small_api_key": self.small_api_key,
             "small_base_url": self.small_base_url,
+            "small_model_name": self.small_model_name,
         }
 
     @classmethod
@@ -136,8 +144,10 @@ class SerializedChatRequest:
             stream_channel=str(payload["stream_channel"]) if payload.get("stream_channel") else None,
             api_key=str(payload["api_key"]) if payload.get("api_key") else None,
             base_url=str(payload["base_url"]) if payload.get("base_url") else None,
+            model_name=str(payload["model_name"]) if payload.get("model_name") else None,
             small_api_key=str(payload["small_api_key"]) if payload.get("small_api_key") else None,
             small_base_url=str(payload["small_base_url"]) if payload.get("small_base_url") else None,
+            small_model_name=str(payload["small_model_name"]) if payload.get("small_model_name") else None,
         )
 
     def restore_messages(self) -> list[BaseMessage]:

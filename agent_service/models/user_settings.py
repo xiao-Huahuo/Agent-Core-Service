@@ -85,3 +85,21 @@ class UserLLMConfig(SQLModel, table=True):
     small_model_name: str = Field(default="", max_length=256)
 
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class UserLLMConfigPreset(SQLModel, table=True):
+    """用户保存的可复用 LLM 单模型配置。
+
+    每条记录只描述一个模型端点,可在设置页导入为大模型或小模型。
+    """
+
+    __tablename__ = "user_llm_config_presets"
+
+    config_id: str = Field(primary_key=True, max_length=64)
+    user_id: str = Field(index=True, max_length=128)
+    label: str = Field(default="", max_length=256)
+    api_key: str = Field(default="", max_length=1024)
+    base_url: str = Field(default="", max_length=1024)
+    model_name: str = Field(default="", max_length=256)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)

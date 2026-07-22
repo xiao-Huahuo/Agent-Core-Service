@@ -134,7 +134,7 @@ async function handleCloseWindow() {
   gap: var(--space-8);
   min-height: 38px;
   padding: 2px var(--space-8);
-  background: var(--color-chrome-bg-solid);
+  background: var(--color-chrome-topbar-bg);
   -webkit-app-region: drag;
   user-select: none;
   position: relative;

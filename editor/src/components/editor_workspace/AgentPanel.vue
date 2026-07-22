@@ -6,8 +6,8 @@
   keeps observability and settings outside of the editor side panel.
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { ChevronDown, History, Maximize2, MessageSquarePlus, MessagesSquare, PanelLeft, UploadCloud } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { BrainCircuit, Check, ChevronDown, History, Maximize2, MessageSquarePlus, MessagesSquare, PanelLeft, UploadCloud } from 'lucide-vue-next'
 
 import ChatInput from '@/components/editor_workspace/agent_chat/ChatInput.vue'
 import MessageList from '@/components/editor_workspace/agent_chat/MessageList.vue'
@@ -21,6 +21,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import SplitText from './SplitText.vue'
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
 import { uploadAgentAttachment } from '@/api/agent'
+import { fetchLLMConfig } from '@/api/settings'
 
 type MessageListApi = {
   scrollToBottom: (options?: ScrollToOptions) => void
@@ -48,6 +49,7 @@ const isUploadingAttachment = ref(false)
 const uploadStatusText = ref('')
 const welcomeIconUrl = new URL('../../assets/images/无底图标.png', import.meta.url).href
 const modeSwitchRef = ref<HTMLElement | null>(null)
+const loopModeMenu = ref<HTMLDetailsElement | null>(null)
 const modeIndicatorStyle = computed(() => {
   if (settingsStore.chatMode === 'chat') {
     return { width: 'calc(50% - 2px)', transform: 'translateX(0)' }
@@ -65,6 +67,17 @@ const sessionTitle = computed(() => {
   return name.replace(/^标题:/, '').trim()
 })
 const chatModeLabel = computed(() => settingsStore.chatMode === 'chat' ? 'chat' : 'tool')
+const currentLargeModelName = ref('')
+const modelConfigLabel = computed(() => currentLargeModelName.value || '配置模型')
+const loopModeOptions: Array<{ value: AgentLoopMode; label: string; hint: string }> = [
+  { value: 'auto', label: 'Auto', hint: '自动选择' },
+  { value: 'simple', label: 'Simple', hint: '直接回答' },
+  { value: 'react', label: 'ReAct', hint: '工具循环' },
+  { value: 'plan', label: 'Plan', hint: '规划执行' },
+]
+const selectedLoopModeLabel = computed(() => {
+  return loopModeOptions.find((option) => option.value === settingsStore.agentLoopMode)?.label || 'Auto'
+})
 const knowledgeTitle = computed(() => {
   const name = settingsStore.activeKnowledgeLibrary?.name?.trim()
   if (name) return name
@@ -137,6 +150,9 @@ function handleToggleWebSearch() {
 
 function setAgentLoopMode(mode: AgentLoopMode) {
   settingsStore.setAgentLoopMode(mode)
+  if (loopModeMenu.value) {
+    loopModeMenu.value.open = false
+  }
 }
 
 function setAgentAccessMode(mode: AgentAccessMode) {
@@ -147,6 +163,36 @@ function setChatRenderMode(mode: 'chat' | 'tool') {
   if (settingsStore.chatMode !== mode) {
     settingsStore.toggleChatMode()
   }
+}
+
+function handleLoopModeSummaryClick(event: MouseEvent) {
+  if (!userId.value) {
+    event.preventDefault()
+  }
+}
+
+async function loadCurrentModelConfig() {
+  if (!userId.value) {
+    currentLargeModelName.value = ''
+    return
+  }
+  try {
+    const config = await fetchLLMConfig(userId.value)
+    currentLargeModelName.value = config.model_name?.trim() || ''
+  } catch {
+    currentLargeModelName.value = ''
+  }
+}
+
+function openModelSettings() {
+  localStorage.setItem('agent_editor_settings_active_tab', 'llm')
+  window.dispatchEvent(new CustomEvent('agent-settings-tab', { detail: 'llm' }))
+  workspaceStore.setMainView('settings')
+}
+
+function handleModelConfigUpdated(event: Event) {
+  const modelName = (event as CustomEvent<{ modelName?: string }>).detail?.modelName
+  currentLargeModelName.value = modelName?.trim() || ''
 }
 
 function openSessionDrawer() {
@@ -246,7 +292,10 @@ async function uploadFiles(files: File[], sessionId: string) {
   }
 }
 
-watch(userId, () => void reloadSessions())
+watch(userId, () => {
+  void reloadSessions()
+  void loadCurrentModelConfig()
+})
 
 watch(
   () => props.mode,
@@ -288,8 +337,14 @@ watch(
 )
 
 onMounted(() => {
+  window.addEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
   void reloadSessions()
+  void loadCurrentModelConfig()
   void settingsStore.fetchWebSearchSettings()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
 })
 </script>
 
@@ -326,6 +381,34 @@ onMounted(() => {
       </div>
       <span class="topbar-title">{{ sessionTitle }}</span>
       <div class="topbar-right">
+        <details ref="loopModeMenu" class="topbar-loop-mode-dropdown" :class="{ disabled: !userId }">
+          <summary
+            class="topbar-loop-mode-trigger"
+            title="Agent Loop 模式"
+            aria-label="Agent Loop 模式"
+            @click="handleLoopModeSummaryClick"
+          >
+            <BrainCircuit :size="13" />
+            <span>{{ selectedLoopModeLabel }}</span>
+            <ChevronDown :size="12" />
+          </summary>
+          <div class="topbar-loop-mode-menu" role="listbox" aria-label="Agent Loop 模式">
+            <button
+              v-for="option in loopModeOptions"
+              :key="option.value"
+              class="topbar-loop-mode-option"
+              :class="{ active: settingsStore.agentLoopMode === option.value }"
+              type="button"
+              role="option"
+              :aria-selected="settingsStore.agentLoopMode === option.value"
+              @click="setAgentLoopMode(option.value)"
+            >
+              <span class="topbar-loop-mode-label">{{ option.label }}</span>
+              <span class="topbar-loop-mode-hint">{{ option.hint }}</span>
+              <Check v-if="settingsStore.agentLoopMode === option.value" :size="13" />
+            </button>
+          </div>
+        </details>
         <div ref="modeSwitchRef" class="topbar-mode-switch" role="group" aria-label="Chat render mode">
           <span class="mode-indicator" :style="modeIndicatorStyle"></span>
           <button
@@ -438,7 +521,7 @@ onMounted(() => {
         :disabled="!userId"
         :centered="!hasMessages && !chatStore.isStreaming"
         :web-search-enabled="settingsStore.profile.webSearchEnabled"
-        :agent-mode="settingsStore.agentLoopMode"
+        :model-label="modelConfigLabel"
         :agent-access-mode="settingsStore.agentAccessMode"
         :reference="referenceText"
         :attachments="chatStore.pendingAttachments"
@@ -447,7 +530,7 @@ onMounted(() => {
         @send="sendMessage"
         @select-suggestion="sendSuggestion"
         @toggle-web-search="handleToggleWebSearch"
-        @set-agent-mode="setAgentLoopMode"
+        @configure-model="openModelSettings"
         @set-agent-access-mode="setAgentAccessMode"
         @clear-reference="clearReference"
         @remove-attachment="removeAttachment"
@@ -571,7 +654,110 @@ onMounted(() => {
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-4);
-  min-width: 128px;
+  min-width: 228px;
+}
+
+.topbar-loop-mode-dropdown {
+  position: relative;
+}
+
+.topbar-loop-mode-dropdown.disabled {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.topbar-loop-mode-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  height: 28px;
+  min-width: 78px;
+  padding: 0 var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-tertiary);
+  font-family: var(--font-ui);
+  font-size: calc(10px * var(--font-scale));
+  line-height: 1;
+  list-style: none;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.topbar-loop-mode-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.topbar-loop-mode-trigger::marker {
+  content: '';
+}
+
+.topbar-loop-mode-trigger:hover,
+.topbar-loop-mode-dropdown[open] .topbar-loop-mode-trigger {
+  border-color: var(--color-accent);
+  background: var(--color-accent-muted);
+  color: var(--color-text-primary);
+}
+
+.topbar-loop-mode-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: 198px;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-lg);
+}
+
+.topbar-loop-mode-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  min-height: 34px;
+  padding: var(--space-6) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.topbar-loop-mode-option:hover,
+.topbar-loop-mode-option.active {
+  background: var(--color-primary-softer);
+  color: var(--color-text-primary);
+}
+
+.topbar-loop-mode-label {
+  color: inherit;
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 650;
+}
+
+.topbar-loop-mode-hint {
+  flex: 1;
+  color: var(--color-text-tertiary);
+  font-size: calc(10px * var(--font-scale));
+}
+
+.topbar-loop-mode-option svg {
+  color: var(--color-primary);
 }
 
 .topbar-mode-switch {

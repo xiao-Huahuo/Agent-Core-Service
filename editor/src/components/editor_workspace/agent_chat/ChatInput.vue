@@ -8,16 +8,16 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { BrainCircuit, Check, ChevronDown, Globe, Plus, Send, Shield, X } from 'lucide-vue-next'
+import { Check, ChevronDown, Globe, Plus, Send, Settings, Shield, X } from 'lucide-vue-next'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
-import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
+import type { AgentAccessMode } from '@/api/agent'
 import type { AgentUploadedAttachment } from '@/stores/chat'
 
 const props = defineProps<{
   disabled?: boolean
   centered?: boolean
   webSearchEnabled?: boolean
-  agentMode?: AgentLoopMode
+  modelLabel?: string
   agentAccessMode?: AgentAccessMode
   reference?: string
   attachments?: AgentUploadedAttachment[]
@@ -28,7 +28,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   send: [text: string, reference?: string]
   'toggle-web-search': []
-  'set-agent-mode': [mode: AgentLoopMode]
+  'configure-model': []
   'set-agent-access-mode': [mode: AgentAccessMode]
   'clear-reference': []
   'remove-attachment': [attachment: AgentUploadedAttachment]
@@ -37,16 +37,8 @@ const emit = defineEmits<{
 }>()
 
 const text = ref('')
-const loopModeMenu = ref<HTMLDetailsElement | null>(null)
 const accessModeMenu = ref<HTMLDetailsElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
-
-const loopModeOptions: Array<{ value: AgentLoopMode; label: string; hint: string }> = [
-  { value: 'auto', label: 'Auto', hint: '自动选择' },
-  { value: 'simple', label: 'Simple', hint: '直接回答' },
-  { value: 'react', label: 'ReAct', hint: '工具循环' },
-  { value: 'plan', label: 'Plan', hint: '规划执行' },
-]
 
 const accessModeOptions: Array<{ value: AgentAccessMode; label: string; hint: string }> = [
   { value: 'readonly', label: '只读', hint: '全目录只读' },
@@ -54,14 +46,11 @@ const accessModeOptions: Array<{ value: AgentAccessMode; label: string; hint: st
   { value: 'full_access', label: '完全访问', hint: '不限制边界' },
 ]
 
-const selectedLoopMode = computed<AgentLoopMode>(() => props.agentMode || 'auto')
-const selectedLoopModeLabel = computed(() => {
-  return loopModeOptions.find((option) => option.value === selectedLoopMode.value)?.label || 'Auto'
-})
 const selectedAccessMode = computed<AgentAccessMode>(() => props.agentAccessMode || 'sandbox')
 const selectedAccessModeLabel = computed(() => {
   return accessModeOptions.find((option) => option.value === selectedAccessMode.value)?.label || '沙盒'
 })
+const displayedModelLabel = computed(() => props.modelLabel?.trim() || '配置模型')
 
 function handleSend() {
   const trimmed = text.value.trim()
@@ -81,22 +70,9 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
-function handleLoopModeSummaryClick(event: MouseEvent) {
-  if (props.disabled) {
-    event.preventDefault()
-  }
-}
-
 function handleAccessModeSummaryClick(event: MouseEvent) {
   if (props.disabled) {
     event.preventDefault()
-  }
-}
-
-function selectLoopMode(mode: AgentLoopMode) {
-  emit('set-agent-mode', mode)
-  if (loopModeMenu.value) {
-    loopModeMenu.value.open = false
   }
 }
 
@@ -214,34 +190,16 @@ function handleFileChange(event: Event) {
             </div>
           </details>
         </div>
-        <details ref="loopModeMenu" class="loop-mode-dropdown" :class="{ disabled }">
-          <summary
-            class="loop-mode-trigger"
-            title="Agent Loop 模式"
-            aria-label="Agent Loop 模式"
-            @click="handleLoopModeSummaryClick"
-          >
-            <BrainCircuit :size="13" />
-            <span class="loop-mode-label">{{ selectedLoopModeLabel }}</span>
-            <ChevronDown :size="12" class="loop-mode-caret" />
-          </summary>
-          <div class="loop-mode-menu" role="listbox" aria-label="Agent Loop 模式">
-            <button
-              v-for="option in loopModeOptions"
-              :key="option.value"
-              class="loop-mode-option"
-              :class="{ active: selectedLoopMode === option.value }"
-              type="button"
-              role="option"
-              :aria-selected="selectedLoopMode === option.value"
-              @click="selectLoopMode(option.value)"
-            >
-              <span class="loop-mode-option-label">{{ option.label }}</span>
-              <span class="loop-mode-option-hint">{{ option.hint }}</span>
-              <Check v-if="selectedLoopMode === option.value" :size="13" class="loop-mode-check" />
-            </button>
-          </div>
-        </details>
+        <button
+          class="model-config-trigger"
+          type="button"
+          :disabled="disabled"
+          title="配置模型"
+          @click="emit('configure-model')"
+        >
+          <Settings :size="13" />
+          <span>{{ displayedModelLabel }}</span>
+        </button>
         <button class="send-btn" :disabled="disabled || !text.trim()" type="button" title="发送" @click="handleSend">
           <Send :size="15" />
         </button>
@@ -346,6 +304,7 @@ function handleFileChange(event: Event) {
 }
 
 .input-container {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   overflow: visible;
@@ -433,6 +392,7 @@ function handleFileChange(event: Event) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-6);
   height: 38px;
   padding: 0 10px;
 }
@@ -442,12 +402,14 @@ function handleFileChange(event: Event) {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  flex: 0 1 auto;
 }
 
 .attach-file-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 26px;
   width: 26px;
   height: 26px;
   border: 1px solid var(--color-border);
@@ -475,6 +437,7 @@ function handleFileChange(event: Event) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 26px;
   width: 26px;
   height: 26px;
   border: 1px solid var(--color-primary);
@@ -513,6 +476,7 @@ function handleFileChange(event: Event) {
 
 .access-mode-dropdown {
   position: relative;
+  flex: 0 0 auto;
 }
 
 .access-mode-dropdown.disabled {
@@ -638,6 +602,49 @@ function handleFileChange(event: Event) {
 
 .access-mode-check {
   color: var(--color-primary);
+}
+
+.model-config-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: 176px;
+  height: 28px;
+  margin-left: auto;
+  padding: 0 var(--space-10);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 46%, var(--color-border));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-primary);
+  font-family: var(--font-ui);
+  font-size: calc(11px * var(--font-scale));
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.model-config-trigger span {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-config-trigger:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-text-primary);
+}
+
+.model-config-trigger:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .loop-mode-dropdown {
@@ -774,6 +781,7 @@ function handleFileChange(event: Event) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 30px;
   width: 30px;
   height: 30px;
   border: 0;
@@ -803,5 +811,41 @@ function handleFileChange(event: Event) {
 .send-btn:disabled {
   cursor: default;
   opacity: 0.35;
+}
+
+@container (max-width: 360px) {
+  .model-config-trigger {
+    flex: 0 0 30px;
+    width: 30px;
+    padding: 0;
+  }
+
+  .model-config-trigger span {
+    display: none;
+  }
+}
+
+@container (max-width: 320px) {
+  .attach-file-btn {
+    display: none;
+  }
+}
+
+@container (max-width: 288px) {
+  .web-search-toggle {
+    display: none;
+  }
+}
+
+@container (max-width: 252px) {
+  .access-mode-trigger {
+    min-width: 30px;
+    padding: 0;
+  }
+
+  .access-mode-label,
+  .access-mode-caret {
+    display: none;
+  }
 }
 </style>

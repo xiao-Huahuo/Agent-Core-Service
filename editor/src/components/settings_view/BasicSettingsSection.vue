@@ -22,6 +22,7 @@ defineProps<{
 
 defineEmits<{
   save: []
+  logout: []
 }>()
 </script>
 
@@ -66,5 +67,59 @@ defineEmits<{
       <span v-if="saveMessage" class="feedback">{{ saveMessage }}</span>
       <span v-if="saveError" class="feedback error">{{ saveError }}</span>
     </div>
+    <section class="logout-section">
+      <div>
+        <h3>当前身份</h3>
+        <p class="setting-hint">退出后会回到 user_id 输入入口,本地知识库和用户配置不会被删除。</p>
+      </div>
+      <button class="logout-button" type="button" @click="$emit('logout')">退出登录</button>
+    </section>
   </div>
 </template>
+
+<style scoped>
+.logout-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-12);
+  margin-top: var(--space-12);
+  padding-top: var(--space-14);
+  border-top: 1px solid var(--color-border);
+}
+
+.logout-section h3 {
+  margin: 0 0 var(--space-4);
+}
+
+.logout-button {
+  height: 32px;
+  padding: 0 var(--space-12);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 58%, var(--color-border));
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-danger);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.logout-button:hover {
+  border-color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+}
+
+@media (max-width: 560px) {
+  .logout-section {
+    grid-template-columns: 1fr;
+  }
+
+  .logout-button {
+    justify-self: start;
+  }
+}
+</style>

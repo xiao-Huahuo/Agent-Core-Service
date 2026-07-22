@@ -141,7 +141,7 @@ class ObservationNode:
     def _call_llm(self, system_message: Any, context_message: Any, state: AgentState) -> Any:
         """调用 LLM,流式场景下通过 callback 逐 token 推送。"""
 
-        api_key, base_url, small_api_key, small_base_url = get_user_llm_overrides(state)
+        api_key, base_url, model_name, small_api_key, small_base_url, small_model_name = get_user_llm_overrides(state)
         callback = get_observation_content_callback()
         if callback is not None:
             cumulative = ""
@@ -152,8 +152,10 @@ class ObservationNode:
                 model_tier=SMALL_MODEL_TIER,
                 api_key=api_key,
                 base_url=base_url,
+                model_name=model_name,
                 small_api_key=small_api_key,
                 small_base_url=small_base_url,
+                small_model_name=small_model_name,
             ):
                 is_complete = chunk.get("status") == "complete"
                 if not is_complete:
@@ -174,8 +176,10 @@ class ObservationNode:
             model_tier=SMALL_MODEL_TIER,
             api_key=api_key,
             base_url=base_url,
+            model_name=model_name,
             small_api_key=small_api_key,
             small_base_url=small_base_url,
+            small_model_name=small_model_name,
         )
 
     def _check_overflow_then_decide(self, state: AgentState, llm_decision: str) -> str:

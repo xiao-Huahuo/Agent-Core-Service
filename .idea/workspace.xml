@@ -4,12 +4,55 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="任务建议;token用量的三个表">
-      <change beforePath="$PROJECT_DIR$/.idea/MetaWeave.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/MetaWeave.iml" afterDir="false" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="修复了不能嵌入图片的问题">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/nodes/model_decision.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/nodes/model_decision.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/nodes/observation.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/nodes/observation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/nodes/planner.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/nodes/planner.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.pyi" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.pyi" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2_grpc.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2_grpc.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/servicer.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/servicer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/knowledge.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/knowledge.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/core/agent_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/core/agent_config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/models/user_settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/models/user_settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/knowledge_graph_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/knowledge_graph_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/scheduler/redis_backend.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/scheduler/redis_backend.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/scheduler/runtime.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/scheduler/runtime.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/scheduler/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/scheduler/scheduler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/settings_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/settings_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/task_suggestion_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/task_suggestion_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/api/knowledge.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/knowledge.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/api/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/settings.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/assets/main.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/main.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/assets/ui-system.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/ui-system.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/common/UserIdGate.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/common/UserIdGate.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileContextMenu.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileContextMenu.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatInput.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatInput.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/BasicSettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/BasicSettingsSection.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/LlmSettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/LlmSettingsSection.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/MemorySettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/MemorySettingsSection.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/settings.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/workspace.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/workspace.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/types/knowledge.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/types/knowledge.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/protos/agent_service.proto" beforeDir="false" afterPath="$PROJECT_DIR$/protos/agent_service.proto" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_knowledge_graph_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_knowledge_graph_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_knowledge_library_trash.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_knowledge_library_trash.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_task_scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_task_scheduler.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -278,15 +321,7 @@
       <workItem from="1784615003592" duration="22715000" />
       <workItem from="1784638422280" duration="912000" />
       <workItem from="1784688429981" duration="15773000" />
-      <workItem from="1784723159028" duration="1503000" />
-    </task>
-    <task id="LOCAL-00149" summary="修了在文件树中快速切换文件,文件预览有时候会卡死,并且导致其他文件也打不开,甚至其他功能都被阻塞打不开的问题.">
-      <option name="closed" value="true" />
-      <created>1784274298199</created>
-      <option name="number" value="00149" />
-      <option name="presentableId" value="LOCAL-00149" />
-      <option name="project" value="LOCAL" />
-      <updated>1784274298199</updated>
+      <workItem from="1784723159028" duration="9739000" />
     </task>
     <task id="LOCAL-00150" summary="pptx预览,有点粗糙">
       <option name="closed" value="true" />
@@ -672,14 +707,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784709438040</updated>
     </task>
-    <option name="localTasksCounter" value="198" />
+    <task id="LOCAL-00198" summary="修复了不能嵌入图片的问题">
+      <option name="closed" value="true" />
+      <created>1784724864639</created>
+      <option name="number" value="00198" />
+      <option name="presentableId" value="LOCAL-00198" />
+      <option name="project" value="LOCAL" />
+      <updated>1784724864640</updated>
+    </task>
+    <option name="localTasksCounter" value="199" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="." />
     <MESSAGE value="agent观测重构v1" />
     <MESSAGE value="agent观测重构v2" />
     <MESSAGE value="agent观测重构v3" />
@@ -704,7 +746,8 @@
     <MESSAGE value="终端能力v2" />
     <MESSAGE value="字体调节" />
     <MESSAGE value="任务建议;token用量的三个表" />
-    <option name="LAST_COMMIT_MESSAGE" value="任务建议;token用量的三个表" />
+    <MESSAGE value="修复了不能嵌入图片的问题" />
+    <option name="LAST_COMMIT_MESSAGE" value="修复了不能嵌入图片的问题" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />

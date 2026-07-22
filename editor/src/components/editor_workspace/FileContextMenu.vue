@@ -34,6 +34,7 @@ const emit = defineEmits<{
   showInFolder: []
   openDefault: []
   showInGraph: []
+  extractGraph: []
   askAgent: []
   ingest: []
   toggleIgnore: []
@@ -67,6 +68,9 @@ defineExpose({
     <button type="button" :disabled="!node" @click="emit('openDefault')"><span>用默认程序打开</span></button>
     <hr class="context-separator" />
     <button type="button" :disabled="!node" @click="emit('showInGraph')"><span>在图谱中显示</span><kbd>Ctrl+G</kbd></button>
+    <button type="button" :disabled="!node" @click="emit('extractGraph')">
+      <span>{{ node?.isDir ? '文件夹抽取图谱' : '文件抽取图谱' }}</span>
+    </button>
     <hr class="context-separator" />
     <button type="button" @click="emit('askAgent')"><span>询问 Agent</span></button>
     <hr class="context-separator" />

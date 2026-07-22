@@ -481,7 +481,8 @@
   color: #f59f00;
 }
 
-.index-status-cell {
+.index-status-cell,
+.graph-status-cell {
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
@@ -498,6 +499,22 @@
 
 .index-status-cell.failed {
   color: #f59f00;
+}
+
+.graph-status-cell {
+  color: #4dabf7;
+}
+
+.graph-status-cell.graphed {
+  color: #15aabf;
+}
+
+.graph-status-cell.dirty {
+  color: var(--color-danger);
+}
+
+.graph-status-cell.ignored {
+  color: #748ffc;
 }
 
 .material-file-icon {

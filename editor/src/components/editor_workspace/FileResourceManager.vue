@@ -19,11 +19,14 @@ import {
   CircleAlert,
   CircleCheck,
   FolderOpen,
+  GitBranch,
   Grid2X2,
+  ImageIcon,
   LayoutList,
   List,
   ListChecks,
   ListFilter,
+  Network,
   RefreshCw,
   RotateCcw,
   Trash2,
@@ -139,7 +142,9 @@ const visibleItems = computed(() => {
 const listGridColumns = computed(() => {
   const selectionColumn = isMultiSelecting.value ? '28px ' : ''
   const indexColumn = settingsStore.showIndexColumn ? '118px' : ''
-  return `${selectionColumn}minmax(240px, 1fr) 168px 168px 112px 96px${indexColumn ? ` ${indexColumn}` : ''}`
+  const graphColumn = settingsStore.showGraphColumn ? '118px' : ''
+  const statusColumns = [indexColumn, graphColumn].filter(Boolean).join(' ')
+  return `${selectionColumn}minmax(240px, 1fr) 168px 168px 112px 96px${statusColumns ? ` ${statusColumns}` : ''}`
 })
 const trashGridColumns = 'minmax(220px, 1fr) minmax(260px, 1.2fr) 156px 156px 96px 96px 132px'
 
@@ -312,6 +317,30 @@ function indexStatusClass(node: KnowledgeFileNode): string {
   if (node.indexStatus === 'ignored') return 'ignored'
   if (node.indexStatus === 'failed') return 'failed'
   return 'dirty'
+}
+
+function graphStatusIcon(node: KnowledgeFileNode) {
+  if (node.graphStatus === 'graphed') return Network
+  if (node.graphStatus === 'ignored') return Ban
+  return GitBranch
+}
+
+function graphStatusTitle(node: KnowledgeFileNode): string {
+  if (node.graphStatus === 'graphed') return '已入图谱'
+  if (node.graphStatus === 'ignored') return '已屏蔽'
+  return '未入图谱'
+}
+
+function graphStatusClass(node: KnowledgeFileNode): string {
+  if (node.graphStatus === 'graphed') return 'graphed'
+  if (node.graphStatus === 'ignored') return 'ignored'
+  return 'dirty'
+}
+
+function toggleStatusColumns() {
+  const nextVisible = !(settingsStore.showIndexColumn && settingsStore.showGraphColumn)
+  settingsStore.setShowIndexColumn(nextVisible)
+  settingsStore.setShowGraphColumn(nextVisible)
 }
 
 function visibleRangePaths(anchorPath: string, targetPath: string): string[] {
@@ -516,6 +545,13 @@ async function openWithDefaultFromMenu() {
 function showInGraphFromMenu() {
   closeContextMenu()
   workspaceStore.setMainView('graph')
+}
+
+async function extractGraphFromMenu() {
+  const node = contextMenu.value.node
+  closeContextMenu()
+  if (!node) return
+  await workspaceStore.extractGraphForNode(node)
 }
 
 async function askAgentFromMenu() {
@@ -805,11 +841,11 @@ onUnmounted(() => {
       <button
         v-if="resourcePage === 'files'"
         class="tool-button"
-        :class="{ active: settingsStore.showIndexColumn }"
+        :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn }"
         type="button"
-        :title="settingsStore.showIndexColumn ? '隐藏索引状态' : '显示索引状态'"
-        :aria-label="settingsStore.showIndexColumn ? '隐藏索引状态' : '显示索引状态'"
-        @click="settingsStore.setShowIndexColumn(!settingsStore.showIndexColumn)"
+        :title="(settingsStore.showIndexColumn || settingsStore.showGraphColumn) ? '隐藏索引与图谱状态' : '显示索引与图谱状态'"
+        :aria-label="(settingsStore.showIndexColumn || settingsStore.showGraphColumn) ? '隐藏索引与图谱状态' : '显示索引与图谱状态'"
+        @click="toggleStatusColumns"
       >
         <ListFilter :size="15" />
       </button>
@@ -943,6 +979,7 @@ onUnmounted(() => {
           <span>类型</span>
           <span>大小</span>
           <span v-if="settingsStore.showIndexColumn">入库状态</span>
+          <span v-if="settingsStore.showGraphColumn">图谱状态</span>
         </div>
         <button
           v-for="(node, index) in visibleItems"
@@ -976,6 +1013,10 @@ onUnmounted(() => {
           <span v-if="settingsStore.showIndexColumn" class="index-status-cell" :class="indexStatusClass(node)">
             <component v-if="!node.isDir" :is="indexStatusIcon(node)" :size="13" />
             <span>{{ node.isDir ? '-' : indexStatusTitle(node) }}</span>
+          </span>
+          <span v-if="settingsStore.showGraphColumn" class="graph-status-cell" :class="graphStatusClass(node)">
+            <component v-if="!node.isDir" :is="graphStatusIcon(node)" :size="13" />
+            <span>{{ node.isDir ? '-' : graphStatusTitle(node) }}</span>
           </span>
         </button>
       </div>
@@ -1085,6 +1126,7 @@ onUnmounted(() => {
       @show-in-folder="showInFolderFromMenu"
       @open-default="openWithDefaultFromMenu"
       @show-in-graph="showInGraphFromMenu"
+      @extract-graph="extractGraphFromMenu"
       @ask-agent="askAgentFromMenu"
       @ingest="ingestFromMenu"
       @toggle-ignore="toggleIgnoreFromMenu"

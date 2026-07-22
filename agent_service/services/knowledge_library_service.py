@@ -739,6 +739,12 @@ class KnowledgeLibraryService:
             tag=self.config.constants.knowledge_tag,
             memory_type="knowledge_chunk",
         )
+        list_graph_statuses = getattr(self.knowledge_graph_service, "list_document_statuses", None)
+        graph_status_by_document = (
+            list_graph_statuses(user_id=normalized_user_id, library_id=library_id)
+            if callable(list_graph_statuses)
+            else {}
+        )
         return [
             self._path_to_node(
                 path=path,
@@ -746,6 +752,7 @@ class KnowledgeLibraryService:
                 ignore_matcher=ignore_matcher,
                 indexed_source_ids=indexed_source_ids,
                 source_updated_at=source_updated_at,
+                graph_status_by_document=graph_status_by_document,
                 frontmatter_root=frontmatter_root,
                 ocr_enabled=ocr_enabled,
             )
@@ -1774,6 +1781,7 @@ class KnowledgeLibraryService:
         ignore_matcher: KnowledgeIgnoreMatcher | None = None,
         indexed_source_ids: set[str] | None = None,
         source_updated_at: dict[str, datetime] | None = None,
+        graph_status_by_document: dict[str, Any] | None = None,
         frontmatter_root: Path | None = None,
         ocr_enabled: bool = False,
     ) -> dict:
@@ -1798,12 +1806,25 @@ class KnowledgeLibraryService:
             frontmatter_root=frontmatter_root,
         ):
             is_indexed = False
+        index_status = "ignored" if ignored else ("indexed" if is_indexed else "dirty")
+        graph_status = (
+            "ignored"
+            if ignored
+            else self._graph_status_for_source(
+                source_id=source_id,
+                relative_path=relative_path,
+                frontmatter_root=frontmatter_root,
+                graph_status_by_document=graph_status_by_document,
+                is_indexed=is_indexed,
+            )
+        )
         node = {
             "name": path.name,
             "path": relative_path,
             "isDir": is_dir,
             "mtime": self._format_mtime(path),
-            "indexStatus": "ignored" if ignored else ("indexed" if is_indexed else "dirty"),
+            "indexStatus": index_status,
+            "graphStatus": graph_status,
         }
         if is_indexed and source_id and source_updated_at:
             ingested_at = source_updated_at.get(source_id)
@@ -1817,6 +1838,7 @@ class KnowledgeLibraryService:
                     ignore_matcher=ignore_matcher,
                     indexed_source_ids=indexed_source_ids,
                     source_updated_at=source_updated_at,
+                    graph_status_by_document=graph_status_by_document,
                     frontmatter_root=frontmatter_root,
                     ocr_enabled=ocr_enabled,
                 )
@@ -1832,6 +1854,36 @@ class KnowledgeLibraryService:
         else:
             node["size"] = stat.st_size
         return node
+
+    def _graph_status_for_source(
+        self,
+        *,
+        source_id: str,
+        relative_path: str,
+        frontmatter_root: Path | None,
+        graph_status_by_document: dict[str, Any] | None,
+        is_indexed: bool,
+    ) -> str:
+        """Return whether one source file has current graph extraction output."""
+
+        if not source_id or not is_indexed or frontmatter_root is None:
+            return "dirty"
+        frontmatter_path = (frontmatter_root / relative_path).with_suffix(".json").resolve()
+        if not self._is_relative_to(frontmatter_path, frontmatter_root) or not frontmatter_path.is_file():
+            return "dirty"
+        try:
+            payload = json.loads(frontmatter_path.read_text(encoding="utf-8"))
+        except Exception:
+            return "dirty"
+        source_hash = str(payload.get("source_hash") or "")
+        status = (graph_status_by_document or {}).get(source_id)
+        if (
+            status
+            and str(getattr(status, "source_hash", "")) == source_hash
+            and str(getattr(status, "status", "")) in {"completed", "skipped"}
+        ):
+            return "graphed"
+        return "dirty"
 
     def _build_ignore_matcher(self, *, user_id: str) -> KnowledgeIgnoreMatcher:
         """从用户设置构造知识库屏蔽规则匹配器。"""

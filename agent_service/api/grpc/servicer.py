@@ -47,6 +47,13 @@ from agent_service.api.grpc.agent_service_pb2 import (
     KnowledgePathRenameRequest,
     KnowledgeRebuildRequest,
     KnowledgeRebuildResponse,
+    LLMConfigPresetDeleteRequest,
+    LLMConfigPresetListResponse,
+    LLMConfigPresetResponse,
+    LLMConfigPresetSaveRequest,
+    LLMConfigRequest,
+    LLMConfigResponse,
+    LLMConfigSaveRequest,
     MemoryAddRequest,
     MemoryDeleteRequest,
     MemoryEntryResponse,
@@ -439,6 +446,75 @@ class AgentServiceServicer(BaseServicer):
             ],
         )
 
+    def GetLLMConfig(  # noqa: N802
+        self, request: LLMConfigRequest, context: grpc.ServicerContext,
+    ) -> LLMConfigResponse:
+        logger.info("GetLLMConfig user=%s", request.user_id)
+        svc = self._require_settings_service(context)
+        try:
+            return _llm_config_to_response(svc.get_llm_config(user_id=request.user_id))
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+
+    def SaveLLMConfig(  # noqa: N802
+        self, request: LLMConfigSaveRequest, context: grpc.ServicerContext,
+    ) -> LLMConfigResponse:
+        logger.info("SaveLLMConfig user=%s", request.user_id)
+        svc = self._require_settings_service(context)
+        try:
+            payload = svc.save_llm_config(
+                user_id=request.user_id,
+                api_key=request.api_key,
+                base_url=request.base_url,
+                model_name=request.model_name,
+                small_api_key=request.small_api_key,
+                small_base_url=request.small_base_url,
+                small_model_name=request.small_model_name,
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return _llm_config_to_response(payload)
+
+    def ListLLMConfigPresets(  # noqa: N802
+        self, request: LLMConfigRequest, context: grpc.ServicerContext,
+    ) -> LLMConfigPresetListResponse:
+        logger.info("ListLLMConfigPresets user=%s", request.user_id)
+        svc = self._require_settings_service(context)
+        try:
+            presets = svc.list_llm_config_presets(user_id=request.user_id)
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return LLMConfigPresetListResponse(
+            configs=[_llm_config_preset_to_response(item) for item in presets],
+        )
+
+    def SaveLLMConfigPreset(  # noqa: N802
+        self, request: LLMConfigPresetSaveRequest, context: grpc.ServicerContext,
+    ) -> LLMConfigPresetResponse:
+        logger.info("SaveLLMConfigPreset user=%s label=%s", request.user_id, request.label)
+        svc = self._require_settings_service(context)
+        try:
+            preset = svc.save_llm_config_preset(
+                user_id=request.user_id,
+                label=request.label,
+                api_key=request.api_key,
+                base_url=request.base_url,
+                model_name=request.model_name,
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return _llm_config_preset_to_response(preset)
+
+    def DeleteLLMConfigPreset(  # noqa: N802
+        self, request: LLMConfigPresetDeleteRequest, context: grpc.ServicerContext,
+    ) -> DeleteResponse:
+        logger.info("DeleteLLMConfigPreset config=%s", request.config_id)
+        svc = self._require_settings_service(context)
+        deleted = svc.delete_llm_config_preset(config_id=request.config_id)
+        if not deleted:
+            context.abort(grpc.StatusCode.NOT_FOUND, "LLM config preset not found")
+        return DeleteResponse(ok=True, deleted_count=1)
+
     def RebuildKnowledge(  # noqa: N802
         self, request: KnowledgeRebuildRequest, context: grpc.ServicerContext,
     ) -> KnowledgeRebuildResponse:
@@ -806,6 +882,39 @@ def _knowledge_rebuild_to_response(result: KnowledgeLibraryRebuildResult) -> Kno
     )
 
 
+def _llm_config_to_response(payload: dict[str, Any]) -> LLMConfigResponse:
+    """将 LLM 配置字典转换为 gRPC 响应。"""
+
+    return LLMConfigResponse(
+        user_id=str(payload.get("user_id", "")),
+        api_key=str(payload.get("api_key", "")),
+        base_url=str(payload.get("base_url", "")),
+        model_name=str(payload.get("model_name", "")),
+        small_api_key=str(payload.get("small_api_key", "")),
+        small_base_url=str(payload.get("small_base_url", "")),
+        small_model_name=str(payload.get("small_model_name", "")),
+        effective_small_api_key=str(payload.get("effective_small_api_key", "")),
+        effective_small_base_url=str(payload.get("effective_small_base_url", "")),
+        effective_small_model_name=str(payload.get("effective_small_model_name", "")),
+        updated_at=str(payload.get("updated_at", "")),
+    )
+
+
+def _llm_config_preset_to_response(payload: dict[str, Any]) -> LLMConfigPresetResponse:
+    """将已保存 LLM 配置字典转换为 gRPC 响应。"""
+
+    return LLMConfigPresetResponse(
+        config_id=str(payload.get("config_id", "")),
+        user_id=str(payload.get("user_id", "")),
+        label=str(payload.get("label", "")),
+        api_key=str(payload.get("api_key", "")),
+        base_url=str(payload.get("base_url", "")),
+        model_name=str(payload.get("model_name", "")),
+        created_at=str(payload.get("created_at", "")),
+        updated_at=str(payload.get("updated_at", "")),
+    )
+
+
 def _knowledge_library_to_response(payload: dict[str, Any]) -> KnowledgeLibraryEntry:
     """将知识库配置字典转换为 gRPC 响应。"""
 
@@ -834,6 +943,7 @@ def _knowledge_file_node_to_response(payload: dict[str, Any]) -> KnowledgeFileNo
             _knowledge_file_node_to_response(child)
             for child in payload.get("children", [])
         ],
+        graph_status=str(payload.get("graphStatus", "")),
     )
 
 

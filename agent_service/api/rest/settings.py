@@ -177,6 +177,45 @@ async def save_llm_config(body: dict[str, Any]) -> dict[str, Any]:
     user_id = str(body.get("user_id") or "").strip()
     if not user_id:
         raise HTTPException(status_code=422, detail="user_id is required")
+    def _unwrap(field: str) -> str | None:
+        if field not in body:
+            return None
+        value = body.get(field)
+        if value is None or isinstance(value, bool):
+            return None
+        s = str(value).strip()
+        return s
+
+    svc = _require_settings_service()
+    return svc.save_llm_config(
+        user_id=user_id,
+        api_key=_unwrap("api_key"),
+        base_url=_unwrap("base_url"),
+        model_name=_unwrap("model_name"),
+        small_api_key=_unwrap("small_api_key"),
+        small_base_url=_unwrap("small_base_url"),
+        small_model_name=_unwrap("small_model_name"),
+    )
+
+
+# ---- 联网搜索配置 ----
+
+@router.get("/settings/model-config/saved")
+async def list_llm_config_presets(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+    """列出用户保存的可复用 LLM 配置。"""
+
+    svc = _require_settings_service()
+    return {"configs": svc.list_llm_config_presets(user_id=user_id)}
+
+
+@router.post("/settings/model-config/saved")
+async def save_llm_config_preset(body: dict[str, Any]) -> dict[str, Any]:
+    """保存一条可复用的单模型 LLM 配置。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+
     def _unwrap(value: Any) -> str | None:
         if value is None or isinstance(value, bool):
             return None
@@ -184,18 +223,28 @@ async def save_llm_config(body: dict[str, Any]) -> dict[str, Any]:
         return s if s else None
 
     svc = _require_settings_service()
-    return svc.save_llm_config(
-        user_id=user_id,
-        api_key=_unwrap(body.get("api_key")),
-        base_url=_unwrap(body.get("base_url")),
-        model_name=_unwrap(body.get("model_name")),
-        small_api_key=_unwrap(body.get("small_api_key")),
-        small_base_url=_unwrap(body.get("small_base_url")),
-        small_model_name=_unwrap(body.get("small_model_name")),
-    )
+    try:
+        return svc.save_llm_config_preset(
+            user_id=user_id,
+            label=_unwrap(body.get("label")),
+            api_key=_unwrap(body.get("api_key")),
+            base_url=_unwrap(body.get("base_url")),
+            model_name=_unwrap(body.get("model_name")),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-# ---- 联网搜索配置 ----
+@router.delete("/settings/model-config/saved/{config_id}")
+async def delete_llm_config_preset(config_id: str) -> dict[str, Any]:
+    """删除一条已保存的 LLM 配置。"""
+
+    svc = _require_settings_service()
+    deleted = svc.delete_llm_config_preset(config_id=config_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Config not found")
+    return {"ok": True}
+
 
 @router.get("/settings/web-search")
 async def get_web_search_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:

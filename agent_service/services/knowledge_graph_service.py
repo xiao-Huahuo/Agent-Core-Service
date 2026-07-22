@@ -150,8 +150,10 @@ class LLMKnowledgeGraphExtractor:
                 SystemMessage(content=self._system_prompt()),
                 HumanMessage(content=self._human_prompt(document=document, section=section, content=content[:6000])),
             ],
+            model_name=self._value("model_name"),
             api_key=self._value("api_key"),
             base_url=self._value("base_url"),
+            small_model_name=self._value("small_model_name"),
             small_api_key=self._value("small_api_key"),
             small_base_url=self._value("small_base_url"),
         )
@@ -706,6 +708,17 @@ class KnowledgeGraphService:
             )
             return bool(status and status.source_hash == source_hash and status.status in {"completed", "skipped"})
 
+    def list_document_statuses(self, *, user_id: str, library_id: str) -> dict[str, KnowledgeGraphDocumentStatus]:
+        """Return graph extraction status records keyed by source document id."""
+
+        with Session(self.engine) as db:
+            statuses = db.exec(
+                select(KnowledgeGraphDocumentStatus)
+                .where(KnowledgeGraphDocumentStatus.user_id == user_id)
+                .where(KnowledgeGraphDocumentStatus.library_id == library_id)
+            ).all()
+            return {status.document_id: status for status in statuses}
+
     def _write_status(
         self,
         *,
@@ -1036,29 +1049,47 @@ def _build_llm_config(
     """从 config 构造抽取器可用的 llm_config 字典。
 
     优先级: user_llm_config（用户设置页）> AgentConfig（env/默认值）。
-    当小模型 API Key 未配置时，整体降级使用主模型配置（key + base_url 一起切换），
-    避免将主模型的 key 发送到小模型默认端点导致鉴权失败。
+    当小模型未配置时，整体降级使用主模型配置（model_name + key + base_url 一起切换），
+    避免将主模型的 key 发送到小模型默认端点，或缺少 small_model_name 导致调度器无法构造模型。
     """
+    has_user_config = bool(user_llm_config)
+    source = user_llm_config or {}
     base = {
-        "api_key": config.model.api_key.strip() or None,
-        "base_url": config.model.base_url.strip() or None,
-        "small_api_key": config.model.small_model_api_key.strip() or None,
-        "small_base_url": config.model.small_model_base_url.strip() or None,
+        "model_name": None,
+        "api_key": None,
+        "base_url": None,
+        "small_model_name": None,
+        "small_api_key": None,
+        "small_base_url": None,
     }
-    if user_llm_config:
-        for key in ("api_key", "base_url", "small_api_key", "small_base_url"):
-            val = user_llm_config.get(key)
+    if has_user_config:
+        for key in base:
+            val = source.get(key)
             if val and isinstance(val, str) and val.strip():
                 base[key] = val.strip()
+    else:
+        base = {
+            "model_name": config.model.model_name.strip() or None,
+            "api_key": config.model.api_key.strip() or None,
+            "base_url": config.model.base_url.strip() or None,
+            "small_model_name": config.model.small_model_name.strip() or None,
+            "small_api_key": config.model.small_model_api_key.strip() or None,
+            "small_base_url": config.model.small_model_base_url.strip() or None,
+        }
 
-    small_key = base.get("small_api_key")
-    small_url = base.get("small_base_url")
-    if not small_key:
+    small_model_name = base.get("small_model_name")
+    if not small_model_name:
+        small_model_name = base.get("model_name")
         small_key = base.get("api_key")
         small_url = base.get("base_url")
+    else:
+        small_key = base.get("small_api_key") or base.get("api_key")
+        small_url = base.get("small_base_url") or base.get("base_url")
     return {
+        "model_name": base.get("model_name"),
         "api_key": base.get("api_key"),
         "base_url": base.get("base_url"),
+        "small_model_name": small_model_name,
         "small_api_key": small_key,
         "small_base_url": small_url,
     }
@@ -1071,24 +1102,38 @@ def _run_graph_extraction(
     library_id: str,
     frontmatter_dir: Path,
     user_llm_config: dict[str, Any] | None = None,
+    target_source_path: Path | None = None,
+    target_is_dir: bool = False,
 ) -> None:
     """在后台线程中执行图谱抽取并更新进度。"""
     try:
         llm_config = _build_llm_config(config, user_llm_config=user_llm_config)
-        if not llm_config.get("small_api_key"):
+        if not llm_config.get("small_api_key") or not llm_config.get("small_model_name"):
             _update_graph_progress(
                 user_id, library_id,
                 status="failed",
-                message="小模型 API Key 未配置，无法进行 LLM 语义抽取。请在「模型设置」中配置小模型的 API Key，或在 .env 中设置 AGENT_SMALL_MODEL_API_KEY。",
+                message="模型配置不完整，无法进行 LLM 语义抽取。请在「模型设置」中至少配置大模型的模型名和 API Key；小模型留空时会自动继承大模型。",
             )
             return
 
         svc = KnowledgeGraphService(config=config)
         paths = sorted(path for path in frontmatter_dir.rglob("*.json") if path.is_file()) if frontmatter_dir.exists() else []
+        if target_source_path is not None:
+            paths = [
+                path
+                for path in paths
+                if _frontmatter_path_matches_target(
+                    path=path,
+                    target_source_path=target_source_path,
+                    target_is_dir=target_is_dir,
+                )
+            ]
         total = len(paths)
         print(f"\n{'='*60}")
         print(f"  知识图谱抽取开始 | 共 {total} 个文档")
         print(f"  frontmatter_dir={frontmatter_dir}")
+        if target_source_path is not None:
+            print(f"  target_source_path={target_source_path}")
         print(f"{'='*60}\n")
 
         docs: list[dict] = []
@@ -1110,7 +1155,14 @@ def _run_graph_extraction(
                 skipped_count += 1
                 print(f"  SKIP {doc_data.title or path.name} [hash not changed]")
             else:
-                docs.append({"path": path.name, "name": doc_data.title or path.stem, "status": "pending", "progress": 0, "total_sections": total_sections})
+                docs.append(_graph_progress_doc_entry(
+                    document=doc_data,
+                    frontmatter_path=path,
+                    frontmatter_dir=frontmatter_dir,
+                    status="pending",
+                    progress=0,
+                    total_sections=total_sections,
+                ))
                 pending_paths.append(path)
                 need_extract += 1
 
@@ -1258,11 +1310,12 @@ def _run_graph_extraction(
             # 限流: 每文档间等待 1s,让 API 有喘息时间
             time.sleep(1.0)
 
-        svc.delete_graph_except_documents(
-            user_id=user_id,
-            library_id=library_id,
-            keep_document_ids=document_ids_seen,
-        )
+        if target_source_path is None:
+            svc.delete_graph_except_documents(
+                user_id=user_id,
+                library_id=library_id,
+                keep_document_ids=document_ids_seen,
+            )
 
         print(f"\n{'='*60}")
         print(f"  图谱抽取完成!")
@@ -1276,13 +1329,23 @@ def _run_graph_extraction(
             print(f"  !! some docs skipped due to circuit breaker")
         print(f"{'='*60}\n")
 
-        if circuit_breaker_hit:
+        if failed_count > 0 and completed_count == 0:
+            _update_graph_progress(
+                user_id, library_id,
+                status="failed",
+                total=need_extract,
+                current=doc_index,
+                message=f"图谱抽取失败：{failed_count} 个文档抽取失败，请检查模型配置或 API Key。",
+                docs=docs,
+            )
+        elif circuit_breaker_hit:
             _update_graph_progress(
                 user_id, library_id,
                 status="completed",
                 total=need_extract,
                 current=need_extract,
                 message="图谱抽取完成（部分文档因模型调用限流或熔断已跳过）",
+                docs=docs,
             )
         else:
             _update_graph_progress(
@@ -1291,6 +1354,7 @@ def _run_graph_extraction(
                 total=need_extract,
                 current=need_extract,
                 message="图谱抽取完成",
+                docs=docs,
             )
     except Exception as exc:
         logger.exception("图谱抽取整体失败")
@@ -1300,3 +1364,72 @@ def _run_graph_extraction(
             status="failed",
             message=f"抽取失败: {exc}",
         )
+
+
+def _frontmatter_path_matches_target(*, path: Path, target_source_path: Path, target_is_dir: bool) -> bool:
+    """判断 frontmatter 文档的原始源文件是否落在右键指定的文件/文件夹范围内。"""
+
+    try:
+        document = KnowledgeGraphService._load_document(path)
+    except Exception:
+        return False
+    raw_source_path = document.source_path or document.source_uri
+    if not raw_source_path:
+        return False
+    try:
+        source_path = Path(raw_source_path).resolve(strict=False)
+    except (OSError, ValueError):
+        return False
+    target = target_source_path.resolve(strict=False)
+    source_key = _normalize_graph_scope_path(source_path)
+    target_key = _normalize_graph_scope_path(target)
+    if not target_is_dir:
+        return source_key == target_key
+    return source_key == target_key or source_key.startswith(f"{target_key}\\")
+
+
+def _graph_progress_doc_entry(
+    *,
+    document: StructuredKnowledgeDocument,
+    frontmatter_path: Path,
+    frontmatter_dir: Path,
+    status: str,
+    progress: int,
+    total_sections: int,
+) -> dict[str, Any]:
+    """Build one graph progress doc row using the source-file relative path."""
+
+    return {
+        "path": _graph_progress_relative_path(
+            document=document,
+            frontmatter_path=frontmatter_path,
+            frontmatter_dir=frontmatter_dir,
+        ),
+        "name": document.title or Path(document.source_path or frontmatter_path.stem).stem,
+        "status": status,
+        "progress": progress,
+        "total_sections": total_sections,
+    }
+
+
+def _graph_progress_relative_path(
+    *,
+    document: StructuredKnowledgeDocument,
+    frontmatter_path: Path,
+    frontmatter_dir: Path,
+) -> str:
+    """Return the knowledge-tree path for one frontmatter document."""
+
+    relative_path = str(document.metadata.get("relative_path") or "").replace("\\", "/").strip("/")
+    if relative_path:
+        return relative_path
+    try:
+        return frontmatter_path.relative_to(frontmatter_dir).as_posix()
+    except ValueError:
+        return frontmatter_path.name
+
+
+def _normalize_graph_scope_path(path: Path) -> str:
+    """归一化 Windows 路径用于图谱右键抽取范围比较。"""
+
+    return str(path).replace("/", "\\").rstrip("\\").lower()

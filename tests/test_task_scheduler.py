@@ -18,6 +18,7 @@ import time
 
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
+import pytest
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.scheduler import BACKGROUND_SUMMARY_TASK
@@ -244,3 +245,35 @@ def test_llm_task_scheduler_small_model_falls_back_to_runtime_primary_key() -> N
     assert api_key == "user-large-key"
     assert base_url == "https://user-large.example.com/v1"
     assert temperature == 0.3
+
+
+def test_llm_task_scheduler_small_model_inherits_runtime_large_model() -> None:
+    """验证小模型未单独配置时,运行时复用用户配置的大模型。"""
+
+    scheduler = get_llm_task_scheduler(make_scheduler_test_config())
+
+    model_name, api_key, base_url, _temperature = scheduler._resolve_model_runtime(
+        model_tier=SMALL_MODEL_TIER,
+        requested_temperature=None,
+        model_name="user-large-model",
+        api_key="user-large-key",
+        base_url="https://user-large.example.com/v1",
+    )
+
+    assert model_name == "user-large-model"
+    assert api_key == "user-large-key"
+    assert base_url == "https://user-large.example.com/v1"
+
+
+def test_llm_task_scheduler_requires_runtime_large_model_name() -> None:
+    """验证后端不再提供硬编码默认大模型名称。"""
+
+    scheduler = get_llm_task_scheduler(make_scheduler_test_config())
+
+    with pytest.raises(ValueError, match="大模型未配置模型名称"):
+        scheduler._resolve_model_runtime(
+            model_tier=None,
+            requested_temperature=None,
+            api_key="user-large-key",
+            base_url="https://user-large.example.com/v1",
+        )

@@ -53,8 +53,10 @@ class LLMTaskRuntimeMixin:
         model_tier: str,
         api_key: str | None = None,
         base_url: str | None = None,
+        model_name: str | None = None,
         small_api_key: str | None = None,
         small_base_url: str | None = None,
+        small_model_name: str | None = None,
     ) -> Any:
         """构造或复用与请求匹配的 ChatOpenAI 实例。"""
 
@@ -63,8 +65,10 @@ class LLMTaskRuntimeMixin:
             requested_temperature=temperature,
             api_key=api_key,
             base_url=base_url,
+            model_name=model_name,
             small_api_key=small_api_key,
             small_base_url=small_base_url,
+            small_model_name=small_model_name,
         )
         if not resolved_api_key:
             logger = __import__("logging").getLogger(__name__)
@@ -77,6 +81,7 @@ class LLMTaskRuntimeMixin:
             )
         cache_key = (
             model_tier,
+            model_name,
             tuple(sorted(tool_names)),
             float(final_temperature),
             float(timeout_seconds),
@@ -116,23 +121,55 @@ class LLMTaskRuntimeMixin:
         requested_temperature: float | None,
         api_key: str | None = None,
         base_url: str | None = None,
+        model_name: str | None = None,
         small_api_key: str | None = None,
         small_base_url: str | None = None,
+        small_model_name: str | None = None,
     ) -> tuple[str, str, str, float]:
         """根据模型池等级解析实际调用所需的模型参数。"""
 
-        if model_tier == SMALL_MODEL_TIER and self.config.model.small_model_name:
-            return (
-                self.config.model.small_model_name,
-                small_api_key or api_key or self.config.model.small_model_api_key or self.config.model.api_key,
-                small_base_url or base_url or self.config.model.small_model_base_url or self.config.model.base_url,
-                self.config.model.resolve_small_temperature(requested_temperature),
+        primary_model_name = (model_name or self.config.model.model_name or "").strip()
+        primary_api_key = api_key or self.config.model.api_key
+        primary_base_url = base_url or self.config.model.base_url
+        resolved_small_model_name = (
+            small_model_name
+            or model_name
+            or self.config.model.small_model_name
+            or self.config.model.model_name
+            or ""
+        ).strip()
+        if model_tier == SMALL_MODEL_TIER:
+            if not resolved_small_model_name:
+                raise ValueError("小模型未配置模型名称,请先在设置页配置大模型或小模型。")
+            small_temperature = self.config.model._normalize_temperature_for_model(
+                model_name=resolved_small_model_name,
+                requested_temperature=(
+                    self.config.model.small_model_temperature
+                    if requested_temperature is None
+                    else requested_temperature
+                ),
             )
+            return (
+                resolved_small_model_name,
+                small_api_key or self.config.model.small_model_api_key or primary_api_key,
+                small_base_url or self.config.model.small_model_base_url or primary_base_url,
+                small_temperature,
+            )
+        if not primary_model_name:
+            raise ValueError("大模型未配置模型名称,请先在设置页配置模型。")
+        primary_temperature = self.config.model._normalize_temperature_for_model(
+            model_name=primary_model_name,
+            requested_temperature=(
+                self.config.model.temperature
+                if requested_temperature is None
+                else requested_temperature
+            ),
+        )
         return (
-            self.config.model.model_name,
-            api_key or self.config.model.api_key,
-            base_url or self.config.model.base_url,
-            self.config.model.resolve_primary_temperature(requested_temperature),
+            primary_model_name,
+            primary_api_key,
+            primary_base_url,
+            primary_temperature,
         )
 
     @contextmanager

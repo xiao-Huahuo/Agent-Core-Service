@@ -10,7 +10,11 @@ from sqlmodel import Session, create_engine, select
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.models.knowledge_graph import KnowledgeGraphDocumentStatus
-from agent_service.services.knowledge_graph_service import KnowledgeGraphService
+from agent_service.services.knowledge_graph_service import (
+    KnowledgeGraphService,
+    _build_llm_config,
+    _graph_progress_doc_entry,
+)
 from agent_service.services.memory.rag.frontmatter_document import (
     StructuredKnowledgeDocument,
     StructuredKnowledgeSection,
@@ -75,6 +79,152 @@ class SameEntityDifferentTypeExtractor:
             ],
             "relations": [],
         }
+
+
+def test_graph_llm_config_inherits_large_model_when_small_model_empty(tmp_path: Path) -> None:
+    """图谱抽取未配置小模型时应完整继承大模型配置。"""
+
+    config = AgentConfig.load_config(
+        {
+            "model": {
+                "model_name": "",
+                "api_key": "",
+                "base_url": "",
+                "small_model_name": "",
+                "small_model_api_key": "",
+                "small_model_base_url": "",
+            },
+            "storage": {"project_root": str(tmp_path), "base_data_dir": str(tmp_path / "runtime")},
+        },
+        load_env=False,
+        load_dotenv=False,
+        ensure_models=False,
+    )
+
+    llm_config = _build_llm_config(
+        config,
+        user_llm_config={
+            "model_name": "deepseek-v4-flash",
+            "api_key": "large-key",
+            "base_url": "https://api.deepseek.com",
+            "small_model_name": "",
+            "small_api_key": "",
+            "small_base_url": "",
+        },
+    )
+
+    assert llm_config["model_name"] == "deepseek-v4-flash"
+    assert llm_config["api_key"] == "large-key"
+    assert llm_config["base_url"] == "https://api.deepseek.com"
+    assert llm_config["small_model_name"] == "deepseek-v4-flash"
+    assert llm_config["small_api_key"] == "large-key"
+    assert llm_config["small_base_url"] == "https://api.deepseek.com"
+
+
+def test_graph_llm_config_user_large_model_ignores_stale_config_small_key(tmp_path: Path) -> None:
+    """用户未配置小模型时,图谱抽取不应混用环境或配置中残留的小模型 key。"""
+
+    config = AgentConfig.load_config(
+        {
+            "model": {
+                "model_name": "",
+                "api_key": "",
+                "base_url": "",
+                "small_model_name": "stale-small-model",
+                "small_model_api_key": "stale-small-key",
+                "small_model_base_url": "https://stale-small.example.com",
+            },
+            "storage": {"project_root": str(tmp_path), "base_data_dir": str(tmp_path / "runtime")},
+        },
+        load_env=False,
+        load_dotenv=False,
+        ensure_models=False,
+    )
+
+    llm_config = _build_llm_config(
+        config,
+        user_llm_config={
+            "model_name": "deepseek-v4-flash",
+            "api_key": "valid-large-key",
+            "base_url": "https://api.deepseek.com",
+            "small_model_name": "",
+            "small_api_key": "stale-db-small-key",
+            "small_base_url": "",
+        },
+    )
+
+    assert llm_config["small_model_name"] == "deepseek-v4-flash"
+    assert llm_config["small_api_key"] == "valid-large-key"
+    assert llm_config["small_base_url"] == "https://api.deepseek.com"
+
+
+def test_graph_llm_config_uses_explicit_small_model_when_present(tmp_path: Path) -> None:
+    """图谱抽取配置了小模型时应优先使用小模型配置。"""
+
+    config = AgentConfig.load_config(
+        {
+            "model": {
+                "model_name": "",
+                "api_key": "",
+                "base_url": "",
+                "small_model_name": "",
+                "small_model_api_key": "",
+                "small_model_base_url": "",
+            },
+            "storage": {"project_root": str(tmp_path), "base_data_dir": str(tmp_path / "runtime")},
+        },
+        load_env=False,
+        load_dotenv=False,
+        ensure_models=False,
+    )
+
+    llm_config = _build_llm_config(
+        config,
+        user_llm_config={
+            "model_name": "large-model",
+            "api_key": "large-key",
+            "base_url": "https://large.example.com",
+            "small_model_name": "small-model",
+            "small_api_key": "small-key",
+            "small_base_url": "https://small.example.com",
+        },
+    )
+
+    assert llm_config["small_model_name"] == "small-model"
+    assert llm_config["small_api_key"] == "small-key"
+    assert llm_config["small_base_url"] == "https://small.example.com"
+
+
+def test_graph_progress_doc_entry_uses_source_relative_path(tmp_path: Path) -> None:
+    """图谱抽取进度应返回文件树相对路径,以便前端逐个更新图谱状态图标。"""
+
+    document = StructuredKnowledgeDocument(
+        document_id="doc_nested_demo",
+        source_type="markdown",
+        source_path=str(tmp_path / "knowledge" / "notes" / "demo.md"),
+        source_uri=str(tmp_path / "knowledge" / "notes" / "demo.md"),
+        source_hash="hash-1",
+        title="demo",
+        summary="",
+        tags=[],
+        authority=0.7,
+        valid_from=None,
+        valid_until=None,
+        metadata={"relative_path": "notes/demo.md"},
+        sections=[],
+    )
+
+    entry = _graph_progress_doc_entry(
+        document=document,
+        frontmatter_path=tmp_path / "runtime" / "frontmatter" / "notes" / "demo.json",
+        frontmatter_dir=tmp_path / "runtime" / "frontmatter",
+        status="pending",
+        progress=0,
+        total_sections=0,
+    )
+
+    assert entry["path"] == "notes/demo.md"
+    assert entry["name"] == "demo"
 
 
 def test_knowledge_graph_service_extracts_validated_edges(tmp_path: Path) -> None:

@@ -12,7 +12,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from sqlmodel import Session, select
@@ -22,12 +22,14 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.models.user_settings import (
     UserKnowledgeLibrary,
     UserLLMConfig,
+    UserLLMConfigPreset,
     UserSettingsRecord,
     UserSystemPromptEntry,
 )
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
-from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
-from agent_service.services.memory.rag.embedding import _get_shared_provider
+
+if TYPE_CHECKING:
+    from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 
 logger = logging.getLogger(__name__)
 
@@ -608,6 +610,8 @@ class SettingsService:
 
     def add_memory(self, *, user_id: str, content: str, importance: float = 0.5) -> dict:
         """添加一条用户自定义长期记忆,生成向量并写入向量库。"""
+        from agent_service.services.memory.rag.embedding import _get_shared_provider
+
         provider = _get_shared_provider(self.config)
         vectors = provider.embed_texts([content])
         vector = vectors[0] if vectors else []
@@ -635,25 +639,46 @@ class SettingsService:
 
     # ---- 用户 LLM 配置 ----
 
-    def get_llm_config(self, *, user_id: str) -> dict:
-        """获取用户自定义 LLM 配置，包含大模型和小模型两套。
+    @staticmethod
+    def _normalize_optional_text(value: str | None) -> str:
+        """Return a stripped string for optional model configuration fields."""
 
-        返回原始的 api_key（不脱敏），REST 端点应对 API Key 做脱敏处理。
-        """
+        return str(value or "").strip()
+
+    def _serialize_llm_config(self, config: UserLLMConfig) -> dict:
+        """Serialize current LLM settings and expose effective small-model fallback fields."""
+
+        large_api_key = self._normalize_optional_text(config.api_key)
+        large_base_url = self._normalize_optional_text(config.base_url)
+        large_model_name = self._normalize_optional_text(config.model_name)
+        small_api_key = self._normalize_optional_text(config.small_api_key)
+        small_base_url = self._normalize_optional_text(config.small_base_url)
+        small_model_name = self._normalize_optional_text(config.small_model_name)
+        effective_small_model_name = small_model_name or large_model_name
+        effective_small_api_key = (small_api_key or large_api_key) if small_model_name else large_api_key
+        effective_small_base_url = (small_base_url or large_base_url) if small_model_name else large_base_url
+        return {
+            "user_id": config.user_id,
+            "api_key": large_api_key,
+            "base_url": large_base_url,
+            "model_name": large_model_name,
+            "small_api_key": small_api_key,
+            "small_base_url": small_base_url,
+            "small_model_name": small_model_name,
+            "effective_small_api_key": effective_small_api_key,
+            "effective_small_base_url": effective_small_base_url,
+            "effective_small_model_name": effective_small_model_name,
+            "updated_at": config.updated_at.isoformat(),
+        }
+
+    def get_llm_config(self, *, user_id: str) -> dict:
+        """获取用户自定义 LLM 配置，包含大模型和小模型两套。"""
+
         with Session(self.engine) as db:
             config = db.get(UserLLMConfig, user_id.strip())
             if config is None:
                 return {}
-            return {
-                "user_id": config.user_id,
-                "api_key": config.api_key,
-                "base_url": config.base_url,
-                "model_name": config.model_name,
-                "small_api_key": config.small_api_key,
-                "small_base_url": config.small_base_url,
-                "small_model_name": config.small_model_name,
-                "updated_at": config.updated_at.isoformat(),
-            }
+            return self._serialize_llm_config(config)
 
     def save_llm_config(
         self,
@@ -699,16 +724,82 @@ class SettingsService:
             db.add(config)
             db.commit()
             db.refresh(config)
-            return {
-                "user_id": config.user_id,
-                "api_key": config.api_key,
-                "base_url": config.base_url,
-                "model_name": config.model_name,
-                "small_api_key": config.small_api_key,
-                "small_base_url": config.small_base_url,
-                "small_model_name": config.small_model_name,
-                "updated_at": config.updated_at.isoformat(),
-            }
+            return self._serialize_llm_config(config)
+
+    def list_llm_config_presets(self, *, user_id: str) -> list[dict]:
+        """列出用户保存的单模型 LLM 配置。"""
+
+        normalized_user_id = user_id.strip()
+        with Session(self.engine) as db:
+            statement = (
+                select(UserLLMConfigPreset)
+                .where(UserLLMConfigPreset.user_id == normalized_user_id)
+                .order_by(UserLLMConfigPreset.updated_at.desc())
+            )
+            return [self._serialize_llm_config_preset(record) for record in db.exec(statement).all()]
+
+    def save_llm_config_preset(
+        self,
+        *,
+        user_id: str,
+        label: str | None = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model_name: str | None = None,
+    ) -> dict:
+        """保存一条可复用的单模型 LLM 配置。"""
+
+        normalized_user_id = user_id.strip()
+        normalized_model_name = self._normalize_optional_text(model_name)
+        normalized_base_url = self._normalize_optional_text(base_url)
+        normalized_api_key = self._normalize_optional_text(api_key)
+        if not normalized_user_id:
+            raise ValueError("user_id is required")
+        if not normalized_model_name and not normalized_base_url and not normalized_api_key:
+            raise ValueError("model config is empty")
+        now = self._utc_now()
+        with Session(self.engine) as db:
+            record = UserLLMConfigPreset(
+                config_id=f"llm_cfg_{uuid4().hex[:16]}",
+                user_id=normalized_user_id,
+                label=self._normalize_optional_text(label) or normalized_model_name or normalized_base_url,
+                api_key=normalized_api_key,
+                base_url=normalized_base_url,
+                model_name=normalized_model_name,
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            return self._serialize_llm_config_preset(record)
+
+    def delete_llm_config_preset(self, *, config_id: str) -> bool:
+        """删除一条已保存的 LLM 配置。"""
+
+        normalized_config_id = config_id.strip()
+        with Session(self.engine) as db:
+            record = db.get(UserLLMConfigPreset, normalized_config_id)
+            if record is None:
+                return False
+            db.delete(record)
+            db.commit()
+            return True
+
+    @staticmethod
+    def _serialize_llm_config_preset(record: UserLLMConfigPreset) -> dict:
+        """将已保存的 LLM 配置转换为 API 响应。"""
+
+        return {
+            "config_id": record.config_id,
+            "user_id": record.user_id,
+            "label": record.label,
+            "api_key": record.api_key,
+            "base_url": record.base_url,
+            "model_name": record.model_name,
+            "created_at": record.created_at.isoformat(),
+            "updated_at": record.updated_at.isoformat(),
+        }
 
     def remove_memory(self, *, memory_id: str) -> bool:
         """删除一条自定义长期记忆。"""
