@@ -10,7 +10,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { deleteAgentAttachment, streamPrompt } from '@/api/agent'
-import type { AgentAttachmentUploadResponse, AgentLoopMode } from '@/api/agent'
+import type { AgentAccessMode, AgentAttachmentUploadResponse, AgentLoopMode } from '@/api/agent'
 import { fetchMessages } from '@/api/session'
 import { useSessionStore } from '@/stores/session'
 
@@ -286,7 +286,14 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function send(userId: string, sessionId: string | null, prompt: string, reference = '', agentMode: AgentLoopMode = 'auto') {
+  async function send(
+    userId: string,
+    sessionId: string | null,
+    prompt: string,
+    reference = '',
+    agentMode: AgentLoopMode = 'auto',
+    agentAccessMode: AgentAccessMode = 'sandbox',
+  ) {
     if (!prompt.trim()) {
       return
     }
@@ -364,7 +371,12 @@ export const useChatStore = defineStore('chat', () => {
         sessionStore.select(targetSessionId)
       }
 
-      for await (const rawChunk of streamPrompt(userId, targetSessionId, prompt, { signal, reference, agentMode })) {
+      for await (const rawChunk of streamPrompt(
+        userId,
+        targetSessionId,
+        prompt,
+        { signal, reference, agentMode, agentAccessMode },
+      )) {
         const chunk = asRecord(rawChunk)
         const node = asString(chunk.node)
         const content = asString(chunk.content)

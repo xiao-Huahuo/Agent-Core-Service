@@ -54,6 +54,15 @@
   color: var(--color-selection-blue);
 }
 
+.header-action:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.header-action.loading svg {
+  animation: root-spin 1s linear infinite;
+}
+
 .root-button:hover {
   background: var(--color-primary-softer);
   color: var(--color-primary);

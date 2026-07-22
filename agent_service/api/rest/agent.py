@@ -176,6 +176,7 @@ def _build_agent_stream_response(
     session_id: str,
     reference: str | None = None,
     agent_mode: str | None = None,
+    agent_access_mode: str | None = None,
 ) -> StreamingResponse:
     """创建带会话上下文的 Agent SSE 响应。"""
 
@@ -190,6 +191,7 @@ def _build_agent_stream_response(
                     session_id=session_id,
                     reference=reference,
                     agent_mode=agent_mode or "auto",
+                    agent_access_mode=agent_access_mode or "sandbox",
                 )
             )
         except Exception:
@@ -214,6 +216,7 @@ async def agent_stream(
     session_id: str = Query(..., min_length=1, description="会话 ID"),
     reference: str | None = Query(default=None, description="用户引用的文本"),
     agent_mode: str = Query(default="auto", description="Agent Loop 模式: auto/simple/react/plan"),
+    agent_access_mode: str = Query(default="sandbox", description="Agent 权限模式: readonly/sandbox/full_access"),
 ) -> StreamingResponse:
     """
     SSE 流式对话接口(带 session 上下文)。
@@ -226,6 +229,7 @@ async def agent_stream(
         session_id=session_id,
         reference=reference,
         agent_mode=agent_mode,
+        agent_access_mode=agent_access_mode,
     )
 
 
@@ -236,6 +240,7 @@ async def agent_stream_post(
     session_id: str = Body(..., embed=True, min_length=1),
     reference: str | None = Body(default=None, embed=True),
     agent_mode: str = Body(default="auto", embed=True),
+    agent_access_mode: str = Body(default="sandbox", embed=True),
 ) -> StreamingResponse:
     """通过 JSON body 发起 SSE 对话,避免长引用受 URL 长度限制。"""
 
@@ -245,6 +250,7 @@ async def agent_stream_post(
         session_id=session_id,
         reference=reference,
         agent_mode=agent_mode,
+        agent_access_mode=agent_access_mode,
     )
 
 

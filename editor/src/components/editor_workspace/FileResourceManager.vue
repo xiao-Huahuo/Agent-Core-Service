@@ -766,7 +766,14 @@ onUnmounted(() => {
         <button class="tool-button" type="button" title="去上级文件夹" :disabled="!canGoUp" @click="goUpDirectory">
           <ArrowUp :size="15" />
         </button>
-        <button class="tool-button" type="button" title="刷新" @click="refreshResources">
+        <button
+          class="tool-button"
+          :class="{ loading: workspaceStore.treeLoading || workspaceStore.trashLoading }"
+          type="button"
+          title="刷新"
+          :disabled="workspaceStore.treeLoading || workspaceStore.trashLoading"
+          @click="refreshResources"
+        >
           <RefreshCw :size="15" />
         </button>
       </div>

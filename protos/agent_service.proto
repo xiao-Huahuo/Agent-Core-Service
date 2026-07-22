@@ -96,6 +96,8 @@ message RunRequest {
   string reference = 4;
   // Agent Loop 模式: auto / simple / react / plan。
   string agent_mode = 5;
+  // Agent 权限模式: readonly / sandbox / full_access。
+  string agent_access_mode = 6;
 }
 
 message RunResult {

@@ -12,7 +12,7 @@ import { computed, ref } from 'vue'
 
 import { ApiError } from '@/api/client'
 import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, saveAppearanceConfig, saveFontConfig, saveKnowledgeIngestionConfig, saveWebSearchConfig, updateSettingsKnowledgeDir } from '@/api/settings'
-import type { AgentLoopMode } from '@/api/agent'
+import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
 import type { SettingsKnowledgeLibraryResponse, SettingsProfileResponse } from '@/api/settings'
 import type { KnowledgeLibraryProfile } from '@/types/settings'
 import type { ThemeMode, UserSettingsProfile } from '@/types/settings'
@@ -21,6 +21,7 @@ const THEME_KEY = 'agent_editor_theme_mode'
 const PROFILE_KEY = 'agent_editor_profile'
 const CHAT_MODE_KEY = 'agent_editor_chat_mode'
 const AGENT_LOOP_MODE_KEY = 'agent_editor_loop_mode'
+const AGENT_ACCESS_MODE_KEY = 'agent_editor_access_mode'
 const SHOW_INDEX_COLUMN_KEY = 'agent_editor_show_index_column'
 
 const DEFAULT_UI_FONT_STACK = 'var(--font-ui-default)'
@@ -177,6 +178,13 @@ function normalizeAgentLoopMode(mode: string | null): AgentLoopMode {
   return 'auto'
 }
 
+function normalizeAgentAccessMode(mode: string | null): AgentAccessMode {
+  if (mode === 'readonly' || mode === 'full_access') {
+    return mode
+  }
+  return 'sandbox'
+}
+
 function loadProfile(): UserSettingsProfile {
   const raw = localStorage.getItem(PROFILE_KEY)
   if (!raw) {
@@ -204,6 +212,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /** Agent execution loop mode shared by Agent panel and Obs graph. */
   const agentLoopMode = ref<AgentLoopMode>(normalizeAgentLoopMode(localStorage.getItem(AGENT_LOOP_MODE_KEY)))
+
+  /** Agent filesystem and terminal permission mode for the next turn. */
+  const agentAccessMode = ref<AgentAccessMode>(normalizeAgentAccessMode(localStorage.getItem(AGENT_ACCESS_MODE_KEY)))
 
   /** Whether to show index status column/icons in file tree and file resource manager. */
   const showIndexColumn = ref(localStorage.getItem(SHOW_INDEX_COLUMN_KEY) !== 'false')
@@ -328,6 +339,11 @@ export const useSettingsStore = defineStore('settings', () => {
   function setAgentLoopMode(mode: AgentLoopMode) {
     agentLoopMode.value = mode
     localStorage.setItem(AGENT_LOOP_MODE_KEY, mode)
+  }
+
+  function setAgentAccessMode(mode: AgentAccessMode) {
+    agentAccessMode.value = normalizeAgentAccessMode(mode)
+    localStorage.setItem(AGENT_ACCESS_MODE_KEY, agentAccessMode.value)
   }
 
   /** Update local profile values until backend settings are connected. */
@@ -520,6 +536,7 @@ export const useSettingsStore = defineStore('settings', () => {
     colorScheme,
     chatMode,
     agentLoopMode,
+    agentAccessMode,
     profile,
     hasUserId,
     activeKnowledgeLibrary,
@@ -530,6 +547,7 @@ export const useSettingsStore = defineStore('settings', () => {
     toggleTheme,
     toggleChatMode,
     setAgentLoopMode,
+    setAgentAccessMode,
     updateProfile,
     setUiFontFamilies,
     setTextFontFamilies,

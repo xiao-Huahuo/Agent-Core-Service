@@ -13,7 +13,6 @@ import { RefreshCw, Search } from 'lucide-vue-next'
 
 import { fetchAgentTools, type AgentToolInfo } from '@/api/tools'
 import { fetchAvailableTools, saveDisabledTools } from '@/api/settings'
-import type { ToolEntry } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
 
 const settingsStore = useSettingsStore()

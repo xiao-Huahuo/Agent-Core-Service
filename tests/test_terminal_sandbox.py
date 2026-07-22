@@ -14,6 +14,7 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 from agent_service.services.settings_service import SettingsService
 from agent_service.services.terminal.command_sandbox import TerminalSandbox, TerminalSandboxSettings
+from agent_service.tools.runtime_context import AGENT_ACCESS_FULL, AGENT_ACCESS_READONLY
 
 
 def _build_settings(workspace_root: Path) -> TerminalSandboxSettings:
@@ -148,16 +149,41 @@ def test_terminal_sandbox_runs_internal_head_command(tmp_path: Path) -> None:
     assert result["results"][0]["stdout"] == "one\ntwo"
 
 
-def test_terminal_sandbox_blocks_internal_command_path_escape(tmp_path: Path) -> None:
-    """内部系统指令的路径参数仍必须留在工作区内。"""
+def test_terminal_sandbox_allows_internal_read_path_escape(tmp_path: Path) -> None:
+    """沙盒模式允许内部读取指令穿透工作区读取目录外文件。"""
+
+    outside_file = tmp_path.parent / "outside.txt"
+    outside_file.write_text("outside read", encoding="utf-8")
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path))
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "cat", "args": ["../outside.txt"]}],
+    )
+
+    assert result["ok"] is True
+    assert result["results"][0]["stdout"] == "outside read"
+
+
+def test_terminal_sandbox_internal_write_stays_inside_workspace(tmp_path: Path) -> None:
+    """沙盒模式支持内部写指令,但写入路径必须留在工作区内。"""
 
     sandbox = TerminalSandbox(settings=_build_settings(tmp_path))
 
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "write", "args": ["notes/out.txt", "hello"]}],
+    )
+
+    assert result["ok"] is True
+    assert (tmp_path / "notes" / "out.txt").read_text(encoding="utf-8") == "hello"
     with pytest.raises(ValueError, match="不在终端沙盒工作区内"):
         sandbox.run(
             shell="cmd",
             cwd=".",
-            segments=[{"type": "internal_command", "command": "cat", "args": ["../outside.txt"]}],
+            segments=[{"type": "internal_command", "command": "write", "args": ["../outside-write.txt", "blocked"]}],
         )
 
 
@@ -190,6 +216,52 @@ def test_terminal_sandbox_blocks_python_inline_code(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="内联代码"):
         sandbox.run(shell="cmd", cwd=".", segments=[{"program": "python", "args": ["-c", "print('bad')"]}])
+
+
+def test_terminal_readonly_access_allows_internal_read_outside_workspace(tmp_path: Path) -> None:
+    """只读权限允许内部读取指令访问工作区外路径,但不允许写入类外部程序。"""
+
+    outside_file = tmp_path.parent / "outside-readonly.txt"
+    outside_file.write_text("readonly ok", encoding="utf-8")
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_READONLY)
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=str(tmp_path.parent),
+        segments=[{"type": "internal_command", "command": "cat", "args": [outside_file.name]}],
+    )
+
+    assert result["ok"] is True
+    assert result["results"][0]["stdout"] == "readonly ok"
+    blocked = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "write", "args": ["blocked.txt", "no"]}],
+    )
+    assert blocked["ok"] is False
+    assert "只读权限" in blocked["results"][0]["stderr"]
+    with pytest.raises(ValueError, match="只读权限"):
+        sandbox.run(shell="cmd", cwd=".", segments=[{"program": "python", "args": ["--version"]}])
+
+
+def test_terminal_full_access_allows_cwd_outside_workspace(tmp_path: Path) -> None:
+    """完全访问权限放宽 cwd 和路径边界,但仍保持结构化执行。"""
+
+    outside_file = tmp_path.parent / "full-write.txt"
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_FULL)
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=str(tmp_path.parent),
+        segments=[
+            {"type": "internal_command", "command": "pwd", "args": []},
+            {"type": "internal_command", "command": "write", "args": [outside_file.name, "full ok"]},
+        ],
+    )
+
+    assert result["ok"] is True
+    assert str(tmp_path.parent.resolve()) in result["results"][0]["stdout"]
+    assert outside_file.read_text(encoding="utf-8") == "full ok"
 
 
 def test_terminal_sandbox_allows_expanded_readonly_tooling(tmp_path: Path) -> None:

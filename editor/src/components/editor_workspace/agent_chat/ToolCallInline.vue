@@ -255,7 +255,7 @@ function parseTerminalResult(content: string): TerminalResultDisplay | null {
 }
 
 const toolEntries = computed(() => {
-  const pendingStarts = new Map<string, { key: string; text: string; argsSummary: string }>()
+  const pendingStarts = new Map<string, { key: string; text: string; argsSummary: string; toolName: string }>()
   const startArgsByToolName = new Map<string, string>()
   const startCommandByToolName = new Map<string, string>()
   ;(props.traces ?? [])
@@ -273,6 +273,7 @@ const toolEntries = computed(() => {
           ? terminalCommandSummary(argsSummary, terminalCommand)
           : asString(trace.human_readable) || `正在调用工具「${asString(trace.display_name) || FALLBACK_DISPLAY[toolName] || toolName}」`,
         argsSummary,
+        toolName,
       })
     })
   const merged = new Map<string, ToolEntry>()
@@ -283,7 +284,12 @@ const toolEntries = computed(() => {
       const argsSummary = asString(trace.tool_args_summary)
       const terminalCommand = asString(trace.terminal_command)
       const mergeKey = toolMergeKey(toolName, argsSummary, terminalCommand)
-      pendingStarts.delete(mergeKey)
+      if (!pendingStarts.delete(mergeKey)) {
+        const staleStart = Array.from(pendingStarts.entries()).find(([, start]) => start.toolName === toolName)
+        if (staleStart) {
+          pendingStarts.delete(staleStart[0])
+        }
+      }
       const existing = merged.get(mergeKey)
       const resultCount = asNumber(trace.result_count)
       const fn = extractFilename(trace, toolName)

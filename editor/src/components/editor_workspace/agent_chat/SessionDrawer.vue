@@ -6,7 +6,7 @@
   sessions for the current editor user_id.
 -->
 <script setup lang="ts">
-import { PanelLeft, Plus, Trash2, X } from 'lucide-vue-next'
+import { PanelLeft, Trash2, X } from 'lucide-vue-next'
 import logoSrc from '@/assets/images/无底图标.png'
 
 import { useSessionStore } from '@/stores/session'

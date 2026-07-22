@@ -11,12 +11,10 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { FileSearch, Layers, List, Loader, Search, Sparkles, ToggleLeft, ToggleRight, X } from 'lucide-vue-next'
 
 import { highlightMatch } from '@/utils/highlight'
-import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import SplitText from '@/components/editor_workspace/SplitText.vue'
 
 const workspaceStore = useWorkspaceStore()
-const settingsStore = useSettingsStore()
 
 const inputEl = ref<HTMLInputElement | null>(null)
 const hasSearched = ref(false)

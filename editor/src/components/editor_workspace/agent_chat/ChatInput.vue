@@ -8,9 +8,9 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { BrainCircuit, Check, ChevronDown, Globe, Plus, Send, X } from 'lucide-vue-next'
+import { BrainCircuit, Check, ChevronDown, Globe, Plus, Send, Shield, X } from 'lucide-vue-next'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
-import type { AgentLoopMode } from '@/api/agent'
+import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
 import type { AgentUploadedAttachment } from '@/stores/chat'
 
 const props = defineProps<{
@@ -18,6 +18,7 @@ const props = defineProps<{
   centered?: boolean
   webSearchEnabled?: boolean
   agentMode?: AgentLoopMode
+  agentAccessMode?: AgentAccessMode
   reference?: string
   attachments?: AgentUploadedAttachment[]
 }>()
@@ -26,6 +27,7 @@ const emit = defineEmits<{
   send: [text: string, reference?: string]
   'toggle-web-search': []
   'set-agent-mode': [mode: AgentLoopMode]
+  'set-agent-access-mode': [mode: AgentAccessMode]
   'clear-reference': []
   'remove-attachment': [attachment: AgentUploadedAttachment]
   'file-select': [file: File]
@@ -33,6 +35,7 @@ const emit = defineEmits<{
 
 const text = ref('')
 const loopModeMenu = ref<HTMLDetailsElement | null>(null)
+const accessModeMenu = ref<HTMLDetailsElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 
 const loopModeOptions: Array<{ value: AgentLoopMode; label: string; hint: string }> = [
@@ -42,9 +45,19 @@ const loopModeOptions: Array<{ value: AgentLoopMode; label: string; hint: string
   { value: 'plan', label: 'Plan', hint: '规划执行' },
 ]
 
+const accessModeOptions: Array<{ value: AgentAccessMode; label: string; hint: string }> = [
+  { value: 'readonly', label: '只读', hint: '全目录只读' },
+  { value: 'sandbox', label: '沙盒', hint: '知识库内写' },
+  { value: 'full_access', label: '完全访问', hint: '不限制边界' },
+]
+
 const selectedLoopMode = computed<AgentLoopMode>(() => props.agentMode || 'auto')
 const selectedLoopModeLabel = computed(() => {
   return loopModeOptions.find((option) => option.value === selectedLoopMode.value)?.label || 'Auto'
+})
+const selectedAccessMode = computed<AgentAccessMode>(() => props.agentAccessMode || 'sandbox')
+const selectedAccessModeLabel = computed(() => {
+  return accessModeOptions.find((option) => option.value === selectedAccessMode.value)?.label || '沙盒'
 })
 
 function handleSend() {
@@ -71,10 +84,23 @@ function handleLoopModeSummaryClick(event: MouseEvent) {
   }
 }
 
+function handleAccessModeSummaryClick(event: MouseEvent) {
+  if (props.disabled) {
+    event.preventDefault()
+  }
+}
+
 function selectLoopMode(mode: AgentLoopMode) {
   emit('set-agent-mode', mode)
   if (loopModeMenu.value) {
     loopModeMenu.value.open = false
+  }
+}
+
+function selectAccessMode(mode: AgentAccessMode) {
+  emit('set-agent-access-mode', mode)
+  if (accessModeMenu.value) {
+    accessModeMenu.value.open = false
   }
 }
 
@@ -144,6 +170,34 @@ function handleFileChange(event: Event) {
           >
             <Globe :size="14" />
           </button>
+          <details ref="accessModeMenu" class="access-mode-dropdown" :class="{ disabled }">
+            <summary
+              class="access-mode-trigger"
+              title="Agent 权限"
+              aria-label="Agent 权限"
+              @click="handleAccessModeSummaryClick"
+            >
+              <Shield :size="12" />
+              <span class="access-mode-label">{{ selectedAccessModeLabel }}</span>
+              <ChevronDown :size="11" class="access-mode-caret" />
+            </summary>
+            <div class="access-mode-menu" role="listbox" aria-label="Agent 权限">
+              <button
+                v-for="option in accessModeOptions"
+                :key="option.value"
+                class="access-mode-option"
+                :class="{ active: selectedAccessMode === option.value }"
+                type="button"
+                role="option"
+                :aria-selected="selectedAccessMode === option.value"
+                @click="selectAccessMode(option.value)"
+              >
+                <span class="access-mode-option-label">{{ option.label }}</span>
+                <span class="access-mode-option-hint">{{ option.hint }}</span>
+                <Check v-if="selectedAccessMode === option.value" :size="13" class="access-mode-check" />
+              </button>
+            </div>
+          </details>
         </div>
         <details ref="loopModeMenu" class="loop-mode-dropdown" :class="{ disabled }">
           <summary
@@ -388,6 +442,135 @@ function handleFileChange(event: Event) {
   border-color: var(--color-primary-hover);
   color: #fff;
   background: var(--color-primary-hover);
+}
+
+.access-mode-dropdown {
+  position: relative;
+}
+
+.access-mode-dropdown.disabled {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.access-mode-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 26px;
+  min-width: 64px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted, #8b93a7);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  line-height: 1;
+  list-style: none;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.access-mode-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.access-mode-trigger::marker {
+  content: '';
+}
+
+.access-mode-trigger:hover,
+.access-mode-dropdown[open] .access-mode-trigger {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
+.access-mode-label {
+  color: inherit;
+  white-space: nowrap;
+}
+
+.access-mode-caret {
+  color: inherit;
+  transition: transform 120ms ease;
+}
+
+.access-mode-dropdown[open] .access-mode-caret {
+  transform: rotate(180deg);
+}
+
+.access-mode-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: 180px;
+  padding: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 10px;
+  background: var(--color-surface, #111827);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  animation: loop-menu-pop 140ms ease-out both;
+}
+
+.access-mode-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-secondary, #a8b0c1);
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-4px);
+  animation: loop-option-drop 150ms ease-out both;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.access-mode-option:nth-child(2) {
+  animation-delay: 26ms;
+}
+
+.access-mode-option:nth-child(3) {
+  animation-delay: 52ms;
+}
+
+.access-mode-option:hover,
+.access-mode-option.active {
+  background: var(--color-primary-softer);
+  color: var(--color-text, #e5e7eb);
+}
+
+.access-mode-option-label {
+  width: 54px;
+  color: inherit;
+  font-size: 11px;
+}
+
+.access-mode-option-hint {
+  flex: 1;
+  color: var(--color-text-muted, #7c8496);
+  font-size: 10px;
+}
+
+.access-mode-check {
+  color: var(--color-primary);
 }
 
 .loop-mode-dropdown {

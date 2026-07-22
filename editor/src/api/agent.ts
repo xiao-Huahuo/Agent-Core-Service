@@ -20,6 +20,7 @@ export interface AgentStreamChunk {
 }
 
 export type AgentLoopMode = 'auto' | 'simple' | 'react' | 'plan'
+export type AgentAccessMode = 'readonly' | 'sandbox' | 'full_access'
 
 export interface CurrentDocumentContextPayload {
   user_id: string
@@ -38,7 +39,7 @@ export function streamPrompt(
   userId: string,
   sessionId: string,
   prompt: string,
-  options: { signal?: AbortSignal; reference?: string; agentMode?: AgentLoopMode } = {},
+  options: { signal?: AbortSignal; reference?: string; agentMode?: AgentLoopMode; agentAccessMode?: AgentAccessMode } = {},
 ): AsyncGenerator<Record<string, unknown>> {
   const body = {
     user_id: userId,
@@ -46,6 +47,7 @@ export function streamPrompt(
     prompt,
     reference: options.reference?.trim() || undefined,
     agent_mode: options.agentMode || 'auto',
+    agent_access_mode: options.agentAccessMode || 'sandbox',
   }
   return streamLines(
     buildApiUrl(API_ROUTES.AGENT_STREAM),

@@ -383,10 +383,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     setGraphProgress(initialValue)
   }
 
-  function finishGraphProgress(delay = 1000) {
-    setGraphProgress(100)
-  }
-
   function stopGraphPolling() {
     if (graphPollingTimer !== null) {
       clearInterval(graphPollingTimer)

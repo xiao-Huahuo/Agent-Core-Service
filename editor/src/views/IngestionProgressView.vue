@@ -30,9 +30,10 @@ const historyFilter = ref<HistorySourceType | 'all'>('all')
 
 const queueRows = computed(() => workspaceStore.ingestionQueue)
 const graphQueueRows = computed(() => workspaceStore.graphQueue)
+type HistoryRow = IngestionHistoryItem & { sourceType: HistorySourceType; sourceSort: number }
 
 const allHistoryRows = computed(() => {
-  const items: (IngestionHistoryItem & { sourceSort: number })[] = [
+  const items: HistoryRow[] = [
     ...workspaceStore.ingestionHistory.map((item, i) => ({
       ...item,
       sourceType: (item.sourceType ?? 'ingestion') as HistorySourceType,

@@ -11,7 +11,7 @@ import { ref } from 'vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { SourceItem } from '@/stores/chat'
 
-const props = defineProps<{
+defineProps<{
   sources: SourceItem[]
 }>()
 

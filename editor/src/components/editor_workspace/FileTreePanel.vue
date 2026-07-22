@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { FilePlus2, FolderPlus, FolderOpen } from 'lucide-vue-next'
+import { FilePlus2, FolderPlus, FolderOpen, RefreshCw } from 'lucide-vue-next'
 
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import TreeNode from '@/components/editor_workspace/TreeNode.vue'
@@ -192,6 +192,11 @@ async function openRootPicker() {
   actionError.value = rootError.value
 }
 
+async function refreshFileTree() {
+  actionError.value = ''
+  await workspaceStore.loadKnowledgeTree()
+}
+
 function filesFromEvent(event: DragEvent): File[] {
   return Array.from(event.dataTransfer?.files ?? [])
 }
@@ -210,10 +215,6 @@ function desktopPathsFromFiles(files: File[]): string[] {
       }
     })
     .filter(Boolean)
-}
-
-function openMultiFilePicker() {
-  uploadPicker.value?.click()
 }
 
 function handleTreeDragEnter() {
@@ -767,6 +768,16 @@ onUnmounted(() => {
       </button>
       <button class="header-action" type="button" title="New folder" @click="beginCreate('folder', '')">
         <FolderPlus :size="18" />
+      </button>
+      <button
+        class="header-action"
+        :class="{ loading: workspaceStore.treeLoading }"
+        type="button"
+        title="刷新文件树"
+        :disabled="workspaceStore.treeLoading"
+        @click="refreshFileTree"
+      >
+        <RefreshCw :size="18" />
       </button>
       <input
         ref="uploadPicker"

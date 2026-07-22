@@ -20,6 +20,11 @@ if TYPE_CHECKING:
     from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
     from agent_service.services.memory.rag.embedding import EmbeddingService
 
+AGENT_ACCESS_READONLY = "readonly"
+AGENT_ACCESS_SANDBOX = "sandbox"
+AGENT_ACCESS_FULL = "full_access"
+AGENT_ACCESS_MODES = {AGENT_ACCESS_READONLY, AGENT_ACCESS_SANDBOX, AGENT_ACCESS_FULL}
+
 
 @dataclass(slots=True)
 class ToolRuntimeState:
@@ -40,6 +45,7 @@ class ToolRuntimeState:
     retrieval_service: MemoryRetrievalService
     memory_service: LongTermMemoryService | None = None
     embedding_service: EmbeddingService | None = None
+    agent_access_mode: str = AGENT_ACCESS_SANDBOX
     citation_map: dict[str, dict[str, Any]] = field(default_factory=dict)
     tool_citation_counter: int = 0
     network_citation_counter: int = 0
@@ -57,6 +63,7 @@ def set_tool_runtime(
     memory_service: LongTermMemoryService | None = None,
     embedding_service: EmbeddingService | None = None,
     citation_map: dict[str, dict[str, Any]] | None = None,
+    agent_access_mode: str = AGENT_ACCESS_SANDBOX,
 ) -> None:
     """
     设置当前线程的工具运行时状态。
@@ -79,6 +86,7 @@ def set_tool_runtime(
         retrieval_service=retrieval_service or MemoryRetrievalService(config=config),
         memory_service=memory_service or LongTermMemoryService(config=config),
         embedding_service=embedding_service or EmbeddingService(config=config),
+        agent_access_mode=normalize_agent_access_mode(agent_access_mode),
         citation_map=citation_map if citation_map is not None else {},
     )
 
@@ -245,6 +253,19 @@ def get_tool_runtime() -> ToolRuntimeState:
     if state is None:
         raise RuntimeError("当前工具调用缺少 Agent 运行时上下文。")
     return state
+
+
+def normalize_agent_access_mode(value: str | None) -> str:
+    """规范化 Agent 权限模式,未知值回退到沙盒模式。"""
+
+    normalized = (value or AGENT_ACCESS_SANDBOX).strip().lower()
+    if normalized in {"read_only", "read-only", "只读"}:
+        return AGENT_ACCESS_READONLY
+    if normalized in {"full", "full-access", "完全访问"}:
+        return AGENT_ACCESS_FULL
+    if normalized not in AGENT_ACCESS_MODES:
+        return AGENT_ACCESS_SANDBOX
+    return normalized
 
 
 def register_tool_citation(

@@ -8,9 +8,9 @@ Agent 终端命令沙盒。
 
 使用说明:
 通过 `TerminalSandboxSettings.from_config_payload()` 合并进程默认值和用户设置,
-再创建 `TerminalSandbox(settings=...)` 调用 `run()`。每个 segment 只支持
-`{"program": "...", "args": ["..."]}` 格式;后续需要新增指令段类型时应在本文件
-显式扩展 catalog 与校验逻辑。
+再创建 `TerminalSandbox(settings=...)` 调用 `run()`。segment 支持
+`external_program` 外部程序段和 `internal_command` 内部读写指令段;所有新增
+指令都必须在本文件显式扩展 catalog、参数解析和路径权限校验。
 """
 
 from __future__ import annotations
@@ -26,8 +26,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 from agent_service.core.agent_config import AgentConfig
+from agent_service.tools.runtime_context import AGENT_ACCESS_FULL, AGENT_ACCESS_READONLY, AGENT_ACCESS_SANDBOX
 
 SUPPORTED_SHELLS = ("cmd", "powershell", "bash")
+TERMINAL_ACCESS_MODES = {AGENT_ACCESS_READONLY, AGENT_ACCESS_SANDBOX, AGENT_ACCESS_FULL}
 PATH_VALUE_PATTERN = re.compile(r"^[A-Za-z]:[\\/]|[\\/]|^\.\.?($|[\\/])|^~[\\/]|[A-Za-z0-9_.-]+\.[A-Za-z0-9]{1,8}$")
 CONTROL_CHAR_PATTERN = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 URL_SCHEMES = {"http", "https", "git", "ssh"}
@@ -120,6 +122,12 @@ COMMON_INTERNAL_COMMANDS = [
     {"type": "internal_command", "command": "tail", "usage": "tail -n 40 logs/app.log"},
     {"type": "internal_command", "command": "stat", "usage": "stat README.md"},
     {"type": "internal_command", "command": "wc", "usage": "wc README.md"},
+    {"type": "internal_command", "command": "write", "usage": "write notes/todo.md content"},
+    {"type": "internal_command", "command": "append", "usage": "append notes/todo.md content"},
+    {"type": "internal_command", "command": "touch", "usage": "touch notes/todo.md"},
+    {"type": "internal_command", "command": "mkdir", "usage": "mkdir notes"},
+    {"type": "internal_command", "command": "rm", "usage": "rm notes/todo.md"},
+    {"type": "internal_command", "command": "mv", "usage": "mv old.md new.md"},
 ]
 
 DEFAULT_TERMINAL_SEGMENT_CATALOG: dict[str, list[dict[str, str]]] = {
@@ -231,10 +239,11 @@ class TerminalSandboxSettings:
 class TerminalSandbox:
     """执行结构化终端指令段的沙盒。"""
 
-    def __init__(self, *, settings: TerminalSandboxSettings) -> None:
+    def __init__(self, *, settings: TerminalSandboxSettings, access_mode: str = AGENT_ACCESS_SANDBOX) -> None:
         """保存已规范化的沙盒设置。"""
 
         self.settings = settings
+        self.access_mode = access_mode if access_mode in TERMINAL_ACCESS_MODES else AGENT_ACCESS_SANDBOX
 
     def run(
         self,
@@ -265,9 +274,13 @@ class TerminalSandbox:
                 self._validate_control_chars(args=args)
                 result = self._run_internal_one(index=index, command=program, args=args, cwd=safe_cwd)
             else:
+                if self.access_mode == AGENT_ACCESS_READONLY:
+                    raise ValueError("只读权限下终端只允许执行 pwd、ls、dir、cat、type、head、tail、stat、wc 等内部读取指令。")
+                if self.access_mode == AGENT_ACCESS_SANDBOX:
+                    self._assert_path_in_workspace(safe_cwd)
                 self._validate_program(shell=normalized_shell, program=program)
                 self._validate_program_args(program=program, args=args, cwd=safe_cwd)
-                self._validate_args(args=args, cwd=safe_cwd)
+                self._validate_external_args(args=args, cwd=safe_cwd)
                 result = self._run_one(index=index, program=program, args=args, cwd=safe_cwd, timeout=timeout)
             results.append(result)
             combined_output += result["stdout"] + result["stderr"]
@@ -333,8 +346,8 @@ class TerminalSandbox:
         if _looks_like_path(program):
             self._resolve_safe_path(program)
 
-    def _validate_args(self, *, args: list[str], cwd: Path) -> None:
-        """校验参数内容和参数中出现的路径不会越过工作区。"""
+    def _validate_external_args(self, *, args: list[str], cwd: Path) -> None:
+        """校验外部程序参数,沙盒模式下路径仍不能越过工作区。"""
 
         self._validate_control_chars(args=args)
         for arg in args:
@@ -342,7 +355,10 @@ class TerminalSandbox:
                 path = Path(value).expanduser()
                 if not path.is_absolute():
                     path = cwd / path
-                self._assert_path_in_workspace(path)
+                if self.access_mode == AGENT_ACCESS_FULL:
+                    path.resolve(strict=False)
+                else:
+                    self._assert_path_in_workspace(path)
 
     @staticmethod
     def _validate_control_chars(*, args: list[str]) -> None:
@@ -563,12 +579,19 @@ class TerminalSandbox:
         raise ValueError(f"{program} 暂只允许版本查询。")
 
     def _resolve_safe_path(self, raw_path: str) -> Path:
-        """将 cwd 或路径参数解析为工作区内的安全绝对路径。"""
+        """按当前权限模式解析 cwd 或路径参数。"""
 
         path = Path(raw_path).expanduser()
         if not path.is_absolute():
             path = self.settings.workspace_root / path
-        return self._assert_path_in_workspace(path)
+        return self._assert_read_path_allowed(path)
+
+    def _assert_read_path_allowed(self, raw_path: Path) -> Path:
+        """按权限模式校验读取路径,三档权限均允许读取穿透。"""
+
+        if self.access_mode in {AGENT_ACCESS_READONLY, AGENT_ACCESS_SANDBOX, AGENT_ACCESS_FULL}:
+            return raw_path.resolve(strict=False)
+        return self._assert_path_in_workspace(raw_path)
 
     def _assert_path_in_workspace(self, raw_path: Path) -> Path:
         """解析路径并确认它没有通过相对路径或链接跳出 workspace_root。"""
@@ -633,6 +656,18 @@ class TerminalSandbox:
             return self._internal_stat(args=args, cwd=cwd)
         if command == "wc":
             return self._internal_wc(args=args, cwd=cwd)
+        if command == "write":
+            return self._internal_write_file(args=args, cwd=cwd, append=False)
+        if command == "append":
+            return self._internal_write_file(args=args, cwd=cwd, append=True)
+        if command == "touch":
+            return self._internal_touch(args=args, cwd=cwd)
+        if command == "mkdir":
+            return self._internal_mkdir(args=args, cwd=cwd)
+        if command in {"rm", "del"}:
+            return self._internal_remove(args=args, cwd=cwd)
+        if command in {"mv", "move"}:
+            return self._internal_move(args=args, cwd=cwd)
         raise ValueError(f"不支持内部系统指令 {command}。")
 
     def _internal_list_dir(self, *, args: list[str], cwd: Path) -> str:
@@ -701,12 +736,85 @@ class TerminalSandbox:
         word_count = len(re.findall(r"\S+", content))
         return f"{line_count}\t{word_count}\t{len(content)}\t{target}"
 
+    def _internal_write_file(self, *, args: list[str], cwd: Path, append: bool) -> str:
+        """在允许写入的路径内创建、覆盖或追加文本文件。"""
+
+        if len(args) < 2:
+            command = "append" if append else "write"
+            raise ValueError(f"{command} 必须指定文件路径和文本内容。")
+        target = self._resolve_write_path(args[0], cwd=cwd)
+        content = args[1] if len(args) == 2 else " ".join(args[1:])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        mode = "a" if append else "w"
+        with target.open(mode, encoding="utf-8", newline="") as file:
+            file.write(content)
+        action = "追加" if append else "写入"
+        return f"已{action}: {target}"
+
+    def _internal_touch(self, *, args: list[str], cwd: Path) -> str:
+        """在允许写入的路径内创建空文件或更新时间戳。"""
+
+        if len(args) != 1:
+            raise ValueError("touch 必须且只能指定一个文件路径。")
+        target = self._resolve_write_path(args[0], cwd=cwd)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.touch(exist_ok=True)
+        return f"已 touch: {target}"
+
+    def _internal_mkdir(self, *, args: list[str], cwd: Path) -> str:
+        """在允许写入的路径内创建目录。"""
+
+        if len(args) != 1:
+            raise ValueError("mkdir 必须且只能指定一个目录路径。")
+        target = self._resolve_write_path(args[0], cwd=cwd)
+        target.mkdir(parents=True, exist_ok=True)
+        return f"已创建目录: {target}"
+
+    def _internal_remove(self, *, args: list[str], cwd: Path) -> str:
+        """删除允许写入范围内的文件或空目录。"""
+
+        if len(args) != 1:
+            raise ValueError("rm/del 必须且只能指定一个路径。")
+        target = self._resolve_write_path(args[0], cwd=cwd)
+        if not target.exists():
+            raise ValueError(f"路径不存在: {target}")
+        if target.is_dir():
+            target.rmdir()
+            return f"已删除目录: {target}"
+        target.unlink()
+        return f"已删除文件: {target}"
+
+    def _internal_move(self, *, args: list[str], cwd: Path) -> str:
+        """移动或重命名允许写入范围内的文件和目录。"""
+
+        if len(args) != 2:
+            raise ValueError("mv/move 必须指定源路径和目标路径。")
+        source = self._resolve_write_path(args[0], cwd=cwd)
+        target = self._resolve_write_path(args[1], cwd=cwd)
+        if not source.exists():
+            raise ValueError(f"源路径不存在: {source}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source.replace(target)
+        return f"已移动: {source} -> {target}"
+
     def _resolve_arg_path(self, raw_path: str, *, cwd: Path) -> Path:
-        """按当前 cwd 解析内部指令路径并确认仍在工作区内。"""
+        """按当前 cwd 解析内部读取路径。"""
 
         path = Path(raw_path).expanduser()
         if not path.is_absolute():
             path = cwd / path
+        return self._assert_read_path_allowed(path)
+
+    def _resolve_write_path(self, raw_path: str, *, cwd: Path) -> Path:
+        """按当前 cwd 解析内部写入路径并套用权限边界。"""
+
+        if self.access_mode == AGENT_ACCESS_READONLY:
+            raise ValueError("只读权限下禁止终端写入。")
+        path = Path(raw_path).expanduser()
+        if not path.is_absolute():
+            path = cwd / path
+        if self.access_mode == AGENT_ACCESS_FULL:
+            return path.resolve(strict=False)
         return self._assert_path_in_workspace(path)
 
     @staticmethod

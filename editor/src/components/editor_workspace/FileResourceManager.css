@@ -145,6 +145,10 @@
   opacity: 0.35;
 }
 
+.tool-button.loading svg {
+  animation: refresh-spin 1s linear infinite;
+}
+
 .view-button {
   width: 28px;
   height: 28px;
@@ -761,6 +765,12 @@
 
   to {
     transform: translateY(0);
+  }
+}
+
+@keyframes refresh-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

@@ -2041,11 +2041,13 @@ class KnowledgeLibraryService:
             if self._is_relative_to(frontmatter_path, frontmatter_root) and frontmatter_path.exists():
                 frontmatter_path.unlink()
             # 同时删除该文档产生的图谱点边和状态记录
-            self.knowledge_graph_service.delete_document_graph(
-                user_id=normalized_user_id,
-                library_id=library_id,
-                document_id=source_id,
-            )
+            delete_document_graph = getattr(self.knowledge_graph_service, "delete_document_graph", None)
+            if callable(delete_document_graph):
+                delete_document_graph(
+                    user_id=normalized_user_id,
+                    library_id=library_id,
+                    document_id=source_id,
+                )
         return chunks_deleted
 
     def _source_needs_ocr_reindex(

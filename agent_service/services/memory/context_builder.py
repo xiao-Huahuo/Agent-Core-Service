@@ -153,8 +153,8 @@ class ContextBuilder:
         knowledge_count = len(knowledge)
         important_count = 1 if important_summary is not None else 0
 
-        memory_request = memory_snapshot.request_limit or max(self.config.memory.rerank_top_k, 1)
-        knowledge_request = knowledge_snapshot.request_limit or max(self.config.memory.rerank_top_k, 1)
+        memory_request = getattr(memory_snapshot, "request_limit", None) or max(self.config.memory.rerank_top_k, 1)
+        knowledge_request = getattr(knowledge_snapshot, "request_limit", None) or max(self.config.memory.rerank_top_k, 1)
         total_request = memory_request + knowledge_request
         fill_rate = round((memory_count + knowledge_count) / max(total_request, 1) * 100, 1)
 

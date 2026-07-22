@@ -82,6 +82,7 @@ from agent_service.tools import (
     set_observation_content_callback,
     set_tool_runtime,
     set_tool_trace_callback,
+    normalize_agent_access_mode,
 )
 
 logger = logging.getLogger(__name__)
@@ -209,7 +210,15 @@ class AgentCore:
         }
         self.graph_diagram_path = self.graph_diagram_paths[AGENT_LOOP_PLAN]
 
-    def stream_run(self, *, prompt: str, user_id: str, session_id: str, agent_mode: str = AGENT_LOOP_PLAN) -> Iterator[dict[str, Any]]:
+    def stream_run(
+        self,
+        *,
+        prompt: str,
+        user_id: str,
+        session_id: str,
+        agent_mode: str = AGENT_LOOP_PLAN,
+        agent_access_mode: str = "sandbox",
+    ) -> Iterator[dict[str, Any]]:
         """
         运行一轮无状态 Agent 并逐节点产出 dict 事件。
 
@@ -228,10 +237,19 @@ class AgentCore:
             session_id=session_id,
             graph=self.graphs[effective_mode],
             agent_mode=effective_mode,
+            agent_access_mode=agent_access_mode,
         )
         logger.debug("无状态流式运行完成 | user=%s session=%s mode=%s", user_id, session_id, effective_mode)
 
-    def run_once(self, *, prompt: str, user_id: str, session_id: str, agent_mode: str = AGENT_LOOP_PLAN) -> dict[str, Any]:
+    def run_once(
+        self,
+        *,
+        prompt: str,
+        user_id: str,
+        session_id: str,
+        agent_mode: str = AGENT_LOOP_PLAN,
+        agent_access_mode: str = "sandbox",
+    ) -> dict[str, Any]:
         """
         运行一轮无状态 Agent 并返回结构化结果。
 
@@ -242,7 +260,13 @@ class AgentCore:
         """
 
         effective_mode = AGENT_LOOP_REACT if agent_mode == AGENT_LOOP_REACT else AGENT_LOOP_PLAN
-        chunks = list(self.stream_run(prompt=prompt, user_id=user_id, session_id=session_id, agent_mode=effective_mode))
+        chunks = list(self.stream_run(
+            prompt=prompt,
+            user_id=user_id,
+            session_id=session_id,
+            agent_mode=effective_mode,
+            agent_access_mode=agent_access_mode,
+        ))
         graph_diagram_path = self.graph_diagram_paths[effective_mode]
         graph_diagram = graph_diagram_path.read_text(encoding="utf-8")
         return {
@@ -311,6 +335,7 @@ class AgentCore:
         session_id: str,
         reference: str | None = None,
         agent_mode: str = AGENT_LOOP_AUTO,
+        agent_access_mode: str = "sandbox",
     ) -> dict[str, Any]:
         """
         运行带 session 上下文和消息持久化的一轮 Agent,返回结构化结果。
@@ -329,8 +354,10 @@ class AgentCore:
                 session_id=session_id,
                 reference=reference,
                 agent_mode=agent_mode,
+                agent_access_mode=agent_access_mode,
             )
         )
+        effective_access_mode = normalize_agent_access_mode(agent_access_mode)
         effective_mode = self._extract_agent_mode_from_events(chunks) or self._resolve_agent_loop_mode_fallback(
             agent_mode=agent_mode,
             prompt=prompt,
@@ -345,6 +372,7 @@ class AgentCore:
             "final_output": self.extract_final_output(chunks),
             "events": chunks,
             "agent_mode": effective_mode,
+            "agent_access_mode": effective_access_mode,
         }
 
     def stream_session_prompt(
@@ -355,6 +383,7 @@ class AgentCore:
         session_id: str,
         reference: str | None = None,
         agent_mode: str = AGENT_LOOP_AUTO,
+        agent_access_mode: str = "sandbox",
     ) -> Iterator[dict[str, Any]]:
         """
         运行带 session 上下文和消息持久化的一轮 Agent,逐节点产出 dict 事件。
@@ -373,6 +402,7 @@ class AgentCore:
             reference=reference,
             user_id=user_id,
         )
+        effective_access_mode = normalize_agent_access_mode(agent_access_mode)
         message_service = self._get_message_service()
         context_builder = self._get_context_builder(message_service=message_service)
         logger.info(
@@ -430,6 +460,7 @@ class AgentCore:
                     system_meta["citation_map"] = citation_map
                 system_meta["agent_mode"] = effective_mode
                 system_meta["requested_agent_mode"] = agent_mode
+                system_meta["agent_access_mode"] = effective_access_mode
                 yield {
                     "node": "context_builder",
                     "type": "system_prompt",
@@ -469,6 +500,7 @@ class AgentCore:
             initial_plan=initial_plan,
             graph=self.graphs[effective_mode],
             agent_mode=effective_mode,
+            agent_access_mode=effective_access_mode,
             citation_map=turn_citation_map,
         )
         if self._has_renamable_assistant_reply(user_id=user_id, session_id=session_id):
@@ -506,6 +538,7 @@ class AgentCore:
         initial_plan: dict[str, Any] | None = None,
         graph: CompiledStateGraph | None = None,
         agent_mode: str = AGENT_LOOP_PLAN,
+        agent_access_mode: str = "sandbox",
         citation_map: dict[str, Any] | None = None,
     ) -> Iterator[dict[str, Any]]:
         """
@@ -537,6 +570,7 @@ class AgentCore:
             inputs["plan"] = initial_plan
         runtime_config = {"configurable": {"thread_id": session_id}}
         active_graph = graph or self.graphs.get(agent_mode) or self.graph
+        effective_access_mode = normalize_agent_access_mode(agent_access_mode)
         retrieval_service = None
         if self.context_builder is not None:
             retrieval_service = self.context_builder.retrieval_service
@@ -614,6 +648,7 @@ class AgentCore:
                 session_id=session_id,
                 retrieval_service=retrieval_service,
                 citation_map=_citation_map,
+                agent_access_mode=effective_access_mode,
             )
             set_agent_token_callback(on_token)
             set_tool_trace_callback(on_tool_trace)

@@ -35,6 +35,8 @@ describe('streamPrompt reference transport', () => {
       session_id: 'session-1',
       prompt: '请解释',
       reference: '被引用的文档内容',
+      agent_mode: 'auto',
+      agent_access_mode: 'sandbox',
     })
   })
 })

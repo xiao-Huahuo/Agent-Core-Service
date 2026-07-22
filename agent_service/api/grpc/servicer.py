@@ -123,6 +123,7 @@ class AgentServiceServicer(BaseServicer):
                 user_id=request.user_id,
                 session_id=request.session_id,
                 agent_mode=getattr(request, "agent_mode", "") or "plan",
+                agent_access_mode=getattr(request, "agent_access_mode", "") or "sandbox",
             )
         )
 
@@ -136,6 +137,7 @@ class AgentServiceServicer(BaseServicer):
                 session_id=request.session_id,
                 reference=request.reference or None,
                 agent_mode=getattr(request, "agent_mode", "") or "auto",
+                agent_access_mode=getattr(request, "agent_access_mode", "") or "sandbox",
             )
         )
 
@@ -151,6 +153,7 @@ class AgentServiceServicer(BaseServicer):
             user_id=request.user_id,
             session_id=request.session_id,
             agent_mode=getattr(request, "agent_mode", "") or "plan",
+            agent_access_mode=getattr(request, "agent_access_mode", "") or "sandbox",
         )
         return self._build_run_result(result)
 
@@ -163,6 +166,7 @@ class AgentServiceServicer(BaseServicer):
             session_id=request.session_id,
             reference=request.reference or None,
             agent_mode=getattr(request, "agent_mode", "") or "auto",
+            agent_access_mode=getattr(request, "agent_access_mode", "") or "sandbox",
         )
         return self._build_run_result(result)
 

@@ -6,12 +6,16 @@
 import { describe, expect, it } from 'vitest'
 
 import { mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 
 import ChatBubble from '../ChatBubble.vue'
 
 describe('ChatBubble user references', () => {
   it('renders the reference above the user message', () => {
     const wrapper = mount(ChatBubble, {
+      global: {
+        plugins: [createPinia()],
+      },
       props: {
         message: {
           role: 'user',

@@ -27,6 +27,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from agent_service.tools.runtime_context import (
+    AGENT_ACCESS_READONLY,
     get_plan_state,
     get_tool_runtime,
     register_network_citation,
@@ -38,6 +39,18 @@ from agent_service.tools.tool_math import evaluate_math_expression
 
 
 ToolFunction = Callable[..., str]
+
+
+def _is_readonly_access() -> bool:
+    """判断当前工具运行时是否处于只读权限模式。"""
+
+    return get_tool_runtime().agent_access_mode == AGENT_ACCESS_READONLY
+
+
+def _deny_readonly_write(action: str) -> str:
+    """返回 Agent 只读权限下统一的写操作拒绝信息。"""
+
+    return f"权限不足: 当前 Agent 权限为只读,已禁止{action}。请切换到沙盒或完全访问后重试。"
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,7 +240,7 @@ def run_terminal_command(
     settings_service = SettingsService(config=runtime.config, memory_service=runtime.memory_service)
     payload = settings_service.get_terminal_sandbox_config(user_id=runtime.user_id)["config"]
     settings = TerminalSandboxSettings.from_config_payload(config=runtime.config, payload=payload)
-    sandbox = TerminalSandbox(settings=settings)
+    sandbox = TerminalSandbox(settings=settings, access_mode=runtime.agent_access_mode)
     try:
         result = sandbox.run(
             shell=shell,
@@ -298,6 +311,8 @@ def rebuild_knowledge_base(knowledge_dir: str = "") -> str:
     knowledge_dir: 可选新知识库目录;为空时使用当前用户设置中的目录。
     """
 
+    if _is_readonly_access():
+        return _deny_readonly_write("重建知识库")
     runtime = get_tool_runtime()
     from agent_service.services.knowledge_library_service import KnowledgeLibraryService
     from agent_service.services.settings_service import SettingsService
@@ -681,6 +696,8 @@ def write_knowledge_file(path: str, content: str) -> str:
     content: 要写入的完整文件内容。
     """
 
+    if _is_readonly_access():
+        return _deny_readonly_write("写入知识库文件")
     runtime = get_tool_runtime()
     service = _build_knowledge_service()
     try:
@@ -698,6 +715,8 @@ def delete_knowledge_file(path: str) -> str:
     注意: 删除文件夹会递归删除其下所有内容。
     """
 
+    if _is_readonly_access():
+        return _deny_readonly_write("删除知识库文件")
     runtime = get_tool_runtime()
     service = _build_knowledge_service()
     try:
@@ -715,6 +734,8 @@ def rename_knowledge_file(source_path: str, target_path: str) -> str:
     target_path: 新相对路径,例如 `new_name.md` 或 `archive/new_name.md`。
     """
 
+    if _is_readonly_access():
+        return _deny_readonly_write("重命名或移动知识库文件")
     runtime = get_tool_runtime()
     service = _build_knowledge_service()
     try:
@@ -731,6 +752,8 @@ def create_knowledge_folder(path: str) -> str:
     path: 文件夹相对于知识库根目录的路径,例如 `projects/new-project`。
     """
 
+    if _is_readonly_access():
+        return _deny_readonly_write("创建知识库文件夹")
     runtime = get_tool_runtime()
     service = _build_knowledge_service()
     try:
@@ -762,6 +785,8 @@ def save_uploaded_attachment_to_knowledge(
 
     from agent_service.models.attachment import SessionAttachmentRecord
 
+    if _is_readonly_access():
+        return _deny_readonly_write("保存上传附件到知识库")
     runtime = get_tool_runtime()
     service = _build_knowledge_service()
     normalized_attachment = attachment.strip()

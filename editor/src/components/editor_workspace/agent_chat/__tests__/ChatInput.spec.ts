@@ -25,4 +25,22 @@ describe('ChatInput references', () => {
     ])
     expect(wrapper.emitted('clear-reference')).toHaveLength(1)
   })
+
+  it('emits the selected Agent access mode from the permission menu', async () => {
+    const wrapper = mount(ChatInput, {
+      props: {
+        agentAccessMode: 'sandbox',
+      },
+    })
+
+    await wrapper.get('.access-mode-trigger').trigger('click')
+    const fullAccessButton = wrapper
+      .findAll('.access-mode-option')
+      .find((button) => button.text().includes('完全访问'))
+
+    expect(fullAccessButton).toBeTruthy()
+    await fullAccessButton?.trigger('click')
+
+    expect(wrapper.emitted('set-agent-access-mode')).toEqual([['full_access']])
+  })
 })

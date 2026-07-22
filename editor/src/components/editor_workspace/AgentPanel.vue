@@ -19,7 +19,7 @@ import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import SplitText from './SplitText.vue'
-import type { AgentLoopMode } from '@/api/agent'
+import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
 import { uploadAgentAttachment } from '@/api/agent'
 
 type MessageListApi = {
@@ -117,7 +117,14 @@ async function sendMessage(text: string, reference = '') {
   if (!userId.value) {
     return
   }
-  await chatStore.send(userId.value, sessionStore.currentSessionId, text, reference, settingsStore.agentLoopMode)
+  await chatStore.send(
+    userId.value,
+    sessionStore.currentSessionId,
+    text,
+    reference,
+    settingsStore.agentLoopMode,
+    settingsStore.agentAccessMode,
+  )
 }
 
 function clearReference() {
@@ -130,6 +137,10 @@ function handleToggleWebSearch() {
 
 function setAgentLoopMode(mode: AgentLoopMode) {
   settingsStore.setAgentLoopMode(mode)
+}
+
+function setAgentAccessMode(mode: AgentAccessMode) {
+  settingsStore.setAgentAccessMode(mode)
 }
 
 function setChatRenderMode(mode: 'chat' | 'tool') {
@@ -409,11 +420,13 @@ onMounted(() => {
         :centered="!hasMessages && !chatStore.isStreaming"
         :web-search-enabled="settingsStore.profile.webSearchEnabled"
         :agent-mode="settingsStore.agentLoopMode"
+        :agent-access-mode="settingsStore.agentAccessMode"
         :reference="referenceText"
         :attachments="chatStore.pendingAttachments"
         @send="sendMessage"
         @toggle-web-search="handleToggleWebSearch"
         @set-agent-mode="setAgentLoopMode"
+        @set-agent-access-mode="setAgentAccessMode"
         @clear-reference="clearReference"
         @remove-attachment="removeAttachment"
         @file-select="handleFileSelect"

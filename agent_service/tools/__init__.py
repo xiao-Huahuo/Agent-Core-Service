@@ -23,6 +23,10 @@ from agent_service.tools.builtin import (
 )
 from agent_service.tools.executor import ToolExecutor
 from agent_service.tools.runtime_context import (
+    AGENT_ACCESS_FULL,
+    AGENT_ACCESS_MODES,
+    AGENT_ACCESS_READONLY,
+    AGENT_ACCESS_SANDBOX,
     clear_agent_token_callback,
     clear_context_mirror_callback,
     clear_plan_state,
@@ -32,6 +36,7 @@ from agent_service.tools.runtime_context import (
     clear_tool_trace_callback,
     get_agent_token_callback,
     get_plan_state,
+    normalize_agent_access_mode,
     set_agent_token_callback,
     set_context_mirror_callback,
     set_plan_state,
@@ -51,6 +56,10 @@ __all__ = [
     "BuiltinToolDefinition",
     "ToolExecutor",
     "ToolRegistry",
+    "AGENT_ACCESS_FULL",
+    "AGENT_ACCESS_MODES",
+    "AGENT_ACCESS_READONLY",
+    "AGENT_ACCESS_SANDBOX",
     "clear_agent_token_callback",
     "clear_context_mirror_callback",
     "clear_plan_state",
@@ -60,6 +69,7 @@ __all__ = [
     "clear_tool_trace_callback",
     "get_agent_token_callback",
     "get_plan_state",
+    "normalize_agent_access_mode",
     "set_agent_token_callback",
     "set_context_mirror_callback",
     "set_plan_state",

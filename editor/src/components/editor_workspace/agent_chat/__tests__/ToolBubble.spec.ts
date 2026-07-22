@@ -7,12 +7,16 @@
 import { describe, expect, it } from 'vitest'
 
 import { mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 
 import ToolBubble from '../ToolBubble.vue'
 
 describe('ToolBubble user references', () => {
   it('renders the reference above the user message', () => {
     const wrapper = mount(ToolBubble, {
+      global: {
+        plugins: [createPinia()],
+      },
       props: {
         message: {
           role: 'user',
