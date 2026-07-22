@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchWebSearchConfig, saveWebSearchConfig, fetchAvailableTools, saveDisabledTools, fetchTerminalSandboxConfig, saveTerminalSandboxConfig } from '@/api/settings'
 import type { SystemPromptEntry, MemoryEntry, ToolEntry, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
@@ -40,6 +40,7 @@ const ocrEnabledDraft = ref(Boolean(settingsStore.profile.ocrEnabled))
 const knowledgeIgnorePatternsDraft = ref(settingsStore.profile.knowledgeIgnorePatterns ?? '')
 const uiFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.uiFontFamilies ?? [])])
 const textFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.textFontFamilies ?? [])])
+const fontSizePercentDraft = ref(settingsStore.profile.fontSizePercent ?? 100)
 const themePrimaryColorDraft = ref(settingsStore.profile.themePrimaryColor || '#4224eb')
 const themeSoftColorDraft = ref(settingsStore.profile.themeSoftColor || '#4224eb')
 const availableFontFamilies = ref<string[]>([])
@@ -47,6 +48,7 @@ const fontsLoading = ref(false)
 const saving = ref(false)
 const saveError = ref('')
 const saveMessage = ref('')
+let fontSizeSaveTimer: number | null = null
 
 const hasChanges = computed(() => {
   return (
@@ -95,6 +97,11 @@ watch(
 )
 
 watch(
+  () => settingsStore.profile.fontSizePercent,
+  (value) => { fontSizePercentDraft.value = value ?? 100 },
+)
+
+watch(
   () => settingsStore.profile.themePrimaryColor,
   (value) => { themePrimaryColorDraft.value = value || '#4224eb' },
 )
@@ -139,10 +146,33 @@ async function handleSaveFontFamilies(payload: { target: 'ui' | 'text'; families
     await settingsStore.saveFontSettings({
       uiFontFamilies: nextUiFontFamilies,
       textFontFamilies: nextTextFontFamilies,
+      fontSizePercent: fontSizePercentDraft.value,
     })
   } catch (error) {
     saveError.value = error instanceof Error ? error.message : '保存字体设置失败'
   }
+}
+
+async function persistFontSize(percent: number) {
+  try {
+    await settingsStore.saveFontSettings({
+      fontSizePercent: percent,
+    })
+  } catch (error) {
+    saveError.value = error instanceof Error ? error.message : '保存字体大小失败'
+  }
+}
+
+function handleSaveFontSize(percent: number) {
+  fontSizePercentDraft.value = percent
+  settingsStore.setFontSizePercent(percent)
+  if (fontSizeSaveTimer) {
+    window.clearTimeout(fontSizeSaveTimer)
+  }
+  fontSizeSaveTimer = window.setTimeout(() => {
+    fontSizeSaveTimer = null
+    void persistFontSize(percent)
+  }, 350)
 }
 
 async function handleSaveThemeColors() {
@@ -474,6 +504,14 @@ onMounted(() => {
   loadTools()
   loadTerminalSandboxConfig()
 })
+
+onBeforeUnmount(() => {
+  if (fontSizeSaveTimer) {
+    window.clearTimeout(fontSizeSaveTimer)
+    fontSizeSaveTimer = null
+    void persistFontSize(fontSizePercentDraft.value)
+  }
+})
 </script>
 
 <template>
@@ -502,6 +540,7 @@ onMounted(() => {
 
       <AppearanceSettingsSection
         v-if="activeTab === 'appearance'"
+        v-model:font-size-percent-draft="fontSizePercentDraft"
         v-model:text-font-families-draft="textFontFamiliesDraft"
         v-model:theme-primary-color-draft="themePrimaryColorDraft"
         v-model:theme-soft-color-draft="themeSoftColorDraft"
@@ -513,6 +552,7 @@ onMounted(() => {
         @preview-theme-colors="handlePreviewThemeColors"
         @reset-theme-colors="handleResetThemeColors"
         @save-font-families="handleSaveFontFamilies"
+        @save-font-size="handleSaveFontSize"
         @save-theme-colors="handleSaveThemeColors"
         @set-theme-mode="settingsStore.setThemeMode"
       />
@@ -610,7 +650,7 @@ onMounted(() => {
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   text-align: left;
   cursor: pointer;
   transition: background 150ms, color 150ms;
@@ -632,12 +672,12 @@ onMounted(() => {
   min-width: 0;
   overflow-y: auto;
   padding: var(--space-16) var(--space-20);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .setting-section h3 {
   margin: 0 0 var(--space-10);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 600;
   color: var(--color-text-muted);
   text-transform: uppercase;
@@ -655,7 +695,7 @@ onMounted(() => {
   flex-shrink: 0;
   width: 72px;
   color: var(--color-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .setting-row > input {
@@ -667,7 +707,7 @@ onMounted(() => {
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   outline: none;
 }
 
@@ -735,7 +775,7 @@ onMounted(() => {
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   line-height: 1.5;
   outline: none;
   resize: vertical;
@@ -775,7 +815,7 @@ onMounted(() => {
   border-radius: 0;
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .terminal-page-tab:hover,
@@ -808,12 +848,12 @@ onMounted(() => {
 .segment-row code {
   color: var(--color-text-muted);
   font-family: var(--font-code);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .segment-row strong {
   color: var(--color-text);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 600;
 }
 
@@ -822,7 +862,7 @@ onMounted(() => {
   overflow: hidden;
   color: var(--color-text-secondary);
   font-family: var(--font-code);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -830,7 +870,7 @@ onMounted(() => {
 .setting-hint {
   margin: -2px 0 var(--space-8) 82px;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   line-height: 1.45;
 }
 
@@ -851,12 +891,47 @@ onMounted(() => {
   width: 72px;
   margin-left: -82px;
   color: var(--color-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .font-family-header span {
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
+}
+
+.font-size-control {
+  margin-bottom: var(--space-16);
+}
+
+.font-size-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 72px;
+  align-items: center;
+  gap: var(--space-10);
+}
+
+.font-size-row input[type='range'] {
+  width: 100%;
+  accent-color: var(--color-primary);
+}
+
+.font-size-number {
+  width: 72px;
+  height: 30px;
+  padding: 0 var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.font-size-number:focus {
+  border-color: var(--color-primary);
 }
 
 .font-chip-row {
@@ -874,7 +949,7 @@ onMounted(() => {
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .font-chip:hover,
@@ -905,7 +980,7 @@ onMounted(() => {
   outline: 0;
   background: var(--color-surface-raised);
   color: var(--color-text);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .font-picker-popover input:focus {
@@ -927,7 +1002,7 @@ onMounted(() => {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   text-align: left;
 }
 
@@ -939,7 +1014,7 @@ onMounted(() => {
 .font-empty {
   margin: var(--space-8);
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 /* Theme */
@@ -955,7 +1030,7 @@ onMounted(() => {
   border-radius: 999px;
   background: var(--color-canvas);
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   cursor: pointer;
 }
 
@@ -1011,12 +1086,12 @@ onMounted(() => {
   width: 72px;
   margin-left: -82px;
   color: var(--color-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .color-control-header span {
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .color-row {
@@ -1044,7 +1119,7 @@ onMounted(() => {
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   outline: none;
 }
 
@@ -1073,7 +1148,7 @@ onMounted(() => {
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   outline: none;
   box-sizing: border-box;
 }
@@ -1102,7 +1177,7 @@ onMounted(() => {
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   outline: none;
   box-sizing: border-box;
 }
@@ -1126,7 +1201,7 @@ onMounted(() => {
   background: var(--color-canvas);
   color: var(--color-text-muted);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   cursor: pointer;
 }
 
@@ -1143,7 +1218,7 @@ onMounted(() => {
 
 .hint-text {
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   line-height: 1.4;
 }
 
@@ -1159,7 +1234,7 @@ onMounted(() => {
   background: transparent;
   color: var(--color-primary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   cursor: pointer;
 }
 
@@ -1180,7 +1255,7 @@ onMounted(() => {
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   cursor: pointer;
 }
 
@@ -1196,7 +1271,7 @@ onMounted(() => {
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   cursor: pointer;
 }
 
@@ -1219,7 +1294,7 @@ onMounted(() => {
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   outline: none;
 }
 
@@ -1236,7 +1311,7 @@ onMounted(() => {
   background: transparent;
   color: var(--color-primary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   cursor: pointer;
   white-space: nowrap;
 }
@@ -1254,7 +1329,7 @@ onMounted(() => {
 .feedback {
   margin: var(--space-4) 0 0;
   color: var(--color-primary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 /* Entry list */
@@ -1280,7 +1355,7 @@ onMounted(() => {
 .entry-text {
   flex: 1;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   color: var(--color-text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1298,7 +1373,7 @@ onMounted(() => {
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   cursor: pointer;
 }
 
@@ -1339,13 +1414,13 @@ onMounted(() => {
 }
 
 .tool-name {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 600;
   color: var(--color-text);
 }
 
 .tool-desc {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: var(--color-text-muted);
   line-height: 1.4;
   overflow: hidden;
@@ -1395,7 +1470,7 @@ onMounted(() => {
 }
 
 .empty-hint {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   color: var(--color-text-muted);
   margin: var(--space-4) 0;
 }

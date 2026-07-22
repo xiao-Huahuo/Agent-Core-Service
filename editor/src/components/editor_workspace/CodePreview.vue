@@ -86,7 +86,7 @@ const highlightedHtml = computed(() => {
 .code-preview code {
   color: var(--color-text);
   font-family: var(--font-code);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   line-height: 1.6;
 }
 </style>

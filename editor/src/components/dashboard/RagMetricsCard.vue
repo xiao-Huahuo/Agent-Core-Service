@@ -199,7 +199,7 @@ const lineOption = computed(() => {
 
 .chart-mode-btn {
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
   color: var(--color-text-tertiary);
   background: transparent;
   border: 1px solid transparent;
@@ -254,13 +254,13 @@ const lineOption = computed(() => {
 
 .gauge-value {
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   line-height: 1;
 }
 
 .gauge-label {
   font-family: var(--font-ui);
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale));
   line-height: 1.3;
   color: var(--color-text-tertiary);
   text-transform: lowercase;
@@ -300,11 +300,11 @@ const lineOption = computed(() => {
   }
 
   .gauge-value {
-    font-size: 12px;
+    font-size: calc(12px * var(--font-scale));
   }
 
   .gauge-label {
-    font-size: 7px;
+    font-size: calc(7px * var(--font-scale));
   }
 }
 </style>

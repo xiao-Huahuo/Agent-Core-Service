@@ -181,7 +181,7 @@ defineEmits<{
   margin: 0;
   color: var(--color-text-secondary);
   font-family: var(--font-text);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   line-height: var(--line-height-relaxed);
   white-space: pre-wrap;
   word-break: break-word;

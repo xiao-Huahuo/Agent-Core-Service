@@ -122,7 +122,7 @@ function maxColumns(rows: string[][]): number {
   margin: 0 0 var(--space-8);
   color: var(--color-text);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .table-scroll {
@@ -136,7 +136,7 @@ function maxColumns(rows: string[][]): number {
   border-collapse: collapse;
   color: var(--color-text);
   font-family: var(--font-text);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .table-scroll td {
@@ -162,7 +162,7 @@ function maxColumns(rows: string[][]): number {
   margin: 0;
   color: var(--color-text);
   font-family: var(--font-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   line-height: 1.6;
   white-space: pre-wrap;
 }
@@ -172,6 +172,6 @@ function maxColumns(rows: string[][]): number {
   place-items: center;
   color: var(--color-text-muted);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 </style>

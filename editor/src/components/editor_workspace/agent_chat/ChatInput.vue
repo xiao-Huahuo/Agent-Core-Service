@@ -312,7 +312,7 @@ function handleFileChange(event: Event) {
   overflow: hidden;
   color: var(--color-text-muted);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -466,7 +466,7 @@ function handleFileChange(event: Event) {
   background: transparent;
   color: var(--color-text-muted, #8b93a7);
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   line-height: 1;
   list-style: none;
   cursor: pointer;
@@ -560,13 +560,13 @@ function handleFileChange(event: Event) {
 .access-mode-option-label {
   width: 54px;
   color: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .access-mode-option-hint {
   flex: 1;
   color: var(--color-text-muted, #7c8496);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
 }
 
 .access-mode-check {
@@ -595,7 +595,7 @@ function handleFileChange(event: Event) {
   background: transparent;
   color: var(--color-text-muted, #8b93a7);
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   line-height: 1;
   list-style: none;
   cursor: pointer;
@@ -684,7 +684,7 @@ function handleFileChange(event: Event) {
 
 .loop-mode-option-label {
   color: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: 0.02em;
@@ -693,7 +693,7 @@ function handleFileChange(event: Event) {
 .loop-mode-option-hint {
   margin-left: auto;
   color: var(--color-text-tertiary, #7c8496);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   line-height: 1.2;
   white-space: nowrap;
 }

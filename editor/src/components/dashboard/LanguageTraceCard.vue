@@ -315,7 +315,7 @@ const rawContextJson = computed(() => {
   color: var(--color-text-tertiary);
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
   transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
 }
 
@@ -417,7 +417,7 @@ const rawContextJson = computed(() => {
 
 .source-title {
   color: var(--source-accent);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
 }
 
 .assembly-order,
@@ -429,24 +429,24 @@ const rawContextJson = computed(() => {
 
 .assembly-order {
   color: var(--color-text-tertiary);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
 }
 
 .assembly-title {
   color: var(--source-accent);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
 }
 
 .assembly-kind,
 .assembly-count {
   color: var(--color-text-tertiary);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
 }
 
 .source-count {
   margin-left: auto;
   color: var(--color-text-tertiary);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
 }
 
 .source-items,
@@ -460,7 +460,7 @@ const rawContextJson = computed(() => {
 .source-text {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   line-height: var(--line-height-relaxed);
   white-space: pre-wrap;
   word-break: break-word;
@@ -470,7 +470,7 @@ const rawContextJson = computed(() => {
   min-height: 100%;
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   line-height: var(--line-height-relaxed);
   white-space: pre-wrap;
   word-break: break-word;

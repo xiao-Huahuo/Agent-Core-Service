@@ -302,7 +302,7 @@ function handleRowDrop(event: DragEvent) {
 
 .node-name {
   overflow: hidden;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -317,7 +317,7 @@ function handleRowDrop(event: DragEvent) {
   background: var(--color-canvas);
   color: var(--color-text);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   outline: none;
 }
 

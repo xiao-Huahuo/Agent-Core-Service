@@ -11,6 +11,7 @@ import type { ThemeMode } from '@/types/settings'
 
 const uiFontFamiliesDraft = defineModel<string[]>('uiFontFamiliesDraft', { required: true })
 const textFontFamiliesDraft = defineModel<string[]>('textFontFamiliesDraft', { required: true })
+const fontSizePercentDraft = defineModel<number>('fontSizePercentDraft', { required: true })
 const themePrimaryColorDraft = defineModel<string>('themePrimaryColorDraft', { required: true })
 const themeSoftColorDraft = defineModel<string>('themeSoftColorDraft', { required: true })
 
@@ -24,6 +25,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   setThemeMode: [mode: ThemeMode]
   saveFontFamilies: [payload: { target: 'ui' | 'text'; families: string[] }]
+  saveFontSize: [percent: number]
   previewThemeColors: []
   saveThemeColors: []
   resetThemeColors: []
@@ -91,8 +93,26 @@ function filteredFontOptions(target: 'ui' | 'text'): string[] {
 const uiFontOptions = computed(() => filteredFontOptions('ui'))
 const textFontOptions = computed(() => filteredFontOptions('text'))
 
+function normalizeFontSizePercent(value: number | string): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return 100
+  return Math.max(50, Math.min(150, Math.round(parsed)))
+}
+
 function saveFamilies(target: 'ui' | 'text', families: string[]) {
   emit('saveFontFamilies', { target, families })
+}
+
+function updateFontSize(value: number | string) {
+  const normalized = normalizeFontSizePercent(value)
+  fontSizePercentDraft.value = normalized
+  emit('saveFontSize', normalized)
+}
+
+function saveFontSize() {
+  const normalized = normalizeFontSizePercent(fontSizePercentDraft.value)
+  fontSizePercentDraft.value = normalized
+  emit('saveFontSize', normalized)
 }
 
 function addFontFamily(target: 'ui' | 'text', family: string) {
@@ -197,6 +217,35 @@ onBeforeUnmount(() => {
     </div>
 
     <h3 style="margin-top: 20px">字体</h3>
+    <div class="font-family-control font-size-control">
+      <div class="font-family-header">
+        <label>字体大小</label>
+        <span>{{ fontSizePercentDraft }}%</span>
+      </div>
+      <div class="font-size-row">
+        <input
+          :value="fontSizePercentDraft"
+          max="150"
+          min="50"
+          step="1"
+          type="range"
+          @change="saveFontSize"
+          @input="updateFontSize(($event.target as HTMLInputElement).value)"
+        />
+        <input
+          :value="fontSizePercentDraft"
+          class="font-size-number"
+          max="150"
+          min="50"
+          step="1"
+          type="number"
+          @blur="saveFontSize"
+          @change="saveFontSize"
+          @input="updateFontSize(($event.target as HTMLInputElement).value)"
+        />
+      </div>
+    </div>
+
     <div class="font-family-control">
       <div class="font-family-header">
         <label>界面字体</label>

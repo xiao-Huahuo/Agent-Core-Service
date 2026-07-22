@@ -86,6 +86,7 @@ class SettingsService:
                 "terminal_sandbox_config": "TEXT NOT NULL DEFAULT ''",
                 "ui_font_families": "TEXT NOT NULL DEFAULT ''",
                 "text_font_families": "TEXT NOT NULL DEFAULT ''",
+                "font_size_percent": "INTEGER NOT NULL DEFAULT 100",
                 "theme_primary_color": "VARCHAR(16) NOT NULL DEFAULT ''",
                 "theme_soft_color": "VARCHAR(16) NOT NULL DEFAULT ''",
             }
@@ -341,6 +342,7 @@ class SettingsService:
             "terminal_sandbox": self._load_terminal_sandbox_payload(record.terminal_sandbox_config),
             "ui_font_families": self._load_font_families(record.ui_font_families),
             "text_font_families": self._load_font_families(record.text_font_families),
+            "font_size_percent": self._normalize_font_size_percent(record.font_size_percent),
             "theme_primary_color": record.theme_primary_color,
             "theme_soft_color": record.theme_soft_color,
             "created_at": record.created_at.isoformat(),
@@ -380,12 +382,23 @@ class SettingsService:
             normalized.append(family)
         return json.dumps(normalized, ensure_ascii=False)
 
+    @staticmethod
+    def _normalize_font_size_percent(value: int | float | str | None) -> int:
+        """Normalize editor font size percentage to the supported 50-150 range."""
+
+        try:
+            percent = int(round(float(value)))
+        except (TypeError, ValueError):
+            percent = 100
+        return max(50, min(150, percent))
+
     def save_font_config(
         self,
         *,
         user_id: str,
         ui_font_families: list[str] | None = None,
         text_font_families: list[str] | None = None,
+        font_size_percent: int | None = None,
     ) -> dict:
         """Persist the user's editor font family stacks."""
 
@@ -406,6 +419,8 @@ class SettingsService:
                 record.ui_font_families = self._dump_font_families(ui_font_families)
             if text_font_families is not None:
                 record.text_font_families = self._dump_font_families(text_font_families)
+            if font_size_percent is not None:
+                record.font_size_percent = self._normalize_font_size_percent(font_size_percent)
             record.updated_at = now
             db.add(record)
             db.commit()
@@ -414,6 +429,7 @@ class SettingsService:
                 "user_id": record.user_id,
                 "ui_font_families": self._load_font_families(record.ui_font_families),
                 "text_font_families": self._load_font_families(record.text_font_families),
+                "font_size_percent": self._normalize_font_size_percent(record.font_size_percent),
                 "updated_at": record.updated_at.isoformat(),
             }
 

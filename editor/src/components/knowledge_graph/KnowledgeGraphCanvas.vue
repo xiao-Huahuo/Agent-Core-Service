@@ -475,7 +475,7 @@ canvas.hovering {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   color: var(--color-text-muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
 }
 
 .loading-spinner {

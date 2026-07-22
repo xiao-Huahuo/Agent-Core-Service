@@ -107,7 +107,7 @@ function runCommand(command: CommandAction) {
   outline: 0;
   background: transparent;
   color: var(--color-text);
-  font-size: 16px;
+  font-size: calc(16px * var(--font-scale));
 }
 
 .command-list {
@@ -150,6 +150,6 @@ kbd {
   border-radius: var(--radius-sm);
   color: var(--color-text-muted);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 </style>

@@ -82,14 +82,14 @@ async function submitUserId() {
 
 .gate-eyebrow {
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 label {
   color: var(--color-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 650;
 }
 
@@ -109,7 +109,7 @@ input {
   background: var(--color-canvas-soft);
   color: var(--color-text);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 input:focus {
@@ -123,7 +123,7 @@ button {
   border-radius: var(--radius-sm);
   background: var(--color-primary);
   color: white;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 button:disabled {
@@ -134,7 +134,7 @@ button:disabled {
 .gate-error {
   margin: 0;
   color: var(--color-danger);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   line-height: 1.5;
 }
 </style>

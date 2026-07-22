@@ -43,7 +43,7 @@
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .page-switch-button:hover,
@@ -79,7 +79,7 @@
   border: 0;
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow: hidden;
@@ -94,7 +94,7 @@
 .trash-path-capsule {
   gap: var(--space-8);
   color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .root-button,
@@ -156,7 +156,7 @@
   gap: 0;
   padding: 0;
   border-radius: 50%;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   transition:
     width 180ms ease,
     border-radius 180ms ease,
@@ -230,7 +230,7 @@
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   text-align: left;
   opacity: 0;
   transform: translateY(-4px);
@@ -273,7 +273,7 @@
   border-bottom: 1px solid var(--color-border);
   background: #ffffff;
   color: #1f2328;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .resource-manager.theme-dark .multi-banner {
@@ -334,7 +334,7 @@
   border-bottom: 1px solid var(--color-border);
   background: var(--color-panel-bg);
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 500;
 }
 
@@ -347,7 +347,7 @@
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   text-align: left;
   opacity: 0;
   transform-origin: top;
@@ -373,7 +373,7 @@
   place-items: center;
   min-height: 220px;
   color: var(--color-text-muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .trash-actions {
@@ -395,7 +395,7 @@
   background: var(--color-surface-raised);
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .trash-action-button:hover {
@@ -564,7 +564,7 @@
 .content-text small,
 .icon-tile small {
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .preview-pane {
@@ -586,7 +586,7 @@
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--font-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   line-height: 1.55;
 }
 
@@ -610,7 +610,7 @@
   overflow: auto;
   padding: var(--space-12);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   line-height: 1;
 }
 
@@ -755,7 +755,7 @@
 
 .drop-box span {
   color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 @keyframes sort-menu-pop {

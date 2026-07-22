@@ -486,7 +486,7 @@ const toolEntries = computed(() => {
   min-width: 0;
   color: var(--color-text-secondary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   line-height: var(--line-height-normal);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -543,7 +543,7 @@ const toolEntries = computed(() => {
   padding: var(--space-8) var(--space-12);
   color: var(--color-text-muted);
   font-family: var(--font-text);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -563,7 +563,7 @@ const toolEntries = computed(() => {
   background: rgba(0, 0, 0, 0.12);
   color: var(--color-text-secondary);
   font-family: var(--font-text);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
@@ -602,7 +602,7 @@ const toolEntries = computed(() => {
   background: rgba(66, 36, 235, 0.12);
   color: var(--color-primary);
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
   font-weight: 600;
 }
 
@@ -611,7 +611,7 @@ const toolEntries = computed(() => {
   grid-row: 1;
   color: var(--color-text-muted);
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   align-self: center;
 }
 
@@ -621,7 +621,7 @@ const toolEntries = computed(() => {
   margin: 0;
   color: var(--color-text-secondary);
   font-family: var(--font-text);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -640,7 +640,7 @@ const toolEntries = computed(() => {
   gap: var(--space-6);
   padding: var(--space-3) var(--space-12);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   line-height: 1.5;
 }
 
@@ -683,7 +683,7 @@ const toolEntries = computed(() => {
   gap: var(--space-8);
   color: var(--color-text-muted);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   line-height: 1.5;
 }
 
@@ -717,14 +717,14 @@ const toolEntries = computed(() => {
   border-bottom: 1px solid rgba(148, 163, 184, 0.08);
   background: rgba(148, 163, 184, 0.05);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .terminal-segment-head code {
   max-width: 100%;
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -741,14 +741,14 @@ const toolEntries = computed(() => {
   margin-bottom: var(--space-4);
   color: var(--color-text-muted);
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
 }
 
 .terminal-stream pre {
   margin: 0;
   color: var(--color-text-secondary);
   font-family: var(--font-text);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -765,7 +765,7 @@ const toolEntries = computed(() => {
   padding: var(--space-8);
   color: var(--color-text-muted);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 @keyframes tool-slide-in {

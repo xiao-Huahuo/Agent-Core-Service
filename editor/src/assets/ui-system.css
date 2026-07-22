@@ -15,12 +15,13 @@
   --font-text: var(--font-text-default);
   --font-chat: var(--font-ui);
   --font-mono: var(--font-code);
+  --font-scale: 1;
 
-  --font-size-xs: 0.75rem;    /* 12px */
-  --font-size-sm: 0.825rem;   /* 13.2px */
-  --font-size-base: 0.9rem;   /* 14.4px */
-  --font-size-md: 1rem;       /* 16px */
-  --font-size-lg: 1.15rem;    /* 18.4px */
+  --font-size-xs: calc(0.75rem * var(--font-scale));    /* 12px at 100% */
+  --font-size-sm: calc(0.825rem * var(--font-scale));   /* 13.2px at 100% */
+  --font-size-base: calc(0.9rem * var(--font-scale));   /* 14.4px at 100% */
+  --font-size-md: calc(1rem * var(--font-scale));       /* 16px at 100% */
+  --font-size-lg: calc(1.15rem * var(--font-scale));    /* 18.4px at 100% */
 
   --font-weight-normal: 400;
   --font-weight-medium: 500;

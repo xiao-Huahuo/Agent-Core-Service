@@ -134,7 +134,7 @@ function formatScore(value: number | undefined): string {
 }
 
 .chart-mode-btn {
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
   color: var(--color-text-tertiary);
   background: transparent;
   border: 1px solid transparent;
@@ -176,14 +176,14 @@ function formatScore(value: number | undefined): string {
 }
 
 .knowledge-type {
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale));
   color: var(--color-green);
   text-transform: uppercase;
 }
 
 .knowledge-score {
   margin-left: auto;
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale));
   color: var(--color-text-tertiary);
 }
 
@@ -195,13 +195,13 @@ function formatScore(value: number | undefined): string {
 }
 
 .knowledge-meta-item {
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale));
   color: var(--color-text-tertiary);
 }
 
 .knowledge-text {
   margin: 0;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   color: var(--color-text-secondary);
   line-height: var(--line-height-relaxed);
   white-space: pre-wrap;

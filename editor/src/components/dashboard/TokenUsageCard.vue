@@ -174,7 +174,7 @@ const barOption = computed(() => {
 
 .chart-mode-btn {
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
   color: var(--color-text-tertiary);
   background: transparent;
   border: 1px solid transparent;

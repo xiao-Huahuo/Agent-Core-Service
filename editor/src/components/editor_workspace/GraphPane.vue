@@ -455,7 +455,7 @@ watch(
 
 .graph-stat {
   color: var(--color-text-muted);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
 }
 
 .graph-action {
@@ -469,7 +469,7 @@ watch(
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .graph-action:hover {
@@ -512,7 +512,7 @@ watch(
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   white-space: nowrap;
 }
 
@@ -578,7 +578,7 @@ watch(
   align-items: center;
   gap: var(--space-4);
   color: var(--color-text-secondary);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -656,7 +656,7 @@ watch(
 }
 
 .sidebar-title {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 600;
   color: var(--color-text);
 }
@@ -701,7 +701,7 @@ watch(
   border: 0;
   background: transparent;
   color: var(--color-text);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   outline: none;
 }
 
@@ -723,7 +723,7 @@ watch(
 .sidebar-label {
   margin-bottom: var(--space-4);
   color: var(--color-text-muted);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -732,7 +732,7 @@ watch(
 .sidebar-empty {
   padding: var(--space-8) var(--space-12);
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 /* Search result pills */
@@ -751,7 +751,7 @@ watch(
   border-radius: 999px;
   background: var(--color-surface-raised);
   color: var(--color-text);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   white-space: nowrap;
   max-width: 240px;
   overflow: hidden;
@@ -772,7 +772,7 @@ watch(
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-6) 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   color: var(--color-text);
 }
 
@@ -783,7 +783,7 @@ watch(
   min-height: 18px;
   padding: 0 6px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 600;
   white-space: nowrap;
 }
@@ -833,7 +833,7 @@ watch(
   border-radius: 6px;
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   text-align: left;
   cursor: pointer;
 }

@@ -119,7 +119,7 @@ defineExpose({
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   text-align: left;
 }
 
@@ -132,7 +132,7 @@ defineExpose({
 .context-menu kbd {
   color: var(--color-text-muted);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .context-menu button:hover:not(:disabled) {

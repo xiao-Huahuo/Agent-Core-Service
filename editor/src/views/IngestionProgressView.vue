@@ -340,14 +340,14 @@ function historySummary(row: IngestionHistoryItem): string {
 
 .page-heading h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale));
   font-weight: 700;
 }
 
 .page-heading p {
   margin: 4px 0 0;
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .heading-actions {
@@ -380,7 +380,7 @@ function historySummary(row: IngestionHistoryItem): string {
   min-height: 28px;
   padding: 0 12px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .tab-button:hover,
@@ -426,7 +426,7 @@ function historySummary(row: IngestionHistoryItem): string {
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface-raised);
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .file-table-head span,
@@ -439,7 +439,7 @@ function historySummary(row: IngestionHistoryItem): string {
   min-height: 38px;
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .file-row:last-child {
@@ -487,7 +487,7 @@ function historySummary(row: IngestionHistoryItem): string {
   border-radius: 999px;
   background: var(--color-surface);
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .status-pill.running,
@@ -522,7 +522,7 @@ function historySummary(row: IngestionHistoryItem): string {
   border-radius: 999px;
   background: var(--color-surface);
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .filter-chip:hover {
@@ -543,7 +543,7 @@ function historySummary(row: IngestionHistoryItem): string {
   min-height: 20px;
   padding: 0 8px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 600;
 }
 
@@ -564,7 +564,7 @@ function historySummary(row: IngestionHistoryItem): string {
   place-items: center;
   min-height: 180px;
   color: var(--color-text-muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .spin {
@@ -601,7 +601,7 @@ function historySummary(row: IngestionHistoryItem): string {
   position: relative;
   z-index: 1;
   margin: 0 auto;
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 600;
   color: var(--color-text);
   line-height: 18px;
@@ -609,7 +609,7 @@ function historySummary(row: IngestionHistoryItem): string {
 
 .progress-na {
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .ingestion-row-enter-active,

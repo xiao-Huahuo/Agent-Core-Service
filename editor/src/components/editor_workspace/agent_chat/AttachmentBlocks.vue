@@ -233,7 +233,7 @@ function toneFor(filename: string) {
   overflow: hidden;
   color: var(--attachment-color);
   font-family: var(--font-ui);
-  font-size: 6px;
+  font-size: calc(6px * var(--font-scale));
   font-weight: 800;
   line-height: 1;
   text-overflow: ellipsis;
@@ -246,7 +246,7 @@ function toneFor(filename: string) {
   overflow: hidden;
   color: var(--color-text-primary);
   font-family: var(--font-ui);
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--font-scale));
   line-height: 1.18;
   text-align: center;
   text-overflow: ellipsis;

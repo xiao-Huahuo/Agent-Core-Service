@@ -311,7 +311,7 @@ function toggleUnified() {
   outline: 0;
   background: transparent;
   color: var(--color-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 :root[data-theme="dark"] .search-input::placeholder {
@@ -361,7 +361,7 @@ function toggleUnified() {
   border-radius: 999px;
   background: var(--color-primary);
   color: #ffffff;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 600;
   cursor: pointer;
   flex-shrink: 0;
@@ -437,7 +437,7 @@ function toggleUnified() {
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   cursor: pointer;
   white-space: nowrap;
 }
@@ -495,7 +495,7 @@ function toggleUnified() {
 .group-label {
   padding: var(--space-4) var(--space-8);
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -556,14 +556,14 @@ function toggleUnified() {
 }
 
 .history-text {
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .result-name {
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 600;
   flex-shrink: 0;
   overflow: hidden;
@@ -572,7 +572,7 @@ function toggleUnified() {
 }
 
 .result-meta {
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -593,7 +593,7 @@ hr {
   justify-content: center;
   padding: var(--space-20);
   color: var(--color-text-muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 /* Transition */

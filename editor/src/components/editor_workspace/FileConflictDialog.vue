@@ -51,13 +51,13 @@ const workspaceStore = useWorkspaceStore()
 .conflict-dialog h2 {
   margin: 0 0 var(--space-8);
   color: var(--color-text);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
 }
 
 .conflict-dialog p {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   line-height: 1.5;
 }
 
@@ -67,7 +67,7 @@ const workspaceStore = useWorkspaceStore()
   padding-left: var(--space-12);
   overflow: auto;
   color: var(--color-text);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   line-height: 1.7;
 }
 
@@ -87,7 +87,7 @@ const workspaceStore = useWorkspaceStore()
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   transition:
     background var(--transition-fast),
     color var(--transition-fast),

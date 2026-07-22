@@ -193,7 +193,7 @@ async function clearAllSessions() {
   overflow: hidden;
   color: var(--color-text-primary);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -218,7 +218,7 @@ async function clearAllSessions() {
   overflow: hidden;
   color: var(--color-text-tertiary);
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -265,7 +265,7 @@ async function clearAllSessions() {
   background: var(--color-surface-raised);
   color: var(--color-text-primary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 600;
   transition:
     border-color 180ms ease,
@@ -365,7 +365,7 @@ async function clearAllSessions() {
   background: transparent;
   color: var(--color-text-secondary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   text-align: left;
 }
 
@@ -386,7 +386,7 @@ async function clearAllSessions() {
 }
 
 .session-time {
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
 }
 
 .session-name {
@@ -451,14 +451,14 @@ async function clearAllSessions() {
   display: block;
   color: var(--color-text-tertiary);
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
 }
 
 .user-strip strong {
   display: block;
   overflow: hidden;
   color: var(--color-text-primary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;

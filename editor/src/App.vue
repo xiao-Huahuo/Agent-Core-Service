@@ -42,6 +42,6 @@ onMounted(async () => {
   height: 100%;
   background: var(--color-canvas);
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 </style>

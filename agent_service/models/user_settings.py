@@ -43,6 +43,7 @@ class UserSettingsRecord(SQLModel, table=True):
     terminal_sandbox_config: str = Field(default="", sa_column=Column(Text))
     ui_font_families: str = Field(default="", sa_column=Column(Text))
     text_font_families: str = Field(default="", sa_column=Column(Text))
+    font_size_percent: int = Field(default=100)
     theme_primary_color: str = Field(default="", max_length=16)
     theme_soft_color: str = Field(default="", max_length=16)
     created_at: datetime = Field(default_factory=utc_now)

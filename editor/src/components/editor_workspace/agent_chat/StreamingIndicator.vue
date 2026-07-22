@@ -48,7 +48,7 @@ const chatStore = useChatStore()
   margin-left: 6px;
   color: var(--color-text-tertiary);
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   text-transform: uppercase;
 }
 

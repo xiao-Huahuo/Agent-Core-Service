@@ -56,7 +56,7 @@ defineEmits<{
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text-muted);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .code-editor-input {
@@ -70,7 +70,7 @@ defineEmits<{
   background: transparent;
   color: var(--color-text);
   font-family: var(--font-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   line-height: 1.6;
   tab-size: 2;
   white-space: pre;

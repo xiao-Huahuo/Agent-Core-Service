@@ -166,7 +166,7 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   cursor: pointer;
   transition: background 120ms, color 120ms;
 }

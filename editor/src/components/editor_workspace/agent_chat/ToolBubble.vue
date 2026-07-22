@@ -329,7 +329,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   margin: 0;
   color: var(--color-text-tertiary);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   line-height: var(--line-height-normal);
 }
 
@@ -424,7 +424,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   background: rgba(148, 163, 184, 0.08);
   color: var(--color-text-muted);
   font-family: var(--font-chat);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   line-height: 1.4;
 }
 
@@ -492,7 +492,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 .system-role {
   color: var(--color-text-tertiary);
   font-family: var(--font-ui);
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale));
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
@@ -501,7 +501,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   max-height: 120px;
   overflow-y: auto;
   color: var(--color-text-tertiary);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .cursor {

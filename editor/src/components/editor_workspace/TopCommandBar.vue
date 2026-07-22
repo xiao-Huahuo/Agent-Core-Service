@@ -199,7 +199,7 @@ async function handleCloseWindow() {
   display: block;
   overflow: hidden;
   color: var(--color-text);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 650;
   letter-spacing: 0;
   text-overflow: ellipsis;
@@ -260,7 +260,7 @@ async function handleCloseWindow() {
   border-radius: 999px;
   background: var(--color-surface);
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   transition:
     border-color var(--transition-fast),
     background var(--transition-fast),
@@ -297,7 +297,7 @@ async function handleCloseWindow() {
   background: color-mix(in srgb, var(--color-canvas) 92%, var(--color-primary) 8%);
   color: var(--color-primary);
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
   font-weight: 700;
   line-height: 1;
   -webkit-app-region: no-drag;
@@ -355,7 +355,7 @@ async function handleCloseWindow() {
   border-radius: var(--radius-lg);
   background: #fff;
   color: #333;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 600;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   pointer-events: none;
@@ -385,7 +385,7 @@ kbd {
   border-radius: 999px;
   color: var(--color-text-muted);
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
 }
 
 .window-controls {

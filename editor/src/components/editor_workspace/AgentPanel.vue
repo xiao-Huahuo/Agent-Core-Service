@@ -538,7 +538,7 @@ onMounted(() => {
   overflow: hidden;
   text-align: center;
   color: var(--color-text-primary);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -591,7 +591,7 @@ onMounted(() => {
   background: transparent;
   color: var(--color-text-tertiary);
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   line-height: 1;
   cursor: pointer;
   transition:
@@ -631,7 +631,7 @@ onMounted(() => {
     color-mix(in srgb, var(--color-surface-raised) 90%, transparent);
   color: var(--color-text-primary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   text-align: center;
   pointer-events: none;
   box-shadow:
@@ -672,7 +672,7 @@ onMounted(() => {
   display: block;
   overflow: hidden;
   color: var(--color-text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -710,7 +710,7 @@ onMounted(() => {
   padding: 0 var(--space-8);
   border-radius: 999px;
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
 }
 
 .icon-button:hover,
@@ -810,7 +810,7 @@ onMounted(() => {
   pointer-events: none;
   color: var(--color-text-tertiary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   letter-spacing: 0;
 }
 
@@ -899,7 +899,7 @@ onMounted(() => {
   margin: 0;
   color: var(--color-text);
   font-family: var(--font-ui);
-  font-size: 32px;
+  font-size: calc(32px * var(--font-scale));
   font-weight: 750;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -908,7 +908,7 @@ onMounted(() => {
 .welcome-subtitle {
   margin: var(--space-10) 0 0;
   color: var(--color-text-muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   line-height: 1.5;
 }
 

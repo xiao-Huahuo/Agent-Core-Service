@@ -300,7 +300,7 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
 
 .axis-text {
   fill: var(--color-text-secondary);
-  font-size: 4px;
+  font-size: calc(4px * var(--font-scale));
   font-family: var(--font-ui);
 }
 
@@ -332,20 +332,20 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
 
 .detail-title {
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   color: var(--color-text-primary);
 }
 
 .detail-time {
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
   color: var(--color-accent);
   margin-left: auto;
 }
 
 .detail-prompt {
   font-family: var(--font-text);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   color: var(--color-text-secondary);
   line-height: var(--line-height-relaxed);
   white-space: pre-wrap;
@@ -377,7 +377,7 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
 
 .col-label {
   font-family: var(--font-ui);
-  font-size: 8px;
+  font-size: calc(8px * var(--font-scale));
   color: var(--color-text-tertiary);
   margin-bottom: var(--space-4);
   flex-shrink: 0;

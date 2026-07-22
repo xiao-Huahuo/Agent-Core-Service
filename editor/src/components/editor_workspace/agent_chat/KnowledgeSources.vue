@@ -100,7 +100,7 @@ function openSource(uri: string) {
   color: var(--color-text-tertiary);
   cursor: pointer;
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   letter-spacing: 0.3px;
   text-transform: uppercase;
   transition:
@@ -139,7 +139,7 @@ function openSource(uri: string) {
   border-radius: 3px;
   background: var(--color-primary-soft);
   color: var(--color-primary);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
   font-weight: 650;
   line-height: 1;
 }
@@ -162,7 +162,7 @@ function openSource(uri: string) {
   background: transparent;
   color: var(--color-text);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   cursor: pointer;
   text-align: left;
   transition:
@@ -185,7 +185,7 @@ function openSource(uri: string) {
   border-radius: 0;
   background: transparent;
   color: var(--color-primary);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
   font-weight: 650;
   flex-shrink: 0;
   transition: color var(--transition-fast);

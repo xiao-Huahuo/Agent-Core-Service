@@ -342,7 +342,7 @@ onMounted(() => {
   margin: 0;
   color: var(--color-text);
   font-family: var(--font-ui);
-  font-size: 32px;
+  font-size: calc(32px * var(--font-scale));
   font-weight: 750;
   letter-spacing: 0;
 }
@@ -356,7 +356,7 @@ onMounted(() => {
 .hero-title p {
   margin: 10px 0 0;
   color: var(--color-text-muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 .title-fade-leave-active {
@@ -422,7 +422,7 @@ onMounted(() => {
   outline: 0;
   background: transparent;
   color: var(--color-text);
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale));
 }
 
 .search-box-input::placeholder {
@@ -469,7 +469,7 @@ onMounted(() => {
   border-radius: 999px;
   background: var(--color-primary);
   color: #ffffff;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   font-weight: 600;
   cursor: pointer;
   flex-shrink: 0;
@@ -496,7 +496,7 @@ onMounted(() => {
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   cursor: pointer;
 }
 
@@ -547,7 +547,7 @@ onMounted(() => {
 
 .results-count {
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .mode-toggle {
@@ -559,7 +559,7 @@ onMounted(() => {
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   cursor: pointer;
 }
 
@@ -580,7 +580,7 @@ onMounted(() => {
   text-align: center;
   padding: 60px 0;
   color: var(--color-text-muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
 }
 
 /* Result groups (separated mode) */
@@ -591,7 +591,7 @@ onMounted(() => {
 .group-label {
   padding: 6px 12px;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -623,7 +623,7 @@ onMounted(() => {
 }
 
 .card-name {
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale));
   font-weight: 650;
   color: var(--color-text);
 }
@@ -635,7 +635,7 @@ onMounted(() => {
 }
 
 .card-snippet {
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   color: var(--color-text-secondary);
   line-height: 1.5;
   overflow: hidden;
@@ -650,7 +650,7 @@ onMounted(() => {
 }
 
 .card-snippet-truncated {
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   color: var(--color-text-muted);
   line-height: 1.5;
   overflow: hidden;
@@ -659,7 +659,7 @@ onMounted(() => {
 }
 
 .card-path {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: var(--color-text-muted);
   font-family: var(--font-ui);
   overflow: hidden;
@@ -674,7 +674,7 @@ onMounted(() => {
   border-radius: 999px;
   background: rgba(235, 36, 99, 0.12);
   color: var(--color-accent);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   font-weight: 600;
 }
 </style>

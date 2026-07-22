@@ -401,7 +401,7 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
   background: transparent;
   color: var(--color-primary);
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
   font-weight: 650;
   cursor: pointer;
   vertical-align: super;

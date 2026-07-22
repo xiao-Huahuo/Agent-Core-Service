@@ -327,7 +327,7 @@ watch(
   border-radius: 8px 8px 0 0;
   background: var(--color-canvas);
   color: var(--color-text);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   text-align: left;
   flex: 0 1 min(260px, 45vw);
 }
@@ -404,7 +404,7 @@ watch(
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   transition:
     background var(--transition-fast),
     color var(--transition-fast),
@@ -512,7 +512,7 @@ watch(
 
 .editor-empty p {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 @media (max-width: 920px) {

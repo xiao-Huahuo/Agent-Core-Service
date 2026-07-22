@@ -282,13 +282,13 @@ onMounted(() => {
   gap: var(--space-10);
   min-width: 0;
   color: var(--color-text-tertiary);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
 }
 
 h2 {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   line-height: 1.2;
 }
 
@@ -338,7 +338,7 @@ h2 {
 }
 
 .registry-search input::placeholder {
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .registry-grid {
@@ -409,14 +409,14 @@ h2 {
 
 .tool-name {
   overflow: hidden;
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .tool-meta {
   color: var(--color-text-tertiary);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
 }
 
 .tool-toggle-label {
@@ -466,7 +466,7 @@ h2 {
 
 .disabled-badge {
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: calc(9px * var(--font-scale));
   color: var(--color-text-muted);
   white-space: nowrap;
 }
@@ -484,18 +484,18 @@ h2 {
 
 .detail-display {
   color: var(--color-text-primary);
-  font-size: 18px;
+  font-size: calc(18px * var(--font-scale));
   font-weight: 650;
 }
 
 .detail-title code {
   color: var(--color-primary);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .detail-disabled-badge {
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: calc(10px * var(--font-scale));
   color: var(--color-text-tertiary);
   padding: 2px 6px;
   border: 1px solid var(--color-border);
@@ -505,7 +505,7 @@ h2 {
 .detail-description {
   margin: var(--space-10) 0 var(--space-12);
   color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
   line-height: 1.6;
 }
 
@@ -522,7 +522,7 @@ h2 {
   padding: var(--space-8);
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
 }
 
 .arg-row:last-child {
@@ -553,14 +553,14 @@ h2 {
   border-radius: 8px;
   background: var(--color-surface-raised);
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   line-height: 1.5;
 }
 
 .empty-state,
 .error-line {
   color: var(--color-text-tertiary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .empty-state {

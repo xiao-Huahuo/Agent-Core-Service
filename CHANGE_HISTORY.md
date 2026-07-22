@@ -1,6 +1,7 @@
 # CHANGE HISTORY
 
 ## 2026-07-22
+- [x] 外观设置新增全局字体大小配置: 字体区新增 50%~150% 滑杆与数字输入, 默认 100%, 拖动时立即预览字号变化并防抖自动保存到 `font_size_percent`; 前端通过 `--font-scale` 同步缩放界面字体、文本字体字号 token 和已有硬编码 `px` 字号, 后端补齐用户设置字段、迁移与 50~150 边界归一化。
 - [x] 为 Agent 新增项目终端沙盒能力: 新增 `run_terminal_command` 内置工具,只接受 `shell + cwd + segments` 结构化参数,通过 `TerminalSandbox` 使用 `subprocess.run(..., shell=False)` 执行外部程序段,避免整条 shell 字符串注入;沙盒校验 cwd、程序 allowlist/denylist、程序级安全子命令、参数路径、超时、输出截断和单次段数上限,并禁止 `python -c`、`node -e` 等内联代码入口。
 - [x] 新增终端沙盒用户配置: `AgentConfig` 增加进程级默认终端沙盒配置和环境变量覆盖;`user_settings` 增加 `terminal_sandbox_config` JSON 字段及自动迁移;REST 新增 `/settings/terminal-sandbox` 读取/保存接口,返回 `cmd`、`powershell`、`bash` 三类终端当前支持的指令段目录。
 - [x] 设置页新增“终端沙盒”分页配置页面: 前端新增终端沙盒 API 类型和子组件,支持编辑启用状态、工作区、超时、输出上限、单次段数、禁止程序、三类终端各自 allowlist,并分页展示三类终端支持的结构化 `external_program` 指令段。
