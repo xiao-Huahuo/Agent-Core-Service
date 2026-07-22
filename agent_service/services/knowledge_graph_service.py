@@ -43,6 +43,7 @@ from agent_service.services.scheduler import (
     SMALL_MODEL_TIER,
     get_llm_task_scheduler,
 )
+from agent_service.services.token_usage_service import TokenUsageService
 
 logger = logging.getLogger(__name__)
 
@@ -124,12 +125,17 @@ class LLMKnowledgeGraphExtractor:
         config: AgentConfig,
         task_scheduler: LLMTaskScheduler | None = None,
         llm_config: dict[str, Any] | None = None,
+        user_id: str | None = None,
+        library_id: str | None = None,
     ) -> None:
         """保存模型调度依赖和用户模型覆盖配置。"""
 
         self.config = config
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.llm_config = llm_config or {}
+        self.user_id = user_id
+        self.library_id = library_id
+        self.token_usage_service = TokenUsageService(config=config)
 
     def extract(self, *, document: StructuredKnowledgeDocument, section: StructuredKnowledgeSection) -> dict[str, Any]:
         """调用 small tier 模型,要求只返回 JSON 对象。"""
@@ -149,7 +155,30 @@ class LLMKnowledgeGraphExtractor:
             small_api_key=self._value("small_api_key"),
             small_base_url=self._value("small_base_url"),
         )
+        self._record_token_usage(response=response, document=document, section=section)
         return self._parse_json_object(str(response.content or ""))
+
+    def _record_token_usage(
+        self,
+        *,
+        response: Any,
+        document: StructuredKnowledgeDocument,
+        section: StructuredKnowledgeSection,
+    ) -> None:
+        """Persist graph extraction model usage as a non-session background call."""
+
+        if not self.user_id:
+            return
+        source_id = f"knowledge_graph_{self.library_id or 'default'}_{document.document_id}_{section.section_id}"
+        self.token_usage_service.record_llm_response_token_usage(
+            user_id=self.user_id,
+            session_id=None,
+            response=response,
+            node="knowledge_graph",
+            event="section_extracted",
+            model_tier=SMALL_MODEL_TIER,
+            source_id=source_id,
+        )
 
     @staticmethod
     def _system_prompt() -> str:
@@ -335,6 +364,8 @@ class KnowledgeGraphService:
         extractor = self.extractor or LLMKnowledgeGraphExtractor(
             config=self.config,
             llm_config=llm_config,
+            user_id=user_id,
+            library_id=library_id,
         )
         try:
             entities_by_key: dict[tuple[str, str], EntityCandidate] = {}
@@ -1099,7 +1130,12 @@ def _run_graph_extraction(
         )
         print(f"  [同步] 文档节点同步完成, 开始 LLM 抽取\n")
 
-        extractor = LLMKnowledgeGraphExtractor(config=config, llm_config=llm_config)
+        extractor = LLMKnowledgeGraphExtractor(
+            config=config,
+            llm_config=llm_config,
+            user_id=user_id,
+            library_id=library_id,
+        )
         document_ids_seen: set[str] = set()
         circuit_breaker_hit = False
         completed_count = 0

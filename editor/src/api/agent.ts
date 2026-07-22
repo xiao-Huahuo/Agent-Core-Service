@@ -6,7 +6,7 @@
  * chat endpoint as the console front-end.
  */
 
-import { apiDelete, apiGet, apiPostForm, apiPut, buildApiUrl, streamLines } from '@/api/client'
+import { apiDelete, apiGet, apiPost, apiPostForm, apiPut, buildApiUrl, streamLines } from '@/api/client'
 import { API_ROUTES } from '@/router/api_routes'
 
 export interface AgentStreamChunk {
@@ -121,4 +121,85 @@ export interface RecallDetailsResponse {
 
 export function fetchRecallDetails(sessionId: string, userId: string): Promise<RecallDetailsResponse> {
   return apiGet<RecallDetailsResponse>(API_ROUTES.AGENT_RECALL_DETAILS, { session_id: sessionId, user_id: userId })
+}
+
+export interface TaskSuggestionsResponse {
+  suggestions: string[]
+}
+
+export function fetchTaskSuggestions(userId: string, sessionId: string): Promise<TaskSuggestionsResponse> {
+  return apiPost<TaskSuggestionsResponse>(API_ROUTES.AGENT_TASK_SUGGESTIONS, {
+    user_id: userId,
+    session_id: sessionId,
+  })
+}
+
+export type TokenUsageInterval =
+  | '1m'
+  | '3m'
+  | '5m'
+  | '10m'
+  | '30m'
+  | '1h'
+  | '2h'
+  | '3h'
+  | '6h'
+  | '12h'
+  | '24h'
+  | '3d'
+  | '10d'
+  | '15d'
+  | 'month'
+
+export interface TokenUsageCall {
+  token_usage_id: string
+  session_id: string
+  message_id: string
+  node: string
+  event: string
+  model_tier: 'large' | 'small'
+  model_name: string
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  created_at: string
+}
+
+export interface TokenUsageBucket {
+  bucket: string
+  label: string
+  start_at: string
+  large_tokens: number
+  small_tokens: number
+  total_tokens: number
+  call_count: number
+}
+
+export interface TokenUsageSessionTotal {
+  session_id: string
+  session_name: string
+  large_tokens: number
+  small_tokens: number
+  total_tokens: number
+  call_count: number
+  updated_at: string
+}
+
+export interface TokenUsageStatsResponse {
+  interval: TokenUsageInterval
+  calls: TokenUsageCall[]
+  buckets: TokenUsageBucket[]
+  sessions: TokenUsageSessionTotal[]
+}
+
+export function fetchTokenUsageStats(
+  userId: string,
+  options: { sessionId?: string | null; interval?: TokenUsageInterval; limit?: number } = {},
+): Promise<TokenUsageStatsResponse> {
+  return apiGet<TokenUsageStatsResponse>(API_ROUTES.AGENT_TOKEN_USAGE, {
+    user_id: userId,
+    session_id: options.sessionId || undefined,
+    interval: options.interval || '5m',
+    limit: options.limit || 120,
+  })
 }

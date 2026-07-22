@@ -4,6 +4,7 @@ import grpc
 import warnings
 
 from agent_service.api.grpc import agent_service_pb2 as agent__service__pb2
+from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
 
 GRPC_GENERATED_VERSION = '1.68.1'
 GRPC_VERSION = grpc.__version__
@@ -112,6 +113,16 @@ class AgentServiceStub(object):
                 '/agent_service.AgentService/GetRecallDetails',
                 request_serializer=agent__service__pb2.RecallDetailsRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.RecallDetailsResponse.FromString,
+                _registered_method=True)
+        self.GetTaskSuggestions = channel.unary_unary(
+                '/agent_service.AgentService/GetTaskSuggestions',
+                request_serializer=agent__service__pb2.TaskSuggestionsRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.TaskSuggestionsResponse.FromString,
+                _registered_method=True)
+        self.GetTokenUsage = channel.unary_unary(
+                '/agent_service.AgentService/GetTokenUsage',
+                request_serializer=agent__service__pb2.TokenUsageRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
                 _registered_method=True)
         self.GetRegisteredTools = channel.unary_unary(
                 '/agent_service.AgentService/GetRegisteredTools',
@@ -319,6 +330,18 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetTaskSuggestions(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetTokenUsage(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def GetRegisteredTools(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -510,6 +533,16 @@ def add_AgentServiceServicer_to_server(servicer, server):
                     servicer.GetRecallDetails,
                     request_deserializer=agent__service__pb2.RecallDetailsRequest.FromString,
                     response_serializer=agent__service__pb2.RecallDetailsResponse.SerializeToString,
+            ),
+            'GetTaskSuggestions': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetTaskSuggestions,
+                    request_deserializer=agent__service__pb2.TaskSuggestionsRequest.FromString,
+                    response_serializer=agent__service__pb2.TaskSuggestionsResponse.SerializeToString,
+            ),
+            'GetTokenUsage': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetTokenUsage,
+                    request_deserializer=agent__service__pb2.TokenUsageRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             ),
             'GetRegisteredTools': grpc.unary_unary_rpc_method_handler(
                     servicer.GetRegisteredTools,
@@ -994,6 +1027,60 @@ class AgentService(object):
             '/agent_service.AgentService/GetRecallDetails',
             agent__service__pb2.RecallDetailsRequest.SerializeToString,
             agent__service__pb2.RecallDetailsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetTaskSuggestions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetTaskSuggestions',
+            agent__service__pb2.TaskSuggestionsRequest.SerializeToString,
+            agent__service__pb2.TaskSuggestionsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetTokenUsage(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetTokenUsage',
+            agent__service__pb2.TokenUsageRequest.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
             options,
             channel_credentials,
             insecure,

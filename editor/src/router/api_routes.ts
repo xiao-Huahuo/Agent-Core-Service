@@ -41,6 +41,8 @@ export const API_ROUTES = {
   AGENT_TOOLS: '/agent/tools',
   AGENT_EVENTS: '/agent/events',
   AGENT_RECALL_DETAILS: '/agent/recall-details',
+  AGENT_TASK_SUGGESTIONS: '/agent/task-suggestions',
+  AGENT_TOKEN_USAGE: '/agent/token-usage',
   DEBUG_RUNTIME_APIS: '/debug/runtime-apis',
   DEBUG_MULTIMODAL_INGESTION: '/debug/multimodal-ingestion',
   KNOWLEDGE_SEARCH: '/knowledge/search',

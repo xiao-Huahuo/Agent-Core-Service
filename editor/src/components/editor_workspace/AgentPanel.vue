@@ -170,6 +170,10 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   void chatStore.deleteAttachment(attachment)
 }
 
+function sendSuggestion(suggestion: string) {
+  void sendMessage(suggestion)
+}
+
 function containsFiles(event: DragEvent) {
   return Array.from(event.dataTransfer?.types ?? []).includes('Files')
 }
@@ -267,6 +271,21 @@ watch(() => workspaceStore.pendingAgentReference, (refText) => {
     workspaceStore.pendingAgentReference = ''
   }
 })
+
+watch(
+  () => chatStore.isStreaming,
+  (streaming, wasStreaming) => {
+    if (streaming || !wasStreaming || !userId.value || !sessionStore.currentSessionId) {
+      return
+    }
+    window.setTimeout(() => {
+      if (!userId.value || !sessionStore.currentSessionId || chatStore.isStreaming) {
+        return
+      }
+      void chatStore.refreshTaskSuggestions(userId.value, sessionStore.currentSessionId)
+    }, 0)
+  },
+)
 
 onMounted(() => {
   void reloadSessions()
@@ -423,7 +442,10 @@ onMounted(() => {
         :agent-access-mode="settingsStore.agentAccessMode"
         :reference="referenceText"
         :attachments="chatStore.pendingAttachments"
+        :suggestions="chatStore.taskSuggestions"
+        :suggestions-loading="chatStore.suggestionsLoading"
         @send="sendMessage"
+        @select-suggestion="sendSuggestion"
         @toggle-web-search="handleToggleWebSearch"
         @set-agent-mode="setAgentLoopMode"
         @set-agent-access-mode="setAgentAccessMode"

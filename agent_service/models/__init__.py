@@ -11,6 +11,7 @@ from agent_service.models.longterm_memory_spec import LongTermMemorySpec, LongTe
 from agent_service.models.attachment import SessionAttachmentRecord
 from agent_service.models.message import MessageBase, MessageRecord
 from agent_service.models.session import SessionBase, SessionRecord
+from agent_service.models.token_usage import TokenUsageRecord
 from agent_service.models.user_settings import UserSettingsRecord, UserSystemPromptEntry
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "MessageRecord",
     "SessionBase",
     "SessionRecord",
+    "TokenUsageRecord",
     "UserSettingsRecord",
     "UserSystemPromptEntry",
 ]

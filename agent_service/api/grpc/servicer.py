@@ -70,6 +70,9 @@ from agent_service.api.grpc.agent_service_pb2 import (
     SystemPromptEntriesResponse,
     SystemPromptEntryResponse,
     SystemPromptRequest,
+    TaskSuggestionsRequest,
+    TaskSuggestionsResponse,
+    TokenUsageRequest,
     ToolInfo,
     ToolListRequest,
     ToolListResponse,
@@ -85,6 +88,8 @@ from agent_service.services.message_service import MessageService
 from agent_service.services.session_service import SessionService
 from agent_service.services.settings_service import SettingsService
 from agent_service.services.knowledge_library_service import KnowledgeLibraryService, KnowledgeLibraryRebuildResult
+from agent_service.services.task_suggestion_service import TaskSuggestionService
+from agent_service.services.token_usage_service import SUPPORTED_INTERVALS, TokenUsageService
 
 logger = logging.getLogger(__name__)
 
@@ -325,6 +330,35 @@ class AgentServiceServicer(BaseServicer):
             memory_recall=payload["memory_recall"],
             knowledge_recall=payload["knowledge_recall"],
         )
+
+    def GetTaskSuggestions(  # noqa: N802
+        self, request: TaskSuggestionsRequest, context: grpc.ServicerContext
+    ) -> TaskSuggestionsResponse:
+        """Return likely next user tasks generated from the current session context."""
+
+        logger.info("GetTaskSuggestions user=%s session=%s", request.user_id, request.session_id)
+        service = TaskSuggestionService(
+            agent=self._agent,
+            message_service=self._require_message_service(context),
+        )
+        payload = service.generate_suggestions(user_id=request.user_id, session_id=request.session_id)
+        return TaskSuggestionsResponse(suggestions=payload.get("suggestions", []))
+
+    def GetTokenUsage(  # noqa: N802
+        self, request: TokenUsageRequest, context: grpc.ServicerContext
+    ) -> Struct:
+        """Return persisted token usage dashboard statistics."""
+
+        logger.info("GetTokenUsage user=%s session=%s", request.user_id, request.session_id)
+        interval = request.interval if request.interval in SUPPORTED_INTERVALS else "5m"
+        service = TokenUsageService(config=self._agent.config)
+        payload = service.get_dashboard_stats(
+            user_id=request.user_id,
+            session_id=request.session_id or None,
+            interval=interval,
+            limit=request.limit or 120,
+        )
+        return ParseDict(payload, Struct())
 
     def GetRegisteredTools(  # noqa: N802
         self, request: ToolListRequest, context: grpc.ServicerContext,

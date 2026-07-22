@@ -1,6 +1,15 @@
 # CHANGE HISTORY
 
 ## 2026-07-22
+- [x] 扩展 Token 统计口径: 新增非会话 LLM 调用记录入口,任务推荐和知识图谱 section 抽取的小/大模型 token 用量会进入“每次调用”和“时间刻度”图表;非会话后台调用不进入不同 session 总用量统计。
+- [x] 调整 Dashboard Token 图表默认页签: Token 卡片默认展示“时间刻度”,并将“时间刻度”按钮放在“每次调用”左侧。
+- [x] 修正 Dashboard Token 图表能力: “每次调用 / 时间刻度 / Session 总量”三类统计均支持在同区域切换柱状图与曲线图;曲线图增加同色发光面积层;后端时间刻度改为按 Asia/Shanghai 本地时间取整聚合,并在首尾有数据的刻度间补齐 0 消耗空桶。
+- [x] 修正 Dashboard Token 区域呈现方式: 撤回错误的三表格铺开布局,恢复原有 Token 卡片所在区域和 Time/Consumption 页排布; Token 卡片内部改为“每次调用 / 时间刻度 / Session 总量”三张 ECharts 图表同区域切换。
+- [x] 重构 Dashboard Token 用量统计: 新增 `agent_token_usage` 持久化表和 `TokenUsageService`, 从 assistant trace 中抽取模型调用 token 事件并支持历史消息回填; REST `/agent/token-usage` 与 gRPC `GetTokenUsage` 返回每次模型调用、固定时间刻度大小模型汇总、不同 session 总用量三类统计; 前端 Token 区域改为三张后端驱动图表, 原图表标题语义改为“每次模型调用 token 用量”。
+- [x] 去除 Agent 任务推荐加载文案: 输入框上方不再显示“正在生成下一步”, 后台仍异步生成推荐, 仅在拿到真实推荐项后渲染推荐按钮。
+- [x] 调整 Agent 任务推荐模型兜底顺序: 小模型额度不足、限流或调用异常时会自动回退到主模型重新生成推荐; 只有主模型也失败或两级模型均未产出有效推荐时, 才使用最近对话生成本地兜底推荐, 并补充 small->large 回退测试。
+- [x] 修复 Agent 任务推荐不可见的失败路径: `/agent/task-suggestions` 在小模型额度不足、限流或调用异常时不再返回 500, 而是记录 warning 并基于最近对话生成 3 条本地兜底推荐, 保证输入框推荐区可正常出现; 同步恢复任务推荐服务与测试文件中的 UTF-8 中文文案。
+- [x] 新增 Agent 任务推荐功能: 每轮 Agent 回答结束后,前端异步请求 `/agent/task-suggestions`,后端复用小模型调度器基于当前 session 历史生成 3 条下一步问题/任务;推荐挂载在输入框上方,点击后自动作为下一轮消息发送,同步补齐 gRPC `GetTaskSuggestions` 并补充服务层解析测试。
 - [x] 外观设置新增全局字体大小配置: 字体区新增 50%~150% 滑杆与数字输入, 默认 100%, 拖动时立即预览字号变化并防抖自动保存到 `font_size_percent`; 前端通过 `--font-scale` 同步缩放界面字体、文本字体字号 token 和已有硬编码 `px` 字号, 后端补齐用户设置字段、迁移与 50~150 边界归一化。
 - [x] 为 Agent 新增项目终端沙盒能力: 新增 `run_terminal_command` 内置工具,只接受 `shell + cwd + segments` 结构化参数,通过 `TerminalSandbox` 使用 `subprocess.run(..., shell=False)` 执行外部程序段,避免整条 shell 字符串注入;沙盒校验 cwd、程序 allowlist/denylist、程序级安全子命令、参数路径、超时、输出截断和单次段数上限,并禁止 `python -c`、`node -e` 等内联代码入口。
 - [x] 新增终端沙盒用户配置: `AgentConfig` 增加进程级默认终端沙盒配置和环境变量覆盖;`user_settings` 增加 `terminal_sandbox_config` JSON 字段及自动迁移;REST 新增 `/settings/terminal-sandbox` 读取/保存接口,返回 `cmd`、`powershell`、`bash` 三类终端当前支持的指令段目录。

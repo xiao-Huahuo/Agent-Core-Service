@@ -54,6 +54,8 @@ service AgentService {
 
   rpc GetEvents(EventsRequest) returns (EventsResponse);
   rpc GetRecallDetails(RecallDetailsRequest) returns (RecallDetailsResponse);
+  rpc GetTaskSuggestions(TaskSuggestionsRequest) returns (TaskSuggestionsResponse);
+  rpc GetTokenUsage(TokenUsageRequest) returns (google.protobuf.Struct);
   rpc GetRegisteredTools(ToolListRequest) returns (ToolListResponse);
 
   // ---- 用户设置 ----
@@ -249,6 +251,22 @@ message RecallDetailsResponse {
   google.protobuf.Struct rag_metrics = 5;
   google.protobuf.Struct memory_recall = 6;
   google.protobuf.Struct knowledge_recall = 7;
+}
+
+message TaskSuggestionsRequest {
+  string user_id = 1;
+  string session_id = 2;
+}
+
+message TaskSuggestionsResponse {
+  repeated string suggestions = 1;
+}
+
+message TokenUsageRequest {
+  string user_id = 1;
+  string session_id = 2;
+  string interval = 3;
+  int32 limit = 4;
 }
 
 message ToolListRequest {

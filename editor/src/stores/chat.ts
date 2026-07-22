@@ -9,7 +9,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { deleteAgentAttachment, streamPrompt } from '@/api/agent'
+import { deleteAgentAttachment, fetchTaskSuggestions, streamPrompt } from '@/api/agent'
 import type { AgentAccessMode, AgentAttachmentUploadResponse, AgentLoopMode } from '@/api/agent'
 import { fetchMessages } from '@/api/session'
 import { useSessionStore } from '@/stores/session'
@@ -93,9 +93,12 @@ export const useChatStore = defineStore('chat', () => {
   const currentKnowledgeSources = ref<SourceItem[]>([])
   const currentCitationMap = ref<Record<string, SourceItem>>({})
   const pendingAttachments = ref<AgentUploadedAttachment[]>([])
+  const taskSuggestions = ref<string[]>([])
+  const suggestionsLoading = ref(false)
 
   let streamAbortController: AbortController | null = null
   let historyAbortController: AbortController | null = null
+  let suggestionRequestId = 0
   let pendingContent = ''
   let flushTimer: number | null = null
   const contentFlushMs = 50
@@ -276,6 +279,7 @@ export const useChatStore = defineStore('chat', () => {
           reference: asString(message.metadata?.reference) || undefined,
         }))
       loadedSessionId.value = sessionId
+      void refreshTaskSuggestions(userId, sessionId)
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return
@@ -283,6 +287,26 @@ export const useChatStore = defineStore('chat', () => {
       console.error('加载历史消息失败:', error)
       messages.value = []
       loadedSessionId.value = ''
+    }
+  }
+
+  async function refreshTaskSuggestions(userId: string, sessionId: string) {
+    const requestId = ++suggestionRequestId
+    suggestionsLoading.value = true
+    try {
+      const result = await fetchTaskSuggestions(userId, sessionId)
+      if (requestId === suggestionRequestId) {
+        taskSuggestions.value = result.suggestions ?? []
+      }
+    } catch (error) {
+      console.debug('生成任务推荐失败:', error)
+      if (requestId === suggestionRequestId) {
+        taskSuggestions.value = []
+      }
+    } finally {
+      if (requestId === suggestionRequestId) {
+        suggestionsLoading.value = false
+      }
     }
   }
 
@@ -312,6 +336,8 @@ export const useChatStore = defineStore('chat', () => {
 
     const attachmentsForTurn = [...pendingAttachments.value]
     pendingAttachments.value = []
+    taskSuggestions.value = []
+    suggestionRequestId += 1
     appendMessage({
       role: 'user',
       content: prompt,
@@ -497,6 +523,9 @@ export const useChatStore = defineStore('chat', () => {
     currentKnowledgeSources.value = []
     currentCitationMap.value = {}
     pendingAttachments.value = []
+    taskSuggestions.value = []
+    suggestionsLoading.value = false
+    suggestionRequestId += 1
   }
 
   function addPendingAttachment(attachment: AgentUploadedAttachment) {
@@ -544,9 +573,12 @@ export const useChatStore = defineStore('chat', () => {
     contextMirror,
     activeAgentMode,
     pendingAttachments,
+    taskSuggestions,
+    suggestionsLoading,
     lastMessage,
     canSend,
     loadHistory,
+    refreshTaskSuggestions,
     send,
     clear,
     addPendingAttachment,

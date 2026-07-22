@@ -8,6 +8,7 @@ from agent_service.api.rest.agent import router as agent_router
 from agent_service.api.rest.debug import router as debug_router
 from agent_service.api.rest.knowledge import router as knowledge_router
 from agent_service.api.rest.settings import router as settings_router
+from agent_service.api.rest.token_usage import router as token_usage_router
 
 router = APIRouter()
 router.include_router(health_router)
@@ -16,5 +17,6 @@ router.include_router(agent_router)
 router.include_router(debug_router)
 router.include_router(knowledge_router)
 router.include_router(settings_router)
+router.include_router(token_usage_router)
 
 __all__ = ["router"]

@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from agent_service.api.recall_details import build_recall_details_payload
 from agent_service.api.rest.deps import _require_agent, _require_attachment_service, _require_message_service
 from agent_service.services.editor_context_service import editor_context_service
+from agent_service.services.task_suggestion_service import TaskSuggestionService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -398,3 +399,25 @@ async def agent_recall_details(
         user_id=user_id,
         session_id=session_id,
     )
+
+
+@router.post("/agent/task-suggestions")
+async def agent_task_suggestions(
+    user_id: str = Body(..., embed=True, min_length=1),
+    session_id: str = Body(..., embed=True, min_length=1),
+) -> dict[str, Any]:
+    """Generate three likely next user tasks from the current session context."""
+
+    logger.info("生成 Agent 任务推荐 | user=%s session=%s", user_id, session_id)
+    service = TaskSuggestionService(
+        agent=_require_agent(),
+        message_service=_require_message_service(),
+    )
+    payload = service.generate_suggestions(user_id=user_id, session_id=session_id)
+    logger.info(
+        "Agent 任务推荐生成完成 | user=%s session=%s count=%s",
+        user_id,
+        session_id,
+        len(payload.get("suggestions", [])),
+    )
+    return payload

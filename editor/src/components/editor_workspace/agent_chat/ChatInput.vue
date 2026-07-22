@@ -21,6 +21,8 @@ const props = defineProps<{
   agentAccessMode?: AgentAccessMode
   reference?: string
   attachments?: AgentUploadedAttachment[]
+  suggestions?: string[]
+  suggestionsLoading?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -31,6 +33,7 @@ const emit = defineEmits<{
   'clear-reference': []
   'remove-attachment': [attachment: AgentUploadedAttachment]
   'file-select': [file: File]
+  'select-suggestion': [suggestion: string]
 }>()
 
 const text = ref('')
@@ -120,6 +123,18 @@ function handleFileChange(event: Event) {
 
 <template>
   <div class="chat-input-wrap" :class="{ centered }">
+    <div v-if="!centered && !attachments?.length && suggestions?.length" class="task-suggestions">
+      <button
+        v-for="suggestion in suggestions"
+        :key="suggestion"
+        class="suggestion-button"
+        type="button"
+        :disabled="disabled"
+        @click="emit('select-suggestion', suggestion)"
+      >
+        {{ suggestion }}
+      </button>
+    </div>
     <AttachmentBlocks
       v-if="!centered && attachments?.length"
       class="input-attachments"
@@ -259,6 +274,58 @@ function handleFileChange(event: Event) {
 .chat-input-wrap.centered {
   bottom: 50%;
   width: min(90%, 400px);
+}
+
+.task-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  align-items: center;
+  justify-content: flex-start;
+  pointer-events: auto;
+}
+
+.suggestion-button {
+  max-width: 100%;
+  min-height: 26px;
+  padding: 0 var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: calc(11px * var(--font-scale));
+  line-height: 1.2;
+}
+
+.suggestion-button {
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.suggestion-button:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-text);
+  transform: translateY(-1px);
+}
+
+.suggestion-button:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .input-attachments {

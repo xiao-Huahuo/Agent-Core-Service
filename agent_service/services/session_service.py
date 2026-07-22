@@ -27,6 +27,7 @@ import agent_service.models  # noqa: F401
 from agent_service.core.agent_config import AgentConfig
 from agent_service.models.message import MessageRecord
 from agent_service.models.session import SessionRecord
+from agent_service.models.token_usage import TokenUsageRecord
 from agent_service.schemas.session import SessionCreate, SessionOut, SessionUpdate
 
 
@@ -91,6 +92,11 @@ class SessionService:
             ).all()
             for msg in msgs:
                 db_session.delete(msg)
+            usage_records = db_session.exec(
+                select(TokenUsageRecord).where(TokenUsageRecord.session_id == session_id)
+            ).all()
+            for usage in usage_records:
+                db_session.delete(usage)
             db_session.delete(record)
             db_session.commit()
             return True
@@ -114,6 +120,11 @@ class SessionService:
                 ).all()
                 for msg in msgs:
                     db_session.delete(msg)
+                usage_records = db_session.exec(
+                    select(TokenUsageRecord).where(TokenUsageRecord.session_id == record.session_id)
+                ).all()
+                for usage in usage_records:
+                    db_session.delete(usage)
             # 再删除会话
             for record in records:
                 db_session.delete(record)

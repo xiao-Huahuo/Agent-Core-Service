@@ -27,6 +27,7 @@ import agent_service.models  # noqa: F401
 from agent_service.core.agent_config import AgentConfig
 from agent_service.models.message import MessageRecord
 from agent_service.schemas.message import MessageCreate, MessageOut, MessageUpdate
+from agent_service.services.token_usage_service import TokenUsageService
 
 
 class MessageService:
@@ -49,6 +50,7 @@ class MessageService:
 
         self.config = config
         self.engine = engine or create_engine(f"sqlite:///{config.storage.sqlite_path}", pool_pre_ping=True)
+        self.token_usage_service = TokenUsageService(config=config, engine=self.engine, create_tables=create_tables)
         if create_tables:
             SQLModel.metadata.create_all(self.engine)
 
@@ -74,7 +76,10 @@ class MessageService:
             db_session.add(record)
             db_session.commit()
             db_session.refresh(record)
-            return MessageOut.from_record(record)
+            result = MessageOut.from_record(record)
+        if record.role == "assistant":
+            self.token_usage_service.record_message_token_usage(record)
+        return result
 
     def update_message(self, message_id: str, message_update: MessageUpdate) -> MessageOut | None:
         """
