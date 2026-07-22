@@ -85,10 +85,10 @@ const splitBodyStyle = computed(() => {
   return { gridTemplateColumns: `${r * 100}% 6px ${(1 - r) * 100}%` } as const
 })
 
-const modeButtons: Array<{ mode: EditorViewMode; label: string; icon: typeof Pencil }> = [
-  { mode: 'edit', label: 'Edit', icon: Pencil },
-  { mode: 'preview', label: 'Preview', icon: Eye },
-  { mode: 'split', label: 'Split', icon: Columns2 },
+const modeButtons: Array<{ mode: EditorViewMode; label: string; shortcut: string; icon: typeof Pencil }> = [
+  { mode: 'edit', label: 'Edit', shortcut: 'Ctrl+E', icon: Pencil },
+  { mode: 'preview', label: 'Preview', shortcut: 'Ctrl+P', icon: Eye },
+  { mode: 'split', label: 'Split', shortcut: 'Ctrl+T', icon: Columns2 },
 ]
 
 let resizeObserver: ResizeObserver | null = null
@@ -155,6 +155,29 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
   event.returnValue = ''
 }
 
+function handleEditorShortcut(event: KeyboardEvent) {
+  const isModifier = event.ctrlKey || event.metaKey
+  if (!isModifier || event.altKey || event.shiftKey) {
+    return
+  }
+  const target = event.target
+  if (!(target instanceof HTMLElement) || !target.closest('.editor-panel')) {
+    return
+  }
+  const key = event.key.toLowerCase()
+  const modeByKey: Record<string, EditorViewMode> = {
+    e: 'edit',
+    p: 'preview',
+    t: 'split',
+  }
+  const nextMode = modeByKey[key]
+  if (!nextMode) {
+    return
+  }
+  event.preventDefault()
+  setEditorMode(nextMode)
+}
+
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
   resizeObserver = new ResizeObserver(updateSegmentedIndicator)
@@ -193,7 +216,7 @@ watch(
 </script>
 
 <template>
-  <main class="editor-panel surface-panel">
+  <main class="editor-panel surface-panel" @keydown.capture="handleEditorShortcut">
     <div class="tab-strip">
       <div class="tab-list">
         <button
@@ -224,6 +247,7 @@ watch(
           >
             <component :is="button.icon" :size="14" />
             <span>{{ button.label }}</span>
+            <kbd>{{ button.shortcut }}</kbd>
           </button>
         </div>
         <button
@@ -420,6 +444,13 @@ watch(
   color: white;
 }
 
+.segmented kbd {
+  color: inherit;
+  font-family: var(--font-ui);
+  font-size: calc(10px * var(--font-scale));
+  opacity: 0.72;
+}
+
 .segmented button:disabled {
   cursor: not-allowed;
   opacity: 0.42;
@@ -524,6 +555,10 @@ watch(
   .tab-actions {
     width: 100%;
     overflow: hidden;
+  }
+
+  .segmented kbd {
+    display: none;
   }
 
   .editor-body[data-mode='split'] {
