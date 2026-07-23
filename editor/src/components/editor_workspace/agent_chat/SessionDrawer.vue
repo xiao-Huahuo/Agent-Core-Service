@@ -121,7 +121,7 @@ async function clearAllSessions() {
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--color-bg-elevated);
+  background: var(--color-chrome-rail-bg);
   transform: translateX(calc(-100% - 16px));
   transition:
     transform 200ms ease,
@@ -143,8 +143,9 @@ async function clearAllSessions() {
   width: 280px;
   max-width: min(280px, 80vw);
   border: 0;
+  outline: none;
   border-radius: 0;
-  background: var(--color-canvas-soft);
+  background: var(--color-chrome-rail-bg);
   box-shadow: none;
   backdrop-filter: none;
   transform: translateX(calc(-100% + 10px));
@@ -157,6 +158,7 @@ async function clearAllSessions() {
 
 .session-drawer.page-mode.open {
   transform: translateX(0);
+  border-radius: 0;
 }
 
 .drawer-titlebar {
@@ -261,7 +263,7 @@ async function clearAllSessions() {
   min-height: 36px;
   padding: 0 var(--space-12);
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: 999px;
   background: var(--color-surface-raised);
   color: var(--color-text-primary);
   font-family: var(--font-ui);
@@ -307,7 +309,7 @@ async function clearAllSessions() {
   background: transparent;
   color: var(--color-text-secondary);
   font-family: var(--font-ui);
-  font-size: var(--font-size-xs);
+  font-size: calc(var(--font-size-xs) * var(--font-scale));
   transition:
     border-color 180ms ease,
     background 180ms ease,

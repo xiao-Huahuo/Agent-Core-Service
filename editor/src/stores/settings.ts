@@ -218,7 +218,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const profile = ref<UserSettingsProfile>(loadProfile())
 
   /** Chat bubble rendering mode shared by the editor Agent panel. */
-  const chatMode = ref<'chat' | 'tool'>((localStorage.getItem(CHAT_MODE_KEY) as 'chat' | 'tool' | null) ?? 'chat')
+  const chatMode = ref<'chat' | 'tool'>((localStorage.getItem(CHAT_MODE_KEY) as 'chat' | 'tool' | null) ?? 'tool')
 
   /** Agent execution loop mode shared by Agent panel and Obs graph. */
   const agentLoopMode = ref<AgentLoopMode>(normalizeAgentLoopMode(localStorage.getItem(AGENT_LOOP_MODE_KEY)))

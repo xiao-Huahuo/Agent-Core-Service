@@ -282,7 +282,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const editorMode = ref<EditorViewMode>('edit')
 
   /** Active center workspace view. */
-  const mainView = ref<WorkspaceMainView>('editor')
+  const mainView = ref<WorkspaceMainView>('agent')
 
   /** Open file tabs. */
   const openTabs = ref<EditorTab[]>([])

@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { BrainCircuit, Check, ChevronDown, History, Maximize2, MessageSquarePlus, MessagesSquare, PanelLeft, UploadCloud } from 'lucide-vue-next'
+import { BrainCircuit, Check, ChevronDown, History, Maximize2, MessageSquarePlus, MessagesSquare, SquarePen, UploadCloud } from 'lucide-vue-next'
 
 import ChatInput from '@/components/editor_workspace/agent_chat/ChatInput.vue'
 import MessageList from '@/components/editor_workspace/agent_chat/MessageList.vue'
@@ -39,7 +39,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   expand: []
 }>()
-const sessionDrawerOpen = ref(props.mode === 'page')
+const sessionDrawerOpen = ref(false)
 const isBootstrapping = ref(false)
 const referenceText = ref('')
 const messageListRef = ref<MessageListApi | null>(null)
@@ -47,14 +47,14 @@ const isMessageListAtBottom = ref(true)
 const dragDepth = ref(0)
 const isUploadingAttachment = ref(false)
 const uploadStatusText = ref('')
-const welcomeIconUrl = new URL('../../assets/images/无底图标.png', import.meta.url).href
+const logoSrc = new URL('../../assets/images/无底图标.png', import.meta.url).href
 const modeSwitchRef = ref<HTMLElement | null>(null)
 const loopModeMenu = ref<HTMLDetailsElement | null>(null)
 const modeIndicatorStyle = computed(() => {
-  if (settingsStore.chatMode === 'chat') {
+  if (settingsStore.chatMode === 'tool') {
     return { width: 'calc(50% - 2px)', transform: 'translateX(0)' }
   }
-  return { width: 'calc(50% - 2px)', transform: 'translateX(calc(100% + 0px))' }
+  return { width: 'calc(50% - 2px)', transform: 'translateX(100%) translateX(2px)' }
 })
 
 const userId = computed(() => settingsStore.profile.userId)
@@ -195,10 +195,6 @@ function handleModelConfigUpdated(event: Event) {
   currentLargeModelName.value = modelName?.trim() || ''
 }
 
-function openSessionDrawer() {
-  sessionDrawerOpen.value = true
-}
-
 function closeSessionDrawer() {
   sessionDrawerOpen.value = false
 }
@@ -297,15 +293,6 @@ watch(userId, () => {
   void loadCurrentModelConfig()
 })
 
-watch(
-  () => props.mode,
-  (mode) => {
-    if (mode === 'page') {
-      sessionDrawerOpen.value = true
-    }
-  },
-)
-
 watch(() => workspaceStore.pendingAgentPrompt, (prompt) => {
   if (prompt) {
     void sendMessage(prompt)
@@ -371,13 +358,34 @@ onBeforeUnmount(() => {
     </Transition>
 
     <header v-if="props.mode === 'page'" class="agent-topbar">
-      <div class="topbar-left">
-        <button class="icon-button" type="button" title="New session" @click="createSession">
-          <MessageSquarePlus :size="18" />
+      <div class="topbar-capsule" :class="{ 'drawer-open': sessionDrawerOpen }">
+        <button class="capsule-logo-btn" type="button" title="Toggle sidebar" @click="sessionDrawerOpen = !sessionDrawerOpen">
+          <img :src="logoSrc" class="capsule-logo" alt="" />
         </button>
-        <button class="icon-button" type="button" title="Toggle sidebar" @click="sessionDrawerOpen = !sessionDrawerOpen">
-          <PanelLeft :size="18" />
-        </button>
+        <span class="capsule-divider" data-divider></span>
+        <div ref="modeSwitchRef" class="capsule-switch" role="group" aria-label="Chat render mode">
+          <span class="mode-indicator" :style="modeIndicatorStyle"></span>
+          <button
+            class="capsule-switch-btn"
+            :class="{ active: settingsStore.chatMode === 'tool' }"
+            type="button"
+            aria-label="Tool mode"
+            :aria-pressed="settingsStore.chatMode === 'tool'"
+            @click="setChatRenderMode('tool')"
+          >
+            Tool
+          </button>
+          <button
+            class="capsule-switch-btn"
+            :class="{ active: settingsStore.chatMode === 'chat' }"
+            type="button"
+            aria-label="Chat mode"
+            :aria-pressed="settingsStore.chatMode === 'chat'"
+            @click="setChatRenderMode('chat')"
+          >
+            Chat
+          </button>
+        </div>
       </div>
       <span class="topbar-title">{{ sessionTitle }}</span>
       <div class="topbar-right">
@@ -409,52 +417,21 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </details>
-        <div ref="modeSwitchRef" class="topbar-mode-switch" role="group" aria-label="Chat render mode">
-          <span class="mode-indicator" :style="modeIndicatorStyle"></span>
-          <button
-            class="topbar-mode-option"
-            :class="{ active: settingsStore.chatMode === 'chat' }"
-            type="button"
-            aria-label="Chat mode"
-            :aria-pressed="settingsStore.chatMode === 'chat'"
-            @click="setChatRenderMode('chat')"
-          >
-            Chat
-          </button>
-          <button
-            class="topbar-mode-option"
-            :class="{ active: settingsStore.chatMode === 'tool' }"
-            type="button"
-            aria-label="Tool mode"
-            :aria-pressed="settingsStore.chatMode === 'tool'"
-            @click="setChatRenderMode('tool')"
-          >
-            Tool
-          </button>
-        </div>
+        <button class="new-session-round-btn" type="button" title="New session" @click="createSession">
+          <SquarePen :size="16" />
+        </button>
       </div>
     </header>
 
+    <SessionDrawer
+      :open="sessionDrawerOpen"
+      :mode="props.mode"
+      :user-id="userId"
+      @close="closeSessionDrawer"
+      @create="createSession"
+      @select="selectSession"
+    />
     <div class="agent-body">
-      <SessionDrawer
-        :open="sessionDrawerOpen"
-        :mode="props.mode"
-        :user-id="userId"
-        @close="closeSessionDrawer"
-        @create="createSession"
-        @select="selectSession"
-      />
-
-      <button
-        v-if="props.mode === 'page' && !sessionDrawerOpen"
-        class="drawer-hover-zone"
-        type="button"
-        title="Open sessions"
-        aria-label="Open sessions"
-        @mouseenter="openSessionDrawer"
-        @focus="openSessionDrawer"
-      ></button>
-
       <header v-if="props.mode === 'panel'" class="agent-titlebar">
       <button
         class="icon-button drawer-toggle"
@@ -490,8 +467,7 @@ onBeforeUnmount(() => {
     <main class="chat-body" :class="{ dimmed: isBootstrapping }">
       <Transition name="welcome-fade">
         <div v-if="!hasMessages && !chatStore.isStreaming" class="welcome-center">
-          <img class="welcome-icon" :src="welcomeIconUrl" alt="" aria-hidden="true" />
-          <SplitText text="MetaWeave" tag="h1" class="welcome-title" :trigger-on-mount="true" />
+          <SplitText text="元织Agent" tag="h1" class="welcome-title" :trigger-on-mount="true" />
           <p class="welcome-subtitle">在知识库 {{ knowledgeTitle }} 中有什么问题?</p>
         </div>
       </Transition>
@@ -594,7 +570,7 @@ onBeforeUnmount(() => {
   --agent-content-offset: 0px;
   --agent-chat-max-width: min(72vw, 960px);
   --agent-input-max-width: min(52vw, 720px);
-  --agent-topbar-height: 32px;
+  --agent-topbar-height: 48px;
   border: 0;
   background: var(--color-canvas-soft);
   backdrop-filter: none;
@@ -630,12 +606,108 @@ onBeforeUnmount(() => {
   gap: var(--space-8);
   background: var(--color-canvas-soft);
   flex-shrink: 0;
+  transition: padding-left 200ms ease;
 }
 
-.topbar-left {
-  display: flex;
+.agent-panel.agent-drawer-open .agent-topbar {
+  padding-left: calc(var(--space-12) + var(--agent-content-offset));
+}
+
+.topbar-capsule {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
+  height: 36px;
+  padding: 3px;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  transition: gap 200ms ease, padding 200ms ease;
+}
+
+.topbar-capsule.drawer-open {
+  gap: 0;
+  padding: 3px 10px 3px 0;
+}
+
+.capsule-logo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    width 200ms ease,
+    opacity 160ms ease,
+    margin 200ms ease;
+}
+
+.topbar-capsule.drawer-open .capsule-logo-btn {
+  width: 0;
+  opacity: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.capsule-logo {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.capsule-divider {
+  width: 1px;
+  height: 18px;
+  flex-shrink: 0;
+  background: var(--color-border);
+  transition:
+    width 200ms ease,
+    opacity 160ms ease;
+}
+
+.topbar-capsule.drawer-open [data-divider] {
+  width: 0;
+  opacity: 0;
+}
+
+.capsule-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.capsule-switch-btn {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 28px;
+  padding: 0 var(--space-10);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-ui);
+  font-size: calc(10px * var(--font-scale));
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.capsule-switch-btn:hover {
+  color: var(--color-text-secondary);
+}
+
+.capsule-switch-btn.active {
+  color: #ffffff;
 }
 
 .topbar-title {
@@ -654,7 +726,19 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-4);
-  min-width: 228px;
+}
+
+.mode-indicator {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  height: calc(100% - 4px);
+  border-radius: 999px;
+  background: var(--color-primary);
+  transition:
+    transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
 }
 
 .topbar-loop-mode-dropdown {
@@ -671,7 +755,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: var(--space-4);
-  height: 28px;
+  height: 32px;
   min-width: 78px;
   padding: 0 var(--space-8);
   border: 1px solid var(--color-border);
@@ -760,58 +844,27 @@ onBeforeUnmount(() => {
   color: var(--color-primary);
 }
 
-.topbar-mode-switch {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  padding: 2px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-surface);
-}
-
-.mode-indicator {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  height: calc(100% - 4px);
-  border-radius: 999px;
-  background: var(--color-primary);
-  transition:
-    transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
-    width 200ms cubic-bezier(0.4, 0, 0.2, 1);
-  pointer-events: none;
-}
-
-.topbar-mode-option {
-  position: relative;
-  z-index: 1;
-  flex: 1;
+.new-session-round-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 0;
-  height: 22px;
-  padding: 0 var(--space-10);
-  border: 0;
-  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
   background: transparent;
   color: var(--color-text-tertiary);
-  font-family: var(--font-ui);
-  font-size: calc(10px * var(--font-scale));
-  line-height: 1;
   cursor: pointer;
   transition:
-    color var(--transition-fast);
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
 }
 
-.topbar-mode-option:hover {
-  color: var(--color-text-secondary);
-}
-
-.topbar-mode-option.active {
-  color: #ffffff;
+.new-session-round-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-muted);
 }
 
 .agent-body {
@@ -1042,48 +1095,9 @@ onBeforeUnmount(() => {
   left: max(var(--space-16), calc(var(--agent-content-offset) + (100% - var(--agent-content-offset) - var(--agent-input-max-width)) / 2));
 }
 
-.drawer-hover-zone {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 3;
-  width: 18px;
-  border: 0;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 18%, transparent), transparent);
-  opacity: 0.18;
-}
-
-.drawer-hover-zone:hover {
-  opacity: 0.42;
-}
-
-.agent-page-mode .welcome-center {
-  right: calc((100% - var(--agent-content-offset)) / 2);
-  left: auto;
-  width: min(100%, var(--agent-chat-max-width));
-  transform: translateX(50%);
-  transition: right 200ms ease;
-}
-
-.chat-body.dimmed {
-  opacity: 0.55;
-  pointer-events: none;
-}
-
-.stream-error {
-  margin: 0 var(--space-16) var(--space-8);
-  padding: var(--space-8) var(--space-10);
-  border: 1px solid rgba(235, 36, 99, 0.36);
-  background: rgba(235, 36, 99, 0.08);
-  color: #f08aa9;
-  font-family: var(--font-ui);
-  font-size: var(--font-size-xs);
-}
-
 .welcome-center {
   position: absolute;
-  bottom: calc(50% + 100px);
+  bottom: calc(50% + 110px);
   left: 0;
   right: 0;
   display: flex;
@@ -1093,14 +1107,12 @@ onBeforeUnmount(() => {
   z-index: 1;
 }
 
-.welcome-icon {
-  width: clamp(72px, 11vw, 112px);
-  height: auto;
-  margin-bottom: var(--space-14);
-  object-fit: contain;
-  opacity: 0;
-  filter: drop-shadow(0 16px 34px color-mix(in srgb, var(--color-primary) 22%, transparent));
-  animation: welcome-icon-reveal 900ms cubic-bezier(0.22, 1, 0.36, 1) 120ms forwards;
+.agent-page-mode .welcome-center {
+  right: calc((100% - var(--agent-content-offset)) / 2);
+  left: auto;
+  width: min(100%, var(--agent-chat-max-width));
+  transform: translateX(50%);
+  transition: right 200ms ease;
 }
 
 .welcome-title {
@@ -1140,20 +1152,6 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes welcome-icon-reveal {
-  0% {
-    opacity: 0;
-    transform: translateY(18px) scale(0.94);
-  }
-  60% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
 @media (max-width: 820px) {
   .agent-panel.agent-page-mode {
     --agent-content-offset: 0px;
@@ -1169,11 +1167,6 @@ onBeforeUnmount(() => {
 
   .mode-button span {
     display: none;
-  }
-
-  .welcome-icon {
-    width: 76px;
-    margin-bottom: var(--space-10);
   }
 }
 </style>
