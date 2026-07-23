@@ -400,8 +400,8 @@ onMounted(() => {
 }
 
 :root[data-theme="light"] .search-box {
-  background: #f4f4f8;
-  border-color: #dcdce4;
+  background: var(--color-surface);
+  border-color: var(--color-border);
 }
 
 .search-box:focus-within {

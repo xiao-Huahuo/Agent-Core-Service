@@ -6,7 +6,7 @@
   links between the editor, graph preview, settings, and existing console.
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Bot, DatabaseZap, Maximize2, Minus, Moon, Network, Settings, Sun, X } from 'lucide-vue-next'
 
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
@@ -20,17 +20,54 @@ const emit = defineEmits<{
   toggleAgent: []
   openSettings: []
 }>()
-const knowledgeTitle = computed(() => {
-  const activeLibraryName = settingsStore.activeKnowledgeLibrary?.name?.trim()
-  if (activeLibraryName) {
-    return activeLibraryName
-  }
-  const normalizedPath = settingsStore.profile.knowledgeDir.replace(/\\/g, '/')
-  const pathParts = normalizedPath.split('/').filter(Boolean)
-  return pathParts[pathParts.length - 1] || 'Untitled'
+const graphRebuilding = computed(() => workspaceStore.graphQueue.length > 0)
+
+const switchingRoot = ref(false)
+const savingLibraryName = ref(false)
+const libraryNameDraft = ref('')
+const activeLibraryName = computed(() => {
+  return settingsStore.activeKnowledgeLibrary?.name?.trim() || settingsStore.profile.knowledgeDir
 })
 
-const graphRebuilding = computed(() => workspaceStore.graphQueue.length > 0)
+watch(
+  activeLibraryName,
+  (name) => {
+    libraryNameDraft.value = name
+  },
+  { immediate: true },
+)
+
+async function openRootPicker() {
+  if (!window.agentEditorDesktop?.selectDirectory) return
+  const selectedDir = await window.agentEditorDesktop.selectDirectory()
+  if (!selectedDir) return
+  switchingRoot.value = true
+  try {
+    await settingsStore.switchKnowledgeRoot(selectedDir)
+  } catch {
+    // ignore
+  } finally {
+    await workspaceStore.loadKnowledgeTree()
+    workspaceStore.restartFileWatcher()
+    switchingRoot.value = false
+  }
+}
+
+async function commitLibraryName() {
+  const nextName = libraryNameDraft.value.trim()
+  if (!nextName || nextName === activeLibraryName.value) {
+    libraryNameDraft.value = activeLibraryName.value
+    return
+  }
+  savingLibraryName.value = true
+  try {
+    await settingsStore.renameActiveKnowledgeLibrary(nextName)
+  } catch {
+    libraryNameDraft.value = activeLibraryName.value
+  } finally {
+    savingLibraryName.value = false
+  }
+}
 
 async function handleCloseWindow() {
   if (!(await workspaceStore.confirmSaveDirtyBeforeExit())) {
@@ -43,7 +80,27 @@ async function handleCloseWindow() {
 <template>
   <header class="topbar">
     <div class="brand">
-      <strong>元织-{{ knowledgeTitle }}</strong>
+      <div class="brand-copy">
+        <input
+          v-model="libraryNameDraft"
+          class="library-name-input"
+          :disabled="savingLibraryName"
+          :title="settingsStore.profile.knowledgeDir"
+          spellcheck="false"
+          @blur="commitLibraryName"
+          @keydown.enter.prevent="commitLibraryName"
+          @keydown.escape.prevent="libraryNameDraft = activeLibraryName"
+        />
+        <button
+          class="root-path-btn"
+          type="button"
+          :disabled="switchingRoot"
+          :title="settingsStore.profile.knowledgeDir"
+          @click="openRootPicker"
+        >
+          {{ settingsStore.profile.knowledgeDir }}
+        </button>
+      </div>
       <div v-if="workspaceStore.ingestionProgressVisible" class="ingestion-progress" aria-live="polite">
         <span class="ingestion-progress-track" aria-hidden="true">
           <span
@@ -132,8 +189,8 @@ async function handleCloseWindow() {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8);
-  min-height: 38px;
-  padding: 2px var(--space-8);
+  min-height: 46px;
+  padding: 4px var(--space-8);
   background: var(--color-chrome-topbar-bg);
   -webkit-app-region: drag;
   user-select: none;
@@ -149,6 +206,64 @@ async function handleCloseWindow() {
   overflow: hidden;
   flex-shrink: 0;
   z-index: 1;
+  padding-left: var(--space-4);
+}
+
+.brand-copy {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.library-name-input {
+  display: block;
+  width: min(180px, 100%);
+  min-width: 0;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  overflow: hidden;
+  background: transparent;
+  color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.library-name-input:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.root-path-btn {
+  display: block;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
+  font-size: calc(10px * var(--font-scale));
+  line-height: 1.1;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.root-path-btn:hover:not(:disabled) {
+  color: var(--color-primary);
+}
+
+.root-path-btn:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .ingest-button {

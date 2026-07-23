@@ -33,6 +33,7 @@ const props = defineProps<{
   dirtyPaths: Set<string>
   editingPath: string
   editingValue: string
+  staggerIndex?: number
 }>()
 
 const emit = defineEmits<{
@@ -170,7 +171,7 @@ function handleRowDrop(event: DragEvent) {
 </script>
 
 <template>
-  <li>
+  <li :style="{ '--stagger': staggerIndex ?? 0 }">
     <div
       class="tree-row"
       :class="{ selected: selectedPath === node.path || selectedPaths.has(node.path), 'drag-over': dragOver }"
@@ -232,10 +233,11 @@ function handleRowDrop(event: DragEvent) {
     >
       <ul v-if="node.isDir && expandedPaths.has(node.path) && node.children" class="tree-children">
         <TreeNode
-        v-for="child in node.children"
+        v-for="(child, childIndex) in node.children"
         :key="child.path"
         :node="child"
         :depth="depth + 1"
+        :stagger-index="(staggerIndex ?? 0) + childIndex + 1"
         :expanded-paths="expandedPaths"
         :selected-path="selectedPath"
         :selected-paths="selectedPaths"
@@ -262,6 +264,8 @@ function handleRowDrop(event: DragEvent) {
   position: relative;
   display: grid;
   grid-template-columns: 14px 16px minmax(0, 1fr) 58px;
+  animation: tree-node-enter 0.25s ease-out both;
+  animation-delay: calc(var(--stagger, 0) * 40ms);
   align-items: center;
   isolation: isolate;
   gap: var(--space-6);
@@ -437,6 +441,17 @@ function handleRowDrop(event: DragEvent) {
   to {
     transform: translateX(0);
     opacity: 1;
+  }
+}
+
+@keyframes tree-node-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

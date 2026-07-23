@@ -290,8 +290,8 @@ function toggleUnified() {
 }
 
 :root[data-theme="light"] .search-bar {
-  background: #f4f4f8;
-  border-color: #dcdce4;
+  background: var(--color-surface);
+  border-color: var(--color-border);
 }
 
 .search-wrapper.focused .search-bar {
@@ -416,8 +416,8 @@ function toggleUnified() {
 }
 
 :root[data-theme="light"] .search-dropdown {
-  background: #f4f4f8;
-  border-color: #dcdce4;
+  background: var(--color-surface);
+  border-color: var(--color-border);
 }
 
 .toggle-row {

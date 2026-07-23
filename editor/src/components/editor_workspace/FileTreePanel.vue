@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { FilePlus2, FolderPlus, FolderOpen, RefreshCw } from 'lucide-vue-next'
+import { FilePlus2, FolderPlus, RefreshCw } from 'lucide-vue-next'
 
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import TreeNode from '@/components/editor_workspace/TreeNode.vue'
@@ -19,11 +19,7 @@ const settingsStore = useSettingsStore()
 const isDark = computed(() => settingsStore.isDark)
 const workspaceStore = useWorkspaceStore()
 const dragging = ref(false)
-const switchingRoot = ref(false)
-const savingLibraryName = ref(false)
-const rootError = ref('')
 const uploadPicker = ref<HTMLInputElement | null>(null)
-const libraryNameDraft = ref('')
 const contextMenu = ref<{
   open: boolean
   x: number
@@ -32,6 +28,7 @@ const contextMenu = ref<{
 }>({ open: false, x: 0, y: 0, node: null })
 const contextMenuStyle = ref<Record<string, string>>({ left: '0px', top: '0px' })
 const contextMenuRef = ref<{ getBoundingClientRect: () => DOMRect } | null>(null)
+const treeVersion = ref(0)
 const inlineEdit = ref<{
   mode: 'create' | 'rename'
   kind: 'file' | 'folder'
@@ -46,9 +43,6 @@ const selectedTreePath = computed(() => workspaceStore.selectedTreePath || works
 const canPaste = computed(() => Boolean(workspaceStore.fileClipboard) || Boolean(window.agentEditorDesktop?.readClipboardFilePaths))
 const selectedTreeNode = computed(() => findNode(workspaceStore.tree, selectedTreePath.value))
 const visibleTreeNodes = computed(() => flattenVisibleNodes(displayTree.value, workspaceStore.expandedPaths))
-const activeLibraryName = computed(() => {
-  return settingsStore.activeKnowledgeLibrary?.name || settingsStore.profile.knowledgeDir
-})
 const displayTree = computed(() => {
   const edit = inlineEdit.value
   if (!edit || edit.mode !== 'create') {
@@ -63,14 +57,6 @@ const displayTree = computed(() => {
   }
   return insertDraftNode(workspaceStore.tree, edit.parentPath, draftNode)
 })
-
-watch(
-  activeLibraryName,
-  (name) => {
-    libraryNameDraft.value = name
-  },
-  { immediate: true },
-)
 
 function normalizeTreePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
@@ -167,33 +153,10 @@ function insertDraftNode(
   })
 }
 
-async function openRootPicker() {
-  rootError.value = ''
-  actionError.value = ''
-  if (window.agentEditorDesktop?.selectDirectory) {
-    const selectedDir = await window.agentEditorDesktop.selectDirectory()
-    if (!selectedDir) {
-      return
-    }
-    switchingRoot.value = true
-    try {
-      await settingsStore.switchKnowledgeRoot(selectedDir)
-    } catch (error) {
-      rootError.value = error instanceof Error ? error.message : 'Failed to switch knowledge root.'
-      actionError.value = rootError.value
-    } finally {
-      await workspaceStore.loadKnowledgeTree()
-      workspaceStore.restartFileWatcher()
-      switchingRoot.value = false
-    }
-    return
-  }
-  rootError.value = 'Switching a local knowledge root requires the Electron directory picker.'
-  actionError.value = rootError.value
-}
 
 async function refreshFileTree() {
   actionError.value = ''
+  treeVersion.value++
   await workspaceStore.loadKnowledgeTree()
 }
 
@@ -641,24 +604,6 @@ async function toggleIgnoreFromMenu() {
   }
 }
 
-async function commitLibraryName() {
-  const nextName = libraryNameDraft.value.trim()
-  if (!nextName || nextName === activeLibraryName.value) {
-    libraryNameDraft.value = activeLibraryName.value
-    return
-  }
-  savingLibraryName.value = true
-  actionError.value = ''
-  try {
-    await settingsStore.renameActiveKnowledgeLibrary(nextName)
-  } catch (error) {
-    actionError.value = error instanceof Error ? error.message : 'Failed to rename knowledge library.'
-    libraryNameDraft.value = activeLibraryName.value
-  } finally {
-    savingLibraryName.value = false
-  }
-}
-
 function beginCreate(kind: 'file' | 'folder', parentPath = '') {
   actionError.value = ''
   if (parentPath) {
@@ -746,30 +691,6 @@ onUnmounted(() => {
 <template>
   <aside class="file-panel surface-panel" :class="{ dragging, 'theme-dark': isDark, 'theme-light': !isDark }">
     <div class="panel-header">
-      <button
-        class="root-button"
-        type="button"
-        :disabled="switchingRoot"
-        :title="rootError || 'Switch knowledge root'"
-        @click="openRootPicker"
-      >
-        <FolderOpen :size="18" />
-      </button>
-      <div class="root-copy">
-        <input
-          v-model="libraryNameDraft"
-          class="library-name-input"
-          :disabled="savingLibraryName"
-          :title="settingsStore.profile.knowledgeDir"
-          spellcheck="false"
-          @blur="commitLibraryName"
-          @keydown.enter.prevent="commitLibraryName"
-          @keydown.escape.prevent="libraryNameDraft = activeLibraryName"
-        />
-        <span class="root-path" :title="settingsStore.profile.knowledgeDir">
-          {{ settingsStore.profile.knowledgeDir }}
-        </span>
-      </div>
       <button class="header-action" type="button" title="New file" @click="beginCreate('file', '')">
         <FilePlus2 :size="18" />
       </button>
@@ -788,7 +709,7 @@ onUnmounted(() => {
       </button>
       <input
         ref="uploadPicker"
-        class="root-picker"
+        style="display:none"
         type="file"
         multiple
         @change="handleMultiFileChange"
@@ -804,10 +725,11 @@ onUnmounted(() => {
       @contextmenu.prevent="openContextMenu(null, $event)"
     >
       <TreeNode
-        v-for="node in displayTree"
-        :key="node.path"
+        v-for="(node, nodeIndex) in displayTree"
+        :key="`${treeVersion}-${node.path}`"
         :node="node"
         :depth="0"
+        :stagger-index="nodeIndex"
         :expanded-paths="workspaceStore.expandedPaths"
         :selected-path="selectedTreePath"
         :selected-paths="workspaceStore.selectedTreePaths"

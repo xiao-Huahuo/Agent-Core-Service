@@ -101,11 +101,11 @@
 }
 
 :root[data-theme="light"] {
-  --color-chrome-bg-top: rgba(255, 255, 255, 0.94);
-  --color-chrome-bg-bottom: rgba(244, 246, 255, 0.92);
-  --color-chrome-bg-solid: rgba(255, 255, 255, 0.88);
-  --color-chrome-topbar-bg: #f4f5f8;
-  --color-chrome-rail-bg: #f0f1f5;
+  --color-chrome-bg-top: #ffffff;
+  --color-chrome-bg-bottom: #ffffff;
+  --color-chrome-bg-solid: #ffffff;
+  --color-chrome-topbar-bg: #ffffff;
+  --color-chrome-rail-bg: #ffffff;
   --color-canvas: #ffffff;
   --color-canvas-soft: #ffffff;
   --color-surface: #ffffff;
@@ -120,12 +120,12 @@
 
   --color-text-primary: #1a1a1a;
   --color-text-tertiary: rgba(0, 0, 0, 0.3);
-  --color-bg-primary: #f0f0f0;
+  --color-bg-primary: #ffffff;
   --color-bg-card: #ffffff;
-  --color-bg-muted: #f5f5f5;
+  --color-bg-muted: #ffffff;
   --color-bg-hover: rgba(0, 0, 0, 0.04);
   --color-bg-active: rgba(0, 0, 0, 0.06);
-  --color-bg-app: #f0f0f0;
+  --color-bg-app: #ffffff;
   --color-accent-muted: rgba(184, 112, 80, 0.1);
   --color-accent-glow: rgba(184, 112, 80, 0.08);
   --color-green: #00a544;

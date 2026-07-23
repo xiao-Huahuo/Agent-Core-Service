@@ -346,9 +346,7 @@ onBeforeUnmount(() => {
   grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
-  background:
-    linear-gradient(180deg, var(--color-chrome-bg-top), var(--color-chrome-bg-bottom)),
-    var(--color-chrome-bg-solid);
+  background: var(--color-bg-app);
 }
 
 .workspace-grid {
@@ -438,6 +436,7 @@ onBeforeUnmount(() => {
   border-left: 0;
   border-right: 0;
   border-radius: var(--radius-lg);
+  background: var(--color-bg-app);
 }
 
 .agent-col {
