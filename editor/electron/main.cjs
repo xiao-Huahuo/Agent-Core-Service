@@ -10,7 +10,7 @@
  */
 /* eslint-disable @typescript-eslint/no-require-imports */
 
-const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } = require('electron')
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell, Tray, nativeImage } = require('electron')
 const childProcess = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
@@ -20,6 +20,7 @@ const DEV_SERVER_URL = process.env.ELECTRON_RENDERER_URL || 'http://127.0.0.1:51
 const APP_ICON_PATH = path.join(__dirname, '..', 'src', 'assets', 'icons', 'app.ico')
 
 let mainWindow = null
+let tray = null
 
 function buildDropEffectBuffer(mode) {
   const effect = mode === 'cut' ? 2 : 1
@@ -225,6 +226,44 @@ async function loadDevServer(window, attempts = 40) {
   await window.loadURL(DEV_SERVER_URL)
 }
 
+function createTray() {
+  const icon = nativeImage.createFromPath(APP_ICON_PATH)
+  tray = new Tray(icon.resize({ width: 16, height: 16 }))
+  tray.setToolTip('MetaWeave')
+
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.focus()
+      } else {
+        mainWindow.show()
+        mainWindow.focus()
+      }
+    }
+  })
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '显示 / Show',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show()
+          mainWindow.focus()
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      label: '退出 / Quit',
+      click: () => {
+        app.isQuitting = true
+        app.quit()
+      },
+    },
+  ])
+  tray.setContextMenu(contextMenu)
+}
+
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -246,6 +285,16 @@ function createMainWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
+  })
+
+  createTray()
+
+  // Override close to hide to tray instead of quitting.
+  mainWindow.on('close', (event) => {
+    if (!app.isQuitting) {
+      event.preventDefault()
+      mainWindow.hide()
+    }
   })
 
   // Register shell-level clipboard shortcuts. Undo/redo must reach the renderer
@@ -290,8 +339,13 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
+  // Close hides to tray instead of quitting.
+})
+
+app.on('will-quit', () => {
+  if (tray) {
+    tray.destroy()
+    tray = null
   }
 })
 

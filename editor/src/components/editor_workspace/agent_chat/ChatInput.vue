@@ -7,7 +7,7 @@
   above the input area.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { Check, ChevronDown, Globe, Plus, Send, Settings, Shield, X } from 'lucide-vue-next'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import type { AgentAccessMode } from '@/api/agent'
@@ -39,6 +39,7 @@ const emit = defineEmits<{
 const text = ref('')
 const accessModeMenu = ref<HTMLDetailsElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
 
 const accessModeOptions: Array<{ value: AgentAccessMode; label: string; hint: string }> = [
   { value: 'readonly', label: '只读', hint: '全目录只读' },
@@ -51,6 +52,16 @@ const selectedAccessModeLabel = computed(() => {
   return accessModeOptions.find((option) => option.value === selectedAccessMode.value)?.label || '沙盒'
 })
 const displayedModelLabel = computed(() => props.modelLabel?.trim() || '配置模型')
+
+function adjustHeight() {
+  const el = textareaRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  const max = 6 * Math.round(parseFloat(getComputedStyle(el).lineHeight)) + 14
+  el.style.height = `${Math.min(el.scrollHeight, max)}px`
+}
+
+watch(text, () => nextTick(adjustHeight))
 
 function handleSend() {
   const trimmed = text.value.trim()
@@ -130,6 +141,7 @@ function handleFileChange(event: Event) {
         class="input-area"
         :class="{ 'has-reference': !!reference }"
         :disabled="disabled"
+        ref="textareaRef"
         placeholder="输入消息..."
         rows="1"
         @keydown="handleKeydown"
@@ -367,7 +379,7 @@ function handleFileChange(event: Event) {
 .input-area {
   width: 100%;
   min-height: 52px;
-  max-height: 180px;
+  max-height: 140px;
   padding: 14px 14px 0;
   border: 0;
   outline: 0;
@@ -608,10 +620,8 @@ function handleFileChange(event: Event) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 1 1 auto;
   gap: var(--space-4);
   min-width: 0;
-  max-width: 176px;
   height: 28px;
   margin-left: auto;
   padding: 0 var(--space-10);
