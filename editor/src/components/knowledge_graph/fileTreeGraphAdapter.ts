@@ -31,9 +31,9 @@ function normalizeExtension(name: string): string {
 
 function nodeRadius(node: KnowledgeFileNode, depth: number): number {
   if (node.isDir) {
-    return Math.max(9, 15 - depth)
+    return Math.max(6, Math.round((15 - depth) * 2 / 3))
   }
-  return Math.max(5, 10 - Math.min(depth, 4))
+  return Math.max(3, Math.round((10 - Math.min(depth, 4)) * 2 / 3))
 }
 
 function sortedChildren(nodes: KnowledgeFileNode[]): KnowledgeFileNode[] {
@@ -102,7 +102,7 @@ export function buildFileTreeGraph(
       siblingIndex: 0,
       siblingCount: 1,
       ringIndex: 0,
-      radius: 20,
+      radius: 13,
       targetX: 0,
       targetY: 0,
     },

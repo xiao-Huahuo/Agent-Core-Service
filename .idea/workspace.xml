@@ -6,14 +6,11 @@
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="ui小改">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/ui-system.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/ui-system.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/SearchPalette.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/SearchPalette.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/SearchPage.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SearchPage.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/fileTreeGraphAdapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/fileTreeGraphAdapter.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/graphRenderer.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/graphRenderer.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/layeredForceLayout.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/layeredForceLayout.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/semanticGraphAdapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/semanticGraphAdapter.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -283,14 +280,6 @@
       <workItem from="1784638422280" duration="912000" />
       <workItem from="1784688429981" duration="15773000" />
       <workItem from="1784723159028" duration="13415000" />
-    </task>
-    <task id="LOCAL-00154" summary="ui小改">
-      <option name="closed" value="true" />
-      <created>1784290371380</created>
-      <option name="number" value="00154" />
-      <option name="presentableId" value="LOCAL-00154" />
-      <option name="project" value="LOCAL" />
-      <updated>1784290371381</updated>
     </task>
     <task id="LOCAL-00155" summary="准备进行工具观测">
       <option name="closed" value="true" />
@@ -676,7 +665,15 @@
       <option name="project" value="LOCAL" />
       <updated>1784810865964</updated>
     </task>
-    <option name="localTasksCounter" value="203" />
+    <task id="LOCAL-00203" summary="ui小改">
+      <option name="closed" value="true" />
+      <created>1784812293510</created>
+      <option name="number" value="00203" />
+      <option name="presentableId" value="LOCAL-00203" />
+      <option name="project" value="LOCAL" />
+      <updated>1784812293510</updated>
+    </task>
+    <option name="localTasksCounter" value="204" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

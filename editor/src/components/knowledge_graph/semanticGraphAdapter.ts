@@ -12,14 +12,17 @@ import type { KnowledgeSemanticGraphResponse } from '@/types/knowledge'
 
 import type { KnowledgeGraphLink, KnowledgeGraphModel, KnowledgeGraphNode, KnowledgeGraphNodeKind } from './graphTypes'
 
-function nodeRadius(kind: string): number {
+function nodeRadius(kind: string, connectionCount: number): number {
   if (kind === 'document') {
-    return 12
+    return 24
   }
   if (kind === 'entity') {
-    return 8
+    const baseSize = 5
+    const extraConnections = Math.max(0, connectionCount - 1)
+    const increase = Math.min(extraConnections * baseSize * 0.1, baseSize * 0.9)
+    return Math.round(baseSize + increase)
   }
-  return 7
+  return 5
 }
 
 function graphNodeKind(kind: string): KnowledgeGraphNodeKind {
@@ -41,6 +44,13 @@ export function buildSemanticKnowledgeGraph(
   const backendNodes = payload?.nodes ?? []
   const nodeCount = backendNodes.length
 
+  // Count connections per node from backend links
+  const connectionCounts = new Map<string, number>()
+  for (const link of payload?.links ?? []) {
+    connectionCounts.set(link.source, (connectionCounts.get(link.source) ?? 0) + 1)
+    connectionCounts.set(link.target, (connectionCounts.get(link.target) ?? 0) + 1)
+  }
+
   // Spread nodes in a circle as initial positions so d3-force doesn't
   // pile everything at the canvas center.  The force simulation will
   // pull related nodes together naturally.
@@ -60,7 +70,7 @@ export function buildSemanticKnowledgeGraph(
       siblingIndex: index,
       siblingCount: nodeCount,
       ringIndex: 0,
-      radius: nodeRadius(node.kind),
+      radius: nodeRadius(node.kind, connectionCounts.get(node.id) ?? 0),
       targetX: Math.cos(angle) * radius,
       targetY: Math.sin(angle) * radius,
       x: Math.cos(angle) * radius,

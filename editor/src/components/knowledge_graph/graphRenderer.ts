@@ -236,7 +236,9 @@ function drawLink(
   ctx.moveTo(sourceX, sourceY)
   ctx.lineTo(targetX, targetY)
   ctx.strokeStyle = theme.edge
-  ctx.lineWidth = 0.85
+  const bothEntity = source.kind === 'entity' && target.kind === 'entity'
+  const oneEntity = source.kind === 'entity' || target.kind === 'entity'
+  ctx.lineWidth = bothEntity ? 1.2 : oneEntity ? 0.3 : 0.6
   ctx.stroke()
   ctx.restore()
   if (!touchesHovered || hoverProgress <= 0) {
@@ -256,7 +258,7 @@ function drawLink(
   ctx.shadowColor = hoverColor
   ctx.shadowBlur = 10 * hoverProgress
   ctx.strokeStyle = hoverColor
-  ctx.lineWidth = 1.2 + 1.3 * hoverProgress
+  ctx.lineWidth = 0.8 + 0.9 * hoverProgress
   ctx.beginPath()
   ctx.moveTo(startX, startY)
   ctx.lineTo(glowEndX, glowEndY)
