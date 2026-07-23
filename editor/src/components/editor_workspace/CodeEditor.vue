@@ -550,7 +550,6 @@ onBeforeUnmount(() => {
   <section class="code-editor">
     <div class="code-editor-header">
       <span>{{ language || 'text' }}</span>
-      <span v-if="isMarkdown" class="code-editor-shortcuts">Ctrl+S 保存 · Ctrl+F 查找 · Ctrl+B/I/D 格式</span>
     </div>
     <div v-if="findBarOpen" class="find-replace-bar">
       <div class="find-field-wrapper">
@@ -663,13 +662,6 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
   font-family: var(--font-ui);
   font-size: calc(11px * var(--font-scale));
-}
-
-.code-editor-shortcuts {
-  overflow: hidden;
-  color: var(--color-text-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .find-replace-bar {
@@ -909,10 +901,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 820px) {
-  .code-editor-shortcuts {
-    display: none;
-  }
-
   .find-replace-actions {
     flex-wrap: wrap;
   }

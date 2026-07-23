@@ -320,15 +320,17 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
 .markdown-body :deep(h5),
 .markdown-body :deep(h6) {
   margin: var(--space-16) 0 var(--space-8);
-  color: var(--color-text-primary);
   font-family: var(--font-chat);
   font-weight: 650;
   line-height: var(--line-height-tight);
 }
 
-.markdown-body :deep(h1) { font-size: var(--font-size-xl); }
-.markdown-body :deep(h2) { font-size: var(--font-size-lg); }
-.markdown-body :deep(h3) { font-size: var(--font-size-md); }
+.markdown-body :deep(h1) { color: var(--color-primary); font-size: calc(2rem * var(--font-scale)); }
+.markdown-body :deep(h2) { color: color-mix(in srgb, var(--color-primary) 86.7%, white); font-size: calc(1.35rem * var(--font-scale)); }
+.markdown-body :deep(h3) { color: color-mix(in srgb, var(--color-primary) 73.3%, white); font-size: calc(1.05rem * var(--font-scale)); }
+.markdown-body :deep(h4) { color: color-mix(in srgb, var(--color-primary) 60%, white); font-size: calc(0.9rem * var(--font-scale)); }
+.markdown-body :deep(h5) { color: color-mix(in srgb, var(--color-primary) 46.7%, white); font-size: calc(0.825rem * var(--font-scale)); }
+.markdown-body :deep(h6) { color: color-mix(in srgb, var(--color-primary) 33.3%, white); font-size: calc(0.75rem * var(--font-scale)); }
 
 .markdown-body :deep(code) {
   padding: 1px 4px;
@@ -359,6 +361,10 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
 .markdown-body :deep(ol) {
   margin: var(--space-8) 0;
   padding-left: var(--space-24);
+}
+
+.markdown-body :deep(li)::marker {
+  color: var(--color-primary);
 }
 
 .markdown-body :deep(blockquote) {

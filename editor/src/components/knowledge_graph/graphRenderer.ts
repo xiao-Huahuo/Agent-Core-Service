@@ -239,7 +239,7 @@ function drawLink(
   ctx.strokeStyle = theme.edge
   const bothEntity = source.kind === 'entity' && target.kind === 'entity'
   const oneEntity = source.kind === 'entity' || target.kind === 'entity'
-  ctx.lineWidth = bothEntity ? 1.2 : oneEntity ? 0.3 : 0.6
+  ctx.lineWidth = bothEntity ? 0.6 : oneEntity ? 0.3 : 0.6
   ctx.stroke()
   ctx.restore()
   if (!touchesHovered || hoverProgress <= 0) {

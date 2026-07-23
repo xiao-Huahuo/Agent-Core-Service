@@ -4,12 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="图谱小改">
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/KnowledgeGraphCanvas.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/KnowledgeGraphCanvas.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/graphRenderer.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/graphRenderer.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/layeredForceLayout.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/layeredForceLayout.ts" afterDir="false" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="图谱定格与释放">
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MarkdownContent.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MarkdownContent.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -279,14 +276,6 @@
       <workItem from="1784638422280" duration="912000" />
       <workItem from="1784688429981" duration="15773000" />
       <workItem from="1784723159028" duration="13415000" />
-    </task>
-    <task id="LOCAL-00156" summary="工具观测增强">
-      <option name="closed" value="true" />
-      <created>1784295968577</created>
-      <option name="number" value="00156" />
-      <option name="presentableId" value="LOCAL-00156" />
-      <option name="project" value="LOCAL" />
-      <updated>1784295968577</updated>
     </task>
     <task id="LOCAL-00157" summary="UI小调整">
       <option name="closed" value="true" />
@@ -672,14 +661,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784813948710</updated>
     </task>
-    <option name="localTasksCounter" value="205" />
+    <task id="LOCAL-00205" summary="图谱定格与释放">
+      <option name="closed" value="true" />
+      <created>1784814615906</created>
+      <option name="number" value="00205" />
+      <option name="presentableId" value="LOCAL-00205" />
+      <option name="project" value="LOCAL" />
+      <updated>1784814615906</updated>
+    </task>
+    <option name="localTasksCounter" value="206" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="编辑区顶栏" />
     <MESSAGE value="可视化的入库进度页面" />
     <MESSAGE value="最近删除页面" />
     <MESSAGE value="修复了入库历史显示问题;添加二进制检测" />
@@ -704,7 +700,8 @@
     <MESSAGE value="隐藏到托盘" />
     <MESSAGE value="ui小改" />
     <MESSAGE value="图谱小改" />
-    <option name="LAST_COMMIT_MESSAGE" value="图谱小改" />
+    <MESSAGE value="图谱定格与释放" />
+    <option name="LAST_COMMIT_MESSAGE" value="图谱定格与释放" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />

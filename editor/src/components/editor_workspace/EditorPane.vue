@@ -85,10 +85,10 @@ const splitBodyStyle = computed(() => {
   return { gridTemplateColumns: `${r * 100}% 6px ${(1 - r) * 100}%` } as const
 })
 
-const modeButtons: Array<{ mode: EditorViewMode; label: string; shortcut: string; icon: typeof Pencil }> = [
-  { mode: 'edit', label: 'Edit', shortcut: 'Ctrl+E', icon: Pencil },
-  { mode: 'preview', label: 'Preview', shortcut: 'Ctrl+P', icon: Eye },
-  { mode: 'split', label: 'Split', shortcut: 'Ctrl+T', icon: Columns2 },
+const modeButtons: Array<{ mode: EditorViewMode; label: string; icon: typeof Pencil }> = [
+  { mode: 'edit', label: 'Edit', icon: Pencil },
+  { mode: 'preview', label: 'Preview', icon: Eye },
+  { mode: 'split', label: 'Split', icon: Columns2 },
 ]
 
 let resizeObserver: ResizeObserver | null = null
@@ -247,7 +247,6 @@ watch(
           >
             <component :is="button.icon" :size="14" />
             <span>{{ button.label }}</span>
-            <kbd>{{ button.shortcut }}</kbd>
           </button>
         </div>
         <button
