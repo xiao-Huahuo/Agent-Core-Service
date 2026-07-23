@@ -148,7 +148,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 
 <template>
   <div v-if="message.role === 'assistant' && message.node === 'action' && hasToolTrace" class="action-row">
-    <ToolCallInline :traces="message.trace ?? []" />
+    <ToolCallInline :traces="message.trace ?? []" :is-streaming="isStreaming" />
   </div>
 
   <div v-else-if="shouldRenderAssistant" class="bubble-row assistant tool-assistant-row">

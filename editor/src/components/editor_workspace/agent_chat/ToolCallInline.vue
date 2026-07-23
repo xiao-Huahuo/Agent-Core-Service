@@ -12,6 +12,7 @@ import { ChevronDown } from 'lucide-vue-next'
 
 const props = defineProps<{
   traces?: Array<Record<string, unknown>>
+  isStreaming?: boolean
 }>()
 
 interface ToolDisplayEntry {
@@ -318,13 +319,17 @@ const toolEntries = computed(() => {
         })
       }
     })
+  const pendingEntries = props.isStreaming
+    ? Array.from(pendingStarts.values()).map((entry) => ({
+        ...entry,
+        pending: true,
+        rawContents: [],
+        toolName: '',
+      }))
+    : []
+
   return [
-    ...Array.from(pendingStarts.values()).map((entry) => ({
-      ...entry,
-      pending: true,
-      rawContents: [],
-      toolName: '',
-    })),
+    ...pendingEntries,
     ...Array.from(merged.values())
     .map((entry) => ({
       key: `${entry.tool_name}-${entry.terminal_command || entry.call_count}`,
@@ -342,7 +347,6 @@ const toolEntries = computed(() => {
   <div v-for="entry in toolEntries" :key="entry.key" class="tool-call-box" :class="{ expandable: !entry.pending && entry.rawContents.length > 0 }">
     <div class="tool-call-header">
       <span v-if="entry.pending" class="tool-loader" aria-hidden="true"></span>
-      <span class="tool-text">{{ entry.text }}</span>
       <button
         v-if="!entry.pending && entry.rawContents.length > 0"
         class="tool-expand-btn"
@@ -353,6 +357,7 @@ const toolEntries = computed(() => {
       >
         <ChevronDown :size="16" />
       </button>
+      <span class="tool-text" :class="{ pending: entry.pending }">{{ entry.text }}</span>
     </div>
     <div
       v-if="!entry.pending && entry.rawContents.length > 0"
@@ -449,13 +454,7 @@ const toolEntries = computed(() => {
   box-sizing: border-box;
   width: 100%;
   margin-bottom: var(--space-6);
-  padding: var(--space-8) var(--space-12);
-  border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 8px;
-  background:
-    linear-gradient(90deg, rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.07) 48%, transparent),
-    rgba(255, 255, 255, 0.025);
-  backdrop-filter: blur(10px);
   animation: tool-slide-in 220ms ease-out;
 }
 
@@ -467,15 +466,14 @@ const toolEntries = computed(() => {
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  padding: var(--space-8) var(--space-12);
   min-height: 32px;
 }
 
 .tool-loader {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
-  border: 2px solid rgba(148, 163, 184, 0.22);
+  border: 2px solid rgba(148, 163, 184, 0.35);
   border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: tool-loader-spin 720ms linear infinite;
@@ -491,6 +489,22 @@ const toolEntries = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tool-text.pending {
+  background: linear-gradient(
+    90deg,
+    var(--color-text-secondary) 0%,
+    var(--color-text-secondary) 40%,
+    var(--color-accent) 50%,
+    var(--color-text-secondary) 60%,
+    var(--color-text-secondary) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: tool-shimmer 2.4s ease-in-out infinite;
 }
 
 .tool-expand-btn {
@@ -535,7 +549,13 @@ const toolEntries = computed(() => {
 
 .tool-result-content {
   overflow: hidden;
-  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  background: transparent;
+}
+
+.tool-result-collapse.open .tool-result-content {
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  margin-top: var(--space-4);
 }
 
 .tool-result-text {
@@ -782,6 +802,15 @@ const toolEntries = computed(() => {
 @keyframes tool-loader-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes tool-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -100% 0;
   }
 }
 </style>
