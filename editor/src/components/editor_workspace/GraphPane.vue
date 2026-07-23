@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { AlertCircle, Crosshair, RefreshCw, RotateCcw, Search, Type, X } from 'lucide-vue-next'
+import { AlertCircle, Crosshair, Pause, Play, RefreshCw, Search, Type, X } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
 import { fetchKnowledgeGraph, getKnowledgeGraphStatus, rebuildKnowledgeGraph } from '@/api/knowledge'
@@ -143,6 +143,16 @@ function refreshGraph() {
     return
   }
   void workspaceStore.loadKnowledgeTree()
+}
+
+function toggleFreeze() {
+  const canvas = graphCanvasRef.value
+  if (!canvas) return
+  if (canvas.frozen) {
+    canvas.unfreezeSimulation()
+  } else {
+    canvas.freezeSimulation()
+  }
 }
 
 async function loadSemanticGraph() {
@@ -302,9 +312,9 @@ watch(
           <RefreshCw :size="15" />
           <span>抽取</span>
         </button>
-        <button class="graph-action" type="button" title="Reheat layout" @click="graphCanvasRef?.reheatLayout()">
-          <RotateCcw :size="15" />
-          <span>重排</span>
+        <button class="graph-action" type="button" :title="graphCanvasRef?.frozen ? '释放' : '定格'" @click="toggleFreeze">
+          <component :is="graphCanvasRef?.frozen ? Play : Pause" :size="15" />
+          <span>{{ graphCanvasRef?.frozen ? '释放' : '定格' }}</span>
         </button>
       </div>
     </header>

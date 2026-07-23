@@ -160,6 +160,7 @@ function drawGlowCircle(
   radius: number,
   color: string,
   progress: number,
+  theme: KnowledgeGraphRenderTheme,
 ) {
   if (progress <= 0) {
     return
@@ -172,7 +173,7 @@ function drawGlowCircle(
   ctx.fill()
   ctx.globalAlpha = 1
   ctx.shadowColor = color
-  ctx.shadowBlur = 14 * progress
+  ctx.shadowBlur = (theme.isDark ? 48 : 14) * progress
   ctx.strokeStyle = color
   ctx.lineWidth = 0.9 + 0.5 * progress
   ctx.stroke()
@@ -184,7 +185,7 @@ function applyAmbientNodeGlow(ctx: CanvasRenderingContext2D, color: string, them
     return
   }
   ctx.shadowColor = color
-  ctx.shadowBlur = 7
+  ctx.shadowBlur = 24
   ctx.shadowOffsetX = 0
   ctx.shadowOffsetY = 0
 }
@@ -256,7 +257,7 @@ function drawLink(
   ctx.save()
   ctx.globalAlpha = 0.2 + 0.8 * hoverProgress
   ctx.shadowColor = hoverColor
-  ctx.shadowBlur = 10 * hoverProgress
+  ctx.shadowBlur = (theme.isDark ? 30 : 10) * hoverProgress
   ctx.strokeStyle = hoverColor
   ctx.lineWidth = 0.8 + 0.9 * hoverProgress
   ctx.beginPath()
@@ -289,9 +290,9 @@ function drawNode(
   ctx.save()
   ctx.globalAlpha = hasActive && !isRelated ? 0.38 : 1
   if (glowProgress > 0) {
-    drawGlowCircle(ctx, x, y, node.radius, color, glowProgress)
+    drawGlowCircle(ctx, x, y, node.radius, color, glowProgress, theme)
     ctx.shadowColor = color
-    ctx.shadowBlur = 8 + 8 * glowProgress
+    ctx.shadowBlur = (theme.isDark ? 24 : 8) + (theme.isDark ? 24 : 8) * glowProgress
   } else {
     applyAmbientNodeGlow(ctx, color, theme)
   }

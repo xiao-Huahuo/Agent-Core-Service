@@ -38,6 +38,7 @@ const hostRef = ref<HTMLElement | null>(null)
 const runtimeModel = shallowRef<KnowledgeGraphModel>({ nodes: [], links: [] })
 const hoveredNodeId = ref('')
 const selectedNodeId = ref(props.selectedNodeId ?? '')
+const frozen = ref(false)
 const viewport = ref<KnowledgeGraphViewport>({ x: 0, y: 0, scale: 1 })
 const canvasSize = ref({ width: 1, height: 1 })
 const loadingOverlay = ref(false)
@@ -333,6 +334,9 @@ function handlePointerUp(event: PointerEvent) {
   }
   if (node && !movedDuringPointer) {
     selectNode(node)
+  } else if (!node && !movedDuringPointer) {
+    selectedNodeId.value = ''
+    requestDraw()
   }
   pointerMode = 'none'
   activePointerId = 0
@@ -407,9 +411,22 @@ watch(
   () => requestDraw(),
 )
 
+function freezeSimulation() {
+  simulation?.stop()
+  frozen.value = true
+}
+
+function unfreezeSimulation() {
+  simulation?.restart()
+  frozen.value = false
+}
+
 defineExpose({
   fitToView,
   reheatLayout,
+  freezeSimulation,
+  unfreezeSimulation,
+  frozen,
   graphStats,
 })
 </script>

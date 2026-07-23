@@ -209,8 +209,9 @@ export function createLayeredForceSimulation(
     .force('x', forceX<KnowledgeGraphNode>((node) => node.targetX).strength(options.anchorStrength))
     .force('y', forceY<KnowledgeGraphNode>((node) => node.targetY).strength(options.anchorStrength))
     .force('center', forceCenter(width / 2, height / 2))
-    .alpha(semantic ? 0.45 : 0.95)
-    .alphaDecay(semantic ? 0.018 : 0.035);
+    .alpha(semantic ? 0.12 : 0.95)
+    .alphaDecay(semantic ? 0 : 0.035)
+    .alphaMin(semantic ? 0 : 0.001);
   if (semantic) {
     simulation.force('document-repulsion', forceDocumentRepulsion(5000))
   }
