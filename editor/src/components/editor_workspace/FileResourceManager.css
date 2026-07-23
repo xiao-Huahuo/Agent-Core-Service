@@ -470,7 +470,7 @@
 }
 
 .index-icon.indexed {
-  color: #2fb344;
+  color: var(--color-primary);
 }
 
 .index-icon.ignored {
@@ -478,7 +478,7 @@
 }
 
 .index-icon.failed {
-  color: #f59f00;
+  color: var(--color-danger);
 }
 
 .index-status-cell,
@@ -486,11 +486,11 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
-  color: var(--color-danger);
+  color: var(--color-text-muted);
 }
 
 .index-status-cell.indexed {
-  color: #2fb344;
+  color: var(--color-primary);
 }
 
 .index-status-cell.ignored {
@@ -498,15 +498,15 @@
 }
 
 .index-status-cell.failed {
-  color: #f59f00;
+  color: var(--color-danger);
 }
 
 .graph-status-cell {
-  color: #4dabf7;
+  color: var(--color-text-muted);
 }
 
 .graph-status-cell.graphed {
-  color: #15aabf;
+  color: var(--color-primary);
 }
 
 .graph-status-cell.dirty {
@@ -514,7 +514,7 @@
 }
 
 .graph-status-cell.ignored {
-  color: #748ffc;
+  color: var(--color-text-muted);
 }
 
 .material-file-icon {

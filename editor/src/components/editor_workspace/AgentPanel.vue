@@ -568,8 +568,8 @@ onBeforeUnmount(() => {
 .agent-panel.agent-page-mode {
   --agent-drawer-width: 280px;
   --agent-content-offset: 0px;
-  --agent-chat-max-width: min(72vw, 960px);
-  --agent-input-max-width: min(52vw, 720px);
+  --agent-chat-max-width: min(85vw, 1100px);
+  --agent-input-max-width: min(75vw, 960px);
   --agent-topbar-height: 48px;
   border: 0;
   background: var(--color-canvas-soft);
@@ -578,8 +578,8 @@ onBeforeUnmount(() => {
 
 .agent-panel.agent-page-mode.agent-drawer-open {
   --agent-content-offset: var(--agent-drawer-width);
-  --agent-chat-max-width: min(calc(100vw - var(--agent-content-offset) - 48px), 960px);
-  --agent-input-max-width: min(calc(100vw - var(--agent-content-offset) - 96px), 720px);
+  --agent-chat-max-width: min(calc(100vw - var(--agent-content-offset) - 48px), 1100px);
+  --agent-input-max-width: min(calc(100vw - var(--agent-content-offset) - 96px), 960px);
 }
 
 .agent-panel.attachment-drop-active {

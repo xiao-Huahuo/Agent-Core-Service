@@ -1122,35 +1122,9 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.theme-row button.theme-dark.active {
-  border-color: #EB2463;
-  color: #EB2463;
-}
-
-.theme-row button.theme-light.active {
-  border-color: #4224EB;
-  color: #4224EB;
-}
-
-.theme-row button.theme-system.active {
-  position: relative;
-  border: 1px solid transparent;
-  background: transparent;
-  color: #4224EB;
-  font-weight: 600;
-}
-
-.theme-row button.theme-system.active::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  padding: 1px;
-  background: linear-gradient(90deg, #EB2463, #4224EB);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
+.theme-row button.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .color-control {

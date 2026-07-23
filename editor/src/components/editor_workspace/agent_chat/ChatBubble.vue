@@ -315,7 +315,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   display: flex;
   align-items: flex-start;
   gap: var(--space-8);
-  max-width: min(84%, 500px);
+  max-width: min(90%, 960px);
   margin-bottom: var(--space-12);
 }
 

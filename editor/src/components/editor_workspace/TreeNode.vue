@@ -376,7 +376,7 @@ function handleRowDrop(event: DragEvent) {
 
 .node-index-dot {
   justify-self: center;
-  color: var(--color-danger);
+  color: var(--color-text-muted);
 }
 
 .node-index-placeholder {
@@ -386,7 +386,7 @@ function handleRowDrop(event: DragEvent) {
 }
 
 .node-index-dot.indexed {
-  color: #2fb344;
+  color: var(--color-primary);
 }
 
 .node-index-dot.ignored {
@@ -394,16 +394,16 @@ function handleRowDrop(event: DragEvent) {
 }
 
 .node-index-dot.failed {
-  color: #f59f00;
+  color: var(--color-danger);
 }
 
 .node-graph-dot {
   justify-self: center;
-  color: #4dabf7;
+  color: var(--color-text-muted);
 }
 
 .node-graph-dot.graphed {
-  color: #15aabf;
+  color: var(--color-primary);
 }
 
 .node-graph-dot.dirty {
@@ -411,7 +411,7 @@ function handleRowDrop(event: DragEvent) {
 }
 
 .node-graph-dot.ignored {
-  color: #748ffc;
+  color: var(--color-text-muted);
 }
 
 .material-file-icon {
