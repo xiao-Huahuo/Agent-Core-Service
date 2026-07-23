@@ -44,6 +44,7 @@ const isBootstrapping = ref(false)
 const referenceText = ref('')
 const messageListRef = ref<MessageListApi | null>(null)
 const isMessageListAtBottom = ref(true)
+const contextWindowTokens = ref(128000)
 const dragDepth = ref(0)
 const isUploadingAttachment = ref(false)
 const uploadStatusText = ref('')
@@ -179,6 +180,7 @@ async function loadCurrentModelConfig() {
   try {
     const config = await fetchLLMConfig(userId.value)
     currentLargeModelName.value = config.model_name?.trim() || ''
+    contextWindowTokens.value = config.context_window_tokens ?? 128000
   } catch {
     currentLargeModelName.value = ''
   }
@@ -503,6 +505,8 @@ onBeforeUnmount(() => {
         :attachments="chatStore.pendingAttachments"
         :suggestions="chatStore.taskSuggestions"
         :suggestions-loading="chatStore.suggestionsLoading"
+        :messages="chatStore.messages"
+        :max-context-tokens="contextWindowTokens"
         @send="sendMessage"
         @select-suggestion="sendSuggestion"
         @toggle-web-search="handleToggleWebSearch"
@@ -1059,6 +1063,8 @@ onBeforeUnmount(() => {
 .agent-page-mode .scroll-bottom-button {
   left: calc(var(--agent-content-offset) + (100% - var(--agent-content-offset)) / 2);
 }
+
+
 
 .thinking-flow {
   position: absolute;

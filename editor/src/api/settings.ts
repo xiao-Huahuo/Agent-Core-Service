@@ -324,6 +324,7 @@ export interface LLMConfigResponse {
   effective_small_api_key?: string
   effective_small_base_url?: string
   effective_small_model_name?: string
+  context_window_tokens?: number
   updated_at: string
 }
 

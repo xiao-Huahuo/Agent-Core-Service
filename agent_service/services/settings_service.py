@@ -670,6 +670,8 @@ class SettingsService:
             "effective_small_api_key": effective_small_api_key,
             "effective_small_base_url": effective_small_base_url,
             "effective_small_model_name": effective_small_model_name,
+            "summary_trigger_tokens": self.config.memory.summary_trigger_tokens,
+            "context_window_tokens": self.config.memory.context_window_tokens,
             "updated_at": config.updated_at.isoformat(),
         }
 

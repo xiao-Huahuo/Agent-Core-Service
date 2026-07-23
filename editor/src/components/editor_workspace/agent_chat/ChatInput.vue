@@ -10,6 +10,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Check, ChevronDown, Globe, Plus, Send, Settings, Shield, X } from 'lucide-vue-next'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
+import ContextProgress from '@/components/editor_workspace/agent_chat/ContextProgress.vue'
 import type { AgentAccessMode } from '@/api/agent'
 import type { AgentUploadedAttachment } from '@/stores/chat'
 
@@ -23,6 +24,8 @@ const props = defineProps<{
   attachments?: AgentUploadedAttachment[]
   suggestions?: string[]
   suggestionsLoading?: boolean
+  messages?: unknown[]
+  maxContextTokens?: number
 }>()
 
 const emit = defineEmits<{
@@ -271,6 +274,10 @@ function handleFileChange(event: Event) {
           <Settings :size="13" />
           <span>{{ displayedModelLabel }}</span>
         </button>
+        <ContextProgress
+          :messages="props.messages"
+          :max-context-tokens="props.maxContextTokens"
+        />
         <button class="send-btn" :disabled="disabled || !text.trim()" type="button" title="发送" @click="handleSend">
           <Send :size="15" />
         </button>
