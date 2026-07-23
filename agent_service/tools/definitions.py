@@ -147,7 +147,8 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
             "在项目终端沙盒中执行一个或多个结构化指令段。必须传 shell、segments、cwd; "
             "禁止传整条 shell 字符串。支持 external_program 外部程序段,以及 pwd/ls/dir/cat/type/head/tail/stat/wc "
             "等内部读取指令和 write/append/touch/mkdir/rm/mv 等内部写入指令。沙盒模式允许内部读取穿透目录外,"
-            "但写入和外部程序执行仍限制在终端工作区内。"
+            "但写入和外部程序执行仍限制在终端工作区内。完全访问模式下还额外支持 kill/taskkill 杀进程,"
+            "且内部指令参数限制大幅放宽(如 rm -rf、mkdir -p、多文件 cat/stat/wc、批量 touch 等)。"
         ),
         args_schema={
             "type": "object",

@@ -348,3 +348,301 @@ def test_terminal_sandbox_defaults_to_active_knowledge_dir(tmp_path: Path) -> No
     payload = settings_service.get_terminal_sandbox_config(user_id="user_terminal")
 
     assert Path(payload["config"]["workspace_root"]) == knowledge_dir.resolve()
+
+
+# ── Full access mode: internal command flexibility ──────────────────────────
+
+
+def test_full_access_rm_rf_recursive(tmp_path: Path) -> None:
+    """完全访问下 rm -rf 应能递归删除目录树。"""
+
+    subdir = tmp_path / "data" / "nested"
+    subdir.mkdir(parents=True)
+    (subdir / "file.txt").write_text("hello", encoding="utf-8")
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_FULL)
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "rm", "args": ["-rf", "data"]}],
+    )
+
+    assert result["ok"] is True
+    assert not (tmp_path / "data").exists()
+
+
+def test_sandbox_rm_rejects_multiple_args(tmp_path: Path) -> None:
+    """沙盒模式下 rm 拒绝多个参数或 -rf 标志。"""
+
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path))
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "rm", "args": ["-rf", "data"]}],
+    )
+
+    assert result["ok"] is False
+    assert "必须且只能指定一个路径" in result["results"][0]["stderr"]
+
+
+def test_full_access_cat_multiple_files(tmp_path: Path) -> None:
+    """完全访问下 cat 支持多个文件。"""
+
+    (tmp_path / "a.txt").write_text("aaa", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("bbb", encoding="utf-8")
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_FULL)
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "cat", "args": ["a.txt", "b.txt"]}],
+    )
+
+    assert result["ok"] is True
+    assert result["results"][0]["stdout"] == "aaa\nbbb"
+
+
+def test_full_access_stat_multiple_paths(tmp_path: Path) -> None:
+    """完全访问下 stat 支持多个路径。"""
+
+    (tmp_path / "a.txt").write_text("hello", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("world", encoding="utf-8")
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_FULL)
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "stat", "args": ["a.txt", "b.txt"]}],
+    )
+
+    assert result["ok"] is True
+    stdout = result["results"][0]["stdout"]
+    assert "a.txt" in stdout
+    assert "b.txt" in stdout
+    assert "---" in stdout
+
+
+def test_full_access_wc_multiple_files(tmp_path: Path) -> None:
+    """完全访问下 wc 支持多个文件。"""
+
+    (tmp_path / "a.txt").write_text("one\ntwo\n", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("three\n", encoding="utf-8")
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_FULL)
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "wc", "args": ["a.txt", "b.txt"]}],
+    )
+
+    assert result["ok"] is True
+    stdout = result["results"][0]["stdout"]
+    assert "a.txt" in stdout
+    assert "b.txt" in stdout
+
+
+def test_full_access_touch_multiple_files(tmp_path: Path) -> None:
+    """完全访问下 touch 支持多个文件。"""
+
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_FULL)
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "touch", "args": ["f1.txt", "f2.txt"]}],
+    )
+
+    assert result["ok"] is True
+    assert (tmp_path / "f1.txt").exists()
+    assert (tmp_path / "f2.txt").exists()
+
+
+def test_full_access_mkdir_p_multiple(tmp_path: Path) -> None:
+    """完全访问下 mkdir -p 支持创建多层嵌套目录。"""
+
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_FULL)
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "mkdir", "args": ["-p", "a/b/c", "d/e/f"]}],
+    )
+
+    assert result["ok"] is True
+    assert (tmp_path / "a" / "b" / "c").is_dir()
+    assert (tmp_path / "d" / "e" / "f").is_dir()
+
+
+def test_sandbox_mkdir_rejects_multiple_args(tmp_path: Path) -> None:
+    """沙盒模式下 mkdir 拒绝多个参数。"""
+
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path))
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "mkdir", "args": ["dir1", "dir2"]}],
+    )
+
+    assert result["ok"] is False
+    assert "必须且只能指定一个目录路径" in result["results"][0]["stderr"]
+
+
+def test_full_access_mv_bulk(tmp_path: Path) -> None:
+    """完全访问下 mv 支持批量移动到目标目录。"""
+
+    (tmp_path / "a.txt").write_text("a", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("b", encoding="utf-8")
+    target_dir = tmp_path / "dest"
+    target_dir.mkdir()
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_FULL)
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "mv", "args": ["a.txt", "b.txt", "dest"]}],
+    )
+
+    assert result["ok"] is True
+    assert (target_dir / "a.txt").exists()
+    assert (target_dir / "b.txt").exists()
+    assert not (tmp_path / "a.txt").exists()
+
+
+# ── Full access mode: process kill capability ───────────────────────────────
+
+
+def test_sandbox_blocks_kill(tmp_path: Path) -> None:
+    """沙盒模式下 kill 被禁止。"""
+
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path))
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "kill", "args": ["99999"]}],
+    )
+
+    assert result["ok"] is False
+    assert "只能在完全访问权限下执行" in result["results"][0]["stderr"]
+
+
+def test_readonly_blocks_kill(tmp_path: Path) -> None:
+    """只读模式下 kill 被禁止。"""
+
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_READONLY)
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "taskkill", "args": ["/PID", "99999"]}],
+    )
+
+    assert result["ok"] is False
+    assert "只能在完全访问权限下执行" in result["results"][0]["stderr"]
+
+
+def test_full_access_kill_nonexistent_pid(tmp_path: Path) -> None:
+    """完全访问下 kill 尝试杀不存在的进程应返回错误（而非崩溃）。"""
+
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_FULL)
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "kill", "args": ["999999999"]}],
+    )
+
+    assert result["ok"] is False
+    assert "杀进程失败" in result["results"][0]["stderr"]
+
+
+# ── Sandbox mode: strict arg validation still works ─────────────────────────
+
+
+def test_sandbox_cat_rejects_multiple_files(tmp_path: Path) -> None:
+    """沙盒模式下 cat 仍然只允许一个文件路径。"""
+
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path))
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "cat", "args": ["a.txt", "b.txt"]}],
+    )
+
+    assert result["ok"] is False
+    assert "必须且只能指定一个文件路径" in result["results"][0]["stderr"]
+
+
+def test_sandbox_touch_rejects_multiple_files(tmp_path: Path) -> None:
+    """沙盒模式下 touch 仍然只允许一个文件路径。"""
+
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path))
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "touch", "args": ["a.txt", "b.txt"]}],
+    )
+
+    assert result["ok"] is False
+    assert "必须且只能指定一个文件路径" in result["results"][0]["stderr"]
+
+
+# ── Full access: program validation still applies for external programs ──────
+
+
+def test_full_access_still_blocks_nested_shell(tmp_path: Path) -> None:
+    """完全访问下嵌套 shell 仍被全局 denylist 拦截。"""
+
+    config = AgentConfig.load_config(
+        {
+            "terminal_sandbox": {
+                "enabled": True,
+                "default_workspace_root": str(tmp_path),
+                "allowed_programs": {"cmd": ["cmd"], "powershell": [], "bash": []},
+            }
+        },
+        load_env=False,
+        load_dotenv=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    sandbox = TerminalSandbox(
+        settings=TerminalSandboxSettings.from_config_payload(config=config),
+        access_mode=AGENT_ACCESS_FULL,
+    )
+
+    with pytest.raises(ValueError, match="被沙盒禁止"):
+        sandbox.run(shell="cmd", cwd=".", segments=[{"program": "cmd", "args": ["/c", "dir"]}])
+
+
+def test_full_access_still_blocks_python_inline(tmp_path: Path) -> None:
+    """完全访问下 python -c 内联代码仍被拦截（安全红线）。"""
+
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_FULL)
+
+    with pytest.raises(ValueError, match="内联代码"):
+        sandbox.run(shell="cmd", cwd=".", segments=[{"program": "python", "args": ["-c", "print('bad')"]}])
+
+
+# ── Full access: write outside workspace ────────────────────────────────────
+
+
+def test_full_access_write_outside_workspace(tmp_path: Path) -> None:
+    """完全访问下内部写入指令可以写在工作区外。"""
+
+    outside = tmp_path.parent / "outside-full.txt"
+    sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_FULL)
+
+    result = sandbox.run(
+        shell="cmd",
+        cwd=".",
+        segments=[{"type": "internal_command", "command": "write", "args": [str(outside), "full access write"]}],
+    )
+
+    assert result["ok"] is True
+    assert outside.read_text(encoding="utf-8") == "full access write"
+    outside.unlink()

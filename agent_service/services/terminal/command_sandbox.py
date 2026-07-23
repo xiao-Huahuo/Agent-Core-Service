@@ -18,7 +18,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import signal
 import subprocess
+import sys
 from datetime import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -128,6 +131,7 @@ COMMON_INTERNAL_COMMANDS = [
     {"type": "internal_command", "command": "mkdir", "usage": "mkdir notes"},
     {"type": "internal_command", "command": "rm", "usage": "rm notes/todo.md"},
     {"type": "internal_command", "command": "mv", "usage": "mv old.md new.md"},
+    {"type": "internal_command", "command": "kill", "usage": "kill PID / taskkill /F /PID PID（仅完全访问）"},
 ]
 
 DEFAULT_TERMINAL_SEGMENT_CATALOG: dict[str, list[dict[str, str]]] = {
@@ -216,7 +220,7 @@ class TerminalSandboxSettings:
                 payload.get("max_segments_per_call"),
                 default=config.terminal_sandbox.max_segments_per_call,
                 minimum=1,
-                maximum=10,
+                maximum=50,
             ),
         )
 
@@ -668,6 +672,8 @@ class TerminalSandbox:
             return self._internal_remove(args=args, cwd=cwd)
         if command in {"mv", "move"}:
             return self._internal_move(args=args, cwd=cwd)
+        if command in {"kill", "taskkill"}:
+            return self._internal_kill(args=args)
         raise ValueError(f"不支持内部系统指令 {command}。")
 
     def _internal_list_dir(self, *, args: list[str], cwd: Path) -> str:
@@ -695,11 +701,16 @@ class TerminalSandbox:
     def _internal_read_file(self, *, args: list[str], cwd: Path) -> str:
         """读取工作区内文本文件内容,等价于基础 `cat/type`。"""
 
-        if len(args) != 1:
+        if not args:
+            raise ValueError("cat/type 至少指定一个文件路径。")
+        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 1:
             raise ValueError("cat/type 必须且只能指定一个文件路径。")
-        target = self._resolve_arg_path(args[0], cwd=cwd)
-        self._assert_regular_file(target)
-        return target.read_text(encoding="utf-8", errors="replace")
+        outputs = []
+        for arg in args:
+            target = self._resolve_arg_path(arg, cwd=cwd)
+            self._assert_regular_file(target)
+            outputs.append(target.read_text(encoding="utf-8", errors="replace"))
+        return "\n".join(outputs)
 
     def _internal_read_file_lines(self, *, command: str, args: list[str], cwd: Path) -> str:
         """读取工作区内文本文件的前 N 行或后 N 行。"""
@@ -714,27 +725,37 @@ class TerminalSandbox:
     def _internal_stat(self, *, args: list[str], cwd: Path) -> str:
         """返回工作区内文件或目录的基础状态信息。"""
 
-        if len(args) != 1:
+        if not args:
+            raise ValueError("stat 至少指定一个路径。")
+        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 1:
             raise ValueError("stat 必须且只能指定一个路径。")
-        target = self._resolve_arg_path(args[0], cwd=cwd)
-        if not target.exists():
-            raise ValueError(f"路径不存在: {target}")
-        stat = target.stat()
-        kind = "directory" if target.is_dir() else "file"
-        modified = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-        return f"path: {target}\ntype: {kind}\nsize: {stat.st_size}\nmodified: {modified}"
+        results = []
+        for arg in args:
+            target = self._resolve_arg_path(arg, cwd=cwd)
+            if not target.exists():
+                raise ValueError(f"路径不存在: {target}")
+            stat = target.stat()
+            kind = "directory" if target.is_dir() else "file"
+            modified = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+            results.append(f"path: {target}\ntype: {kind}\nsize: {stat.st_size}\nmodified: {modified}")
+        return "\n---\n".join(results)
 
     def _internal_wc(self, *, args: list[str], cwd: Path) -> str:
         """统计工作区内文本文件的行数、词数和字符数。"""
 
-        if len(args) != 1:
+        if not args:
+            raise ValueError("wc 至少指定一个文件路径。")
+        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 1:
             raise ValueError("wc 必须且只能指定一个文件路径。")
-        target = self._resolve_arg_path(args[0], cwd=cwd)
-        self._assert_regular_file(target)
-        content = target.read_text(encoding="utf-8", errors="replace")
-        line_count = len(content.splitlines())
-        word_count = len(re.findall(r"\S+", content))
-        return f"{line_count}\t{word_count}\t{len(content)}\t{target}"
+        results = []
+        for arg in args:
+            target = self._resolve_arg_path(arg, cwd=cwd)
+            self._assert_regular_file(target)
+            content = target.read_text(encoding="utf-8", errors="replace")
+            line_count = len(content.splitlines())
+            word_count = len(re.findall(r"\S+", content))
+            results.append(f"{line_count}\t{word_count}\t{len(content)}\t{target}")
+        return "\n".join(results)
 
     def _internal_write_file(self, *, args: list[str], cwd: Path, append: bool) -> str:
         """在允许写入的路径内创建、覆盖或追加文本文件。"""
@@ -754,48 +775,126 @@ class TerminalSandbox:
     def _internal_touch(self, *, args: list[str], cwd: Path) -> str:
         """在允许写入的路径内创建空文件或更新时间戳。"""
 
-        if len(args) != 1:
+        if not args:
+            raise ValueError("touch 至少指定一个文件路径。")
+        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 1:
             raise ValueError("touch 必须且只能指定一个文件路径。")
-        target = self._resolve_write_path(args[0], cwd=cwd)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.touch(exist_ok=True)
-        return f"已 touch: {target}"
+        results = []
+        for arg in args:
+            target = self._resolve_write_path(arg, cwd=cwd)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.touch(exist_ok=True)
+            results.append(str(target))
+        return f"已 touch: {', '.join(results)}"
 
     def _internal_mkdir(self, *, args: list[str], cwd: Path) -> str:
         """在允许写入的路径内创建目录。"""
 
-        if len(args) != 1:
+        if not args:
+            raise ValueError("mkdir 至少指定一个目录路径。")
+        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 1:
             raise ValueError("mkdir 必须且只能指定一个目录路径。")
-        target = self._resolve_write_path(args[0], cwd=cwd)
-        target.mkdir(parents=True, exist_ok=True)
-        return f"已创建目录: {target}"
+        dir_args = args
+        if self.access_mode == AGENT_ACCESS_FULL and dir_args[0] in {"-p", "--parents"}:
+            dir_args = dir_args[1:]
+        results = []
+        for arg in dir_args:
+            target = self._resolve_write_path(arg, cwd=cwd)
+            target.mkdir(parents=True, exist_ok=True)
+            results.append(str(target))
+        return f"已创建目录: {', '.join(results)}"
 
     def _internal_remove(self, *, args: list[str], cwd: Path) -> str:
         """删除允许写入范围内的文件或空目录。"""
 
-        if len(args) != 1:
+        if not args:
+            raise ValueError("rm/del 至少指定一个路径。")
+        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 1:
             raise ValueError("rm/del 必须且只能指定一个路径。")
-        target = self._resolve_write_path(args[0], cwd=cwd)
-        if not target.exists():
-            raise ValueError(f"路径不存在: {target}")
-        if target.is_dir():
-            target.rmdir()
-            return f"已删除目录: {target}"
-        target.unlink()
-        return f"已删除文件: {target}"
+
+        # Full access mode: parse flags and allow recursive delete
+        target_args = list(args)
+        recursive = False
+        if self.access_mode == AGENT_ACCESS_FULL:
+            while target_args and target_args[0].startswith("-"):
+                flag = target_args.pop(0)
+                if flag in {"-r", "-rf", "-f", "-fr", "--recursive"}:
+                    recursive = True
+            while target_args and target_args[0].upper() in {"/S", "/Q", "/F"}:
+                flag = target_args.pop(0)
+                if flag.upper() == "/S":
+                    recursive = True
+
+        if not target_args:
+            raise ValueError("rm/del 至少指定一个路径。")
+
+        results = []
+        for arg in target_args:
+            target = self._resolve_write_path(arg, cwd=cwd)
+            if not target.exists():
+                raise ValueError(f"路径不存在: {target}")
+            if target.is_dir():
+                if recursive:
+                    shutil.rmtree(target)
+                    results.append(str(target))
+                else:
+                    target.rmdir()
+                    results.append(str(target))
+            else:
+                target.unlink()
+                results.append(str(target))
+        return f"已删除: {', '.join(results)}"
 
     def _internal_move(self, *, args: list[str], cwd: Path) -> str:
         """移动或重命名允许写入范围内的文件和目录。"""
 
-        if len(args) != 2:
+        if len(args) < 2:
             raise ValueError("mv/move 必须指定源路径和目标路径。")
-        source = self._resolve_write_path(args[0], cwd=cwd)
-        target = self._resolve_write_path(args[1], cwd=cwd)
-        if not source.exists():
-            raise ValueError(f"源路径不存在: {source}")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        source.replace(target)
-        return f"已移动: {source} -> {target}"
+        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 2:
+            raise ValueError("mv/move 只能指定一个源路径和一个目标路径。")
+
+        if len(args) == 2:
+            source = self._resolve_write_path(args[0], cwd=cwd)
+            target = self._resolve_write_path(args[1], cwd=cwd)
+            if not source.exists():
+                raise ValueError(f"源路径不存在: {source}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source.replace(target)
+            return f"已移动: {source} -> {target}"
+
+        # Bulk move: last arg is target directory
+        target_dir = self._resolve_write_path(args[-1], cwd=cwd)
+        if not target_dir.exists():
+            raise ValueError(f"目标目录不存在: {target_dir}")
+        if not target_dir.is_dir():
+            raise ValueError(f"目标必须是目录: {target_dir}")
+        results = []
+        for arg in args[:-1]:
+            source = self._resolve_write_path(arg, cwd=cwd)
+            if not source.exists():
+                raise ValueError(f"源路径不存在: {source}")
+            dest = target_dir / source.name
+            source.replace(dest)
+            results.append(f"{source.name} -> {dest}")
+        return f"已移动: {', '.join(results)}"
+
+    def _internal_kill(self, *, args: list[str]) -> str:
+        """在完全访问权限下通过系统 kill/taskkill 终止进程。"""
+
+        if self.access_mode != AGENT_ACCESS_FULL:
+            raise ValueError("kill/taskkill 只能在完全访问权限下执行。")
+        if not args:
+            raise ValueError("kill 必须指定进程 PID 或名称。")
+        if sys.platform == "win32":
+            cmd = ["taskkill", *args]
+        else:
+            cmd = ["kill", *args]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        stdout = (result.stdout or "").strip()
+        stderr = (result.stderr or "").strip()
+        if result.returncode != 0:
+            raise ValueError(f"杀进程失败: {stderr or stdout}")
+        return stdout or f"已执行: {' '.join(cmd)}"
 
     def _resolve_arg_path(self, raw_path: str, *, cwd: Path) -> Path:
         """按当前 cwd 解析内部读取路径。"""

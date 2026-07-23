@@ -7,7 +7,7 @@
   above the input area.
 -->
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Check, ChevronDown, Globe, Plus, Send, Settings, Shield, X } from 'lucide-vue-next'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import type { AgentAccessMode } from '@/api/agent'
@@ -38,8 +38,12 @@ const emit = defineEmits<{
 
 const text = ref('')
 const accessModeMenu = ref<HTMLDetailsElement | null>(null)
+const accessModeTrigger = ref<HTMLElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+
+const menuVisible = ref(false)
+const menuStyle = ref<Record<string, string>>({})
 
 const accessModeOptions: Array<{ value: AgentAccessMode; label: string; hint: string }> = [
   { value: 'readonly', label: '只读', hint: '全目录只读' },
@@ -62,6 +66,18 @@ function adjustHeight() {
 }
 
 watch(text, () => nextTick(adjustHeight))
+
+watch(menuVisible, (visible) => {
+  if (visible) {
+    document.addEventListener('click', handleOutsideClick, true)
+    window.addEventListener('scroll', handleScrollResize, true)
+    window.addEventListener('resize', handleScrollResize)
+  } else {
+    document.removeEventListener('click', handleOutsideClick, true)
+    window.removeEventListener('scroll', handleScrollResize, true)
+    window.removeEventListener('resize', handleScrollResize)
+  }
+})
 
 function handleSend() {
   const trimmed = text.value.trim()
@@ -87,6 +103,40 @@ function handleAccessModeSummaryClick(event: MouseEvent) {
   }
 }
 
+function handleAccessModeToggle(event: Event) {
+  if ((event.target as HTMLElement)?.tagName !== 'DETAILS') return
+  if (accessModeMenu.value?.open && accessModeTrigger.value) {
+    const rect = accessModeTrigger.value.getBoundingClientRect()
+    menuStyle.value = {
+      left: `${rect.left}px`,
+      bottom: `${window.innerHeight - rect.top + 8}px`,
+    }
+    menuVisible.value = true
+  } else {
+    menuVisible.value = false
+  }
+}
+
+function handleOutsideClick(event: MouseEvent) {
+  if (!menuVisible.value) return
+  const target = event.target as Node
+  if (accessModeTrigger.value?.contains(target)) return
+  if (accessModeMenu.value?.contains(target)) return
+  menuVisible.value = false
+  if (accessModeMenu.value) {
+    accessModeMenu.value.open = false
+  }
+}
+
+function handleScrollResize() {
+  if (!menuVisible.value || !accessModeTrigger.value) return
+  const rect = accessModeTrigger.value.getBoundingClientRect()
+  menuStyle.value = {
+    left: `${rect.left}px`,
+    bottom: `${window.innerHeight - rect.top + 8}px`,
+  }
+}
+
 function selectAccessMode(mode: AgentAccessMode) {
   emit('set-agent-access-mode', mode)
   if (accessModeMenu.value) {
@@ -97,6 +147,12 @@ function selectAccessMode(mode: AgentAccessMode) {
 function triggerFilePicker() {
   fileInput.value?.click()
 }
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleOutsideClick, true)
+  window.removeEventListener('scroll', handleScrollResize, true)
+  window.removeEventListener('resize', handleScrollResize)
+})
 
 function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement
@@ -173,8 +229,9 @@ function handleFileChange(event: Event) {
           >
             <Globe :size="14" />
           </button>
-          <details ref="accessModeMenu" class="access-mode-dropdown" :class="{ disabled }">
+          <details ref="accessModeMenu" class="access-mode-dropdown" :class="{ disabled }" @toggle="handleAccessModeToggle">
             <summary
+              ref="accessModeTrigger"
               class="access-mode-trigger"
               title="Agent 权限"
               aria-label="Agent 权限"
@@ -184,7 +241,9 @@ function handleFileChange(event: Event) {
               <span class="access-mode-label">{{ selectedAccessModeLabel }}</span>
               <ChevronDown :size="11" class="access-mode-caret" />
             </summary>
-            <div class="access-mode-menu" role="listbox" aria-label="Agent 权限">
+          </details>
+          <Teleport to="body">
+            <div v-if="menuVisible" class="access-mode-menu" :style="menuStyle" role="listbox" aria-label="Agent 权限">
               <button
                 v-for="option in accessModeOptions"
                 :key="option.value"
@@ -200,7 +259,7 @@ function handleFileChange(event: Event) {
                 <Check v-if="selectedAccessMode === option.value" :size="13" class="access-mode-check" />
               </button>
             </div>
-          </details>
+          </Teleport>
         </div>
         <button
           class="model-config-trigger"
@@ -387,7 +446,7 @@ function handleFileChange(event: Event) {
   background: transparent;
   color: var(--input-text);
   font-family: var(--font-ui);
-  font-size: var(--font-size-sm);
+  font-size: calc(13px * var(--font-scale));
   line-height: 1.5;
 }
 
@@ -549,10 +608,8 @@ function handleFileChange(event: Event) {
 }
 
 .access-mode-menu {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 8px);
-  z-index: 20;
+  position: fixed;
+  z-index: 1000;
   display: flex;
   flex-direction: column;
   width: 180px;
