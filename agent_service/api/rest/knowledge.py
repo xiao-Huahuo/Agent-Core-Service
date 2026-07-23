@@ -549,7 +549,7 @@ async def search_knowledge(
 @router.get("/knowledge/graph")
 async def get_knowledge_graph(
     user_id: str = Query(..., min_length=1, description="用户 ID"),
-    limit: int = Query(default=500, ge=50, le=1200, description="返回节点上限"),
+    limit: int | None = Query(default=None, ge=50, le=10000, description="返回节点上限,不传则使用用户配置"),
 ) -> dict[str, Any]:
     """返回当前 active 知识库的知识图谱点边数据。"""
 
@@ -558,6 +558,8 @@ async def get_knowledge_graph(
     try:
         profile = await run_in_threadpool(settings_svc.ensure_user_profile, user_id=user_id)
         active_library = dict(profile["active_knowledge_library"])
+        if limit is None:
+            limit = profile.get("graph_node_limit", 2000)
         return await run_in_threadpool(
             graph_svc.get_graph,
             user_id=str(profile["user_id"]),

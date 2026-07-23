@@ -222,7 +222,7 @@ export function searchKnowledge(
   })
 }
 
-export function fetchKnowledgeGraph(userId: string, limit = 500): Promise<KnowledgeSemanticGraphResponse> {
+export function fetchKnowledgeGraph(userId: string, limit = 2000): Promise<KnowledgeSemanticGraphResponse> {
   return apiGet<KnowledgeSemanticGraphResponse>(API_ROUTES.KNOWLEDGE_GRAPH, {
     user_id: userId,
     limit,

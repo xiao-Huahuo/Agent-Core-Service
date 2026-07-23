@@ -557,6 +557,80 @@ def write_long_term_memory(
     return f"已记住: {content}"
 
 
+def delete_long_term_memory(content: str) -> str:
+    """
+    删除当前用户的一条长期记忆。按内容文本匹配后删除。
+
+    content: 需要删除的记忆内容关键词或完整句子。会尝试精确匹配和包含匹配。
+    """
+
+    if _is_readonly_access():
+        return _deny_readonly_write("删除长期记忆")
+    normalized_content = content.strip()
+    if not normalized_content:
+        return "删除失败: content 不能为空。"
+    runtime = get_tool_runtime()
+    memories = runtime.memory_service.list_user_memories(
+        user_id=runtime.user_id, limit=200,
+    )
+    lower_content = normalized_content.lower()
+    matched = None
+    for m in memories:
+        if m.content.strip().lower() == lower_content:
+            matched = m
+            break
+    if not matched:
+        for m in memories:
+            if lower_content in m.content.strip().lower() or m.content.strip().lower() in lower_content:
+                matched = m
+                break
+    if not matched:
+        return f"未找到内容匹配的长期记忆: {normalized_content}"
+    success = runtime.memory_service.delete_memory(memory_id=matched.memory_id)
+    if success:
+        return f"已删除长期记忆: {matched.content[:200]}"
+    return f"删除长期记忆失败，可能已被删除。"
+
+
+def delete_long_term_rule(content: str) -> str:
+    """
+    删除当前用户的一条长期系统规则。按内容文本匹配后删除。
+
+    content: 需要删除的规则内容关键词或完整句子。会尝试精确匹配和包含匹配。
+    """
+
+    if _is_readonly_access():
+        return _deny_readonly_write("删除长期规则")
+    normalized_content = content.strip()
+    if not normalized_content:
+        return "删除失败: content 不能为空。"
+    runtime = get_tool_runtime()
+    if runtime.memory_service is None:
+        return "删除长期规则失败: 当前工具运行时缺少设置存储服务。"
+    from agent_service.services.settings_service import SettingsService
+
+    settings_service = SettingsService(config=runtime.config, memory_service=runtime.memory_service)
+    entries = settings_service.list_system_prompt_entries(user_id=runtime.user_id)
+    lower_content = normalized_content.lower()
+    matched = None
+    for entry in entries:
+        if entry["content"].strip().lower() == lower_content:
+            matched = entry
+            break
+    if not matched:
+        for entry in entries:
+            entry_content = entry["content"].strip().lower()
+            if lower_content in entry_content or entry_content in lower_content:
+                matched = entry
+                break
+    if not matched:
+        return f"未找到内容匹配的长期规则: {normalized_content}"
+    success = settings_service.delete_system_prompt_entry(prompt_id=matched["prompt_id"])
+    if success:
+        return f"已删除长期规则: {matched['content'][:200]}"
+    return f"删除长期规则失败，可能已被删除。"
+
+
 def write_long_term_rule(content: str) -> str:
     """
     追加一条当前用户的长期系统规则。

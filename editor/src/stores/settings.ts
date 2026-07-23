@@ -11,7 +11,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { ApiError } from '@/api/client'
-import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, saveAppearanceConfig, saveFontConfig, saveKnowledgeIngestionConfig, saveWebSearchConfig, updateSettingsKnowledgeDir } from '@/api/settings'
+import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, saveAppearanceConfig, saveFontConfig, saveGraphConfig, saveKnowledgeIngestionConfig, saveWebSearchConfig, updateSettingsKnowledgeDir } from '@/api/settings'
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
 import type { SettingsKnowledgeLibraryResponse, SettingsProfileResponse } from '@/api/settings'
 import type { KnowledgeLibraryProfile } from '@/types/settings'
@@ -47,6 +47,7 @@ const DEFAULT_PROFILE: UserSettingsProfile = {
   fontSizePercent: 100,
   themePrimaryColor: '',
   themeSoftColor: '',
+  graphNodeLimit: 2000,
 }
 
 function normalizeThemeColor(value: string | undefined): string {
@@ -168,6 +169,7 @@ function mapBackendProfile(profileResponse: SettingsProfileResponse): Partial<Us
     fontSizePercent: normalizeFontSizePercent(profileResponse.font_size_percent),
     themePrimaryColor: profileResponse.theme_primary_color ?? '',
     themeSoftColor: profileResponse.theme_soft_color ?? '',
+    graphNodeLimit: profileResponse.graph_node_limit ?? 2000,
   }
 }
 
@@ -563,6 +565,27 @@ export const useSettingsStore = defineStore('settings', () => {
     await saveKnowledgeIngestionSettings({ autoIngestOnUpload: enabled })
   }
 
+  async function saveGraphSettings(params: { graphNodeLimit?: number }) {
+    if (!hasUserId.value) {
+      updateProfile({
+        graphNodeLimit: params.graphNodeLimit ?? profile.value.graphNodeLimit,
+      })
+      return
+    }
+    const prev = { graphNodeLimit: profile.value.graphNodeLimit }
+    updateProfile({
+      graphNodeLimit: params.graphNodeLimit ?? profile.value.graphNodeLimit,
+    })
+    try {
+      const result = await saveGraphConfig(profile.value.userId, params)
+      updateProfile({ graphNodeLimit: result.graph_node_limit })
+      return result
+    } catch {
+      updateProfile(prev)
+      throw new Error('保存图谱设置失败')
+    }
+  }
+
   return {
     themeMode,
     colorScheme,
@@ -597,6 +620,7 @@ export const useSettingsStore = defineStore('settings', () => {
     fetchWebSearchSettings,
     toggleWebSearch,
     saveKnowledgeIngestionSettings,
+    saveGraphSettings,
     setAutoIngestOnUpload,
     showIndexColumn,
     setShowIndexColumn,

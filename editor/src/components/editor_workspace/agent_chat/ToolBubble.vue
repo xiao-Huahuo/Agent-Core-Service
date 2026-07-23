@@ -180,8 +180,8 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           :aria-label="copied ? 'Copied' : 'Copy message'"
           @click="copyBubbleContent"
         >
-          <Check v-if="copied" :size="12" />
-          <Copy v-else :size="12" />
+          <Check v-if="copied" :size="22" />
+          <Copy v-else :size="22" />
         </button>
         <button
           class="feedback-action feedback-up"
@@ -191,7 +191,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           aria-label="Like response"
           @click="setFeedback('up')"
         >
-          <ThumbsUp :size="12" />
+          <ThumbsUp :size="22" />
         </button>
         <button
           class="feedback-action feedback-down"
@@ -201,7 +201,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           aria-label="Dislike response"
           @click="setFeedback('down')"
         >
-          <ThumbsDown :size="12" />
+          <ThumbsDown :size="22" />
         </button>
       </div>
       <KnowledgeSources
@@ -235,8 +235,8 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
         :aria-label="copied ? 'Copied' : 'Copy message'"
         @click="copyBubbleContent"
       >
-        <Check v-if="copied" :size="12" />
-        <Copy v-else :size="12" />
+        <Check v-if="copied" :size="18" />
+        <Copy v-else :size="18" />
       </button>
     </div>
     <img :src="userAvatar" class="avatar" alt="user" />
@@ -468,7 +468,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   margin: 0;
   color: var(--color-text-primary);
   font-family: var(--font-chat);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
   line-height: var(--line-height-relaxed);
   white-space: pre-wrap;
 }

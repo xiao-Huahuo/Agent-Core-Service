@@ -91,6 +91,7 @@ class SettingsService:
                 "font_size_percent": "INTEGER NOT NULL DEFAULT 100",
                 "theme_primary_color": "VARCHAR(16) NOT NULL DEFAULT ''",
                 "theme_soft_color": "VARCHAR(16) NOT NULL DEFAULT ''",
+                "graph_node_limit": "INTEGER NOT NULL DEFAULT 2000",
             }
             with Session(self.engine) as db:
                 for col_name, col_type in migrations.items():
@@ -347,6 +348,7 @@ class SettingsService:
             "font_size_percent": self._normalize_font_size_percent(record.font_size_percent),
             "theme_primary_color": record.theme_primary_color,
             "theme_soft_color": record.theme_soft_color,
+            "graph_node_limit": record.graph_node_limit,
             "created_at": record.created_at.isoformat(),
             "updated_at": record.updated_at.isoformat(),
         }
@@ -1082,6 +1084,37 @@ class SettingsService:
                 "ocr_enabled": bool(record.ocr_enabled),
                 "knowledge_ignore_patterns": record.knowledge_ignore_patterns,
                 "restart_required": restart_required,
+            }
+
+    def save_graph_config(
+        self,
+        *,
+        user_id: str,
+        graph_node_limit: int | None = None,
+    ) -> dict:
+        """保存用户图谱配置。"""
+
+        normalized_user_id = user_id.strip()
+        now = self._utc_now()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                record = UserSettingsRecord(
+                    user_id=normalized_user_id,
+                    knowledge_dir=str(self.config.storage.knowledge_dir),
+                    graph_node_limit=graph_node_limit or 2000,
+                    created_at=now,
+                    updated_at=now,
+                )
+            else:
+                if graph_node_limit is not None:
+                    record.graph_node_limit = max(50, min(int(graph_node_limit), 10000))
+                record.updated_at = now
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            return {
+                "graph_node_limit": record.graph_node_limit,
             }
 
     def is_ocr_enabled_for_user(self, *, user_id: str) -> bool:

@@ -43,6 +43,8 @@ export interface UserSettingsProfile {
   themePrimaryColor?: string
   /** Optional soft UI color applied to muted primary backgrounds. */
   themeSoftColor?: string
+  /** Maximum number of nodes to return in the knowledge graph. */
+  graphNodeLimit?: number
   /** Legacy single-value localStorage field, normalized into uiFontFamilies. */
   uiFontFamily?: string
   /** Legacy single-value localStorage field, normalized into textFontFamilies. */

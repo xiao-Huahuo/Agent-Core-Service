@@ -424,12 +424,13 @@ class KnowledgeGraphService:
     def get_graph(self, *, user_id: str, library_id: str, limit: int = 500) -> dict[str, Any]:
         """返回前端 Canvas 可直接消费的图谱数据。"""
 
-        safe_limit = max(50, min(int(limit or 500), 1200))
+        safe_limit = max(50, min(int(limit or 500), 10000))
         with Session(self.engine) as db:
             raw_nodes = list(db.exec(
                 select(KnowledgeGraphNode)
                 .where(KnowledgeGraphNode.user_id == user_id)
                 .where(KnowledgeGraphNode.library_id == library_id)
+                .order_by(KnowledgeGraphNode.node_id)
                 .limit(safe_limit)
             ).all())
             nodes, node_id_aliases = self._coalesce_entity_nodes(raw_nodes)
@@ -440,6 +441,7 @@ class KnowledgeGraphService:
                     select(KnowledgeGraphEdge)
                     .where(KnowledgeGraphEdge.user_id == user_id)
                     .where(KnowledgeGraphEdge.library_id == library_id)
+                    .order_by(KnowledgeGraphEdge.edge_id)
                     .limit(safe_limit * 2)
                 ).all()
                 if edge.source_node_id in node_ids and edge.target_node_id in node_ids

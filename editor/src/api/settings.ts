@@ -24,6 +24,7 @@ export interface SettingsProfileResponse {
   font_size_percent?: number
   theme_primary_color?: string
   theme_soft_color?: string
+  graph_node_limit?: number
   created_at: string
   updated_at: string
 }
@@ -170,6 +171,19 @@ export function saveKnowledgeIngestionConfig(
   if ('ocrEnabled' in params && params.ocrEnabled !== undefined) body.ocr_enabled = params.ocrEnabled
   if (params.knowledgeIgnorePatterns !== undefined) body.knowledge_ignore_patterns = params.knowledgeIgnorePatterns
   return apiPut<KnowledgeIngestionConfigResponse>(API_ROUTES.SETTINGS_KNOWLEDGE_INGESTION, body)
+}
+
+export interface GraphConfigResponse {
+  graph_node_limit: number
+}
+
+export function saveGraphConfig(
+  userId: string,
+  params: { graphNodeLimit?: number },
+): Promise<GraphConfigResponse> {
+  const body: Record<string, string | number> = { user_id: userId }
+  if (params.graphNodeLimit !== undefined) body.graph_node_limit = params.graphNodeLimit
+  return apiPut<GraphConfigResponse>(API_ROUTES.SETTINGS_GRAPH_CONFIG, body)
 }
 
 export function rebuildKnowledgeRoot(

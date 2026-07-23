@@ -1,5 +1,5 @@
 """
-AgentService 微服务入口。
+服务入口。
 
 本文件启动 FastAPI + gRPC 双协议微服务:
 - FastAPI (HTTP): 健康检查、测试调用。

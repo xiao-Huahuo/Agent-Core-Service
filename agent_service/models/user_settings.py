@@ -46,6 +46,7 @@ class UserSettingsRecord(SQLModel, table=True):
     font_size_percent: int = Field(default=100)
     theme_primary_color: str = Field(default="", max_length=16)
     theme_soft_color: str = Field(default="", max_length=16)
+    graph_node_limit: int = Field(default=2000)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

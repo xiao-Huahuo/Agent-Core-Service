@@ -55,4 +55,5 @@ export const API_ROUTES = {
   SETTINGS_DISABLED_TOOLS: '/settings/disabled-tools',
   SETTINGS_AVAILABLE_TOOLS: '/settings/available-tools',
   SETTINGS_TERMINAL_SANDBOX: '/settings/terminal-sandbox',
+  SETTINGS_GRAPH_CONFIG: '/settings/graph-config',
 } as const

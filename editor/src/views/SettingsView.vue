@@ -12,6 +12,7 @@ import type { SettingsTabKey } from '@/components/settings_view/SettingsSidebar.
 import TerminalSandboxSettingsSection from '@/components/settings_view/TerminalSandboxSettingsSection.vue'
 import ToolsSettingsSection from '@/components/settings_view/ToolsSettingsSection.vue'
 import WebSearchSettingsSection from '@/components/settings_view/WebSearchSettingsSection.vue'
+import GraphSettingsSection from '@/components/settings_view/GraphSettingsSection.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { ThemeMode } from '@/types/settings'
@@ -30,6 +31,7 @@ const tabs = [
   { key: 'terminal' as const, label: '终端沙盒' },
   { key: 'web' as const, label: '联网配置' },
   { key: 'memory' as const, label: '记忆与指令' },
+  { key: 'graph' as const, label: '图谱' },
 ]
 
 watch(activeTab, (tab) => {
@@ -55,6 +57,7 @@ const textFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.textFontF
 const fontSizePercentDraft = ref(settingsStore.profile.fontSizePercent ?? 100)
 const themePrimaryColorDraft = ref(settingsStore.profile.themePrimaryColor || '#4224eb')
 const themeSoftColorDraft = ref(settingsStore.profile.themeSoftColor || '#4224eb')
+const graphNodeLimitDraft = ref(settingsStore.profile.graphNodeLimit ?? 2000)
 const availableFontFamilies = ref<string[]>([])
 const fontsLoading = ref(false)
 const saving = ref(false)
@@ -699,6 +702,11 @@ onBeforeUnmount(() => {
         @delete-prompt="handleDeletePrompt"
         @set-show-graph-column="settingsStore.setShowGraphColumn"
         @set-show-index-column="settingsStore.setShowIndexColumn"
+      />
+
+      <GraphSettingsSection
+        v-if="activeTab === 'graph'"
+        v-model:graph-node-limit-draft="graphNodeLimitDraft"
       />
     </div>
   </div>

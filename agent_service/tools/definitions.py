@@ -17,6 +17,8 @@ from agent_service.tools.builtin import (
     calculate,
     create_knowledge_folder,
     delete_knowledge_file,
+    delete_long_term_memory,
+    delete_long_term_rule,
     echo_text,
     generate_uuid,
     get_current_time,
@@ -209,6 +211,28 @@ MEMORY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         },
         function=write_long_term_rule,
         display_name="写入长期规则",
+    ),
+    BuiltinToolDefinition(
+        name="delete_long_term_memory",
+        description="删除当前用户的一条长期记忆。按内容文本匹配后删除,会先尝试精确匹配,再尝试包含匹配。用于清理或修正错误写入的记忆。",
+        args_schema={
+            "type": "object",
+            "properties": {"content": {"type": "string", "description": "需要删除的记忆内容关键词或完整句子。"}},
+            "required": ["content"],
+        },
+        function=delete_long_term_memory,
+        display_name="删除记忆",
+    ),
+    BuiltinToolDefinition(
+        name="delete_long_term_rule",
+        description="删除当前用户的一条长期系统规则。按内容文本匹配后删除,会先尝试精确匹配,再尝试包含匹配。用于清理或修正不再需要的长期规则。",
+        args_schema={
+            "type": "object",
+            "properties": {"content": {"type": "string", "description": "需要删除的规则内容关键词或完整句子。"}},
+            "required": ["content"],
+        },
+        function=delete_long_term_rule,
+        display_name="删除长期规则",
     ),
 ]
 

@@ -133,6 +133,22 @@ async def save_knowledge_ingestion_config(body: dict[str, Any]) -> dict[str, Any
             result["ignore_cleanup"] = {"files_seen": 0, "chunks_deleted": 0}
     return result
 
+
+@router.put("/settings/graph-config")
+async def save_graph_config(body: dict[str, Any]) -> dict[str, Any]:
+    """保存用户图谱配置。body: user_id 必填,graph_node_limit 可选。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    svc = _require_settings_service()
+    result = svc.save_graph_config(
+        user_id=user_id,
+        graph_node_limit=body.get("graph_node_limit"),
+    )
+    return result
+
+
 @router.get("/settings/system-prompt")
 async def list_system_prompt_entries(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
     """列出用户的所有系统提示词条目。"""
