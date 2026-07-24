@@ -46,6 +46,7 @@ const accessModeMenu = ref<HTMLDetailsElement | null>(null)
 const accessModeTrigger = ref<HTMLElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+const inputContainer = ref<HTMLDivElement | null>(null)
 
 const menuVisible = ref(false)
 const menuStyle = ref<Record<string, string>>({})
@@ -154,6 +155,21 @@ function triggerFilePicker() {
   fileInput.value?.click()
 }
 
+function handleInputMouseMove(e: MouseEvent) {
+  const el = inputContainer.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  el.style.setProperty('--mouse-x', String((e.clientX - rect.left) / rect.width))
+  el.style.setProperty('--mouse-y', String((e.clientY - rect.top) / rect.height))
+  el.style.setProperty('--glow-opacity', '1')
+}
+
+function handleInputMouseLeave() {
+  const el = inputContainer.value
+  if (!el) return
+  el.style.setProperty('--glow-opacity', '0')
+}
+
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleOutsideClick, true)
   window.removeEventListener('scroll', handleScrollResize, true)
@@ -191,7 +207,12 @@ function handleFileChange(event: Event) {
       align="left"
       @remove="emit('remove-attachment', $event)"
     />
-    <div class="input-container">
+    <div
+      ref="inputContainer"
+      class="input-container"
+      @mousemove="handleInputMouseMove"
+      @mouseleave="handleInputMouseLeave"
+    >
       <div v-if="reference" class="reference-bar">
         <span class="reference-text">{{ reference }}</span>
         <button class="reference-close" type="button" title="移除引用" @click="emit('clear-reference')">
@@ -401,6 +422,7 @@ function handleFileChange(event: Event) {
 }
 
 .input-container {
+  position: relative;
   container-type: inline-size;
   display: flex;
   flex-direction: column;
@@ -417,6 +439,28 @@ function handleFileChange(event: Event) {
 .input-container:focus-within {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 2px var(--color-accent-muted);
+}
+
+/* Specular edge glow */
+.input-container::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    180px circle at calc(var(--mouse-x, 0.5) * 100%) calc(var(--mouse-y, 0.5) * 100%),
+    rgba(255, 255, 255, 0.7),
+    transparent 60%
+  );
+  opacity: var(--glow-opacity, 0);
+  transition: opacity 0.4s ease;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  padding: 1px;
 }
 
 .reference-bar {

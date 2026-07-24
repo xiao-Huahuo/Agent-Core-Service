@@ -4,24 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="美丽按钮">
-      <change afterPath="$PROJECT_DIR$/supercomponents/new/agent/动态流光智能体loader.vue" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/supercomponents/new/agent/动态流光智能体圆环.vue" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/supercomponents/new/agent/动态流光智能体圆环2.vue" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/supercomponents/new/agent/动态流光智能体头像.vue" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/supercomponents/new/agent/动态流光智能体头像2.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/LoaderCube.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/LoaderCube.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/supercomponents/new/动态流光智能体头像式按钮.vue" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/new/agent/动态流光智能体头像式按钮.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/supercomponents/new/动态流光智能体头像式按钮2.vue" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/new/agent/动态流光智能体头像式按钮2.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/supercomponents/new/动态流光智能体头像式按钮3.vue" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/new/agent/动态流光智能体头像式按钮3.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/supercomponents/new/明暗切换.vue" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/new/明暗切换/明暗切换.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/supercomponents/new/明暗切换2.vue" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/new/明暗切换/明暗切换2.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/supercomponents/new/明暗切换3.vue" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/new/明暗切换/明暗切换3.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/supercomponents/new/明暗切换4.vue" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/new/明暗切换/明暗切换4.vue" afterDir="false" />
-    </list>
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="美丽按钮" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -292,15 +275,7 @@
       <workItem from="1784638422280" duration="912000" />
       <workItem from="1784688429981" duration="15773000" />
       <workItem from="1784723159028" duration="13415000" />
-      <workItem from="1784854303470" duration="39159000" />
-    </task>
-    <task id="LOCAL-00178" summary="入库观测页面">
-      <option name="closed" value="true" />
-      <created>1784461338756</created>
-      <option name="number" value="00178" />
-      <option name="presentableId" value="LOCAL-00178" />
-      <option name="project" value="LOCAL" />
-      <updated>1784461338756</updated>
+      <workItem from="1784854303470" duration="39541000" />
     </task>
     <task id="LOCAL-00179" summary="入库观测页面">
       <option name="closed" value="true" />
@@ -686,7 +661,15 @@
       <option name="project" value="LOCAL" />
       <updated>1784900523389</updated>
     </task>
-    <option name="localTasksCounter" value="227" />
+    <task id="LOCAL-00227" summary="美丽按钮">
+      <option name="closed" value="true" />
+      <created>1784901810764</created>
+      <option name="number" value="00227" />
+      <option name="presentableId" value="LOCAL-00227" />
+      <option name="project" value="LOCAL" />
+      <updated>1784901810764</updated>
+    </task>
+    <option name="localTasksCounter" value="228" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
