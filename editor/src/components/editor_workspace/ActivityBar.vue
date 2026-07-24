@@ -32,6 +32,14 @@ const emit = defineEmits<{
   openSearch: []
   openSettings: []
 }>()
+
+function handleRipple(e: MouseEvent) {
+  const el = e.currentTarget as HTMLElement
+  const ripple = document.createElement('span')
+  ripple.className = 'ripple-effect'
+  el.appendChild(ripple)
+  ripple.addEventListener('animationend', () => ripple.remove(), { once: true })
+}
 </script>
 
 <template>
@@ -42,6 +50,7 @@ const emit = defineEmits<{
       type="button"
       title="Files"
       aria-label="Files"
+      @mousedown.prevent="handleRipple"
       @click="emit('toggleFile')"
     >
       <Folder :size="18" />
@@ -52,6 +61,7 @@ const emit = defineEmits<{
       type="button"
       title="File resources"
       aria-label="File resources"
+      @mousedown.prevent="handleRipple"
       @click="emit('openResources')"
     >
       <Files :size="18" />
@@ -62,6 +72,7 @@ const emit = defineEmits<{
       type="button"
       title="入库进度"
       aria-label="入库进度"
+      @mousedown.prevent="handleRipple"
       @click="emit('openIngestion')"
     >
       <DatabaseZap :size="18" />
@@ -72,6 +83,7 @@ const emit = defineEmits<{
       type="button"
       title="Search"
       aria-label="Search"
+      @mousedown.prevent="handleRipple"
       @click="emit('openSearch')"
     >
       <Search :size="18" />
@@ -82,6 +94,7 @@ const emit = defineEmits<{
       type="button"
       title="Agent"
       aria-label="Agent"
+      @mousedown.prevent="handleRipple"
       @click="emit('toggleAgent')"
     >
       <Bot :size="18" />
@@ -92,6 +105,7 @@ const emit = defineEmits<{
       type="button"
       title="Knowledge graph"
       aria-label="Knowledge graph"
+      @mousedown.prevent="handleRipple"
       @click="emit('toggleGraph')"
     >
       <Share2 :size="18" />
@@ -102,6 +116,7 @@ const emit = defineEmits<{
       type="button"
       title="Dashboard"
       aria-label="Dashboard"
+      @mousedown.prevent="handleRipple"
       @click="emit('openDashboard')"
     >
       <Activity :size="18" />
@@ -113,7 +128,8 @@ const emit = defineEmits<{
         type="button"
         title="Debug"
         aria-label="Debug"
-        @click="emit('openDebug')"
+        @mousedown.prevent="handleRipple"
+      @click="emit('openDebug')"
       >
         <Bug :size="18" />
       </button>
@@ -123,7 +139,8 @@ const emit = defineEmits<{
         type="button"
         title="Settings"
         aria-label="Settings"
-        @click="emit('openSettings')"
+        @mousedown.prevent="handleRipple"
+      @click="emit('openSettings')"
       >
         <Settings :size="18" />
       </button>
@@ -153,6 +170,32 @@ const emit = defineEmits<{
   border-radius: 50%;
   background: transparent;
   color: var(--color-text-muted);
+  position: relative;
+  overflow: hidden;
+  transition: background 0.25s, border-color 0.25s, color 0.25s;
+}
+
+.ripple-effect {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--color-primary);
+  animation: ripple-expand 0.35s ease-out;
+  pointer-events: none;
+  will-change: transform;
+  z-index: 2;
+}
+
+@keyframes ripple-expand {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
 }
 
 .activity-button:hover {
@@ -162,8 +205,8 @@ const emit = defineEmits<{
 
 .activity-button.active {
   border-color: var(--color-primary);
-  background: transparent;
-  color: var(--color-primary);
+  background: var(--color-primary);
+  color: #ffffff;
 }
 
 .bottom-group {

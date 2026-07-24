@@ -2,110 +2,39 @@
   Loader cube.
 
   Usage:
-  Console-compatible 3D cube shown before the first assistant message is
+  Console-compatible circle spinner shown before the first assistant message is
   created during streaming.
 -->
 <template>
-  <div class="spinner">
-    <div></div>
-    <div></div>
-    <div></div>
-    <div></div>
-    <div></div>
-    <div></div>
-    <div></div>
-    <div></div>
-    <div></div>
-    <div></div>
-  </div>
+  <svg viewBox="25 25 50 50">
+    <circle r="20" cy="50" cx="50"></circle>
+  </svg>
 </template>
 
 <style scoped>
-.spinner {
-  position: relative;
-  display: inline-block;
-  width: 3px;
-  height: 3px;
-  flex-shrink: 0;
-  transform: translate(5px, -2px);
+svg {
+  width: 2.2em;
+  transform-origin: center;
+  animation: rotate4 2s linear infinite;
 }
 
-.spinner div {
-  position: absolute;
-  width: 50%;
-  height: 150%;
-  background: #474bff;
-  transform: rotate(calc(var(--rotation) * 1deg)) translate(0, calc(var(--translation) * 1%));
-  animation: spinner-fzua35 1s calc(var(--delay) * 1s) infinite ease;
+circle {
+  fill: none;
+  stroke: hsl(214, 97%, 59%);
+  stroke-width: 2;
+  stroke-dasharray: 1, 200;
+  stroke-dashoffset: 0;
+  stroke-linecap: round;
+  animation: dash4 1.5s ease-in-out infinite;
 }
 
-.spinner div:nth-child(1) {
-  --delay: 0.1;
-  --rotation: 36;
-  --translation: 150;
+@keyframes rotate4 {
+  100% { transform: rotate(360deg); }
 }
 
-.spinner div:nth-child(2) {
-  --delay: 0.2;
-  --rotation: 72;
-  --translation: 150;
-}
-
-.spinner div:nth-child(3) {
-  --delay: 0.3;
-  --rotation: 108;
-  --translation: 150;
-}
-
-.spinner div:nth-child(4) {
-  --delay: 0.4;
-  --rotation: 144;
-  --translation: 150;
-}
-
-.spinner div:nth-child(5) {
-  --delay: 0.5;
-  --rotation: 180;
-  --translation: 150;
-}
-
-.spinner div:nth-child(6) {
-  --delay: 0.6;
-  --rotation: 216;
-  --translation: 150;
-}
-
-.spinner div:nth-child(7) {
-  --delay: 0.7;
-  --rotation: 252;
-  --translation: 150;
-}
-
-.spinner div:nth-child(8) {
-  --delay: 0.8;
-  --rotation: 288;
-  --translation: 150;
-}
-
-.spinner div:nth-child(9) {
-  --delay: 0.9;
-  --rotation: 324;
-  --translation: 150;
-}
-
-.spinner div:nth-child(10) {
-  --delay: 1;
-  --rotation: 360;
-  --translation: 150;
-}
-
-@keyframes spinner-fzua35 {
-  0%, 10%, 20%, 30%, 50%, 60%, 70%, 80%, 90%, 100% {
-    transform: rotate(calc(var(--rotation) * 1deg)) translate(0, calc(var(--translation) * 1%));
-  }
-
-  50% {
-    transform: rotate(calc(var(--rotation) * 1deg)) translate(0, calc(var(--translation) * 1.5%));
-  }
+@keyframes dash4 {
+  0% { stroke-dasharray: 1, 200; stroke-dashoffset: 0; }
+  50% { stroke-dasharray: 90, 200; stroke-dashoffset: -35px; }
+  100% { stroke-dashoffset: -125px; }
 }
 </style>
