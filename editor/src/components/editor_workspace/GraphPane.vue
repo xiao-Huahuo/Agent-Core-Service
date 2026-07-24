@@ -7,11 +7,11 @@
   events upward; it intentionally does not own route navigation or file opening.
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Crosshair, Pause, Play, RefreshCw, Search, Type, X } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
-import { fetchKnowledgeGraph } from '@/api/knowledge'
+import { deduplicateKnowledgeGraph, fetchKnowledgeGraph, getDedupStatus } from '@/api/knowledge'
 import KnowledgeGraphCanvas from '@/components/knowledge_graph/KnowledgeGraphCanvas.vue'
 import { buildFileTreeGraph } from '@/components/knowledge_graph/fileTreeGraphAdapter'
 import { buildSemanticKnowledgeGraph } from '@/components/knowledge_graph/semanticGraphAdapter'
@@ -34,6 +34,10 @@ const graphMode = ref<'tree' | 'semantic'>('semantic')
 const semanticGraph = ref<KnowledgeSemanticGraphResponse | null>(null)
 const semanticLoading = ref(false)
 const semanticError = ref('')
+const dedupLoading = ref(false)
+const dedupProgress = ref(0) // 0~100
+const dedupMessage = ref('')
+let dedupTimer: ReturnType<typeof setInterval> | null = null
 
 // Sidebar state
 const sidebarOpen = ref(false)
@@ -149,6 +153,66 @@ async function loadSemanticGraph() {
   }
 }
 
+async function handleDedup() {
+  if (!settingsStore.profile.userId) return
+  dedupLoading.value = true
+  dedupProgress.value = 0
+  dedupMessage.value = '正在启动去重…'
+  try {
+    await deduplicateKnowledgeGraph(settingsStore.profile.userId)
+    // 轮询进度
+    await pollDedupProgress()
+    // 完成后刷新图谱
+    await loadSemanticGraph()
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('already_running')) {
+      dedupMessage.value = '去重已在运行中'
+    } else {
+      semanticError.value = error instanceof Error ? error.message : '去重失败'
+    }
+  } finally {
+    dedupLoading.value = false
+    dedupProgress.value = 0
+    dedupMessage.value = ''
+  }
+}
+
+async function pollDedupProgress() {
+  const userId = settingsStore.profile.userId
+  if (!userId) return
+  return new Promise<void>((resolve) => {
+    dedupTimer = setInterval(async () => {
+      try {
+        const status = await getDedupStatus(userId)
+        if (status.total > 0) {
+          dedupProgress.value = Math.round((status.current / status.total) * 100)
+        }
+        dedupMessage.value = status.message
+        if (status.status === 'completed' || status.status === 'failed' || status.status === 'idle') {
+          if (dedupTimer) {
+            clearInterval(dedupTimer)
+            dedupTimer = null
+          }
+          resolve()
+        }
+      } catch {
+        if (dedupTimer) {
+          clearInterval(dedupTimer)
+          dedupTimer = null
+        }
+        resolve()
+      }
+    }, 1500)
+  })
+}
+
+onUnmounted(() => {
+  if (dedupTimer) {
+    clearInterval(dedupTimer)
+    dedupTimer = null
+  }
+})
+
 function kindLabel(kind: string): string {
   if (kind === 'root') return '根'
   if (kind === 'folder') return '文件夹'
@@ -232,12 +296,29 @@ watch(
           <RefreshCw :size="15" />
           <span>刷新</span>
         </button>
+        <button
+          class="graph-action"
+          :class="{ loading: dedupLoading }"
+          type="button"
+          title="全量去重"
+          :disabled="dedupLoading || treeLoading || semanticLoading"
+          @click="handleDedup"
+        >
+          <RefreshCw :size="15" />
+          <span>去重</span>
+        </button>
         <button class="graph-action" type="button" :title="graphCanvasRef?.frozen ? '释放' : '定格'" @click="toggleFreeze">
           <component :is="graphCanvasRef?.frozen ? Play : Pause" :size="15" />
           <span>{{ graphCanvasRef?.frozen ? '释放' : '定格' }}</span>
         </button>
       </div>
     </header>
+
+    <!-- 去重进度条 -->
+    <div v-if="dedupLoading" class="dedup-progress-bar">
+      <div class="dedup-progress-fill" :style="{ width: dedupProgress + '%' }"></div>
+      <span class="dedup-progress-text">{{ dedupMessage || `处理中 ${dedupProgress}%` }}</span>
+    </div>
 
     <div class="graph-body">
       <KnowledgeGraphCanvas
@@ -694,6 +775,33 @@ watch(
 .connected-name {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 去重进度条 */
+.dedup-progress-bar {
+  position: relative;
+  height: 24px;
+  flex-shrink: 0;
+  background: var(--color-surface-raised);
+  border-bottom: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.dedup-progress-fill {
+  height: 100%;
+  background: var(--color-primary-soft);
+  transition: width 300ms ease;
+}
+
+.dedup-progress-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(11px * var(--font-scale));
+  color: var(--color-text);
   white-space: nowrap;
 }
 </style>

@@ -49,6 +49,8 @@ export const API_ROUTES = {
   KNOWLEDGE_GRAPH: '/knowledge/graph',
   KNOWLEDGE_GRAPH_REBUILD: '/knowledge/graph/rebuild',
   KNOWLEDGE_GRAPH_REBUILD_STATUS: '/knowledge/graph/rebuild/status',
+  KNOWLEDGE_GRAPH_DEDUP: '/knowledge/graph/dedup',
+  KNOWLEDGE_GRAPH_DEDUP_STATUS: '/knowledge/graph/dedup/status',
   SETTINGS_MODEL_CONFIG: '/settings/model-config',
   SETTINGS_MODEL_CONFIG_SAVED: '/settings/model-config/saved',
   SETTINGS_WEB_SEARCH: '/settings/web-search',

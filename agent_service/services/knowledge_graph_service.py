@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from langchain_core.messages import HumanMessage, SystemMessage
+import numpy as np
+from sklearn.cluster import DBSCAN
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -37,6 +39,7 @@ from agent_service.services.memory.rag.frontmatter_document import (
     StructuredKnowledgeDocument,
     StructuredKnowledgeSection,
 )
+from agent_service.services.memory.rag.embedding import EmbeddingService
 from agent_service.services.scheduler import (
     BACKGROUND_FACT_RESOLUTION_TASK,
     LLMTaskScheduler,
@@ -330,6 +333,84 @@ class LLMKnowledgeGraphExtractor:
             '输出: {"groups": [...]}'
         )
 
+    def deduplicate_entities_incremental(
+        self,
+        entities: list[EntityCandidate],
+        candidates: dict[str, list[tuple[str, float]]],
+        document: StructuredKnowledgeDocument,
+    ) -> dict[str, str]:
+        """对入库新实体做库级去重: 小模型判断新实体是否与已有实体同义。
+
+        candidates: {new_entity_name: [(existing_name, similarity), ...]}
+
+        返回 name_mapping: {new_entity_name: canonical_existing_name, ...}
+        """
+
+        if not candidates:
+            return {}
+        response = self.task_scheduler.invoke_chat(
+            task_type=BACKGROUND_FACT_RESOLUTION_TASK,
+            model_tier=SMALL_MODEL_TIER,
+            messages=[
+                SystemMessage(content=self._dedup_incremental_system_prompt()),
+                HumanMessage(content=self._dedup_incremental_human_prompt(
+                    document=document, entities=entities, candidates=candidates,
+                )),
+            ],
+            model_name=self._value("model_name"),
+            api_key=self._value("api_key"),
+            base_url=self._value("base_url"),
+            small_model_name=self._value("small_model_name"),
+            small_api_key=self._value("small_api_key"),
+            small_base_url=self._value("small_base_url"),
+        )
+        self._record_dedup_token_usage(response=response, document=document)
+        payload = self._parse_json_object(str(response.content or ""))
+        merges = payload.get("merges", []) if isinstance(payload, dict) else []
+        name_mapping: dict[str, str] = {}
+        for merge in merges:
+            if not isinstance(merge, dict):
+                continue
+            from_name = str(merge.get("from", "")).strip()
+            to_name = str(merge.get("to", "")).strip()
+            if from_name and to_name and from_name != to_name:
+                name_mapping[from_name] = to_name
+        return name_mapping
+
+    @staticmethod
+    def _dedup_incremental_system_prompt() -> str:
+        """返回增量去重系统提示词。"""
+
+        return (
+            "你是实体同义判断器。你的任务是判断文档新抽取的实体是否与知识库中已有的实体语义相同。"
+            "每个新实体后附有库中候选列表(含向量相似度)。如果新实体与某个候选指向同一事物，"
+            "输出 from→to 映射。不确定就不映射。只输出 JSON。"
+        )
+
+    @staticmethod
+    def _dedup_incremental_human_prompt(
+        *,
+        document: StructuredKnowledgeDocument,
+        entities: list[EntityCandidate],
+        candidates: dict[str, list[tuple[str, float]]],
+    ) -> str:
+        """构造增量去重输入。"""
+
+        lines = [f"文档标题: {document.title}", "新实体及候选:"]
+        for entity in entities:
+            name = entity.name
+            entry = f"  [{name}] type={entity.entity_type}"
+            cands = candidates.get(name, [])
+            if cands:
+                cand_str = ", ".join(f"{c}({s:.2f})" for c, s in cands[:5])
+                entry += f" → 候选: {cand_str}"
+            lines.append(entry)
+        return (
+            "\n".join(lines)
+            + '\n\n请输出: {"merges": [{"from": "新实体名", "to": "库中已有实体名"}, ...]}'
+            + "\n只输出确定同义的映射。"
+        )
+
     def _record_dedup_token_usage(
         self,
         *,
@@ -552,6 +633,34 @@ class KnowledgeGraphService:
                         remapped.append((relation, section))
                     relations = remapped
 
+            # 库级增量去重: embedding 检索 + 小模型裁决,合并与库中已有同义实体
+            if isinstance(extractor, LLMKnowledgeGraphExtractor) and entities_by_key:
+                entity_list = list(entities_by_key.values())
+                cross_mapping = self._deduplicate_entities_incremental(
+                    user_id=user_id, library_id=library_id,
+                    new_entities=entity_list, extractor=extractor, document=document,
+                )
+                if cross_mapping:
+                    new_keyed: dict[tuple[str, str], EntityCandidate] = {}
+                    for entity in entity_list:
+                        new_name = cross_mapping.get(entity.name, entity.name)
+                        if self._normalize_label(new_name) != self._normalize_label(entity.name):
+                            entity.name = new_name
+                        key = (self._normalize_label(entity.name), entity.entity_type)
+                        if key not in new_keyed or entity.confidence > new_keyed[key].confidence:
+                            new_keyed[key] = entity
+                    entities_by_key = new_keyed
+                    remapped: list[tuple[RelationCandidate, StructuredKnowledgeSection]] = []
+                    for relation, section in relations:
+                        new_source = cross_mapping.get(relation.source, relation.source)
+                        new_target = cross_mapping.get(relation.target, relation.target)
+                        if new_source == new_target:
+                            continue
+                        relation.source = new_source
+                        relation.target = new_target
+                        remapped.append((relation, section))
+                    relations = remapped
+
             written_entities, written_relations = self._write_graph(
                 user_id=user_id,
                 library_id=library_id,
@@ -719,6 +828,243 @@ class KnowledgeGraphService:
         ).all():
             if node.node_id not in linked_node_ids:
                 db.delete(node)
+
+    def _deduplicate_entities_incremental(
+        self,
+        *,
+        user_id: str,
+        library_id: str,
+        new_entities: list[EntityCandidate],
+        extractor: LLMKnowledgeGraphExtractor,
+        document: StructuredKnowledgeDocument,
+    ) -> dict[str, str]:
+        """增量去重: embedding 检索相似实体 → 小模型裁决同义 → 返回 name_mapping。"""
+
+        if not isinstance(extractor, LLMKnowledgeGraphExtractor) or not new_entities:
+            return {}
+        candidates = self._search_similar_entities(
+            user_id=user_id, library_id=library_id, new_entities=new_entities,
+        )
+        if not candidates:
+            return {}
+        return extractor.deduplicate_entities_incremental(
+            entities=new_entities, candidates=candidates, document=document,
+        )
+
+    def _search_similar_entities(
+        self,
+        *,
+        user_id: str,
+        library_id: str,
+        new_entities: list[EntityCandidate],
+    ) -> dict[str, list[tuple[str, float]]]:
+        """用 Embedding 搜索库中已有相似实体,返回 {新实体名: [(库中实体名, 相似度), ...]}。"""
+
+        with Session(self.engine) as db:
+            existing = db.exec(
+                select(KnowledgeGraphNode.node_id, KnowledgeGraphNode.label)
+                .where(KnowledgeGraphNode.user_id == user_id)
+                .where(KnowledgeGraphNode.library_id == library_id)
+                .where(KnowledgeGraphNode.node_type == "entity")
+            ).all()
+        if not existing:
+            return {}
+        try:
+            embedder = EmbeddingService(config=self.config)
+            new_texts = [e.name for e in new_entities]
+            existing_texts = [row.label for row in existing]
+            new_vecs = embedder.embed_texts(new_texts)
+            existing_vecs = embedder.embed_texts(existing_texts)
+        except Exception:
+            logger.warning("Embedding 不可用,跳过增量去重", exc_info=True)
+            return {}
+
+        results: dict[str, list[tuple[str, float]]] = {}
+        for i, nv in enumerate(new_vecs):
+            scores = []
+            for j, ev in enumerate(existing_vecs):
+                sim = self._cosine_similarity(nv, ev)
+                if sim >= 0.55:
+                    scores.append((existing_texts[j], sim))
+            scores.sort(key=lambda x: x[1], reverse=True)
+            if scores:
+                results[new_entities[i].name] = scores[:10]
+        return results
+
+    @staticmethod
+    def _cosine_similarity(a: list[float], b: list[float]) -> float:
+        """计算余弦相似度。"""
+        dot = sum(x * y for x, y in zip(a, b))
+        na = sum(x * x for x in a) ** 0.5
+        nb = sum(x * x for x in b) ** 0.5
+        if na == 0 or nb == 0:
+            return 0.0
+        return dot / (na * nb)
+
+    def full_dedup_library(
+        self,
+        *,
+        user_id: str,
+        library_id: str,
+        llm_config: dict[str, Any] | None = None,
+        eps: float = 0.5,
+        min_samples: int = 2,
+        max_cluster_size: int = 500,
+    ) -> int:
+        """全库实体去重: Embedding 聚类 + 逐簇小模型去重。
+
+        先用 Embedding 将全库实体向量化,再用 DBSCAN 按余弦距离聚出"语义密集团"。
+        如果单个簇超过 max_cluster_size 则拆成子批次,避免一次喂给 LLM 太多实体。
+        """
+
+        with Session(self.engine) as db:
+            entity_rows = db.exec(
+                select(KnowledgeGraphNode)
+                .where(KnowledgeGraphNode.user_id == user_id)
+                .where(KnowledgeGraphNode.library_id == library_id)
+                .where(KnowledgeGraphNode.node_type == "entity")
+            ).all()
+
+        if len(entity_rows) <= 1:
+            _set_dedup_progress(user_id, library_id, "completed", 0, 0, "无需去重", 0)
+            return 0
+
+        _set_dedup_progress(user_id, library_id, "running", 0, 0, "正在生成 Embedding…", 0)
+
+        # 生成全部实体的嵌入向量
+        embedder = EmbeddingService(config=self.config)
+        all_labels = [row.label for row in entity_rows]
+        all_vectors = embedder.embed_texts(all_labels)  # list[list[float]]
+
+        # DBSCAN 聚类 (余弦距离)
+        matrix = np.array(all_vectors, dtype=np.float64)
+        clustering = DBSCAN(eps=eps, min_samples=min_samples, metric="cosine").fit(matrix)
+        cluster_labels = clustering.labels_
+
+        # 按簇分组,跳过噪声点(簇标签 -1); 超大簇拆成子批次
+        raw_clusters: dict[int, list[tuple[str, KnowledgeGraphNode]]] = {}
+        for label, entity_label, row in zip(cluster_labels, all_labels, entity_rows):
+            if label == -1:
+                continue
+            raw_clusters.setdefault(label, []).append((entity_label, row))
+
+        batches: list[list[tuple[str, KnowledgeGraphNode]]] = []
+        for items in raw_clusters.values():
+            for start in range(0, len(items), max_cluster_size):
+                batches.append(items[start:start + max_cluster_size])
+
+        total_batches = len(batches)
+        _set_dedup_progress(user_id, library_id, "running", total_batches, 0,
+                            f"聚类完成,共 {total_batches} 批需要处理", 0)
+
+        extractor = LLMKnowledgeGraphExtractor(
+            config=self.config,
+            llm_config=llm_config,
+            user_id=user_id,
+            library_id=library_id,
+        )
+        dummy_doc = StructuredKnowledgeDocument(
+            document_id="__full_dedup__", source_type="text", source_path="", source_uri="",
+            source_hash="", title="【全库去重】", summary="", tags=[], authority=0.7,
+            valid_from=None, valid_until=None, metadata={}, sections=[],
+        )
+
+        all_mapping: dict[str, str] = {}
+        for idx, cluster_items in enumerate(batches, start=1):
+            if len(cluster_items) <= 1:
+                continue
+            batch = [
+                EntityCandidate(
+                    name=label,
+                    entity_type=row.entity_type,
+                    aliases=row.metadata_json.get("aliases", []) if row.metadata_json else [],
+                    description="",
+                    confidence=row.metadata_json.get("confidence", 0.7) if row.metadata_json else 0.7,
+                )
+                for label, row in cluster_items
+            ]
+            _set_dedup_progress(user_id, library_id, "running", total_batches, idx,
+                                f"正在处理第 {idx}/{total_batches} 批 ({len(batch)} 个实体)", 0)
+            result = extractor.deduplicate_entities(batch, document=dummy_doc)
+            name_mapping = result.get("name_mapping", {}) or {}
+            for src, dst in name_mapping.items():
+                all_mapping[src] = dst
+
+        if not all_mapping:
+            _set_dedup_progress(user_id, library_id, "completed", total_batches, total_batches, "未发现同义实体", 0)
+            return 0
+
+        _set_dedup_progress(user_id, library_id, "running", total_batches, total_batches, "正在更新数据库…", 0)
+
+        # ----------------------------------------------------------------
+        # 以下 DB 更新逻辑与原实现一致 (链式映射 + 重定向边 + 清理自环)
+        # ----------------------------------------------------------------
+        label_map: dict[str, str] = {}
+        seen_labels: set[str] = set()
+        for src, dst in all_mapping.items():
+            if src == dst:
+                continue
+            resolved = dst
+            visited = {src}
+            while resolved in all_mapping and resolved != all_mapping[resolved]:
+                if resolved in visited:
+                    resolved = dst
+                    break
+                visited.add(resolved)
+                resolved = all_mapping[resolved]
+            label_map[src] = resolved
+            seen_labels.add(src)
+            seen_labels.add(resolved)
+
+        with Session(self.engine) as db:
+            for src_label, dst_label in label_map.items():
+                src_rows = db.exec(
+                    select(KnowledgeGraphNode)
+                    .where(KnowledgeGraphNode.user_id == user_id)
+                    .where(KnowledgeGraphNode.library_id == library_id)
+                    .where(KnowledgeGraphNode.node_type == "entity")
+                    .where(KnowledgeGraphNode.label == src_label)
+                ).all()
+                dst_rows = db.exec(
+                    select(KnowledgeGraphNode)
+                    .where(KnowledgeGraphNode.user_id == user_id)
+                    .where(KnowledgeGraphNode.library_id == library_id)
+                    .where(KnowledgeGraphNode.node_type == "entity")
+                    .where(KnowledgeGraphNode.label == dst_label)
+                ).all()
+                if not src_rows or not dst_rows:
+                    continue
+                src_node = src_rows[0]
+                dst_node = dst_rows[0]
+                if src_node.node_id == dst_node.node_id:
+                    continue
+                for edge in db.exec(
+                    select(KnowledgeGraphEdge)
+                    .where(KnowledgeGraphEdge.user_id == user_id)
+                    .where(KnowledgeGraphEdge.library_id == library_id)
+                    .where(KnowledgeGraphEdge.source_node_id == src_node.node_id)
+                ).all():
+                    edge.source_node_id = dst_node.node_id
+                for edge in db.exec(
+                    select(KnowledgeGraphEdge)
+                    .where(KnowledgeGraphEdge.user_id == user_id)
+                    .where(KnowledgeGraphEdge.library_id == library_id)
+                    .where(KnowledgeGraphEdge.target_node_id == src_node.node_id)
+                ).all():
+                    edge.target_node_id = dst_node.node_id
+                db.delete(src_node)
+            for edge in db.exec(
+                select(KnowledgeGraphEdge)
+                .where(KnowledgeGraphEdge.user_id == user_id)
+                .where(KnowledgeGraphEdge.library_id == library_id)
+                .where(KnowledgeGraphEdge.source_node_id == KnowledgeGraphEdge.target_node_id)
+            ).all():
+                db.delete(edge)
+            db.commit()
+        merged = len(label_map)
+        _set_dedup_progress(user_id, library_id, "completed", total_batches, total_batches,
+                            f"去重完成,合并了 {merged} 个实体", merged)
+        return merged
 
     def _write_graph(
         self,
@@ -1210,6 +1556,43 @@ def _update_graph_progress(
         _graph_extraction_progress[(user_id, library_id)] = entry
 
 
+# ---------------------------------------------------------------------------
+# 全库去重进度追踪
+# ---------------------------------------------------------------------------
+
+_dedup_progress: dict[tuple[str, str], dict[str, Any]] = {}
+_dedup_progress_lock = threading.Lock()
+
+
+def get_dedup_progress(user_id: str, library_id: str) -> dict[str, Any]:
+    """返回给定用户/知识库的全库去重进度。"""
+    with _dedup_progress_lock:
+        state = _dedup_progress.get((user_id, library_id))
+        if state is None:
+            return {"status": "idle", "total": 0, "current": 0, "message": ""}
+        return dict(state)
+
+
+def _set_dedup_progress(
+    user_id: str,
+    library_id: str,
+    status: str,
+    total: int = 0,
+    current: int = 0,
+    message: str = "",
+    merged_count: int = 0,
+) -> None:
+    """更新全库去重进度。"""
+    with _dedup_progress_lock:
+        _dedup_progress[(user_id, library_id)] = {
+            "status": status,
+            "total": total,
+            "current": current,
+            "message": message,
+            "merged_count": merged_count,
+        }
+
+
 def _build_llm_config(
     config: AgentConfig,
     user_llm_config: dict[str, Any] | None = None,
@@ -1439,6 +1822,34 @@ def _run_graph_extraction(
                             relation.target = new_target
                             remapped.append((relation, section))
                         relations = remapped
+
+                # 库级增量去重: embedding 检索 + 小模型裁决
+                if isinstance(extractor, LLMKnowledgeGraphExtractor) and entities_by_key:
+                    entity_list = list(entities_by_key.values())
+                    cross_mapping = svc._deduplicate_entities_incremental(
+                        user_id=user_id, library_id=library_id,
+                        new_entities=entity_list, extractor=extractor, document=document,
+                    )
+                    if cross_mapping:
+                        new_keyed: dict[tuple[str, str], EntityCandidate] = {}
+                        for entity in entity_list:
+                            new_name = cross_mapping.get(entity.name, entity.name)
+                            if svc._normalize_label(new_name) != svc._normalize_label(entity.name):
+                                entity.name = new_name
+                            key = (svc._normalize_label(entity.name), entity.entity_type)
+                            if key not in new_keyed or entity.confidence > new_keyed[key].confidence:
+                                new_keyed[key] = entity
+                        entities_by_key = new_keyed
+                        remapped2: list[tuple[RelationCandidate, StructuredKnowledgeSection]] = []
+                        for relation, section in relations:
+                            new_src = cross_mapping.get(relation.source, relation.source)
+                            new_tgt = cross_mapping.get(relation.target, relation.target)
+                            if new_src == new_tgt:
+                                continue
+                            relation.source = new_src
+                            relation.target = new_tgt
+                            remapped2.append((relation, section))
+                        relations = remapped2
 
                 written_entities, written_relations = svc._write_graph(
                     user_id=user_id,

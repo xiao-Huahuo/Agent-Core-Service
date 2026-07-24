@@ -385,32 +385,31 @@ editor编辑区不仅提供Markdown编辑器功能,还对多种代码文件提�
 在多模态文件入库的路径中,当文档被解析为JSON后,一路进行切片入向量库,另一路则进行异步的小模型实体关系提取.
 语义知识图谱提取各文档内的实体,用LLM(小模型)异步解析**文档内各实体**的关联,将知识库多模态文件的结构化 JSON 转译为实体-关系图,最终持久化到 SQLite,前端通过 D3.js Canvas 实时渲染.
 
-**关系类型**: `defines`,`contains`,`depends_on`,`produces`,`consumes`,`calls`,`configures`,`mentions`,`related_to`。
-**实体类型**: `person`,`organization`,`project`,`module`,`class`,`function`,`file`,`concept`,`config`,`data`,`other`。
+- **关系类型**: `defines`,`contains`,`depends_on`,`produces`,`consumes`,`calls`,`configures`,`mentions`,`related_to`。
+- **实体类型**: `person`,`organization`,`project`,`module`,`class`,`function`,`file`,`concept`,`config`,`data`,`other`。
 
-**入库模型**:
+- **入库模型**:
+  抽取结果写入 `runtime/db/relation/agent_service.db` 三张表:
+  - `knowledge_graph_nodes` — 全部节点(文档 + 实体)
+  - `knowledge_graph_edges` — 全部边,分为两种:
+  - **实体-实体边**: LLM 从同一个 section 文本中抽取的语义关系,携带 `evidence`(原文短语)
+  - **文档-实体边**: 程序自动生成的 `mentions` 边,连接文档节点与该文档 section 中出现的所有实体,`weight` 由 entity confidence 决定
+  - `knowledge_graph_document_status` — 每篇文档的抽取状态(completed/failed/skipped)
+  图谱特点是**文档内通过 LLM 输出的语义关系进行关联, 不同文档通过共享实体节点间接连接**,形成隐式的跨文档语义网络.抽取时不做跨文档关系发现,保证每篇文档的独立性,同时共享实体节点在外图中自然实现了桥接.
+  重建时按 `source_hash` 增量执行,仅对新增或内容变更的文档重新调用 LLM 抽取,已抽取且未变化的文档直接跳过.
 
-抽取结果写入 `runtime/db/relation/agent_service.db` 三张表:
-- `knowledge_graph_nodes` — 全部节点(文档 + 实体)
-- `knowledge_graph_edges` — 全部边,分为两种:
-- **实体-实体边**: LLM 从同一个 section 文本中抽取的语义关系,携带 `evidence`(原文短语)
-- **文档-实体边**: 程序自动生成的 `mentions` 边,连接文档节点与该文档 section 中出现的所有实体,`weight` 由 entity confidence 决定
-- `knowledge_graph_document_status` — 每篇文档的抽取状态(completed/failed/skipped)
+- **语义去重**: 系统提供两层语义去重机制,分别处理文档内和跨文档的同义实体合并。
+  - **文档级去重**: 每篇文档的所有 section 抽取完成后,自动将该文档的所有实体候选汇总喂给小模型做语义去重。小模型识别出文字不同但语义一致的实体(如"AI"="Artificial Intelligence"、"星铁"="星穹铁道"),合并为规范名称并重映射关系边。自动触发,无需用户干预。
+  - **库级全量去重**: 图谱面板工具栏有"去重"按钮,点击后触发全库所有实体的聚类去重。先对所有实体做 Embedding 向量化,再用 DBSCAN 按余弦距离聚类找出"语义密集团"(如多个称呼同一作品的相近实体),只对每个非单点簇喂给小模型做同义判断和合并,噪声点自动跳过。此外文档抽取完成后还有一个**增量去重**步骤:对每篇文档的新实体,通过 Embedding 从库中检索最相似的已有实体,一并喂给小模型裁决是否合并。
 
-图谱特点是**文档内通过 LLM 输出的语义关系进行关联, 不同文档通过共享实体节点间接连接**,形成隐式的跨文档语义网络.抽取时不做跨文档关系发现,保证每篇文档的独立性,同时共享实体节点在外图中自然实现了桥接.
-重建时按 `source_hash` 增量执行,仅对新增或内容变更的文档重新调用 LLM 抽取,已抽取且未变化的文档直接跳过.
-
-**语义去去重**: section 抽取完成后,将所有实体候选送小模型做一次语义去重,合并同义不同名的实体（如"AI"="Artificial Intelligence"、"用户"="end user"）,并自动重映射关系两端。`tests/测试文档.md` 是用于验证的测试文档。
-
-**前端渲染**:
-
-- 语义图谱无根节点,实体和文档节点根据 d3-force 力导向布局自动散开
-- 实体节点按类型着色(person→粉色, organization→靛蓝, project→青色, concept→橙色 等)
-- 实体节点为实心球,文档节点为虚线空心球
-- 拖拽节点时暂时固定位置,松手后力布局重新演算
-- 文件树图谱(父子层级)与语义图谱(自由网状)通过前端按钮切换,共享同一个 Canvas 渲染器
-- 对于实体节点,连接了1条边的大小为基础大小,每多连接1条边,则实体节点大小增加基础大小的10%,最多增加90%,更多则大小固定.
-- 图谱默认为释放态(电荷小球物理排斥),可以进行定格.
+- **前端渲染**:
+  - 语义图谱无根节点,实体和文档节点根据 d3-force 力导向布局自动散开
+  - 实体节点按类型着色(person→粉色, organization→靛蓝, project→青色, concept→橙色 等)
+  - 实体节点为实心球,文档节点为虚线空心球
+  - 拖拽节点时暂时固定位置,松手后力布局重新演算
+  - 文件树图谱(父子层级)与语义图谱(自由网状)通过前端按钮切换,共享同一个 Canvas 渲染器
+  - 对于实体节点,连接了1条边的大小为基础大小,每多连接1条边,则实体节点大小增加基础大小的10%,最多增加90%,更多则大小固定.
+  - 图谱默认为释放态(电荷小球物理排斥),可以进行定格.
 
 > **注意**: 首次打开图谱页面时,语义图谱默认模式需要显式加载。`GraphPane.vue` 在 `onMounted` 中会调用 `loadSemanticGraph()` 加载语义数据,无需手动切换模式。
 
@@ -988,6 +987,19 @@ flowchart TD
     E --> T{"检测熔断<br/>(余额不足/配额超限)?"}
     T -->|"是"| U["停止抽取,输出部分结果"]
     T -->|"否"| E
+
+    subgraph manual_dedup["用户手动全库去重"]
+        V["图谱面板<br/>点击「去重」按钮"] --> W["POST /knowledge/graph/dedup"]
+        W --> X["读全部实体节点<br/>Embedding 向量化"]
+        X --> Y["DBSCAN 聚类<br/>(余弦距离 eps=0.5)"]
+        Y --> Z{"非单点簇<br/>(≥2 实体)?"}
+        Z -->|"是"| AA["逐簇喂给小模型<br/>判断同义并合并"]
+        Z -->|"否(噪声点)"| AB["跳过"]
+        AA --> AC["链式解析映射<br/>a→b, b→c → a→c"]
+        AC --> AD["更新 DB: 重定向边<br/>删除源节点,清理自环"]
+    end
+
+    P -.->|"全库去重<br/>操作对象"| X
 
 ```
 ## 接口设计

@@ -21,3 +21,4 @@ paddlepaddle
 paddleocr
 requests
 bandit
+scikit-learn

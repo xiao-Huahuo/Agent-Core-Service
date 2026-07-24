@@ -250,6 +250,22 @@ export function rebuildKnowledgeGraph(userId: string, path?: string): Promise<{ 
   return apiPost(API_ROUTES.KNOWLEDGE_GRAPH_REBUILD, { user_id: userId, path })
 }
 
+export interface DedupStatus {
+  status: 'idle' | 'pending' | 'running' | 'completed' | 'failed'
+  total: number
+  current: number
+  message: string
+  merged_count: number
+}
+
+export function deduplicateKnowledgeGraph(userId: string): Promise<{ status: string; message: string }> {
+  return apiPost(API_ROUTES.KNOWLEDGE_GRAPH_DEDUP, { user_id: userId })
+}
+
+export function getDedupStatus(userId: string): Promise<DedupStatus> {
+  return apiGet<DedupStatus>(API_ROUTES.KNOWLEDGE_GRAPH_DEDUP_STATUS, { user_id: userId })
+}
+
 export function getKnowledgeGraphStatus(userId: string): Promise<GraphRebuildStatus> {
   return apiGet<GraphRebuildStatus>(API_ROUTES.KNOWLEDGE_GRAPH_REBUILD_STATUS, { user_id: userId })
 }

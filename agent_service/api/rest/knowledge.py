@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import queue
 import re
 import threading
@@ -31,6 +32,8 @@ from agent_service.api.rest.deps import (
 )
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 class _KnowledgeFileEventHandler(FileSystemEventHandler):
@@ -571,8 +574,11 @@ async def get_knowledge_graph(
 
 
 from agent_service.services.knowledge_graph_service import (
+    KnowledgeGraphService,
     _run_graph_extraction,
     _update_graph_progress,
+    get_dedup_progress,
+    _set_dedup_progress,
     get_graph_extraction_progress,
 )
 
@@ -674,6 +680,66 @@ async def get_graph_rebuild_status(
         "message": progress.get("message", ""),
         "result": result_data,
         "docs": docs,
+    }
+
+
+@router.post("/knowledge/graph/dedup")
+async def dedup_knowledge_graph(body: dict[str, Any]) -> dict[str, Any]:
+    """
+    在全量知识库范围内对语义实体进行去重。
+    将语义相似的实体合并为同一节点，保留置信度最高的实体。
+    在后台线程执行,前端轮询 /knowledge/graph/dedup/status 获取进度。
+    """
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    settings_svc = _require_settings_service()
+    graph_svc = _require_knowledge_graph_service()
+    profile = await run_in_threadpool(settings_svc.ensure_user_profile, user_id=user_id)
+    active_library = dict(profile["active_knowledge_library"])
+    normalized_user_id = str(profile["user_id"])
+    library_id = str(active_library["library_id"])
+
+    current_progress = get_dedup_progress(normalized_user_id, library_id)
+    if current_progress.get("status") == "running":
+        return {"status": "already_running", "message": "全库去重已在执行中"}
+
+    _set_dedup_progress(normalized_user_id, library_id, "pending", 0, 0, "排队中…", 0)
+    user_llm_config = settings_svc.get_llm_config(user_id=normalized_user_id)
+
+    def _run_dedup() -> None:
+        try:
+            graph_svc.full_dedup_library(
+                user_id=normalized_user_id,
+                library_id=library_id,
+                llm_config=user_llm_config,
+            )
+        except Exception:
+            logger.exception("全库去重失败")
+            _set_dedup_progress(normalized_user_id, library_id, "failed", 0, 0, "去重失败,请查看后端日志", 0)
+
+    thread = threading.Thread(target=_run_dedup, daemon=True)
+    thread.start()
+    return {"status": "started", "message": "全库去重已在后台启动"}
+
+
+@router.get("/knowledge/graph/dedup/status")
+async def get_dedup_status(
+    user_id: str = Query(..., min_length=1, description="用户 ID"),
+) -> dict[str, Any]:
+    """返回全库去重进度。"""
+    settings_svc = _require_settings_service()
+    profile = await run_in_threadpool(settings_svc.ensure_user_profile, user_id=user_id)
+    active_library = dict(profile["active_knowledge_library"])
+    normalized_user_id = str(profile["user_id"])
+    library_id = str(active_library["library_id"])
+    progress = get_dedup_progress(normalized_user_id, library_id)
+    return {
+        "status": progress.get("status", "idle"),
+        "total": progress.get("total", 0),
+        "current": progress.get("current", 0),
+        "message": progress.get("message", ""),
+        "merged_count": progress.get("merged_count", 0),
     }
 
 

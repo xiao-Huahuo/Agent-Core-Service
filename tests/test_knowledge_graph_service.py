@@ -568,3 +568,76 @@ def test_knowledge_graph_service_coalesces_same_named_entities_across_documents(
     ]
     assert graph["stats"]["entities"] == 1
     assert len(mention_edges) == 2
+
+
+def test_cosine_similarity_identical_vectors() -> None:
+    """相同向量的余弦相似度应为 1.0。"""
+
+    from agent_service.services.knowledge_graph_service import KnowledgeGraphService
+
+    a = [1.0, 0.0, 0.0]
+    assert KnowledgeGraphService._cosine_similarity(a, a) == 1.0
+
+
+def test_cosine_similarity_orthogonal_vectors() -> None:
+    """正交向量的余弦相似度应为 0.0。"""
+
+    from agent_service.services.knowledge_graph_service import KnowledgeGraphService
+
+    a = [1.0, 0.0, 0.0]
+    b = [0.0, 1.0, 0.0]
+    assert KnowledgeGraphService._cosine_similarity(a, b) == 0.0
+
+
+def test_incremental_dedup_passthrough_on_empty_db(tmp_path: Path) -> None:
+    """库中没有实体时增量去重应返回空映射。"""
+
+    from unittest.mock import MagicMock
+
+    from sqlalchemy.pool import StaticPool
+
+    from agent_service.core.agent_config import AgentConfig
+    from agent_service.services.knowledge_graph_service import (
+        EntityCandidate,
+        KnowledgeGraphService,
+        LLMKnowledgeGraphExtractor,
+    )
+    from agent_service.services.memory.rag.frontmatter_document import (
+        StructuredKnowledgeDocument,
+    )
+
+    config = AgentConfig.load_config(
+        {"storage": {"project_root": str(tmp_path), "base_data_dir": str(tmp_path / "runtime")}},
+        load_env=False,
+        load_dotenv=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    mock_scheduler = MagicMock()
+    extractor = LLMKnowledgeGraphExtractor(config=config, task_scheduler=mock_scheduler)
+    service = KnowledgeGraphService(config=config, engine=engine, extractor=None, create_tables=True)
+    document = StructuredKnowledgeDocument(
+        document_id="doc_inc",
+        source_type="text",
+        source_path=str(tmp_path / "inc.txt"),
+        source_uri=str(tmp_path / "inc.txt"),
+        source_hash="h1",
+        title="inc_test",
+        summary="",
+        tags=[],
+        authority=0.7,
+        valid_from=None,
+        valid_until=None,
+        metadata={},
+        sections=[],
+    )
+
+    # 库中无实体,应返回空
+    mapping = service._deduplicate_entities_incremental(
+        user_id="u1",
+        library_id="lib1",
+        new_entities=[EntityCandidate(name="AI", entity_type="concept", aliases=[], description="", confidence=0.9)],
+        extractor=extractor,
+        document=document,
+    )
+    assert mapping == {}
