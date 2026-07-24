@@ -7,7 +7,7 @@
   above the input area.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Check, ChevronDown, Globe, Plus, Send, Settings, Shield, Square, X } from 'lucide-vue-next'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import ContextProgress from '@/components/editor_workspace/agent_chat/ContextProgress.vue'
@@ -164,13 +164,12 @@ function handleInputMouseMove(e: MouseEvent) {
   el.style.setProperty('--glow-opacity', '1')
 }
 
-function handleInputMouseLeave() {
-  const el = inputContainer.value
-  if (!el) return
-  el.style.setProperty('--glow-opacity', '0')
-}
+onMounted(() => {
+  document.addEventListener('mousemove', handleInputMouseMove)
+})
 
 onBeforeUnmount(() => {
+  document.removeEventListener('mousemove', handleInputMouseMove)
   document.removeEventListener('click', handleOutsideClick, true)
   window.removeEventListener('scroll', handleScrollResize, true)
   window.removeEventListener('resize', handleScrollResize)
@@ -210,8 +209,6 @@ function handleFileChange(event: Event) {
     <div
       ref="inputContainer"
       class="input-container"
-      @mousemove="handleInputMouseMove"
-      @mouseleave="handleInputMouseLeave"
     >
       <div v-if="reference" class="reference-bar">
         <span class="reference-text">{{ reference }}</span>
@@ -450,9 +447,9 @@ function handleFileChange(event: Event) {
   z-index: 1;
   pointer-events: none;
   background: radial-gradient(
-    180px circle at calc(var(--mouse-x, 0.5) * 100%) calc(var(--mouse-y, 0.5) * 100%),
-    rgba(255, 255, 255, 0.7),
-    transparent 60%
+    1000px circle at calc(var(--mouse-x, 0.5) * 100%) calc(var(--mouse-y, 0.5) * 100%),
+    rgba(255, 255, 255, 0.65),
+    transparent 35%
   );
   opacity: var(--glow-opacity, 0);
   transition: opacity 0.4s ease;
