@@ -200,6 +200,10 @@ onMounted(() => {
                       type="checkbox"
                       @change="handleToggleTool(tool.name)"
                     />
+                    <span class="toggle-bg"></span>
+                    <span class="toggle-thumb">
+                      <span class="toggle-dot"></span>
+                    </span>
                     <span v-if="!tool.enabled" class="disabled-badge">未启用</span>
                   </label>
                 </div>
@@ -374,22 +378,73 @@ h2 { margin: 0; color: var(--color-text-primary); font-size: calc(14px * var(--f
 .tool-row:hover { background: var(--color-primary-softer); color: var(--color-text-primary); }
 .tool-name { overflow: hidden; font-size: calc(13px * var(--font-scale)); text-overflow: ellipsis; white-space: nowrap; }
 .tool-meta { color: var(--color-text-tertiary); font-size: calc(10px * var(--font-scale)); }
-.tool-toggle-label { display: flex; align-items: center; gap: 4px; padding: 0 var(--space-6) 0 0; cursor: pointer; }
-.tool-toggle-label input[type="checkbox"] {
-  position: relative; width: 22px; height: 12px; margin: 0; flex: none;
-  appearance: none;
-  border: 1px solid var(--color-border); border-radius: 999px;
-  background: var(--color-surface); cursor: pointer;
-  transition: background 200ms, border-color 200ms; flex-shrink: 0;
+.tool-toggle-label {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
-.tool-toggle-label input[type="checkbox"]::before {
-  content: ''; position: absolute; top: 1.5px; left: 1.5px;
-  width: 7px; height: 7px; border-radius: 999px;
+
+.tool-toggle-label input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+
+.toggle-bg {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
   background: var(--color-text-muted);
-  transition: transform 200ms, background 200ms;
+  opacity: 0.3;
+  transition: opacity 0.3s, background 0.3s;
+  pointer-events: none;
 }
-.tool-toggle-label input[type="checkbox"]:checked { background: var(--color-primary); border-color: var(--color-primary); }
-.tool-toggle-label input[type="checkbox"]:checked::before { transform: translateX(10px); background: var(--color-bg-card); }
+
+.toggle-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-text-tertiary);
+  transition: left 0.3s, background 0.3s;
+  pointer-events: none;
+  z-index: 1;
+  margin: auto;
+  bottom: 0;
+}
+
+.toggle-dot {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  transition: transform 0.2s;
+}
+
+input:checked ~ .toggle-bg {
+  opacity: 1;
+  background: var(--color-primary);
+}
+
+input:checked ~ .toggle-thumb {
+  left: 16px;
+  background: var(--color-primary);
+}
+
+input:checked ~ .toggle-thumb .toggle-dot {
+  transform: scale(0);
+}
 .disabled-badge { font-family: var(--font-ui); font-size: calc(9px * var(--font-scale)); color: var(--color-text-muted); white-space: nowrap; }
 .tool-detail { padding: var(--space-12); }
 .detail-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-8); }

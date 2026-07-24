@@ -785,39 +785,61 @@ onBeforeUnmount(() => {
 
 .toggle-row input[type="checkbox"] {
   position: relative;
-  width: 28px;
-  height: 16px;
+  width: 32px;
+  height: 20px;
   margin: 0;
   flex: none;
   appearance: none;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-surface);
+  -webkit-appearance: none;
+  outline: none;
   cursor: pointer;
-  transition: background 200ms, border-color 200ms;
   flex-shrink: 0;
+  background: transparent;
+  border: none;
+  z-index: 0;
+  padding: 0;
 }
 
+/* Track */
 .toggle-row input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  right: 2px;
+  height: 6px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: var(--color-text-muted);
+  opacity: 0.3;
+  transition: opacity 0.3s, background 0.3s;
+  pointer-events: none;
+}
+
+/* Thumb with inner dot */
+.toggle-row input[type="checkbox"]::after {
   content: '';
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: var(--color-text-muted);
-  transition: transform 200ms, background 200ms;
-}
-
-.toggle-row input[type="checkbox"]:checked {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-text-tertiary);
+  box-shadow: inset 0 0 0 3px var(--color-canvas);
+  transition: left 0.3s, background 0.3s, box-shadow 0.2s;
+  pointer-events: none;
 }
 
 .toggle-row input[type="checkbox"]:checked::before {
-  transform: translateX(12px);
-  background: #fff;
+  opacity: 1;
+  background: var(--color-primary);
+}
+
+.toggle-row input[type="checkbox"]:checked::after {
+  left: 14px;
+  background: var(--color-primary);
+  box-shadow: none;
 }
 
 .ignore-row {
