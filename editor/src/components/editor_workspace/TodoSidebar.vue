@@ -6,7 +6,7 @@
   checkboxes, due dates, search, and hide-done toggle.
 -->
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { onBeforeUnmount, onMounted, nextTick, ref } from 'vue'
 import {
   Calendar,
   Circle,
@@ -27,6 +27,17 @@ const editingId = ref('')
 const editingText = ref('')
 const editingDate = ref('')
 const deletingId = ref('')
+const timeTick = ref(0)
+
+let tickTimer: ReturnType<typeof setInterval> | undefined
+
+onMounted(() => {
+  tickTimer = setInterval(() => { timeTick.value = Date.now() }, 30000)
+})
+
+onBeforeUnmount(() => {
+  if (tickTimer) clearInterval(tickTimer)
+})
 
 function triggerPicker(target: 'new' | string) {
   nextTick(() => {
@@ -162,7 +173,7 @@ function isDatetimeExpired(iso: string): boolean {
       </div>
     </div>
 
-    <div class="todo-list">
+    <div class="todo-list" :data-tick="timeTick">
       <div
         v-for="item in todoStore.filteredTodos"
         :key="item.id"
@@ -243,7 +254,7 @@ function isDatetimeExpired(iso: string): boolean {
           <input
             :id="'picker-' + item.id"
             class="todo-inline-picker"
-            type="date"
+            type="datetime-local"
             :data-target="item.id"
             @change="onSharedPick"
           />
@@ -282,7 +293,7 @@ function isDatetimeExpired(iso: string): boolean {
         >
           <Calendar :size="14" />
         </button>
-        <input id="picker-new" class="todo-inline-picker" type="date" data-target="new" @change="onSharedPick" />
+        <input id="picker-new" class="todo-inline-picker" type="datetime-local" data-target="new" @change="onSharedPick" />
         <button
           class="todo-add-btn"
           :disabled="!newTodoText.trim()"

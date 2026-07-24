@@ -18,7 +18,6 @@ import FileResourceManager from '@/components/editor_workspace/FileResourceManag
 import SelectionToolbar from '@/components/editor_workspace/SelectionToolbar.vue'
 import TodoSidebar from '@/components/editor_workspace/TodoSidebar.vue'
 import TopCommandBar from '@/components/editor_workspace/TopCommandBar.vue'
-import { useTodoStore } from '@/stores/todo'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graphTypes'
 
@@ -123,7 +122,6 @@ function toggleAgentSidebar() {
 const todoSidebarOpen = ref(false)
 const todoSplitRatio = ref(0.5)
 const TODO_COLLAPSE_THRESHOLD = 0.12
-const agentWasOpenBeforeTodo = ref(false)
 watch(() => workspaceStore.todoSidebarOpen, (val) => {
   todoSidebarOpen.value = val
 })
@@ -136,17 +134,11 @@ function toggleTodoSidebar() {
   if (sidebarHidden.value) {
     workspaceStore.setMainView('editor')
   }
+  todoSidebarOpen.value = !todoSidebarOpen.value
   if (todoSidebarOpen.value) {
-    todoSidebarOpen.value = false
-    if (!agentWasOpenBeforeTodo.value) {
-      agentSidebarOpen.value = false
-    }
-    return
+    agentWidth.value = Math.max(agentWidth.value, DEFAULT_AGENT_WIDTH)
+    todoSplitRatio.value = 0.5
   }
-  agentWasOpenBeforeTodo.value = agentSidebarOpen.value
-  todoSidebarOpen.value = true
-  agentWidth.value = Math.max(agentWidth.value, DEFAULT_AGENT_WIDTH)
-  todoSplitRatio.value = 0.5
 }
 
 let activeTodoResize = false
@@ -160,7 +152,7 @@ function startTodoResize(event: PointerEvent) {
 
 function handleTodoResizeMove(event: PointerEvent) {
   if (!activeTodoResize) return
-  const container = (event.target as HTMLElement)?.closest('.agent-col') as HTMLElement | null
+  const container = (document.querySelector('.agent-col') as HTMLElement)
   if (!container) return
   const rect = container.getBoundingClientRect()
   const y = event.clientY - rect.top
@@ -288,10 +280,14 @@ function handleResizeMove(event: PointerEvent) {
 
   const nextWidth = rect.right - event.clientX
   if (nextWidth < COLLAPSE_THRESHOLD) {
-    agentSidebarOpen.value = false
+    if (agentSidebarOpen.value) {
+      agentSidebarOpen.value = false
+    }
     return
   }
-  agentSidebarOpen.value = true
+  if (!visibleAgentSidebarOpen.value) {
+    agentSidebarOpen.value = true
+  }
   const fileColumnWidth = fileSidebarOpen.value ? fileWidth.value : 0
   const maxAgentWidth = Math.max(MIN_PANEL_WIDTH, rect.width - ACTIVITY_BAR_WIDTH - fileColumnWidth - 8)
   agentWidth.value = clamp(nextWidth, MIN_PANEL_WIDTH, maxAgentWidth)
