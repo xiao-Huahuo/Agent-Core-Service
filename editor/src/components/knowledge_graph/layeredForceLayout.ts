@@ -211,7 +211,8 @@ export function createLayeredForceSimulation(
     .force('center', forceCenter(width / 2, height / 2))
     .alpha(semantic ? 0.12 : 0.95)
     .alphaDecay(semantic ? 0 : 0.035)
-    .alphaMin(semantic ? 0 : 0.001);
+    .alphaMin(semantic ? 0 : 0.001)
+    .velocityDecay(semantic ? 0.55 : 0.4);
   if (semantic) {
     simulation.force('document-repulsion', forceDocumentRepulsion(5000))
   }

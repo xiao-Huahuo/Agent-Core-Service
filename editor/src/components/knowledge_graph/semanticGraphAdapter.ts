@@ -14,7 +14,7 @@ import type { KnowledgeGraphLink, KnowledgeGraphModel, KnowledgeGraphNode, Knowl
 
 function nodeRadius(kind: string, connectionCount: number): number {
   if (kind === 'document') {
-    return 24
+    return 8
   }
   if (kind === 'entity') {
     const baseSize = 5
@@ -39,6 +39,7 @@ function documentPath(node: { metadata?: Record<string, unknown>; source_uri?: s
 /** Build a flat, rootless graph model from backend semantic graph payload. */
 export function buildSemanticKnowledgeGraph(
   payload: KnowledgeSemanticGraphResponse | null,
+  libraryName?: string,
 ): KnowledgeGraphModel {
   const backendNodes = payload?.nodes ?? []
   const nodeCount = backendNodes.length
@@ -84,6 +85,35 @@ export function buildSemanticKnowledgeGraph(
     kind: link.kind || 'semantic',
     weight: link.weight,
   }))
+
+  // Add a library node that connects to all document nodes to anchor them.
+  const libraryNode: KnowledgeGraphNode = {
+    id: '__library__',
+    label: libraryName || '知识库',
+    path: '',
+    kind: 'library',
+    depth: 0,
+    siblingIndex: 0,
+    siblingCount: nodes.length + 1,
+    ringIndex: 0,
+    radius: 31,
+    targetX: 0,
+    targetY: 0,
+    x: 0,
+    y: 0,
+  }
+  nodes.push(libraryNode)
+
+  const documentNodes = nodes.filter((n) => n.kind === 'document')
+  for (let i = 0; i < documentNodes.length; i++) {
+    links.push({
+      id: `__library__to__${documentNodes[i].id}`,
+      source: '__library__',
+      target: documentNodes[i].id,
+      kind: 'semantic',
+      weight: 1,
+    })
+  }
 
   return { nodes, links }
 }

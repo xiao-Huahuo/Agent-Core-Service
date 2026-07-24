@@ -66,6 +66,9 @@ function nodeColor(node: KnowledgeGraphNode, theme: KnowledgeGraphRenderTheme): 
   if (node.kind === 'document') {
     return theme.root
   }
+  if (node.kind === 'library') {
+    return theme.root
+  }
   if (node.kind === 'entity') {
     return (node.extension && ENTITY_TYPE_COLORS[node.extension]) ?? theme.accent
   }
@@ -81,7 +84,7 @@ function shouldShowLabel(node: KnowledgeGraphNode, state: KnowledgeGraphRenderSt
   if (!state.showLabels) {
     return node.id === state.hoveredNodeId
   }
-  if (node.kind === 'root' || node.kind === 'folder' || node.kind === 'document') {
+  if (node.kind === 'root' || node.kind === 'folder' || node.kind === 'document' || node.kind === 'library') {
     return true
   }
   return state.viewport.scale > 0.92 || isActive
@@ -304,6 +307,23 @@ function drawNode(
     ctx.strokeStyle = color
     ctx.lineWidth = 1.4 + 1.6 * glowProgress
     ctx.fill()
+    ctx.stroke()
+  } else if (node.kind === 'library') {
+    ctx.fillStyle = theme.surface
+    ctx.fill()
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(x, y, node.radius, 0, Math.PI * 2)
+    ctx.clip()
+    if (theme.libraryImage) {
+      const imgSize = node.radius * 1.6
+      ctx.drawImage(theme.libraryImage, x - imgSize / 2, y - imgSize / 2, imgSize, imgSize)
+    }
+    ctx.restore()
+    ctx.beginPath()
+    ctx.arc(x, y, node.radius, 0, Math.PI * 2)
+    ctx.strokeStyle = color
+    ctx.lineWidth = 1.4 + 1.6 * glowProgress
     ctx.stroke()
   } else {
     ctx.fillStyle = color

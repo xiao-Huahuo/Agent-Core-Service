@@ -36,6 +36,10 @@ const emit = defineEmits<{
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const hostRef = ref<HTMLElement | null>(null)
 const runtimeModel = shallowRef<KnowledgeGraphModel>({ nodes: [], links: [] })
+
+// Preload library node logo image
+const libraryLogo = new Image()
+libraryLogo.src = new URL('../../assets/images/无底图标.png', import.meta.url).href
 const hoveredNodeId = ref('')
 const selectedNodeId = ref(props.selectedNodeId ?? '')
 const frozen = ref(false)
@@ -107,6 +111,7 @@ function readTheme(): KnowledgeGraphRenderTheme {
     selected: cssVar('--color-accent', '#eb2463'),
     accent: cssVar('--color-accent', '#eb2463'),
     surface: cssVar('--color-surface-raised', isDark ? '#202026' : '#ffffff'),
+    libraryImage: libraryLogo,
   }
 }
 

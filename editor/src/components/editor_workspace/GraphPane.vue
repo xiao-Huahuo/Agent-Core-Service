@@ -54,7 +54,7 @@ const knowledgeTitle = computed(() => {
 
 const graphModel = computed(() => {
   if (graphMode.value === 'semantic') {
-    return buildSemanticKnowledgeGraph(semanticGraph.value)
+    return buildSemanticKnowledgeGraph(semanticGraph.value, knowledgeTitle.value)
   }
   return buildFileTreeGraph(tree.value, { rootLabel: knowledgeTitle.value })
 })

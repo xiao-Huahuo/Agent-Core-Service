@@ -8,7 +8,7 @@
  */
 
 /** Supported graph node categories. */
-export type KnowledgeGraphNodeKind = 'root' | 'folder' | 'file' | 'virtual-group' | 'document' | 'entity'
+export type KnowledgeGraphNodeKind = 'root' | 'folder' | 'file' | 'virtual-group' | 'document' | 'entity' | 'library'
 
 /** Supported graph edge categories. Semantic graph relation types may use domain-specific strings. */
 export type KnowledgeGraphLinkKind = 'parent-child' | 'reference' | 'semantic' | string
@@ -119,6 +119,8 @@ export interface KnowledgeGraphRenderTheme {
   selected: string
   accent: string
   surface: string
+  /** Preloaded logo image for the library node. */
+  libraryImage?: HTMLImageElement
 }
 
 /** Hover highlight spread animation state. */
