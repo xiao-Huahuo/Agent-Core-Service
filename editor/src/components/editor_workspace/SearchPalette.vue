@@ -279,7 +279,7 @@ function navigateToSearchPage() {
   position: relative;
   display: flex;
   flex-direction: column;
-  max-width: 560px;
+  max-width: 336px;
   width: 100%;
   margin: 2px 0;
   z-index: 100;
@@ -381,7 +381,7 @@ function navigateToSearchPage() {
   overflow: hidden;
   white-space: nowrap;
   line-height: 22px;
-  transition: color 0.3s 0.1s ease-out;
+  transition: color 0.25s, background 0.25s;
   outline: none;
   text-align: center;
 }
@@ -418,7 +418,7 @@ function navigateToSearchPage() {
 
 .search-submit-btn:hover {
   color: #fff;
-  border-color: var(--color-primary);
+  background: var(--color-primary);
 }
 
 .search-submit-btn:hover::before {

@@ -53,7 +53,7 @@ function handleRipple(e: MouseEvent) {
       @mousedown.prevent="handleRipple"
       @click="emit('toggleFile')"
     >
-      <Folder :size="18" />
+      <Files :size="18" />
     </button>
     <button
       class="activity-button"
@@ -64,7 +64,7 @@ function handleRipple(e: MouseEvent) {
       @mousedown.prevent="handleRipple"
       @click="emit('openResources')"
     >
-      <Files :size="18" />
+      <Folder :size="18" />
     </button>
     <button
       class="activity-button"
