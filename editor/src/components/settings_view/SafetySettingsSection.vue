@@ -1,0 +1,594 @@
+<!--
+  安全设置面板：编辑敏感词库。
+
+  Usage:
+  读取并编辑 resources/safety/sensitive_words.json，以分类卡片展示，
+  每个敏感词和正则模式以 Chip/块 显示，支持行内增删。
+  支持一键关闭敏感词库和整个安全审核系统。
+-->
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from 'vue'
+import { fetchSensitiveWords, saveSensitiveWords } from '@/api/settings'
+
+interface CategoryData {
+  name: string
+  risk_level: string
+  block: boolean
+  exact: string[]
+  regex: string[]
+}
+
+interface WordData {
+  _description: string
+  _sensitive_words_disabled: boolean
+  _safety_disabled: boolean
+  categories: Record<string, CategoryData>
+}
+
+const data = reactive<WordData>({
+  _description: '敏感词库,按类别分组。支持 exact 精确匹配 + regex 正则匹配',
+  _sensitive_words_disabled: false,
+  _safety_disabled: false,
+  categories: {},
+})
+
+const categoryKeys = ref<string[]>([])
+const newCategoryKey = ref('')
+const newCategoryName = ref('')
+const newExactText = ref<Record<string, string>>({})
+const newRegexText = ref<Record<string, string>>({})
+const saving = ref(false)
+const saveMsg = ref('')
+const loading = ref(true)
+
+const safetyDisabled = computed(() => data._safety_disabled)
+const sensitiveDisabled = computed(() => data._sensitive_words_disabled)
+
+function showMessage(text: string, duration = 2000) {
+  saveMsg.value = text
+  setTimeout(() => { saveMsg.value = '' }, duration)
+}
+
+async function loadData() {
+  loading.value = true
+  try {
+    const raw = await fetchSensitiveWords()
+    if (raw && typeof raw === 'object') {
+      const r = raw as Record<string, unknown>
+      if (typeof r._description === 'string') data._description = r._description
+      data._sensitive_words_disabled = r._sensitive_words_disabled === true
+      data._safety_disabled = r._safety_disabled === true
+      const cats = r.categories
+      if (cats && typeof cats === 'object') {
+        data.categories = cats as Record<string, CategoryData>
+      }
+    }
+    categoryKeys.value = Object.keys(data.categories)
+  } catch {
+    showMessage('加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+function addExact(catKey: string) {
+  const text = (newExactText.value[catKey] || '').trim()
+  if (!text) return
+  const cat = data.categories[catKey]
+  if (cat && !cat.exact.includes(text)) {
+    cat.exact.push(text)
+  }
+  newExactText.value[catKey] = ''
+}
+
+function removeExact(catKey: string, index: number) {
+  const cat = data.categories[catKey]
+  if (cat) cat.exact.splice(index, 1)
+}
+
+function addRegex(catKey: string) {
+  const text = (newRegexText.value[catKey] || '').trim()
+  if (!text) return
+  const cat = data.categories[catKey]
+  if (cat && !cat.regex.includes(text)) {
+    cat.regex.push(text)
+  }
+  newRegexText.value[catKey] = ''
+}
+
+function removeRegex(catKey: string, index: number) {
+  const cat = data.categories[catKey]
+  if (cat) cat.regex.splice(index, 1)
+}
+
+function addCategory() {
+  const key = newCategoryKey.value.trim()
+  const name = newCategoryName.value.trim()
+  if (!key || !name) return
+  if (data.categories[key]) {
+    showMessage('分类键已存在')
+    return
+  }
+  data.categories[key] = {
+    name,
+    risk_level: 'high',
+    block: true,
+    exact: [],
+    regex: [],
+  }
+  categoryKeys.value = Object.keys(data.categories)
+  newCategoryKey.value = ''
+  newCategoryName.value = ''
+}
+
+function removeCategory(catKey: string) {
+  delete data.categories[catKey]
+  categoryKeys.value = Object.keys(data.categories)
+}
+
+function handleKeydownInput(e: KeyboardEvent, catKey: string, type: 'exact' | 'regex') {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    if (type === 'exact') addExact(catKey)
+    else addRegex(catKey)
+  }
+}
+
+async function handleSave() {
+  saving.value = true
+  saveMsg.value = ''
+  try {
+    const payload: Record<string, unknown> = {
+      _description: data._description,
+      _sensitive_words_disabled: data._sensitive_words_disabled,
+      _safety_disabled: data._safety_disabled,
+      categories: data.categories,
+    }
+    await saveSensitiveWords(payload)
+    showMessage('已保存')
+  } catch {
+    showMessage('保存失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+onMounted(loadData)
+</script>
+
+<template>
+  <div class="setting-section">
+    <h3>安全审核词库</h3>
+    <p class="safety-desc">{{ data._description }}</p>
+
+    <!-- 全局开关 -->
+    <div class="safety-global-toggles">
+      <div class="safety-global-row" :class="{ 'safety-global-risk': sensitiveDisabled }">
+        <label class="safety-global-label">敏感词库</label>
+        <input
+          :checked="sensitiveDisabled"
+          type="checkbox"
+          class="safety-toggle safety-toggle-danger"
+          @change="data._sensitive_words_disabled = ($event.target as HTMLInputElement).checked"
+        />
+        <span class="safety-global-text">
+          {{ sensitiveDisabled ? '已关闭 — 敏感词检查通过,不再拦截' : '开启中' }}
+        </span>
+      </div>
+      <div class="safety-global-row" :class="{ 'safety-global-risk': safetyDisabled }">
+        <label class="safety-global-label">安全审核系统</label>
+        <input
+          :checked="safetyDisabled"
+          type="checkbox"
+          class="safety-toggle safety-toggle-danger"
+          @change="data._safety_disabled = ($event.target as HTMLInputElement).checked"
+        />
+        <span class="safety-global-text">
+          {{ safetyDisabled ? '已关闭 — 三大审核层全部绕过' : '开启中' }}
+        </span>
+      </div>
+      <div v-if="safetyDisabled" class="safety-global-warning">
+        ⚠ 安全审核系统已关闭，敏感词库、意图审核、输出审核全部绕过
+      </div>
+    </div>
+
+    <!-- Save bar -->
+    <div class="safety-actions">
+      <button class="save-model-btn" :disabled="saving" @click="handleSave">
+        {{ saving ? '保存中...' : '保存全部' }}
+      </button>
+      <span v-if="saveMsg" class="feedback">{{ saveMsg }}</span>
+    </div>
+
+    <!-- Loading -->
+    <p v-if="loading" class="safety-loading">加载中...</p>
+
+    <!-- Category list -->
+    <div v-for="catKey in categoryKeys" :key="catKey" class="safety-category-card">
+      <div class="safety-cat-header">
+        <strong class="safety-cat-key">{{ catKey }}</strong>
+        <input
+          v-model="data.categories[catKey].name"
+          class="safety-cat-name-input"
+          placeholder="分类名称"
+          spellcheck="false"
+        />
+        <button class="entry-del" title="删除此分类" @click="removeCategory(catKey)">&times;</button>
+      </div>
+
+      <div class="safety-cat-meta">
+        <label class="safety-label">风险等级</label>
+        <select v-model="data.categories[catKey].risk_level" class="safety-select">
+          <option value="high">高</option>
+          <option value="medium">中</option>
+          <option value="low">低</option>
+        </select>
+        <label class="safety-label" style="margin-left: 16px">拦截</label>
+        <input
+          :checked="data.categories[catKey].block"
+          type="checkbox"
+          class="safety-toggle"
+          @change="data.categories[catKey].block = ($event.target as HTMLInputElement).checked"
+        />
+      </div>
+
+      <!-- Exact words -->
+      <div class="safety-subsection">
+        <span class="safety-subtitle">精确匹配</span>
+        <div v-if="data.categories[catKey].exact.length" class="safety-chip-row">
+          <span
+            v-for="(word, i) in data.categories[catKey].exact"
+            :key="i"
+            class="safety-chip"
+          >
+            <span class="safety-chip-text">{{ word }}</span>
+            <button class="safety-chip-del" @click="removeExact(catKey, i)">&times;</button>
+          </span>
+        </div>
+        <div class="safety-chip-input-row">
+          <input
+            v-model="newExactText[catKey]"
+            class="safety-chip-input"
+            placeholder="添加精确匹配词"
+            spellcheck="false"
+            @keydown="handleKeydownInput($event, catKey, 'exact')"
+          />
+          <button class="add-btn" :disabled="!(newExactText[catKey] || '').trim()" @click="addExact(catKey)">添加</button>
+        </div>
+      </div>
+
+      <!-- Regex patterns -->
+      <div class="safety-subsection">
+        <span class="safety-subtitle">正则匹配</span>
+        <div v-if="data.categories[catKey].regex.length" class="safety-chip-row">
+          <span
+            v-for="(pattern, i) in data.categories[catKey].regex"
+            :key="i"
+            class="safety-chip safety-chip-regex"
+          >
+            <span class="safety-chip-text safety-chip-code">{{ pattern }}</span>
+            <button class="safety-chip-del" @click="removeRegex(catKey, i)">&times;</button>
+          </span>
+        </div>
+        <div class="safety-chip-input-row">
+          <input
+            v-model="newRegexText[catKey]"
+            class="safety-chip-input safety-chip-input-code"
+            placeholder="添加正则模式"
+            spellcheck="false"
+            @keydown="handleKeydownInput($event, catKey, 'regex')"
+          />
+          <button class="add-btn" :disabled="!(newRegexText[catKey] || '').trim()" @click="addRegex(catKey)">添加</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add new category -->
+    <div class="safety-add-cat">
+      <h3 style="margin-top: 20px">添加分类</h3>
+      <div class="safety-add-cat-row">
+        <input
+          v-model="newCategoryKey"
+          class="safety-chip-input"
+          placeholder="分类键（英文，如 violence）"
+          spellcheck="false"
+          style="width: 200px"
+        />
+        <input
+          v-model="newCategoryName"
+          class="safety-chip-input"
+          placeholder="分类名称（如 暴力）"
+          spellcheck="false"
+          style="width: 200px"
+        />
+        <button class="add-btn" :disabled="!newCategoryKey.trim() || !newCategoryName.trim()" @click="addCategory">
+          添加分类
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.safety-desc {
+  margin: -4px 0 var(--space-10);
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
+  line-height: 1.45;
+}
+
+.safety-loading {
+  color: var(--color-text-muted);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.safety-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-bottom: var(--space-14);
+}
+
+/* ---- 全局开关 ---- */
+
+.safety-global-toggles {
+  margin-bottom: var(--space-10);
+  padding: var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+}
+
+.safety-global-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-6) 0;
+}
+
+.safety-global-row + .safety-global-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.safety-global-label {
+  flex-shrink: 0;
+  width: 110px;
+  color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 600;
+}
+
+.safety-global-text {
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
+}
+
+.safety-global-risk .safety-global-text {
+  color: var(--color-danger);
+}
+
+.safety-global-warning {
+  margin-top: var(--space-6);
+  padding: var(--space-6) var(--space-8);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 95, 95, 0.1);
+  color: var(--color-danger);
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.4;
+}
+
+.safety-toggle-danger:checked {
+  background: var(--color-danger) !important;
+  border-color: var(--color-danger) !important;
+}
+
+/* ---- 分类卡片 ---- */
+
+.safety-category-card {
+  margin-bottom: var(--space-12);
+  padding: var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+}
+
+.safety-cat-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-bottom: var(--space-8);
+}
+
+.safety-cat-key {
+  flex-shrink: 0;
+  font-size: calc(11px * var(--font-scale));
+  color: var(--color-text-muted);
+  font-family: var(--font-code);
+  text-transform: lowercase;
+}
+
+.safety-cat-name-input {
+  flex: 1;
+  height: 28px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
+  outline: none;
+}
+
+.safety-cat-name-input:focus {
+  border-color: var(--color-primary);
+}
+
+.safety-cat-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-10);
+}
+
+.safety-label {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.safety-select {
+  height: 26px;
+  padding: 0 var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: calc(12px * var(--font-scale));
+  outline: none;
+}
+
+.safety-toggle {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  margin: 0;
+  flex: none;
+  appearance: none;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: background 200ms, border-color 200ms;
+}
+
+.safety-toggle::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-text-muted);
+  transition: transform 200ms, background 200ms;
+}
+
+.safety-toggle:checked {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.safety-toggle:checked::before {
+  transform: translateX(12px);
+  background: #fff;
+}
+
+.safety-subsection {
+  margin-bottom: var(--space-8);
+}
+
+.safety-subtitle {
+  display: block;
+  margin-bottom: var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.safety-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.safety-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 26px;
+  padding: 0 var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.safety-chip-regex {
+  border-color: var(--color-primary-soft);
+  background: var(--color-primary-softer);
+}
+
+.safety-chip-text {
+  color: var(--color-text);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.safety-chip-code {
+  font-family: var(--font-code);
+  font-size: calc(11px * var(--font-scale));
+}
+
+.safety-chip-del {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: calc(13px * var(--font-scale));
+  cursor: pointer;
+}
+
+.safety-chip-del:hover {
+  color: var(--color-danger);
+  background: rgba(255, 95, 95, 0.08);
+}
+
+.safety-chip-input-row {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.safety-chip-input {
+  flex: 1;
+  height: 28px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+  outline: none;
+}
+
+.safety-chip-input:focus {
+  border-color: var(--color-primary);
+}
+
+.safety-chip-input-code {
+  font-family: var(--font-code);
+  font-size: calc(11px * var(--font-scale));
+}
+
+.safety-add-cat {
+  margin-top: var(--space-4);
+}
+
+.safety-add-cat-row {
+  display: flex;
+  gap: var(--space-6);
+  align-items: center;
+  flex-wrap: wrap;
+}
+</style>
