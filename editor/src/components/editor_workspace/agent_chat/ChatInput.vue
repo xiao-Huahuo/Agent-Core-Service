@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { Check, ChevronDown, Globe, Plus, Send, Settings, Shield, X } from 'lucide-vue-next'
+import { Check, ChevronDown, Globe, Plus, Send, Settings, Shield, Square, X } from 'lucide-vue-next'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import ContextProgress from '@/components/editor_workspace/agent_chat/ContextProgress.vue'
 import type { AgentAccessMode } from '@/api/agent'
@@ -26,6 +26,7 @@ const props = defineProps<{
   suggestionsLoading?: boolean
   messages?: unknown[]
   maxContextTokens?: number
+  isStreaming?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -37,6 +38,7 @@ const emit = defineEmits<{
   'remove-attachment': [attachment: AgentUploadedAttachment]
   'file-select': [file: File]
   'select-suggestion': [suggestion: string]
+  'cancel-stream': []
 }>()
 
 const text = ref('')
@@ -83,6 +85,7 @@ watch(menuVisible, (visible) => {
 })
 
 function handleSend() {
+  if (props.isStreaming) return
   const trimmed = text.value.trim()
   if (!trimmed) {
     return
@@ -278,7 +281,23 @@ function handleFileChange(event: Event) {
           :messages="props.messages"
           :max-context-tokens="props.maxContextTokens"
         />
-        <button class="send-btn" :disabled="disabled || !text.trim()" type="button" title="发送" @click="handleSend">
+        <button
+          v-if="isStreaming"
+          class="send-btn stop-btn"
+          type="button"
+          title="中断输出"
+          @click="emit('cancel-stream')"
+        >
+          <Square :size="14" />
+        </button>
+        <button
+          v-else
+          class="send-btn"
+          :disabled="disabled || !text.trim()"
+          type="button"
+          title="发送"
+          @click="handleSend"
+        >
           <Send :size="15" />
         </button>
       </div>
@@ -885,6 +904,35 @@ function handleFileChange(event: Event) {
 .send-btn:disabled {
   cursor: default;
   opacity: 0.35;
+}
+
+.stop-btn {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #d32f2f;
+  color: #fff;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.stop-btn:hover:not(:disabled) {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px #d32f2f;
+  color: #d32f2f;
+}
+
+.stop-btn :deep(svg) {
+  display: block;
+}
+
+@keyframes stop-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(211, 47, 47, 0); }
 }
 
 @container (max-width: 360px) {

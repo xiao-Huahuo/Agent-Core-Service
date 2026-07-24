@@ -1,5 +1,11 @@
 # CHANGE HISTORY
 
+## 2026-07-24
+- [x] Agent 输出中断与超时熔断: ChatInput 发送按钮在流式输出时切换为红色脉冲停止按钮(Square 图标);点击停止后 `chatStore.cancelStream()` 立即中止 fetch、刷新缓冲内容并将最后一条 assistant 消息标记为 `interrupted` 节点,中断消息和已有 Agent 输出会保留在会话上下文中;自动启动 5 分钟超时定时器,超时后自动熔断取消输出。
+- [x] Markdown 代码块明暗切换与 ActivityBar Debug/Settings 按钮次序。
+- [x] Markdown 代码块明暗切换: 为 `MarkdownContent.vue` 添加 unscoped highlight.js 主题样式,所有 hljs 类使用 CSS 变量,亮色/暗色主题跟随 `data-theme` 自动切换,无需 JS 干预。
+- [x] 调整 ActivityBar 按钮次序: 将 Debug 按钮和 Settings 按钮包裹在 `bottom-group` 容器中,两个按钮一起置底,Debug 在上、Settings 在下。
+
 ## 2026-07-23
 - [x] 修正 Markdown 编辑菜单与查找替换细节: 右键二级菜单子项加宽并固定快捷键列,避免“纯文本粘贴 Ctrl+Shift+V”文字穿模;查找替换栏改为两行圆角输入框与右侧圆角按钮组;编辑区选中文字后直接输入 `*`、反引号、`$`、`=`、`~` 等符号时会包裹选区,不再替换掉选中文本。
 - [x] 完善 Markdown 编辑区快捷键与查找替换: 右键二级菜单标注保存、加粗、倾斜、删除线、剪切、复制、粘贴、纯文本粘贴、全选、查找替换、撤销/反撤销等核心快捷键;编辑区内支持 Ctrl+B/I/D 快速包裹选区、Ctrl+F 打开顶部查找替换栏并支持上/下一个、单次替换和全部替换;编辑面板内支持 Ctrl+E/P/T 切换 Edit/Preview/Split,不会作用到文件树快捷键上下文。

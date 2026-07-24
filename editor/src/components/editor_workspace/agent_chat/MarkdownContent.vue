@@ -440,3 +440,122 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
   color: var(--color-accent);
 }
 </style>
+
+<!--
+  highlight.js light / dark theme.
+  Switches with [data-theme] on <html> — no JS needed.
+-->
+<style>
+/* ── base ── */
+.hljs {
+  color: var(--hljs-fg, #e6e6e6);
+  background: transparent;
+}
+
+/* ── keywords / operators / tags ── */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link {
+  color: var(--hljs-keyword, #ff79c6);
+}
+
+/* ── strings / template ── */
+.hljs-string,
+.hljs-addition,
+.hljs-attribute,
+.hljs-template-variable,
+.hljs-selector-id {
+  color: var(--hljs-string, #50fa7b);
+}
+
+/* ── numbers / built-in / types ── */
+.hljs-number,
+.hljs-built_in,
+.hljs-type,
+.hljs-params {
+  color: var(--hljs-type, #8be9fd);
+}
+
+/* ── function names / titles ── */
+.hljs-title,
+.hljs-title.function_ {
+  color: var(--hljs-function, #50fa7b);
+}
+
+/* ── class names ── */
+.hljs-title.class_,
+.hljs-title.class_.inherited__ {
+  color: var(--hljs-class, #f1fa8c);
+}
+
+/* ── comments / quotes ── */
+.hljs-comment,
+.hljs-quote {
+  color: var(--hljs-comment, #6272a4);
+  font-style: italic;
+}
+
+/* ── constants / meta ── */
+.hljs-literal,
+.hljs-selector-attr,
+.hljs-selector-pseudo,
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-meta .hljs-string {
+  color: var(--hljs-constant, #bd93f9);
+}
+
+/* ── variables / attributes ── */
+.hljs-variable,
+.hljs-variable.language_,
+.hljs-variable.constant_ {
+  color: var(--hljs-variable, #f8f8f2);
+}
+
+/* ── deletion / diff ── */
+.hljs-deletion {
+  color: var(--hljs-deletion, #f55);
+}
+
+/* ── attr / property / regexp ── */
+.hljs-attr,
+.hljs-property,
+.hljs-regexp {
+  color: var(--hljs-attr, #f1fa8c);
+}
+
+/* ── punctuation / operators ── */
+.hljs-punctuation,
+.hljs-operator {
+  color: var(--hljs-operator, #ff79c6);
+}
+
+/* ── code tag / subst ── */
+.hljs-subst {
+  color: var(--hljs-fg, #e6e6e6);
+}
+
+/* ── doxy tags ── */
+.hljs-doctag,
+.hljs-doctag .hljs-keyword {
+  color: var(--hljs-comment, #6272a4);
+}
+
+/* ── light theme ── */
+[data-theme="light"] .hljs {
+  --hljs-fg: #24292e;
+  --hljs-keyword: #d73a49;
+  --hljs-string: #032f62;
+  --hljs-type: #6f42c1;
+  --hljs-function: #6f42c1;
+  --hljs-class: #e36209;
+  --hljs-comment: #6a737d;
+  --hljs-constant: #005cc5;
+  --hljs-variable: #24292e;
+  --hljs-deletion: #b31d28;
+  --hljs-attr: #22863a;
+  --hljs-operator: #d73a49;
+}
+</style>

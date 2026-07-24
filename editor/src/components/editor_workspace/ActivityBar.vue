@@ -106,26 +106,28 @@ const emit = defineEmits<{
     >
       <Activity :size="18" />
     </button>
-    <button
-      class="activity-button"
-      :class="{ active: debugActive }"
-      type="button"
-      title="Debug"
-      aria-label="Debug"
-      @click="emit('openDebug')"
-    >
-      <Bug :size="18" />
-    </button>
-    <button
-      class="activity-button bottom-button"
-      :class="{ active: settingsActive }"
-      type="button"
-      title="Settings"
-      aria-label="Settings"
-      @click="emit('openSettings')"
-    >
-      <Settings :size="18" />
-    </button>
+    <div class="bottom-group">
+      <button
+        class="activity-button"
+        :class="{ active: debugActive }"
+        type="button"
+        title="Debug"
+        aria-label="Debug"
+        @click="emit('openDebug')"
+      >
+        <Bug :size="18" />
+      </button>
+      <button
+        class="activity-button"
+        :class="{ active: settingsActive }"
+        type="button"
+        title="Settings"
+        aria-label="Settings"
+        @click="emit('openSettings')"
+      >
+        <Settings :size="18" />
+      </button>
+    </div>
   </nav>
 </template>
 
@@ -164,7 +166,11 @@ const emit = defineEmits<{
   color: var(--color-primary);
 }
 
-.bottom-button {
+.bottom-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
   margin-top: auto;
 }
 </style>

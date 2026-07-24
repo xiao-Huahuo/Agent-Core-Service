@@ -507,6 +507,7 @@ onBeforeUnmount(() => {
         :suggestions-loading="chatStore.suggestionsLoading"
         :messages="chatStore.messages"
         :max-context-tokens="contextWindowTokens"
+        :is-streaming="chatStore.isStreaming"
         @send="sendMessage"
         @select-suggestion="sendSuggestion"
         @toggle-web-search="handleToggleWebSearch"
@@ -515,6 +516,7 @@ onBeforeUnmount(() => {
         @clear-reference="clearReference"
         @remove-attachment="removeAttachment"
         @file-select="handleFileSelect"
+        @cancel-stream="chatStore.cancelStream"
       />
     </main>
     </div>

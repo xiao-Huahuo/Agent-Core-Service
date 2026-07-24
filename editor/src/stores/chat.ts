@@ -98,6 +98,8 @@ export const useChatStore = defineStore('chat', () => {
 
   let streamAbortController: AbortController | null = null
   let historyAbortController: AbortController | null = null
+  let streamTimeoutId: number | null = null
+  const streamTimeoutMs = 5 * 60 * 1000 // 5 minutes default
   let suggestionRequestId = 0
   let pendingContent = ''
   let flushTimer: number | null = null
@@ -325,13 +327,7 @@ export const useChatStore = defineStore('chat', () => {
     let targetSessionId = sessionId || sessionStore.currentSessionId
 
     if (isStreaming.value) {
-      streamAbortController?.abort()
-      forceFlushContent()
-      isStreaming.value = false
-      const lastAssistant = findLastAssistant()
-      if (lastAssistant) {
-        lastAssistant.node = 'interrupted'
-      }
+      cancelStream()
     }
 
     const attachmentsForTurn = [...pendingAttachments.value]
@@ -353,6 +349,12 @@ export const useChatStore = defineStore('chat', () => {
     activeAgentMode.value = agentMode
     currentKnowledgeSources.value = []
     currentCitationMap.value = {}
+
+    // Start stream timeout — auto-cancel if stream exceeds limit
+    clearStreamTimeout()
+    streamTimeoutId = window.setTimeout(() => {
+      cancelStream()
+    }, streamTimeoutMs)
 
     const bufferedTraces: Array<Record<string, unknown>> = []
     let assistantCreated = false
@@ -491,6 +493,7 @@ export const useChatStore = defineStore('chat', () => {
         updateLastMessage(streamError.value)
       }
     } finally {
+      clearStreamTimeout()
       if (!signal.aborted) {
         forceFlushContent()
         attachCitationMapToLastFinalAssistant()
@@ -513,6 +516,7 @@ export const useChatStore = defineStore('chat', () => {
     historyAbortController?.abort()
     streamAbortController = null
     historyAbortController = null
+    clearStreamTimeout()
     messages.value = []
     contextMirror.value = []
     activeAgentMode.value = 'auto'
@@ -526,6 +530,32 @@ export const useChatStore = defineStore('chat', () => {
     taskSuggestions.value = []
     suggestionsLoading.value = false
     suggestionRequestId += 1
+  }
+
+  function clearStreamTimeout() {
+    if (streamTimeoutId !== null) {
+      window.clearTimeout(streamTimeoutId)
+      streamTimeoutId = null
+    }
+  }
+
+  /**
+   * Cancel the current streaming response.
+   * Aborts the fetch, flushes buffered content, and marks the last assistant
+   * message as 'interrupted' so it's preserved in context.
+   */
+  function cancelStream() {
+    if (!isStreaming.value) return
+    clearStreamTimeout()
+    streamAbortController?.abort()
+    forceFlushContent()
+    isStreaming.value = false
+    const lastAssistant = findLastAssistant()
+    if (lastAssistant) {
+      lastAssistant.node = 'interrupted'
+    }
+    attachCitationMapToLastFinalAssistant()
+    currentNode.value = ''
   }
 
   function addPendingAttachment(attachment: AgentUploadedAttachment) {
@@ -580,6 +610,7 @@ export const useChatStore = defineStore('chat', () => {
     loadHistory,
     refreshTaskSuggestions,
     send,
+    cancelStream,
     clear,
     addPendingAttachment,
     deleteAttachment,
