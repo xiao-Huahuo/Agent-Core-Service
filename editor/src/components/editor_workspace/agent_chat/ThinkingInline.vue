@@ -287,7 +287,6 @@ const entries = computed(() => {
   min-height: 24px;
   color: #8a93a3;
   cursor: pointer;
-  user-select: none;
 }
 
 .bar-chevron {

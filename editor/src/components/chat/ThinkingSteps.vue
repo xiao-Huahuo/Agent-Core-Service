@@ -131,7 +131,6 @@ function traceKey(trace: TraceRecord, idx: number): string {
   gap: var(--space-6);
   padding: var(--space-8) var(--space-10);
   cursor: pointer;
-  user-select: none;
   font-family: var(--font-ui);
   transition: background var(--transition-fast);
 }
@@ -232,7 +231,6 @@ function traceKey(trace: TraceRecord, idx: number): string {
   gap: var(--space-6);
   padding: var(--space-8) var(--space-10);
   cursor: pointer;
-  user-select: none;
   min-width: 0;
 }
 

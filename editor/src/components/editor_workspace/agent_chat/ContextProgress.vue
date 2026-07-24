@@ -75,7 +75,6 @@ const dashOffset = computed(() => {
   align-items: center;
   gap: 4px;
   cursor: default;
-  user-select: none;
 }
 
 .ring {

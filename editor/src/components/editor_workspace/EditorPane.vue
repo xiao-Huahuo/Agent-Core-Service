@@ -498,7 +498,6 @@ watch(
 
 .editor-body[data-mode='split'] {
   gap: 0;
-  user-select: none;
 }
 
 .editor-body[data-mode='edit'],

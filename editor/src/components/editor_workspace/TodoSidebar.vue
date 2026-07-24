@@ -443,7 +443,6 @@ function isDatetimeExpired(iso: string): boolean {
   font-size: calc(11px * var(--font-scale));
   color: var(--color-text-muted);
   cursor: pointer;
-  user-select: none;
   white-space: nowrap;
 }
 

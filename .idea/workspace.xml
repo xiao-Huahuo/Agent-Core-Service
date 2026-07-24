@@ -4,21 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="修复agent的session没有恰当的重命名的问题.">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="图谱UI小改">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/safety/safety_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/safety/safety_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/safety/sensitive_word_checker.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/safety/sensitive_word_checker.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/api/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/settings.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/knowledge_graph/semanticGraphAdapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/knowledge_graph/semanticGraphAdapter.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/SettingsSidebar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/SettingsSidebar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/resources/safety/sensitive_words.json" beforeDir="false" afterPath="$PROJECT_DIR$/resources/safety/sensitive_words.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/chat/ThinkingSteps.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/chat/ThinkingSteps.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TodoSidebar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TodoSidebar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ContextProgress.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ContextProgress.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ThinkingInline.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ThinkingInline.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -288,31 +280,7 @@
       <workItem from="1784638422280" duration="912000" />
       <workItem from="1784688429981" duration="15773000" />
       <workItem from="1784723159028" duration="13415000" />
-      <workItem from="1784854303470" duration="22542000" />
-    </task>
-    <task id="LOCAL-00168" summary="图标">
-      <option name="closed" value="true" />
-      <created>1784388526127</created>
-      <option name="number" value="00168" />
-      <option name="presentableId" value="LOCAL-00168" />
-      <option name="project" value="LOCAL" />
-      <updated>1784388526127</updated>
-    </task>
-    <task id="LOCAL-00169" summary=".">
-      <option name="closed" value="true" />
-      <created>1784444862582</created>
-      <option name="number" value="00169" />
-      <option name="presentableId" value="LOCAL-00169" />
-      <option name="project" value="LOCAL" />
-      <updated>1784444862583</updated>
-    </task>
-    <task id="LOCAL-00170" summary="agent观测重构v1">
-      <option name="closed" value="true" />
-      <created>1784446395241</created>
-      <option name="number" value="00170" />
-      <option name="presentableId" value="LOCAL-00170" />
-      <option name="project" value="LOCAL" />
-      <updated>1784446395241</updated>
+      <workItem from="1784854303470" duration="23871000" />
     </task>
     <task id="LOCAL-00171" summary="agent观测重构v2">
       <option name="closed" value="true" />
@@ -682,15 +650,37 @@
       <option name="project" value="LOCAL" />
       <updated>1784879838883</updated>
     </task>
-    <option name="localTasksCounter" value="217" />
+    <task id="LOCAL-00217" summary="可选的安全审核">
+      <option name="closed" value="true" />
+      <created>1784884025285</created>
+      <option name="number" value="00217" />
+      <option name="presentableId" value="LOCAL-00217" />
+      <option name="project" value="LOCAL" />
+      <updated>1784884025285</updated>
+    </task>
+    <task id="LOCAL-00218" summary="可选的安全审核">
+      <option name="closed" value="true" />
+      <created>1784884029096</created>
+      <option name="number" value="00218" />
+      <option name="presentableId" value="LOCAL-00218" />
+      <option name="project" value="LOCAL" />
+      <updated>1784884029096</updated>
+    </task>
+    <task id="LOCAL-00219" summary="图谱UI小改">
+      <option name="closed" value="true" />
+      <created>1784884772316</created>
+      <option name="number" value="00219" />
+      <option name="presentableId" value="LOCAL-00219" />
+      <option name="project" value="LOCAL" />
+      <updated>1784884772317</updated>
+    </task>
+    <option name="localTasksCounter" value="220" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="语义知识图谱v2" />
-    <MESSAGE value="readme" />
     <MESSAGE value="图谱动画" />
     <MESSAGE value="语义知识图谱v3-实现了知识图谱队列" />
     <MESSAGE value="语义知识图谱v4-图谱侧边栏" />
@@ -714,7 +704,9 @@
     <MESSAGE value="图谱去重" />
     <MESSAGE value="图谱全库去重" />
     <MESSAGE value="修复agent的session没有恰当的重命名的问题." />
-    <option name="LAST_COMMIT_MESSAGE" value="修复agent的session没有恰当的重命名的问题." />
+    <MESSAGE value="可选的安全审核" />
+    <MESSAGE value="图谱UI小改" />
+    <option name="LAST_COMMIT_MESSAGE" value="图谱UI小改" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
