@@ -92,10 +92,10 @@ function stripHtml(value: string): string {
 }
 
 const sanitizedHtml = computed(() => {
-  // Allow citation-anchor class and data-citation-idx attribute
+  // Allow citation-anchor class, data-citation-idx attribute, and img tags
   const purifyConfig = {
-    ALLOWED_ATTR: ['data-citation-idx', 'class'],
-    ADD_TAGS: ['sup'],
+    ALLOWED_ATTR: ['data-citation-idx', 'class', 'src', 'alt', 'referrerpolicy'],
+    ADD_TAGS: ['sup', 'img'],
   }
   return DOMPurify.sanitize(
     marked.parse(stripHtml(props.content), { async: false }) as string,
@@ -438,6 +438,12 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
 
 .markdown-body :deep(.source-file-link:hover) {
   color: var(--color-accent);
+}
+
+.markdown-body :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
 }
 </style>
 

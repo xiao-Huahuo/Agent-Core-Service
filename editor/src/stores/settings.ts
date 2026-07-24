@@ -39,6 +39,7 @@ const DEFAULT_PROFILE: UserSettingsProfile = {
   knowledgeWatchEnabled: true,
   proxyUrl: '',
   webSearchEnabled: false,
+  webSearchMaxResults: 10,
   autoIngestOnUpload: false,
   ocrEnabled: false,
   knowledgeIgnorePatterns: '',
@@ -173,10 +174,11 @@ function mapBackendProfile(profileResponse: SettingsProfileResponse): Partial<Us
   }
 }
 
-function mapBackendWebSearchConfig(config: { proxy_url: string; web_search_enabled: boolean }): Partial<UserSettingsProfile> {
+function mapBackendWebSearchConfig(config: { proxy_url: string; web_search_enabled: boolean; web_search_max_results?: number }): Partial<UserSettingsProfile> {
   return {
     proxyUrl: config.proxy_url,
     webSearchEnabled: config.web_search_enabled,
+    webSearchMaxResults: config.web_search_max_results ?? 10,
   }
 }
 

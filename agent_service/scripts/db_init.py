@@ -19,6 +19,7 @@ python -m agent_service.scripts.db_init
 from __future__ import annotations
 
 from sqlmodel import SQLModel, create_engine
+from sqlalchemy import text
 
 import agent_service.models  # noqa: F401
 from agent_service.core.agent_config import AgentConfig
@@ -34,6 +35,15 @@ def initialize_database(*, config: AgentConfig) -> None:
 
     engine = create_engine(f"sqlite:///{config.storage.sqlite_path}", pool_pre_ping=True)
     SQLModel.metadata.create_all(engine)
+
+    # 迁移: 旧数据库可能缺少 web_search_max_results 列
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT COUNT(*) FROM pragma_table_info('user_settings') WHERE name='web_search_max_results'")
+        )
+        if result.scalar() == 0:
+            conn.execute(text("ALTER TABLE user_settings ADD COLUMN web_search_max_results INTEGER DEFAULT 10"))
+            conn.commit()
 
     from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 

@@ -51,7 +51,10 @@ class ContextBuilder:
         self.retrieval_service = retrieval_service or MemoryRetrievalService(config=config)
         self.attachment_service = attachment_service
 
-    def build_messages(self, *, user_id: str, session_id: str, current_prompt: str, reference: str | None = None) -> list[BaseMessage]:
+    def build_messages(
+        self, *, user_id: str, session_id: str, current_prompt: str, reference: str | None = None,
+        web_search_max_results: int = 10,
+    ) -> list[BaseMessage]:
         """
         构建当前轮 Agent 调用需要的 LangChain messages。
 
@@ -73,6 +76,7 @@ class ContextBuilder:
             session_id=session_id,
             current_prompt=current_prompt,
             has_history=bool(history),
+            web_search_max_results=web_search_max_results,
         )
         if memory_context:
             messages.append(
@@ -92,6 +96,7 @@ class ContextBuilder:
                 current_prompt=current_prompt,
                 history=compressed_history,
                 reference=reference,
+                web_search_max_results=web_search_max_results,
             )
         return messages
 
@@ -102,6 +107,7 @@ class ContextBuilder:
         session_id: str,
         current_prompt: str,
         has_history: bool,
+        web_search_max_results: int = 10,
     ) -> tuple[str, dict[str, float | int], dict[str, Any]]:
         """
         构建长期记忆和知识库召回上下文文本,并产出检索指标。
@@ -201,6 +207,21 @@ class ContextBuilder:
             "When mentioning a cited local document by name, prefer the full `source_uri` path from the citation metadata "
             "instead of only a bare filename, so the UI can link the document name."
         )
+        sections.append(
+            "图片展示规则: 需要展示图片时,直接使用 Markdown 热链接 `![描述](原始图片URL)` 嵌入图片,"
+            "不要下载图片到本地。只有在用户明确要求保存/下载图片时,才使用 download_file 工具。"
+        )
+        sections.append(
+            f"联网搜索规则: 每次搜索时使用 max_results={web_search_max_results} 一次性获取尽可能多的结果,"
+            "仔细阅读所有返回结果后再决定是否需要再次搜索。"
+            "不要在已有结果的情况下立即发起新的搜索——先看完当前结果,确认缺少关键信息时再搜索。"
+            "宁可一次搜全面,也不要分多次零散搜索。"
+        )
+        sections.append(
+            "知识库文件 URL 规则: 为在回复中展示知识库中的图片/文件,使用 get_knowledge_file_url 工具获取文件的可访问 URL,"
+            "获取后在 Markdown 中以 `![描述](url)` 或 `[文件名](url)` 格式引用。"
+            "下载到本地的文件可通过 /downloads/ 路径访问,例如 `![图片](/downloads/filename.png)`。"
+        )
         if has_history:
             sections.append("短期上下文状态: 当前 session 已存在历史消息,回答时优先使用这些历史事实。")
         has_refs = important_summary is not None or memories or knowledge or bool(attachment_context and attachment_context.content)
@@ -250,6 +271,7 @@ class ContextBuilder:
         current_prompt: str,
         history: list[MessageOut],
         reference: str | None = None,
+        web_search_max_results: int = 10,
     ) -> list[BaseMessage]:
         """
         在上下文接近 token 上限时重建更紧凑的消息列表。
@@ -267,6 +289,7 @@ class ContextBuilder:
             session_id=session_id,
             current_prompt=current_prompt,
             has_history=bool(history),
+            web_search_max_results=web_search_max_results,
         )
         if memory_context:
             messages.append(

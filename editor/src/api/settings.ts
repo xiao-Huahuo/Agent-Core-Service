@@ -276,6 +276,7 @@ export interface WebSearchConfigResponse {
   user_id: string
   proxy_url: string
   web_search_enabled: boolean
+  web_search_max_results: number
 }
 
 export function fetchWebSearchConfig(userId: string): Promise<WebSearchConfigResponse> {
@@ -284,11 +285,12 @@ export function fetchWebSearchConfig(userId: string): Promise<WebSearchConfigRes
 
 export function saveWebSearchConfig(
   userId: string,
-  params: { proxyUrl?: string; webSearchEnabled?: boolean },
+  params: { proxyUrl?: string; webSearchEnabled?: boolean; webSearchMaxResults?: number },
 ): Promise<WebSearchConfigResponse> {
-  const body: Record<string, string | boolean> = { user_id: userId }
+  const body: Record<string, string | boolean | number> = { user_id: userId }
   if (params.proxyUrl !== undefined) body.proxy_url = params.proxyUrl
   if (params.webSearchEnabled !== undefined) body.web_search_enabled = params.webSearchEnabled
+  if (params.webSearchMaxResults !== undefined) body.web_search_max_results = params.webSearchMaxResults
   return apiPut<WebSearchConfigResponse>(API_ROUTES.SETTINGS_WEB_SEARCH, body)
 }
 
@@ -393,8 +395,14 @@ export interface ToolEntry {
   enabled: boolean
 }
 
-export interface AvailableToolsResponse {
+export interface ToolGroup {
+  category: string
+  display_name: string
   tools: ToolEntry[]
+}
+
+export interface AvailableToolsResponse {
+  groups: ToolGroup[]
 }
 
 export function fetchAvailableTools(userId: string): Promise<AvailableToolsResponse> {

@@ -21,6 +21,7 @@ from agent_service.tools.builtin import (
     delete_long_term_memory,
     delete_long_term_rule,
     delete_todo,
+    download_file,
     echo_text,
     edit_todo,
     generate_uuid,
@@ -28,6 +29,7 @@ from agent_service.tools.builtin import (
     get_current_utc_time,
     get_current_viewing_document,
     get_knowledge_context,
+    get_knowledge_file_url,
     get_long_term_memory,
     json_parse,
     json_pick,
@@ -174,6 +176,21 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         function=run_terminal_command,
         display_name="终端命令",
     ),
+    BuiltinToolDefinition(
+        name="download_file",
+        description="下载文件到本地存储。注意: 展示图片时请直接使用 Markdown 热链接嵌入原始图片 URL,不要使用本工具。仅在用户明确要求保存或下载文件时才调用本工具。如果 save_to_knowledge=True,还会将文件拷贝到知识库并灌库。下载后的文件可通过 /downloads/ 路径在 Markdown 中引用。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "待下载文件的完整 URL。"},
+                "save_to_knowledge": {"type": "boolean", "description": "是否同时保存到当前 active 知识库并灌库。默认 false。"},
+                "knowledge_path": {"type": "string", "description": "可选。保存到知识库时的相对路径。"},
+            },
+            "required": ["url"],
+        },
+        function=download_file,
+        display_name="下载文件",
+    ),
 ]
 
 MEMORY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
@@ -298,6 +315,19 @@ KNOWLEDGE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         },
         function=save_uploaded_attachment_to_knowledge,
         display_name="附件存入知识库",
+    ),
+    BuiltinToolDefinition(
+        name="get_knowledge_file_url",
+        description="获取知识库中本地文件的浏览器可访问 URL。返回的 URL 可用于 Markdown 图片或链接,在回复中直接引用知识库文件。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "文件相对于知识库根目录的路径。例如 images/diagram.png。"},
+            },
+            "required": ["path"],
+        },
+        function=get_knowledge_file_url,
+        display_name="获取文件URL",
     ),
 ]
 
@@ -477,12 +507,12 @@ TODO_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
 WEB_SEARCH_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="web_search",
-        description="通过 DuckDuckGo 搜索互联网,返回格式化搜索结果列表。",
+        description="通过 DuckDuckGo 搜索互联网,返回格式化搜索结果列表。尽量少次搜索,每次搜索要覆盖全面——宁可一次搜完,也不要分多次搜。",
         args_schema={
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "搜索关键词。"},
-                "max_results": {"type": "integer", "description": "最大返回结果数,默认 5。"},
+                "query": {"type": "string", "description": "搜索关键词。尽量精确、全面,一次覆盖所有可能的关键词。"},
+                "max_results": {"type": "integer", "description": "最大返回结果数,不传则使用用户的配置值。"},
                 "region": {"type": "string", "description": "搜索区域代码,默认 cn-zh。"},
                 "time_range": {"type": "string", "description": "时间范围筛选。d/w/m/y。留空表示不限时间。"},
             },

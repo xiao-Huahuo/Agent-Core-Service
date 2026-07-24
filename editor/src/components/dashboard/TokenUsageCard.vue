@@ -4,6 +4,7 @@
   Usage:
   Keeps the original dashboard card area and switches between three backend
   backed charts: per model call, fixed time bucket, and session total usage.
+  Each tab provides its own filter controls.
 -->
 
 <script setup lang="ts">
@@ -17,8 +18,9 @@ import { useChatStore } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 
-type ChartKind = 'calls' | 'buckets' | 'sessions'
+type ChartKind = 'buckets' | 'calls' | 'sessions'
 type ChartMode = 'bar' | 'line'
+type SessionSort = 'time' | 'tokens'
 
 const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
@@ -30,7 +32,13 @@ const chartModes = ref<Record<ChartKind, ChartMode>>({
   buckets: 'bar',
   sessions: 'bar',
 })
+
+// --- per-tab filters ---
 const interval = ref<TokenUsageInterval>('5m')
+const lookback = ref<number>(24) // 小时
+const callLimit = ref<number>(50)
+const sessionSort = ref<SessionSort>('time')
+
 const loading = ref(false)
 const error = ref('')
 const stats = ref<TokenUsageStatsResponse>({
@@ -47,21 +55,45 @@ const chartTabs: Array<{ value: ChartKind; label: string }> = [
 ]
 
 const intervalOptions: Array<{ value: TokenUsageInterval; label: string }> = [
-  { value: '1m', label: '1分钟' },
-  { value: '3m', label: '3分钟' },
-  { value: '5m', label: '5分钟' },
-  { value: '10m', label: '10分钟' },
-  { value: '30m', label: '30分钟' },
-  { value: '1h', label: '1小时' },
-  { value: '2h', label: '2小时' },
-  { value: '3h', label: '3小时' },
-  { value: '6h', label: '6小时' },
-  { value: '12h', label: '12小时' },
-  { value: '24h', label: '24小时' },
+  { value: '1m', label: '1分' },
+  { value: '3m', label: '3分' },
+  { value: '5m', label: '5分' },
+  { value: '10m', label: '10分' },
+  { value: '30m', label: '30分' },
+  { value: '1h', label: '1时' },
+  { value: '2h', label: '2时' },
+  { value: '3h', label: '3时' },
+  { value: '6h', label: '6时' },
+  { value: '12h', label: '12时' },
+  { value: '24h', label: '24时' },
   { value: '3d', label: '3天' },
   { value: '10d', label: '10天' },
   { value: '15d', label: '15天' },
   { value: 'month', label: '月' },
+]
+
+const lookbackOptions: Array<{ value: number; label: string }> = [
+  { value: 1, label: '最近1小时' },
+  { value: 6, label: '最近6小时' },
+  { value: 24, label: '最近1天' },
+  { value: 72, label: '最近3天' },
+  { value: 240, label: '最近10天' },
+  { value: 360, label: '最近15天' },
+  { value: 720, label: '最近30天' },
+]
+
+const callLimitOptions: Array<{ value: number; label: string }> = [
+  { value: 5, label: '5次' },
+  { value: 10, label: '10次' },
+  { value: 30, label: '30次' },
+  { value: 50, label: '50次' },
+  { value: 100, label: '100次' },
+  { value: 300, label: '300次' },
+]
+
+const sessionSortOptions: Array<{ value: SessionSort; label: string }> = [
+  { value: 'time', label: '按时间' },
+  { value: 'tokens', label: '按用量' },
 ]
 
 const CURVE_COLORS = {
@@ -75,8 +107,14 @@ const TXT_LABEL = '#777'
 const statusText = computed(() => {
   if (loading.value) return '读取中'
   if (error.value) return '读取失败'
-  if (chartKind.value === 'calls') return `${stats.value.calls.length} 次调用`
-  if (chartKind.value === 'buckets') return intervalOptions.find((item) => item.value === interval.value)?.label || interval.value
+  if (chartKind.value === 'calls') {
+    const opt = callLimitOptions.find((item) => item.value === callLimit.value)
+    return `${stats.value.calls.length} 次(筛选${opt?.label || `${callLimit.value}次`})`
+  }
+  if (chartKind.value === 'buckets') {
+    const lo = lookbackOptions.find((item) => item.value === lookback.value)
+    return lo?.label || `最近${lookback.value}小时`
+  }
   return `${stats.value.sessions.length} sessions`
 })
 
@@ -250,11 +288,19 @@ async function loadStats() {
   loading.value = true
   error.value = ''
   try {
-    stats.value = await fetchTokenUsageStats(userId, {
+    const params: Parameters<typeof fetchTokenUsageStats>[1] = {
       sessionId: sessionStore.currentSessionId,
-      interval: interval.value,
-      limit: 120,
-    })
+    }
+    if (chartKind.value === 'buckets') {
+      params.interval = interval.value
+      params.lookbackHours = lookback.value
+    } else if (chartKind.value === 'calls') {
+      params.limit = callLimit.value
+    } else {
+      params.interval = interval.value
+      params.sessionSort = sessionSort.value
+    }
+    stats.value = await fetchTokenUsageStats(userId, params)
   } catch (err) {
     error.value = err instanceof Error ? err.message : '读取 token 统计失败'
   } finally {
@@ -267,7 +313,12 @@ onMounted(() => {
 })
 
 watch(
-  () => [settingsStore.profile.userId, sessionStore.currentSessionId, interval.value] as const,
+  () => [settingsStore.profile.userId, sessionStore.currentSessionId] as const,
+  () => void loadStats(),
+)
+
+watch(
+  () => [chartKind.value, interval.value, lookback.value, callLimit.value, sessionSort.value] as const,
   () => void loadStats(),
 )
 
@@ -295,11 +346,46 @@ watch(
         >
           {{ tab.label }}
         </button>
-        <select v-if="chartKind === 'buckets'" v-model="interval" class="interval-select">
-          <option v-for="option in intervalOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
+
+        <!-- 时间刻度: 桶粒度 + 时间范围 -->
+        <template v-if="chartKind === 'buckets'">
+          <select v-model="interval" class="filter-select">
+            <option v-for="option in intervalOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+          <select v-model="lookback" class="filter-select">
+            <option v-for="option in lookbackOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </template>
+
+        <!-- 每次调用: 调用次数筛选 -->
+        <template v-if="chartKind === 'calls'">
+          <select v-model="callLimit" class="filter-select">
+            <option v-for="option in callLimitOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </template>
+
+        <!-- Session 总量: 排序方式 -->
+        <template v-if="chartKind === 'sessions'">
+          <div class="sort-toggle">
+            <button
+              v-for="opt in sessionSortOptions"
+              :key="opt.value"
+              class="chart-mode-btn"
+              :class="{ active: sessionSort === opt.value }"
+              type="button"
+              @click="sessionSort = opt.value"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+        </template>
+
         <div class="chart-type-toggle">
           <button
             class="chart-mode-btn"
@@ -346,9 +432,11 @@ watch(
   align-items: center;
   gap: var(--space-6);
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
-.chart-type-toggle {
+.chart-type-toggle,
+.sort-toggle {
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -356,7 +444,7 @@ watch(
 }
 
 .chart-mode-btn,
-.interval-select {
+.filter-select {
   height: 22px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -377,7 +465,7 @@ watch(
   background: var(--color-primary-softer);
 }
 
-.interval-select {
+.filter-select {
   padding: 0 6px;
   border-color: var(--color-border);
   background: var(--color-surface);

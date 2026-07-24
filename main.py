@@ -236,12 +236,21 @@ _runtime_config = AgentConfig.load_config(ensure_directories=False, ensure_model
 _knowledge_assets_dir = _runtime_config.storage.base_data_dir / "assets" / "knowledge"
 _knowledge_assets_dir.mkdir(parents=True, exist_ok=True)
 
+_downloads_dir = _runtime_config.storage.base_data_dir / "assets" / "downloads"
+_downloads_dir.mkdir(parents=True, exist_ok=True)
+
 from fastapi.staticfiles import StaticFiles
 
 app.mount(
     "/knowledge/assets",
     StaticFiles(directory=str(_knowledge_assets_dir)),
     name="knowledge_assets",
+)
+
+app.mount(
+    "/downloads",
+    StaticFiles(directory=str(_downloads_dir)),
+    name="downloads",
 )
 
 

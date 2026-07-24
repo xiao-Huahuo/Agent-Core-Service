@@ -385,6 +385,7 @@ class AgentCore:
         reference: str | None = None,
         agent_mode: str = AGENT_LOOP_AUTO,
         agent_access_mode: str = "sandbox",
+        web_search_max_results: int = 10,
     ) -> Iterator[dict[str, Any]]:
         """
         运行带 session 上下文和消息持久化的一轮 Agent,逐节点产出 dict 事件。
@@ -394,6 +395,7 @@ class AgentCore:
         session_id: 会话 ID。
         reference: 用户引用的文本,作为额外上下文注入。
         agent_mode: Agent Loop 模式,支持 auto / simple / react / plan。兼容 deep 旧别名。
+        web_search_max_results: 联网搜索每次最大结果数,用于系统提示词引导 agent 行为。
         """
 
         reference = reference.strip() if reference and reference.strip() else None
@@ -414,7 +416,10 @@ class AgentCore:
             effective_mode,
             agent_mode,
         )
-        messages = context_builder.build_messages(user_id=user_id, session_id=session_id, current_prompt=prompt, reference=reference)
+        messages = context_builder.build_messages(
+            user_id=user_id, session_id=session_id, current_prompt=prompt, reference=reference,
+            web_search_max_results=web_search_max_results,
+        )
         turn_citation_map: dict[str, Any] = {}
         logger.debug("上下文构建完成 | message_count=%d", len(messages))
 
@@ -481,7 +486,7 @@ class AgentCore:
                 message_service=message_service,
                 citation_map=turn_citation_map,
             )
-            yield from _try_rename_and_yield(self, user_id, session_id)
+            _launch_auto_rename(self, user_id=user_id, session_id=session_id)
             return
 
         yield from self._stream_events(
@@ -495,7 +500,7 @@ class AgentCore:
             agent_access_mode=effective_access_mode,
             citation_map=turn_citation_map,
         )
-        yield from _try_rename_and_yield(self, user_id, session_id)
+        _launch_auto_rename(self, user_id=user_id, session_id=session_id)
 
     def cancel_session(self, session_id: str) -> None:
         """取消指定 session 正在执行的图,保存部分输出。"""
@@ -2003,14 +2008,3 @@ def _launch_auto_rename(agent: AgentCore, *, user_id: str, session_id: str) -> t
     return thread, q
 
 
-def _try_rename_and_yield(agent: AgentCore, user_id: str, session_id: str) -> Iterator[dict[str, Any]]:
-    """尝试自动重命名会话,成功则 yield session_renamed 事件。"""
-    logger.info("尝试会话自动重命名 | session=%s", session_id)
-    _rename_thread, rename_queue = _launch_auto_rename(agent, user_id=user_id, session_id=session_id)
-    try:
-        title = rename_queue.get(timeout=60.0)
-        if title:
-            logger.info("会话自动重命名成功 | session=%s title=%s", session_id, title)
-            yield {"type": "session_renamed", "session_id": session_id, "session_name": title}
-    except queue_module.Empty:
-        logger.info("会话自动重命名等待超时 | session=%s", session_id)

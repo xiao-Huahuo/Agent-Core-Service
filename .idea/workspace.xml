@@ -5,12 +5,57 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="图谱UI小改">
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/悬浮变色按钮.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/悬浮液滴缩小按钮.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/文件夹.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/新建按钮.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/更牛逼的文件夹.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/退出按钮.vue" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/chat/ThinkingSteps.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/chat/ThinkingSteps.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TodoSidebar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TodoSidebar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ContextProgress.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ContextProgress.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ThinkingInline.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ThinkingInline.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/nodes/observation.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/nodes/observation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/agent.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/token_usage.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/token_usage.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/models/user_settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/models/user_settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/scripts/db_init.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/scripts/db_init.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/context_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/context_builder.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/settings_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/settings_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/token_usage_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/token_usage_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/builtin.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/builtin.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/definitions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/definitions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/api/agent.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/agent.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/api/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/settings.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/TokenUsageCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/TokenUsageCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/ToolRegistryPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/ToolRegistryPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MarkdownContent.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MarkdownContent.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/ToolsSettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/ToolsSettingsSection.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/WebSearchSettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/WebSearchSettingsSection.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/chat.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/chat.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/settings.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/types/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/types/settings.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/vite.config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/Logo Loop" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/Logo Loop" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/Pixel马赛克图片变换" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/Pixel马赛克图片变换" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/StaggeredMenu" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/StaggeredMenu" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/Stepper表单" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/Stepper表单" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/carousel" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/carousel" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/一条向左一条向右" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/一条向左一条向右" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/光弦" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/光弦" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/光弦流背景" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/光弦流背景" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/动态列表" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/动态列表" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/图标坞" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/图标坞" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/文件夹" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/文件夹" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/浮上来出现的大标题" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/浮上来出现的大标题" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/液态玻璃" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/液态玻璃" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/液态玻璃2" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/液态玻璃2" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/点域背景" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/点域背景" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/绕着星环旋转" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/绕着星环旋转" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/边缘流光卡片" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/边缘流光卡片" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supercomponents/闪闪发光的卡片" beforeDir="false" afterPath="$PROJECT_DIR$/supercomponents/old/闪闪发光的卡片" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -30,6 +75,7 @@
         <option value="FastAPI test_main" />
         <option value="Vue Composition API Component" />
         <option value="Python Script" />
+        <option value="Vue Options API Component" />
       </list>
     </option>
   </component>
@@ -81,12 +127,13 @@
     "nodejs_package_manager_path": "npm",
     "prettierjs.PrettierConfiguration.Package": "D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\prettier",
     "settings.editor.selected.configurable": "project.propVCSSupport.DirectoryMappings",
-    "ts.external.directory.path": "D:\\Softwares\\JetBrains\\PyCharm 2025.2.3\\plugins\\javascript-plugin\\jsLanguageServicesImpl\\external",
+    "ts.external.directory.path": "D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\typescript\\lib",
     "vue.rearranger.settings.migration": "true"
   },
   "keyToStringList": {
     "vue.recent.templates": [
-      "Vue Composition API Component"
+      "Vue Composition API Component",
+      "Vue Options API Component"
     ]
   }
 }]]></component>
@@ -99,11 +146,11 @@
       <recent name="D:\Projects\Python\MetaWeave\docs\assets" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="D:\Projects\Python\MetaWeave\supercomponents\old" />
       <recent name="D:\Projects\Python\MetaWeave\tests\测试文件" />
       <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\images" />
       <recent name="D:\Projects\Python\MetaWeave" />
       <recent name="D:\Projects\Python\MetaWeave\docs\AI反思日志" />
-      <recent name="D:\Projects\Python\MetaWeave\docs\api" />
     </key>
   </component>
   <component name="RunManager" selected="Batch.启动">
@@ -280,15 +327,7 @@
       <workItem from="1784638422280" duration="912000" />
       <workItem from="1784688429981" duration="15773000" />
       <workItem from="1784723159028" duration="13415000" />
-      <workItem from="1784854303470" duration="23871000" />
-    </task>
-    <task id="LOCAL-00171" summary="agent观测重构v2">
-      <option name="closed" value="true" />
-      <created>1784447565488</created>
-      <option name="number" value="00171" />
-      <option name="presentableId" value="LOCAL-00171" />
-      <option name="project" value="LOCAL" />
-      <updated>1784447565488</updated>
+      <workItem from="1784854303470" duration="32334000" />
     </task>
     <task id="LOCAL-00172" summary="agent观测重构v3">
       <option name="closed" value="true" />
@@ -674,7 +713,15 @@
       <option name="project" value="LOCAL" />
       <updated>1784884772317</updated>
     </task>
-    <option name="localTasksCounter" value="220" />
+    <task id="LOCAL-00220" summary="图谱UI小改">
+      <option name="closed" value="true" />
+      <created>1784885362116</created>
+      <option name="number" value="00220" />
+      <option name="presentableId" value="LOCAL-00220" />
+      <option name="project" value="LOCAL" />
+      <updated>1784885362116</updated>
+    </task>
+    <option name="localTasksCounter" value="221" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

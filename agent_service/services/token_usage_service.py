@@ -170,12 +170,17 @@ class TokenUsageService:
         session_id: str | None = None,
         interval: str = "5m",
         limit: int = 120,
+        lookback_hours: int | None = None,
+        session_sort: str = "time",
     ) -> dict[str, Any]:
         """
         Return token usage stats for dashboard cards.
 
         The response contains per-call rows, uniform time buckets, and session
         totals. Existing message trace metadata is backfilled before querying.
+
+        lookback_hours: Filter bucket data to the last N hours. None means no filter.
+        session_sort: Session total sort strategy: 'time' (default) or 'tokens'.
         """
 
         interval_key = interval if interval in SUPPORTED_INTERVALS else "5m"
@@ -190,8 +195,8 @@ class TokenUsageService:
         return {
             "interval": interval_key,
             "calls": [self._serialize_record(record) for record in records],
-            "buckets": self._build_buckets(all_user_records, interval_key),
-            "sessions": self._build_session_totals(user_id=user_id),
+            "buckets": self._build_buckets(all_user_records, interval_key, lookback_hours=lookback_hours),
+            "sessions": self._build_session_totals(user_id=user_id, sort_by=session_sort),
         }
 
     def _list_records(
@@ -225,9 +230,14 @@ class TokenUsageService:
         rows.reverse()
         return rows
 
-    def _build_buckets(self, records: list[TokenUsageRecord], interval: str) -> list[dict[str, Any]]:
+    def _build_buckets(
+        self, records: list[TokenUsageRecord], interval: str, *, lookback_hours: int | None = None
+    ) -> list[dict[str, Any]]:
         """Aggregate token usage into uniform time buckets."""
 
+        if lookback_hours:
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=lookback_hours)
+            records = [r for r in records if r.created_at >= cutoff]
         buckets: dict[str, dict[str, Any]] = {}
         for record in records:
             key, label, start = self._bucket_key(record.created_at, interval)
@@ -257,8 +267,11 @@ class TokenUsageService:
             for key, label, start in self._iter_bucket_range(starts[0], starts[-1], interval)
         ]
 
-    def _build_session_totals(self, *, user_id: str) -> list[dict[str, Any]]:
-        """Aggregate token totals by session for the given user."""
+    def _build_session_totals(self, *, user_id: str, sort_by: str = "time") -> list[dict[str, Any]]:
+        """Aggregate token totals by session for the given user.
+
+        sort_by: 'time' sorts by updated_at descending; 'tokens' by total_tokens descending.
+        """
 
         sessions: dict[str, dict[str, Any]] = {}
         with Session(self.engine) as db_session:
@@ -306,7 +319,9 @@ class TokenUsageService:
                 item["small_tokens"] += record.total_tokens
             item["total_tokens"] += record.total_tokens
             item["call_count"] += 1
-        return sorted(sessions.values(), key=lambda item: (item["total_tokens"], item["updated_at"]), reverse=True)
+        if sort_by == "tokens":
+            return sorted(sessions.values(), key=lambda item: item["total_tokens"], reverse=True)
+        return sorted(sessions.values(), key=lambda item: item["updated_at"], reverse=True)
 
     def _records_from_message(self, message: MessageRecord) -> list[TokenUsageRecord]:
         """Convert one message's trace metadata into token usage records."""

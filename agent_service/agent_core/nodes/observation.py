@@ -245,7 +245,7 @@ class ObservationNode:
                 for tc in calls:
                     tool_calls.append(tc)
             elif msg_type == "tool" and content:
-                tool_results.append(f"  结果: {content[:500]}")
+                tool_results.append(f"  结果: {content[:2000]}")
 
         if tool_calls:
             tc = tool_calls[-1]

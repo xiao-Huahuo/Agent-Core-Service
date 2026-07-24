@@ -194,12 +194,20 @@ export interface TokenUsageStatsResponse {
 
 export function fetchTokenUsageStats(
   userId: string,
-  options: { sessionId?: string | null; interval?: TokenUsageInterval; limit?: number } = {},
+  options: {
+    sessionId?: string | null
+    interval?: TokenUsageInterval
+    limit?: number
+    lookbackHours?: number
+    sessionSort?: 'time' | 'tokens'
+  } = {},
 ): Promise<TokenUsageStatsResponse> {
   return apiGet<TokenUsageStatsResponse>(API_ROUTES.AGENT_TOKEN_USAGE, {
     user_id: userId,
     session_id: options.sessionId || undefined,
     interval: options.interval || '5m',
     limit: options.limit || 120,
+    lookback_hours: options.lookbackHours,
+    session_sort: options.sessionSort || 'time',
   })
 }

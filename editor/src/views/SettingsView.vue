@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchSavedLLMConfigs, saveLLMConfigPreset, deleteLLMConfigPreset, fetchWebSearchConfig, saveWebSearchConfig, fetchAvailableTools, saveDisabledTools, fetchTerminalSandboxConfig, saveTerminalSandboxConfig } from '@/api/settings'
-import type { SystemPromptEntry, MemoryEntry, ToolEntry, SavedLLMConfig, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
+import type { SystemPromptEntry, MemoryEntry, ToolGroup, SavedLLMConfig, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
 import AppearanceSettingsSection from '@/components/settings_view/AppearanceSettingsSection.vue'
 import BasicSettingsSection from '@/components/settings_view/BasicSettingsSection.vue'
 import LlmSettingsSection from '@/components/settings_view/LlmSettingsSection.vue'
@@ -361,6 +361,7 @@ async function handleDeleteMemory(memoryId: string) {
 
 const proxyUrlDraft = ref('')
 const webSearchEnabledDraft = ref(false)
+const webSearchMaxResultsDraft = ref(10)
 const webSearchSaving = ref(false)
 const webSearchMsg = ref('')
 
@@ -370,6 +371,7 @@ async function loadWebSearchConfig() {
     const cfg = await fetchWebSearchConfig(settingsStore.profile.userId)
     proxyUrlDraft.value = cfg.proxy_url || ''
     webSearchEnabledDraft.value = cfg.web_search_enabled
+    webSearchMaxResultsDraft.value = cfg.web_search_max_results ?? 10
   } catch { /* ignore */ }
 }
 
@@ -381,6 +383,7 @@ async function handleSaveWebSearch() {
     await saveWebSearchConfig(settingsStore.profile.userId, {
       proxyUrl: proxyUrlDraft.value || undefined,
       webSearchEnabled: webSearchEnabledDraft.value,
+      webSearchMaxResults: webSearchMaxResultsDraft.value || undefined,
     })
     settingsStore.updateProfile({
       proxyUrl: proxyUrlDraft.value,
@@ -502,38 +505,42 @@ async function handleDeleteSavedModelConfig(configId: string) {
 
 /* ---- Tool management ---- */
 
-const tools = ref<ToolEntry[]>([])
+const toolGroups = ref<ToolGroup[]>([])
 const toolsMsg = ref('')
 
 async function loadTools() {
   if (!settingsStore.profile.userId) return
   try {
     const res = await fetchAvailableTools(settingsStore.profile.userId)
-    tools.value = res.tools ?? []
+    toolGroups.value = res.groups ?? []
   } catch {
-    tools.value = []
+    toolGroups.value = []
   }
 }
 
 async function handleToggleTool(toolName: string) {
   if (!settingsStore.profile.userId) return
-  const tool = tools.value.find(t => t.name === toolName)
-  if (tool) tool.enabled = !tool.enabled
-  try {
-    const disabled = tools.value.filter(t => !t.enabled).map(t => t.name)
-    await saveDisabledTools(settingsStore.profile.userId, disabled)
-  } catch {
-    if (tool) tool.enabled = !tool.enabled
-    showMessage(toolsMsg, '保存失败')
+  // Find the tool in groups and toggle
+  for (const g of toolGroups.value) {
+    const tool = g.tools.find(t => t.name === toolName)
+    if (tool) {
+      tool.enabled = !tool.enabled
+      try {
+        const disabled: string[] = []
+        for (const group of toolGroups.value) {
+          for (const t of group.tools) {
+            if (!t.enabled) disabled.push(t.name)
+          }
+        }
+        await saveDisabledTools(settingsStore.profile.userId, disabled)
+      } catch {
+        tool.enabled = !tool.enabled
+        showMessage(toolsMsg, '保存失败')
+      }
+      return
+    }
   }
 }
-
-const sortedTools = computed(() => {
-  return [...tools.value].sort((a, b) => {
-    if (a.enabled !== b.enabled) return a.enabled ? -1 : 1
-    return a.display_name.localeCompare(b.display_name)
-  })
-})
 
 /* ---- Terminal sandbox ---- */
 
@@ -663,7 +670,7 @@ onBeforeUnmount(() => {
 
       <ToolsSettingsSection
         v-if="activeTab === 'tools'"
-        :tools="sortedTools"
+        :groups="toolGroups"
         :tools-msg="toolsMsg"
         @toggle-tool="handleToggleTool"
       />
@@ -681,6 +688,7 @@ onBeforeUnmount(() => {
         v-if="activeTab === 'web'"
         v-model:proxy-url-draft="proxyUrlDraft"
         v-model:web-search-enabled-draft="webSearchEnabledDraft"
+        v-model:web-search-max-results-draft="webSearchMaxResultsDraft"
         :web-search-msg="webSearchMsg"
         :web-search-saving="webSearchSaving"
         @save="handleSaveWebSearch"

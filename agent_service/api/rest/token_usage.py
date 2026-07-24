@@ -24,6 +24,8 @@ async def get_agent_token_usage(
     session_id: str | None = Query(default=None, description="可选 session ID,用于每次调用表过滤"),
     interval: str = Query(default="5m", description="时间聚合刻度"),
     limit: int = Query(default=120, ge=1, le=500, description="每次调用表返回上限"),
+    lookback_hours: int | None = Query(default=None, description="时间刻度范围筛选(小时数,为空不过滤)"),
+    session_sort: str = Query(default="time", description="Session 排序方式: time|tokens"),
 ) -> dict[str, Any]:
     """Return persisted Agent token usage statistics."""
 
@@ -34,4 +36,6 @@ async def get_agent_token_usage(
         session_id=session_id,
         interval=interval_key,
         limit=limit,
+        lookback_hours=lookback_hours,
+        session_sort=session_sort,
     )

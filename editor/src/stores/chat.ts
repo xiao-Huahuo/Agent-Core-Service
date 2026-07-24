@@ -99,7 +99,7 @@ export const useChatStore = defineStore('chat', () => {
   let streamAbortController: AbortController | null = null
   let historyAbortController: AbortController | null = null
   let streamTimeoutId: number | null = null
-  const streamTimeoutMs = 5 * 60 * 1000 // 5 minutes default
+  const streamTimeoutMs = 10 * 60 * 1000 // 10 minutes sliding window
   let suggestionRequestId = 0
   let pendingContent = ''
   let flushTimer: number | null = null
@@ -350,11 +350,8 @@ export const useChatStore = defineStore('chat', () => {
     currentKnowledgeSources.value = []
     currentCitationMap.value = {}
 
-    // Start stream timeout — auto-cancel if stream exceeds limit
-    clearStreamTimeout()
-    streamTimeoutId = window.setTimeout(() => {
-      cancelStream()
-    }, streamTimeoutMs)
+    // Start stream timeout — auto-cancel if stream stalls for >10 minutes
+    resetStreamTimeout()
 
     const bufferedTraces: Array<Record<string, unknown>> = []
     let assistantCreated = false
@@ -390,6 +387,9 @@ export const useChatStore = defineStore('chat', () => {
           return true
         })
         lastAssistant.trace.push(...fresh)
+        if (node === 'action') {
+          lastAssistant.node = 'action'
+        }
       }
     }
 
@@ -419,6 +419,7 @@ export const useChatStore = defineStore('chat', () => {
         for (const traceItem of trace) {
           mergeCurrentCitationMap(traceItem.citation_map)
         }
+        resetStreamTimeout() // 每次收到新 chunk 重置超时计时器
 
         if (chunk.type === 'system_prompt' && content) {
           messages.value = messages.value.filter((message) => message.role !== 'system')
@@ -537,6 +538,13 @@ export const useChatStore = defineStore('chat', () => {
       window.clearTimeout(streamTimeoutId)
       streamTimeoutId = null
     }
+  }
+
+  function resetStreamTimeout() {
+    clearStreamTimeout()
+    streamTimeoutId = window.setTimeout(() => {
+      cancelStream()
+    }, streamTimeoutMs)
   }
 
   /**

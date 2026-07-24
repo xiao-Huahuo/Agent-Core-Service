@@ -9,7 +9,7 @@ const EDITOR_CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: http://127.0.0.1:8002 http://localhost:8002",
+  "img-src 'self' data: blob: https: http://127.0.0.1:8002 http://localhost:8002",
   "font-src 'self' data:",
   "connect-src 'self' http://127.0.0.1:8002 http://localhost:8002",
   "worker-src 'self' blob:",
@@ -61,6 +61,7 @@ export default defineConfig({
       '/knowledge': 'http://127.0.0.1:8002',
       '/sessions': 'http://127.0.0.1:8002',
       '/settings': 'http://127.0.0.1:8002',
+      '/downloads': 'http://127.0.0.1:8002',
     },
   },
   resolve: {

@@ -987,7 +987,7 @@ def get_current_viewing_document() -> str:
 
 def web_search(
     query: str,
-    max_results: int = 5,
+    max_results: int | None = None,
     region: str = "cn-zh",
     time_range: str = "",
 ) -> str:
@@ -995,7 +995,7 @@ def web_search(
     通过 DuckDuckGo 搜索互联网，返回格式化的搜索结果列表。
 
     query: 搜索关键词。
-    max_results: 最大返回结果数，默认 5。
+    max_results: 最大返回结果数，不传则使用用户的配置值。
     region: 搜索区域代码，默认 cn-zh（中国中文）。
     time_range: 时间范围。d=一天内, w=一周内, m=一个月内, y=一年内。留空不限时间。
     """
@@ -1016,6 +1016,8 @@ def web_search(
         return "联网搜索未启用，请在设置中开启。"
 
     proxy_url = config.get("proxy_url", "") or ""
+    configured_max = config.get("web_search_max_results", 10) or 10
+    effective_max = max(1, configured_max)
 
     if not proxy_url:
         return "搜索失败：未配置代理地址。国内访问 DuckDuckGo 需要代理，请在设置页面的「联网搜索」中填写代理地址（如 http://127.0.0.1:7890）。"
@@ -1029,7 +1031,7 @@ def web_search(
                 raw_results = list(ddgs.text(
                     query,
                     region=region,
-                    max_results=max_results * 2,
+                    max_results=effective_max * 2,
                     timelimit=time_range if time_range else None,
                 ))
             if raw_results:
@@ -1056,7 +1058,7 @@ def web_search(
             continue
         seen_hrefs.add(href)
         filtered.append(item)
-        if len(filtered) >= max_results:
+        if len(filtered) >= effective_max:
             break
 
     if not filtered:
@@ -1219,6 +1221,127 @@ def delete_todo(todo_id: str) -> str:
     if service.delete_todo(user_id=runtime.user_id, todo_id=todo_id):
         return f"已删除待办: {todo_id}"
     return f"未找到 ID 为 {todo_id} 的待办事项。"
+
+
+def get_knowledge_file_url(path: str) -> str:
+    """
+    获取知识库中本地文件的浏览器可访问 URL。用于在回复中以 Markdown 图片或链接形式引用知识库文件。
+
+    path: 文件相对于知识库根目录的路径。
+    """
+
+    runtime = get_tool_runtime()
+    return f"/knowledge/files/raw?user_id={runtime.user_id}&path={path}"
+
+
+def download_file(url: str, save_to_knowledge: bool = False) -> str:
+    """
+    从网络下载文件并存储到本地。可选的 save_to_knowledge=True 可将下载的文件复制到知识库并灌库。
+
+    url: 需要下载的文件的完整 URL。
+    save_to_knowledge: 是否将下载后的文件复制到知识库并灌库。默认 False。
+    """
+
+    import uuid
+    import urllib.request
+
+    runtime = get_tool_runtime()
+    downloads_dir = runtime.config.storage.base_data_dir / "assets" / "downloads"
+    downloads_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "MetaWeave/1.0"})
+        with urllib.request.urlopen(req, timeout=60) as response:
+            content = response.read()
+            content_type = response.headers.get("Content-Type", "")
+    except Exception as exc:
+        return f"下载失败: {exc}"
+
+    ext = _infer_extension(content_type, url)
+    filename = f"{uuid.uuid4().hex}{ext}"
+    local_path = downloads_dir / filename
+    local_path.write_bytes(content)
+    local_url = f"/downloads/{filename}"
+
+    if not save_to_knowledge:
+        return (
+            f"文件已下载到本地。预览: ![](local_url)\n\n"
+            f"本地 URL: {local_url}\n"
+            f"文件名: {filename}\n"
+            f"类型: {content_type}\n"
+            f"大小: {len(content)} 字节"
+        )
+
+    # Copy to knowledge library and ingest
+    try:
+        from agent_service.services.knowledge_library_service import KnowledgeLibraryService
+        from agent_service.services.settings_service import SettingsService
+
+        if runtime.memory_service is None:
+            return "下载成功,但无法保存到知识库: 当前工具运行时缺少记忆写入服务。"
+
+        settings_service = SettingsService(config=runtime.config, memory_service=runtime.memory_service)
+        knowledge_service = KnowledgeLibraryService(
+            config=runtime.config,
+            memory_service=runtime.memory_service,
+            settings_service=settings_service,
+            embedding_service=runtime.embedding_service,
+        )
+
+        uploaded_path = knowledge_service.write_uploaded_file(
+            user_id=runtime.user_id,
+            filename=filename,
+            content=content,
+            relative_dir="",
+            conflict_strategy="rename",
+        )
+        root = knowledge_service.get_active_root_path(user_id=runtime.user_id)
+        relative_path = uploaded_path.resolve().relative_to(root.resolve()).as_posix()
+        result = knowledge_service.ingest_single_file(user_id=runtime.user_id, path=relative_path)
+        status = result.status_message or "ingested"
+
+        return (
+            f"文件已下载并存入知识库。预览: ![](local_url)\n\n"
+            f"本地 URL: {local_url}\n"
+            f"知识库路径: {relative_path}\n"
+            f"灌库状态: {status}\n"
+            f"类型: {content_type}\n"
+            f"大小: {len(content)} 字节"
+        )
+    except Exception as exc:
+        return (
+            f"文件已下载到本地,但存入知识库失败: {exc}\n"
+            f"本地 URL: {local_url}\n"
+            f"大小: {len(content)} 字节"
+        )
+
+
+def _infer_extension(content_type: str, url: str) -> str:
+    """从 Content-Type 或 URL 后缀推断文件扩展名。"""
+
+    ext_map = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "image/webp": ".webp",
+        "image/svg+xml": ".svg",
+        "image/bmp": ".bmp",
+        "application/pdf": ".pdf",
+        "text/plain": ".txt",
+        "text/html": ".html",
+        "text/csv": ".csv",
+        "application/json": ".json",
+        "application/zip": ".zip",
+    }
+    for ct, ext in ext_map.items():
+        if content_type.startswith(ct):
+            return ext
+    # Fallback: extract from URL
+    import pathlib
+    url_ext = pathlib.Path(url.split("?")[0].split("#")[0]).suffix
+    if url_ext and len(url_ext) <= 6:
+        return url_ext
+    return ".bin"
 
 
 from agent_service.tools.definitions import (  # noqa: E402

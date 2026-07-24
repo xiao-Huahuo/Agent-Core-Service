@@ -92,6 +92,7 @@ class SettingsService:
                 "theme_primary_color": "VARCHAR(16) NOT NULL DEFAULT ''",
                 "theme_soft_color": "VARCHAR(16) NOT NULL DEFAULT ''",
                 "graph_node_limit": "INTEGER NOT NULL DEFAULT 2000",
+                "web_search_max_results": "INTEGER NOT NULL DEFAULT 10",
             }
             with Session(self.engine) as db:
                 for col_name, col_type in migrations.items():
@@ -812,15 +813,16 @@ class SettingsService:
     # ---- 联网搜索配置 ----
 
     def get_web_search_config(self, *, user_id: str) -> dict:
-        """获取用户的联网搜索配置（代理地址 + 开关状态）。"""
+        """获取用户的联网搜索配置（代理地址 + 开关状态 + 最大结果数）。"""
         normalized_user_id = user_id.strip()
         with Session(self.engine) as db:
             record = db.get(UserSettingsRecord, normalized_user_id)
             if record is None:
-                return {"proxy_url": "", "web_search_enabled": False}
+                return {"proxy_url": "", "web_search_enabled": False, "web_search_max_results": 10}
             return {
                 "proxy_url": record.proxy_url,
                 "web_search_enabled": record.web_search_enabled,
+                "web_search_max_results": getattr(record, "web_search_max_results", 10) or 10,
             }
 
     def save_web_search_config(
@@ -829,6 +831,7 @@ class SettingsService:
         user_id: str,
         proxy_url: str | None = None,
         web_search_enabled: bool | None = None,
+        web_search_max_results: int | None = None,
     ) -> dict:
         """保存用户的联网搜索配置。"""
         normalized_user_id = user_id.strip()
@@ -841,6 +844,7 @@ class SettingsService:
                     knowledge_dir=str(self.config.storage.knowledge_dir),
                     proxy_url=proxy_url or "",
                     web_search_enabled=web_search_enabled or False,
+                    web_search_max_results=web_search_max_results or 10,
                     created_at=now,
                     updated_at=now,
                 )
@@ -849,6 +853,8 @@ class SettingsService:
                     record.proxy_url = proxy_url
                 if web_search_enabled is not None:
                     record.web_search_enabled = web_search_enabled
+                if web_search_max_results is not None:
+                    record.web_search_max_results = web_search_max_results
                 record.updated_at = now
             db.add(record)
             db.commit()
@@ -856,6 +862,7 @@ class SettingsService:
             return {
                 "proxy_url": record.proxy_url,
                 "web_search_enabled": record.web_search_enabled,
+                "web_search_max_results": getattr(record, "web_search_max_results", 10) or 10,
             }
 
     # ---- 可开关工具 ----
@@ -895,19 +902,44 @@ class SettingsService:
             return json.loads(record.disabled_tools)
 
     def list_available_tools(self, *, user_id: str) -> list[dict]:
-        """列出全部可用的内置工具及每项在当前用户的开关状态。"""
-        from agent_service.tools.builtin import BUILTIN_TOOL_DEFINITIONS
+        """列出全部可用的内置工具及每项在当前用户的开关状态,按类别分组返回。"""
+        from agent_service.tools.definitions import (
+            FILE_TOOL_DEFINITIONS,
+            KNOWLEDGE_TOOL_DEFINITIONS,
+            MEMORY_TOOL_DEFINITIONS,
+            STATE_TOOL_DEFINITIONS,
+            TODO_TOOL_DEFINITIONS,
+            UTILITY_TOOL_DEFINITIONS,
+            WEB_SEARCH_TOOL_DEFINITIONS,
+        )
+
+        CATEGORIES: list[tuple[str, str, list]] = [
+            ("UTILITY", "通用工具", UTILITY_TOOL_DEFINITIONS),
+            ("MEMORY", "记忆工具", MEMORY_TOOL_DEFINITIONS),
+            ("KNOWLEDGE", "知识库工具", KNOWLEDGE_TOOL_DEFINITIONS),
+            ("FILE", "文件管理工具", FILE_TOOL_DEFINITIONS),
+            ("STATE", "状态工具", STATE_TOOL_DEFINITIONS),
+            ("TODO", "待办工具", TODO_TOOL_DEFINITIONS),
+            ("WEB_SEARCH", "联网搜索工具", WEB_SEARCH_TOOL_DEFINITIONS),
+        ]
 
         disabled = set(self.get_disabled_tools(user_id=user_id))
-        result = []
-        for definition in BUILTIN_TOOL_DEFINITIONS:
-            result.append({
-                "name": definition.name,
-                "display_name": getattr(definition, "display_name", "") or definition.name,
-                "description": definition.description,
-                "enabled": definition.name not in disabled,
+        groups: list[dict] = []
+        for category_key, display_name, definitions in CATEGORIES:
+            tools = []
+            for definition in definitions:
+                tools.append({
+                    "name": definition.name,
+                    "display_name": getattr(definition, "display_name", "") or definition.name,
+                    "description": definition.description,
+                    "enabled": definition.name not in disabled,
+                })
+            groups.append({
+                "category": category_key,
+                "display_name": display_name,
+                "tools": tools,
             })
-        return result
+        return {"groups": groups}
 
     # ---- 终端沙盒配置 ----
 

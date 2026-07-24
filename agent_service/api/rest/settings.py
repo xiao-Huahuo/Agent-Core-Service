@@ -288,10 +288,17 @@ async def save_web_search_config(body: dict[str, Any]) -> dict[str, Any]:
         return s if s else None
 
     svc = _require_settings_service()
+    raw_max = body.get("web_search_max_results")
+    web_search_max_results: int | None = (
+        int(raw_max) if raw_max is not None and not isinstance(raw_max, bool) else None
+    )
+
+    svc = _require_settings_service()
     return svc.save_web_search_config(
         user_id=user_id,
         proxy_url=_unwrap(body.get("proxy_url")),
         web_search_enabled=body.get("web_search_enabled"),
+        web_search_max_results=web_search_max_results,
     )
 
 
@@ -320,7 +327,7 @@ async def save_disabled_tools(body: dict[str, Any]) -> dict[str, Any]:
 async def list_available_tools(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
     """列出全部内置工具及当前用户的开关状态。"""
     svc = _require_settings_service()
-    return {"tools": svc.list_available_tools(user_id=user_id)}
+    return svc.list_available_tools(user_id=user_id)
 
 
 @router.get("/settings/terminal-sandbox")

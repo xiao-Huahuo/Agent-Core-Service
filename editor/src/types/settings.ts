@@ -25,6 +25,8 @@ export interface UserSettingsProfile {
   proxyUrl?: string
   /** Whether web search is enabled for the current user. */
   webSearchEnabled?: boolean
+  /** Maximum results per web search call. */
+  webSearchMaxResults?: number
   /** Whether uploaded files should be ingested immediately. Defaults to false. */
   autoIngestOnUpload?: boolean
   /** Whether OCR should be enabled after restarting the backend service. */
