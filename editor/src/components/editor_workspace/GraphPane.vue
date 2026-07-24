@@ -30,7 +30,7 @@ const { tree, treeLoading } = storeToRefs(workspaceStore)
 const graphCanvasRef = ref<InstanceType<typeof KnowledgeGraphCanvas> | null>(null)
 const selectedNode = ref<KnowledgeGraphNodeEvent | null>(null)
 const showGraphLabels = ref(true)
-const graphMode = ref<'tree' | 'semantic'>('tree')
+const graphMode = ref<'tree' | 'semantic'>('semantic')
 const semanticGraph = ref<KnowledgeSemanticGraphResponse | null>(null)
 const semanticLoading = ref(false)
 const semanticError = ref('')
@@ -185,19 +185,19 @@ watch(
       <div class="graph-mode">
         <button
           class="graph-mode-button"
-          :class="{ active: graphMode === 'tree' }"
-          type="button"
-          @click="graphMode = 'tree'"
-        >
-          文件树
-        </button>
-        <button
-          class="graph-mode-button"
           :class="{ active: graphMode === 'semantic' }"
           type="button"
           @click="graphMode = 'semantic'"
         >
           语义
+        </button>
+        <button
+          class="graph-mode-button"
+          :class="{ active: graphMode === 'tree' }"
+          type="button"
+          @click="graphMode = 'tree'"
+        >
+          文件树
         </button>
       </div>
       <div class="graph-actions">

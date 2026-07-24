@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Bot, DatabaseZap, Maximize2, Minus, Moon, Network, Settings, Sun, X } from 'lucide-vue-next'
+import { Bot, CheckSquare, DatabaseZap, Maximize2, Minus, Moon, Network, Settings, Sun, X } from 'lucide-vue-next'
 
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -18,9 +18,14 @@ const workspaceStore = useWorkspaceStore()
 const desktopApi = window.agentEditorDesktop
 const emit = defineEmits<{
   toggleAgent: []
+  toggleTodo: []
+  openAgentPage: []
   openSettings: []
 }>()
 const graphRebuilding = computed(() => workspaceStore.graphQueue.length > 0)
+const todoActive = computed(() => workspaceStore.todoSidebarOpen)
+const agentActive = computed(() => workspaceStore.agentSidebarOpen)
+const logoSrc = new URL('../../assets/images/无底图标.png', import.meta.url).href
 
 const switchingRoot = ref(false)
 const savingLibraryName = ref(false)
@@ -80,6 +85,9 @@ async function handleCloseWindow() {
 <template>
   <header class="topbar">
     <div class="brand">
+      <button class="logo-btn" type="button" title="打开 Agent 页面" @click="emit('openAgentPage')">
+        <img :src="logoSrc" class="logo-img" alt="MetaWeave" />
+      </button>
       <div class="brand-copy">
         <input
           v-model="libraryNameDraft"
@@ -129,9 +137,18 @@ async function handleCloseWindow() {
       <button class="icon-button" type="button" title="设置" @click="emit('openSettings')">
         <Settings :size="14" />
       </button>
-      <button class="console-link" type="button" title="切换 Agent 面板" @click="emit('toggleAgent')">
+      <button class="console-link" :class="{ active: agentActive }" type="button" title="切换 Agent 面板" @click="emit('toggleAgent')">
         <Bot :size="14" />
         <span>Agent</span>
+      </button>
+      <button
+        class="todo-link"
+        :class="{ active: todoActive }"
+        type="button"
+        title="切换待办列表"
+        @click="emit('toggleTodo')"
+      >
+        <CheckSquare :size="14" />
       </button>
       <button
         class="ingest-button graph-btn"
@@ -214,6 +231,33 @@ async function handleCloseWindow() {
   gap: 0;
   min-width: 0;
   -webkit-app-region: no-drag;
+}
+
+.logo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background var(--transition-fast);
+}
+
+.logo-btn:hover {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+.logo-img {
+  display: block;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
 }
 
 .library-name-input {
@@ -388,15 +432,46 @@ async function handleCloseWindow() {
   color: var(--color-text);
 }
 
-.console-link {
+.console-link.active {
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: white;
 }
 
-.console-link:hover {
+.console-link.active:hover {
   border-color: var(--color-primary-hover);
   background: var(--color-primary-hover);
+  color: white;
+}
+
+.todo-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  -webkit-app-region: no-drag;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.todo-link:hover {
+  border-color: var(--color-primary);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.todo-link.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
   color: white;
 }
 

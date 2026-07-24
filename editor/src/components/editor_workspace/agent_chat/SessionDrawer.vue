@@ -6,11 +6,15 @@
   sessions for the current editor user_id.
 -->
 <script setup lang="ts">
+import { computed } from 'vue'
 import { PanelLeft, Trash2, X } from 'lucide-vue-next'
-import logoSrc from '@/assets/images/无底图标.png'
 
 import { useSessionStore } from '@/stores/session'
+import { useSettingsStore } from '@/stores/settings'
 import type { SessionRecord } from '@/api/session'
+import logoSrc from '@/assets/images/无底图标.png'
+import lightTitle from '@/assets/images/亮色标题.png'
+import darkTitle from '@/assets/images/暗色标题.png'
 
 const props = defineProps<{
   open: boolean
@@ -25,6 +29,8 @@ const emit = defineEmits<{
 }>()
 
 const sessionStore = useSessionStore()
+const settingsStore = useSettingsStore()
+const titleSrc = computed(() => settingsStore.isDark ? darkTitle : lightTitle)
 
 function displayName(session: SessionRecord) {
   return session.session_name || session.session_id.slice(0, 8)
@@ -55,7 +61,7 @@ async function clearAllSessions() {
     <div class="drawer-titlebar">
       <button class="brand-copy" type="button" @click="emit('create')">
         <img :src="logoSrc" class="brand-logo" alt="" />
-        <strong>MetaWeave</strong>
+        <img :src="titleSrc" class="brand-title" alt="MetaWeave" />
       </button>
       <button class="close-button" type="button" title="收起侧边栏" @click="emit('close')">
         <PanelLeft :size="15" />
@@ -186,20 +192,18 @@ async function clearAllSessions() {
 }
 
 .brand-logo {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
 }
 
-.brand-copy strong {
-  overflow: hidden;
-  color: var(--color-text-primary);
-  font-family: var(--font-ui);
-  font-size: calc(14px * var(--font-scale));
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.brand-title {
+  display: block;
+  height: 22px;
+  width: auto;
+  object-fit: contain;
 }
+
 
 .traffic-lights {
   display: flex;

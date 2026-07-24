@@ -1,6 +1,12 @@
 # CHANGE HISTORY
 
 ## 2026-07-24
+- [x] 为 Agent 配备 TODO 增删改查工具: 后端新增 `TodoService` (JSON 文件持久化)、`builtin.py` 中注册 5 个工具函数(list_todos/add_todo/toggle_todo/edit_todo/delete_todo)、REST API 端点(todo.py)及路由器注册;前端新增 `api/todo.ts` 客户端、`api_routes.ts` 中注册 TODO 路由。
+- [x] 待办列表侧边栏: 在 agent-col 内部基于 flex 列布局分割待办(上半)与 Agent(下半),过渡动画保持 160~180ms。
+  - 新建 `TodoSidebar.vue` 组件: 勾选/隐藏已完成/搜索/截止日期(过期变红)/内联编辑/新增待办/清除已完成。
+  - 新建 `useTodoStore` Pinia store: localStorage 持久化(`metaweave_todos` key),过滤、排序、过期检测。
+  - workspace.ts 新增 `todoSidebarOpen` 状态,EditorWorkspace 中实现上下分割拖拽(resize)和一键切换。
+  - TopCommandBar 新增 CheckSquare 待办按钮,点击后 agent 压缩到下半、待办从上半展开。
 - [x] Agent 输出中断与超时熔断: ChatInput 发送按钮在流式输出时切换为红色脉冲停止按钮(Square 图标);点击停止后 `chatStore.cancelStream()` 立即中止 fetch、刷新缓冲内容并将最后一条 assistant 消息标记为 `interrupted` 节点,中断消息和已有 Agent 输出会保留在会话上下文中;自动启动 5 分钟超时定时器,超时后自动熔断取消输出。
 - [x] Markdown 代码块明暗切换与 ActivityBar Debug/Settings 按钮次序。
 - [x] Markdown 代码块明暗切换: 为 `MarkdownContent.vue` 添加 unscoped highlight.js 主题样式,所有 hljs 类使用 CSS 变量,亮色/暗色主题跟随 `data-theme` 自动切换,无需 JS 干预。

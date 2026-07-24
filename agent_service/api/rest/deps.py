@@ -17,6 +17,7 @@ from agent_service.services.knowledge_library_service import KnowledgeLibrarySer
 from agent_service.services.knowledge_graph_service import KnowledgeGraphService
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 from agent_service.services.session_attachment_service import SessionAttachmentService
+from agent_service.services.todo_service import TodoService
 
 _agent: AgentCore | None = None
 _session_service: SessionService | None = None
@@ -27,6 +28,7 @@ _knowledge_graph_service: KnowledgeGraphService | None = None
 _retrieval_service: MemoryRetrievalService | None = None
 _attachment_service: SessionAttachmentService | None = None
 _grpc_running = False
+_todo_service: TodoService | None = None
 
 
 def _require_agent() -> AgentCore:
@@ -75,3 +77,10 @@ def _require_attachment_service() -> SessionAttachmentService:
     if _attachment_service is None:
         raise HTTPException(status_code=503, detail="SessionAttachmentService not initialized yet")
     return _attachment_service
+
+
+def _require_todo_service() -> TodoService:
+    global _todo_service
+    if _todo_service is None:
+        _todo_service = TodoService()
+    return _todo_service

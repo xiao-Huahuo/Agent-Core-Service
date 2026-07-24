@@ -660,6 +660,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** Whether the Agent sidebar is visible. Shared so child components can open it. */
   const agentSidebarOpen = ref(true)
 
+  /** Whether the Todo sidebar section is visible within the agent column. */
+  const todoSidebarOpen = ref(false)
+
   /** 由子组件设置的待发送 Agent 消息,AgentPanel 消费后清空。 */
   const pendingAgentPrompt = ref('')
 
@@ -2285,6 +2288,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     resolveConflict,
     cancelConflict,
     agentSidebarOpen,
+    todoSidebarOpen,
     pendingAgentPrompt,
     pendingAgentReference,
     toggleDirectory,

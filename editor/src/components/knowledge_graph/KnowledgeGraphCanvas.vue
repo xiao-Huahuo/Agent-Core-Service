@@ -283,6 +283,10 @@ function handlePointerDown(event: PointerEvent) {
   movedDuringPointer = false
   const node = hitTestNode(runtimeModel.value, screenToWorld(pointerStart, viewport.value))
   if (node) {
+    // Dragging a node while frozen auto-unfreezes so the button stays accurate
+    if (frozen.value) {
+      frozen.value = false
+    }
     pointerMode = 'node'
     draggedNode = node
     setHighlightNode(node.id)

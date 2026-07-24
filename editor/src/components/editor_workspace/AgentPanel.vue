@@ -9,6 +9,9 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { BrainCircuit, Check, ChevronDown, History, Maximize2, MessageSquarePlus, MessagesSquare, SquarePen, UploadCloud } from 'lucide-vue-next'
 
+import darkTitle from '@/assets/images/暗色标题.png'
+import lightTitle from '@/assets/images/亮色标题.png'
+import logoSrc from '@/assets/images/无底图标.png'
 import ChatInput from '@/components/editor_workspace/agent_chat/ChatInput.vue'
 import MessageList from '@/components/editor_workspace/agent_chat/MessageList.vue'
 import SessionDrawer from '@/components/editor_workspace/agent_chat/SessionDrawer.vue'
@@ -18,7 +21,6 @@ import type { AgentUploadedAttachment } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
-import SplitText from './SplitText.vue'
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
 import { uploadAgentAttachment } from '@/api/agent'
 import { fetchLLMConfig } from '@/api/settings'
@@ -48,7 +50,6 @@ const contextWindowTokens = ref(128000)
 const dragDepth = ref(0)
 const isUploadingAttachment = ref(false)
 const uploadStatusText = ref('')
-const logoSrc = new URL('../../assets/images/无底图标.png', import.meta.url).href
 const modeSwitchRef = ref<HTMLElement | null>(null)
 const loopModeMenu = ref<HTMLDetailsElement | null>(null)
 const modeIndicatorStyle = computed(() => {
@@ -60,6 +61,7 @@ const modeIndicatorStyle = computed(() => {
 
 const userId = computed(() => settingsStore.profile.userId)
 const isDark = computed(() => settingsStore.isDark)
+const welcomeTitleSrc = computed(() => isDark.value ? darkTitle : lightTitle)
 const hasMessages = computed(() => chatStore.messages.filter((m) => m.role !== 'system').length > 0)
 const hasStreamingContent = computed(() => !!chatStore.lastMessage?.content)
 const isAttachmentDropActive = computed(() => dragDepth.value > 0 || isUploadingAttachment.value)
@@ -362,7 +364,7 @@ onBeforeUnmount(() => {
     <header v-if="props.mode === 'page'" class="agent-topbar">
       <div class="topbar-capsule" :class="{ 'drawer-open': sessionDrawerOpen }">
         <button class="capsule-logo-btn" type="button" title="Toggle sidebar" @click="sessionDrawerOpen = !sessionDrawerOpen">
-          <img :src="logoSrc" class="capsule-logo" alt="" />
+          <img :src="logoSrc" class="capsule-logo" alt="MetaWeave" />
         </button>
         <span class="capsule-divider" data-divider></span>
         <div ref="modeSwitchRef" class="capsule-switch" role="group" aria-label="Chat render mode">
@@ -469,7 +471,7 @@ onBeforeUnmount(() => {
     <main class="chat-body" :class="{ dimmed: isBootstrapping }">
       <Transition name="welcome-fade">
         <div v-if="!hasMessages && !chatStore.isStreaming" class="welcome-center">
-          <SplitText text="元织Agent" tag="h1" class="welcome-title" :trigger-on-mount="true" />
+          <img :src="welcomeTitleSrc" class="welcome-logo" alt="MetaWeave" />
           <p class="welcome-subtitle">在知识库 {{ knowledgeTitle }} 中有什么问题?</p>
         </div>
       </Transition>
@@ -569,6 +571,7 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 0;
   background: var(--color-canvas-soft);
+  height: 100%;
 }
 
 .agent-panel.agent-page-mode {
@@ -640,8 +643,10 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
+  width: auto;
+  min-width: 30px;
   height: 30px;
+  padding: 0 var(--space-4);
   flex-shrink: 0;
   border: 0;
   border-radius: 999px;
@@ -651,19 +656,23 @@ onBeforeUnmount(() => {
   transition:
     width 200ms ease,
     opacity 160ms ease,
-    margin 200ms ease;
+    margin 200ms ease,
+    padding 200ms ease;
 }
 
 .topbar-capsule.drawer-open .capsule-logo-btn {
   width: 0;
+  min-width: 0;
+  padding: 0;
   opacity: 0;
   margin: 0;
   pointer-events: none;
 }
 
 .capsule-logo {
-  width: 20px;
-  height: 20px;
+  display: block;
+  height: 18px;
+  width: auto;
   object-fit: contain;
 }
 
@@ -1123,14 +1132,24 @@ onBeforeUnmount(() => {
   transition: right 200ms ease;
 }
 
-.welcome-title {
-  margin: 0;
-  color: var(--color-text);
-  font-family: var(--font-ui);
-  font-size: calc(32px * var(--font-scale));
-  font-weight: 750;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+.welcome-logo {
+  display: block;
+  width: 240px;
+  height: auto;
+  object-fit: contain;
+  pointer-events: auto;
+  animation: welcome-fade-in 1.2s ease-out forwards;
+}
+
+@keyframes welcome-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .welcome-subtitle {

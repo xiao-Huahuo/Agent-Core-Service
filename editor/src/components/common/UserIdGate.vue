@@ -6,10 +6,12 @@
   through the settings store and will later be replaced by backend user settings.
 -->
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { ensureSettingsProfile } from '@/api/settings'
-import SplitText from '@/components/editor_workspace/SplitText.vue'
+import darkTitle from '@/assets/images/暗色标题.png'
+import lightTitle from '@/assets/images/亮色标题.png'
+import logoSrc from '@/assets/images/无底图标.png'
 import { useSettingsStore } from '@/stores/settings'
 
 defineOptions({ name: 'UserIdGate' })
@@ -18,6 +20,8 @@ const settingsStore = useSettingsStore()
 const draftUserId = ref('')
 const errorMessage = ref('')
 const loading = ref(false)
+const isDark = computed(() => settingsStore.isDark)
+const welcomeTitleSrc = computed(() => isDark.value ? darkTitle : lightTitle)
 
 async function submitUserId() {
   const normalizedUserId = draftUserId.value.trim()
@@ -39,7 +43,8 @@ async function submitUserId() {
 
 <template>
   <main class="user-gate">
-    <SplitText text="元织" tag="h1" class="gate-title" :trigger-on-mount="true" :delay="90" :y="28" />
+    <img :src="logoSrc" class="gate-cap-icon" alt="" />
+    <img :src="welcomeTitleSrc" class="gate-logo" alt="MetaWeave" />
     <form class="gate-panel" @submit.prevent="submitUserId">
       <div class="gate-copy">
         <h2>选择本地身份</h2>
@@ -78,15 +83,34 @@ async function submitUserId() {
   -webkit-app-region: drag;
 }
 
-.gate-title {
-  margin: 0;
-  color: var(--color-text);
-  font-family: var(--font-ui);
-  font-size: calc(32px * var(--font-scale));
-  font-weight: 750;
-  line-height: 1.15;
-  letter-spacing: 0;
+.gate-cap-icon {
+  display: block;
+  width: 96px;
+  height: auto;
+  object-fit: contain;
+  margin-bottom: -8px;
+  animation: gate-fade-in 1.2s ease-out forwards;
   -webkit-app-region: no-drag;
+}
+
+.gate-logo {
+  display: block;
+  width: 240px;
+  height: auto;
+  object-fit: contain;
+  animation: gate-fade-in 1.2s ease-out forwards;
+  -webkit-app-region: no-drag;
+}
+
+@keyframes gate-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .gate-panel {

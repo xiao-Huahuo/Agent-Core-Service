@@ -18,6 +18,7 @@ from agent_service.tools.builtin import (
     FILE_TOOL_DEFINITIONS,
     KNOWLEDGE_TOOL_DEFINITIONS,
     MEMORY_TOOL_DEFINITIONS,
+    TODO_TOOL_DEFINITIONS,
     UTILITY_TOOL_DEFINITIONS,
     BuiltinToolDefinition,
 )

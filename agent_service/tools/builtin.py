@@ -35,6 +35,7 @@ from agent_service.tools.runtime_context import (
     set_plan_state,
 )
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
+from agent_service.services.todo_service import TodoService
 from agent_service.tools.tool_math import evaluate_math_expression
 
 
@@ -1121,12 +1122,112 @@ def update_exploration_state(
     )
 
 
+def _get_todo_service() -> TodoService:
+    """获取 TodoService 实例。"""
+    runtime = get_tool_runtime()
+    data_dir = runtime.config.project_root if runtime.config else None
+    return TodoService(data_dir=data_dir)
+
+
+def list_todos() -> str:
+    """
+    列出当前用户的所有待办事项。返回格式化的待办列表,包含编号、完成状态、截止日期。
+    """
+
+    runtime = get_tool_runtime()
+    service = _get_todo_service()
+    items = service.list_todos(user_id=runtime.user_id)
+    if not items:
+        return "当前没有待办事项。"
+    lines = []
+    for i, item in enumerate(items, 1):
+        status = "✅" if item.get("done") else "⬜"
+        due = f" [截止: {item['dueDate']}]" if item.get("dueDate") else ""
+        lines.append(f"{i}. {status} {item['text']}{due}")
+    return "\n".join(lines)
+
+
+def add_todo(text: str, due_date: str | None = None) -> str:
+    """
+    新增一条待办事项。
+
+    text: 待办事项的文字描述。
+    due_date: 可选截止日期,格式 YYYY-MM-DD。
+    """
+
+    runtime = get_tool_runtime()
+    service = _get_todo_service()
+    item = service.add_todo(user_id=runtime.user_id, text=text, due_date=due_date)
+    due = f", 截止日期: {item['dueDate']}" if item.get("dueDate") else ""
+    return f"已创建待办: {item['text']}{due}"
+
+
+def toggle_todo(todo_id: str) -> str:
+    """
+    切换待办事项的完成状态(已完成↔未完成)。
+
+    todo_id: 待办的唯一 ID,可通过 list_todos 获取。
+    """
+
+    runtime = get_tool_runtime()
+    service = _get_todo_service()
+    item = service.toggle_todo(user_id=runtime.user_id, todo_id=todo_id)
+    if item is None:
+        return f"未找到 ID 为 {todo_id} 的待办事项。"
+    status = "已完成" if item.get("done") else "未完成"
+    return f"已切换待办 [{item['id']}] 状态为: {status} — {item['text']}"
+
+
+def edit_todo(todo_id: str, text: str | None = None, due_date: str | None = None) -> str:
+    """
+    编辑待办事项的文本或截止日期。
+
+    todo_id: 待办的唯一 ID,可通过 list_todos 获取。
+    text: 新的待办文本。留空则不修改。
+    due_date: 新的截止日期(YYYY-MM-DD),传入空字符串可清除截止日期,不传则不修改。
+    """
+
+    runtime = get_tool_runtime()
+    service = _get_todo_service()
+    # 先获取当前项
+    items = service.list_todos(user_id=runtime.user_id)
+    current = next((item for item in items if item.get("id") == todo_id), None)
+    if current is None:
+        return f"未找到 ID 为 {todo_id} 的待办事项。"
+    final_text = text if text is not None else current["text"]
+    final_due = current.get("dueDate")
+    if due_date is not None:
+        final_due = due_date if due_date else None
+    item = service.edit_todo(user_id=runtime.user_id, todo_id=todo_id, text=final_text, due_date=final_due)
+    if item is None:
+        return f"编辑待办失败。"
+    parts = [f"已更新待办: {item['text']}"]
+    if item.get("dueDate"):
+        parts.append(f"截止日期: {item['dueDate']}")
+    return " | ".join(parts)
+
+
+def delete_todo(todo_id: str) -> str:
+    """
+    删除指定的待办事项。
+
+    todo_id: 待办的唯一 ID,可通过 list_todos 获取。
+    """
+
+    runtime = get_tool_runtime()
+    service = _get_todo_service()
+    if service.delete_todo(user_id=runtime.user_id, todo_id=todo_id):
+        return f"已删除待办: {todo_id}"
+    return f"未找到 ID 为 {todo_id} 的待办事项。"
+
+
 from agent_service.tools.definitions import (  # noqa: E402
     BUILTIN_TOOL_DEFINITIONS,
     FILE_TOOL_DEFINITIONS,
     KNOWLEDGE_TOOL_DEFINITIONS,
     MEMORY_TOOL_DEFINITIONS,
     STATE_TOOL_DEFINITIONS,
+    TODO_TOOL_DEFINITIONS,
     UTILITY_TOOL_DEFINITIONS,
     WEB_SEARCH_TOOL_DEFINITIONS,
 )

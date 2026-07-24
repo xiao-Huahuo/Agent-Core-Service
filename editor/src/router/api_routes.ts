@@ -56,4 +56,9 @@ export const API_ROUTES = {
   SETTINGS_AVAILABLE_TOOLS: '/settings/available-tools',
   SETTINGS_TERMINAL_SANDBOX: '/settings/terminal-sandbox',
   SETTINGS_GRAPH_CONFIG: '/settings/graph-config',
+  TODO_LIST: '/todo/list',
+  TODO_ADD: '/todo/add',
+  TODO_TOGGLE: '/todo/toggle',
+  TODO_EDIT: '/todo/edit',
+  TODO_DELETE: '/todo/delete',
 } as const

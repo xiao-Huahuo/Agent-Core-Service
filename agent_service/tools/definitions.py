@@ -14,12 +14,15 @@ from __future__ import annotations
 
 from agent_service.tools.builtin import (
     BuiltinToolDefinition,
+    add_todo,
     calculate,
     create_knowledge_folder,
     delete_knowledge_file,
     delete_long_term_memory,
     delete_long_term_rule,
+    delete_todo,
     echo_text,
+    edit_todo,
     generate_uuid,
     get_current_time,
     get_current_utc_time,
@@ -30,6 +33,7 @@ from agent_service.tools.builtin import (
     json_pick,
     list_builtin_tools,
     list_knowledge_files,
+    list_todos,
     read_knowledge_file,
     read_multimodal_file_info,
     rebuild_knowledge_base,
@@ -38,6 +42,7 @@ from agent_service.tools.builtin import (
     save_uploaded_attachment_to_knowledge,
     search_knowledge,
     text_stats,
+    toggle_todo,
     update_exploration_state,
     web_search,
     write_knowledge_file,
@@ -404,6 +409,71 @@ STATE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     ),
 ]
 
+TODO_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
+    BuiltinToolDefinition(
+        name="list_todos",
+        description="列出当前用户的所有待办事项,返回编号列表,包含完成状态和截止日期。",
+        args_schema={"type": "object", "properties": {}, "required": []},
+        function=list_todos,
+        display_name="列出待办",
+    ),
+    BuiltinToolDefinition(
+        name="add_todo",
+        description="新增一条待办事项。可指定可选的截止日期。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "待办事项的文字描述。"},
+                "due_date": {"type": "string", "description": "可选截止日期,格式 YYYY-MM-DD。"},
+            },
+            "required": ["text"],
+        },
+        function=add_todo,
+        display_name="新增待办",
+    ),
+    BuiltinToolDefinition(
+        name="toggle_todo",
+        description="切换待办事项的完成状态(已完成↔未完成)。需要 todo_id。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "todo_id": {"type": "string", "description": "待办的唯一 ID,可通过 list_todos 获取。"},
+            },
+            "required": ["todo_id"],
+        },
+        function=toggle_todo,
+        display_name="切换待办状态",
+    ),
+    BuiltinToolDefinition(
+        name="edit_todo",
+        description="编辑待办事项的文本或截止日期。只传需要修改的字段。不传 text 则保留原文本。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "todo_id": {"type": "string", "description": "待办的唯一 ID,可通过 list_todos 获取。"},
+                "text": {"type": "string", "description": "新的待办文本,留空则不修改文本。"},
+                "due_date": {"type": "string", "description": "新的截止日期(YYYY-MM-DD),传入空字符串清除截止日期,不传则不修改。"},
+            },
+            "required": ["todo_id"],
+        },
+        function=edit_todo,
+        display_name="编辑待办",
+    ),
+    BuiltinToolDefinition(
+        name="delete_todo",
+        description="删除指定的待办事项。需要 todo_id。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "todo_id": {"type": "string", "description": "待办的唯一 ID,可通过 list_todos 获取。"},
+            },
+            "required": ["todo_id"],
+        },
+        function=delete_todo,
+        display_name="删除待办",
+    ),
+]
+
 WEB_SEARCH_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="web_search",
@@ -429,5 +499,6 @@ BUILTIN_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = (
     + KNOWLEDGE_TOOL_DEFINITIONS
     + FILE_TOOL_DEFINITIONS
     + STATE_TOOL_DEFINITIONS
+    + TODO_TOOL_DEFINITIONS
     + WEB_SEARCH_TOOL_DEFINITIONS
 )

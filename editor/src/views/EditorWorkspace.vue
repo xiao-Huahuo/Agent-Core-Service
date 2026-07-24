@@ -16,7 +16,9 @@ import FileConflictDialog from '@/components/editor_workspace/FileConflictDialog
 import FileTreePanel from '@/components/editor_workspace/FileTreePanel.vue'
 import FileResourceManager from '@/components/editor_workspace/FileResourceManager.vue'
 import SelectionToolbar from '@/components/editor_workspace/SelectionToolbar.vue'
+import TodoSidebar from '@/components/editor_workspace/TodoSidebar.vue'
 import TopCommandBar from '@/components/editor_workspace/TopCommandBar.vue'
+import { useTodoStore } from '@/stores/todo'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graphTypes'
 
@@ -53,7 +55,7 @@ const isAgentPage = computed(() => workspaceStore.mainView === 'agent')
 const isGraphPage = computed(() => workspaceStore.mainView === 'graph')
 const sidebarHidden = computed(() => isAgentPage.value || isGraphPage.value)
 const visibleFileSidebarOpen = computed(() => fileSidebarOpen.value && !sidebarHidden.value)
-const visibleAgentSidebarOpen = computed(() => agentSidebarOpen.value && !sidebarHidden.value)
+const visibleAgentSidebarOpen = computed(() => (agentSidebarOpen.value || todoSidebarOpen.value) && !sidebarHidden.value)
 const showConflictDialog = computed(() => {
   return workspaceStore.conflictDialog.open
 })
@@ -112,12 +114,74 @@ function toggleAgentSidebar() {
     agentWidth.value = Math.max(agentWidth.value, DEFAULT_AGENT_WIDTH)
     return
   }
+  agentSidebarOpen.value = !agentSidebarOpen.value
   if (agentSidebarOpen.value) {
-    agentSidebarOpen.value = false
+    agentWidth.value = Math.max(agentWidth.value, DEFAULT_AGENT_WIDTH)
+  }
+}
+
+const todoSidebarOpen = ref(false)
+const todoSplitRatio = ref(0.5)
+const TODO_COLLAPSE_THRESHOLD = 0.12
+const agentWasOpenBeforeTodo = ref(false)
+watch(() => workspaceStore.todoSidebarOpen, (val) => {
+  todoSidebarOpen.value = val
+})
+
+watch(todoSidebarOpen, (val) => {
+  workspaceStore.todoSidebarOpen = val
+})
+
+function toggleTodoSidebar() {
+  if (sidebarHidden.value) {
+    workspaceStore.setMainView('editor')
+  }
+  if (todoSidebarOpen.value) {
+    todoSidebarOpen.value = false
+    if (!agentWasOpenBeforeTodo.value) {
+      agentSidebarOpen.value = false
+    }
     return
   }
-  agentSidebarOpen.value = true
+  agentWasOpenBeforeTodo.value = agentSidebarOpen.value
+  todoSidebarOpen.value = true
   agentWidth.value = Math.max(agentWidth.value, DEFAULT_AGENT_WIDTH)
+  todoSplitRatio.value = 0.5
+}
+
+let activeTodoResize = false
+
+function startTodoResize(event: PointerEvent) {
+  event.preventDefault()
+  activeTodoResize = true
+  window.addEventListener('pointermove', handleTodoResizeMove)
+  window.addEventListener('pointerup', stopTodoResize)
+}
+
+function handleTodoResizeMove(event: PointerEvent) {
+  if (!activeTodoResize) return
+  const container = (event.target as HTMLElement)?.closest('.agent-col') as HTMLElement | null
+  if (!container) return
+  const rect = container.getBoundingClientRect()
+  const y = event.clientY - rect.top
+  const ratio = y / rect.height
+  if (ratio < TODO_COLLAPSE_THRESHOLD) {
+    todoSidebarOpen.value = false
+    return
+  }
+  if (ratio > 1 - TODO_COLLAPSE_THRESHOLD) {
+    todoSidebarOpen.value = true
+    todoSplitRatio.value = 1
+    return
+  }
+  todoSidebarOpen.value = true
+  todoSplitRatio.value = ratio
+}
+
+function stopTodoResize() {
+  activeTodoResize = false
+  window.removeEventListener('pointermove', handleTodoResizeMove)
+  window.removeEventListener('pointerup', stopTodoResize)
 }
 
 function openAgentPage() {
@@ -271,12 +335,13 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
   stopResize()
+  stopTodoResize()
 })
 </script>
 
 <template>
-  <div class="workspace-page" :class="{ resizing: activeResizeTarget }">
-    <TopCommandBar @toggle-agent="toggleAgentSidebar" @open-settings="openSettings" />
+  <div class="workspace-page" :class="{ resizing: activeResizeTarget || activeTodoResize }">
+    <TopCommandBar @toggle-agent="toggleAgentSidebar" @toggle-todo="toggleTodoSidebar" @open-agent-page="openAgentPage" @open-settings="openSettings" />
     <div
       ref="workspaceGrid"
       class="workspace-grid"
@@ -332,7 +397,23 @@ onBeforeUnmount(() => {
         aria-label="Resize Agent panel"
         @pointerdown="startResize('agent', $event)"
       ></div>
-      <AgentPanel v-if="!isAgentPage" class="agent-col" :aria-hidden="!visibleAgentSidebarOpen" @expand="openAgentPage" />
+      <div v-if="!isAgentPage" class="agent-col" :class="{ 'todo-open': todoSidebarOpen }" :aria-hidden="!visibleAgentSidebarOpen">
+        <div class="todo-section" :style="{ flex: todoSidebarOpen ? (agentSidebarOpen ? todoSplitRatio : 1) : 0 }">
+          <div class="todo-body-wrap" :class="{ visible: todoSidebarOpen }">
+            <TodoSidebar />
+          </div>
+        </div>
+        <div
+          class="todo-agent-divider"
+          :class="{ visible: todoSidebarOpen }"
+          @pointerdown="startTodoResize"
+        ></div>
+        <div class="agent-section" :class="{ visible: agentSidebarOpen }" :style="{ flex: agentSidebarOpen ? (todoSidebarOpen ? 1 - todoSplitRatio : 1) : 0 }">
+          <div class="agent-body-wrap" :class="{ visible: agentSidebarOpen }">
+            <AgentPanel @expand="openAgentPage" />
+          </div>
+        </div>
+      </div>
     </div>
     <CommandPalette />
     <SelectionToolbar @ask="handleAskAgent" />
@@ -399,9 +480,78 @@ onBeforeUnmount(() => {
 .agent-col {
   grid-column: 6;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   transition:
     opacity 160ms ease,
     transform 180ms ease;
+}
+
+.todo-section {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  height: 100%;
+}
+
+.todo-body-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-12px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.todo-body-wrap.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.agent-section {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.agent-body-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.agent-body-wrap.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.todo-agent-divider {
+  flex: 0 0 4px;
+  cursor: row-resize;
+  background: transparent;
+  border-top: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+  opacity: 0;
+  transition: opacity 160ms ease, background var(--transition-fast);
+}
+
+.todo-agent-divider.visible {
+  opacity: 1;
+}
+
+.todo-agent-divider:hover,
+.workspace-page.resizing .todo-agent-divider {
+  background: var(--color-primary-soft);
 }
 
 .workspace-grid.file-sidebar-collapsed .file-col {
