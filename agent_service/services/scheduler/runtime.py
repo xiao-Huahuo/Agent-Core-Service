@@ -12,6 +12,7 @@ LLM 调度器运行时辅助 mixin。
 
 from __future__ import annotations
 
+import logging
 import queue
 import random
 import sys
@@ -19,6 +20,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from contextlib import contextmanager
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from langchain_openai import ChatOpenAI
 
@@ -140,7 +143,14 @@ class LLMTaskRuntimeMixin:
         ).strip()
         if model_tier == SMALL_MODEL_TIER:
             if not resolved_small_model_name:
-                raise ValueError("小模型未配置模型名称,请先在设置页配置大模型或小模型。")
+                logger.warning("小模型未配置,降级使用大模型 | resolved_small_model_name=%r", resolved_small_model_name)
+                return self._resolve_model_runtime(
+                    model_tier=LARGE_MODEL_TIER,
+                    requested_temperature=requested_temperature,
+                    api_key=api_key,
+                    base_url=base_url,
+                    model_name=model_name,
+                )
             small_temperature = self.config.model._normalize_temperature_for_model(
                 model_name=resolved_small_model_name,
                 requested_temperature=(

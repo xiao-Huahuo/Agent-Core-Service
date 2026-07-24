@@ -60,6 +60,7 @@ from agent_service.services.safety import SafetyService
 from agent_service.services.scheduler import (
     BACKGROUND_SUMMARY_TASK,
     FOREGROUND_AGENT_TASK,
+    LARGE_MODEL_TIER,
     SMALL_MODEL_TIER,
     LLMTaskScheduler,
     get_llm_task_scheduler,
@@ -480,16 +481,7 @@ class AgentCore:
                 message_service=message_service,
                 citation_map=turn_citation_map,
             )
-            rename_queue: queue_module.Queue | None = None
-            if self._has_renamable_assistant_reply(user_id=user_id, session_id=session_id):
-                _rename_thread, rename_queue = _launch_auto_rename(self, user_id=user_id, session_id=session_id)
-            if rename_queue is not None:
-                try:
-                    title = rename_queue.get(timeout=10.0)
-                    if title:
-                        yield {"type": "session_renamed", "session_id": session_id, "session_name": title}
-                except queue_module.Empty:
-                    pass
+            yield from _try_rename_and_yield(self, user_id, session_id)
             return
 
         yield from self._stream_events(
@@ -503,14 +495,7 @@ class AgentCore:
             agent_access_mode=effective_access_mode,
             citation_map=turn_citation_map,
         )
-        if self._has_renamable_assistant_reply(user_id=user_id, session_id=session_id):
-            _rename_thread, rename_queue = _launch_auto_rename(self, user_id=user_id, session_id=session_id)
-            try:
-                title = rename_queue.get(timeout=10.0)
-                if title:
-                    yield {"type": "session_renamed", "session_id": session_id, "session_name": title}
-            except queue_module.Empty:
-                pass
+        yield from _try_rename_and_yield(self, user_id, session_id)
 
     def cancel_session(self, session_id: str) -> None:
         """取消指定 session 正在执行的图,保存部分输出。"""
@@ -908,34 +893,6 @@ class AgentCore:
                 attachment_service=self.attachment_service,
             )
         return self.context_builder
-
-    def _has_renamable_assistant_reply(self, *, user_id: str, session_id: str) -> bool:
-        """判断本轮是否有值得用于自动命名的真实助手回复。"""
-
-        try:
-            message_service = self._get_message_service()
-            recent = message_service.list_recent_messages(
-                user_id=user_id,
-                session_id=session_id,
-                limit=4,
-                include_summarized=True,
-            )
-        except Exception:
-            logger.debug("检查自动命名条件失败 | session=%s", session_id, exc_info=True)
-            return False
-        for message in reversed(recent):
-            if getattr(message, "role", "") != "assistant":
-                continue
-            content = (getattr(message, "content", "") or "").strip()
-            metadata = getattr(message, "metadata_json", None) or {}
-            if not content:
-                return False
-            if metadata.get("node") == "error":
-                return False
-            if "429 Too Many Requests" in content or "模型服务限流" in content:
-                return False
-            return True
-        return False
 
     def _stream_simple_answer(
         self,
@@ -1932,7 +1889,7 @@ class AgentCore:
 
 
 def _rename_session_worker(agent: AgentCore, *, user_id: str, session_id: str) -> str | None:
-    """Run the small-model rename and persist the new title. Returns the title or None."""
+    """生成会话标题并持久化到 DB。优先用小模型,失败时自动降级大模型。"""
     try:
         message_service = agent._get_message_service()
         recent = message_service.list_recent_messages(
@@ -1975,33 +1932,59 @@ def _rename_session_worker(agent: AgentCore, *, user_id: str, session_id: str) -
         small_api_key = (llm_config.get("small_api_key") or api_key) if llm_config else None
         small_base_url = (llm_config.get("small_base_url") or base_url) if llm_config else None
         small_model_name = (llm_config.get("small_model_name") or model_name) if llm_config else None
+
+        title = _do_rename_llm_call(agent, rename_prompt, session_id,
+            model_tier=SMALL_MODEL_TIER,
+            api_key=api_key, base_url=base_url, model_name=model_name,
+            small_api_key=small_api_key, small_base_url=small_base_url, small_model_name=small_model_name)
+        if title is not None:
+            return _persist_rename_title(agent, session_id, title)
+
+        logger.info("小模型重命名失败,降级使用大模型 | session=%s", session_id)
+        title = _do_rename_llm_call(agent, rename_prompt, session_id,
+            model_tier=LARGE_MODEL_TIER,
+            api_key=api_key, base_url=base_url, model_name=model_name)
+        if title is not None:
+            return _persist_rename_title(agent, session_id, title)
+        return None
+    except Exception:
+        logger.info("会话自动重命名失败 | session=%s", session_id, exc_info=True)
+        return None
+
+
+def _do_rename_llm_call(
+    agent: AgentCore, prompt: str, session_id: str, *,
+    model_tier: str,
+    api_key: str | None = None, base_url: str | None = None, model_name: str | None = None,
+    small_api_key: str | None = None, small_base_url: str | None = None, small_model_name: str | None = None,
+) -> str | None:
+    """调用 LLM 生成会话标题,返回标题或 None。"""
+    try:
         response = agent.task_scheduler.invoke_chat(
             task_type=BACKGROUND_SUMMARY_TASK,
-            messages=[HumanMessage(content=rename_prompt)],
+            messages=[HumanMessage(content=prompt)],
             tool_names=[],
-            model_tier=SMALL_MODEL_TIER,
+            model_tier=model_tier,
             temperature=0.3,
-            api_key=api_key,
-            base_url=base_url,
-            model_name=model_name,
-            small_api_key=small_api_key,
-            small_base_url=small_base_url,
-            small_model_name=small_model_name,
+            api_key=api_key, base_url=base_url, model_name=model_name,
+            small_api_key=small_api_key, small_base_url=small_base_url, small_model_name=small_model_name,
         )
         title = (getattr(response, "content", "") or "").strip()
         if not title:
             return None
-        title = title[:30]
-        from agent_service.services.session_service import SessionService
-        from agent_service.schemas.session import SessionUpdate
-        session_service = SessionService(config=agent.config)
-        session_service.update_session_name(
-            session_id, SessionUpdate(session_name=title)
-        )
-        return title
+        return title[:30]
     except Exception:
-        logger.debug("会话自动重命名失败 | session=%s", session_id, exc_info=True)
+        logger.info("重命名 LLM 调用失败 | session=%s tier=%s", session_id, model_tier, exc_info=True)
         return None
+
+
+def _persist_rename_title(agent: AgentCore, session_id: str, title: str) -> str:
+    """将标题写入 DB 并返回。"""
+    from agent_service.services.session_service import SessionService
+    from agent_service.schemas.session import SessionUpdate
+    session_service = SessionService(config=agent.config)
+    session_service.update_session_name(session_id, SessionUpdate(session_name=title))
+    return title
 
 
 def _launch_auto_rename(agent: AgentCore, *, user_id: str, session_id: str) -> tuple[threading.Thread, queue_module.Queue]:
@@ -2018,3 +2001,16 @@ def _launch_auto_rename(agent: AgentCore, *, user_id: str, session_id: str) -> t
     thread = threading.Thread(target=_worker, daemon=True, name=f"rename-{session_id[:12]}")
     thread.start()
     return thread, q
+
+
+def _try_rename_and_yield(agent: AgentCore, user_id: str, session_id: str) -> Iterator[dict[str, Any]]:
+    """尝试自动重命名会话,成功则 yield session_renamed 事件。"""
+    logger.info("尝试会话自动重命名 | session=%s", session_id)
+    _rename_thread, rename_queue = _launch_auto_rename(agent, user_id=user_id, session_id=session_id)
+    try:
+        title = rename_queue.get(timeout=60.0)
+        if title:
+            logger.info("会话自动重命名成功 | session=%s title=%s", session_id, title)
+            yield {"type": "session_renamed", "session_id": session_id, "session_name": title}
+    except queue_module.Empty:
+        logger.info("会话自动重命名等待超时 | session=%s", session_id)
