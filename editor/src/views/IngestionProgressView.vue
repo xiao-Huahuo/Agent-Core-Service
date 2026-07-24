@@ -156,8 +156,8 @@ function historySummary(row: IngestionHistoryItem): string {
             <span>入库历史</span>
           </button>
         </div>
-        <button class="icon-button" type="button" title="刷新" aria-label="刷新" @click="refresh">
-          <RefreshCw :size="16" />
+        <button class="refresh-btn" type="button" title="刷新" aria-label="刷新" @click="refresh">
+          <RefreshCw :size="16" class="refresh-svg" />
         </button>
         <button
           v-if="activeTab === 'history' && historyRows.length > 0"
@@ -400,6 +400,36 @@ function historySummary(row: IngestionHistoryItem): string {
   border-color: var(--color-border);
   border-radius: 8px;
   background: var(--color-surface);
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 5px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.refresh-btn:hover {
+  transform: rotate(90deg);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.refresh-svg {
+  transition: all 0.3s;
+}
+
+.refresh-btn:hover .refresh-svg {
+  stroke: var(--color-primary);
 }
 
 .file-table {

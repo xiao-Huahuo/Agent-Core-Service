@@ -466,6 +466,8 @@ watch(
   background: var(--color-primary-softer);
   color: var(--color-text);
 }
+.graph-action:hover :deep(svg) { transform: rotate(90deg); }
+.graph-action :deep(svg) { transition: transform 0.3s; }
 
 .graph-action.active {
   border-color: var(--color-primary);

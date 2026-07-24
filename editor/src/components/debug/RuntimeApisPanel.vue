@@ -377,6 +377,8 @@ onMounted(() => {
   border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
   background: var(--color-primary-soft);
 }
+.icon-button:hover:not(:disabled) :deep(svg) { transform: rotate(90deg); }
+.icon-button :deep(svg) { transition: transform 0.3s; }
 
 .icon-button:disabled {
   cursor: default;

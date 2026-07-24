@@ -40,6 +40,8 @@
   background: var(--color-selection-blue-soft);
   color: var(--color-selection-blue);
 }
+.header-action:hover :deep(svg) { transform: rotate(90deg); }
+.header-action :deep(svg) { transition: transform 0.3s; }
 
 .header-action:disabled {
   cursor: wait;

@@ -5,11 +5,28 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="美丽按钮">
-      <change afterPath="$PROJECT_DIR$/supercomponents/new/什么Hub.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/SearchPalette.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/SearchPalette.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/checkbox.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/checkbox2.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/github.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/动态流光智能体头像式按钮2.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/动态流光智能体头像式按钮3.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/悬浮液滴扩大按钮.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/明暗切换.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/明暗切换2.vue" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supercomponents/new/通知.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/ToolRegistryPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/ToolRegistryPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/debug/MultimodalIngestionPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/debug/MultimodalIngestionPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/debug/RuntimeApisPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/debug/RuntimeApisPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TodoSidebar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TodoSidebar.vue" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/ToolsSettingsSection.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/BasicSettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/BasicSettingsSection.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/IngestionProgressView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/IngestionProgressView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/SearchPage.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SearchPage.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -281,15 +298,7 @@
       <workItem from="1784638422280" duration="912000" />
       <workItem from="1784688429981" duration="15773000" />
       <workItem from="1784723159028" duration="13415000" />
-      <workItem from="1784854303470" duration="34297000" />
-    </task>
-    <task id="LOCAL-00174" summary="最近删除页面">
-      <option name="closed" value="true" />
-      <created>1784455237173</created>
-      <option name="number" value="00174" />
-      <option name="presentableId" value="LOCAL-00174" />
-      <option name="project" value="LOCAL" />
-      <updated>1784455237173</updated>
+      <workItem from="1784854303470" duration="37233000" />
     </task>
     <task id="LOCAL-00175" summary="修复了入库历史显示问题;添加二进制检测">
       <option name="closed" value="true" />
@@ -675,7 +684,15 @@
       <option name="project" value="LOCAL" />
       <updated>1784896004453</updated>
     </task>
-    <option name="localTasksCounter" value="223" />
+    <task id="LOCAL-00223" summary="美丽按钮">
+      <option name="closed" value="true" />
+      <created>1784896944558</created>
+      <option name="number" value="00223" />
+      <option name="presentableId" value="LOCAL-00223" />
+      <option name="project" value="LOCAL" />
+      <updated>1784896944558</updated>
+    </task>
+    <option name="localTasksCounter" value="224" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

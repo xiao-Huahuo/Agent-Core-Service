@@ -528,7 +528,9 @@ onBeforeUnmount(() => {
         aria-label="Scroll to bottom"
         @click="jumpToMessageBottom"
       >
-        <ChevronDown :size="18" />
+        <svg class="scroll-svg" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="currentColor">
+          <path d="M440-800v487L216-537l-56 57 320 320 320-320-56-57-224 224v-487h-80Z"></path>
+        </svg>
       </button>
       <div v-if="chatStore.isStreaming" class="thinking-flow" aria-live="polite">
         <span>正在思考</span>
@@ -1147,30 +1149,63 @@ onBeforeUnmount(() => {
   left: 50%;
   bottom: 132px;
   z-index: 3;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 38px;
   height: 38px;
-  border: 1px solid var(--color-border);
+  padding: 10px;
+  border: 0;
   border-radius: 50%;
-  background: var(--color-surface-raised);
-  color: var(--color-text-secondary);
+  background-color: white;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
   transform: translateX(-50%);
-  transition:
-    left 200ms ease,
-    border-color var(--transition-fast),
-    background var(--transition-fast),
-    color var(--transition-fast),
-    box-shadow var(--transition-fast);
+  cursor: pointer;
+  transition: all 0.5s;
+  color: #0c0c0c;
+}
+
+.scroll-bottom-button::after {
+  content: "Down";
+  position: absolute;
+  width: auto;
+  background-color: white;
+  font-size: calc(12px * var(--font-scale));
+  box-sizing: border-box;
+  padding: 8px 14px;
+  border-radius: 25px;
+  top: -44px;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+  transition: all 0.5s;
+  transform: scale(0);
+  white-space: nowrap;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  color: #0c0c0c;
+}
+
+.scroll-svg {
+  transition: all 0.5s;
 }
 
 .scroll-bottom-button:hover {
-  border-color: var(--color-accent);
-  background: var(--color-accent-muted);
-  color: var(--color-text-primary);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  transform: translateX(-50%) translateY(-3px);
+  background-color: #0c0c0c;
+  border-color: #0c0c0c;
+  color: white;
+}
+
+.scroll-bottom-button:hover .scroll-svg {
+  fill: white;
+  transform: scale(1.2);
+}
+
+.scroll-bottom-button:hover::after {
+  transform: scale(1);
+}
+
+.scroll-bottom-button:active {
+  transform: translateX(-50%) translateY(2px);
 }
 
 .agent-page-mode .scroll-bottom-button {

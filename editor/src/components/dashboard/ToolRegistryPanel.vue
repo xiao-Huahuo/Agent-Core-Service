@@ -300,6 +300,8 @@ h2 { margin: 0; color: var(--color-text-primary); font-size: calc(14px * var(--f
   border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
   background: var(--color-primary-soft);
 }
+.icon-button:hover:not(:disabled) :deep(svg) { transform: rotate(90deg); }
+.icon-button :deep(svg) { transition: transform 0.3s; }
 .icon-button:disabled { opacity: 0.45; }
 .registry-search {
   display: flex; align-items: center; gap: var(--space-8);

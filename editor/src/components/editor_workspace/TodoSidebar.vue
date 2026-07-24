@@ -9,8 +9,6 @@
 import { onBeforeUnmount, onMounted, nextTick, ref } from 'vue'
 import {
   Calendar,
-  Circle,
-  CircleCheck,
   Pencil,
   Plus,
   Search,
@@ -184,15 +182,22 @@ function isDatetimeExpired(iso: string): boolean {
           'todo-deleting': deletingId === item.id,
         }"
       >
-        <button
-          class="todo-checkbox"
-          type="button"
-          :title="item.done ? '标记未完成' : '标记完成'"
-          @click="todoStore.toggleTodo(item.id)"
-        >
-          <CircleCheck v-if="item.done" :size="14" class="todo-check-icon done" />
-          <Circle v-else :size="14" class="todo-check-icon" />
-        </button>
+        <label class="creative-checkbox" :title="item.done ? '标记未完成' : '标记完成'">
+          <input
+            type="checkbox"
+            :checked="item.done"
+            @change="todoStore.toggleTodo(item.id)"
+          />
+          <div class="checkbox-box">
+            <svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+              <path
+                class="box-path"
+                d="M12,4 H32 A8,8 0 0 1 40,12 V32 A8,8 0 0 1 32,40 H12 A8,8 0 0 1 4,32 V12 A8,8 0 0 1 12,4 Z"
+              />
+              <path class="check-path" d="M14,23 L19,28 L30,15" />
+            </svg>
+          </div>
+        </label>
 
         <div class="todo-body">
           <div v-if="editingId === item.id" class="todo-edit-wrap">
@@ -215,23 +220,24 @@ function isDatetimeExpired(iso: string): boolean {
           >
             {{ item.text }}
           </span>
-          <div v-if="item.dueDate" class="todo-date-row">
-            <Calendar :size="10" />
-            <span
-              class="todo-date"
-              :class="{ expired: isDatetimeExpired(item.dueDate) && !item.done }"
-            >
-              {{ formatDatetime(item.dueDate) }}
-            </span>
-            <button
-              class="todo-date-clear"
-              type="button"
-              title="清除日期"
-              @click="todoStore.setDueDate(item.id, undefined)"
-            >
-              <X :size="10" />
-            </button>
-          </div>
+        </div>
+
+        <div v-if="item.dueDate" class="todo-date-col">
+          <Calendar :size="10" />
+          <span
+            class="todo-date"
+            :class="{ expired: isDatetimeExpired(item.dueDate) && !item.done }"
+          >
+            {{ formatDatetime(item.dueDate) }}
+          </span>
+          <button
+            class="todo-date-clear"
+            type="button"
+            title="清除日期"
+            @click="todoStore.setDueDate(item.id, undefined)"
+          >
+            <X :size="10" />
+          </button>
         </div>
 
         <div class="todo-actions">
@@ -489,9 +495,10 @@ function isDatetimeExpired(iso: string): boolean {
 }
 
 .todo-item {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-6);
   padding: var(--space-6) var(--space-8);
   border-bottom: 1px solid var(--color-border-soft);
   transition: background var(--transition-fast), box-shadow var(--transition-fast);
@@ -575,6 +582,101 @@ function isDatetimeExpired(iso: string): boolean {
   color: var(--color-primary);
 }
 
+.creative-checkbox {
+  --color-idle: var(--color-text-muted);
+  --color-hover: var(--color-text-secondary);
+  --color-active: var(--color-primary);
+  --color-active-glow: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  --size: 24px;
+  flex: 0 0 auto;
+  display: inline-block;
+  width: var(--size);
+  height: var(--size);
+  cursor: pointer;
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+  margin-top: 6px;
+}
+
+.creative-checkbox input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.creative-checkbox .checkbox-box {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: transparent;
+  transition:
+    background 0.3s,
+    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.creative-checkbox .checkbox-box svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.creative-checkbox .box-path {
+  fill: none;
+  stroke: var(--color-idle);
+  stroke-width: 3.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 144;
+  stroke-dashoffset: 0;
+  transition:
+    stroke-dashoffset 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    stroke 0.3s,
+    stroke-width 0.3s;
+}
+
+.creative-checkbox .check-path {
+  fill: none;
+  stroke: white;
+  stroke-width: 4px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 25;
+  stroke-dashoffset: 25;
+  transition: stroke-dashoffset 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s;
+}
+
+.creative-checkbox:hover .box-path {
+  stroke: var(--color-hover);
+  stroke-width: 4px;
+}
+
+.creative-checkbox input:checked ~ .checkbox-box {
+  background: var(--color-active);
+  box-shadow: 0 0 0 6px var(--color-active-glow);
+  animation: dynamic-bounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.creative-checkbox input:checked ~ .checkbox-box .box-path {
+  stroke: var(--color-active);
+  stroke-dashoffset: 144;
+  stroke-width: 0px;
+}
+
+.creative-checkbox input:checked ~ .checkbox-box .check-path {
+  stroke-dashoffset: 0;
+}
+
+@keyframes dynamic-bounce {
+  0% { transform: scale(1); }
+  30% { transform: scale(0.85) rotate(-4deg); }
+  70% { transform: scale(1.12) rotate(4deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
 .todo-body {
   flex: 1 1 auto;
   min-width: 0;
@@ -591,13 +693,16 @@ function isDatetimeExpired(iso: string): boolean {
   cursor: default;
 }
 
-.todo-date-row {
-  display: flex;
+/* ── Date as separate column ── */
+.todo-date-col {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  margin-top: var(--space-1);
+  flex: 0 0 auto;
+  position: relative;
   color: var(--color-text-muted);
   font-size: calc(10px * var(--font-scale));
+  white-space: nowrap;
 }
 
 .todo-date.expired {
@@ -655,8 +760,15 @@ function isDatetimeExpired(iso: string): boolean {
   transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
 }
 
-.todo-date-row:hover .todo-date-clear {
+.todo-date-col:hover .todo-date-clear {
   opacity: 1;
+}
+
+.todo-date-col .todo-date-clear {
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .todo-date-clear:hover {

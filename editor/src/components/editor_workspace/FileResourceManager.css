@@ -145,6 +145,9 @@
   opacity: 0.35;
 }
 
+.tool-button:hover :deep(svg) { transform: rotate(90deg); }
+.tool-button :deep(svg) { transition: transform 0.3s; }
+
 .tool-button.loading svg {
   animation: refresh-spin 1s linear infinite;
 }

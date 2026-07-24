@@ -81,7 +81,7 @@ defineEmits<{
     </section>
     <div class="github-section">
       <a
-        href="https://github.com/slumpyfufu/MetaWeave"
+        href="https://github.com/xiao-Huahuo/MetaWeave.git"
         target="_blank"
         rel="noopener noreferrer"
         class="github-btn"
