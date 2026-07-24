@@ -136,8 +136,10 @@ async function handleCloseWindow() {
       <button class="icon-button" type="button" title="设置" @click="emit('openSettings')">
         <Settings :size="14" />
       </button>
-      <button class="console-link" :class="{ active: agentActive }" type="button" title="切换 Agent 面板" @click="emit('toggleAgent')">
-        <span>Agent</span>
+      <button class="agent-play-btn" :class="{ active: agentActive }" type="button" title="切换 Agent 面板" @click="emit('toggleAgent')">
+        <img :src="logoSrc" class="agent-play-img" alt="MetaWeave" />
+        <span class="agent-now">NOW!</span>
+        <span class="agent-play">AGENT</span>
       </button>
       <button
         class="todo-link"
@@ -406,39 +408,76 @@ async function handleCloseWindow() {
   stroke: currentColor;
 }
 
-.console-link {
-  display: inline-flex;
+.agent-play-btn {
+  display: flex;
   align-items: center;
-  gap: var(--space-4);
+  justify-content: center;
+  gap: 4px;
   height: 24px;
-  padding: 0 var(--space-8);
-  border: 1px solid var(--color-border);
+  padding: 0 10px;
+  border: 0;
   border-radius: 999px;
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  font-size: calc(12px * var(--font-scale));
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast),
-    color var(--transition-fast);
+  background-color: var(--color-primary);
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  font-size: calc(10px * var(--font-scale));
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.5s ease;
 }
 
-.console-link:hover {
-  border-color: var(--color-primary);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
+.agent-play-btn:active {
+  transform: scale(0.9);
+  transition: all 100ms ease;
 }
 
-.console-link.active {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: white;
+.agent-play-img {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  transition: all 0.5s ease;
+  z-index: 2;
+  filter: brightness(0) invert(1);
 }
 
-.console-link.active:hover {
-  border-color: var(--color-primary-hover);
-  background: var(--color-primary-hover);
-  color: white;
+.agent-play {
+  transition: all 0.5s ease;
+  transition-delay: 300ms;
+}
+
+.agent-play-btn:hover {
+  overflow: visible;
+}
+
+.agent-play-btn:hover .agent-play-img {
+  transform: scale(3) translateX(12px);
+  transform-origin: left center;
+}
+
+.agent-now {
+  position: absolute;
+  left: 0;
+  transform: translateX(-100%);
+  transition: all 0.5s ease;
+  z-index: 2;
+}
+
+.agent-play-btn:hover .agent-now {
+  transform: translateX(6px);
+  transition-delay: 300ms;
+}
+
+.agent-play-btn:hover .agent-play {
+  transform: translateX(200%);
+  transition-delay: 300ms;
+}
+
+.agent-play-btn.active {
+  background-color: color-mix(in srgb, var(--color-primary) 80%, #000);
 }
 
 .todo-link {
