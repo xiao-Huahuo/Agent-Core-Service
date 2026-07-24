@@ -1127,13 +1127,14 @@ def update_exploration_state(
 def _get_todo_service() -> TodoService:
     """获取 TodoService 实例。"""
     runtime = get_tool_runtime()
-    data_dir = runtime.config.project_root if runtime.config else None
+    data_dir = str(runtime.config.storage.project_root / "data") if runtime.config else None
     return TodoService(data_dir=data_dir)
 
 
 def list_todos() -> str:
     """
-    列出当前用户的所有待办事项。返回格式化的待办列表,包含编号、完成状态、截止日期。
+    列出当前用户的所有待办事项。返回格式化的待办列表,每行包含编号、ID、完成状态和截止日期。
+    Agent 应当从输出中提取每个待办的 ID(格式为 todo_xxx)来调用 toggle_todo/edit_todo/delete_todo。
     """
 
     runtime = get_tool_runtime()
@@ -1144,8 +1145,9 @@ def list_todos() -> str:
     lines = []
     for i, item in enumerate(items, 1):
         status = "✅" if item.get("done") else "⬜"
+        tid = item["id"]
         due = f" [截止: {item['dueDate']}]" if item.get("dueDate") else ""
-        lines.append(f"{i}. {status} {item['text']}{due}")
+        lines.append(f"{i}. [{tid}] {status} {item['text']}{due}")
     return "\n".join(lines)
 
 
@@ -1161,7 +1163,7 @@ def add_todo(text: str, due_date: str | None = None) -> str:
     service = _get_todo_service()
     item = service.add_todo(user_id=runtime.user_id, text=text, due_date=due_date)
     due = f", 截止日期: {item['dueDate']}" if item.get("dueDate") else ""
-    return f"已创建待办: {item['text']}{due}"
+    return f"已创建待办 [{item['id']}]: {item['text']}{due}"
 
 
 def toggle_todo(todo_id: str) -> str:
@@ -1196,10 +1198,14 @@ def edit_todo(todo_id: str, text: str | None = None, due_date: str | None = None
     current = next((item for item in items if item.get("id") == todo_id), None)
     if current is None:
         return f"未找到 ID 为 {todo_id} 的待办事项。"
-    final_text = text if text is not None else current["text"]
+    final_text = current["text"]
+    if text:
+        stripped = text.strip()
+        if stripped:
+            final_text = stripped
     final_due = current.get("dueDate")
     if due_date is not None:
-        final_due = due_date if due_date else None
+        final_due = due_date
     item = service.edit_todo(user_id=runtime.user_id, todo_id=todo_id, text=final_text, due_date=final_due)
     if item is None:
         return f"编辑待办失败。"

@@ -149,6 +149,8 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     rest_deps._knowledge_graph_service = knowledge_graph_service
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
     rest_deps._retrieval_service = retrieval_service
+    from agent_service.services.todo_service import TodoService
+    rest_deps._todo_service = TodoService(data_dir=str(config.storage.project_root / "data"))
     logger.info("SettingsService 初始化完成")
 
     # 自动灌库: 扫描 resources/knowledge, 对已变更的文件执行 frontmatter 结构化 + Embedding + 入库
@@ -226,6 +228,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._attachment_service = None
         rest_deps._knowledge_library_service = None
         rest_deps._knowledge_graph_service = None
+        rest_deps._todo_service = None
         logger.info("AgentService 已关闭")
 
 

@@ -1,5 +1,15 @@
 # CHANGE HISTORY
 
+## 2026-07-25
+- [x] 修复 TODO 工具 `'AgentConfig' object has no attribute 'project_root'` 错误: `_get_todo_service()` 中 `runtime.config.project_root` 改为 `runtime.config.storage.project_root`,因 `project_root` 是 `AgentConfig.storage` 嵌套 dataclass 的字段,不是 `AgentConfig` 的直接属性。
+- [x] 让agent输出可以挂图片,可以从网上搜索并下载图片甚至各种内容到本地.
+- [x] 待办列表新增刷新按钮: `TodoSidebar.vue` header 增加 RefreshCw 按钮,调用 `todoStore.refreshFromServer()` 从后端 `/todo/list` 接口拉取待办数据并覆盖本地;同步显示旋转动画。
+- [x] 待办全面自测与修复:
+  - Bug 1: REST API TodoService 在 `deps.py` 中用无参 `TodoService()` 创建,默认使用 `os.getcwd()` 作为数据目录,与 Agent 内置工具使用的 `config.storage.project_root` 不一致。修复: `deps.py` 的 `_require_todo_service()` 不再自建实例,改为由 `main.py` lifespan 注入 `TodoService(data_dir=str(config.storage.project_root / "data"))`, shutdown 时也清空。
+  - Bug 2: `edit_todo` 内置工具函数当 LLM 传入空文本(`text=""`)时,会将空文本传给 `TodoService.edit_todo`,后者因文本为空返回 None,函数最终返回"编辑待办失败。"。修复: 当文本为空或纯空白时,保留原标题再传给服务。(`builtin.py:1199`)
+  - Bug 3: `edit_todo` 内置函数中 `due_date=''` 通过 `due_date if due_date else None` 被错误转换为 `None`,导致服务层收到 `None` 后跳过更新(属于"不传则不修改"逻辑),实际无法清除截止日期。修复: 直接透传 `due_date` 原值给服务层,利用服务层自身的 `'' → None` 转换逻辑。(`builtin.py:1205`)
+  - Bug 4: `list_todos()` 输出不包含待办 ID(`todo_xxx`),Agent 仅有序号(1./2./3.)无从知道真实 ID,导致后续 toggle/edit/delete 传参错误全返回"未找到"。修复: 列表每行增加 `[todo_xxx]` 格式的 ID 展示;`add_todo` 返回值也带上 `[todo_xxx]`;工具描述同步提示 Agent 从输出中提取 ID。(`builtin.py:1144-1148`)
+  - Bug 5: Vite 开发服务器代理配置未包含 `/todo` 路由,前端刷新按钮发起的 `/todo/list` 请求被 Vite 自身处理而没有转发到后端 8002 端口,导致 API 调用静默失败(500 或连接拒绝),且 `refreshFromServer` 的 catch 块未输出任何日志,用户看不到失败反馈。修复: `vite.config.ts` 补充 `'/todo': 'http://127.0.0.1:8002'` 代理规则;`refreshFromServer` 的 catch 块改为打印 warning 日志以便排查。
 ## 2026-07-24
 - [x] 为 Agent 配备 TODO 增删改查工具: 后端新增 `TodoService` (JSON 文件持久化)、`builtin.py` 中注册 5 个工具函数(list_todos/add_todo/toggle_todo/edit_todo/delete_todo)、REST API 端点(todo.py)及路由器注册;前端新增 `api/todo.ts` 客户端、`api_routes.ts` 中注册 TODO 路由。
 - [x] 待办列表侧边栏: 在 agent-col 内部基于 flex 列布局分割待办(上半)与 Agent(下半),过渡动画保持 160~180ms。

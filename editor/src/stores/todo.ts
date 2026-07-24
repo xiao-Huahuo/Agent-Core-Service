@@ -9,6 +9,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
+import { apiListTodos } from '@/api/todo'
+
 export interface TodoItem {
   id: string
   text: string
@@ -46,6 +48,7 @@ export const useTodoStore = defineStore('todo', () => {
   const hideDone = ref(false)
   const searchQuery = ref('')
   const todoSidebarSplitRatio = ref(0.5)
+  const syncing = ref(false)
 
   const overdueIds = computed(() => {
     const now = Date.now()
@@ -126,6 +129,29 @@ export const useTodoStore = defineStore('todo', () => {
     persist()
   }
 
+  async function refreshFromServer() {
+    const { useSettingsStore } = await import('@/stores/settings')
+    const userId = useSettingsStore().profile.userId
+    if (!userId) return
+    syncing.value = true
+    try {
+      const serverTodos = await apiListTodos(userId)
+      todos.value = serverTodos.map((t) => ({
+        id: t.id,
+        text: t.text,
+        done: t.done,
+        createdAt: t.createdAt,
+        dueDate: t.dueDate || undefined,
+      }))
+      persist()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.warn('[TodoStore] 从服务器刷新待办失败:', msg)
+    } finally {
+      syncing.value = false
+    }
+  }
+
   // Expose for split-ratio persistence (saved in EditorWorkspace)
   function setSplitRatio(ratio: number) {
     todoSidebarSplitRatio.value = Math.max(0.1, Math.min(0.9, ratio))
@@ -136,6 +162,7 @@ export const useTodoStore = defineStore('todo', () => {
     hideDone,
     searchQuery,
     todoSidebarSplitRatio,
+    syncing,
     overdueIds,
     filteredTodos,
     pendingCount,
@@ -147,5 +174,6 @@ export const useTodoStore = defineStore('todo', () => {
     toggleHideDone,
     clearDone,
     setSplitRatio,
+    refreshFromServer,
   }
 })

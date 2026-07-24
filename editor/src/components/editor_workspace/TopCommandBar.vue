@@ -6,7 +6,7 @@
   links between the editor, graph preview, settings, and existing console.
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import { CheckSquare, DatabaseZap, Maximize2, Minus, Network, X } from 'lucide-vue-next'
 
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
@@ -29,6 +29,7 @@ const logoSrc = new URL('../../assets/images/无底图标.png', import.meta.url)
 const switchingRoot = ref(false)
 const savingLibraryName = ref(false)
 const libraryNameDraft = ref('')
+const nameInputRef = ref<HTMLInputElement | null>(null)
 const activeLibraryName = computed(() => {
   return settingsStore.activeKnowledgeLibrary?.name?.trim() || settingsStore.profile.knowledgeDir
 })
@@ -79,6 +80,20 @@ async function handleCloseWindow() {
   }
   desktopApi?.close()
 }
+
+function autoResizeInput() {
+  const el = nameInputRef.value
+  if (!el) return
+  el.style.width = '0'
+  el.style.width = `${el.scrollWidth}px`
+}
+
+watch(
+  libraryNameDraft,
+  () => nextTick(autoResizeInput),
+)
+
+onMounted(() => nextTick(autoResizeInput))
 </script>
 
 <template>
@@ -89,11 +104,13 @@ async function handleCloseWindow() {
       </button>
       <div class="brand-copy">
         <input
+          ref="nameInputRef"
           v-model="libraryNameDraft"
           class="library-name-input"
           :disabled="savingLibraryName"
           :title="settingsStore.profile.knowledgeDir"
           spellcheck="false"
+          @input="autoResizeInput"
           @blur="commitLibraryName"
           @keydown.enter.prevent="commitLibraryName"
           @keydown.escape.prevent="libraryNameDraft = activeLibraryName"
@@ -292,18 +309,17 @@ async function handleCloseWindow() {
 
 .library-name-input {
   display: block;
-  width: min(180px, 100%);
-  min-width: 0;
+  width: auto;
+  min-width: 40px;
   height: 18px;
   padding: 0;
   border: 0;
   outline: 0;
-  overflow: hidden;
+  overflow: visible;
   background: transparent;
   color: var(--color-text);
   font-size: calc(13px * var(--font-scale));
   font-weight: 650;
-  text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.2;
 }
@@ -315,7 +331,8 @@ async function handleCloseWindow() {
 
 .root-path-btn {
   display: block;
-  overflow: hidden;
+  width: fit-content;
+  max-width: 100%;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -325,7 +342,6 @@ async function handleCloseWindow() {
   font-size: calc(10px * var(--font-scale));
   line-height: 1.1;
   text-align: left;
-  text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
   transition: color var(--transition-fast);

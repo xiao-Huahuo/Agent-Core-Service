@@ -442,14 +442,14 @@ STATE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
 TODO_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="list_todos",
-        description="列出当前用户的所有待办事项,返回编号列表,包含完成状态和截止日期。",
+        description="列出当前用户的所有待办事项。每行包含编号、ID(todo_xxx)、完成状态和截止日期。后续切换/编辑/删除时需要从输出中提取该 ID。",
         args_schema={"type": "object", "properties": {}, "required": []},
         function=list_todos,
         display_name="列出待办",
     ),
     BuiltinToolDefinition(
         name="add_todo",
-        description="新增一条待办事项。可指定可选的截止日期。",
+        description="新增一条待办事项。可指定可选的截止日期。返回值包含新待办的 ID(todo_xxx),可供后续切换/编辑/删除使用。",
         args_schema={
             "type": "object",
             "properties": {

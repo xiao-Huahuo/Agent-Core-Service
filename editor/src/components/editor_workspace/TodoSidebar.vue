@@ -11,6 +11,7 @@ import {
   Calendar,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
   Trash2,
   X,
@@ -138,6 +139,16 @@ function isDatetimeExpired(iso: string): boolean {
           </span>
           <span>隐藏已完成</span>
         </label>
+        <button
+          class="todo-clear-done"
+          type="button"
+          :class="{ spinning: todoStore.syncing }"
+          title="从服务器刷新"
+          :disabled="todoStore.syncing"
+          @click="todoStore.refreshFromServer()"
+        >
+          <RefreshCw :size="12" />
+        </button>
         <button
           class="todo-clear-done"
           type="button"
@@ -384,6 +395,10 @@ function isDatetimeExpired(iso: string): boolean {
   cursor: default;
 }
 
+.todo-clear-done.spinning :deep(svg) {
+  animation: todo-refresh-spin 800ms linear infinite;
+}
+
 .todo-toolbar {
   display: flex;
   flex-direction: column;
@@ -543,6 +558,11 @@ function isDatetimeExpired(iso: string): boolean {
 @keyframes strike-through {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
+}
+
+@keyframes todo-refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .todo-overdue .todo-text {

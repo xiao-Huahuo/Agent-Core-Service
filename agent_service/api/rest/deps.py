@@ -80,7 +80,6 @@ def _require_attachment_service() -> SessionAttachmentService:
 
 
 def _require_todo_service() -> TodoService:
-    global _todo_service
     if _todo_service is None:
-        _todo_service = TodoService()
+        raise HTTPException(status_code=503, detail="TodoService not initialized yet")
     return _todo_service
