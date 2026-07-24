@@ -24,6 +24,14 @@ defineOptions({ name: 'TreeNode' })
 
 const settingsStore = useSettingsStore()
 
+const statusWidth = computed(() => {
+  const showIndex = settingsStore.showIndexColumn
+  const showGraph = settingsStore.showGraphColumn
+  if (showIndex && showGraph) return '58px'
+  if (showIndex || showGraph) return '34px'
+  return '8px'
+})
+
 const props = defineProps<{
   node: KnowledgeFileNode
   depth: number
@@ -175,7 +183,7 @@ function handleRowDrop(event: DragEvent) {
     <div
       class="tree-row"
       :class="{ selected: selectedPath === node.path || selectedPaths.has(node.path), 'drag-over': dragOver }"
-      :style="{ paddingLeft: `${depth * 14 + 8}px` }"
+      :style="{ paddingLeft: `${depth * 14 + 8}px`, '--status-width': statusWidth }"
       role="button"
       tabindex="0"
       draggable="true"
@@ -263,7 +271,7 @@ function handleRowDrop(event: DragEvent) {
 .tree-row {
   position: relative;
   display: grid;
-  grid-template-columns: 14px 16px minmax(0, 1fr) 58px;
+  grid-template-columns: 14px 16px minmax(0, 1fr) var(--status-width, 58px);
   animation: tree-node-enter 0.25s ease-out both;
   animation-delay: calc(var(--stagger, 0) * 40ms);
   align-items: center;
@@ -360,7 +368,7 @@ function handleRowDrop(event: DragEvent) {
   align-items: center;
   justify-content: end;
   gap: 8px;
-  min-width: 58px;
+  min-width: var(--status-width, 58px);
   padding-left: 8px;
 }
 

@@ -5,7 +5,7 @@
   Hosts developer-facing runtime tools behind a single activity-bar entry.
 -->
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { nextTick, onMounted, ref, watch } from 'vue'
 
 import AgentTracePanel from '@/components/dashboard/AgentTracePanel.vue'
 import MemoryKnowledgePanel from '@/components/dashboard/MemoryKnowledgePanel.vue'
@@ -17,6 +17,23 @@ import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 
 const activeTab = ref<'trace' | 'multimodal' | 'mk' | 'tools' | 'apis'>('trace')
+const debugTabsRef = ref<HTMLElement | null>(null)
+const debugSliderStyle = ref({ width: '0px', left: '0px' })
+
+function updateDebugSlider() {
+  nextTick(() => {
+    const container = debugTabsRef.value
+    if (!container) return
+    const active = container.querySelector('.debug-tab.active') as HTMLElement | null
+    if (!active) return
+    debugSliderStyle.value = {
+      width: `${active.offsetWidth}px`,
+      left: `${active.offsetLeft}px`,
+    }
+  })
+}
+
+watch(activeTab, updateDebugSlider)
 const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
@@ -50,12 +67,14 @@ watch(
 
 onMounted(() => {
   ensureDebugHistoryLoaded()
+  updateDebugSlider()
 })
 </script>
 
 <template>
   <div class="debug-view">
-    <div class="debug-tabs">
+    <div ref="debugTabsRef" class="debug-tabs">
+      <div class="debug-slider" :style="debugSliderStyle"></div>
       <button
         class="debug-tab"
         :class="{ active: activeTab === 'trace' }"
@@ -118,35 +137,50 @@ onMounted(() => {
 }
 
 .debug-tabs {
-  display: flex;
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 2px;
-  padding: var(--space-8) var(--space-10) 0;
+  gap: 4px;
+  padding: 3px;
+  margin: var(--space-8) var(--space-10) 0;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
   flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.debug-slider {
+  position: absolute;
+  top: 3px;
+  height: calc(100% - 6px);
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  transition: left 250ms ease, width 250ms ease;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .debug-tab {
+  position: relative;
+  z-index: 1;
   font-family: var(--font-ui);
   font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border: none;
+  border-radius: 999px;
   padding: 4px 12px;
   cursor: pointer;
-  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+  outline: none;
 }
 
 .debug-tab:hover {
-  color: var(--color-text-secondary);
-  background: var(--color-bg-hover);
+  color: var(--color-primary);
 }
 
 .debug-tab.active {
   color: var(--color-primary);
-  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
-  background: var(--color-primary-soft);
 }
 
 .debug-content {
@@ -176,15 +210,28 @@ onMounted(() => {
     position: sticky;
     top: 0;
     z-index: 5;
+    display: flex;
+    margin: 0;
     padding: var(--space-8);
     background: var(--color-bg-app);
+    border: none;
+    border-radius: 0;
     border-bottom: 1px solid var(--color-border);
+    align-self: auto;
+  }
+
+  .debug-slider {
+    display: none;
   }
 
   .debug-tab {
     flex: 1 1 calc(50% - 2px);
     min-width: 0;
     text-align: center;
+  }
+
+  .debug-tab.active {
+    background: var(--color-primary-soft);
   }
 }
 </style>

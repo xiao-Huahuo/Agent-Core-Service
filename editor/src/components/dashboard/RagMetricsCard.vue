@@ -5,7 +5,7 @@
 -->
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import VChart from 'vue-echarts'
 import 'echarts'
 import { useObsData } from '@/composable/useObsData'
@@ -13,6 +13,21 @@ import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
 
 const obs = useObsData()
 const chartMode = ref<'donut' | 'line'>('donut')
+const ragToggleRef = ref<HTMLElement | null>(null)
+const ragSliderStyle = ref({ width: '0px', left: '0px' })
+
+function updateRagSlider() {
+  nextTick(() => {
+    const el = ragToggleRef.value
+    if (!el) return
+    const a = el.querySelector('.rag-btn.active') as HTMLElement | null
+    if (!a) return
+    ragSliderStyle.value = { width: `${a.offsetWidth}px`, left: `${a.offsetLeft}px` }
+  })
+}
+
+onMounted(updateRagSlider)
+watch(chartMode, updateRagSlider)
 
 const METRIC_TOOLTIP = 'fill rate：槽位填充率 = 返回条数 / 请求上限 × 100\navg relevance：平均相关性 = 各条目 final_score 均值 × 100\nconfidence：置信度，与 avg_relevance 同值'
 
@@ -154,9 +169,10 @@ const lineOption = computed(() => {
     :status="chartMode === 'donut' ? '本轮' : '历史'"
   >
     <div class="card-body">
-      <div class="chart-toolbar">
-        <button class="chart-mode-btn" :class="{ active: chartMode === 'donut' }" @click="chartMode = 'donut'">饼图</button>
-        <button class="chart-mode-btn" :class="{ active: chartMode === 'line' }" @click="chartMode = 'line'">曲线图</button>
+      <div ref="ragToggleRef" class="capsule-toggle">
+        <div class="capsule-slider" :style="ragSliderStyle"></div>
+        <button class="rag-btn" :class="{ active: chartMode === 'donut' }" type="button" @click="chartMode = 'donut'">饼图</button>
+        <button class="rag-btn" :class="{ active: chartMode === 'line' }" type="button" @click="chartMode = 'line'">曲线图</button>
       </div>
 
       <!-- 三个 donut -->
@@ -191,28 +207,50 @@ const lineOption = computed(() => {
   overflow: hidden;
 }
 
-.chart-toolbar {
-  display: flex;
-  gap: var(--space-6);
+.capsule-toggle {
+  position: relative;
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
   flex-shrink: 0;
 }
 
-.chart-mode-btn {
+.capsule-slider {
+  position: absolute;
+  top: 2px;
+  height: calc(100% - 4px);
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  transition: left 250ms ease, width 250ms ease;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.rag-btn {
+  position: relative;
+  z-index: 1;
   font-family: var(--font-ui);
   font-size: calc(9px * var(--font-scale));
   color: var(--color-text-tertiary);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border: none;
+  border-radius: 999px;
   padding: 2px 8px;
   cursor: pointer;
-  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+  outline: none;
 }
-.chart-mode-btn:hover { color: var(--color-text-secondary); background: var(--color-bg-hover); }
-.chart-mode-btn.active {
+
+.rag-btn:hover {
   color: var(--color-primary);
-  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
-  background: var(--color-primary-soft);
+}
+
+.rag-btn.active {
+  color: var(--color-primary);
 }
 
 .gauges-row {

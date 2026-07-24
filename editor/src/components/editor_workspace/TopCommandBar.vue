@@ -377,7 +377,7 @@ async function handleCloseWindow() {
   display: inline-block;
   width: 58px;
   height: 28px;
-  border: 1px solid rgb(58, 58, 58);
+  border: 1px solid var(--color-border);
   border-radius: 22px;
   flex-shrink: 0;
 }
@@ -394,7 +394,7 @@ async function handleCloseWindow() {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #62cff0;
+  background-color: var(--color-primary);
   border-radius: 20px;
   transition: 0.4s;
   overflow: hidden;

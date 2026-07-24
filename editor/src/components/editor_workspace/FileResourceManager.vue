@@ -62,6 +62,8 @@ const workspaceStore = useWorkspaceStore()
 const settingsStore = useSettingsStore()
 const currentDir = ref('')
 const resourcePage = ref<ResourcePage>('files')
+const pageSwitchRef = ref<HTMLElement | null>(null)
+const pageSliderStyle = ref({ width: '0px', left: '0px' })
 const directoryBackStack = ref<string[]>([])
 const directoryForwardStack = ref<string[]>([])
 const viewMode = ref<ResourceViewMode>('list')
@@ -284,11 +286,25 @@ async function refreshResources() {
   }
 }
 
+function updatePageSlider() {
+  nextTick(() => {
+    const container = pageSwitchRef.value
+    if (!container) return
+    const active = container.querySelector('.page-switch-button.active') as HTMLElement | null
+    if (!active) return
+    pageSliderStyle.value = {
+      width: `${active.offsetWidth}px`,
+      left: `${active.offsetLeft}px`,
+    }
+  })
+}
+
 async function switchResourcePage(page: ResourcePage) {
   resourcePage.value = page
   if (page === 'trash') {
     await workspaceStore.loadKnowledgeTrash()
   }
+  updatePageSlider()
 }
 
 function materialIconForEntry(entry: KnowledgeTrashEntry) {
@@ -755,6 +771,7 @@ async function deleteTrash(entry: KnowledgeTrashEntry) {
 onMounted(() => {
   document.addEventListener('click', closeContextMenu)
   void workspaceStore.loadKnowledgeTrash()
+  updatePageSlider()
 })
 
 onUnmounted(() => {
@@ -773,7 +790,8 @@ onUnmounted(() => {
     @contextmenu.prevent="resourcePage === 'files' && openContextMenu(null, $event)"
   >
     <header class="resource-toolbar">
-      <div class="resource-page-switch" aria-label="Resource pages">
+      <div ref="pageSwitchRef" class="resource-page-switch" aria-label="Resource pages">
+        <div class="page-slider" :style="pageSliderStyle"></div>
         <button
           class="page-switch-button"
           :class="{ active: resourcePage === 'files' }"
@@ -804,7 +822,7 @@ onUnmounted(() => {
         </button>
         <button
           class="tool-button"
-          :class="{ loading: workspaceStore.treeLoading || workspaceStore.trashLoading }"
+          :class="{ loading: workspaceStore.treeLoading || workspaceStore.trashLoading, 'refresh-btn': true }"
           type="button"
           title="刷新"
           :disabled="workspaceStore.treeLoading || workspaceStore.trashLoading"

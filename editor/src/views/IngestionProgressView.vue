@@ -6,8 +6,9 @@
   ingestion/graph history with source-type filtering.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
+  BrainCircuit,
   CheckCircle2,
   CircleDashed,
   FileText,
@@ -26,6 +27,24 @@ type IngestionTab = 'queue' | 'graph-queue' | 'history'
 
 const workspaceStore = useWorkspaceStore()
 const activeTab = ref<IngestionTab>('queue')
+const tabSwitchRef = ref<HTMLElement | null>(null)
+const tabSliderStyle = ref({ width: '0px', left: '0px' })
+
+function updateTabSlider() {
+  nextTick(() => {
+    const container = tabSwitchRef.value
+    if (!container) return
+    const active = container.querySelector('.tab-button.active') as HTMLElement | null
+    if (!active) return
+    tabSliderStyle.value = {
+      width: `${active.offsetWidth}px`,
+      left: `${active.offsetLeft}px`,
+    }
+  })
+}
+
+onMounted(updateTabSlider)
+watch(activeTab, updateTabSlider)
 const historyFilter = ref<HistorySourceType | 'all'>('all')
 
 const queueRows = computed(() => workspaceStore.ingestionQueue)
@@ -117,45 +136,37 @@ function historySummary(row: IngestionHistoryItem): string {
 <template>
   <section class="ingestion-page">
     <header class="page-heading">
-      <div>
-        <h1>加载队列</h1>
-        <p v-if="activeTab === 'queue'">{{ queueRows.length }} 个文件正在或等待灌库</p>
-        <p v-else-if="activeTab === 'graph-queue'">{{ graphQueueRows.length > 0 ? `${graphQueueRows.length} 个文档待抽取` : '无正在抽取的任务' }}</p>
-        <p v-else>{{ historyRows.length }} 条历史记录</p>
+      <div ref="tabSwitchRef" class="tab-switch" role="tablist" aria-label="入库进度子页">
+        <div class="tab-slider" :style="tabSliderStyle"></div>
+        <button
+          class="tab-button"
+          :class="{ active: activeTab === 'queue' }"
+          type="button"
+          role="tab"
+          @click="activeTab = 'queue'"
+        >
+          入库队列
+        </button>
+        <button
+          class="tab-button"
+          :class="{ active: activeTab === 'graph-queue' }"
+          type="button"
+          role="tab"
+          @click="activeTab = 'graph-queue'"
+        >
+          图谱抽取队列
+        </button>
+        <button
+          class="tab-button"
+          :class="{ active: activeTab === 'history' }"
+          type="button"
+          role="tab"
+          @click="activeTab = 'history'"
+        >
+          入库历史
+        </button>
       </div>
       <div class="heading-actions">
-        <div class="tab-switch" role="tablist" aria-label="入库进度子页">
-          <button
-            class="tab-button"
-            :class="{ active: activeTab === 'queue' }"
-            type="button"
-            role="tab"
-            @click="activeTab = 'queue'"
-          >
-            <CircleDashed :size="15" />
-            <span>入库队列</span>
-          </button>
-          <button
-            class="tab-button"
-            :class="{ active: activeTab === 'graph-queue' }"
-            type="button"
-            role="tab"
-            @click="activeTab = 'graph-queue'"
-          >
-            <BrainCircuit :size="15" />
-            <span>图谱抽取队列</span>
-          </button>
-          <button
-            class="tab-button"
-            :class="{ active: activeTab === 'history' }"
-            type="button"
-            role="tab"
-            @click="activeTab = 'history'"
-          >
-            <History :size="15" />
-            <span>入库历史</span>
-          </button>
-        </div>
         <button class="refresh-btn" type="button" title="刷新" aria-label="刷新" @click="refresh">
           <RefreshCw :size="16" class="refresh-svg" />
         </button>
@@ -338,18 +349,6 @@ function historySummary(row: IngestionHistoryItem): string {
   gap: var(--space-12);
 }
 
-.page-heading h1 {
-  margin: 0;
-  font-size: calc(18px * var(--font-scale));
-  font-weight: 700;
-}
-
-.page-heading p {
-  margin: 4px 0 0;
-  color: var(--color-text-muted);
-  font-size: calc(12px * var(--font-scale));
-}
-
 .heading-actions {
   display: inline-flex;
   align-items: center;
@@ -357,6 +356,7 @@ function historySummary(row: IngestionHistoryItem): string {
 }
 
 .tab-switch {
+  position: relative;
   display: inline-flex;
   gap: 4px;
   padding: 3px;
@@ -365,14 +365,26 @@ function historySummary(row: IngestionHistoryItem): string {
   background: var(--color-surface);
 }
 
+.tab-slider {
+  position: absolute;
+  top: 3px;
+  height: calc(100% - 6px);
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  transition: left 250ms ease, width 250ms ease;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .tab-button,
 .icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid transparent;
+  border: none;
   background: transparent;
   color: var(--color-text-muted);
+  z-index: 1;
 }
 
 .tab-button {
@@ -381,17 +393,17 @@ function historySummary(row: IngestionHistoryItem): string {
   padding: 0 12px;
   border-radius: 999px;
   font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
+  outline: none;
 }
 
 .tab-button:hover,
-.tab-button.active,
 .icon-button:hover {
-  border-color: var(--color-primary);
   color: var(--color-primary);
 }
 
 .tab-button.active {
-  background: var(--color-primary-soft);
+  color: var(--color-primary);
 }
 
 .icon-button {

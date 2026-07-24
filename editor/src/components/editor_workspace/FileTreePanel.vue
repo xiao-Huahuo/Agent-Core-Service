@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { FilePlus2, FolderPlus, RefreshCw } from 'lucide-vue-next'
+import { ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, FilePlus2, FolderPlus, ListFilter, RefreshCw } from 'lucide-vue-next'
 
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import TreeNode from '@/components/editor_workspace/TreeNode.vue'
@@ -29,6 +29,36 @@ const contextMenu = ref<{
 const contextMenuStyle = ref<Record<string, string>>({ left: '0px', top: '0px' })
 const contextMenuRef = ref<{ getBoundingClientRect: () => DOMRect } | null>(null)
 const treeVersion = ref(0)
+const sortMenuOpen = ref(false)
+const sortKey = ref<'name' | 'mtime' | 'ingested' | 'size'>('name')
+const sortDirection = ref<'asc' | 'desc'>('asc')
+
+function sortTreeNodes(nodes: KnowledgeFileNode[]): KnowledgeFileNode[] {
+  const dirOrder = (a: KnowledgeFileNode, b: KnowledgeFileNode) => Number(b.isDir) - Number(a.isDir)
+  const cmp = (a: KnowledgeFileNode, b: KnowledgeFileNode) => {
+    const d = dirOrder(a, b)
+    if (d !== 0) return d
+    let r = 0
+    if (sortKey.value === 'name') {
+      r = a.name.localeCompare(b.name)
+    } else if (sortKey.value === 'mtime') {
+      r = (a.mtime ? new Date(a.mtime).getTime() : 0) - (b.mtime ? new Date(b.mtime).getTime() : 0)
+    } else if (sortKey.value === 'ingested') {
+      r = (a.ingestedAt ? new Date(a.ingestedAt).getTime() : 0) - (b.ingestedAt ? new Date(b.ingestedAt).getTime() : 0)
+    } else {
+      r = (a.size ?? 0) - (b.size ?? 0)
+    }
+    return sortDirection.value === 'asc' ? r : -r
+  }
+  return nodes
+    .map((n) => ({ ...n, children: n.children ? sortTreeNodes(n.children) : n.children }))
+    .sort(cmp)
+}
+
+const sortedTree = computed(() => {
+  if (!workspaceStore.tree.length) return workspaceStore.tree
+  return sortTreeNodes(workspaceStore.tree)
+})
 const inlineEdit = ref<{
   mode: 'create' | 'rename'
   kind: 'file' | 'folder'
@@ -45,17 +75,16 @@ const selectedTreeNode = computed(() => findNode(workspaceStore.tree, selectedTr
 const visibleTreeNodes = computed(() => flattenVisibleNodes(displayTree.value, workspaceStore.expandedPaths))
 const displayTree = computed(() => {
   const edit = inlineEdit.value
-  if (!edit || edit.mode !== 'create') {
-    return workspaceStore.tree
-  }
-  const draftNode: KnowledgeFileNode = {
-    name: edit.value,
-    path: edit.path,
-    isDir: edit.kind === 'folder',
-    children: edit.kind === 'folder' ? [] : undefined,
-    indexStatus: 'dirty',
-  }
-  return insertDraftNode(workspaceStore.tree, edit.parentPath, draftNode)
+  const source = edit?.mode === 'create'
+    ? insertDraftNode(sortedTree.value, edit.parentPath, {
+        name: edit.value,
+        path: edit.path,
+        isDir: edit.kind === 'folder',
+        children: edit.kind === 'folder' ? [] : undefined,
+        indexStatus: 'dirty',
+      })
+    : sortedTree.value
+  return source
 })
 
 function normalizeTreePath(path: string): string {
@@ -158,6 +187,58 @@ async function refreshFileTree() {
   actionError.value = ''
   treeVersion.value++
   await workspaceStore.loadKnowledgeTree()
+}
+
+function toggleExpandAll() {
+  function collectAllDirPaths(nodes: KnowledgeFileNode[]): string[] {
+    const result: string[] = []
+    for (const node of nodes) {
+      if (node.isDir) {
+        result.push(node.path)
+        if (node.children) {
+          result.push(...collectAllDirPaths(node.children))
+        }
+      }
+    }
+    return result
+  }
+  const tree = workspaceStore.tree
+  if (!tree.length) return
+  const allDirs = collectAllDirPaths(tree)
+  const currentExpanded = workspaceStore.expandedPaths
+  const allExpanded = allDirs.every((p) => currentExpanded.has(p))
+  if (allExpanded) {
+    workspaceStore.expandedPaths = new Set()
+  } else {
+    workspaceStore.expandedPaths = new Set(allDirs)
+  }
+}
+
+const sortKeyOptions: { value: 'name' | 'mtime' | 'ingested' | 'size'; label: string }[] = [
+  { value: 'name', label: '名称排序' },
+  { value: 'mtime', label: '修改时间排序' },
+  { value: 'ingested', label: '入库时间排序' },
+  { value: 'size', label: '大小排序' },
+]
+
+const sortDirectionOptions: { value: 'asc' | 'desc'; label: string }[] = [
+  { value: 'asc', label: '升序' },
+  { value: 'desc', label: '降序' },
+]
+
+function selectSortKey(value: 'name' | 'mtime' | 'ingested' | 'size') {
+  sortKey.value = value
+}
+
+function selectSortDirection(value: 'asc' | 'desc') {
+  sortDirection.value = value
+  sortMenuOpen.value = false
+}
+
+function toggleStatusColumns() {
+  const nextVisible = !(settingsStore.showIndexColumn && settingsStore.showGraphColumn)
+  settingsStore.setShowIndexColumn(nextVisible)
+  settingsStore.setShowGraphColumn(nextVisible)
 }
 
 function filesFromEvent(event: DragEvent): File[] {
@@ -313,6 +394,7 @@ async function openContextMenu(node: KnowledgeFileNode | null, event: MouseEvent
 
 function closeContextMenu() {
   contextMenu.value.open = false
+  sortMenuOpen.value = false
 }
 
 function isTextInputTarget(target: EventTarget | null): boolean {
@@ -691,21 +773,75 @@ onUnmounted(() => {
 <template>
   <aside class="file-panel surface-panel" :class="{ dragging, 'theme-dark': isDark, 'theme-light': !isDark }">
     <div class="panel-header">
-      <button class="header-action" type="button" title="New file" @click="beginCreate('file', '')">
-        <FilePlus2 :size="18" />
+      <button
+        class="header-action"
+        :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn }"
+        type="button"
+        :title="(settingsStore.showIndexColumn || settingsStore.showGraphColumn) ? '隐藏索引与图谱状态' : '显示索引与图谱状态'"
+        @click="toggleStatusColumns"
+      >
+        <ListFilter :size="18" />
       </button>
-      <button class="header-action" type="button" title="New folder" @click="beginCreate('folder', '')">
-        <FolderPlus :size="18" />
+      <div class="sort-control" @click.stop>
+        <button
+          class="header-action"
+          :class="{ active: sortMenuOpen }"
+          type="button"
+          title="排序"
+          @click="sortMenuOpen = !sortMenuOpen"
+        >
+          <ArrowUpDown :size="18" />
+        </button>
+        <div v-if="sortMenuOpen" class="sort-menu" @click.stop>
+          <button
+            v-for="option in sortKeyOptions"
+            :key="option.value"
+            type="button"
+            @click="selectSortKey(option.value)"
+          >
+            <Check v-if="sortKey === option.value" :size="14" />
+            <span v-else class="sort-check-placeholder"></span>
+            <span class="sort-icon-placeholder"></span>
+            <span>{{ option.label }}</span>
+          </button>
+          <hr />
+          <button
+            v-for="option in sortDirectionOptions"
+            :key="option.value"
+            type="button"
+            @click="selectSortDirection(option.value)"
+          >
+            <Check v-if="sortDirection === option.value" :size="14" />
+            <span v-else class="sort-check-placeholder"></span>
+            <ArrowUp v-if="option.value === 'asc'" :size="14" />
+            <ArrowDown v-else :size="14" />
+            <span>{{ option.label }}</span>
+          </button>
+        </div>
+      </div>
+      <button
+        class="header-action"
+        type="button"
+        title="展开/关闭所有文件夹"
+        @click="toggleExpandAll"
+      >
+        <ChevronsUpDown :size="18" />
       </button>
       <button
         class="header-action"
-        :class="{ loading: workspaceStore.treeLoading }"
+        :class="{ loading: workspaceStore.treeLoading, 'refresh-btn': true }"
         type="button"
         title="刷新文件树"
         :disabled="workspaceStore.treeLoading"
         @click="refreshFileTree"
       >
         <RefreshCw :size="18" />
+      </button>
+      <button class="header-action" type="button" title="New folder" @click="beginCreate('folder', '')">
+        <FolderPlus :size="18" />
+      </button>
+      <button class="header-action" type="button" title="New file" @click="beginCreate('file', '')">
+        <FilePlus2 :size="18" />
       </button>
       <input
         ref="uploadPicker"

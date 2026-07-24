@@ -26,6 +26,7 @@
 }
 
 .resource-page-switch {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
@@ -35,20 +36,37 @@
   background: var(--color-canvas);
 }
 
+.page-slider {
+  position: absolute;
+  top: 2px;
+  height: calc(100% - 4px);
+  border-radius: 999px;
+  background: var(--color-primary-softer);
+  transition: left 250ms ease, width 250ms ease;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .page-switch-button {
+  position: relative;
+  z-index: 1;
   height: 26px;
   padding: 0 var(--space-10);
-  border: 0;
+  border: none;
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
   font-size: calc(13px * var(--font-scale));
+  cursor: pointer;
+  outline: none;
 }
 
-.page-switch-button:hover,
+.page-switch-button:hover {
+  color: var(--color-primary);
+}
+
 .page-switch-button.active {
-  background: var(--color-primary-softer);
   color: var(--color-primary);
 }
 
@@ -145,10 +163,11 @@
   opacity: 0.35;
 }
 
-.tool-button:hover :deep(svg) { transform: rotate(90deg); }
-.tool-button :deep(svg) { transition: transform 0.3s; }
+.tool-button.refresh-btn :deep(svg) { transition: transform 0.3s; }
 
-.tool-button.loading svg {
+.tool-button.refresh-btn:hover :deep(svg) { transform: rotate(90deg); }
+
+.tool-button.refresh-btn.loading svg {
   animation: refresh-spin 1s linear infinite;
 }
 

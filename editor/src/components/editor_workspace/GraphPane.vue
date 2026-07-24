@@ -7,7 +7,7 @@
   events upward; it intentionally does not own route navigation or file opening.
 -->
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Crosshair, Pause, Play, RefreshCw, Search, Type, X } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
@@ -31,6 +31,21 @@ const graphCanvasRef = ref<InstanceType<typeof KnowledgeGraphCanvas> | null>(nul
 const selectedNode = ref<KnowledgeGraphNodeEvent | null>(null)
 const showGraphLabels = ref(true)
 const graphMode = ref<'tree' | 'semantic'>('semantic')
+const graphModeRef = ref<HTMLElement | null>(null)
+const graphModeSliderStyle = ref({ width: '0px', left: '0px' })
+
+function updateGraphModeSlider() {
+  nextTick(() => {
+    const container = graphModeRef.value
+    if (!container) return
+    const active = container.querySelector('.graph-mode-button.active') as HTMLElement | null
+    if (!active) return
+    graphModeSliderStyle.value = {
+      width: `${active.offsetWidth}px`,
+      left: `${active.offsetLeft}px`,
+    }
+  })
+}
 const semanticGraph = ref<KnowledgeSemanticGraphResponse | null>(null)
 const semanticLoading = ref(false)
 const semanticError = ref('')
@@ -223,6 +238,7 @@ function kindLabel(kind: string): string {
 }
 
 onMounted(() => {
+  updateGraphModeSlider()
   if (settingsStore.profile.userId) {
     if (tree.value.length === 0) {
       void workspaceStore.loadKnowledgeTree()
@@ -239,6 +255,7 @@ watch(
     selectedNode.value = null
     sidebarOpen.value = false
     searchQuery.value = ''
+    updateGraphModeSlider()
     if (mode === 'semantic') {
       void loadSemanticGraph()
     } else {
@@ -251,7 +268,8 @@ watch(
 <template>
   <section class="graph-pane">
     <header class="graph-toolbar">
-      <div class="graph-mode">
+      <div ref="graphModeRef" class="graph-mode">
+        <div class="graph-mode-slider" :style="graphModeSliderStyle"></div>
         <button
           class="graph-mode-button"
           :class="{ active: graphMode === 'semantic' }"
@@ -287,7 +305,7 @@ watch(
         </button>
         <button
           class="graph-action"
-          :class="{ loading: treeLoading || semanticLoading }"
+          :class="{ loading: treeLoading || semanticLoading, 'refresh-btn': true }"
           type="button"
           title="Reload graph data"
           :disabled="treeLoading || semanticLoading"
@@ -466,8 +484,8 @@ watch(
   background: var(--color-primary-softer);
   color: var(--color-text);
 }
-.graph-action:hover :deep(svg) { transform: rotate(90deg); }
-.graph-action :deep(svg) { transition: transform 0.3s; }
+.graph-action.refresh-btn:hover :deep(svg) { transform: rotate(90deg); }
+.graph-action.refresh-btn :deep(svg) { transition: transform 0.3s; }
 
 .graph-action.active {
   border-color: var(--color-primary);
@@ -485,6 +503,7 @@ watch(
 }
 
 .graph-mode {
+  position: relative;
   display: inline-flex;
   gap: 4px;
   padding: 3px;
@@ -493,28 +512,41 @@ watch(
   background: var(--color-surface);
 }
 
+.graph-mode-slider {
+  position: absolute;
+  top: 3px;
+  height: calc(100% - 6px);
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  transition: left 250ms ease, width 250ms ease;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .graph-mode-button {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: 24px;
   padding: 0 12px;
-  border: 1px solid transparent;
+  border: none;
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-muted);
   font-size: calc(12px * var(--font-scale));
   white-space: nowrap;
+  cursor: pointer;
+  outline: none;
 }
 
-.graph-mode-button:hover,
-.graph-mode-button.active {
-  border-color: var(--color-primary);
+.graph-mode-button:hover {
   color: var(--color-primary);
 }
 
 .graph-mode-button.active {
-  background: var(--color-primary-soft);
+  color: var(--color-primary);
 }
 
 .embedded-graph {

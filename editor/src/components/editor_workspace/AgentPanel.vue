@@ -674,7 +674,7 @@ onBeforeUnmount(() => {
 
 .topbar-capsule.drawer-open {
   gap: 0;
-  padding: 3px 10px 3px 0;
+  padding: 3px 10px 3px 6px;
 }
 
 .capsule-logo-btn {

@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Clock, FileSearch, Layers, List, Loader, Search, Sparkles, ToggleLeft, ToggleRight, Trash2, X } from 'lucide-vue-next'
+import { Clock, FileSearch, Loader, Search, Sparkles, Trash2, X } from 'lucide-vue-next'
 
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -99,9 +99,6 @@ function navigateToSearchPage() {
   focused.value = false
 }
 
-function toggleUnified() {
-  workspaceStore.searchUnified = !workspaceStore.searchUnified
-}
 </script>
 
 <template>
@@ -146,9 +143,20 @@ function toggleUnified() {
             type="button"
             @mousedown.prevent="toggleFulltext"
           >
-            <component :is="workspaceStore.fulltextEnabled ? ToggleRight : ToggleLeft" :size="14" class="toggle-icon" />
-            <FileSearch :size="11" />
-            <span>内容搜索</span>
+            <div class="toggle-inner">
+              <div class="toggle-dot"></div>
+              <span class="toggle-label">内容搜索</span>
+            </div>
+            <div class="toggle-overlay">
+              <div class="toggle-overlay-inner">
+                <FileSearch :size="12" />
+                <span>内容搜索</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="toggle-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h14"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 6l6 6-6 6"></path>
+                </svg>
+              </div>
+            </div>
           </button>
           <button
             class="toggle-btn"
@@ -156,17 +164,22 @@ function toggleUnified() {
             type="button"
             @mousedown.prevent="toggleSemantic"
           >
-            <component :is="workspaceStore.semanticEnabled ? ToggleRight : ToggleLeft" :size="14" class="toggle-icon" />
-            <span>语义搜索</span>
-          </button>
-          <button
-            class="toggle-btn unified-toggle"
-            :class="{ on: workspaceStore.searchUnified }"
-            type="button"
-            title="联合搜索"
-            @mousedown.prevent="toggleUnified"
-          >
-            <component :is="workspaceStore.searchUnified ? Layers : List" :size="12" />
+            <div class="toggle-inner">
+              <div class="toggle-dot"></div>
+              <span class="toggle-label">语义搜索</span>
+            </div>
+            <div class="toggle-overlay">
+              <div class="toggle-overlay-inner">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                </svg>
+                <span>语义搜索</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="toggle-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h14"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 6l6 6-6 6"></path>
+                </svg>
+              </div>
+            </div>
           </button>
           <button
             class="ai-search-btn"
@@ -449,33 +462,113 @@ function toggleUnified() {
 }
 
 .toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: 1px 6px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: calc(11px * var(--font-scale));
+  position: relative;
   cursor: pointer;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  padding: 0;
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 500;
+  font-family: var(--font-ui);
+  color: var(--color-text-muted);
+  box-shadow: none;
+  transition: all 0.3s;
+  outline: none;
+}
+
+.toggle-btn .toggle-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 12px;
+  transition: all 0.3s;
+}
+
+.toggle-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  transition: all 0.3s;
+}
+
+.toggle-label {
+  transition: all 0.3s;
   white-space: nowrap;
 }
 
+.toggle-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  height: 100%;
+  width: 100%;
+  transform: translateX(100%);
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  opacity: 0;
+  transition: all 0.3s;
+}
+
+.toggle-overlay-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 2px 12px;
+}
+
+.toggle-overlay-inner span {
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 500;
+  line-height: 1;
+}
+
+.toggle-arrow {
+  width: 12px;
+  height: 12px;
+  line-height: 1;
+}
+
+/* Off state hover: overlay fades in, inner fades out */
+.toggle-btn:not(.on):hover .toggle-inner {
+  opacity: 0;
+}
+
+.toggle-btn:not(.on):hover .toggle-overlay {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.toggle-btn:not(.on):hover {
+  border-color: var(--color-primary);
+}
+
+/* On state: primary border + dot */
 .toggle-btn.on {
   border-color: var(--color-primary);
   color: var(--color-primary);
 }
 
-.toggle-icon {
-  margin-left: -3px;
+.toggle-btn.on .toggle-dot {
+  background: var(--color-primary);
 }
 
-.unified-toggle {
-  width: 22px;
-  height: 20px;
-  padding: 0;
-  justify-content: center;
+/* On state hover: overlay fades in, inner fades out */
+.toggle-btn.on:hover .toggle-inner {
+  opacity: 0;
+}
+
+.toggle-btn.on:hover .toggle-overlay {
+  transform: translateX(0);
+  opacity: 1;
 }
 
 .ai-search-btn {

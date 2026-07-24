@@ -649,9 +649,8 @@ onMounted(() => {
   line-height: 1;
 }
 
-/* Off state hover: overlay slides in, inner slides out */
+/* Off state hover: overlay fades in, inner fades out */
 .toggle-btn:not(.on):hover .toggle-inner {
-  transform: translateX(-20%);
   opacity: 0;
 }
 
@@ -674,14 +673,13 @@ onMounted(() => {
   background: var(--color-primary);
 }
 
-/* On state hover: overlay (white on primary) slides in */
+/* On state hover: overlay fades in, inner fades out */
 .toggle-btn.on:hover .toggle-inner {
-  transform: translateX(-20%);
   opacity: 0;
 }
 
 .toggle-btn.on:hover .toggle-overlay {
-  transform: translateX(-4px);
+  transform: translateX(0);
   opacity: 1;
 }
 

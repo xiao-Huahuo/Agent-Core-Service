@@ -8,7 +8,7 @@
 -->
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import VChart from 'vue-echarts'
 import 'echarts'
 import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
@@ -27,6 +27,12 @@ const sessionStore = useSessionStore()
 const chatStore = useChatStore()
 
 const chartKind = ref<ChartKind>('buckets')
+const kindToggleRef = ref<HTMLElement | null>(null)
+const kindSliderStyle = ref({ width: '0px', left: '0px' })
+const sortToggleRef = ref<HTMLElement | null>(null)
+const sortSliderStyle = ref({ width: '0px', left: '0px' })
+const chartTypeToggleRef = ref<HTMLElement | null>(null)
+const chartTypeSliderStyle = ref({ width: '0px', left: '0px' })
 const chartModes = ref<Record<ChartKind, ChartMode>>({
   calls: 'line',
   buckets: 'bar',
@@ -273,6 +279,34 @@ function baseOption({ xData, series, xRotate = 0 }: { xData: string[]; series: u
   }
 }
 
+function updateKindSlider() {
+  nextTick(() => {
+    const el = kindToggleRef.value
+    if (!el) return
+    const a = el.querySelector('.kind-btn.active') as HTMLElement | null
+    if (!a) return
+    kindSliderStyle.value = { width: `${a.offsetWidth}px`, left: `${a.offsetLeft}px` }
+  })
+}
+function updateSortSlider() {
+  nextTick(() => {
+    const el = sortToggleRef.value
+    if (!el) return
+    const a = el.querySelector('.sort-btn.active') as HTMLElement | null
+    if (!a) return
+    sortSliderStyle.value = { width: `${a.offsetWidth}px`, left: `${a.offsetLeft}px` }
+  })
+}
+function updateChartTypeSlider() {
+  nextTick(() => {
+    const el = chartTypeToggleRef.value
+    if (!el) return
+    const a = el.querySelector('.chart-type-btn.active') as HTMLElement | null
+    if (!a) return
+    chartTypeSliderStyle.value = { width: `${a.offsetWidth}px`, left: `${a.offsetLeft}px` }
+  })
+}
+
 function formatShortTime(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
@@ -310,6 +344,7 @@ async function loadStats() {
 
 onMounted(() => {
   void loadStats()
+  nextTick(() => { updateKindSlider(); updateChartTypeSlider() })
 })
 
 watch(
@@ -321,6 +356,10 @@ watch(
   () => [chartKind.value, interval.value, lookback.value, callLimit.value, sessionSort.value] as const,
   () => void loadStats(),
 )
+
+watch(chartKind, () => nextTick(() => { updateKindSlider(); updateChartTypeSlider() }))
+watch(sessionSort, updateSortSlider)
+watch(activeChartMode, updateChartTypeSlider)
 
 watch(
   () => chatStore.isStreaming,
@@ -336,16 +375,19 @@ watch(
   <DashboardCardFrame title="Token 用量" :status="statusText">
     <div class="card-body">
       <div class="chart-toolbar">
-        <button
-          v-for="tab in chartTabs"
-          :key="tab.value"
-          class="chart-mode-btn"
-          :class="{ active: chartKind === tab.value }"
-          type="button"
-          @click="chartKind = tab.value"
-        >
-          {{ tab.label }}
-        </button>
+        <div ref="kindToggleRef" class="capsule-toggle">
+          <div class="capsule-slider" :style="kindSliderStyle"></div>
+          <button
+            v-for="tab in chartTabs"
+            :key="tab.value"
+            class="kind-btn"
+            :class="{ active: chartKind === tab.value }"
+            type="button"
+            @click="chartKind = tab.value"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
 
         <!-- 时间刻度: 桶粒度 + 时间范围 -->
         <template v-if="chartKind === 'buckets'">
@@ -372,11 +414,12 @@ watch(
 
         <!-- Session 总量: 排序方式 -->
         <template v-if="chartKind === 'sessions'">
-          <div class="sort-toggle">
+          <div ref="sortToggleRef" class="capsule-toggle">
+            <div class="capsule-slider" :style="sortSliderStyle"></div>
             <button
               v-for="opt in sessionSortOptions"
               :key="opt.value"
-              class="chart-mode-btn"
+              class="sort-btn"
               :class="{ active: sessionSort === opt.value }"
               type="button"
               @click="sessionSort = opt.value"
@@ -386,9 +429,10 @@ watch(
           </div>
         </template>
 
-        <div class="chart-type-toggle">
+        <div ref="chartTypeToggleRef" class="capsule-toggle">
+          <div class="capsule-slider" :style="chartTypeSliderStyle"></div>
           <button
-            class="chart-mode-btn"
+            class="chart-type-btn"
             :class="{ active: activeChartMode === 'bar' }"
             type="button"
             @click="activeChartMode = 'bar'"
@@ -396,7 +440,7 @@ watch(
             柱状图
           </button>
           <button
-            class="chart-mode-btn"
+            class="chart-type-btn"
             :class="{ active: activeChartMode === 'line' }"
             type="button"
             @click="activeChartMode = 'line'"
@@ -435,34 +479,66 @@ watch(
   flex-wrap: wrap;
 }
 
-.chart-type-toggle,
-.sort-toggle {
-  display: flex;
+.capsule-toggle {
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
-  margin-left: auto;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
 }
 
-.chart-mode-btn,
-.filter-select {
+.capsule-slider {
+  position: absolute;
+  top: 2px;
+  height: calc(100% - 4px);
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  transition: left 250ms ease, width 250ms ease;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.kind-btn,
+.sort-btn,
+.chart-type-btn {
+  position: relative;
+  z-index: 1;
   height: 22px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  padding: 0 8px;
+  border: none;
+  border-radius: 999px;
   background: transparent;
   color: var(--color-text-tertiary);
   font-family: var(--font-ui);
   font-size: calc(9px * var(--font-scale));
-}
-
-.chart-mode-btn {
-  padding: 0 8px;
   cursor: pointer;
+  outline: none;
 }
 
-.chart-mode-btn.active {
-  border-color: var(--color-primary);
+.kind-btn:hover,
+.sort-btn:hover,
+.chart-type-btn:hover {
   color: var(--color-primary);
-  background: var(--color-primary-softer);
+}
+
+.kind-btn.active,
+.sort-btn.active,
+.chart-type-btn.active {
+  color: var(--color-primary);
+}
+
+.filter-select {
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-tertiary);
+  font-family: var(--font-ui);
+  font-size: calc(9px * var(--font-scale));
 }
 
 .filter-select {
