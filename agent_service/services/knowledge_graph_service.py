@@ -218,6 +218,139 @@ class LLMKnowledgeGraphExtractor:
         value = self.llm_config.get(key)
         return str(value).strip() if value else None
 
+    def deduplicate_entities(
+        self,
+        entities: list[EntityCandidate],
+        document: StructuredKnowledgeDocument,
+    ) -> dict[str, Any]:
+        """对文档级实体做语义去重,返回合并后的实体列表和名称映射表。"""
+
+        if len(entities) <= 1:
+            return {"entities": list(entities), "name_mapping": {e.name: e.name for e in entities}}
+        response = self.task_scheduler.invoke_chat(
+            task_type=BACKGROUND_FACT_RESOLUTION_TASK,
+            model_tier=SMALL_MODEL_TIER,
+            messages=[
+                SystemMessage(content=self._dedup_system_prompt()),
+                HumanMessage(content=self._dedup_human_prompt(document=document, entities=entities)),
+            ],
+            model_name=self._value("model_name"),
+            api_key=self._value("api_key"),
+            base_url=self._value("base_url"),
+            small_model_name=self._value("small_model_name"),
+            small_api_key=self._value("small_api_key"),
+            small_base_url=self._value("small_base_url"),
+        )
+        self._record_dedup_token_usage(response=response, document=document)
+        payload = self._parse_json_object(str(response.content or ""))
+        groups = payload.get("groups", []) if isinstance(payload, dict) else []
+        if not groups:
+            return {"entities": list(entities), "name_mapping": {e.name: e.name for e in entities}}
+
+        consumed: set[int] = set()
+        merged: list[EntityCandidate] = []
+        name_mapping: dict[str, str] = {}
+
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            canonical_name = str(group.get("canonical_name", "")).strip()
+            if not self._is_valid_entity_name(canonical_name):
+                continue
+            entity_type = str(group.get("canonical_type") or "other").strip().lower()
+            if entity_type not in ENTITY_TYPES:
+                entity_type = "other"
+            indices = [
+                i for i in group.get("entity_indices", [])
+                if isinstance(i, int) and 0 <= i < len(entities)
+            ]
+            if not indices:
+                continue
+            consumed.update(indices)
+            for idx in indices:
+                orig_name = entities[idx].name
+                if orig_name != canonical_name:
+                    name_mapping[orig_name] = canonical_name
+
+            merged.append(
+                EntityCandidate(
+                    name=canonical_name,
+                    entity_type=entity_type,
+                    aliases=group.get("aliases", [])[:5],
+                    description="",
+                    confidence=max(entities[i].confidence for i in indices),
+                )
+            )
+
+        for i, entity in enumerate(entities):
+            if i not in consumed:
+                merged.append(entity)
+                name_mapping[entity.name] = entity.name
+
+        for entity in entities:
+            if entity.name not in name_mapping:
+                name_mapping[entity.name] = entity.name
+
+        return {"entities": merged, "name_mapping": name_mapping}
+
+    @staticmethod
+    def _dedup_system_prompt() -> str:
+        """返回实体语义去重系统提示词。"""
+
+        return (
+            "你是实体语义去重器。你的任务是对同一文档中抽取出的实体候选进行语义去重。"
+            "如果多个候选指代的是同一个事物或概念（例如「AI」和「Artificial Intelligence」、"
+            "「用户」和「end user」、「Python」和「Python语言」），将它们合并为一个规范实体。"
+            "只输出合法 JSON，不要输出解释。"
+        )
+
+    @staticmethod
+    def _dedup_human_prompt(
+        *,
+        document: StructuredKnowledgeDocument,
+        entities: list[EntityCandidate],
+    ) -> str:
+        """构造语义去重输入。"""
+
+        lines = []
+        for i, entity in enumerate(entities):
+            lines.append(
+                f"  [{i}] name={entity.name}  type={entity.entity_type}  "
+                f"aliases={entity.aliases}  desc={entity.description[:80]}"
+            )
+        return (
+            f"文档标题: {document.title}\n"
+            "候选实体列表(每行格式: [index] name=... type=... aliases=... desc=...):\n"
+            + "\n".join(lines)
+            + "\n\n请返回 JSON 数组 groups，每个 group 包含:\n"
+            '  - canonical_name: 规范名称\n'
+            '  - canonical_type: 实体类型\n'
+            '  - entity_indices: 属于该组的输入实体索引列表\n'
+            '  - aliases: 该实体的别名列表\n'
+            '输出: {"groups": [...]}'
+        )
+
+    def _record_dedup_token_usage(
+        self,
+        *,
+        response: Any,
+        document: StructuredKnowledgeDocument,
+    ) -> None:
+        """记录语义去重步骤的模型用量。"""
+
+        if not self.user_id or not self.library_id:
+            return
+        source_id = f"knowledge_graph_{self.library_id}_dedup_{document.document_id}"
+        self.token_usage_service.record_llm_response_token_usage(
+            user_id=self.user_id,
+            session_id=None,
+            response=response,
+            node="knowledge_graph",
+            event="entity_dedup",
+            model_tier=SMALL_MODEL_TIER,
+            source_id=source_id,
+        )
+
     @staticmethod
     def _parse_json_object(content: str) -> dict[str, Any]:
         """解析模型返回的 JSON 对象,兼容包裹在代码块中的输出。"""
@@ -237,6 +370,16 @@ class LLMKnowledgeGraphExtractor:
             except json.JSONDecodeError:
                 return {"entities": [], "relations": []}
         return payload if isinstance(payload, dict) else {"entities": [], "relations": []}
+
+    @staticmethod
+    def _is_valid_entity_name(value: str) -> bool:
+        """过滤明显无效或过泛的实体名。"""
+
+        if not value or len(value) > 80:
+            return False
+        if re.fullmatch(r"[\W_]+", value, flags=re.UNICODE):
+            return False
+        return value not in {"系统", "用户", "文件", "文档", "内容", "数据", "信息"}
 
 
 class KnowledgeGraphService:
@@ -386,6 +529,29 @@ class KnowledgeGraphService:
                         allowed_entity_names=section_entity_names,
                     )
                 )
+
+            # 语义去重: 合并不同 section 中同名但不同表述的实体
+            if isinstance(extractor, LLMKnowledgeGraphExtractor) and entities_by_key:
+                entity_list = list(entities_by_key.values())
+                dedup_result = extractor.deduplicate_entities(entity_list, document=document)
+                merged_entities = dedup_result.get("entities", entity_list)
+                name_mapping = dedup_result.get("name_mapping", {})
+                if name_mapping:
+                    entities_by_key = {
+                        (self._normalize_label(e.name), e.entity_type): e
+                        for e in merged_entities
+                    }
+                    remapped: list[tuple[RelationCandidate, StructuredKnowledgeSection]] = []
+                    for relation, section in relations:
+                        new_source = name_mapping.get(relation.source, relation.source)
+                        new_target = name_mapping.get(relation.target, relation.target)
+                        if new_source == new_target:
+                            continue
+                        relation.source = new_source
+                        relation.target = new_target
+                        remapped.append((relation, section))
+                    relations = remapped
+
             written_entities, written_relations = self._write_graph(
                 user_id=user_id,
                 library_id=library_id,
@@ -1251,6 +1417,28 @@ def _run_graph_extraction(
                         for relation in section_relations
                     )
                     print(f" entities={len(section_entities)} relations={len(section_relations)}")
+
+                # 语义去重: 合并不同 section 中同名但不同表述的实体
+                if isinstance(extractor, LLMKnowledgeGraphExtractor) and entities_by_key:
+                    entity_list = list(entities_by_key.values())
+                    dedup_result = extractor.deduplicate_entities(entity_list, document=document)
+                    merged_entities = dedup_result.get("entities", entity_list)
+                    name_mapping = dedup_result.get("name_mapping", {})
+                    if name_mapping:
+                        entities_by_key = {
+                            (svc._normalize_label(e.name), e.entity_type): e
+                            for e in merged_entities
+                        }
+                        remapped: list[tuple[RelationCandidate, StructuredKnowledgeSection]] = []
+                        for relation, section in relations:
+                            new_source = name_mapping.get(relation.source, relation.source)
+                            new_target = name_mapping.get(relation.target, relation.target)
+                            if new_source == new_target:
+                                continue
+                            relation.source = new_source
+                            relation.target = new_target
+                            remapped.append((relation, section))
+                        relations = remapped
 
                 written_entities, written_relations = svc._write_graph(
                     user_id=user_id,

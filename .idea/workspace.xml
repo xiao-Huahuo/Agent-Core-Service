@@ -4,12 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="deepseek;待办列表">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="待办列表">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TodoSidebar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TodoSidebar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/knowledge_graph_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/knowledge_graph_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_knowledge_graph_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_knowledge_graph_service.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -98,11 +98,11 @@
       <recent name="D:\Projects\Python\MetaWeave\docs\assets" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="D:\Projects\Python\MetaWeave\tests\测试文件" />
       <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\images" />
       <recent name="D:\Projects\Python\MetaWeave" />
       <recent name="D:\Projects\Python\MetaWeave\docs\AI反思日志" />
       <recent name="D:\Projects\Python\MetaWeave\docs\api" />
-      <recent name="D:\Projects\Python\MetaWeave\docs" />
     </key>
   </component>
   <component name="RunManager" selected="Batch.启动">
@@ -279,15 +279,7 @@
       <workItem from="1784638422280" duration="912000" />
       <workItem from="1784688429981" duration="15773000" />
       <workItem from="1784723159028" duration="13415000" />
-      <workItem from="1784854303470" duration="11908000" />
-    </task>
-    <task id="LOCAL-00164" summary="字体变换v1">
-      <option name="closed" value="true" />
-      <created>1784382625928</created>
-      <option name="number" value="00164" />
-      <option name="presentableId" value="LOCAL-00164" />
-      <option name="project" value="LOCAL" />
-      <updated>1784382625928</updated>
+      <workItem from="1784854303470" duration="13856000" />
     </task>
     <task id="LOCAL-00165" summary="字体变换完成">
       <option name="closed" value="true" />
@@ -673,14 +665,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784867957027</updated>
     </task>
-    <option name="localTasksCounter" value="213" />
+    <task id="LOCAL-00213" summary="待办列表">
+      <option name="closed" value="true" />
+      <created>1784869466707</created>
+      <option name="number" value="00213" />
+      <option name="presentableId" value="LOCAL-00213" />
+      <option name="project" value="LOCAL" />
+      <updated>1784869466707</updated>
+    </task>
+    <option name="localTasksCounter" value="214" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="样式小调整,codex把三按钮和来源修了一部分,但是产生了agent不输出中间内容的问题" />
     <MESSAGE value="修复了agent不输出中间内容的问题" />
     <MESSAGE value="写作规范" />
     <MESSAGE value="语义知识图谱v1" />
@@ -705,7 +704,8 @@
     <MESSAGE value="上下文进度" />
     <MESSAGE value="中断" />
     <MESSAGE value="deepseek;待办列表" />
-    <option name="LAST_COMMIT_MESSAGE" value="deepseek;待办列表" />
+    <MESSAGE value="待办列表" />
+    <option name="LAST_COMMIT_MESSAGE" value="待办列表" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />

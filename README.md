@@ -400,6 +400,8 @@ editor编辑区不仅提供Markdown编辑器功能,还对多种代码文件提�
 图谱特点是**文档内通过 LLM 输出的语义关系进行关联, 不同文档通过共享实体节点间接连接**,形成隐式的跨文档语义网络.抽取时不做跨文档关系发现,保证每篇文档的独立性,同时共享实体节点在外图中自然实现了桥接.
 重建时按 `source_hash` 增量执行,仅对新增或内容变更的文档重新调用 LLM 抽取,已抽取且未变化的文档直接跳过.
 
+**语义去去重**: section 抽取完成后,将所有实体候选送小模型做一次语义去重,合并同义不同名的实体（如"AI"="Artificial Intelligence"、"用户"="end user"）,并自动重映射关系两端。`tests/测试文档.md` 是用于验证的测试文档。
+
 **前端渲染**:
 
 - 语义图谱无根节点,实体和文档节点根据 d3-force 力导向布局自动散开
@@ -409,6 +411,8 @@ editor编辑区不仅提供Markdown编辑器功能,还对多种代码文件提�
 - 文件树图谱(父子层级)与语义图谱(自由网状)通过前端按钮切换,共享同一个 Canvas 渲染器
 - 对于实体节点,连接了1条边的大小为基础大小,每多连接1条边,则实体节点大小增加基础大小的10%,最多增加90%,更多则大小固定.
 - 图谱默认为释放态(电荷小球物理排斥),可以进行定格.
+
+> **注意**: 首次打开图谱页面时,语义图谱默认模式需要显式加载。`GraphPane.vue` 在 `onMounted` 中会调用 `loadSemanticGraph()` 加载语义数据,无需手动切换模式。
 
 ## 工作原理流程图
 ### 核心Agent结构设计
@@ -974,13 +978,16 @@ flowchart TD
     I --> J["输出: entities + relations"]
     J --> K["限流 sleep(0.5s/section)"]
     K --> L["每文档后 sleep(1.0s)"]
-    L --> M["写入 SQLite"]
-    M --> N["knowledge_graph_nodes"]
-    M --> O["knowledge_graph_edges"]
-    M --> P["knowledge_graph_document_status"]
-    E --> Q{"检测熔断<br/>(余额不足/配额超限)?"}
-    Q -->|"是"| R["停止抽取,输出部分结果"]
-    Q -->|"否"| E
+    L --> M["文档级实体合并<br/>按 (名称, 类型) 去重"]
+    M --> N["语义去重<br/>所有实体候选送小模型<br/>合并同义实体(AI=Artificial Intelligence)"]
+    N --> O["重映射关系边<br/>旧名→规范名"]
+    O --> P["写入 SQLite"]
+    P --> Q["knowledge_graph_nodes"]
+    P --> R["knowledge_graph_edges"]
+    P --> S["knowledge_graph_document_status"]
+    E --> T{"检测熔断<br/>(余额不足/配额超限)?"}
+    T -->|"是"| U["停止抽取,输出部分结果"]
+    T -->|"否"| E
 
 ```
 ## 接口设计

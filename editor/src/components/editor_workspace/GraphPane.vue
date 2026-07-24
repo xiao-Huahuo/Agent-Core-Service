@@ -159,8 +159,13 @@ function kindLabel(kind: string): string {
 }
 
 onMounted(() => {
-  if (settingsStore.profile.userId && tree.value.length === 0) {
-    void workspaceStore.loadKnowledgeTree()
+  if (settingsStore.profile.userId) {
+    if (tree.value.length === 0) {
+      void workspaceStore.loadKnowledgeTree()
+    }
+    if (graphMode.value === 'semantic') {
+      void loadSemanticGraph()
+    }
   }
 })
 

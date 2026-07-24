@@ -195,6 +195,101 @@ def test_graph_llm_config_uses_explicit_small_model_when_present(tmp_path: Path)
     assert llm_config["small_base_url"] == "https://small.example.com"
 
 
+def test_entity_dedup_merges_semantic_duplicates(tmp_path: Path) -> None:
+    """语义去重应合并不同名称但指代同一事物的实体。"""
+
+    from unittest.mock import MagicMock
+
+    from agent_service.services.knowledge_graph_service import (
+        EntityCandidate,
+        LLMKnowledgeGraphExtractor,
+    )
+
+    mock_response = MagicMock()
+    mock_response.content = (
+        '{"groups": [{"canonical_name": "AI", "canonical_type": "concept", '
+        '"entity_indices": [0, 1], "aliases": ["AI", "Artificial Intelligence"]}]}'
+    )
+    mock_scheduler = MagicMock()
+    mock_scheduler.invoke_chat.return_value = mock_response
+
+    config = AgentConfig.load_config(
+        {
+            "model": {
+                "model_name": "mock-model",
+                "api_key": "mock-key",
+            },
+            "storage": {"project_root": str(tmp_path), "base_data_dir": str(tmp_path / "runtime")},
+        },
+        load_env=False,
+        load_dotenv=False,
+        ensure_models=False,
+    )
+    extractor = LLMKnowledgeGraphExtractor(config=config, task_scheduler=mock_scheduler)
+    entities = [
+        EntityCandidate(name="AI", entity_type="concept", aliases=[], description="人工智能", confidence=0.9),
+        EntityCandidate(name="Artificial Intelligence", entity_type="concept", aliases=[], description="人工智慧", confidence=0.85),
+    ]
+    document = StructuredKnowledgeDocument(
+        document_id="doc_dedup",
+        source_type="text",
+        source_path=str(tmp_path / "dedup.txt"),
+        source_uri=str(tmp_path / "dedup.txt"),
+        source_hash="h1",
+        title="dedup_test",
+        summary="",
+        tags=[],
+        authority=0.7,
+        valid_from=None,
+        valid_until=None,
+        metadata={},
+        sections=[],
+    )
+
+    result = extractor.deduplicate_entities(entities, document=document)
+    merged = result["entities"]
+    name_mapping = result.get("name_mapping", {})
+
+    assert len(merged) == 1
+    assert merged[0].name == "AI"
+    assert name_mapping.get("Artificial Intelligence") == "AI"
+
+
+def test_entity_dedup_passthrough_on_single_entity(tmp_path: Path) -> None:
+    """只有一个实体时应直接透传,不触发 LLM 调用。"""
+
+    from unittest.mock import MagicMock
+
+    from agent_service.services.knowledge_graph_service import (
+        EntityCandidate,
+        LLMKnowledgeGraphExtractor,
+    )
+
+    mock_scheduler = MagicMock()
+    config = AgentConfig.load_config(
+        {
+            "model": {"model_name": "mock-model", "api_key": "mock-key"},
+            "storage": {"project_root": str(tmp_path), "base_data_dir": str(tmp_path / "runtime")},
+        },
+        load_env=False,
+        load_dotenv=False,
+        ensure_models=False,
+    )
+    extractor = LLMKnowledgeGraphExtractor(config=config, task_scheduler=mock_scheduler)
+    entities = [
+        EntityCandidate(name="唯一实体", entity_type="concept", aliases=[], description="", confidence=0.9),
+    ]
+    document = StructuredKnowledgeDocument(
+        document_id="doc_single", source_type="text", source_path=str(tmp_path / "s.txt"),
+        source_uri=str(tmp_path / "s.txt"), source_hash="h1", title="single",
+        summary="", tags=[], authority=0.7, valid_from=None, valid_until=None, metadata={}, sections=[],
+    )
+
+    result = extractor.deduplicate_entities(entities, document=document)
+    assert len(result["entities"]) == 1
+    mock_scheduler.invoke_chat.assert_not_called()
+
+
 def test_graph_progress_doc_entry_uses_source_relative_path(tmp_path: Path) -> None:
     """图谱抽取进度应返回文件树相对路径,以便前端逐个更新图谱状态图标。"""
 
