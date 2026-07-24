@@ -13,6 +13,7 @@ import TerminalSandboxSettingsSection from '@/components/settings_view/TerminalS
 import ToolsSettingsSection from '@/components/settings_view/ToolsSettingsSection.vue'
 import WebSearchSettingsSection from '@/components/settings_view/WebSearchSettingsSection.vue'
 import GraphSettingsSection from '@/components/settings_view/GraphSettingsSection.vue'
+import SafetySettingsSection from '@/components/settings_view/SafetySettingsSection.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { ThemeMode } from '@/types/settings'
@@ -32,6 +33,7 @@ const tabs = [
   { key: 'web' as const, label: '联网配置' },
   { key: 'memory' as const, label: '记忆与指令' },
   { key: 'graph' as const, label: '图谱' },
+  { key: 'safety' as const, label: '安全审核' },
 ]
 
 watch(activeTab, (tab) => {
@@ -707,6 +709,10 @@ onBeforeUnmount(() => {
       <GraphSettingsSection
         v-if="activeTab === 'graph'"
         v-model:graph-node-limit-draft="graphNodeLimitDraft"
+      />
+
+      <SafetySettingsSection
+        v-if="activeTab === 'safety'"
       />
     </div>
   </div>

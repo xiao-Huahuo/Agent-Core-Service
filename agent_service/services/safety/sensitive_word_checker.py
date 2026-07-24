@@ -52,7 +52,9 @@ class SensitiveWordResult:
 class SensitiveWordChecker:
     """敏感词检查器,加载分类词库进行双层匹配。"""
 
-    def __init__(self, categories: dict[str, dict[str, Any]]) -> None:
+    def __init__(self, categories: dict[str, dict[str, Any]], *, disabled: bool = False, safety_disabled: bool = False) -> None:
+        self.disabled = disabled
+        self.safety_disabled = safety_disabled
         self._categories = categories
         self._compiled: dict[str, list[tuple[str, re.Pattern, str, str, bool]]] = {}
         for cat_key, cat_def in categories.items():
@@ -68,10 +70,17 @@ class SensitiveWordChecker:
         """从 JSON 词库文件加载并构造检查器。"""
 
         raw = json.loads(Path(filepath).read_text(encoding="utf-8"))
-        return cls(categories=raw.get("categories", {}))
+        return cls(
+            categories=raw.get("categories", {}),
+            disabled=raw.get("_sensitive_words_disabled", False),
+            safety_disabled=raw.get("_safety_disabled", False),
+        )
 
     def check(self, text: str) -> SensitiveWordResult:
         """对输入文本执行全量敏感词匹配。"""
+
+        if self.disabled or self.safety_disabled:
+            return SensitiveWordResult(blocked=False)
 
         hits: list[SensitiveWordHit] = []
         blocked_categories: list[str] = []

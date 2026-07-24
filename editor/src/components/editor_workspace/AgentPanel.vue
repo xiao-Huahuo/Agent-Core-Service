@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { BrainCircuit, Check, ChevronDown, History, Maximize2, MessageSquarePlus, MessagesSquare, SquarePen, UploadCloud } from 'lucide-vue-next'
+import { Check, ChevronDown, History, Maximize2, MessageSquarePlus, MessagesSquare, SquarePen, UploadCloud } from 'lucide-vue-next'
 
 import darkTitle from '@/assets/images/暗色标题.png'
 import lightTitle from '@/assets/images/亮色标题.png'
@@ -23,7 +23,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
 import { uploadAgentAttachment } from '@/api/agent'
-import { fetchLLMConfig } from '@/api/settings'
+import { fetchLLMConfig, fetchSensitiveWords, saveSensitiveWords } from '@/api/settings'
 
 type MessageListApi = {
   scrollToBottom: (options?: ScrollToOptions) => void
@@ -47,6 +47,8 @@ const referenceText = ref('')
 const messageListRef = ref<MessageListApi | null>(null)
 const isMessageListAtBottom = ref(true)
 const contextWindowTokens = ref(128000)
+const safetyDisabled = ref(false)
+const safetyLoading = ref(false)
 const dragDepth = ref(0)
 const isUploadingAttachment = ref(false)
 const uploadStatusText = ref('')
@@ -199,6 +201,28 @@ function handleModelConfigUpdated(event: Event) {
   currentLargeModelName.value = modelName?.trim() || ''
 }
 
+async function loadSafetyState() {
+  try {
+    const raw = await fetchSensitiveWords()
+    const r = raw as Record<string, unknown>
+    safetyDisabled.value = r._safety_disabled === true
+  } catch { /* 忽略 */ }
+}
+
+async function toggleSafety() {
+  if (safetyLoading.value) return
+  safetyLoading.value = true
+  try {
+    const raw = await fetchSensitiveWords()
+    const r = raw as Record<string, unknown>
+    const next = !(r._safety_disabled === true)
+    r._safety_disabled = next
+    await saveSensitiveWords(r)
+    safetyDisabled.value = next
+  } catch { /* 忽略 */ }
+  finally { safetyLoading.value = false }
+}
+
 function closeSessionDrawer() {
   sessionDrawerOpen.value = false
 }
@@ -331,6 +355,7 @@ onMounted(() => {
   window.addEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
   void reloadSessions()
   void loadCurrentModelConfig()
+  void loadSafetyState()
   void settingsStore.fetchWebSearchSettings()
 })
 
@@ -391,6 +416,18 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </div>
+      <button
+        class="capsule-safety-btn"
+        :class="{ disabled: safetyDisabled }"
+        type="button"
+        :title="safetyDisabled ? '安全审核已关闭' : '安全审核已开启'"
+        :disabled="safetyLoading"
+        @click="toggleSafety"
+      >
+        <span v-if="safetyLoading" class="capsule-safety-dot loading"></span>
+        <span v-else class="capsule-safety-dot" :class="safetyDisabled ? '' : 'on'"></span>
+        <span class="capsule-safety-label">审核</span>
+      </button>
       <span class="topbar-title">{{ sessionTitle }}</span>
       <div class="topbar-right">
         <details ref="loopModeMenu" class="topbar-loop-mode-dropdown" :class="{ disabled: !userId }">
@@ -400,7 +437,6 @@ onBeforeUnmount(() => {
             aria-label="Agent Loop 模式"
             @click="handleLoopModeSummaryClick"
           >
-            <BrainCircuit :size="13" />
             <span>{{ selectedLoopModeLabel }}</span>
             <ChevronDown :size="12" />
           </summary>
@@ -754,6 +790,72 @@ onBeforeUnmount(() => {
     transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
     width 200ms cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
+}
+
+/* ---- 安全审核开关 ---- */
+.capsule-safety-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 150ms;
+}
+
+.capsule-safety-btn:hover:not(:disabled) {
+  color: var(--color-text-secondary);
+}
+
+.capsule-safety-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.capsule-safety-btn.disabled {
+  color: var(--color-danger);
+}
+
+.capsule-safety-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-border);
+  flex-shrink: 0;
+  transition: background 200ms;
+}
+
+.capsule-safety-dot.on {
+  background: #22c55e;
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.5);
+}
+
+.capsule-safety-dot.loading {
+  background: transparent;
+  border: 1.5px solid var(--color-text-muted);
+  border-top-color: transparent;
+  animation: safety-spin 0.6s linear infinite;
+}
+
+.capsule-safety-btn.disabled .capsule-safety-dot {
+  background: var(--color-danger);
+  box-shadow: 0 0 4px rgba(255, 95, 95, 0.4);
+}
+
+.capsule-safety-label {
+  line-height: 1;
+}
+
+@keyframes safety-spin {
+  to { transform: rotate(360deg); }
 }
 
 .topbar-loop-mode-dropdown {

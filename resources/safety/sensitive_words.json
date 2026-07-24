@@ -1,5 +1,7 @@
 {
   "_description": "敏感词库,按类别分组。支持 exact 精确匹配 + regex 正则匹配",
+  "_sensitive_words_disabled": false,
+  "_safety_disabled": true,
   "categories": {
     "politics": {
       "name": "政治敏感",
@@ -109,7 +111,6 @@
         "点击就送",
         "免费领取",
         "限时优惠"
-
       ],
       "regex": [
         "(加|联系).*(微信|QQ|QQ群)",

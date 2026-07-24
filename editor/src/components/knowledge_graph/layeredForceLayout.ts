@@ -36,7 +36,7 @@ export const SEMANTIC_FORCE_OPTIONS: LayeredForceLayoutOptions = {
   baseRingRadius: 96,
   ringGap: 68,
   collisionPadding: 7,
-  anchorStrength: 0.025,
+  anchorStrength: 0.0025,
   chargeStrength: -80,
 }
 

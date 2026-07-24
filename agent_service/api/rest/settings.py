@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import json
+import logging
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
-from agent_service.api.rest.deps import _require_knowledge_library_service, _require_settings_service
+from agent_service.api.rest.deps import _require_agent, _require_knowledge_library_service, _require_settings_service
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 # ---- 系统提示词条目 ----
 
@@ -374,3 +379,38 @@ async def delete_memory(memory_id: str) -> dict[str, Any]:
     if not deleted:
         raise HTTPException(status_code=404, detail="Memory not found")
     return {"ok": True}
+
+
+# ---- 安全配置（敏感词库） ----
+
+_SENSITIVE_WORDS_PATH = Path(__file__).resolve().parent.parent.parent.parent / "resources" / "safety" / "sensitive_words.json"
+
+
+@router.get("/settings/safety/sensitive-words")
+async def get_sensitive_words() -> dict[str, Any]:
+    """读取敏感词库 JSON。"""
+    try:
+        data = json.loads(_SENSITIVE_WORDS_PATH.read_text(encoding="utf-8"))
+        return data
+    except FileNotFoundError:
+        return {"_description": "敏感词库,按类别分组。支持 exact 精确匹配 + regex 正则匹配", "categories": {}}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"读取敏感词库失败: {exc}") from exc
+
+
+@router.post("/settings/safety/sensitive-words")
+async def save_sensitive_words(body: dict[str, Any]) -> dict[str, Any]:
+    """保存敏感词库 JSON,并触发 SafetyService 热重载。"""
+    try:
+        _SENSITIVE_WORDS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _SENSITIVE_WORDS_PATH.write_text(
+            json.dumps(body, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        try:
+            _require_agent().safety_service.reload_sensitive_words()
+        except Exception:
+            logger.warning("敏感词库已保存,但 SafetyService 热重载失败", exc_info=True)
+        return {"ok": True}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"保存敏感词库失败: {exc}") from exc

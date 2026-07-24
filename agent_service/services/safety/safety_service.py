@@ -92,6 +92,10 @@ class SafetyService:
 
         audit_text = self._extract_user_question_for_audit(user_input)
 
+        # 安全审核系统一键关闭
+        if self._sensitive_checker and self._sensitive_checker.safety_disabled:
+            return InputAuditResult(passed=True)
+
         if self._sensitive_checker is not None:
             sensitive_result = self._sensitive_checker.check(audit_text)
             if sensitive_result.blocked:
@@ -258,6 +262,10 @@ class SafetyService:
     def audit_output(self, output_text: str, *, user_input: str = "") -> OutputAuditResult:
         """对 Agent 输出执行 Layer 3 输出审核。"""
 
+        # 安全审核系统一键关闭
+        if self._sensitive_checker and self._sensitive_checker.safety_disabled:
+            return OutputAuditResult(verdict="pass", original_output=output_text)
+
         result = self._output_auditor.audit(output_text, user_input=user_input)
         if result.blocked or result.sanitized:
             logger.warning(
@@ -267,6 +275,17 @@ class SafetyService:
                 len(output_text),
             )
         return result
+
+    def reload_sensitive_words(self) -> None:
+        """从磁盘重新加载敏感词库（热重载）。由 POST /settings/safety/sensitive-words 触发调用。"""
+
+        path = DEFAULT_SENSITIVE_WORDS_PATH
+        self._sensitive_checker = SensitiveWordChecker.from_file(path) if path.exists() else None
+        self._output_auditor = OutputAuditor(
+            config=self.config,
+            sensitive_checker=self._sensitive_checker,
+        )
+        logger.info("敏感词库已热重载 | path=%s", path)
 
     @property
     def supports_input_audit(self) -> bool:

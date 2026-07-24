@@ -7,12 +7,11 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Bot, CheckSquare, DatabaseZap, Maximize2, Minus, Moon, Network, Settings, Sun, X } from 'lucide-vue-next'
+import { CheckSquare, DatabaseZap, Maximize2, Minus, Moon, Network, Settings, Sun, X } from 'lucide-vue-next'
 
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
-
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 const desktopApi = window.agentEditorDesktop
@@ -138,7 +137,6 @@ async function handleCloseWindow() {
         <Settings :size="14" />
       </button>
       <button class="console-link" :class="{ active: agentActive }" type="button" title="切换 Agent 面板" @click="emit('toggleAgent')">
-        <Bot :size="14" />
         <span>Agent</span>
       </button>
       <button
@@ -246,11 +244,10 @@ async function handleCloseWindow() {
   background: transparent;
   cursor: pointer;
   -webkit-app-region: no-drag;
-  transition: background var(--transition-fast);
 }
 
 .logo-btn:hover {
-  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  background: transparent;
 }
 
 .logo-img {

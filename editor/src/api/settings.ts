@@ -425,3 +425,11 @@ export function saveTerminalSandboxConfig(
     config,
   })
 }
+
+export function fetchSensitiveWords(): Promise<Record<string, unknown>> {
+  return apiGet<Record<string, unknown>>(API_ROUTES.SETTINGS_SAFETY_SENSITIVE_WORDS)
+}
+
+export function saveSensitiveWords(data: Record<string, unknown>): Promise<{ ok: boolean }> {
+  return apiPost<{ ok: boolean }>(API_ROUTES.SETTINGS_SAFETY_SENSITIVE_WORDS, data)
+}

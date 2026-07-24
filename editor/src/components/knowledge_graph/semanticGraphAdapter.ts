@@ -18,8 +18,7 @@ function nodeRadius(kind: string, connectionCount: number): number {
   }
   if (kind === 'entity') {
     const baseSize = 5
-    const extraConnections = Math.max(0, connectionCount - 1)
-    const increase = Math.min(extraConnections * baseSize * 0.1, baseSize * 0.9)
+    const increase = Math.min(connectionCount * baseSize * 0.1, baseSize * 5.0)
     return Math.round(baseSize + increase)
   }
   return 5
