@@ -1,8 +1,8 @@
 ﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchSavedLLMConfigs, saveLLMConfigPreset, deleteLLMConfigPreset, fetchWebSearchConfig, saveWebSearchConfig, fetchAvailableTools, saveDisabledTools, fetchTerminalSandboxConfig, saveTerminalSandboxConfig } from '@/api/settings'
-import type { SystemPromptEntry, MemoryEntry, ToolGroup, SavedLLMConfig, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
+import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchSavedLLMConfigs, saveLLMConfigPreset, deleteLLMConfigPreset, fetchWebSearchConfig, saveWebSearchConfig, fetchTerminalSandboxConfig, saveTerminalSandboxConfig } from '@/api/settings'
+import type { SystemPromptEntry, MemoryEntry, SavedLLMConfig, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
 import AppearanceSettingsSection from '@/components/settings_view/AppearanceSettingsSection.vue'
 import BasicSettingsSection from '@/components/settings_view/BasicSettingsSection.vue'
 import LlmSettingsSection from '@/components/settings_view/LlmSettingsSection.vue'
@@ -10,7 +10,7 @@ import MemorySettingsSection from '@/components/settings_view/MemorySettingsSect
 import SettingsSidebar from '@/components/settings_view/SettingsSidebar.vue'
 import type { SettingsTabKey } from '@/components/settings_view/SettingsSidebar.vue'
 import TerminalSandboxSettingsSection from '@/components/settings_view/TerminalSandboxSettingsSection.vue'
-import ToolsSettingsSection from '@/components/settings_view/ToolsSettingsSection.vue'
+
 import WebSearchSettingsSection from '@/components/settings_view/WebSearchSettingsSection.vue'
 import GraphSettingsSection from '@/components/settings_view/GraphSettingsSection.vue'
 import SafetySettingsSection from '@/components/settings_view/SafetySettingsSection.vue'
@@ -28,7 +28,6 @@ const tabs = [
   { key: 'basic' as const, label: '基础设置' },
   { key: 'appearance' as const, label: '外观' },
   { key: 'llm' as const, label: 'LLM 配置' },
-  { key: 'tools' as const, label: '工具配置' },
   { key: 'terminal' as const, label: '终端沙盒' },
   { key: 'web' as const, label: '联网配置' },
   { key: 'memory' as const, label: '记忆与指令' },
@@ -503,44 +502,6 @@ async function handleDeleteSavedModelConfig(configId: string) {
   }
 }
 
-/* ---- Tool management ---- */
-
-const toolGroups = ref<ToolGroup[]>([])
-const toolsMsg = ref('')
-
-async function loadTools() {
-  if (!settingsStore.profile.userId) return
-  try {
-    const res = await fetchAvailableTools(settingsStore.profile.userId)
-    toolGroups.value = res.groups ?? []
-  } catch {
-    toolGroups.value = []
-  }
-}
-
-async function handleToggleTool(toolName: string) {
-  if (!settingsStore.profile.userId) return
-  // Find the tool in groups and toggle
-  for (const g of toolGroups.value) {
-    const tool = g.tools.find(t => t.name === toolName)
-    if (tool) {
-      tool.enabled = !tool.enabled
-      try {
-        const disabled: string[] = []
-        for (const group of toolGroups.value) {
-          for (const t of group.tools) {
-            if (!t.enabled) disabled.push(t.name)
-          }
-        }
-        await saveDisabledTools(settingsStore.profile.userId, disabled)
-      } catch {
-        tool.enabled = !tool.enabled
-        showMessage(toolsMsg, '保存失败')
-      }
-      return
-    }
-  }
-}
 
 /* ---- Terminal sandbox ---- */
 
@@ -588,7 +549,6 @@ onMounted(() => {
   loadModelConfig()
   loadSavedModelConfigs()
   loadWebSearchConfig()
-  loadTools()
   loadTerminalSandboxConfig()
 })
 
@@ -666,13 +626,6 @@ onBeforeUnmount(() => {
         @import-saved-config="importSavedModelConfig"
         @save="handleSaveModel"
         @save-preset="handleSaveModelPreset"
-      />
-
-      <ToolsSettingsSection
-        v-if="activeTab === 'tools'"
-        :groups="toolGroups"
-        :tools-msg="toolsMsg"
-        @toggle-tool="handleToggleTool"
       />
 
       <TerminalSandboxSettingsSection

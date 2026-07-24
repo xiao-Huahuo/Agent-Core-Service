@@ -389,9 +389,34 @@ onMounted(() => {
   border: 2px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-surface);
+  position: relative;
+  overflow: hidden;
   transition:
     border-color var(--transition-fast),
     box-shadow var(--transition-fast);
+}
+
+.search-box::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: auto;
+  content: "";
+  border-radius: 50%;
+  display: block;
+  width: 30em;
+  height: 30em;
+  left: -5em;
+  text-align: center;
+  transition: box-shadow 0.5s ease-out;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.search-box:hover::before {
+  box-shadow: inset 0 0 0 10em color-mix(in srgb, var(--color-primary) 6%, transparent);
 }
 
 :root[data-theme="dark"] .search-box {
@@ -412,6 +437,8 @@ onMounted(() => {
 .search-box-icon {
   flex-shrink: 0;
   color: var(--color-text-muted);
+  position: relative;
+  z-index: 1;
 }
 
 .search-box-input {
@@ -423,6 +450,8 @@ onMounted(() => {
   background: transparent;
   color: var(--color-text);
   font-size: calc(15px * var(--font-scale));
+  position: relative;
+  z-index: 1;
 }
 
 .search-box-input::placeholder {
@@ -433,6 +462,8 @@ onMounted(() => {
   flex-shrink: 0;
   color: var(--color-primary);
   animation: spin 700ms linear infinite;
+  position: relative;
+  z-index: 1;
 }
 
 @keyframes spin {
@@ -452,6 +483,8 @@ onMounted(() => {
   color: var(--color-text-secondary);
   cursor: pointer;
   padding: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .search-box-clear:hover {
@@ -465,19 +498,47 @@ onMounted(() => {
   gap: 6px;
   height: 38px;
   padding: 0 20px;
-  border: 0;
+  border: 1px solid var(--color-primary);
   border-radius: 999px;
-  background: var(--color-primary);
-  color: #ffffff;
+  background: transparent;
+  color: var(--color-primary);
   font-size: calc(13px * var(--font-scale));
   font-weight: 600;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background var(--transition-fast);
+  outline: none;
+  overflow: hidden;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  transition: color 0.3s 0.1s ease-out;
+}
+
+.search-box-submit::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: auto;
+  content: "";
+  border-radius: 50%;
+  display: block;
+  width: 20em;
+  height: 20em;
+  left: -5em;
+  text-align: center;
+  transition: box-shadow 0.5s ease-out;
+  z-index: -1;
 }
 
 .search-box-submit:hover {
-  background: var(--color-primary-hover);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.search-box-submit:hover::before {
+  box-shadow: inset 0 0 0 10em var(--color-primary);
 }
 
 /* Toggles */

@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { CheckSquare, DatabaseZap, Maximize2, Minus, Moon, Network, Settings, Sun, X } from 'lucide-vue-next'
+import { CheckSquare, DatabaseZap, Maximize2, Minus, Moon, Network, Sun, X } from 'lucide-vue-next'
 
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -133,9 +133,6 @@ async function handleCloseWindow() {
     </div>
 
     <div class="actions">
-      <button class="icon-button" type="button" title="设置" @click="emit('openSettings')">
-        <Settings :size="14" />
-      </button>
       <button class="agent-play-btn" :class="{ active: agentActive }" type="button" title="切换 Agent 面板" @click="emit('toggleAgent')">
         <img :src="logoSrc" class="agent-play-img" alt="MetaWeave" />
         <span class="agent-now">NOW!</span>
@@ -151,7 +148,7 @@ async function handleCloseWindow() {
         <CheckSquare :size="14" />
       </button>
       <button
-        class="ingest-button graph-btn"
+        class="todo-link"
         :class="{ refreshing: graphRebuilding }"
         type="button"
         :disabled="graphRebuilding"
@@ -161,7 +158,7 @@ async function handleCloseWindow() {
         <Network :size="14" />
       </button>
       <button
-        class="ingest-button"
+        class="todo-link"
         :class="{ refreshing: workspaceStore.refreshing }"
         type="button"
         :disabled="workspaceStore.refreshing"
@@ -206,8 +203,8 @@ async function handleCloseWindow() {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8);
-  min-height: 46px;
-  padding: 4px var(--space-8);
+  min-height: 56px;
+  padding: 6px var(--space-10);
   background: var(--color-chrome-topbar-bg);
   -webkit-app-region: drag;
   user-select: none;
@@ -307,39 +304,6 @@ async function handleCloseWindow() {
 .root-path-btn:disabled {
   cursor: wait;
   opacity: 0.62;
-}
-
-.ingest-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  -webkit-app-region: no-drag;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast),
-    opacity var(--transition-fast);
-}
-
-.ingest-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  color: var(--color-primary);
-}
-
-.ingest-button:disabled {
-  cursor: wait;
-  opacity: 0.72;
-}
-
-.ingest-button.refreshing :deep(svg) {
-  animation: refresh-spin 900ms linear infinite;
 }
 
 .search-center {
@@ -449,12 +413,8 @@ async function handleCloseWindow() {
   transition-delay: 300ms;
 }
 
-.agent-play-btn:hover {
-  overflow: visible;
-}
-
 .agent-play-btn:hover .agent-play-img {
-  transform: scale(3) translateX(12px);
+  transform: scale(2.5) translateX(14px);
   transform-origin: left center;
 }
 
@@ -563,6 +523,10 @@ async function handleCloseWindow() {
 
 .graph-progress .ingestion-progress-fill {
   background: #14b8a6;
+}
+
+.todo-link.refreshing :deep(svg) {
+  animation: refresh-spin 900ms linear infinite;
 }
 
 @keyframes refresh-spin {

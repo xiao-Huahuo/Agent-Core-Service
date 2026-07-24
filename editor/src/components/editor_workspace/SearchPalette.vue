@@ -357,10 +357,10 @@ function toggleUnified() {
   height: 22px;
   width: 22px;
   padding: 0 0 0 22px;
-  border: 0;
+  border: 1px solid var(--color-primary);
   border-radius: 999px;
-  background: var(--color-primary);
-  color: #ffffff;
+  background: transparent;
+  color: var(--color-primary);
   font-size: calc(11px * var(--font-scale));
   font-weight: 600;
   cursor: pointer;
@@ -368,10 +368,27 @@ function toggleUnified() {
   overflow: hidden;
   white-space: nowrap;
   line-height: 22px;
-  transition:
-    width 200ms ease,
-    padding-left 200ms ease,
-    background var(--transition-fast);
+  transition: color 0.3s 0.1s ease-out;
+  outline: none;
+  text-align: center;
+}
+
+.search-submit-btn::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: auto;
+  content: "";
+  border-radius: 50%;
+  display: block;
+  width: 20em;
+  height: 20em;
+  left: -5em;
+  text-align: center;
+  transition: box-shadow 0.5s ease-out;
+  z-index: -1;
 }
 
 .submit-icon {
@@ -387,9 +404,12 @@ function toggleUnified() {
 }
 
 .search-submit-btn:hover {
-  width: 68px;
-  padding-left: 22px;
-  background: var(--color-primary-hover);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.search-submit-btn:hover::before {
+  box-shadow: inset 0 0 0 10em var(--color-primary);
 }
 
 .search-submit-btn:hover .submit-label {
