@@ -181,6 +181,26 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     except Exception:
         logger.exception("知识库灌库失败,服务继续启动")
 
+    # 启动时自动加载已有 Embedding / ReRank 模型
+    try:
+        from agent_service.core.model_status import ModelState, set_model_state
+        from agent_service.scripts.download_model import is_model_available, model_target_dir
+        from agent_service.api.rest.settings import _trigger_embedding_load, _trigger_rerank_load
+
+        for model_key, model_name, model_dir, trigger_fn in [
+            ("embedding", config.model.embedding_model_name, config.storage.embedding_model_dir, _trigger_embedding_load),
+            ("rerank", config.model.rerank_model_name, config.storage.rerank_model_dir, _trigger_rerank_load),
+        ]:
+            if not model_name or not str(model_dir):
+                continue
+            target = model_target_dir(model_name, model_dir)
+            if is_model_available(target):
+                set_model_state(model_key, ModelState.DOWNLOADED)
+                logger.info("已检测到 %s 模型文件，触发后台加载", model_key)
+                trigger_fn(config)
+    except Exception:
+        logger.exception("模型自动加载失败，服务继续运行")
+
     _grpc_servicer = AgentServiceServicer(
         agent=agent,
         session_service=session_service,

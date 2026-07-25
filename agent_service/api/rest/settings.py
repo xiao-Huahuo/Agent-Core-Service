@@ -54,7 +54,8 @@ async def download_model(body: dict[str, Any]) -> dict[str, Any]:
             ensure_model(model_name, model_dir, model_type="embedding")
             target = model_target_dir(model_name, model_dir)
             if is_model_available(target):
-                set_model_state("embedding", ModelState.READY)
+                set_model_state("embedding", ModelState.DOWNLOADED)
+                _trigger_embedding_load(config)
             else:
                 set_model_state("embedding", ModelState.ERROR)
         except Exception:
@@ -70,7 +71,8 @@ async def download_model(body: dict[str, Any]) -> dict[str, Any]:
             ensure_model(model_name, model_dir, model_type="rerank")
             target = model_target_dir(model_name, model_dir)
             if is_model_available(target):
-                set_model_state("rerank", ModelState.READY)
+                set_model_state("rerank", ModelState.DOWNLOADED)
+                _trigger_rerank_load(config)
             else:
                 set_model_state("rerank", ModelState.ERROR)
         except Exception:
@@ -102,6 +104,56 @@ async def download_model(body: dict[str, Any]) -> dict[str, Any]:
     return {"status": "started", "model": model}
 
 
+def _trigger_embedding_load(config: Any) -> None:
+    """触发 Embedding 模型后台加载。"""
+    try:
+        from agent_service.services.memory.rag.embedding import _get_shared_provider
+        provider = _get_shared_provider(config)
+        provider.warmup()
+        # warmup 后如果模型已就绪，同步状态（防止状态漂移）
+        if provider._model is not None:
+            from agent_service.core.model_status import ModelState, set_model_state
+            set_model_state("embedding", ModelState.READY)
+    except Exception:
+        pass
+
+
+def _trigger_rerank_load(config: Any) -> None:
+    """触发 ReRank 模型后台加载。"""
+    try:
+        from agent_service.services.memory.rag.rerank import _get_shared_rerank_provider
+        provider = _get_shared_rerank_provider(config)
+        provider.warmup()
+        if provider._model is not None:
+            from agent_service.core.model_status import ModelState, set_model_state
+            set_model_state("rerank", ModelState.READY)
+    except Exception:
+        pass
+
+
+@router.post("/settings/models/load")
+async def load_model(body: dict[str, Any]) -> dict[str, Any]:
+    """触发指定模型的后台加载（不下载，只加载到内存）。
+
+    body: { "model": "embedding" | "rerank" }
+    """
+    model = str(body.get("model") or "").strip()
+    if model not in ("embedding", "rerank"):
+        raise HTTPException(status_code=422, detail="model 必须是 embedding / rerank")
+
+    from agent_service.core.model_status import ModelState, set_model_state
+
+    svc = _require_settings_service()
+    config = svc.config
+
+    if model == "embedding":
+        _trigger_embedding_load(config)
+    else:
+        _trigger_rerank_load(config)
+
+    return {"status": "triggered", "model": model}
+
+
 @router.get("/settings/models/download-progress")
 async def get_download_progress() -> dict[str, float]:
     """返回各模型下载进度百分比。"""
@@ -124,11 +176,16 @@ async def check_model_disk() -> dict[str, Any]:
     models = {"embedding": config.model.embedding_model_name, "rerank": config.model.rerank_model_name}
     dirs = {"embedding": config.storage.embedding_model_dir, "rerank": config.storage.rerank_model_dir}
 
-    # embedding / rerank
     for key in ("embedding", "rerank"):
         target = model_target_dir(models[key], dirs[key])
         available = is_model_available(target)
-        set_model_state(key, ModelState.READY if available else ModelState.NOT_DOWNLOADED)
+        if available:
+            current = get_model_status().to_dict().get(key)
+            if current in ("ready", "loading", "downloading"):
+                continue
+            set_model_state(key, ModelState.DOWNLOADED)
+        else:
+            set_model_state(key, ModelState.NOT_DOWNLOADED)
 
     # paddleocr 用 marker 文件检测
     paddleocr_available = False

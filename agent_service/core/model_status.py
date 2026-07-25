@@ -21,6 +21,7 @@ class ModelState(enum.Enum):
 
     NOT_DOWNLOADED = "not_downloaded"
     DOWNLOADING = "downloading"
+    DOWNLOADED = "downloaded"
     LOADING = "loading"
     READY = "ready"
     ERROR = "error"

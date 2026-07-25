@@ -63,6 +63,7 @@ function modelStatusText(model: string): string {
   }
   switch (s) {
     case 'ready': return '已就绪'
+    case 'downloaded': return '已下载'
     case 'downloading': return '下载中...'
     case 'loading': return '加载中...'
     case 'error': return '下载失败'
@@ -74,7 +75,9 @@ function modelStatusText(model: string): string {
 function modelStatusClass(model: string): string {
   const s = modelStatus.value[model as keyof ModelStatusData]
   if (s === 'ready') return 'status-ready'
+  if (s === 'downloaded') return 'status-downloaded'
   if (s === 'downloading' || modelDownloading.value.has(model)) return 'status-downloading'
+  if (s === 'loading') return 'status-loading'
   if (s === 'error') return 'status-error'
   if (s === 'not_downloaded') return 'status-missing'
   return 'status-unknown'
@@ -110,11 +113,78 @@ function isModelReady(modelDirKey: string): boolean {
   return modelStatus.value[t as keyof ModelStatusData] === 'ready'
 }
 
+function shouldShowDownloadButton(modelDirKey: string): boolean {
+  const t = modelKeyToType(modelDirKey)
+  const s = modelStatus.value[t as keyof ModelStatusData]
+  // 已下载、加载中、已就绪时都不显示下载按钮
+  return s === 'not_downloaded' || s === 'error' || s === '' || s === 'unknown'
+}
+
 async function triggerDownload(modelDirKey: string) {
   const modelType = modelKeyToType(modelDirKey)
   if (!modelType) return
   modelDownloading.value = new Set([...modelDownloading.value, modelType])
   modelProgress.value = { ...modelProgress.value, [modelType]: 0 }
+
+  // 假进度：缓缓爬到 64% 后等待
+  let fakePct = 0
+  const fakeInterval = setInterval(() => {
+    if (fakePct < 64) {
+      fakePct += Math.random() * 4 + 0.5
+      if (fakePct > 64) fakePct = 64
+      modelProgress.value = { ...modelProgress.value, [modelType]: Math.round(fakePct) }
+    }
+  }, 600)
+
+  const interval = setInterval(async () => {
+    await pollModelStatus()
+    const s = modelStatus.value[modelType as keyof ModelStatusData]
+
+    if (s === 'downloaded') {
+      modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
+      await triggerLoad(modelType)
+      // 加载已触发，切换到只观察状态变化，不再重复触发的轮询
+      clearInterval(interval)
+      const watchInterval = setInterval(async () => {
+        await pollModelStatus()
+        const st = modelStatus.value[modelType as keyof ModelStatusData]
+        if (st === 'ready') {
+          modelProgress.value = { ...modelProgress.value, [modelType]: 100 }
+          clearInterval(fakeInterval)
+          setTimeout(() => {
+            modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
+          }, 300)
+          clearInterval(watchInterval)
+          show(`${modelType} 模型已就绪`)
+          await loadStorageConfig()
+          await checkAllModels()
+        } else if (st === 'error') {
+          clearInterval(fakeInterval)
+          clearInterval(watchInterval)
+          modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
+          show(`${modelType} 模型加载失败`)
+        }
+      }, 1500)
+    } else if (s === 'loading') {
+      modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
+    } else if (s === 'ready') {
+      modelProgress.value = { ...modelProgress.value, [modelType]: 100 }
+      clearInterval(fakeInterval)
+      setTimeout(() => {
+        modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
+      }, 300)
+      clearInterval(interval)
+      show(`${modelType} 模型已就绪`)
+      await loadStorageConfig()
+      await checkAllModels()
+    } else if (s === 'error') {
+      clearInterval(fakeInterval)
+      clearInterval(interval)
+      modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
+      show(`${modelType} 模型下载失败`)
+    }
+  }, 1500)
+
   try {
     const res = await fetch(API_ROUTES.SETTINGS_MODEL_DOWNLOAD, {
       method: 'POST',
@@ -122,25 +192,47 @@ async function triggerDownload(modelDirKey: string) {
       body: JSON.stringify({ model: modelType }),
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    // start polling status + progress
-    const interval = setInterval(async () => {
-      await Promise.all([pollModelStatus(), pollModelProgress()])
-      const s = modelStatus.value[modelType as keyof ModelStatusData]
-      if (s === 'ready' || s === 'error') {
-        clearInterval(interval)
-        modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
-        if (s === 'ready') {
-          show(`${modelType} 模型下载完成`)
-          await loadStorageConfig() // 刷新大小统计
-          await checkAllModels()    // 刷新磁盘状态
-        } else {
-          show(`${modelType} 模型下载失败`)
-        }
-      }
-    }, 2000)
   } catch (e: unknown) {
+    clearInterval(fakeInterval)
+    clearInterval(interval)
     modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
     show(e instanceof Error ? e.message : '下载启动失败')
+  }
+}
+
+async function triggerLoad(modelType: string) {
+  try {
+    await fetch(API_ROUTES.SETTINGS_MODEL_LOAD, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: modelType }),
+    })
+  } catch { /* ignore */ }
+}
+
+async function handleClickModel(modelDirKey: string) {
+  const modelType = modelKeyToType(modelDirKey)
+  if (!modelType) return
+  const s = modelStatus.value[modelType as keyof ModelStatusData]
+  if (s === 'downloaded') {
+    // 立即本地设为 loading 显示 spinner
+    modelStatus.value = { ...modelStatus.value, [modelType]: 'loading' as any }
+    show(`${modelType} 模型加载中...`)
+    await triggerLoad(modelType)
+    // 轮询跟踪真实状态
+    const poll = setInterval(async () => {
+      await pollModelStatus()
+      const st = modelStatus.value[modelType as keyof ModelStatusData]
+      if (st === 'loading') {
+        show(`${modelType} 模型加载中...`)
+      } else if (st === 'ready') {
+        show(`${modelType} 模型已就绪`)
+        clearInterval(poll)
+      } else if (st === 'error') {
+        show(`${modelType} 模型加载失败`, 4000)
+        clearInterval(poll)
+      }
+    }, 1500)
   }
 }
 
@@ -246,6 +338,10 @@ const totalPieOption = computed(() => ({
     ].filter(d => d.value > 0),
   }],
 }))
+
+const runtimePieData = computed(() =>
+  (runtimePieOption.value as any)?.series?.[0]?.data as { name: string; value: number }[] | undefined
+)
 
 const runtimePieOption = computed(() => {
   const entries = paths.value
@@ -378,6 +474,7 @@ async function handleClear(pathKey: string, label: string) {
   } finally {
     clearing.value = null
     await loadStorageConfig()
+    await checkAllModels()
   }
 }
 
@@ -424,8 +521,8 @@ onMounted(() => {
             <span class="pie-title">运行时分布</span>
           </div>
         </div>
-        <div v-if="runtimePieOption.series[0].data.length > 1" class="pie-legend">
-          <span v-for="(item, i) in runtimePieOption.series[0].data" :key="item.name" class="legend-item">
+        <div v-if="(runtimePieData?.length ?? 0) > 1" class="pie-legend">
+          <span v-for="(item, i) in runtimePieData ?? []" :key="String(item.name)" class="legend-item">
             <span class="legend-dot" :style="{ background: PIE_COLORS[i % PIE_COLORS.length] }"></span>
             {{ item.name }}
           </span>
@@ -437,7 +534,7 @@ onMounted(() => {
 
     <!-- 路径树 -->
     <div v-if="paths.length > 0" class="storage-tree">
-      <TransitionGroup name="tree-slide" tag="div">
+      <div>
         <template v-for="item in treeItems" :key="item.entry.key">
           <div class="tree-row" :class="{ 'tree-child': item.depth > 0 }">
             <div class="tree-label-cell" :style="{ paddingLeft: `${item.depth * 20}px` }">
@@ -480,10 +577,20 @@ onMounted(() => {
             <div class="tree-size-cell">{{ formatBytes(item.entry.size_bytes) }}</div>
             <div class="tree-action-cell">
               <template v-if="MODEL_KEYS.includes(item.entry.key as any) && !modelDownloading.has(modelKeyToType(item.entry.key))">
-                <span class="model-status-dot" :class="modelStatusClass(modelKeyToType(item.entry.key))" :title="modelStatusText(modelKeyToType(item.entry.key))"></span>
-                <span class="model-status-label" :class="modelStatusClass(modelKeyToType(item.entry.key))">{{ modelStatusText(modelKeyToType(item.entry.key)) }}</span>
+                <span
+                  class="model-status-dot"
+                  :class="[modelStatusClass(modelKeyToType(item.entry.key)), { clickable: modelStatus[modelKeyToType(item.entry.key) as keyof ModelStatusData] === 'downloaded' }]"
+                  :title="modelStatusText(modelKeyToType(item.entry.key))"
+                  @click="handleClickModel(item.entry.key)"
+                ></span>
+                <span
+                  class="model-status-label"
+                  :class="[modelStatusClass(modelKeyToType(item.entry.key)), { clickable: modelStatus[modelKeyToType(item.entry.key) as keyof ModelStatusData] === 'downloaded' }]"
+                  @click="handleClickModel(item.entry.key)"
+                >{{ modelStatusText(modelKeyToType(item.entry.key)) }}</span>
+                <span v-if="modelStatus[modelKeyToType(item.entry.key) as keyof ModelStatusData] === 'loading'" class="model-loading-spinner"></span>
                 <button
-                  v-if="!isModelReady(item.entry.key)"
+                  v-if="shouldShowDownloadButton(item.entry.key)"
                   class="save-model-btn"
                   :disabled="modelDownloading.has(modelKeyToType(item.entry.key))"
                   @click="triggerDownload(item.entry.key)"
@@ -509,7 +616,7 @@ onMounted(() => {
             </div>
           </div>
         </template>
-      </TransitionGroup>
+      </div>
     </div>
 
     <p v-else-if="!loading" class="setting-hint">暂无存储路径数据</p>
@@ -688,33 +795,6 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* ---- 展开/收起动画 ---- */
-.tree-slide-enter-active {
-  transition: opacity 0.2s ease, transform 0.25s ease;
-}
-
-.tree-slide-leave-active {
-  transition: opacity 0.15s ease, transform 0.2s ease;
-}
-
-.tree-slide-move {
-  transition: transform 0.25s ease;
-}
-
-.tree-slide-enter-from {
-  opacity: 0;
-  transform: translateY(-12px);
-}
-
-.tree-slide-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-
-.tree-slide-leave-active {
-  position: absolute;
-}
-
 .tree-row {
   display: grid;
   grid-template-columns: 200px 1fr 80px auto;
@@ -882,6 +962,8 @@ onMounted(() => {
 }
 .model-status-dot.status-ready { background: #26a269; }
 .model-status-dot.status-downloading { background: #e2a72e; }
+.model-status-dot.status-downloaded { background: #e2a72e; }
+.model-status-dot.status-loading { background: #e2a72e; }
 .model-status-dot.status-error { background: #ef4444; }
 .model-status-dot.status-missing { background: #888; }
 .model-status-dot.status-unknown { background: #555; }
@@ -891,10 +973,30 @@ onMounted(() => {
   white-space: nowrap;
 }
 .model-status-label.status-ready { color: #26a269; }
+.model-status-label.status-downloaded { color: #e2a72e; }
 .model-status-label.status-downloading { color: #e2a72e; }
+.model-status-label.status-loading { color: #e2a72e; }
 .model-status-label.status-error { color: #ef4444; }
 .model-status-label.status-missing { color: #888; }
 .model-status-label.status-unknown { color: #555; }
+
+.model-status-dot.clickable { cursor: pointer; }
+.model-status-label.clickable { cursor: pointer; text-decoration: underline dotted; }
+
+/* ---- 模型加载 spinner ---- */
+.model-loading-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border);
+  border-top-color: #e2a72e;
+  border-radius: 50%;
+  animation: model-loader-spin 0.7s linear infinite;
+}
+
+@keyframes model-loader-spin {
+  to { transform: rotate(360deg); }
+}
 
 /* ---- 模型下载进度条 ---- */
 .model-progress-bar {

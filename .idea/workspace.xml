@@ -4,32 +4,21 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="重构设置页面接口层,按照设置页面的子页面进行模块设置划分.">
-      <change afterPath="$PROJECT_DIR$/supercomponents/new/删除.vue" afterDir="false" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="存储管理v1">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/agent_service/api/rest/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/core/agent_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/core/agent_config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/models/user_settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/models/user_settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/scripts/download_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/scripts/download_model.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/core/model_status.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/core/model_status.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/agent_service/services/memory/rag/embedding.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/rag/embedding.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/rag/image_ocr.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/rag/image_ocr.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/rag/rerank.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/rag/rerank.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/settings_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/settings_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/tools/builtin.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/builtin.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/api/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/settings.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatInput.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatInput.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/BasicSettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/BasicSettingsSection.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/SettingsSidebar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/SettingsSidebar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/todos/1.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/App.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/App.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/StorageSettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/StorageSettingsSection.vue" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/vite.config.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/开发规范.md" beforeDir="false" afterPath="$PROJECT_DIR$/开发规范.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/todos/1.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/todos/agent_test_user.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/todos/agent_test_user2.json" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -302,14 +291,6 @@
       <workItem from="1784688429981" duration="15773000" />
       <workItem from="1784723159028" duration="13415000" />
       <workItem from="1784854303470" duration="40149000" />
-    </task>
-    <task id="LOCAL-00182" summary="写作规范">
-      <option name="closed" value="true" />
-      <created>1784621137086</created>
-      <option name="number" value="00182" />
-      <option name="presentableId" value="LOCAL-00182" />
-      <option name="project" value="LOCAL" />
-      <updated>1784621137086</updated>
     </task>
     <task id="LOCAL-00183" summary="语义知识图谱v1">
       <option name="closed" value="true" />
@@ -695,14 +676,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784957600417</updated>
     </task>
-    <option name="localTasksCounter" value="231" />
+    <task id="LOCAL-00231" summary="存储管理v1">
+      <option name="closed" value="true" />
+      <created>1784965084307</created>
+      <option name="number" value="00231" />
+      <option name="presentableId" value="LOCAL-00231" />
+      <option name="project" value="LOCAL" />
+      <updated>1784965084307</updated>
+    </task>
+    <option name="localTasksCounter" value="232" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="字体调节" />
     <MESSAGE value="任务建议;token用量的三个表" />
     <MESSAGE value="修复了不能嵌入图片的问题" />
     <MESSAGE value="多模型能力" />
@@ -727,13 +715,14 @@
     <MESSAGE value="输入框光泽" />
     <MESSAGE value="." />
     <MESSAGE value="重构设置页面接口层,按照设置页面的子页面进行模块设置划分." />
-    <option name="LAST_COMMIT_MESSAGE" value="重构设置页面接口层,按照设置页面的子页面进行模块设置划分." />
+    <MESSAGE value="存储管理v1" />
+    <option name="LAST_COMMIT_MESSAGE" value="存储管理v1" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
     <SUITE FILE_PATH="coverage/AgentService$main.coverage" NAME="main 覆盖结果" MODIFIED="1783512965618" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/AgentService$test_agent_core_service.coverage" NAME="test_agent_core_service 覆盖结果" MODIFIED="1778509217316" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
-    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784959127368" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/MetaWeave$main.coverage" NAME="main 覆盖结果" MODIFIED="1784969553332" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>

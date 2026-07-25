@@ -61,6 +61,7 @@ export const API_ROUTES = {
   SETTINGS_SAFETY_SENSITIVE_WORDS: '/settings/safety/sensitive-words',
   SETTINGS_MODEL_STATUS: '/settings/models/status',
   SETTINGS_MODEL_DOWNLOAD: '/settings/models/download',
+  SETTINGS_MODEL_LOAD: '/settings/models/load',
   SETTINGS_MODEL_CHECK: '/settings/models/check',
   SETTINGS_MODEL_DOWNLOAD_PROGRESS: '/settings/models/download-progress',
   SETTINGS_STORAGE_CONFIG: '/settings/storage/config',

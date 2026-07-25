@@ -155,9 +155,22 @@ class SentenceTransformerEmbeddingProvider:
         logger.info("模型路径: %s", model_path)
         logger.info(banner)
         try:
-            self._model = SentenceTransformer(str(model_path))
+            # 绕过 PyTorch 2.5+ meta tensor 与 self.to(device) 的兼容性问题
+            import torch.nn as _nn
+            _orig_apply = _nn.Module._apply
+            def _patched_apply(self, fn):
+                try:
+                    return _orig_apply(self, fn)
+                except NotImplementedError:
+                    return self
+            _nn.Module._apply = _patched_apply
+            try:
+                self._model = SentenceTransformer(str(model_path))
+            finally:
+                _nn.Module._apply = _orig_apply
             set_model_state("embedding", ModelState.READY)
         except Exception as exc:
+            logger.exception("Embedding 模型加载失败: %s", exc)
             set_model_state("embedding", ModelState.ERROR)
             self._load_error = exc
             return
