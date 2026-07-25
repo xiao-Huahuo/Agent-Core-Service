@@ -4,16 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="存储管理v2">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="优化了联网搜索工具的搜索结果">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/core/agent_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/core/agent_config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/context_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/context_builder.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/tools/builtin.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/builtin.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/tools/definitions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/definitions.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/agent.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageList.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageList.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/workspace.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/workspace.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/IngestionProgressView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/IngestionProgressView.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -286,14 +284,6 @@
       <workItem from="1784688429981" duration="15773000" />
       <workItem from="1784723159028" duration="13415000" />
       <workItem from="1784854303470" duration="40149000" />
-    </task>
-    <task id="LOCAL-00185" summary="语义知识图谱v2">
-      <option name="closed" value="true" />
-      <created>1784624949871</created>
-      <option name="number" value="00185" />
-      <option name="presentableId" value="LOCAL-00185" />
-      <option name="project" value="LOCAL" />
-      <updated>1784624949871</updated>
     </task>
     <task id="LOCAL-00186" summary="readme">
       <option name="closed" value="true" />
@@ -679,14 +669,21 @@
       <option name="project" value="LOCAL" />
       <updated>1784974656122</updated>
     </task>
-    <option name="localTasksCounter" value="234" />
+    <task id="LOCAL-00234" summary="优化了联网搜索工具的搜索结果">
+      <option name="closed" value="true" />
+      <created>1784978648643</created>
+      <option name="number" value="00234" />
+      <option name="presentableId" value="LOCAL-00234" />
+      <option name="project" value="LOCAL" />
+      <updated>1784978648643</updated>
+    </task>
+    <option name="localTasksCounter" value="235" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="修复了不能嵌入图片的问题" />
     <MESSAGE value="多模型能力" />
     <MESSAGE value="隐藏到托盘" />
     <MESSAGE value="ui小改" />
@@ -711,7 +708,8 @@
     <MESSAGE value="重构设置页面接口层,按照设置页面的子页面进行模块设置划分." />
     <MESSAGE value="存储管理v1" />
     <MESSAGE value="存储管理v2" />
-    <option name="LAST_COMMIT_MESSAGE" value="存储管理v2" />
+    <MESSAGE value="优化了联网搜索工具的搜索结果" />
+    <option name="LAST_COMMIT_MESSAGE" value="优化了联网搜索工具的搜索结果" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />

@@ -284,6 +284,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** Active center workspace view. */
   const mainView = ref<WorkspaceMainView>('agent')
 
+  /** Active tab within the ingestion progress view: 'queue' | 'graph-queue' | 'history'. */
+  const ingestionViewTab = ref<'queue' | 'graph-queue' | 'history'>('queue')
+
   /** Open file tabs. */
   const openTabs = ref<EditorTab[]>([])
 
@@ -2258,6 +2261,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     selectionAnchorPath,
     selectedNode,
     mainView,
+    ingestionViewTab,
     editorMode,
     openTabs,
     activeContent,

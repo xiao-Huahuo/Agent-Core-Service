@@ -26,7 +26,10 @@ import type { HistorySourceType, IngestionHistoryItem, IngestionQueueItem } from
 type IngestionTab = 'queue' | 'graph-queue' | 'history'
 
 const workspaceStore = useWorkspaceStore()
-const activeTab = ref<IngestionTab>('queue')
+const activeTab = computed({
+  get: () => workspaceStore.ingestionViewTab as IngestionTab,
+  set: (val: IngestionTab) => { workspaceStore.ingestionViewTab = val },
+})
 const tabSwitchRef = ref<HTMLElement | null>(null)
 const tabSliderStyle = ref({ width: '0px', left: '0px' })
 

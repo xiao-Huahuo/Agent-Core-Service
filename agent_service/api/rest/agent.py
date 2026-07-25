@@ -158,10 +158,6 @@ def _to_sse(events: Iterator[dict[str, Any]]) -> Iterator[str]:
         yield "data: [DONE]\n\n"
     except GeneratorExit:
         _stopped.set()
-        try:
-            events.close()
-        except GeneratorExit:
-            pass
         raise
 
 

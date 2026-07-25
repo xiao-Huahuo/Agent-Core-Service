@@ -5,7 +5,8 @@
   - 自动召回现在将长期记忆(session_fact/session_summary/user_custom)的全文注入上下文，带 [1][2] 编号，Agent 可直接引用无需调工具。
   - 知识库切片改为仅提示条数，Agent 需调 get_knowledge_context 查看具体内容。
   - retrieval_context_system_prompt 同步更新优先级和说明文字。
-- [x] README.md 同步更新: 引用溯源描述中"知识库片段"改为"长期记忆"，上下文优先级从"长期记忆>知识库"改为"长期记忆(已附原文)>知识库(需调工具)"。
+- [x] 修复 SSE 流 `GeneratorExit` 中 `events.close()` 导致 "generator already executing" 错误 (`agent.py:159-164`): 去掉多余 close，线程自然退出。
+- [x] 新提交 prompt 时自动滚动到底部 (`MessageList.vue:212-221`): 检测到新增用户消息时强制滚动，不受 pin 状态影响。
 - [x] 新增 web_image_search 联网搜索图片工具 (`builtin.py:1089-1187`, `definitions.py:525-543`):
   - 使用 ddgs.images() 搜索图片，返回图片 URL、缩略图、来源页面和 Markdown 热链接展示格式。
   - Agent 搜索到图片后直接用热链接展示，不再反复调用 web_search 搜文字。

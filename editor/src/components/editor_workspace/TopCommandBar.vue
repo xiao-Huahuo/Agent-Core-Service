@@ -203,7 +203,7 @@ onMounted(() => nextTick(autoResizeInput))
         type="button"
         :disabled="graphRebuilding"
         title="图谱抽取"
-        @click="checkEmbeddingBefore(() => workspaceStore.startGraphRebuild())"
+        @click="checkEmbeddingBefore(() => { workspaceStore.ingestionViewTab = 'graph-queue'; workspaceStore.mainView = 'ingestion'; workspaceStore.startGraphRebuild(); })"
       >
         <Network :size="14" />
       </button>
@@ -213,7 +213,7 @@ onMounted(() => nextTick(autoResizeInput))
         type="button"
         :disabled="workspaceStore.refreshing"
         title="重新灌库"
-        @click="checkEmbeddingBefore(() => workspaceStore.markIndexing())"
+        @click="checkEmbeddingBefore(() => { workspaceStore.ingestionViewTab = 'queue'; workspaceStore.mainView = 'ingestion'; workspaceStore.markIndexing(); })"
       >
         <DatabaseZap :size="14" />
       </button>

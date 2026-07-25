@@ -209,7 +209,17 @@ function knowledgeSourcesForMessage(message: AgentChatMessage): SourceItem[] {
   return sources
 }
 
-watch(() => props.messages.length, scheduleScrollIfNeeded)
+watch(() => props.messages.length, (newLen, oldLen) => {
+  // 新提交 prompt（新增用户消息）时强制滚动到底部
+  if (newLen > oldLen && oldLen > 0 && props.messages[newLen - 1]?.role === 'user') {
+    void nextTick(() => {
+      scrollToBottom()
+      setPinnedToBottom(true)
+    })
+    return
+  }
+  scheduleScrollIfNeeded()
+})
 watch(getLastMessageContent, scheduleScrollIfNeeded)
 
 onMounted(() => {
@@ -239,7 +249,7 @@ defineExpose({
     />
     <div v-if="showThinkingBubble" class="thinking-row">
       <img :src="agentAvatar" class="thinking-avatar" alt="agent" />
-      <LoaderCube />
+      <div class="thinking-loader"><LoaderCube /></div>
     </div>
   </div>
 </template>
@@ -274,6 +284,10 @@ defineExpose({
   border: 0;
   border-radius: 50%;
   object-fit: cover;
+}
+
+.thinking-loader {
+  font-size: 0.55em;
 }
 
 </style>
