@@ -9,6 +9,7 @@
 import { computed } from 'vue'
 import DOMPurify from 'dompurify'
 
+import ImagePreviewer from '@/components/common/ImagePreviewer.vue'
 import { buildApiUrl } from '@/api/client'
 import type { FilePreviewPayload } from '@/types/knowledge'
 
@@ -17,6 +18,12 @@ const props = defineProps<{
 }>()
 
 const safeHtml = computed(() => DOMPurify.sanitize(props.preview?.html ?? ''))
+
+const imageFiles = computed(() => {
+  if (props.preview?.kind !== 'image') return []
+  const src = props.preview.data_url || ''
+  return [{ src, alt: props.preview.path || '' }]
+})
 
 const previewSource = computed(() => {
   if (!props.preview) {
@@ -37,11 +44,10 @@ function maxColumns(rows: string[][]): number {
   <article class="multimodal-preview">
     <div v-if="!preview" class="preview-message">没有可用预览。</div>
 
-    <img
+    <ImagePreviewer
       v-else-if="preview.kind === 'image'"
-      class="image-preview"
-      :src="preview.data_url"
-      :alt="preview.path"
+      mode="embedded"
+      :files="imageFiles"
     />
 
     <iframe
@@ -89,13 +95,6 @@ function maxColumns(rows: string[][]): number {
   border-radius: var(--radius-md);
   background: var(--color-canvas);
   font-family: var(--font-ui);
-}
-
-.image-preview {
-  max-width: 100%;
-  max-height: 100%;
-  margin: auto;
-  object-fit: contain;
 }
 
 .pdf-preview {

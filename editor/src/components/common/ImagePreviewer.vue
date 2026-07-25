@@ -5,32 +5,66 @@
   - Floating card with frosted-glass backdrop ("液态玻璃" suspension effect)
   - Multi-image navigation (prev / next) with pagination counter at bottom
   - Mouse-wheel zoom toward cursor + drag pan when zoomed
-  - Top toolbar with icon+text capsule actions
+  - Top toolbar with icon-only circular action buttons
   - Show in system file explorer (Electron desktop only)
   - Download, copy URL, reset zoom
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
 import { useImagePreviewer } from '@/components/common/useImagePreviewer'
+import type { ImagePreviewItem } from '@/components/common/useImagePreviewer'
 import { useSettingsStore } from '@/stores/settings'
 
 const settingsStore = useSettingsStore()
 
-const {
-  images,
-  currentIndex,
-  isOpen,
-  currentImage,
-  hasNext,
-  hasPrev,
-  close,
-  next,
-  prev,
-} = useImagePreviewer()
+const props = withDefaults(defineProps<{
+  mode?: 'modal' | 'embedded'
+  files?: ImagePreviewItem[]
+}>(), { mode: 'modal' })
 
-const containerRef = ref<HTMLDivElement | null>(null)
+/* =============================================
+   State: modal uses singleton composable,
+   embedded uses prop-driven local state.
+   ============================================= */
+const modal = useImagePreviewer()
+
+const localState = reactive({
+  images: props.files ?? [],
+  currentIndex: 0,
+})
+watch(() => props.files, (f) => {
+  localState.images = f ?? []
+  localState.currentIndex = 0
+})
+
+const images = computed(() => props.mode === 'embedded' ? localState.images : modal.images.value)
+const currentIndex = computed(() => localState.currentIndex)
+const isOpen = computed(() => props.mode === 'embedded' ? true : modal.isOpen.value)
+const currentImage = computed(() => {
+  const list = props.mode === 'embedded' ? localState.images : modal.images.value
+  return list[localState.currentIndex] ?? null
+})
+const hasNext = computed(() => localState.currentIndex < images.value.length - 1)
+const hasPrev = computed(() => localState.currentIndex > 0)
+
+function close() {
+  if (props.mode === 'embedded') return
+  modal.close()
+}
+function nextImage() {
+  if (hasNext.value) localState.currentIndex++
+}
+function prevImage() {
+  if (hasPrev.value) localState.currentIndex--
+}
+function goToImage(index: number) {
+  if (index >= 0 && index < images.value.length) localState.currentIndex = index
+}
+
 const imageRef = ref<HTMLImageElement | null>(null)
+const stageRef = ref<HTMLDivElement | null>(null)
+const toolbarRef = ref<HTMLDivElement | null>(null)
 const scale = ref(1)
 const translateX = ref(0)
 const translateY = ref(0)
@@ -39,6 +73,7 @@ const dragStart = { x: 0, y: 0 }
 const imageLoaded = ref(false)
 const naturalSize = ref({ width: 0, height: 0 })
 const showCopyTip = ref(false)
+const toolbarCompact = ref(false)
 
 /* ---------- helpers ---------- */
 
@@ -73,9 +108,9 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     close()
   } else if (e.key === 'ArrowRight') {
-    next()
+    nextImage()
   } else if (e.key === 'ArrowLeft') {
-    prev()
+    prevImage()
   }
 }
 
@@ -95,12 +130,12 @@ function onWheel(e: WheelEvent) {
 }
 
 function onPointerDown(e: PointerEvent) {
+  // ignore clicks on interactive elements inside the stage
+  if ((e.target as HTMLElement)?.closest?.('button, .stage-nav')) return
   isDragging.value = true
   dragStart.x = e.clientX - translateX.value
   dragStart.y = e.clientY - translateY.value
-  if (imageRef.value) {
-    imageRef.value.setPointerCapture(e.pointerId)
-  }
+  stageRef.value?.setPointerCapture(e.pointerId)
 }
 
 function onPointerMove(e: PointerEvent) {
@@ -200,14 +235,28 @@ watch(isOpen, (v) => {
     imageLoaded.value = false
   }
 })
+
+/* ---------- responsive toolbar ---------- */
+let toolbarObserver: ResizeObserver | null = null
+function watchToolbar(el: Element | null) {
+  toolbarObserver?.disconnect()
+  toolbarObserver = null
+  if (!el) return
+  toolbarObserver = new ResizeObserver(([entry]) => {
+    toolbarCompact.value = (entry.contentRect.width ?? 0) < 480
+  })
+  toolbarObserver.observe(el)
+}
+onMounted(() => { watchToolbar(toolbarRef.value) })
+onUnmounted(() => { toolbarObserver?.disconnect() })
+
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="preview-fade">
       <div
-        v-if="isOpen"
-        ref="containerRef"
+        v-if="isOpen && mode === 'modal'"
         class="image-previewer"
         tabindex="0"
         @keydown="onKeydown"
@@ -218,7 +267,7 @@ watch(isOpen, (v) => {
         <!-- floating card -->
         <div class="previewer-card" @click.stop>
           <!-- ====== top toolbar ====== -->
-          <div class="previewer-toolbar">
+          <div ref="toolbarRef" class="previewer-toolbar" :class="{ compact: toolbarCompact }">
             <div class="toolbar-left">
               <span v-if="naturalSize.width" class="toolbar-meta">{{ naturalSize.width }} × {{ naturalSize.height }}</span>
               <span v-if="scale !== 1" class="toolbar-zoom">{{ Math.round(scale * 100) }}%</span>
@@ -229,56 +278,45 @@ watch(isOpen, (v) => {
             </div>
 
             <div class="toolbar-right">
-              <button class="toolbar-btn capsule" title="重置缩放" @click="resetZoom">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                  <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M8 11h6"/>
-                </svg>
-                <span>缩放</span>
-              </button>
-              <button class="toolbar-btn capsule" @click="copyImageUrl">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <button class="toolbar-btn" @click="copyImageUrl">
+                <svg class="svgIcon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
                 </svg>
-                <span>{{ showCopyTip ? '已复制' : '复制链接' }}</span>
+                <span class="tooltip">{{ showCopyTip ? '已复制' : '复制链接' }}</span>
               </button>
-              <button
-                class="toolbar-btn capsule"
-                :title="isLocalFile ? '在文件管理器中显示' : '在浏览器中打开'"
-                @click="showInFolder"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <button class="toolbar-btn" @click="showInFolder">
+                <svg class="svgIcon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                   <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
                 </svg>
-                <span>{{ isLocalFile ? '在文件夹中显示' : '在浏览器中打开' }}</span>
+                <span class="tooltip">{{ isLocalFile ? '在文件夹中显示' : '在浏览器中打开' }}</span>
               </button>
-              <button class="toolbar-btn capsule toolbar-btn-primary" @click="downloadImage">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              <button class="toolbar-btn download" @click="downloadImage">
+                <svg class="svgIcon" viewBox="0 0 384 512" width="15" height="15" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M169.4 470.6c12.5 12.5 32.8 12.5 45.3 0l160-160c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L224 370.8 224 64c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 306.7L54.6 265.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l160 160z"/>
                 </svg>
-                <span>下载</span>
+                <span class="icon2"></span>
+                <span class="tooltip">下载</span>
               </button>
             </div>
           </div>
+          <!-- close button -->
 
           <!-- ====== image stage ====== -->
-          <div class="previewer-stage" @wheel.prevent="onWheel">
-            <!-- circular prev/next on sides -->
-            <button
-              v-if="hasPrev"
-              class="stage-nav stage-nav-prev"
-              title="上一张（←）"
-              @click.stop="prev"
-            >
+          <div
+            ref="stageRef"
+            class="previewer-stage"
+            @wheel.prevent="onWheel"
+            @pointerdown="onPointerDown"
+            @pointermove="onPointerMove"
+            @pointerup="onPointerUp"
+            @pointercancel="onPointerUp"
+          >
+            <button v-if="hasPrev" class="stage-nav stage-nav-prev" title="上一张（←）" @click.stop="prevImage">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <path d="M15 18l-6-6 6-6" />
               </svg>
             </button>
-            <button
-              v-if="hasNext"
-              class="stage-nav stage-nav-next"
-              title="下一张（→）"
-              @click.stop="next"
-            >
+            <button v-if="hasNext" class="stage-nav stage-nav-next" title="下一张（→）" @click.stop="nextImage">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <path d="M9 18l6-6-6-6" />
               </svg>
@@ -292,10 +330,6 @@ watch(isOpen, (v) => {
                 :style="{
                   transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
                 }"
-                @pointerdown="onPointerDown"
-                @pointermove="onPointerMove"
-                @pointerup="onPointerUp"
-                @pointercancel="onPointerUp"
               >
                 <img
                   ref="imageRef"
@@ -325,6 +359,92 @@ watch(isOpen, (v) => {
       </div>
     </Transition>
   </Teleport>
+
+  <!-- ====== embedded mode (inline in editor) ====== -->
+  <div
+    v-if="mode === 'embedded' && isOpen"
+    class="previewer-embedded"
+    @keydown="onKeydown"
+  >
+    <div class="previewer-embedded-card">
+      <!-- toolbar -->
+      <div ref="toolbarRef" class="previewer-toolbar" :class="{ compact: toolbarCompact }">
+        <div class="toolbar-left">
+          <span v-if="naturalSize.width" class="toolbar-meta">{{ naturalSize.width }} × {{ naturalSize.height }}</span>
+          <span v-if="scale !== 1" class="toolbar-zoom">{{ Math.round(scale * 100) }}%</span>
+        </div>
+        <div class="toolbar-center">
+          <span class="toolbar-filename" :title="filename">{{ filename }}</span>
+        </div>
+        <div class="toolbar-right">
+          <button class="toolbar-btn" @click="copyImageUrl">
+            <svg class="svgIcon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+            </svg>
+            <span class="tooltip">{{ showCopyTip ? '已复制' : '复制链接' }}</span>
+          </button>
+          <button class="toolbar-btn" @click="showInFolder">
+            <svg class="svgIcon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+            </svg>
+            <span class="tooltip">{{ isLocalFile ? '在文件夹中显示' : '在浏览器中打开' }}</span>
+          </button>
+          <button class="toolbar-btn download" @click="downloadImage">
+            <svg class="svgIcon" viewBox="0 0 384 512" width="15" height="15" xmlns="http://www.w3.org/2000/svg">
+              <path d="M169.4 470.6c12.5 12.5 32.8 12.5 45.3 0l160-160c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L224 370.8 224 64c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 306.7L54.6 265.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l160 160z"/>
+            </svg>
+            <span class="icon2"></span>
+            <span class="tooltip">下载</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- stage -->
+      <div
+        ref="stageRef"
+        class="previewer-stage"
+        @wheel.prevent="onWheel"
+        @pointerdown="onPointerDown"
+        @pointermove="onPointerMove"
+        @pointerup="onPointerUp"
+        @pointercancel="onPointerUp"
+      >
+        <button v-if="hasPrev" class="stage-nav stage-nav-prev" title="上一张（←）" @click.stop="prevImage">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <button v-if="hasNext" class="stage-nav stage-nav-next" title="下一张（→）" @click.stop="nextImage">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+        <Transition name="preview-zoom" mode="out-in">
+          <div
+            :key="currentIndex"
+            class="previewer-image-wrap"
+            :class="{ dragging: isDragging, loaded: imageLoaded }"
+            :style="{ transform: `translate(${translateX}px, ${translateY}px) scale(${scale})` }"
+          >
+            <img
+              ref="imageRef"
+              :src="currentImage?.src"
+              :alt="currentImage?.alt || ''"
+              class="previewer-image"
+              @load="onImageLoad"
+              @error="onImageError"
+              draggable="false"
+            />
+          </div>
+        </Transition>
+      </div>
+
+      <!-- pagination -->
+      <div class="previewer-pagination-embedded">
+        <span>{{ currentIndex + 1 }} / {{ images.length }}</span>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -369,6 +489,7 @@ watch(isOpen, (v) => {
   overflow: hidden;
 }
 
+
 /* ---- circular stage nav arrows ---- */
 .stage-nav {
   position: absolute;
@@ -402,11 +523,13 @@ watch(isOpen, (v) => {
 
 /* ======== top toolbar ======== */
 .previewer-toolbar {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(8px);
@@ -414,35 +537,45 @@ watch(isOpen, (v) => {
 }
 
 .toolbar-left {
-  flex: 1;
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
+  flex-shrink: 0;
+  z-index: 1;
   color: rgba(255, 255, 255, 0.7);
   font-family: var(--font-ui, system-ui, sans-serif);
   font-size: 13px;
 }
 
 .toolbar-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 8px;
+  max-width: 40%;
+  overflow: hidden;
+  pointer-events: none;
   color: rgba(255, 255, 255, 0.7);
   font-family: var(--font-ui, system-ui, sans-serif);
   font-size: 13px;
 }
 
 .toolbar-right {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  flex-shrink: 0;
+  z-index: 1;
   min-width: 0;
 }
 
 .toolbar-filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: rgba(255, 255, 255, 0.9);
 }
 
@@ -455,20 +588,26 @@ watch(isOpen, (v) => {
   color: #4fc3f7;
 }
 
-/* ---- capsule buttons ---- */
+/* ---- responsive compact: hide filename ---- */
+.previewer-toolbar.compact .toolbar-center,
+.previewer-toolbar.compact .toolbar-filename {
+  display: none;
+}
+
+/* ---- simple icon button (copy, open folder) ---- */
 .toolbar-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   border: 0;
-  border-radius: 20px;
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.07);
   color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
-  font-family: inherit;
-  font-size: 12.5px;
-  white-space: nowrap;
+  position: relative;
   transition: background 0.15s, color 0.15s, opacity 0.15s;
 }
 .toolbar-btn:hover:not(:disabled) {
@@ -479,12 +618,102 @@ watch(isOpen, (v) => {
   opacity: 0.3;
   cursor: default;
 }
-.toolbar-btn-primary {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+
+.toolbar-btn .tooltip {
+  position: absolute;
+  z-index: 100;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  background-color: rgb(12, 12, 12);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition-duration: .2s;
+  pointer-events: none;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  font-size: 12px;
 }
-.toolbar-btn-primary:hover {
-  background: rgba(255, 255, 255, 0.22) !important;
+
+.toolbar-btn .tooltip::before {
+  position: absolute;
+  content: "";
+  width: 8px;
+  height: 8px;
+  background-color: rgb(12, 12, 12);
+  transform: rotate(45deg);
+  top: -4px;
+  left: 50%;
+  margin-left: -4px;
+  transition-duration: .3s;
+}
+
+.toolbar-btn:hover .tooltip {
+  opacity: 1;
+  transition-duration: .3s;
+}
+
+/* ---- download icon button (fancy dark bg, purple hover, tooltip) ---- */
+.toolbar-btn.download {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background-color: rgb(27, 27, 27);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition-duration: .3s;
+  box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.11);
+}
+
+.toolbar-btn.download .svgIcon {
+  fill: rgb(214, 178, 255);
+  stroke: rgb(214, 178, 255);
+}
+
+.toolbar-btn.download .icon2 {
+  width: 18px;
+  height: 5px;
+  border-bottom: 2px solid rgb(182, 143, 255);
+  border-left: 2px solid rgb(182, 143, 255);
+  border-right: 2px solid rgb(182, 143, 255);
+}
+
+.toolbar-btn.download:hover {
+  background-color: rgb(150, 94, 255);
+  transition-duration: .3s;
+}
+
+.toolbar-btn.download:hover .icon2 {
+  border-bottom: 2px solid rgb(235, 235, 235);
+  border-left: 2px solid rgb(235, 235, 235);
+  border-right: 2px solid rgb(235, 235, 235);
+}
+
+.toolbar-btn.download:hover .svgIcon {
+  fill: rgb(255, 255, 255);
+  stroke: rgb(255, 255, 255);
+  animation: btn-icon-slide-in-top 0.6s cubic-bezier(0.250, 0.460, 0.450, 0.940) both;
+}
+
+@keyframes btn-icon-slide-in-top {
+  0% {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0px);
+    opacity: 1;
+  }
 }
 
 /* ---- close button (page-level top-right) ---- */
@@ -569,6 +798,69 @@ watch(isOpen, (v) => {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   color: rgba(255, 255, 255, 0.7);
+  font-family: var(--font-ui, system-ui, sans-serif);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ======== embedded mode ======== */
+.previewer-embedded {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-canvas);
+}
+
+.previewer-embedded-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.previewer-embedded .previewer-toolbar {
+  flex-shrink: 0;
+}
+
+.previewer-embedded .previewer-stage {
+  flex: 1;
+  background: var(--color-canvas-soft);
+}
+
+.previewer-embedded .previewer-image-wrap {
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.06),
+    0 4px 20px rgba(0, 0, 0, 0.12);
+  background: var(--color-canvas);
+}
+[data-theme="dark"] .previewer-embedded .previewer-image-wrap {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.previewer-embedded .stage-nav {
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.previewer-embedded .stage-nav:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.previewer-pagination-embedded {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-canvas);
+  color: var(--color-text-muted);
   font-family: var(--font-ui, system-ui, sans-serif);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
