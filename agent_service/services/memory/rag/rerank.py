@@ -58,13 +58,15 @@ class SentenceTransformerCrossEncoderProvider:
     """
 
     def __init__(self, *, config: AgentConfig) -> None:
-        """保存配置并延迟加载模型。"""
+        """保存配置并延迟（异步）加载模型。"""
 
         self.config = config
         self._model: object | None = None
+        self._load_event = threading.Event()
+        self._load_error: Exception | None = None
 
     def warmup(self) -> None:
-        """预加载模型到内存,避免首次请求冷启动延迟。"""
+        """触发后台模型加载，不阻塞。"""
 
         self._get_model()
 
@@ -79,45 +81,82 @@ class SentenceTransformerCrossEncoderProvider:
         if not documents:
             return []
         model = self._get_model()
+        if model is None:
+            raise RuntimeError("ReRank 模型尚未就绪，正在异步加载中，请稍后重试。")
         pairs = [[query, document] for document in documents]
         raw_scores = model.predict(pairs, show_progress_bar=False)
         return [self._normalize_score(float(score)) for score in raw_scores]
 
-    def _get_model(self) -> object:
-        """延迟加载本地 CrossEncoder 模型。"""
+    def _get_model(self) -> object | None:
+        """异步加载本地 CrossEncoder 模型。
+
+        首次调用触发后台加载线程，后续调用若加载未完成则返回 None。
+        """
 
         if self._model is not None:
             return self._model
+        if self._load_error is not None:
+            raise self._load_error
+        if not self._load_event.is_set():
+            self._load_event.set()
+            t = threading.Thread(target=self._load_model_in_thread, daemon=True)
+            t.start()
+            return None
+        return None
+
+    def _load_model_in_thread(self) -> None:
+        """在后台线程中执行实际模型加载。"""
+
+        from agent_service.core.model_status import ModelState, set_model_state
+
         try:
             from sentence_transformers.cross_encoder import CrossEncoder
         except ImportError as exc:
-            raise RuntimeError(
+            set_model_state("rerank", ModelState.ERROR)
+            self._load_error = RuntimeError(
                 "缺少 sentence-transformers 依赖,无法加载本地 ReRank 模型。"
-            ) from exc
+            )
+            return
 
         if not self.config.model.rerank_model_name:
-            raise ValueError("config.model.rerank_model_name 不能为空。")
-        model_path = ensure_model(
-            self.config.model.rerank_model_name,
-            self.config.storage.rerank_model_dir,
-        )
+            set_model_state("rerank", ModelState.ERROR)
+            self._load_error = ValueError("config.model.rerank_model_name 不能为空。")
+            return
+        set_model_state("rerank", ModelState.DOWNLOADING)
+        try:
+            model_path = ensure_model(
+                self.config.model.rerank_model_name,
+                self.config.storage.rerank_model_dir,
+            )
+        except Exception as exc:
+            set_model_state("rerank", ModelState.ERROR)
+            self._load_error = exc
+            return
         if model_path is None:
             model_path = model_target_dir(
                 self.config.model.rerank_model_name,
                 self.config.storage.rerank_model_dir,
             )
         if not model_path.exists():
-            raise FileNotFoundError(f"ReRank 模型目录不存在: {model_path}")
+            set_model_state("rerank", ModelState.ERROR)
+            self._load_error = FileNotFoundError(f"ReRank 模型目录不存在: {model_path}")
+            return
+        set_model_state("rerank", ModelState.LOADING)
         banner = "=" * 57
         logger.info(banner)
         logger.info("开始加载 ReRank 模型: %s", self.config.model.rerank_model_name)
         logger.info("模型路径: %s", model_path)
         logger.info(banner)
-        self._model = CrossEncoder(str(model_path))
+        try:
+            self._model = CrossEncoder(str(model_path))
+            set_model_state("rerank", ModelState.READY)
+        except Exception as exc:
+            set_model_state("rerank", ModelState.ERROR)
+            self._load_error = exc
+            return
         logger.info(banner)
         logger.info("ReRank 模型加载完成: %s", self.config.model.rerank_model_name)
         logger.info(banner)
-        return self._model
 
     @staticmethod
     def _normalize_score(value: float) -> float:

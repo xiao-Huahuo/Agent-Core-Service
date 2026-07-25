@@ -14,6 +14,7 @@ import TerminalSandboxSettingsSection from '@/components/settings_view/TerminalS
 import WebSearchSettingsSection from '@/components/settings_view/WebSearchSettingsSection.vue'
 import GraphSettingsSection from '@/components/settings_view/GraphSettingsSection.vue'
 import SafetySettingsSection from '@/components/settings_view/SafetySettingsSection.vue'
+import StorageSettingsSection from '@/components/settings_view/StorageSettingsSection.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { ThemeMode } from '@/types/settings'
@@ -33,6 +34,7 @@ const tabs = [
   { key: 'memory' as const, label: '记忆与指令' },
   { key: 'graph' as const, label: '图谱' },
   { key: 'safety' as const, label: '安全审核' },
+  { key: 'storage' as const, label: '存储管理' },
 ]
 
 watch(activeTab, (tab) => {
@@ -674,6 +676,9 @@ onBeforeUnmount(() => {
 
       <SafetySettingsSection
         v-if="activeTab === 'safety'"
+      />
+      <StorageSettingsSection
+        v-if="activeTab === 'storage'"
       />
     </div>
   </div>
@@ -1358,11 +1363,12 @@ onBeforeUnmount(() => {
   padding: 0 var(--space-16);
   border: 1px solid var(--color-primary);
   border-radius: 999px;
-  background: transparent;
+  background: var(--color-primary-softer);
   color: var(--color-primary);
   font-family: var(--font-ui);
   font-size: calc(12px * var(--font-scale));
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .save-model-btn:hover:not(:disabled) {
@@ -1394,16 +1400,65 @@ onBeforeUnmount(() => {
 .cancel-model-btn {
   height: 28px;
   padding: 0 var(--space-14);
-  border: 0;
+  border: 1px solid var(--color-border);
   border-radius: 999px;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: calc(12px * var(--font-scale));
   cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
 }
 
 .cancel-model-btn:hover {
-  color: var(--color-text);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+/* ---- 动画删除按钮 ---- */
+.delete-btn {
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background-color: var(--color-canvas);
+  border: 1px solid var(--color-border);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  cursor: pointer;
+  transition-duration: .3s;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.delete-btn .svgIcon {
+  width: 12px;
+  transition-duration: .3s;
+}
+
+.delete-btn .svgIcon path {
+  fill: rgb(255, 69, 69);
+}
+
+.delete-btn:hover {
+  width: 70px;
+  border-radius: 50px;
+  transition-duration: .3s;
+  background-color: rgb(255, 69, 69);
+  border-color: rgb(255, 69, 69);
+}
+
+.delete-btn:hover .svgIcon {
+  width: 25px;
+  transition-duration: .3s;
+  transform: translateY(60%);
+}
+
+.delete-btn:hover .svgIcon path {
+  fill: white;
 }
 
 /* Input row for add */

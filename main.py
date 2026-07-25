@@ -132,6 +132,10 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
 
     memory_service = LongTermMemoryService(config=config)
     settings_service = SettingsService(config=config, memory_service=memory_service)
+
+    # 启动时迁移：将用户覆盖的旧路径内容移动到新路径
+    from agent_service.services.storage_service import migrate_storage_paths
+    config = migrate_storage_paths(config, settings_service)
     attachment_service = SessionAttachmentService(config=config, settings_service=settings_service)
     agent.attachment_service = attachment_service
     if agent.context_builder is not None:
@@ -236,10 +240,10 @@ app = FastAPI(title="Agent-Core-Service", lifespan=_lifespan)
 app.include_router(rest_router)
 
 _runtime_config = AgentConfig.load_config(ensure_directories=False, ensure_models=False)
-_knowledge_assets_dir = _runtime_config.storage.base_data_dir / "assets" / "knowledge"
+_knowledge_assets_dir = _runtime_config.storage.assets_dir / "knowledge"
 _knowledge_assets_dir.mkdir(parents=True, exist_ok=True)
 
-_downloads_dir = _runtime_config.storage.base_data_dir / "assets" / "downloads"
+_downloads_dir = _runtime_config.storage.assets_dir / "downloads"
 _downloads_dir.mkdir(parents=True, exist_ok=True)
 
 from fastapi.staticfiles import StaticFiles

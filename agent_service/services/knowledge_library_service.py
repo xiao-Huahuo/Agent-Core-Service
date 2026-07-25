@@ -1941,10 +1941,7 @@ class KnowledgeLibraryService:
     def _trash_base_root(self) -> Path:
         """Return the runtime trash root."""
 
-        base_data_dir = getattr(self.config.storage, "base_data_dir", None)
-        if base_data_dir is not None:
-            return Path(base_data_dir).expanduser().resolve() / "trash"
-        return Path(self.config.storage.frontmatter_dir).expanduser().resolve().parent / "trash"
+        return Path(self.config.storage.trash_dir).expanduser().resolve()
 
     def _trash_root_for(self, *, user_id: str, library_id: str) -> Path:
         """Return the isolated trash root for one user/library pair."""

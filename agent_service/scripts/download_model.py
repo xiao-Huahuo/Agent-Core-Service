@@ -22,6 +22,8 @@ import argparse
 import logging
 import os
 import shutil
+import threading
+import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -45,8 +47,68 @@ MODEL_TOKENIZER_FILES = {
 }
 PADDLEOCR_MARKER_FILE = ".paddleocr_download_complete"
 
+# ---- 下载进度跟踪 ----
+_download_progress: dict[str, float] = {}
+_download_progress_lock = threading.Lock()
 
-def ensure_model(model_name: str, model_dir: Path | str) -> Path | None:
+
+def update_download_progress(model_type: str, pct: float) -> None:
+    with _download_progress_lock:
+        _download_progress[model_type] = pct
+
+
+def get_download_progress(model_type: str) -> float:
+    with _download_progress_lock:
+        return _download_progress.get(model_type, 0.0)
+
+
+def get_all_download_progress() -> dict[str, float]:
+    with _download_progress_lock:
+        return dict(_download_progress)
+
+
+def _tracked_hf_download(
+    model_name: str,
+    target_dir: Path,
+    model_type: str,
+) -> None:
+    """从 Hugging Face 下载模型并按文件数估算进度。"""
+
+    from huggingface_hub import list_repo_files, snapshot_download
+
+    update_download_progress(model_type, 0.0)
+    total_files = 0
+    try:
+        repo_files = list_repo_files(model_name)
+        total_files = len(repo_files)
+    except Exception:
+        pass
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    initial_count = sum(1 for _ in target_dir.rglob("*") if _.is_file()) if target_dir.exists() else 0
+    stop_event = threading.Event()
+
+    if total_files > 0:
+        def _track() -> None:
+            while not stop_event.is_set():
+                current = sum(1 for _ in target_dir.rglob("*") if _.is_file()) - initial_count
+                pct = min(99.0, round(current / total_files * 100, 1))
+                update_download_progress(model_type, pct)
+                stop_event.wait(1.5)
+
+        threading.Thread(target=_track, daemon=True).start()
+
+    snapshot_download(
+        repo_id=model_name,
+        local_dir=str(target_dir),
+        local_dir_use_symlinks=False,
+    )
+    (target_dir / MODEL_MARKER_FILE).write_text(model_name, encoding="utf-8")
+    stop_event.set()
+    update_download_progress(model_type, 100.0)
+
+
+def ensure_model(model_name: str, model_dir: Path | str, model_type: str | None = None) -> Path | None:
     """
     检查指定模型是否已经存在,不存在时从 Hugging Face 下载。
 
@@ -62,7 +124,7 @@ def ensure_model(model_name: str, model_dir: Path | str) -> Path | None:
         logger.info("模型已存在,跳过下载: %s | 路径: %s", model_name, target_dir)
         return target_dir
 
-    _download_from_huggingface(model_name, target_dir)
+    _download_from_huggingface(model_name, target_dir, model_type=model_type)
     if not is_model_available(target_dir):
         raise RuntimeError(f"模型下载后仍不完整: {target_dir}")
     return target_dir
@@ -230,8 +292,12 @@ def is_model_available(target_dir: Path) -> bool:
     return has_marker and has_config and has_weight and has_tokenizer
 
 
-def _download_from_huggingface(model_name: str, target_dir: Path) -> None:
+def _download_from_huggingface(model_name: str, target_dir: Path, model_type: str | None = None) -> None:
     """调用 huggingface_hub 下载模型快照。"""
+
+    if model_type:
+        _tracked_hf_download(model_name, target_dir, model_type)
+        return
 
     try:
         from huggingface_hub import snapshot_download

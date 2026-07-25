@@ -12,8 +12,37 @@ import { CheckSquare, DatabaseZap, Maximize2, Minus, Network, X } from 'lucide-v
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { checkModelDisk } from '@/api/settings'
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
+
+/* ---- 模型阻断模态框 ---- */
+const modelModalVisible = ref(false)
+const modelModalMessage = ref('')
+
+async function checkEmbeddingBefore(action: () => void): Promise<void> {
+  try {
+    const status = await checkModelDisk()
+    if (status.embedding === 'not_downloaded' || status.embedding === 'error') {
+      modelModalMessage.value = 'Embedding 模型未就绪，请先下载'
+      modelModalVisible.value = true
+      return
+    }
+  } catch { /* 检查失败时允许继续 */ }
+  action()
+}
+
+function closeModelModal() {
+  modelModalVisible.value = false
+}
+
+function goToStorageSettings() {
+  modelModalVisible.value = false
+  window.location.hash = '#/settings'
+  setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('agent-settings-tab', { detail: 'storage' }))
+  }, 100)
+}
 const desktopApi = window.agentEditorDesktop
 const emit = defineEmits<{
   toggleAgent: []
@@ -174,7 +203,7 @@ onMounted(() => nextTick(autoResizeInput))
         type="button"
         :disabled="graphRebuilding"
         title="图谱抽取"
-        @click="workspaceStore.startGraphRebuild"
+        @click="checkEmbeddingBefore(() => workspaceStore.startGraphRebuild())"
       >
         <Network :size="14" />
       </button>
@@ -184,7 +213,7 @@ onMounted(() => nextTick(autoResizeInput))
         type="button"
         :disabled="workspaceStore.refreshing"
         title="重新灌库"
-        @click="workspaceStore.markIndexing"
+        @click="checkEmbeddingBefore(() => workspaceStore.markIndexing())"
       >
         <DatabaseZap :size="14" />
       </button>
@@ -241,6 +270,21 @@ onMounted(() => nextTick(autoResizeInput))
       </div>
     </div>
   </header>
+  <!-- 模型阻断模态框 -->
+  <Teleport to="body">
+    <div v-if="modelModalVisible" class="model-modal-overlay" @click.self="closeModelModal">
+      <div class="model-modal">
+        <p class="model-modal-message">{{ modelModalMessage }}</p>
+        <p class="model-modal-link">
+          <a href="#" @click.prevent="goToStorageSettings">前往存储管理页面下载</a>
+        </p>
+        <div class="model-modal-actions">
+          <button class="model-modal-btn close-btn" @click="closeModelModal">关闭</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
   <Transition name="toast-slide">
     <div v-if="workspaceStore.toastVisible" class="toast-banner">
       {{ workspaceStore.toastMessage }}
@@ -957,5 +1001,76 @@ kbd {
     overflow-x: auto;
     padding-bottom: var(--space-2);
   }
+}
+
+/* ---- 模型阻断模态框 ---- */
+:global(.model-modal-overlay) {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+:global(.model-modal) {
+  width: 380px;
+  max-width: 90vw;
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+
+:global(.model-modal-message) {
+  margin: 0 0 12px;
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: calc(13px * var(--font-scale));
+  line-height: 1.5;
+}
+
+:global(.model-modal-link) {
+  margin: 0 0 16px;
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+}
+
+:global(.model-modal-link a) {
+  color: var(--color-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+:global(.model-modal-link a:hover) {
+  color: var(--color-primary-active);
+}
+
+:global(.model-modal-actions) {
+  display: flex;
+  gap: var(--space-8);
+  justify-content: flex-end;
+}
+
+:global(.model-modal-btn) {
+  padding: 6px 18px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+:global(.close-btn) {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+:global(.close-btn:hover) {
+  opacity: 0.8;
 }
 </style>

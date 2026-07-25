@@ -11,6 +11,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Check, ChevronDown, Globe, Plus, Send, Settings, Shield, Square, X } from 'lucide-vue-next'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import ContextProgress from '@/components/editor_workspace/agent_chat/ContextProgress.vue'
+import { checkModelDisk, fetchModelStatus } from '@/api/settings'
 import type { AgentAccessMode } from '@/api/agent'
 import type { AgentUploadedAttachment } from '@/stores/chat'
 
@@ -85,16 +86,74 @@ watch(menuVisible, (visible) => {
   }
 })
 
-function handleSend() {
+const modelModalVisible = ref(false)
+const modelModalMessage = ref('')
+const modelChecking = ref(false)
+
+async function handleSend() {
   if (props.isStreaming) return
   const trimmed = text.value.trim()
-  if (!trimmed) {
-    return
+  if (!trimmed) return
+
+  try {
+    const status = await checkModelDisk()
+    const blockedModels: string[] = []
+    if (status.embedding === 'not_downloaded' || status.embedding === 'error') {
+      blockedModels.push('Embedding')
+    }
+    if (status.rerank === 'not_downloaded' || status.rerank === 'error') {
+      blockedModels.push('ReRank')
+    }
+
+    if (blockedModels.length > 0) {
+      const hasError = status.embedding === 'error' || status.rerank === 'error'
+      modelModalMessage.value = hasError
+        ? `以下模型未就绪：${blockedModels.join('、')}，请先下载`
+        : `以下模型未就绪：${blockedModels.join('、')}，请先下载`
+      modelModalVisible.value = true
+      return
+    }
+  } catch {
+    // 模型状态检查失败时允许继续发送
   }
+
   const reference = props.reference?.trim() || undefined
   emit('send', trimmed, reference)
   text.value = ''
   emit('clear-reference')
+}
+
+async function handleModelModalRetry() {
+  modelChecking.value = true
+  try {
+    const status = await fetchModelStatus()
+    const ready = status.embedding === 'ready' && status.rerank === 'ready'
+    if (ready) {
+      modelModalVisible.value = false
+      return
+    }
+    if (status.embedding === 'downloading' || status.embedding === 'loading' ||
+        status.rerank === 'downloading' || status.rerank === 'loading') {
+      modelModalMessage.value = '模型下载中，请稍候...'
+    }
+  } catch {
+    // keep current message
+  } finally {
+    modelChecking.value = false
+  }
+}
+
+function handleModelModalClose() {
+  modelModalVisible.value = false
+}
+
+function navigateToSettings() {
+  modelModalVisible.value = false
+  window.location.hash = '#/settings'
+  // SettingsView 监听 agent-settings-tab 事件切换标签页
+  setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('agent-settings-tab', { detail: 'storage' }))
+  }, 100)
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -328,6 +387,24 @@ function handleFileChange(event: Event) {
       @remove="emit('remove-attachment', $event)"
     />
   </div>
+
+  <!-- 模型状态阻断模态框 -->
+  <Teleport to="body">
+    <div v-if="modelModalVisible" class="model-modal-overlay" @click.self="handleModelModalClose">
+      <div class="model-modal">
+        <p class="model-modal-message">{{ modelModalMessage }}</p>
+        <p class="model-modal-link">
+          <a href="#" @click.prevent="navigateToSettings">前往存储管理页面下载</a>
+        </p>
+        <div class="model-modal-actions">
+          <button class="model-modal-btn retry-btn" :disabled="modelChecking" @click="handleModelModalRetry">
+            {{ modelChecking ? '检查中...' : '重试' }}
+          </button>
+          <button class="model-modal-btn close-btn" @click="handleModelModalClose">关闭</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -1010,5 +1087,83 @@ function handleFileChange(event: Event) {
   .access-mode-caret {
     display: none;
   }
+}
+
+/* ---- 模型状态阻断模态框 ---- */
+.model-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.model-modal {
+  width: 380px;
+  max-width: 90vw;
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+
+.model-modal-message {
+  margin: 0 0 12px;
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: calc(13px * var(--font-scale));
+  line-height: 1.5;
+}
+
+.model-modal-link {
+  margin: 0 0 16px;
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.model-modal-link a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.model-modal-link a:hover {
+  color: var(--color-primary-active);
+}
+
+.model-modal-actions {
+  display: flex;
+  gap: var(--space-8);
+  justify-content: flex-end;
+}
+
+.model-modal-btn {
+  padding: 6px 18px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.model-modal-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.retry-btn {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.close-btn {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
 }
 </style>

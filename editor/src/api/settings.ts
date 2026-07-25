@@ -441,3 +441,20 @@ export function fetchSensitiveWords(): Promise<Record<string, unknown>> {
 export function saveSensitiveWords(data: Record<string, unknown>): Promise<{ ok: boolean }> {
   return apiPost<{ ok: boolean }>(API_ROUTES.SETTINGS_SAFETY_SENSITIVE_WORDS, data)
 }
+
+/* ---- 模型状态 ---- */
+
+export interface ModelStatusResponse {
+  embedding: string
+  rerank: string
+  paddleocr: string
+}
+
+export function fetchModelStatus(): Promise<ModelStatusResponse> {
+  return apiGet<ModelStatusResponse>(API_ROUTES.SETTINGS_MODEL_STATUS)
+}
+
+/** 磁盘级检测模型状态，返回真实状态（非内存缓存） */
+export function checkModelDisk(): Promise<ModelStatusResponse> {
+  return apiPost<ModelStatusResponse>(API_ROUTES.SETTINGS_MODEL_CHECK, {})
+}

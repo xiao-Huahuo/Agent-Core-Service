@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,129 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # ---- 系统提示词条目 ----
+
+@router.get("/settings/models/status")
+async def get_model_status() -> dict[str, Any]:
+    """返回 Embedding / ReRank / PaddleOCR 模型加载状态快照。"""
+
+    from agent_service.core.model_status import get_model_status as _get_model_status
+
+    return _get_model_status().to_dict()
+
+
+@router.post("/settings/models/download")
+async def download_model(body: dict[str, Any]) -> dict[str, Any]:
+    """异步触发指定模型的后台下载。
+
+    body: { "model": "embedding" | "rerank" | "paddleocr" }
+    返回后前端轮询 GET /settings/models/status 获取进度。
+    """
+
+    model = str(body.get("model") or "").strip()
+    if model not in ("embedding", "rerank", "paddleocr"):
+        raise HTTPException(status_code=422, detail="model 必须是 embedding / rerank / paddleocr")
+
+    from agent_service.core.model_status import ModelState, set_model_state
+
+    svc = _require_settings_service()
+    config = svc.config
+
+    def _download_embedding() -> None:
+        try:
+            from agent_service.scripts.download_model import ensure_model, model_target_dir, is_model_available
+
+            model_name = config.model.embedding_model_name
+            model_dir = config.storage.embedding_model_dir
+            set_model_state("embedding", ModelState.DOWNLOADING)
+            ensure_model(model_name, model_dir, model_type="embedding")
+            target = model_target_dir(model_name, model_dir)
+            if is_model_available(target):
+                set_model_state("embedding", ModelState.READY)
+            else:
+                set_model_state("embedding", ModelState.ERROR)
+        except Exception:
+            set_model_state("embedding", ModelState.ERROR)
+
+    def _download_rerank() -> None:
+        try:
+            from agent_service.scripts.download_model import ensure_model, model_target_dir, is_model_available
+
+            model_name = config.model.rerank_model_name
+            model_dir = config.storage.rerank_model_dir
+            set_model_state("rerank", ModelState.DOWNLOADING)
+            ensure_model(model_name, model_dir, model_type="rerank")
+            target = model_target_dir(model_name, model_dir)
+            if is_model_available(target):
+                set_model_state("rerank", ModelState.READY)
+            else:
+                set_model_state("rerank", ModelState.ERROR)
+        except Exception:
+            set_model_state("rerank", ModelState.ERROR)
+
+    def _download_paddleocr() -> None:
+        try:
+            from agent_service.scripts.download_model import ensure_paddleocr_models
+
+            set_model_state("paddleocr", ModelState.DOWNLOADING)
+            ensure_paddleocr_models(
+                paddleocr_model_dir=config.storage.paddleocr_model_dir,
+                language=config.ocr.language,
+                text_detection_model_name=config.ocr.text_detection_model_name,
+                text_recognition_model_name=config.ocr.text_recognition_model_name,
+                device=config.ocr.device,
+            )
+            set_model_state("paddleocr", ModelState.READY)
+        except Exception:
+            set_model_state("paddleocr", ModelState.ERROR)
+
+    t = threading.Thread(target={
+        "embedding": _download_embedding,
+        "rerank": _download_rerank,
+        "paddleocr": _download_paddleocr,
+    }[model], daemon=True)
+    t.start()
+
+    return {"status": "started", "model": model}
+
+
+@router.get("/settings/models/download-progress")
+async def get_download_progress() -> dict[str, float]:
+    """返回各模型下载进度百分比。"""
+
+    from agent_service.scripts.download_model import get_all_download_progress
+
+    return get_all_download_progress()
+
+
+@router.post("/settings/models/check")
+async def check_model_disk() -> dict[str, Any]:
+    """磁盘级检测模型文件是否存在，同步真实状态。"""
+
+    from agent_service.core.model_status import ModelState, set_model_state, get_model_status
+    from agent_service.scripts.download_model import is_model_available, model_target_dir
+
+    svc = _require_settings_service()
+    config = svc.config
+
+    models = {"embedding": config.model.embedding_model_name, "rerank": config.model.rerank_model_name}
+    dirs = {"embedding": config.storage.embedding_model_dir, "rerank": config.storage.rerank_model_dir}
+
+    # embedding / rerank
+    for key in ("embedding", "rerank"):
+        target = model_target_dir(models[key], dirs[key])
+        available = is_model_available(target)
+        set_model_state(key, ModelState.READY if available else ModelState.NOT_DOWNLOADED)
+
+    # paddleocr 用 marker 文件检测
+    paddleocr_available = False
+    from agent_service.scripts.download_model import PADDLEOCR_MARKER_FILE
+    marker = Path(config.storage.paddleocr_model_dir) / PADDLEOCR_MARKER_FILE
+    if marker.exists():
+        paddleocr_available = True
+    set_model_state("paddleocr", ModelState.READY if paddleocr_available else ModelState.NOT_DOWNLOADED)
+
+    return get_model_status().to_dict()
+
 
 @router.get("/settings/profile")
 async def get_user_profile(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
@@ -421,3 +545,47 @@ async def save_sensitive_words(body: dict[str, Any]) -> dict[str, Any]:
         return {"ok": True}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"保存敏感词库失败: {exc}") from exc
+
+
+# ---- 存储管理 ----
+
+@router.get("/settings/storage/config")
+async def get_storage_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+    """返回所有存储路径的当前值、大小和元数据。"""
+
+    svc = _require_settings_service()
+    from agent_service.services.storage_service import StorageService
+    storage_svc = StorageService(config=svc.config, settings_service=svc)
+    return storage_svc.get_storage_config(user_id=user_id)
+
+
+@router.put("/settings/storage/config")
+async def save_storage_config(body: dict[str, Any]) -> dict[str, Any]:
+    """保存用户存储路径覆盖（knowledge_dir 除外）。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    paths = body.get("paths", {})
+    if not isinstance(paths, dict):
+        raise HTTPException(status_code=422, detail="paths must be a dict")
+    svc = _require_settings_service()
+    from agent_service.services.storage_service import StorageService
+    storage_svc = StorageService(config=svc.config, settings_service=svc)
+    return storage_svc.save_storage_config(user_id=user_id, paths=paths)
+
+
+@router.post("/settings/storage/clear")
+async def clear_storage_path(body: dict[str, Any]) -> dict[str, Any]:
+    """清空指定存储路径的内容，保留目录本身。"""
+
+    path_key = str(body.get("path_key") or "").strip()
+    if not path_key:
+        raise HTTPException(status_code=422, detail="path_key is required")
+    svc = _require_settings_service()
+    from agent_service.services.storage_service import StorageService
+    storage_svc = StorageService(config=svc.config, settings_service=svc)
+    try:
+        return storage_svc.clear_path(path_key=path_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

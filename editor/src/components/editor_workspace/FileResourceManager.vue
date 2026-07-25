@@ -7,6 +7,7 @@
   and visible drop targets for external files.
 -->
 <script setup lang="ts">
+import { checkModelDisk } from '@/api/settings'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   ArrowDown,
@@ -88,6 +89,31 @@ const contextMenu = ref<{
 }>({ open: false, x: 0, y: 0, node: null })
 const contextMenuStyle = ref<Record<string, string>>({ left: '0px', top: '0px' })
 const contextMenuRef = ref<{ getBoundingClientRect: () => DOMRect } | null>(null)
+
+/* ---- 模型阻断模态框 ---- */
+const modelModalVisible = ref(false)
+const modelModalMessage = ref('')
+
+async function checkEmbeddingBefore(action: () => Promise<void>): Promise<void> {
+  try {
+    const status = await checkModelDisk()
+    if (status.embedding === 'not_downloaded' || status.embedding === 'error') {
+      modelModalMessage.value = 'Embedding 模型未就绪，请先下载'
+      modelModalVisible.value = true
+      return
+    }
+  } catch { /* 检查失败时允许继续 */ }
+  await action()
+}
+
+function closeModelModal() { modelModalVisible.value = false }
+function goToStorageSettings() {
+  modelModalVisible.value = false
+  window.location.hash = '#/settings'
+  setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('agent-settings-tab', { detail: 'storage' }))
+  }, 100)
+}
 
 const viewModes: { value: ResourceViewMode; label: string; title: string }[] = [
   { value: 'list', label: '列表', title: '详细列表' },
@@ -567,7 +593,7 @@ async function extractGraphFromMenu() {
   const node = contextMenu.value.node
   closeContextMenu()
   if (!node) return
-  await workspaceStore.extractGraphForNode(node)
+  await checkEmbeddingBefore(() => workspaceStore.extractGraphForNode(node))
 }
 
 async function askAgentFromMenu() {
@@ -585,9 +611,11 @@ async function askAgentFromMenu() {
 async function ingestFromMenu() {
   const nodes = contextTargetNodes()
   closeContextMenu()
-  for (const node of nodes) {
-    await workspaceStore.ingestFile(node)
-  }
+  await checkEmbeddingBefore(async () => {
+    for (const node of nodes) {
+      await workspaceStore.ingestFile(node)
+    }
+  })
 }
 
 function ignorePatternForNode(node: KnowledgeFileNode): string {
@@ -1151,6 +1179,21 @@ onUnmounted(() => {
       @delete="deleteFromMenu"
     />
   </section>
+
+  <!-- 模型阻断模态框 -->
+  <Teleport to="body">
+    <div v-if="modelModalVisible" class="model-modal-overlay" @click.self="closeModelModal">
+      <div class="model-modal">
+        <p class="model-modal-message">{{ modelModalMessage }}</p>
+        <p class="model-modal-link">
+          <a href="#" @click.prevent="goToStorageSettings">前往存储管理页面下载</a>
+        </p>
+        <div class="model-modal-actions">
+          <button class="model-modal-btn close-btn" @click="closeModelModal">关闭</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style src="./FileResourceManager.css" scoped></style>

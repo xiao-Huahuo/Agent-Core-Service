@@ -50,7 +50,6 @@ class SettingsService:
         SQLModel.metadata.create_all(self.engine)
         self._ensure_llm_config_schema()
         self._ensure_user_settings_schema()
-        self._ensure_paddleocr_models_if_required()
 
     def _ensure_llm_config_schema(self) -> None:
         """Ensure user_llm_config table has the small_api_key / small_base_url / small_model_name columns."""
@@ -93,6 +92,7 @@ class SettingsService:
                 "theme_soft_color": "VARCHAR(16) NOT NULL DEFAULT ''",
                 "graph_node_limit": "INTEGER NOT NULL DEFAULT 2000",
                 "web_search_max_results": "INTEGER NOT NULL DEFAULT 10",
+                "storage_path_overrides": "TEXT NOT NULL DEFAULT ''",
             }
             with Session(self.engine) as db:
                 for col_name, col_type in migrations.items():
@@ -1226,3 +1226,42 @@ class SettingsService:
             self.config.ocr.enabled = True
         except Exception as exc:
             logger.warning("PaddleOCR 模型检查失败: %s", exc)
+
+    # ---- 存储路径覆盖 ----
+
+    def get_storage_path_overrides(self, *, user_id: str) -> dict:
+        """读取用户存储路径覆盖配置；无记录时返回空字典。"""
+
+        normalized_user_id = user_id.strip()
+        import json as _json
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None or not record.storage_path_overrides:
+                return {}
+            try:
+                return _json.loads(record.storage_path_overrides)
+            except Exception:
+                return {}
+
+    def save_storage_path_overrides(self, *, user_id: str, overrides: dict) -> dict:
+        """保存用户存储路径覆盖配置到 JSON 列。返回已保存的覆盖。"""
+
+        normalized_user_id = user_id.strip()
+        import json as _json
+        now = self._utc_now()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                record = UserSettingsRecord(
+                    user_id=normalized_user_id,
+                    knowledge_dir=str(self.config.storage.knowledge_dir),
+                    storage_path_overrides=_json.dumps(overrides, ensure_ascii=False),
+                    created_at=now,
+                    updated_at=now,
+                )
+            else:
+                record.storage_path_overrides = _json.dumps(overrides, ensure_ascii=False)
+                record.updated_at = now
+            db.add(record)
+            db.commit()
+            return overrides

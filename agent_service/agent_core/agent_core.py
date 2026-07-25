@@ -158,8 +158,6 @@ class AgentCore:
 
         self.config = config
         logger.debug("AgentCore 初始化开始 | model=%s", config.model.model_name)
-        self.config.ensure_local_models()
-        logger.debug("本地模型检查完成")
         self.message_service = message_service
         self.context_builder = context_builder
         self.attachment_service = attachment_service
@@ -172,10 +170,6 @@ class AgentCore:
         self.tools = list(tools) if tools is not None else self.tool_registry.to_langchain_tools()
         if message_service is not None:
             self._get_context_builder(message_service=message_service)
-            if self.context_builder is not None:
-                logger.info("预加载 Embedding / ReRank 模型中...")
-                self.context_builder.retrieval_service.warmup()
-                logger.info("Embedding / ReRank 模型预加载完成")
         safety_service = SafetyService(config=config, task_scheduler=self.task_scheduler)
         self.safety_service = safety_service
         plan_builder = AgentGraphBuilder(

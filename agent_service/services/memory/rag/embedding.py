@@ -57,10 +57,12 @@ class SentenceTransformerEmbeddingProvider:
     """
 
     def __init__(self, *, config: AgentConfig) -> None:
-        """保存配置并延迟加载模型。"""
+        """保存配置并延迟（异步）加载模型。"""
 
         self.config = config
         self._model: object | None = None
+        self._load_event = threading.Event()
+        self._load_error: Exception | None = None
 
     def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
         """
@@ -72,6 +74,8 @@ class SentenceTransformerEmbeddingProvider:
         if not texts:
             return []
         model = self._get_model()
+        if model is None:
+            raise RuntimeError("Embedding 模型尚未就绪，正在异步加载中，请稍后重试。")
         vectors = model.encode(list(texts), normalize_embeddings=True, show_progress_bar=False)
         return [[float(value) for value in vector] for vector in vectors]
 
@@ -80,43 +84,86 @@ class SentenceTransformerEmbeddingProvider:
 
         self._get_model()
 
-    def _get_model(self) -> object:
-        """延迟加载本地 sentence-transformers 模型。"""
+    def _get_model(self) -> object | None:
+        """异步加载本地 sentence-transformers 模型。
+
+        首次调用触发后台加载线程，后续调用若加载未完成则返回 None，
+        或等待加载完成后返回模型实例。
+        """
 
         if self._model is not None:
             return self._model
+        if self._load_error is not None:
+            raise self._load_error
+
+        # 已在加载中 → 等待完成
+        if self._load_event.is_set():
+            return self._model  # 可能还是 None（出错时）
+
+        # 首次启动加载
+        if not self._load_event.is_set():
+            self._load_event.set()  # 标记加载已启动
+            t = threading.Thread(target=self._load_model_in_thread, daemon=True)
+            t.start()
+            return None  # 不等待，立即返回
+
+        return None
+
+    def _load_model_in_thread(self) -> None:
+        """在后台线程中执行实际模型加载。"""
+
+        from agent_service.core.model_status import ModelState, set_model_state
+
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:
-            raise RuntimeError(
+            set_model_state("embedding", ModelState.ERROR)
+            self._load_error = RuntimeError(
                 "缺少 sentence-transformers 依赖,请先安装 agent_service/requirements.txt。"
-            ) from exc
+            )
+            return
 
         if not self.config.model.embedding_model_name:
-            raise ValueError("config.model.embedding_model_name 不能为空。")
-        model_path = ensure_model(
-            self.config.model.embedding_model_name,
-            self.config.storage.embedding_model_dir,
-        )
+            set_model_state("embedding", ModelState.ERROR)
+            self._load_error = ValueError("config.model.embedding_model_name 不能为空。")
+            return
+        set_model_state("embedding", ModelState.DOWNLOADING)
+        try:
+            model_path = ensure_model(
+                self.config.model.embedding_model_name,
+                self.config.storage.embedding_model_dir,
+            )
+        except Exception as exc:
+            set_model_state("embedding", ModelState.ERROR)
+            self._load_error = exc
+            return
         if model_path is None:
             model_path = model_target_dir(
                 self.config.model.embedding_model_name,
                 self.config.storage.embedding_model_dir,
             )
         if not model_path.exists():
-            raise FileNotFoundError(f"Embedding 模型目录不存在: {model_path}")
+            set_model_state("embedding", ModelState.ERROR)
+            self._load_error = FileNotFoundError(f"Embedding 模型目录不存在: {model_path}")
+            return
         import os
         os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+        set_model_state("embedding", ModelState.LOADING)
         banner = "=" * 57
         logger.info(banner)
         logger.info("开始加载 Embedding 模型: %s", self.config.model.embedding_model_name)
         logger.info("模型路径: %s", model_path)
         logger.info(banner)
-        self._model = SentenceTransformer(str(model_path))
+        try:
+            self._model = SentenceTransformer(str(model_path))
+            set_model_state("embedding", ModelState.READY)
+        except Exception as exc:
+            set_model_state("embedding", ModelState.ERROR)
+            self._load_error = exc
+            return
         logger.info(banner)
         logger.info("Embedding 模型加载完成: %s", self.config.model.embedding_model_name)
         logger.info(banner)
-        return self._model
 
 
 class EmbeddingService:

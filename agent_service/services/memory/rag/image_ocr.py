@@ -15,6 +15,7 @@ result = service.extract_image_text(Path("demo.png"))
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -53,10 +54,12 @@ class ImageOcrService:
     """
 
     def __init__(self, *, config: AgentConfig) -> None:
-        """保存配置并延迟创建 PaddleOCR pipeline。"""
+        """保存配置并延迟（异步）创建 PaddleOCR pipeline。"""
 
         self.config = config
         self._pipeline: Any | None = None
+        self._load_event = threading.Event()
+        self._load_error: Exception | None = None
 
     def extract_image_text(self, source_path: Path) -> ImageOcrResult:
         """
@@ -91,15 +94,35 @@ class ImageOcrService:
         )
 
     def _get_pipeline(self) -> Any | None:
-        """延迟导入 PaddleOCR 并创建可复用 pipeline。"""
+        """异步导入 PaddleOCR 并创建 pipeline。
+
+        首次调用触发后台加载线程，后续调用若加载未完成则返回 None。
+        """
 
         if self._pipeline is not None:
             return self._pipeline
+        if self._load_error is not None:
+            return None
+        if not self._load_event.is_set():
+            self._load_event.set()
+            t = threading.Thread(target=self._load_pipeline_in_thread, daemon=True)
+            t.start()
+            return None
+        return None
+
+    def _load_pipeline_in_thread(self) -> None:
+        """在后台线程中加载 PaddleOCR pipeline。"""
+
+        from agent_service.core.model_status import ModelState, set_model_state
+
         _disable_paddleocr_mkldnn_by_default()
         try:
             from paddleocr import PaddleOCR  # type: ignore[import-untyped]
         except ImportError:
-            return None
+            set_model_state("paddleocr", ModelState.ERROR)
+            self._load_error = ImportError("缺少 PaddleOCR 依赖")
+            return
+        set_model_state("paddleocr", ModelState.LOADING)
         try:
             self._pipeline = _build_paddleocr_pipeline(
                 PaddleOCR=PaddleOCR,
@@ -110,9 +133,9 @@ class ImageOcrService:
                 text_detection_model_dir=self.config.storage.paddleocr_model_dir / "text_detection",
                 text_recognition_model_dir=self.config.storage.paddleocr_model_dir / "text_recognition",
             )
-            return self._pipeline
+            set_model_state("paddleocr", ModelState.READY)
         except Exception:
-            return None
+            set_model_state("paddleocr", ModelState.ERROR)
 
     @staticmethod
     def _run_pipeline(*, pipeline: Any, source_path: Path) -> Any:

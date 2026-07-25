@@ -48,6 +48,7 @@ class UserSettingsRecord(SQLModel, table=True):
     theme_primary_color: str = Field(default="", max_length=16)
     theme_soft_color: str = Field(default="", max_length=16)
     graph_node_limit: int = Field(default=2000)
+    storage_path_overrides: str = Field(default="", sa_column=Column(Text))
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

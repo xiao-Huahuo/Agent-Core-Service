@@ -128,6 +128,8 @@ class AgentConfig:
         frontmatter_dir: Path = field(default_factory=lambda: Path("frontmatter"))
         mcp_server_config_dir: Path = field(default_factory=lambda: Path("resources/mcp"))
         log_dir: Path = field(default_factory=lambda: Path("logs"))
+        assets_dir: Path = field(default_factory=lambda: Path("assets"))
+        trash_dir: Path = field(default_factory=lambda: Path("trash"))
 
         def __post_init__(self) -> None:
             """初始化后统一展开并规范化所有路径配置。"""
@@ -145,6 +147,8 @@ class AgentConfig:
             self.frontmatter_dir = self._resolve_runtime_path(self.frontmatter_dir)
             self.mcp_server_config_dir = self._resolve_project_path(self.mcp_server_config_dir)
             self.log_dir = self._resolve_runtime_path(self.log_dir)
+            self.assets_dir = self._resolve_runtime_path(self.assets_dir)
+            self.trash_dir = self._resolve_runtime_path(self.trash_dir)
 
         def _resolve_project_path(self, path_value: Path | str) -> Path:
             """将相对路径转换为基于 project_root 的绝对路径。
@@ -192,6 +196,8 @@ class AgentConfig:
             self.frontmatter_dir.mkdir(parents=True, exist_ok=True)
             self.mcp_server_config_dir.mkdir(parents=True, exist_ok=True)
             self.log_dir.mkdir(parents=True, exist_ok=True)
+            self.assets_dir.mkdir(parents=True, exist_ok=True)
+            self.trash_dir.mkdir(parents=True, exist_ok=True)
             # 外置资源骨架: 确保 project_root 下有空目录,即使读取回退到 _MEIPASS
             for res_dir in ("resources/knowledge", "resources/mcp", "resources/safety"):
                 (self.project_root / res_dir).mkdir(parents=True, exist_ok=True)
@@ -840,6 +846,8 @@ class AgentConfig:
             "AGENT_FRONTMATTER_DIR": ("storage", "frontmatter_dir", str),
             "AGENT_MCP_SERVER_CONFIG_DIR": ("storage", "mcp_server_config_dir", str),
             "AGENT_LOG_DIR": ("storage", "log_dir", str),
+            "AGENT_ASSETS_DIR": ("storage", "assets_dir", str),
+            "AGENT_TRASH_DIR": ("storage", "trash_dir", str),
             "AGENT_MODEL_PROVIDER": ("model", "provider", str),
             "AGENT_MODEL_NAME": ("model", "model_name", str),
             "AGENT_MODEL_API_KEY": ("model", "api_key", str),

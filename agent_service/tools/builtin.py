@@ -1252,7 +1252,7 @@ def download_file(url: str, save_to_knowledge: bool = False) -> str:
     import urllib.request
 
     runtime = get_tool_runtime()
-    downloads_dir = runtime.config.storage.base_data_dir / "assets" / "downloads"
+    downloads_dir = runtime.config.storage.assets_dir / "downloads"
     downloads_dir.mkdir(parents=True, exist_ok=True)
 
     try:

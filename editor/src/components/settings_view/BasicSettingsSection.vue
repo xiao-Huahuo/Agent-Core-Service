@@ -6,6 +6,10 @@
   persistence and side effects.
 -->
 <script setup lang="ts">
+import { ref } from 'vue'
+import { checkModelDisk } from '@/api/settings'
+import { API_ROUTES } from '@/router/api_routes'
+
 const libraryNameDraft = defineModel<string>('libraryNameDraft', { required: true })
 const knowledgeDirDraft = defineModel<string>('knowledgeDirDraft', { required: true })
 const watchEnabledDraft = defineModel<boolean>('watchEnabledDraft', { required: true })
@@ -20,10 +24,41 @@ defineProps<{
   saveError: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   save: []
   logout: []
 }>()
+
+/* ---- OCR 模型阻断 ---- */
+const ocrModalVisible = ref(false)
+
+async function handleOcrToggle() {
+  // 如果正在关闭 OCR，直接允许
+  if (!ocrEnabledDraft.value) {
+    emit('save')
+    return
+  }
+  try {
+    const status = await checkModelDisk()
+    if (status.paddleocr !== 'ready') {
+      ocrModalVisible.value = true
+      return
+    }
+  } catch { /* 检查失败时允许操作 */ }
+  emit('save')
+}
+
+function closeOcrModal() {
+  ocrModalVisible.value = false
+}
+
+function goToStorageSettings() {
+  ocrModalVisible.value = false
+  window.location.hash = '#/settings'
+  setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('agent-settings-tab', { detail: 'storage' }))
+  }, 100)
+}
 </script>
 
 <template>
@@ -49,7 +84,7 @@ defineEmits<{
     </div>
     <div class="setting-row toggle-row">
       <label>OCR</label>
-      <input v-model="ocrEnabledDraft" type="checkbox" @change="$emit('save')" />
+      <input v-model="ocrEnabledDraft" type="checkbox" @change="handleOcrToggle" />
       <span class="hint-text">开启后需重启;重启时会检查并预热 PaddleOCR 中英文模型</span>
     </div>
     <div class="setting-row ignore-row">
@@ -102,6 +137,21 @@ defineEmits<{
       </a>
     </div>
   </div>
+
+  <!-- OCR 模型阻断 -->
+  <Teleport to="body">
+    <div v-if="ocrModalVisible" class="model-modal-overlay" @click.self="closeOcrModal">
+      <div class="model-modal">
+        <p class="model-modal-message">OCR 模型未就绪，请先下载</p>
+        <p class="model-modal-link">
+          <a href="#" @click.prevent="goToStorageSettings">前往存储管理页面下载</a>
+        </p>
+        <div class="model-modal-actions">
+          <button class="model-modal-btn close-btn" @click="closeOcrModal">关闭</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -287,5 +337,76 @@ defineEmits<{
   font-weight: 500;
   color: #fff;
   letter-spacing: 0.02em;
+}
+
+/* ---- 模型阻断模态框 ---- */
+:global(.model-modal-overlay) {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+:global(.model-modal) {
+  width: 380px;
+  max-width: 90vw;
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+
+:global(.model-modal-message) {
+  margin: 0 0 12px;
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: calc(13px * var(--font-scale));
+  line-height: 1.5;
+}
+
+:global(.model-modal-link) {
+  margin: 0 0 16px;
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+}
+
+:global(.model-modal-link a) {
+  color: var(--color-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+:global(.model-modal-link a:hover) {
+  color: var(--color-primary-active);
+}
+
+:global(.model-modal-actions) {
+  display: flex;
+  gap: var(--space-8);
+  justify-content: flex-end;
+}
+
+:global(.model-modal-btn) {
+  padding: 6px 18px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+:global(.close-btn) {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+:global(.close-btn:hover) {
+  opacity: 0.8;
 }
 </style>
