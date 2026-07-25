@@ -60,8 +60,8 @@ async def update_user_knowledge_dir(body: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/settings/font-config")
-@router.put("/settings/font-config")
+@router.post("/settings/appearance/font")
+@router.put("/settings/appearance/font")
 async def save_font_config(body: dict[str, Any]) -> dict[str, Any]:
     """保存用户 editor 字体家族配置。"""
 
@@ -89,8 +89,8 @@ async def save_font_config(body: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/settings/appearance-config")
-@router.put("/settings/appearance-config")
+@router.post("/settings/appearance/config")
+@router.put("/settings/appearance/config")
 async def save_appearance_config(body: dict[str, Any]) -> dict[str, Any]:
     """Persist editor appearance colors for a user."""
 
@@ -108,7 +108,7 @@ async def save_appearance_config(body: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.get("/settings/knowledge-ingestion")
+@router.get("/settings/profile/ingestion")
 async def get_knowledge_ingestion_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
     """获取知识库灌库配置。"""
 
@@ -116,7 +116,7 @@ async def get_knowledge_ingestion_config(user_id: str = Query(..., min_length=1,
     return svc.get_knowledge_ingestion_config(user_id=user_id)
 
 
-@router.put("/settings/knowledge-ingestion")
+@router.put("/settings/profile/ingestion")
 async def save_knowledge_ingestion_config(body: dict[str, Any]) -> dict[str, Any]:
     """保存知识库灌库配置。body: user_id 必填,auto_ingest_on_upload/ocr_enabled 可选。"""
 
@@ -139,7 +139,7 @@ async def save_knowledge_ingestion_config(body: dict[str, Any]) -> dict[str, Any
     return result
 
 
-@router.put("/settings/graph-config")
+@router.put("/settings/graph/config")
 async def save_graph_config(body: dict[str, Any]) -> dict[str, Any]:
     """保存用户图谱配置。body: user_id 必填,graph_node_limit 可选。"""
 
@@ -154,7 +154,7 @@ async def save_graph_config(body: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-@router.get("/settings/system-prompt")
+@router.get("/settings/memory/system-prompts")
 async def list_system_prompt_entries(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
     """列出用户的所有系统提示词条目。"""
     svc = _require_settings_service()
@@ -162,7 +162,7 @@ async def list_system_prompt_entries(user_id: str = Query(..., min_length=1, des
     return {"entries": entries}
 
 
-@router.post("/settings/system-prompt/entries")
+@router.post("/settings/memory/system-prompts")
 async def add_system_prompt_entry(body: dict[str, Any]) -> dict[str, Any]:
     """添加一条系统提示词条目。body: user_id, content。"""
     user_id = body.get("user_id")
@@ -173,7 +173,7 @@ async def add_system_prompt_entry(body: dict[str, Any]) -> dict[str, Any]:
     return svc.add_system_prompt_entry(user_id=str(user_id), content=str(content))
 
 
-@router.delete("/settings/system-prompt/entries/{prompt_id}")
+@router.delete("/settings/memory/system-prompts/{prompt_id}")
 async def delete_system_prompt_entry(prompt_id: str) -> dict[str, Any]:
     """删除指定的系统提示词条目。"""
     svc = _require_settings_service()
@@ -185,14 +185,14 @@ async def delete_system_prompt_entry(prompt_id: str) -> dict[str, Any]:
 
 # ---- 用户 LLM 配置 ----
 
-@router.get("/settings/model-config")
+@router.get("/settings/llm/config")
 async def get_llm_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
     """获取用户的 LLM 配置（返回明文 API Key）。"""
     svc = _require_settings_service()
     return svc.get_llm_config(user_id=user_id)
 
 
-@router.put("/settings/model-config")
+@router.put("/settings/llm/config")
 async def save_llm_config(body: dict[str, Any]) -> dict[str, Any]:
     """保存用户的 LLM 配置。body: user_id 必填，其余字段可选。"""
     user_id = str(body.get("user_id") or "").strip()
@@ -221,7 +221,7 @@ async def save_llm_config(body: dict[str, Any]) -> dict[str, Any]:
 
 # ---- 联网搜索配置 ----
 
-@router.get("/settings/model-config/saved")
+@router.get("/settings/llm/config/saved")
 async def list_llm_config_presets(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
     """列出用户保存的可复用 LLM 配置。"""
 
@@ -229,7 +229,7 @@ async def list_llm_config_presets(user_id: str = Query(..., min_length=1, descri
     return {"configs": svc.list_llm_config_presets(user_id=user_id)}
 
 
-@router.post("/settings/model-config/saved")
+@router.post("/settings/llm/config/saved")
 async def save_llm_config_preset(body: dict[str, Any]) -> dict[str, Any]:
     """保存一条可复用的单模型 LLM 配置。"""
 
@@ -256,7 +256,7 @@ async def save_llm_config_preset(body: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.delete("/settings/model-config/saved/{config_id}")
+@router.delete("/settings/llm/config/saved/{config_id}")
 async def delete_llm_config_preset(config_id: str) -> dict[str, Any]:
     """删除一条已保存的 LLM 配置。"""
 
@@ -267,14 +267,14 @@ async def delete_llm_config_preset(config_id: str) -> dict[str, Any]:
     return {"ok": True}
 
 
-@router.get("/settings/web-search")
+@router.get("/settings/web-search/config")
 async def get_web_search_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
     """获取用户的联网搜索配置（代理地址 + 开关状态）。"""
     svc = _require_settings_service()
     return svc.get_web_search_config(user_id=user_id)
 
 
-@router.put("/settings/web-search")
+@router.put("/settings/web-search/config")
 async def save_web_search_config(body: dict[str, Any]) -> dict[str, Any]:
     """保存用户的联网搜索配置。body: user_id 必填，其余字段可选。"""
     user_id = str(body.get("user_id") or "").strip()
@@ -304,14 +304,14 @@ async def save_web_search_config(body: dict[str, Any]) -> dict[str, Any]:
 
 # ---- 可开关工具 ----
 
-@router.get("/settings/disabled-tools")
+@router.get("/settings/tools/disabled")
 async def get_disabled_tools(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
     """获取用户关闭的工具名称列表。"""
     svc = _require_settings_service()
     return {"disabled_tools": svc.get_disabled_tools(user_id=user_id)}
 
 
-@router.put("/settings/disabled-tools")
+@router.put("/settings/tools/disabled")
 async def save_disabled_tools(body: dict[str, Any]) -> dict[str, Any]:
     """保存用户关闭的工具列表。body: user_id 必填, tool_names 为关闭的工具名称数组。"""
     user_id = str(body.get("user_id") or "").strip()
@@ -323,14 +323,14 @@ async def save_disabled_tools(body: dict[str, Any]) -> dict[str, Any]:
     return {"disabled_tools": svc.save_disabled_tools(user_id=user_id, tool_names=tool_names)}
 
 
-@router.get("/settings/available-tools")
+@router.get("/settings/tools/available")
 async def list_available_tools(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
     """列出全部内置工具及当前用户的开关状态。"""
     svc = _require_settings_service()
     return svc.list_available_tools(user_id=user_id)
 
 
-@router.get("/settings/terminal-sandbox")
+@router.get("/settings/terminal/sandbox")
 async def get_terminal_sandbox_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
     """获取用户的 Agent 终端沙盒配置和支持的结构化指令段目录。"""
 
@@ -338,7 +338,7 @@ async def get_terminal_sandbox_config(user_id: str = Query(..., min_length=1, de
     return svc.get_terminal_sandbox_config(user_id=user_id)
 
 
-@router.put("/settings/terminal-sandbox")
+@router.put("/settings/terminal/sandbox")
 async def save_terminal_sandbox_config(body: dict[str, Any]) -> dict[str, Any]:
     """保存用户的 Agent 终端沙盒配置。body: user_id 必填,config 为配置对象。"""
 
@@ -356,14 +356,14 @@ async def save_terminal_sandbox_config(body: dict[str, Any]) -> dict[str, Any]:
 
 # ---- 自定义长期记忆 ----
 
-@router.get("/settings/memories")
+@router.get("/settings/memory/memories")
 async def list_memories(user_id: str = Query(..., min_length=1, description="用户 ID")) -> list[dict[str, Any]]:
     """列出用户的自定义长期记忆。"""
     svc = _require_settings_service()
     return svc.list_memories(user_id=user_id)
 
 
-@router.post("/settings/memories")
+@router.post("/settings/memory/memories")
 async def add_memory(body: dict[str, Any]) -> dict[str, Any]:
     """添加一条自定义长期记忆。body: user_id, content, importance (可选)。"""
     user_id = body.get("user_id")
@@ -378,7 +378,7 @@ async def add_memory(body: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-@router.delete("/settings/memories/{memory_id}")
+@router.delete("/settings/memory/memories/{memory_id}")
 async def delete_memory(memory_id: str) -> dict[str, Any]:
     """删除指定的自定义长期记忆。"""
     svc = _require_settings_service()

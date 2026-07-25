@@ -1,6 +1,15 @@
 # CHANGE HISTORY
 
 ## 2026-07-25
+- [x] 设置页接口回退修复(settings_service.py):
+  - `get_llm_config()`: DB 无记录时回退到 AgentConfig 服务级默认值(api_key/base_url/model_name/small_* 系列及 memory 窗口参数),前端不再因 `{}` 响应退出加载。
+  - `get_web_search_config()`: DB 无记录时响应追加 `user_id` 字段。
+  - `get_knowledge_ingestion_config()`: DB 无记录时 `ocr_enabled` 回退 `AgentConfig.ocr.enabled` 而非硬编码 False,追加 `user_id`。
+  - `get_terminal_sandbox_config()`: 整体包 try/except,异常时返回最小化默认配置,避免前端整页白屏。
+- [x] 设置路由按领域重构:
+  - 后端(settings.py): ingestion → /settings/profile/ingestion, font → /settings/appearance/font, appearance → /settings/appearance/config, graph → /settings/graph/config, system-prompt → /settings/memory/system-prompts, model-config → /settings/llm/config, web-search → /settings/web-search/config, disabled-tools → /settings/tools/disabled, available-tools → /settings/tools/available, terminal-sandbox → /settings/terminal/sandbox, memories → /settings/memory/memories。
+  - 前端(api_routes.ts): 15 个常量同步更新,保持前后端一致。
+  - 前端(settings.ts): deleteSystemPromptEntry / deleteMemory 硬编码路径改为 API_ROUTES 常量引用。
 - [x] 修复 TODO 工具 `'AgentConfig' object has no attribute 'project_root'` 错误: `_get_todo_service()` 中 `runtime.config.project_root` 改为 `runtime.config.storage.project_root`,因 `project_root` 是 `AgentConfig.storage` 嵌套 dataclass 的字段,不是 `AgentConfig` 的直接属性。
 - [x] 让agent输出可以挂图片,可以从网上搜索并下载图片甚至各种内容到本地.
 - [x] 待办列表新增刷新按钮: `TodoSidebar.vue` header 增加 RefreshCw 按钮,调用 `todoStore.refreshFromServer()` 从后端 `/todo/list` 接口拉取待办数据并覆盖本地;同步显示旋转动画。

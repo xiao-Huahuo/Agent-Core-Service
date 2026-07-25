@@ -267,7 +267,7 @@ export function addSystemPromptEntry(userId: string, content: string): Promise<S
 }
 
 export function deleteSystemPromptEntry(promptId: string): Promise<{ ok: boolean }> {
-  return apiDelete<{ ok: boolean }>(`/settings/system-prompt/entries/${promptId}`)
+  return apiDelete<{ ok: boolean }>(`${API_ROUTES.SETTINGS_SYSTEM_PROMPT_ENTRIES}/${promptId}`)
 }
 
 /* ---- Web search config ---- */
@@ -310,7 +310,7 @@ export function addMemory(userId: string, content: string, importance?: number):
 }
 
 export function deleteMemory(memoryId: string): Promise<{ ok: boolean }> {
-  return apiDelete<{ ok: boolean }>(`/settings/memories/${memoryId}`)
+  return apiDelete<{ ok: boolean }>(`${API_ROUTES.SETTINGS_MEMORIES}/${memoryId}`)
 }
 
 /* ---- LLM model config ---- */

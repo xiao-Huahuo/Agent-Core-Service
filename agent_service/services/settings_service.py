@@ -676,13 +676,43 @@ class SettingsService:
             "updated_at": config.updated_at.isoformat(),
         }
 
+    def _build_default_llm_config(self, user_id: str) -> dict:
+        """从 AgentConfig 构造服务级默认 LLM 配置响应，DB 无用户记录时作为回退。"""
+
+        m = self.config.model
+        mm = self.config.memory
+        large_api_key = self._normalize_optional_text(m.api_key)
+        large_base_url = self._normalize_optional_text(m.base_url)
+        large_model_name = self._normalize_optional_text(m.model_name)
+        small_api_key = self._normalize_optional_text(m.small_model_api_key)
+        small_base_url = self._normalize_optional_text(m.small_model_base_url)
+        small_model_name = self._normalize_optional_text(m.small_model_name)
+        effective_small_model_name = small_model_name or large_model_name
+        effective_small_api_key = (small_api_key or large_api_key) if small_model_name else large_api_key
+        effective_small_base_url = (small_base_url or large_base_url) if small_model_name else large_base_url
+        return {
+            "user_id": user_id,
+            "api_key": large_api_key,
+            "base_url": large_base_url,
+            "model_name": large_model_name,
+            "small_api_key": small_api_key,
+            "small_base_url": small_base_url,
+            "small_model_name": small_model_name,
+            "effective_small_api_key": effective_small_api_key,
+            "effective_small_base_url": effective_small_base_url,
+            "effective_small_model_name": effective_small_model_name,
+            "summary_trigger_tokens": mm.summary_trigger_tokens,
+            "context_window_tokens": mm.context_window_tokens,
+            "updated_at": self._utc_now().isoformat(),
+        }
+
     def get_llm_config(self, *, user_id: str) -> dict:
-        """获取用户自定义 LLM 配置，包含大模型和小模型两套。"""
+        """获取用户自定义 LLM 配置，包含大模型和小模型两套；DB 无记录时回退到 AgentConfig 服务级默认值。"""
 
         with Session(self.engine) as db:
             config = db.get(UserLLMConfig, user_id.strip())
             if config is None:
-                return {}
+                return self._build_default_llm_config(user_id.strip())
             return self._serialize_llm_config(config)
 
     def save_llm_config(
@@ -818,8 +848,9 @@ class SettingsService:
         with Session(self.engine) as db:
             record = db.get(UserSettingsRecord, normalized_user_id)
             if record is None:
-                return {"proxy_url": "", "web_search_enabled": False, "web_search_max_results": 10}
+                return {"user_id": normalized_user_id, "proxy_url": "", "web_search_enabled": False, "web_search_max_results": 10}
             return {
+                "user_id": normalized_user_id,
                 "proxy_url": record.proxy_url,
                 "web_search_enabled": record.web_search_enabled,
                 "web_search_max_results": getattr(record, "web_search_max_results", 10) or 10,
@@ -944,7 +975,7 @@ class SettingsService:
     # ---- 终端沙盒配置 ----
 
     def get_terminal_sandbox_config(self, *, user_id: str) -> dict:
-        """获取用户的 Agent 终端沙盒配置和三类终端支持的指令段目录。"""
+        """获取用户的 Agent 终端沙盒配置和三类终端支持的指令段目录；异常时回退服务级最小默认配置。"""
 
         from agent_service.services.terminal.command_sandbox import (
             TerminalSandboxSettings,
@@ -953,32 +984,41 @@ class SettingsService:
         )
 
         normalized_user_id = user_id.strip()
-        with Session(self.engine) as db:
-            record = db.get(UserSettingsRecord, normalized_user_id)
-            if record is None:
-                now = self._utc_now()
-                record = UserSettingsRecord(
-                    user_id=normalized_user_id,
-                    knowledge_dir=str(self.config.storage.knowledge_dir),
-                    created_at=now,
-                    updated_at=now,
-                )
-                db.add(record)
-                db.flush()
-            raw_payload = self._load_terminal_sandbox_payload(record.terminal_sandbox_config) if record else {}
-            active_library = self._ensure_active_library(db=db, record=record)
-        raw_payload = self._with_active_terminal_workspace_root(
-            payload=raw_payload,
-            active_knowledge_dir=active_library.knowledge_dir if active_library else "",
-        )
-        if not raw_payload:
-            raw_payload = build_default_terminal_sandbox_payload(self.config)
-        settings = TerminalSandboxSettings.from_config_payload(config=self.config, payload=raw_payload)
-        return {
-            "user_id": normalized_user_id,
-            "config": settings.to_dict(),
-            "segment_catalog": build_terminal_segment_catalog(settings),
-        }
+        try:
+            with Session(self.engine) as db:
+                record = db.get(UserSettingsRecord, normalized_user_id)
+                if record is None:
+                    now = self._utc_now()
+                    record = UserSettingsRecord(
+                        user_id=normalized_user_id,
+                        knowledge_dir=str(self.config.storage.knowledge_dir),
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    db.add(record)
+                    db.flush()
+                raw_payload = self._load_terminal_sandbox_payload(record.terminal_sandbox_config) if record else {}
+                active_library = self._ensure_active_library(db=db, record=record)
+            raw_payload = self._with_active_terminal_workspace_root(
+                payload=raw_payload,
+                active_knowledge_dir=active_library.knowledge_dir if active_library else "",
+            )
+            if not raw_payload:
+                raw_payload = build_default_terminal_sandbox_payload(self.config)
+            settings = TerminalSandboxSettings.from_config_payload(config=self.config, payload=raw_payload)
+            return {
+                "user_id": normalized_user_id,
+                "config": settings.to_dict(),
+                "segment_catalog": build_terminal_segment_catalog(settings),
+            }
+        except Exception:
+            logger.warning("加载终端沙盒配置失败，回退到默认配置", exc_info=True)
+            fallback = build_default_terminal_sandbox_payload(self.config)
+            return {
+                "user_id": normalized_user_id,
+                "config": fallback,
+                "segment_catalog": {"cmd": [], "powershell": [], "bash": []},
+            }
 
     def save_terminal_sandbox_config(self, *, user_id: str, config_payload: dict[str, Any]) -> dict:
         """保存用户的 Agent 终端沙盒配置。"""
@@ -1067,7 +1107,12 @@ class SettingsService:
         with Session(self.engine) as db:
             record = db.get(UserSettingsRecord, normalized_user_id)
             if record is None:
-                return {"auto_ingest_on_upload": False, "ocr_enabled": False, "knowledge_ignore_patterns": ""}
+                return {
+                    "user_id": normalized_user_id,
+                    "auto_ingest_on_upload": False,
+                    "ocr_enabled": self.config.ocr.enabled,
+                    "knowledge_ignore_patterns": "",
+                }
             return {
                 "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
                 "ocr_enabled": bool(record.ocr_enabled),
