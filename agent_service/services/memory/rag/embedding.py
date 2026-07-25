@@ -14,6 +14,7 @@ vectors = service.embed_texts(["hello"])
 from __future__ import annotations
 
 import logging
+import math
 import threading
 from collections.abc import Sequence
 from typing import Protocol
@@ -77,7 +78,14 @@ class SentenceTransformerEmbeddingProvider:
         if model is None:
             raise RuntimeError("Embedding 模型尚未就绪，正在异步加载中，请稍后重试。")
         vectors = model.encode(list(texts), normalize_embeddings=True, show_progress_bar=False)
-        return [[float(value) for value in vector] for vector in vectors]
+        result: list[list[float]] = []
+        for i, vector in enumerate(vectors):
+            vec = [float(value) for value in vector]
+            if any(not math.isfinite(v) for v in vec):
+                logger.warning("文本索引 %d 生成的向量包含 NaN/Inf，已替换为零向量", i)
+                vec = [0.0] * len(vec)
+            result.append(vec)
+        return result
 
     def warmup(self) -> None:
         """预加载模型到内存,避免首次请求冷启动延迟。"""

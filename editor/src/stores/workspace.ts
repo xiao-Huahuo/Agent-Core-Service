@@ -1273,6 +1273,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await writeKnowledgeFile(settingsStore.profile.userId, path, contentByPath.value[path] ?? '')
     tab.dirty = false
     await loadKnowledgeTree()
+    // 文件内容已变更，重置索引状态和图谱状态为未入库
+    updateTreeNodeIndexStatus(path, 'dirty', { force: true })
+    updateTreeNodeGraphStatus(path, 'dirty')
     const savedNode = flatNodes.value.find((n) => n.path === path)
     if (savedNode?.mtime) tab.mtime = savedNode.mtime
     if (path === selectedPath.value) {
@@ -2160,12 +2163,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     const eventSource = new EventSource(buildKnowledgeEventsUrl(settingsStore.profile.userId))
     eventSource.addEventListener('tree_dirty', async () => {
-      await loadKnowledgeTree()
       if (ignoreNextTreeEvent.value > 0) {
         ignoreNextTreeEvent.value -= 1
         return
       }
+      await loadKnowledgeTree()
       markOpenTabsDirty()
+      // 重置外部修改文件的索引和图谱状态为未入库
+      for (const tab of openTabs.value) {
+        if (tab.dirty) {
+          updateTreeNodeIndexStatus(tab.path, 'dirty', { force: true })
+          updateTreeNodeGraphStatus(tab.path, 'dirty')
+        }
+      }
     })
     eventSource.onerror = () => {
       eventSource.close()
