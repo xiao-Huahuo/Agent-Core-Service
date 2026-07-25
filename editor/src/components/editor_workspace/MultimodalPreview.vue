@@ -10,6 +10,8 @@ import { computed } from 'vue'
 import DOMPurify from 'dompurify'
 
 import ImagePreviewer from '@/components/common/ImagePreviewer.vue'
+import { useImagePreviewer } from '@/components/common/useImagePreviewer'
+import type { ImagePreviewItem } from '@/components/common/useImagePreviewer'
 import { buildApiUrl } from '@/api/client'
 import type { FilePreviewPayload } from '@/types/knowledge'
 
@@ -17,7 +19,12 @@ const props = defineProps<{
   preview: FilePreviewPayload | null
 }>()
 
-const safeHtml = computed(() => DOMPurify.sanitize(props.preview?.html ?? ''))
+const imagePreviewer = useImagePreviewer()
+
+const safeHtml = computed(() => DOMPurify.sanitize(props.preview?.html ?? '', {
+  ALLOWED_ATTR: ['src', 'alt', 'class', 'href', 'target', 'rel', 'width', 'height'],
+  ADD_TAGS: ['img'],
+}))
 
 const imageFiles = computed(() => {
   if (props.preview?.kind !== 'image') return []
@@ -37,6 +44,25 @@ const previewSource = computed(() => {
 
 function maxColumns(rows: string[][]): number {
   return rows.reduce((max, row) => Math.max(max, row.length), 0)
+}
+
+function handleDocumentClick(event: MouseEvent) {
+  const target = event.target as HTMLElement
+  if (target.tagName !== 'IMG' || !(target instanceof HTMLImageElement) || !target.src) {
+    return
+  }
+  const root = target.closest('.document-preview')
+  if (!root) return
+  const allImgs = root.querySelectorAll<HTMLImageElement>('img[src]')
+  const items: ImagePreviewItem[] = []
+  let clickIndex = -1
+  allImgs.forEach((img, i) => {
+    if (img === target) clickIndex = i
+    items.push({ src: img.src, alt: img.alt || undefined })
+  })
+  if (clickIndex >= 0) {
+    imagePreviewer.open(items, clickIndex)
+  }
 }
 </script>
 
@@ -74,7 +100,7 @@ function maxColumns(rows: string[][]): number {
       </section>
     </div>
 
-    <div v-else-if="preview.kind === 'document'" class="document-preview" v-html="safeHtml"></div>
+    <div v-else-if="preview.kind === 'document'" class="document-preview" v-html="safeHtml" @click="handleDocumentClick"></div>
 
     <pre v-else-if="preview.kind === 'text'" class="text-preview">{{ preview.content }}</pre>
 
