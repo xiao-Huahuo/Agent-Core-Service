@@ -17,6 +17,9 @@ import {
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 
+import { useImagePreviewer } from '@/components/common/useImagePreviewer'
+import type { ImagePreviewItem } from '@/components/common/useImagePreviewer'
+
 const props = defineProps<{
   content: string
   path?: string
@@ -34,6 +37,7 @@ type VditorPreviewInternals = Vditor & {
   }
 }
 
+const imagePreviewer = useImagePreviewer()
 const previewHost = ref<HTMLDivElement | null>(null)
 let instance: Vditor | null = null
 let mounted = false
@@ -171,6 +175,28 @@ async function queuePreviewRender() {
 
 function handleClick(event: MouseEvent) {
   const eventTarget = event.target instanceof Element ? event.target : null
+
+  // image preview — stopPropagation prevents Vditor's native lightbox
+  const img = eventTarget?.closest<HTMLImageElement>('img[src]')
+  if (img && img.src) {
+    event.stopPropagation()
+    const root = previewHost.value
+    if (root) {
+      const allImgs = root.querySelectorAll<HTMLImageElement>('img[src]')
+      const items: ImagePreviewItem[] = []
+      let clickIndex = -1
+      allImgs.forEach((el, i) => {
+        if (el === img) clickIndex = i
+        items.push({ src: el.src, alt: el.alt || undefined })
+      })
+      if (clickIndex >= 0) {
+        imagePreviewer.open(items, clickIndex)
+      }
+    }
+    event.preventDefault()
+    return
+  }
+
   const link = eventTarget?.closest<HTMLAnchorElement>('a[href]')
   if (!link) {
     return

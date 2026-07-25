@@ -12,6 +12,7 @@ import ActivityBar from '@/components/editor_workspace/ActivityBar.vue'
 import AgentPanel from '@/components/editor_workspace/AgentPanel.vue'
 import CommandPalette from '@/components/editor_workspace/CommandPalette.vue'
 import EditorPane from '@/components/editor_workspace/EditorPane.vue'
+import ImagePreviewer from '@/components/common/ImagePreviewer.vue'
 import FileConflictDialog from '@/components/editor_workspace/FileConflictDialog.vue'
 import FileTreePanel from '@/components/editor_workspace/FileTreePanel.vue'
 import FileResourceManager from '@/components/editor_workspace/FileResourceManager.vue'
@@ -414,6 +415,7 @@ onBeforeUnmount(() => {
     <CommandPalette />
     <SelectionToolbar @ask="handleAskAgent" />
     <FileConflictDialog v-if="showConflictDialog" />
+    <ImagePreviewer />
   </div>
 </template>
 

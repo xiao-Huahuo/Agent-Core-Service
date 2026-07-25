@@ -6,12 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="优化了联网搜索工具的搜索结果">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/agent.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageList.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageList.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/workspace.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/workspace.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/IngestionProgressView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/IngestionProgressView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/common/WifiLoader.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/common/WifiLoader.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MarkdownContent.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MarkdownContent.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -284,14 +282,6 @@
       <workItem from="1784688429981" duration="15773000" />
       <workItem from="1784723159028" duration="13415000" />
       <workItem from="1784854303470" duration="40149000" />
-    </task>
-    <task id="LOCAL-00186" summary="readme">
-      <option name="closed" value="true" />
-      <created>1784628422316</created>
-      <option name="number" value="00186" />
-      <option name="presentableId" value="LOCAL-00186" />
-      <option name="project" value="LOCAL" />
-      <updated>1784628422316</updated>
     </task>
     <task id="LOCAL-00187" summary="图谱动画">
       <option name="closed" value="true" />
@@ -677,7 +667,15 @@
       <option name="project" value="LOCAL" />
       <updated>1784978648643</updated>
     </task>
-    <option name="localTasksCounter" value="235" />
+    <task id="LOCAL-00235" summary="优化了联网搜索工具的搜索结果">
+      <option name="closed" value="true" />
+      <created>1784979655302</created>
+      <option name="number" value="00235" />
+      <option name="presentableId" value="LOCAL-00235" />
+      <option name="project" value="LOCAL" />
+      <updated>1784979655302</updated>
+    </task>
+    <option name="localTasksCounter" value="236" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

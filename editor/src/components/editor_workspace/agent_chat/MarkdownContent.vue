@@ -24,6 +24,9 @@ import yaml from 'highlight.js/lib/languages/yaml'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { SourceItem } from '@/stores/chat'
 
+import { useImagePreviewer } from '@/components/common/useImagePreviewer'
+import type { ImagePreviewItem } from '@/components/common/useImagePreviewer'
+
 hljs.registerLanguage('bash', bash)
 hljs.registerLanguage('css', css)
 hljs.registerLanguage('javascript', javascript)
@@ -75,6 +78,7 @@ const props = defineProps<{
   onNavigateSource?: (uri: string) => void
 }>()
 
+const imagePreviewer = useImagePreviewer()
 const contentRef = ref<HTMLDivElement | null>(null)
 const workspaceStore = useWorkspaceStore()
 
@@ -116,6 +120,23 @@ const sourceLinkSignature = computed(() => {
 
 function handleClick(event: MouseEvent) {
   const target = event.target as HTMLElement
+  // image preview
+  if (target.tagName === 'IMG' && target instanceof HTMLImageElement && target.src) {
+    const root = contentRef.value
+    if (root) {
+      const allImgs = root.querySelectorAll<HTMLImageElement>('img[src]')
+      const items: ImagePreviewItem[] = []
+      let clickIndex = -1
+      allImgs.forEach((img, i) => {
+        if (img === target) clickIndex = i
+        items.push({ src: img.src, alt: img.alt || undefined })
+      })
+      if (clickIndex >= 0) {
+        imagePreviewer.open(items, clickIndex)
+      }
+    }
+    return
+  }
   const sourceLink = target.closest('.source-file-link') as HTMLElement | null
   if (sourceLink && props.onNavigateSource) {
     const uri = sourceLink.getAttribute('data-source-uri')

@@ -18,10 +18,10 @@
 
 <style scoped>
 #wifi-loader {
-  --background: #62abff;
-  --front-color: #4f29f0;
-  --back-color: #c3c8de;
-  --text-color: #414856;
+  --background: color-mix(in srgb, var(--color-primary) 20%, white);
+  --front-color: var(--color-primary);
+  --back-color: color-mix(in srgb, var(--color-primary) 22%, white);
+  --text-color: var(--color-text-secondary);
   width: 64px;
   height: 64px;
   border-radius: 50px;
