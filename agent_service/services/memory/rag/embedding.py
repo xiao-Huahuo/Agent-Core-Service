@@ -155,19 +155,40 @@ class SentenceTransformerEmbeddingProvider:
         logger.info("模型路径: %s", model_path)
         logger.info(banner)
         try:
-            # 绕过 PyTorch 2.5+ meta tensor 与 self.to(device) 的兼容性问题
-            import torch.nn as _nn
-            _orig_apply = _nn.Module._apply
-            def _patched_apply(self, fn):
-                try:
-                    return _orig_apply(self, fn)
-                except NotImplementedError:
-                    return self
-            _nn.Module._apply = _patched_apply
+            # 绕过 PyTorch 2.5+ meta tensor 与 self.to(device) 的兼容性问题:
+            # SentenceTransformer.__init__ 内部会调用 self.to(device),该操作会递归
+            # 遍历所有子模块并对每个参数调用 .to()。如果某个参数仍是 meta tensor,
+            # .to() 会因无法复制抛出 RuntimeError ("Cannot copy out of meta tensor")。
+            # 解决方案: 在调用 _apply 前,预先将整个模型树中所有 meta tensor 物化到 CPU。
+            import torch as _torch
+
+            def _materialize_recursive(module: _torch.nn.Module) -> None:
+                """递归物化本模块及其所有子模块的 meta tensor 到 CPU。"""
+                for _pname, _p in list(module._parameters.items()):
+                    if _p is not None and _p.is_meta:
+                        module._parameters[_pname] = _torch.nn.Parameter(
+                            _torch.empty(_p.shape, device='cpu', dtype=_p.dtype)
+                        )
+                for _bname, _b in list(module._buffers.items()):
+                    if _b is not None and _b.is_meta:
+                        module._buffers[_bname] = _torch.empty(
+                            _b.shape, device='cpu', dtype=_b.dtype
+                        )
+                for _child in module.children():
+                    _materialize_recursive(_child)
+
+            _orig_apply = _torch.nn.Module._apply
+
+            def _patched_apply(module: _torch.nn.Module, fn: object) -> object:
+                # 预先物化所有 meta tensor,然后让 _apply 正常遍历子模块并执行 fn
+                _materialize_recursive(module)
+                return _orig_apply(module, fn)
+
+            _torch.nn.Module._apply = _patched_apply
             try:
                 self._model = SentenceTransformer(str(model_path))
             finally:
-                _nn.Module._apply = _orig_apply
+                _torch.nn.Module._apply = _orig_apply
             set_model_state("embedding", ModelState.READY)
         except Exception as exc:
             logger.exception("Embedding 模型加载失败: %s", exc)

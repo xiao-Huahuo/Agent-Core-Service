@@ -3,7 +3,7 @@ TODO 服务模块。
 
 功能说明:
 以 JSON 文件为用户粒度持久化待办事项。每用户一个文件，
-存储在服务端 data/todos/ 目录下。
+存储在 base_data_dir/todos/ 目录下。
 """
 
 from __future__ import annotations
@@ -21,10 +21,9 @@ logger = logging.getLogger(__name__)
 class TodoService:
     """用户待办事项持久化服务。"""
 
-    def __init__(self, data_dir: str | None = None) -> None:
+    def __init__(self, data_dir: str) -> None:
         """初始化 TODO 存储目录。"""
-        base = data_dir or os.environ.get("AGENT_DATA_DIR", os.path.join(os.getcwd(), "data"))
-        self._storage_dir = os.path.join(base, "todos")
+        self._storage_dir = os.path.join(data_dir, "todos")
         os.makedirs(self._storage_dir, exist_ok=True)
 
     def _user_path(self, user_id: str) -> str:

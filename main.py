@@ -154,7 +154,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
     rest_deps._retrieval_service = retrieval_service
     from agent_service.services.todo_service import TodoService
-    rest_deps._todo_service = TodoService(data_dir=str(config.storage.project_root / "data"))
+    rest_deps._todo_service = TodoService(data_dir=str(config.storage.base_data_dir))
     logger.info("SettingsService 初始化完成")
 
     # 自动灌库: 扫描 resources/knowledge, 对已变更的文件执行 frontmatter 结构化 + Embedding + 入库

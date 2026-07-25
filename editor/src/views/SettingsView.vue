@@ -990,13 +990,13 @@ onBeforeUnmount(() => {
 
 .font-size-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) 72px;
+  grid-template-columns: 140px 72px;
   align-items: center;
   gap: var(--space-10);
 }
 
 .font-size-row input[type='range'] {
-  width: 100%;
+  width: 140px;
   accent-color: var(--color-primary);
 }
 

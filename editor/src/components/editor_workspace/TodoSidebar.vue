@@ -31,6 +31,7 @@ const timeTick = ref(0)
 let tickTimer: ReturnType<typeof setInterval> | undefined
 
 onMounted(() => {
+  todoStore.refreshFromServer()
   tickTimer = setInterval(() => { timeTick.value = Date.now() }, 30000)
 })
 
@@ -142,9 +143,9 @@ function isDatetimeExpired(iso: string): boolean {
         <button
           class="todo-clear-done"
           type="button"
-          :class="{ spinning: todoStore.syncing }"
+          :class="{ spinning: todoStore.pending.has('add') }"
           title="从服务器刷新"
-          :disabled="todoStore.syncing"
+          :disabled="todoStore.pending.has('add')"
           @click="todoStore.refreshFromServer()"
         >
           <RefreshCw :size="12" />

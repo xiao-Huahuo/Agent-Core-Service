@@ -1127,7 +1127,9 @@ def update_exploration_state(
 def _get_todo_service() -> TodoService:
     """获取 TodoService 实例。"""
     runtime = get_tool_runtime()
-    data_dir = str(runtime.config.storage.project_root / "data") if runtime.config else None
+    if not runtime.config:
+        raise RuntimeError("ToolRuntime.config 未初始化，无法创建 TodoService")
+    data_dir = str(runtime.config.storage.base_data_dir)
     return TodoService(data_dir=data_dir)
 
 
