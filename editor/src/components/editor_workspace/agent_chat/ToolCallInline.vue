@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ChevronDown } from 'lucide-vue-next'
+import { ChevronDown, Copy } from 'lucide-vue-next'
 
 const props = defineProps<{
   traces?: Array<Record<string, unknown>>
@@ -53,6 +53,7 @@ interface TerminalResultDisplay {
 }
 
 const expanded = ref(new Set<string>())
+const copiedKey = ref('')
 
 function toggleExpand(key: string) {
   const next = new Set(expanded.value)
@@ -62,6 +63,17 @@ function toggleExpand(key: string) {
     next.add(key)
   }
   expanded.value = next
+}
+
+function copyContent(key: string, text: string) {
+  navigator.clipboard.writeText(text).then(() => {
+    copiedKey.value = key
+    setTimeout(() => { copiedKey.value = '' }, 1500)
+  })
+}
+
+function getCopyText(rawContents: string[]) {
+  return rawContents.join('\n---\n')
 }
 
 const FALLBACK_DISPLAY: Record<string, string> = {
@@ -364,7 +376,21 @@ const toolEntries = computed(() => {
       class="tool-result-collapse"
       :class="{ open: expanded.has(entry.key) }"
     >
-      <div class="tool-result-content">
+      <div class="tool-result-content is-expandable">
+        <button
+          v-if="copiedKey === entry.key"
+          class="tool-copy-btn copied"
+          type="button"
+        >已复制</button>
+        <button
+          v-else
+          class="tool-copy-btn"
+          type="button"
+          title="复制内容"
+          @click="copyContent(entry.key, getCopyText(entry.rawContents))"
+        >
+          <Copy :size="14" />
+        </button>
         <template v-for="(rawContent, idx) in entry.rawContents" :key="idx">
           <!-- Search results: numbered items with source -->
           <div v-if="(entry.toolName === 'search_knowledge' || entry.toolName === 'get_knowledge_context') && parseSearchResults(rawContent)" class="search-results">
@@ -786,6 +812,52 @@ const toolEntries = computed(() => {
   color: var(--color-text-muted);
   font-family: var(--font-ui);
   font-size: calc(11px * var(--font-scale));
+}
+
+
+.tool-copy-btn {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.tool-result-content.is-expandable {
+  position: relative;
+}
+
+.tool-result-content.is-expandable:hover .tool-copy-btn {
+  opacity: 1;
+}
+
+.tool-copy-btn:hover {
+  color: var(--color-text-secondary);
+}
+
+.tool-copy-btn.copied {
+  width: auto;
+  padding: 0 var(--space-8);
+  opacity: 1;
+  color: var(--color-success);
+  border: none;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: calc(11px * var(--font-scale));
+  cursor: default;
 }
 
 @keyframes tool-slide-in {

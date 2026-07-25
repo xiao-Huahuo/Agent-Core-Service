@@ -230,17 +230,12 @@ class ContextBuilder:
         if important_summary is not None:
             sections.append("重要事实摘要(以下是系统自动压缩的关键上下文,直接使用,无需再调工具获取):")
             sections.append(f"- {important_summary.memory.content}")
+        citation_map: dict[str, dict[str, str]] = {}
         if memories:
             sections.append(
-                f"长期记忆索引: 系统中检索到 {memory_count} 条与当前问题相关的历史记忆。"
-                f"如果你需要查看具体内容,请调用 get_long_term_memory 工具来获取全文。"
+                f"长期记忆(共 {memory_count} 条,可直接引用):"
             )
-        citation_map: dict[str, dict[str, str]] = {}
-        if knowledge:
-            sections.append(
-                f"知识库片段(共 {knowledge_count} 条,可直接引用):"
-            )
-            for i, item in enumerate(knowledge, 1):
+            for i, item in enumerate(memories, 1):
                 source_uri = item.memory.source_uri or "未知来源"
                 content = item.memory.content
                 sections.append(f"[{i}] 来源: {source_uri}")
@@ -249,6 +244,11 @@ class ContextBuilder:
                     "source_uri": source_uri,
                     "content": content,
                 }
+        if knowledge:
+            sections.append(
+                f"知识库片段索引: 系统中检索到 {knowledge_count} 条与当前问题相关的知识库片段。"
+                f"如果你需要查看具体内容,请调用 get_knowledge_context 工具来获取全文。"
+            )
         if attachment_context and attachment_context.content:
             sections.append(attachment_context.content)
             citation_map.update(attachment_context.citation_map)

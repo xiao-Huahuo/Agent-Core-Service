@@ -1064,23 +1064,152 @@ def web_search(
     if not filtered:
         return "未搜索到相关结果。"
 
+    # Try to fetch full page text for each result, fall back to DDGS snippet on failure
+    import html as html_mod
+    import re as re_mod
+    import urllib.request as url_req
+
+    def extract_page_text(url: str, fallback: str) -> str:
+        """Fetch a URL and extract readable text. Returns fallback on any failure."""
+        try:
+            req = url_req.Request(url, headers={"User-Agent": "MetaWeave/1.0"})
+            with url_req.urlopen(req, timeout=15) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+            # Strip HTML tags
+            text = re_mod.sub(r"<script[^>]*>.*?</script>", "", raw, flags=re_mod.DOTALL | re_mod.IGNORECASE)
+            text = re_mod.sub(r"<style[^>]*>.*?</style>", "", text, flags=re_mod.DOTALL | re_mod.IGNORECASE)
+            text = re_mod.sub(r"<[^>]+>", " ", text)
+            text = html_mod.unescape(text)
+            # Collapse whitespace
+            text = re_mod.sub(r"\s+", " ", text).strip()
+            # Truncate to reasonable length
+            if len(text) > 3000:
+                text = text[:3000] + "..."
+            if len(text) < 50:
+                return fallback
+            return text
+        except Exception:
+            return fallback
+
     lines: list[str] = []
     for i, item in enumerate(filtered, 1):
         title = item.get("title", "").strip()
         href = item.get("href", "").strip()
         body = item.get("body", "").strip()
+        full_text = extract_page_text(href, body)
         citation_id = register_network_citation(
             source_uri=href,
-            content=body,
+            content=full_text,
             title=title,
             adopted_by_default=False,
         )
         lines.append(f"{i}. {title}")
         lines.append(f"   Citation ID: [{citation_id}]")
         lines.append(f"   URL: {href}")
-        lines.append(f"   摘要: {body}")
+        lines.append(f"   摘要: {full_text}")
         if i < len(filtered):
             lines.append("")
+    lines.append("")
+    lines.append("Citation rule: only cite a result with its exact [N#] id when facts from that result are used in the final answer.")
+    return "\n".join(lines)
+
+
+def web_image_search(
+    query: str,
+    max_results: int | None = None,
+    region: str = "cn-zh",
+) -> str:
+    """
+    通过 DuckDuckGo 搜索图片，返回图片结果列表（含图片 URL、标题、来源页面）。
+
+    query: 搜索关键词。
+    max_results: 最大返回结果数，不传则使用用户的配置值。
+    region: 搜索区域代码，默认 cn-zh（中国中文）。
+    """
+    try:
+        runtime = get_tool_runtime()
+    except RuntimeError:
+        return "搜索失败：无法获取运行上下文。"
+
+    try:
+        from agent_service.api.rest.deps import _settings_service
+        if _settings_service is None:
+            return "搜索失败：设置服务未就绪。"
+        config = _settings_service.get_web_search_config(user_id=runtime.user_id)
+    except Exception:
+        return "搜索失败：无法读取搜索配置。"
+
+    if not config.get("web_search_enabled", False):
+        return "联网搜索未启用，请在设置中开启。"
+
+    proxy_url = config.get("proxy_url", "") or ""
+    configured_max = config.get("web_search_max_results", 10) or 10
+    effective_max = max(1, configured_max)
+
+    if not proxy_url:
+        return "搜索失败：未配置代理地址。国内访问 DuckDuckGo 需要代理，请在设置页面的「联网搜索」中填写代理地址（如 http://127.0.0.1:7890）。"
+
+    try:
+        from ddgs import DDGS
+        import time
+        raw_results = []
+        for attempt in range(3):
+            with DDGS(proxy=proxy_url, timeout=20) as ddgs:
+                raw_results = list(ddgs.images(
+                    query,
+                    region=region,
+                    max_results=effective_max,
+                ))
+            if raw_results:
+                break
+            if attempt < 2:
+                time.sleep(1)
+    except Exception as exc:
+        return f"图片搜索失败: {exc}"
+
+    if not raw_results:
+        return "未搜索到相关图片结果。"
+
+    seen_image_urls: set[str] = set()
+    filtered: list[dict] = []
+    for item in raw_results:
+        image_url = (item.get("image") or "").strip()
+        title = (item.get("title") or "").strip()
+        source_url = (item.get("url") or "").strip()
+        if not image_url or not title:
+            continue
+        if image_url in seen_image_urls:
+            continue
+        seen_image_urls.add(image_url)
+        filtered.append(item)
+        if len(filtered) >= effective_max:
+            break
+
+    if not filtered:
+        return "未搜索到相关图片结果。"
+
+    lines: list[str] = []
+    for i, item in enumerate(filtered, 1):
+        title = item.get("title", "").strip()
+        image_url = item.get("image", "").strip()
+        source_url = item.get("url", "").strip()
+        thumbnail_url = item.get("thumbnail", "").strip()
+
+        citation_id = register_network_citation(
+            source_uri=source_url,
+            content=f"图片标题: {title}\n图片 URL: {image_url}",
+            title=title,
+            adopted_by_default=False,
+        )
+        lines.append(f"{i}. {title}")
+        lines.append(f"   Citation ID: [{citation_id}]")
+        lines.append(f"   图片地址: {image_url}")
+        lines.append(f"   缩略图: {thumbnail_url}")
+        lines.append(f"   来源页面: {source_url}")
+        lines.append(f"   Markdown展示: ![{title}]({image_url})")
+        if i < len(filtered):
+            lines.append("")
+
     lines.append("")
     lines.append("Citation rule: only cite a result with its exact [N#] id when facts from that result are used in the final answer.")
     return "\n".join(lines)
@@ -1273,7 +1402,7 @@ def download_file(url: str, save_to_knowledge: bool = False) -> str:
 
     if not save_to_knowledge:
         return (
-            f"文件已下载到本地。预览: ![](local_url)\n\n"
+            f"文件已下载到本地。预览: ![]({local_url})\n\n"
             f"本地 URL: {local_url}\n"
             f"文件名: {filename}\n"
             f"类型: {content_type}\n"
@@ -1309,7 +1438,7 @@ def download_file(url: str, save_to_knowledge: bool = False) -> str:
         status = result.status_message or "ingested"
 
         return (
-            f"文件已下载并存入知识库。预览: ![](local_url)\n\n"
+            f"文件已下载并存入知识库。预览: ![]({local_url})\n\n"
             f"本地 URL: {local_url}\n"
             f"知识库路径: {relative_path}\n"
             f"灌库状态: {status}\n"

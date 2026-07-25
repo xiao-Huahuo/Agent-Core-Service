@@ -1,6 +1,23 @@
 # CHANGE HISTORY
 
 ## 2026-07-25
+- [x] 交换自动召回全文注入: 长期记忆(全文+编号) ↔ 知识库切片(条数提示) (`context_builder.py:233-251`, `agent_config.py:283-297`):
+  - 自动召回现在将长期记忆(session_fact/session_summary/user_custom)的全文注入上下文，带 [1][2] 编号，Agent 可直接引用无需调工具。
+  - 知识库切片改为仅提示条数，Agent 需调 get_knowledge_context 查看具体内容。
+  - retrieval_context_system_prompt 同步更新优先级和说明文字。
+- [x] README.md 同步更新: 引用溯源描述中"知识库片段"改为"长期记忆"，上下文优先级从"长期记忆>知识库"改为"长期记忆(已附原文)>知识库(需调工具)"。
+- [x] 新增 web_image_search 联网搜索图片工具 (`builtin.py:1089-1187`, `definitions.py:525-543`):
+  - 使用 ddgs.images() 搜索图片，返回图片 URL、缩略图、来源页面和 Markdown 热链接展示格式。
+  - Agent 搜索到图片后直接用热链接展示，不再反复调用 web_search 搜文字。
+  - web_search 工具描述同步标注"本工具仅返回文本结果，如需搜索图片请使用 web_image_search 工具"。
+- [x] 系统提示词规则10/11更新: 提及 web_image_search 搜索图片，明确"搜图片用 web_image_search + 热链接展示"链路。
+- [x] 修复 download_file 工具返回值中 `local_url` 字面量未插值 bug (`builtin.py:1276,1312`):
+  - `f"![](local_url)"` → `f"![]({local_url})"`，Agent 不再看到残缺的图片链接。
+- [x] 系统提示词增加图片热链接规则和任务终止条件规则 (`agent_config.py:273-286`):
+  - 规则10: 展示图片使用 Markdown 热链接引用原始 URL，禁止轻易下载文件。download_file 仅在用户明确要求保存/下载时使用。
+  - 规则11: Agent 获得回答所需的全部信息后立即停止调用新工具。
+  - 规则10: Agent 获得回答所需的全部信息后立即停止调用新工具。
+  - 附带示例: 搜索信息+下载图片完成后即停止，不再循环搜索。
 - [x] 设置页接口回退修复(settings_service.py):
   - `get_llm_config()`: DB 无记录时回退到 AgentConfig 服务级默认值(api_key/base_url/model_name/small_* 系列及 memory 窗口参数),前端不再因 `{}` 响应退出加载。
   - `get_web_search_config()`: DB 无记录时响应追加 `user_id` 字段。

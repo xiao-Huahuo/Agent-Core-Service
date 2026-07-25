@@ -6,17 +6,14 @@
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="存储管理v2">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/rag/embedding.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/rag/embedding.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/rag/rerank.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/rag/rerank.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/todo_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/todo_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/core/agent_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/core/agent_config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/context_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/context_builder.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/agent_service/tools/builtin.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/builtin.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TodoSidebar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TodoSidebar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/todo.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/todo.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/acceptance_commit_metadata.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/build_personal_summary_docx.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/rebuild_acceptance_history.ps1" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/definitions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/definitions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -289,14 +286,6 @@
       <workItem from="1784688429981" duration="15773000" />
       <workItem from="1784723159028" duration="13415000" />
       <workItem from="1784854303470" duration="40149000" />
-    </task>
-    <task id="LOCAL-00184" summary="语义知识图谱v2">
-      <option name="closed" value="true" />
-      <created>1784624576217</created>
-      <option name="number" value="00184" />
-      <option name="presentableId" value="LOCAL-00184" />
-      <option name="project" value="LOCAL" />
-      <updated>1784624576217</updated>
     </task>
     <task id="LOCAL-00185" summary="语义知识图谱v2">
       <option name="closed" value="true" />
@@ -682,7 +671,15 @@
       <option name="project" value="LOCAL" />
       <updated>1784971333767</updated>
     </task>
-    <option name="localTasksCounter" value="233" />
+    <task id="LOCAL-00233" summary="存储管理v2">
+      <option name="closed" value="true" />
+      <created>1784974656122</created>
+      <option name="number" value="00233" />
+      <option name="presentableId" value="LOCAL-00233" />
+      <option name="project" value="LOCAL" />
+      <updated>1784974656122</updated>
+    </task>
+    <option name="localTasksCounter" value="234" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

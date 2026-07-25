@@ -47,6 +47,7 @@ from agent_service.tools.builtin import (
     toggle_todo,
     update_exploration_state,
     web_search,
+    web_image_search,
     write_knowledge_file,
     write_long_term_memory,
     write_long_term_rule,
@@ -507,7 +508,7 @@ TODO_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
 WEB_SEARCH_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="web_search",
-        description="通过 DuckDuckGo 搜索互联网,返回格式化搜索结果列表。尽量少次搜索,每次搜索要覆盖全面——宁可一次搜完,也不要分多次搜。",
+        description="通过 DuckDuckGo 搜索互联网,返回格式化搜索结果列表(标题+URL+摘要)。尽量少次搜索,每次搜索要覆盖全面——宁可一次搜完,也不要分多次搜。本工具仅返回文本结果,无法搜索图片。如需搜索图片请使用 web_image_search 工具。",
         args_schema={
             "type": "object",
             "properties": {
@@ -520,6 +521,21 @@ WEB_SEARCH_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         },
         function=web_search,
         display_name="联网搜索",
+    ),
+    BuiltinToolDefinition(
+        name="web_image_search",
+        description="通过 DuckDuckGo 搜索图片,返回图片 URL 列表,每个结果附带标题、图片地址、缩略图地址和来源页面 URL。搜索到图片后直接用 Markdown 热链接展示,不要调用 download_file 下载。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "搜索关键词。尽量精确、全面,一次覆盖所有可能的关键词。"},
+                "max_results": {"type": "integer", "description": "最大返回结果数,不传则使用用户的配置值。"},
+                "region": {"type": "string", "description": "搜索区域代码,默认 cn-zh。"},
+            },
+            "required": ["query"],
+        },
+        function=web_image_search,
+        display_name="联网搜索图片",
     ),
 ]
 

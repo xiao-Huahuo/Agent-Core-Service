@@ -283,8 +283,8 @@ Agent 通过内置工具 `run_terminal_command` 获得非交互式终端能力�
 * 用户自定义系统提示词:用户可编辑"用户设置系统提示词",追加到原本的系统提示词中.
 
 #### 引用溯源
-**引用溯源**只展示最终回答真正使用的来源,而不是把所有召回结果都挂在气泡下面。自动RAG召回的知识库片段使用数字编号,如`[1]`、`[2]`;Agent主动调用知识库工具得到的结果使用工具编号,如`[K1]`、`[K2]`;联网搜索得到的网页来源使用网络编号,如`[N1]`、`[N2]`;用户上传文件的引用则使用上传编号,如`[A1]`、`[A2]`.
-一轮对话开始时,`ContextBuilder`会把自动RAG召回结果写入系统上下文,同时生成本轮初始`citation_map`。这些自动来源来自知识库切片,适合在模型直接使用预检索片段时标注。Agent如果继续主动调用`get_knowledge_context`、`search_knowledge`、`read_knowledge_file`或`read_multimodal_file_info`,工具运行时会通过`register_tool_citation()`把工具来源登记进同一个`citation_map`,并在工具返回文本中显式携带`Citation ID: [Kx]`或`[Kx]`提示模型引用. Agent调用`web_search`时,搜索结果会通过`register_network_citation()`登记为`[N1]`、`[N2]`这类网络来源,`source_uri`保存网页URL,`title/content/source=network`写入同一个`citation_map`.
+**引用溯源**只展示最终回答真正使用的来源,而不是把所有召回结果都挂在气泡下面。自动RAG召回的长期记忆使用数字编号,如`[1]`、`[2]`;Agent主动调用知识库工具得到的结果使用工具编号,如`[K1]`、`[K2]`;联网搜索得到的网页来源使用网络编号,如`[N1]`、`[N2]`;用户上传文件的引用则使用上传编号,如`[A1]`、`[A2]`.
+一轮对话开始时,`ContextBuilder`会把自动RAG召回结果写入系统上下文,同时生成本轮初始`citation_map`。这些自动来源来自长期记忆(session_fact/session_summary/user_custom),适合在模型直接使用预检索片段时标注。Agent如果继续主动调用`get_knowledge_context`、`search_knowledge`、`read_knowledge_file`或`read_multimodal_file_info`,工具运行时会通过`register_tool_citation()`把工具来源登记进同一个`citation_map`,并在工具返回文本中显式携带`Citation ID: [Kx]`或`[Kx]`提示模型引用. Agent调用`web_search`时,搜索结果会通过`register_network_citation()`登记为`[N1]`、`[N2]`这类网络来源,`source_uri`保存网页URL,`title/content/source=network`写入同一个`citation_map`.
 工具来源分两类处理:`get_knowledge_context`、`read_knowledge_file`和`read_multimodal_file_info`属于明确读取/提供正文内容的来源,会标记为`adopted_by_default`;`search_knowledge`返回的是搜索候选列表,不会默认视为已采纳来源。联网搜索结果同样不会默认采纳,只有最终回答正文里真正使用并标注了对应`[N1]`/`[N2]`的网页,才会进入本条消息的`used_citations`和气泡下方来源列表。这样模型漏写引用时,系统只会兜底处理已经被明确读入的本地文档,不会把搜索命中的全部候选或联网结果都挂到气泡下面.
 模型生成最终回答时应在具体断言、文档行、主题行或联网事实句末尾标注对应来源,例如`01_climate_change_nasa.md ... [K2]`或`某网页报道了最新更新 ... [N1]`。后端会先清理正文中无法映射到本轮`citation_map`的伪引用,再扫描正文中实际出现的`[1]`/`[K1]`/`[N1]`锚点,只保留这些锚点对应的来源。如果模型完全漏写或漏写部分工具引用,后端只做保守的行级补锚点:根据文件名、去扩展名后的文件名或文档标题匹配回答中的具体行,匹配成功才把对应`[Kx]`补到该行末尾;匹配不到时不会在末尾硬塞一串来源,避免制造假的精确溯源. 网络来源不会被自动补锚点,必须由模型在使用网页事实的位置显式写出`[N#]`.
 最终保存消息时,assistant消息自己的`metadata.used_citations`记录本条回答实际采用的编号,`metadata.citation_map`只保存这些编号对应的`source_uri/content/source/title`等来源信息。前端渲染时优先读取当前消息自己的metadata:正文里的`[1]`/`[K1]`会跳转本地知识库文件,`[N1]`会使用默认浏览器打开对应网页URL;气泡下方的来源列表也只显示这些实际被引用的文档或网页,并显示真实 citation id。历史消息依赖自己的metadata复现来源,不会复用当前轮的全局召回结果.
@@ -642,7 +642,7 @@ flowchart TD
 
 **消息角色优先级（上下文拼装顺序）：**  
 `SystemMessage(检索上下文)` → `历史消息按时间正序` → `HumanMessage(当前输入)`  
-检索上下文内部优先级：`important_fact_summary > 当前 session 摘要 > 长期记忆 > 知识库`
+检索上下文内部优先级：`important_fact_summary > 长期记忆(已附原文) > 当前 session 摘要 > 知识库(需调工具)`
 
 ##### 上下文压缩机制
 
@@ -896,50 +896,6 @@ flowchart TD
     T --> U["前端三组结果 &lt;hr&gt; 分隔展示<br/>文件 / 内容匹配 / 语义匹配"]
 ```
 
-##### 引用溯源
-
-```mermaid
-flowchart TD
-    A["用户提问"] --> B["自动RAG召回"]
-    B --> C["系统上下文注入<br/>[1]/[2] 来源 + 片段"]
-    B --> D["初始 citation_map<br/>数字编号 1/2/3..."]
-
-    A --> E["Agent 主动调用工具"]
-    E --> F["知识库工具<br/>get/read/search"]
-    F --> G["register_tool_citation()<br/>工具编号 K1/K2..."]
-    G --> H["工具返回文本携带<br/>Citation ID / [Kx]"]
-    G --> I["工具 trace.citation_map"]
-    F --> Q{"来源类型"}
-    Q -->|"get_knowledge_context<br/>read_knowledge_file<br/>read_multimodal_file_info"| R["adopted_by_default=true<br/>明确读入正文"]
-    Q -->|"search_knowledge"| S["仅搜索候选<br/>不默认采纳"]
-
-    E --> X["联网搜索工具<br/>web_search"]
-    X --> Y["register_network_citation()<br/>网络编号 N1/N2..."]
-    Y --> Z["搜索结果携带<br/>Citation ID: [N#]<br/>source_uri = URL"]
-
-    D --> J["AgentCore 合并本轮 citation_map"]
-    I --> J
-    R --> J
-    S --> J
-    Y --> J
-    C --> K["LLM 最终回答"]
-    H --> K
-    Z --> K
-
-    K --> L["清理无映射伪引用<br/>删除不存在的 [x]"]
-    J --> L
-    L --> M{"正文是否已有<br/>有效 [1]/[K1]/[N1]"}
-    M -->|"有"| N["按正文锚点过滤来源"]
-    M -->|"部分/全部漏写工具锚点"| O["保守行级补锚点<br/>匹配文件名/标题才补 [Kx]"]
-    O --> P["不做末尾 citation-only 堆叠"]
-    N --> T["保存 assistant metadata<br/>used_citations + citation_map"]
-    P --> T
-    T --> U["前端 Markdown 渲染<br/>[1]/[K1]/[N1] 可点击"]
-    U --> U1["本地来源: 跳转文件树"]
-    U --> U2["网络来源: 默认浏览器打开 URL"]
-    T --> V["气泡下方来源列表<br/>只显示实际引用文档/网页"]
-    T --> W["历史消息使用自身 metadata<br/>不复用当前轮全局来源"]
-```
 ##### 文件上传
 
 ```mermaid
@@ -1003,6 +959,95 @@ flowchart TD
     P -.->|"全库去重<br/>操作对象"| X
 
 ```
+
+### 其他设计
+##### 引用溯源
+
+```mermaid
+flowchart TD
+    A["用户提问"] --> B["自动RAG召回"]
+    B --> C["系统上下文注入<br/>[1]/[2] 来源 + 片段"]
+    B --> D["初始 citation_map<br/>数字编号 1/2/3..."]
+
+    A --> E["Agent 主动调用工具"]
+    E --> F["知识库工具<br/>get/read/search"]
+    F --> G["register_tool_citation()<br/>工具编号 K1/K2..."]
+    G --> H["工具返回文本携带<br/>Citation ID / [Kx]"]
+    G --> I["工具 trace.citation_map"]
+    F --> Q{"来源类型"}
+    Q -->|"get_knowledge_context<br/>read_knowledge_file<br/>read_multimodal_file_info"| R["adopted_by_default=true<br/>明确读入正文"]
+    Q -->|"search_knowledge"| S["仅搜索候选<br/>不默认采纳"]
+
+    E --> X["联网搜索工具<br/>web_search"]
+    X --> Y["register_network_citation()<br/>网络编号 N1/N2..."]
+    Y --> Z["搜索结果携带<br/>Citation ID: [N#]<br/>source_uri = URL"]
+
+    D --> J["AgentCore 合并本轮 citation_map"]
+    I --> J
+    R --> J
+    S --> J
+    Y --> J
+    C --> K["LLM 最终回答"]
+    H --> K
+    Z --> K
+
+    K --> L["清理无映射伪引用<br/>删除不存在的 [x]"]
+    J --> L
+    L --> M{"正文是否已有<br/>有效 [1]/[K1]/[N1]"}
+    M -->|"有"| N["按正文锚点过滤来源"]
+    M -->|"部分/全部漏写工具锚点"| O["保守行级补锚点<br/>匹配文件名/标题才补 [Kx]"]
+    O --> P["不做末尾 citation-only 堆叠"]
+    N --> T["保存 assistant metadata<br/>used_citations + citation_map"]
+    P --> T
+    T --> U["前端 Markdown 渲染<br/>[1]/[K1]/[N1] 可点击"]
+    U --> U1["本地来源: 跳转文件树"]
+    U --> U2["网络来源: 默认浏览器打开 URL"]
+    T --> V["气泡下方来源列表<br/>只显示实际引用文档/网页"]
+    T --> W["历史消息使用自身 metadata<br/>不复用当前轮全局来源"]
+```
+
+##### 联网搜索工具
+
+Agent 通过 `web_search` 和 `web_image_search` 两个内置工具访问 DuckDuckGo 搜索引擎，需要代理地址才能正常使用。
+
+**工具一览：**
+
+| 工具名 | 用途 | 底层接口 | 返回内容 |
+|---|---|---|---|
+| `web_search` | 搜索文字信息 | `ddgs.text()` | 标题 + URL + 页面摘要 |
+| `web_image_search` | 搜索图片 | `ddgs.images()` | 标题 + 图片 URL + 缩略图 URL + 来源页面 |
+
+**搜索流程：**
+
+```mermaid
+flowchart TD
+    A["用户提问"] --> B{"是否需要联网搜索?"}
+    B -->|"文字信息"| C["web_search<br/>ddgs.text(query)"]
+    B -->|"图片展示"| D["web_image_search<br/>ddgs.images(query)"]
+
+    C --> E["DuckDuckGo 返回<br/>搜索结果列表"]
+    E --> F["register_network_citation()<br/>生成 [N1][N2] 编号"]
+    F --> G["Agent 收到结果<br/>阅读摘要决定是否再搜"]
+
+    D --> H["DuckDuckGo 返回<br/>图片 URL 列表"]
+    H --> I["register_network_citation()<br/>生成 [N1][N2] 编号"]
+    I --> J["Agent 用热链接展示<br/>![描述](图片URL)"]
+
+    G --> K{"信息足够?"}
+    J --> K
+    K -->|"不足"| B
+    K -->|"足够"| L["组织最终回复"]
+    L --> M["任务终止"]
+```
+
+**行为规则：**
+
+- 搜索图片必须使用 `web_image_search`，不能用 `web_search` 反复搜文字
+- `web_search` 返回的摘要是搜索引擎截断片段，完整内容需访问链接
+- 图片直接用 Markdown 热链接展示，不调 `download_file` 下载
+- 每次搜索用 `max_results` 参数一次性获取足够多结果，减少搜索轮次
+- 信息足够后立即停止搜索，直接生成回复
+
 ## 接口设计
 
 本服务同时提供 **REST (FastAPI)** 和 **gRPC (protobuf)** 两套接口，二者功能完全等价、返回结构一致，可根据客户端需求任选其一。
