@@ -38,6 +38,7 @@ from xml.etree import ElementTree
 logger = logging.getLogger(__name__)
 
 TRASH_RETENTION_DAYS = 90
+HARD_IGNORED_KNOWLEDGE_DIR_NAMES = {".agents"}
 
 
 def _utcnow_naive() -> datetime:
@@ -69,6 +70,8 @@ class KnowledgeIgnoreMatcher:
         if not path:
             return False
         parts = path.split("/")
+        if any(part in HARD_IGNORED_KNOWLEDGE_DIR_NAMES for part in parts):
+            return True
         ignored = False
         for negate, pattern, directory_only in self.rules:
             if directory_only and not (is_dir or "/" in path):

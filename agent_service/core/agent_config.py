@@ -199,7 +199,7 @@ class AgentConfig:
             self.assets_dir.mkdir(parents=True, exist_ok=True)
             self.trash_dir.mkdir(parents=True, exist_ok=True)
             # 外置资源骨架: 确保 project_root 下有空目录,即使读取回退到 _MEIPASS
-            for res_dir in ("resources/knowledge", "resources/mcp", "resources/safety"):
+            for res_dir in ("resources/knowledge", "resources/mcp", "resources/safety", "resources/skills"):
                 (self.project_root / res_dir).mkdir(parents=True, exist_ok=True)
 
     @dataclass(slots=True)

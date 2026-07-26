@@ -40,5 +40,7 @@ class AgentState(TypedDict):
     trace: Annotated[list[dict[str, Any]], add]
     plan: dict[str, Any] | None
     task_list: dict[str, Any] | None
+    skill_index: list[dict[str, Any]] | None
+    active_skills: list[dict[str, Any]] | None
     observation_decision: str
     llm_config: dict[str, Any] | None

@@ -19,6 +19,7 @@ from agent_service.services.memory.retrieval_service import MemoryRetrievalServi
 if TYPE_CHECKING:
     from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
     from agent_service.services.memory.rag.embedding import EmbeddingService
+    from agent_service.services.skill_service import SkillService
     from agent_service.services.task_list_service import TaskListService
 
 AGENT_ACCESS_READONLY = "readonly"
@@ -47,6 +48,7 @@ class ToolRuntimeState:
     memory_service: LongTermMemoryService | None = None
     embedding_service: EmbeddingService | None = None
     task_list_service: TaskListService | None = None
+    skill_service: SkillService | None = None
     agent_access_mode: str = AGENT_ACCESS_SANDBOX
     citation_map: dict[str, dict[str, Any]] = field(default_factory=dict)
     tool_citation_counter: int = 0
@@ -65,6 +67,7 @@ def set_tool_runtime(
     memory_service: LongTermMemoryService | None = None,
     embedding_service: EmbeddingService | None = None,
     task_list_service: TaskListService | None = None,
+    skill_service: Any = None,
     citation_map: dict[str, dict[str, Any]] | None = None,
     agent_access_mode: str = AGENT_ACCESS_SANDBOX,
 ) -> None:
@@ -90,6 +93,7 @@ def set_tool_runtime(
         memory_service=memory_service or LongTermMemoryService(config=config),
         embedding_service=embedding_service or EmbeddingService(config=config),
         task_list_service=task_list_service,
+        skill_service=skill_service,
         agent_access_mode=normalize_agent_access_mode(agent_access_mode),
         citation_map=citation_map if citation_map is not None else {},
     )

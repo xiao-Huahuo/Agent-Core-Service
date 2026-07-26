@@ -86,6 +86,8 @@ const FALLBACK_DISPLAY: Record<string, string> = {
   json_pick: '提取JSON字段',
   text_stats: '文本统计',
   list_builtin_tools: '列出工具',
+  list_skills: '列出技能',
+  use_skill: '使用技能',
   get_long_term_memory: '检索记忆',
   write_long_term_memory: '写入记忆',
   get_knowledge_context: '检索知识',

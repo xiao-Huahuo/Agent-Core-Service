@@ -28,6 +28,7 @@ export type WorkspaceMainView =
   | 'dashboard'
   | 'debug'
   | 'search'
+  | 'skills'
   | 'settings'
   | 'agent'
 

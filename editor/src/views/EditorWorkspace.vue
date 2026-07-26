@@ -30,6 +30,7 @@ const DebugView = defineAsyncComponent(() => import('@/views/DebugView.vue'))
 const IngestionProgressView = defineAsyncComponent(() => import('@/views/IngestionProgressView.vue'))
 const LibraryView = defineAsyncComponent(() => import('@/views/LibraryView.vue'))
 const SearchPage = defineAsyncComponent(() => import('@/views/SearchPage.vue'))
+const SkillView = defineAsyncComponent(() => import('@/views/SkillView.vue'))
 import SettingsView from '@/views/SettingsView.vue'
 
 function handleAskAgent(text: string) {
@@ -248,6 +249,15 @@ function openSearch() {
   }
 }
 
+function openSkills() {
+  const next = workspaceStore.mainView === 'skills' ? 'editor' : 'skills'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
+}
+
 function openSettings() {
   const next = workspaceStore.mainView === 'settings' ? 'editor' : 'settings'
   workspaceStore.setMainView(next)
@@ -381,6 +391,7 @@ onBeforeUnmount(() => {
         :dashboard-active="workspaceStore.mainView === 'dashboard'"
         :debug-active="workspaceStore.mainView === 'debug'"
         :search-active="workspaceStore.mainView === 'search'"
+        :skills-active="workspaceStore.mainView === 'skills'"
         :settings-active="workspaceStore.mainView === 'settings'"
         @toggle-file="toggleFileSidebar"
         @open-resources="openResources"
@@ -391,6 +402,7 @@ onBeforeUnmount(() => {
         @open-dashboard="openDashboard"
         @open-debug="openDebug"
         @open-search="openSearch"
+        @open-skills="openSkills"
         @open-settings="openSettings"
       />
       <FileTreePanel class="file-col ide-panel" :aria-hidden="!visibleFileSidebarOpen" />
@@ -409,6 +421,7 @@ onBeforeUnmount(() => {
       <DashboardView v-else-if="workspaceStore.mainView === 'dashboard'" class="editor-col ide-panel" />
       <DebugView v-else-if="workspaceStore.mainView === 'debug'" class="editor-col ide-panel" />
       <SearchPage v-else-if="workspaceStore.mainView === 'search'" class="editor-col ide-panel" />
+      <SkillView v-else-if="workspaceStore.mainView === 'skills'" class="editor-col ide-panel" />
       <SettingsView v-else-if="workspaceStore.mainView === 'settings'" class="editor-col ide-panel" />
       <div
         class="resize-handle agent-resizer"

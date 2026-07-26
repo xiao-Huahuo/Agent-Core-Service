@@ -1,6 +1,18 @@
 # CHANGE HISTORY
 
 ## 2026-07-26
+- [x] 修复前端工具注册表列表组重叠:
+  - `ToolRegistryPanel.vue` 的工具列表外层和分类内容改为普通块级文档流，避免纵向 flex 子项收缩导致分类内容溢出并压到后续列表组。
+- [x] Add active Skill loading tool:
+  - Added `use_skill` as a read-only Agent tool that loads an enabled Skill's `SKILL.md` body by skill id, name, or folder name for the current turn.
+- [x] Hard-ignore `.agents` during knowledge ingestion:
+  - Added a code-level `.agents` directory ignore rule in `KnowledgeIgnoreMatcher` so user ignore-pattern negation cannot make Agent Skill files enter the knowledge ingestion pipeline.
+- [x] Add Agent Skill capability:
+  - Added `SkillService` to scan built-in skills from `resources/skills` and user skills from the active knowledge library `.agents/skills`, with per-library enable state stored in `.agents/skills_config.json`.
+  - Added Skill routing before non-simple Agent runs, injecting the enabled skill index and current-turn routed `SKILL.md` bodies into model context without persisting those bodies into chat history.
+  - Added REST APIs, a read-only `list_skills` Agent tool, and a new left-rail Skill configuration page for overview, enable toggles, custom Skill creation, and format guidance.
+- [x] Fix Skill API dev proxy:
+  - Added `/skills` to the Vite development proxy so Skill API requests are forwarded to FastAPI instead of returning the editor HTML shell.
 - [x] Add read-only task list status tool:
   - Added `get_task_list_status` as a non-mutating Agent tool for checking the current session task list, current item, item ids, item status, completion summaries, and final summary without triggering UI update events.
 - [x] 补充 README 图书馆说明:

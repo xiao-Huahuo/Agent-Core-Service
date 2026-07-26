@@ -223,6 +223,10 @@ class ModelDecisionNode:
         if task_list_prompt:
             system_content += task_list_prompt
 
+        skill_prompt = self._build_skill_prompt(state.get("skill_index"), state.get("active_skills"))
+        if skill_prompt:
+            system_content += skill_prompt
+
         system_message = SystemMessage(content=system_content)
         token_callback = get_agent_token_callback()
 
@@ -300,6 +304,45 @@ class ModelDecisionNode:
             summary = str(item.get("completion_summary") or "").strip()
             if summary:
                 lines.append(f"  completion_summary: {summary}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _build_skill_prompt(
+        skill_index: list[dict[str, Any]] | None,
+        active_skills: list[dict[str, Any]] | None,
+    ) -> str:
+        """Build the system prompt section for indexed and routed skills."""
+
+        enabled = skill_index if isinstance(skill_index, list) else []
+        selected = active_skills if isinstance(active_skills, list) else []
+        if not enabled and not selected:
+            return ""
+        lines = [
+            "",
+            "",
+            "[Available skills]",
+            "Skills are reusable capability packages. Use their instructions when they match the current user request.",
+            "If a listed skill may help but its body is not included below, call use_skill to load that SKILL.md body before applying it.",
+        ]
+        for skill in enabled:
+            if not isinstance(skill, dict):
+                continue
+            lines.append(
+                f"- {skill.get('skill_id')}: {skill.get('name')} "
+                f"({skill.get('source')}): {skill.get('description') or ''}"
+            )
+        if selected:
+            lines.extend([
+                "",
+                "[Routed skills for this turn]",
+                "The following SKILL.md bodies apply only to the current user turn.",
+            ])
+        for skill in selected:
+            if not isinstance(skill, dict):
+                continue
+            lines.append(f"\n--- Skill: {skill.get('name')} [{skill.get('skill_id')}] ---")
+            lines.append(str(skill.get("body") or ""))
+            lines.append("--- End Skill ---")
         return "\n".join(lines)
 
     def _streaming_call(

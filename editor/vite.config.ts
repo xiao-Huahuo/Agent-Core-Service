@@ -62,6 +62,7 @@ export default defineConfig({
       '/library': 'http://127.0.0.1:8002',
       '/sessions': 'http://127.0.0.1:8002',
       '/settings': 'http://127.0.0.1:8002',
+      '/skills': 'http://127.0.0.1:8002',
       '/downloads': 'http://127.0.0.1:8002',
       '/todo': 'http://127.0.0.1:8002',
       '/health': 'http://127.0.0.1:8002',

@@ -157,6 +157,7 @@ class AgentCore:
         task_scheduler: LLMTaskScheduler | None = None,
         session_service: Any = None,
         task_list_service: Any = None,
+        skill_service: Any = None,
     ) -> None:
         """保存配置、检查本地模型、构建或接收 LangGraph 图,并输出当前节点流程图。"""
 
@@ -167,6 +168,7 @@ class AgentCore:
         self.attachment_service = attachment_service
         self.session_service = session_service
         self.task_list_service = task_list_service
+        self.skill_service = skill_service
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.tool_registry = ToolRegistry.with_builtin_tools(config=config) if tools is None else None
         self.tool_executor = ToolExecutor(registry=self.tool_registry) if self.tool_registry is not None else None
@@ -238,6 +240,7 @@ class AgentCore:
             graph=self.graphs[effective_mode],
             agent_mode=effective_mode,
             agent_access_mode=agent_access_mode,
+            prompt=prompt,
         )
         logger.debug("无状态流式运行完成 | user=%s session=%s mode=%s", user_id, session_id, effective_mode)
 
@@ -501,6 +504,7 @@ class AgentCore:
             agent_mode=effective_mode,
             agent_access_mode=effective_access_mode,
             citation_map=turn_citation_map,
+            prompt=prompt,
         )
         _launch_auto_rename(self, user_id=user_id, session_id=session_id)
 
@@ -532,6 +536,7 @@ class AgentCore:
         agent_mode: str = AGENT_LOOP_PLAN,
         agent_access_mode: str = "sandbox",
         citation_map: dict[str, Any] | None = None,
+        prompt: str = "",
     ) -> Iterator[dict[str, Any]]:
         """
         使用给定 LangChain messages 执行图并逐节点产出 dict 事件。
@@ -560,6 +565,20 @@ class AgentCore:
         }
         if self.task_list_service is not None:
             inputs["task_list"] = self.task_list_service.get_task_list(session_id)
+        if self.skill_service is not None:
+            try:
+                skill_index = self.skill_service.get_enabled_skill_index(user_id=user_id)
+                inputs["skill_index"] = skill_index
+                inputs["active_skills"] = self.skill_service.route_skills(
+                    user_id=user_id,
+                    prompt=prompt or self._last_human_text(messages),
+                    llm_config=llm_config,
+                    task_scheduler=self.task_scheduler,
+                )
+            except Exception:
+                logger.exception("Skill routing failed | user=%s session=%s", user_id, session_id)
+                inputs["skill_index"] = []
+                inputs["active_skills"] = []
         if initial_plan is not None:
             inputs["plan"] = initial_plan
         runtime_config = {"configurable": {"thread_id": session_id}}
@@ -645,6 +664,7 @@ class AgentCore:
                 session_id=session_id,
                 retrieval_service=retrieval_service,
                 task_list_service=self.task_list_service,
+                skill_service=self.skill_service,
                 citation_map=_citation_map,
                 agent_access_mode=effective_access_mode,
             )
@@ -1705,6 +1725,15 @@ class AgentCore:
         return json.dumps(content, ensure_ascii=False)
 
     @staticmethod
+    def _last_human_text(messages: list[BaseMessage]) -> str:
+        """Return the latest human message content as plain text."""
+
+        for message in reversed(messages):
+            if isinstance(message, HumanMessage):
+                return AgentCore._stringify_content(message.content)
+        return ""
+
+    @staticmethod
     def parse_stream_chunks(chunks: list[str]) -> list[dict[str, Any]]:
         """
         将 AgentCore 的 SSE 风格字符串解析为事件字典列表。
@@ -2042,4 +2071,3 @@ def _launch_auto_rename(agent: AgentCore, *, user_id: str, session_id: str) -> t
     thread = threading.Thread(target=_worker, daemon=True, name=f"rename-{session_id[:12]}")
     thread.start()
     return thread, q
-

@@ -331,7 +331,7 @@ h2 { margin: 0; color: var(--color-text-primary); font-size: calc(14px * var(--f
   border: 1px solid var(--color-border); border-radius: 8px;
   background: var(--color-surface-raised); overflow: auto;
 }
-.tool-list { display: flex; flex-direction: column; }
+.tool-list { display: block; }
 
 /* Category header */
 .category-header {
@@ -348,12 +348,14 @@ h2 { margin: 0; color: var(--color-text-primary); font-size: calc(14px * var(--f
   flex: 1;
   color: var(--color-text-primary);
   font-family: var(--font-ui);
-  font-size: calc(11px * var(--font-scale));
+  font-size: calc(13px * var(--font-scale));
   font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 .category-count { color: var(--color-text-tertiary); font-family: var(--font-ui); font-size: calc(10px * var(--font-scale)); }
+
+.category-tools {
+  display: block;
+}
 
 .tool-list-item {
   display: flex; align-items: center;
@@ -370,14 +372,14 @@ h2 { margin: 0; color: var(--color-text-primary); font-size: calc(14px * var(--f
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-8);
   width: 100%;
-  padding: var(--space-8) var(--space-10);
+  padding: var(--space-8) var(--space-10) var(--space-8) var(--space-16);
   border: 0; background: transparent;
   color: var(--color-text-secondary);
   text-align: left; cursor: pointer;
 }
 .tool-row:hover { background: var(--color-primary-softer); color: var(--color-text-primary); }
-.tool-name { overflow: hidden; font-size: calc(13px * var(--font-scale)); text-overflow: ellipsis; white-space: nowrap; }
-.tool-meta { color: var(--color-text-tertiary); font-size: calc(10px * var(--font-scale)); }
+.tool-name { overflow: hidden; font-size: calc(11px * var(--font-scale)); text-overflow: ellipsis; white-space: nowrap; }
+.tool-meta { color: var(--color-text-tertiary); font-size: calc(9px * var(--font-scale)); }
 .tool-toggle-label {
   position: relative;
   width: 32px;

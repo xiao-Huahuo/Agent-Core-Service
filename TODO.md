@@ -22,7 +22,7 @@
     - 分为Skill概览页面和Skill定制页面。
     - Skill概览页面以卡片形式展示系统自带Skill和用户注入的Skill，用户可开关Skill，可注入自定义的Skill。
     - 点击右上角按钮可查看Skill格式和规范说明。
-  - [ ] 配备一个Agent工具： 列出所有Skill。
+  - [ ] 配备2个Agent工具： 列出所有Skill；使用Skill（主动召唤`SKILL.md`正文）
 - [ ] 可统计的：
   - 工具总计调用次数
   - [ ] 会话内统计右边栏：

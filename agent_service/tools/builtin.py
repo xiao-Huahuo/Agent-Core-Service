@@ -214,6 +214,53 @@ def list_builtin_tools() -> str:
     return "\n".join(lines)
 
 
+def list_skills() -> str:
+    """
+    List all skills visible to the current user.
+
+    Return value: human-readable skill index with source and enabled state.
+    """
+
+    runtime = get_tool_runtime()
+    if runtime.skill_service is None:
+        return "Skill service is not available."
+    skills = runtime.skill_service.list_skills(user_id=runtime.user_id)
+    if not skills:
+        return "No skills found."
+    lines = [f"Skills found: {len(skills)}"]
+    for index, skill in enumerate(skills, 1):
+        enabled = "enabled" if skill.get("enabled") else "disabled"
+        lines.append(
+            f"{index}. {skill.get('name')} [{skill.get('skill_id')}, {skill.get('source')}, {enabled}] "
+            f"- {skill.get('description') or ''}"
+        )
+    return "\n".join(lines)
+
+
+def use_skill(skill_ref: str) -> str:
+    """
+    Load one enabled Skill's SKILL.md body for the current Agent turn.
+
+    skill_ref: Skill id, Skill name, or skill directory name returned by list_skills.
+    """
+
+    runtime = get_tool_runtime()
+    if runtime.skill_service is None:
+        return "Skill service is not available."
+    skill = runtime.skill_service.read_skill_body(user_id=runtime.user_id, skill_ref=skill_ref)
+    if skill is None:
+        return f"Skill not found: {skill_ref}. Call list_skills to inspect available skill ids and names."
+    if skill.get("disabled"):
+        return f"Skill is disabled: {skill.get('skill_id') or skill_ref}."
+    return (
+        f"Skill loaded: {skill.get('name')} [{skill.get('skill_id')}]\n"
+        f"Source: {skill.get('source')}\n"
+        f"Path: {skill.get('path')}\n\n"
+        "[SKILL.md]\n"
+        f"{skill.get('body') or ''}"
+    )
+
+
 def run_terminal_command(
     shell: str,
     segments: list[dict[str, Any]],

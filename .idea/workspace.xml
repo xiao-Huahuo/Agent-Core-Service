@@ -4,14 +4,234 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="任务列表">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="任务列表工具名称">
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/LICENSE.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/accept_changes.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/comment.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/helpers/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/helpers/merge_runs.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/helpers/simplify_redlines.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/pack.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chart.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chartDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-diagram.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-lockedCanvas.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-main.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-picture.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-spreadsheetDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-wordprocessingDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/pml.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-additionalCharacteristics.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-bibliography.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-commonSimpleTypes.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlDataProperties.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlSchemaProperties.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesCustom.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesExtended.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesVariantTypes.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-math.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-relationshipReference.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/sml.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-main.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-officeDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-presentationDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-spreadsheetDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-wordprocessingDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/wml.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/xml.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ecma/fouth-edition/opc-contentTypes.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ecma/fouth-edition/opc-coreProperties.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ecma/fouth-edition/opc-digSig.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/ecma/fouth-edition/opc-relationships.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/mce/mc.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/microsoft/wml-2010.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/microsoft/wml-2012.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/microsoft/wml-2018.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/microsoft/wml-cex-2018.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/microsoft/wml-cid-2016.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/microsoft/wml-sdtdatahash-2020.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/schemas/microsoft/wml-symex-2015.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/soffice.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/unpack.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/validate.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/validators/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/validators/base.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/validators/docx.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/validators/pptx.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/office/validators/redlining.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/templates/comments.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/templates/commentsExtended.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/templates/commentsExtensible.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/templates/commentsIds.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/docx/scripts/templates/people.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/enhance-prompt/README.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/enhance-prompt/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/enhance-prompt/references/KEYWORDS.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/humanizer-zh/LICENSE" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/humanizer-zh/README.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/humanizer-zh/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/linear/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/paper-writing/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/paper-writing/assets/research_paper_template.docx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/paper-writing/references/research_tips.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pdf/LICENSE.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pdf/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pdf/forms.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pdf/reference.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pdf/scripts/check_bounding_boxes.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pdf/scripts/check_fillable_fields.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pdf/scripts/convert_pdf_to_images.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pdf/scripts/create_validation_image.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pdf/scripts/extract_form_field_info.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pdf/scripts/extract_form_structure.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pdf/scripts/fill_fillable_fields.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pdf/scripts/fill_pdf_form_with_annotations.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/LICENSE.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/editing.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/pptxgenjs.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/add_slide.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/clean.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/helpers/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/helpers/merge_runs.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/helpers/simplify_redlines.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/pack.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chart.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chartDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-diagram.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-lockedCanvas.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-main.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-picture.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-spreadsheetDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-wordprocessingDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/pml.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-additionalCharacteristics.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-bibliography.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-commonSimpleTypes.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlDataProperties.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlSchemaProperties.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesCustom.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesExtended.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesVariantTypes.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-math.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-relationshipReference.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/sml.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-main.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-officeDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-presentationDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-spreadsheetDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-wordprocessingDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/wml.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/xml.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ecma/fouth-edition/opc-contentTypes.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ecma/fouth-edition/opc-coreProperties.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ecma/fouth-edition/opc-digSig.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/ecma/fouth-edition/opc-relationships.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/mce/mc.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/microsoft/wml-2010.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/microsoft/wml-2012.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/microsoft/wml-2018.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/microsoft/wml-cex-2018.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/microsoft/wml-cid-2016.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/microsoft/wml-sdtdatahash-2020.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/schemas/microsoft/wml-symex-2015.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/soffice.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/unpack.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/validate.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/validators/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/validators/base.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/validators/docx.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/validators/pptx.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/office/validators/redlining.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/pptx/scripts/thumbnail.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/web-access/README.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/web-access/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/web-access/references/cdp-api.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/web-access/scripts/cdp-proxy.mjs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/web-access/scripts/check-deps.mjs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/web-access/scripts/find-url.mjs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/web-access/scripts/match-site.mjs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/LICENSE.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/helpers/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/helpers/merge_runs.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/helpers/simplify_redlines.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/pack.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chart.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chartDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-diagram.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-lockedCanvas.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-main.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-picture.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-spreadsheetDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-wordprocessingDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/pml.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-additionalCharacteristics.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-bibliography.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-commonSimpleTypes.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlDataProperties.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlSchemaProperties.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesCustom.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesExtended.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesVariantTypes.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-math.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-relationshipReference.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/sml.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-main.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-officeDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-presentationDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-spreadsheetDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-wordprocessingDrawing.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/wml.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ISO-IEC29500-4_2016/xml.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ecma/fouth-edition/opc-contentTypes.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ecma/fouth-edition/opc-coreProperties.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ecma/fouth-edition/opc-digSig.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/ecma/fouth-edition/opc-relationships.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/mce/mc.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/microsoft/wml-2010.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/microsoft/wml-2012.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/microsoft/wml-2018.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/microsoft/wml-cex-2018.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/microsoft/wml-cid-2016.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/microsoft/wml-sdtdatahash-2020.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/schemas/microsoft/wml-symex-2015.xsd" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/soffice.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/unpack.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/validate.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/validators/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/validators/base.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/validators/docx.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/validators/pptx.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/office/validators/redlining.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/resources/skills/xlsx/scripts/recalc.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/nodes/base.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/nodes/base.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/nodes/model_decision.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/nodes/model_decision.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/deps.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/deps.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/core/agent_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/core/agent_config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/settings_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/settings_service.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/agent_service/tools/builtin.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/builtin.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/agent_service/tools/definitions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/definitions.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/chat/ThinkingSteps.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/chat/ThinkingSteps.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/TaskListDrawer.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/TaskListDrawer.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/runtime_context.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/runtime_context.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/ToolRegistryPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/ToolRegistryPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ThinkingInline.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ThinkingInline.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/types/knowledge.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/types/knowledge.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/vite.config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_multimodal_cleaner.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_multimodal_cleaner.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -61,45 +281,45 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Batch.启动.executor&quot;: &quot;Run&quot;,
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;Python.main.executor&quot;: &quot;Run&quot;,
-    &quot;Python.requests_test.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_agent_core_service.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;aidebugger.tracer.lastRunConfigName&quot;: &quot;main&quot;,
-    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;last_opened_file_path&quot;: &quot;D:/Projects/Python/MetaWeave/editor/src/assets/images/choosable&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;prettierjs.PrettierConfiguration.Package&quot;: &quot;D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\prettier&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;project.propVCSSupport.DirectoryMappings&quot;,
-    &quot;ts.external.directory.path&quot;: &quot;D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\typescript\\lib&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Batch.启动.executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.main.executor": "Run",
+    "Python.requests_test.executor": "Run",
+    "Python.test_agent_core_service.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "aidebugger.tracer.lastRunConfigName": "main",
+    "dart.analysis.tool.window.visible": "false",
+    "git-widget-placeholder": "master",
+    "last_opened_file_path": "D:/Projects/Python/MetaWeave/resources/skills",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "prettierjs.PrettierConfiguration.Package": "D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\prettier",
+    "settings.editor.selected.configurable": "project.propVCSSupport.DirectoryMappings",
+    "ts.external.directory.path": "D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\typescript\\lib",
+    "vue.rearranger.settings.migration": "true"
   },
-  &quot;keyToStringList&quot;: {
-    &quot;vue.recent.templates&quot;: [
-      &quot;Vue Composition API Component&quot;,
-      &quot;Vue Options API Component&quot;
+  "keyToStringList": {
+    "vue.recent.templates": [
+      "Vue Composition API Component",
+      "Vue Options API Component"
     ]
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="D:\Projects\Python\MetaWeave\resources\skills" />
       <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\images\choosable" />
       <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\images" />
       <recent name="D:\Projects\Python\MetaWeave\实训个人总结" />
       <recent name="D:\Projects\Python\MetaWeave\周报\第二周" />
-      <recent name="D:\Projects\Python\MetaWeave\docs\assets" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="D:\Projects\Python\MetaWeave\supercomponents\new\明暗切换" />
@@ -285,15 +505,7 @@
       <workItem from="1784723159028" duration="13415000" />
       <workItem from="1784854303470" duration="40149000" />
       <workItem from="1785035999688" duration="1499000" />
-      <workItem from="1785057118487" duration="15450000" />
-    </task>
-    <task id="LOCAL-00197" summary="任务建议;token用量的三个表">
-      <option name="closed" value="true" />
-      <created>1784709438040</created>
-      <option name="number" value="00197" />
-      <option name="presentableId" value="LOCAL-00197" />
-      <option name="project" value="LOCAL" />
-      <updated>1784709438040</updated>
+      <workItem from="1785057118487" duration="20302000" />
     </task>
     <task id="LOCAL-00198" summary="修复了不能嵌入图片的问题">
       <option name="closed" value="true" />
@@ -679,14 +891,21 @@
       <option name="project" value="LOCAL" />
       <updated>1785070629046</updated>
     </task>
-    <option name="localTasksCounter" value="246" />
+    <task id="LOCAL-00246" summary="任务列表工具名称">
+      <option name="closed" value="true" />
+      <created>1785075389255</created>
+      <option name="number" value="00246" />
+      <option name="presentableId" value="LOCAL-00246" />
+      <option name="project" value="LOCAL" />
+      <updated>1785075389255</updated>
+    </task>
+    <option name="localTasksCounter" value="247" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="todo" />
     <MESSAGE value="工具条样式" />
     <MESSAGE value="上下文进度" />
     <MESSAGE value="中断" />
@@ -711,7 +930,8 @@
     <MESSAGE value="图书馆v1" />
     <MESSAGE value="图书馆v2" />
     <MESSAGE value="任务列表" />
-    <option name="LAST_COMMIT_MESSAGE" value="任务列表" />
+    <MESSAGE value="任务列表工具名称" />
+    <option name="LAST_COMMIT_MESSAGE" value="任务列表工具名称" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />

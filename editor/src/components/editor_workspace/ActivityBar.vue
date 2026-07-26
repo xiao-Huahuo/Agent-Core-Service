@@ -6,7 +6,7 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { Activity, BookOpen, Bot, Bug, DatabaseZap, Files, Folder, Search, Settings, Share2 } from 'lucide-vue-next'
+import { Activity, BookOpen, Bot, Bug, DatabaseZap, Files, Folder, Search, Settings, Share2, Sparkles } from 'lucide-vue-next'
 
 defineProps<{
   fileOpen: boolean
@@ -19,6 +19,7 @@ defineProps<{
   dashboardActive: boolean
   debugActive: boolean
   searchActive: boolean
+  skillsActive: boolean
   settingsActive: boolean
 }>()
 
@@ -32,6 +33,7 @@ const emit = defineEmits<{
   openDashboard: []
   openDebug: []
   openSearch: []
+  openSkills: []
   openSettings: []
 }>()
 
@@ -111,6 +113,17 @@ function handleRipple(e: MouseEvent) {
       @click="emit('toggleAgent')"
     >
       <Bot :size="18" />
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: skillsActive }"
+      type="button"
+      title="Skills"
+      aria-label="Skills"
+      @mousedown.prevent="handleRipple"
+      @click="emit('openSkills')"
+    >
+      <Sparkles :size="18" />
     </button>
     <button
       class="activity-button"

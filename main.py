@@ -93,6 +93,7 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.services.session_service import SessionService
 from agent_service.services.message_service import MessageService
 from agent_service.services.session_attachment_service import SessionAttachmentService
+from agent_service.services.skill_service import SkillService
 from agent_service.services.task_list_service import TaskListService
 from agent_service.services.logging_service import setup_logging
 
@@ -140,6 +141,8 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
 
     memory_service = LongTermMemoryService(config=config)
     settings_service = SettingsService(config=config, memory_service=memory_service)
+    skill_service = SkillService(config=config, settings_service=settings_service)
+    agent.skill_service = skill_service
 
     # 启动时迁移：将用户覆盖的旧路径内容移动到新路径
     from agent_service.services.storage_service import migrate_storage_paths
@@ -163,6 +166,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     )
     rest_deps._settings_service = settings_service
     rest_deps._attachment_service = attachment_service
+    rest_deps._skill_service = skill_service
     rest_deps._knowledge_library_service = knowledge_library_service
     rest_deps._knowledge_graph_service = knowledge_graph_service
     rest_deps._library_service = library_service
@@ -266,6 +270,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._message_service = None
         rest_deps._settings_service = None
         rest_deps._attachment_service = None
+        rest_deps._skill_service = None
         rest_deps._knowledge_library_service = None
         rest_deps._knowledge_graph_service = None
         rest_deps._library_service = None

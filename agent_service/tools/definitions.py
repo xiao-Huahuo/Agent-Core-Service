@@ -38,6 +38,7 @@ from agent_service.tools.builtin import (
     json_parse,
     json_pick,
     list_builtin_tools,
+    list_skills,
     list_knowledge_files,
     list_todos,
     read_knowledge_file,
@@ -50,6 +51,7 @@ from agent_service.tools.builtin import (
     text_stats,
     toggle_todo,
     update_exploration_state,
+    use_skill,
     web_search,
     web_image_search,
     write_knowledge_file,
@@ -197,6 +199,35 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         display_name="下载文件",
     ),
 ]
+
+SKILL_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
+    BuiltinToolDefinition(
+        name="list_skills",
+        description="List all skills visible to the current user, including built-in and user-level skills, their sources, descriptions, and enabled states.",
+        args_schema={"type": "object", "properties": {}, "required": []},
+        function=list_skills,
+        display_name="列出技能",
+    ),
+]
+
+SKILL_TOOL_DEFINITIONS.append(
+    BuiltinToolDefinition(
+        name="use_skill",
+        description="Load one enabled Skill's SKILL.md body into the current turn when the Agent needs detailed instructions for a specific skill. Use skill_ref from list_skills, such as skill_id, name, or folder name.",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "skill_ref": {
+                    "type": "string",
+                    "description": "Skill id, Skill name, or skill folder name returned by list_skills.",
+                }
+            },
+            "required": ["skill_ref"],
+        },
+        function=use_skill,
+        display_name="使用技能",
+    )
+)
 
 MEMORY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
@@ -620,6 +651,7 @@ WEB_SEARCH_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
 
 BUILTIN_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = (
     UTILITY_TOOL_DEFINITIONS
+    + SKILL_TOOL_DEFINITIONS
     + MEMORY_TOOL_DEFINITIONS
     + KNOWLEDGE_TOOL_DEFINITIONS
     + FILE_TOOL_DEFINITIONS

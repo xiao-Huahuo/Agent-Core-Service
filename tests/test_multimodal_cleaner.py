@@ -436,3 +436,17 @@ def test_knowledge_ignore_matcher_supports_gitignore_subset() -> None:
     assert matcher.is_ignored("nested/file.tmp")
     assert not matcher.is_ignored("private/keep.md")
     assert not matcher.is_ignored("docs/readme.md")
+
+
+def test_knowledge_ignore_matcher_hard_ignores_agents_dir() -> None:
+    """`.agents` is a hard-coded system directory and cannot be unignored."""
+
+    matcher = KnowledgeIgnoreMatcher(
+        """
+        !.agents/skills/demo/SKILL.md
+        """
+    )
+
+    assert matcher.is_ignored(".agents", is_dir=True)
+    assert matcher.is_ignored(".agents/skills/demo/SKILL.md")
+    assert matcher.is_ignored("nested/.agents/skills/demo/SKILL.md")

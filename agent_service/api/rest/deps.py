@@ -18,6 +18,7 @@ from agent_service.services.knowledge_graph_service import KnowledgeGraphService
 from agent_service.services.library_service import LibraryService
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 from agent_service.services.session_attachment_service import SessionAttachmentService
+from agent_service.services.skill_service import SkillService
 from agent_service.services.task_list_service import TaskListService
 from agent_service.services.todo_service import TodoService
 
@@ -30,6 +31,7 @@ _knowledge_graph_service: KnowledgeGraphService | None = None
 _library_service: LibraryService | None = None
 _retrieval_service: MemoryRetrievalService | None = None
 _attachment_service: SessionAttachmentService | None = None
+_skill_service: SkillService | None = None
 _task_list_service: TaskListService | None = None
 _grpc_running = False
 _todo_service: TodoService | None = None
@@ -99,3 +101,9 @@ def _require_task_list_service() -> TaskListService:
     if _task_list_service is None:
         raise HTTPException(status_code=503, detail="TaskListService not initialized yet")
     return _task_list_service
+
+
+def _require_skill_service() -> SkillService:
+    if _skill_service is None:
+        raise HTTPException(status_code=503, detail="SkillService not initialized yet")
+    return _skill_service
