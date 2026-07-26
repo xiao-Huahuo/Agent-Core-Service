@@ -1,5 +1,11 @@
 # CHANGE HISTORY
 
+## 2026-07-27
+- [x] Agent 顶栏新增 Skill 引用下拉:
+  - `AgentPanel.vue` 在 Agent 页面顶栏的 Loop Mode 切换左侧新增胶囊形 Skill 按钮，下拉展示已提取 Skill，菜单右上角提供刷新按钮，点击 Skill 会写入引用 `用户要求使用Skill： XXX`。
+- [x] 修复大工具历史加载白屏:
+  - `ToolCallInline.vue` 的工具结果详情改为仅在用户展开时渲染，避免历史会话中大量折叠工具结果仍被一次性解析和挂载，导致 docx/web-access 演示这类长工具链会话加载历史时白屏。
+
 ## 2026-07-26
 - [x] 修复前端工具注册表列表组重叠:
   - `ToolRegistryPanel.vue` 的工具列表外层和分类内容改为普通块级文档流，避免纵向 flex 子项收缩导致分类内容溢出并压到后续列表组。

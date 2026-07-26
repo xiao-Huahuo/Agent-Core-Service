@@ -374,9 +374,8 @@ const toolEntries = computed(() => {
       <span class="tool-text" :class="{ pending: entry.pending }">{{ entry.text }}</span>
     </div>
     <div
-      v-if="!entry.pending && entry.rawContents.length > 0"
-      class="tool-result-collapse"
-      :class="{ open: expanded.has(entry.key) }"
+      v-if="!entry.pending && entry.rawContents.length > 0 && expanded.has(entry.key)"
+      class="tool-result-collapse open"
     >
       <div class="tool-result-content is-expandable">
         <button

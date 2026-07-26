@@ -388,18 +388,18 @@ onBeforeUnmount(() => {
 
 .markdown-preview :deep(code) {
   padding: 1px 8px !important;
-  border: 1px solid var(--color-border) !important;
+  border: 0 !important;
   border-radius: 999px !important;
-  background: var(--color-bg-muted) !important;
-  font-size: var(--font-size-xs) !important;
+  background: var(--color-code-bg) !important;
+  font-size: 0.85em !important;
 }
 
 .markdown-preview :deep(pre) {
   padding: var(--space-12) !important;
-  border: 1px solid var(--color-border) !important;
+  border: 0 !important;
   border-radius: var(--radius-md) !important;
-  background: var(--color-bg-muted) !important;
-  line-height: 1.35 !important;
+  background: var(--color-code-bg) !important;
+  line-height: 1.3 !important;
   position: relative !important;
 }
 
@@ -409,7 +409,8 @@ onBeforeUnmount(() => {
   border-radius: 0 !important;
   background: transparent !important;
   font-family: var(--font-text) !important;
-  line-height: inherit !important;
+  font-size: var(--font-size-base) !important;
+  line-height: 1.3 !important;
 }
 
 .markdown-preview :deep(a) {
@@ -445,18 +446,20 @@ onBeforeUnmount(() => {
   position: absolute !important;
   top: var(--space-6) !important;
   right: var(--space-6) !important;
-  padding: 2px var(--space-8) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
   border: 1px solid var(--color-border) !important;
-  border-radius: var(--radius-sm) !important;
-  background: var(--color-surface-raised) !important;
+  border-radius: 50% !important;
+  background: transparent !important;
   color: var(--color-text-tertiary) !important;
-  font-family: var(--font-ui) !important;
-  font-size: calc(10px * var(--font-scale)) !important;
   cursor: pointer !important;
   opacity: 0 !important;
-  transition: opacity 160ms ease, color 160ms ease !important;
+  transition: opacity 160ms ease, color 160ms ease, border-color 160ms ease !important;
   z-index: 2 !important;
-  line-height: 1.6 !important;
 }
 
 .markdown-preview :deep(pre:hover .code-copy-btn) {

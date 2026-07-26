@@ -375,22 +375,22 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
 
 .markdown-body :deep(code) {
   padding: 1px 8px;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: 999px;
-  background: var(--color-bg-muted);
+  background: var(--color-code-bg);
   color: var(--color-text-primary);
   font-family: var(--font-text);
-  font-size: var(--font-size-xs);
+  font-size: 0.85em;
 }
 
 .markdown-body :deep(pre) {
   margin: var(--space-8) 0;
   padding: var(--space-12);
   overflow-x: auto;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: var(--radius-md);
-  background: var(--color-bg-muted);
-  line-height: 1.35;
+  background: var(--color-code-bg);
+  line-height: 1.3;
 }
 
 .markdown-body :deep(pre code) {
@@ -399,8 +399,8 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
   border-radius: 0;
   background: transparent;
   font-family: var(--font-text);
-  font-size: var(--font-size-xs);
-  line-height: inherit;
+  font-size: var(--font-size-base);
+  line-height: 1.3;
 }
 
 .markdown-body :deep(ul),
@@ -497,18 +497,20 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
   position: absolute;
   top: var(--space-6);
   right: var(--space-6);
-  padding: 2px var(--space-8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-raised);
+  border-radius: 50%;
+  background: transparent;
   color: var(--color-text-tertiary);
-  font-family: var(--font-ui);
-  font-size: calc(10px * var(--font-scale));
   cursor: pointer;
   opacity: 0;
-  transition: opacity 160ms ease, color 160ms ease;
+  transition: opacity 160ms ease, color 160ms ease, border-color 160ms ease;
   z-index: 2;
-  line-height: 1.6;
 }
 
 .markdown-body :deep(pre:hover .code-copy-btn) {

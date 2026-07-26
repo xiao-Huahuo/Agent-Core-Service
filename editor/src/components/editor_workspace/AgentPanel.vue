@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Check, ChevronDown, History, ListChecks, Maximize2, MessageSquarePlus, MessagesSquare, SquarePen, UploadCloud } from 'lucide-vue-next'
+import { Check, ChevronDown, History, ListChecks, Maximize2, MessageSquarePlus, MessagesSquare, RefreshCw, SquarePen, UploadCloud } from 'lucide-vue-next'
 
 import darkTitle from '@/assets/images/暗色标题.png'
 import lightTitle from '@/assets/images/亮色标题.png'
@@ -21,6 +21,7 @@ import { useChatStore } from '@/stores/chat'
 import type { AgentUploadedAttachment } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
+import { useSkillsStore } from '@/stores/skills'
 import { useTaskListStore } from '@/stores/taskList'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
@@ -34,6 +35,7 @@ type MessageListApi = {
 const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
+const skillsStore = useSkillsStore()
 const taskListStore = useTaskListStore()
 const workspaceStore = useWorkspaceStore()
 const props = withDefaults(defineProps<{
@@ -57,6 +59,7 @@ const isUploadingAttachment = ref(false)
 const uploadStatusText = ref('')
 const modeSwitchRef = ref<HTMLElement | null>(null)
 const loopModeMenu = ref<HTMLDetailsElement | null>(null)
+const skillMenu = ref<HTMLDetailsElement | null>(null)
 const modeIndicatorStyle = computed(() => {
   if (settingsStore.chatMode === 'tool') {
     return { width: 'calc(50% - 2px)', transform: 'translateX(0)' }
@@ -85,6 +88,9 @@ const loopModeOptions: Array<{ value: AgentLoopMode; label: string; hint: string
 ]
 const selectedLoopModeLabel = computed(() => {
   return loopModeOptions.find((option) => option.value === settingsStore.agentLoopMode)?.label || 'Auto'
+})
+const extractedSkills = computed(() => {
+  return [...skillsStore.skills].sort((a, b) => a.name.localeCompare(b.name))
 })
 const knowledgeTitle = computed(() => {
   const name = settingsStore.activeKnowledgeLibrary?.name?.trim()
@@ -182,6 +188,17 @@ function setAgentLoopMode(mode: AgentLoopMode) {
   settingsStore.setAgentLoopMode(mode)
   if (loopModeMenu.value) {
     loopModeMenu.value.open = false
+  }
+}
+
+async function refreshSkills() {
+  await skillsStore.loadSkills()
+}
+
+function selectSkillReference(skillName: string) {
+  referenceText.value = `用户要求使用Skill： ${skillName}`
+  if (skillMenu.value) {
+    skillMenu.value.open = false
   }
 }
 
@@ -380,6 +397,7 @@ onMounted(() => {
   window.addEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
   void reloadSessions()
   void loadCurrentModelConfig()
+  void refreshSkills()
   void loadSafetyState()
   void settingsStore.fetchWebSearchSettings()
 })
@@ -464,6 +482,47 @@ onBeforeUnmount(() => {
         >
           <ListChecks :size="16" />
         </button>
+        <details ref="skillMenu" class="topbar-skill-dropdown" :class="{ disabled: !userId }">
+          <summary
+            class="topbar-skill-trigger"
+            title="Skill"
+            aria-label="Skill"
+          >
+            <span>Skill</span>
+            <ChevronDown :size="12" />
+          </summary>
+          <div class="topbar-skill-menu" role="listbox" aria-label="Skill">
+            <div class="topbar-skill-menu-head">
+              <span>Skills</span>
+              <button
+                class="topbar-skill-refresh"
+                type="button"
+                title="刷新 Skill"
+                :disabled="skillsStore.loading"
+                @click.prevent.stop="refreshSkills"
+              >
+                <RefreshCw :size="13" :class="{ spinning: skillsStore.loading }" />
+              </button>
+            </div>
+            <button
+              v-for="skill in extractedSkills"
+              :key="skill.skill_id"
+              class="topbar-skill-option"
+              type="button"
+              role="option"
+              @click="selectSkillReference(skill.name)"
+            >
+              <span class="topbar-skill-name">{{ skill.name }}</span>
+              <span class="topbar-skill-desc">{{ skill.description }}</span>
+            </button>
+            <div v-if="!skillsStore.loading && extractedSkills.length === 0" class="topbar-skill-empty">
+              暂无 Skill
+            </div>
+            <div v-if="skillsStore.loading && extractedSkills.length === 0" class="topbar-skill-empty">
+              正在读取
+            </div>
+          </div>
+        </details>
         <details ref="loopModeMenu" class="topbar-loop-mode-dropdown" :class="{ disabled: !userId }">
           <summary
             class="topbar-loop-mode-trigger"
@@ -907,16 +966,19 @@ onBeforeUnmount(() => {
   to { transform: rotate(360deg); }
 }
 
-.topbar-loop-mode-dropdown {
+.topbar-loop-mode-dropdown,
+.topbar-skill-dropdown {
   position: relative;
 }
 
-.topbar-loop-mode-dropdown.disabled {
+.topbar-loop-mode-dropdown.disabled,
+.topbar-skill-dropdown.disabled {
   pointer-events: none;
   opacity: 0.55;
 }
 
-.topbar-loop-mode-trigger {
+.topbar-loop-mode-trigger,
+.topbar-skill-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -932,6 +994,7 @@ onBeforeUnmount(() => {
   font-size: calc(10px * var(--font-scale));
   line-height: 1;
   list-style: none;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     border-color var(--transition-fast),
@@ -939,22 +1002,31 @@ onBeforeUnmount(() => {
     color var(--transition-fast);
 }
 
-.topbar-loop-mode-trigger::-webkit-details-marker {
+.topbar-skill-trigger {
+  min-width: 76px;
+}
+
+.topbar-loop-mode-trigger::-webkit-details-marker,
+.topbar-skill-trigger::-webkit-details-marker {
   display: none;
 }
 
-.topbar-loop-mode-trigger::marker {
+.topbar-loop-mode-trigger::marker,
+.topbar-skill-trigger::marker {
   content: '';
 }
 
 .topbar-loop-mode-trigger:hover,
-.topbar-loop-mode-dropdown[open] .topbar-loop-mode-trigger {
+.topbar-loop-mode-dropdown[open] .topbar-loop-mode-trigger,
+.topbar-skill-trigger:hover,
+.topbar-skill-dropdown[open] .topbar-skill-trigger {
   border-color: var(--color-accent);
   background: var(--color-accent-muted);
   color: var(--color-text-primary);
 }
 
-.topbar-loop-mode-menu {
+.topbar-loop-mode-menu,
+.topbar-skill-menu {
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
@@ -969,7 +1041,57 @@ onBeforeUnmount(() => {
   box-shadow: var(--shadow-lg);
 }
 
-.topbar-loop-mode-option {
+.topbar-skill-menu {
+  width: 260px;
+  max-height: 340px;
+  overflow: auto;
+}
+
+.topbar-skill-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  min-height: 30px;
+  padding: var(--space-4) var(--space-6) var(--space-6);
+  color: var(--color-text-tertiary);
+  font-family: var(--font-ui);
+  font-size: calc(10px * var(--font-scale));
+  text-transform: uppercase;
+}
+
+.topbar-skill-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.topbar-skill-refresh:hover:not(:disabled) {
+  background: var(--color-primary-softer);
+  color: var(--color-text-primary);
+}
+
+.topbar-skill-refresh:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.topbar-skill-refresh .spinning {
+  animation: safety-spin 0.8s linear infinite;
+}
+
+.topbar-loop-mode-option,
+.topbar-skill-option {
   display: flex;
   align-items: center;
   gap: var(--space-8);
@@ -989,21 +1111,42 @@ onBeforeUnmount(() => {
 }
 
 .topbar-loop-mode-option:hover,
-.topbar-loop-mode-option.active {
+.topbar-loop-mode-option.active,
+.topbar-skill-option:hover {
   background: var(--color-primary-softer);
   color: var(--color-text-primary);
 }
 
-.topbar-loop-mode-label {
+.topbar-skill-option {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.topbar-loop-mode-label,
+.topbar-skill-name {
   color: inherit;
   font-size: calc(12px * var(--font-scale));
   font-weight: 650;
 }
 
-.topbar-loop-mode-hint {
+.topbar-loop-mode-hint,
+.topbar-skill-desc {
   flex: 1;
+  overflow: hidden;
   color: var(--color-text-tertiary);
   font-size: calc(10px * var(--font-scale));
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-skill-empty {
+  padding: var(--space-10) var(--space-8);
+  color: var(--color-text-tertiary);
+  font-family: var(--font-ui);
+  font-size: calc(11px * var(--font-scale));
+  text-align: center;
 }
 
 .topbar-loop-mode-option svg {
