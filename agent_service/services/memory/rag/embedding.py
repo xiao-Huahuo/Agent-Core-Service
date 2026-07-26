@@ -63,6 +63,8 @@ class SentenceTransformerEmbeddingProvider:
         self.config = config
         self._model: object | None = None
         self._load_event = threading.Event()
+        self._load_lock = threading.Lock()
+        self._load_thread: threading.Thread | None = None
         self._load_error: Exception | None = None
 
     def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
@@ -74,7 +76,7 @@ class SentenceTransformerEmbeddingProvider:
 
         if not texts:
             return []
-        model = self._get_model()
+        model = self._get_model(wait=True)
         if model is None:
             raise RuntimeError("Embedding 模型尚未就绪，正在异步加载中，请稍后重试。")
         vectors = model.encode(list(texts), normalize_embeddings=True, show_progress_bar=False)
@@ -90,9 +92,9 @@ class SentenceTransformerEmbeddingProvider:
     def warmup(self) -> None:
         """预加载模型到内存,避免首次请求冷启动延迟。"""
 
-        self._get_model()
+        self._get_model(wait=False)
 
-    def _get_model(self) -> object | None:
+    def _get_model(self, *, wait: bool) -> object | None:
         """异步加载本地 sentence-transformers 模型。
 
         首次调用触发后台加载线程，后续调用若加载未完成则返回 None，
@@ -104,18 +106,24 @@ class SentenceTransformerEmbeddingProvider:
         if self._load_error is not None:
             raise self._load_error
 
-        # 已在加载中 → 等待完成
-        if self._load_event.is_set():
-            return self._model  # 可能还是 None（出错时）
+        if wait:
+            with self._load_lock:
+                if self._load_thread is None:
+                    self._load_event.set()
+                    self._load_thread = threading.Thread(target=self._load_model_in_thread, daemon=True)
+                    self._load_thread.start()
+                load_thread = self._load_thread
+            load_thread.join()
+            if self._load_error is not None:
+                raise self._load_error
+            return self._model
 
-        # 首次启动加载
-        if not self._load_event.is_set():
-            self._load_event.set()  # 标记加载已启动
-            t = threading.Thread(target=self._load_model_in_thread, daemon=True)
-            t.start()
-            return None  # 不等待，立即返回
-
-        return None
+        with self._load_lock:
+            if self._load_thread is None:
+                self._load_event.set()
+                self._load_thread = threading.Thread(target=self._load_model_in_thread, daemon=True)
+                self._load_thread.start()
+        return self._model
 
     def _load_model_in_thread(self) -> None:
         """在后台线程中执行实际模型加载。"""

@@ -6,12 +6,13 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { Activity, Bot, Bug, DatabaseZap, Files, Folder, Search, Settings, Share2 } from 'lucide-vue-next'
+import { Activity, BookOpen, Bot, Bug, DatabaseZap, Files, Folder, Search, Settings, Share2 } from 'lucide-vue-next'
 
 defineProps<{
   fileOpen: boolean
   agentOpen: boolean
   resourcesActive: boolean
+  libraryActive: boolean
   ingestionActive: boolean
   agentActive: boolean
   graphActive: boolean
@@ -24,6 +25,7 @@ defineProps<{
 const emit = defineEmits<{
   toggleFile: []
   openResources: []
+  openLibrary: []
   openIngestion: []
   toggleAgent: []
   toggleGraph: []
@@ -65,6 +67,17 @@ function handleRipple(e: MouseEvent) {
       @click="emit('openResources')"
     >
       <Folder :size="18" />
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: libraryActive }"
+      type="button"
+      title="图书馆"
+      aria-label="图书馆"
+      @mousedown.prevent="handleRipple"
+      @click="emit('openLibrary')"
+    >
+      <BookOpen :size="18" />
     </button>
     <button
       class="activity-button"

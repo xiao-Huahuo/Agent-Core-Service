@@ -4,7 +4,15 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="图片预览v3" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="图片预览v3">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/deps.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/deps.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/types/knowledge.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/types/knowledge.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -276,14 +284,7 @@
       <workItem from="1784688429981" duration="15773000" />
       <workItem from="1784723159028" duration="13415000" />
       <workItem from="1784854303470" duration="40149000" />
-    </task>
-    <task id="LOCAL-00191" summary="语义知识图谱v3-实现了知识图谱队列">
-      <option name="closed" value="true" />
-      <created>1784637158252</created>
-      <option name="number" value="00191" />
-      <option name="presentableId" value="LOCAL-00191" />
-      <option name="project" value="LOCAL" />
-      <updated>1784637158252</updated>
+      <workItem from="1785035999688" duration="1499000" />
     </task>
     <task id="LOCAL-00192" summary="语义知识图谱v4-图谱侧边栏">
       <option name="closed" value="true" />
@@ -669,7 +670,15 @@
       <option name="project" value="LOCAL" />
       <updated>1784985519616</updated>
     </task>
-    <option name="localTasksCounter" value="240" />
+    <task id="LOCAL-00240" summary="图片预览v3">
+      <option name="closed" value="true" />
+      <created>1785036288130</created>
+      <option name="number" value="00240" />
+      <option name="presentableId" value="LOCAL-00240" />
+      <option name="project" value="LOCAL" />
+      <updated>1785036288130</updated>
+    </task>
+    <option name="localTasksCounter" value="241" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

@@ -60,7 +60,7 @@ function nodeColor(node: KnowledgeGraphNode, theme: KnowledgeGraphRenderTheme): 
   if (node.kind === 'root') {
     return theme.root
   }
-  if (node.kind === 'folder') {
+  if (node.kind === 'folder' || node.kind === 'virtual-group') {
     return theme.folder
   }
   if (node.kind === 'document') {
@@ -84,7 +84,7 @@ function shouldShowLabel(node: KnowledgeGraphNode, state: KnowledgeGraphRenderSt
   if (!state.showLabels) {
     return node.id === state.hoveredNodeId
   }
-  if (node.kind === 'root' || node.kind === 'folder' || node.kind === 'document' || node.kind === 'library') {
+  if (node.kind === 'root' || node.kind === 'folder' || node.kind === 'virtual-group' || node.kind === 'document' || node.kind === 'library') {
     return true
   }
   return state.viewport.scale > 0.92 || isActive
@@ -301,7 +301,7 @@ function drawNode(
   }
   ctx.beginPath()
   ctx.arc(x, y, node.radius, 0, Math.PI * 2)
-  if (node.kind === 'folder' || node.kind === 'document') {
+  if (node.kind === 'folder' || node.kind === 'virtual-group' || node.kind === 'document') {
     ctx.setLineDash([4, 3])
     ctx.fillStyle = theme.surface
     ctx.strokeStyle = color

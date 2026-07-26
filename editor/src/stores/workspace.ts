@@ -284,6 +284,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** Active center workspace view. */
   const mainView = ref<WorkspaceMainView>('agent')
 
+  /** Pending virtual-library collection to open when LibraryView is mounted. */
+  const pendingLibraryParentId = ref('')
+
   /** Active tab within the ingestion progress view: 'queue' | 'graph-queue' | 'history'. */
   const ingestionViewTab = ref<'queue' | 'graph-queue' | 'history'>('queue')
 
@@ -1241,6 +1244,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   function setMainView(view: WorkspaceMainView) {
     mainView.value = view
+  }
+
+  function openLibraryParent(parentId: string) {
+    pendingLibraryParentId.value = parentId
+    mainView.value = 'library'
   }
 
   function updateActiveContent(content: string) {
@@ -2271,6 +2279,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     selectionAnchorPath,
     selectedNode,
     mainView,
+    pendingLibraryParentId,
     ingestionViewTab,
     editorMode,
     openTabs,
@@ -2315,6 +2324,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     closeTab,
     setEditorMode,
     setMainView,
+    openLibraryParent,
     updateActiveContent,
     saveActiveFile,
     saveAllDirtyFiles,

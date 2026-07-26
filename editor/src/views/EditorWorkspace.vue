@@ -28,6 +28,7 @@ const GraphPane = defineAsyncComponent(() => import('@/components/editor_workspa
 const DashboardView = defineAsyncComponent(() => import('@/views/DashboardView.vue'))
 const DebugView = defineAsyncComponent(() => import('@/views/DebugView.vue'))
 const IngestionProgressView = defineAsyncComponent(() => import('@/views/IngestionProgressView.vue'))
+const LibraryView = defineAsyncComponent(() => import('@/views/LibraryView.vue'))
 const SearchPage = defineAsyncComponent(() => import('@/views/SearchPage.vue'))
 import SettingsView from '@/views/SettingsView.vue'
 
@@ -220,6 +221,15 @@ function openResources() {
   agentSidebarOpen.value = false
 }
 
+function openLibrary() {
+  const next = workspaceStore.mainView === 'library' ? 'editor' : 'library'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
+}
+
 function openIngestion() {
   const next = workspaceStore.mainView === 'ingestion' ? 'editor' : 'ingestion'
   workspaceStore.setMainView(next)
@@ -249,6 +259,15 @@ function openSettings() {
 
 async function openGraphNode(node: KnowledgeGraphNodeEvent) {
   if (node.kind === 'root') {
+    return
+  }
+  if (node.kind === 'virtual-group' && node.id.startsWith('library:')) {
+    workspaceStore.openLibraryParent(node.id.slice('library:'.length))
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+    return
+  }
+  if (!node.path) {
     return
   }
   workspaceStore.setMainView('editor')
@@ -355,6 +374,7 @@ onBeforeUnmount(() => {
         :file-open="visibleFileSidebarOpen"
         :agent-open="visibleAgentSidebarOpen"
         :resources-active="workspaceStore.mainView === 'resources'"
+        :library-active="workspaceStore.mainView === 'library'"
         :ingestion-active="workspaceStore.mainView === 'ingestion'"
         :agent-active="workspaceStore.mainView === 'agent'"
         :graph-active="workspaceStore.mainView === 'graph'"
@@ -364,6 +384,7 @@ onBeforeUnmount(() => {
         :settings-active="workspaceStore.mainView === 'settings'"
         @toggle-file="toggleFileSidebar"
         @open-resources="openResources"
+        @open-library="openLibrary"
         @open-ingestion="openIngestion"
         @toggle-agent="openAgentPage"
         @toggle-graph="toggleGraphView"
@@ -381,6 +402,7 @@ onBeforeUnmount(() => {
       ></div>
       <EditorPane v-if="workspaceStore.mainView === 'editor'" class="editor-col ide-panel" />
       <FileResourceManager v-else-if="workspaceStore.mainView === 'resources'" class="editor-col ide-panel" />
+      <LibraryView v-else-if="workspaceStore.mainView === 'library'" class="editor-col ide-panel" />
       <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="editor-col ide-panel" />
       <AgentPage v-else-if="workspaceStore.mainView === 'agent'" class="editor-col ide-panel" />
       <GraphPane v-else-if="workspaceStore.mainView === 'graph'" class="editor-col ide-panel" @open-node="openGraphNode" />

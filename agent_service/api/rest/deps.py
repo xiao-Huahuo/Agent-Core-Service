@@ -15,6 +15,7 @@ from agent_service.services.session_service import SessionService
 from agent_service.services.settings_service import SettingsService
 from agent_service.services.knowledge_library_service import KnowledgeLibraryService
 from agent_service.services.knowledge_graph_service import KnowledgeGraphService
+from agent_service.services.library_service import LibraryService
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 from agent_service.services.session_attachment_service import SessionAttachmentService
 from agent_service.services.todo_service import TodoService
@@ -25,6 +26,7 @@ _message_service: MessageService | None = None
 _settings_service: SettingsService | None = None
 _knowledge_library_service: KnowledgeLibraryService | None = None
 _knowledge_graph_service: KnowledgeGraphService | None = None
+_library_service: LibraryService | None = None
 _retrieval_service: MemoryRetrievalService | None = None
 _attachment_service: SessionAttachmentService | None = None
 _grpc_running = False
@@ -65,6 +67,12 @@ def _require_knowledge_graph_service() -> KnowledgeGraphService:
     if _knowledge_graph_service is None:
         raise HTTPException(status_code=503, detail="KnowledgeGraphService not initialized yet")
     return _knowledge_graph_service
+
+
+def _require_library_service() -> LibraryService:
+    if _library_service is None:
+        raise HTTPException(status_code=503, detail="LibraryService not initialized yet")
+    return _library_service
 
 
 def _require_retrieval_service() -> MemoryRetrievalService:

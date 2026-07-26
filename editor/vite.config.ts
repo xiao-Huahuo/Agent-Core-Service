@@ -59,6 +59,7 @@ export default defineConfig({
         },
       },
       '/knowledge': 'http://127.0.0.1:8002',
+      '/library': 'http://127.0.0.1:8002',
       '/sessions': 'http://127.0.0.1:8002',
       '/settings': 'http://127.0.0.1:8002',
       '/downloads': 'http://127.0.0.1:8002',

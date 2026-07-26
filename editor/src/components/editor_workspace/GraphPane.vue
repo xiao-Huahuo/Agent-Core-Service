@@ -8,16 +8,18 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Crosshair, Pause, Play, RefreshCw, Search, Type, X } from 'lucide-vue-next'
+import { Crosshair, Pause, Play, RefreshCw, Search, Tags, Type, X } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
 import { deduplicateKnowledgeGraph, fetchKnowledgeGraph, getDedupStatus } from '@/api/knowledge'
+import { listLibraryItems, listLibraryTags } from '@/api/library'
 import KnowledgeGraphCanvas from '@/components/knowledge_graph/KnowledgeGraphCanvas.vue'
 import { buildFileTreeGraph } from '@/components/knowledge_graph/fileTreeGraphAdapter'
+import { buildLibraryGraph } from '@/components/knowledge_graph/libraryGraphAdapter'
 import { buildSemanticKnowledgeGraph } from '@/components/knowledge_graph/semanticGraphAdapter'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
-import type { KnowledgeSemanticGraphResponse } from '@/types/knowledge'
+import type { KnowledgeSemanticGraphResponse, LibraryItem, LibraryTag } from '@/types/knowledge'
 import type { KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graphTypes'
 
 const emit = defineEmits<{
@@ -30,7 +32,7 @@ const { tree, treeLoading } = storeToRefs(workspaceStore)
 const graphCanvasRef = ref<InstanceType<typeof KnowledgeGraphCanvas> | null>(null)
 const selectedNode = ref<KnowledgeGraphNodeEvent | null>(null)
 const showGraphLabels = ref(true)
-const graphMode = ref<'tree' | 'semantic'>('semantic')
+const graphMode = ref<'tree' | 'semantic' | 'library'>('semantic')
 const graphModeRef = ref<HTMLElement | null>(null)
 const graphModeSliderStyle = ref({ width: '0px', left: '0px' })
 
@@ -49,6 +51,10 @@ function updateGraphModeSlider() {
 const semanticGraph = ref<KnowledgeSemanticGraphResponse | null>(null)
 const semanticLoading = ref(false)
 const semanticError = ref('')
+const libraryItems = ref<LibraryItem[]>([])
+const libraryTags = ref<LibraryTag[]>([])
+const selectedLibraryTag = ref('')
+const libraryLoading = ref(false)
 const dedupLoading = ref(false)
 const dedupProgress = ref(0) // 0~100
 const dedupMessage = ref('')
@@ -67,9 +73,45 @@ const knowledgeTitle = computed(() => {
   return libraryName || basename(settingsStore.profile.knowledgeDir) || 'Knowledge Root'
 })
 
+const filteredLibraryItems = computed(() => {
+  if (!selectedLibraryTag.value) return libraryItems.value
+  const allowedCollectionIds = new Set<string>()
+  const allowedItemIds = new Set(
+    libraryItems.value
+      .filter((item) => item.tags.includes(selectedLibraryTag.value))
+      .map((item) => item.item_id),
+  )
+  const includeDescendants = (parentId: string) => {
+    for (const child of libraryItems.value.filter((item) => item.parent_id === parentId)) {
+      allowedItemIds.add(child.item_id)
+      if (child.item_type === 'collection') {
+        includeDescendants(child.item_id)
+      }
+    }
+  }
+  for (const itemId of [...allowedItemIds]) {
+    const item = libraryItems.value.find((candidate) => candidate.item_id === itemId)
+    if (item?.item_type === 'collection') {
+      includeDescendants(item.item_id)
+    }
+  }
+  for (const item of libraryItems.value) {
+    if (!allowedItemIds.has(item.item_id)) continue
+    let parentId = item.parent_id
+    while (parentId) {
+      allowedCollectionIds.add(parentId)
+      parentId = libraryItems.value.find((candidate) => candidate.item_id === parentId)?.parent_id ?? ''
+    }
+  }
+  return libraryItems.value.filter((item) => allowedItemIds.has(item.item_id) || allowedCollectionIds.has(item.item_id))
+})
+
 const graphModel = computed(() => {
   if (graphMode.value === 'semantic') {
     return buildSemanticKnowledgeGraph(semanticGraph.value, knowledgeTitle.value)
+  }
+  if (graphMode.value === 'library') {
+    return buildLibraryGraph(filteredLibraryItems.value, { rootLabel: knowledgeTitle.value })
   }
   return buildFileTreeGraph(tree.value, { rootLabel: knowledgeTitle.value })
 })
@@ -140,6 +182,10 @@ function refreshGraph() {
     void loadSemanticGraph()
     return
   }
+  if (graphMode.value === 'library') {
+    void loadLibraryGraph()
+    return
+  }
   void workspaceStore.loadKnowledgeTree()
 }
 
@@ -167,6 +213,47 @@ async function loadSemanticGraph() {
     semanticLoading.value = false
   }
 }
+
+async function loadLibraryGraph() {
+  if (!settingsStore.profile.userId) return
+  libraryLoading.value = true
+  try {
+    const [items, tagResponse] = await Promise.all([
+      loadLibraryItemsRecursive(''),
+      listLibraryTags(settingsStore.profile.userId),
+    ])
+    libraryItems.value = items
+    libraryTags.value = tagResponse.tags
+    if (selectedLibraryTag.value && !tagResponse.tags.some((tag) => tag.name === selectedLibraryTag.value)) {
+      selectedLibraryTag.value = ''
+    }
+  } finally {
+    libraryLoading.value = false
+  }
+}
+
+async function loadLibraryItemsRecursive(parentId: string): Promise<LibraryItem[]> {
+  const response = await listLibraryItems({
+    userId: settingsStore.profile.userId,
+    parentId,
+    sort: 'updated_at',
+    direction: 'desc',
+  })
+  const descendants = await Promise.all(
+    response.items
+      .filter((item) => item.item_type === 'collection')
+      .map((item) => loadLibraryItemsRecursive(item.item_id)),
+  )
+  return [...response.items, ...descendants.flat()]
+}
+
+function cycleLibraryTag() {
+  const options = ['', ...libraryTags.value.map((tag) => tag.name)]
+  const currentIndex = Math.max(0, options.indexOf(selectedLibraryTag.value))
+  selectedLibraryTag.value = options[(currentIndex + 1) % options.length] ?? ''
+}
+
+const libraryTagTitle = computed(() => selectedLibraryTag.value ? `图书馆标签: ${selectedLibraryTag.value}` : '图书馆标签: 全部')
 
 async function handleDedup() {
   if (!settingsStore.profile.userId) return
@@ -232,6 +319,7 @@ function kindLabel(kind: string): string {
   if (kind === 'root') return '根'
   if (kind === 'folder') return '文件夹'
   if (kind === 'file') return '文件'
+  if (kind === 'virtual-group') return '集锦'
   if (kind === 'document') return '文档'
   if (kind === 'entity') return '实体'
   return kind
@@ -245,6 +333,8 @@ onMounted(() => {
     }
     if (graphMode.value === 'semantic') {
       void loadSemanticGraph()
+    } else if (graphMode.value === 'library') {
+      void loadLibraryGraph()
     }
   }
 })
@@ -258,6 +348,8 @@ watch(
     updateGraphModeSlider()
     if (mode === 'semantic') {
       void loadSemanticGraph()
+    } else if (mode === 'library') {
+      void loadLibraryGraph()
     } else {
       void workspaceStore.loadKnowledgeTree()
     }
@@ -286,9 +378,28 @@ watch(
         >
           文件树
         </button>
+        <button
+          class="graph-mode-button"
+          :class="{ active: graphMode === 'library' }"
+          type="button"
+          @click="graphMode = 'library'"
+        >
+          图书馆
+        </button>
       </div>
       <div class="graph-actions">
         <span class="graph-stat mono">{{ graphStats.nodes }} nodes / {{ graphStats.links }} links</span>
+        <button
+          v-if="graphMode === 'library'"
+          class="graph-action"
+          :class="{ active: Boolean(selectedLibraryTag) }"
+          type="button"
+          :title="libraryTagTitle"
+          @click="cycleLibraryTag"
+        >
+          <Tags :size="15" />
+          <span>{{ selectedLibraryTag || '全部' }}</span>
+        </button>
         <button
           class="graph-action"
           :class="{ active: showGraphLabels }"
@@ -305,21 +416,22 @@ watch(
         </button>
         <button
           class="graph-action"
-          :class="{ loading: treeLoading || semanticLoading, 'refresh-btn': true }"
+          :class="{ loading: treeLoading || semanticLoading || libraryLoading, 'refresh-btn': true }"
           type="button"
           title="Reload graph data"
-          :disabled="treeLoading || semanticLoading"
+          :disabled="treeLoading || semanticLoading || libraryLoading"
           @click="refreshGraph"
         >
           <RefreshCw :size="15" />
           <span>刷新</span>
         </button>
         <button
+          v-if="graphMode === 'semantic'"
           class="graph-action"
           :class="{ loading: dedupLoading }"
           type="button"
           title="全量去重"
-          :disabled="dedupLoading || treeLoading || semanticLoading"
+          :disabled="dedupLoading || treeLoading || semanticLoading || libraryLoading"
           @click="handleDedup"
         >
           <RefreshCw :size="15" />
@@ -770,7 +882,9 @@ watch(
 }
 
 .selected-node-kind-tag.folder,
-.connected-kind-tag.folder {
+.connected-kind-tag.folder,
+.selected-node-kind-tag.virtual-group,
+.connected-kind-tag.virtual-group {
   border: 1px solid var(--color-primary);
   background: var(--color-primary-soft);
   color: var(--color-primary);

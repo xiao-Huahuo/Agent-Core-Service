@@ -22,6 +22,7 @@ export type FileViewerKind = 'markdown' | 'code' | 'image' | 'pdf' | 'table' | '
 export type WorkspaceMainView =
   | 'editor'
   | 'resources'
+  | 'library'
   | 'ingestion'
   | 'graph'
   | 'dashboard'
@@ -64,6 +65,62 @@ export interface KnowledgeTrashEntry {
   deleted_at: string
   expires_at: string
   chunks_deleted?: number
+}
+
+export interface LibraryAsset {
+  asset_id: string
+  mime_type: string
+  file_name: string
+  url: string
+  width: number
+  height: number
+  size: number
+  created_at: string
+}
+
+export interface LibraryTag {
+  tag_id: string
+  name: string
+}
+
+export interface LibraryBreadcrumb {
+  item_id: string
+  title: string
+}
+
+export interface LibraryItem {
+  item_id: string
+  user_id: string
+  library_id: string
+  parent_id: string
+  item_type: 'book' | 'collection'
+  content_type: 'knowledge_file' | 'web_url' | 'external_file' | 'collection'
+  title: string
+  display_title: string
+  description: string
+  source_path: string
+  source_url: string
+  source_name: string
+  source_mime: string
+  source_size: number
+  source_mtime: string
+  source_exists: boolean
+  cover_mode: 'icon' | 'image' | 'description' | 'source_image' | 'title'
+  cover_asset_id: string
+  cover_asset: LibraryAsset | null
+  sort_order: number
+  index_status: IndexStatus | 'missing' | ''
+  graph_status: GraphStatus | ''
+  tags: string[]
+  child_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface LibraryItemsResponse {
+  items: LibraryItem[]
+  parent: LibraryItem | null
+  breadcrumbs: LibraryBreadcrumb[]
 }
 
 export type IngestionQueueStatus = 'running' | 'waiting'

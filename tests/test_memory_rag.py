@@ -13,6 +13,8 @@ RAG 检索链路测试脚本。
 
 from __future__ import annotations
 
+import threading
+import time
 from typing import Sequence
 
 from sqlmodel import SQLModel, create_engine
@@ -20,7 +22,7 @@ from sqlmodel import SQLModel, create_engine
 from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
-from agent_service.services.memory.rag.embedding import EmbeddingService
+from agent_service.services.memory.rag.embedding import EmbeddingService, SentenceTransformerEmbeddingProvider
 from agent_service.services.memory.rag.hybrid_retrieval import HybridRetrievalService
 from agent_service.services.memory.rag.rerank import RerankProvider, RerankService
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
@@ -42,6 +44,50 @@ class FakeEmbeddingProvider:
         """根据文本长度生成稳定假向量。"""
 
         return [[float(len(text) + index) for index in range(self.dimension)] for text in texts]
+
+
+class FakeSentenceTransformerModel:
+    """Minimal model stub used to verify provider loading behavior."""
+
+    def encode(
+        self,
+        texts: list[str],
+        *,
+        normalize_embeddings: bool,
+        show_progress_bar: bool,
+    ) -> list[list[float]]:
+        _ = normalize_embeddings, show_progress_bar
+        return [[float(len(text))] for text in texts]
+
+
+def test_sentence_transformer_embedding_provider_waits_for_warmup_load() -> None:
+    """Embedding generation should wait for the background warmup load to finish."""
+
+    config = make_rag_test_config()
+    provider = SentenceTransformerEmbeddingProvider(config=config)
+    load_started = threading.Event()
+    allow_load_finish = threading.Event()
+
+    def fake_load_model_in_thread() -> None:
+        load_started.set()
+        allow_load_finish.wait(timeout=5)
+        provider._model = FakeSentenceTransformerModel()
+
+    provider._load_model_in_thread = fake_load_model_in_thread  # type: ignore[method-assign]
+    provider.warmup()
+    assert load_started.wait(timeout=1)
+
+    vectors: list[list[float]] = []
+    embed_thread = threading.Thread(target=lambda: vectors.extend(provider.embed_texts(["hello"])))
+    embed_thread.start()
+    time.sleep(0.05)
+    assert embed_thread.is_alive()
+
+    allow_load_finish.set()
+    embed_thread.join(timeout=1)
+
+    assert not embed_thread.is_alive()
+    assert vectors == [[5.0]]
 
 
 class FakeRerankProvider(RerankProvider):

@@ -85,6 +85,7 @@ from agent_service.services.memory.retrieval_service import MemoryRetrievalServi
 from agent_service.services.settings_service import SettingsService
 from agent_service.services.knowledge_library_service import KnowledgeLibraryService
 from agent_service.services.knowledge_graph_service import KnowledgeGraphService
+from agent_service.services.library_service import LibraryService
 from agent_service.services.memory.rag.knowledge_ingestion import KnowledgeIngestionService
 from agent_service.scripts.frontmatter_bootstrap import bootstrap_frontmatter
 import agent_service.api.rest.deps as rest_deps
@@ -147,10 +148,17 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         settings_service=settings_service,
         knowledge_graph_service=knowledge_graph_service,
     )
+    library_service = LibraryService(
+        config=config,
+        settings_service=settings_service,
+        knowledge_library_service=knowledge_library_service,
+        knowledge_graph_service=knowledge_graph_service,
+    )
     rest_deps._settings_service = settings_service
     rest_deps._attachment_service = attachment_service
     rest_deps._knowledge_library_service = knowledge_library_service
     rest_deps._knowledge_graph_service = knowledge_graph_service
+    rest_deps._library_service = library_service
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
     rest_deps._retrieval_service = retrieval_service
     from agent_service.services.todo_service import TodoService
@@ -252,6 +260,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._attachment_service = None
         rest_deps._knowledge_library_service = None
         rest_deps._knowledge_graph_service = None
+        rest_deps._library_service = None
         rest_deps._todo_service = None
         logger.info("AgentService 已关闭")
 
@@ -266,6 +275,9 @@ _knowledge_assets_dir.mkdir(parents=True, exist_ok=True)
 _downloads_dir = _runtime_config.storage.assets_dir / "downloads"
 _downloads_dir.mkdir(parents=True, exist_ok=True)
 
+_library_assets_dir = _runtime_config.storage.assets_dir / "library"
+_library_assets_dir.mkdir(parents=True, exist_ok=True)
+
 from fastapi.staticfiles import StaticFiles
 
 app.mount(
@@ -278,6 +290,12 @@ app.mount(
     "/downloads",
     StaticFiles(directory=str(_downloads_dir)),
     name="downloads",
+)
+
+app.mount(
+    "/library/assets",
+    StaticFiles(directory=str(_library_assets_dir)),
+    name="library_assets",
 )
 
 
