@@ -288,8 +288,28 @@ function linkSourceNames() {
 async function highlightCodeBlocks() {
   await nextTick()
   linkSourceNames()
-  contentRef.value?.querySelectorAll('pre code').forEach((block) => {
+  const root = contentRef.value
+  if (!root) return
+  root.querySelectorAll('pre code').forEach((block) => {
     hljs.highlightElement(block as HTMLElement)
+  })
+  // Add copy buttons to pre blocks
+  root.querySelectorAll('pre').forEach((pre) => {
+    if (pre.querySelector('.code-copy-btn')) return
+    const btn = document.createElement('button')
+    btn.className = 'code-copy-btn'
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+    btn.title = '复制代码'
+    btn.addEventListener('click', () => {
+      const code = pre.querySelector('code')
+      const text = code?.textContent ?? ''
+      navigator.clipboard.writeText(text).then(() => {
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+        setTimeout(() => { btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' }, 1500)
+      })
+    })
+    pre.style.position = 'relative'
+    pre.appendChild(btn)
   })
 }
 
@@ -354,12 +374,12 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
 .markdown-body :deep(h6) { color: color-mix(in srgb, var(--color-primary) 33.3%, white); font-size: calc(0.75rem * var(--font-scale)); }
 
 .markdown-body :deep(code) {
-  padding: 1px 4px;
+  padding: 1px 8px;
   border: 1px solid var(--color-border);
-  border-radius: 0;
+  border-radius: 999px;
   background: var(--color-bg-muted);
   color: var(--color-text-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-text);
   font-size: var(--font-size-xs);
 }
 
@@ -368,14 +388,19 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
   padding: var(--space-12);
   overflow-x: auto;
   border: 1px solid var(--color-border);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background: var(--color-bg-muted);
+  line-height: 1.35;
 }
 
 .markdown-body :deep(pre code) {
   padding: 0;
   border: 0;
+  border-radius: 0;
   background: transparent;
+  font-family: var(--font-text);
+  font-size: var(--font-size-xs);
+  line-height: inherit;
 }
 
 .markdown-body :deep(ul),
@@ -465,6 +490,34 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
   max-width: 100%;
   height: auto;
   border-radius: 6px;
+}
+
+/* Copy button on code blocks */
+.markdown-body :deep(.code-copy-btn) {
+  position: absolute;
+  top: var(--space-6);
+  right: var(--space-6);
+  padding: 2px var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text-tertiary);
+  font-family: var(--font-ui);
+  font-size: calc(10px * var(--font-scale));
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 160ms ease, color 160ms ease;
+  z-index: 2;
+  line-height: 1.6;
+}
+
+.markdown-body :deep(pre:hover .code-copy-btn) {
+  opacity: 1;
+}
+
+.markdown-body :deep(.code-copy-btn:hover) {
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
 }
 </style>
 

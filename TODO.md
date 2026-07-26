@@ -10,14 +10,14 @@
   - 目录结构：
     ```text
     skill-name/
-      SKILL.md
-      scripts/
-      references/
-      assets/
+      SKILL.md (必须有）
+      scripts/ （可选）
+      references/ （可选）
+      assets/ （可选）
     ```
   - 用户级Skill按用户知识库隔离，**用户登录或知识库目录变更时**扫描Skill目录，读取元信息，建立索引，将已启用Skill的基本索引信息注入上下文。
   - 对于非Simple思考模式下的每次用户输入，Agent决策前，在入口节点设置一个`Skill路由器`节点： 调用小模型，返回针对用户当前询问场景适合的3个Skill。 小模型不可用或返回异常时，使用关键词/description 简单匹配。随后将命中的 Skill 正文（`SKILL.md`）注入本轮运行上下文（用户下一轮询问后从上下文中去除），Skill 正文默认只对当前轮生效，下一轮重新路由。。
-  - 每个 Skill 是独立目录，必须有 `SKILL.md`，可选带 `references/`、`scripts/`、`assets/`。
+  - [ ] 调试Skill
   - [ ] 左侧图标栏添加一个新的Skill配置页面：
     - 分为Skill概览页面和Skill定制页面。
     - Skill概览页面以卡片形式展示系统自带Skill和用户注入的Skill，用户可开关Skill，可注入自定义的Skill。

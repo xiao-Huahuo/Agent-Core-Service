@@ -140,6 +140,28 @@ function getPreviewScrollContainer(target: HTMLElement) {
   return null
 }
 
+function injectCodeCopyButtons() {
+  const root = getPreviewElement()
+  if (!root) return
+  root.querySelectorAll('pre').forEach((pre) => {
+    if ((pre as HTMLElement).querySelector('.code-copy-btn')) return
+    const btn = document.createElement('button')
+    btn.className = 'code-copy-btn'
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+    btn.title = '复制代码'
+    btn.addEventListener('click', () => {
+      const code = pre.querySelector('code')
+      const text = code?.textContent ?? ''
+      navigator.clipboard.writeText(text).then(() => {
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+        setTimeout(() => { btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' }, 1500)
+      })
+    })
+    ;(pre as HTMLElement).style.position = 'relative'
+    pre.appendChild(btn)
+  })
+}
+
 function syncPreviewContent() {
   if (!instance) {
     return
@@ -152,6 +174,7 @@ function syncPreviewContent() {
     ensurePreviewPaneIsRenderable()
     instance.renderPreview()
     fixImageUrls()
+    injectCodeCopyButtons()
   } catch (err) {
     console.warn('[MarkdownPreview] syncPreviewContent failed:', err)
   }
@@ -360,7 +383,33 @@ onBeforeUnmount(() => {
 
 .markdown-preview :deep(pre),
 .markdown-preview :deep(code) {
-  font-family: var(--font-code) !important;
+  font-family: var(--font-text) !important;
+}
+
+.markdown-preview :deep(code) {
+  padding: 1px 8px !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 999px !important;
+  background: var(--color-bg-muted) !important;
+  font-size: var(--font-size-xs) !important;
+}
+
+.markdown-preview :deep(pre) {
+  padding: var(--space-12) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-md) !important;
+  background: var(--color-bg-muted) !important;
+  line-height: 1.35 !important;
+  position: relative !important;
+}
+
+.markdown-preview :deep(pre code) {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  font-family: var(--font-text) !important;
+  line-height: inherit !important;
 }
 
 .markdown-preview :deep(a) {
@@ -390,5 +439,32 @@ onBeforeUnmount(() => {
 .markdown-preview :deep(blockquote) {
   border-left-color: var(--color-primary) !important;
   color: var(--color-text-muted) !important;
+}
+
+.markdown-preview :deep(.code-copy-btn) {
+  position: absolute !important;
+  top: var(--space-6) !important;
+  right: var(--space-6) !important;
+  padding: 2px var(--space-8) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-sm) !important;
+  background: var(--color-surface-raised) !important;
+  color: var(--color-text-tertiary) !important;
+  font-family: var(--font-ui) !important;
+  font-size: calc(10px * var(--font-scale)) !important;
+  cursor: pointer !important;
+  opacity: 0 !important;
+  transition: opacity 160ms ease, color 160ms ease !important;
+  z-index: 2 !important;
+  line-height: 1.6 !important;
+}
+
+.markdown-preview :deep(pre:hover .code-copy-btn) {
+  opacity: 1 !important;
+}
+
+.markdown-preview :deep(.code-copy-btn:hover) {
+  color: var(--color-primary) !important;
+  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border)) !important;
 }
 </style>
