@@ -16,6 +16,7 @@ interface TraceRecord {
   event?: string
   human_readable?: string
   tool_name?: string
+  display_name?: string
   tool_args_summary?: string
   result_summary?: string
 }
@@ -94,7 +95,7 @@ function traceKey(trace: TraceRecord, idx: number): string {
               [{{ trace.node }}]
             </span>
             <span class="step-summary">{{ trace.human_readable || trace.event }}</span>
-            <span v-if="trace.tool_name" class="step-tool-tag">{{ trace.tool_name }}</span>
+            <span v-if="trace.tool_name" class="step-tool-tag">{{ trace.display_name || trace.tool_name }}</span>
           </div>
 
           <Transition name="detail">

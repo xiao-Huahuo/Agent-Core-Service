@@ -1277,6 +1277,44 @@ def _emit_task_list_update(task_list: dict[str, Any] | None) -> None:
         callback(task_list)
 
 
+def get_task_list_status() -> str:
+    """
+    Read the current session task list without changing its state.
+
+    Use this when the Agent needs to confirm item ids, current progress, or
+    completion summaries before continuing a long-running task list.
+    """
+
+    service = _get_task_list_service()
+    runtime = get_tool_runtime()
+    task_list = service.get_task_list(runtime.session_id)
+    if task_list is None:
+        return "No task list exists for this session."
+    items = task_list.get("items", [])
+    completed_count = len([item for item in items if isinstance(item, dict) and item.get("status") == "completed"])
+    lines = [
+        f"Task list: {task_list.get('title') or 'Task list'}",
+        f"Status: {task_list.get('status') or 'active'}",
+        f"Current item id: {task_list.get('current_item_id') or 'none'}",
+        f"Progress: {completed_count}/{len(items) if isinstance(items, list) else 0}",
+    ]
+    if isinstance(items, list) and items:
+        lines.append("Items:")
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                f"- {item.get('id')}: [{item.get('status') or 'pending'}] {item.get('title') or ''}"
+            )
+            summary = str(item.get("completion_summary") or "").strip()
+            if summary:
+                lines.append(f"  completion_summary: {summary}")
+    final_summary = str(task_list.get("final_summary") or "").strip()
+    if final_summary:
+        lines.append(f"Final summary: {final_summary}")
+    return "\n".join(lines)
+
+
 def create_task_list(title: str = "", items: list[Any] | str | None = None) -> str:
     """
     Create a session-scoped task list for complex long-running work.

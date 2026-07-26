@@ -30,6 +30,7 @@ from agent_service.tools.builtin import (
     generate_uuid,
     get_current_time,
     get_current_utc_time,
+    get_task_list_status,
     get_current_viewing_document,
     get_knowledge_context,
     get_knowledge_file_url,
@@ -445,6 +446,17 @@ STATE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
 
 TASK_LIST_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
+        name="get_task_list_status",
+        description=(
+            "Read the current session task list without changing it. "
+            "Use this when you need to confirm task list status, item ids, current item, "
+            "or completion summaries before continuing long-running work."
+        ),
+        args_schema={"type": "object", "properties": {}, "required": []},
+        function=get_task_list_status,
+        display_name="获取任务列表状态",
+    ),
+    BuiltinToolDefinition(
         name="create_task_list",
         description=(
             "Create a persistent session task list for complex or step-by-step work. "
@@ -463,7 +475,7 @@ TASK_LIST_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
             "required": ["items"],
         },
         function=create_task_list,
-        display_name="Create task list",
+        display_name="创建任务列表",
     ),
     BuiltinToolDefinition(
         name="complete_task_list_item",
@@ -487,7 +499,7 @@ TASK_LIST_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
             "required": ["item_id", "completion_summary"],
         },
         function=complete_task_list_item,
-        display_name="Complete task item",
+        display_name="完成任务项",
     ),
     BuiltinToolDefinition(
         name="finish_task_list",
@@ -503,7 +515,7 @@ TASK_LIST_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
             "required": [],
         },
         function=finish_task_list,
-        display_name="Finish task list",
+        display_name="完成任务列表",
     ),
 ]
 

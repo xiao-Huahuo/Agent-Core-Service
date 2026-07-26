@@ -1,6 +1,8 @@
 # CHANGE HISTORY
 
 ## 2026-07-26
+- [x] Add read-only task list status tool:
+  - Added `get_task_list_status` as a non-mutating Agent tool for checking the current session task list, current item, item ids, item status, completion summaries, and final summary without triggering UI update events.
 - [x] 补充 README 图书馆说明:
   - 在“图书馆”章节补充面向用户的核心功能说明,并改成更短段落,方便用户快速理解图书馆用途、资料类型、拖拽上传、真实文件同步和缺失状态。
 - [x] 图书馆真实文件夹改为半维护投影:
