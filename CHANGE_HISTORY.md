@@ -37,6 +37,26 @@
   - Bug 3: `edit_todo` 内置函数中 `due_date=''` 通过 `due_date if due_date else None` 被错误转换为 `None`,导致服务层收到 `None` 后跳过更新(属于"不传则不修改"逻辑),实际无法清除截止日期。修复: 直接透传 `due_date` 原值给服务层,利用服务层自身的 `'' → None` 转换逻辑。(`builtin.py:1205`)
   - Bug 4: `list_todos()` 输出不包含待办 ID(`todo_xxx`),Agent 仅有序号(1./2./3.)无从知道真实 ID,导致后续 toggle/edit/delete 传参错误全返回"未找到"。修复: 列表每行增加 `[todo_xxx]` 格式的 ID 展示;`add_todo` 返回值也带上 `[todo_xxx]`;工具描述同步提示 Agent 从输出中提取 ID。(`builtin.py:1144-1148`)
   - Bug 5: Vite 开发服务器代理配置未包含 `/todo` 路由,前端刷新按钮发起的 `/todo/list` 请求被 Vite 自身处理而没有转发到后端 8002 端口,导致 API 调用静默失败(500 或连接拒绝),且 `refreshFromServer` 的 catch 块未输出任何日志,用户看不到失败反馈。修复: `vite.config.ts` 补充 `'/todo': 'http://127.0.0.1:8002'` 代理规则;`refreshFromServer` 的 catch 块改为打印 warning 日志以便排查。
+- [x] 设置里面增加一页存储管理,可以自行设置各种东西的路径,除了知识库路径之外,其他路径一旦修改并保存了新配置,则重启后生效,重启后首先将原来路径的相关存储内容移动到目标文件夹.
+  - 注: 在进行以下配置调整之前,要对于模型加载逻辑做一个调整: 按需下载,等要使用Agent时再检测并下载Embedding和ReRank模型,等开启OCR功能时再检测并下载OCR模型,没下载模型时禁止使用各自功能,硬性弹窗阻断.模型加载改成异步加载,而不必阻塞在主进程启动路径上.
+  - 知识库路径(默认resources/knowledge)
+  - 运行时文件根路径(runtime/)(记为R)
+  - 资源文件路径(R/assets)
+  - 数据库根路径(R/db)(记为D)
+  - 关联库路径(D/relation)
+  - 向量库路径(D/vector)
+  - 预处理中间文件(R/frontmatter)
+  - 日志文件(R/logs)
+  - 模型根路径(R/models)(记为M)
+  - Embedding模型路径(M/embedding)
+  - OCR模型路径(M/paddleocr)
+  - CrossEncoder模型路径(M/rerank)
+  - 最近删除(R/trash)
+  - 注: 以上除了知识库路径和根路径之外,其他所有路径都配备有一个"清空"按钮.顶端有一个"清理存储"按钮,右边统计了知识库总大小和R根路径总大小.每个路径都登记路径大小.
+- [x] 重构设置页面接口层,按照设置页面的子页面进行模块设置划分.
+- [x] 修复待办的几个agent工具.
+- [x] 为markdown预览(包括agent输出的以及编辑器预览的)里面的图片配备预览器,可以下载,缩放,查看详细信息.
+- [x] 找到产生不明原因的data/文件夹或者todos/文件夹,这个deepseek-v4-flash写出的狗屎代码问题.
 ## 2026-07-24
 - [x] 为 Agent 配备 TODO 增删改查工具: 后端新增 `TodoService` (JSON 文件持久化)、`builtin.py` 中注册 5 个工具函数(list_todos/add_todo/toggle_todo/edit_todo/delete_todo)、REST API 端点(todo.py)及路由器注册;前端新增 `api/todo.ts` 客户端、`api_routes.ts` 中注册 TODO 路由。
 - [x] 待办列表侧边栏: 在 agent-col 内部基于 flex 列布局分割待办(上半)与 Agent(下半),过渡动画保持 160~180ms。
