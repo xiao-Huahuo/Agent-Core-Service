@@ -98,6 +98,7 @@ export interface LibraryItem {
   title: string
   display_title: string
   description: string
+  storage_path: string
   source_path: string
   source_url: string
   source_name: string

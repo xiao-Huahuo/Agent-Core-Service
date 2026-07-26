@@ -466,15 +466,19 @@ class SettingsService:
             select(LibraryItem)
             .where(LibraryItem.user_id == user_id)
             .where(LibraryItem.library_id == library_id)
-            .where(LibraryItem.content_type == "knowledge_file")
         )
         for item in db.exec(statement).all():
             source_path = item.source_path.strip().replace("\\", "/")
+            storage_path = item.storage_path.strip().replace("\\", "/")
+            if storage_path == old_prefix:
+                item.storage_path = new_prefix
+            elif storage_path.startswith(f"{old_prefix}/"):
+                item.storage_path = f"{new_prefix}/{storage_path[len(old_prefix) + 1:]}"
             if source_path == old_prefix:
                 item.source_path = new_prefix
             elif source_path.startswith(f"{old_prefix}/"):
                 item.source_path = f"{new_prefix}/{source_path[len(old_prefix) + 1:]}"
-            else:
+            elif storage_path == item.storage_path:
                 continue
             item.updated_at = self._utc_now()
             db.add(item)

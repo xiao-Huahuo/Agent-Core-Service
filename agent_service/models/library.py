@@ -32,6 +32,7 @@ class LibraryItem(SQLModel, table=True):
     content_type: str = Field(default="knowledge_file", index=True, max_length=32)
     title: str = Field(default="", max_length=256)
     description: str = Field(default="", sa_column=Column(Text))
+    storage_path: str = Field(default="", index=True, max_length=2048)
     source_path: str = Field(default="", index=True, max_length=2048)
     source_url: str = Field(default="", max_length=2048)
     source_name: str = Field(default="", max_length=512)

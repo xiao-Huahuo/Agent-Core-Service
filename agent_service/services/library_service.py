@@ -2,8 +2,8 @@
 图书馆虚拟编目服务。
 
 功能说明:
-本服务负责图书馆页面的虚拟资源管理。它不会扫描真实知识库生成条目,也不会
-移动或重命名真实文件;所有集锦、标签、别名、描述、封面和排序都写入 SQLite。
+本服务负责图书馆页面的虚拟资源管理,并把虚拟集锦/图书结构投影到当前知识库
+的图书馆存储目录。集锦维护真实文件夹,图书维护真实文件路径。
 
 使用说明:
 由 REST 层注入 user_id 后调用。创建图书时可引用知识库相对路径、网页 URL 或
@@ -13,11 +13,13 @@
 from __future__ import annotations
 
 import mimetypes
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from sqlalchemy import text
 from sqlmodel import Session, SQLModel, col, select
 
 from agent_service.core.agent_config import AgentConfig
@@ -61,6 +63,21 @@ class LibraryService:
         self.knowledge_graph_service = knowledge_graph_service
         self.engine = settings_service.engine
         SQLModel.metadata.create_all(self.engine)
+        self._ensure_library_schema()
+
+    def _ensure_library_schema(self) -> None:
+        """确保旧库中的图书馆表具备真实投影路径字段。"""
+
+        from sqlalchemy import inspect as sa_inspect
+        try:
+            inspector = sa_inspect(self.engine)
+            columns = [column["name"] for column in inspector.get_columns("library_items")]
+            with Session(self.engine) as db:
+                if "storage_path" not in columns:
+                    db.execute(text("ALTER TABLE library_items ADD COLUMN storage_path VARCHAR(2048) NOT NULL DEFAULT ''"))
+                db.commit()
+        except Exception:
+            pass
 
     def list_items(
         self,
@@ -90,6 +107,7 @@ class LibraryService:
         normalized_tag = tag.strip()
         normalized_content_type = content_type.strip()
         with Session(self.engine) as db:
+            self._sync_collection_storage_dirs(db=db, context=context)
             statement = (
                 select(LibraryItem)
                 .where(LibraryItem.user_id == context["user_id"])
@@ -210,6 +228,12 @@ class LibraryService:
         now = self._now()
         with Session(self.engine) as db:
             self._validate_parent(db=db, context=context, parent_id=parent_id)
+            storage_path = self._create_collection_storage_path(
+                db=db,
+                context=context,
+                parent_id=parent_id.strip(),
+                title=title,
+            )
             item = LibraryItem(
                 item_id=self._new_id("lib"),
                 user_id=context["user_id"],
@@ -219,6 +243,7 @@ class LibraryService:
                 content_type=COLLECTION_ITEM_TYPE,
                 title=title.strip(),
                 description=description.strip(),
+                storage_path=storage_path,
                 cover_mode=self._normalize_cover_mode(cover_mode),
                 cover_asset_id=cover_asset_id.strip(),
                 created_at=now,
@@ -258,6 +283,22 @@ class LibraryService:
         now = self._now()
         with Session(self.engine) as db:
             self._validate_parent(db=db, context=context, parent_id=parent_id)
+            storage_path = ""
+            if normalized_content_type == CONTENT_KNOWLEDGE_FILE:
+                normalized_source_path = self._move_book_file_to_parent_storage(
+                    db=db,
+                    context=context,
+                    parent_id=parent_id.strip(),
+                    source_path=normalized_source_path,
+                    title=title,
+                )
+                storage_path = normalized_source_path
+                source_meta = self._source_metadata(
+                    context=context,
+                    content_type=normalized_content_type,
+                    source_path=normalized_source_path,
+                    source_url=normalized_source_url,
+                )
             item = LibraryItem(
                 item_id=self._new_id("lib"),
                 user_id=context["user_id"],
@@ -267,6 +308,7 @@ class LibraryService:
                 content_type=normalized_content_type,
                 title=title.strip(),
                 description=description.strip(),
+                storage_path=storage_path,
                 source_path=normalized_source_path,
                 source_url=normalized_source_url,
                 source_name=source_meta["source_name"],
@@ -292,12 +334,31 @@ class LibraryService:
         context = self._context(user_id=user_id)
         with Session(self.engine) as db:
             item = self._get_owned_item(db=db, context=context, item_id=item_id)
+            next_parent_id = item.parent_id
+            next_title = item.title
             if "parent_id" in payload:
-                parent_id = str(payload.get("parent_id") or "").strip()
-                self._validate_move(db=db, context=context, item=item, parent_id=parent_id)
-                item.parent_id = parent_id
+                next_parent_id = str(payload.get("parent_id") or "").strip()
+                self._validate_move(db=db, context=context, item=item, parent_id=next_parent_id)
             if "title" in payload:
-                item.title = str(payload.get("title") or "").strip()
+                next_title = str(payload.get("title") or "").strip()
+            if item.item_type == COLLECTION_ITEM_TYPE and (next_parent_id != item.parent_id or next_title != item.title):
+                self._move_collection_storage(
+                    db=db,
+                    context=context,
+                    item=item,
+                    parent_id=next_parent_id,
+                    title=next_title,
+                )
+            elif item.item_type == BOOK_ITEM_TYPE and (next_parent_id != item.parent_id or next_title != item.title):
+                self._move_book_storage(
+                    db=db,
+                    context=context,
+                    item=item,
+                    parent_id=next_parent_id,
+                    title=next_title,
+                )
+            item.parent_id = next_parent_id
+            item.title = next_title
             if "description" in payload:
                 item.description = str(payload.get("description") or "").strip()
             if "cover_mode" in payload:
@@ -379,6 +440,7 @@ class LibraryService:
             "user_id": str(profile["user_id"]),
             "library_id": str(active_library["library_id"]),
             "knowledge_dir": Path(str(active_library["knowledge_dir"])).expanduser().resolve(),
+            "library_storage_dir": str(active_library.get("library_storage_dir") or "library"),
         }
 
     def _source_metadata(self, *, context: dict[str, Any], content_type: str, source_path: str, source_url: str) -> dict[str, Any]:
@@ -455,6 +517,7 @@ class LibraryService:
             "title": item.title,
             "display_title": self._display_title(item),
             "description": item.description,
+            "storage_path": item.storage_path,
             "source_path": item.source_path,
             "source_url": item.source_url,
             "source_name": source_meta["source_name"] or item.source_name,
@@ -686,13 +749,258 @@ class LibraryService:
         """判断条目引用的真实内容是否存在或有效。"""
 
         if item.item_type == COLLECTION_ITEM_TYPE:
-            return True
+            if not item.storage_path:
+                return True
+            root = Path(context["knowledge_dir"])
+            return (root / item.storage_path).resolve().is_dir()
         if item.content_type == CONTENT_WEB_URL:
             return bool(item.source_url)
         if item.content_type == CONTENT_EXTERNAL_FILE:
             return Path(item.source_path).expanduser().exists()
         root = Path(context["knowledge_dir"])
         return (root / item.source_path).resolve().exists()
+
+    def _library_root_relative(self, *, context: dict[str, Any]) -> str:
+        """返回图书馆真实存储根目录相对路径。"""
+
+        value = str(context.get("library_storage_dir") or "library").strip().replace("\\", "/").strip("/")
+        return value or "library"
+
+    def _library_root_path(self, *, context: dict[str, Any]) -> Path:
+        """返回图书馆真实存储根目录绝对路径。"""
+
+        root = Path(context["knowledge_dir"])
+        path = (root / self._library_root_relative(context=context)).resolve()
+        if not self._is_relative_to(path, root):
+            raise ValueError("library storage path escapes active knowledge library")
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _create_collection_storage_path(
+        self,
+        *,
+        db: Session,
+        context: dict[str, Any],
+        parent_id: str,
+        title: str,
+    ) -> str:
+        """为新集锦创建真实文件夹并返回知识库相对路径。"""
+
+        parent_dir = self._parent_storage_dir(db=db, context=context, parent_id=parent_id)
+        folder_name = self._safe_path_segment(title) or "未命名集锦"
+        target_dir = self._unique_child_path(target_dir=parent_dir, preferred_name=folder_name)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        return self._relative_to_knowledge_root(context=context, path=target_dir)
+
+    def _move_collection_storage(
+        self,
+        *,
+        db: Session,
+        context: dict[str, Any],
+        item: LibraryItem,
+        parent_id: str,
+        title: str,
+    ) -> None:
+        """移动或重命名集锦真实文件夹并重写子孙条目的路径前缀。"""
+
+        old_relative = self._collection_storage_relative(db=db, context=context, item=item)
+        old_dir = self._absolute_knowledge_path(context=context, relative_path=old_relative)
+        parent_dir = self._parent_storage_dir(db=db, context=context, parent_id=parent_id)
+        folder_name = self._safe_path_segment(title) or "未命名集锦"
+        target_dir = (parent_dir / folder_name).resolve()
+        if target_dir != old_dir:
+            target_dir = self._unique_child_path(target_dir=parent_dir, preferred_name=folder_name)
+            if old_dir.exists():
+                target_dir.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(old_dir), str(target_dir))
+            else:
+                target_dir.mkdir(parents=True, exist_ok=True)
+        new_relative = self._relative_to_knowledge_root(context=context, path=target_dir)
+        self._rewrite_descendant_storage_paths(
+            db=db,
+            context=context,
+            root_item=item,
+            old_prefix=old_relative,
+            new_prefix=new_relative,
+        )
+        item.storage_path = new_relative
+
+    def _move_book_storage(
+        self,
+        *,
+        db: Session,
+        context: dict[str, Any],
+        item: LibraryItem,
+        parent_id: str,
+        title: str,
+    ) -> None:
+        """移动 knowledge_file 图书真实文件并更新 source_path/storage_path。"""
+
+        if item.content_type != CONTENT_KNOWLEDGE_FILE or not item.source_path:
+            return
+        next_path = self._move_book_file_to_parent_storage(
+            db=db,
+            context=context,
+            parent_id=parent_id,
+            source_path=item.source_path,
+            title=title,
+        )
+        item.source_path = next_path
+        item.storage_path = next_path
+
+    def _move_book_file_to_parent_storage(
+        self,
+        *,
+        db: Session,
+        context: dict[str, Any],
+        parent_id: str,
+        source_path: str,
+        title: str,
+    ) -> str:
+        """把图书真实文件移动到目标集锦文件夹并返回新相对路径。"""
+
+        source_relative = source_path.strip().replace("\\", "/").strip("/")
+        source_file = self._absolute_knowledge_path(context=context, relative_path=source_relative)
+        if not source_file.exists() or not source_file.is_file():
+            return source_relative
+        target_dir = self._parent_storage_dir(db=db, context=context, parent_id=parent_id)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_name = self._book_file_name(title=title, fallback_name=source_file.name)
+        target_file = (target_dir / target_name).resolve()
+        if target_file == source_file:
+            return self._relative_to_knowledge_root(context=context, path=source_file)
+        if target_file.exists():
+            target_file = self._unique_child_path(target_dir=target_dir, preferred_name=target_name)
+        shutil.move(str(source_file), str(target_file))
+        return self._relative_to_knowledge_root(context=context, path=target_file)
+
+    def _parent_storage_dir(self, *, db: Session, context: dict[str, Any], parent_id: str) -> Path:
+        """返回虚拟父集锦对应的真实目录;根层返回图书馆存储根目录。"""
+
+        normalized_parent_id = parent_id.strip()
+        if not normalized_parent_id:
+            return self._library_root_path(context=context)
+        parent = self._get_owned_item(db=db, context=context, item_id=normalized_parent_id)
+        if parent.item_type != COLLECTION_ITEM_TYPE:
+            raise ValueError("parent_id must point to a collection")
+        relative = self._collection_storage_relative(db=db, context=context, item=parent)
+        folder = self._absolute_knowledge_path(context=context, relative_path=relative)
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder
+
+    def _collection_storage_relative(self, *, db: Session, context: dict[str, Any], item: LibraryItem) -> str:
+        """返回集锦真实文件夹相对路径;旧数据缺失时补建。"""
+
+        if item.storage_path.strip():
+            return item.storage_path.strip().replace("\\", "/").strip("/")
+        relative = self._create_collection_storage_path(
+            db=db,
+            context=context,
+            parent_id=item.parent_id,
+            title=item.title,
+        )
+        item.storage_path = relative
+        db.add(item)
+        return relative
+
+    def _rewrite_descendant_storage_paths(
+        self,
+        *,
+        db: Session,
+        context: dict[str, Any],
+        root_item: LibraryItem,
+        old_prefix: str,
+        new_prefix: str,
+    ) -> None:
+        """集锦目录移动后同步子孙集锦和图书的相对路径前缀。"""
+
+        old_value = old_prefix.strip("/")
+        new_value = new_prefix.strip("/")
+        if not old_value or old_value == new_value:
+            return
+        for item_id in self._collect_descendant_ids(db=db, context=context, root_id=root_item.item_id):
+            if item_id == root_item.item_id:
+                continue
+            child = db.get(LibraryItem, item_id)
+            if child is None:
+                continue
+            if child.storage_path.startswith(f"{old_value}/"):
+                child.storage_path = f"{new_value}/{child.storage_path[len(old_value) + 1:]}"
+            if child.content_type == CONTENT_KNOWLEDGE_FILE and child.source_path.startswith(f"{old_value}/"):
+                child.source_path = f"{new_value}/{child.source_path[len(old_value) + 1:]}"
+            child.updated_at = self._now()
+            db.add(child)
+
+    def _sync_collection_storage_dirs(self, *, db: Session, context: dict[str, Any]) -> None:
+        """刷新列表时确保虚拟集锦的真实文件夹存在,但不删除缺失图书条目。"""
+
+        statement = (
+            select(LibraryItem)
+            .where(LibraryItem.user_id == context["user_id"])
+            .where(LibraryItem.library_id == context["library_id"])
+            .where(LibraryItem.item_type == COLLECTION_ITEM_TYPE)
+        )
+        changed = False
+        for item in db.exec(statement).all():
+            had_storage_path = bool(item.storage_path.strip())
+            relative = self._collection_storage_relative(db=db, context=context, item=item)
+            if not had_storage_path and item.storage_path:
+                changed = True
+            folder = self._absolute_knowledge_path(context=context, relative_path=relative)
+            if not folder.exists():
+                folder.mkdir(parents=True, exist_ok=True)
+                changed = True
+        if changed:
+            db.commit()
+
+    def _absolute_knowledge_path(self, *, context: dict[str, Any], relative_path: str) -> Path:
+        """将知识库相对路径转换为绝对路径并防止越界。"""
+
+        root = Path(context["knowledge_dir"])
+        path = (root / relative_path.strip().replace("\\", "/").strip("/")).resolve()
+        if not self._is_relative_to(path, root):
+            raise ValueError("library storage path escapes active knowledge library")
+        return path
+
+    def _relative_to_knowledge_root(self, *, context: dict[str, Any], path: Path) -> str:
+        """将绝对路径转换为当前知识库相对路径。"""
+
+        root = Path(context["knowledge_dir"]).resolve()
+        resolved = path.resolve()
+        if not self._is_relative_to(resolved, root):
+            raise ValueError("library storage path escapes active knowledge library")
+        return resolved.relative_to(root).as_posix()
+
+    def _book_file_name(self, *, title: str, fallback_name: str) -> str:
+        """根据标题生成真实文件名,保留原文件扩展名并清理非法字符。"""
+
+        fallback = Path(fallback_name).name or "untitled"
+        suffix = Path(fallback).suffix
+        stem = self._safe_path_segment(title) or Path(fallback).stem or "untitled"
+        return f"{stem}{suffix}"
+
+    @staticmethod
+    def _safe_path_segment(value: str) -> str:
+        """将标题转换为可用路径段,移除 Windows 非法字符并压缩空白。"""
+
+        cleaned = "".join("_" if char in '<>:"/\\|?*' or ord(char) < 32 else char for char in value.strip())
+        cleaned = " ".join(cleaned.split()).strip(" .")
+        return cleaned[:96]
+
+    def _unique_child_path(self, *, target_dir: Path, preferred_name: str) -> Path:
+        """在目录内生成不冲突的子路径,使用 `名称 (1)` 去重。"""
+
+        safe_name = self._safe_path_segment(preferred_name) or "untitled"
+        candidate = (target_dir / safe_name).resolve()
+        if not candidate.exists():
+            return candidate
+        stem = Path(safe_name).stem
+        suffix = Path(safe_name).suffix
+        for index in range(1, 10_000):
+            next_candidate = (target_dir / f"{stem} ({index}){suffix}").resolve()
+            if not next_candidate.exists():
+                return next_candidate
+        raise ValueError("unable to allocate unique library storage path")
 
     @staticmethod
     def _mtime(path: Path) -> str:
