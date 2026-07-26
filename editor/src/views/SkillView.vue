@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { BookOpen, Check, FileText, FolderPlus, RefreshCw, SlidersHorizontal, X } from 'lucide-vue-next'
+import { BookOpen, FileText, FolderPlus, RefreshCw, SlidersHorizontal, X } from 'lucide-vue-next'
 
 import { useSkillsStore } from '@/stores/skills'
 import { useSettingsStore } from '@/stores/settings'
@@ -152,18 +152,118 @@ watch(
       </button>
     </form>
 
-    <div v-if="specOpen" class="modal-mask" @click.self="specOpen = false">
+    <div v-if="specOpen" class="spec-overlay" @click.self="specOpen = false">
       <section class="spec-modal" role="dialog" aria-modal="true" aria-label="Skill 规范">
         <header>
-          <h2>Skill 规范</h2>
+          <h2>Skill 规范文档</h2>
           <button type="button" class="icon-button" title="关闭" aria-label="关闭" @click="specOpen = false">
-            <X :size="16" />
+            <X :size="18" />
           </button>
         </header>
-        <p>{{ skillsStore.spec }}</p>
-        <div class="spec-tree">
-          <Check :size="16" />
-          <span>skill-name / SKILL.md / references / scripts / assets</span>
+
+        <div class="spec-body">
+          <section class="spec-section">
+            <h3>什么是 Skill？</h3>
+            <p>
+              Skill（技能）是 AI Agent 从通用型走向专用型的关键能力载体。它将领域知识、操作规范与可执行脚本封装为可复用的模块，使 Agent 能够在特定场景下表现出专家级别的行为。一个 Skill 可以理解为 Agent 的"插件"——它告诉 Agent 在遇到特定任务时应该调用哪些知识、遵循什么流程、使用什么工具。
+            </p>
+            <p>
+              MetaWeave 的 Skill 系统同时兼容 <strong>OpenAI Skills 标准</strong>与 <strong>Anthropic Agent Skills 扩展字段</strong>，这意味着你可以将在其他平台开发的 Skill 无缝迁移到 MetaWeave 中使用。
+            </p>
+          </section>
+
+          <section class="spec-section">
+            <h3>目录结构</h3>
+            <p>每个 Skill 是一个独立目录，以 Skill 名称命名，放置在对应的 Skill 根目录下：</p>
+            <div class="spec-code-block">
+              <pre>skill-name/                # 目录名即 Skill 名称（小写字母、数字、连字符）
+  SKILL.md                 # 必需的 Skill 定义文件
+  scripts/                 # 可选的可执行脚本目录
+  references/              # 可选的参考文档目录
+  assets/                  # 可选的资源文件目录</pre>
+            </div>
+            <div class="spec-note">
+              <strong>存放路径：</strong>内置 Skill 位于 <code>resources/skills/</code>，用户级 Skill 位于知识库目录下的 <code>.agents/skills/</code>，按知识库隔离。
+            </div>
+          </section>
+
+          <section class="spec-section">
+            <h3>SKILL.md — 核心定义文件</h3>
+            <p>
+              <code>SKILL.md</code> 是 Skill 的核心，使用 Markdown 编写。它告诉 Agent 这个 Skill 能做什么、在什么场景下触发、以及具体的行为指令。兼容 OpenAI 与 Anthropic 的 Skill 元信息格式：
+            </p>
+            <div class="spec-code-block">
+              <pre>---
+name: skill-name
+description: 一句话描述 Skill 的用途和触发场景
+model: (可选) 推荐使用的模型
+temperature: (可选) 推理温度
+tools: (可选) 需要启用的工具列表
+---
+
+## 行为指令
+
+在这里用清晰的 Markdown 描述 Agent 应该遵循的行为规范。
+包括具体的步骤、规则、边界条件和输出格式要求。
+
+## 使用示例
+
+提供 1-2 个典型场景示例，帮助 Agent 理解如何应用此 Skill。</pre>
+            </div>
+          </section>
+
+          <section class="spec-section">
+            <h3>Skill 路由机制</h3>
+            <p>
+              MetaWeave 的 <strong>Skill 路由器</strong>在 Agent 每次接收用户输入时自动工作：
+            </p>
+            <ol>
+              <li><strong>智能路由：</strong>调用轻量级模型分析当前用户输入，匹配最相关的 3 个 Skill。小模型不可用或异常时，降级为关键词与 description 的简单匹配。</li>
+              <li><strong>按需注入：</strong>将匹配到的 Skill 的 <code>SKILL.md</code> 正文注入当前推理上下文。</li>
+              <li><strong>单轮有效：</strong>Skill 正文默认仅对当前轮对话生效，下一轮重新路由，避免上下文污染。</li>
+              <li><strong>主动召唤：</strong>用户可通过 "使用 Skill：skill-name" 的格式主动召唤指定 Skill。</li>
+            </ol>
+          </section>
+
+          <section class="spec-section">
+            <h3>可选的附属目录</h3>
+            <div class="spec-grid">
+              <div class="spec-grid-item">
+                <strong>scripts/</strong>
+                <p>包含 Agent 可调用的 Python 脚本或其他可执行文件。Agent 在沙盒或完全访问模式下执行这些脚本以完成具体操作。</p>
+              </div>
+              <div class="spec-grid-item">
+                <strong>references/</strong>
+                <p>存放参考文档、API 规格说明、格式定义等辅助资料，Agent 在任务执行时可查阅。</p>
+              </div>
+              <div class="spec-grid-item">
+                <strong>assets/</strong>
+                <p>存放图表、模板文件、配置文件等静态资源，供 Skill 执行时使用。</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="spec-section">
+            <h3>Skill 最佳实践</h3>
+            <ul class="spec-tips">
+              <li><strong>职责单一：</strong>每个 Skill 只专注一个领域的任务，保持描述精炼、行为明确。</li>
+              <li><strong>描述精准：</strong><code>description</code> 字段是路由匹配的关键，使用清晰的关键词描述触发场景。</li>
+              <li><strong>示例丰富：</strong>在 SKILL.md 中包含典型使用示例，帮助 Agent 快速理解正确用法。</li>
+              <li><strong>独立可测：</strong>Skill 应尽可能自包含，减少对外部环境的隐式依赖。</li>
+              <li><strong>安全优先：</strong>scripts 中的代码需要经过审查，避免执行危险操作。</li>
+              <li><strong>版本兼容：</strong>遵循 OpenAI 核心标准确保跨平台兼容性，利用 Anthropic 扩展字段增强 MetaWeave 中的表现。</li>
+            </ul>
+          </section>
+
+          <section class="spec-section">
+            <h3>兼容性标准</h3>
+            <p>
+              统一兼容 <a href="https://developers.openai.com/api/docs/guides/tools-skills" target="_blank" rel="noopener">OpenAI 开放标准</a>作为主标准，兼容 <a href="https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview" target="_blank" rel="noopener">Anthropic 标准</a>扩展字段。
+            </p>
+            <p>
+              这种双标准兼容的设计使得 Skill 可以跨平台复用——在 OpenAI 生态中开发的 Skill 可直接用于 MetaWeave，反之亦然。
+            </p>
+          </section>
         </div>
       </section>
     </div>
@@ -527,37 +627,158 @@ watch(
   color: var(--color-danger);
 }
 
-.modal-mask {
+.spec-overlay {
   position: fixed;
   inset: 0;
   display: grid;
   place-items: center;
+  align-items: flex-start;
+  padding: 48px var(--space-20);
   background: rgba(0, 0, 0, 0.48);
   z-index: 30;
+  overflow-y: auto;
 }
 
 .spec-modal {
-  width: min(560px, calc(100vw - 32px));
-  padding: var(--space-16);
+  width: min(960px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: var(--space-24) var(--space-24);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-panel);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
   box-shadow: var(--shadow-lg);
 }
 
 .spec-modal header {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-12);
+  margin-bottom: var(--space-20);
+  padding-bottom: var(--space-16);
+  border-bottom: 2px solid var(--color-border);
 }
 
-.spec-modal p {
+.spec-modal header h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.spec-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+}
+
+.spec-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+}
+
+.spec-section h3 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--color-primary);
+}
+
+.spec-section p {
+  margin: 0;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.spec-section ol,
+.spec-section ul {
+  margin: 0;
+  padding-left: var(--space-20);
+}
+
+.spec-section li {
+  line-height: 1.65;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  margin-bottom: var(--space-6);
+}
+
+.spec-code-block {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-muted);
+  overflow-x: auto;
+}
+
+.spec-code-block pre {
+  margin: 0;
+  padding: var(--space-16) var(--space-16);
+  font-family: var(--font-code);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre;
+}
+
+.spec-note {
+  padding: var(--space-12) var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-softer);
+  color: var(--color-text-secondary);
+  font-size: 13px;
   line-height: 1.55;
+}
+
+.spec-note code {
+  padding: 1px var(--space-6);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-muted);
+  font-family: var(--font-code);
+  font-size: 12px;
+}
+
+.spec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-12);
+}
+
+.spec-grid-item {
+  padding: var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-muted);
+}
+
+.spec-grid-item strong {
+  display: block;
+  margin-bottom: var(--space-6);
+  font-family: var(--font-code);
+  font-size: 14px;
+  color: var(--color-primary);
+}
+
+.spec-grid-item p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
   color: var(--color-text-secondary);
 }
 
-.spec-tree {
-  gap: var(--space-8);
-  margin-top: var(--space-12);
-  color: var(--color-text-muted);
+.spec-tips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding-left: var(--space-20);
+}
+
+.spec-tips li {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--color-text-secondary);
+}
+
+.spec-tips li strong {
+  color: var(--color-text);
 }
 </style>

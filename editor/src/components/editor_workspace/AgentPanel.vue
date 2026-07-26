@@ -610,6 +610,7 @@ onBeforeUnmount(() => {
     <main class="chat-body" :class="{ dimmed: isBootstrapping }">
       <Transition name="welcome-fade">
         <div v-if="!hasMessages && !chatStore.isStreaming" class="welcome-center">
+          <img :src="logoSrc" class="welcome-cap-icon" alt="" />
           <img :src="welcomeTitleSrc" class="welcome-logo" alt="MetaWeave" />
           <p class="welcome-subtitle">在知识库 {{ knowledgeTitle }} 中有什么问题?</p>
         </div>
@@ -1449,7 +1450,7 @@ onBeforeUnmount(() => {
 
 .welcome-center {
   position: absolute;
-  bottom: calc(50% + 110px);
+  bottom: calc(50% + 60px);
   left: 0;
   right: 0;
   display: flex;
@@ -1467,6 +1468,16 @@ onBeforeUnmount(() => {
   transition: right 200ms ease;
 }
 
+.welcome-cap-icon {
+  display: block;
+  width: 120px;
+  height: auto;
+  object-fit: contain;
+  margin-bottom: -6px;
+  pointer-events: auto;
+  animation: welcome-cap-in 1.2s ease-out forwards;
+}
+
 .welcome-logo {
   display: block;
   width: 240px;
@@ -1476,7 +1487,7 @@ onBeforeUnmount(() => {
   animation: welcome-fade-in 1.2s ease-out forwards;
 }
 
-@keyframes welcome-fade-in {
+@keyframes welcome-cap-in {
   from {
     opacity: 0;
     transform: scale(0.92);
@@ -1484,6 +1495,17 @@ onBeforeUnmount(() => {
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes welcome-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

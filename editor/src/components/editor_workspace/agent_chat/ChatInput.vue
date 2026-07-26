@@ -471,7 +471,7 @@ function handleFileChange(event: Event) {
 }
 
 .chat-input-wrap.centered {
-  bottom: 50%;
+  bottom: 42%;
   width: min(90%, 400px);
 }
 

@@ -186,6 +186,24 @@ AgentService.exe
    * 工具可开关: 用户可在设置中对Agent可使用的工具进行开关,或者直接在Agent观测页面的工具注册表进行工具开关.
    * 可观测性执行流程：每步工具调用逐一执行，产生 start 与 end 双向 trace（含工具名、参数摘要、结果摘要与条目数），通过异步回调实时推送前端观测面板, 工具调用结果则写回消息历史供后续观察节点 `observation`/`agent` 审视，形成完整的可追溯闭合回路。
     Agent可操作用户本地知识库文件.Agent既可以通过RAG获取用户指代的最相关文件,又可以通过通过文件管理系统API具体调查和操作任何所需的具体文档,实现了"中枢智能体"的理念.
+#### Skill能力
+
+Skill能力是Agent从通用Agent走向专用Agent的关键。其设计如下：
+
+- 所有的内置Skill默认统一存放在根目录的`resources/skills/`文件夹中，用户级Skill放在用户知识库目录下的`.agents/skills/`文件夹中。
+- 统一兼容[OpenAI开放标准](https://developers.openai.com/api/docs/guides/tools-skills)作为主标准，兼容[Anthropic标准](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)扩展字段。
+- 目录结构：
+  ```text
+  skill-name/
+    SKILL.md (必须有）
+    scripts/ （可选）
+    references/ （可选）
+    assets/ （可选）
+  ```
+- 用户级Skill按用户知识库隔离，**用户登录或知识库目录变更时**扫描Skill目录，读取元信息，建立索引，将已启用Skill的基本索引信息注入上下文。
+- 对于非Simple思考模式下的每次用户输入，Agent决策前，在入口节点设置一个`Skill路由器`节点：调用小模型，返回针对用户当前询问场景适合的3个Skill。小模型不可用或返回异常时，使用关键词/description简单匹配。随后将命中的Skill正文（`SKILL.md`）注入本轮运行上下文（用户下一轮询问后从上下文中去除），Skill正文默认只对当前轮生效，下一轮重新路由。
+- 配备有2个Agent工具：列出所有Skill；使用Skill（主动召唤`SKILL.md`正文）。
+
 #### 可观测性
 ##### 对话内观测
 Agent对话框分为"对话模式"和"工具模式":

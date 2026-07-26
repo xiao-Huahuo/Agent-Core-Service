@@ -105,11 +105,11 @@ async function submitUserId() {
 @keyframes gate-fade-in {
   from {
     opacity: 0;
-    transform: scale(0.92);
+    transform: translateY(30px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(0);
   }
 }
 

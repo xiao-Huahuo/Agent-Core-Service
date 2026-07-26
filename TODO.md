@@ -2,9 +2,9 @@
 
 - [ ] 系统性的真正打通多模态解析链,包括图片OCR解析,扫描件pdf的图片渲染,pptx的渲染与预览等.
 - [ ] 尝试使用[OpenDataloader-PDF](https://github.com/opendataloader-project/opendataloader-pdf)代替OCR进行解析?
-
+- [ ] 定时自动化任务： 可以给Agent布置定时自动化任务，比如每天晚上9点git commit之类的。
 - [ ] 多agent:智能体蜂群,AgentSworm
-- [ ] Skill能力是Agent从通用Agent走向专用Agent的关键。其设计如下：
+- [x] Skill能力是Agent从通用Agent走向专用Agent的关键。其设计如下：
   - 所有的内置Skill默认统一存放在根目录的`resources/skills/`文件夹中，用户级Skill放在用户知识库目录下的`.agents/skills/`文件夹中。
   - 统一兼容[OpenAI开放标准](https://developers.openai.com/api/docs/guides/tools-skills)作为主标准，兼容[Anthropic标准](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)扩展字段。
   - 目录结构：
@@ -17,12 +17,12 @@
     ```
   - 用户级Skill按用户知识库隔离，**用户登录或知识库目录变更时**扫描Skill目录，读取元信息，建立索引，将已启用Skill的基本索引信息注入上下文。
   - 对于非Simple思考模式下的每次用户输入，Agent决策前，在入口节点设置一个`Skill路由器`节点： 调用小模型，返回针对用户当前询问场景适合的3个Skill。 小模型不可用或返回异常时，使用关键词/description 简单匹配。随后将命中的 Skill 正文（`SKILL.md`）注入本轮运行上下文（用户下一轮询问后从上下文中去除），Skill 正文默认只对当前轮生效，下一轮重新路由。。
-  - [ ] 调试Skill，协调Skill要求与沙盒/完全访问模式的终端权限。
-  - [ ] 左侧图标栏添加一个新的Skill配置页面：
+  - [x] 左侧图标栏添加一个新的Skill配置页面：
     - 分为Skill概览页面和Skill定制页面。
     - Skill概览页面以卡片形式展示系统自带Skill和用户注入的Skill，用户可开关Skill，可注入自定义的Skill。
     - 点击右上角按钮可查看Skill格式和规范说明。
-  - [ ] 配备2个Agent工具： 列出所有Skill；使用Skill（主动召唤`SKILL.md`正文）
+  - [x] 配备2个Agent工具： 列出所有Skill；使用Skill（主动召唤`SKILL.md`正文）
+- [ ] 调试Skill，协调Skill要求与沙盒/完全访问模式的终端权限。
 - [ ] 可统计的：
   - 工具总计调用次数
   - [ ] 会话内统计右边栏：
