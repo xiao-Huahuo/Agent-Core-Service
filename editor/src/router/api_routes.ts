@@ -76,4 +76,7 @@ export const API_ROUTES = {
   TODO_TOGGLE: '/todo/toggle',
   TODO_EDIT: '/todo/edit',
   TODO_DELETE: '/todo/delete',
+  SESSION_TASK_LIST: (sessionId: string) => `/sessions/${sessionId}/task-list`,
+  SESSION_TASK_LIST_COMPLETE_ITEM: (sessionId: string) => `/sessions/${sessionId}/task-list/complete-item`,
+  SESSION_TASK_LIST_FINISH: (sessionId: string) => `/sessions/${sessionId}/task-list/finish`,
 } as const

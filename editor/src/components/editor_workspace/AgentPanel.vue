@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Check, ChevronDown, History, Maximize2, MessageSquarePlus, MessagesSquare, SquarePen, UploadCloud } from 'lucide-vue-next'
+import { Check, ChevronDown, History, ListChecks, Maximize2, MessageSquarePlus, MessagesSquare, SquarePen, UploadCloud } from 'lucide-vue-next'
 
 import darkTitle from '@/assets/images/暗色标题.png'
 import lightTitle from '@/assets/images/亮色标题.png'
@@ -16,10 +16,12 @@ import ChatInput from '@/components/editor_workspace/agent_chat/ChatInput.vue'
 import MessageList from '@/components/editor_workspace/agent_chat/MessageList.vue'
 import SessionDrawer from '@/components/editor_workspace/agent_chat/SessionDrawer.vue'
 import StreamingIndicator from '@/components/editor_workspace/agent_chat/StreamingIndicator.vue'
+import TaskListDrawer from '@/components/editor_workspace/agent_chat/TaskListDrawer.vue'
 import { useChatStore } from '@/stores/chat'
 import type { AgentUploadedAttachment } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
+import { useTaskListStore } from '@/stores/taskList'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
 import { uploadAgentAttachment } from '@/api/agent'
@@ -32,6 +34,7 @@ type MessageListApi = {
 const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
+const taskListStore = useTaskListStore()
 const workspaceStore = useWorkspaceStore()
 const props = withDefaults(defineProps<{
   mode?: 'panel' | 'page'
@@ -143,6 +146,28 @@ async function sendMessage(text: string, reference = '') {
     settingsStore.agentLoopMode,
     settingsStore.agentAccessMode,
   )
+}
+
+async function createTaskListFromInput(title: string, items: string[]) {
+  if (!userId.value || items.length === 0) {
+    return
+  }
+  let targetSessionId = sessionStore.currentSessionId
+  if (!targetSessionId) {
+    targetSessionId = await sessionStore.create(userId.value)
+    sessionStore.select(targetSessionId)
+  }
+  const taskList = await taskListStore.create(targetSessionId, title || 'Task list', items)
+  if (!taskList) {
+    return
+  }
+  const promptLines = [
+    `Task list: ${taskList.title}`,
+    ...taskList.items.map((item, index) => `${index + 1}. ${item.title}`),
+    '',
+    'Please work through this task list. Use complete_task_list_item after each completed item and finish_task_list when the list is done.',
+  ]
+  await sendMessage(promptLines.join('\n'))
 }
 
 function clearReference() {
@@ -430,6 +455,15 @@ onBeforeUnmount(() => {
       </button>
       <span class="topbar-title">{{ sessionTitle }}</span>
       <div class="topbar-right">
+        <button
+          v-if="taskListStore.hasTaskList"
+          class="new-session-round-btn"
+          type="button"
+          title="Task list"
+          @click="taskListStore.toggleSidebar()"
+        >
+          <ListChecks :size="16" />
+        </button>
         <details ref="loopModeMenu" class="topbar-loop-mode-dropdown" :class="{ disabled: !userId }">
           <summary
             class="topbar-loop-mode-trigger"
@@ -486,6 +520,15 @@ onBeforeUnmount(() => {
       </div>
       <div class="title-actions">
         <button
+          v-if="taskListStore.hasTaskList"
+          class="icon-button"
+          type="button"
+          title="Task list"
+          @click="taskListStore.toggleSidebar()"
+        >
+          <ListChecks :size="16" />
+        </button>
+        <button
           v-if="props.mode === 'panel'"
           class="icon-button"
           type="button"
@@ -504,6 +547,7 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
+    <div class="agent-content-row">
     <main class="chat-body" :class="{ dimmed: isBootstrapping }">
       <Transition name="welcome-fade">
         <div v-if="!hasMessages && !chatStore.isStreaming" class="welcome-center">
@@ -557,8 +601,11 @@ onBeforeUnmount(() => {
         @remove-attachment="removeAttachment"
         @file-select="handleFileSelect"
         @cancel-stream="chatStore.cancelStream"
+        @create-task-list="createTaskListFromInput"
       />
     </main>
+    <TaskListDrawer />
+    </div>
     </div>
   </aside>
 </template>
@@ -991,6 +1038,14 @@ onBeforeUnmount(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.agent-content-row {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
 }

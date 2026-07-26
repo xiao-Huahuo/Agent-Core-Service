@@ -93,6 +93,7 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.services.session_service import SessionService
 from agent_service.services.message_service import MessageService
 from agent_service.services.session_attachment_service import SessionAttachmentService
+from agent_service.services.task_list_service import TaskListService
 from agent_service.services.logging_service import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -128,7 +129,13 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     message_service = MessageService(config=config)
 
     session_service = SessionService(config=config)
-    agent = AgentCore(config=config, message_service=message_service, session_service=session_service)
+    task_list_service = TaskListService(session_service=session_service)
+    agent = AgentCore(
+        config=config,
+        message_service=message_service,
+        session_service=session_service,
+        task_list_service=task_list_service,
+    )
     logger.info("AgentCore 初始化完成 | graph_diagram=%s", agent.graph_diagram_path)
 
     memory_service = LongTermMemoryService(config=config)
@@ -159,6 +166,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     rest_deps._knowledge_library_service = knowledge_library_service
     rest_deps._knowledge_graph_service = knowledge_graph_service
     rest_deps._library_service = library_service
+    rest_deps._task_list_service = task_list_service
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
     rest_deps._retrieval_service = retrieval_service
     from agent_service.services.todo_service import TodoService

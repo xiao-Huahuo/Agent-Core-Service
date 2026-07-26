@@ -219,6 +219,10 @@ class ModelDecisionNode:
                 f"策略提示: {plan['hint']}"
             )
 
+        task_list_prompt = self._build_task_list_prompt(state.get("task_list"))
+        if task_list_prompt:
+            system_content += task_list_prompt
+
         system_message = SystemMessage(content=system_content)
         token_callback = get_agent_token_callback()
 
@@ -266,6 +270,37 @@ class ModelDecisionNode:
                 }
             ],
         }
+
+    @staticmethod
+    def _build_task_list_prompt(task_list: dict[str, Any] | None) -> str:
+        """Build the system prompt section for an active session task list."""
+
+        if not isinstance(task_list, dict):
+            return ""
+        items = task_list.get("items")
+        if not isinstance(items, list) or not items:
+            return ""
+        status = str(task_list.get("status") or "active")
+        current_item_id = task_list.get("current_item_id")
+        lines = [
+            "",
+            "",
+            "[Session task list]",
+            f"Status: {status}",
+            f"Title: {task_list.get('title') or 'Task list'}",
+            "Your later work in this session must continue this task list until finish_task_list is called.",
+            "When an item is actually completed, call complete_task_list_item with that item id and a factual completion_summary before starting another item.",
+            "Items may be completed in any order. When no useful items remain, call finish_task_list.",
+        ]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            marker = "current" if item.get("id") == current_item_id else str(item.get("status") or "pending")
+            lines.append(f"- {item.get('id')}: [{marker}] {item.get('title')}")
+            summary = str(item.get("completion_summary") or "").strip()
+            if summary:
+                lines.append(f"  completion_summary: {summary}")
+        return "\n".join(lines)
 
     def _streaming_call(
         self,

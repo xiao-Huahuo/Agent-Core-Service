@@ -49,7 +49,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.graph.state import CompiledStateGraph
 
 from agent_service.agent_core.graph import AgentGraphBuilder
-from agent_service.agent_core.nodes.model_decision import extract_token_usage
+from agent_service.agent_core.nodes.model_decision import ModelDecisionNode, extract_token_usage
 from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.message import MessageCreate
 from agent_service.scripts.draw_agent_graph import draw_agent_graph
@@ -73,6 +73,7 @@ from agent_service.tools import (
     clear_plan_state,
     clear_planner_content_callback,
     clear_observation_content_callback,
+    clear_task_list_callback,
     clear_tool_runtime,
     clear_tool_trace_callback,
     get_plan_state,
@@ -81,10 +82,12 @@ from agent_service.tools import (
     set_plan_state,
     set_planner_content_callback,
     set_observation_content_callback,
+    set_task_list_callback,
     set_tool_runtime,
     set_tool_trace_callback,
     normalize_agent_access_mode,
 )
+from agent_service.services.task_list_service import extract_plan_state, merge_plan_state
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +156,7 @@ class AgentCore:
         attachment_service: SessionAttachmentService | None = None,
         task_scheduler: LLMTaskScheduler | None = None,
         session_service: Any = None,
+        task_list_service: Any = None,
     ) -> None:
         """保存配置、检查本地模型、构建或接收 LangGraph 图,并输出当前节点流程图。"""
 
@@ -162,6 +166,7 @@ class AgentCore:
         self.context_builder = context_builder
         self.attachment_service = attachment_service
         self.session_service = session_service
+        self.task_list_service = task_list_service
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.tool_registry = ToolRegistry.with_builtin_tools(config=config) if tools is None else None
         self.tool_executor = ToolExecutor(registry=self.tool_registry) if self.tool_registry is not None else None
@@ -399,6 +404,9 @@ class AgentCore:
             reference=reference,
             user_id=user_id,
         )
+        active_task_list = self.task_list_service.get_task_list(session_id) if self.task_list_service is not None else None
+        if active_task_list is not None and effective_mode == AGENT_LOOP_SIMPLE:
+            effective_mode = AGENT_LOOP_REACT
         effective_access_mode = normalize_agent_access_mode(agent_access_mode)
         message_service = self._get_message_service()
         context_builder = self._get_context_builder(message_service=message_service)
@@ -550,6 +558,8 @@ class AgentCore:
             "trace": [],
             "llm_config": llm_config,
         }
+        if self.task_list_service is not None:
+            inputs["task_list"] = self.task_list_service.get_task_list(session_id)
         if initial_plan is not None:
             inputs["plan"] = initial_plan
         runtime_config = {"configurable": {"thread_id": session_id}}
@@ -624,6 +634,9 @@ class AgentCore:
         def on_context_mirror(messages: list[dict[str, Any]]) -> None:
             token_queue.put({"type": "context_mirror", "messages": messages})
 
+        def on_task_list_update(task_list: dict[str, Any] | None) -> None:
+            token_queue.put({"type": "task_list_updated", "task_list": task_list})
+
         def run_graph() -> None:
             nonlocal graph_error
             set_tool_runtime(
@@ -631,6 +644,7 @@ class AgentCore:
                 user_id=user_id,
                 session_id=session_id,
                 retrieval_service=retrieval_service,
+                task_list_service=self.task_list_service,
                 citation_map=_citation_map,
                 agent_access_mode=effective_access_mode,
             )
@@ -639,6 +653,7 @@ class AgentCore:
             set_planner_content_callback(on_planner_content)
             set_observation_content_callback(on_observation_content)
             set_context_mirror_callback(on_context_mirror)
+            set_task_list_callback(on_task_list_update)
             set_plan_state(initial_plan)
             try:
                 for event in active_graph.stream(inputs, config=runtime_config, stream_mode="updates"):
@@ -654,6 +669,7 @@ class AgentCore:
                 clear_planner_content_callback()
                 clear_observation_content_callback()
                 clear_context_mirror_callback()
+                clear_task_list_callback()
                 clear_plan_state()
                 clear_tool_runtime()
                 token_queue.put({"type": "done"})
@@ -785,6 +801,17 @@ class AgentCore:
                         "context_messages": item.get("messages", []),
                     }
 
+                elif item_type == "task_list_updated":
+                    yield {
+                        "node": "task_list",
+                        "type": "task_list_updated",
+                        "content": "",
+                        "tool_calls": [],
+                        "trace": [],
+                        "model_name": "",
+                        "task_list": item.get("task_list"),
+                    }
+
                 elif item_type == "node":
                     event = item["event"]
                     for node_name, state_update in event.items():
@@ -871,6 +898,7 @@ class AgentCore:
             clear_tool_trace_callback()
             clear_planner_content_callback()
             clear_observation_content_callback()
+            clear_task_list_callback()
             clear_plan_state()
             clear_tool_runtime()
             graph_thread.join(timeout=5.0)
@@ -909,7 +937,7 @@ class AgentCore:
         但绕过 planner/action/observation graph loop,避免一次简单问候触发多次 LLM 请求。
         """
 
-        system_content = self._build_runtime_system_prompt(user_id=user_id)
+        system_content = self._build_runtime_system_prompt(user_id=user_id, session_id=session_id)
         llm_config = self._get_user_llm_config(user_id) or {}
         api_key = llm_config.get("api_key")
         base_url = llm_config.get("base_url")
@@ -1374,7 +1402,7 @@ class AgentCore:
                 return mode
         return None
 
-    def _build_runtime_system_prompt(self, *, user_id: str) -> str:
+    def _build_runtime_system_prompt(self, *, user_id: str, session_id: str = "") -> str:
         """构造运行时系统提示词,与模型决策节点保持一致。"""
 
         system_content = self.config.model.system_prompt
@@ -1388,6 +1416,13 @@ class AgentCore:
                     system_content += f"\n\n【用户自定义指令】\n{custom_prompt}"
         except Exception:
             logger.debug("读取用户自定义系统提示词失败 | user=%s", user_id, exc_info=True)
+        if session_id and self.task_list_service is not None:
+            try:
+                system_content += ModelDecisionNode._build_task_list_prompt(
+                    self.task_list_service.get_task_list(session_id)
+                )
+            except Exception:
+                logger.debug("failed to load session task list | session=%s", session_id, exc_info=True)
         return system_content
 
     @staticmethod
@@ -1870,7 +1905,7 @@ class AgentCore:
         if not state_json:
             return None
         try:
-            return json.loads(state_json)
+            return extract_plan_state(json.loads(state_json))
         except (json.JSONDecodeError, TypeError):
             logger.warning("会话状态 JSON 解析失败 | session=%s", session_id)
             return None
@@ -1880,11 +1915,18 @@ class AgentCore:
 
         if self.session_service is None:
             return
-        if plan is None:
-            self.session_service.update_session_state(session_id, None)
-            return
-        state_json = json.dumps(plan, ensure_ascii=False)
-        self.session_service.update_session_state(session_id, state_json)
+        current_state = None
+        state_json = self.session_service.get_session_state(session_id)
+        if state_json:
+            try:
+                current_state = json.loads(state_json)
+            except (json.JSONDecodeError, TypeError):
+                current_state = None
+        merged_state = merge_plan_state(current_state, plan)
+        self.session_service.update_session_state(
+            session_id,
+            json.dumps(merged_state, ensure_ascii=False) if merged_state is not None else None,
+        )
 
 
 def _rename_session_worker(agent: AgentCore, *, user_id: str, session_id: str) -> str | None:
@@ -2000,5 +2042,4 @@ def _launch_auto_rename(agent: AgentCore, *, user_id: str, session_id: str) -> t
     thread = threading.Thread(target=_worker, daemon=True, name=f"rename-{session_id[:12]}")
     thread.start()
     return thread, q
-
 

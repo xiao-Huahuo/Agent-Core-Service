@@ -9,6 +9,7 @@ from agent_service.api.rest.debug import router as debug_router
 from agent_service.api.rest.knowledge import router as knowledge_router
 from agent_service.api.rest.library import router as library_router
 from agent_service.api.rest.settings import router as settings_router
+from agent_service.api.rest.task_lists import router as task_lists_router
 from agent_service.api.rest.token_usage import router as token_usage_router
 from agent_service.api.rest.todo import router as todo_router
 
@@ -20,6 +21,7 @@ router.include_router(debug_router)
 router.include_router(knowledge_router)
 router.include_router(library_router)
 router.include_router(settings_router)
+router.include_router(task_lists_router)
 router.include_router(token_usage_router)
 router.include_router(todo_router)
 

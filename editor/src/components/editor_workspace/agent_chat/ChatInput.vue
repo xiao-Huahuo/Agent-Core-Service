@@ -40,6 +40,7 @@ const emit = defineEmits<{
   'file-select': [file: File]
   'select-suggestion': [suggestion: string]
   'cancel-stream': []
+  'create-task-list': [title: string, items: string[]]
 }>()
 
 const text = ref('')
@@ -89,6 +90,9 @@ watch(menuVisible, (visible) => {
 const modelModalVisible = ref(false)
 const modelModalMessage = ref('')
 const modelChecking = ref(false)
+const taskModalVisible = ref(false)
+const taskTitle = ref('')
+const taskItemsText = ref('')
 
 async function handleSend() {
   if (props.isStreaming) return
@@ -212,6 +216,20 @@ function selectAccessMode(mode: AgentAccessMode) {
 
 function triggerFilePicker() {
   fileInput.value?.click()
+}
+
+function closeTaskModal() {
+  taskModalVisible.value = false
+}
+
+function submitTaskList() {
+  const items = taskItemsText.value
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^[-*]\s*/, '').trim())
+    .filter(Boolean)
+  if (items.length === 0) return
+  emit('create-task-list', taskTitle.value.trim(), items)
+  taskModalVisible.value = false
 }
 
 function handleInputMouseMove(e: MouseEvent) {
@@ -401,6 +419,37 @@ function handleFileChange(event: Event) {
             {{ modelChecking ? '检查中...' : '重试' }}
           </button>
           <button class="model-modal-btn close-btn" @click="handleModelModalClose">关闭</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <Teleport to="body">
+    <div v-if="taskModalVisible" class="model-modal-overlay" @click.self="closeTaskModal">
+      <div class="model-modal task-list-modal">
+        <label class="task-list-field">
+          <span>Title</span>
+          <input v-model="taskTitle" class="task-list-input" type="text" placeholder="Task list" />
+        </label>
+        <label class="task-list-field">
+          <span>Tasks</span>
+          <textarea
+            v-model="taskItemsText"
+            class="task-list-textarea"
+            rows="7"
+            placeholder="One task per line"
+          ></textarea>
+        </label>
+        <div class="model-modal-actions">
+          <button class="model-modal-btn close-btn" type="button" @click="closeTaskModal">Cancel</button>
+          <button
+            class="model-modal-btn retry-btn"
+            type="button"
+            :disabled="!taskItemsText.trim()"
+            @click="submitTaskList"
+          >
+            Start
+          </button>
         </div>
       </div>
     </div>
@@ -1165,5 +1214,47 @@ function handleFileChange(event: Event) {
   background: transparent;
   color: var(--color-text);
   border: 1px solid var(--color-border);
+}
+
+.task-list-modal {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.task-list-field {
+  display: grid;
+  gap: var(--space-6);
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.task-list-input,
+.task-list-textarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: calc(13px * var(--font-scale));
+  outline: 0;
+}
+
+.task-list-input {
+  height: 34px;
+  padding: 0 var(--space-10);
+}
+
+.task-list-textarea {
+  min-height: 140px;
+  padding: var(--space-8) var(--space-10);
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.task-list-input:focus,
+.task-list-textarea:focus {
+  border-color: var(--color-primary);
 }
 </style>

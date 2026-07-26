@@ -12,7 +12,9 @@ import { defineStore } from 'pinia'
 import { deleteAgentAttachment, fetchTaskSuggestions, streamPrompt } from '@/api/agent'
 import type { AgentAccessMode, AgentAttachmentUploadResponse, AgentLoopMode } from '@/api/agent'
 import { fetchMessages } from '@/api/session'
+import type { AgentTaskList } from '@/api/taskList'
 import { useSessionStore } from '@/stores/session'
+import { useTaskListStore } from '@/stores/taskList'
 
 export interface AgentChatMessage {
   role: 'user' | 'assistant' | 'system'
@@ -281,6 +283,7 @@ export const useChatStore = defineStore('chat', () => {
           reference: asString(message.metadata?.reference) || undefined,
         }))
       loadedSessionId.value = sessionId
+      void useTaskListStore().load(sessionId)
       void refreshTaskSuggestions(userId, sessionId)
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -447,6 +450,11 @@ export const useChatStore = defineStore('chat', () => {
           continue
         }
 
+        if (chunk.type === 'task_list_updated') {
+          useTaskListStore().setTaskList(chunk.task_list as AgentTaskList | null)
+          continue
+        }
+
         if (chunk.type === 'session_renamed') {
           const newName = asString(chunk.session_name)
           if (newName) {
@@ -531,6 +539,7 @@ export const useChatStore = defineStore('chat', () => {
     taskSuggestions.value = []
     suggestionsLoading.value = false
     suggestionRequestId += 1
+    useTaskListStore().clear()
   }
 
   function clearStreamTimeout() {

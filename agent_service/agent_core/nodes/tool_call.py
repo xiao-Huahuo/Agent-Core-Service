@@ -22,9 +22,10 @@ from langgraph.prebuilt import ToolNode
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.core.agent_config import AgentConfig
 from agent_service.tools import ToolExecutor
-from agent_service.tools.runtime_context import get_tool_citation_map, get_tool_trace_callback
+from agent_service.tools.runtime_context import get_tool_citation_map, get_tool_runtime, get_tool_trace_callback
 
 MAX_TOOL_CALLS_PER_TURN = 4
+TASK_LIST_TOOL_NAMES = {"create_task_list", "complete_task_list_item", "finish_task_list"}
 
 
 class ToolCallNode:
@@ -103,6 +104,7 @@ class ToolCallNode:
         messages: list[ToolMessage] = []
         traces: list[dict[str, Any]] = []
         trace_callback = get_tool_trace_callback()
+        task_list_updated = False
         for tool_call in tool_calls:
             tool_call_id = tool_call.get("id")
             if not tool_call_id:
@@ -135,6 +137,8 @@ class ToolCallNode:
                 content = self.tool_executor.execute(tool_name, arguments)
             except Exception as exc:
                 content = f"工具 {tool_name} 执行失败: {exc}"
+            if tool_name in TASK_LIST_TOOL_NAMES:
+                task_list_updated = True
             duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
             after_citations = get_tool_citation_map()
             new_citations = {
@@ -189,7 +193,15 @@ class ToolCallNode:
             traces.append(deferred_trace)
             if trace_callback is not None:
                 trace_callback(deferred_trace)
-        return {"messages": messages, "trace": traces}
+        result: dict[str, Any] = {"messages": messages, "trace": traces}
+        if task_list_updated:
+            try:
+                runtime = get_tool_runtime()
+                if runtime.task_list_service is not None:
+                    result["task_list"] = runtime.task_list_service.get_task_list(runtime.session_id)
+            except RuntimeError:
+                pass
+        return result
 
     def _lookup_display_name(self, tool_name: str) -> str:
         """从工具执行器的注册表中查找工具的 display_name，找不到则回退到 tool_name。"""

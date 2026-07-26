@@ -39,5 +39,6 @@ class AgentState(TypedDict):
     session_id: str
     trace: Annotated[list[dict[str, Any]], add]
     plan: dict[str, Any] | None
+    task_list: dict[str, Any] | None
     observation_decision: str
     llm_config: dict[str, Any] | None

@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from agent_service.tools.runtime_context import (
     AGENT_ACCESS_READONLY,
+    get_task_list_callback,
     get_plan_state,
     get_tool_runtime,
     register_network_citation,
@@ -1251,6 +1252,92 @@ def update_exploration_state(
         + (f", 信息充足" if state.get("sufficient") else "")
         + "。"
     )
+
+
+def _get_task_list_service():
+    """Return the current task list service."""
+
+    runtime = get_tool_runtime()
+    if runtime.task_list_service is not None:
+        return runtime.task_list_service
+    try:
+        from agent_service.api.rest.deps import _task_list_service
+        if _task_list_service is not None:
+            return _task_list_service
+    except Exception:
+        pass
+    raise RuntimeError("TaskListService is not initialized.")
+
+
+def _emit_task_list_update(task_list: dict[str, Any] | None) -> None:
+    """Notify the current Agent stream that task list state changed."""
+
+    callback = get_task_list_callback()
+    if callback is not None:
+        callback(task_list)
+
+
+def create_task_list(title: str = "", items: list[Any] | str | None = None) -> str:
+    """
+    Create a session-scoped task list for complex long-running work.
+
+    title: short task list title.
+    items: ordered task titles, or a newline-separated string.
+    """
+
+    if isinstance(items, str):
+        parsed_items = [line.strip("- 	") for line in items.splitlines() if line.strip("- \t")]
+    elif isinstance(items, list):
+        parsed_items = [str(item).strip() for item in items if str(item).strip()]
+    else:
+        parsed_items = []
+    service = _get_task_list_service()
+    runtime = get_tool_runtime()
+    task_list = service.create_task_list(
+        session_id=runtime.session_id,
+        title=title,
+        items=parsed_items,
+    )
+    _emit_task_list_update(task_list)
+    current = next((item for item in task_list["items"] if item.get("id") == task_list.get("current_item_id")), None)
+    current_title = current.get("title") if current else "none"
+    return f"Task list created with {len(task_list['items'])} items. Current item: {current_title}"
+
+
+def complete_task_list_item(item_id: str, completion_summary: str, next_item_id: str | None = None) -> str:
+    """
+    Mark a task list item complete and record the completion summary.
+
+    item_id: task list item id.
+    completion_summary: concrete summary of what was completed.
+    next_item_id: optional next item to make current.
+    """
+
+    service = _get_task_list_service()
+    runtime = get_tool_runtime()
+    task_list = service.complete_task_list_item(
+        session_id=runtime.session_id,
+        item_id=item_id,
+        completion_summary=completion_summary,
+        next_item_id=next_item_id,
+    )
+    _emit_task_list_update(task_list)
+    remaining = len([item for item in task_list.get("items", []) if item.get("status") != "completed"])
+    return f"Task list item completed. Remaining items: {remaining}"
+
+
+def finish_task_list(final_summary: str = "") -> str:
+    """
+    Finish the active session task list after all useful work is complete.
+
+    final_summary: optional overall completion summary.
+    """
+
+    service = _get_task_list_service()
+    runtime = get_tool_runtime()
+    task_list = service.finish_task_list(session_id=runtime.session_id, final_summary=final_summary)
+    _emit_task_list_update(task_list)
+    return "Task list finished."
 
 
 def _get_todo_service() -> TodoService:

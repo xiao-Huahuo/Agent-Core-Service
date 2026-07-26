@@ -16,6 +16,8 @@ from agent_service.tools.builtin import (
     BuiltinToolDefinition,
     add_todo,
     calculate,
+    complete_task_list_item,
+    create_task_list,
     create_knowledge_folder,
     delete_knowledge_file,
     delete_long_term_memory,
@@ -24,6 +26,7 @@ from agent_service.tools.builtin import (
     download_file,
     echo_text,
     edit_todo,
+    finish_task_list,
     generate_uuid,
     get_current_time,
     get_current_utc_time,
@@ -440,6 +443,70 @@ STATE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     ),
 ]
 
+TASK_LIST_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
+    BuiltinToolDefinition(
+        name="create_task_list",
+        description=(
+            "Create a persistent session task list for complex or step-by-step work. "
+            "Use this when the task needs long-running progress tracking across messages. "
+            "After creating it, continue working toward this list until finish_task_list is called."
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Short title for the task list."},
+                "items": {
+                    "type": "array",
+                    "description": "Concrete task items to complete. Each item should be a short actionable string.",
+                },
+            },
+            "required": ["items"],
+        },
+        function=create_task_list,
+        display_name="Create task list",
+    ),
+    BuiltinToolDefinition(
+        name="complete_task_list_item",
+        description=(
+            "Mark one task list item complete. You must call this after actually completing an item, "
+            "and include a concrete completion summary before starting another item."
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "item_id": {"type": "string", "description": "The task list item id."},
+                "completion_summary": {
+                    "type": "string",
+                    "description": "A concise factual summary of what was completed for this item.",
+                },
+                "next_item_id": {
+                    "type": "string",
+                    "description": "Optional id of the next item to mark in progress.",
+                },
+            },
+            "required": ["item_id", "completion_summary"],
+        },
+        function=complete_task_list_item,
+        display_name="Complete task item",
+    ),
+    BuiltinToolDefinition(
+        name="finish_task_list",
+        description=(
+            "End the active session task list after the long-running task is complete. "
+            "Do not call this until no useful task list work remains."
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "final_summary": {"type": "string", "description": "Optional overall summary for the finished list."},
+            },
+            "required": [],
+        },
+        function=finish_task_list,
+        display_name="Finish task list",
+    ),
+]
+
 TODO_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="list_todos",
@@ -545,6 +612,7 @@ BUILTIN_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = (
     + KNOWLEDGE_TOOL_DEFINITIONS
     + FILE_TOOL_DEFINITIONS
     + STATE_TOOL_DEFINITIONS
+    + TASK_LIST_TOOL_DEFINITIONS
     + TODO_TOOL_DEFINITIONS
     + WEB_SEARCH_TOOL_DEFINITIONS
 )

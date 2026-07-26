@@ -18,6 +18,7 @@ from agent_service.services.knowledge_graph_service import KnowledgeGraphService
 from agent_service.services.library_service import LibraryService
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 from agent_service.services.session_attachment_service import SessionAttachmentService
+from agent_service.services.task_list_service import TaskListService
 from agent_service.services.todo_service import TodoService
 
 _agent: AgentCore | None = None
@@ -29,6 +30,7 @@ _knowledge_graph_service: KnowledgeGraphService | None = None
 _library_service: LibraryService | None = None
 _retrieval_service: MemoryRetrievalService | None = None
 _attachment_service: SessionAttachmentService | None = None
+_task_list_service: TaskListService | None = None
 _grpc_running = False
 _todo_service: TodoService | None = None
 
@@ -91,3 +93,9 @@ def _require_todo_service() -> TodoService:
     if _todo_service is None:
         raise HTTPException(status_code=503, detail="TodoService not initialized yet")
     return _todo_service
+
+
+def _require_task_list_service() -> TaskListService:
+    if _task_list_service is None:
+        raise HTTPException(status_code=503, detail="TaskListService not initialized yet")
+    return _task_list_service

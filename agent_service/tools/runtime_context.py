@@ -19,6 +19,7 @@ from agent_service.services.memory.retrieval_service import MemoryRetrievalServi
 if TYPE_CHECKING:
     from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
     from agent_service.services.memory.rag.embedding import EmbeddingService
+    from agent_service.services.task_list_service import TaskListService
 
 AGENT_ACCESS_READONLY = "readonly"
 AGENT_ACCESS_SANDBOX = "sandbox"
@@ -45,6 +46,7 @@ class ToolRuntimeState:
     retrieval_service: MemoryRetrievalService
     memory_service: LongTermMemoryService | None = None
     embedding_service: EmbeddingService | None = None
+    task_list_service: TaskListService | None = None
     agent_access_mode: str = AGENT_ACCESS_SANDBOX
     citation_map: dict[str, dict[str, Any]] = field(default_factory=dict)
     tool_citation_counter: int = 0
@@ -62,6 +64,7 @@ def set_tool_runtime(
     retrieval_service: MemoryRetrievalService | None = None,
     memory_service: LongTermMemoryService | None = None,
     embedding_service: EmbeddingService | None = None,
+    task_list_service: TaskListService | None = None,
     citation_map: dict[str, dict[str, Any]] | None = None,
     agent_access_mode: str = AGENT_ACCESS_SANDBOX,
 ) -> None:
@@ -86,6 +89,7 @@ def set_tool_runtime(
         retrieval_service=retrieval_service or MemoryRetrievalService(config=config),
         memory_service=memory_service or LongTermMemoryService(config=config),
         embedding_service=embedding_service or EmbeddingService(config=config),
+        task_list_service=task_list_service,
         agent_access_mode=normalize_agent_access_mode(agent_access_mode),
         citation_map=citation_map if citation_map is not None else {},
     )
@@ -240,6 +244,32 @@ def clear_context_mirror_callback() -> None:
     """清理当前线程的上下文镜像回调。"""
     if hasattr(_CONTEXT_MIRROR_CALLBACK, "callback"):
         delattr(_CONTEXT_MIRROR_CALLBACK, "callback")
+
+
+# ------------------------------------------------------------------
+# Task list update callback
+# ------------------------------------------------------------------
+
+_TASK_LIST_CALLBACK: local = local()
+
+
+def set_task_list_callback(callback: Callable[[dict[str, Any] | None], None]) -> None:
+    """Set the current thread task list update callback."""
+
+    _TASK_LIST_CALLBACK.callback = callback
+
+
+def get_task_list_callback() -> Callable[[dict[str, Any] | None], None] | None:
+    """Return the current thread task list update callback."""
+
+    return getattr(_TASK_LIST_CALLBACK, "callback", None)
+
+
+def clear_task_list_callback() -> None:
+    """Clear the current thread task list update callback."""
+
+    if hasattr(_TASK_LIST_CALLBACK, "callback"):
+        delattr(_TASK_LIST_CALLBACK, "callback")
 
 
 def get_tool_runtime() -> ToolRuntimeState:
