@@ -61,6 +61,8 @@ export interface KnowledgeLibraryProfile {
   name: string
   /** Absolute local knowledge root path. */
   knowledgeDir: string
+  /** Relative storage directory for files created by the virtual library page. */
+  libraryStorageDir: string
   /** Whether this library is the current active root. */
   isActive: boolean
 }

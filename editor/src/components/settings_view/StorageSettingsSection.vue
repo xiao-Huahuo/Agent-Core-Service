@@ -47,6 +47,7 @@ const clearing = ref<string | null>(null)
 const savingKey = ref<string | null>(null)
 const feedback = ref('')
 const knowledgeDirDraft = ref('')
+const libraryStorageDirDraft = ref('')
 const baseDataDirDraft = ref('')
 
 /* ---- 模型状态 ---- */
@@ -252,7 +253,7 @@ const PIE_COLORS = [
 
 /* ---- 排序 ---- */
 const ROOT_ORDER = [
-  'knowledge_dir', 'base_data_dir',
+  'knowledge_dir', 'library_storage_dir', 'base_data_dir',
   'assets_dir', 'db_dir', 'relation_db_dir', 'vector_db_dir', 'sqlite_path', 'chroma_persist_dir',
   'frontmatter_dir', 'log_dir', 'models_dir',
   'embedding_model_dir', 'paddleocr_model_dir', 'rerank_model_dir',
@@ -407,12 +408,42 @@ async function loadStorageConfig() {
 
     const kd = data.paths.find((p: StoragePathEntry) => p.key === 'knowledge_dir')
     if (kd) knowledgeDirDraft.value = kd.value
+    const ld = data.paths.find((p: StoragePathEntry) => p.key === 'library_storage_dir')
+    if (ld) libraryStorageDirDraft.value = ld.value
     const rd = data.paths.find((p: StoragePathEntry) => p.key === 'base_data_dir')
     if (rd) baseDataDirDraft.value = rd.value
   } catch {
     show('加载失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function handleSaveLibraryStorageDir() {
+  if (savingKey.value) return
+  savingKey.value = 'library_storage_dir'
+  feedback.value = ''
+  try {
+    const body = JSON.stringify({
+      user_id: settingsStore.profile.userId,
+      paths: { library_storage_dir: libraryStorageDirDraft.value },
+    })
+    const res = await fetch(API_ROUTES.SETTINGS_STORAGE_CONFIG, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    })
+    if (!res.ok) {
+      const detail = await res.text()
+      throw new Error(detail || `HTTP ${res.status}`)
+    }
+    await settingsStore.refreshUserProfile()
+    show('图书馆存储路径已更新')
+  } catch (e: unknown) {
+    show(e instanceof Error ? e.message : '保存失败', 4000)
+  } finally {
+    savingKey.value = null
+    await loadStorageConfig()
   }
 }
 
@@ -555,6 +586,15 @@ onMounted(() => {
                   <FolderOpen :size="14" />
                 </button>
                 <button class="save-model-btn" :disabled="savingKey === item.entry.key || knowledgeDirDraft === item.entry.value" @click="handleSaveKnowledgeDir">
+                  {{ savingKey === item.entry.key ? '...' : '保存' }}
+                </button>
+              </template>
+              <template v-else-if="item.entry.key === 'library_storage_dir'">
+                <input v-model="libraryStorageDirDraft" type="text" class="tree-input" :disabled="savingKey === item.entry.key" />
+                <button class="tree-explore-btn" title="在资源管理器中打开" @click="openInExplorer(item.entry.value)">
+                  <FolderOpen :size="14" />
+                </button>
+                <button class="save-model-btn" :disabled="savingKey === item.entry.key || libraryStorageDirDraft === item.entry.value" @click="handleSaveLibraryStorageDir">
                   {{ savingKey === item.entry.key ? '...' : '保存' }}
                 </button>
               </template>

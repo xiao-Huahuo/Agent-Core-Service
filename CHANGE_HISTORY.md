@@ -1,6 +1,16 @@
 # CHANGE HISTORY
 
 ## 2026-07-26
+- [x] 调整图书馆文件存储路径:
+  - `UserKnowledgeLibrary` 新增 `library_storage_dir`,默认使用当前知识库下的 `library` 文件夹保存图书馆新增文件/文本。
+  - 存储管理新增"图书馆存储路径",支持在知识库目录内即时修改;保存时迁移旧目录内容并重写当前图书馆虚拟条目的 `source_path` 前缀。
+  - 图书馆新增文件/文本上传默认写入配置的图书馆存储路径,不再落到知识库根目录。
+- [x] 图书馆新增/编辑表单封面上传支持拖拽:
+  - `LibraryCreateDialog.vue` 的新增文件、新增集锦封面区域支持点击选择和拖拽图片上传。
+  - `LibraryItemDialog.vue` 的编辑图书、编辑集锦封面区域支持点击选择和拖拽图片上传,拖入时使用主色高亮并复用原封面上传接口。
+- [x] 增强图书馆"新增文件"弹窗:
+  - `LibraryCreateDialog.vue` 在取消/创建按钮同一行左侧新增圆形"文本"与"网页"图标按钮,支持在文件拖拽区、文本内容输入块、URL 输入框之间切换。
+  - `LibraryView.vue` 新增文本来源处理: 将输入文本保存为 Markdown 文件并复用知识库上传流程,再创建图书馆条目;网页来源直接创建 `web_url` 图书馆条目。
 - [x] 新增图书馆虚拟编目页面:
   - 后端新增 `LibraryItem` / `LibraryTag` / `LibraryItemTag` / `LibraryAsset` SQLite 模型,图书馆虚拟集锦、标签、别名、描述、封面和排序独立存储,真实知识库文件只通过 `source_path` 引用。
   - 后端新增 `LibraryService` 与 `/library/*` REST 端点,支持初始空图书馆、主动添加真实文件/网页、创建虚拟集锦、编辑虚拟元数据、上传封面、标签筛选、类型筛选、排序和移出图书馆。

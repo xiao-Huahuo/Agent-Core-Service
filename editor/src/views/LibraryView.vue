@@ -7,22 +7,23 @@
   knowledge files through the existing workspace editor.
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
-  ArrowDownUp,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
   CalendarClock,
+  Check,
   FilePlus2,
   FolderOpen,
   FolderPlus,
   HardDrive,
   Link,
+  ListFilter,
   RefreshCw,
+  Save,
   Search,
   Tags,
-  Trash2,
   X,
 } from 'lucide-vue-next'
 
@@ -55,8 +56,7 @@ const loading = ref(false)
 const query = ref('')
 const selectedTag = ref('')
 const selectedContentType = ref('')
-const sortKey = ref('updated_at')
-const sortDirection = ref<'asc' | 'desc'>('desc')
+const filterMenuOpen = ref(false)
 const multiSelect = ref(false)
 const selectedIds = ref<Set<string>>(new Set())
 const selectedItem = ref<LibraryItem | null>(null)
@@ -67,6 +67,20 @@ const editItem = ref<LibraryItem | null>(null)
 const createDialogMode = ref<'book' | 'collection' | null>(null)
 const backStack = ref<string[]>([])
 const forwardStack = ref<string[]>([])
+const contextMenuTarget = ref<LibraryItem | null>(null)
+const contextMenuOpen = ref(false)
+const contextMenuStyle = ref({ left: '0px', top: '0px' })
+
+function sortItems(list: LibraryItem[]): LibraryItem[] {
+  return [...list].sort((a, b) => {
+    const aIsCollection = a.item_type === 'collection' ? 0 : 1
+    const bIsCollection = b.item_type === 'collection' ? 0 : 1
+    if (aIsCollection !== bIsCollection) return aIsCollection - bIsCollection
+    const aTitle = (a.display_title || a.title || '').toLowerCase()
+    const bTitle = (b.display_title || b.title || '').toLowerCase()
+    return aTitle.localeCompare(bTitle)
+  })
+}
 
 const selectedItems = computed(() => items.value.filter((item) => selectedIds.value.has(item.item_id)))
 const hasSelection = computed(() => selectedIds.value.size > 0)
@@ -76,15 +90,9 @@ const canGoForward = computed(() => forwardStack.value.length > 0)
 const virtualPath = computed(() => ['图书馆', ...breadcrumbs.value.map((crumb) => crumb.title)].join(' / '))
 const drawerOpen = computed(() => Boolean(selectedItem.value) && !multiSelect.value)
 const selectedDate = computed(() => formatDate(selectedItem.value?.source_mtime || selectedItem.value?.updated_at || ''))
-const tagFilterTitle = computed(() => selectedTag.value ? `标签: ${selectedTag.value}` : '标签筛选: 全部')
-const typeFilterTitle = computed(() => `类型筛选: ${contentTypeLabel(selectedContentType.value)}`)
-const sortTitle = computed(() => `排序: ${sortLabel(sortKey.value)}`)
-
-const contentTypeOptions = ['', 'knowledge_file', 'web_url', 'collection']
-const sortOptions = ['updated_at', 'source_mtime', 'title', 'source_name']
 
 watch(
-  [query, selectedTag, selectedContentType, sortKey, sortDirection, currentParentId],
+  [query, selectedTag, selectedContentType, currentParentId],
   () => {
     void loadItems()
   },
@@ -118,6 +126,11 @@ watch(selectedItem, (item) => {
 
 onMounted(async () => {
   await Promise.all([loadItems(), loadTags(), workspaceStore.loadKnowledgeTree()])
+  document.addEventListener('click', closeContextMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeContextMenu)
 })
 
 async function loadItems() {
@@ -130,10 +143,10 @@ async function loadItems() {
       query: query.value,
       tag: selectedTag.value,
       contentType: selectedContentType.value,
-      sort: sortKey.value,
-      direction: sortDirection.value,
+      sort: 'updated_at',
+      direction: 'desc',
     })
-    items.value = response.items
+    items.value = sortItems(response.items)
     breadcrumbs.value = response.breadcrumbs
     selectedIds.value = new Set([...selectedIds.value].filter((id) => response.items.some((item) => item.item_id === id)))
     if (selectedItem.value) {
@@ -160,7 +173,7 @@ async function loadDrawerChildren(parentId: string) {
       sort: 'updated_at',
       direction: 'desc',
     })
-    drawerChildren.value = response.items
+    drawerChildren.value = sortItems(response.items)
   } finally {
     drawerChildrenLoading.value = false
   }
@@ -218,24 +231,17 @@ function selectItem(item: LibraryItem) {
     toggleItem(item)
     return
   }
-  selectedItem.value = selectedItem.value?.item_id === item.item_id ? null : item
+  selectedItem.value = item
 }
 
-function cycleTagFilter() {
-  const tagNames = tags.value.map((tag) => tag.name)
-  const options = ['', ...tagNames]
-  const currentIndex = Math.max(0, options.indexOf(selectedTag.value))
-  selectedTag.value = options[(currentIndex + 1) % options.length] ?? ''
+function selectTagFilter(tag: string) {
+  selectedTag.value = tag
+  filterMenuOpen.value = false
 }
 
-function cycleContentTypeFilter() {
-  const currentIndex = Math.max(0, contentTypeOptions.indexOf(selectedContentType.value))
-  selectedContentType.value = contentTypeOptions[(currentIndex + 1) % contentTypeOptions.length] ?? ''
-}
-
-function cycleSortKey() {
-  const currentIndex = Math.max(0, sortOptions.indexOf(sortKey.value))
-  sortKey.value = sortOptions[(currentIndex + 1) % sortOptions.length] ?? 'updated_at'
+function selectContentTypeFilter(type: string) {
+  selectedContentType.value = type
+  filterMenuOpen.value = false
 }
 
 async function openItem(item: LibraryItem) {
@@ -270,6 +276,63 @@ function toggleItem(item: LibraryItem) {
   selectedIds.value = next
 }
 
+function cancelMultiSelect() {
+  multiSelect.value = false
+  selectedIds.value = new Set()
+}
+
+function openContextMenu(event: MouseEvent, item: LibraryItem) {
+  contextMenuTarget.value = item
+  contextMenuOpen.value = true
+  const x = Math.min(event.clientX, window.innerWidth - 180)
+  const y = Math.min(event.clientY, window.innerHeight - 240)
+  contextMenuStyle.value = { left: `${x}px`, top: `${y}px` }
+}
+
+function closeContextMenu() {
+  contextMenuOpen.value = false
+  contextMenuTarget.value = null
+}
+
+function contextEdit() {
+  if (!contextMenuTarget.value) return
+  editItem.value = contextMenuTarget.value
+  closeContextMenu()
+}
+
+async function contextMoveToParent() {
+  const item = contextMenuTarget.value
+  closeContextMenu()
+  if (!item || !currentParentId.value) return
+  items.value = sortItems(items.value.filter((i) => i.item_id !== item.item_id))
+  try {
+    await updateLibraryItem(item.item_id, {
+      user_id: settingsStore.profile.userId,
+      parent_id: '',
+    })
+    workspaceStore.showToast(`已移动到根目录`)
+    await loadItems()
+  } catch (error) {
+    workspaceStore.showToast(`移动失败 — ${errorMessage(error)}`)
+    await loadItems()
+  }
+}
+
+async function contextDelete() {
+  const item = contextMenuTarget.value
+  closeContextMenu()
+  if (!item) return
+  if (!window.confirm(`移出图书馆: ${item.display_title}? 真实文件不会被删除。`)) return
+  items.value = sortItems(items.value.filter((i) => i.item_id !== item.item_id))
+  selectedItem.value = null
+  try {
+    await deleteLibraryItem(settingsStore.profile.userId, item.item_id)
+    await loadItems()
+  } catch {
+    await loadItems()
+  }
+}
+
 function startDrag(item: LibraryItem) {
   draggedItem.value = item
 }
@@ -278,16 +341,17 @@ async function dropOnItem(target: LibraryItem) {
   const source = draggedItem.value
   draggedItem.value = null
   if (!source || target.item_type !== 'collection' || source.item_id === target.item_id) return
+  items.value = sortItems(items.value.filter((item) => item.item_id !== source.item_id))
   try {
     await updateLibraryItem(source.item_id, {
       user_id: settingsStore.profile.userId,
       parent_id: target.item_id,
     })
-    selectedItem.value = null
-    await loadItems()
     workspaceStore.showToast(`已移动到 ${target.display_title}`)
+    await loadItems()
   } catch (error) {
     workspaceStore.showToast(`移动失败 — ${errorMessage(error)}`)
+    await loadItems()
   }
 }
 
@@ -306,6 +370,9 @@ async function createFromDialog(payload: {
   cover_mode: LibraryItem['cover_mode']
   cover_asset_id: string
   file: File | null
+  source_mode: 'file' | 'text' | 'url'
+  text_content: string
+  source_url: string
 }) {
   const mode = createDialogMode.value
   if (!mode) return
@@ -321,12 +388,37 @@ async function createFromDialog(payload: {
         tags: payload.tags,
       })
       workspaceStore.showToast('已新增集锦')
+    } else if (payload.source_mode === 'url') {
+      if (!payload.source_url) {
+        workspaceStore.showToast('请输入 URL')
+        return
+      }
+      await createLibraryBook({
+        user_id: settingsStore.profile.userId,
+        parent_id: currentParentId.value,
+        content_type: 'web_url',
+        source_url: payload.source_url,
+        title: payload.title,
+        description: payload.description,
+        cover_mode: payload.cover_mode,
+        cover_asset_id: payload.cover_asset_id,
+        tags: payload.tags,
+      })
+      workspaceStore.showToast('已新增网页并加入图书馆')
     } else {
-      if (!payload.file) {
+      const sourceFile = payload.source_mode === 'text'
+        ? createTextSourceFile(payload.title, payload.text_content)
+        : payload.file
+      if (!sourceFile) {
         workspaceStore.showToast('请选择真实文件')
         return
       }
-      const result = await uploadKnowledgeFile(settingsStore.profile.userId, payload.file, '', false, 'rename') as { uploaded_path?: string; knowledge_dir?: string }
+      if (payload.source_mode === 'text' && !payload.text_content.trim()) {
+        workspaceStore.showToast('请输入文本内容')
+        return
+      }
+      const libraryStorageDir = settingsStore.activeKnowledgeLibrary?.libraryStorageDir || 'library'
+      const result = await uploadKnowledgeFile(settingsStore.profile.userId, sourceFile, libraryStorageDir, false, 'rename') as { uploaded_path?: string; knowledge_dir?: string }
       const relativePath = relativeUploadedPath(result.uploaded_path ?? '', result.knowledge_dir ?? settingsStore.profile.knowledgeDir)
       if (!relativePath) {
         workspaceStore.showToast('上传完成但无法识别知识库相对路径')
@@ -344,7 +436,7 @@ async function createFromDialog(payload: {
         tags: payload.tags,
       })
       await workspaceStore.loadKnowledgeTree()
-      workspaceStore.showToast('已新增文件并加入图书馆')
+      workspaceStore.showToast(payload.source_mode === 'text' ? '已保存文本并加入图书馆' : '已新增文件并加入图书馆')
     }
     createDialogMode.value = null
     await Promise.all([loadItems(), loadTags()])
@@ -367,13 +459,6 @@ async function saveEdit(payload: { title: string; description: string; cover_mod
   await Promise.all([loadItems(), loadTags()])
 }
 
-async function removeItem(item: LibraryItem) {
-  if (!window.confirm(`移出图书馆: ${item.display_title}? 真实文件不会被删除。`)) return
-  await deleteLibraryItem(settingsStore.profile.userId, item.item_id)
-  selectedItem.value = null
-  await loadItems()
-}
-
 async function removeSelected() {
   if (!hasSelection.value) return
   if (!window.confirm(`移出选中的 ${selectedIds.value.size} 项? 真实文件不会被删除。`)) return
@@ -384,18 +469,18 @@ async function removeSelected() {
   await loadItems()
 }
 
-async function tagSelected() {
-  if (!hasSelection.value) return
-  const tagText = window.prompt('为选中项设置标签,用英文逗号分隔', '')?.trim()
-  if (tagText === undefined) return
-  const tags = tagText.split(',').map((tag) => tag.trim()).filter(Boolean)
-  for (const item of selectedItems.value) {
-    await updateLibraryItem(item.item_id, {
-      user_id: settingsStore.profile.userId,
-      tags,
-    })
-  }
-  await Promise.all([loadItems(), loadTags()])
+function createTextSourceFile(title: string, content: string): File {
+  const baseName = sanitizeTextFileName(title) || `图书馆文本-${Date.now()}`
+  const fileName = baseName.toLowerCase().endsWith('.md') ? baseName : `${baseName}.md`
+  return new File([content], fileName, { type: 'text/markdown;charset=utf-8' })
+}
+
+function sanitizeTextFileName(rawTitle: string): string {
+  return rawTitle
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 80)
 }
 
 function relativeUploadedPath(uploadedPath: string, knowledgeDir: string): string {
@@ -413,20 +498,6 @@ function formatDate(raw: string): string {
   if (Number.isNaN(date.getTime())) return raw.slice(0, 16)
   const pad = (value: number) => String(value).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-function contentTypeLabel(value: string): string {
-  if (value === 'knowledge_file') return '知识库文件'
-  if (value === 'web_url') return '网页'
-  if (value === 'collection') return '集锦'
-  return '全部'
-}
-
-function sortLabel(value: string): string {
-  if (value === 'source_mtime') return '真实修改日期'
-  if (value === 'title') return '图书馆假名'
-  if (value === 'source_name') return '真实文件名'
-  return '编辑日期'
 }
 
 function errorMessage(error: unknown): string {
@@ -465,18 +536,54 @@ function errorMessage(error: unknown): string {
           <Search :size="14" />
           <input v-model="query" type="search" placeholder="查找" />
         </label>
-        <button class="icon-toolbar-btn" type="button" :title="tagFilterTitle" @click="cycleTagFilter">
-          <Tags :size="16" />
-        </button>
-        <button class="icon-toolbar-btn" type="button" :title="typeFilterTitle" @click="cycleContentTypeFilter">
-          <HardDrive :size="16" />
-        </button>
-        <button class="icon-toolbar-btn" type="button" :title="sortTitle" @click="cycleSortKey">
-          <CalendarClock :size="16" />
-        </button>
-        <button class="icon-toolbar-btn" type="button" :title="sortDirection === 'desc' ? '降序' : '升序'" @click="sortDirection = sortDirection === 'desc' ? 'asc' : 'desc'">
-          <ArrowDownUp :size="16" />
-        </button>
+        <div class="filter-control">
+          <button class="filter-capsule-btn" type="button" title="筛选" @click="filterMenuOpen = !filterMenuOpen">
+            <ListFilter :size="16" />
+            <span>筛选</span>
+          </button>
+          <div v-if="filterMenuOpen" class="filter-menu" @click.stop>
+            <button type="button" class="filter-label-btn" disabled>类型</button>
+            <button type="button" @click="selectContentTypeFilter('')">
+              <Check v-if="!selectedContentType" :size="14" />
+              <span v-else class="filter-check-placeholder"></span>
+              <span>全部</span>
+            </button>
+            <button type="button" @click="selectContentTypeFilter('knowledge_file')">
+              <Check v-if="selectedContentType === 'knowledge_file'" :size="14" />
+              <span v-else class="filter-check-placeholder"></span>
+              <span>知识库文件</span>
+            </button>
+            <button type="button" @click="selectContentTypeFilter('web_url')">
+              <Check v-if="selectedContentType === 'web_url'" :size="14" />
+              <span v-else class="filter-check-placeholder"></span>
+              <span>网页</span>
+            </button>
+            <button type="button" @click="selectContentTypeFilter('collection')">
+              <Check v-if="selectedContentType === 'collection'" :size="14" />
+              <span v-else class="filter-check-placeholder"></span>
+              <span>集锦</span>
+            </button>
+            <hr />
+            <button type="button" class="filter-label-btn" disabled>标签</button>
+            <button type="button" @click="selectTagFilter('')">
+              <Check v-if="!selectedTag" :size="14" />
+              <span v-else class="filter-check-placeholder"></span>
+              <span>全部</span>
+            </button>
+            <div class="filter-tag-grid">
+              <button
+                v-for="tag in tags"
+                :key="tag.name"
+                class="filter-tag-pill"
+                :class="{ active: selectedTag === tag.name }"
+                type="button"
+                @click="selectTagFilter(tag.name)"
+              >
+                {{ tag.name }}
+              </button>
+            </div>
+          </div>
+        </div>
         <button class="icon-toolbar-btn" type="button" title="新增文件" @click="openCreateBookDialog">
           <FilePlus2 :size="16" />
         </button>
@@ -485,40 +592,44 @@ function errorMessage(error: unknown): string {
         </button>
         <button class="icon-toolbar-btn" :class="{ active: multiSelect }" type="button" title="多选" @click="multiSelect = !multiSelect">
           <Tags :size="16" />
+          <span v-if="multiSelect" class="multi-indicator">{{ selectedIds.size }}</span>
         </button>
-        <template v-if="multiSelect">
-          <span class="selected-count">{{ selectedIds.size }}</span>
-          <button class="icon-toolbar-btn" type="button" title="为选中项设置标签" :disabled="!hasSelection" @click="tagSelected">
-            <Tags :size="16" />
-          </button>
-          <button class="icon-toolbar-btn danger" type="button" title="移出选中项" :disabled="!hasSelection" @click="removeSelected">
-            <Trash2 :size="16" />
-          </button>
-        </template>
       </div>
     </header>
 
+    <section v-if="multiSelect" class="multi-banner">
+      <span>已选择 {{ selectedIds.size }} 项</span>
+      <div class="banner-actions">
+        <button class="delete-btn" type="button" :disabled="!hasSelection" title="移出" @click="removeSelected">
+          <svg viewBox="0 0 448 512" class="svgIcon"><path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32L53.2 467c1.6 25.3 22.6 45 47.9 45H346.9c25.3 0 46.3-19.7 47.9-45L416 128z"></path></svg>
+        </button>
+        <button class="banner-close" type="button" title="取消多选" @click="cancelMultiSelect">
+          <X :size="14" />
+        </button>
+      </div>
+    </section>
+
     <section class="library-content">
       <main class="library-body">
-        <div v-if="loading" class="empty-state">正在读取图书馆</div>
-        <div v-else-if="items.length === 0" class="empty-state">
+        <div v-if="items.length === 0 && !loading" class="empty-hint">
           当前集锦为空。新增文件或创建集锦后会出现在这里。
         </div>
-        <div v-else class="library-grid">
+        <TransitionGroup v-else-if="items.length" appear name="card" tag="div" class="library-grid">
           <LibraryCard
-            v-for="item in items"
+            v-for="(item, i) in items"
             :key="item.item_id"
+            :style="{ '--i': i }"
             :item="item"
             :selected="multiSelect ? selectedIds.has(item.item_id) : selectedItem?.item_id === item.item_id"
             :multi-select="multiSelect"
             @open="openItem"
-            @edit="editItem = $event"
+            @contextmenu="openContextMenu"
             @toggle="toggleItem"
             @select="selectItem"
             @drag-start="startDrag"
             @drop-on="dropOnItem"
           />
-        </div>
+        </TransitionGroup>
       </main>
 
       <aside class="detail-drawer" :class="{ open: drawerOpen }">
@@ -546,11 +657,11 @@ function errorMessage(error: unknown): string {
             </div>
           </div>
           <div v-if="selectedItem.description" class="drawer-section">
-            <div class="drawer-label">Description</div>
+            <div class="drawer-label">描述</div>
             <p class="drawer-description">{{ selectedItem.description }}</p>
           </div>
           <div v-if="selectedItem.tags.length" class="drawer-section">
-            <div class="drawer-label">Tags</div>
+            <div class="drawer-label">标签</div>
             <div class="drawer-tags">
               <span v-for="tag in selectedItem.tags" :key="tag" class="tag-pill">{{ tag }}</span>
             </div>
@@ -580,6 +691,29 @@ function errorMessage(error: unknown): string {
       </aside>
     </section>
 
+    <ul v-if="contextMenuOpen" class="context-menu" :style="contextMenuStyle" @click.stop>
+      <li class="context-item" @click="openCreateBookDialog(); closeContextMenu()">
+        <FilePlus2 :size="14" />
+        <span>新增文件</span>
+      </li>
+      <li class="context-item" @click="openCreateCollectionDialog(); closeContextMenu()">
+        <FolderPlus :size="14" />
+        <span>新增集锦</span>
+      </li>
+      <li class="context-item" @click="contextEdit()">
+        <Save :size="14" />
+        <span>编辑</span>
+      </li>
+      <li class="context-item" @click="contextMoveToParent()">
+        <ArrowUp :size="14" />
+        <span>移动到上一级集锦</span>
+      </li>
+      <hr class="context-sep" />
+      <li class="context-item danger" @click="contextDelete()">
+        <X :size="14" />
+        <span>删除</span>
+      </li>
+    </ul>
     <LibraryItemDialog
       :open="Boolean(editItem)"
       :item="editItem"
@@ -599,11 +733,14 @@ function errorMessage(error: unknown): string {
 
 <style scoped>
 .library-view {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   background: var(--color-canvas);
+  font-family: var(--font-ui);
+  font-size: calc(13px * var(--font-scale));
 }
 
 .library-toolbar {
@@ -642,10 +779,10 @@ function errorMessage(error: unknown): string {
   border-radius: 4px;
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 12px;
 }
 
 .icon-toolbar-btn {
+  position: relative;
   justify-content: center;
   width: 32px;
   padding: 0;
@@ -678,10 +815,10 @@ function errorMessage(error: unknown): string {
   min-width: 160px;
   height: 28px;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
   background: var(--color-canvas);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 55%, transparent);
-  padding: 0 6px;
+  padding: 0 10px;
 }
 
 .path-segment {
@@ -698,15 +835,16 @@ function errorMessage(error: unknown): string {
 
 .path-separator {
   color: var(--color-text-muted);
-  font-size: 12px;
 }
 
 .search-box {
   flex: 0 1 220px;
   gap: 6px;
-  padding: 0 8px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
   background: var(--color-canvas);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 55%, transparent);
 }
 
 .search-box input {
@@ -718,26 +856,232 @@ function errorMessage(error: unknown): string {
   color: var(--color-text);
 }
 
-.selected-count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 22px;
-  height: 22px;
+.filter-control {
+  position: relative;
+  display: inline-flex;
+}
+
+.filter-capsule-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  border: 1px solid var(--color-border);
   border-radius: 999px;
+  background: var(--color-canvas);
+  color: var(--color-text-secondary);
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.filter-capsule-btn:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  color: var(--color-primary);
+}
+
+.filter-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  min-width: 180px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-canvas);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  padding: 6px;
+}
+
+.filter-menu button {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: calc(13px * var(--font-scale));
+  text-align: left;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.filter-menu button:not(.filter-label-btn):hover {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-text);
+}
+
+.filter-menu .filter-label-btn {
+  height: 24px;
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 700;
+  color: var(--color-text-muted);
+  cursor: default;
+  text-transform: uppercase;
+}
+
+.filter-menu hr {
+  width: 100%;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.filter-check-placeholder {
+  width: 14px;
+}
+
+.filter-tag-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 4px 8px 6px;
+}
+
+.filter-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  padding: 0 10px;
+  cursor: pointer;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.filter-tag-pill:hover {
+  border-color: var(--color-primary);
   background: var(--color-primary-soft);
   color: var(--color-primary);
-  font-size: 11px;
+}
+
+.filter-tag-pill.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.multi-indicator {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: calc(10px * var(--font-scale));
+  font-weight: 700;
+  padding: 0 4px;
+}
+
+.multi-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  color: var(--color-text-secondary);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.banner-close {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.banner-close:hover {
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  color: var(--color-danger);
+}
+
+.delete-btn {
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background-color: var(--color-canvas);
+  border: 1px solid var(--color-border);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  cursor: pointer;
+  transition-duration: .3s;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.delete-btn .svgIcon {
+  width: 12px;
+  transition-duration: .3s;
+}
+
+.delete-btn .svgIcon path {
+  fill: rgb(255, 69, 69);
+}
+
+.delete-btn:hover {
+  width: 70px;
+  border-radius: 50px;
+  transition-duration: .3s;
+  background-color: rgb(255, 69, 69);
+  border-color: rgb(255, 69, 69);
+}
+
+.delete-btn:hover .svgIcon {
+  width: 25px;
+  transition-duration: .3s;
+  transform: translateY(60%);
+}
+
+.delete-btn:hover .svgIcon path {
+  fill: white;
+}
+
+.delete-btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .library-content {
-  position: relative;
-  display: block;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
 .library-body {
+  flex: 1;
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -750,38 +1094,60 @@ function errorMessage(error: unknown): string {
   grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
   gap: 16px;
   align-items: start;
+  position: relative;
 }
 
-.empty-state {
+.card-move {
+  transition: transform 400ms ease;
+}
+
+.card-enter-active {
+  animation: card-in 350ms ease both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+.card-leave-active {
+  transition: opacity 300ms ease;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.card-leave-to {
+  opacity: 0;
+}
+
+.empty-hint {
   display: grid;
   place-items: center;
   min-height: 260px;
-  border-radius: 10px;
   color: var(--color-text-muted);
-  background: var(--color-surface);
+  font-size: calc(14px * var(--font-scale));
   text-align: center;
-  padding: 24px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
 .detail-drawer {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
+  flex: 0 0 0px;
   width: 300px;
-  min-width: 300px;
+  min-width: 0;
   overflow: hidden;
   border-left: 1px solid var(--color-border);
   background: var(--color-surface);
-  transform: translateX(100%);
   transition:
-    transform 240ms ease;
+    flex-basis 240ms ease,
+    padding 240ms ease;
 }
 
 .detail-drawer.open {
-  transform: translateX(0);
+  flex-basis: 300px;
 }
 
 .drawer-head {
@@ -798,7 +1164,7 @@ function errorMessage(error: unknown): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: calc(14px * var(--font-scale));
   font-weight: 700;
 }
 
@@ -820,7 +1186,7 @@ function errorMessage(error: unknown): string {
   gap: 8px;
   min-width: 0;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .drawer-kv span {
@@ -832,7 +1198,7 @@ function errorMessage(error: unknown): string {
 
 .drawer-label {
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -840,7 +1206,7 @@ function errorMessage(error: unknown): string {
 .drawer-description {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
   line-height: 1.55;
   white-space: pre-wrap;
 }
@@ -853,7 +1219,7 @@ function errorMessage(error: unknown): string {
 
 .drawer-empty {
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .drawer-child {
@@ -897,6 +1263,52 @@ function errorMessage(error: unknown): string {
   white-space: nowrap;
 }
 
+.context-menu {
+  position: fixed;
+  z-index: 100;
+  display: grid;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-canvas);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  list-style: none;
+  margin: 0;
+}
+
+.context-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: calc(13px * var(--font-scale));
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.context-item:hover {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-text);
+}
+
+.context-item.danger:hover {
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  color: var(--color-danger);
+}
+
+.context-sep {
+  width: 100%;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+
 @media (max-width: 860px) {
   .search-box {
     flex: 0 1 150px;
@@ -907,8 +1319,7 @@ function errorMessage(error: unknown): string {
   }
 
   .detail-drawer.open {
-    width: 260px;
-    min-width: 260px;
+    flex-basis: 260px;
   }
 }
 </style>

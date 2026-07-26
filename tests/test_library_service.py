@@ -135,3 +135,32 @@ def test_delete_library_item_does_not_delete_real_file(tmp_path: Path) -> None:
     assert result["ok"] is True
     assert response["items"] == []
     assert source.read_text(encoding="utf-8") == "hello"
+
+
+def test_library_storage_dir_migration_updates_virtual_source_paths(tmp_path: Path) -> None:
+    """修改图书馆存储路径时移动旧目录内容并更新虚拟条目的 source_path。"""
+
+    source = tmp_path / "library" / "paper.md"
+    source.parent.mkdir(parents=True)
+    source.write_text("hello", encoding="utf-8")
+    service = make_service(tmp_path)
+    profile = service.settings_service.ensure_user_profile(user_id="u1")
+    assert profile["active_knowledge_library"]["library_storage_dir"] == "library"
+    book = service.create_item(
+        user_id="u1",
+        content_type="knowledge_file",
+        source_path="library/paper.md",
+        title="原论文",
+    )["item"]
+
+    result = service.settings_service.update_library_storage_dir(
+        user_id="u1",
+        library_storage_dir="bookshelf",
+    )
+    updated = service.get_item(user_id="u1", item_id=book["item_id"])["item"]
+
+    assert result["moved"] is True
+    assert result["active_knowledge_library"]["library_storage_dir"] == "bookshelf"
+    assert not source.exists()
+    assert (tmp_path / "bookshelf" / "paper.md").read_text(encoding="utf-8") == "hello"
+    assert updated["source_path"] == "bookshelf/paper.md"

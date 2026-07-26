@@ -24,6 +24,7 @@ const emit = defineEmits<{
   edit: [item: LibraryItem]
   toggle: [item: LibraryItem]
   select: [item: LibraryItem]
+  contextmenu: [event: MouseEvent, item: LibraryItem]
   dragStart: [item: LibraryItem]
   dropOn: [item: LibraryItem]
 }>()
@@ -109,19 +110,19 @@ function handleDrop(event: DragEvent) {
     draggable="true"
     @click="handleClick"
     @dblclick.stop="emit('open', item)"
-    @contextmenu.prevent="emit('edit', item)"
+    @contextmenu.prevent="emit('contextmenu', $event, item)"
     @dragstart="handleDragStart"
     @dragover="handleDragOver"
     @dragleave="dragOver = false"
     @drop="handleDrop"
   >
     <header v-if="isCollection" class="collection-strip">
-      <span class="collection-title" :title="item.display_title">{{ item.display_title }}</span>
-      <span class="collection-badge">集锦</span>
+      <span class="collection-label">集锦</span>
     </header>
     <button
       v-if="multiSelect"
       class="select-button"
+      :class="{ checked: selected }"
       type="button"
       :title="selected ? '取消选择' : '选择'"
       @click.stop="emit('toggle', item)"
@@ -133,7 +134,7 @@ function handleDrop(event: DragEvent) {
       <div v-else-if="item.cover_mode === 'description' && item.description" class="text-cover">
         {{ item.description }}
       </div>
-      <div v-else-if="item.cover_mode === 'title'" class="title-cover">
+      <div v-else-if="item.cover_mode === 'title' || isCollection" class="title-cover">
         {{ item.display_title }}
       </div>
       <div v-else class="icon-cover">
@@ -148,10 +149,9 @@ function handleDrop(event: DragEvent) {
       <div class="tag-row">
         <span v-for="tag in item.tags" :key="tag" class="tag-pill" :title="tag">{{ tag }}</span>
       </div>
-      <div v-if="!isCollection" class="title" :title="item.display_title">{{ item.display_title }}</div>
-      <div class="source" :title="sourceLabel">
-        <FolderOpen v-if="isCollection" :size="13" />
-        <img v-else-if="fileIcon.src" class="source-icon" :src="fileIcon.src" alt="" />
+      <div class="title" :title="item.display_title">{{ item.display_title }}</div>
+      <div v-if="!isCollection" class="source" :title="sourceLabel">
+        <img v-if="fileIcon.src" class="source-icon" :src="fileIcon.src" alt="" />
         <Link v-else-if="item.content_type === 'web_url'" :size="13" />
         <span>{{ sourceLabel }}</span>
       </div>
@@ -176,6 +176,8 @@ function handleDrop(event: DragEvent) {
   border-radius: 14px;
   background: var(--color-surface);
   color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: calc(13px * var(--font-scale));
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.10);
   transition:
     box-shadow 160ms ease,
@@ -211,7 +213,6 @@ function handleDrop(event: DragEvent) {
 .collection-strip {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   min-width: 0;
   padding: 0 12px;
@@ -219,38 +220,40 @@ function handleDrop(event: DragEvent) {
   color: var(--color-primary);
 }
 
-.collection-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
+.collection-label {
+  flex: 0 0 auto;
+  font-size: 11px;
   font-weight: 700;
+  opacity: 0.65;
 }
 
-.collection-badge {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
-  padding: 2px 7px;
-  font-size: 10px;
-  font-weight: 700;
-}
 
 .select-button {
   position: absolute;
   top: 10px;
-  left: 10px;
+  right: 10px;
   z-index: 2;
-  display: inline-grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 24px;
   height: 24px;
-  border: 0;
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: var(--color-surface);
-  color: var(--color-primary);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+  background: var(--color-canvas);
+  color: var(--color-text-muted);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.select-button :deep(svg) {
+  margin-left: -1px;
+}
+
+.select-button.checked {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
 }
 
 .cover {
@@ -279,7 +282,6 @@ function handleDrop(event: DragEvent) {
 .text-cover {
   padding: 18px;
   color: var(--color-text);
-  font-size: 14px;
   line-height: 1.55;
   overflow: hidden;
   white-space: pre-wrap;
@@ -288,7 +290,7 @@ function handleDrop(event: DragEvent) {
 .title-cover {
   padding: 22px;
   color: var(--color-text);
-  font-size: 22px;
+  font-size: calc(22px * var(--font-scale));
   line-height: 1.25;
   font-weight: 700;
   text-align: center;
@@ -365,7 +367,6 @@ function handleDrop(event: DragEvent) {
 
 .title {
   font-weight: 700;
-  font-size: 14px;
   color: var(--color-text);
 }
 
@@ -373,7 +374,6 @@ function handleDrop(event: DragEvent) {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
   color: var(--color-text-secondary);
 }
 
@@ -387,7 +387,6 @@ function handleDrop(event: DragEvent) {
 .description {
   display: -webkit-box;
   color: var(--color-text-muted);
-  font-size: 12px;
   line-height: 1.4;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -397,7 +396,7 @@ function handleDrop(event: DragEvent) {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
+  font-size: calc(11px * var(--font-scale));
   color: var(--color-text-muted);
 }
 </style>

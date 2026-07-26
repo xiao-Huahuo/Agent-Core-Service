@@ -62,6 +62,7 @@ class UserKnowledgeLibrary(SQLModel, table=True):
     user_id: str = Field(index=True, max_length=128)
     name: str = Field(max_length=256)
     knowledge_dir: str = Field(index=True, max_length=1024)
+    library_storage_dir: str = Field(default="", max_length=1024)
     is_active: bool = Field(default=False, index=True)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

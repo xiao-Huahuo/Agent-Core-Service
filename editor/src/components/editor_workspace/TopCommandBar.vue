@@ -330,8 +330,8 @@ onMounted(() => nextTick(autoResizeInput))
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
+  width: 38px;
+  height: 38px;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -346,8 +346,8 @@ onMounted(() => nextTick(autoResizeInput))
 
 .logo-img {
   display: block;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
 }
 

@@ -60,6 +60,7 @@ export interface SettingsKnowledgeLibraryResponse {
   user_id: string
   name: string
   knowledge_dir: string
+  library_storage_dir?: string
   is_active: boolean
   created_at: string
   updated_at: string

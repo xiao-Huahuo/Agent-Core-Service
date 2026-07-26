@@ -629,7 +629,10 @@ async def save_storage_config(body: dict[str, Any]) -> dict[str, Any]:
     svc = _require_settings_service()
     from agent_service.services.storage_service import StorageService
     storage_svc = StorageService(config=svc.config, settings_service=svc)
-    return storage_svc.save_storage_config(user_id=user_id, paths=paths)
+    try:
+        return storage_svc.save_storage_config(user_id=user_id, paths=paths)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/settings/storage/clear")

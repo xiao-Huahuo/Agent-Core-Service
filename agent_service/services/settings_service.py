@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import hashlib
 import json
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -50,6 +51,7 @@ class SettingsService:
         SQLModel.metadata.create_all(self.engine)
         self._ensure_llm_config_schema()
         self._ensure_user_settings_schema()
+        self._ensure_user_knowledge_libraries_schema()
 
     def _ensure_llm_config_schema(self) -> None:
         """Ensure user_llm_config table has the small_api_key / small_base_url / small_model_name columns."""
@@ -99,6 +101,25 @@ class SettingsService:
                     if col_name not in columns:
                         db.execute(text(f"ALTER TABLE user_settings ADD COLUMN {col_name} {col_type}"))
                         logger.info("Schema migration: added column %s to user_settings", col_name)
+                db.commit()
+        except Exception:
+            pass
+
+    def _ensure_user_knowledge_libraries_schema(self) -> None:
+        """Ensure user_knowledge_libraries has per-library storage columns."""
+
+        from sqlalchemy import inspect as sa_inspect
+        try:
+            inspector = sa_inspect(self.engine)
+            columns = [c["name"] for c in inspector.get_columns("user_knowledge_libraries")]
+            migrations = {
+                "library_storage_dir": "VARCHAR(1024) NOT NULL DEFAULT ''",
+            }
+            with Session(self.engine) as db:
+                for col_name, col_type in migrations.items():
+                    if col_name not in columns:
+                        db.execute(text(f"ALTER TABLE user_knowledge_libraries ADD COLUMN {col_name} {col_type}"))
+                        logger.info("Schema migration: added column %s to user_knowledge_libraries", col_name)
                 db.commit()
         except Exception:
             pass
@@ -182,6 +203,64 @@ class SettingsService:
 
         profile = self.ensure_user_profile(user_id=user_id)
         return dict(profile["active_knowledge_library"])
+
+    def update_library_storage_dir(self, *, user_id: str, library_storage_dir: str) -> dict:
+        """
+        更新当前 active 知识库的图书馆文件存储目录并迁移旧内容。
+
+        user_id: 用户 ID。
+        library_storage_dir: 用户输入目录,可为知识库内相对路径或绝对路径。
+        """
+
+        normalized_user_id = user_id.strip()
+        if not normalized_user_id:
+            raise ValueError("user_id is required")
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                record = UserSettingsRecord(
+                    user_id=normalized_user_id,
+                    knowledge_dir=str(self.config.storage.knowledge_dir),
+                    created_at=self._utc_now(),
+                    updated_at=self._utc_now(),
+                )
+                db.add(record)
+                db.commit()
+                db.refresh(record)
+            active_library = self._ensure_active_library(db=db, record=record)
+            knowledge_root = Path(active_library.knowledge_dir).expanduser().resolve()
+            old_relative = self._library_storage_relative_path(active_library)
+            new_absolute = self._resolve_library_storage_dir(
+                knowledge_root=knowledge_root,
+                library_storage_dir=library_storage_dir,
+            )
+            new_relative = new_absolute.relative_to(knowledge_root).as_posix()
+            if old_relative == new_relative:
+                active_library.library_storage_dir = new_relative
+                active_library.updated_at = self._utc_now()
+                db.add(active_library)
+                db.commit()
+                db.refresh(active_library)
+                return {"active_knowledge_library": self._serialize_knowledge_library(active_library), "moved": False}
+
+            old_absolute = (knowledge_root / old_relative).resolve()
+            self._move_library_storage_dir(old_path=old_absolute, new_path=new_absolute)
+            self._rewrite_library_item_source_paths(
+                db=db,
+                user_id=normalized_user_id,
+                library_id=active_library.library_id,
+                old_relative=old_relative,
+                new_relative=new_relative,
+            )
+            now = self._utc_now()
+            active_library.library_storage_dir = new_relative
+            active_library.updated_at = now
+            record.updated_at = now
+            db.add(active_library)
+            db.add(record)
+            db.commit()
+            db.refresh(active_library)
+            return {"active_knowledge_library": self._serialize_knowledge_library(active_library), "moved": True}
 
     def resolve_active_knowledge_owner_id(self, *, user_id: str) -> str:
         """
@@ -295,6 +374,7 @@ class SettingsService:
                 user_id=user_id,
                 name=normalized_name or fallback_name,
                 knowledge_dir=normalized_dir,
+                library_storage_dir="library",
                 is_active=True,
                 created_at=now,
                 updated_at=now,
@@ -302,6 +382,7 @@ class SettingsService:
         else:
             library.knowledge_dir = normalized_dir
             library.name = normalized_name or library.name or fallback_name
+            library.library_storage_dir = self._library_storage_relative_path(library)
             library.updated_at = now
         for item in libraries:
             item.is_active = item.library_id == library_id
@@ -310,6 +391,93 @@ class SettingsService:
         library.is_active = True
         db.add(library)
         return library
+
+    def _resolve_library_storage_dir(self, *, knowledge_root: Path, library_storage_dir: str) -> Path:
+        """
+        解析图书馆文件存储目录并确保其仍位于当前知识库内。
+
+        knowledge_root: 当前 active 知识库根目录。
+        library_storage_dir: 用户输入目录。
+        """
+
+        raw_value = library_storage_dir.strip().replace("\\", "/").strip("/")
+        candidate = Path(raw_value).expanduser() if raw_value else knowledge_root / "library"
+        if not candidate.is_absolute():
+            candidate = knowledge_root / candidate
+        resolved = candidate.resolve()
+        try:
+            resolved.relative_to(knowledge_root.resolve())
+        except ValueError as exc:
+            raise ValueError("library_storage_dir must stay inside active knowledge library") from exc
+        return resolved
+
+    def _library_storage_relative_path(self, library: UserKnowledgeLibrary) -> str:
+        """返回知识库内图书馆存储目录相对路径。"""
+
+        knowledge_root = Path(library.knowledge_dir).expanduser().resolve()
+        raw_value = str(getattr(library, "library_storage_dir", "") or "").strip()
+        resolved = self._resolve_library_storage_dir(knowledge_root=knowledge_root, library_storage_dir=raw_value)
+        return resolved.relative_to(knowledge_root).as_posix()
+
+    def _move_library_storage_dir(self, *, old_path: Path, new_path: Path) -> None:
+        """将旧图书馆存储目录内容移动到新目录,不覆盖目标同名内容。"""
+
+        if old_path == new_path:
+            new_path.mkdir(parents=True, exist_ok=True)
+            return
+        new_inside_old = False
+        try:
+            new_path.relative_to(old_path)
+            new_inside_old = True
+        except ValueError:
+            new_inside_old = False
+        if new_inside_old:
+            raise ValueError("library_storage_dir cannot be inside current library storage directory")
+        new_path.mkdir(parents=True, exist_ok=True)
+        if not old_path.exists():
+            return
+        if not old_path.is_dir():
+            raise ValueError("existing library storage path is not a directory")
+        for child in old_path.iterdir():
+            destination = new_path / child.name
+            if destination.exists():
+                raise ValueError(f"target library storage already contains: {child.name}")
+        for child in old_path.iterdir():
+            shutil.move(str(child), str(new_path / child.name))
+
+    def _rewrite_library_item_source_paths(
+        self,
+        *,
+        db: Session,
+        user_id: str,
+        library_id: str,
+        old_relative: str,
+        new_relative: str,
+    ) -> None:
+        """重写当前知识库下图书馆虚拟条目的知识库文件相对路径前缀。"""
+
+        from agent_service.models.library import LibraryItem
+
+        old_prefix = old_relative.strip("/").replace("\\", "/")
+        new_prefix = new_relative.strip("/").replace("\\", "/")
+        if not old_prefix or old_prefix == new_prefix:
+            return
+        statement = (
+            select(LibraryItem)
+            .where(LibraryItem.user_id == user_id)
+            .where(LibraryItem.library_id == library_id)
+            .where(LibraryItem.content_type == "knowledge_file")
+        )
+        for item in db.exec(statement).all():
+            source_path = item.source_path.strip().replace("\\", "/")
+            if source_path == old_prefix:
+                item.source_path = new_prefix
+            elif source_path.startswith(f"{old_prefix}/"):
+                item.source_path = f"{new_prefix}/{source_path[len(old_prefix) + 1:]}"
+            else:
+                continue
+            item.updated_at = self._utc_now()
+            db.add(item)
 
     def _list_knowledge_libraries(self, *, user_id: str) -> list[UserKnowledgeLibrary]:
         """
@@ -515,10 +683,25 @@ class SettingsService:
             "user_id": record.user_id,
             "name": record.name,
             "knowledge_dir": record.knowledge_dir,
+            "library_storage_dir": SettingsService._library_storage_relative_path_static(record),
             "is_active": record.is_active,
             "created_at": record.created_at.isoformat(),
             "updated_at": record.updated_at.isoformat(),
         }
+
+    @staticmethod
+    def _library_storage_relative_path_static(record: UserKnowledgeLibrary) -> str:
+        """序列化时返回稳定的图书馆存储相对路径。"""
+
+        knowledge_root = Path(record.knowledge_dir).expanduser().resolve()
+        raw_value = str(getattr(record, "library_storage_dir", "") or "library").strip()
+        candidate = Path(raw_value).expanduser()
+        if not candidate.is_absolute():
+            candidate = knowledge_root / raw_value
+        try:
+            return candidate.resolve().relative_to(knowledge_root).as_posix()
+        except ValueError:
+            return "library"
 
     @staticmethod
     def build_library_id(*, user_id: str, knowledge_dir: str) -> str:

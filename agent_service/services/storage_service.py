@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 # 路径定义：key → (label, parent_key, can_clear, requires_restart)
 STORAGE_PATH_DEFINITIONS: dict[str, dict[str, Any]] = {
     "knowledge_dir": {"label": "知识库路径", "parent": None, "can_clear": False, "requires_restart": False},
+    "library_storage_dir": {"label": "图书馆存储路径", "parent": "knowledge_dir", "can_clear": False, "requires_restart": False},
     "base_data_dir": {"label": "运行时文件根路径(R)", "parent": None, "can_clear": False, "requires_restart": True},
     "assets_dir": {"label": "资源文件路径", "parent": "base_data_dir", "can_clear": True, "requires_restart": True},
     "db_dir": {"label": "数据库根路径(D)", "parent": "base_data_dir", "can_clear": False, "requires_restart": True},
@@ -37,7 +38,7 @@ STORAGE_PATH_DEFINITIONS: dict[str, dict[str, Any]] = {
 }
 
 # 明确不可清空的路径 key 列表
-UNCLEARABLE_KEYS = {"knowledge_dir", "base_data_dir", "relation_db_dir", "vector_db_dir", "models_dir", "db_dir"}
+UNCLEARABLE_KEYS = {"knowledge_dir", "library_storage_dir", "base_data_dir", "relation_db_dir", "vector_db_dir", "models_dir", "db_dir"}
 
 # 虚拟节点 key（不对应实际 config.storage 属性）
 VIRTUAL_KEYS = {"models_dir", "db_dir"}
@@ -85,7 +86,35 @@ class StorageService:
         overrides = self.settings_service.get_storage_path_overrides(user_id=user_id)
 
         paths = []
+        active_library = self.settings_service.get_active_knowledge_library(user_id=user_id)
+        active_knowledge_dir = Path(str(active_library["knowledge_dir"])).expanduser().resolve()
         for key, definition in STORAGE_PATH_DEFINITIONS.items():
+            if key == "knowledge_dir":
+                size_bytes = _dir_size(active_knowledge_dir)
+                paths.append({
+                    "key": key,
+                    "label": definition["label"],
+                    "value": str(active_knowledge_dir),
+                    "size_bytes": size_bytes,
+                    "requires_restart": definition["requires_restart"],
+                    "can_clear": definition["can_clear"],
+                    "parent": definition["parent"],
+                })
+                continue
+            if key == "library_storage_dir":
+                relative_dir = str(active_library.get("library_storage_dir") or "library").strip() or "library"
+                current_path = (active_knowledge_dir / relative_dir).resolve()
+                size_bytes = _dir_size(current_path)
+                paths.append({
+                    "key": key,
+                    "label": definition["label"],
+                    "value": str(current_path),
+                    "size_bytes": size_bytes,
+                    "requires_restart": definition["requires_restart"],
+                    "can_clear": definition["can_clear"],
+                    "parent": definition["parent"],
+                })
+                continue
             if key in VIRTUAL_KEYS:
                 # 虚拟节点：路径基于 base_data_dir 拼接，大小为子项之和
                 base = Path(getattr(storage, "base_data_dir")).expanduser().resolve()
@@ -119,7 +148,7 @@ class StorageService:
             })
 
         # 计算顶层汇总
-        knowledge_dir_total = _dir_size(Path(getattr(storage, "knowledge_dir")))
+        knowledge_dir_total = _dir_size(active_knowledge_dir)
         runtime_total = _dir_size(Path(getattr(storage, "base_data_dir")))
 
         return {
@@ -131,12 +160,30 @@ class StorageService:
     def save_storage_config(self, *, user_id: str, paths: dict[str, str]) -> dict:
         """保存用户存储路径覆盖（knowledge_dir 除外，用现有 API 单独处理）。"""
 
-        # 移除 knowledge_dir（用现有 updateKnowledgeDir 处理）和虚拟节点
-        cleaned = {k: str(v).strip() for k, v in paths.items() if k not in ("knowledge_dir", *VIRTUAL_KEYS) and str(v).strip()}
+        saved_keys: list[str] = []
+        if str(paths.get("library_storage_dir") or "").strip():
+            self.settings_service.update_library_storage_dir(
+                user_id=user_id,
+                library_storage_dir=str(paths["library_storage_dir"]),
+            )
+            saved_keys.append("library_storage_dir")
+
+        # 移除 knowledge_dir 与 library_storage_dir（用即时 API 处理）和虚拟节点
+        cleaned = {
+            k: str(v).strip()
+            for k, v in paths.items()
+            if k not in ("knowledge_dir", "library_storage_dir", *VIRTUAL_KEYS) and str(v).strip()
+        }
         # 只保留 STORAGE_PATH_DEFINITIONS 中定义的 key
-        cleaned = {k: v for k, v in cleaned.items() if k in STORAGE_PATH_DEFINITIONS and k not in ("knowledge_dir", *VIRTUAL_KEYS)}
-        self.settings_service.save_storage_path_overrides(user_id=user_id, overrides=cleaned)
-        return {"requires_restart": len(cleaned) > 0, "saved": list(cleaned.keys())}
+        cleaned = {
+            k: v
+            for k, v in cleaned.items()
+            if k in STORAGE_PATH_DEFINITIONS and k not in ("knowledge_dir", "library_storage_dir", *VIRTUAL_KEYS)
+        }
+        if cleaned:
+            self.settings_service.save_storage_path_overrides(user_id=user_id, overrides=cleaned)
+            saved_keys.extend(cleaned.keys())
+        return {"requires_restart": len(cleaned) > 0, "saved": saved_keys}
 
     def clear_path(self, *, path_key: str) -> dict:
         """删除指定路径的内容（保留目录本身）。"""

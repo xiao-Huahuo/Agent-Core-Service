@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ImagePlus, Save, X } from 'lucide-vue-next'
+import { ImagePlus, Save, X, XCircle } from 'lucide-vue-next'
 
 import { uploadLibraryCover } from '@/api/library'
 import type { LibraryItem } from '@/types/knowledge'
@@ -27,8 +27,11 @@ const title = ref('')
 const description = ref('')
 const coverMode = ref<LibraryItem['cover_mode']>('icon')
 const coverAssetId = ref('')
-const tagText = ref('')
+const tags = ref<string[]>([])
+const tagDraft = ref('')
 const uploading = ref(false)
+const coverDragActive = ref(false)
+const coverPreviewUrl = ref('')
 const uploadInput = ref<HTMLInputElement | null>(null)
 
 const isCollection = computed(() => props.item?.item_type === 'collection')
@@ -44,18 +47,41 @@ watch(
     description.value = item?.description ?? ''
     coverMode.value = item?.cover_mode ?? 'icon'
     coverAssetId.value = item?.cover_asset_id ?? ''
-    tagText.value = item?.tags.join(', ') ?? ''
+    coverPreviewUrl.value = item?.cover_asset?.url ?? ''
+    tags.value = item?.tags ?? []
+    tagDraft.value = ''
+    coverDragActive.value = false
   },
   { immediate: true },
 )
 
+function addTag(rawValue = tagDraft.value) {
+  const name = rawValue.trim()
+  if (!name) return
+  if (!tags.value.some((tag) => tag.toLowerCase() === name.toLowerCase())) {
+    tags.value = [...tags.value, name]
+  }
+  tagDraft.value = ''
+}
+
+function handleTagKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter' && event.key !== ',') return
+  event.preventDefault()
+  addTag()
+}
+
+function removeTag(name: string) {
+  tags.value = tags.value.filter((tag) => tag !== name)
+}
+
 function submit() {
+  addTag()
   emit('save', {
     title: title.value.trim(),
     description: description.value.trim(),
     cover_mode: coverMode.value,
     cover_asset_id: coverAssetId.value,
-    tags: tagText.value.split(',').map((tag) => tag.trim()).filter(Boolean),
+    tags: tags.value,
   })
 }
 
@@ -63,14 +89,26 @@ async function uploadCover(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file || !props.userId) return
+  await uploadCoverFile(file)
+  input.value = ''
+}
+
+async function dropCover(event: DragEvent) {
+  coverDragActive.value = false
+  const file = event.dataTransfer?.files?.[0]
+  if (!file || !props.userId) return
+  await uploadCoverFile(file)
+}
+
+async function uploadCoverFile(file: File) {
   uploading.value = true
   try {
     const response = await uploadLibraryCover(props.userId, file)
     coverAssetId.value = response.asset?.asset_id ?? ''
+    coverPreviewUrl.value = response.asset?.url ?? ''
     coverMode.value = 'image'
   } finally {
     uploading.value = false
-    input.value = ''
   }
 }
 </script>
@@ -89,20 +127,68 @@ async function uploadCover(event: Event) {
           </button>
         </header>
 
-        <label class="field">
-          <span>图书馆假名</span>
-          <input v-model="title" type="text" spellcheck="false" placeholder="留空使用默认名称" />
-        </label>
-        <label class="field">
-          <span>描述</span>
-          <textarea v-model="description" rows="4" placeholder="用于封面文字、搜索和归纳说明" />
-        </label>
-        <label class="field">
-          <span>标签</span>
-          <input v-model="tagText" type="text" spellcheck="false" placeholder="用英文逗号分隔" />
-        </label>
-        <div class="field">
-          <span>封面 Key</span>
+        <section class="upper-grid">
+          <div class="metadata-zone">
+            <label class="field">
+              <span>标题</span>
+              <input v-model="title" type="text" spellcheck="false" placeholder="留空使用默认名称" />
+            </label>
+            <label class="field">
+              <span>描述</span>
+              <textarea v-model="description" rows="5" placeholder="用于封面文字、搜索和归纳说明" />
+            </label>
+            <div class="field">
+              <span>标签</span>
+              <div class="tag-input-wrap">
+                <input
+                  v-model="tagDraft"
+                  type="text"
+                  spellcheck="false"
+                  placeholder="输入标签后回车"
+                  @blur="addTag()"
+                  @keydown="handleTagKeydown"
+                />
+              </div>
+              <div v-if="tags.length" class="tag-list">
+                <button
+                  v-for="tag in tags"
+                  :key="tag"
+                  class="tag-pill"
+                  type="button"
+                  :title="`移除 ${tag}`"
+                  @click="removeTag(tag)"
+                >
+                  <span>{{ tag }}</span>
+                  <XCircle :size="13" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="cover-zone">
+            <input ref="uploadInput" class="hidden-input" type="file" accept="image/*" @change="uploadCover" />
+            <button
+              class="cover-drop"
+              :class="{ active: coverDragActive }"
+              type="button"
+              :disabled="uploading"
+              @click="uploadInput?.click()"
+              @dragenter.prevent="coverDragActive = true"
+              @dragover.prevent="coverDragActive = true"
+              @dragleave.prevent="coverDragActive = false"
+              @drop.prevent="dropCover"
+            >
+              <img v-if="coverPreviewUrl" class="cover-preview" :src="coverPreviewUrl" alt="" />
+              <template v-else>
+                <ImagePlus :size="30" />
+                <span>{{ uploading ? '上传中' : '点击或拖拽上传封面' }}</span>
+              </template>
+            </button>
+          </div>
+        </section>
+
+        <div class="field" style="padding: 10px 16px 0;">
+          <span>封面模式</span>
           <div class="cover-options">
             <label><input v-model="coverMode" type="radio" value="icon" /> 文件类型图标</label>
             <label><input v-model="coverMode" type="radio" value="title" /> 标题文字</label>
@@ -110,11 +196,6 @@ async function uploadCover(event: Event) {
             <label><input v-model="coverMode" type="radio" value="image" /> 上传图片</label>
             <label v-if="canUseSourceImage"><input v-model="coverMode" type="radio" value="source_image" /> 使用真实图片</label>
           </div>
-          <input ref="uploadInput" class="hidden-input" type="file" accept="image/*" @change="uploadCover" />
-          <button class="secondary-btn" type="button" :disabled="uploading" @click="uploadInput?.click()">
-            <ImagePlus :size="14" />
-            {{ uploading ? '上传中' : '上传封面' }}
-          </button>
         </div>
 
         <footer class="dialog-actions">
@@ -140,55 +221,184 @@ async function uploadCover(event: Event) {
 }
 
 .dialog-panel {
-  width: min(520px, calc(100vw - 32px));
+  width: min(760px, calc(100vw - 32px));
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface);
   color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
 }
 
 .dialog-head {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--color-border);
 }
 
 .dialog-head h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: calc(15px * var(--font-scale));
 }
 
 .dialog-head p {
   margin: 4px 0 0;
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--font-scale));
+}
+
+.upper-grid {
+  display: grid;
+  grid-template-columns: 5fr 3fr;
+  gap: 14px;
+  padding: 16px 16px 0;
+}
+
+.metadata-zone {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
 }
 
 .field {
   display: grid;
-  gap: 8px;
-  padding: 14px 16px 0;
-  font-size: 12px;
+  gap: 7px;
+  font-size: calc(12px * var(--font-scale));
   color: var(--color-text-secondary);
 }
 
-.field input[type="text"],
+.field input[type="text"] {
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  padding: 0 14px;
+  font-size: calc(13px * var(--font-scale));
+  outline: none;
+}
+
+.field input[type="text"]:focus {
+  border-color: var(--color-primary);
+}
+
 .field textarea {
   width: 100%;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: 12px;
   background: var(--color-canvas);
   color: var(--color-text);
-  padding: 8px 10px;
+  padding: 10px 14px;
   resize: vertical;
+  font-size: calc(13px * var(--font-scale));
+  outline: none;
+}
+
+.field textarea:focus {
+  border-color: var(--color-primary);
+}
+
+.tag-input-wrap {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-canvas);
+  padding: 0 14px;
+}
+
+.tag-input-wrap input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 160px;
+  min-height: 24px;
+  border: 1px solid var(--color-primary);
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  padding: 0 8px;
+  font-size: calc(12px * var(--font-scale));
+}
+
+.tag-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cover-zone {
+  display: flex;
+  min-width: 0;
+}
+
+.cover-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  flex: 1;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 16px;
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  padding: 12px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.cover-drop:hover,
+.cover-drop.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
+.cover-drop span {
+  max-width: 100%;
+  color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.cover-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
 }
 
 .cover-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 }
 
 .cover-options label {
@@ -196,6 +406,7 @@ async function uploadCover(event: Event) {
   align-items: center;
   gap: 6px;
   color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
 }
 
 .hidden-input {
@@ -209,18 +420,39 @@ async function uploadCover(event: Event) {
   padding: 16px;
 }
 
-.icon-btn,
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.icon-btn:hover {
+  background: color-mix(in srgb, var(--color-text-secondary) 10%, transparent);
+  color: var(--color-text);
+}
+
 .secondary-btn,
 .primary-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-height: 32px;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: 999px;
   background: var(--color-surface-raised);
   color: var(--color-text);
-  padding: 7px 10px;
+  padding: 0 14px;
+  font-size: calc(13px * var(--font-scale));
+  cursor: pointer;
 }
 
 .primary-btn {
@@ -232,5 +464,11 @@ async function uploadCover(event: Event) {
 .secondary-btn:hover,
 .icon-btn:hover {
   border-color: var(--color-border-strong);
+}
+
+@media (max-width: 720px) {
+  .upper-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>
