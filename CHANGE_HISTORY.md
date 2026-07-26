@@ -74,6 +74,24 @@
   * 在agent页面加上一个右侧边栏,也是平滑抽拉式的,右侧边栏里面暂时只放任务列表.agent完成任务列表项后自动勾选那一项,并在此项下面显示agent的完成概要.agent结束列表时自动将列表标记为已完成.
   * 会话历史也要存储任务列表相关内容,加载历史时如果有任务列表则会展开右侧边栏并显示任务列表.
   * 在联网按钮右边加一个任务按钮,用户可以自己写任务,交给agent自行完成,和agent调用创建任务列表工具的效果是一致的.
+- [x] Skill能力是Agent从通用Agent走向专用Agent的关键。其设计如下：
+  - 所有的内置Skill默认统一存放在根目录的`resources/skills/`文件夹中，用户级Skill放在用户知识库目录下的`.agents/skills/`文件夹中。
+  - 统一兼容[OpenAI开放标准](https://developers.openai.com/api/docs/guides/tools-skills)作为主标准，兼容[Anthropic标准](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)扩展字段。
+  - 目录结构：
+    ```text
+    skill-name/
+      SKILL.md (必须有）
+      scripts/ （可选）
+      references/ （可选）
+      assets/ （可选）
+    ```
+  - 用户级Skill按用户知识库隔离，**用户登录或知识库目录变更时**扫描Skill目录，读取元信息，建立索引，将已启用Skill的基本索引信息注入上下文。
+  - 对于非Simple思考模式下的每次用户输入，Agent决策前，在入口节点设置一个`Skill路由器`节点： 调用小模型，返回针对用户当前询问场景适合的3个Skill。 小模型不可用或返回异常时，使用关键词/description 简单匹配。随后将命中的 Skill 正文（`SKILL.md`）注入本轮运行上下文（用户下一轮询问后从上下文中去除），Skill 正文默认只对当前轮生效，下一轮重新路由。。
+  - [x] 左侧图标栏添加一个新的Skill配置页面：
+    - 分为Skill概览页面和Skill定制页面。
+    - Skill概览页面以卡片形式展示系统自带Skill和用户注入的Skill，用户可开关Skill，可注入自定义的Skill。
+    - 点击右上角按钮可查看Skill格式和规范说明。
+  - [x] 配备2个Agent工具： 列出所有Skill；使用Skill（主动召唤`SKILL.md`正文）
 ## 2026-07-25
 - [x] 交换自动召回全文注入: 长期记忆(全文+编号) ↔ 知识库切片(条数提示) (`context_builder.py:233-251`, `agent_config.py:283-297`):
   - 自动召回现在将长期记忆(session_fact/session_summary/user_custom)的全文注入上下文，带 [1][2] 编号，Agent 可直接引用无需调工具。
