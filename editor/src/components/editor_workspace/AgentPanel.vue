@@ -1331,6 +1331,7 @@ onBeforeUnmount(() => {
   flex: 1;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   transition: opacity var(--transition-fast);
 }
 

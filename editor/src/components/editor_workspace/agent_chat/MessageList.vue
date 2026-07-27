@@ -263,6 +263,7 @@ defineExpose({
   padding: var(--space-16);
   padding-bottom: 116px;
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: none;
 }
 
