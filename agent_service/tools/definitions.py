@@ -159,10 +159,27 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         name="run_terminal_command",
         description=(
             "在项目终端沙盒中执行一个或多个结构化指令段。必须传 shell、segments、cwd; "
-            "禁止传整条 shell 字符串。支持 external_program 外部程序段,以及 pwd/ls/dir/cat/type/head/tail/stat/wc "
-            "等内部读取指令和 write/append/touch/mkdir/rm/mv 等内部写入指令。沙盒模式允许内部读取穿透目录外,"
-            "但写入和外部程序执行仍限制在终端工作区内。完全访问模式下还额外支持 kill/taskkill 杀进程,"
-            "且内部指令参数限制大幅放宽(如 rm -rf、mkdir -p、多文件 cat/stat/wc、批量 touch 等)。"
+            "禁止传整条 shell 字符串。\n\n"
+            "内部读取指令(internal_command 类型): pwd(当前目录), ls/dir(列出目录,"
+            "支持 -a/R/l 和 /s/b 等标志,支持 *.docx 通配符), cat/type(读文件), "
+            "head/tail -n N 文件(行窗口), stat(文件状态), wc(统计行/词/字符数,可用 -c/-l/-w 筛选"
+            "但始终显示三项;未指定文件则返回总计数)。\n"
+            "内部写入指令: write(覆写), append(追加), touch(创建/时间戳), "
+            "mkdir(始终 -p 模式), rm/del(目录递归删除), mv/move(移动/重命名)。\n\n"
+            "外部程序段(external_program 类型): 在沙盒/只读模式下需在白名单内,"
+            "白名单程序包括 python/pytest/pip/git/npm/node/eslint/vitest/go/cargo/find/wc 等;"
+            "find 用于搜索文件(如 find . -name '*.docx' -type f), "
+            "wc 用于带标志统计(如 wc -l file.txt)。"
+            "完全访问模式下所有外部程序都允许(嵌套 shell 仍禁止)。\n\n"
+            "权限模式影响:\n"
+            "- readonly: 仅内部读取指令(pwd/ls/cat/head/tail/stat/wc),禁止写入和外部程序。\n"
+            "- sandbox(默认): 内部读取可穿透工作区根目录;写入和外部程序限制在工作区内。\n"
+            "- full_access: 所有内部指令和外部程序放开限制,额外支持 kill/taskkill 杀进程,"
+            "rm -rf/mkdir -p/批量 cat/mv 等都允许。\n\n"
+            "注意事项:\n"
+            "- 文件搜索优先用 ls/dir *.docx /s /b 或 find . -name '*.docx'。\n"
+            "- 需要标志的 wc(如 wc -l)用 external_program 类型;仅统计用 internal_command。\n"
+            "- 所有 internal_command 都无需 shell 程序支持,在任何环境下可用。"
         ),
         args_schema={
             "type": "object",

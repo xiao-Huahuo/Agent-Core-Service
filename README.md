@@ -309,8 +309,8 @@ Agent观测面板实时展示 Agent 行动轨迹，包括节点状态、上下�
 
 Agent 通过内置工具 `run_terminal_command` 获得非交互式终端能力。该工具不接受整条 shell 字符串,必须传入结构化参数: `shell`、`cwd`、`segments`。`segments` 分为两类:
 
-- `internal_command`: 由后端直接实现,不经过系统 shell。读取类包括 `pwd`、`ls/dir`、`cat/type`、`head`、`tail`、`stat`、`wc`;写入类包括 `write`、`append`、`touch`、`mkdir`、`rm/del`、`mv/move`。
-- `external_program`: 通过 `subprocess.run(..., shell=False)` 执行白名单程序,仍会拦截嵌套 shell、`python -c`、`node -e`、包安装、`git push` 等高风险入口。
+- `internal_command`: 由后端直接实现,不经过系统 shell。读取类包括 `pwd`、`ls/dir`（支持 `-R`/`/s` 递归和 `*.docx` glob 通配符）、`cat/type`、`head`、`tail`、`stat`、`wc`（支持 `-l`/`-w`/`-c` 标志和多文件）;写入类包括 `write`、`append`、`touch`、`mkdir`（自动 `-p`）、`rm/del`、`mv/move`。所有内部命令已移除单文件/单路径限制,支持多参数批量操作。
+- `external_program`: 通过 `subprocess.run(..., shell=False)` 执行。受权限模式控制:沙盒模式下走白名单+安全参数校验;完全访问模式下跳过白名单,仅拦截嵌套 shell（`cmd`/`powershell`/`bash`/`sh`/`wt`）和 `python -c`、`node -e`、包安装、`git push` 等高风险入口。
 
 终端权限和文件工具权限分开控制:终端权限调控内部读写指令、外部程序和路径边界;文件工具只操作当前知识库,只读模式会拒绝写文件、删除、重命名、建目录、保存附件和重建知识库等写操作。
 
@@ -318,7 +318,7 @@ Agent 通过内置工具 `run_terminal_command` 获得非交互式终端能力�
 |---|---|---|---|---|---|
 | 只读 | 全目录可读 | 禁止 | 禁止 | 知识库内可读 | 禁止 |
 | 沙盒 | 全目录可读 | 仅终端工作区内 | 仅终端工作区内，且白名单/安全参数 | 知识库内可读 | 知识库内可写 |
-| 完全访问 | 全目录可读 | 全目录可写 | 路径不限制，但仍白名单/安全参数 | 知识库内可读 | 知识库内可写 |
+| 完全访问 | 全目录可读 | 全目录可写 | 全目录可用，跳过白名单，仅拦截嵌套 shell 等高风险入口 | 知识库内可读 | 知识库内可写 |
 #### 可定制性
 * 用户自定义长期记忆:用户可以管理长期记忆,可以增加新的自定义长期记忆注入到向量库,或者删除长期记忆.
 * 用户自定义系统提示词:用户可编辑"用户设置系统提示词",追加到原本的系统提示词中.

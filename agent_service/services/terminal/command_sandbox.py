@@ -15,6 +15,7 @@ Agent 终端命令沙盒。
 
 from __future__ import annotations
 
+import glob as globmod
 import json
 import os
 import re
@@ -75,9 +76,9 @@ SAFE_DOTNET_SUBCOMMANDS = {"build", "format", "test", "--info", "--list-sdks", "
 SAFE_JAVA_BUILD_SUBCOMMANDS = {"compile", "package", "test", "verify"}
 SCRIPT_SUFFIXES = {".cjs", ".js", ".jsx", ".mjs", ".py", ".ts", ".tsx"}
 LEGACY_DEFAULT_ALLOWED_PROGRAMS = {
-    "cmd": ["python", "pytest", "git", "npm", "node", "where"],
-    "powershell": ["python", "pytest", "git", "npm", "node"],
-    "bash": ["python", "pytest", "git", "npm", "node", "which"],
+    "cmd": ["python", "pytest", "git", "npm", "node", "where", "find", "wc"],
+    "powershell": ["python", "pytest", "git", "npm", "node", "find", "wc"],
+    "bash": ["python", "pytest", "git", "npm", "node", "which", "find", "wc"],
 }
 
 COMMON_TERMINAL_PROGRAMS = [
@@ -114,6 +115,8 @@ COMMON_TERMINAL_PROGRAMS = [
     {"type": "external_program", "program": "javac", "usage": "javac --version"},
     {"type": "external_program", "program": "mvn", "usage": "mvn test / mvn verify"},
     {"type": "external_program", "program": "gradle", "usage": "gradle test / gradle build"},
+    {"type": "external_program", "program": "find", "usage": "find . -name '*.docx' -type f"},
+    {"type": "external_program", "program": "wc", "usage": "wc -l file.txt / wc -c file.txt"},
 ]
 COMMON_INTERNAL_COMMANDS = [
     {"type": "internal_command", "command": "pwd", "usage": "pwd"},
@@ -305,8 +308,6 @@ class TerminalSandbox:
 
         if not isinstance(segments, list) or not segments:
             raise ValueError("segments 必须是非空数组。")
-        if len(segments) > self.settings.max_segments_per_call:
-            raise ValueError(f"单次最多执行 {self.settings.max_segments_per_call} 个指令段。")
         normalized: list[dict[str, Any]] = []
         for segment in segments:
             if not isinstance(segment, dict):
@@ -339,11 +340,17 @@ class TerminalSandbox:
         return max(1, min(value, self.settings.max_timeout_seconds))
 
     def _validate_program(self, *, shell: str, program: str) -> None:
-        """校验程序段名称在 allowlist 内且不是嵌套 shell。"""
+        """校验程序段名称。
+
+        完全访问模式: 仅检查嵌套 shell 黑名单,跳过程序白名单,允许任意外部程序。
+        沙盒/只读模式: 同时检查嵌套 shell 黑名单和程序白名单。
+        """
 
         normalized = _normalize_program_name(program)
         if normalized in set(self.settings.blocked_programs):
             raise ValueError(f"程序 {program} 被沙盒禁止。")
+        if self.access_mode == AGENT_ACCESS_FULL:
+            return
         allowed = set(self.settings.allowed_programs.get(shell, []))
         if normalized not in allowed:
             raise ValueError(f"{shell} 终端不支持程序段 {program}。")
@@ -373,8 +380,13 @@ class TerminalSandbox:
                 raise ValueError("参数中包含不可见控制字符。")
 
     def _validate_program_args(self, *, program: str, args: list[str], cwd: Path) -> None:
-        """按程序类型限制高风险子命令和内联代码执行入口。"""
+        """按程序类型限制高风险子命令和内联代码执行入口。
 
+        完全访问模式跳过所有参数级限制,信任用户完全控制能力。
+        """
+
+        if self.access_mode == AGENT_ACCESS_FULL:
+            return
         normalized_program = _normalize_program_name(program)
         if normalized_program in {"python", "python.exe", "py", "py.exe"}:
             self._validate_python_args(args=args, cwd=cwd)
@@ -676,35 +688,69 @@ class TerminalSandbox:
             return self._internal_kill(args=args)
         raise ValueError(f"不支持内部系统指令 {command}。")
 
+    def _expand_glob_matches(self, raw_path: str, *, cwd: Path) -> list[Path] | None:
+        """展开 glob 通配符匹配;不含通配符或无匹配时返回 None。"""
+        if not any(ch in raw_path for ch in "*?["):
+            return None
+        search_path = raw_path if Path(raw_path).is_absolute() else str(cwd / raw_path)
+        matches = [Path(p) for p in sorted(globmod.iglob(search_path, recursive=False))]
+        if not matches:
+            return None
+        return [self._resolve_arg_path(str(m), cwd=cwd) for m in matches]
+
     def _internal_list_dir(self, *, args: list[str], cwd: Path) -> str:
         """列出工作区内目录内容,等价于基础 `ls/dir`。"""
 
         list_options = _parse_list_dir_args(args)
-        target = self._resolve_arg_path(list_options["path"], cwd=cwd)
-        if not target.exists():
-            raise ValueError(f"目录不存在: {target}")
+        targets: list[Path] = []
+        for raw_path in list_options["paths"]:
+            matched = self._expand_glob_matches(raw_path, cwd=cwd)
+            if matched is None:
+                target = self._resolve_arg_path(raw_path, cwd=cwd)
+                if not target.exists():
+                    raise ValueError(f"路径不存在: {target}")
+                targets.append(target)
+            else:
+                targets.extend(matched)
+
+        lines: list[str] = []
+        for target in targets:
+            if len(targets) > 1:
+                lines.append(f"{target}:")
+            self._list_dir_contents(target=target, options=list_options, lines=lines)
+            if lines:
+                lines.append("")
+        return "\n".join(lines).rstrip("\n")
+
+    def _list_dir_contents(self, *, target: Path, options: dict[str, Any], lines: list[str]) -> None:
+        """递归列出目录内容。"""
+
         if not target.is_dir():
-            raise ValueError(f"目标不是目录: {target}")
-        lines = []
-        for child in sorted(target.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
-            if not list_options["show_all"] and _is_hidden_path(child):
+            lines.append(str(target))
+            return
+
+        children = sorted(target.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower()))
+        for child in children:
+            if not options["show_all"] and _is_hidden_path(child):
                 continue
-            if not list_options["long"]:
+            if options["bare"]:
+                lines.append(child.name)
+                continue
+            if options["long"]:
+                stat = child.stat()
+                kind = "dir " if child.is_dir() else "file"
+                modified = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                lines.append(f"{kind}\t{stat.st_size}\t{modified}\t{child.name}")
+            else:
                 lines.append(child.name + ("/" if child.is_dir() else ""))
-                continue
-            stat = child.stat()
-            kind = "dir " if child.is_dir() else "file"
-            modified = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-            lines.append(f"{kind}\t{stat.st_size}\t{modified}\t{child.name}")
-        return "\n".join(lines) if lines else "<empty directory>"
+            if options.get("recursive") and child.is_dir():
+                self._list_dir_contents(target=child, options=options, lines=lines)
 
     def _internal_read_file(self, *, args: list[str], cwd: Path) -> str:
         """读取工作区内文本文件内容,等价于基础 `cat/type`。"""
 
         if not args:
             raise ValueError("cat/type 至少指定一个文件路径。")
-        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 1:
-            raise ValueError("cat/type 必须且只能指定一个文件路径。")
         outputs = []
         for arg in args:
             target = self._resolve_arg_path(arg, cwd=cwd)
@@ -715,20 +761,23 @@ class TerminalSandbox:
     def _internal_read_file_lines(self, *, command: str, args: list[str], cwd: Path) -> str:
         """读取工作区内文本文件的前 N 行或后 N 行。"""
 
-        line_count, path_arg = _parse_line_window_args(args)
-        target = self._resolve_arg_path(path_arg, cwd=cwd)
-        self._assert_regular_file(target)
-        lines = target.read_text(encoding="utf-8", errors="replace").splitlines()
-        selected = lines[:line_count] if command == "head" else lines[-line_count:]
-        return "\n".join(selected)
+        parsed = _parse_line_window_args(args)
+        results: list[str] = []
+        for path_arg in parsed["paths"]:
+            target = self._resolve_arg_path(path_arg, cwd=cwd)
+            self._assert_regular_file(target)
+            lines = target.read_text(encoding="utf-8", errors="replace").splitlines()
+            selected = lines[:parsed["lines"]] if command == "head" else lines[-parsed["lines"]:]
+            if len(parsed["paths"]) > 1:
+                results.append(f"==> {target} <==")
+            results.append("\n".join(selected))
+        return "\n".join(results)
 
     def _internal_stat(self, *, args: list[str], cwd: Path) -> str:
         """返回工作区内文件或目录的基础状态信息。"""
 
         if not args:
             raise ValueError("stat 至少指定一个路径。")
-        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 1:
-            raise ValueError("stat 必须且只能指定一个路径。")
         results = []
         for arg in args:
             target = self._resolve_arg_path(arg, cwd=cwd)
@@ -741,20 +790,75 @@ class TerminalSandbox:
         return "\n---\n".join(results)
 
     def _internal_wc(self, *, args: list[str], cwd: Path) -> str:
-        """统计工作区内文本文件的行数、词数和字符数。"""
+        """统计工作区内文本文件的行数、词数和字符数。
+
+        支持 -l(行数)、-w(词数)、-c(字符数)标志筛选,默认显示全部。
+        """
 
         if not args:
             raise ValueError("wc 至少指定一个文件路径。")
-        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 1:
-            raise ValueError("wc 必须且只能指定一个文件路径。")
-        results = []
+        count_lines = True
+        count_words = True
+        count_chars = True
+        file_args: list[str] = []
         for arg in args:
+            if arg.startswith("/"):
+                flags = arg[1:]
+                if "l" in flags:
+                    count_words = count_chars = False
+                if "w" in flags:
+                    count_lines = count_chars = False
+                if "c" in flags:
+                    count_lines = count_words = False
+            elif arg.startswith("-"):
+                flags = arg.lstrip("-")
+                if "l" in flags:
+                    count_words = count_chars = False
+                if "w" in flags:
+                    count_lines = count_chars = False
+                if "c" in flags:
+                    count_lines = count_words = False
+                if flags in {"lines"}:
+                    count_words = count_chars = False
+                if flags in {"words"}:
+                    count_lines = count_chars = False
+                if flags in {"chars", "bytes"}:
+                    count_lines = count_words = False
+            else:
+                file_args.append(arg)
+        if not file_args:
+            raise ValueError("wc 至少指定一个文件路径。")
+        total_lines = total_words = total_chars = 0
+        results: list[str] = []
+        for arg in file_args:
             target = self._resolve_arg_path(arg, cwd=cwd)
             self._assert_regular_file(target)
             content = target.read_text(encoding="utf-8", errors="replace")
             line_count = len(content.splitlines())
             word_count = len(re.findall(r"\S+", content))
-            results.append(f"{line_count}\t{word_count}\t{len(content)}\t{target}")
+            char_count = len(content)
+            cols = []
+            if count_lines:
+                cols.append(str(line_count))
+            if count_words:
+                cols.append(str(word_count))
+            if count_chars:
+                cols.append(str(char_count))
+            cols.append(str(target))
+            results.append("\t".join(cols))
+            total_lines += line_count
+            total_words += word_count
+            total_chars += char_count
+        if len(file_args) > 1:
+            cols = []
+            if count_lines:
+                cols.append(str(total_lines))
+            if count_words:
+                cols.append(str(total_words))
+            if count_chars:
+                cols.append(str(total_chars))
+            cols.append("总和")
+            results.append("\t".join(cols))
         return "\n".join(results)
 
     def _internal_write_file(self, *, args: list[str], cwd: Path, append: bool) -> str:
@@ -777,8 +881,6 @@ class TerminalSandbox:
 
         if not args:
             raise ValueError("touch 至少指定一个文件路径。")
-        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 1:
-            raise ValueError("touch 必须且只能指定一个文件路径。")
         results = []
         for arg in args:
             target = self._resolve_write_path(arg, cwd=cwd)
@@ -788,58 +890,35 @@ class TerminalSandbox:
         return f"已 touch: {', '.join(results)}"
 
     def _internal_mkdir(self, *, args: list[str], cwd: Path) -> str:
-        """在允许写入的路径内创建目录。"""
+        """在允许写入的路径内创建目录,始终支持多级目录（等价于 mkdir -p）。"""
 
         if not args:
             raise ValueError("mkdir 至少指定一个目录路径。")
-        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 1:
-            raise ValueError("mkdir 必须且只能指定一个目录路径。")
-        dir_args = args
-        if self.access_mode == AGENT_ACCESS_FULL and dir_args[0] in {"-p", "--parents"}:
-            dir_args = dir_args[1:]
         results = []
-        for arg in dir_args:
+        for arg in args:
+            if arg in {"-p", "--parents"}:
+                continue
             target = self._resolve_write_path(arg, cwd=cwd)
             target.mkdir(parents=True, exist_ok=True)
             results.append(str(target))
         return f"已创建目录: {', '.join(results)}"
 
     def _internal_remove(self, *, args: list[str], cwd: Path) -> str:
-        """删除允许写入范围内的文件或空目录。"""
+        """删除允许写入范围内的文件或目录,目录递归删除。"""
 
         if not args:
             raise ValueError("rm/del 至少指定一个路径。")
-        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 1:
-            raise ValueError("rm/del 必须且只能指定一个路径。")
-
-        # Full access mode: parse flags and allow recursive delete
-        target_args = list(args)
-        recursive = False
-        if self.access_mode == AGENT_ACCESS_FULL:
-            while target_args and target_args[0].startswith("-"):
-                flag = target_args.pop(0)
-                if flag in {"-r", "-rf", "-f", "-fr", "--recursive"}:
-                    recursive = True
-            while target_args and target_args[0].upper() in {"/S", "/Q", "/F"}:
-                flag = target_args.pop(0)
-                if flag.upper() == "/S":
-                    recursive = True
-
-        if not target_args:
-            raise ValueError("rm/del 至少指定一个路径。")
 
         results = []
-        for arg in target_args:
+        for arg in args:
+            if arg.startswith("-") or arg.upper() in {"/S", "/Q", "/F"}:
+                continue
             target = self._resolve_write_path(arg, cwd=cwd)
             if not target.exists():
                 raise ValueError(f"路径不存在: {target}")
             if target.is_dir():
-                if recursive:
-                    shutil.rmtree(target)
-                    results.append(str(target))
-                else:
-                    target.rmdir()
-                    results.append(str(target))
+                shutil.rmtree(target)
+                results.append(str(target))
             else:
                 target.unlink()
                 results.append(str(target))
@@ -850,8 +929,6 @@ class TerminalSandbox:
 
         if len(args) < 2:
             raise ValueError("mv/move 必须指定源路径和目标路径。")
-        if self.access_mode != AGENT_ACCESS_FULL and len(args) != 2:
-            raise ValueError("mv/move 只能指定一个源路径和一个目标路径。")
 
         if len(args) == 2:
             source = self._resolve_write_path(args[0], cwd=cwd)
@@ -1095,8 +1172,11 @@ def _first_non_option_arg(args: list[str]) -> str:
     return ""
 
 
-def _parse_line_window_args(args: list[str]) -> tuple[int, str]:
-    """解析 head/tail 的 `-n 数量 文件` 或 `文件` 参数。"""
+def _parse_line_window_args(args: list[str]) -> dict[str, Any]:
+    """解析 head/tail 的 `-n 数量 文件...` 或 `文件...` 参数。
+
+    返回值: {"lines": int, "paths": list[str]}
+    """
 
     if not args:
         raise ValueError("head/tail 必须指定文件路径。")
@@ -1112,19 +1192,25 @@ def _parse_line_window_args(args: list[str]) -> tuple[int, str]:
         remaining = remaining[2:]
     if line_count < 1 or line_count > 1000:
         raise ValueError("head/tail 的行数必须在 1 到 1000 之间。")
-    if len(remaining) != 1:
-        raise ValueError("head/tail 必须且只能指定一个文件路径。")
-    return line_count, remaining[0]
+    if not remaining:
+        raise ValueError("head/tail 必须指定文件路径。")
+    return {"lines": line_count, "paths": remaining}
 
 
 def _parse_list_dir_args(args: list[str]) -> dict[str, Any]:
-    """解析 ls/dir 的显示选项和可选目录路径。"""
+    """解析 ls/dir 的显示选项和目录路径列表。
+
+    支持 -a/l/1/R 短标志、--all/--long/--recursive/--bare 长标志、
+    /a/l/s/b 等 Windows 风格标志。未知标志静默忽略，允许多个路径。
+    """
 
     show_all = False
     long = False
-    path = "."
-    path_seen = False
+    recursive = False
+    bare = False
+    paths: list[str] = []
     for arg in args:
+        lower_arg = arg.lower()
         if arg in {"-a", "--all"}:
             show_all = True
             continue
@@ -1133,24 +1219,40 @@ def _parse_list_dir_args(args: list[str]) -> dict[str, Any]:
             continue
         if arg in {"-1", "--one-column"}:
             continue
+        if arg in {"-R", "--recursive"}:
+            recursive = True
+            continue
+        if arg in {"--bare"}:
+            bare = True
+            continue
+        if arg.startswith("/"):
+            if lower_arg in {"/a", "/all"}:
+                show_all = True
+                continue
+            if lower_arg in {"/l", "/long"}:
+                long = True
+                continue
+            if lower_arg in {"/s", "/s/q"}:
+                recursive = True
+                continue
+            if lower_arg in {"/b", "/bare"}:
+                bare = True
+                continue
+            # Windows /D, /Q, /W 等未知标志静默忽略
+            continue
         if arg.startswith("-") and len(arg) > 1:
             short_flags = set(arg[1:])
-            if short_flags and short_flags.issubset({"a", "l", "1"}):
+            if short_flags and short_flags.issubset({"a", "l", "1", "R"}):
                 show_all = show_all or "a" in short_flags
                 long = long or "l" in short_flags
+                recursive = recursive or "R" in short_flags
                 continue
-            raise ValueError(f"ls/dir 不支持选项 {arg}。")
-        if arg.startswith("/") and arg.lower() in {"/a", "/all"}:
-            show_all = True
+            # 未知标志静默忽略而非报错,避免不必要的中断
             continue
-        if arg.startswith("/") and arg.lower() in {"/l", "/long"}:
-            long = True
-            continue
-        if path_seen:
-            raise ValueError("ls/dir 最多只能指定一个目录路径。")
-        path = arg
-        path_seen = True
-    return {"show_all": show_all, "long": long, "path": path}
+        paths.append(arg)
+    if not paths:
+        paths.append(".")
+    return {"show_all": show_all, "long": long, "recursive": recursive, "bare": bare, "paths": paths}
 
 
 def _is_hidden_path(path: Path) -> bool:

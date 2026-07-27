@@ -300,9 +300,9 @@ def test_terminal_sandbox_upgrades_unmodified_legacy_allowlist(tmp_path: Path) -
         config=config,
         payload={
             "allowed_programs": {
-                "cmd": ["python", "pytest", "git", "npm", "node", "where"],
-                "powershell": ["python", "pytest", "git", "npm", "node"],
-                "bash": ["python", "pytest", "git", "npm", "node", "which"],
+                "cmd": ["python", "pytest", "git", "npm", "node", "where", "find", "wc"],
+                "powershell": ["python", "pytest", "git", "npm", "node", "find", "wc"],
+                "bash": ["python", "pytest", "git", "npm", "node", "which", "find", "wc"],
             }
         },
     )
@@ -371,19 +371,22 @@ def test_full_access_rm_rf_recursive(tmp_path: Path) -> None:
     assert not (tmp_path / "data").exists()
 
 
-def test_sandbox_rm_rejects_multiple_args(tmp_path: Path) -> None:
-    """沙盒模式下 rm 拒绝多个参数或 -rf 标志。"""
+def test_sandbox_rm_allows_multiple_args(tmp_path: Path) -> None:
+    """沙盒模式下 rm 支持多参数和 -rf 标志（标志跳过,直接删除）。"""
 
+    (tmp_path / "data").mkdir()
+    (tmp_path / "other").mkdir()
     sandbox = TerminalSandbox(settings=_build_settings(tmp_path))
 
     result = sandbox.run(
         shell="cmd",
         cwd=".",
-        segments=[{"type": "internal_command", "command": "rm", "args": ["-rf", "data"]}],
+        segments=[{"type": "internal_command", "command": "rm", "args": ["-rf", "data", "other"]}],
     )
 
-    assert result["ok"] is False
-    assert "必须且只能指定一个路径" in result["results"][0]["stderr"]
+    assert result["ok"] is True
+    assert not (tmp_path / "data").exists()
+    assert not (tmp_path / "other").exists()
 
 
 def test_full_access_cat_multiple_files(tmp_path: Path) -> None:
@@ -474,8 +477,8 @@ def test_full_access_mkdir_p_multiple(tmp_path: Path) -> None:
     assert (tmp_path / "d" / "e" / "f").is_dir()
 
 
-def test_sandbox_mkdir_rejects_multiple_args(tmp_path: Path) -> None:
-    """沙盒模式下 mkdir 拒绝多个参数。"""
+def test_sandbox_mkdir_allows_multiple_args(tmp_path: Path) -> None:
+    """沙盒模式下 mkdir 支持多参数。"""
 
     sandbox = TerminalSandbox(settings=_build_settings(tmp_path))
 
@@ -485,8 +488,9 @@ def test_sandbox_mkdir_rejects_multiple_args(tmp_path: Path) -> None:
         segments=[{"type": "internal_command", "command": "mkdir", "args": ["dir1", "dir2"]}],
     )
 
-    assert result["ok"] is False
-    assert "必须且只能指定一个目录路径" in result["results"][0]["stderr"]
+    assert result["ok"] is True
+    assert (tmp_path / "dir1").is_dir()
+    assert (tmp_path / "dir2").is_dir()
 
 
 def test_full_access_mv_bulk(tmp_path: Path) -> None:
@@ -561,9 +565,11 @@ def test_full_access_kill_nonexistent_pid(tmp_path: Path) -> None:
 # ── Sandbox mode: strict arg validation still works ─────────────────────────
 
 
-def test_sandbox_cat_rejects_multiple_files(tmp_path: Path) -> None:
-    """沙盒模式下 cat 仍然只允许一个文件路径。"""
+def test_sandbox_cat_allows_multiple_files(tmp_path: Path) -> None:
+    """沙盒模式下 cat 支持多文件。"""
 
+    (tmp_path / "a.txt").write_text("aaa\n", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("bbb\n", encoding="utf-8")
     sandbox = TerminalSandbox(settings=_build_settings(tmp_path))
 
     result = sandbox.run(
@@ -572,12 +578,13 @@ def test_sandbox_cat_rejects_multiple_files(tmp_path: Path) -> None:
         segments=[{"type": "internal_command", "command": "cat", "args": ["a.txt", "b.txt"]}],
     )
 
-    assert result["ok"] is False
-    assert "必须且只能指定一个文件路径" in result["results"][0]["stderr"]
+    assert result["ok"] is True
+    assert "aaa" in result["results"][0]["stdout"]
+    assert "bbb" in result["results"][0]["stdout"]
 
 
-def test_sandbox_touch_rejects_multiple_files(tmp_path: Path) -> None:
-    """沙盒模式下 touch 仍然只允许一个文件路径。"""
+def test_sandbox_touch_allows_multiple_files(tmp_path: Path) -> None:
+    """沙盒模式下 touch 支持多文件。"""
 
     sandbox = TerminalSandbox(settings=_build_settings(tmp_path))
 
@@ -587,8 +594,9 @@ def test_sandbox_touch_rejects_multiple_files(tmp_path: Path) -> None:
         segments=[{"type": "internal_command", "command": "touch", "args": ["a.txt", "b.txt"]}],
     )
 
-    assert result["ok"] is False
-    assert "必须且只能指定一个文件路径" in result["results"][0]["stderr"]
+    assert result["ok"] is True
+    assert (tmp_path / "a.txt").exists()
+    assert (tmp_path / "b.txt").exists()
 
 
 # ── Full access: program validation still applies for external programs ──────
@@ -619,13 +627,15 @@ def test_full_access_still_blocks_nested_shell(tmp_path: Path) -> None:
         sandbox.run(shell="cmd", cwd=".", segments=[{"program": "cmd", "args": ["/c", "dir"]}])
 
 
-def test_full_access_still_blocks_python_inline(tmp_path: Path) -> None:
-    """完全访问下 python -c 内联代码仍被拦截（安全红线）。"""
+def test_full_access_allows_python_inline(tmp_path: Path) -> None:
+    """完全访问下 python -c 内联代码可执行（完全访问信任用户）。"""
 
     sandbox = TerminalSandbox(settings=_build_settings(tmp_path), access_mode=AGENT_ACCESS_FULL)
 
-    with pytest.raises(ValueError, match="内联代码"):
-        sandbox.run(shell="cmd", cwd=".", segments=[{"program": "python", "args": ["-c", "print('bad')"]}])
+    result = sandbox.run(shell="cmd", cwd=".", segments=[{"program": "python", "args": ["-c", "print('ok')"]}])
+
+    assert result["ok"] is True
+    assert "ok" in result["results"][0]["stdout"] or "ok" in result["results"][0]["stderr"]
 
 
 # ── Full access: write outside workspace ────────────────────────────────────
