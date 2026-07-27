@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Check, ChevronDown, History, ListChecks, Maximize2, MessageSquarePlus, MessagesSquare, RefreshCw, SquarePen, UploadCloud } from 'lucide-vue-next'
+import { Check, ChevronDown, History, ListChecks, Maximize2, MessageSquarePlus, MessagesSquare, RefreshCw, SquarePen, Upload, UploadCloud } from 'lucide-vue-next'
 
 import darkTitle from '@/assets/images/暗色标题.png'
 import lightTitle from '@/assets/images/亮色标题.png'
@@ -20,6 +20,7 @@ import TaskListDrawer from '@/components/editor_workspace/agent_chat/TaskListDra
 import { useChatStore } from '@/stores/chat'
 import type { AgentUploadedAttachment } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
+import { exportSession } from '@/utils/sessionExport'
 import { useSettingsStore } from '@/stores/settings'
 import { useSkillsStore } from '@/stores/skills'
 import { useTaskListStore } from '@/stores/taskList'
@@ -110,6 +111,22 @@ async function reloadSessions() {
     await sessionStore.load(userId.value)
   } finally {
     isBootstrapping.value = false
+  }
+}
+
+const sessionExporting = ref(false)
+
+async function exportCurrentSession() {
+  if (sessionExporting.value) return
+  const session = sessionStore.currentSession
+  if (!session) return
+  sessionExporting.value = true
+  try {
+    await exportSession(session, userId.value)
+  } catch (error) {
+    console.error('导出会话失败:', error)
+  } finally {
+    sessionExporting.value = false
   }
 }
 
@@ -550,6 +567,15 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </details>
+        <button
+          class="new-session-round-btn"
+          type="button"
+          :title="sessionExporting ? '导出中...' : '导出当前会话'"
+          :disabled="sessionExporting"
+          @click="exportCurrentSession"
+        >
+          <Upload :size="16" />
+        </button>
         <button class="new-session-round-btn" type="button" title="New session" @click="createSession">
           <SquarePen :size="16" />
         </button>

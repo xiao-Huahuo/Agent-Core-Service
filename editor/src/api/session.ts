@@ -59,6 +59,55 @@ export function pruneEmptySessions(userId: string): Promise<{ ok: boolean; prune
   return apiPost<{ ok: boolean; pruned_count: number }>('/sessions/prune', { user_id: userId })
 }
 
+export interface ImportedMessage {
+  role: string
+  content: string
+  created_at?: string
+  node?: string
+  reference?: string
+  tool_calls?: unknown[]
+  trace_details?: unknown[]
+  tool_call_id?: string
+}
+
+export function importSession(
+  userId: string,
+  messages: ImportedMessage[],
+  sessionName?: string,
+): Promise<{
+  session_id: string
+  user_id: string
+  session_name: string
+  created_at: string
+  updated_at: string
+  imported_count: number
+}> {
+  return apiPost('/sessions/import', {
+    user_id: userId,
+    session_name: sessionName,
+    messages,
+  })
+}
+
+export function importSessionFile(
+  userId: string,
+  content: string,
+  sessionName?: string,
+): Promise<{
+  session_id: string
+  user_id: string
+  session_name: string
+  created_at: string
+  updated_at: string
+  imported_count: number
+}> {
+  return apiPost('/sessions/import-file', {
+    user_id: userId,
+    content,
+    session_name: sessionName,
+  })
+}
+
 export function updateSessionName(
   sessionId: string,
   sessionName: string,

@@ -4,11 +4,18 @@ Session 管理端点。
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
+import json
+
 from fastapi import APIRouter, HTTPException, Query
+from sqlmodel import Session as DBSession, select
 
 from agent_service.api.rest.deps import _require_message_service, _require_session_service
+from agent_service.models.message import MessageRecord
+from agent_service.models.session import SessionRecord
+from agent_service.schemas.message import MessageCreate
 from agent_service.schemas.session import SessionCreate, SessionUpdate
 
 router = APIRouter()
@@ -47,6 +54,183 @@ async def create_session(body: dict[str, Any]) -> dict[str, Any]:
         "created_at": session.created_at.isoformat(),
         "updated_at": session.updated_at.isoformat(),
     }
+
+
+@router.post("/sessions/import")
+async def import_session(body: dict[str, Any]) -> dict[str, Any]:
+    """导入结构化 JSON 格式的会话。"""
+    return _do_import(body)
+
+
+@router.post("/sessions/import-file")
+async def import_session_file(body: dict[str, Any]) -> dict[str, Any]:
+    """导入 YAML/JSON 文件内容。
+
+    body:
+      user_id (必填): 目标用户
+      content (必填): YAML 或 JSON 格式的原始文本
+      session_name (可选): 导入后的会话名
+
+    content 格式应与 /sessions/export 导出的 YAML 结构一致:
+      session: { id, name, user_id, created_at, updated_at }
+      messages: [{ role, content, created_at, node, tool_calls, trace_details, ... }]
+    或者顶层直接包含 messages 数组:
+      messages: [...]
+    """
+    import yaml
+
+    user_id = body.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    content = body.get("content")
+    if not content:
+        raise HTTPException(status_code=422, detail="content is required")
+
+    try:
+        parsed = yaml.safe_load(content)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"无法解析 YAML/JSON 内容: {exc}")
+
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=422, detail="content 必须解析为对象")
+
+    # 兼容两种结构: 顶层 { session, messages } 或纯 { messages }
+    if "messages" in parsed:
+        data = parsed
+    else:
+        raise HTTPException(status_code=422, detail="缺少 messages 字段")
+
+    # 构造导入 body
+    import_body: dict[str, Any] = {
+        "user_id": str(user_id),
+        "session_name": body.get("session_name") or (parsed.get("session", {}).get("name") if isinstance(parsed.get("session"), dict) else None),
+        "messages": data.get("messages", []),
+    }
+    task_list = parsed.get("task_list")
+    if task_list and isinstance(task_list, dict):
+        import_body["task_list"] = task_list
+
+    return _do_import(import_body)
+
+
+def _do_import(body: dict[str, Any]) -> dict[str, Any]:
+    """导入外部 YAML/JSON 格式的会话。
+
+    body 格式:
+      user_id (必填): 导入到哪个用户下
+      session_name (可选): 导入后显示的名称
+      messages (必填): 消息列表,每项包含:
+        - role (必填): user/assistant/tool/system
+        - content (必填): 消息正文
+        - created_at (可选): ISO 格式时间,默认当前时间
+        - node (可选): 图节点名,写入 metadata.node
+        - reference (可选): 用户引用,写入 metadata.reference
+        - tool_calls (可选): 工具调用列表
+        - trace_details (可选): trace 事件列表,写入 metadata.trace
+    """
+    user_id = body.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    messages = body.get("messages")
+    if not messages or not isinstance(messages, list):
+        raise HTTPException(status_code=422, detail="messages is required and must be a list")
+
+    # 1. 创建新会话
+    session_service = _require_session_service()
+    session_name = body.get("session_name")
+    session = session_service.create_session(SessionCreate(user_id=str(user_id), session_name=session_name))
+    session_id = session.session_id
+    now = datetime.now(timezone.utc)
+
+    # 2. 导入消息
+    message_service = _require_message_service()
+    engine = message_service.engine
+
+    imported_count = 0
+    with DBSession(engine) as db_session:
+        for raw in messages:
+            if not isinstance(raw, dict):
+                continue
+            role = raw.get("role", "")
+            if not role:
+                continue
+            content = raw.get("content", "") or ""
+            created_at_str = raw.get("created_at")
+            msg_created_at = _parse_iso_time(created_at_str) if created_at_str else now
+
+            metadata: dict[str, Any] = {}
+            node = raw.get("node")
+            if node:
+                metadata["node"] = node
+            reference = raw.get("reference")
+            if reference:
+                metadata["reference"] = reference
+            trace_details = raw.get("trace_details")
+            if trace_details and isinstance(trace_details, list):
+                metadata["trace"] = trace_details
+
+            tool_calls = raw.get("tool_calls")
+            if not tool_calls or not isinstance(tool_calls, list):
+                tool_calls = []
+
+            tool_call_id = raw.get("tool_call_id")
+
+            record = MessageRecord(
+                message_id=message_service.generate_message_id(),
+                session_id=session_id,
+                user_id=str(user_id),
+                role=role,
+                content=content,
+                tool_call_id=tool_call_id,
+                tool_calls_json=tool_calls,
+                metadata_json=metadata,
+                created_at=msg_created_at,
+            )
+            db_session.add(record)
+            imported_count += 1
+
+        # 更新会话的 updated_at 为最新消息时间
+        if imported_count > 0:
+            db_session.commit()
+            # 找到消息中的最晚时间
+            latest = db_session.exec(
+                select(MessageRecord.created_at)
+                .where(MessageRecord.session_id == session_id)
+                .order_by(MessageRecord.created_at.desc())
+                .limit(1)
+            ).first()
+            if latest:
+                sess = db_session.get(SessionRecord, session_id)
+                if sess:
+                    sess.updated_at = latest
+                    db_session.add(sess)
+            db_session.commit()
+
+    # 3. 恢复 task list (Agent 执行状态)
+    task_list = body.get("task_list")
+    if task_list and isinstance(task_list, dict):
+        state = {"task_list": task_list}
+        session_service.update_session_state(session_id, json.dumps(state, ensure_ascii=False))
+
+    return {
+        "session_id": session_id,
+        "user_id": session.user_id,
+        "session_name": session.session_name,
+        "created_at": session.created_at.isoformat(),
+        "updated_at": session.updated_at.isoformat(),
+        "imported_count": imported_count,
+    }
+
+
+def _parse_iso_time(value: str) -> datetime:
+    """尝试解析 ISO 格式时间字符串,失败时返回当前 UTC 时间。"""
+    try:
+        dt = datetime.fromisoformat(value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (ValueError, TypeError):
+        return datetime.now(timezone.utc)
 
 
 @router.get("/sessions/{session_id}")

@@ -6,16 +6,12 @@
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="Skill v2">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/icons/app.ico" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/icons/app.ico" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/images/亮色标题.png" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/images/亮色标题.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/images/无底图标.png" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/images/无底图标.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/images/暗色标题.png" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/images/暗色标题.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/common/UserIdGate.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/common/UserIdGate.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/sessions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/sessions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/api/session.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/session.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatInput.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatInput.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/SkillView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SkillView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/SessionDrawer.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/SessionDrawer.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -292,15 +288,8 @@
       <workItem from="1785057118487" duration="22541000" />
       <workItem from="1785084185830" duration="101000" />
       <workItem from="1785084627527" duration="1120000" />
-      <workItem from="1785086087907" duration="307000" />
-    </task>
-    <task id="LOCAL-00201" summary="ui小改">
-      <option name="closed" value="true" />
-      <created>1784809990848</created>
-      <option name="number" value="00201" />
-      <option name="presentableId" value="LOCAL-00201" />
-      <option name="project" value="LOCAL" />
-      <updated>1784809990848</updated>
+      <workItem from="1785086087907" duration="1002000" />
+      <workItem from="1785156958440" duration="2603000" />
     </task>
     <task id="LOCAL-00202" summary="ui小改">
       <option name="closed" value="true" />
@@ -686,7 +675,15 @@
       <option name="project" value="LOCAL" />
       <updated>1785083129553</updated>
     </task>
-    <option name="localTasksCounter" value="250" />
+    <task id="LOCAL-00250" summary="Skill v2">
+      <option name="closed" value="true" />
+      <created>1785086404754</created>
+      <option name="number" value="00250" />
+      <option name="presentableId" value="LOCAL-00250" />
+      <option name="project" value="LOCAL" />
+      <updated>1785086404754</updated>
+    </task>
+    <option name="localTasksCounter" value="251" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

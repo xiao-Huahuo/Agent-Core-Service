@@ -1,6 +1,17 @@
 # CHANGE HISTORY
 
 ## 2026-07-27
+- [x] 会话导入功能:
+  - 后端 `sessions.py` 新增 `POST /sessions/import`（JSON 结构化导入）与 `POST /sessions/import-file`（YAML/JSON 文件内容导入，服务端用 PyYAML 解析）
+  - `_do_import()` 核心函数创建新会话、批量导入消息（保留原始时间戳、node、trace 等元数据），更新会话 updated_at 为最新消息时间
+  - `session.ts` 新增 `importSession` / `importSessionFile` API 客户端
+  - `SessionDrawer.vue` 工具栏"新对话"按钮右侧新增"导入"按钮，点击弹出文件选择器（.yaml/.yml/.json），读取后调用 `/sessions/import-file` 接口，自动刷新列表并选中导入的会话
+- [x] 会话导出功能（YAML）:
+  - 创建 `editor/src/utils/yamlExport.ts` — 简易 YAML 序列化工具
+  - 创建 `editor/src/utils/sessionExport.ts` — 会话导出逻辑（拉取消息、组装 YAML、触发下载）
+  - `SessionDrawer.vue` — 每个会话项新增导出按钮（Download 图标），hover 时显示
+  - `AgentPanel.vue` — 顶栏新增导出当前会话按钮（Download 图标）
+  - 导出内容包含：会话元信息、用户提问、Agent 中间/最终回答、工具调用文本与详细参数
 - [x] Agent 顶栏新增 Skill 引用下拉:
   - `AgentPanel.vue` 在 Agent 页面顶栏的 Loop Mode 切换左侧新增胶囊形 Skill 按钮，下拉展示已提取 Skill，菜单右上角提供刷新按钮，点击 Skill 会写入引用 `用户要求使用Skill： XXX`。
 - [x] 修复大工具历史加载白屏:

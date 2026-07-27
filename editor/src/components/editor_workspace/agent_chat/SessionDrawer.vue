@@ -6,12 +6,14 @@
   sessions for the current editor user_id.
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
-import { PanelLeft, Trash2, X } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { Download, PanelLeft, Trash2, Upload, X } from 'lucide-vue-next'
 
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 import type { SessionRecord } from '@/api/session'
+import { importSessionFile } from '@/api/session'
+import { exportSession } from '@/utils/sessionExport'
 import logoSrc from '@/assets/images/无底图标.png'
 import lightTitle from '@/assets/images/亮色标题.png'
 import darkTitle from '@/assets/images/暗色标题.png'
@@ -31,6 +33,34 @@ const emit = defineEmits<{
 const sessionStore = useSessionStore()
 const settingsStore = useSettingsStore()
 const titleSrc = computed(() => settingsStore.isDark ? darkTitle : lightTitle)
+const exportingId = ref<string | null>(null)
+const importing = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function triggerImportFile() {
+  fileInputRef.value?.click()
+}
+
+async function handleImportFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  importing.value = true
+  try {
+    const text = await file.text()
+    const result = await importSessionFile(props.userId, text)
+    // 刷新会话列表并选中导入的会话
+    await sessionStore.load(props.userId)
+    sessionStore.select(result.session_id)
+    emit('select', result.session_id)
+  } catch (error) {
+    console.error('导入会话失败:', error)
+    window.alert(error instanceof Error ? error.message : '导入会话失败')
+  } finally {
+    importing.value = false
+    input.value = ''
+  }
+}
 
 function displayName(session: SessionRecord) {
   return session.session_name || session.session_id.slice(0, 8)
@@ -43,6 +73,19 @@ function selectSession(sessionId: string) {
 async function deleteSession(sessionId: string, event: MouseEvent) {
   event.stopPropagation()
   await sessionStore.remove(sessionId)
+}
+
+async function exportSessionHandler(session: SessionRecord, event: MouseEvent) {
+  event.stopPropagation()
+  if (exportingId.value) return
+  exportingId.value = session.session_id
+  try {
+    await exportSession(session, props.userId)
+  } catch (error) {
+    console.error('导出会话失败:', error)
+  } finally {
+    exportingId.value = null
+  }
 }
 
 async function clearAllSessions() {
@@ -63,10 +106,28 @@ async function clearAllSessions() {
         <img :src="logoSrc" class="brand-logo" alt="" />
         <img :src="titleSrc" class="brand-title" alt="MetaWeave" />
       </button>
-      <button class="close-button" type="button" title="收起侧边栏" @click="emit('close')">
+      <button
+        class="titlebar-icon-btn"
+        type="button"
+        :disabled="importing"
+        :title="importing ? '导入中...' : '导入会话文件'"
+        @click="triggerImportFile"
+      >
+        <Download :size="15" />
+      </button>
+      <button class="titlebar-icon-btn" type="button" title="收起侧边栏" @click="emit('close')">
         <PanelLeft :size="15" />
       </button>
     </div>
+
+    <!-- 隐藏的文件选择器,用于导入 YAML/JSON -->
+    <input
+      ref="fileInputRef"
+      type="file"
+      accept=".yaml,.yml,.json"
+      style="display: none"
+      @change="handleImportFile"
+    />
 
     <div class="drawer-toolbar">
       <div class="primary-actions">
@@ -88,8 +149,16 @@ async function clearAllSessions() {
         @click="selectSession(session.session_id)"
       >
         <span class="session-name">{{ displayName(session) }}</span>
+        <span
+          class="session-export-btn"
+          :class="{ loading: exportingId === session.session_id }"
+          title="导出会话"
+          @click="exportSessionHandler(session, $event)"
+        >
+          <Upload :size="12" />
+        </span>
         <span class="session-time">{{ session.updated_at?.slice(0, 10) }}</span>
-        <span class="delete-btn" title="删除会话" @click="deleteSession(session.session_id, $event)">
+        <span class="session-del-btn" title="删除会话" @click="deleteSession(session.session_id, $event)">
           <X :size="12" />
         </span>
       </button>
@@ -168,14 +237,40 @@ async function clearAllSessions() {
 }
 
 .drawer-titlebar {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   display: grid;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--space-4);
   min-height: 58px;
   padding: 0 var(--space-20);
   border-bottom: 0;
   background: transparent;
+}
+
+.titlebar-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.titlebar-icon-btn:hover:not(:disabled) {
+  background: var(--drawer-page-hover);
+  color: var(--color-text-primary);
+}
+
+.titlebar-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .brand-copy {
@@ -227,23 +322,6 @@ async function clearAllSessions() {
   font-size: calc(10px * var(--font-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.close-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--color-text-tertiary);
-}
-
-.close-button:hover {
-  background: var(--drawer-page-hover);
-  color: var(--color-text-primary);
 }
 
 .drawer-toolbar {
@@ -403,7 +481,7 @@ async function clearAllSessions() {
   white-space: nowrap;
 }
 
-.delete-btn {
+.session-del-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -414,13 +492,42 @@ async function clearAllSessions() {
   color: var(--color-text-tertiary);
 }
 
-.session-item:hover .delete-btn {
+.session-item:hover .session-del-btn {
   opacity: 1;
 }
 
-.delete-btn:hover {
-  background: rgba(197, 101, 101, 0.12);
+.session-del-btn:hover {
   color: #c56565;
+}
+
+.session-export-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  opacity: 0;
+  color: var(--color-text-tertiary);
+}
+
+.session-item:hover .session-export-btn {
+  opacity: 1;
+}
+
+.session-export-btn:hover {
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
+.session-export-btn.loading {
+  opacity: 1;
+  animation: export-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes export-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
 .empty-hint {

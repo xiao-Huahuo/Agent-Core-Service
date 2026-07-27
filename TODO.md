@@ -1,18 +1,18 @@
 ### TODOs
-
 - [ ] 系统性的真正打通多模态解析链,包括图片OCR解析,扫描件pdf的图片渲染,pptx的渲染与预览等.
-- [ ] 尝试使用[OpenDataloader-PDF](https://github.com/opendataloader-project/opendataloader-pdf)代替OCR进行解析?
 - [ ] 定时自动化任务： 可以给Agent布置定时自动化任务，比如每天晚上9点git commit之类的。
-- [ ] 多agent:智能体蜂群,AgentSworm
+
 
 - [ ] 调试Skill，协调Skill要求与沙盒/完全访问模式的终端权限。
+  - [x] 为Agent的每个Session对话都提供“导出”按钮，点击后以yaml导出会话的所有信息，包括：会话的元信息，用户提问，Agent工具调用条的文字，Agent工具条的详细内容，Agent的中间回答和最终回答。按顺序排列。
+  - [ ] 修复当Agent的工具条过长(比如Agent调用终端工具输入了较长的指令)时会导致Agent页面发生整体右移的bug，也有可能不是这个导致的，但是有时候就会出现页面发生整体右移的bug。
 - [ ] 可统计的：
   - 工具总计调用次数
   - [ ] 会话内统计右边栏：
     - Dashboard里面理论上需要统计的是“长时统计结果”。因此，dashboard里面的三率饼图放到会话内统计右边栏，三率曲线图改成统计session为单位的，每次message思考耗时图放到会话内统计右边栏。
+### IDEAs
+- [ ] 娱乐功能：做一个桌宠，只需要悬停，可以右键，可以对话。
+- [ ] 多agent:智能体蜂群,AgentSworm,父子Agent，子Agent可以是Loop，也可以是Graph。
 ### BUGs
-
 - [ ] 解决agent输出的代码块没渲染和HTML高亮乱码问题,尤其是修复输出大量含有这种乱码渲染导致页面卡死的问题.(&amp?,span?)
-- [ ] 修理安全审核节点不明原因的抽风把正常内容拦截的问题.
-- [ ] 解决思考过长导致"HTTP/1.1 400 Bad Request"禁止访问的问题(可能需要彻底的优化上下文构建机制)
 
