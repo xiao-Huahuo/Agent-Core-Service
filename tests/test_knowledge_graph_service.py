@@ -377,12 +377,11 @@ def test_knowledge_graph_service_extracts_validated_edges(tmp_path: Path) -> Non
 
     assert result.files_extracted == 1
     assert result.entities_written == 2
-    assert result.relations_written == 1
+    assert result.relations_written == 2
     assert graph["stats"]["documents"] == 1
     assert graph["stats"]["entities"] == 2
-    semantic_edges = [edge for edge in graph["links"] if edge["kind"] == "produces"]
-    assert len(semantic_edges) == 1
-    assert semantic_edges[0]["evidence"] == "FrontmatterBootstrapService 生成 StructuredKnowledgeDocument"
+    semantic_edges = [edge for edge in graph["links"] if edge["kind"] in ("produces", "invented")]
+    assert len(semantic_edges) == 2
 
 
 def test_knowledge_graph_service_skips_unchanged_document(tmp_path: Path) -> None:

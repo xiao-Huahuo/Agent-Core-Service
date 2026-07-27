@@ -13,6 +13,7 @@ import darkTitle from '@/assets/images/暗色标题.png'
 import lightTitle from '@/assets/images/亮色标题.png'
 import logoSrc from '@/assets/images/无底图标.png'
 import ChatInput from '@/components/editor_workspace/agent_chat/ChatInput.vue'
+import LoaderCube from '@/components/editor_workspace/agent_chat/LoaderCube.vue'
 import MessageList from '@/components/editor_workspace/agent_chat/MessageList.vue'
 import SessionDrawer from '@/components/editor_workspace/agent_chat/SessionDrawer.vue'
 import StreamingIndicator from '@/components/editor_workspace/agent_chat/StreamingIndicator.vue'
@@ -52,6 +53,7 @@ const isBootstrapping = ref(false)
 const referenceText = ref('')
 const messageListRef = ref<MessageListApi | null>(null)
 const isMessageListAtBottom = ref(true)
+const sessionLoading = ref(false)
 const contextWindowTokens = ref(128000)
 const safetyDisabled = ref(false)
 const safetyLoading = ref(false)
@@ -154,7 +156,12 @@ async function createSession() {
 async function selectSession(sessionId: string) {
   sessionStore.select(sessionId)
   chatStore.clear()
-  await chatStore.loadHistory(sessionId, userId.value)
+  sessionLoading.value = true
+  try {
+    await chatStore.loadHistory(sessionId, userId.value)
+  } finally {
+    sessionLoading.value = false
+  }
 }
 
 async function sendMessage(text: string, reference = '') {
@@ -635,12 +642,17 @@ onBeforeUnmount(() => {
     <div class="agent-content-row">
     <main class="chat-body" :class="{ dimmed: isBootstrapping }">
       <Transition name="welcome-fade">
-        <div v-if="!hasMessages && !chatStore.isStreaming" class="welcome-center">
+        <div v-if="!hasMessages && !chatStore.isStreaming && !sessionLoading" class="welcome-center">
           <img :src="logoSrc" class="welcome-cap-icon" alt="" />
           <img :src="welcomeTitleSrc" class="welcome-logo" alt="MetaWeave" />
           <p class="welcome-subtitle">在知识库 {{ knowledgeTitle }} 中有什么问题?</p>
         </div>
       </Transition>
+      <div v-if="sessionLoading" class="history-loading">
+        <LoaderCube />
+        <span>加载会话历史...</span>
+      </div>
+      <div v-else class="chat-content">
       <MessageList
         ref="messageListRef"
         :messages="chatStore.messages"
@@ -689,6 +701,7 @@ onBeforeUnmount(() => {
         @cancel-stream="chatStore.cancelStream"
         @create-task-list="createTaskListFromInput"
       />
+    </div>
     </main>
     <TaskListDrawer />
     </div>
@@ -1579,5 +1592,31 @@ onBeforeUnmount(() => {
   .mode-button span {
     display: none;
   }
+}
+
+.history-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-16);
+  flex: 1;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.agent-page-mode .history-loading {
+  margin-left: var(--agent-content-offset);
+  width: calc(100% - var(--agent-content-offset));
+  transition:
+    margin-left 200ms ease,
+    width 200ms ease;
+}
+
+.chat-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 </style>

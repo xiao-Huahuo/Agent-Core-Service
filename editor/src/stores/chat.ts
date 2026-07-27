@@ -97,12 +97,14 @@ export const useChatStore = defineStore('chat', () => {
   const pendingAttachments = ref<AgentUploadedAttachment[]>([])
   const taskSuggestions = ref<string[]>([])
   const suggestionsLoading = ref(false)
+  const loadingHistory = ref(false)
 
   let streamAbortController: AbortController | null = null
   let historyAbortController: AbortController | null = null
   let streamTimeoutId: number | null = null
   const streamTimeoutMs = 10 * 60 * 1000 // 10 minutes sliding window
   let suggestionRequestId = 0
+  let historyRequestId = 0
   let pendingContent = ''
   let flushTimer: number | null = null
   const contentFlushMs = 50
@@ -257,11 +259,14 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function loadHistory(sessionId: string, userId: string, limit = 50) {
+    const requestId = ++historyRequestId
     historyAbortController?.abort()
     historyAbortController = new AbortController()
+    loadingHistory.value = true
     messages.value = []
     try {
       const history = await fetchMessages(sessionId, userId, limit, { signal: historyAbortController.signal })
+      if (requestId !== historyRequestId) return
       messages.value = history
         .filter((message) => message.role !== 'tool' || message.metadata?.node === 'action')
         .filter((message) => message.metadata?.node !== 'planner' && message.metadata?.node !== 'observation')
@@ -292,6 +297,10 @@ export const useChatStore = defineStore('chat', () => {
       console.error('加载历史消息失败:', error)
       messages.value = []
       loadedSessionId.value = ''
+    } finally {
+      if (requestId === historyRequestId) {
+        loadingHistory.value = false
+      }
     }
   }
 

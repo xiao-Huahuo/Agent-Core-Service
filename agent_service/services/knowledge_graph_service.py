@@ -73,6 +73,11 @@ RELATION_TYPES = {
     "configures",
     "mentions",
     "related_to",
+    "likes",
+    "knows",
+    "uses",
+    "creates",
+    "modifies",
 }
 WEAK_RELATION_TYPES = {"mentions", "related_to"}
 
@@ -193,7 +198,8 @@ class LLMKnowledgeGraphExtractor:
             "你是知识图谱抽取器。只从给定文本中抽取明确出现的实体和关系,不要推理文本没有表达的事实。"
             "只输出合法 JSON,不要输出解释。"
             "实体类型只能是: person, organization, project, module, class, function, file, concept, config, data, other。"
-            "关系类型只能是: defines, contains, depends_on, produces, consumes, calls, configures, mentions, related_to。"
+            "关系类型: defines, contains, depends_on, produces, consumes, calls, configures, uses, creates, modifies, mentions, related_to, likes, knows。"
+            "如果文本描述的是人际/情感关系（如喜欢、认识、了解等）优先使用 likes/knows 类型。"
             "关系两端必须来自 entities.name。每条关系必须有 evidence, evidence 必须是原文中的短句或短语。"
             "不确定就不要抽。输出结构固定为 {\"entities\":[],\"relations\":[]}。"
         )
@@ -1322,10 +1328,20 @@ class KnowledgeGraphService:
             confidence = self._clamp_float(item.get("confidence"), default=0.7)
             if not source or not target or source == target:
                 continue
-            if relation_type not in RELATION_TYPES or confidence < 0.55:
+            if confidence < 0.55:
                 continue
             if not evidence or evidence not in section_text:
-                continue
+                norm_ev = self._normalize_label(evidence)
+                norm_section = self._normalize_label(section_text)
+                if norm_ev and norm_ev in norm_section:
+                    pass
+                else:
+                    # 移除所有标点和空白后再次尝试（处理 LLM 加空格的中文场景）
+                    compact_pat = re.compile(r"[^\w一-鿿]")
+                    compact_ev = compact_pat.sub("", norm_ev)
+                    compact_section = compact_pat.sub("", norm_section)
+                    if not compact_ev or compact_ev not in compact_section:
+                        continue
             key = (source, target, relation_type, evidence)
             if key in seen:
                 continue

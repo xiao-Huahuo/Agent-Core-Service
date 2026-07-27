@@ -488,7 +488,9 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
 
 .markdown-body :deep(img) {
   max-width: 100%;
+  max-height: min(72vh, 960px);
   height: auto;
+  object-fit: contain;
   border-radius: 6px;
 }
 

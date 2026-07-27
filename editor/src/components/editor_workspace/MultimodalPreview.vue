@@ -183,6 +183,14 @@ function handleDocumentClick(event: MouseEvent) {
   margin: 0 0 var(--space-10);
 }
 
+.document-preview :deep(img) {
+  max-width: 100%;
+  max-height: min(72vh, 960px);
+  height: auto;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
 .text-preview {
   margin: 0;
   color: var(--color-text);
