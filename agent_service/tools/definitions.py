@@ -412,9 +412,11 @@ TASK_LIST_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="create_task_list",
         description=(
-            "Create a persistent session task list for complex long-running work that benefits from explicit progress tracking. "
+            "Create a persistent session task list for execution work that must be completed in ordered steps. "
+            "Use it for coding, debugging, file operations, document processing, data analysis, tool-chain work, "
+            "or any user request that needs multiple concrete steps before the final result. "
             "Task List is only for this Agent session's execution progress; it is completely unrelated to user Todo items. "
-            "Do not create one merely because a question has several reasoning steps. "
+            "Do not use it for direct single-step answers or for creating, editing, completing, or deleting long-term user Todo items. "
             "After creating it, continue working toward this list until finish_task_list is called."
         ),
         args_schema={

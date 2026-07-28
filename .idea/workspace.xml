@@ -6,7 +6,12 @@
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="管理栏模式">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/core/agent_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/core/agent_config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/definitions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/definitions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/taskList.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/taskList.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -287,14 +292,6 @@
       <workItem from="1785156958440" duration="11035000" />
       <workItem from="1785205674487" duration="2033000" />
       <workItem from="1785212115660" duration="1797000" />
-    </task>
-    <task id="LOCAL-00209" summary="工具条样式">
-      <option name="closed" value="true" />
-      <created>1784822939408</created>
-      <option name="number" value="00209" />
-      <option name="presentableId" value="LOCAL-00209" />
-      <option name="project" value="LOCAL" />
-      <updated>1784822939408</updated>
     </task>
     <task id="LOCAL-00210" summary="上下文进度">
       <option name="closed" value="true" />
@@ -680,7 +677,15 @@
       <option name="project" value="LOCAL" />
       <updated>1785253943837</updated>
     </task>
-    <option name="localTasksCounter" value="258" />
+    <task id="LOCAL-00258" summary="管理栏模式">
+      <option name="closed" value="true" />
+      <created>1785254521456</created>
+      <option name="number" value="00258" />
+      <option name="presentableId" value="LOCAL-00258" />
+      <option name="project" value="LOCAL" />
+      <updated>1785254521456</updated>
+    </task>
+    <option name="localTasksCounter" value="259" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

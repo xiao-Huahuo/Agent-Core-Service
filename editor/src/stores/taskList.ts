@@ -7,6 +7,7 @@ import type { AgentTaskList } from '@/api/taskList'
 export const useTaskListStore = defineStore('taskList', () => {
   const taskList = ref<AgentTaskList | null>(null)
   const sidebarOpen = ref(false)
+  const autoOpenOnUpdate = ref(true)
   const loading = ref(false)
   const error = ref('')
 
@@ -20,14 +21,15 @@ export const useTaskListStore = defineStore('taskList', () => {
     return taskList.value?.items.filter((item) => item.status === 'completed').length ?? 0
   })
 
-  function setTaskList(next: AgentTaskList | null | undefined) {
+  function setTaskList(next: AgentTaskList | null | undefined, options?: { open?: boolean }) {
     taskList.value = next ?? null
-    if (taskList.value) {
+    const shouldOpen = options?.open ?? autoOpenOnUpdate.value
+    if (taskList.value && shouldOpen) {
       sidebarOpen.value = true
     }
   }
 
-  async function load(sessionId: string) {
+  async function load(sessionId: string, options?: { open?: boolean }) {
     if (!sessionId) {
       clear()
       return
@@ -36,7 +38,7 @@ export const useTaskListStore = defineStore('taskList', () => {
     error.value = ''
     try {
       const response = await fetchSessionTaskList(sessionId)
-      setTaskList(response.task_list)
+      setTaskList(response.task_list, options)
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e)
       taskList.value = null
@@ -45,14 +47,14 @@ export const useTaskListStore = defineStore('taskList', () => {
     }
   }
 
-  async function create(sessionId: string, title: string, items: string[]) {
+  async function create(sessionId: string, title: string, items: string[], options?: { open?: boolean }) {
     const cleaned = items.map((item) => item.trim()).filter(Boolean)
     if (!sessionId || cleaned.length === 0) return null
     loading.value = true
     error.value = ''
     try {
       const response = await createSessionTaskList(sessionId, title, cleaned)
-      setTaskList(response.task_list)
+      setTaskList(response.task_list, options)
       return response.task_list
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e)
@@ -76,9 +78,14 @@ export const useTaskListStore = defineStore('taskList', () => {
     sidebarOpen.value = !sidebarOpen.value
   }
 
+  function setAutoOpenOnUpdate(open: boolean) {
+    autoOpenOnUpdate.value = open
+  }
+
   return {
     taskList,
     sidebarOpen,
+    autoOpenOnUpdate,
     loading,
     error,
     hasTaskList,
@@ -90,5 +97,6 @@ export const useTaskListStore = defineStore('taskList', () => {
     clear,
     setSidebarOpen,
     toggleSidebar,
+    setAutoOpenOnUpdate,
   }
 })

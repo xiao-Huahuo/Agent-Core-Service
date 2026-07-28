@@ -187,7 +187,7 @@ async function createTaskListFromInput(title: string, items: string[]) {
     targetSessionId = await sessionStore.create(userId.value)
     sessionStore.select(targetSessionId)
   }
-  const taskList = await taskListStore.create(targetSessionId, title || 'Task list', items)
+  const taskList = await taskListStore.create(targetSessionId, title || 'Task list', items, { open: props.mode === 'page' })
   if (!taskList) {
     return
   }
@@ -387,6 +387,14 @@ watch(userId, () => {
   void loadCurrentModelConfig()
 })
 
+watch(
+  () => props.mode,
+  (mode) => {
+    taskListStore.setAutoOpenOnUpdate(mode === 'page')
+  },
+  { immediate: true },
+)
+
 watch(() => workspaceStore.pendingAgentPrompt, (prompt) => {
   if (prompt) {
     void sendMessage(prompt)
@@ -428,6 +436,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
+  taskListStore.setAutoOpenOnUpdate(true)
 })
 </script>
 
@@ -439,6 +448,7 @@ onBeforeUnmount(() => {
       'theme-light': !isDark,
       'agent-page-mode': props.mode === 'page',
       'agent-drawer-open': props.mode === 'page' && sessionDrawerOpen,
+      'agent-panel-task-list-open': props.mode === 'panel' && taskListStore.sidebarOpen,
       'attachment-drop-active': isAttachmentDropActive,
     }"
     @dragenter="handleDragEnter"
@@ -1345,7 +1355,22 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-  transition: opacity var(--transition-fast);
+  overflow: hidden;
+  transition:
+    flex-basis 220ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity var(--transition-fast);
+}
+
+.agent-panel-task-list-open .chat-body {
+  flex: 0 1 0px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.agent-panel-task-list-open :deep(.task-list-drawer.open) {
+  flex-basis: 100%;
+  width: 100%;
+  border-left: 0;
 }
 
 .agent-page-mode :deep(.message-list) {
