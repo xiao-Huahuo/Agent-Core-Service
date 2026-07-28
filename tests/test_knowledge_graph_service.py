@@ -81,6 +81,21 @@ class SameEntityDifferentTypeExtractor:
         }
 
 
+class SimilarityTextExtractor:
+    """模拟小模型只抽出实体,漏掉原文中明确写出的相似关系。"""
+
+    def extract(self, *, document: StructuredKnowledgeDocument, section: StructuredKnowledgeSection) -> dict[str, Any]:
+        """返回 A 和 B 两个实体,但不返回 A像B 的关系候选。"""
+
+        return {
+            "entities": [
+                {"name": "A", "type": "concept", "confidence": 0.9},
+                {"name": "B", "type": "concept", "confidence": 0.9},
+            ],
+            "relations": [],
+        }
+
+
 def test_graph_llm_config_inherits_large_model_when_small_model_empty(tmp_path: Path) -> None:
     """图谱抽取未配置小模型时应完整继承大模型配置。"""
 
@@ -567,6 +582,56 @@ def test_knowledge_graph_service_coalesces_same_named_entities_across_documents(
     ]
     assert graph["stats"]["entities"] == 1
     assert len(mention_edges) == 2
+
+
+def test_knowledge_graph_service_infers_explicit_similarity_relation(tmp_path: Path) -> None:
+    """小模型漏掉 A像B 关系时,服务应从原文补出 A 到 B 的语义边。"""
+
+    config = AgentConfig.load_config(
+        {"storage": {"project_root": str(tmp_path), "base_data_dir": str(tmp_path / "runtime")}},
+        load_env=False,
+        load_dotenv=False,
+        ensure_models=False,
+    )
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    service = KnowledgeGraphService(config=config, engine=engine, extractor=SimilarityTextExtractor())
+    document = StructuredKnowledgeDocument(
+        document_id="doc_similarity",
+        source_type="text",
+        source_path=str(tmp_path / "similarity.txt"),
+        source_uri=str(tmp_path / "similarity.txt"),
+        source_hash="hash-similarity",
+        title="similarity",
+        summary="",
+        tags=[],
+        authority=0.7,
+        valid_from=None,
+        valid_until=None,
+        metadata={"relative_path": "similarity.txt"},
+        sections=[
+            StructuredKnowledgeSection(
+                section_id="sec_0000",
+                heading="similarity",
+                title_path=["similarity"],
+                content="A像B。",
+                start_char=0,
+                end_char=4,
+            )
+        ],
+    )
+
+    result = service.extract_document(user_id="u1", library_id="lib1", document=document)
+    graph = service.get_graph(user_id="u1", library_id="lib1")
+    semantic_edges = [edge for edge in graph["links"] if edge["kind"] == "related_to"]
+
+    assert result.entities_written == 2
+    assert result.relations_written == 1
+    assert len(semantic_edges) == 1
+    assert semantic_edges[0]["evidence"] == "A像B"
 
 
 def test_cosine_similarity_identical_vectors() -> None:

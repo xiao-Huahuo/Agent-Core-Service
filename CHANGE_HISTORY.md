@@ -1,6 +1,10 @@
 # CHANGE HISTORY
 
 ## 2026-07-28
+- [x] 修复图谱抽取漏掉明示相似关系:
+  - `KnowledgeGraphService` 在小模型只抽出实体、漏掉关系时,对同一 section 内已抽出的实体补充窄范围明示关系规则: `A像B`、`A类似B`、`A相似B` 等会写入 `related_to` 语义边。
+  - 后备规则已接入单文档抽取和后台批量抽取两条路径,避免只生成“文档 mentions A/B”而没有 A-B 关联。
+  - `test_knowledge_graph_service.py` 新增 `A像B` 复现测试,先确认旧逻辑 `relations_written == 0`,修复后验证写入 1 条 `related_to` 边。
 - [x] 修正 Agent 首页快捷块状态切换动画:
   - `ChatInput.vue` 将快捷块容器与提示条列表拆成不同 Transition，快捷块在清空输入重新出现和点击块消失时保留 `translateX(-50%)` 居中定位，只叠加缩放与透明度动画，避免横向进出。
 - [x] 调整 Agent 首页快捷提示动画:
