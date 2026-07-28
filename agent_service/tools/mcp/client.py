@@ -28,7 +28,7 @@ async def main() -> None:
     )
     async with client:
         tools = await client.list_tools()
-        result = await client.call_tool("echo_text", {"text": "hello"})
+        result = await client.call_tool("example_tool", {"text": "hello"})
         print(tools)
         print(result.text)
 

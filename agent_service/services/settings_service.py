@@ -1126,7 +1126,6 @@ class SettingsService:
             KNOWLEDGE_TOOL_DEFINITIONS,
             MEMORY_TOOL_DEFINITIONS,
             SKILL_TOOL_DEFINITIONS,
-            STATE_TOOL_DEFINITIONS,
             TASK_LIST_TOOL_DEFINITIONS,
             TODO_TOOL_DEFINITIONS,
             UTILITY_TOOL_DEFINITIONS,
@@ -1140,7 +1139,6 @@ class SettingsService:
             ("FILE", "文件管理工具", FILE_TOOL_DEFINITIONS),
             ("SKILL", "技能工具", SKILL_TOOL_DEFINITIONS),
             ("TASK_LIST", "任务列表工具", TASK_LIST_TOOL_DEFINITIONS),
-            ("STATE", "状态工具", STATE_TOOL_DEFINITIONS),
             ("TODO", "待办工具", TODO_TOOL_DEFINITIONS),
             ("WEB_SEARCH", "联网搜索工具", WEB_SEARCH_TOOL_DEFINITIONS),
         ]

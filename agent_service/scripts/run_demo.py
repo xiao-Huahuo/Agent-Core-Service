@@ -137,7 +137,7 @@ def run_stream_session_demo() -> None:
     session_service = SessionService(config=config)
     session = session_service.create_session(SessionCreate(user_id="stream-demo-user", session_name="流式推送演示"))
 
-    prompt = "你好,请用三句话简单介绍一下你自己,然后调用 echo_text 工具输出'流式测试完成'。"
+    prompt = "你好,请用三句话简单介绍一下你自己,然后调用 get_current_time 工具获取 UTC 当前时间。"
 
     print("=" * 60)
     print(f"Session: {session.session_id}")

@@ -10,7 +10,7 @@
 
 registry = ToolRegistry.with_builtin_tools()
 executor = ToolExecutor(registry=registry)
-result = executor.execute("echo_text", {"text": "hello"})
+result = executor.execute("get_current_time", {"timezone_name": "UTC"})
 """
 
 from __future__ import annotations

@@ -6,7 +6,7 @@
 `tool_registry.py` 完成,工具执行由 `executor.py` 完成。
 
 工具分为多个类别,分别存放在独立的分组列表中:
-- UTILITY_TOOL_DEFINITIONS  通用工具 (时间、UUID、计算、JSON、文本统计等)
+- UTILITY_TOOL_DEFINITIONS  通用工具 (当前时间、终端命令、下载等)
 - MEMORY_TOOL_DEFINITIONS   长期记忆工具 (检索与写入用户跨会话记忆)
 - KNOWLEDGE_TOOL_DEFINITIONS 知识库工具 (检索系统知识库文档切片)
 - FILE_TOOL_DEFINITIONS     文件管理工具 (浏览、读写、创建、删除、重命名文件/文件夹)
@@ -19,25 +19,20 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Callable
-from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from agent_service.tools.runtime_context import (
     AGENT_ACCESS_READONLY,
     get_task_list_callback,
-    get_plan_state,
     get_tool_runtime,
     register_network_citation,
     register_tool_citation,
-    set_plan_state,
 )
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
 from agent_service.services.todo_service import TodoService
-from agent_service.tools.tool_math import evaluate_math_expression
 
 
 ToolFunction = Callable[..., str]
@@ -73,16 +68,6 @@ class BuiltinToolDefinition:
     display_name: str = ""
 
 
-def get_current_utc_time() -> str:
-    """
-    获取当前 UTC 时间。
-
-    返回值: ISO 8601 格式 UTC 时间字符串。
-    """
-
-    return datetime.now(timezone.utc).isoformat()
-
-
 def get_current_time(timezone_name: str = "UTC") -> str:
     """
     获取指定时区的当前时间。
@@ -96,122 +81,6 @@ def get_current_time(timezone_name: str = "UTC") -> str:
     except ZoneInfoNotFoundError:
         return f"未知时区: {normalized_timezone_name}"
     return datetime.now(target_timezone).isoformat()
-
-
-def echo_text(text: str) -> str:
-    """
-    原样返回输入文本。
-
-    text: 需要回显的文本。
-    """
-
-    return text
-
-
-def generate_uuid() -> str:
-    """
-    生成随机 UUID。
-
-    返回值: UUID4 字符串,可用于临时任务 ID、调试 ID 或幂等标识。
-    """
-
-    return str(uuid4())
-
-
-def calculate(expression: str) -> str:
-    """
-    安全计算基础数学表达式。
-
-    expression: 只允许数字、括号、加减乘除、取模、幂和一元正负号。
-    """
-
-    try:
-        result = evaluate_math_expression(expression)
-    except Exception as exc:
-        return f"计算失败: {exc}"
-    return str(result)
-
-
-def json_parse(json_text: str) -> str:
-    """
-    解析 JSON 字符串并返回结构化描述。
-
-    json_text: 需要解析的 JSON 字符串。
-    """
-
-    try:
-        parsed = json.loads(json_text)
-    except json.JSONDecodeError as exc:
-        return f"JSON 解析失败: 第 {exc.lineno} 行第 {exc.colno} 列: {exc.msg}"
-    if isinstance(parsed, dict):
-        keys = list(parsed.keys())
-        summary = f"JSON 解析成功,这是一个包含 {len(keys)} 个字段的对象"
-        if len(keys) <= 10:
-            summary += f",字段: {', '.join(keys)}"
-        else:
-            summary += f",主要字段: {', '.join(keys[:10])} 等"
-        return summary + "。"
-    if isinstance(parsed, list):
-        summary = f"JSON 解析成功,这是一个包含 {len(parsed)} 个元素的数组"
-        if parsed and isinstance(parsed[0], dict):
-            summary += f",每个元素是包含 {len(parsed[0])} 个字段的对象"
-        return summary + "。"
-    return f"JSON 解析成功,值为: {parsed}"
-
-
-def json_pick(json_text: str, path: str) -> str:
-    """
-    从 JSON 字符串中按简单路径取值,返回人类可读的描述。
-
-    json_text: 需要读取的 JSON 字符串。
-    path: 点分路径,例如 `user.name` 或 `items.0.title`。
-    """
-
-    try:
-        current_value: Any = json.loads(json_text)
-        for segment in path.split("."):
-            if isinstance(current_value, list):
-                current_value = current_value[int(segment)]
-            elif isinstance(current_value, dict):
-                current_value = current_value[segment]
-            else:
-                return f"路径 {path} 在 {segment} 处无法继续读取。"
-    except (json.JSONDecodeError, KeyError, IndexError, ValueError) as exc:
-        return f"JSON 取值失败: {exc}"
-    if isinstance(current_value, (dict, list)):
-        kind = "对象" if isinstance(current_value, dict) else "数组"
-        return f"路径 {path} 的值是一个{kind},包含 {len(current_value)} 个元素。"
-    if isinstance(current_value, str) and len(str(current_value)) > 200:
-        return f"路径 {path} 的值是一段文本,共 {len(current_value)} 个字符。"
-    return f"路径 {path} 的值为: {current_value}"
-
-
-def text_stats(text: str) -> str:
-    """
-    统计文本基础信息,返回人类可读的统计结果。
-
-    text: 需要统计的文本。
-    """
-
-    chars = len(text)
-    non_ws = len("".join(text.split()))
-    lines = 0 if text == "" else text.count("\n") + 1
-    words = len(text.split())
-    tokens = max(1, len(text) // 4) if text else 0
-    return f"文本统计: {chars} 个字符, {non_ws} 个非空白字符, {lines} 行, {words} 个词, 约 {tokens} 个 token。"
-
-
-def list_builtin_tools() -> str:
-    """
-    列出当前注册的内置工具,返回人类可读的编号列表。
-
-    返回值: 工具名称和描述的格式化文本。
-    """
-
-    lines = [f"当前可用工具共 {len(BUILTIN_TOOL_DEFINITIONS)} 个:"]
-    for i, definition in enumerate(BUILTIN_TOOL_DEFINITIONS, 1):
-        lines.append(f"{i}. {definition.name} — {definition.description}")
-    return "\n".join(lines)
 
 
 def list_skills() -> str:
@@ -1263,44 +1132,6 @@ def web_image_search(
     return "\n".join(lines)
 
 
-def update_exploration_state(
-    covered: str = "",
-    suggested: str = "",
-    sufficient: str = "",
-    hint: str = "",
-) -> str:
-    """
-    更新 Agent 自身的知识探索状态,供跨轮持续追踪探索进度。
-
-    covered: 逗号分隔的已覆盖主题。
-    suggested: 逗号分隔的建议继续探索方向。
-    sufficient: 当前信息是否足够回答用户问题,true/false。
-    hint: 给后续轮次的一两句策略提示。
-    """
-
-    state = get_plan_state() or {"covered": [], "suggested": [], "sufficient": False, "hint": ""}
-    if covered:
-        new_covered = [c.strip() for c in covered.split(",") if c.strip()]
-        existing = state.get("covered", [])
-        for c in new_covered:
-            if c not in existing:
-                existing.append(c)
-        state["covered"] = existing
-    if suggested:
-        state["suggested"] = [s.strip() for s in suggested.split(",") if s.strip()]
-    if sufficient:
-        state["sufficient"] = sufficient.strip().lower() == "true"
-    if hint:
-        state["hint"] = hint.strip()
-    set_plan_state(state)
-    covered_count = len(state.get("covered", []))
-    return (
-        f"探索状态已更新。已覆盖 {covered_count} 个主题"
-        + (f", 信息充足" if state.get("sufficient") else "")
-        + "。"
-    )
-
-
 def _get_task_list_service():
     """Return the current task list service."""
 
@@ -1658,7 +1489,6 @@ from agent_service.tools.definitions import (  # noqa: E402
     FILE_TOOL_DEFINITIONS,
     KNOWLEDGE_TOOL_DEFINITIONS,
     MEMORY_TOOL_DEFINITIONS,
-    STATE_TOOL_DEFINITIONS,
     TODO_TOOL_DEFINITIONS,
     UTILITY_TOOL_DEFINITIONS,
     WEB_SEARCH_TOOL_DEFINITIONS,

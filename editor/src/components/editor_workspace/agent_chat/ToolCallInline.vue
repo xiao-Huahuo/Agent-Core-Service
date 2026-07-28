@@ -31,6 +31,7 @@ interface ToolEntry {
   result_count?: number
   call_count: number
   filenames: string[]
+  labels: string[]
   raw_contents: string[]
 }
 
@@ -77,20 +78,13 @@ function getCopyText(rawContents: string[]) {
 }
 
 const FALLBACK_DISPLAY: Record<string, string> = {
-  get_current_utc_time: '获取UTC时间',
   get_current_time: '获取当前时间',
-  echo_text: '回显文本',
-  generate_uuid: '生成UUID',
-  calculate: '数学计算',
-  json_parse: '解析JSON',
-  json_pick: '提取JSON字段',
-  text_stats: '文本统计',
-  list_builtin_tools: '列出工具',
   list_skills: '列出技能',
   use_skill: '使用技能',
   get_long_term_memory: '检索记忆',
   write_long_term_memory: '写入记忆',
   get_knowledge_context: '检索知识',
+  search_knowledge: '全库联合搜索',
   rebuild_knowledge_base: '重建知识库',
   get_current_viewing_document: '获取当前文档',
   list_knowledge_files: '列出文件',
@@ -99,7 +93,6 @@ const FALLBACK_DISPLAY: Record<string, string> = {
   delete_knowledge_file: '删除文件',
   rename_knowledge_file: '重命名文件',
   create_knowledge_folder: '创建文件夹',
-  update_exploration_state: '更新探索状态',
   run_terminal_command: '终端命令',
 }
 
@@ -109,6 +102,88 @@ function asString(value: unknown) {
 
 function asNumber(value: unknown) {
   return typeof value === 'number' ? value : undefined
+}
+
+function truncateLabel(value: string, maxLength = 42) {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (normalized.length <= maxLength) return normalized
+  return `${normalized.slice(0, maxLength)}…`
+}
+
+function extractArgsValue(argsSummary: string, key: string) {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(`(?:^|,\\s*)${escapedKey}=([^,]+)`)
+  return (argsSummary.match(pattern)?.[1] ?? '').trim()
+}
+
+function uniquePush(values: string[], value: string | null | undefined) {
+  const normalized = truncateLabel(value ?? '')
+  if (normalized && !values.includes(normalized)) {
+    values.push(normalized)
+  }
+}
+
+function formatLabels(values: string[], singlePrefix: string, multiPrefix: string) {
+  if (values.length === 0) return singlePrefix
+  if (values.length <= 2) return `${singlePrefix}：${values.join('、')}`
+  return `${multiPrefix} ${values.length} 项`
+}
+
+function formatIsoTime(rawContent: string) {
+  const trimmed = rawContent.trim()
+  const date = new Date(trimmed)
+  if (Number.isNaN(date.getTime())) return trimmed || '未知'
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function parseJsonObject(rawContent: string): Record<string, unknown> | null {
+  try {
+    return asRecord(JSON.parse(rawContent))
+  } catch {
+    return null
+  }
+}
+
+function currentDocumentLabel(rawContent: string) {
+  const parsed = parseJsonObject(rawContent)
+  if (parsed) {
+    return asString(parsed.name) || asString(parsed.path) || '无活动文件'
+  }
+  if (rawContent.includes('没有') || rawContent.includes('暂无')) return '无活动文件'
+  return truncateLabel(rawContent)
+}
+
+function taskListStatusLabel(rawContent: string) {
+  if (rawContent.includes('No task list')) return '无任务列表'
+  const status = rawContent.match(/^Status:\s*(.+)$/m)?.[1]?.trim()
+  if (status) return status
+  return rawContent.includes('finished') || rawContent.includes('completed') ? '已完成' : '进行中'
+}
+
+function countTodoLines(rawContent: string) {
+  if (rawContent.includes('当前没有待办事项')) return 0
+  return rawContent.split('\n').filter((line) => /^\d+\.\s+\[todo_[^\]]+\]/.test(line.trim())).length
+}
+
+function fileTreeCounts(rawContent: string) {
+  const summary = rawContent.match(/共\s*(\d+)\s*个文件,\s*(\d+)\s*个文件夹/)
+  if (summary) {
+    return {
+      files: Number(summary[1] ?? 0),
+      dirs: Number(summary[2] ?? 0),
+    }
+  }
+  return {
+    files: rawContent.split('\n').filter((line) => line.trim().startsWith('[FILE]')).length,
+    dirs: rawContent.split('\n').filter((line) => line.trim().startsWith('[DIR]')).length,
+  }
+}
+
+function firstPathFromArgs(argsSummary: string) {
+  return extractArgsValue(argsSummary, 'path')
+    || extractArgsValue(argsSummary, 'source_path')
+    || extractArgsValue(argsSummary, 'target_path')
 }
 
 function extractFilename(trace: Record<string, unknown>, toolName: string) {
@@ -130,6 +205,23 @@ function extractFilename(trace: Record<string, unknown>, toolName: string) {
     return m ? m[1] : null
   }
   return null
+}
+
+function extractToolLabel(trace: Record<string, unknown>, toolName: string) {
+  const argsSummary = asString(trace.tool_args_summary)
+  const rawContent = asString(trace.raw_content)
+  if (toolName === 'web_search' || toolName === 'web_image_search' || toolName === 'search_knowledge') {
+    return extractArgsValue(argsSummary, 'query')
+  }
+  if (toolName === 'use_skill') return extractArgsValue(argsSummary, 'skill_ref')
+  if (toolName === 'create_task_list') return extractArgsValue(argsSummary, 'title')
+  if (toolName === 'add_todo') {
+    return extractArgsValue(argsSummary, 'text') || rawContent.match(/已创建待办\s*\[[^\]]+\]:\s*(.+?)(?:,\s*截止日期|$)/)?.[1] || ''
+  }
+  if (toolName === 'edit_todo') return extractArgsValue(argsSummary, 'text') || rawContent.match(/已更新待办:\s*(.+?)(?:\s*\||$)/)?.[1] || ''
+  if (toolName === 'write_long_term_rule') return extractArgsValue(argsSummary, 'content')
+  if (toolName === 'get_knowledge_file_url') return extractArgsValue(argsSummary, 'path') || rawContent
+  return extractFilename(trace, toolName) || firstPathFromArgs(argsSummary)
 }
 
 function extractQuotedListItems(value: string) {
@@ -163,8 +255,95 @@ function toolSummary(entry: ToolEntry) {
   const displayName = entry.display_name || entry.tool_name
   if (!displayName) return null
 
-  if (entry.result_count !== undefined && entry.result_count > 0) {
-    return `${displayName}：${entry.result_count} 条结果`
+  const latest = entry.raw_contents.length > 0 ? entry.raw_contents[entry.raw_contents.length - 1] ?? '' : ''
+  const count = entry.result_count ?? entry.call_count
+
+  if (entry.tool_name === 'web_search') {
+    const suffix = entry.labels.length > 0 ? ` 条结果 | ${entry.labels.join(' | ')}` : ' 条结果'
+    return `联网搜索：${entry.result_count ?? entry.call_count}${suffix}`
+  }
+  if (entry.tool_name === 'web_image_search') {
+    const suffix = entry.labels.length > 0 ? ` 张图片 | ${entry.labels.join(' | ')}` : ' 张图片'
+    return `联网搜图：${entry.result_count ?? entry.call_count}${suffix}`
+  }
+  if (entry.tool_name === 'get_knowledge_context') {
+    return `检索到 ${entry.result_count ?? entry.call_count} 条知识`
+  }
+  if (entry.tool_name === 'search_knowledge') {
+    const suffix = entry.labels.length > 0 ? ` 条结果 | ${entry.labels.join(' | ')}` : ' 条结果'
+    return `全库联合搜索：${entry.result_count ?? entry.call_count}${suffix}`
+  }
+  if (entry.tool_name === 'get_long_term_memory') {
+    return `检索到 ${entry.result_count ?? entry.call_count} 条记忆`
+  }
+  if (entry.tool_name === 'write_long_term_memory') {
+    return `写入 ${count} 条记忆`
+  }
+  if (entry.tool_name === 'delete_long_term_memory') {
+    return `删除 ${count} 条记忆`
+  }
+  if (entry.tool_name === 'delete_long_term_rule') {
+    return `删除 ${count} 条长期规则`
+  }
+  if (entry.tool_name === 'complete_task_list_item') {
+    return `完成 ${count} 个任务项`
+  }
+  if (entry.tool_name === 'toggle_todo') {
+    return `更新 ${count} 条待办`
+  }
+  if (entry.tool_name === 'delete_todo') {
+    return `删除 ${count} 条待办`
+  }
+  if (entry.tool_name === 'list_knowledge_files') {
+    const totals = entry.raw_contents.reduce((sum, rawContent) => {
+      const parsed = fileTreeCounts(rawContent)
+      return { files: sum.files + parsed.files, dirs: sum.dirs + parsed.dirs }
+    }, { files: 0, dirs: 0 })
+    return totals.dirs > 0 ? `列出 ${totals.files} 个文件 / ${totals.dirs} 个文件夹` : `列出 ${totals.files} 个文件`
+  }
+
+  const fileCountLabels: Record<string, [string, string, string]> = {
+    read_knowledge_file: ['阅读文件', '阅读 ', ' 个文件'],
+    write_knowledge_file: ['创作文件', '创作 ', ' 个文件'],
+    delete_knowledge_file: ['删除文件', '删除 ', ' 个文件'],
+    rename_knowledge_file: ['重命名文件', '重命名 ', ' 个文件'],
+    create_knowledge_folder: ['创建文件夹', '创建 ', ' 个文件夹'],
+    read_multimodal_file_info: ['读取多模态文件信息', '读取 ', ' 份多模态文件信息'],
+    save_uploaded_attachment_to_knowledge: ['附件存入知识库', '保存 ', ' 个附件到知识库'],
+    download_file: ['下载文件', '下载 ', ' 个文件'],
+  }
+  const fileCountConfig = fileCountLabels[entry.tool_name]
+  if (fileCountConfig) {
+    if (entry.call_count === 1 && entry.labels.length > 0) {
+      return `${fileCountConfig[0]}：${entry.labels[0]}`
+    }
+    return `${fileCountConfig[1]}${entry.call_count}${fileCountConfig[2]}`
+  }
+
+  const contentSummary: Record<string, [string, string]> = {
+    use_skill: ['使用技能', '使用'],
+    create_task_list: ['创建任务列表', '创建'],
+    add_todo: ['新增待办', '新增'],
+    edit_todo: ['编辑待办', '编辑'],
+    write_long_term_rule: ['写入长期规则', '写入'],
+  }
+  const contentConfig = contentSummary[entry.tool_name]
+  if (contentConfig) {
+    return formatLabels(entry.labels, contentConfig[0], `${contentConfig[1]} ${entry.call_count}`)
+  }
+
+  const statusSummary: Record<string, string> = {
+    get_current_time: `获取当前时间：${formatIsoTime(latest)}`,
+    get_current_viewing_document: `获取当前文档：${currentDocumentLabel(latest)}`,
+    get_task_list_status: `获取任务列表状态：${taskListStatusLabel(latest)}`,
+    list_todos: `列出待办：${countTodoLines(latest) > 0 ? `${countTodoLines(latest)} 条` : '无'}`,
+    get_knowledge_file_url: `获取文件链接：${entry.labels[0] || '完成'}`,
+    rebuild_knowledge_base: `重建知识库：${latest.includes('失败') ? '失败' : '完成'}`,
+    finish_task_list: '完成任务列表：完成',
+    list_skills: '列出技能',
+  }
+  if (statusSummary[entry.tool_name]) {
+    return statusSummary[entry.tool_name]
   }
 
   if (entry.call_count > 1) {
@@ -308,6 +487,7 @@ const toolEntries = computed(() => {
       const existing = merged.get(mergeKey)
       const resultCount = asNumber(trace.result_count)
       const fn = extractFilename(trace, toolName)
+      const label = extractToolLabel(trace, toolName)
       const rawContent = asString(trace.raw_content)
       if (existing) {
         if (resultCount !== undefined) {
@@ -317,6 +497,7 @@ const toolEntries = computed(() => {
         if (fn && !existing.filenames.includes(fn)) {
           existing.filenames.push(fn)
         }
+        uniquePush(existing.labels, label)
         if (rawContent && !existing.raw_contents.includes(rawContent)) {
           existing.raw_contents.push(rawContent)
         }
@@ -329,6 +510,7 @@ const toolEntries = computed(() => {
           result_count: resultCount,
           call_count: 1,
           filenames: fn ? [fn] : [],
+          labels: label ? [truncateLabel(label)] : [],
           raw_contents: rawContent ? [rawContent] : [],
         })
       }
@@ -413,12 +595,8 @@ const toolEntries = computed(() => {
           <div v-else-if="entry.toolName === 'read_knowledge_file'">
             <pre class="tool-result-code">{{ rawContent }}</pre>
           </div>
-          <!-- JSON parse/pick: formatted -->
-          <div v-else-if="entry.toolName === 'json_parse' || entry.toolName === 'json_pick'">
-            <pre class="tool-result-text">{{ rawContent }}</pre>
-          </div>
-          <!-- Calculate / time / UUID / echo: simple result -->
-          <div v-else-if="entry.toolName === 'calculate' || entry.toolName === 'get_current_time' || entry.toolName === 'get_current_utc_time' || entry.toolName === 'generate_uuid' || entry.toolName === 'echo_text' || entry.toolName === 'text_stats'">
+          <!-- Time and status tools: simple result -->
+          <div v-else-if="entry.toolName === 'get_current_time' || entry.toolName === 'get_current_viewing_document' || entry.toolName === 'get_task_list_status'">
             <pre class="tool-result-text">{{ rawContent }}</pre>
           </div>
           <!-- File operations: write/delete/rename/create folder -->

@@ -19,7 +19,6 @@ import types
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from uuid import UUID
 
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 from sqlmodel import SQLModel, create_engine
@@ -298,14 +297,14 @@ def test_agent_core_build_human_readable_process() -> None:
     """验证 AgentCore 可以把结构化事件转换为给人阅读的执行过程。"""
 
     events = [
-        {"node": "agent", "content": "", "tool_calls": [{"name": "echo_text"}], "trace": []},
+        {"node": "agent", "content": "", "tool_calls": [{"name": "get_current_time"}], "trace": []},
         {"node": "action", "content": "hello", "tool_calls": [], "trace": []},
         {"node": "agent", "content": "最终回复", "tool_calls": [], "trace": []},
     ]
 
     process = AgentCore.build_human_readable_process(events)
 
-    assert process[0] == "1. 模型决定调用工具: echo_text"
+    assert process[0] == "1. 模型决定调用工具: get_current_time"
     assert process[-1] == "3. 模型生成最终回复。"
 
 
@@ -568,7 +567,7 @@ def test_context_builder_appends_current_prompt_and_converts_roles() -> None:
             user_id="user_1",
             role="assistant",
             content="",
-            tool_calls_json=[{"id": "call_1", "name": "echo_text", "args": {"text": "hello"}}],
+            tool_calls_json=[{"id": "call_1", "name": "get_current_time", "args": {"timezone_name": "UTC"}}],
         )
     )
     service.create_message(
@@ -1593,21 +1592,27 @@ def test_tool_registry_exports_builtin_langchain_tools() -> None:
     registry = ToolRegistry.with_builtin_tools()
     tools = registry.to_langchain_tools()
 
-    assert registry.get("echo_text") is not None
-    assert {tool.name for tool in tools} >= {
-        "calculate",
-        "echo_text",
-        "generate_uuid",
+    tool_names = {tool.name for tool in tools}
+    assert registry.get("get_current_time") is not None
+    assert tool_names >= {
         "get_knowledge_context",
         "get_long_term_memory",
         "write_long_term_rule",
         "get_current_time",
+        "search_knowledge",
+        "list_knowledge_files",
+    }
+    assert tool_names.isdisjoint({
+        "calculate",
+        "echo_text",
+        "generate_uuid",
         "get_current_utc_time",
         "json_parse",
         "json_pick",
         "list_builtin_tools",
         "text_stats",
-    }
+        "update_exploration_state",
+    })
 
 
 def test_tool_executor_runs_builtin_tool() -> None:
@@ -1615,35 +1620,9 @@ def test_tool_executor_runs_builtin_tool() -> None:
 
     executor = ToolExecutor(registry=ToolRegistry.with_builtin_tools())
 
-    result = executor.execute("echo_text", {"text": "hello"})
+    result = executor.execute("get_current_time", {"timezone_name": "UTC"})
 
-    assert result == "hello"
-
-
-def test_tool_executor_runs_general_builtin_tools() -> None:
-    """验证常用内置工具可以通过统一执行器执行。"""
-
-    executor = ToolExecutor(registry=ToolRegistry.with_builtin_tools())
-
-    uuid_value = executor.execute("generate_uuid", {})
-    calculate_value = executor.execute("calculate", {"expression": "(1 + 2) * 3"})
-    json_value = executor.execute("json_pick", {"json_text": '{"user": {"name": "Ada"}}', "path": "user.name"})
-    text_stats_value = executor.execute("text_stats", {"text": "hello\nworld"})
-
-    assert str(UUID(uuid_value)) == uuid_value
-    assert calculate_value == "9"
-    assert "Ada" in json_value
-    assert "2" in text_stats_value
-
-
-def test_calculate_rejects_unsafe_expression() -> None:
-    """验证计算工具不会执行函数调用等非白名单表达式。"""
-
-    executor = ToolExecutor(registry=ToolRegistry.with_builtin_tools())
-
-    result = executor.execute("calculate", {"expression": "__import__('os').system('echo bad')"})
-
-    assert result.startswith("计算失败:")
+    assert "T" in result
 
 
 def test_tool_call_node_uses_project_executor() -> None:
@@ -1656,7 +1635,7 @@ def test_tool_call_node_uses_project_executor() -> None:
         "messages": [
             AIMessage(
                 content="",
-                tool_calls=[{"id": "call_echo", "name": "echo_text", "args": {"text": "node-ok"}}],
+                tool_calls=[{"id": "call_time", "name": "get_current_time", "args": {"timezone_name": "UTC"}}],
             )
         ],
         "user_id": "u1",
@@ -1666,9 +1645,9 @@ def test_tool_call_node_uses_project_executor() -> None:
 
     result = node(state)
 
-    assert result["messages"][0].content == "node-ok"
+    assert "T" in result["messages"][0].content
     assert result["trace"][0]["event"] == "tool_call_start"
-    assert result["trace"][0]["tool_name"] == "echo_text"
+    assert result["trace"][0]["tool_name"] == "get_current_time"
 
 
 def test_tool_call_node_counts_knowledge_search_results() -> None:
