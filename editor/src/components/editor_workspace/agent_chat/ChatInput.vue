@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Check, ChevronDown, Globe, Plus, Send, Settings, Shield, Square, X } from 'lucide-vue-next'
+import { Bug, Check, ChevronDown, ClipboardCheck, Globe, Hammer, Plus, SearchCode, Send, Settings, Shield, Square, X } from 'lucide-vue-next'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import ContextProgress from '@/components/editor_workspace/agent_chat/ContextProgress.vue'
 import { checkModelDisk, fetchModelStatus } from '@/api/settings'
@@ -52,6 +52,61 @@ const inputContainer = ref<HTMLDivElement | null>(null)
 
 const menuVisible = ref(false)
 const menuStyle = ref<Record<string, string>>({})
+const activeStarterPrefix = ref('')
+
+type PromptStarter = {
+  prefix: string
+  title: string
+  icon: typeof SearchCode
+  suggestions: string[]
+}
+
+const promptStarters: PromptStarter[] = [
+  {
+    prefix: '探索',
+    title: '探索并理解代码',
+    icon: SearchCode,
+    suggestions: [
+      '探索并了解功能的工作原理',
+      '探索当前代码库的模块结构',
+      '探索这个文件和相关依赖的关系',
+      '探索一个入口请求的完整执行流程',
+    ],
+  },
+  {
+    prefix: '构建',
+    title: '构建新功能应用或工具',
+    icon: Hammer,
+    suggestions: [
+      '构建一个新功能并接入现有界面',
+      '构建一个可复用的工具组件',
+      '构建一条完整的前后端功能链路',
+      '构建一个最小可用版本并补充验证',
+    ],
+  },
+  {
+    prefix: '审查',
+    title: '审查代码并提出修改建议',
+    icon: ClipboardCheck,
+    suggestions: [
+      '审查当前改动并指出潜在问题',
+      '审查这段实现是否符合项目规范',
+      '审查代码结构并给出必要修改建议',
+      '审查测试覆盖是否能防止回归',
+    ],
+  },
+  {
+    prefix: '修复',
+    title: '修复问题和失败',
+    icon: Bug,
+    suggestions: [
+      '修复这个报错并解释根因',
+      '修复失败的测试并保持行为一致',
+      '修复页面交互异常和样式错位',
+      '修复接口调用失败并补充验证',
+    ],
+  },
+]
 
 const accessModeOptions: Array<{ value: AgentAccessMode; label: string; hint: string }> = [
   { value: 'readonly', label: '只读', hint: '全目录只读' },
@@ -64,6 +119,34 @@ const selectedAccessModeLabel = computed(() => {
   return accessModeOptions.find((option) => option.value === selectedAccessMode.value)?.label || '沙盒'
 })
 const displayedModelLabel = computed(() => props.modelLabel?.trim() || '配置模型')
+const promptInput = computed(() => text.value.trim())
+const activeStarter = computed(() => {
+  const input = promptInput.value
+  if (!input) return undefined
+
+  const lockedStarter = promptStarters.find((starter) => starter.prefix === activeStarterPrefix.value)
+  if (lockedStarter && matchesPromptStarter(lockedStarter, input)) {
+    return lockedStarter
+  }
+  return promptStarters.find((starter) => matchesPromptStarter(starter, input))
+})
+const matchedPromptSuggestions = computed(() => {
+  const input = promptInput.value
+  if (!activeStarter.value || !input) return []
+  return activeStarter.value.suggestions.filter((suggestion) => suggestion.startsWith(input))
+})
+const showPromptStarters = computed(() => {
+  return props.centered && !promptInput.value && !props.reference && !props.attachments?.length
+})
+const showPromptWaterfall = computed(() => {
+  return props.centered && matchedPromptSuggestions.value.length > 0 && !props.reference && !props.attachments?.length
+})
+
+function matchesPromptStarter(starter: PromptStarter, input: string) {
+  return starter.prefix.startsWith(input) ||
+    input.startsWith(starter.prefix) ||
+    starter.suggestions.some((suggestion) => suggestion.startsWith(input))
+}
 
 function adjustHeight() {
   const el = textareaRef.value
@@ -73,7 +156,20 @@ function adjustHeight() {
   el.style.height = `${Math.min(el.scrollHeight, max)}px`
 }
 
-watch(text, () => nextTick(adjustHeight))
+watch(text, () => {
+  if (!promptInput.value) {
+    activeStarterPrefix.value = ''
+  } else if (activeStarter.value) {
+    activeStarterPrefix.value = activeStarter.value.prefix
+  }
+  nextTick(adjustHeight)
+})
+
+watch(() => props.centered, (centered) => {
+  if (!centered) {
+    activeStarterPrefix.value = ''
+  }
+})
 
 watch(menuVisible, (visible) => {
   if (visible) {
@@ -165,6 +261,23 @@ function handleKeydown(event: KeyboardEvent) {
     event.preventDefault()
     handleSend()
   }
+}
+
+function applyPromptStarter(starter: PromptStarter) {
+  activeStarterPrefix.value = starter.prefix
+  text.value = starter.prefix
+  nextTick(() => {
+    textareaRef.value?.focus()
+  })
+}
+
+function applyPromptSuggestion(suggestion: string) {
+  text.value = suggestion
+  activeStarterPrefix.value = ''
+  nextTick(() => {
+    textareaRef.value?.focus()
+    adjustHeight()
+  })
 }
 
 function handleAccessModeSummaryClick(event: MouseEvent) {
@@ -397,6 +510,42 @@ function handleFileChange(event: Event) {
         </button>
       </div>
     </div>
+    <Transition name="starter-grid-panel">
+      <div v-if="showPromptStarters" class="prompt-starter-grid" aria-label="Agent 快捷提示">
+        <button
+          v-for="starter in promptStarters"
+          :key="starter.prefix"
+          class="prompt-starter-card"
+          type="button"
+          :disabled="disabled"
+          @click="applyPromptStarter(starter)"
+        >
+          <component :is="starter.icon" class="prompt-starter-icon" :size="16" aria-hidden="true" />
+          <span class="prompt-starter-title">{{ starter.title }}</span>
+        </button>
+      </div>
+    </Transition>
+    <Transition name="starter-panel">
+      <div v-if="showPromptWaterfall" class="prompt-waterfall-list" aria-label="Agent 提示补全">
+        <button
+          v-for="(suggestion, index) in matchedPromptSuggestions"
+          :key="suggestion"
+          class="prompt-waterfall-item"
+          type="button"
+          :disabled="disabled"
+          :style="{ '--waterfall-index': String(index) }"
+          @click="applyPromptSuggestion(suggestion)"
+        >
+          <component
+            :is="activeStarter?.icon"
+            class="prompt-waterfall-icon"
+            :size="15"
+            aria-hidden="true"
+          />
+          <span>{{ suggestion }}</span>
+        </button>
+      </div>
+    </Transition>
     <AttachmentBlocks
       v-if="centered && attachments?.length"
       class="input-attachments centered-attachments"
@@ -542,6 +691,195 @@ function handleFileChange(event: Event) {
 .input-attachments.centered-attachments {
   top: calc(100% + 8px);
   bottom: auto;
+}
+
+.prompt-starter-grid,
+.prompt-waterfall-list {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 0;
+  right: 0;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.prompt-starter-grid {
+  display: grid;
+  left: 50%;
+  right: auto;
+  width: min(920px, calc(100vw - 48px));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-12);
+  transform: translateX(-50%);
+}
+
+.prompt-starter-card {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-16);
+  min-width: 0;
+  min-height: 124px;
+  padding: var(--space-16);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--color-surface-raised) 86%, transparent);
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.94);
+  transform-origin: center;
+  animation: starter-card-scale 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.prompt-starter-card:nth-child(2) {
+  animation-delay: 36ms;
+}
+
+.prompt-starter-card:nth-child(3) {
+  animation-delay: 72ms;
+}
+
+.prompt-starter-card:nth-child(4) {
+  animation-delay: 108ms;
+}
+
+.prompt-starter-card:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-primary) 54%, var(--color-border));
+  background: var(--color-primary-softer);
+  color: var(--color-text);
+  transform: translateY(-2px);
+}
+
+.prompt-starter-card:disabled,
+.prompt-waterfall-item:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.prompt-starter-icon {
+  flex: 0 0 auto;
+  color: var(--color-primary);
+}
+
+.prompt-starter-card:nth-child(1) .prompt-starter-icon {
+  color: #5b8def;
+}
+
+.prompt-starter-card:nth-child(2) .prompt-starter-icon {
+  color: #d18b45;
+}
+
+.prompt-starter-card:nth-child(3) .prompt-starter-icon {
+  color: #48a868;
+}
+
+.prompt-starter-card:nth-child(4) .prompt-starter-icon {
+  color: #d85a7f;
+}
+
+.prompt-starter-title {
+  overflow: hidden;
+  min-width: 0;
+  color: inherit;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-waterfall-list {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.prompt-waterfall-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  min-height: 34px;
+  padding: 0 var(--space-12);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(calc((var(--waterfall-index, 0) + 1) * -6px));
+  animation: waterfall-drop 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(var(--waterfall-index, 0) * 48ms);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.prompt-waterfall-item:hover:not(:disabled) {
+  background: var(--color-primary-softer);
+  color: var(--color-text);
+  transform: translateX(4px);
+}
+
+.prompt-waterfall-icon {
+  flex: 0 0 18px;
+  width: 18px;
+  color: var(--color-primary);
+}
+
+.prompt-waterfall-item span {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.starter-panel-enter-active,
+.starter-panel-leave-active {
+  transition:
+    opacity 180ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: center top;
+}
+
+.starter-grid-panel-enter-active,
+.starter-grid-panel-leave-active {
+  transition:
+    opacity 180ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: center top;
+}
+
+.starter-panel-enter-from,
+.starter-panel-leave-to {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+.starter-grid-panel-enter-from,
+.starter-grid-panel-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) scale(0.94);
+}
+
+.starter-grid-panel-enter-to,
+.starter-grid-panel-leave-from {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
 }
 
 .input-container {
@@ -1063,6 +1401,22 @@ function handleFileChange(event: Event) {
   to { transform: translateY(0); opacity: 1; }
 }
 
+@keyframes starter-card-scale {
+  from { transform: scale(0.94); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes waterfall-drop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .send-btn:hover:not(:disabled) {
   background: var(--color-accent);
   color: #0a0a0a;
@@ -1103,6 +1457,11 @@ function handleFileChange(event: Event) {
 }
 
 @container (max-width: 360px) {
+  .prompt-starter-grid {
+    width: min(520px, calc(100vw - 32px));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .model-config-trigger {
     flex: 0 0 30px;
     width: 30px;
@@ -1121,6 +1480,10 @@ function handleFileChange(event: Event) {
 }
 
 @container (max-width: 288px) {
+  .prompt-starter-grid {
+    display: none;
+  }
+
   .web-search-toggle {
     display: none;
   }
