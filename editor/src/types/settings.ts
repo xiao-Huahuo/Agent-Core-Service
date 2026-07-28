@@ -9,6 +9,9 @@
 /** Theme mode applied to documentElement. */
 export type ThemeMode = 'dark' | 'light' | 'system'
 
+/** Left workspace sidebar display density. */
+export type SidebarDisplayMode = 'icons' | 'management'
+
 /** Persisted editor profile settings. */
 export interface UserSettingsProfile {
   /** Stable user identifier shared with the existing console front-end. */

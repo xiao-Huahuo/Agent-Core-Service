@@ -19,9 +19,11 @@ import FileResourceManager from '@/components/editor_workspace/FileResourceManag
 import SelectionToolbar from '@/components/editor_workspace/SelectionToolbar.vue'
 import TodoSidebar from '@/components/editor_workspace/TodoSidebar.vue'
 import TopCommandBar from '@/components/editor_workspace/TopCommandBar.vue'
+import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graphTypes'
 
+const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 const AgentPage = defineAsyncComponent(() => import('@/views/AgentPage.vue'))
 const GraphPane = defineAsyncComponent(() => import('@/components/editor_workspace/GraphPane.vue'))
@@ -38,7 +40,8 @@ function handleAskAgent(text: string) {
   workspaceStore.agentSidebarOpen = true
 }
 
-const ACTIVITY_BAR_WIDTH = 40
+const ACTIVITY_BAR_ICON_WIDTH = 40
+const ACTIVITY_BAR_MANAGEMENT_WIDTH = 136
 const DEFAULT_FILE_WIDTH = 280
 const DEFAULT_AGENT_WIDTH = 340
 const MIN_PANEL_WIDTH = 180
@@ -61,6 +64,9 @@ const visibleAgentSidebarOpen = computed(() => (agentSidebarOpen.value || todoSi
 const showConflictDialog = computed(() => {
   return workspaceStore.conflictDialog.open
 })
+const activityBarWidth = computed(() => (
+  settingsStore.sidebarDisplayMode === 'management' ? ACTIVITY_BAR_MANAGEMENT_WIDTH : ACTIVITY_BAR_ICON_WIDTH
+))
 
 // 双向同步: 允许子组件通过 store 打开 Agent 侧边栏
 watch(() => workspaceStore.agentSidebarOpen, (val) => {
@@ -76,6 +82,7 @@ watch(agentSidebarOpen, (val) => {
 
 
 const workspaceGridStyle = computed<Record<string, string>>(() => ({
+  '--activity-col-width': `${activityBarWidth.value}px`,
   '--file-col-width': visibleFileSidebarOpen.value ? `${fileWidth.value}px` : '0px',
   '--file-resizer-width': visibleFileSidebarOpen.value ? '4px' : '0px',
   '--agent-col-width': visibleAgentSidebarOpen.value ? `${agentWidth.value}px` : '0px',
@@ -298,7 +305,7 @@ function handleResizeMove(event: PointerEvent) {
   }
   const rect = grid.getBoundingClientRect()
   if (activeResizeTarget.value === 'file') {
-    const nextWidth = event.clientX - rect.left - ACTIVITY_BAR_WIDTH
+    const nextWidth = event.clientX - rect.left - activityBarWidth.value
     if (nextWidth < COLLAPSE_THRESHOLD) {
       fileSidebarOpen.value = false
       return
@@ -319,7 +326,7 @@ function handleResizeMove(event: PointerEvent) {
     agentSidebarOpen.value = true
   }
   const fileColumnWidth = fileSidebarOpen.value ? fileWidth.value : 0
-  const maxAgentWidth = Math.max(MIN_PANEL_WIDTH, rect.width - ACTIVITY_BAR_WIDTH - fileColumnWidth - 8)
+  const maxAgentWidth = Math.max(MIN_PANEL_WIDTH, rect.width - activityBarWidth.value - fileColumnWidth - 8)
   agentWidth.value = clamp(nextWidth, MIN_PANEL_WIDTH, maxAgentWidth)
 }
 
@@ -367,7 +374,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="workspace-page" :class="{ resizing: activeResizeTarget || activeTodoResize }">
-    <TopCommandBar @toggle-agent="toggleAgentSidebar" @toggle-todo="toggleTodoSidebar" @open-agent-page="openAgentPage" @open-settings="openSettings" />
+    <TopCommandBar @toggle-agent="toggleAgentSidebar" @open-agent-page="openAgentPage" @open-settings="openSettings" />
     <div
       ref="workspaceGrid"
       class="workspace-grid"
@@ -388,17 +395,20 @@ onBeforeUnmount(() => {
         :ingestion-active="workspaceStore.mainView === 'ingestion'"
         :agent-active="workspaceStore.mainView === 'agent'"
         :graph-active="workspaceStore.mainView === 'graph'"
+        :todo-active="workspaceStore.todoSidebarOpen"
         :dashboard-active="workspaceStore.mainView === 'dashboard'"
         :debug-active="workspaceStore.mainView === 'debug'"
         :search-active="workspaceStore.mainView === 'search'"
         :skills-active="workspaceStore.mainView === 'skills'"
         :settings-active="workspaceStore.mainView === 'settings'"
+        :display-mode="settingsStore.sidebarDisplayMode"
         @toggle-file="toggleFileSidebar"
         @open-resources="openResources"
         @open-library="openLibrary"
         @open-ingestion="openIngestion"
         @toggle-agent="openAgentPage"
         @toggle-graph="toggleGraphView"
+        @toggle-todo="toggleTodoSidebar"
         @open-dashboard="openDashboard"
         @open-debug="openDebug"
         @open-search="openSearch"
@@ -466,7 +476,7 @@ onBeforeUnmount(() => {
 .workspace-grid {
   display: grid;
   grid-template-columns:
-    40px var(--file-col-width) var(--file-resizer-width) minmax(0, 1fr)
+    var(--activity-col-width) var(--file-col-width) var(--file-resizer-width) minmax(0, 1fr)
     var(--agent-resizer-width) var(--agent-col-width);
   column-gap: 0;
   min-width: 0;
@@ -664,7 +674,7 @@ onBeforeUnmount(() => {
   }
 
   .workspace-grid {
-    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-columns: var(--activity-col-width) minmax(0, 1fr);
     grid-template-rows: var(--file-mobile-row) minmax(520px, 70vh) var(--agent-mobile-row);
     min-height: auto;
     gap: 0;

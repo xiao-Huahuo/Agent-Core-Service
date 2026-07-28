@@ -1,6 +1,21 @@
 # CHANGE HISTORY
 
 ## 2026-07-28
+- [x] 修复管理栏点击波纹遮挡文字:
+  - `ActivityBar.vue` 在生成新点击波纹前清理旧波纹,并将波纹层级放到图标与文字下方,避免管理栏模式下多次点击后遮盖标签文字。
+- [x] 增加左侧栏展示模式与暗色细节调整:
+  - 暗色主题左侧活动栏背景统一为纯黑。
+  - `TopCommandBar.vue` 将知识库名称区域改为内容宽度驱动并限制区域占位,避免名称实际宽度之外的顶栏空间被占用。
+  - `settings.ts` 新增本地持久化的 `sidebarDisplayMode`,外观设置新增“页面 / 侧边栏展示”开关,支持“图标栏”和“管理栏”。
+  - `ActivityBar.vue` 与 `EditorWorkspace.vue` 支持管理栏模式,在图标右侧显示文字并平滑切换栏宽和文字显隐。
+- [x] 调整编辑器主界面工具栏与队列入口:
+  - 暗色主题顶栏背景统一为纯黑,并取消 Electron 主窗口最小宽高限制。
+  - `TopCommandBar.vue` 改为弹性布局,搜索框保留且不再与知识库名称或右侧图标重叠;顶栏动作按钮在窄宽度下逐步收缩或隐藏。
+  - `ActivityBar.vue` 将 Agent 图标替换为无底图标图片,并把待办入口移动到图谱按钮下方。
+  - `IngestionProgressView.vue` 在入库队列和图谱抽取队列右上角刷新按钮左侧分别新增对应动作按钮。
+- [x] 调整顶部工具栏知识库切换入口:
+  - `TopCommandBar.vue` 移除知识库名称下方的路径文字按钮,改为在知识库名称左侧显示无背景文件夹图标按钮;点击仍复用原有目录选择与知识库切换流程,悬停通过标题显示完整知识库路径.
+  - 新增 `TopCommandBar.spec.ts` 回归测试,覆盖路径不再作为左侧文字渲染、文件夹按钮保留路径悬停提示以及点击按钮触发原有切库流程.
 - [x] 重做 Agent 工具清理与工具条摘要文案:
   - 从内置工具注册与实现中删除 `get_current_utc_time`、回显文本、UUID、数学计算、JSON 解析/字段提取、文本统计、内置工具自查和 `update_exploration_state` 等冗余工具。
   - `search_knowledge` 中文名改为“全库联合搜索”,并明确 `get_knowledge_context`、`search_knowledge`、`list_knowledge_files` 在正文召回、文件名/全文搜索和目录列举之间的使用边界。

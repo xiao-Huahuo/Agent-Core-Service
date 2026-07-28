@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onMounted } from 'vue'
-import { CheckSquare, DatabaseZap, Maximize2, Minus, Network, X } from 'lucide-vue-next'
+import { DatabaseZap, FolderOpen, Maximize2, Minus, Network, X } from 'lucide-vue-next'
 
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -46,12 +46,10 @@ function goToStorageSettings() {
 const desktopApi = window.agentEditorDesktop
 const emit = defineEmits<{
   toggleAgent: []
-  toggleTodo: []
   openAgentPage: []
   openSettings: []
 }>()
 const graphRebuilding = computed(() => workspaceStore.graphQueue.length > 0)
-const todoActive = computed(() => workspaceStore.todoSidebarOpen)
 const agentActive = computed(() => workspaceStore.agentSidebarOpen)
 const logoSrc = new URL('../../assets/images/无底图标.png', import.meta.url).href
 
@@ -132,6 +130,16 @@ onMounted(() => nextTick(autoResizeInput))
         <img :src="logoSrc" class="logo-img" alt="MetaWeave" />
       </button>
       <div class="brand-copy">
+        <button
+          class="library-folder-btn"
+          type="button"
+          aria-label="切换知识库"
+          :disabled="switchingRoot"
+          :title="settingsStore.profile.knowledgeDir"
+          @click="openRootPicker"
+        >
+          <FolderOpen :size="15" />
+        </button>
         <input
           ref="nameInputRef"
           v-model="libraryNameDraft"
@@ -144,15 +152,6 @@ onMounted(() => nextTick(autoResizeInput))
           @keydown.enter.prevent="commitLibraryName"
           @keydown.escape.prevent="libraryNameDraft = activeLibraryName"
         />
-        <button
-          class="root-path-btn"
-          type="button"
-          :disabled="switchingRoot"
-          :title="settingsStore.profile.knowledgeDir"
-          @click="openRootPicker"
-        >
-          {{ settingsStore.profile.knowledgeDir }}
-        </button>
       </div>
       <div v-if="workspaceStore.ingestionProgressVisible" class="ingestion-progress" aria-live="polite">
         <span class="ingestion-progress-track" aria-hidden="true">
@@ -189,16 +188,7 @@ onMounted(() => nextTick(autoResizeInput))
         <span class="agent-play">AGENT</span>
       </button>
       <button
-        class="todo-link"
-        :class="{ active: todoActive }"
-        type="button"
-        title="切换待办列表"
-        @click="emit('toggleTodo')"
-      >
-        <CheckSquare :size="14" />
-      </button>
-      <button
-        class="todo-link"
+        class="todo-link topbar-optional"
         :class="{ refreshing: graphRebuilding }"
         type="button"
         :disabled="graphRebuilding"
@@ -208,7 +198,7 @@ onMounted(() => nextTick(autoResizeInput))
         <Network :size="14" />
       </button>
       <button
-        class="todo-link"
+        class="todo-link topbar-optional"
         :class="{ refreshing: workspaceStore.refreshing }"
         type="button"
         :disabled="workspaceStore.refreshing"
@@ -311,16 +301,19 @@ onMounted(() => nextTick(autoResizeInput))
   display: flex;
   align-items: center;
   gap: var(--space-8);
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: min(280px, 30vw);
   overflow: hidden;
-  flex-shrink: 0;
   z-index: 1;
   padding-left: var(--space-4);
 }
 
 .brand-copy {
-  display: grid;
-  gap: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 0 1 auto;
   min-width: 0;
   -webkit-app-region: no-drag;
 }
@@ -355,11 +348,12 @@ onMounted(() => nextTick(autoResizeInput))
   display: block;
   width: auto;
   min-width: 40px;
+  max-width: min(220px, 24vw);
   height: 18px;
   padding: 0;
   border: 0;
   outline: 0;
-  overflow: visible;
+  overflow: hidden;
   background: transparent;
   color: var(--color-text);
   font-size: calc(13px * var(--font-scale));
@@ -373,41 +367,38 @@ onMounted(() => nextTick(autoResizeInput))
   opacity: 0.62;
 }
 
-.root-path-btn {
-  display: block;
-  width: fit-content;
-  max-width: 100%;
+.library-folder-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: var(--color-text-muted);
-  font-family: var(--font-ui);
-  font-size: calc(10px * var(--font-scale));
-  line-height: 1.1;
-  text-align: left;
-  white-space: nowrap;
   cursor: pointer;
   transition: color var(--transition-fast);
 }
 
-.root-path-btn:hover:not(:disabled) {
+.library-folder-btn:hover:not(:disabled) {
   color: var(--color-primary);
 }
 
-.root-path-btn:disabled {
+.library-folder-btn:disabled {
   cursor: wait;
   opacity: 0.62;
 }
 
 .search-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 320px;
+  flex: 1 1 336px;
+  min-width: 220px;
+  max-width: 336px;
   -webkit-app-region: no-drag;
 }
 
@@ -426,7 +417,9 @@ onMounted(() => nextTick(autoResizeInput))
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   -webkit-app-region: no-drag;
   z-index: 1;
 }
@@ -989,17 +982,65 @@ kbd {
   color: white;
 }
 
+@media (max-width: 1040px) {
+  .github-btn-topbar {
+    display: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .agent-play-btn {
+    width: 24px;
+    padding: 0;
+    gap: 0;
+  }
+
+  .agent-play,
+  .agent-now {
+    display: none;
+  }
+
+  .agent-play-btn:hover .agent-play-img {
+    transform: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .topbar {
+    gap: var(--space-6);
+  }
+
+  .brand {
+    max-width: 180px;
+  }
+
+  .search-center {
+    min-width: 180px;
+  }
+
+  .topbar-optional {
+    display: none;
+  }
+}
+
 @media (max-width: 760px) {
   .topbar {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
     padding: var(--space-10);
   }
 
   .actions {
-    width: 100%;
-    overflow-x: auto;
-    padding-bottom: var(--space-2);
+    flex-shrink: 0;
+  }
+
+  .brand {
+    flex: 0 1 auto;
+    max-width: 132px;
+  }
+
+  .search-center {
+    flex: 1 1 180px;
+    min-width: 160px;
   }
 }
 

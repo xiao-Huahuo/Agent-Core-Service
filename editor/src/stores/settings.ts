@@ -15,7 +15,7 @@ import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, save
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
 import type { SettingsKnowledgeLibraryResponse, SettingsProfileResponse } from '@/api/settings'
 import type { KnowledgeLibraryProfile } from '@/types/settings'
-import type { ThemeMode, UserSettingsProfile } from '@/types/settings'
+import type { SidebarDisplayMode, ThemeMode, UserSettingsProfile } from '@/types/settings'
 
 const THEME_KEY = 'agent_editor_theme_mode'
 const PROFILE_KEY = 'agent_editor_profile'
@@ -24,6 +24,7 @@ const AGENT_LOOP_MODE_KEY = 'agent_editor_loop_mode'
 const AGENT_ACCESS_MODE_KEY = 'agent_editor_access_mode'
 const SHOW_INDEX_COLUMN_KEY = 'agent_editor_show_index_column'
 const SHOW_GRAPH_COLUMN_KEY = 'agent_editor_show_graph_column'
+const SIDEBAR_DISPLAY_MODE_KEY = 'agent_editor_sidebar_display_mode'
 
 const DEFAULT_UI_FONT_STACK = 'var(--font-ui-default)'
 const DEFAULT_TEXT_FONT_STACK = 'var(--font-text-default)'
@@ -200,6 +201,10 @@ function normalizeAgentAccessMode(mode: string | null): AgentAccessMode {
   return 'sandbox'
 }
 
+function normalizeSidebarDisplayMode(mode: string | null): SidebarDisplayMode {
+  return mode === 'management' ? 'management' : 'icons'
+}
+
 function loadProfile(): UserSettingsProfile {
   const raw = localStorage.getItem(PROFILE_KEY)
   if (!raw) {
@@ -236,6 +241,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /** Whether to show semantic graph status column/icons in file tree and file resource manager. */
   const showGraphColumn = ref(localStorage.getItem(SHOW_GRAPH_COLUMN_KEY) !== 'false')
+
+  /** Left workspace sidebar mode: icon-only rail or wider management rail. */
+  const sidebarDisplayMode = ref<SidebarDisplayMode>(normalizeSidebarDisplayMode(localStorage.getItem(SIDEBAR_DISPLAY_MODE_KEY)))
 
   /** Whether the editor shell can enter workspace routes. */
   const hasUserId = computed(() => profile.value.userId.trim().length > 0)
@@ -361,6 +369,11 @@ export const useSettingsStore = defineStore('settings', () => {
   function setShowGraphColumn(value: boolean) {
     showGraphColumn.value = value
     localStorage.setItem(SHOW_GRAPH_COLUMN_KEY, String(value))
+  }
+
+  function setSidebarDisplayMode(mode: SidebarDisplayMode) {
+    sidebarDisplayMode.value = normalizeSidebarDisplayMode(mode)
+    localStorage.setItem(SIDEBAR_DISPLAY_MODE_KEY, sidebarDisplayMode.value)
   }
 
   function setAgentLoopMode(mode: AgentLoopMode) {
@@ -595,6 +608,7 @@ export const useSettingsStore = defineStore('settings', () => {
     chatMode,
     agentLoopMode,
     agentAccessMode,
+    sidebarDisplayMode,
     profile,
     hasUserId,
     activeKnowledgeLibrary,
@@ -606,6 +620,7 @@ export const useSettingsStore = defineStore('settings', () => {
     toggleChatMode,
     setAgentLoopMode,
     setAgentAccessMode,
+    setSidebarDisplayMode,
     updateProfile,
     setUiFontFamilies,
     setTextFontFamilies,

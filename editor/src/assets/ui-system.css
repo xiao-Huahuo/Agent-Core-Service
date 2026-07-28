@@ -68,8 +68,8 @@
   --color-chrome-bg-top: rgba(8, 8, 8, 0.96);
   --color-chrome-bg-bottom: rgba(0, 0, 0, 0.94);
   --color-chrome-bg-solid: rgba(0, 0, 0, 0.90);
-  --color-chrome-topbar-bg: #111116;
-  --color-chrome-rail-bg: #050507;
+  --color-chrome-topbar-bg: #000000;
+  --color-chrome-rail-bg: #000000;
   --color-canvas: #080808;
   --color-canvas-soft: #000000;
   --color-surface: #0a0a0a;

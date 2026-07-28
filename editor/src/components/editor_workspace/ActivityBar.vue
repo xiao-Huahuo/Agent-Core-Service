@@ -6,9 +6,11 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { Activity, BookOpen, Bot, Bug, DatabaseZap, Files, Folder, Search, Settings, Share2, Sparkles } from 'lucide-vue-next'
+import { Activity, BookOpen, Bug, CheckSquare, DatabaseZap, Files, Folder, Search, Settings, Share2, Sparkles } from 'lucide-vue-next'
+import type { SidebarDisplayMode } from '@/types/settings'
 
 defineProps<{
+  displayMode: SidebarDisplayMode
   fileOpen: boolean
   agentOpen: boolean
   resourcesActive: boolean
@@ -16,6 +18,7 @@ defineProps<{
   ingestionActive: boolean
   agentActive: boolean
   graphActive: boolean
+  todoActive: boolean
   dashboardActive: boolean
   debugActive: boolean
   searchActive: boolean
@@ -30,6 +33,7 @@ const emit = defineEmits<{
   openIngestion: []
   toggleAgent: []
   toggleGraph: []
+  toggleTodo: []
   openDashboard: []
   openDebug: []
   openSearch: []
@@ -39,15 +43,19 @@ const emit = defineEmits<{
 
 function handleRipple(e: MouseEvent) {
   const el = e.currentTarget as HTMLElement
+  el.querySelectorAll('.ripple-effect').forEach((item) => item.remove())
   const ripple = document.createElement('span')
   ripple.className = 'ripple-effect'
   el.appendChild(ripple)
   ripple.addEventListener('animationend', () => ripple.remove(), { once: true })
+  window.setTimeout(() => ripple.remove(), 450)
 }
+
+const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta.url).href
 </script>
 
 <template>
-  <nav class="activity-bar" aria-label="Editor activity bar">
+  <nav class="activity-bar" :class="{ management: displayMode === 'management' }" aria-label="Editor activity bar">
     <button
       class="activity-button"
       :class="{ active: fileOpen }"
@@ -58,6 +66,7 @@ function handleRipple(e: MouseEvent) {
       @click="emit('toggleFile')"
     >
       <Files :size="18" />
+      <span class="activity-label">文件</span>
     </button>
     <button
       class="activity-button"
@@ -69,6 +78,7 @@ function handleRipple(e: MouseEvent) {
       @click="emit('openResources')"
     >
       <Folder :size="18" />
+      <span class="activity-label">资源</span>
     </button>
     <button
       class="activity-button"
@@ -80,6 +90,7 @@ function handleRipple(e: MouseEvent) {
       @click="emit('openLibrary')"
     >
       <BookOpen :size="18" />
+      <span class="activity-label">图书馆</span>
     </button>
     <button
       class="activity-button"
@@ -91,6 +102,7 @@ function handleRipple(e: MouseEvent) {
       @click="emit('openIngestion')"
     >
       <DatabaseZap :size="18" />
+      <span class="activity-label">入库</span>
     </button>
     <button
       class="activity-button"
@@ -102,6 +114,7 @@ function handleRipple(e: MouseEvent) {
       @click="emit('openSearch')"
     >
       <Search :size="18" />
+      <span class="activity-label">搜索</span>
     </button>
     <button
       class="activity-button"
@@ -112,7 +125,8 @@ function handleRipple(e: MouseEvent) {
       @mousedown.prevent="handleRipple"
       @click="emit('toggleAgent')"
     >
-      <Bot :size="18" />
+      <img :src="agentIconSrc" class="activity-agent-icon" alt="" />
+      <span class="activity-label">Agent</span>
     </button>
     <button
       class="activity-button"
@@ -124,6 +138,7 @@ function handleRipple(e: MouseEvent) {
       @click="emit('openSkills')"
     >
       <Sparkles :size="18" />
+      <span class="activity-label">Skills</span>
     </button>
     <button
       class="activity-button"
@@ -135,6 +150,19 @@ function handleRipple(e: MouseEvent) {
       @click="emit('toggleGraph')"
     >
       <Share2 :size="18" />
+      <span class="activity-label">图谱</span>
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: todoActive }"
+      type="button"
+      title="Todo"
+      aria-label="Todo"
+      @mousedown.prevent="handleRipple"
+      @click="emit('toggleTodo')"
+    >
+      <CheckSquare :size="18" />
+      <span class="activity-label">待办</span>
     </button>
     <button
       class="activity-button"
@@ -146,6 +174,7 @@ function handleRipple(e: MouseEvent) {
       @click="emit('openDashboard')"
     >
       <Activity :size="18" />
+      <span class="activity-label">看板</span>
     </button>
     <div class="bottom-group">
       <button
@@ -158,6 +187,7 @@ function handleRipple(e: MouseEvent) {
       @click="emit('openDebug')"
       >
         <Bug :size="18" />
+        <span class="activity-label">Debug</span>
       </button>
       <button
         class="activity-button"
@@ -169,6 +199,7 @@ function handleRipple(e: MouseEvent) {
       @click="emit('openSettings')"
       >
         <Settings :size="18" />
+        <span class="activity-label">设置</span>
       </button>
     </div>
   </nav>
@@ -184,12 +215,19 @@ function handleRipple(e: MouseEvent) {
   height: 100%;
   padding: var(--space-8) var(--space-4);
   background: var(--color-chrome-rail-bg);
+  transition: padding 180ms ease;
+}
+
+.activity-bar.management {
+  align-items: stretch;
+  padding: var(--space-8) var(--space-6);
 }
 
 .activity-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0;
   width: 32px;
   height: 32px;
   border: 1px solid transparent;
@@ -198,7 +236,21 @@ function handleRipple(e: MouseEvent) {
   color: var(--color-text-muted);
   position: relative;
   overflow: hidden;
-  transition: background 0.25s, border-color 0.25s, color 0.25s;
+  transition:
+    width 180ms ease,
+    gap 180ms ease,
+    padding 180ms ease,
+    background 0.25s,
+    border-color 0.25s,
+    color 0.25s;
+}
+
+.activity-bar.management .activity-button {
+  justify-content: flex-start;
+  width: 100%;
+  padding: 0 var(--space-8);
+  gap: var(--space-8);
+  border-radius: var(--radius-sm);
 }
 
 .ripple-effect {
@@ -210,7 +262,7 @@ function handleRipple(e: MouseEvent) {
   animation: ripple-expand 0.35s ease-out;
   pointer-events: none;
   will-change: transform;
-  z-index: 2;
+  z-index: 0;
 }
 
 @keyframes ripple-expand {
@@ -235,11 +287,61 @@ function handleRipple(e: MouseEvent) {
   color: #ffffff;
 }
 
+.activity-agent-icon {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+}
+
+.activity-button :deep(svg) {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.activity-label {
+  display: inline-block;
+  position: relative;
+  z-index: 1;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  color: currentColor;
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateX(-6px);
+  transition:
+    max-width 180ms ease,
+    opacity 140ms ease,
+    transform 180ms ease;
+}
+
+.activity-bar.management .activity-label {
+  max-width: 72px;
+  opacity: 1;
+  transform: translateX(0);
+  transition-delay: 40ms;
+}
+
+.activity-button.active .activity-agent-icon {
+  filter: brightness(0) invert(1);
+}
+
 .bottom-group {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-4);
   margin-top: auto;
+}
+
+.activity-bar.management .bottom-group {
+  align-items: stretch;
+  width: 100%;
 }
 </style>

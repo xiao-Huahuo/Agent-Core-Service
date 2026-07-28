@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
-import type { ThemeMode } from '@/types/settings'
+import type { SidebarDisplayMode, ThemeMode } from '@/types/settings'
 
 const uiFontFamiliesDraft = defineModel<string[]>('uiFontFamiliesDraft', { required: true })
 const textFontFamiliesDraft = defineModel<string[]>('textFontFamiliesDraft', { required: true })
@@ -18,6 +18,7 @@ const themeSoftColorDraft = defineModel<string>('themeSoftColorDraft', { require
 const props = defineProps<{
   themeOptions: Array<{ value: ThemeMode; label: string }>
   themeMode: ThemeMode
+  sidebarDisplayMode: SidebarDisplayMode
   availableFontFamilies: string[]
   fontsLoading: boolean
 }>()
@@ -29,6 +30,7 @@ const emit = defineEmits<{
   previewThemeColors: []
   saveThemeColors: []
   resetThemeColors: []
+  setSidebarDisplayMode: [mode: SidebarDisplayMode]
 }>()
 
 const activeFontPicker = ref<'ui' | 'text' | null>(null)
@@ -214,6 +216,30 @@ onBeforeUnmount(() => {
     <div class="model-actions appearance-actions">
       <button class="save-model-btn" type="button" @click="$emit('saveThemeColors')">保存主题色</button>
       <button class="cancel-model-btn" type="button" @click="$emit('resetThemeColors')">重置默认色</button>
+    </div>
+
+    <h3 style="margin-top: 20px">页面</h3>
+    <div class="page-display-control">
+      <div class="page-display-header">
+        <label>侧边栏展示</label>
+        <span>{{ sidebarDisplayMode === 'icons' ? '图标栏' : '管理栏' }}</span>
+      </div>
+      <div class="page-display-row" role="group" aria-label="侧边栏展示">
+        <button
+          type="button"
+          :class="{ active: sidebarDisplayMode === 'icons' }"
+          @click="$emit('setSidebarDisplayMode', 'icons')"
+        >
+          图标栏
+        </button>
+        <button
+          type="button"
+          :class="{ active: sidebarDisplayMode === 'management' }"
+          @click="$emit('setSidebarDisplayMode', 'management')"
+        >
+          管理栏
+        </button>
+      </div>
     </div>
 
     <h3 style="margin-top: 20px">字体</h3>

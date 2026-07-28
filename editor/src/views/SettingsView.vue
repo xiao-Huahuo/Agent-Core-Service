@@ -598,6 +598,7 @@ onBeforeUnmount(() => {
         v-model:ui-font-families-draft="uiFontFamiliesDraft"
         :available-font-families="availableFontFamilies"
         :fonts-loading="fontsLoading"
+        :sidebar-display-mode="settingsStore.sidebarDisplayMode"
         :theme-mode="settingsStore.themeMode"
         :theme-options="themeOptions"
         @preview-theme-colors="handlePreviewThemeColors"
@@ -605,6 +606,7 @@ onBeforeUnmount(() => {
         @save-font-families="handleSaveFontFamilies"
         @save-font-size="handleSaveFontSize"
         @save-theme-colors="handleSaveThemeColors"
+        @set-sidebar-display-mode="settingsStore.setSidebarDisplayMode"
         @set-theme-mode="settingsStore.setThemeMode"
       />
 
@@ -1169,6 +1171,56 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.page-display-control {
+  margin: var(--space-10) 0 var(--space-16);
+  padding-left: 82px;
+}
+
+.page-display-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  margin-bottom: var(--space-6);
+}
+
+.page-display-header label {
+  width: 72px;
+  margin-left: -82px;
+  color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.page-display-header span {
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
+}
+
+.page-display-row {
+  display: inline-flex;
+  gap: var(--space-6);
+}
+
+.page-display-row button {
+  height: 28px;
+  padding: 0 var(--space-16);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+  color: var(--color-text-secondary);
+  font-size: calc(12px * var(--font-scale));
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.page-display-row button:hover,
+.page-display-row button.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
 .color-text {
   width: 110px;
   height: 28px;
@@ -1657,4 +1709,3 @@ onBeforeUnmount(() => {
   margin: var(--space-4) 0;
 }
 </style>
-

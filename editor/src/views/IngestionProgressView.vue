@@ -11,10 +11,12 @@ import {
   BrainCircuit,
   CheckCircle2,
   CircleDashed,
+  DatabaseZap,
   FileText,
   Folder,
   History,
   Loader2,
+  Network,
   RefreshCw,
   Trash2,
   XCircle,
@@ -82,6 +84,18 @@ const historyColumns = 'minmax(220px, 2fr) 80px 140px 132px 160px 1fr'
 
 async function refresh() {
   await workspaceStore.loadKnowledgeTree()
+}
+
+function startIngestion() {
+  workspaceStore.ingestionViewTab = 'queue'
+  workspaceStore.mainView = 'ingestion'
+  workspaceStore.markIndexing()
+}
+
+function startGraphExtraction() {
+  workspaceStore.ingestionViewTab = 'graph-queue'
+  workspaceStore.mainView = 'ingestion'
+  workspaceStore.startGraphRebuild()
 }
 
 function formatSize(size?: number): string {
@@ -170,6 +184,30 @@ function historySummary(row: IngestionHistoryItem): string {
         </button>
       </div>
       <div class="heading-actions">
+        <button
+          v-if="activeTab === 'queue'"
+          class="topbar-action-clone"
+          :class="{ refreshing: workspaceStore.refreshing }"
+          type="button"
+          :disabled="workspaceStore.refreshing"
+          title="重新灌库"
+          aria-label="重新灌库"
+          @click="startIngestion"
+        >
+          <DatabaseZap :size="14" />
+        </button>
+        <button
+          v-else-if="activeTab === 'graph-queue'"
+          class="topbar-action-clone"
+          :class="{ refreshing: graphQueueRows.length > 0 }"
+          type="button"
+          :disabled="graphQueueRows.length > 0"
+          title="图谱抽取"
+          aria-label="图谱抽取"
+          @click="startGraphExtraction"
+        >
+          <Network :size="14" />
+        </button>
         <button class="refresh-btn" type="button" title="刷新" aria-label="刷新" @click="refresh">
           <RefreshCw :size="16" class="refresh-svg" />
         </button>
@@ -445,6 +483,47 @@ function historySummary(row: IngestionHistoryItem): string {
 
 .refresh-btn:hover .refresh-svg {
   stroke: var(--color-primary);
+}
+
+.topbar-action-clone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.topbar-action-clone :deep(svg) {
+  transition: transform 0.3s;
+}
+
+.topbar-action-clone:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.topbar-action-clone:hover:not(:disabled) :deep(svg) {
+  transform: rotate(90deg);
+}
+
+.topbar-action-clone.refreshing :deep(svg) {
+  animation: spin 900ms linear infinite;
+}
+
+.topbar-action-clone:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .file-table {
