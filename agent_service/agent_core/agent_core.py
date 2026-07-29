@@ -569,13 +569,15 @@ class AgentCore:
             inputs["task_list"] = self.task_list_service.get_task_list(session_id)
         if self.skill_service is not None:
             try:
-                skill_index = self.skill_service.get_enabled_skill_index(user_id=user_id)
+                skill_prompt = prompt or self._last_human_text(messages)
+                skill_index = self.skill_service.select_skill_candidates(user_id=user_id, prompt=skill_prompt)
                 inputs["skill_index"] = skill_index
                 inputs["active_skills"] = self.skill_service.route_skills(
                     user_id=user_id,
-                    prompt=prompt or self._last_human_text(messages),
+                    prompt=skill_prompt,
                     llm_config=llm_config,
                     task_scheduler=self.task_scheduler,
+                    candidate_skills=skill_index,
                 )
             except Exception:
                 logger.exception("Skill routing failed | user=%s session=%s", user_id, session_id)

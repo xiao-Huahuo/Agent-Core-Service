@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { buildLatencyTurns, buildRagHistory, buildRagMetrics, buildTokenSeries } from '../useObsData'
+import { buildContextAssembly, buildLatencyTurns, buildRagHistory, buildRagMetrics, buildTokenSeries } from '../useObsData'
 
 describe('buildTokenSeries', () => {
   it('aggregates token usage by large/small model pool only', () => {
@@ -259,5 +259,32 @@ describe('buildLatencyTurns', () => {
       agent: 130,
       planner: 50,
     })
+  })
+})
+
+describe('buildContextAssembly', () => {
+  it('splits skill routing sections into a dedicated context block', () => {
+    const assembly = buildContextAssembly([
+      {
+        role: 'system',
+        content: [
+          '核心系统提示',
+          '[Candidate skills]',
+          '- builtin:web-access: web-access (builtin): 联网访问',
+          '[Routed skills for this turn]',
+          '--- Skill: web-access [builtin:web-access] ---',
+          'Use browser tools for web tasks.',
+          '--- End Skill ---',
+        ].join('\n'),
+      },
+      { role: 'user', content: '搜索最新资料' },
+    ])
+
+    const skillBlock = assembly.blocks.find((block) => block.type === 'skills')
+
+    expect(skillBlock?.title).toBe('Skill 候选与正文')
+    expect(skillBlock?.lines).toContain('[Candidate skills]')
+    expect(skillBlock?.lines).toContain('[Routed skills for this turn]')
+    expect(assembly.blocks.find((block) => block.type === 'system')?.lines).toEqual(['核心系统提示'])
   })
 })

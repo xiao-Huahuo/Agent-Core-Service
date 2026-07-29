@@ -315,14 +315,21 @@ class ModelDecisionNode:
 
         enabled = skill_index if isinstance(skill_index, list) else []
         selected = active_skills if isinstance(active_skills, list) else []
-        if not enabled and not selected:
+        if skill_index is None and active_skills is None:
             return ""
+        if not enabled and not selected:
+            return (
+                "\n\n"
+                "[Skill routing]\n"
+                "Skill registry is available, but no candidate skill matched this turn. "
+                "If the user request clearly needs a reusable capability package, call list_skills first, then use_skill with the selected skill id."
+            )
         lines = [
             "",
             "",
-            "[Available skills]",
-            "Skills are reusable capability packages. Use their instructions when they match the current user request.",
-            "If a listed skill may help but its body is not included below, call use_skill to load that SKILL.md body before applying it.",
+            "[Candidate skills]",
+            "Skills are reusable capability packages. This section only lists skills matched to the current user request.",
+            "If a candidate skill may help but its body is not included below, call use_skill to load that SKILL.md body before applying it.",
         ]
         for skill in enabled:
             if not isinstance(skill, dict):

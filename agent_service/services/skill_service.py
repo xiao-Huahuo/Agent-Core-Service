@@ -24,6 +24,8 @@ from agent_service.services.settings_service import SettingsService
 
 SKILL_BODY_MAX_CHARS = 8000
 SKILL_ROUTER_MAX_SKILLS = 3
+SKILL_ROUTER_CANDIDATE_LIMIT = 20
+SKILL_INDEX_DESCRIPTION_MAX_CHARS = 240
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,7 +78,7 @@ class SkillService:
         return [record.to_dict() for record in sorted(records, key=lambda item: (item.source, item.name.lower()))]
 
     def get_enabled_skill_index(self, *, user_id: str) -> list[dict[str, str]]:
-        """Return compact index information injected into the Agent context."""
+        """Return compact index information for management views and explicit listing."""
 
         return [
             {
@@ -88,6 +90,22 @@ class SkillService:
             for skill in self.list_skills(user_id=user_id)
             if skill.get("enabled")
         ]
+
+    def select_skill_candidates(
+        self,
+        *,
+        user_id: str,
+        prompt: str,
+        limit: int = SKILL_ROUTER_CANDIDATE_LIMIT,
+    ) -> list[dict[str, str]]:
+        """Return a small prompt-matched skill index for the current Agent turn."""
+
+        skills = [skill for skill in self.list_skills(user_id=user_id) if skill.get("enabled")]
+        ranked = self._rank_skills_by_prompt(prompt=prompt, skills=skills)
+        candidates: list[dict[str, str]] = []
+        for _, skill in ranked[: max(0, limit)]:
+            candidates.append(self._to_compact_index(skill))
+        return candidates
 
     def read_skill_body(self, *, user_id: str, skill_ref: str) -> dict[str, Any] | None:
         """Return one enabled skill and its SKILL.md body by id, name, or folder name."""
@@ -117,10 +135,11 @@ class SkillService:
         prompt: str,
         llm_config: dict[str, Any] | None,
         task_scheduler: LLMTaskScheduler | None,
+        candidate_skills: Sequence[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         """Select up to three enabled skills for the current user input."""
 
-        skills = [skill for skill in self.list_skills(user_id=user_id) if skill.get("enabled")]
+        skills = self._resolve_route_candidates(user_id=user_id, prompt=prompt, candidate_skills=candidate_skills)
         if not skills:
             return []
         selected_ids = self._route_with_small_model(
@@ -251,21 +270,52 @@ class SkillService:
         return []
 
     def _route_by_keywords(self, *, prompt: str, skills: Sequence[dict[str, Any]]) -> list[str]:
+        ranked = self._rank_skills_by_prompt(prompt=prompt, skills=skills)
+        return [str(skill["skill_id"]) for _, skill in ranked[:SKILL_ROUTER_MAX_SKILLS]]
+
+    def _resolve_route_candidates(
+        self,
+        *,
+        user_id: str,
+        prompt: str,
+        candidate_skills: Sequence[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]]:
+        if candidate_skills:
+            candidate_ids = {str(skill.get("skill_id") or "") for skill in candidate_skills}
+            return [
+                skill
+                for skill in self.list_skills(user_id=user_id)
+                if skill.get("enabled") and str(skill.get("skill_id") or "") in candidate_ids
+            ]
+        skills = [skill for skill in self.list_skills(user_id=user_id) if skill.get("enabled")]
+        return [skill for _, skill in self._rank_skills_by_prompt(prompt=prompt, skills=skills)[:SKILL_ROUTER_CANDIDATE_LIMIT]]
+
+    def _rank_skills_by_prompt(
+        self,
+        *,
+        prompt: str,
+        skills: Sequence[dict[str, Any]],
+    ) -> list[tuple[int, dict[str, Any]]]:
         text = prompt.lower()
-        scored: list[tuple[int, str]] = []
+        prompt_tokens = set(self._tokens(text))
+        scored: list[tuple[int, dict[str, Any]]] = []
         for skill in skills:
-            name = str(skill.get("name") or "").lower()
-            description = str(skill.get("description") or "").lower()
+            searchable = self._searchable_skill_text(skill).lower()
             score = 0
+            name = str(skill.get("name") or "").lower()
             if name and name in text:
-                score += 8
-            for token in self._tokens(name) + self._tokens(description):
-                if len(token) >= 2 and token in text:
+                score += 12
+            for token in self._tokens(searchable):
+                if len(token) < 2:
+                    continue
+                if token in prompt_tokens:
+                    score += 3
+                elif token in text:
                     score += 1
             if score > 0:
-                scored.append((score, str(skill["skill_id"])))
-        scored.sort(key=lambda item: item[0], reverse=True)
-        return [skill_id for _, skill_id in scored[:SKILL_ROUTER_MAX_SKILLS]]
+                scored.append((score, skill))
+        scored.sort(key=lambda item: (-item[0], str(item[1].get("source") or ""), str(item[1].get("name") or "").lower()))
+        return scored
 
     def _scan_root(self, *, root: Path, source: str, disabled: set[str]) -> list[SkillRecord]:
         if not root.exists() or not root.is_dir():
@@ -332,6 +382,34 @@ class SkillService:
         payload = dict(skill)
         payload["body"] = path.read_text(encoding="utf-8")[:SKILL_BODY_MAX_CHARS]
         return payload
+
+    @staticmethod
+    def _to_compact_index(skill: dict[str, Any]) -> dict[str, str]:
+        description = str(skill.get("description") or "")
+        if len(description) > SKILL_INDEX_DESCRIPTION_MAX_CHARS:
+            description = description[:SKILL_INDEX_DESCRIPTION_MAX_CHARS].rstrip() + "..."
+        return {
+            "skill_id": str(skill["skill_id"]),
+            "name": str(skill["name"]),
+            "description": description,
+            "source": str(skill["source"]),
+        }
+
+    @staticmethod
+    def _searchable_skill_text(skill: dict[str, Any]) -> str:
+        metadata = skill.get("metadata") if isinstance(skill.get("metadata"), dict) else {}
+        parts = [
+            str(skill.get("skill_id") or ""),
+            str(skill.get("name") or ""),
+            str(skill.get("description") or ""),
+        ]
+        for key in ("keywords", "triggers", "aliases", "tags"):
+            value = metadata.get(key)
+            if isinstance(value, list):
+                parts.extend(str(item) for item in value)
+            elif value:
+                parts.append(str(value))
+        return " ".join(parts)
 
     def _read_disabled_skill_ids(self, *, user_id: str) -> set[str]:
         payload = self._read_user_config(self._user_config_path(user_id=user_id))

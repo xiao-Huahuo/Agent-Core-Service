@@ -30,6 +30,8 @@ class AgentState(TypedDict):
     trace: 节点运行轨迹,用于观测面板展示每个节点发生了什么。
     plan: 策略顾问节点生成的探索状态,格式: {"covered": [...], "suggested": [...], "sufficient": bool, "hint": str}。
     observation_decision: 反思节点决策结果,"continue" 继续调工具 / "answer" 直接回答。
+    skill_index: 本轮用户输入命中的少量 Skill 候选摘要,不是全量 Skill 注册表。
+    active_skills: 本轮路由命中的 Skill 正文,只在当前图运行中生效。
 
     llm_config: 可选,预读取的用户 LLM 配置,避免图重入时重复从 _settings_service 读取。
     """

@@ -116,4 +116,19 @@ describe('ChatInput references', () => {
     expect(wrapper.findAll('.prompt-waterfall-item')).toHaveLength(0)
     expect(wrapper.findAll('.prompt-starter-card')).toHaveLength(4)
   })
+
+  it('hides prompt starter blocks in compact sidebar mode', async () => {
+    const wrapper = mount(ChatInput, {
+      props: {
+        centered: true,
+        compact: true,
+      },
+    })
+
+    expect(wrapper.findAll('.prompt-starter-card')).toHaveLength(0)
+
+    await wrapper.get('textarea').setValue('探索')
+
+    expect(wrapper.findAll('.prompt-waterfall-item')).toHaveLength(0)
+  })
 })

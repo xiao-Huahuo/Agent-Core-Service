@@ -1284,3 +1284,6 @@
 - 修复启动全局灌库重复消费用户知识库的问题: 启动 frontmatter 生成和向量入库都会排除已登记在全局 `resources/knowledge` 下的用户知识库子树, 避免手动灌库后又被写入全局 frontmatter/Knowledge owner。
 - 兼容历史用户命名空间: 当 `runtime/frontmatter/users/<user>` 存在时, 启动全局灌库会额外跳过 `resources/knowledge/<user>` 和 `runtime/frontmatter/<user>`, 防止默认知识库仍指向全局根时重复消费 editor 用户文件。
 - 修复知识图谱未体现灌库规模的问题: 图谱抽取现在先同步 frontmatter 文档节点, 小模型实体关系抽取失败只影响语义边而不再导致文档节点缺失; editor 图谱面板新增 Refresh 按钮用于灌库后重新拉取 Knowledge 图谱。
+- 收敛 Skill 加载策略: README 改为本地候选召回 + 小模型 top-k 路由 + 当前轮正文注入; 后端主模型上下文不再注入全量已启用 Skill 索引, 小模型路由前先按当前输入筛选少量候选,降低 Skill 数量增长造成的上下文膨胀。
+- 调整 Agent 侧边栏输入体验: AgentPanel 在侧边栏模式下向 ChatInput 传入 compact 状态,隐藏欢迎态输入框下方的四个快捷提示块,保留独立 Agent 页面中的快捷提示。
+- 修复 Skill 上下文可观测性缺口: 无候选命中时仍向主模型注入极简 Skill 路由协议,并让 Obs 上下文拼装面板将 Skill routing、候选摘要和本轮正文拆成独立 Skill 块展示。

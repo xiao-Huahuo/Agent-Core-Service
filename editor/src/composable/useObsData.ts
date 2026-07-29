@@ -276,6 +276,7 @@ function toTitle(type: string): string {
     knowledge: '知识库',
     history: '短期历史',
     prompt: '当前问题',
+    skills: 'Skill 候选',
     system: '系统提示',
   }
   return map[type] || '上下文'
@@ -288,6 +289,7 @@ function sourceAccent(type: string): string {
     knowledge: 'var(--color-green)',
     history: 'var(--color-sky)',
     prompt: 'var(--color-accent)',
+    skills: 'var(--color-accent)',
     system: 'var(--color-text-tertiary)',
   }
   return map[type] || 'var(--color-text-tertiary)'
@@ -300,6 +302,7 @@ function sourceStatus(type: string): string {
     knowledge: '索引提示',
     history: '会话历史',
     prompt: '当前输入',
+    skills: '路由候选',
     system: '系统约束',
   }
   return map[type] || '上下文'
@@ -418,10 +421,16 @@ function buildSystemContextBlocks(messages: { role: string; content: unknown }[]
     const importantLines: string[] = []
     const memoryLines: string[] = []
     const knowledgeLines: string[] = []
+    const skillLines: string[] = []
     let insideRefs = false
     let mode = 'preface'
 
     for (const line of rawLines) {
+      if (line === '[Skill routing]' || line === '[Candidate skills]' || line === '[Routed skills for this turn]') {
+        mode = 'skills'
+        skillLines.push(line)
+        continue
+      }
       if (line === '--- 参考材料开始 ---') {
         insideRefs = true
         mode = 'refs'
@@ -467,6 +476,11 @@ function buildSystemContextBlocks(messages: { role: string; content: unknown }[]
         continue
       }
 
+      if (mode === 'skills') {
+        skillLines.push(line)
+        continue
+      }
+
       prefaceLines.push(line)
     }
 
@@ -474,12 +488,13 @@ function buildSystemContextBlocks(messages: { role: string; content: unknown }[]
     pushAssemblyBlock(blocks, 'important_summary', '重要事实摘要', importantLines)
     pushAssemblyBlock(blocks, 'memory', '长期记忆索引', memoryLines)
     pushAssemblyBlock(blocks, 'knowledge', '知识库索引', knowledgeLines)
+    pushAssemblyBlock(blocks, 'skills', 'Skill 候选与正文', skillLines)
   }
 
   return blocks
 }
 
-function buildContextAssembly(messages: { role: string; content: unknown }[]): ContextAssembly {
+export function buildContextAssembly(messages: { role: string; content: unknown }[]): ContextAssembly {
   const blocks: AssemblyBlock[] = []
 
   for (const systemBlock of buildSystemContextBlocks(messages)) {

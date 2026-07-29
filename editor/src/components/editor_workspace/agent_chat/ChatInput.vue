@@ -18,6 +18,7 @@ import type { AgentUploadedAttachment } from '@/stores/chat'
 const props = defineProps<{
   disabled?: boolean
   centered?: boolean
+  compact?: boolean
   webSearchEnabled?: boolean
   modelLabel?: string
   agentAccessMode?: AgentAccessMode
@@ -136,10 +137,10 @@ const matchedPromptSuggestions = computed(() => {
   return activeStarter.value.suggestions.filter((suggestion) => suggestion.startsWith(input))
 })
 const showPromptStarters = computed(() => {
-  return props.centered && !promptInput.value && !props.reference && !props.attachments?.length
+  return !props.compact && props.centered && !promptInput.value && !props.reference && !props.attachments?.length
 })
 const showPromptWaterfall = computed(() => {
-  return props.centered && matchedPromptSuggestions.value.length > 0 && !props.reference && !props.attachments?.length
+  return !props.compact && props.centered && matchedPromptSuggestions.value.length > 0 && !props.reference && !props.attachments?.length
 })
 
 function matchesPromptStarter(starter: PromptStarter, input: string) {

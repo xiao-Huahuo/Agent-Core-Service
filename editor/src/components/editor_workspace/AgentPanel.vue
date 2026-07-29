@@ -690,6 +690,7 @@ onBeforeUnmount(() => {
       <ChatInput
         :disabled="!userId"
         :centered="!hasMessages && !chatStore.isStreaming"
+        :compact="props.mode === 'panel'"
         :web-search-enabled="settingsStore.profile.webSearchEnabled"
         :model-label="modelConfigLabel"
         :agent-access-mode="settingsStore.agentAccessMode"
