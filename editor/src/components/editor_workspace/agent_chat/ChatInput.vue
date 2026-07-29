@@ -995,15 +995,15 @@ function handleFileChange(event: Event) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-6);
+  gap: var(--space-4);
   height: 38px;
-  padding: 0 10px;
+  padding: 0 8px;
 }
 
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   min-width: 0;
   flex: 0 1 auto;
 }
@@ -1209,11 +1209,11 @@ function handleFileChange(event: Event) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
   min-width: 0;
   height: 28px;
   margin-left: auto;
-  padding: 0 var(--space-10);
+  padding: 0 var(--space-8);
   border: 1px solid color-mix(in srgb, var(--color-primary) 46%, var(--color-border));
   border-radius: 999px;
   background: transparent;

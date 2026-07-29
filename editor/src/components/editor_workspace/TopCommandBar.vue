@@ -342,6 +342,16 @@ onMounted(() => nextTick(autoResizeInput))
   width: 30px;
   height: 30px;
   object-fit: contain;
+  filter: grayscale(1) saturate(0);
+  opacity: 0.82;
+  transition:
+    filter var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.logo-btn:hover .logo-img {
+  filter: grayscale(1) saturate(0);
+  opacity: 1;
 }
 
 .library-name-input {
@@ -384,7 +394,7 @@ onMounted(() => nextTick(autoResizeInput))
 }
 
 .library-folder-btn:hover:not(:disabled) {
-  color: var(--color-primary);
+  color: var(--color-text);
 }
 
 .library-folder-btn:disabled {

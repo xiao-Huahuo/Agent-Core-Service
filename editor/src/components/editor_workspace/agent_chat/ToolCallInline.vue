@@ -540,7 +540,12 @@ const toolEntries = computed(() => {
 </script>
 
 <template>
-  <div v-for="entry in toolEntries" :key="entry.key" class="tool-call-box" :class="{ expandable: !entry.pending && entry.rawContents.length > 0 }">
+  <div
+    v-for="entry in toolEntries"
+    :key="entry.key"
+    class="action-row tool-call-box"
+    :class="{ expandable: !entry.pending && entry.rawContents.length > 0 }"
+  >
     <div class="tool-call-header">
       <span v-if="entry.pending" class="tool-loader" aria-hidden="true"></span>
       <button
@@ -661,6 +666,14 @@ const toolEntries = computed(() => {
   margin-bottom: var(--space-6);
   border-radius: 8px;
   animation: tool-slide-in 220ms ease-out;
+}
+
+.action-row {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
 }
 
 .tool-call-box.expandable {

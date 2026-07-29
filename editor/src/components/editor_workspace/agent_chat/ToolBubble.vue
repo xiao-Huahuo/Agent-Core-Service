@@ -147,9 +147,11 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 </script>
 
 <template>
-  <div v-if="message.role === 'assistant' && message.node === 'action' && hasToolTrace" class="action-row">
-    <ToolCallInline :traces="message.trace ?? []" :is-streaming="isStreaming" />
-  </div>
+  <ToolCallInline
+    v-if="message.role === 'assistant' && message.node === 'action' && hasToolTrace"
+    :traces="message.trace ?? []"
+    :is-streaming="isStreaming"
+  />
 
   <div v-else-if="shouldRenderAssistant" class="bubble-row assistant tool-assistant-row">
     <div class="bubble-col">
@@ -277,15 +279,6 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   border: 1px solid var(--color-border);
   border-radius: 50%;
   object-fit: cover;
-}
-
-.action-row {
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: none;
-  margin-bottom: var(--space-12);
 }
 
 .bubble-col {
