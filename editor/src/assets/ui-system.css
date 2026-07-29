@@ -68,8 +68,8 @@
   --color-chrome-bg-top: rgba(8, 8, 8, 0.96);
   --color-chrome-bg-bottom: rgba(0, 0, 0, 0.94);
   --color-chrome-bg-solid: rgba(0, 0, 0, 0.90);
-  --color-chrome-topbar-bg: #000000;
-  --color-chrome-rail-bg: #000000;
+  --color-chrome-topbar-bg: rgba(18, 18, 20, 0.92);
+  --color-chrome-rail-bg: rgba(18, 18, 20, 0.92);
   --color-canvas: #080808;
   --color-canvas-soft: #000000;
   --color-surface: #0a0a0a;
@@ -105,8 +105,8 @@
   --color-chrome-bg-top: #ffffff;
   --color-chrome-bg-bottom: #ffffff;
   --color-chrome-bg-solid: #ffffff;
-  --color-chrome-topbar-bg: #ffffff;
-  --color-chrome-rail-bg: #ffffff;
+  --color-chrome-topbar-bg: rgba(244, 245, 247, 0.92);
+  --color-chrome-rail-bg: rgba(244, 245, 247, 0.92);
   --color-canvas: #ffffff;
   --color-canvas-soft: #ffffff;
   --color-surface: #ffffff;

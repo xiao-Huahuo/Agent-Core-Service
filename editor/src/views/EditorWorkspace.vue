@@ -443,18 +443,20 @@ onBeforeUnmount(() => {
         aria-label="Resize file tree"
         @pointerdown="startResize('file', $event)"
       ></div>
-      <EditorPane v-if="workspaceStore.mainView === 'editor'" class="editor-col ide-panel" />
-      <FileResourceManager v-else-if="workspaceStore.mainView === 'resources'" class="editor-col ide-panel" />
-      <LibraryView v-else-if="workspaceStore.mainView === 'library'" class="editor-col ide-panel" />
-      <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="editor-col ide-panel" />
-      <MarkdownHtmlVisualizationView v-else-if="workspaceStore.mainView === 'visualization'" class="editor-col ide-panel" />
-      <AgentPage v-else-if="workspaceStore.mainView === 'agent'" class="editor-col ide-panel" />
-      <GraphPane v-else-if="workspaceStore.mainView === 'graph'" class="editor-col ide-panel" @open-node="openGraphNode" />
-      <DashboardView v-else-if="workspaceStore.mainView === 'dashboard'" class="editor-col ide-panel" />
-      <DebugView v-else-if="workspaceStore.mainView === 'debug'" class="editor-col ide-panel" />
-      <SearchPage v-else-if="workspaceStore.mainView === 'search'" class="editor-col ide-panel" />
-      <SkillView v-else-if="workspaceStore.mainView === 'skills'" class="editor-col ide-panel" />
-      <SettingsView v-else-if="workspaceStore.mainView === 'settings'" class="editor-col ide-panel" />
+      <main class="main-shell editor-col ide-panel">
+        <EditorPane v-if="workspaceStore.mainView === 'editor'" class="main-shell-content" />
+        <FileResourceManager v-else-if="workspaceStore.mainView === 'resources'" class="main-shell-content" />
+        <LibraryView v-else-if="workspaceStore.mainView === 'library'" class="main-shell-content" />
+        <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="main-shell-content" />
+        <MarkdownHtmlVisualizationView v-else-if="workspaceStore.mainView === 'visualization'" class="main-shell-content" />
+        <AgentPage v-else-if="workspaceStore.mainView === 'agent'" class="main-shell-content" />
+        <GraphPane v-else-if="workspaceStore.mainView === 'graph'" class="main-shell-content" @open-node="openGraphNode" />
+        <DashboardView v-else-if="workspaceStore.mainView === 'dashboard'" class="main-shell-content" />
+        <DebugView v-else-if="workspaceStore.mainView === 'debug'" class="main-shell-content" />
+        <SearchPage v-else-if="workspaceStore.mainView === 'search'" class="main-shell-content" />
+        <SkillView v-else-if="workspaceStore.mainView === 'skills'" class="main-shell-content" />
+        <SettingsView v-else-if="workspaceStore.mainView === 'settings'" class="main-shell-content" />
+      </main>
       <div
         class="resize-handle agent-resizer"
         role="separator"
@@ -492,7 +494,7 @@ onBeforeUnmount(() => {
   grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
-  background: var(--color-bg-app);
+  background: var(--color-chrome-topbar-bg);
 }
 
 .workspace-grid {
@@ -525,6 +527,7 @@ onBeforeUnmount(() => {
 .file-col {
   grid-column: 2;
   overflow: hidden;
+  background: var(--color-chrome-rail-bg);
   transition:
     opacity 160ms ease,
     transform 180ms ease;
@@ -536,6 +539,26 @@ onBeforeUnmount(() => {
 
 .editor-col {
   grid-column: 4;
+}
+
+.main-shell.ide-panel {
+  position: relative;
+  z-index: 60;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 var(--space-12) var(--space-12) 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 28px;
+  background: var(--color-bg-app);
+  box-shadow: 0 0 12px rgba(15, 23, 42, 0.09);
+}
+
+.main-shell-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
 }
 
 .agent-resizer {
@@ -650,8 +673,7 @@ onBeforeUnmount(() => {
 .editor-col {
   border-left: 0;
   border-right: 0;
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-app);
+  background: transparent;
 }
 
 .agent-col {
@@ -716,6 +738,11 @@ onBeforeUnmount(() => {
   .editor-col {
     grid-column: 2;
     grid-row: 2;
+  }
+
+  .main-shell.ide-panel {
+    margin: 0 var(--space-8) var(--space-8) 0;
+    border-radius: 24px;
   }
 
   .agent-col {
