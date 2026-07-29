@@ -291,6 +291,9 @@ _downloads_dir.mkdir(parents=True, exist_ok=True)
 _library_assets_dir = _runtime_config.storage.assets_dir / "library"
 _library_assets_dir.mkdir(parents=True, exist_ok=True)
 
+_visualizations_dir = _runtime_config.storage.base_data_dir / "visualizations"
+_visualizations_dir.mkdir(parents=True, exist_ok=True)
+
 from fastapi.staticfiles import StaticFiles
 
 app.mount(
@@ -309,6 +312,12 @@ app.mount(
     "/library/assets",
     StaticFiles(directory=str(_library_assets_dir)),
     name="library_assets",
+)
+
+app.mount(
+    "/visualizations",
+    StaticFiles(directory=str(_visualizations_dir)),
+    name="visualizations",
 )
 
 

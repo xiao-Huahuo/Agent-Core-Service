@@ -1,6 +1,42 @@
 # CHANGE HISTORY
 
 ## 2026-07-29
+- [x] 修复 MD-HTML 可视化 Agent 文档读取链路:
+  - `read_multimodal_file_info` 补充缺失的 `json` 导入, 修复多模态 JSON 读取工具运行时报 `name 'json' is not defined` 的问题。
+  - MD-HTML 工作流提示词明确禁止通过终端、Python 库、`get_knowledge_file_url`、`download_file` 或系统源文件路径自行解析知识库文档。
+  - 强化 `read_knowledge_file`、`read_multimodal_file_info` 和 `run_terminal_command` 的工具说明, 明确文本与多模态文档的专用读取路径。
+  - Agent 工具消息保留工具名, 上下文压缩时对最近的文档读取结果提高保留预算, 并移除“章节/关键词补读”这类当前工具不支持的误导性提示。
+- [x] 收窄悬浮文件资源管理器标题栏留白:
+  - 将标题栏左右内边距从 24px 档位收回到 16px 档位, 标题和关闭按钮外侧补偿从 8px 收回到 4px, 保留边距但避免距离过大.
+- [x] 调整悬浮文件资源管理器标题栏留白:
+  - `FloatingFileResourcePicker.vue` 增大标题栏左右内边距, 并给“选择文件”标题和右上角关闭按钮增加外侧间距, 避免两端贴边.
+- [x] 微调 MD-HTML 与文件资源管理器界面:
+  - 悬浮文件资源管理器标题左侧留白加大, 让“选择文件”标题向右移动.
+  - 文件资源管理器列表列名行改为不透明画布背景, 避免滚动内容透出.
+  - MD-HTML 的“原结构模式 / AI提炼模式”和高级生成勾选项统一收纳到工具栏“高级选项”下拉中, 保持顶部只显示“选择文件”“高级选项”“一键可视化”.
+- [x] 修复 MD-HTML 生成结果无法在前端 iframe 渲染:
+  - `vite.config.ts` 新增 `/visualizations` 开发代理, 让 Agent 写入 `runtime/visualizations` 的 HTML 可以通过 Vite dev server 正确转发到后端静态目录.
+  - 生产 CSP 新增 `frame-src 'self' http://127.0.0.1:8002 http://localhost:8002`, 避免打包环境中后端静态 HTML iframe 被 CSP 拦截.
+  - 新增 `visualizationStaticProxy.spec.ts`, 覆盖可视化静态资源代理和 iframe CSP 白名单.
+- [x] 调整 MD-HTML 页面选择流程:
+  - 左侧活动栏入口改名为 `MD-HTML`, 点击入口时只切换主页面并收起文件树, 不再自动展开文件树.
+  - 文件树和文件资源管理器右键菜单中的 `HTML可视化` 改为只选中文件并跳转到 MD-HTML 页面, 不再自动灌库、不再自动展开 Agent 或下发可视化任务.
+  - 新增悬浮文件资源管理器选择器, 复用 `FileResourceManager.vue` 作为浮层主体, 底部提供当前文件路径输入框、`选择文件` 与 `取消` 操作, 用于把文件投送到 MD-HTML 页面后再由用户手动触发一键可视化.
+  - 新增 `workspaceMarkdownHtmlVisualization.spec.ts` 与 `MarkdownHtmlVisualizationView.spec.ts`, 覆盖右键选择语义和 MD-HTML 页面入口文案.
+- [x] 补全文件右键 HTML 可视化工作流:
+  - 共享文件右键菜单新增“HTML可视化”，文件树与文件资源管理器中的普通文件均可直接触发，目录项保持禁用。
+  - 右键触发后会选中目标文件、等待灌库完成、切换到 HTML 可视化页面、收起文件树并展开 Agent 侧边栏，然后下发必须创建任务列表并调用 `show_markdown_html` 的生成任务。
+  - 生成结果保存到知识库时改用当前用户对应的 `{user_id}_html/` 目录；系统资源管理器按钮继续定位 `runtime/visualizations` 中的生成文件，便于另存。
+  - 新增 `FileContextMenu.spec.ts`，覆盖文件动作触发与目录禁用行为。
+- [x] 补充 Markdown 可视化主页面入口:
+  - `ActivityBar.vue` 新增“可视化”入口，`EditorWorkspace.vue` 新增 `visualization` 主视图渲染分支。
+  - 新增 `MarkdownHtmlVisualizationView.vue`，在主工作区展示模式切换、高级配置、一键可视化按钮和生成后的 HTML iframe。
+  - Agent 工具生成 HTML 后会自动切到 Markdown 可视化页面，避免只在编辑器工具条里隐藏入口。
+- [x] 新增 Agent 文档 HTML 可视化工作流:
+  - `show_markdown_html` 内置工具会将 Agent 生成的 HTML 保存到 `runtime/visualizations`，并通过流式事件通知前端自动挂载展示。
+  - 后端新增 `/visualizations` 静态目录挂载和 `markdown_html_visualization` SSE 事件，前端 chat store 收到事件后打开可视化面板。
+  - 编辑器工具条新增“可视化”菜单，支持“原结构 / AI提炼”模式和“强动效 / 阴影 / 圆角 / emoji”配置；点击“一键可视化”会先保存当前文档、灌库，再展开 Agent 侧边栏下发必须创建任务列表的可视化任务。
+  - 新增 HTML 可视化面板，支持 iframe 展示、保存生成 HTML 到知识库 `visualizations/` 目录，以及在系统资源管理器中定位 runtime 文件。
 - [x] 优化 Agent 任务列表提示词与侧边栏展示行为:
   - `agent_config.py` 与内置 `create_task_list` 工具描述明确区分 Task List 和 Todo: Task List 仅用于当前会话内的分步执行进度,Todo 仅用于跨会话长期待办事项,并要求凡是需要分步完成的执行型任务都创建 Task List。
   - `taskList.ts` 新增任务列表更新时是否自动展开的上下文开关,让 Agent 侧边栏模式下创建或流式更新任务列表时不再自动展开抽屉,页面模式继续沿用自动展开行为。

@@ -616,6 +616,15 @@ async function askAgentFromMenu() {
   }
 }
 
+async function htmlVisualizeFromMenu() {
+  const node = contextMenu.value.node
+  closeContextMenu()
+  if (!node || node.isDir) {
+    return
+  }
+  await workspaceStore.selectMarkdownHtmlVisualizationDocument(node)
+}
+
 async function ingestFromMenu() {
   const node = contextMenu.value.node
   closeContextMenu()
@@ -906,6 +915,7 @@ onUnmounted(() => {
       @show-in-graph="showInGraphFromMenu"
       @extract-graph="extractGraphFromMenu"
       @ask-agent="askAgentFromMenu"
+      @html-visualize="htmlVisualizeFromMenu"
       @ingest="ingestFromMenu"
       @toggle-ignore="toggleIgnoreFromMenu"
       @delete="deleteFromMenu"

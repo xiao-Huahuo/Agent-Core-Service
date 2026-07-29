@@ -36,6 +36,7 @@ const emit = defineEmits<{
   showInGraph: []
   extractGraph: []
   askAgent: []
+  htmlVisualize: []
   ingest: []
   toggleIgnore: []
   delete: []
@@ -73,6 +74,14 @@ defineExpose({
     </button>
     <hr class="context-separator" />
     <button type="button" @click="emit('askAgent')"><span>询问 Agent</span></button>
+    <button
+      type="button"
+      data-action="html-visualize"
+      :disabled="!node || node.isDir"
+      @click="emit('htmlVisualize')"
+    >
+      <span>HTML可视化</span>
+    </button>
     <hr class="context-separator" />
     <button type="button" :disabled="!node" @click="emit('ingest')">
       <span>{{ node?.isDir ? '灌库文件夹' : '灌库文件' }}</span>

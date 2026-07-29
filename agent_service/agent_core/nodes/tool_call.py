@@ -146,7 +146,7 @@ class ToolCallNode:
                 for key, value in after_citations.items()
                 if key not in before_citations
             }
-            messages.append(ToolMessage(content=content, tool_call_id=tool_call_id))
+            messages.append(ToolMessage(content=content, tool_call_id=tool_call_id, name=tool_name))
             result_count = self._count_results(content)
             summary_text = (str(content).strip()[:200] + "…") if len(str(content).strip()) > 200 else content.strip()
             end_trace = {
@@ -179,7 +179,7 @@ class ToolCallNode:
                 f"工具 {display_name} 本轮暂未执行: 单轮最多执行 {MAX_TOOL_CALLS_PER_TURN} 个工具调用, "
                 "请根据已获得结果决定是否继续读取剩余文件。"
             )
-            messages.append(ToolMessage(content=content, tool_call_id=tool_call_id))
+            messages.append(ToolMessage(content=content, tool_call_id=tool_call_id, name=tool_name))
             deferred_trace = {
                 "node": "action",
                 "event": "tool_call_deferred",

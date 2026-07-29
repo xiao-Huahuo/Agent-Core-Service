@@ -70,6 +70,7 @@ from agent_service.tools import (
     ToolRegistry,
     clear_agent_token_callback,
     clear_context_mirror_callback,
+    clear_markdown_html_visualization_callback,
     clear_plan_state,
     clear_planner_content_callback,
     clear_observation_content_callback,
@@ -79,6 +80,7 @@ from agent_service.tools import (
     get_plan_state,
     set_agent_token_callback,
     set_context_mirror_callback,
+    set_markdown_html_visualization_callback,
     set_plan_state,
     set_planner_content_callback,
     set_observation_content_callback,
@@ -656,6 +658,9 @@ class AgentCore:
         def on_task_list_update(task_list: dict[str, Any] | None) -> None:
             token_queue.put({"type": "task_list_updated", "task_list": task_list})
 
+        def on_markdown_html_visualization(visualization: dict[str, Any]) -> None:
+            token_queue.put({"type": "markdown_html_visualization", "visualization": visualization})
+
         def run_graph() -> None:
             nonlocal graph_error
             set_tool_runtime(
@@ -674,6 +679,7 @@ class AgentCore:
             set_observation_content_callback(on_observation_content)
             set_context_mirror_callback(on_context_mirror)
             set_task_list_callback(on_task_list_update)
+            set_markdown_html_visualization_callback(on_markdown_html_visualization)
             set_plan_state(initial_plan)
             try:
                 for event in active_graph.stream(inputs, config=runtime_config, stream_mode="updates"):
@@ -690,6 +696,7 @@ class AgentCore:
                 clear_observation_content_callback()
                 clear_context_mirror_callback()
                 clear_task_list_callback()
+                clear_markdown_html_visualization_callback()
                 clear_plan_state()
                 clear_tool_runtime()
                 token_queue.put({"type": "done"})
@@ -830,6 +837,17 @@ class AgentCore:
                         "trace": [],
                         "model_name": "",
                         "task_list": item.get("task_list"),
+                    }
+
+                elif item_type == "markdown_html_visualization":
+                    yield {
+                        "node": "visualization",
+                        "type": "markdown_html_visualization",
+                        "content": "",
+                        "tool_calls": [],
+                        "trace": [],
+                        "model_name": "",
+                        "visualization": item.get("visualization"),
                     }
 
                 elif item_type == "node":

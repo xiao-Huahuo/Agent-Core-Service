@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable
@@ -26,6 +27,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from agent_service.tools.runtime_context import (
     AGENT_ACCESS_READONLY,
+    get_markdown_html_visualization_callback,
     get_task_list_callback,
     get_tool_runtime,
     register_network_citation,
@@ -48,6 +50,36 @@ def _deny_readonly_write(action: str) -> str:
     """返回 Agent 只读权限下统一的写操作拒绝信息。"""
 
     return f"权限不足: 当前 Agent 权限为只读,已禁止{action}。请切换到沙盒或完全访问后重试。"
+
+
+def _strip_markdown_html_fence(content: str) -> str:
+    """Remove one surrounding Markdown code fence from generated HTML."""
+
+    stripped = content.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    lines = stripped.splitlines()
+    if len(lines) < 2 or lines[-1].strip() != "```":
+        return stripped
+    opener = lines[0].strip().lower()
+    if opener in {"```", "```html", "```htm"}:
+        return "\n".join(lines[1:-1]).strip()
+    return stripped
+
+
+def _safe_visualization_filename(title: str, source_path: str, filename: str) -> str:
+    """Create a safe timestamped HTML filename for runtime visualizations."""
+
+    import re
+    from pathlib import Path
+
+    seed = filename.strip() or title.strip() or Path(source_path).stem or "visualization"
+    seed = seed.replace("\\", "/").split("/")[-1]
+    seed = re.sub(r"[^\w.\-\u4e00-\u9fff]+", "_", seed, flags=re.UNICODE).strip("._")
+    if not seed:
+        seed = "visualization"
+    stem = Path(seed).stem or "visualization"
+    return f"{stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
 
 
 @dataclass(frozen=True, slots=True)
@@ -697,6 +729,54 @@ def write_knowledge_file(path: str, content: str) -> str:
     except Exception as exc:
         return f"写入文件失败: {exc}"
     return f"已保存文件: {result['path']} (大小: {result.get('size', 'N/A')} 字节)"
+
+
+def show_markdown_html(title: str, html: str, source_path: str = "", filename: str = "") -> str:
+    """
+    Save generated document visualization HTML under runtime/visualizations and notify the front-end.
+
+    title: Human-readable title shown by the front-end visualization panel.
+    html: Complete HTML document or HTML fragment generated from the source document.
+    source_path: Optional source document path relative to the active knowledge library root.
+    filename: Optional preferred output filename; it is sanitized and timestamped.
+    """
+
+    if _is_readonly_access():
+        return _deny_readonly_write("generate Markdown-HTML visualization")
+    clean_html = _strip_markdown_html_fence(html)
+    if not clean_html:
+        return "Markdown-HTML visualization failed: html is empty."
+
+    runtime = get_tool_runtime()
+    output_dir = (runtime.config.storage.base_data_dir / "visualizations").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = _safe_visualization_filename(title, source_path, filename)
+    output_path = (output_dir / safe_name).resolve()
+    if output_dir not in output_path.parents and output_path != output_dir:
+        return "Markdown-HTML visualization failed: output path escaped runtime directory."
+
+    try:
+        output_path.write_text(clean_html, encoding="utf-8")
+    except Exception as exc:
+        return f"Markdown-HTML visualization failed: {exc}"
+
+    display_title = title.strip() or source_path.strip() or safe_name
+    payload = {
+        "title": display_title,
+        "filename": safe_name,
+        "path": str(output_path),
+        "url": f"/visualizations/{safe_name}",
+        "source_path": source_path,
+        "created_at": datetime.now().isoformat(),
+    }
+    callback = get_markdown_html_visualization_callback()
+    if callback is not None:
+        callback(payload)
+    return (
+        f"Markdown-HTML visualization generated and mounted: {display_title}\n"
+        f"URL: {payload['url']}\n"
+        f"Local path: {output_path}"
+    )
 
 
 def delete_knowledge_file(path: str) -> str:

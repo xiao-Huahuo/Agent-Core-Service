@@ -6,7 +6,7 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { Activity, BookOpen, Bug, CheckSquare, DatabaseZap, Files, Folder, Search, Settings, Share2, Sparkles } from 'lucide-vue-next'
+import { Activity, BookOpen, Bug, CheckSquare, DatabaseZap, FileCode, Files, Folder, Search, Settings, Share2, Sparkles } from 'lucide-vue-next'
 import type { SidebarDisplayMode } from '@/types/settings'
 
 defineProps<{
@@ -16,6 +16,7 @@ defineProps<{
   resourcesActive: boolean
   libraryActive: boolean
   ingestionActive: boolean
+  visualizationActive: boolean
   agentActive: boolean
   graphActive: boolean
   todoActive: boolean
@@ -31,6 +32,7 @@ const emit = defineEmits<{
   openResources: []
   openLibrary: []
   openIngestion: []
+  openVisualization: []
   toggleAgent: []
   toggleGraph: []
   toggleTodo: []
@@ -115,6 +117,18 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
     >
       <Search :size="18" />
       <span class="activity-label">搜索</span>
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: visualizationActive }"
+      type="button"
+      title="MD-HTML"
+      aria-label="MD-HTML"
+      @mousedown.prevent="handleRipple"
+      @click="emit('openVisualization')"
+    >
+      <FileCode :size="18" />
+      <span class="activity-label">MD-HTML</span>
     </button>
     <button
       class="activity-button"

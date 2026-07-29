@@ -471,12 +471,23 @@ class ModelDecisionNode:
         for message in reversed(filtered):
             if isinstance(message, ToolMessage):
                 tool_seen_from_tail += 1
-                max_chars = 900 if tool_seen_from_tail <= 8 else 240
+                max_chars = ModelDecisionNode._tool_message_max_chars(message, tool_seen_from_tail=tool_seen_from_tail)
                 prepared_tail.append(ModelDecisionNode._compact_tool_message(message, max_chars=max_chars))
             else:
                 prepared_tail.append(message)
         prepared_tail.reverse()
         return [system_message, *prepared_tail]
+
+    @staticmethod
+    def _tool_message_max_chars(message: ToolMessage, *, tool_seen_from_tail: int) -> int:
+        """Return a compression budget tuned for the tool result type."""
+
+        tool_name = str(getattr(message, "name", "") or "")
+        if tool_seen_from_tail <= 4 and tool_name == "read_multimodal_file_info":
+            return 12000
+        if tool_seen_from_tail <= 4 and tool_name == "read_knowledge_file":
+            return 6000
+        return 900 if tool_seen_from_tail <= 8 else 240
 
     @staticmethod
     def _compact_tool_message(message: ToolMessage, *, max_chars: int) -> ToolMessage:
@@ -488,9 +499,13 @@ class ModelDecisionNode:
         compacted = (
             content[:max_chars]
             + f"\n\n[工具返回内容已压缩: 原始长度 {len(content)} 字符, 当前仅保留前 {max_chars} 字符。"
-            "如需完整内容,请继续用更精确的文件路径、章节或关键词读取。]"
+            "请基于已保留内容继续; 若该工具明确提供分块、分页或检索参数, 才使用对应参数继续读取。]"
         )
-        return ToolMessage(content=compacted, tool_call_id=message.tool_call_id)
+        return ToolMessage(
+            content=compacted,
+            tool_call_id=message.tool_call_id,
+            name=getattr(message, "name", None),
+        )
 
     def _get_user_model_overrides(
         self,

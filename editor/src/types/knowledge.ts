@@ -15,6 +15,27 @@ export type GraphStatus = 'graphed' | 'dirty' | 'ignored'
 /** Editor display mode controlled by the central toolbar. */
 export type EditorViewMode = 'edit' | 'preview' | 'split'
 
+/** Agent document visualization mode selected from the editor toolbar. */
+export type MarkdownHtmlVisualizationMode = 'structure' | 'insight'
+
+/** Presentation switches forwarded to the Agent visualization prompt. */
+export interface MarkdownHtmlVisualizationOptions {
+  strongMotion: boolean
+  shadow: boolean
+  rounded: boolean
+  emoji: boolean
+}
+
+/** Runtime HTML visualization payload emitted by the Agent tool stream. */
+export interface MarkdownHtmlVisualizationPayload {
+  title: string
+  filename: string
+  path: string
+  url: string
+  source_path?: string
+  created_at?: string
+}
+
 /** File viewer selected by extension and backend preview metadata. */
 export type FileViewerKind = 'markdown' | 'code' | 'image' | 'pdf' | 'table' | 'document' | 'text' | 'unsupported'
 
@@ -24,6 +45,7 @@ export type WorkspaceMainView =
   | 'resources'
   | 'library'
   | 'ingestion'
+  | 'visualization'
   | 'graph'
   | 'dashboard'
   | 'debug'

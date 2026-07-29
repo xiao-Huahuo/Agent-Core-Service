@@ -54,6 +54,12 @@ import type { FilePreviewPayload, KnowledgeFileNode, KnowledgeTrashEntry } from 
 
 defineOptions({ name: 'FileResourceManager' })
 
+const props = withDefaults(defineProps<{
+  embeddedPicker?: boolean
+}>(), {
+  embeddedPicker: false,
+})
+
 type ResourcePage = 'files' | 'trash'
 type ResourceViewMode = 'list' | 'content' | 'small' | 'medium' | 'large'
 type SortKey = 'name' | 'mtime' | 'ingested' | 'size'
@@ -427,6 +433,10 @@ function handleItemDblClick(node: KnowledgeFileNode) {
     workspaceStore.selectedTreePath = node.path
     return
   }
+  if (props.embeddedPicker) {
+    void workspaceStore.selectFile(node)
+    return
+  }
   workspaceStore.setMainView('editor')
   void workspaceStore.selectFile(node)
 }
@@ -606,6 +616,15 @@ async function askAgentFromMenu() {
     workspaceStore.agentSidebarOpen = true
     workspaceStore.pendingAgentPrompt = 'Help me review the currently open file.'
   }
+}
+
+async function htmlVisualizeFromMenu() {
+  const node = contextMenu.value.node
+  closeContextMenu()
+  if (!node || node.isDir) {
+    return
+  }
+  await workspaceStore.selectMarkdownHtmlVisualizationDocument(node)
 }
 
 async function ingestFromMenu() {
@@ -1174,6 +1193,7 @@ onUnmounted(() => {
       @show-in-graph="showInGraphFromMenu"
       @extract-graph="extractGraphFromMenu"
       @ask-agent="askAgentFromMenu"
+      @html-visualize="htmlVisualizeFromMenu"
       @ingest="ingestFromMenu"
       @toggle-ignore="toggleIgnoreFromMenu"
       @delete="deleteFromMenu"

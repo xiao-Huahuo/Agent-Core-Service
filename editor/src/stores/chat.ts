@@ -15,6 +15,8 @@ import { fetchMessages } from '@/api/session'
 import type { AgentTaskList } from '@/api/taskList'
 import { useSessionStore } from '@/stores/session'
 import { useTaskListStore } from '@/stores/taskList'
+import { useWorkspaceStore } from '@/stores/workspace'
+import type { MarkdownHtmlVisualizationPayload } from '@/types/knowledge'
 
 export interface AgentChatMessage {
   role: 'user' | 'assistant' | 'system'
@@ -461,6 +463,11 @@ export const useChatStore = defineStore('chat', () => {
 
         if (chunk.type === 'task_list_updated') {
           useTaskListStore().setTaskList(chunk.task_list as AgentTaskList | null)
+          continue
+        }
+
+        if (chunk.type === 'markdown_html_visualization' && chunk.visualization) {
+          useWorkspaceStore().showMarkdownHtmlVisualization(chunk.visualization as MarkdownHtmlVisualizationPayload)
           continue
         }
 

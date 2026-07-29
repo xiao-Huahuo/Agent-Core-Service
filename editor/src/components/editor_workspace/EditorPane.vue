@@ -7,11 +7,12 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onErrorCaptured, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Columns2, Eye, Pencil, Save, X } from 'lucide-vue-next'
+import { Columns2, Eye, Pencil, Save, Sparkles, X } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
 import CodeEditor from '@/components/editor_workspace/CodeEditor.vue'
 import CodePreview from '@/components/editor_workspace/CodePreview.vue'
+import MarkdownHtmlVisualizationPanel from '@/components/editor_workspace/MarkdownHtmlVisualizationPanel.vue'
 import MarkdownPreview from '@/components/editor_workspace/MarkdownPreview.vue'
 import MultimodalPreview from '@/components/editor_workspace/MultimodalPreview.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -23,6 +24,7 @@ const { editorMode } = storeToRefs(workspaceStore)
 const segmentedRef = ref<HTMLElement | null>(null)
 const modeButtonRefs = ref<HTMLElement[]>([])
 const indicatorStyle = ref({ width: '0px', transform: 'translateX(0px)' })
+const visualizeMenuOpen = ref(false)
 
 const splitRatio = ref(0.5)
 const splitBodyRef = ref<HTMLElement | null>(null)
@@ -90,6 +92,25 @@ const modeButtons: Array<{ mode: EditorViewMode; label: string; icon: typeof Pen
   { mode: 'preview', label: 'Preview', icon: Eye },
   { mode: 'split', label: 'Split', icon: Columns2 },
 ]
+
+const visualizationOptions = [
+  { key: 'strongMotion', label: '强动效' },
+  { key: 'shadow', label: '阴影' },
+  { key: 'rounded', label: '圆角' },
+  { key: 'emoji', label: 'emoji' },
+] as const
+
+function handleVisualizationStart() {
+  visualizeMenuOpen.value = false
+  void workspaceStore.startMarkdownHtmlVisualization()
+}
+
+function handleVisualizationOptionChange(
+  key: typeof visualizationOptions[number]['key'],
+  event: Event,
+) {
+  workspaceStore.setMarkdownHtmlVisualizationOption(key, (event.target as HTMLInputElement).checked)
+}
 
 let resizeObserver: ResizeObserver | null = null
 
@@ -249,6 +270,48 @@ watch(
             <span>{{ button.label }}</span>
           </button>
         </div>
+        <div class="visualize-menu" :class="{ open: visualizeMenuOpen }">
+          <button
+            class="visualize-trigger"
+            type="button"
+            :disabled="!workspaceStore.activeTab || workspaceStore.selectedNode?.isDir"
+            @click="visualizeMenuOpen = !visualizeMenuOpen"
+          >
+            <Sparkles :size="15" />
+            <span>可视化</span>
+          </button>
+          <div v-if="visualizeMenuOpen" class="visualize-popover">
+            <div class="visualize-mode">
+              <button
+                type="button"
+                :class="{ active: workspaceStore.markdownHtmlVisualizationMode === 'structure' }"
+                @click="workspaceStore.setMarkdownHtmlVisualizationMode('structure')"
+              >
+                原结构
+              </button>
+              <button
+                type="button"
+                :class="{ active: workspaceStore.markdownHtmlVisualizationMode === 'insight' }"
+                @click="workspaceStore.setMarkdownHtmlVisualizationMode('insight')"
+              >
+                AI提炼
+              </button>
+            </div>
+            <div class="visualize-options">
+              <label v-for="option in visualizationOptions" :key="option.key">
+                <input
+                  type="checkbox"
+                  :checked="workspaceStore.markdownHtmlVisualizationOptions[option.key]"
+                  @change="handleVisualizationOptionChange(option.key, $event)"
+                />
+                <span>{{ option.label }}</span>
+              </label>
+            </div>
+            <button class="visualize-submit" type="button" @click="handleVisualizationStart">
+              一键可视化
+            </button>
+          </div>
+        </div>
         <button
           class="save-button"
           type="button"
@@ -302,11 +365,13 @@ watch(
     <div v-else class="editor-empty">
       <p>选择文件以开始编辑。</p>
     </div>
+    <MarkdownHtmlVisualizationPanel />
   </main>
 </template>
 
 <style scoped>
 .editor-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -455,6 +520,109 @@ watch(
   opacity: 0.42;
 }
 
+.visualize-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.visualize-trigger,
+.visualize-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  height: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: calc(11px * var(--font-scale));
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.visualize-trigger {
+  padding: 0 var(--space-8);
+}
+
+.visualize-trigger:hover,
+.visualize-menu.open .visualize-trigger {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.visualize-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.visualize-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  width: min(280px, 78vw);
+  gap: var(--space-8);
+  padding: var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+}
+
+.visualize-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.visualize-mode button {
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas-soft);
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.visualize-mode button.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: white;
+}
+
+.visualize-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+}
+
+.visualize-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-width: 0;
+  color: var(--color-text);
+  font-size: calc(11px * var(--font-scale));
+}
+
+.visualize-options input {
+  flex: 0 0 auto;
+}
+
+.visualize-submit {
+  width: 100%;
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: white;
+}
+
 .save-button {
   padding: 0 var(--space-8);
   border: 1px solid var(--color-primary);
@@ -553,6 +721,11 @@ watch(
   .tab-actions {
     width: 100%;
     overflow: hidden;
+  }
+
+  .visualize-trigger span,
+  .save-button span {
+    display: none;
   }
 
   .segmented kbd {

@@ -8,6 +8,7 @@
 
 import { apiDelete, apiGet, apiPost, apiPostForm, apiPut, buildApiUrl, streamLines } from '@/api/client'
 import { API_ROUTES } from '@/router/api_routes'
+import type { MarkdownHtmlVisualizationPayload } from '@/types/knowledge'
 
 export interface AgentStreamChunk {
   type?: string
@@ -17,6 +18,7 @@ export interface AgentStreamChunk {
   trace?: Array<Record<string, unknown>>
   metadata?: Record<string, unknown>
   context_messages?: unknown[]
+  visualization?: MarkdownHtmlVisualizationPayload
 }
 
 export type AgentLoopMode = 'auto' | 'simple' | 'react' | 'plan'

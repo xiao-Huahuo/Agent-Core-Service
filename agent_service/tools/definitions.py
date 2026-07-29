@@ -41,6 +41,7 @@ from agent_service.tools.builtin import (
     run_terminal_command,
     save_uploaded_attachment_to_knowledge,
     search_knowledge,
+    show_markdown_html,
     toggle_todo,
     use_skill,
     web_search,
@@ -89,6 +90,7 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
             "- full_access: 所有内部指令和外部程序放开限制,额外支持 kill/taskkill 杀进程,"
             "rm -rf/mkdir -p/批量 cat/mv 等都允许。\n\n"
             "注意事项:\n"
+            "- 读取或解析知识库中的文档正文时, 不要使用本工具; 文本/Markdown/代码用 read_knowledge_file, PDF/图片/Office/表格/扫描件用 read_multimodal_file_info。\n"
             "- 文件搜索优先用 ls/dir *.docx /s /b 或 find . -name '*.docx'。\n"
             "- 需要标志的 wc(如 wc -l)用 external_program 类型;仅统计用 internal_command。\n"
             "- 所有 internal_command 都无需 shell 程序支持,在任何环境下可用。"
@@ -325,7 +327,12 @@ FILE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     ),
     BuiltinToolDefinition(
         name="read_knowledge_file",
-        description="读取知识库中指定文本文件的内容。先调用 list_knowledge_files 查看文件列表,再读取感兴趣的文件。",
+        description=(
+            "读取知识库中指定纯文本、Markdown、代码等文本文件的正文内容。"
+            "这是知识库文本文件正文读取的专用入口；如果用户已经给出准确 path, 直接用该 path 读取, 不需要先列目录。"
+            "PDF、图片、Office 文档、表格、扫描件等已灌库的多模态/二进制文档不要用本工具, 必须改用 read_multimodal_file_info。"
+            "不要为了读取知识库文档正文而调用 run_terminal_command、get_knowledge_file_url、download_file 或 Python 库自行解析源文件。"
+        ),
         args_schema={
             "type": "object",
             "properties": {"path": {"type": "string", "description": "文件相对于知识库根目录的路径。"}},
@@ -336,7 +343,12 @@ FILE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     ),
     BuiltinToolDefinition(
         name="read_multimodal_file_info",
-        description="读取已灌库的多模态文件结构化信息,返回标题、模态、元数据、章节列表和内容预览。",
+        description=(
+            "读取已灌库多模态/二进制文档的结构化 JSON 提取结果。"
+            "PDF、图片、扫描件、Word、PPT、Excel、表格等文件要用本工具获取内容、章节、OCR、元数据和抽取文本。"
+            "这是多模态知识库文档内容读取的专用入口；不要调用 run_terminal_command、get_knowledge_file_url、download_file 或 Python 库自行解析源文件。"
+            "生成文档可视化、摘要或问答时, 应基于本工具返回的 JSON 结构化结果。"
+        ),
         args_schema={
             "type": "object",
             "properties": {"path": {"type": "string", "description": "文件相对于当前知识库根目录的路径。"}},
@@ -358,6 +370,28 @@ FILE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         },
         function=write_knowledge_file,
         display_name="创作文件",
+    ),
+    BuiltinToolDefinition(
+        name="show_markdown_html",
+        description=(
+            "Display a generated Markdown/document HTML visualization in the editor front-end. "
+            "Use this only after you have produced the final complete HTML for the current document visualization. "
+            "The tool saves the HTML under runtime/visualizations, returns the local path and URL, "
+            "and automatically triggers the front-end iframe mount. For multimodal documents, first read the JSON "
+            "extraction result with read_multimodal_file_info and build the HTML from that structured result."
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Visualization title shown in the front-end panel."},
+                "html": {"type": "string", "description": "Complete standalone HTML document or valid HTML fragment."},
+                "source_path": {"type": "string", "description": "Optional source document path in the knowledge library."},
+                "filename": {"type": "string", "description": "Optional preferred HTML filename; it will be sanitized and timestamped."},
+            },
+            "required": ["title", "html"],
+        },
+        function=show_markdown_html,
+        display_name="展示Markdown-HTML",
     ),
     BuiltinToolDefinition(
         name="delete_knowledge_file",

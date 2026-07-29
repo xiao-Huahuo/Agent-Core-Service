@@ -276,6 +276,32 @@ def clear_task_list_callback() -> None:
         delattr(_TASK_LIST_CALLBACK, "callback")
 
 
+# ------------------------------------------------------------------
+# Markdown HTML visualization callback
+# ------------------------------------------------------------------
+
+_MARKDOWN_HTML_VISUALIZATION_CALLBACK: local = local()
+
+
+def set_markdown_html_visualization_callback(callback: Callable[[dict[str, Any]], None]) -> None:
+    """Set the current thread Markdown-to-HTML visualization callback."""
+
+    _MARKDOWN_HTML_VISUALIZATION_CALLBACK.callback = callback
+
+
+def get_markdown_html_visualization_callback() -> Callable[[dict[str, Any]], None] | None:
+    """Return the current thread Markdown-to-HTML visualization callback."""
+
+    return getattr(_MARKDOWN_HTML_VISUALIZATION_CALLBACK, "callback", None)
+
+
+def clear_markdown_html_visualization_callback() -> None:
+    """Clear the current thread Markdown-to-HTML visualization callback."""
+
+    if hasattr(_MARKDOWN_HTML_VISUALIZATION_CALLBACK, "callback"):
+        delattr(_MARKDOWN_HTML_VISUALIZATION_CALLBACK, "callback")
+
+
 def get_tool_runtime() -> ToolRuntimeState:
     """
     获取当前线程的工具运行时状态。

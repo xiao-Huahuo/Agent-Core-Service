@@ -31,6 +31,7 @@ const DashboardView = defineAsyncComponent(() => import('@/views/DashboardView.v
 const DebugView = defineAsyncComponent(() => import('@/views/DebugView.vue'))
 const IngestionProgressView = defineAsyncComponent(() => import('@/views/IngestionProgressView.vue'))
 const LibraryView = defineAsyncComponent(() => import('@/views/LibraryView.vue'))
+const MarkdownHtmlVisualizationView = defineAsyncComponent(() => import('@/views/MarkdownHtmlVisualizationView.vue'))
 const SearchPage = defineAsyncComponent(() => import('@/views/SearchPage.vue'))
 const SkillView = defineAsyncComponent(() => import('@/views/SkillView.vue'))
 import SettingsView from '@/views/SettingsView.vue'
@@ -79,6 +80,15 @@ watch(agentSidebarOpen, (val) => {
     workspaceStore.agentSidebarOpen = val
   }
 })
+
+watch(
+  [() => workspaceStore.mainView, () => workspaceStore.agentSidebarOpen],
+  ([mainView, agentOpen]) => {
+    if (mainView === 'visualization' && agentOpen) {
+      fileSidebarOpen.value = false
+    }
+  },
+)
 
 
 const workspaceGridStyle = computed<Record<string, string>>(() => ({
@@ -247,6 +257,15 @@ function openIngestion() {
   }
 }
 
+function openVisualization() {
+  const next = workspaceStore.mainView === 'visualization' ? 'editor' : 'visualization'
+  workspaceStore.setMainView(next)
+  if (next === 'visualization') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
+}
+
 function openSearch() {
   const next = workspaceStore.mainView === 'search' ? 'editor' : 'search'
   workspaceStore.setMainView(next)
@@ -393,6 +412,7 @@ onBeforeUnmount(() => {
         :resources-active="workspaceStore.mainView === 'resources'"
         :library-active="workspaceStore.mainView === 'library'"
         :ingestion-active="workspaceStore.mainView === 'ingestion'"
+        :visualization-active="workspaceStore.mainView === 'visualization'"
         :agent-active="workspaceStore.mainView === 'agent'"
         :graph-active="workspaceStore.mainView === 'graph'"
         :todo-active="workspaceStore.todoSidebarOpen"
@@ -406,6 +426,7 @@ onBeforeUnmount(() => {
         @open-resources="openResources"
         @open-library="openLibrary"
         @open-ingestion="openIngestion"
+        @open-visualization="openVisualization"
         @toggle-agent="openAgentPage"
         @toggle-graph="toggleGraphView"
         @toggle-todo="toggleTodoSidebar"
@@ -426,6 +447,7 @@ onBeforeUnmount(() => {
       <FileResourceManager v-else-if="workspaceStore.mainView === 'resources'" class="editor-col ide-panel" />
       <LibraryView v-else-if="workspaceStore.mainView === 'library'" class="editor-col ide-panel" />
       <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="editor-col ide-panel" />
+      <MarkdownHtmlVisualizationView v-else-if="workspaceStore.mainView === 'visualization'" class="editor-col ide-panel" />
       <AgentPage v-else-if="workspaceStore.mainView === 'agent'" class="editor-col ide-panel" />
       <GraphPane v-else-if="workspaceStore.mainView === 'graph'" class="editor-col ide-panel" @open-node="openGraphNode" />
       <DashboardView v-else-if="workspaceStore.mainView === 'dashboard'" class="editor-col ide-panel" />
