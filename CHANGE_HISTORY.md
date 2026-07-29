@@ -1300,3 +1300,14 @@
 - 统一文件树与 chrome 背景色,并为 EditorWorkspace 主内容 shell 恢复四周小阴影; shell 设置更高层级,让阴影覆盖在顶栏、文件树和左侧栏之上。
 - 修正资源管理器在主内容 shell 内的宽度适配: FileResourceManager 根容器和内容区显式填满父容器并使用画布背景; 主内容 shell 背景恢复为应用画布色,避免亮色模式出现灰色卡片底。
 - 减弱 EditorWorkspace 主内容 shell 的四周阴影强度,让圆角卡片边界更克制。
+- 调整 Agent 主页面历史侧边栏布局: 仅在 page 模式下放开外层主内容 shell 裁剪,让 SessionDrawer 使用左侧栏 chrome 背景显示在聊天卡片之外; 聊天区改为独立圆角内容卡片并保留原有打开/收起控制逻辑,侧边栏模式不变。
+- 统一 Agent 侧栏 chrome 视觉: 右侧 Agent 侧边栏与其历史 SessionDrawer 改为左侧栏同色背景并移除边框; 主内容大卡片显式清除 outline,阴影改为轻微下投影以避免四边呈现边框感。
+- 为主内容卡片恢复明确的 1px 圆角细边框,并同步给 Agent 独立页面的聊天卡片添加同样边框,让边界沿圆角连续闭合。
+- 将主内容卡片与 Agent 独立页面聊天卡片边框临时加粗到 6px,用于明确验证可见边界是否来自卡片本体。
+- 撤销主内容卡片与 Agent 独立页面聊天卡片的厚边框,改为参考示例卡片的无边框双层阴影: `0 10px 15px -3px` 与 `0 4px 6px -2px`。
+- 移除主内容卡片直接包裹页面的贴边细线: 清理编辑器主区域、资源管理器工具栏/表头/内容分隔、库页工具栏、可视化工具栏/结果容器、图谱工具栏/侧栏分隔、设置页侧栏分隔和移动端调试页顶部 tabs 分隔线。
+- 继续去除编辑区组件根层边框: CodeEditor、CodePreview 和 MarkdownPreview 根容器改为无边框无圆角,并移除 CodeEditor 顶部栏底线; 同时让 Agent SessionDrawer 关闭态禁用 pointer-events,避免未展开时截获左侧栏点击。
+- 更正编辑区边框处理范围: 恢复 CodeEditor、CodePreview、MarkdownPreview 和编辑器 tab/body 的内部边框,仅让 editor 主视图的 main-shell 去掉外层阴影包裹感,对应“囊括文件 tab、模式切换和编辑区的大块外框”。
+- 按编辑页可见区域重新清理边框: 移除文件 tab、模式切换、可视化/保存按钮、编辑主体、CodeEditor、CodePreview、MarkdownPreview、MultimodalPreview 根层以及 CodeEditor 顶部/查找栏分隔线的边框,保留临时菜单、输入框和表格内部网格线。
+- 针对 `EditorWorkspace.vue` 中直接挂载 `EditorPane` 的层级继续去除编辑页卡片感: 为 EditorPane 添加 `editor-main-content` 类,并让 editor 视图的 main-shell 透明、无圆角、无裁剪和无阴影,避免 EditorPane 作为主内容子页面时仍呈现额外外框。
+- 回退错误的 editor main-shell 透明化处理: 移除 `editor-page-main-shell` 和 `editor-main-content`,恢复编辑页使用默认大圆角主内容卡片,避免编辑区大圆角卡片消失。

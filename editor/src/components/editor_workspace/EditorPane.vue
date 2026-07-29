@@ -375,6 +375,7 @@ watch(
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border: 0;
   background: var(--color-canvas-soft);
   font-family: var(--font-ui);
 }
@@ -410,7 +411,7 @@ watch(
   height: 28px;
   transform: translateY(2px);
   padding: 0 var(--space-10);
-  border: 1px solid var(--color-border);
+  border: 0;
   border-bottom: 0;
   border-radius: 8px 8px 0 0;
   background: var(--color-canvas);
@@ -462,7 +463,7 @@ watch(
   position: relative;
   display: inline-flex;
   padding: 2px;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: var(--radius-md);
   background: var(--color-canvas-soft);
 }
@@ -532,7 +533,7 @@ watch(
   justify-content: center;
   gap: var(--space-4);
   height: 22px;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text);
@@ -567,7 +568,7 @@ watch(
   width: min(280px, 78vw);
   gap: var(--space-8);
   padding: var(--space-10);
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: var(--radius-md);
   background: var(--color-canvas);
 }
@@ -580,7 +581,7 @@ watch(
 
 .visualize-mode button {
   height: 24px;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: var(--radius-sm);
   background: var(--color-canvas-soft);
   color: var(--color-text-muted);
@@ -625,7 +626,7 @@ watch(
 
 .save-button {
   padding: 0 var(--space-8);
-  border: 1px solid var(--color-primary);
+  border: 0;
   color: var(--color-text);
 }
 
@@ -647,7 +648,7 @@ watch(
   margin: 0 var(--space-10) var(--space-10);
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: 0 8px 8px 8px;
   background: var(--color-canvas);
 }

@@ -463,6 +463,16 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
 
+    <SessionDrawer
+      :open="sessionDrawerOpen"
+      :mode="props.mode"
+      :user-id="userId"
+      @close="closeSessionDrawer"
+      @create="createSession"
+      @select="selectSession"
+    />
+
+    <div class="agent-chat-card">
     <header v-if="props.mode === 'page'" class="agent-topbar">
       <div class="topbar-capsule" :class="{ 'drawer-open': sessionDrawerOpen }">
         <button class="capsule-logo-btn" type="button" title="Toggle sidebar" @click="sessionDrawerOpen = !sessionDrawerOpen">
@@ -599,14 +609,6 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-    <SessionDrawer
-      :open="sessionDrawerOpen"
-      :mode="props.mode"
-      :user-id="userId"
-      @close="closeSessionDrawer"
-      @create="createSession"
-      @select="selectSession"
-    />
     <div class="agent-body">
       <header v-if="props.mode === 'panel'" class="agent-titlebar">
       <button
@@ -717,6 +719,7 @@ onBeforeUnmount(() => {
     <TaskListDrawer />
     </div>
     </div>
+    </div>
   </aside>
 </template>
 
@@ -765,7 +768,8 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border: 0;
   border-radius: 0;
-  background: var(--color-canvas-soft);
+  outline: none;
+  background: var(--color-chrome-rail-bg);
   height: 100%;
 }
 
@@ -776,7 +780,8 @@ onBeforeUnmount(() => {
   --agent-input-max-width: min(75vw, 960px);
   --agent-topbar-height: 48px;
   border: 0;
-  background: var(--color-canvas-soft);
+  overflow: visible;
+  background: transparent;
   backdrop-filter: none;
 }
 
@@ -784,6 +789,29 @@ onBeforeUnmount(() => {
   --agent-content-offset: var(--agent-drawer-width);
   --agent-chat-max-width: min(calc(100vw - var(--agent-content-offset) - 48px), 1100px);
   --agent-input-max-width: min(calc(100vw - var(--agent-content-offset) - 96px), 960px);
+}
+
+.agent-chat-card {
+  display: contents;
+}
+
+.agent-panel.agent-page-mode .agent-chat-card {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin-left: var(--agent-content-offset);
+  overflow: hidden;
+  border: 0;
+  border-radius: 28px;
+  background: var(--color-bg-app);
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  transition: margin-left 200ms ease;
 }
 
 .agent-panel.attachment-drop-active {
@@ -799,7 +827,7 @@ onBeforeUnmount(() => {
   gap: var(--space-8);
   min-height: 28px;
   padding: 0 var(--space-10);
-  background: var(--color-bg-muted);
+  background: transparent;
 }
 
 .agent-topbar {
@@ -813,8 +841,8 @@ onBeforeUnmount(() => {
   transition: padding-left 200ms ease;
 }
 
-.agent-panel.agent-drawer-open .agent-topbar {
-  padding-left: calc(var(--space-12) + var(--agent-content-offset));
+.agent-panel.agent-page-mode.agent-drawer-open .agent-topbar {
+  padding-left: var(--space-12);
 }
 
 .topbar-capsule {
@@ -1378,8 +1406,8 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   width: 100%;
   align-self: stretch;
-  padding-right: max(var(--space-16), calc((100% - var(--agent-content-offset) - var(--agent-chat-max-width)) / 2));
-  padding-left: max(var(--space-16), calc(var(--agent-content-offset) + (100% - var(--agent-content-offset) - var(--agent-chat-max-width)) / 2));
+  padding-right: max(var(--space-16), calc((100% - var(--agent-chat-max-width)) / 2));
+  padding-left: max(var(--space-16), calc((100% - var(--agent-chat-max-width)) / 2));
   transition:
     padding-right 200ms ease,
     padding-left 200ms ease;
@@ -1395,7 +1423,7 @@ onBeforeUnmount(() => {
 }
 
 .agent-page-mode :deep(.chat-input-wrap) {
-  left: calc(var(--agent-content-offset) + (100% - var(--agent-content-offset)) / 2);
+  left: 50%;
   max-width: var(--agent-input-max-width);
   transition:
     left 200ms ease,
@@ -1405,8 +1433,8 @@ onBeforeUnmount(() => {
 
 .agent-page-mode .stream-error {
   width: min(100%, var(--agent-chat-max-width));
-  margin-right: max(var(--space-16), calc((100% - var(--agent-content-offset) - var(--agent-chat-max-width)) / 2));
-  margin-left: max(var(--space-16), calc(var(--agent-content-offset) + (100% - var(--agent-content-offset) - var(--agent-chat-max-width)) / 2));
+  margin-right: max(var(--space-16), calc((100% - var(--agent-chat-max-width)) / 2));
+  margin-left: max(var(--space-16), calc((100% - var(--agent-chat-max-width)) / 2));
 }
 
 .scroll-bottom-button {
@@ -1474,7 +1502,7 @@ onBeforeUnmount(() => {
 }
 
 .agent-page-mode .scroll-bottom-button {
-  left: calc(var(--agent-content-offset) + (100% - var(--agent-content-offset)) / 2);
+  left: 50%;
 }
 
 
@@ -1511,7 +1539,7 @@ onBeforeUnmount(() => {
 }
 
 .agent-page-mode .thinking-flow {
-  left: max(var(--space-16), calc(var(--agent-content-offset) + (100% - var(--agent-content-offset) - var(--agent-input-max-width)) / 2));
+  left: max(var(--space-16), calc((100% - var(--agent-input-max-width)) / 2));
 }
 
 .welcome-center {
@@ -1527,10 +1555,10 @@ onBeforeUnmount(() => {
 }
 
 .agent-page-mode .welcome-center {
-  right: calc((100% - var(--agent-content-offset)) / 2);
-  left: auto;
+  right: auto;
+  left: 50%;
   width: min(100%, var(--agent-chat-max-width));
-  transform: translateX(50%);
+  transform: translateX(-50%);
   transition: right 200ms ease;
 }
 
@@ -1632,8 +1660,8 @@ onBeforeUnmount(() => {
 }
 
 .agent-page-mode .history-loading {
-  margin-left: var(--agent-content-offset);
-  width: calc(100% - var(--agent-content-offset));
+  margin-left: 0;
+  width: 100%;
   transition:
     margin-left 200ms ease,
     width 200ms ease;

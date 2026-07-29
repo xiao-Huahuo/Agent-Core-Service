@@ -443,7 +443,12 @@ onBeforeUnmount(() => {
         aria-label="Resize file tree"
         @pointerdown="startResize('file', $event)"
       ></div>
-      <main class="main-shell editor-col ide-panel">
+      <main
+        class="main-shell editor-col ide-panel"
+        :class="{
+          'agent-page-main-shell': isAgentPage,
+        }"
+      >
         <EditorPane v-if="workspaceStore.mainView === 'editor'" class="main-shell-content" />
         <FileResourceManager v-else-if="workspaceStore.mainView === 'resources'" class="main-shell-content" />
         <LibraryView v-else-if="workspaceStore.mainView === 'library'" class="main-shell-content" />
@@ -550,9 +555,18 @@ onBeforeUnmount(() => {
   margin: 0 var(--space-12) var(--space-12) 0;
   overflow: hidden;
   border: 0;
+  outline: none;
   border-radius: 28px;
   background: var(--color-bg-app);
-  box-shadow: 0 0 12px rgba(15, 23, 42, 0.09);
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.main-shell.ide-panel.agent-page-main-shell {
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
 }
 
 .main-shell-content {
@@ -571,6 +585,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  background: var(--color-chrome-rail-bg);
   transition:
     opacity 160ms ease,
     transform 180ms ease;

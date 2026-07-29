@@ -216,7 +216,7 @@ onMounted(() => {
     background: var(--color-bg-app);
     border: none;
     border-radius: 0;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 0;
     align-self: auto;
   }
 

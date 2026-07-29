@@ -319,8 +319,8 @@ onBeforeUnmount(() => {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border: 0;
+  border-radius: 0;
   background: var(--color-surface-raised);
   color: var(--color-text-secondary);
 }

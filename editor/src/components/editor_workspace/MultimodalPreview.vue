@@ -117,8 +117,8 @@ function handleDocumentClick(event: MouseEvent) {
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border: 0;
+  border-radius: 0;
   background: var(--color-canvas);
   font-family: var(--font-ui);
 }

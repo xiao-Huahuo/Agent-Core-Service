@@ -194,7 +194,8 @@ async function clearAllSessions() {
   flex-direction: column;
   width: min(290px, calc(100% - 24px));
   overflow: hidden;
-  border: 1px solid var(--color-border);
+  border: 0;
+  outline: none;
   border-radius: var(--radius-md);
   background: var(--color-chrome-rail-bg);
   transform: translateX(calc(-100% - 16px));
@@ -202,11 +203,13 @@ async function clearAllSessions() {
     transform 200ms ease,
     opacity 160ms ease;
   opacity: 0;
+  pointer-events: none;
 }
 
 .session-drawer.open {
   transform: translateX(0);
   opacity: 1;
+  pointer-events: auto;
 }
 
 .session-drawer.page-mode {

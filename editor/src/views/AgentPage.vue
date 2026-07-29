@@ -23,8 +23,8 @@ import AgentPanel from '@/components/editor_workspace/AgentPanel.vue'
   position: relative;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
-  background: var(--color-canvas-soft);
+  overflow: visible;
+  background: transparent;
 }
 
 .agent-page-shell {

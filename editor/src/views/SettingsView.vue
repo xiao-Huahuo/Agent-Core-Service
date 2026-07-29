@@ -703,7 +703,7 @@ onBeforeUnmount(() => {
   width: 120px;
   flex-shrink: 0;
   padding: var(--space-12) var(--space-8);
-  border-right: 1px solid var(--color-border);
+  border-right: 0;
   overflow-y: auto;
 }
 

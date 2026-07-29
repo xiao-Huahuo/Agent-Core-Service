@@ -561,7 +561,7 @@ watch(
   gap: var(--space-12);
   min-height: 38px;
   padding: 0 var(--space-10);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 0;
   background: var(--color-canvas);
 }
 
@@ -716,7 +716,7 @@ watch(
 }
 .graph-sidebar.open {
   width: 280px;
-  border-left: 1px solid var(--color-border);
+  border-left: 0;
 }
 
 .sidebar-header {
@@ -724,7 +724,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: var(--space-8) var(--space-12);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 0;
 }
 
 .sidebar-title {

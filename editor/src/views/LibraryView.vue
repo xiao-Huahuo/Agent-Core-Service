@@ -749,7 +749,7 @@ function errorMessage(error: unknown): string {
   min-width: 0;
   min-height: 40px;
   padding: 5px 8px;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 0;
   background: var(--color-surface-raised);
 }
 

@@ -361,7 +361,7 @@ function startVisualization() {
   justify-content: space-between;
   gap: var(--space-12);
   min-width: 0;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 0;
   background: var(--color-canvas);
 }
 
@@ -721,7 +721,7 @@ function startVisualization() {
   min-height: 0;
   margin: var(--space-12);
   overflow: hidden;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: var(--radius-md);
   background: var(--color-canvas);
 }
