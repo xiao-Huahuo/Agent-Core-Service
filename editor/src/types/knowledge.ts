@@ -18,12 +18,24 @@ export type EditorViewMode = 'edit' | 'preview' | 'split'
 /** Agent document visualization mode selected from the editor toolbar. */
 export type MarkdownHtmlVisualizationMode = 'structure' | 'insight'
 
+/** User-friendly design preset forwarded to the Agent visualization prompt. */
+export type MarkdownHtmlVisualizationPreset = 'balanced' | 'reader' | 'dashboard' | 'magazine'
+
 /** Presentation switches forwarded to the Agent visualization prompt. */
 export interface MarkdownHtmlVisualizationOptions {
   strongMotion: boolean
   shadow: boolean
   rounded: boolean
   emoji: boolean
+  visualHierarchy: boolean
+  gridLayout: boolean
+  callouts: boolean
+  denseLayout: boolean
+  typographyScale: boolean
+  contrast: boolean
+  accentColor: boolean
+  microInteractions: boolean
+  scrollReveal: boolean
 }
 
 /** Runtime HTML visualization payload emitted by the Agent tool stream. */

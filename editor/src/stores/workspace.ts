@@ -52,6 +52,7 @@ import type {
   MarkdownHtmlVisualizationMode,
   MarkdownHtmlVisualizationOptions,
   MarkdownHtmlVisualizationPayload,
+  MarkdownHtmlVisualizationPreset,
   GraphStatus,
   SearchResults,
   WorkspaceMainView,
@@ -682,11 +683,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const markdownHtmlVisualization = ref<MarkdownHtmlVisualizationPayload | null>(null)
   const markdownHtmlVisualizationOpen = ref(false)
   const markdownHtmlVisualizationMode = ref<MarkdownHtmlVisualizationMode>('structure')
+  const markdownHtmlVisualizationPreset = ref<MarkdownHtmlVisualizationPreset>('balanced')
+  const markdownHtmlVisualizationCustomRequirement = ref('')
   const markdownHtmlVisualizationOptions = ref<MarkdownHtmlVisualizationOptions>({
     strongMotion: false,
     shadow: false,
     rounded: false,
     emoji: false,
+    visualHierarchy: true,
+    gridLayout: true,
+    callouts: true,
+    denseLayout: false,
+    typographyScale: true,
+    contrast: true,
+    accentColor: false,
+    microInteractions: true,
+    scrollReveal: false,
   })
   const markdownHtmlVisualizationUrl = computed(() => {
     const url = markdownHtmlVisualization.value?.url ?? ''
@@ -1769,6 +1781,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     markdownHtmlVisualizationMode.value = mode
   }
 
+  function setMarkdownHtmlVisualizationPreset(preset: MarkdownHtmlVisualizationPreset) {
+    markdownHtmlVisualizationPreset.value = preset
+  }
+
   function setMarkdownHtmlVisualizationOption(
     key: keyof MarkdownHtmlVisualizationOptions,
     value: boolean,
@@ -1777,6 +1793,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       ...markdownHtmlVisualizationOptions.value,
       [key]: value,
     }
+  }
+
+  function setMarkdownHtmlVisualizationCustomRequirement(value: string) {
+    markdownHtmlVisualizationCustomRequirement.value = value
   }
 
   function showMarkdownHtmlVisualization(payload: MarkdownHtmlVisualizationPayload) {
@@ -1788,6 +1808,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   function closeMarkdownHtmlVisualization() {
     markdownHtmlVisualizationOpen.value = false
+    markdownHtmlVisualization.value = null
   }
 
   async function selectMarkdownHtmlVisualizationDocument(targetNode?: KnowledgeFileNode) {
@@ -1797,6 +1818,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return
     }
     await selectFile(node)
+    closeMarkdownHtmlVisualization()
     mainView.value = 'visualization'
     agentSidebarOpen.value = false
     todoSidebarOpen.value = false
@@ -1806,15 +1828,31 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const modeLine = markdownHtmlVisualizationMode.value === 'structure'
       ? '原结构模式: 严格保留并可视化文档原本的层级、章节、列表、表格和引用关系。不要额外扩展文档没有表达的知识。'
       : 'AI提炼模式: 先理解文档和相关知识，再重组为更清晰的知识页面，可以总结、归纳和补充必要的解释。'
+    const presetEntries: Record<MarkdownHtmlVisualizationPreset, string> = {
+      balanced: '均衡展示: 兼顾阅读、结构和视觉重点，适合大多数文档。',
+      reader: '阅读导向: 优先长文可读性、稳定排版、清晰章节和低干扰视觉。',
+      dashboard: '仪表盘导向: 优先摘要、指标、对比、分组和快速扫描。',
+      magazine: '杂志导向: 优先强标题、叙事节奏、重点图文区和更鲜明的版面层次。',
+    }
     const optionEntries: Array<[keyof MarkdownHtmlVisualizationOptions, string]> = [
       ['strongMotion', '强动效'],
       ['shadow', '阴影'],
       ['rounded', '圆角'],
       ['emoji', 'emoji'],
+      ['visualHierarchy', '视觉层级'],
+      ['gridLayout', '网格系统'],
+      ['callouts', '重点标注'],
+      ['denseLayout', '高信息密度'],
+      ['typographyScale', '字体层级'],
+      ['contrast', '对比度'],
+      ['accentColor', '强调色'],
+      ['microInteractions', '微交互'],
+      ['scrollReveal', '滚动揭示'],
     ]
     const optionLines = optionEntries
       .map(([key, label]) => `- ${label}: ${markdownHtmlVisualizationOptions.value[key] ? '启用' : '禁用'}`)
       .join('\n')
+    const customRequirement = markdownHtmlVisualizationCustomRequirement.value.trim()
     const preferredName = `${splitExtension(getBaseName(node.path)).stem || 'visualization'}.html`
     return [
       '请必须先调用 create_task_list 创建任务列表，并逐项完成后再结束。',
@@ -1833,7 +1871,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       '7. 生成结束后必须调用 show_markdown_html 工具，传入 title、source_path、filename 和完整 html，让前端自动挂载展示。',
       '',
       '高级生成配置:',
+      `- 展示预设: ${presetEntries[markdownHtmlVisualizationPreset.value]}`,
       optionLines,
+      ...(customRequirement ? ['', '自定义要求:', customRequirement] : []),
       '',
       `show_markdown_html 参数建议: source_path="${node.path}", filename="${preferredName}"。`,
     ].join('\n')
@@ -2480,10 +2520,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     markdownHtmlVisualization,
     markdownHtmlVisualizationOpen,
     markdownHtmlVisualizationMode,
+    markdownHtmlVisualizationPreset,
+    markdownHtmlVisualizationCustomRequirement,
     markdownHtmlVisualizationOptions,
     markdownHtmlVisualizationUrl,
     setMarkdownHtmlVisualizationMode,
+    setMarkdownHtmlVisualizationPreset,
     setMarkdownHtmlVisualizationOption,
+    setMarkdownHtmlVisualizationCustomRequirement,
     showMarkdownHtmlVisualization,
     closeMarkdownHtmlVisualization,
     selectMarkdownHtmlVisualizationDocument,

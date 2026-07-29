@@ -10,6 +10,8 @@ export const useTaskListStore = defineStore('taskList', () => {
   const autoOpenOnUpdate = ref(true)
   const loading = ref(false)
   const error = ref('')
+  const eventSerial = ref(0)
+  const lastEventType = ref<'created' | 'updated' | 'completed' | 'cleared'>('cleared')
 
   const hasTaskList = computed(() => taskList.value !== null)
   const currentItem = computed(() => {
@@ -21,8 +23,22 @@ export const useTaskListStore = defineStore('taskList', () => {
     return taskList.value?.items.filter((item) => item.status === 'completed').length ?? 0
   })
 
-  function setTaskList(next: AgentTaskList | null | undefined, options?: { open?: boolean }) {
+  function setTaskList(next: AgentTaskList | null | undefined, options?: { open?: boolean; emitEvent?: boolean }) {
+    const previous = taskList.value
     taskList.value = next ?? null
+    const shouldEmitEvent = options?.emitEvent ?? true
+    if (shouldEmitEvent) {
+      eventSerial.value += 1
+      if (!taskList.value) {
+        lastEventType.value = 'cleared'
+      } else if (taskList.value.status === 'completed') {
+        lastEventType.value = 'completed'
+      } else if (!previous || previous.task_list_id !== taskList.value.task_list_id) {
+        lastEventType.value = 'created'
+      } else {
+        lastEventType.value = 'updated'
+      }
+    }
     const shouldOpen = options?.open ?? autoOpenOnUpdate.value
     if (taskList.value && shouldOpen) {
       sidebarOpen.value = true
@@ -38,7 +54,7 @@ export const useTaskListStore = defineStore('taskList', () => {
     error.value = ''
     try {
       const response = await fetchSessionTaskList(sessionId)
-      setTaskList(response.task_list, options)
+      setTaskList(response.task_list, { ...options, emitEvent: false })
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e)
       taskList.value = null
@@ -68,6 +84,8 @@ export const useTaskListStore = defineStore('taskList', () => {
     taskList.value = null
     sidebarOpen.value = false
     error.value = ''
+    eventSerial.value += 1
+    lastEventType.value = 'cleared'
   }
 
   function setSidebarOpen(open: boolean) {
@@ -88,6 +106,8 @@ export const useTaskListStore = defineStore('taskList', () => {
     autoOpenOnUpdate,
     loading,
     error,
+    eventSerial,
+    lastEventType,
     hasTaskList,
     currentItem,
     completedCount,
