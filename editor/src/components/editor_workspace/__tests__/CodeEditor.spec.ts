@@ -4,9 +4,9 @@
  * Verifies that Markdown-only right-click commands transform the textarea
  * selection instead of depending on the browser's native context menu.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 
 import CodeEditor from '../CodeEditor.vue'
 
@@ -23,6 +23,45 @@ function mountMarkdownEditor(value: string) {
 }
 
 describe('CodeEditor Markdown context menu', () => {
+  it('renders an external query as yellow highlights while remaining readonly', () => {
+    const wrapper = mount(CodeEditor, {
+      props: {
+        modelValue: 'alpha beta alpha',
+        language: 'text',
+        readonly: true,
+        highlightQuery: 'alpha',
+      },
+    })
+
+    expect(wrapper.get('textarea').attributes('readonly')).toBeDefined()
+    expect(wrapper.findAll('.highlight-layer .match-highlight')).toHaveLength(2)
+    expect(wrapper.find('.find-replace-bar').exists()).toBe(false)
+  })
+
+  it('blocks paste and save shortcuts while readonly', async () => {
+    const readText = vi.fn().mockResolvedValue('changed')
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { readText },
+    })
+    const wrapper = mount(CodeEditor, {
+      props: {
+        modelValue: 'original',
+        language: 'text',
+        readonly: true,
+      },
+    })
+    const textarea = wrapper.get('textarea')
+
+    await textarea.trigger('keydown', { key: 'v', ctrlKey: true, shiftKey: true })
+    await textarea.trigger('keydown', { key: 's', ctrlKey: true })
+    await flushPromises()
+
+    expect(readText).not.toHaveBeenCalled()
+    expect((wrapper.props() as { modelValue: string }).modelValue).toBe('original')
+    expect(wrapper.emitted('save')).toBeUndefined()
+  })
+
   it('wraps the selected text as bold Markdown', async () => {
     const wrapper = mountMarkdownEditor('hello')
     const textarea = wrapper.get('textarea').element as HTMLTextAreaElement

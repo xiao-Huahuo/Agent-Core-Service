@@ -13,11 +13,15 @@ import { FileSearch, Layers, List, Loader, Search, Sparkles, X } from 'lucide-vu
 import { highlightMatch } from '@/utils/highlight'
 import { useWorkspaceStore } from '@/stores/workspace'
 import SplitText from '@/components/editor_workspace/SplitText.vue'
+import SearchResultPreview from '@/components/search_page/SearchResultPreview.vue'
+import type { KnowledgeFileNode } from '@/types/knowledge'
 
 const workspaceStore = useWorkspaceStore()
 
 const inputEl = ref<HTMLInputElement | null>(null)
 const hasSearched = ref(false)
+/** Result currently displayed in the in-page readonly preview. */
+const selectedPreview = ref<{ path: string; semanticOnly: boolean } | null>(null)
 
 const unifiedMode = computed({
   get: () => workspaceStore.searchUnified,
@@ -33,6 +37,7 @@ function onSubmit() {
   const q = workspaceStore.searchQuery.trim()
   if (!q) return
   hasSearched.value = true
+  selectedPreview.value = null
   workspaceStore.performSearch(q)
 }
 
@@ -43,16 +48,35 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
-function openResult(path: string) {
+/** Resolves search backend paths to the current knowledge-tree node. */
+function resolveResultNode(path: string): KnowledgeFileNode | undefined {
   let node = workspaceStore.flatNodes?.find((n) => n.path === path)
   if (!node) {
     const name = baseName(path)
     node = workspaceStore.flatNodes?.find((n) => n.path.endsWith(`/${name}`) || n.name === name)
   }
+  return node
+}
+
+/** Opens a result inside the search page without mutating editor selection. */
+function previewResult(path: string, semanticOnly = false) {
+  const node = resolveResultNode(path)
+  if (!node || node.isDir) return
+  selectedPreview.value = { path: node.path, semanticOnly }
+}
+
+/** Enters the regular editor workflow after a result is double-clicked. */
+function openResult(path: string) {
+  const node = resolveResultNode(path)
   if (node) {
     workspaceStore.setMainView('editor')
     workspaceStore.selectFile(node)
   }
+}
+
+/** Unified results highlight when they contain lexical evidence, not semantic evidence alone. */
+function isSemanticOnlyResult(item: MergedResult): boolean {
+  return Boolean(item.semanticContent && !item.fulltextSnippet && !item.filenameMatched)
 }
 
 function toggleFulltext() {
@@ -229,102 +253,123 @@ onMounted(() => {
 
     <!-- Results (below absolute search-stage, scrolls with page) -->
     <div v-if="hasSearched && workspaceStore.searchQuery" class="results-area">
-      <div v-if="workspaceStore.searchResults" class="results-header">
-        <span class="results-count">
-          {{ unifiedMode ? unifiedResults.length : (workspaceStore.searchResults.filename_results.length + workspaceStore.searchResults.fulltext_results.length + workspaceStore.searchResults.semantic_results.length) }} 个结果
-        </span>
-        <button
-          class="mode-toggle"
-          type="button"
-          :class="{ active: unifiedMode }"
-          @click="unifiedMode = !unifiedMode"
-        >
-          <component :is="unifiedMode ? Layers : List" :size="12" />
-          <span>{{ unifiedMode ? '联合搜索' : '搜索分离' }}</span>
-        </button>
-      </div>
+      <div class="results-workspace" :class="{ 'preview-open': selectedPreview }">
+        <div class="results-list-pane">
+          <div v-if="workspaceStore.searchResults" class="results-header">
+            <span class="results-count">
+              {{ unifiedMode ? unifiedResults.length : (workspaceStore.searchResults.filename_results.length + workspaceStore.searchResults.fulltext_results.length + workspaceStore.searchResults.semantic_results.length) }} 个结果
+            </span>
+            <button
+              class="mode-toggle"
+              type="button"
+              :class="{ active: unifiedMode }"
+              @click="unifiedMode = !unifiedMode"
+            >
+              <component :is="unifiedMode ? Layers : List" :size="12" />
+              <span>{{ unifiedMode ? '联合搜索' : '搜索分离' }}</span>
+            </button>
+          </div>
 
-      <div v-if="workspaceStore.searchResults" class="results-container">
+          <div v-if="workspaceStore.searchResults" class="results-container">
         <!-- === SEPARATED MODE === -->
-        <template v-if="!unifiedMode">
-          <div v-if="workspaceStore.searchResults.filename_results.length" class="result-group">
-            <div class="group-label">文件</div>
-            <button
-              v-for="item in workspaceStore.searchResults.filename_results"
-              :key="item.path"
-              class="result-card"
-              type="button"
-              @click="openResult(item.path)"
-            >
-              <div class="card-title">
-                <span class="card-name" v-html="highlightMatch(item.name, workspaceStore.searchQuery)" />
+            <template v-if="!unifiedMode">
+              <div v-if="workspaceStore.searchResults.filename_results.length" class="result-group">
+                <div class="group-label">文件</div>
+                <button
+                  v-for="item in workspaceStore.searchResults.filename_results"
+                  :key="item.path"
+                  class="result-card"
+                  :class="{ selected: selectedPreview?.path === resolveResultNode(item.path)?.path }"
+                  type="button"
+                  @click="previewResult(item.path)"
+                  @dblclick="openResult(item.path)"
+                >
+                  <div class="card-title">
+                    <span class="card-name" v-html="highlightMatch(item.name, workspaceStore.searchQuery)" />
+                  </div>
+                  <div class="card-path">{{ item.path }}</div>
+                </button>
               </div>
-              <div class="card-path">{{ item.path }}</div>
-            </button>
+
+              <div v-if="workspaceStore.searchResults.fulltext_results.length" class="result-group">
+                <div class="group-label">内容匹配</div>
+                <button
+                  v-for="item in workspaceStore.searchResults.fulltext_results"
+                  :key="item.source_uri"
+                  class="result-card"
+                  :class="{ selected: selectedPreview?.path === resolveResultNode(item.source_uri)?.path }"
+                  type="button"
+                  @click="previewResult(item.source_uri)"
+                  @dblclick="openResult(item.source_uri)"
+                >
+                  <div class="card-title">
+                    <span class="card-name">{{ baseName(item.source_uri) }}</span>
+                  </div>
+                  <div class="card-snippet" v-html="highlightMatch(item.snippet, workspaceStore.searchQuery)" />
+                  <div class="card-path">{{ item.source_uri }}</div>
+                </button>
+              </div>
+
+              <div v-if="workspaceStore.searchResults.semantic_results.length" class="result-group">
+                <div class="group-label">语义匹配</div>
+                <button
+                  v-for="item in workspaceStore.searchResults.semantic_results"
+                  :key="(item as Record<string, unknown>).memory_id as string"
+                  class="result-card"
+                  :class="{ selected: selectedPreview?.path === resolveResultNode((item as Record<string, unknown>).source_uri as string)?.path }"
+                  type="button"
+                  @click="previewResult((item as Record<string, unknown>).source_uri as string, true)"
+                  @dblclick="openResult((item as Record<string, unknown>).source_uri as string)"
+                >
+                  <div class="card-title">
+                    <span class="card-name">{{ baseName((item as Record<string, unknown>).source_uri as string) }}</span>
+                    <span class="semantic-tag">语义</span>
+                  </div>
+                  <div class="card-snippet">{{ (item as Record<string, unknown>).content }}</div>
+                  <div class="card-path">{{ (item as Record<string, unknown>).source_uri }}</div>
+                </button>
+              </div>
+            </template>
+
+            <!-- === UNIFIED MODE === -->
+            <template v-else>
+              <button
+                v-for="item in unifiedResults"
+                :key="item.path"
+                class="result-card"
+                :class="{ selected: selectedPreview?.path === resolveResultNode(item.path)?.path }"
+                type="button"
+                @click="previewResult(item.path, isSemanticOnlyResult(item))"
+                @dblclick="openResult(item.path)"
+              >
+                <div class="card-title">
+                  <span class="card-name" v-html="highlightMatch(item.name, workspaceStore.searchQuery)" />
+                  <span v-if="item.semanticContent" class="semantic-tag">语义</span>
+                </div>
+                <div
+                  v-if="item.fulltextSnippet"
+                  class="card-snippet"
+                  v-html="highlightMatch(item.fulltextSnippet, workspaceStore.searchQuery)"
+                />
+                <div v-else-if="item.semanticContent" class="card-snippet-truncated">{{ item.semanticContent.slice(0, 200) }}</div>
+                <div class="card-path">{{ item.path }}</div>
+              </button>
+            </template>
           </div>
 
-          <div v-if="workspaceStore.searchResults.fulltext_results.length" class="result-group">
-            <div class="group-label">内容匹配</div>
-            <button
-              v-for="item in workspaceStore.searchResults.fulltext_results"
-              :key="item.source_uri"
-              class="result-card"
-              type="button"
-              @click="openResult(item.source_uri)"
-            >
-              <div class="card-title">
-                <span class="card-name">{{ baseName(item.source_uri) }}</span>
-              </div>
-              <div class="card-snippet" v-html="highlightMatch(item.snippet, workspaceStore.searchQuery)" />
-              <div class="card-path">{{ item.source_uri }}</div>
-            </button>
+          <div v-else-if="!workspaceStore.searching" class="results-empty">
+            无匹配结果
           </div>
+        </div>
 
-          <div v-if="workspaceStore.searchResults.semantic_results.length" class="result-group">
-            <div class="group-label">语义匹配</div>
-            <button
-              v-for="item in workspaceStore.searchResults.semantic_results"
-              :key="(item as Record<string, unknown>).memory_id as string"
-              class="result-card"
-              type="button"
-              @click="openResult((item as Record<string, unknown>).source_uri as string)"
-            >
-              <div class="card-title">
-                <span class="card-name">{{ baseName((item as Record<string, unknown>).source_uri as string) }}</span>
-                <span class="semantic-tag">语义</span>
-              </div>
-              <div class="card-snippet">{{ (item as Record<string, unknown>).content }}</div>
-              <div class="card-path">{{ (item as Record<string, unknown>).source_uri }}</div>
-            </button>
-          </div>
-        </template>
-
-        <!-- === UNIFIED MODE === -->
-        <template v-else>
-          <button
-            v-for="item in unifiedResults"
-            :key="item.path"
-            class="result-card"
-            type="button"
-            @click="openResult(item.path)"
-          >
-            <div class="card-title">
-              <span class="card-name" v-html="highlightMatch(item.name, workspaceStore.searchQuery)" />
-              <span v-if="item.semanticContent" class="semantic-tag">语义</span>
-            </div>
-            <div
-              v-if="item.fulltextSnippet"
-              class="card-snippet"
-              v-html="highlightMatch(item.fulltextSnippet, workspaceStore.searchQuery)"
-            />
-            <div v-else-if="item.semanticContent" class="card-snippet-truncated">{{ item.semanticContent.slice(0, 200) }}</div>
-            <div class="card-path">{{ item.path }}</div>
-          </button>
-        </template>
-      </div>
-
-      <div v-else-if="!workspaceStore.searching" class="results-empty">
-        无匹配结果
+        <Transition name="preview-slide">
+          <SearchResultPreview
+            v-if="selectedPreview"
+            :path="selectedPreview.path"
+            :highlight-query="selectedPreview.semanticOnly ? '' : workspaceStore.searchQuery"
+            @close="selectedPreview = null"
+          />
+        </Transition>
       </div>
     </div>
   </div>
@@ -706,16 +751,31 @@ onMounted(() => {
 .results-area {
   margin-top: 140px;
   padding: 0 24px 80px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+}
+
+.results-workspace {
+  display: grid;
+  width: min(90%, 720px);
+  margin: 0 auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-16);
+  transition: width 220ms ease;
+}
+
+.results-workspace.preview-open {
+  width: min(96%, 1280px);
+  grid-template-columns: minmax(300px, 0.82fr) minmax(460px, 1.25fr);
+}
+
+.results-list-pane {
+  min-width: 0;
 }
 
 .results-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: min(90%, 720px);
+  width: 100%;
   margin-bottom: 16px;
 }
 
@@ -743,14 +803,14 @@ onMounted(() => {
 }
 
 .results-container {
-  width: min(90%, 720px);
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
 .results-empty {
-  width: min(90%, 720px);
+  width: 100%;
   text-align: center;
   padding: 60px 0;
   color: var(--color-text-muted);
@@ -788,6 +848,15 @@ onMounted(() => {
 
 .result-card:hover {
   background: var(--color-surface-active);
+}
+
+.result-card.selected {
+  background: var(--color-primary-soft);
+}
+
+.result-card:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }
 
 .card-title {
@@ -850,5 +919,37 @@ onMounted(() => {
   color: var(--color-accent);
   font-size: calc(10px * var(--font-scale));
   font-weight: 600;
+}
+
+.preview-slide-enter-active,
+.preview-slide-leave-active {
+  transition: opacity 200ms ease, transform 220ms ease;
+}
+
+.preview-slide-enter-from,
+.preview-slide-leave-to {
+  opacity: 0;
+  transform: translateX(18px);
+}
+
+@media (max-width: 900px) {
+  .results-workspace.preview-open {
+    width: min(96%, 720px);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .results-workspace.preview-open :deep(.search-result-preview) {
+    position: relative;
+    top: auto;
+    height: 60vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .results-workspace,
+  .preview-slide-enter-active,
+  .preview-slide-leave-active {
+    transition: none;
+  }
 }
 </style>

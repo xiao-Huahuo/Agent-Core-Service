@@ -13,6 +13,8 @@ const model = defineModel<string>({ required: true })
 const props = defineProps<{
   language: string
   readonly?: boolean
+  /** Optional query highlighted by readonly consumers such as search preview. */
+  highlightQuery?: string
 }>()
 
 const emit = defineEmits<{
@@ -76,20 +78,24 @@ const findQuery = ref('')
 const replaceQuery = ref('')
 const currentMatchIndex = ref(0)
 const isMarkdown = computed(() => ['md', 'markdown'].includes((props.language || '').toLowerCase()))
+/** Uses the find-bar query when open, otherwise the external preview query. */
+const activeHighlightQuery = computed(() => (
+  findBarOpen.value ? findQuery.value : (props.highlightQuery?.trim() ?? '')
+))
 const matches = computed(() => {
-  if (!findQuery.value) {
+  if (!activeHighlightQuery.value) {
     return []
   }
   const result: Array<{ start: number; end: number }> = []
   const haystack = model.value.toLowerCase()
-  const needle = findQuery.value.toLowerCase()
+  const needle = activeHighlightQuery.value.toLowerCase()
   let cursor = 0
   while (cursor <= haystack.length) {
     const found = haystack.indexOf(needle, cursor)
     if (found < 0) {
       break
     }
-    result.push({ start: found, end: found + findQuery.value.length })
+    result.push({ start: found, end: found + activeHighlightQuery.value.length })
     cursor = found + Math.max(1, needle.length)
   }
   return result
@@ -101,7 +107,7 @@ function escapeHtml(s: string): string {
 
 const highlightedHtml = computed(() => {
   const content = model.value
-  if (!findBarOpen.value || !findQuery.value || !content) {
+  if (!activeHighlightQuery.value || !content) {
     return escapeHtml(content)
   }
   const ms = matches.value
@@ -115,7 +121,7 @@ const highlightedHtml = computed(() => {
     if (m.start > pos) {
       result += escapeHtml(content.slice(pos, m.start))
     }
-    const cls = i === currentMatchIndex.value ? 'match-current' : 'match-highlight'
+    const cls = findBarOpen.value && i === currentMatchIndex.value ? 'match-current' : 'match-highlight'
     result += `<span class="${cls}">${escapeHtml(content.slice(m.start, m.end))}</span>`
     pos = m.end
   }
@@ -458,9 +464,17 @@ function handleEditorKeydown(event: KeyboardEvent) {
       (event.key.length === 1 || ['Backspace', 'Delete', 'Enter', 'Tab'].includes(event.key))) {
     pendingInputSnapshot = model.value
   }
-  const sel = selectedRange()
   const isModifier = event.ctrlKey || event.metaKey
-  if (!isModifier && !event.altKey && !props.readonly) {
+  const key = event.key.toLowerCase()
+  if (props.readonly) {
+    if (isModifier && !event.altKey && key === 'f') {
+      event.preventDefault()
+      openFindBar()
+    }
+    return
+  }
+  const sel = selectedRange()
+  if (!isModifier && !event.altKey) {
     const wrappers: Record<string, [string, string]> = {
       '*': ['*', '*'],
       '`': ['`', '`'],
@@ -478,7 +492,6 @@ function handleEditorKeydown(event: KeyboardEvent) {
   if (!isModifier || event.altKey) {
     return
   }
-  const key = event.key.toLowerCase()
   if (event.shiftKey && key === 'v') {
     event.preventDefault()
     void pasteFromClipboard()
@@ -499,9 +512,6 @@ function handleEditorKeydown(event: KeyboardEvent) {
     redo()
     return
   }
-  if (props.readonly) {
-    return
-  }
   if (key === 'b') {
     event.preventDefault()
     wrapSelection('**', '**', undefined, sel)
@@ -515,6 +525,13 @@ function handleEditorKeydown(event: KeyboardEvent) {
   if (key === 'd') {
     event.preventDefault()
     wrapSelection('~~', '~~', undefined, sel)
+  }
+}
+
+/** Emits save only for editable instances while consuming the browser shortcut. */
+function handleSaveShortcut() {
+  if (!props.readonly) {
+    emit('save')
   }
 }
 
@@ -582,7 +599,12 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <div class="editor-wrapper">
-      <div v-if="findBarOpen" ref="highlightRef" class="highlight-layer" v-html="highlightedHtml"></div>
+      <div
+        v-if="findBarOpen || Boolean(highlightQuery)"
+        ref="highlightRef"
+        class="highlight-layer"
+        v-html="highlightedHtml"
+      ></div>
       <textarea
         ref="textareaRef"
         v-model="model"
@@ -590,8 +612,8 @@ onBeforeUnmount(() => {
         :class="{ readonly }"
         spellcheck="false"
         :readonly="readonly"
-        @keydown.ctrl.s.prevent="$emit('save')"
-        @keydown.meta.s.prevent="$emit('save')"
+        @keydown.ctrl.s.prevent="handleSaveShortcut"
+        @keydown.meta.s.prevent="handleSaveShortcut"
         @keydown="handleEditorKeydown"
         @input="flushTypingSnapshot"
         @scroll="syncScroll"
