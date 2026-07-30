@@ -99,6 +99,7 @@
   --color-border-light: rgba(255, 255, 255, 0.04);
   --shadow-window: 0 0 0 1px rgba(255, 255, 255, 0.03), 0 8px 32px rgba(0, 0, 0, 0.4);
   --color-code-bg: #262626;
+  --color-tab-active: #1a1a2e;
 }
 
 :root[data-theme="light"] {
@@ -136,4 +137,5 @@
   --color-border-light: rgba(0, 0, 0, 0.04);
   --shadow-window: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 4px 24px rgba(0, 0, 0, 0.1);
   --color-code-bg: #f0f0f2;
+  --color-tab-active: #eceef0;
 }

@@ -278,7 +278,6 @@ watch(
             @click="visualizeMenuOpen = !visualizeMenuOpen"
           >
             <Sparkles :size="15" />
-            <span>可视化</span>
           </button>
           <div v-if="visualizeMenuOpen" class="visualize-popover">
             <div class="visualize-mode">
@@ -409,12 +408,10 @@ watch(
   width: min(260px, 45vw);
   max-width: min(260px, 45vw);
   height: 28px;
-  transform: translateY(2px);
   padding: 0 var(--space-10);
   border: 0;
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
-  background: var(--color-canvas);
+  border-radius: 999px;
+  background: var(--color-tab-active);
   color: var(--color-text);
   font-size: calc(12px * var(--font-scale));
   text-align: left;
@@ -526,7 +523,28 @@ watch(
   flex: 0 0 auto;
 }
 
-.visualize-trigger,
+.visualize-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.visualize-trigger:hover,
+.visualize-menu.open .visualize-trigger {
+  background: var(--color-accent);
+  color: white;
+}
+
 .visualize-submit {
   display: inline-flex;
   align-items: center;
@@ -542,16 +560,6 @@ watch(
     background var(--transition-fast),
     border-color var(--transition-fast),
     color var(--transition-fast);
-}
-
-.visualize-trigger {
-  padding: 0 var(--space-8);
-}
-
-.visualize-trigger:hover,
-.visualize-menu.open .visualize-trigger {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
 }
 
 .visualize-trigger:disabled {

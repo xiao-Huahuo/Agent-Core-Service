@@ -1,5 +1,12 @@
 # CHANGE HISTORY
 
+## 2026-07-30
+- [x] 编辑区打开文件选项卡改为圆角矩形并进一步改为胶囊、可视化按钮改为圆形图标:
+  - 新增 `--color-tab-active` 主题变量: 暗色 `#1a1a2e`(更亮), 亮色 `#eceef0`(更灰)
+  - `.tab-item` 改为全圆角 `var(--radius-md)`(8px), 再改为 `border-radius: 999px` 胶囊形状, 去掉 `translateY(2px)` 底部重叠
+  - 可视化按钮去掉 `<span>可视化</span>` 文字, 改为等宽高 22px 圆形按钮 (`border-radius: 50%`)
+  - 可视化按钮 hover/open 状态背景改为 `var(--color-accent)`(红) + 白色图标
+
 ## 2026-07-29
 - [x] 修复 MD-HTML 高级选项按钮全蓝导致不可辨识的问题:
   - 将 MD-HTML 顶栏主按钮样式从 `.toolbar-actions button` 收窄为直属按钮选择器, 避免高级下拉菜单里的模式、预设和分页按钮被错误套用主按钮蓝色背景。

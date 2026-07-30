@@ -7,21 +7,8 @@
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="大卡片">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/CodeEditor.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/CodeEditor.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/CodePreview.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/CodePreview.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/assets/ui-system.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/ui-system.css" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/GraphPane.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/MultimodalPreview.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/MultimodalPreview.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/SessionDrawer.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/SessionDrawer.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/AgentPage.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/AgentPage.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/DebugView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/DebugView.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/LibraryView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/LibraryView.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/MarkdownHtmlVisualizationView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/MarkdownHtmlVisualizationView.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -302,6 +289,7 @@
       <workItem from="1785156958440" duration="11035000" />
       <workItem from="1785205674487" duration="2033000" />
       <workItem from="1785212115660" duration="1797000" />
+      <workItem from="1785411230338" duration="1721000" />
     </task>
     <task id="LOCAL-00217" summary="可选的安全审核">
       <option name="closed" value="true" />
