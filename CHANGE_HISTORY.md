@@ -1,11 +1,30 @@
 # CHANGE HISTORY
 
 ## 2026-07-30
+- [x] 入库/图谱队列页面按钮统一大小; 待办按钮从左侧边栏移到顶栏; 队列/Skill/MD-HTML页面toggle样式与文件资源管理器对齐:
+  - `IngestionProgressView.vue`: `.topbar-action-clone` 改为 32x32 圆形按钮, 与 `.refresh-btn` 大小一致; `.tab-switch`/`.tab-slider`/`.tab-button` 样式改为与 `FileResourceManager.css` 的 `.resource-page-switch`/`.page-slider`/`.page-switch-button` 一致(26px 高度、13px 字号、2px 内边距、`--color-primary-softer` 滑块)
+  - `SkillView.vue`: `.tabs`(概览/定制) 替换为 `.resource-page-switch`/`.page-slider`/`.page-switch-button` 结构, 增加 `tabSwitchRef`/`tabSliderStyle`/`updateTabSlider`/`switchTab` 实现滑动指示器
+  - `MarkdownHtmlVisualizationView.vue`: 添加 `.mode-pill`/`.mode-slider`/`.mode-button` 滑块切换(原结构模式/AI提炼模式)到工具栏, 移除高级下拉中的重复模式选择
+  - `ActivityBar.vue`: 移除待办按钮(CheckSquare图标), 移除 `toggleTodo` emit
+  - `TopCommandBar.vue`: 在 Agent 按钮右侧新增待办按钮(CheckSquare), 使用 `.todo-link` 样式(24x24 pill), 与右侧图谱抽取/重新灌库按钮大小一致; 新增 `toggleTodo` emit、`todoActive` 计算属性
+  - `EditorWorkspace.vue`: 连接 `TopCommandBar` 的 `@toggle-todo` 到 `toggleTodoSidebar`, 移除 `ActivityBar` 上不再需要的 `:todo-active` prop
 - [x] 编辑区打开文件选项卡改为圆角矩形并进一步改为胶囊、可视化按钮改为圆形图标:
   - 新增 `--color-tab-active` 主题变量: 暗色 `#1a1a2e`(更亮), 亮色 `#eceef0`(更灰)
   - `.tab-item` 改为全圆角 `var(--radius-md)`(8px), 再改为 `border-radius: 999px` 胶囊形状, 去掉 `translateY(2px)` 底部重叠
   - 可视化按钮去掉 `<span>可视化</span>` 文字, 改为等宽高 22px 圆形按钮 (`border-radius: 50%`)
   - 可视化按钮 hover/open 状态背景改为 `var(--color-accent)`(红) + 白色图标
+- [x] 图书馆集锦卡片横幅改为灰色、"集锦"文字增大; 双击集锦导航时不关闭侧边栏; 集锦横幅改为左上角斜45度对角标签:
+  - `LibraryCard.vue`: 水平 `collection-strip` 改为绝对定位左上角的斜45度对角标签 `.collection-corner`, 利用 `overflow: hidden` 自然裁切; "集锦"文字跟随整体旋转; 文字颜色固定白色, 背景色使用新变量 `--color-collection-corner`
+  - `ui-system.css`: 新增 `--color-collection-corner` — 暗色 `#1f1f1f`(偏暗), 亮色 `#c8c8cc`(偏灰)
+- [x] Dashboard 长期观测统计改为跨 Session 完整历史:
+  - 新增用户完整消息历史查询,REST 与 gRPC 均可读取跨 Session 消息。
+  - RAG 曲线改用全部历史 Session 的检索样本;Message 耗时曲线按时间铺开全部 Session 的独立 message 耗时与节点占比。
+  - Token 卡片按当前标签页和筛选结果显示大/小模型 Token 合计,零值隐藏,并使用用户配置的模型名标注模型层级。
+  - 修复完整历史接口返回 HTML 时出现 `Unexpected token '<'` 并清空曲线的问题;优先直连专用后端接口,接口缺失时明确提示重启后端,同用户刷新失败时保留已显示曲线。
+  - 修复兼容回退对全部 Session 扇出请求造成的日志刷屏:HTML 响应先直连后端完整历史接口,历史加载共享同用户的进行中请求,并移除 Dashboard 重复挂载加载入口。
+  - RAG 三率曲线与 message 耗时曲线新增最近 `5/10/20/50/100/200/500/1000/全部` 范围选择,默认 20;RAG 曲线仅在用户切换到曲线模式后加载,耗时曲线按当前选择加载,加载期间显示“加载中”。
+  - 范围选项补充明确统计单位:RAG 显示“最近 N 次 RAG / 全部 RAG”,耗时曲线显示“最近 N 条 message / 全部 message”。
+  - 历史接口的 `limit` 改为按最近用户 message 轮次做 SQL 范围查询,REST/gRPC 语义同步;观测响应压缩 trace 和 tool call 字段,不再传输工具原文与完整上下文。
 
 ## 2026-07-29
 - [x] 修复 MD-HTML 高级选项按钮全蓝导致不可辨识的问题:

@@ -7,8 +7,28 @@
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="大卡片">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/servicer.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/servicer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/sessions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/sessions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/message_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/message_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/api/session.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/session.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/assets/ui-system.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/ui-system.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/LatencyCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/LatencyCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/RagMetricsCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/RagMetricsCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/TokenUsageCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/TokenUsageCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/library_view/LibraryCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/library_view/LibraryCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/composable/__tests__/useObsData.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/composable/__tests__/useObsData.spec.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/composable/useObsData.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/composable/useObsData.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/DashboardView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/DashboardView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/IngestionProgressView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/IngestionProgressView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/LibraryView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/LibraryView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/MarkdownHtmlVisualizationView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/MarkdownHtmlVisualizationView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/SkillView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SkillView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_agent_core_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_agent_core_service.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -289,15 +309,7 @@
       <workItem from="1785156958440" duration="11035000" />
       <workItem from="1785205674487" duration="2033000" />
       <workItem from="1785212115660" duration="1797000" />
-      <workItem from="1785411230338" duration="1721000" />
-    </task>
-    <task id="LOCAL-00217" summary="可选的安全审核">
-      <option name="closed" value="true" />
-      <created>1784884025285</created>
-      <option name="number" value="00217" />
-      <option name="presentableId" value="LOCAL-00217" />
-      <option name="project" value="LOCAL" />
-      <updated>1784884025285</updated>
+      <workItem from="1785411230338" duration="7779000" />
     </task>
     <task id="LOCAL-00218" summary="可选的安全审核">
       <option name="closed" value="true" />
@@ -683,7 +695,15 @@
       <option name="project" value="LOCAL" />
       <updated>1785328723303</updated>
     </task>
-    <option name="localTasksCounter" value="266" />
+    <task id="LOCAL-00266" summary="大卡片">
+      <option name="closed" value="true" />
+      <created>1785413673591</created>
+      <option name="number" value="00266" />
+      <option name="presentableId" value="LOCAL-00266" />
+      <option name="project" value="LOCAL" />
+      <updated>1785413673591</updated>
+    </task>
+    <option name="localTasksCounter" value="267" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

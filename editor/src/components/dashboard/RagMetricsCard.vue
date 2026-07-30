@@ -1,6 +1,6 @@
 <!--
   RagMetricsCard —— RAG 召回率、命中率、置信度展示卡片。
-  可切换 donut(本轮) / line(全会话历史)。
+  可切换 donut(当前 Session 累计值) / line(全部历史 Session)。
   ECharts 渲染，弹性布局。
 -->
 
@@ -9,9 +9,20 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import VChart from 'vue-echarts'
 import 'echarts'
 import { useObsData } from '@/composable/useObsData'
+import {
+  OBS_HISTORY_RANGE_OPTIONS,
+  formatObsHistoryRange,
+  useObsHistory,
+  type ObsHistoryRange,
+} from '@/composable/useObsHistory'
 import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
+import { useSessionStore } from '@/stores/session'
+import { useSettingsStore } from '@/stores/settings'
 
 const obs = useObsData()
+const history = useObsHistory()
+const sessionStore = useSessionStore()
+const settingsStore = useSettingsStore()
 const chartMode = ref<'donut' | 'line'>('donut')
 const ragToggleRef = ref<HTMLElement | null>(null)
 const ragSliderStyle = ref({ width: '0px', left: '0px' })
@@ -28,6 +39,33 @@ function updateRagSlider() {
 
 onMounted(updateRagSlider)
 watch(chartMode, updateRagSlider)
+
+const selectedRange = computed<ObsHistoryRange>({
+  get: () => history.ragLimit.value,
+  set: (value) => {
+    history.ragLimit.value = value
+  },
+})
+
+/** Load the selected range only after the user opens the RAG curve. */
+async function loadSelectedRagRange(): Promise<void> {
+  const userId = settingsStore.profile.userId
+  if (!userId) return
+  if (sessionStore.sessions.length === 0) await sessionStore.load(userId)
+  await history.loadRag(userId, sessionStore.sessions, selectedRange.value)
+}
+
+watch(
+  () => [chartMode.value, selectedRange.value, settingsStore.profile.userId],
+  ([mode]) => {
+    if (mode === 'line') void loadSelectedRagRange()
+  },
+)
+
+const rangeStatus = computed(() => {
+  const range = formatObsHistoryRange(selectedRange.value, '次', 'RAG')
+  return `${range} · 已加载 ${history.ragHistory.value.length} 次 RAG`
+})
 
 const METRIC_TOOLTIP = 'fill rate：槽位填充率 = 返回条数 / 请求上限 × 100\navg relevance：平均相关性 = 各条目 final_score 均值 × 100\nconfidence：置信度，与 avg_relevance 同值'
 
@@ -99,7 +137,7 @@ const donutItems = computed<DonutItem[]>(() => {
 
 /** 曲线图：会话级三率历史 */
 const lineOption = computed(() => {
-  const rows = obs.ragHistory.value
+  const rows = history.ragHistory.value
 
   return {
     backgroundColor: 'transparent',
@@ -166,13 +204,25 @@ const lineOption = computed(() => {
   <DashboardCardFrame
     title="RAG 填充率 / 平均相关性 / 置信度"
     :title-hint="METRIC_TOOLTIP"
-    :status="chartMode === 'donut' ? '本轮' : '历史'"
+    :status="chartMode === 'donut' ? '当前 Session' : rangeStatus"
   >
     <div class="card-body">
-      <div ref="ragToggleRef" class="capsule-toggle">
-        <div class="capsule-slider" :style="ragSliderStyle"></div>
-        <button class="rag-btn" :class="{ active: chartMode === 'donut' }" type="button" @click="chartMode = 'donut'">饼图</button>
-        <button class="rag-btn" :class="{ active: chartMode === 'line' }" type="button" @click="chartMode = 'line'">曲线图</button>
+      <div class="chart-toolbar">
+        <div ref="ragToggleRef" class="capsule-toggle">
+          <div class="capsule-slider" :style="ragSliderStyle"></div>
+          <button class="rag-btn" :class="{ active: chartMode === 'donut' }" type="button" @click="chartMode = 'donut'">饼图</button>
+          <button class="rag-btn" :class="{ active: chartMode === 'line' }" type="button" @click="chartMode = 'line'">曲线图</button>
+        </div>
+        <select
+          v-if="chartMode === 'line'"
+          v-model="selectedRange"
+          class="range-select"
+          aria-label="RAG 曲线范围"
+        >
+          <option v-for="range in OBS_HISTORY_RANGE_OPTIONS" :key="range" :value="range">
+            {{ formatObsHistoryRange(range, '次', 'RAG') }}
+          </option>
+        </select>
       </div>
 
       <!-- 三个 donut -->
@@ -190,7 +240,9 @@ const lineOption = computed(() => {
 
       <!-- 曲线图 -->
       <div v-else class="line-chart-wrap">
-        <v-chart :option="lineOption" autoresize class="line-chart" />
+        <div v-if="history.ragLoading.value" class="chart-state">加载中</div>
+        <div v-else-if="history.ragError.value" class="chart-state">{{ history.ragError.value }}</div>
+        <v-chart v-else :option="lineOption" autoresize class="line-chart" />
       </div>
     </div>
   </DashboardCardFrame>
@@ -218,6 +270,26 @@ const lineOption = computed(() => {
   border-radius: 999px;
   background: var(--color-surface);
   flex-shrink: 0;
+}
+
+.chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  flex-shrink: 0;
+}
+
+.range-select {
+  min-width: 88px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  font-family: var(--font-ui);
+  font-size: calc(9px * var(--font-scale));
+  padding: 0 var(--space-6);
 }
 
 .capsule-slider {
@@ -312,6 +384,17 @@ const lineOption = computed(() => {
 .line-chart {
   width: 100%;
   height: 100%;
+}
+
+.chart-state {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
 }
 
 @media (max-width: 1180px) {

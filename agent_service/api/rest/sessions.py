@@ -233,6 +233,39 @@ def _parse_iso_time(value: str) -> datetime:
         return datetime.now(timezone.utc)
 
 
+@router.get("/sessions/messages/history")
+@router.get("/sessions/observability/history")
+async def list_user_message_history(
+    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    limit: int | None = Query(
+        default=None,
+        ge=1,
+        le=1000,
+        description="最近用户 message 轮次数量;不传则返回全部历史",
+    ),
+) -> list[dict[str, Any]]:
+    """获取用户跨全部 session 的观测消息历史,支持按最近轮次懒加载。"""
+
+    message_service = _require_message_service()
+    messages = message_service.list_user_observability_messages(
+        user_id=user_id,
+        turn_limit=limit,
+    )
+    return [
+        {
+            "message_id": message.message_id,
+            "session_id": message.session_id,
+            "user_id": message.user_id,
+            "role": message.role,
+            "content": message.content if message.role in {"user", "assistant"} else "",
+            "tool_calls": message_service.compact_observability_tool_calls(message.tool_calls_json),
+            "metadata": message_service.compact_observability_metadata(message.metadata_json),
+            "created_at": message.created_at.isoformat(),
+        }
+        for message in messages
+    ]
+
+
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str) -> dict[str, Any]:
     """获取指定会话详情。"""

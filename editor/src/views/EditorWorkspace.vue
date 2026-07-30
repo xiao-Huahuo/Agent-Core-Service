@@ -393,7 +393,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="workspace-page" :class="{ resizing: activeResizeTarget || activeTodoResize }">
-    <TopCommandBar @toggle-agent="toggleAgentSidebar" @open-agent-page="openAgentPage" @open-settings="openSettings" />
+    <TopCommandBar @toggle-agent="toggleAgentSidebar" @open-agent-page="openAgentPage" @open-settings="openSettings" @toggle-todo="toggleTodoSidebar" />
     <div
       ref="workspaceGrid"
       class="workspace-grid"
@@ -415,7 +415,6 @@ onBeforeUnmount(() => {
         :visualization-active="workspaceStore.mainView === 'visualization'"
         :agent-active="workspaceStore.mainView === 'agent'"
         :graph-active="workspaceStore.mainView === 'graph'"
-        :todo-active="workspaceStore.todoSidebarOpen"
         :dashboard-active="workspaceStore.mainView === 'dashboard'"
         :debug-active="workspaceStore.mainView === 'debug'"
         :search-active="workspaceStore.mainView === 'search'"

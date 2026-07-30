@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { buildContextAssembly, buildLatencyTurns, buildRagHistory, buildRagMetrics, buildTokenSeries } from '../useObsData'
+import { buildAllSessionLatencyTurns, buildContextAssembly, buildLatencyTurns, buildRagHistory, buildRagMetrics, buildTokenSeries } from '../useObsData'
 
 describe('buildTokenSeries', () => {
   it('aggregates token usage by large/small model pool only', () => {
@@ -228,7 +228,37 @@ describe('buildRagMetrics', () => {
 })
 
 describe('buildLatencyTurns', () => {
-  it('accumulates node duration breakdown through the selected turn', () => {
+  it('lays every session turn on one global message timeline', () => {
+    const turns = buildAllSessionLatencyTurns([
+      {
+        sessionId: 'sess_b',
+        sessionName: '会话 B',
+        messages: [
+          { role: 'user', content: 'B', created_at: '2026-07-02T00:00:00Z' },
+          { role: 'assistant', content: 'B done', created_at: '2026-07-02T00:00:03Z' },
+        ],
+      },
+      {
+        sessionId: 'sess_a',
+        sessionName: '会话 A',
+        messages: [
+          { role: 'user', content: 'A', created_at: '2026-07-01T00:00:00Z' },
+          { role: 'assistant', content: 'A done', created_at: '2026-07-01T00:00:02Z' },
+        ],
+      },
+    ])
+
+    expect(turns.map((turn) => ({
+      index: turn.index,
+      sessionId: turn.sessionId,
+      seconds: turn.seconds,
+    }))).toEqual([
+      { index: 1, sessionId: 'sess_a', seconds: 2 },
+      { index: 2, sessionId: 'sess_b', seconds: 3 },
+    ])
+  })
+
+  it('keeps each message node duration breakdown independent', () => {
     const turns = buildLatencyTurns([
       { role: 'user', content: 'first', created_at: '2026-07-16T10:00:00.000Z' },
       {
@@ -255,9 +285,34 @@ describe('buildLatencyTurns', () => {
     expect(turns).toHaveLength(2)
     expect(turns[1]?.cumulativeSeconds).toBe(0.2)
     expect(Object.fromEntries((turns[1]?.nodeBreakdown || []).map((item) => [item.node, item.durationMs]))).toEqual({
-      safety_input: 20,
-      agent: 130,
+      agent: 50,
       planner: 50,
+    })
+  })
+
+  it('uses the latest cumulative trace snapshot once per message', () => {
+    const turns = buildLatencyTurns([
+      { role: 'user', content: 'run', created_at: '2026-07-16T10:00:00.000Z' },
+      {
+        role: 'assistant',
+        content: '',
+        node: 'planner',
+        trace: [{ node: 'planner', duration_ms: 40 }],
+      },
+      {
+        role: 'assistant',
+        content: 'done',
+        trace: [
+          { node: 'planner', duration_ms: 40 },
+          { node: 'agent', duration_ms: 60 },
+        ],
+      },
+    ])
+
+    expect(turns[0]?.seconds).toBe(0.1)
+    expect(Object.fromEntries((turns[0]?.nodeBreakdown || []).map((item) => [item.node, item.durationMs]))).toEqual({
+      planner: 40,
+      agent: 60,
     })
   })
 })

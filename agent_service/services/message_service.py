@@ -20,6 +20,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from sqlalchemy import and_, or_
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -28,6 +29,21 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.models.message import MessageRecord
 from agent_service.schemas.message import MessageCreate, MessageOut, MessageUpdate
 from agent_service.services.token_usage_service import TokenUsageService
+
+
+# Trace fields required by RAG and latency curve calculations. Large raw tool
+# results and context snapshots are deliberately excluded from history payloads.
+OBSERVABILITY_TRACE_FIELDS = (
+    "node",
+    "event",
+    "duration_ms",
+    "ts",
+    "tool_name",
+    "tool_call_id",
+    "tool_args_summary",
+    "result_count",
+    "confidence",
+)
 
 
 class MessageService:
@@ -162,6 +178,223 @@ class MessageService:
             records = list(db_session.exec(statement).all())
             records.reverse()
             return [MessageOut.from_record(record) for record in records]
+
+    def list_user_messages(self, *, user_id: str, limit: int | None = None) -> list[MessageOut]:
+        """
+        查询用户全部 session 的消息历史并按时间正序返回。
+
+        user_id: 用户 ID,用于隔离不同用户的观测数据。
+        limit: 可选的最近消息数量上限;为空时返回该用户的完整历史。
+        """
+
+        statement = (
+            select(MessageRecord)
+            .where(MessageRecord.user_id == user_id)
+            .order_by(MessageRecord.created_at.asc(), MessageRecord.message_id.asc())
+        )
+        if limit is None:
+            with Session(self.engine) as db_session:
+                records = list(db_session.exec(statement).all())
+                return [MessageOut.from_record(record) for record in records]
+
+        if limit <= 0:
+            return []
+        recent_statement = (
+            select(MessageRecord)
+            .where(MessageRecord.user_id == user_id)
+            .order_by(MessageRecord.created_at.desc(), MessageRecord.message_id.desc())
+            .limit(limit)
+        )
+        with Session(self.engine) as db_session:
+            records = list(db_session.exec(recent_statement).all())
+            records.reverse()
+            return [MessageOut.from_record(record) for record in records]
+
+    def list_user_observability_messages(
+        self,
+        *,
+        user_id: str,
+        turn_limit: int | None,
+    ) -> list[MessageOut]:
+        """
+        查询用户最近 N 个对话轮次所需的观测消息。
+
+        user_id: 用户 ID,用于隔离不同用户的观测数据。
+        turn_limit: 最近用户 message 的数量;为空时返回完整历史。
+
+        每个轮次保留用户消息、与其时间最近的 RAG 指标系统消息,以及该
+        Session 下一条用户消息之前产生的 assistant/tool 消息。这样前端
+        无需下载完整事件表即可计算 RAG 三率和每次 message 耗时。
+        """
+
+        if turn_limit is None:
+            return self.list_user_messages(user_id=user_id)
+        if turn_limit <= 0:
+            return []
+
+        recent_user_statement = (
+            select(MessageRecord)
+            .where(MessageRecord.user_id == user_id)
+            .where(MessageRecord.role == "user")
+            .order_by(MessageRecord.created_at.desc(), MessageRecord.message_id.desc())
+            .limit(turn_limit)
+        )
+        with Session(self.engine) as db_session:
+            recent_user_records = list(db_session.exec(recent_user_statement).all())
+            if not recent_user_records:
+                return []
+
+            session_ids = {record.session_id for record in recent_user_records}
+            session_user_statement = (
+                select(MessageRecord)
+                .where(MessageRecord.user_id == user_id)
+                .where(MessageRecord.role == "user")
+                .where(MessageRecord.session_id.in_(session_ids))
+                .order_by(MessageRecord.created_at.asc(), MessageRecord.message_id.asc())
+            )
+            session_user_records = list(db_session.exec(session_user_statement).all())
+
+            earliest_selected_by_session: dict[str, MessageRecord] = {}
+            for record in reversed(recent_user_records):
+                earliest_selected_by_session.setdefault(record.session_id, record)
+
+            lower_bounds: dict[str, MessageRecord | None] = {}
+            users_by_session: dict[str, list[MessageRecord]] = {}
+            for record in session_user_records:
+                users_by_session.setdefault(record.session_id, []).append(record)
+            for session_id, earliest_selected in earliest_selected_by_session.items():
+                previous_user: MessageRecord | None = None
+                for record in users_by_session.get(session_id, []):
+                    if record.message_id == earliest_selected.message_id:
+                        break
+                    previous_user = record
+                lower_bounds[session_id] = previous_user
+
+            session_ranges = []
+            for session_id, previous_user in lower_bounds.items():
+                session_filter = MessageRecord.session_id == session_id
+                if previous_user is not None:
+                    session_filter = and_(
+                        session_filter,
+                        or_(
+                            MessageRecord.created_at > previous_user.created_at,
+                            and_(
+                                MessageRecord.created_at == previous_user.created_at,
+                                MessageRecord.message_id > previous_user.message_id,
+                            ),
+                        ),
+                    )
+                session_ranges.append(session_filter)
+
+            candidate_statement = (
+                select(MessageRecord)
+                .where(MessageRecord.user_id == user_id)
+                .where(MessageRecord.role.in_(["user", "system", "assistant", "tool"]))
+                .where(or_(*session_ranges))
+                .order_by(MessageRecord.created_at.asc(), MessageRecord.message_id.asc())
+            )
+            candidate_records = list(db_session.exec(candidate_statement).all())
+            messages = [MessageOut.from_record(record) for record in candidate_records]
+
+        role_order = {"system": 0, "user": 1, "assistant": 2, "tool": 3}
+        messages.sort(
+            key=lambda message: (
+                message.created_at,
+                role_order.get(message.role, 4),
+                message.message_id,
+            )
+        )
+        selected_user_ids = {
+            record.message_id
+            for record in recent_user_records
+        }
+
+        previous_user_by_message: dict[str, MessageOut] = {}
+        previous_user_by_session: dict[str, MessageOut] = {}
+        for message in messages:
+            previous = previous_user_by_session.get(message.session_id)
+            if previous is not None:
+                previous_user_by_message[message.message_id] = previous
+            if message.role == "user":
+                previous_user_by_session[message.session_id] = message
+                previous_user_by_message[message.message_id] = message
+
+        next_user_by_message: dict[str, MessageOut] = {}
+        next_user_by_session: dict[str, MessageOut] = {}
+        for message in reversed(messages):
+            following = next_user_by_session.get(message.session_id)
+            if following is not None:
+                next_user_by_message[message.message_id] = following
+            if message.role == "user":
+                next_user_by_session[message.session_id] = message
+                next_user_by_message[message.message_id] = message
+
+        selected_messages: list[MessageOut] = []
+        for message in messages:
+            owner: MessageOut | None = None
+            if message.role == "user":
+                owner = message
+            elif message.role == "system" and (message.metadata_json or {}).get("rag_metrics"):
+                # ContextBuilder persists RAG metrics immediately before the
+                # user prompt row, so the following user owns this sample.
+                owner = (
+                    next_user_by_message.get(message.message_id)
+                    or previous_user_by_message.get(message.message_id)
+                )
+            elif message.role in {"assistant", "tool"}:
+                owner = previous_user_by_message.get(message.message_id)
+
+            if owner is not None and owner.message_id in selected_user_ids:
+                selected_messages.append(message)
+        return selected_messages
+
+    @staticmethod
+    def compact_observability_metadata(metadata: dict | None) -> dict:
+        """
+        保留曲线计算需要的 message metadata 字段。
+
+        metadata: 数据库存储的完整消息元数据。返回值会移除 raw_content、
+        context_messages 等体积较大的调试字段。
+        """
+
+        source = metadata or {}
+        compact: dict = {}
+        node = source.get("node")
+        if node:
+            compact["node"] = node
+        rag_metrics = source.get("rag_metrics")
+        if isinstance(rag_metrics, dict):
+            compact["rag_metrics"] = rag_metrics
+        traces = source.get("trace")
+        if isinstance(traces, list):
+            compact["trace"] = [
+                {
+                    key: trace[key]
+                    for key in OBSERVABILITY_TRACE_FIELDS
+                    if key in trace
+                }
+                for trace in traces
+                if isinstance(trace, dict)
+            ]
+        return compact
+
+    @staticmethod
+    def compact_observability_tool_calls(tool_calls: list | None) -> list[dict]:
+        """
+        保留工具调用计数和标识所需字段,移除可能很大的参数正文。
+
+        tool_calls: 数据库存储的完整工具调用列表。
+        """
+
+        return [
+            {
+                key: tool_call[key]
+                for key in ("id", "name")
+                if key in tool_call
+            }
+            for tool_call in (tool_calls or [])
+            if isinstance(tool_call, dict)
+        ]
 
     def list_unsummarized_messages(self, *, user_id: str, session_id: str) -> list[MessageOut]:
         """

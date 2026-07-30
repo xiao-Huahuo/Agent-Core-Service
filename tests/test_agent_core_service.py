@@ -539,6 +539,132 @@ def test_message_service_lists_recent_messages_by_session_window() -> None:
     assert {message.content for message in messages} == {"a-1", "a-2"}
 
 
+def test_message_service_lists_complete_user_history_across_sessions() -> None:
+    """验证观测面板可以读取同一用户跨 session 的完整消息历史。"""
+
+    config = make_test_config()
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    service = MessageService(config=config, engine=engine, create_tables=False)
+
+    for session_id, content in (("sess_a", "a-0"), ("sess_b", "b-0")):
+        service.create_message(
+            MessageCreate(
+                session_id=session_id,
+                user_id="user_1",
+                role="user",
+                content=content,
+            )
+        )
+    service.create_message(
+        MessageCreate(
+            session_id="sess_other",
+            user_id="user_2",
+            role="user",
+            content="other-user",
+        )
+    )
+
+    messages = service.list_user_messages(user_id="user_1")
+
+    assert [message.session_id for message in messages] == ["sess_a", "sess_b"]
+    assert [message.content for message in messages] == ["a-0", "b-0"]
+
+
+def test_message_service_limits_observability_history_by_recent_user_turns() -> None:
+    """验证观测历史按最近用户轮次截取,并保留对应 RAG 与 assistant 记录。"""
+
+    config = make_test_config()
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    service = MessageService(config=config, engine=engine, create_tables=False)
+
+    for index, session_id in enumerate(("sess_a", "sess_b", "sess_a"), start=1):
+        service.create_message(
+            MessageCreate(
+                session_id=session_id,
+                user_id="user_1",
+                role="system",
+                content=f"rag-{index}",
+                metadata_json={"rag_metrics": {"fill_rate": index * 10}},
+            )
+        )
+        service.create_message(
+            MessageCreate(
+                session_id=session_id,
+                user_id="user_1",
+                role="user",
+                content=f"user-{index}",
+            )
+        )
+        service.create_message(
+            MessageCreate(
+                session_id=session_id,
+                user_id="user_1",
+                role="assistant",
+                content=f"assistant-{index}",
+                metadata_json={"node": "agent", "trace": [{"duration_ms": index * 100}]},
+            )
+        )
+
+    def fail_if_complete_history_is_loaded(**_kwargs: Any) -> list[Any]:
+        """有限范围查询不得先物化用户的完整消息历史。"""
+
+        raise AssertionError("bounded observability query loaded complete history")
+
+    service.list_user_messages = fail_if_complete_history_is_loaded  # type: ignore[method-assign]
+    messages = service.list_user_observability_messages(user_id="user_1", turn_limit=2)
+
+    contents = [message.content for message in messages]
+    assert set(contents) == {
+        "rag-2",
+        "user-2",
+        "assistant-2",
+        "rag-3",
+        "user-3",
+        "assistant-3",
+    }
+    assert contents.index("rag-2") < contents.index("user-2") < contents.index("assistant-2")
+    assert contents.index("rag-3") < contents.index("user-3") < contents.index("assistant-3")
+
+
+def test_message_service_compacts_observability_trace_payload() -> None:
+    """验证观测接口移除曲线计算不需要的 trace 大字段。"""
+
+    metadata = MessageService.compact_observability_metadata(
+        {
+            "node": "action",
+            "rag_metrics": {"fill_rate": 50},
+            "trace": [
+                {
+                    "node": "action",
+                    "event": "tool_call_end",
+                    "duration_ms": 120,
+                    "tool_name": "read_knowledge_file",
+                    "result_count": 1,
+                    "raw_content": "very large tool response",
+                    "human_readable": "工具执行完成",
+                }
+            ],
+            "context_messages": ["very large context"],
+        }
+    )
+
+    assert metadata == {
+        "node": "action",
+        "rag_metrics": {"fill_rate": 50},
+        "trace": [
+            {
+                "node": "action",
+                "event": "tool_call_end",
+                "duration_ms": 120,
+                "tool_name": "read_knowledge_file",
+                "result_count": 1,
+            }
+        ],
+    }
+
+
 def test_context_builder_appends_current_prompt_and_converts_roles() -> None:
     """验证 ContextBuilder 会转换历史消息并把当前 prompt 追加到最后。"""
 

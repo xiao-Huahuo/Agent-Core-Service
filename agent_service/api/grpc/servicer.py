@@ -256,22 +256,40 @@ class AgentServiceServicer(BaseServicer):
     ) -> ListMessagesResponse:
         logger.info("ListMessages user=%s session=%s", request.user_id, request.session_id)
         ms = self._require_message_service(context)
-        messages = ms.list_session_messages(
-            user_id=request.user_id,
-            session_id=request.session_id,
-            limit=request.limit or 50,
-        )
+        if request.session_id:
+            observability_scope = False
+            messages = ms.list_session_messages(
+                user_id=request.user_id,
+                session_id=request.session_id,
+                limit=request.limit or 50,
+            )
+        else:
+            observability_scope = True
+            messages = ms.list_user_observability_messages(
+                user_id=request.user_id,
+                turn_limit=request.limit or None,
+            )
         entries = []
         for m in messages:
+            metadata = (
+                ms.compact_observability_metadata(m.metadata_json)
+                if observability_scope
+                else (m.metadata_json or {})
+            )
+            tool_calls = (
+                ms.compact_observability_tool_calls(m.tool_calls_json)
+                if observability_scope
+                else m.tool_calls_json
+            )
             entries.append(
                 MessageEntry(
                     message_id=m.message_id,
                     session_id=m.session_id,
                     user_id=m.user_id,
                     role=m.role,
-                    content=m.content,
-                    tool_calls=_build_tool_call_list(m.tool_calls_json),
-                    metadata=m.metadata_json or {},
+                    content=m.content if not observability_scope or m.role in {"user", "assistant"} else "",
+                    tool_calls=_build_tool_call_list(tool_calls),
+                    metadata=metadata,
                     created_at=_to_iso(m.created_at),
                 )
             )

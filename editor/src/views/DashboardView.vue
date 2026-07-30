@@ -3,8 +3,9 @@
 -->
 
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { computed, watch } from 'vue'
 import TimeConsumptionPanel from '@/components/dashboard/TimeConsumptionPanel.vue'
+import { useObsHistory } from '@/composable/useObsHistory'
 import { useChatStore } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
@@ -12,13 +13,16 @@ import { useSettingsStore } from '@/stores/settings'
 const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
+const obsHistory = useObsHistory()
 
-const userId = settingsStore.profile.userId
+const userId = computed(() => settingsStore.profile.userId)
 
-async function ensureObsHistoryLoaded() {
-  if (!userId) return
+/** Ensure only the current-session context needed by non-history cards is loaded. */
+async function ensureDashboardContextLoaded() {
+  const activeUserId = userId.value
+  if (!activeUserId) return
   if (sessionStore.sessions.length === 0) {
-    await sessionStore.load(userId)
+    await sessionStore.load(activeUserId)
   }
 
   let sessionId = sessionStore.currentSessionId
@@ -27,22 +31,27 @@ async function ensureObsHistoryLoaded() {
     sessionStore.select(sessionId)
   }
 
-  if (!sessionId) return
-  if (chatStore.loadedSessionId === sessionId && chatStore.messages.length > 0) return
-  await chatStore.loadHistory(sessionId, userId, 200)
+  if (sessionId && (chatStore.loadedSessionId !== sessionId || chatStore.messages.length === 0)) {
+    await chatStore.loadHistory(sessionId, activeUserId, 200)
+  }
 }
 
 watch(
-  () => [userId, sessionStore.currentSessionId, sessionStore.sessions.length],
+  () => [userId.value, sessionStore.currentSessionId, sessionStore.sessions.length],
   () => {
-    ensureObsHistoryLoaded()
+    ensureDashboardContextLoaded()
   },
   { immediate: true },
 )
 
-onMounted(() => {
-  ensureObsHistoryLoaded()
-})
+watch(
+  () => chatStore.isStreaming,
+  (streaming, wasStreaming) => {
+    if (!streaming && wasStreaming) {
+      void obsHistory.refreshLoaded(userId.value, sessionStore.sessions)
+    }
+  },
+)
 </script>
 
 <template>

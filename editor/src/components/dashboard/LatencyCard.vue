@@ -1,6 +1,6 @@
 <!--
   LatencyCard —— 每次 message 思考耗时折线图。
-  点击数据点展开该轮步骤耗时占比（纵向柱状图 + 玫瑰图）。
+  跨全部历史 Session 按时间铺开，点击数据点展开该 message 的步骤耗时占比。
   ECharts 渲染，弹性布局。
 -->
 
@@ -8,14 +8,45 @@
 import { computed, ref, watch } from 'vue'
 import VChart from 'vue-echarts'
 import 'echarts'
-import { useObsData } from '@/composable/useObsData'
+import {
+  OBS_HISTORY_RANGE_OPTIONS,
+  formatObsHistoryRange,
+  useObsHistory,
+  type ObsHistoryRange,
+} from '@/composable/useObsHistory'
 import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
+import { useSessionStore } from '@/stores/session'
+import { useSettingsStore } from '@/stores/settings'
 
-const obs = useObsData()
+const history = useObsHistory()
+const sessionStore = useSessionStore()
+const settingsStore = useSettingsStore()
 const selectedIdx = ref(-1)
 
-const turns = computed(() => obs.latencyTurns.value)
+const turns = computed(() => history.latencyTurns.value)
 const hasTurns = computed(() => turns.value.length > 0)
+const selectedRange = computed<ObsHistoryRange>({
+  get: () => history.latencyLimit.value,
+  set: (value) => {
+    history.latencyLimit.value = value
+  },
+})
+
+/** Load only the currently selected latency range. */
+async function loadSelectedLatencyRange(): Promise<void> {
+  const userId = settingsStore.profile.userId
+  if (!userId) return
+  if (sessionStore.sessions.length === 0) await sessionStore.load(userId)
+  await history.loadLatency(userId, sessionStore.sessions, selectedRange.value)
+}
+
+watch(
+  () => [selectedRange.value, settingsStore.profile.userId],
+  () => {
+    void loadSelectedLatencyRange()
+  },
+  { immediate: true },
+)
 
 watch(turns, (val) => {
   if (val.length > 0) {
@@ -24,15 +55,17 @@ watch(turns, (val) => {
 })
 
 const summaryLabel = computed(() => {
-  const s = obs.latencySummary.value
-  if (turns.value.length === 0) return 'no data'
-  return `avg ${s.avg}s · max ${s.max}s · ${turns.value.length} turns`
+  const range = formatObsHistoryRange(selectedRange.value, '条', 'message')
+  if (turns.value.length === 0) return `${range} · no data`
+  const total = turns.value.reduce((sum, turn) => sum + turn.seconds, 0)
+  const average = Number((total / turns.value.length).toFixed(2))
+  const maximum = Number(Math.max(...turns.value.map((turn) => turn.seconds)).toFixed(2))
+  return `${range} · avg ${average}s · max ${maximum}s · ${turns.value.length} messages`
 })
 
 const emptyHint = computed(() => {
-  const sessionId = obs.sessionStats.value.currentSessionId || '--'
-  const messageCount = obs.messages.value.length
-  return `$ no latency data | session ${sessionId} | messages ${messageCount}`
+  if (history.latencyError.value) return `$ ${history.latencyError.value}`
+  return `$ no latency data | sessions ${history.latencySessions.value.length} | messages ${history.latencyMessages.value.length}`
 })
 
 const selectedTurn = computed(() => {
@@ -61,7 +94,7 @@ const lineOption = computed(() => {
     grid: { top: 14, right: 20, bottom: 24, left: 42 },
     xAxis: {
       type: 'category',
-      data: items.map((t) => `T${t.index}`),
+      data: items.map((t) => `M${t.index}`),
       axisLine: { lineStyle: { color: GRID_COLOR } },
       axisTick: { show: false },
       axisLabel: { color: TXT_LABEL, fontSize: 9 },
@@ -79,7 +112,7 @@ const lineOption = computed(() => {
       data: items.map((t, i) => {
         const isSel = i === sel
         return {
-          value: t.cumulativeSeconds,
+          value: t.seconds,
           symbol: items.length === 1 ? 'pin' : 'circle',
           symbolSize: items.length === 1 ? 14 : (isSel ? 10 : 6),
           itemStyle: {
@@ -111,7 +144,7 @@ const lineOption = computed(() => {
       formatter: (params: { dataIndex: number; value: number }[]) => {
         const p = params[0]!
         const turn = items[p.dataIndex]
-        return `Turn ${p.dataIndex + 1}<br/>cumulative ${p.value}s<br/>turn ${turn?.seconds || 0}s`
+        return `${turn?.sessionName || turn?.sessionId || 'Session'}<br/>Message ${p.dataIndex + 1}<br/>${p.value}s`
       },
     },
   }
@@ -190,9 +223,23 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
 <template>
   <DashboardCardFrame title="每次 message 思考耗时" :status="summaryLabel">
     <div class="card-body">
+      <div class="chart-toolbar">
+        <label class="range-label" for="latency-history-range">显示范围</label>
+        <select
+          id="latency-history-range"
+          v-model="selectedRange"
+          class="range-select"
+        >
+          <option v-for="range in OBS_HISTORY_RANGE_OPTIONS" :key="range" :value="range">
+            {{ formatObsHistoryRange(range, '条', 'message') }}
+          </option>
+        </select>
+      </div>
+
       <div class="line-chart-wrap">
+        <div v-if="history.latencyLoading.value" class="chart-loading">加载中</div>
         <v-chart
-          v-if="hasTurns"
+          v-else-if="hasTurns"
           :option="lineOption"
           autoresize
           class="line-chart"
@@ -208,9 +255,9 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
             <text x="2" y="17" class="axis-text">1</text>
             <text x="2" y="29" class="axis-text">0.5</text>
             <text x="5" y="41" class="axis-text">0</text>
-            <text x="15" y="57" class="axis-text">T1</text>
-            <text x="43" y="57" class="axis-text">T2</text>
-            <text x="71" y="57" class="axis-text">T3</text>
+            <text x="15" y="57" class="axis-text">M1</text>
+            <text x="43" y="57" class="axis-text">M2</text>
+            <text x="71" y="57" class="axis-text">M3</text>
             <polyline points="18,42 44,31 70,35 90,20" class="ghost-line" />
             <circle cx="18" cy="42" r="1.8" class="ghost-dot" />
             <circle cx="44" cy="31" r="1.8" class="ghost-dot" />
@@ -222,8 +269,8 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
 
       <div v-if="selectedTurn" class="detail-panel">
         <div class="detail-summary">
-          <span class="detail-title">Turn {{ selectedTurn.index }}</span>
-          <span class="detail-time">{{ selectedTurn.seconds }}s / total {{ selectedTurn.cumulativeSeconds }}s{{ selectedTurn.estimated ? ' (est.)' : '' }}</span>
+          <span class="detail-title">{{ selectedTurn.sessionName || selectedTurn.sessionId }} · Message {{ selectedTurn.index }}</span>
+          <span class="detail-time">{{ selectedTurn.seconds }}s{{ selectedTurn.estimated ? ' (est.)' : '' }}</span>
         </div>
         <p class="detail-prompt">{{ selectedTurn.userPrompt }}</p>
 
@@ -261,6 +308,32 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
   overflow-y: auto;
 }
 
+.chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-6);
+  flex-shrink: 0;
+}
+
+.range-label {
+  color: var(--color-text-tertiary);
+  font-family: var(--font-ui);
+  font-size: calc(9px * var(--font-scale));
+}
+
+.range-select {
+  min-width: 96px;
+  height: 26px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  font-family: var(--font-ui);
+  font-size: calc(9px * var(--font-scale));
+  padding: 0 var(--space-6);
+}
+
 /* ---- 折线图 ---- */
 .line-chart-wrap {
   flex-shrink: 0;
@@ -273,6 +346,17 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
   width: 100%;
   height: 100%;
   min-height: 100px;
+}
+
+.chart-loading {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
 }
 
 .line-chart-skeleton {

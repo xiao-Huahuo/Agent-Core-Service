@@ -161,6 +161,16 @@ export interface LatencyTurn {
   traceCount: number
   toolCount: number
   nodeBreakdown: NodeBreakdownItem[]
+  sessionId?: string
+  sessionName?: string
+  createdAt?: string
+}
+
+/** One persisted session and the messages used to derive its latency turns. */
+export interface ObsSessionHistory {
+  sessionId: string
+  sessionName: string
+  messages: { role: string; content?: unknown; created_at?: unknown; trace?: unknown; tool_calls?: unknown; node?: unknown }[]
 }
 
 /** 延迟摘要 */
@@ -547,7 +557,6 @@ export function buildLatencyTurns(
   const turns: LatencyTurn[] = []
   let pendingUser: { content?: unknown; created_at?: unknown } | null = null
   let pendingAssistants: { content?: unknown; created_at?: unknown; trace?: unknown; tool_calls?: unknown; node?: unknown }[] = []
-  const cumulativeTraces: Record<string, unknown>[] = []
   let cumulativeSeconds = 0
   let turnIndex = 0
 
@@ -556,7 +565,12 @@ export function buildLatencyTurns(
     const lastAssistant = pendingAssistants[pendingAssistants.length - 1]!
     const userTime = parseDate(pendingUser.created_at)
     const assistantTime = parseDate(lastAssistant.created_at)
-    const allTraces = pendingAssistants.flatMap((m) => safeArray<Record<string, unknown>>(m.trace))
+    // Persisted assistant rows carry cumulative trace snapshots; only the
+    // latest non-empty snapshot may be summed or earlier nodes are duplicated.
+    const latestTraceSnapshot = [...pendingAssistants]
+      .reverse()
+      .find((message) => safeArray<Record<string, unknown>>(message.trace).length > 0)
+    const allTraces = safeArray<Record<string, unknown>>(latestTraceSnapshot?.trace)
     const allToolCalls = pendingAssistants.flatMap((m) => safeArray<unknown>(m.tool_calls))
     const combinedOutput = pendingAssistants
       .map((m) => String(m.content || '').trim())
@@ -581,8 +595,6 @@ export function buildLatencyTurns(
       estimated = true
     }
     cumulativeSeconds += seconds
-    cumulativeTraces.push(...allTraces)
-
     turns.push({
       id: `turn-${turnIndex}`,
       index: turnIndex + 1,
@@ -593,7 +605,8 @@ export function buildLatencyTurns(
       estimated,
       traceCount,
       toolCount,
-      nodeBreakdown: summarizeNodeBreakdown(cumulativeTraces),
+      nodeBreakdown: summarizeNodeBreakdown(allTraces),
+      createdAt: typeof pendingUser.created_at === 'string' ? pendingUser.created_at : '',
     })
     turnIndex += 1
   }
@@ -634,11 +647,42 @@ export function buildLatencyTurns(
       estimated: true,
       traceCount,
       toolCount,
-      nodeBreakdown: summarizeNodeBreakdown([...cumulativeTraces, ...streamingTraces]),
+      nodeBreakdown: summarizeNodeBreakdown(streamingTraces),
     })
   }
 
   return turns
+}
+
+/**
+ * Flatten every session's message turns onto one chronological dashboard line.
+ *
+ * Session boundaries are preserved while deriving turns so a user message in
+ * one session can never be paired with an assistant message from another.
+ */
+export function buildAllSessionLatencyTurns(sessions: ObsSessionHistory[]): LatencyTurn[] {
+  const derivedTurns = sessions.flatMap((session) =>
+    buildLatencyTurns(session.messages).map((turn) => ({
+      ...turn,
+      id: `${session.sessionId}:${turn.id}`,
+      sessionId: session.sessionId,
+      sessionName: session.sessionName,
+    })),
+  ).sort((left, right) => {
+    const leftTime = Date.parse(left.createdAt || '')
+    const rightTime = Date.parse(right.createdAt || '')
+    if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) return 0
+    return leftTime - rightTime
+  })
+  let cumulativeSeconds = 0
+  return derivedTurns.map((turn, index) => {
+    cumulativeSeconds += turn.seconds
+    return {
+      ...turn,
+      index: index + 1,
+      cumulativeSeconds: roundNumber(cumulativeSeconds, 2),
+    }
+  })
 }
 
 function summarizeNodeBreakdown(traces: Array<Record<string, unknown>> | undefined): NodeBreakdownItem[] {

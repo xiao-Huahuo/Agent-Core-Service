@@ -116,8 +116,8 @@ function handleDrop(event: DragEvent) {
     @dragleave="dragOver = false"
     @drop="handleDrop"
   >
-    <header v-if="isCollection" class="collection-strip">
-      <span class="collection-label">集锦</span>
+    <header v-if="isCollection" class="collection-corner">
+      集锦
     </header>
     <button
       v-if="multiSelect"
@@ -185,10 +185,6 @@ function handleDrop(event: DragEvent) {
     background 160ms ease;
 }
 
-.library-card.collection {
-  grid-template-rows: 1fr 4fr 5fr;
-}
-
 .library-card:hover,
 .library-card.selected {
   background: var(--color-surface-raised);
@@ -210,21 +206,19 @@ function handleDrop(event: DragEvent) {
   outline: 2px solid color-mix(in srgb, var(--color-danger) 72%, transparent);
 }
 
-.collection-strip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 0 12px;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-}
-
-.collection-label {
-  flex: 0 0 auto;
-  font-size: 11px;
+.collection-corner {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  top: 10px;
+  left: -28px;
+  transform: rotate(-45deg);
+  padding: 3px 36px;
+  background: var(--color-collection-corner);
+  color: #fff;
+  font-size: calc(12px * var(--font-scale));
   font-weight: 700;
-  opacity: 0.65;
+  white-space: nowrap;
 }
 
 

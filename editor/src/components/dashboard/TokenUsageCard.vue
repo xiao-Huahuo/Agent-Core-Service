@@ -14,6 +14,8 @@ import 'echarts'
 import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
 import { fetchTokenUsageStats } from '@/api/agent'
 import type { TokenUsageInterval, TokenUsageStatsResponse } from '@/api/agent'
+import { fetchLLMConfig } from '@/api/settings'
+import { buildTokenViewTotals, displayedTokenSessions, formatTokenModelLabel } from '@/composable/useTokenUsageDisplay'
 import { useChatStore } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
@@ -47,6 +49,8 @@ const sessionSort = ref<SessionSort>('time')
 
 const loading = ref(false)
 const error = ref('')
+const largeModelName = ref('')
+const smallModelName = ref('')
 const stats = ref<TokenUsageStatsResponse>({
   interval: '5m',
   calls: [],
@@ -113,16 +117,15 @@ const TXT_LABEL = '#777'
 const statusText = computed(() => {
   if (loading.value) return '读取中'
   if (error.value) return '读取失败'
-  if (chartKind.value === 'calls') {
-    const opt = callLimitOptions.find((item) => item.value === callLimit.value)
-    return `${stats.value.calls.length} 次(筛选${opt?.label || `${callLimit.value}次`})`
-  }
-  if (chartKind.value === 'buckets') {
-    const lo = lookbackOptions.find((item) => item.value === lookback.value)
-    return lo?.label || `最近${lookback.value}小时`
-  }
-  return `${stats.value.sessions.length} sessions`
+  const totals = buildTokenViewTotals(stats.value, chartKind.value)
+  return [
+    totals.large > 0 ? `${largeModelLabel.value} ${totals.large.toLocaleString('zh-CN')}` : '',
+    totals.small > 0 ? `${smallModelLabel.value} ${totals.small.toLocaleString('zh-CN')}` : '',
+  ].filter(Boolean).join(' · ')
 })
+
+const largeModelLabel = computed(() => formatTokenModelLabel(largeModelName.value, 'large'))
+const smallModelLabel = computed(() => formatTokenModelLabel(smallModelName.value, 'small'))
 
 const hasData = computed(() => {
   if (chartKind.value === 'calls') return stats.value.calls.length > 0
@@ -149,8 +152,8 @@ const callOption = computed(() => {
   return baseOption({
     xData: items.map((item) => formatShortTime(item.created_at)),
     series: [
-      tokenSeries('大模型', items.map((item) => item.model_tier === 'large' ? item.total_tokens : 0), CURVE_COLORS.large, mode),
-      tokenSeries('小模型', items.map((item) => item.model_tier === 'small' ? item.total_tokens : 0), CURVE_COLORS.small, mode),
+      tokenSeries(largeModelLabel.value, items.map((item) => item.model_tier === 'large' ? item.total_tokens : 0), CURVE_COLORS.large, mode),
+      tokenSeries(smallModelLabel.value, items.map((item) => item.model_tier === 'small' ? item.total_tokens : 0), CURVE_COLORS.small, mode),
     ],
   })
 })
@@ -161,21 +164,21 @@ const bucketOption = computed(() => {
   return baseOption({
     xData: items.map((item) => item.label),
     series: [
-      tokenSeries('大模型', items.map((item) => item.large_tokens), CURVE_COLORS.large, mode),
-      tokenSeries('小模型', items.map((item) => item.small_tokens), CURVE_COLORS.small, mode),
+      tokenSeries(largeModelLabel.value, items.map((item) => item.large_tokens), CURVE_COLORS.large, mode),
+      tokenSeries(smallModelLabel.value, items.map((item) => item.small_tokens), CURVE_COLORS.small, mode),
     ],
   })
 })
 
 const sessionOption = computed(() => {
-  const items = stats.value.sessions.filter((item) => item.total_tokens > 0).slice(0, 12)
+  const items = displayedTokenSessions(stats.value.sessions)
   const mode = chartModes.value.sessions
   return baseOption({
     xData: items.map((item) => item.session_name || item.session_id),
     xRotate: items.length > 4 ? 25 : 0,
     series: [
-      tokenSeries('大模型', items.map((item) => item.large_tokens), CURVE_COLORS.large, mode),
-      tokenSeries('小模型', items.map((item) => item.small_tokens), CURVE_COLORS.small, mode),
+      tokenSeries(largeModelLabel.value, items.map((item) => item.large_tokens), CURVE_COLORS.large, mode),
+      tokenSeries(smallModelLabel.value, items.map((item) => item.small_tokens), CURVE_COLORS.small, mode),
     ],
   })
 })
@@ -342,14 +345,38 @@ async function loadStats() {
   }
 }
 
+/** Load the effective user model names used in chart legends and totals. */
+async function loadModelNames() {
+  const userId = settingsStore.profile.userId
+  if (!userId) {
+    largeModelName.value = ''
+    smallModelName.value = ''
+    return
+  }
+  try {
+    const config = await fetchLLMConfig(userId)
+    largeModelName.value = config.model_name || ''
+    smallModelName.value = config.effective_small_model_name || config.small_model_name || ''
+  } catch {
+    largeModelName.value = ''
+    smallModelName.value = ''
+  }
+}
+
 onMounted(() => {
   void loadStats()
+  void loadModelNames()
   nextTick(() => { updateKindSlider(); updateChartTypeSlider() })
 })
 
 watch(
   () => [settingsStore.profile.userId, sessionStore.currentSessionId] as const,
   () => void loadStats(),
+)
+
+watch(
+  () => settingsStore.profile.userId,
+  () => void loadModelNames(),
 )
 
 watch(

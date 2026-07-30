@@ -6,7 +6,7 @@
   workflow and for mounting the generated runtime HTML.
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ChevronDown, Download, FileCode, FolderOpen, Play, SlidersHorizontal, X } from 'lucide-vue-next'
 
 import FloatingFileResourcePicker from '@/components/editor_workspace/FloatingFileResourcePicker.vue'
@@ -18,6 +18,8 @@ import type { MarkdownHtmlVisualizationOptions, MarkdownHtmlVisualizationPreset 
 const settingsStore = useSettingsStore()
 const taskListStore = useTaskListStore()
 const workspaceStore = useWorkspaceStore()
+const modeSwitchRef = ref<HTMLElement | null>(null)
+const modeSliderStyle = ref({ width: '0px', left: '0px' })
 const pickerOpen = ref(false)
 const advancedOptionsOpen = ref(false)
 const advancedOptionsPage = ref<'layout' | 'visual' | 'motion'>('layout')
@@ -136,9 +138,25 @@ watch(hasMountedVisualization, (mounted) => {
   }
 })
 
+function updateModeSlider() {
+  nextTick(() => {
+    const container = modeSwitchRef.value
+    if (!container) return
+    const active = container.querySelector('.mode-button.active') as HTMLElement | null
+    if (!active) return
+    modeSliderStyle.value = {
+      width: `${active.offsetWidth}px`,
+      left: `${active.offsetLeft}px`,
+    }
+  })
+}
+
 function setMode(mode: 'structure' | 'insight') {
   workspaceStore.setMarkdownHtmlVisualizationMode(mode)
+  updateModeSlider()
 }
+
+onMounted(updateModeSlider)
 
 function setPreset(preset: MarkdownHtmlVisualizationPreset) {
   workspaceStore.setMarkdownHtmlVisualizationPreset(preset)
@@ -167,6 +185,21 @@ function startVisualization() {
           <p>{{ selectedDocumentLabel }}</p>
         </div>
       </div>
+      <div ref="modeSwitchRef" class="mode-pill">
+        <div class="mode-slider" :style="modeSliderStyle"></div>
+        <button
+          type="button"
+          class="mode-button"
+          :class="{ active: workspaceStore.markdownHtmlVisualizationMode === 'structure' }"
+          @click="setMode('structure')"
+        >原结构模式</button>
+        <button
+          type="button"
+          class="mode-button"
+          :class="{ active: workspaceStore.markdownHtmlVisualizationMode === 'insight' }"
+          @click="setMode('insight')"
+        >AI提炼模式</button>
+      </div>
       <div class="toolbar-actions">
         <button type="button" class="secondary-action" @click="pickerOpen = true">
           <FolderOpen :size="15" />
@@ -186,25 +219,6 @@ function startVisualization() {
             <ChevronDown :size="14" />
           </button>
           <div v-if="advancedOptionsOpen" class="advanced-menu" role="menu">
-            <section class="advanced-section">
-              <span class="advanced-section-title">生成方式</span>
-              <div class="mode-switch" aria-label="HTML 可视化模式">
-                <button
-                  type="button"
-                  :class="{ active: workspaceStore.markdownHtmlVisualizationMode === 'structure' }"
-                  @click.stop="setMode('structure')"
-                >
-                  原结构模式
-                </button>
-                <button
-                  type="button"
-                  :class="{ active: workspaceStore.markdownHtmlVisualizationMode === 'insight' }"
-                  @click.stop="setMode('insight')"
-                >
-                  AI提炼模式
-                </button>
-              </div>
-            </section>
             <section class="advanced-section">
               <span class="advanced-section-title">展示预设</span>
               <div class="preset-grid" aria-label="HTML 可视化展示预设">
@@ -399,8 +413,55 @@ function startVisualization() {
   font-size: calc(11px * var(--font-scale));
 }
 
+.mode-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 2px;
+  margin-left: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-canvas);
+  flex-shrink: 0;
+}
+
+.mode-slider {
+  position: absolute;
+  top: 2px;
+  height: calc(100% - 4px);
+  border-radius: 999px;
+  background: var(--color-primary-softer);
+  transition: left 250ms ease, width 250ms ease;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.mode-button {
+  position: relative;
+  z-index: 1;
+  height: 26px;
+  padding: 0 var(--space-10);
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+}
+
+.mode-button:hover {
+  color: var(--color-primary);
+}
+
+.mode-button.active {
+  color: var(--color-primary);
+}
+
 .toolbar-actions button,
-.mode-switch button,
 .preset-grid button,
 .advanced-page-tabs button,
 .result-actions button {
@@ -484,13 +545,6 @@ function startVisualization() {
   font-weight: 650;
 }
 
-.mode-switch {
-  display: inline-grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
-  min-width: 220px;
-}
-
 .preset-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -503,7 +557,6 @@ function startVisualization() {
   gap: var(--space-4);
 }
 
-.mode-switch button.active,
 .preset-grid button.active,
 .advanced-page-tabs button.active {
   border-color: var(--color-primary);
@@ -813,7 +866,6 @@ function startVisualization() {
     margin-top: var(--space-8);
   }
 
-  .mode-switch,
   .toolbar-actions > button {
     width: 100%;
   }

@@ -399,19 +399,20 @@ function historySummary(row: IngestionHistoryItem): string {
 .tab-switch {
   position: relative;
   display: inline-flex;
-  gap: 4px;
-  padding: 3px;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 2px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: var(--color-surface);
+  background: var(--color-canvas);
 }
 
 .tab-slider {
   position: absolute;
-  top: 3px;
-  height: calc(100% - 6px);
+  top: 2px;
+  height: calc(100% - 4px);
   border-radius: 999px;
-  background: var(--color-primary-soft);
+  background: var(--color-primary-softer);
   transition: left 250ms ease, width 250ms ease;
   z-index: 0;
   pointer-events: none;
@@ -429,11 +430,16 @@ function historySummary(row: IngestionHistoryItem): string {
 }
 
 .tab-button {
-  gap: 6px;
-  min-height: 28px;
-  padding: 0 12px;
+  position: relative;
+  z-index: 1;
+  height: 26px;
+  padding: 0 var(--space-10);
+  border: none;
   border-radius: 999px;
-  font-size: calc(12px * var(--font-scale));
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
   cursor: pointer;
   outline: none;
 }
@@ -489,14 +495,14 @@ function historySummary(row: IngestionHistoryItem): string {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--color-text-secondary);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
   transition:
     border-color var(--transition-fast),
     background var(--transition-fast),
@@ -530,9 +536,10 @@ function historySummary(row: IngestionHistoryItem): string {
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border: 0;
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .file-table-head,

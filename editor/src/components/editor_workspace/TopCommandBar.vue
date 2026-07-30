@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onMounted } from 'vue'
-import { DatabaseZap, FolderOpen, Maximize2, Minus, Network, X } from 'lucide-vue-next'
+import { CheckSquare, DatabaseZap, FolderOpen, Maximize2, Minus, Network, X } from 'lucide-vue-next'
 
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -48,9 +48,11 @@ const emit = defineEmits<{
   toggleAgent: []
   openAgentPage: []
   openSettings: []
+  toggleTodo: []
 }>()
 const graphRebuilding = computed(() => workspaceStore.graphQueue.length > 0)
 const agentActive = computed(() => workspaceStore.agentSidebarOpen)
+const todoActive = computed(() => workspaceStore.todoSidebarOpen)
 const logoSrc = new URL('../../assets/images/无底图标.png', import.meta.url).href
 
 const switchingRoot = ref(false)
@@ -186,6 +188,15 @@ onMounted(() => nextTick(autoResizeInput))
         <img :src="logoSrc" class="agent-play-img" alt="MetaWeave" />
         <span class="agent-now">NOW!</span>
         <span class="agent-play">AGENT</span>
+      </button>
+      <button
+        class="todo-link topbar-optional"
+        :class="{ active: todoActive }"
+        type="button"
+        title="待办"
+        @click="emit('toggleTodo')"
+      >
+        <CheckSquare :size="14" />
       </button>
       <button
         class="todo-link topbar-optional"

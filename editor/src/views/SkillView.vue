@@ -6,7 +6,7 @@
   them, create custom skills, and read the local Skill format guide.
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { BookOpen, FileText, FolderPlus, RefreshCw, SlidersHorizontal, X } from 'lucide-vue-next'
 
 import { useSkillsStore } from '@/stores/skills'
@@ -16,6 +16,8 @@ const skillsStore = useSkillsStore()
 const settingsStore = useSettingsStore()
 const activeTab = ref<'overview' | 'custom'>('overview')
 const specOpen = ref(false)
+const tabSwitchRef = ref<HTMLElement | null>(null)
+const tabSliderStyle = ref({ width: '0px', left: '0px' })
 const name = ref('')
 const description = ref('')
 const body = ref('')
@@ -42,8 +44,27 @@ async function createCustomSkill() {
   activeTab.value = 'overview'
 }
 
+function updateTabSlider() {
+  nextTick(() => {
+    const container = tabSwitchRef.value
+    if (!container) return
+    const active = container.querySelector('.page-switch-button.active') as HTMLElement | null
+    if (!active) return
+    tabSliderStyle.value = {
+      width: `${active.offsetWidth}px`,
+      left: `${active.offsetLeft}px`,
+    }
+  })
+}
+
+function switchTab(tab: 'overview' | 'custom') {
+  activeTab.value = tab
+  updateTabSlider()
+}
+
 onMounted(() => {
   void skillsStore.loadSkills()
+  updateTabSlider()
 })
 
 watch(
@@ -75,12 +96,13 @@ watch(
       </div>
     </header>
 
-    <div class="tabs" role="tablist" aria-label="Skill views">
-      <button type="button" :class="{ active: activeTab === 'overview' }" @click="activeTab = 'overview'">
+    <div ref="tabSwitchRef" class="resource-page-switch" role="tablist" aria-label="Skill views">
+      <div class="page-slider" :style="tabSliderStyle"></div>
+      <button type="button" class="page-switch-button" :class="{ active: activeTab === 'overview' }" @click="switchTab('overview')">
         <FileText :size="15" />
         <span>概览</span>
       </button>
-      <button type="button" :class="{ active: activeTab === 'custom' }" @click="activeTab = 'custom'">
+      <button type="button" class="page-switch-button" :class="{ active: activeTab === 'custom' }" @click="switchTab('custom')">
         <SlidersHorizontal :size="15" />
         <span>定制</span>
       </button>
@@ -311,7 +333,6 @@ tools: (可选) 需要启用的工具列表
 }
 
 .header-actions,
-.tabs,
 .card-head,
 .group-title,
 .meta-row,
@@ -326,7 +347,6 @@ tools: (可选) 需要启用的工具列表
 }
 
 .icon-button,
-.tabs button,
 .primary-button {
   border: 1px solid var(--color-border);
   background: var(--color-bg-panel);
@@ -342,17 +362,6 @@ tools: (可选) 需要启用的工具列表
   border-radius: var(--radius-md);
 }
 
-.tabs {
-  align-self: flex-start;
-  gap: var(--space-4);
-  padding: 3px;
-  margin-bottom: var(--space-16);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-panel);
-}
-
-.tabs button,
 .primary-button {
   display: inline-flex;
   align-items: center;
@@ -362,11 +371,55 @@ tools: (可选) 需要启用的工具列表
   border-radius: var(--radius-sm);
 }
 
-.tabs button {
-  border-color: transparent;
+.resource-page-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 2px;
+  margin-bottom: var(--space-16);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-canvas);
 }
 
-.tabs button.active,
+.page-slider {
+  position: absolute;
+  top: 2px;
+  height: calc(100% - 4px);
+  border-radius: 999px;
+  background: var(--color-primary-softer);
+  transition: left 250ms ease, width 250ms ease;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.page-switch-button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  height: 26px;
+  padding: 0 var(--space-10);
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
+  cursor: pointer;
+  outline: none;
+}
+
+.page-switch-button:hover {
+  color: var(--color-primary);
+}
+
+.page-switch-button.active {
+  color: var(--color-primary);
+}
+
 .primary-button {
   background: var(--color-primary);
   color: #fff;

@@ -60,6 +60,7 @@ const filterMenuOpen = ref(false)
 const multiSelect = ref(false)
 const selectedIds = ref<Set<string>>(new Set())
 const selectedItem = ref<LibraryItem | null>(null)
+const pendingAutoSelect = ref(false)
 const drawerChildren = ref<LibraryItem[]>([])
 const drawerChildrenLoading = ref(false)
 const draggedItem = ref<LibraryItem | null>(null)
@@ -152,8 +153,13 @@ async function loadItems() {
     if (selectedItem.value) {
       selectedItem.value = response.items.find((item) => item.item_id === selectedItem.value?.item_id) ?? null
     }
+    if (pendingAutoSelect.value && response.items.length > 0) {
+      selectedItem.value = response.items[0]
+      pendingAutoSelect.value = false
+    }
   } finally {
     loading.value = false
+    pendingAutoSelect.value = false
   }
 }
 
@@ -246,6 +252,11 @@ function selectContentTypeFilter(type: string) {
 
 async function openItem(item: LibraryItem) {
   if (item.item_type === 'collection') {
+    if (selectedItem.value) {
+      // 侧边栏已打开时双击集锦导航，导航后自动选中新视图第一项以保持侧边栏开启
+      pendingAutoSelect.value = true
+    }
+    selectedItem.value = null
     navigateTo(item.item_id)
     return
   }

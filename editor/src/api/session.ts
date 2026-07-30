@@ -6,7 +6,10 @@
  * console and editor for the same user_id.
  */
 
-import { apiDelete, apiGet, apiPost, apiPut } from '@/api/client'
+import { ApiError, apiDelete, apiGet, apiPost, apiPut } from '@/api/client'
+import { API_ROUTES } from '@/router/api_routes'
+
+const LOCAL_BACKEND_ORIGIN = 'http://127.0.0.1:8002'
 
 export interface SessionRecord {
   session_id: string
@@ -18,6 +21,7 @@ export interface SessionRecord {
 
 export interface SessionMessageRecord {
   message_id: string
+  session_id: string
   role: string
   content: string
   tool_calls?: unknown[]
@@ -45,6 +49,49 @@ export function fetchMessages(
   return apiGet<SessionMessageRecord[]>(`/sessions/${sessionId}/messages`, { user_id: userId, limit }, {
     signal: options.signal,
   })
+}
+
+/**
+ * Fetch every persisted message owned by one user across all sessions.
+ *
+ * The dashboard uses this endpoint for long-term RAG and latency charts so
+ * their scope does not depend on the currently selected chat session. During
+ * a rolling frontend/backend upgrade, retry the dedicated backend origin when
+ * a frontend HTML fallback is returned. Missing range support fails explicitly
+ * instead of issuing one request per Session.
+ */
+export async function fetchUserMessageHistory(
+  userId: string,
+  turnLimit?: number,
+): Promise<SessionMessageRecord[]> {
+  const query = { user_id: userId, limit: turnLimit }
+  try {
+    return await apiGet<SessionMessageRecord[]>(API_ROUTES.SESSION_MESSAGE_HISTORY, query)
+  } catch (historyError) {
+    if (!isHistoryRouteUnavailable(historyError)) {
+      throw historyError
+    }
+    if (historyError instanceof SyntaxError) {
+      try {
+        return await apiGet<SessionMessageRecord[]>(
+          `${LOCAL_BACKEND_ORIGIN}${API_ROUTES.SESSION_MESSAGE_HISTORY}`,
+          query,
+        )
+      } catch (directError) {
+        if (!isHistoryRouteUnavailable(directError)) {
+          throw directError
+        }
+      }
+    }
+  }
+
+  throw new ApiError(503, '观测历史范围接口不可用，请重启后端服务后重试')
+}
+
+/** Identify a missing route or an SPA HTML fallback without hiding real API failures. */
+function isHistoryRouteUnavailable(error: unknown): boolean {
+  return error instanceof SyntaxError
+    || (error instanceof ApiError && (error.status === 404 || error.status === 405))
 }
 
 export function deleteSession(sessionId: string): Promise<{ ok: boolean }> {
