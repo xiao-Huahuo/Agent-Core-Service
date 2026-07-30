@@ -12,9 +12,12 @@ import { Loader, X } from 'lucide-vue-next'
 
 import { previewKnowledgeFile, readKnowledgeFile } from '@/api/knowledge'
 import CodeEditor from '@/components/editor_workspace/CodeEditor.vue'
+import CodePreview from '@/components/editor_workspace/CodePreview.vue'
+import EditorModeSwitch from '@/components/editor_workspace/EditorModeSwitch.vue'
+import MarkdownPreview from '@/components/editor_workspace/MarkdownPreview.vue'
 import MultimodalPreview from '@/components/editor_workspace/MultimodalPreview.vue'
 import { useSettingsStore } from '@/stores/settings'
-import type { FilePreviewPayload } from '@/types/knowledge'
+import type { EditorViewMode, FilePreviewPayload } from '@/types/knowledge'
 
 defineOptions({ name: 'SearchResultPreview' })
 
@@ -36,6 +39,8 @@ const preview = ref<FilePreviewPayload | null>(null)
 const loading = ref(false)
 /** User-facing load failure for the currently selected result. */
 const error = ref('')
+/** Local view mode; it never changes the readonly policy of this preview. */
+const editorMode = ref<EditorViewMode>('edit')
 let requestController: AbortController | null = null
 
 /** File extensions that must use the backend preview endpoint. */
@@ -57,6 +62,15 @@ const language = computed(() => {
   const extension = fileName.value.slice(dotIndex + 1).toLowerCase()
   return extension === 'txt' ? 'text' : extension
 })
+
+/** Whether the selected result supports Markdown rendering. */
+const isMarkdown = computed(() => ['md', 'markdown'].includes(language.value))
+/** Binary results without extracted text can only use Preview mode. */
+const isPreviewOnly = computed(() => !content.value)
+/** View mode normalized for files that cannot expose an editable text surface. */
+const effectiveEditorMode = computed<EditorViewMode>(() => (
+  isPreviewOnly.value ? 'preview' : editorMode.value
+))
 
 /** Loads text or multimodal data without changing the workspace selection. */
 async function loadSelectedFile() {
@@ -91,6 +105,7 @@ async function loadSelectedFile() {
 }
 
 watch(() => props.path, () => {
+  editorMode.value = 'edit'
   void loadSelectedFile()
 }, { immediate: true })
 
@@ -105,6 +120,11 @@ onUnmounted(() => requestController?.abort())
         <span :title="path">{{ path }}</span>
       </div>
       <span class="readonly-label">只读</span>
+      <EditorModeSwitch
+        :model-value="effectiveEditorMode"
+        :preview-only="isPreviewOnly"
+        @update:model-value="editorMode = $event"
+      />
       <button type="button" title="关闭预览" aria-label="关闭预览" @click="emit('close')">
         <X :size="16" />
       </button>
@@ -115,31 +135,57 @@ onUnmounted(() => requestController?.abort())
       <span>正在加载文件…</span>
     </div>
     <div v-else-if="error" class="preview-state preview-error">{{ error }}</div>
-    <CodeEditor
-      v-else-if="content"
-      v-model="content"
-      :language="language"
-      :highlight-query="highlightQuery"
-      readonly
-    />
-    <MultimodalPreview v-else-if="preview" :preview="preview" />
+    <div
+      v-else-if="content || preview"
+      class="preview-body"
+      :data-mode="effectiveEditorMode"
+    >
+      <section v-if="content && effectiveEditorMode !== 'preview'" class="preview-surface">
+        <CodeEditor
+          v-model="content"
+          :language="language"
+          :highlight-query="highlightQuery"
+          readonly
+        />
+      </section>
+      <div v-if="effectiveEditorMode === 'split'" class="preview-divider"></div>
+      <section
+        v-if="isPreviewOnly || effectiveEditorMode !== 'edit'"
+        class="preview-surface"
+      >
+        <MultimodalPreview v-if="preview" :preview="preview" />
+        <MarkdownPreview
+          v-else-if="content && isMarkdown"
+          :content="content"
+          :path="path"
+        />
+        <CodePreview
+          v-else-if="content"
+          :content="content"
+          :language="language"
+        />
+      </section>
+    </div>
     <div v-else class="preview-state">没有可预览的内容</div>
   </aside>
 </template>
 
 <style scoped>
 .search-result-preview {
-  position: sticky;
-  top: 140px;
+  position: relative;
+  align-self: stretch;
   display: flex;
   min-width: 0;
-  height: calc(100vh - 180px);
-  min-height: 360px;
+  height: 100%;
+  min-height: calc(100vh - 180px);
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border: 0;
+  border-radius: calc(var(--radius-md) + 8px);
   background: var(--color-canvas);
+  box-shadow:
+    0 6px 18px color-mix(in srgb, black 8%, transparent),
+    0 1px 4px color-mix(in srgb, black 5%, transparent);
 }
 
 .preview-header {
@@ -148,7 +194,7 @@ onUnmounted(() => requestController?.abort())
   align-items: center;
   gap: var(--space-8);
   padding: 0 var(--space-10);
-  border-bottom: 1px solid var(--color-border);
+  border: 0;
 }
 
 .preview-title {
@@ -218,6 +264,45 @@ onUnmounted(() => requestController?.abort())
   animation: preview-spin 700ms linear infinite;
 }
 
+.preview-body {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.preview-body[data-mode='edit'],
+.preview-body[data-mode='preview'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.preview-body[data-mode='split'] {
+  grid-template-columns: minmax(0, 1fr) 6px minmax(0, 1fr);
+}
+
+.preview-surface {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.preview-surface > * {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.preview-divider {
+  background: var(--color-canvas-soft);
+}
+
+/* The search preview is intentionally one continuous surface without any
+   nested strokes, including borders owned by reused editor components. */
+.search-result-preview :deep(*) {
+  border: 0 !important;
+}
+
 @keyframes preview-spin {
   to { transform: rotate(360deg); }
 }
@@ -225,6 +310,13 @@ onUnmounted(() => requestController?.abort())
 @media (prefers-reduced-motion: reduce) {
   .preview-spinner {
     animation: none;
+  }
+}
+
+@media (max-width: 1120px) {
+  .preview-title span,
+  .readonly-label {
+    display: none;
   }
 }
 </style>

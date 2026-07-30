@@ -6,24 +6,21 @@
   save/view-mode controls.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onErrorCaptured, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Columns2, Eye, Pencil, Save, Sparkles, X } from 'lucide-vue-next'
+import { computed, onErrorCaptured, onMounted, onUnmounted, ref } from 'vue'
+import { Save, Sparkles, X } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
 import CodeEditor from '@/components/editor_workspace/CodeEditor.vue'
 import CodePreview from '@/components/editor_workspace/CodePreview.vue'
+import EditorModeSwitch from '@/components/editor_workspace/EditorModeSwitch.vue'
 import MarkdownHtmlVisualizationPanel from '@/components/editor_workspace/MarkdownHtmlVisualizationPanel.vue'
 import MarkdownPreview from '@/components/editor_workspace/MarkdownPreview.vue'
 import MultimodalPreview from '@/components/editor_workspace/MultimodalPreview.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { EditorViewMode } from '@/types/knowledge'
-import type { ComponentPublicInstance } from 'vue'
 
 const workspaceStore = useWorkspaceStore()
 const { editorMode } = storeToRefs(workspaceStore)
-const segmentedRef = ref<HTMLElement | null>(null)
-const modeButtonRefs = ref<HTMLElement[]>([])
-const indicatorStyle = ref({ width: '0px', transform: 'translateX(0px)' })
 const visualizeMenuOpen = ref(false)
 
 const splitRatio = ref(0.5)
@@ -87,12 +84,6 @@ const splitBodyStyle = computed(() => {
   return { gridTemplateColumns: `${r * 100}% 6px ${(1 - r) * 100}%` } as const
 })
 
-const modeButtons: Array<{ mode: EditorViewMode; label: string; icon: typeof Pencil }> = [
-  { mode: 'edit', label: 'Edit', icon: Pencil },
-  { mode: 'preview', label: 'Preview', icon: Eye },
-  { mode: 'split', label: 'Split', icon: Columns2 },
-]
-
 const visualizationOptions = [
   { key: 'strongMotion', label: '强动效' },
   { key: 'shadow', label: '阴影' },
@@ -112,60 +103,11 @@ function handleVisualizationOptionChange(
   workspaceStore.setMarkdownHtmlVisualizationOption(key, (event.target as HTMLInputElement).checked)
 }
 
-let resizeObserver: ResizeObserver | null = null
-
-function setModeButtonRef(element: Element | ComponentPublicInstance | null, index: number) {
-  if (element instanceof HTMLElement) {
-    modeButtonRefs.value[index] = element
-  }
-}
-
-function moveSegmentedIndicatorToButton(activeButton: HTMLElement) {
-  const segmented = segmentedRef.value
-  if (!segmented) {
-    return
-  }
-  const buttonRect = activeButton.getBoundingClientRect()
-  const segmentedRect = segmented.getBoundingClientRect()
-  indicatorStyle.value = {
-    width: `${buttonRect.width}px`,
-    transform: `translateX(${buttonRect.left - segmentedRect.left - 2}px)`,
-  }
-}
-
-function updateSegmentedIndicator() {
-  const activeIndex = modeButtons.findIndex((button) => button.mode === effectiveEditorMode.value)
-  const activeButton = modeButtonRefs.value[activeIndex]
-  if (!activeButton) {
-    return
-  }
-  moveSegmentedIndicatorToButton(activeButton)
-}
-
-function setEditorMode(mode: EditorViewMode, event?: MouseEvent | PointerEvent) {
+function setEditorMode(mode: EditorViewMode) {
   if (isPreviewOnlyViewer.value && mode !== 'preview') {
     return
   }
   editorMode.value = mode
-  if (event?.currentTarget instanceof HTMLElement) {
-    moveSegmentedIndicatorToButton(event.currentTarget)
-    return
-  }
-  void nextTick(updateSegmentedIndicator)
-}
-
-function handleModePointerdown(mode: EditorViewMode, event: PointerEvent) {
-  if (event.button !== 0) {
-    return
-  }
-  setEditorMode(mode, event)
-}
-
-function handleModeClick(mode: EditorViewMode, event: MouseEvent) {
-  if (event.detail !== 0) {
-    return
-  }
-  setEditorMode(mode, event)
 }
 
 function handleBeforeUnload(event: BeforeUnloadEvent) {
@@ -201,17 +143,10 @@ function handleEditorShortcut(event: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
-  resizeObserver = new ResizeObserver(updateSegmentedIndicator)
-  if (segmentedRef.value) {
-    resizeObserver.observe(segmentedRef.value)
-  }
-  void nextTick(updateSegmentedIndicator)
 })
 
 onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
-  resizeObserver?.disconnect()
-  resizeObserver = null
 })
 
 onErrorCaptured((err, vm, info) => {
@@ -221,19 +156,6 @@ onErrorCaptured((err, vm, info) => {
   return false
 })
 
-watch(
-  editorMode,
-  () => {
-    void nextTick(updateSegmentedIndicator)
-  },
-)
-
-watch(
-  isPreviewOnlyViewer,
-  () => {
-    void nextTick(updateSegmentedIndicator)
-  },
-)
 </script>
 
 <template>
@@ -254,22 +176,11 @@ watch(
       </div>
 
       <div class="tab-actions">
-        <div ref="segmentedRef" class="segmented">
-          <span class="segmented-indicator" :style="indicatorStyle"></span>
-          <button
-            v-for="(button, index) in modeButtons"
-            :key="button.mode"
-            :ref="(element) => setModeButtonRef(element, index)"
-            :class="{ active: effectiveEditorMode === button.mode }"
-            :disabled="isPreviewOnlyViewer && button.mode !== 'preview'"
-            type="button"
-            @pointerdown="handleModePointerdown(button.mode, $event)"
-            @click="handleModeClick(button.mode, $event)"
-          >
-            <component :is="button.icon" :size="14" />
-            <span>{{ button.label }}</span>
-          </button>
-        </div>
+        <EditorModeSwitch
+          :model-value="effectiveEditorMode"
+          :preview-only="isPreviewOnlyViewer"
+          @update:model-value="setEditorMode"
+        />
         <div class="visualize-menu" :class="{ open: visualizeMenuOpen }">
           <button
             class="visualize-trigger"
@@ -456,30 +367,6 @@ watch(
   padding-bottom: var(--space-6);
 }
 
-.segmented {
-  position: relative;
-  display: inline-flex;
-  padding: 2px;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--color-canvas-soft);
-}
-
-.segmented-indicator {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  left: 2px;
-  z-index: 0;
-  pointer-events: none;
-  border-radius: var(--radius-sm);
-  background: var(--color-primary);
-  transition:
-    transform 180ms ease,
-    width 180ms ease;
-}
-
-.segmented button,
 .save-button {
   display: inline-flex;
   align-items: center;
@@ -495,27 +382,6 @@ watch(
     background var(--transition-fast),
     color var(--transition-fast),
     border-color var(--transition-fast);
-}
-
-.segmented button {
-  position: relative;
-  z-index: 1;
-}
-
-.segmented button.active {
-  color: white;
-}
-
-.segmented kbd {
-  color: inherit;
-  font-family: var(--font-ui);
-  font-size: calc(10px * var(--font-scale));
-  opacity: 0.72;
-}
-
-.segmented button:disabled {
-  cursor: not-allowed;
-  opacity: 0.42;
 }
 
 .visualize-menu {
@@ -734,10 +600,6 @@ watch(
 
   .visualize-trigger span,
   .save-button span {
-    display: none;
-  }
-
-  .segmented kbd {
     display: none;
   }
 

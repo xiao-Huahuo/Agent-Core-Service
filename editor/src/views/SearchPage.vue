@@ -7,25 +7,33 @@
   upward on submit, results scroll below.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { FileSearch, Layers, List, Loader, Search, Sparkles, X } from 'lucide-vue-next'
+import { computed, onMounted, ref, watch } from 'vue'
+import { Layers, List } from 'lucide-vue-next'
 
 import { highlightMatch } from '@/utils/highlight'
 import { useWorkspaceStore } from '@/stores/workspace'
+import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import SplitText from '@/components/editor_workspace/SplitText.vue'
 import SearchResultPreview from '@/components/search_page/SearchResultPreview.vue'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 
 const workspaceStore = useWorkspaceStore()
 
-const inputEl = ref<HTMLInputElement | null>(null)
 const hasSearched = ref(false)
+/** Fixed number of search results displayed on one page. */
+const PAGE_SIZE = 20
+/** One-based page currently displayed in the result list. */
+const currentPage = ref(1)
 /** Result currently displayed in the in-page readonly preview. */
 const selectedPreview = ref<{ path: string; semanticOnly: boolean } | null>(null)
 
 const unifiedMode = computed({
   get: () => workspaceStore.searchUnified,
-  set: (v: boolean) => { workspaceStore.searchUnified = v },
+  set: (v: boolean) => {
+    workspaceStore.searchUnified = v
+    currentPage.value = 1
+    selectedPreview.value = null
+  },
 })
 
 function baseName(uri: string): string {
@@ -37,15 +45,9 @@ function onSubmit() {
   const q = workspaceStore.searchQuery.trim()
   if (!q) return
   hasSearched.value = true
+  currentPage.value = 1
   selectedPreview.value = null
   workspaceStore.performSearch(q)
-}
-
-function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Enter') {
-    event.preventDefault()
-    onSubmit()
-  }
 }
 
 /** Resolves search backend paths to the current knowledge-tree node. */
@@ -62,6 +64,10 @@ function resolveResultNode(path: string): KnowledgeFileNode | undefined {
 function previewResult(path: string, semanticOnly = false) {
   const node = resolveResultNode(path)
   if (!node || node.isDir) return
+  if (selectedPreview.value?.path === node.path) {
+    selectedPreview.value = null
+    return
+  }
   selectedPreview.value = { path: node.path, semanticOnly }
 }
 
@@ -77,28 +83,6 @@ function openResult(path: string) {
 /** Unified results highlight when they contain lexical evidence, not semantic evidence alone. */
 function isSemanticOnlyResult(item: MergedResult): boolean {
   return Boolean(item.semanticContent && !item.fulltextSnippet && !item.filenameMatched)
-}
-
-function toggleFulltext() {
-  workspaceStore.fulltextEnabled = !workspaceStore.fulltextEnabled
-  if (workspaceStore.searchQuery.trim()) {
-    workspaceStore.performSearch(workspaceStore.searchQuery)
-  }
-}
-
-function toggleSemantic() {
-  workspaceStore.semanticEnabled = !workspaceStore.semanticEnabled
-  if (workspaceStore.searchQuery.trim()) {
-    workspaceStore.performSearch(workspaceStore.searchQuery)
-  }
-}
-
-function askAgent() {
-  const q = workspaceStore.searchQuery.trim()
-  if (!q) return
-  workspaceStore.setMainView('editor')
-  workspaceStore.agentSidebarOpen = true
-  workspaceStore.pendingAgentPrompt = `在知识库里面找一个文件,特征是${q}`
 }
 
 // ---- unified mode merge logic ----
@@ -141,6 +125,69 @@ const unifiedResults = computed<MergedResult[]>(() => {
   return [...byName.values()]
 })
 
+/** Total result count for separated mode before pagination. */
+const separatedResultCount = computed(() => {
+  const results = workspaceStore.searchResults
+  if (!results) return 0
+  return results.filename_results.length
+    + results.fulltext_results.length
+    + results.semantic_results.length
+})
+
+/** Total count for whichever result presentation is active. */
+const displayedResultCount = computed(() => (
+  unifiedMode.value ? unifiedResults.value.length : separatedResultCount.value
+))
+
+/** Number of available pages, kept at one to simplify bounded navigation. */
+const totalPages = computed(() => Math.max(1, Math.ceil(displayedResultCount.value / PAGE_SIZE)))
+/** Zero-based inclusive offset of the current page in the displayed sequence. */
+const pageStart = computed(() => (currentPage.value - 1) * PAGE_SIZE)
+/** Zero-based exclusive offset of the current page in the displayed sequence. */
+const pageEnd = computed(() => pageStart.value + PAGE_SIZE)
+
+/**
+ * Slices one separated-mode group against the global page offsets.
+ * Group offsets preserve the visible filename -> fulltext -> semantic order.
+ */
+function sliceSeparatedGroup<T>(items: T[], groupStart: number): T[] {
+  const localStart = Math.max(0, pageStart.value - groupStart)
+  const localEnd = Math.max(0, pageEnd.value - groupStart)
+  return items.slice(localStart, localEnd)
+}
+
+/** Filename matches visible on the current separated-mode page. */
+const pagedFilenameResults = computed(() => {
+  const results = workspaceStore.searchResults
+  return results ? sliceSeparatedGroup(results.filename_results, 0) : []
+})
+
+/** Fulltext matches visible after filename matches on the current page. */
+const pagedFulltextResults = computed(() => {
+  const results = workspaceStore.searchResults
+  if (!results) return []
+  return sliceSeparatedGroup(results.fulltext_results, results.filename_results.length)
+})
+
+/** Semantic matches visible after the two lexical groups on the current page. */
+const pagedSemanticResults = computed(() => {
+  const results = workspaceStore.searchResults
+  if (!results) return []
+  const groupStart = results.filename_results.length + results.fulltext_results.length
+  return sliceSeparatedGroup(results.semantic_results, groupStart)
+})
+
+/** Unified results visible on the current page. */
+const pagedUnifiedResults = computed(() => unifiedResults.value.slice(pageStart.value, pageEnd.value))
+
+/** Moves to a bounded page and clears a preview selected on the previous page. */
+function setPage(page: number) {
+  const nextPage = Math.min(totalPages.value, Math.max(1, page))
+  if (nextPage === currentPage.value) return
+  currentPage.value = nextPage
+  selectedPreview.value = null
+}
+
 function syncFromStore() {
   if (workspaceStore.searchQuery.trim() && workspaceStore.searchResults) {
     hasSearched.value = true
@@ -152,13 +199,16 @@ function syncFromStore() {
 watch(() => workspaceStore.mainView, (view) => {
   if (view === 'search') {
     syncFromStore()
-    nextTick(() => inputEl.value?.focus())
   }
+})
+
+watch(() => workspaceStore.searchResults, () => {
+  currentPage.value = 1
+  selectedPreview.value = null
 })
 
 onMounted(() => {
   syncFromStore()
-  inputEl.value?.focus()
 })
 </script>
 
@@ -174,80 +224,7 @@ onMounted(() => {
       </Transition>
 
       <div class="search-box-wrap">
-        <div class="search-box">
-          <Search :size="20" class="search-box-icon" />
-          <input
-            ref="inputEl"
-            v-model="workspaceStore.searchQuery"
-            type="text"
-            placeholder="搜索文件..."
-            class="search-box-input"
-            @keydown="onKeydown"
-          />
-          <Loader v-if="workspaceStore.searching" :size="18" class="search-box-spinner" />
-          <button
-            v-if="workspaceStore.searchQuery && !workspaceStore.searching"
-            class="search-box-clear"
-            type="button"
-            @click="workspaceStore.searchQuery = ''"
-          >
-            <X :size="12" />
-          </button>
-          <button class="search-box-submit" type="button" @click="onSubmit">
-            <Search :size="16" />
-            <span>搜索</span>
-          </button>
-        </div>
-
-        <div class="search-box-toggles">
-          <button
-            class="toggle-btn"
-            :class="{ on: workspaceStore.fulltextEnabled }"
-            type="button"
-            @click="toggleFulltext"
-          >
-            <div class="toggle-inner">
-              <div class="toggle-dot"></div>
-              <span class="toggle-label">内容搜索</span>
-            </div>
-            <div class="toggle-overlay">
-              <div class="toggle-overlay-inner">
-                <FileSearch :size="12" />
-                <span>内容搜索</span>
-                <svg xmlns="http://www.w3.org/2000/svg" class="toggle-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h14"></path>
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 6l6 6-6 6"></path>
-                </svg>
-              </div>
-            </div>
-          </button>
-          <button
-            class="toggle-btn"
-            :class="{ on: workspaceStore.semanticEnabled }"
-            type="button"
-            @click="toggleSemantic"
-          >
-            <div class="toggle-inner">
-              <div class="toggle-dot"></div>
-              <span class="toggle-label">语义搜索</span>
-            </div>
-            <div class="toggle-overlay">
-              <div class="toggle-overlay-inner">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
-                </svg>
-                <span>语义搜索</span>
-                <svg xmlns="http://www.w3.org/2000/svg" class="toggle-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h14"></path>
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 6l6 6-6 6"></path>
-                </svg>
-              </div>
-            </div>
-          </button>
-          <button class="ai-search-btn" type="button" title="AI帮你搜" @click="askAgent">
-            <Sparkles :size="12" />
-          </button>
-        </div>
+        <SearchPalette variant="page" @submit="onSubmit" />
       </div>
     </div>
 
@@ -273,10 +250,10 @@ onMounted(() => {
           <div v-if="workspaceStore.searchResults" class="results-container">
         <!-- === SEPARATED MODE === -->
             <template v-if="!unifiedMode">
-              <div v-if="workspaceStore.searchResults.filename_results.length" class="result-group">
+              <div v-if="pagedFilenameResults.length" class="result-group">
                 <div class="group-label">文件</div>
                 <button
-                  v-for="item in workspaceStore.searchResults.filename_results"
+                  v-for="item in pagedFilenameResults"
                   :key="item.path"
                   class="result-card"
                   :class="{ selected: selectedPreview?.path === resolveResultNode(item.path)?.path }"
@@ -291,10 +268,10 @@ onMounted(() => {
                 </button>
               </div>
 
-              <div v-if="workspaceStore.searchResults.fulltext_results.length" class="result-group">
+              <div v-if="pagedFulltextResults.length" class="result-group">
                 <div class="group-label">内容匹配</div>
                 <button
-                  v-for="item in workspaceStore.searchResults.fulltext_results"
+                  v-for="item in pagedFulltextResults"
                   :key="item.source_uri"
                   class="result-card"
                   :class="{ selected: selectedPreview?.path === resolveResultNode(item.source_uri)?.path }"
@@ -310,10 +287,10 @@ onMounted(() => {
                 </button>
               </div>
 
-              <div v-if="workspaceStore.searchResults.semantic_results.length" class="result-group">
+              <div v-if="pagedSemanticResults.length" class="result-group">
                 <div class="group-label">语义匹配</div>
                 <button
-                  v-for="item in workspaceStore.searchResults.semantic_results"
+                  v-for="item in pagedSemanticResults"
                   :key="(item as Record<string, unknown>).memory_id as string"
                   class="result-card"
                   :class="{ selected: selectedPreview?.path === resolveResultNode((item as Record<string, unknown>).source_uri as string)?.path }"
@@ -334,7 +311,7 @@ onMounted(() => {
             <!-- === UNIFIED MODE === -->
             <template v-else>
               <button
-                v-for="item in unifiedResults"
+                v-for="item in pagedUnifiedResults"
                 :key="item.path"
                 class="result-card"
                 :class="{ selected: selectedPreview?.path === resolveResultNode(item.path)?.path }"
@@ -360,6 +337,33 @@ onMounted(() => {
           <div v-else-if="!workspaceStore.searching" class="results-empty">
             无匹配结果
           </div>
+
+          <nav
+            v-if="workspaceStore.searchResults && totalPages > 1"
+            class="pagination"
+            aria-label="搜索结果分页"
+          >
+            <button
+              class="pagination-button pagination-previous"
+              type="button"
+              :disabled="currentPage === 1"
+              @click="setPage(currentPage - 1)"
+            >
+              上一页
+            </button>
+            <span class="pagination-status" aria-live="polite">
+              {{ currentPage }} / {{ totalPages }}
+            </span>
+            <button
+              class="pagination-button pagination-next"
+              type="button"
+              :disabled="currentPage === totalPages"
+              @click="setPage(currentPage + 1)"
+            >
+              下一页
+            </button>
+          </nav>
+
         </div>
 
         <Transition name="preview-slide">
@@ -483,10 +487,6 @@ onMounted(() => {
   transition: box-shadow 0.5s ease-out;
   z-index: 0;
   pointer-events: none;
-}
-
-.search-box:hover::before {
-  box-shadow: inset 0 0 0 10em color-mix(in srgb, var(--color-primary) 6%, transparent);
 }
 
 :root[data-theme="dark"] .search-box {
@@ -809,6 +809,52 @@ onMounted(() => {
   gap: 2px;
 }
 
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-12);
+  min-height: 44px;
+  margin-top: var(--space-16);
+}
+
+.pagination-button {
+  min-width: 64px;
+  height: 32px;
+  padding: 0 var(--space-10);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-canvas-soft);
+  color: var(--color-text);
+  font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.pagination-button:hover:not(:disabled) {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.pagination-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.pagination-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.pagination-status {
+  min-width: 56px;
+  color: var(--color-text-muted);
+  font-size: calc(12px * var(--font-scale));
+  text-align: center;
+}
+
 .results-empty {
   width: 100%;
   text-align: center;
@@ -838,20 +884,23 @@ onMounted(() => {
   gap: 4px;
   width: 100%;
   padding: 10px 14px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: background 120ms ease;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
 .result-card:hover {
-  background: var(--color-surface-active);
+  background: var(--color-primary-soft);
 }
 
 .result-card.selected {
   background: var(--color-primary-soft);
+  border-color: var(--color-primary);
 }
 
 .result-card:focus-visible {
@@ -939,8 +988,6 @@ onMounted(() => {
   }
 
   .results-workspace.preview-open :deep(.search-result-preview) {
-    position: relative;
-    top: auto;
     height: 60vh;
   }
 }

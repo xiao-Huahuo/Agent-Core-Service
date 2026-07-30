@@ -2,9 +2,8 @@
   Inline search bar + dropdown results.
 
   Usage:
-  Embedded in TopCommandBar header center. Always shows a search input;
-  when focused and a query is present, a dropdown results panel appears
-  below with filename / fulltext / semantic results grouped by <hr>.
+  Embedded in TopCommandBar or SearchPage. Both variants share the same
+  history, search toggles, AI action, and grouped result preview dropdown.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -12,11 +11,34 @@ import { Clock, FileSearch, Loader, Search, Sparkles, Trash2, X } from 'lucide-v
 
 import { useWorkspaceStore } from '@/stores/workspace'
 
+defineOptions({ name: 'SearchPalette' })
+
+const props = withDefaults(defineProps<{
+  variant?: 'toolbar' | 'page'
+}>(), {
+  variant: 'toolbar',
+})
+
+const emit = defineEmits<{
+  submit: []
+}>()
+
 const workspaceStore = useWorkspaceStore()
 
 const inputEl = ref<HTMLInputElement | null>(null)
 const wrapperEl = ref<HTMLElement | null>(null)
 const focused = ref(false)
+const dropdownPos = ref({ top: 0, left: 0, width: 0 })
+
+function updateDropdownPos() {
+  if (!wrapperEl.value) return
+  const rect = wrapperEl.value.getBoundingClientRect()
+  dropdownPos.value = {
+    top: rect.bottom + 4,
+    left: rect.left,
+    width: rect.width,
+  }
+}
 
 const showDropdown = computed(() => focused.value)
 
@@ -28,10 +50,13 @@ function handleClickOutside(event: MouseEvent) {
 
 onMounted(() => {
   document.addEventListener('mousedown', handleClickOutside)
+  updateDropdownPos()
+  window.addEventListener('resize', updateDropdownPos)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', handleClickOutside)
+  window.removeEventListener('resize', updateDropdownPos)
 })
 
 function selectHistory(query: string) {
@@ -48,6 +73,7 @@ watch(() => workspaceStore.searchOpen, (open) => {
 
 function onFocus() {
   focused.value = true
+  nextTick(updateDropdownPos)
 }
 
 function handleOpenFile(path: string) {
@@ -57,6 +83,7 @@ function handleOpenFile(path: string) {
     node = workspaceStore.flatNodes?.find((n) => n.path.endsWith(`/${name}`) || n.name === name)
   }
   if (node) {
+    workspaceStore.setMainView('editor')
     workspaceStore.selectFile(node)
   }
   workspaceStore.closeSearch()
@@ -93,16 +120,31 @@ function askAgentSearch() {
   workspaceStore.pendingAgentPrompt = `在知识库里找一个文件，特征是：${q}`
 }
 
-function navigateToSearchPage() {
+/** Submits through the owning page or navigates there from the toolbar. */
+function handleSubmit() {
   workspaceStore.searchQuery = workspaceStore.searchQuery.trim()
-  workspaceStore.setMainView('search')
+  if (props.variant === 'page') {
+    emit('submit')
+  } else {
+    workspaceStore.setMainView('search')
+  }
   focused.value = false
 }
 
+/** Focuses the shared input when its owning view becomes active. */
+function focus() {
+  inputEl.value?.focus()
+}
+
+defineExpose({ focus })
 </script>
 
 <template>
-  <div ref="wrapperEl" class="search-wrapper" :class="{ focused: focused }">
+  <div
+    ref="wrapperEl"
+    class="search-wrapper"
+    :class="{ focused: focused, 'page-variant': variant === 'page' }"
+  >
     <div class="search-bar">
       <Search :size="16" class="search-icon" />
       <input
@@ -111,6 +153,8 @@ function navigateToSearchPage() {
         type="text"
         placeholder="搜索文件..."
         class="search-input"
+        :aria-expanded="showDropdown"
+        aria-haspopup="listbox"
         @focus="onFocus"
       />
       <Loader v-if="workspaceStore.searching" :size="14" class="spinner" />
@@ -124,8 +168,9 @@ function navigateToSearchPage() {
       </button>
       <button
         class="search-submit-btn"
+        :class="{ 'search-box-submit': variant === 'page' }"
         type="button"
-        @mousedown.prevent="navigateToSearchPage"
+        @click="handleSubmit"
       >
         <Search :size="12" class="submit-icon" />
         <span class="submit-label">Search</span>
@@ -133,8 +178,19 @@ function navigateToSearchPage() {
     </div>
 
     <!-- Dropdown results -->
-    <Transition name="dropdown">
-      <div v-if="showDropdown" class="search-dropdown">
+    <Teleport to="body">
+      <Transition name="dropdown">
+        <div
+          v-if="showDropdown"
+          class="search-dropdown"
+          :class="{ 'page-search-dropdown': variant === 'page' }"
+          :style="{
+            position: 'fixed',
+            top: dropdownPos.top + 'px',
+            left: dropdownPos.left + 'px',
+            width: dropdownPos.width + 'px',
+          }"
+        >
         <!-- Toggle row: always visible -->
         <div class="toggle-row">
           <button
@@ -271,6 +327,7 @@ function navigateToSearchPage() {
         </template>
       </div>
     </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -285,6 +342,11 @@ function navigateToSearchPage() {
   z-index: 100;
 }
 
+.search-wrapper.page-variant {
+  max-width: none;
+  margin: 0;
+}
+
 .search-bar {
   display: flex;
   align-items: center;
@@ -295,6 +357,37 @@ function navigateToSearchPage() {
   border-radius: 999px;
   background: var(--color-surface);
   transition: border-color var(--transition-fast);
+}
+
+.page-variant .search-bar {
+  height: 48px;
+  gap: 10px;
+  padding: 0 4px 0 18px;
+  border-width: 2px;
+}
+
+.page-variant .search-input {
+  font-size: calc(15px * var(--font-scale));
+}
+
+.page-variant .clear-btn {
+  width: 22px;
+  height: 22px;
+}
+
+.page-variant .search-submit-btn {
+  width: auto;
+  height: 38px;
+  padding: 0 20px 0 38px;
+  line-height: 38px;
+}
+
+.page-variant .submit-icon {
+  left: 14px;
+}
+
+.page-variant .submit-label {
+  opacity: 1;
 }
 
 :root[data-theme="dark"] .search-bar {
@@ -441,6 +534,14 @@ function navigateToSearchPage() {
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
+}
+
+.search-dropdown.page-search-dropdown {
+  max-height: 520px;
+}
+
+.search-dropdown.page-search-dropdown .result-list {
+  max-height: 450px;
 }
 
 :root[data-theme="dark"] .search-dropdown {
@@ -629,7 +730,7 @@ function navigateToSearchPage() {
 }
 
 .result-row:hover {
-  background: var(--color-surface-active);
+  background: var(--color-primary-soft);
 }
 
 .history-header {
@@ -654,7 +755,7 @@ function navigateToSearchPage() {
 }
 
 .history-clear-btn:hover {
-  background: var(--color-surface-active);
+  background: var(--color-primary-soft);
   color: var(--color-text);
 }
 

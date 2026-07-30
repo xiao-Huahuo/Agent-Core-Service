@@ -1,0 +1,132 @@
+<!--
+  Shared editor view-mode switch.
+
+  Usage:
+  Bind an EditorViewMode with v-model. Set preview-only when the current file
+  cannot expose text; Edit and Split then remain visible but disabled.
+-->
+<script setup lang="ts">
+import { Columns2, Eye, Pencil } from 'lucide-vue-next'
+
+import type { EditorViewMode } from '@/types/knowledge'
+
+defineOptions({ name: 'EditorModeSwitch' })
+
+const props = withDefaults(defineProps<{
+  modelValue: EditorViewMode
+  previewOnly?: boolean
+}>(), {
+  previewOnly: false,
+})
+
+const emit = defineEmits<{
+  'update:modelValue': [mode: EditorViewMode]
+}>()
+
+/** Stable mode definitions shared by the formal editor and readonly preview. */
+const modeButtons: Array<{ mode: EditorViewMode; label: string; icon: typeof Pencil }> = [
+  { mode: 'edit', label: 'Edit', icon: Pencil },
+  { mode: 'preview', label: 'Preview', icon: Eye },
+  { mode: 'split', label: 'Split', icon: Columns2 },
+]
+
+/** Selects an available view mode without changing the editor's write policy. */
+function selectMode(mode: EditorViewMode) {
+  if (props.previewOnly && mode !== 'preview') return
+  emit('update:modelValue', mode)
+}
+</script>
+
+<template>
+  <div
+    class="editor-mode-switch"
+    :data-mode="modelValue"
+    role="group"
+    aria-label="Editor view mode"
+  >
+    <span class="editor-mode-indicator"></span>
+    <button
+      v-for="button in modeButtons"
+      :key="button.mode"
+      :class="{ active: modelValue === button.mode }"
+      :disabled="previewOnly && button.mode !== 'preview'"
+      :aria-pressed="modelValue === button.mode"
+      type="button"
+      @click="selectMode(button.mode)"
+    >
+      <component :is="button.icon" :size="14" />
+      <span>{{ button.label }}</span>
+    </button>
+  </div>
+</template>
+
+<style scoped>
+.editor-mode-switch {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 2px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-canvas-soft);
+}
+
+.editor-mode-indicator {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / 3);
+  pointer-events: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  transition: transform 180ms ease;
+}
+
+.editor-mode-switch[data-mode='preview'] .editor-mode-indicator {
+  transform: translateX(100%);
+}
+
+.editor-mode-switch[data-mode='split'] .editor-mode-indicator {
+  transform: translateX(200%);
+}
+
+.editor-mode-switch button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  min-width: 68px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-6);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.editor-mode-switch button.active {
+  color: white;
+}
+
+.editor-mode-switch button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.editor-mode-switch button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-mode-indicator {
+    transition: none;
+  }
+}
+</style>
