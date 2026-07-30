@@ -4,31 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="大卡片">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="dashboard小改">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/servicer.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/servicer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/sessions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/sessions.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/message_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/message_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/api/session.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/session.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/ui-system.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/ui-system.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/LatencyCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/LatencyCard.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/RagMetricsCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/RagMetricsCard.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/TokenUsageCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/TokenUsageCard.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/library_view/LibraryCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/library_view/LibraryCard.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/composable/__tests__/useObsData.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/composable/__tests__/useObsData.spec.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/composable/useObsData.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/composable/useObsData.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/DashboardView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/DashboardView.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/IngestionProgressView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/IngestionProgressView.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/LibraryView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/LibraryView.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/MarkdownHtmlVisualizationView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/MarkdownHtmlVisualizationView.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/SkillView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SkillView.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_agent_core_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_agent_core_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/workspace.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/workspace.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -309,15 +291,7 @@
       <workItem from="1785156958440" duration="11035000" />
       <workItem from="1785205674487" duration="2033000" />
       <workItem from="1785212115660" duration="1797000" />
-      <workItem from="1785411230338" duration="7779000" />
-    </task>
-    <task id="LOCAL-00218" summary="可选的安全审核">
-      <option name="closed" value="true" />
-      <created>1784884029096</created>
-      <option name="number" value="00218" />
-      <option name="presentableId" value="LOCAL-00218" />
-      <option name="project" value="LOCAL" />
-      <updated>1784884029096</updated>
+      <workItem from="1785411230338" duration="9877000" />
     </task>
     <task id="LOCAL-00219" summary="图谱UI小改">
       <option name="closed" value="true" />
@@ -703,14 +677,21 @@
       <option name="project" value="LOCAL" />
       <updated>1785413673591</updated>
     </task>
-    <option name="localTasksCounter" value="267" />
+    <task id="LOCAL-00267" summary="dashboard小改">
+      <option name="closed" value="true" />
+      <created>1785422572243</created>
+      <option name="number" value="00267" />
+      <option name="presentableId" value="LOCAL-00267" />
+      <option name="project" value="LOCAL" />
+      <updated>1785422572243</updated>
+    </task>
+    <option name="localTasksCounter" value="268" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="存储管理v2" />
     <MESSAGE value="优化了联网搜索工具的搜索结果" />
     <MESSAGE value="图片预览v1" />
     <MESSAGE value="图片预览v2" />
@@ -735,7 +716,8 @@
     <MESSAGE value="神秘的skill问题" />
     <MESSAGE value="工具条样式小改" />
     <MESSAGE value="大卡片" />
-    <option name="LAST_COMMIT_MESSAGE" value="大卡片" />
+    <MESSAGE value="dashboard小改" />
+    <option name="LAST_COMMIT_MESSAGE" value="dashboard小改" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />

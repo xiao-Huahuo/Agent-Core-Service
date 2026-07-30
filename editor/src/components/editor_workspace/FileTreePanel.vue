@@ -7,13 +7,15 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, FilePlus2, FolderPlus, ListFilter, RefreshCw } from 'lucide-vue-next'
+import { ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, FilePlus2, FolderPlus, History, ListFilter, RefreshCw, Search } from 'lucide-vue-next'
 
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
+import RecentFileList from '@/components/editor_workspace/RecentFileList.vue'
 import TreeNode from '@/components/editor_workspace/TreeNode.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeFileNode } from '@/types/knowledge'
+import { buildRecentFileGroups, type RecentFileVisit } from '@/utils/recentFileHistory'
 
 const settingsStore = useSettingsStore()
 const isDark = computed(() => settingsStore.isDark)
@@ -32,6 +34,22 @@ const treeVersion = ref(0)
 const sortMenuOpen = ref(false)
 const sortKey = ref<'name' | 'mtime' | 'ingested' | 'size'>('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
+/** Whether the panel is displaying the recent-files layout. */
+const recentMode = ref(false)
+/** Filename-only query applied to the frozen recent visit snapshot. */
+const recentSearchQuery = ref('')
+/** Stable visit ordering captured on entry or explicit refresh. */
+const recentVisitSnapshot = ref<RecentFileVisit[]>([])
+const recentFileGroups = computed(() => buildRecentFileGroups(
+  recentVisitSnapshot.value,
+  workspaceStore.flatNodes,
+  recentSearchQuery.value,
+))
+const hasRecentFiles = computed(() => buildRecentFileGroups(
+  recentVisitSnapshot.value,
+  workspaceStore.flatNodes,
+  '',
+).length > 0)
 
 function sortTreeNodes(nodes: KnowledgeFileNode[]): KnowledgeFileNode[] {
   const dirOrder = (a: KnowledgeFileNode, b: KnowledgeFileNode) => Number(b.isDir) - Number(a.isDir)
@@ -187,6 +205,9 @@ async function refreshFileTree() {
   actionError.value = ''
   treeVersion.value++
   await workspaceStore.loadKnowledgeTree()
+  if (recentMode.value) {
+    recentVisitSnapshot.value = workspaceStore.recentFileVisits.map((visit) => ({ ...visit }))
+  }
 }
 
 function toggleExpandAll() {
@@ -477,12 +498,14 @@ function handleGlobalKeydown(event: KeyboardEvent) {
 async function createFileFromMenu() {
   const parentPath = contextTargetDir()
   closeContextMenu()
+  leaveRecentMode()
   beginCreate('file', parentPath)
 }
 
 async function createFolderFromMenu() {
   const parentPath = contextTargetDir()
   closeContextMenu()
+  leaveRecentMode()
   beginCreate('folder', parentPath)
 }
 
@@ -550,6 +573,7 @@ async function renameFromMenu() {
     return
   }
   closeContextMenu()
+  leaveRecentMode()
   beginRename(node)
 }
 
@@ -614,6 +638,22 @@ async function askAgentFromMenu() {
     workspaceStore.agentSidebarOpen = true
     workspaceStore.pendingAgentPrompt = 'Help me review the currently open file.'
   }
+}
+
+/** Enters recent mode and captures a stable list ordering for the session. */
+function openRecentMode() {
+  if (recentMode.value) return
+  recentVisitSnapshot.value = workspaceStore.recentFileVisits.map((visit) => ({ ...visit }))
+  recentMode.value = true
+  sortMenuOpen.value = false
+  contextMenu.value.open = false
+}
+
+/** Returns to the normal tree and clears transient recent-mode state. */
+function leaveRecentMode() {
+  recentMode.value = false
+  recentSearchQuery.value = ''
+  contextMenu.value.open = false
 }
 
 async function htmlVisualizeFromMenu() {
@@ -780,9 +820,20 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <aside class="file-panel surface-panel" :class="{ dragging, 'theme-dark': isDark, 'theme-light': !isDark }">
-    <div class="panel-header">
+  <aside class="file-panel surface-panel" :class="{ dragging, 'recent-mode': recentMode, 'theme-dark': isDark, 'theme-light': !isDark }">
+    <div class="panel-header" :class="{ 'recent-header': recentMode }">
       <button
+        v-if="recentMode"
+        class="header-action"
+        type="button"
+        title="返回普通文件树"
+        aria-label="返回普通文件树"
+        @click="leaveRecentMode"
+      >
+        <ArrowLeft :size="18" />
+      </button>
+      <button
+        v-if="!recentMode"
         class="header-action"
         :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn }"
         type="button"
@@ -791,7 +842,7 @@ onUnmounted(() => {
       >
         <ListFilter :size="18" />
       </button>
-      <div class="sort-control" @click.stop>
+      <div v-if="!recentMode" class="sort-control" @click.stop>
         <button
           class="header-action"
           :class="{ active: sortMenuOpen }"
@@ -829,6 +880,7 @@ onUnmounted(() => {
         </div>
       </div>
       <button
+        v-if="!recentMode"
         class="header-action"
         type="button"
         title="展开/关闭所有文件夹"
@@ -846,10 +898,20 @@ onUnmounted(() => {
       >
         <RefreshCw :size="18" />
       </button>
-      <button class="header-action" type="button" title="New folder" @click="beginCreate('folder', '')">
+      <button
+        class="header-action"
+        :class="{ active: recentMode }"
+        type="button"
+        title="最近浏览"
+        :aria-pressed="recentMode"
+        @click="openRecentMode"
+      >
+        <History :size="18" />
+      </button>
+      <button v-if="!recentMode" class="header-action" type="button" title="New folder" @click="beginCreate('folder', '')">
         <FolderPlus :size="18" />
       </button>
-      <button class="header-action" type="button" title="New file" @click="beginCreate('file', '')">
+      <button v-if="!recentMode" class="header-action" type="button" title="New file" @click="beginCreate('file', '')">
         <FilePlus2 :size="18" />
       </button>
       <input
@@ -861,7 +923,27 @@ onUnmounted(() => {
       />
     </div>
 
+    <label v-if="recentMode" class="recent-search">
+      <Search :size="15" aria-hidden="true" />
+      <input
+        v-model="recentSearchQuery"
+        type="search"
+        placeholder="按文件名搜索"
+        aria-label="按文件名搜索最近浏览"
+      />
+    </label>
+
+    <RecentFileList
+      v-if="recentMode"
+      :groups="recentFileGroups"
+      :selected-path="workspaceStore.selectedPath"
+      :has-history="hasRecentFiles"
+      @select="handleSelect"
+      @context-menu="openContextMenu"
+    />
+
     <ul
+      v-else
       class="tree-root"
       @dragenter.prevent="dragging = true"
       @dragover.prevent="handleTreeDragEnter"

@@ -57,6 +57,10 @@ import type {
   SearchResults,
   WorkspaceMainView,
 } from '@/types/knowledge'
+import {
+  updateRecentFileVisits,
+  type RecentFileVisit,
+} from '@/utils/recentFileHistory'
 
 function createId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
@@ -302,6 +306,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   /** Backend-generated multimodal preview cache for binary/table/document files. */
   const previewByPath = ref<Record<string, FilePreviewPayload>>({})
+
+  /** Files opened by the current user, newest visit first. */
+  const recentFileVisits = ref<RecentFileVisit[]>([])
+  let recentFileHistoryKey = ''
 
   /** Abort controller for the current preview fetch — cancels stale in-flight requests. */
   let _previewAbort: AbortController | null = null
@@ -1236,6 +1244,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return
     }
     selectedPath.value = node.path
+    recordRecentFileVisit(node.path)
     if (!openTabs.value.some((tab) => tab.path === node.path)) {
       openTabs.value.push({ path: node.path, title: node.name, dirty: false, mtime: node.mtime })
     }
@@ -1254,7 +1263,46 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function activateTab(path: string) {
     selectedPath.value = path
     selectedTreePath.value = path
+    recordRecentFileVisit(path)
     syncCurrentDocumentContext()
+  }
+
+  function recentFileStorageKey(): string {
+    const settingsStore = useSettingsStore()
+    const root = encodeURIComponent(settingsStore.profile.knowledgeDir)
+    return `metaweave_recent_files:${settingsStore.profile.userId}:${root}`
+  }
+
+  function loadRecentFileVisits() {
+    const storageKey = recentFileStorageKey()
+    if (storageKey === recentFileHistoryKey) return
+    recentFileHistoryKey = storageKey
+    try {
+      const parsed = JSON.parse(localStorage.getItem(storageKey) ?? '[]') as unknown
+      recentFileVisits.value = Array.isArray(parsed)
+        ? parsed.filter((visit): visit is RecentFileVisit => {
+            if (!visit || typeof visit !== 'object') return false
+            const candidate = visit as Partial<RecentFileVisit>
+            return typeof candidate.path === 'string' && typeof candidate.lastViewedAt === 'string'
+          })
+        : []
+    } catch {
+      recentFileVisits.value = []
+    }
+  }
+
+  function persistRecentFileVisits() {
+    try {
+      localStorage.setItem(recentFileStorageKey(), JSON.stringify(recentFileVisits.value))
+    } catch {
+      // Browsing history is optional when browser storage is unavailable.
+    }
+  }
+
+  function recordRecentFileVisit(path: string) {
+    loadRecentFileVisits()
+    recentFileVisits.value = updateRecentFileVisits(recentFileVisits.value, path, new Date().toISOString())
+    persistRecentFileVisits()
   }
 
   function closeTab(path: string) {
@@ -2167,6 +2215,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return
     }
     openTabs.value = openTabs.value.filter((tab) => !isSameOrChildPath(tab.path, node.path))
+    recentFileVisits.value = recentFileVisits.value.filter((visit) => !isSameOrChildPath(visit.path, node.path))
+    persistRecentFileVisits()
     Object.keys(contentByPath.value).forEach((path) => {
       if (isSameOrChildPath(path, node.path)) {
         delete contentByPath.value[path]
@@ -2192,6 +2242,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!settingsStore.profile.userId) {
       return
     }
+    loadRecentFileVisits()
     treeLoading.value = true
     try {
       const response = await listKnowledgeFiles(settingsStore.profile.userId)
@@ -2467,6 +2518,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (isSameOrChildPath(selectedPath.value, sourcePath)) {
       selectedPath.value = selectedPath.value.replace(sourcePath, targetPath)
     }
+    recentFileVisits.value = recentFileVisits.value.map((visit) => {
+      if (!isSameOrChildPath(visit.path, sourcePath)) return visit
+      return { ...visit, path: visit.path.replace(sourcePath, targetPath) }
+    })
+    persistRecentFileVisits()
   }
 
   function isSameOrChildPath(path: string, parentPath: string): boolean {
@@ -2475,6 +2531,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   return {
     tree,
+    recentFileVisits,
     expandedPaths,
     selectedPath,
     selectedTreePath,
