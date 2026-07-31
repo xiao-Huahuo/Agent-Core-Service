@@ -162,3 +162,12 @@ export function addGitRemote(userId: string, name: string, url: string): Promise
     url,
   })
 }
+
+export function switchGitBranch(userId: string, name: string): Promise<GitStatus> {
+  /** Switch the active knowledge library worktree to an existing local branch. */
+
+  return apiPost<GitStatus>(API_ROUTES.GIT_SWITCH, {
+    user_id: userId,
+    name,
+  })
+}

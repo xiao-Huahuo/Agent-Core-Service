@@ -8,7 +8,13 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { addGitRemote, commitGitPaths, fetchGitStatus, pushGitBranch } from '@/api/git'
+import {
+  addGitRemote,
+  commitGitPaths,
+  fetchGitStatus,
+  pushGitBranch,
+  switchGitBranch,
+} from '@/api/git'
 import { ApiError } from '@/api/client'
 
 describe('Git API client', () => {
@@ -122,6 +128,25 @@ describe('Git API client', () => {
       user_id: 'user-1',
       name: 'origin',
       url: 'git@example.com:team/notes.git',
+    })
+  })
+
+  it('posts the selected local branch when switching branches', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ initialized: true, current_branch: 'docs' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await switchGitBranch('user-1', 'docs')
+
+    const [path, request] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(path).toBe('/git/switch')
+    expect(JSON.parse(String(request.body))).toEqual({
+      user_id: 'user-1',
+      name: 'docs',
     })
   })
 })

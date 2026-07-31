@@ -6,13 +6,14 @@
   upload target, and watcher/index status placeholders.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, FilePlus2, FolderPlus, History, ListFilter, RefreshCw, Search } from 'lucide-vue-next'
 
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import RecentFileList from '@/components/editor_workspace/RecentFileList.vue'
 import TreeNode from '@/components/editor_workspace/TreeNode.vue'
 import { useSettingsStore } from '@/stores/settings'
+import { useGitStore } from '@/stores/git'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 import { buildRecentFileGroups, type RecentFileVisit } from '@/utils/recentFileHistory'
@@ -20,6 +21,7 @@ import { buildRecentFileGroups, type RecentFileVisit } from '@/utils/recentFileH
 const settingsStore = useSettingsStore()
 const isDark = computed(() => settingsStore.isDark)
 const workspaceStore = useWorkspaceStore()
+const gitStore = useGitStore()
 const dragging = ref(false)
 const uploadPicker = ref<HTMLInputElement | null>(null)
 const contextMenu = ref<{
@@ -809,6 +811,7 @@ onMounted(async () => {
   document.addEventListener('click', closeContextMenu)
   window.addEventListener('keydown', handleGlobalKeydown)
   await workspaceStore.loadKnowledgeTree()
+  void gitStore.refresh()
   workspaceStore.startFileWatcher()
 })
 

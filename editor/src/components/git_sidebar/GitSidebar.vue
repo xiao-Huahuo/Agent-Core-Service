@@ -124,7 +124,7 @@ async function toggleHistoryDropdown(): Promise<void> {
       </button>
     </div>
 
-    <template v-else>
+    <div v-else class="git-ready">
       <div class="git-groups">
         <GitChangeGroup
           title="更改"
@@ -148,18 +148,37 @@ async function toggleHistoryDropdown(): Promise<void> {
       </div>
 
       <footer class="commit-panel">
-        <div class="history-control">
-          <button
-            class="history-button"
-            type="button"
-            :aria-expanded="gitStore.historyOpen"
-            aria-haspopup="listbox"
-            @click="toggleHistoryDropdown().catch(() => undefined)"
-          >
-            <History :size="13" />
-            历史提交记录
-          </button>
-          <GitHistoryDropdown v-if="gitStore.historyOpen" />
+        <div class="commit-toolbar">
+          <div class="history-control">
+            <button
+              class="history-button"
+              type="button"
+              :aria-expanded="gitStore.historyOpen"
+              aria-haspopup="listbox"
+              @click="toggleHistoryDropdown().catch(() => undefined)"
+            >
+              <History :size="13" />
+              历史提交记录
+            </button>
+            <GitHistoryDropdown v-if="gitStore.historyOpen" />
+          </div>
+          <label class="branch-switcher">
+            <span class="sr-only">切换本地分支</span>
+            <select
+              :value="gitStore.status.current_branch"
+              :disabled="gitStore.mutating || gitStore.status.detached || gitStore.status.branches.length === 0"
+              aria-label="切换本地分支"
+              @change="gitStore.switchBranch(($event.target as HTMLSelectElement).value).catch(() => undefined)"
+            >
+              <option
+                v-for="branch in gitStore.status.branches"
+                :key="branch.name"
+                :value="branch.name"
+              >
+                {{ branch.name }}
+              </option>
+            </select>
+          </label>
         </div>
         <label>
           <span class="sr-only">提交概要</span>
@@ -190,7 +209,7 @@ async function toggleHistoryDropdown(): Promise<void> {
           </button>
         </div>
       </footer>
-    </template>
+    </div>
 
     <GitPushDialog v-if="gitStore.pushOpen" />
   </aside>
@@ -198,11 +217,13 @@ async function toggleHistoryDropdown(): Promise<void> {
 
 <style scoped>
 .git-sidebar {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
+  max-height: 100%;
   min-height: 0;
+  overflow: hidden;
   background: var(--color-chrome-rail-bg);
   color: var(--color-text);
 }
@@ -288,10 +309,11 @@ async function toggleHistoryDropdown(): Promise<void> {
 }
 
 .git-empty {
-  grid-row: 3 / 5;
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   justify-content: center;
+  min-height: 0;
   padding: var(--space-24);
 }
 
@@ -319,6 +341,15 @@ async function toggleHistoryDropdown(): Promise<void> {
   font-size: calc(10px * var(--font-scale));
 }
 
+.git-ready {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+
 .git-groups {
   min-height: 0;
   overflow: auto;
@@ -332,23 +363,31 @@ async function toggleHistoryDropdown(): Promise<void> {
 }
 
 .commit-panel {
-  position: sticky;
-  bottom: 0;
+  position: relative;
   z-index: 4;
+  min-height: 0;
   padding: var(--space-8);
   border-top: 1px solid var(--color-border);
   background: var(--color-surface);
 }
 
+.commit-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(84px, auto);
+  align-items: center;
+  gap: var(--space-8);
+  margin-bottom: var(--space-6);
+}
+
 .history-control {
   position: relative;
+  min-width: 0;
 }
 
 .history-button {
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
-  margin-bottom: var(--space-6);
   padding: 0;
   border: 0;
   background: transparent;
@@ -359,6 +398,36 @@ async function toggleHistoryDropdown(): Promise<void> {
 
 .history-button:hover {
   color: var(--color-primary);
+}
+
+.branch-switcher {
+  min-width: 0;
+}
+
+.branch-switcher select {
+  width: 100%;
+  min-height: 24px;
+  padding: 0 var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  background: var(--color-canvas);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: calc(10px * var(--font-scale));
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.branch-switcher select:hover:not(:disabled),
+.branch-switcher select:focus {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.branch-switcher select:disabled {
+  cursor: not-allowed;
+  opacity: .48;
 }
 
 textarea {

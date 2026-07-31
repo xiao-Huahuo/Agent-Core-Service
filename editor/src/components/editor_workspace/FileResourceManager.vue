@@ -390,9 +390,7 @@ function graphStatusClass(node: KnowledgeFileNode): string {
 function gitStatusClass(node: KnowledgeFileNode): string {
   // Resource views share the same semantic Git colors as the recursive tree.
 
-  if (node.isDir) return ''
-  const state = gitStore.statusForPath(node.path)?.state
-  return state ? `git-${state}` : ''
+  return gitStore.statusClassForPath(node.path, node.isDir)
 }
 
 function toggleStatusColumns() {
@@ -828,6 +826,7 @@ async function deleteTrash(entry: KnowledgeTrashEntry) {
 onMounted(() => {
   document.addEventListener('click', closeContextMenu)
   void workspaceStore.loadKnowledgeTrash()
+  void gitStore.refresh()
   updatePageSlider()
 })
 

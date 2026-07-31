@@ -63,9 +63,7 @@ const dragOver = ref(false)
 
 const materialIcon = computed(() => materialFileIconForNode(props.node, props.node.isDir && props.expandedPaths.has(props.node.path)))
 const gitStatusClass = computed(() => {
-  if (props.node.isDir) return ''
-  const state = gitStore.statusForPath(props.node.path)?.state
-  return state ? `git-${state}` : ''
+  return gitStore.statusClassForPath(props.node.path, props.node.isDir)
 })
 
 const indexStatusClass = computed(() => {

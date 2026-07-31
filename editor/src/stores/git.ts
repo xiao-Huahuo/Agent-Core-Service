@@ -18,6 +18,7 @@ import {
   initializeGitRepository,
   pushGitBranch,
   restoreGitPaths,
+  switchGitBranch,
   type GitFileChange,
   type GitHistoryPayload,
   type GitStatus,
@@ -41,6 +42,15 @@ const EMPTY_STATUS: GitStatus = {
   untracked: [],
   has_changes: false,
 }
+
+const DIRECTORY_STATE_PRIORITY: GitFileChange['state'][] = [
+  'conflicted',
+  'modified',
+  'added',
+  'renamed',
+  'deleted',
+  'untracked',
+]
 
 export const useGitStore = defineStore('git', () => {
   /** Latest repository status returned by the backend. */
@@ -259,6 +269,26 @@ export const useGitStore = defineStore('git', () => {
     status.value = await addGitRemote(userId(), name, url)
   }
 
+  async function switchBranch(name: string): Promise<void> {
+    /** Switch to a local branch through the backend so knowledge indexes invalidate correctly. */
+
+    if (!name || name === status.value.current_branch || mutating.value) return
+    mutating.value = true
+    errorMessage.value = ''
+    try {
+      status.value = await switchGitBranch(userId(), name)
+      selectedPaths.value = new Set()
+      historyOpen.value = false
+      await useWorkspaceStore().loadKnowledgeTree()
+      useWorkspaceStore().showToast(`已切换到 ${name}`)
+    } catch (error) {
+      errorMessage.value = readableError(error)
+      throw error
+    } finally {
+      mutating.value = false
+    }
+  }
+
   function useHistoryMessage(summary: string): void {
     commitMessage.value = summary
     historyOpen.value = false
@@ -266,6 +296,22 @@ export const useGitStore = defineStore('git', () => {
 
   function statusForPath(path: string): GitFileChange | undefined {
     return fileStatusMap.value.get(path.replace(/\\/g, '/'))
+  }
+
+  function statusClassForPath(path: string, isDirectory = false): string {
+    /** Return the semantic Git color class for a file or a changed descendant directory. */
+
+    const normalizedPath = path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+    if (!isDirectory) {
+      const state = statusForPath(normalizedPath)?.state
+      return state ? `git-${state}` : ''
+    }
+    const prefix = normalizedPath ? `${normalizedPath}/` : ''
+    const states = allFiles.value
+      .filter((item) => item.path.replace(/\\/g, '/').startsWith(prefix))
+      .map((item) => item.state)
+    const state = DIRECTORY_STATE_PRIORITY.find((candidate) => states.includes(candidate))
+    return state ? `git-${state}` : ''
   }
 
   function reset(): void {
@@ -308,8 +354,10 @@ export const useGitStore = defineStore('git', () => {
     push,
     ensureLocalBranch,
     ensureRemote,
+    switchBranch,
     useHistoryMessage,
     statusForPath,
+    statusClassForPath,
     reset,
   }
 })

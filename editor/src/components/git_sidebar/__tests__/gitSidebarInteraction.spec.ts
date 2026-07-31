@@ -2,8 +2,9 @@
  * Git sidebar interaction structure tests.
  *
  * Usage:
- * Protects the IDE-style sticky commit footer, indented file rows, anchored
- * history dropdown, and creatable push targets requested by the editor UI.
+ * Protects the IDE-style bottom commit footer, branch switcher, indented file
+ * rows, anchored history dropdown, and creatable push targets requested by the
+ * editor UI.
  */
 
 import { readFileSync } from 'node:fs'
@@ -16,11 +17,21 @@ const groupSource = readFileSync(resolve(componentRoot, 'GitChangeGroup.vue'), '
 const pushSource = readFileSync(resolve(componentRoot, 'GitPushDialog.vue'), 'utf-8')
 
 describe('Git sidebar interaction structure', () => {
-  it('keeps the commit panel sticky and uses an anchored history dropdown', () => {
+  it('keeps the commit panel in the sidebar bottom row with an anchored history dropdown', () => {
     expect(sidebarSource).toContain('GitHistoryDropdown')
     expect(sidebarSource).not.toContain('GitHistoryDialog')
-    expect(sidebarSource).toMatch(/\.commit-panel\s*\{[^}]*position:\s*sticky/s)
-    expect(sidebarSource).toMatch(/\.commit-panel\s*\{[^}]*bottom:\s*0/s)
+    expect(sidebarSource).toMatch(/\.git-sidebar\s*\{[^}]*display:\s*flex/s)
+    expect(sidebarSource).toMatch(/\.git-sidebar\s*\{[^}]*overflow:\s*hidden/s)
+    expect(sidebarSource).toMatch(/\.git-ready\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto/s)
+    expect(sidebarSource).toMatch(/\.git-groups\s*\{[^}]*overflow:\s*auto/s)
+    expect(sidebarSource).not.toMatch(/\.commit-panel\s*\{[^}]*position:\s*sticky/s)
+  })
+
+  it('shows a local branch switcher beside the history control', () => {
+    expect(sidebarSource).toContain('class="commit-toolbar"')
+    expect(sidebarSource).toContain('class="branch-switcher"')
+    expect(sidebarSource).toContain('gitStore.switchBranch')
+    expect(sidebarSource).toContain('gitStore.status.branches')
   })
 
   it('indents the complete file row beneath its change group', () => {

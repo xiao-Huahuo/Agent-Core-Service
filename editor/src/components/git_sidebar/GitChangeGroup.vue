@@ -9,6 +9,7 @@
 import { computed } from 'vue'
 import { ChevronRight } from 'lucide-vue-next'
 
+import GitCheckbox from '@/components/git_sidebar/GitCheckbox.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import type { GitFileChange } from '@/api/git'
 
@@ -44,12 +45,10 @@ function statusLabel(item: GitFileChange): string {
 <template>
   <section class="change-group">
     <div class="group-header">
-      <input
-        class="git-checkbox"
-        type="checkbox"
+      <GitCheckbox
         :checked="allSelected"
-        :aria-label="`选择全部${title}`"
-        @change="emit('toggleAll', ($event.target as HTMLInputElement).checked)"
+        :label="`选择全部${title}`"
+        @change="emit('toggleAll', $event)"
       />
       <button
         class="group-toggle"
@@ -66,11 +65,9 @@ function statusLabel(item: GitFileChange): string {
     <Transition name="group-collapse">
       <ul v-if="expanded" class="change-list">
         <li v-for="item in files" :key="item.path" class="change-row">
-          <input
-            class="git-checkbox"
-            type="checkbox"
+          <GitCheckbox
             :checked="selectedPaths.has(item.path)"
-            :aria-label="`选择 ${item.path}`"
+            :label="`选择 ${item.path}`"
             @change="emit('togglePath', item.path)"
           />
           <img
@@ -151,14 +148,6 @@ function statusLabel(item: GitFileChange): string {
 
 .change-row:hover {
   background: var(--color-selection-blue-soft);
-}
-
-.git-checkbox {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: var(--color-primary);
-  cursor: pointer;
 }
 
 .file-icon {
