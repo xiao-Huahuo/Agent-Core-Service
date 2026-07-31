@@ -18,6 +18,7 @@ import {
   FolderOpen,
   FolderPlus,
   HardDrive,
+  Info,
   Link,
   ListFilter,
   RefreshCw,
@@ -57,9 +58,12 @@ const query = ref('')
 const selectedTag = ref('')
 const selectedContentType = ref('')
 const filterMenuOpen = ref(false)
+const TAGS_PER_PAGE = 10
+const tagPage = ref(0)
 const multiSelect = ref(false)
 const selectedIds = ref<Set<string>>(new Set())
 const selectedItem = ref<LibraryItem | null>(null)
+const detailOpen = ref(false)
 const pendingAutoSelect = ref(false)
 const drawerChildren = ref<LibraryItem[]>([])
 const drawerChildrenLoading = ref(false)
@@ -89,8 +93,10 @@ const canGoUp = computed(() => Boolean(currentParentId.value))
 const canGoBack = computed(() => backStack.value.length > 0)
 const canGoForward = computed(() => forwardStack.value.length > 0)
 const virtualPath = computed(() => ['图书馆', ...breadcrumbs.value.map((crumb) => crumb.title)].join(' / '))
-const drawerOpen = computed(() => Boolean(selectedItem.value) && !multiSelect.value)
+const drawerOpen = computed(() => Boolean(selectedItem.value) && !multiSelect.value && detailOpen.value)
 const selectedDate = computed(() => formatDate(selectedItem.value?.source_mtime || selectedItem.value?.updated_at || ''))
+const tagPageCount = computed(() => Math.max(1, Math.ceil(tags.value.length / TAGS_PER_PAGE)))
+const pagedTags = computed(() => tags.value.slice(tagPage.value * TAGS_PER_PAGE, (tagPage.value + 1) * TAGS_PER_PAGE))
 
 watch(
   [query, selectedTag, selectedContentType, currentParentId],
@@ -104,6 +110,12 @@ watch(multiSelect, (enabled) => {
     selectedItem.value = null
   } else {
     selectedIds.value = new Set()
+  }
+})
+
+watch(tags, () => {
+  if (tagPage.value >= tagPageCount.value) {
+    tagPage.value = Math.max(0, tagPageCount.value - 1)
   }
 })
 
@@ -237,7 +249,9 @@ function selectItem(item: LibraryItem) {
     toggleItem(item)
     return
   }
+  // 单击仅做卡片高亮,不再呼出右侧边栏;边栏只能通过右键菜单"详细信息"打开
   selectedItem.value = item
+  detailOpen.value = false
 }
 
 function selectTagFilter(tag: string) {
@@ -309,6 +323,19 @@ function contextEdit() {
   if (!contextMenuTarget.value) return
   editItem.value = contextMenuTarget.value
   closeContextMenu()
+}
+
+function contextDetails() {
+  const item = contextMenuTarget.value
+  closeContextMenu()
+  if (!item) return
+  selectedItem.value = item
+  detailOpen.value = true
+}
+
+function closeDetails() {
+  selectedItem.value = null
+  detailOpen.value = false
 }
 
 async function contextMoveToParent() {
@@ -576,21 +603,48 @@ function errorMessage(error: unknown): string {
             </button>
             <hr />
             <button type="button" class="filter-label-btn" disabled>标签</button>
-            <button type="button" @click="selectTagFilter('')">
+            <button
+              type="button"
+              class="filter-tag-row"
+              :class="{ active: !selectedTag }"
+              @click="selectTagFilter('')"
+            >
               <Check v-if="!selectedTag" :size="14" />
               <span v-else class="filter-check-placeholder"></span>
-              <span>全部</span>
+              <span class="filter-tag-name">全部</span>
             </button>
-            <div class="filter-tag-grid">
+            <div class="filter-tag-list">
               <button
-                v-for="tag in tags"
+                v-for="tag in pagedTags"
                 :key="tag.name"
-                class="filter-tag-pill"
+                class="filter-tag-row"
                 :class="{ active: selectedTag === tag.name }"
                 type="button"
+                :title="tag.name"
                 @click="selectTagFilter(tag.name)"
               >
-                {{ tag.name }}
+                <Check v-if="selectedTag === tag.name" :size="14" />
+                <span v-else class="filter-check-placeholder"></span>
+                <span class="filter-tag-name">{{ tag.name }}</span>
+              </button>
+            </div>
+            <div v-if="tagPageCount > 1" class="filter-pagination">
+              <button
+                class="filter-page-btn"
+                type="button"
+                :disabled="tagPage <= 0"
+                @click="tagPage -= 1"
+              >
+                上一页
+              </button>
+              <span class="filter-page-info">{{ tagPage + 1 }} / {{ tagPageCount }}</span>
+              <button
+                class="filter-page-btn"
+                type="button"
+                :disabled="tagPage >= tagPageCount - 1"
+                @click="tagPage += 1"
+              >
+                下一页
               </button>
             </div>
           </div>
@@ -647,7 +701,7 @@ function errorMessage(error: unknown): string {
         <template v-if="selectedItem">
           <header class="drawer-head">
             <div class="drawer-title" :title="selectedItem.display_title">{{ selectedItem.display_title }}</div>
-            <button class="icon-toolbar-btn" type="button" title="关闭" @click="selectedItem = null">
+            <button class="icon-toolbar-btn" type="button" title="关闭" @click="closeDetails">
               <X :size="15" />
             </button>
           </header>
@@ -710,6 +764,10 @@ function errorMessage(error: unknown): string {
       <li class="context-item" @click="openCreateCollectionDialog(); closeContextMenu()">
         <FolderPlus :size="14" />
         <span>新增集锦</span>
+      </li>
+      <li class="context-item" @click="contextDetails()">
+        <Info :size="14" />
+        <span>详细信息</span>
       </li>
       <li class="context-item" @click="contextEdit()">
         <Save :size="14" />
@@ -896,7 +954,7 @@ function errorMessage(error: unknown): string {
   right: 0;
   z-index: 30;
   display: grid;
-  min-width: 180px;
+  min-width: 240px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: var(--color-canvas);
@@ -925,7 +983,16 @@ function errorMessage(error: unknown): string {
   color: var(--color-text);
 }
 
+.filter-menu button > span:not(.filter-check-placeholder) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .filter-menu .filter-label-btn {
+  display: flex;
+  align-items: center;
   height: 24px;
   font-size: calc(11px * var(--font-scale));
   font-weight: 700;
@@ -945,38 +1012,62 @@ function errorMessage(error: unknown): string {
   width: 14px;
 }
 
-.filter-tag-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  padding: 4px 8px 6px;
+.filter-tag-list {
+  display: grid;
 }
 
-.filter-tag-pill {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  font-size: 11px;
-  padding: 0 10px;
-  cursor: pointer;
+.filter-menu .filter-tag-row.active,
+.filter-menu .filter-tag-row.active:hover {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.filter-tag-name {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.filter-tag-pill:hover {
+.filter-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 2px;
+  border-top: 1px solid var(--color-border);
+  margin-top: 4px;
+}
+
+.filter-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: calc(11px * var(--font-scale));
+  cursor: pointer;
+  padding: 0 8px;
+}
+
+.filter-menu .filter-page-btn:hover:not(:disabled) {
   border-color: var(--color-primary);
-  background: var(--color-primary-soft);
   color: var(--color-primary);
 }
 
-.filter-tag-pill.active {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: #fff;
+.filter-page-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.filter-page-info {
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
+  white-space: nowrap;
 }
 
 .multi-indicator {

@@ -935,3 +935,39 @@
 .git-renamed {
   color: var(--color-git-renamed);
 }
+
+.resource-row.git-modified .file-name,
+.content-item.git-modified strong,
+.icon-tile.git-modified .tile-name {
+  color: var(--color-git-modified);
+}
+
+.resource-row.git-added .file-name,
+.content-item.git-added strong,
+.icon-tile.git-added .tile-name {
+  color: var(--color-git-added);
+}
+
+.resource-row.git-untracked .file-name,
+.content-item.git-untracked strong,
+.icon-tile.git-untracked .tile-name {
+  color: var(--color-git-untracked);
+}
+
+.resource-row.git-conflicted .file-name,
+.content-item.git-conflicted strong,
+.icon-tile.git-conflicted .tile-name {
+  color: var(--color-danger);
+}
+
+.resource-row.git-deleted .file-name,
+.content-item.git-deleted strong,
+.icon-tile.git-deleted .tile-name {
+  color: var(--color-git-deleted);
+}
+
+.resource-row.git-renamed .file-name,
+.content-item.git-renamed strong,
+.icon-tile.git-renamed .tile-name {
+  color: var(--color-git-renamed);
+}

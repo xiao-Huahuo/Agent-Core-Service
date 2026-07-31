@@ -1059,7 +1059,10 @@ onUnmounted(() => {
           v-for="(node, index) in visibleItems"
           :key="node.path"
           class="resource-row"
-          :class="{ selected: workspaceStore.selectedTreePath === node.path || selectedPaths.has(node.path) }"
+          :class="[
+            gitStatusClass(node),
+            { selected: workspaceStore.selectedTreePath === node.path || selectedPaths.has(node.path) },
+          ]"
           :style="{
             gridTemplateColumns: listGridColumns,
             animationDelay: `${Math.min(index, 24) * 18}ms`,
@@ -1101,7 +1104,10 @@ onUnmounted(() => {
             v-for="node in visibleItems"
             :key="node.path"
             class="content-item"
-            :class="{ selected: workspaceStore.selectedTreePath === node.path || selectedPaths.has(node.path) }"
+            :class="[
+              gitStatusClass(node),
+              { selected: workspaceStore.selectedTreePath === node.path || selectedPaths.has(node.path) },
+            ]"
             type="button"
             @click="handleItemClick(node, $event)"
             @dblclick="handleItemDblClick(node)"
@@ -1135,10 +1141,13 @@ onUnmounted(() => {
           v-for="node in visibleItems"
           :key="node.path"
           class="icon-tile"
-          :class="{
-            selected: workspaceStore.selectedTreePath === node.path || selectedPaths.has(node.path),
-            glass: viewMode === 'medium' || viewMode === 'large',
-          }"
+          :class="[
+            gitStatusClass(node),
+            {
+              selected: workspaceStore.selectedTreePath === node.path || selectedPaths.has(node.path),
+              glass: viewMode === 'medium' || viewMode === 'large',
+            },
+          ]"
           type="button"
           @click="handleItemClick(node, $event)"
           @dblclick="handleItemDblClick(node)"

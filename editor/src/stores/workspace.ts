@@ -1365,6 +1365,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     // 文件内容已变更，重置索引状态和图谱状态为未入库
     updateTreeNodeIndexStatus(path, 'dirty', { force: true })
     updateTreeNodeGraphStatus(path, 'dirty')
+    window.dispatchEvent(new CustomEvent('metaweave-knowledge-file-change'))
     const savedNode = flatNodes.value.find((n) => n.path === path)
     if (savedNode?.mtime) tab.mtime = savedNode.mtime
     if (path === selectedPath.value) {

@@ -425,13 +425,20 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
+function refreshGitAfterKnowledgeFileChange(): void {
+  // 知识文件保存会吞掉文件监听事件，工作区需要常驻刷新 Git 状态以驱动文件树颜色。
+  void gitStore.refresh()
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
+  window.addEventListener('metaweave-knowledge-file-change', refreshGitAfterKnowledgeFileChange)
   void gitStore.refresh()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('metaweave-knowledge-file-change', refreshGitAfterKnowledgeFileChange)
   stopResize()
   stopTodoResize()
 })

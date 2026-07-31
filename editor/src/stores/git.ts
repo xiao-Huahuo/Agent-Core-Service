@@ -52,6 +52,30 @@ const DIRECTORY_STATE_PRIORITY: GitFileChange['state'][] = [
   'untracked',
 ]
 
+function normalizeGitPathKey(path: string): string {
+  /** Normalize UI and Git paths into one comparable relative-path key. */
+
+  return String(path || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase()
+}
+
+function isSameGitPath(candidatePath: string, targetPath: string): boolean {
+  /** Match exact paths and paths with an extra repository or library prefix. */
+
+  const candidate = normalizeGitPathKey(candidatePath)
+  const target = normalizeGitPathKey(targetPath)
+  if (!candidate || !target) return false
+  return candidate === target || candidate.endsWith(`/${target}`) || target.endsWith(`/${candidate}`)
+}
+
+function isGitPathInDirectory(candidatePath: string, directoryPath: string): boolean {
+  /** Match descendant files even when one side contains an extra root segment. */
+
+  const candidate = normalizeGitPathKey(candidatePath)
+  const directory = normalizeGitPathKey(directoryPath)
+  if (!candidate || !directory) return false
+  return candidate.startsWith(`${directory}/`) || candidate.includes(`/${directory}/`)
+}
+
 export const useGitStore = defineStore('git', () => {
   /** Latest repository status returned by the backend. */
   const status = ref<GitStatus>({ ...EMPTY_STATUS })
@@ -68,6 +92,7 @@ export const useGitStore = defineStore('git', () => {
 
   /** Request and dialog state. */
   const loading = ref(false)
+  const refreshQueued = ref(false)
   const mutating = ref(false)
   const historyOpen = ref(false)
   const pushOpen = ref(false)
@@ -87,7 +112,7 @@ export const useGitStore = defineStore('git', () => {
   const fileStatusMap = computed(() => {
     const result = new Map<string, GitFileChange>()
     for (const item of allFiles.value) {
-      result.set(item.path.replace(/\\/g, '/'), item)
+      result.set(normalizeGitPathKey(item.path), item)
     }
     return result
   })
@@ -111,7 +136,11 @@ export const useGitStore = defineStore('git', () => {
 
   async function refresh(): Promise<void> {
     const currentUserId = userId()
-    if (!currentUserId || loading.value) return
+    if (!currentUserId) return
+    if (loading.value) {
+      refreshQueued.value = true
+      return
+    }
     loading.value = true
     errorMessage.value = ''
     try {
@@ -121,6 +150,10 @@ export const useGitStore = defineStore('git', () => {
       errorMessage.value = readableError(error)
     } finally {
       loading.value = false
+      if (refreshQueued.value) {
+        refreshQueued.value = false
+        await refresh()
+      }
     }
   }
 
@@ -295,20 +328,21 @@ export const useGitStore = defineStore('git', () => {
   }
 
   function statusForPath(path: string): GitFileChange | undefined {
-    return fileStatusMap.value.get(path.replace(/\\/g, '/'))
+    const normalizedPath = normalizeGitPathKey(path)
+    return fileStatusMap.value.get(normalizedPath)
+      ?? allFiles.value.find((item) => isSameGitPath(item.path, normalizedPath))
   }
 
   function statusClassForPath(path: string, isDirectory = false): string {
     /** Return the semantic Git color class for a file or a changed descendant directory. */
 
-    const normalizedPath = path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+    const normalizedPath = normalizeGitPathKey(path)
     if (!isDirectory) {
       const state = statusForPath(normalizedPath)?.state
       return state ? `git-${state}` : ''
     }
-    const prefix = normalizedPath ? `${normalizedPath}/` : ''
     const states = allFiles.value
-      .filter((item) => item.path.replace(/\\/g, '/').startsWith(prefix))
+      .filter((item) => isGitPathInDirectory(item.path, normalizedPath))
       .map((item) => item.state)
     const state = DIRECTORY_STATE_PRIORITY.find((candidate) => states.includes(candidate))
     return state ? `git-${state}` : ''

@@ -187,7 +187,10 @@ function handleRowDrop(event: DragEvent) {
   <li :style="{ '--stagger': staggerIndex ?? 0 }">
     <div
       class="tree-row"
-      :class="{ selected: selectedPath === node.path || selectedPaths.has(node.path), 'drag-over': dragOver }"
+      :class="[
+        gitStatusClass,
+        { selected: selectedPath === node.path || selectedPaths.has(node.path), 'drag-over': dragOver },
+      ]"
       :style="{ paddingLeft: `${depth * 14 + 8}px`, '--status-width': statusWidth }"
       role="button"
       tabindex="0"
@@ -374,6 +377,36 @@ function handleRowDrop(event: DragEvent) {
 }
 
 .node-name.git-renamed {
+  color: var(--color-git-renamed);
+}
+
+.tree-row.git-modified .node-name,
+.tree-row .node-name.git-modified {
+  color: var(--color-git-modified);
+}
+
+.tree-row.git-added .node-name,
+.tree-row .node-name.git-added {
+  color: var(--color-git-added);
+}
+
+.tree-row.git-untracked .node-name,
+.tree-row .node-name.git-untracked {
+  color: var(--color-git-untracked);
+}
+
+.tree-row.git-conflicted .node-name,
+.tree-row .node-name.git-conflicted {
+  color: var(--color-danger);
+}
+
+.tree-row.git-deleted .node-name,
+.tree-row .node-name.git-deleted {
+  color: var(--color-git-deleted);
+}
+
+.tree-row.git-renamed .node-name,
+.tree-row .node-name.git-renamed {
   color: var(--color-git-renamed);
 }
 
