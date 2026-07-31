@@ -19,10 +19,12 @@ import {
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 import { useSettingsStore } from '@/stores/settings'
+import { useGitStore } from '@/stores/git'
 
 defineOptions({ name: 'TreeNode' })
 
 const settingsStore = useSettingsStore()
+const gitStore = useGitStore()
 
 const statusWidth = computed(() => {
   const showIndex = settingsStore.showIndexColumn
@@ -60,6 +62,11 @@ const inlineInput = ref<HTMLInputElement | null>(null)
 const dragOver = ref(false)
 
 const materialIcon = computed(() => materialFileIconForNode(props.node, props.node.isDir && props.expandedPaths.has(props.node.path)))
+const gitStatusClass = computed(() => {
+  if (props.node.isDir) return ''
+  const state = gitStore.statusForPath(props.node.path)?.state
+  return state ? `git-${state}` : ''
+})
 
 const indexStatusClass = computed(() => {
   if (props.node.indexStatus === 'indexed' || props.node.indexStatus === 'clean') return 'indexed'
@@ -209,7 +216,7 @@ function handleRowDrop(event: DragEvent) {
         @keydown.enter.prevent.stop="emit('editCommit', editingValue)"
         @keydown.esc.prevent.stop="emit('editCancel')"
       />
-      <span v-else class="node-name">{{ node.name }}</span>
+      <span v-else class="node-name" :class="gitStatusClass">{{ node.name }}</span>
       <span class="node-status-cluster">
         <i class="node-dirty-dot" :class="{ show: dirtyPaths.has(node.path) }"></i>
         <component
@@ -346,6 +353,30 @@ function handleRowDrop(event: DragEvent) {
   font-size: calc(13px * var(--font-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.node-name.git-modified {
+  color: var(--color-git-modified);
+}
+
+.node-name.git-added {
+  color: var(--color-git-added);
+}
+
+.node-name.git-untracked {
+  color: var(--color-git-untracked);
+}
+
+.node-name.git-conflicted {
+  color: var(--color-danger);
+}
+
+.node-name.git-deleted {
+  color: var(--color-git-deleted);
+}
+
+.node-name.git-renamed {
+  color: var(--color-git-renamed);
 }
 
 .node-editor {

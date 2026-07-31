@@ -26,6 +26,17 @@ from agent_service.tools.builtin import (
     edit_todo,
     finish_task_list,
     get_current_time,
+    git_commit_files,
+    git_add_remote,
+    git_create_branch,
+    git_diff,
+    git_history,
+    git_init_repository,
+    git_pull_branch,
+    git_push_branch,
+    git_restore_files,
+    git_status,
+    git_switch_branch,
     get_task_list_status,
     get_current_viewing_document,
     get_knowledge_context,
@@ -128,6 +139,164 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         },
         function=download_file,
         display_name="下载文件",
+    ),
+]
+
+GIT_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
+    BuiltinToolDefinition(
+        name="git_status",
+        description="读取当前知识库仓库状态、分支、远程、更改和未跟踪文件。",
+        args_schema={"type": "object", "properties": {}, "required": []},
+        function=git_status,
+        display_name="Git 状态",
+    ),
+    BuiltinToolDefinition(
+        name="git_diff",
+        description="读取当前知识库工作区或暂存区的 Git diff。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "可选知识库相对路径。"},
+                "staged": {"type": "boolean", "description": "是否读取暂存区差异。"},
+            },
+            "required": [],
+        },
+        function=git_diff,
+        display_name="Git 差异",
+    ),
+    BuiltinToolDefinition(
+        name="git_history",
+        description="读取提交历史、未推送提交和未推送文件。",
+        args_schema={
+            "type": "object",
+            "properties": {"limit": {"type": "integer", "description": "最大提交数,默认 30。"}},
+            "required": [],
+        },
+        function=git_history,
+        display_name="Git 历史",
+    ),
+    BuiltinToolDefinition(
+        name="git_init_repository",
+        description="在当前知识库根目录初始化 Git 仓库。",
+        args_schema={
+            "type": "object",
+            "properties": {"initial_branch": {"type": "string", "description": "初始分支名,默认 main。"}},
+            "required": [],
+        },
+        function=git_init_repository,
+        display_name="初始化 Git",
+    ),
+    BuiltinToolDefinition(
+        name="git_restore_files",
+        description=(
+            "回滚选中文件。已跟踪文件恢复到 HEAD 并清理旧知识索引;"
+            "未跟踪文件移入 MetaWeave 最近删除,不会永久清除。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "知识库相对路径列表。",
+                }
+            },
+            "required": ["paths"],
+        },
+        function=git_restore_files,
+        display_name="Git 回滚",
+    ),
+    BuiltinToolDefinition(
+        name="git_commit_files",
+        description="暂存选中的知识库文件并创建本地提交。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "paths": {"type": "array", "items": {"type": "string"}},
+                "message": {"type": "string", "description": "提交概要。"},
+            },
+            "required": ["paths", "message"],
+        },
+        function=git_commit_files,
+        display_name="Git 提交",
+    ),
+    BuiltinToolDefinition(
+        name="git_push_branch",
+        description=(
+            "推送本地分支到远程。必须先获得用户明确确认并传 confirm=true;"
+            "force-with-lease 还需要独立的 confirm_force=true。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "local_branch": {"type": "string"},
+                "remote": {"type": "string"},
+                "remote_branch": {"type": "string"},
+                "confirm": {"type": "boolean"},
+                "force_with_lease": {"type": "boolean"},
+                "confirm_force": {"type": "boolean"},
+                "all_branches": {
+                    "type": "boolean",
+                    "description": "为 true 时推送所有本地分支。",
+                },
+            },
+            "required": ["local_branch", "remote", "remote_branch", "confirm"],
+        },
+        function=git_push_branch,
+        display_name="Git 推送",
+    ),
+    BuiltinToolDefinition(
+        name="git_create_branch",
+        description="创建本地 Git 分支,可选择立即切换。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "checkout": {"type": "boolean"},
+            },
+            "required": ["name"],
+        },
+        function=git_create_branch,
+        display_name="创建 Git 分支",
+    ),
+    BuiltinToolDefinition(
+        name="git_add_remote",
+        description="为当前知识库 Git 仓库新增命名远程。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "远程名称,例如 origin。"},
+                "url": {"type": "string", "description": "HTTPS、SSH 或本地 Git 仓库地址。"},
+            },
+            "required": ["name", "url"],
+        },
+        function=git_add_remote,
+        display_name="新增 Git 远程",
+    ),
+    BuiltinToolDefinition(
+        name="git_switch_branch",
+        description="切换本地 Git 分支并使实际变化文件的知识索引失效。",
+        args_schema={
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
+        function=git_switch_branch,
+        display_name="切换 Git 分支",
+    ),
+    BuiltinToolDefinition(
+        name="git_pull_branch",
+        description="获取并快进合并远程分支,不会自动创建合并提交。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "remote": {"type": "string"},
+                "branch": {"type": "string"},
+            },
+            "required": ["remote", "branch"],
+        },
+        function=git_pull_branch,
+        display_name="Git 拉取",
     ),
 ]
 
@@ -610,6 +779,7 @@ WEB_SEARCH_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
 
 BUILTIN_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = (
     UTILITY_TOOL_DEFINITIONS
+    + GIT_TOOL_DEFINITIONS
     + SKILL_TOOL_DEFINITIONS
     + MEMORY_TOOL_DEFINITIONS
     + KNOWLEDGE_TOOL_DEFINITIONS

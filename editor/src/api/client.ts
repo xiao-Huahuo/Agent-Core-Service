@@ -64,9 +64,30 @@ async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
       const detail = await readErrorDetail(response)
       throw new ApiError(response.status, `Request failed: ${response.status} ${detail || response.statusText}`)
     }
-    return response.json() as Promise<T>
+    return await readJsonResponse<T>(response, path)
   } finally {
     clearTimeout(timeoutId)
+  }
+}
+
+async function readJsonResponse<T>(response: Response, path: string): Promise<T> {
+  /**
+   * Parse one successful API response and convert malformed/non-JSON bodies
+   * into an actionable ApiError instead of leaking the browser SyntaxError.
+   */
+
+  if (response.status === 204) {
+    return undefined as T
+  }
+  const contentType = response.headers.get('content-type') || 'unknown'
+  const body = await response.text()
+  try {
+    return JSON.parse(body) as T
+  } catch {
+    throw new ApiError(
+      response.status,
+      `接口 ${path} 返回了非 JSON 响应（Content-Type: ${contentType}）`,
+    )
   }
 }
 

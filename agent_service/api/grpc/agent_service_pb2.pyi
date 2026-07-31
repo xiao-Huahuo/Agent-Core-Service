@@ -6,6 +6,104 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class GitUserRequest(_message.Message):
+    __slots__ = ("user_id",)
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    def __init__(self, user_id: _Optional[str] = ...) -> None: ...
+
+class GitInitRequest(_message.Message):
+    __slots__ = ("user_id", "initial_branch")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    INITIAL_BRANCH_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    initial_branch: str
+    def __init__(self, user_id: _Optional[str] = ..., initial_branch: _Optional[str] = ...) -> None: ...
+
+class GitHistoryRequest(_message.Message):
+    __slots__ = ("user_id", "limit")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    limit: int
+    def __init__(self, user_id: _Optional[str] = ..., limit: _Optional[int] = ...) -> None: ...
+
+class GitDiffRequest(_message.Message):
+    __slots__ = ("user_id", "path", "staged")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    PATH_FIELD_NUMBER: _ClassVar[int]
+    STAGED_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    path: str
+    staged: bool
+    def __init__(self, user_id: _Optional[str] = ..., path: _Optional[str] = ..., staged: bool = ...) -> None: ...
+
+class GitPathsRequest(_message.Message):
+    __slots__ = ("user_id", "paths")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    PATHS_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    paths: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, user_id: _Optional[str] = ..., paths: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class GitCommitRequest(_message.Message):
+    __slots__ = ("user_id", "paths", "message")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    PATHS_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    paths: _containers.RepeatedScalarFieldContainer[str]
+    message: str
+    def __init__(self, user_id: _Optional[str] = ..., paths: _Optional[_Iterable[str]] = ..., message: _Optional[str] = ...) -> None: ...
+
+class GitPushRequest(_message.Message):
+    __slots__ = ("user_id", "local_branch", "remote", "remote_branch", "force_with_lease", "set_upstream", "all_branches")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    LOCAL_BRANCH_FIELD_NUMBER: _ClassVar[int]
+    REMOTE_FIELD_NUMBER: _ClassVar[int]
+    REMOTE_BRANCH_FIELD_NUMBER: _ClassVar[int]
+    FORCE_WITH_LEASE_FIELD_NUMBER: _ClassVar[int]
+    SET_UPSTREAM_FIELD_NUMBER: _ClassVar[int]
+    ALL_BRANCHES_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    local_branch: str
+    remote: str
+    remote_branch: str
+    force_with_lease: bool
+    set_upstream: bool
+    all_branches: bool
+    def __init__(self, user_id: _Optional[str] = ..., local_branch: _Optional[str] = ..., remote: _Optional[str] = ..., remote_branch: _Optional[str] = ..., force_with_lease: bool = ..., set_upstream: bool = ..., all_branches: bool = ...) -> None: ...
+
+class GitBranchRequest(_message.Message):
+    __slots__ = ("user_id", "name", "checkout")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    CHECKOUT_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    name: str
+    checkout: bool
+    def __init__(self, user_id: _Optional[str] = ..., name: _Optional[str] = ..., checkout: bool = ...) -> None: ...
+
+class GitRemoteRequest(_message.Message):
+    __slots__ = ("user_id", "name", "url")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    URL_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    name: str
+    url: str
+    def __init__(self, user_id: _Optional[str] = ..., name: _Optional[str] = ..., url: _Optional[str] = ...) -> None: ...
+
+class GitPullRequest(_message.Message):
+    __slots__ = ("user_id", "remote", "branch")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    REMOTE_FIELD_NUMBER: _ClassVar[int]
+    BRANCH_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    remote: str
+    branch: str
+    def __init__(self, user_id: _Optional[str] = ..., remote: _Optional[str] = ..., branch: _Optional[str] = ...) -> None: ...
+
 class RunRequest(_message.Message):
     __slots__ = ("prompt", "user_id", "session_id", "reference", "agent_mode", "agent_access_mode")
     PROMPT_FIELD_NUMBER: _ClassVar[int]

@@ -32,6 +32,16 @@ from agent_service.api.grpc.agent_service_pb2 import (
     EventEntry,
     EventsRequest,
     EventsResponse,
+    GitBranchRequest,
+    GitCommitRequest,
+    GitDiffRequest,
+    GitHistoryRequest,
+    GitInitRequest,
+    GitPathsRequest,
+    GitPullRequest,
+    GitPushRequest,
+    GitRemoteRequest,
+    GitUserRequest,
     KnowledgeFileContentRequest,
     KnowledgeFileContentResponse,
     KnowledgeFileCreateRequest,
@@ -95,6 +105,7 @@ from agent_service.services.message_service import MessageService
 from agent_service.services.session_service import SessionService
 from agent_service.services.settings_service import SettingsService
 from agent_service.services.knowledge_library_service import KnowledgeLibraryService, KnowledgeLibraryRebuildResult
+from agent_service.services.git_service import GitService, GitServiceError
 from agent_service.services.task_suggestion_service import TaskSuggestionService
 from agent_service.services.token_usage_service import SUPPORTED_INTERVALS, TokenUsageService
 
@@ -112,12 +123,14 @@ class AgentServiceServicer(BaseServicer):
         message_service: MessageService | None = None,
         settings_service: SettingsService | None = None,
         knowledge_library_service: KnowledgeLibraryService | None = None,
+        git_service: GitService | None = None,
     ) -> None:
         self._agent = agent
         self._session_service = session_service
         self._message_service = message_service
         self._settings_service = settings_service
         self._knowledge_library_service = knowledge_library_service
+        self._git_service = git_service
 
     def shutdown(self) -> None:
         self._agent.close()
@@ -704,6 +717,153 @@ class AgentServiceServicer(BaseServicer):
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
         return _knowledge_file_node_to_response(node)
 
+    # ------------------------------------------------------------------
+    # 知识库 Git 管理 RPC
+    # ------------------------------------------------------------------
+
+    def GetGitStatus(  # noqa: N802
+        self, request: GitUserRequest, context: grpc.ServicerContext,
+    ) -> Struct:
+        """读取当前知识库 Git 状态。"""
+
+        return self._git_struct(
+            context,
+            self._require_git_service(context).get_status,
+            user_id=request.user_id,
+        )
+
+    def InitGitRepository(  # noqa: N802
+        self, request: GitInitRequest, context: grpc.ServicerContext,
+    ) -> Struct:
+        """初始化当前知识库 Git 仓库。"""
+
+        return self._git_struct(
+            context,
+            self._require_git_service(context).initialize_repository,
+            user_id=request.user_id,
+            initial_branch=request.initial_branch or "main",
+        )
+
+    def GetGitHistory(  # noqa: N802
+        self, request: GitHistoryRequest, context: grpc.ServicerContext,
+    ) -> Struct:
+        """读取提交历史和未推送内容。"""
+
+        return self._git_struct(
+            context,
+            self._require_git_service(context).get_history,
+            user_id=request.user_id,
+            limit=request.limit or 50,
+        )
+
+    def GetGitDiff(  # noqa: N802
+        self, request: GitDiffRequest, context: grpc.ServicerContext,
+    ) -> Struct:
+        """读取工作区或暂存区 diff。"""
+
+        return self._git_struct(
+            context,
+            self._require_git_service(context).get_diff,
+            user_id=request.user_id,
+            path=request.path,
+            staged=request.staged,
+        )
+
+    def RestoreGitPaths(  # noqa: N802
+        self, request: GitPathsRequest, context: grpc.ServicerContext,
+    ) -> Struct:
+        """回滚文件并同步清理知识索引。"""
+
+        return self._git_struct(
+            context,
+            self._require_git_service(context).restore_paths,
+            user_id=request.user_id,
+            paths=list(request.paths),
+        )
+
+    def CommitGitPaths(  # noqa: N802
+        self, request: GitCommitRequest, context: grpc.ServicerContext,
+    ) -> Struct:
+        """提交选中的知识库文件。"""
+
+        return self._git_struct(
+            context,
+            self._require_git_service(context).commit,
+            user_id=request.user_id,
+            paths=list(request.paths),
+            message=request.message,
+        )
+
+    def PushGitBranch(  # noqa: N802
+        self, request: GitPushRequest, context: grpc.ServicerContext,
+    ) -> Struct:
+        """推送本地分支到远程分支。"""
+
+        return self._git_struct(
+            context,
+            self._require_git_service(context).push,
+            user_id=request.user_id,
+            local_branch=request.local_branch,
+            remote=request.remote,
+            remote_branch=request.remote_branch,
+            force_with_lease=request.force_with_lease,
+            # proto3 的 bool 缺省值为 false；单分支推送保持与 REST 的默认
+            # `set_upstream=true` 一致，全部分支模式由 GitService 忽略该参数。
+            set_upstream=request.set_upstream or not request.all_branches,
+            all_branches=request.all_branches,
+        )
+
+    def CreateGitBranch(  # noqa: N802
+        self, request: GitBranchRequest, context: grpc.ServicerContext,
+    ) -> Struct:
+        """创建本地分支。"""
+
+        return self._git_struct(
+            context,
+            self._require_git_service(context).create_branch,
+            user_id=request.user_id,
+            name=request.name,
+            checkout=request.checkout,
+        )
+
+    def SwitchGitBranch(  # noqa: N802
+        self, request: GitBranchRequest, context: grpc.ServicerContext,
+    ) -> Struct:
+        """切换本地分支并清理受影响知识索引。"""
+
+        return self._git_struct(
+            context,
+            self._require_git_service(context).switch_branch,
+            user_id=request.user_id,
+            name=request.name,
+        )
+
+    def AddGitRemote(  # noqa: N802
+        self, request: GitRemoteRequest, context: grpc.ServicerContext,
+    ) -> Struct:
+        """新增命名远程仓库。"""
+
+        return self._git_struct(
+            context,
+            self._require_git_service(context).add_remote,
+            user_id=request.user_id,
+            name=request.name,
+            url=request.url,
+        )
+
+    def PullGitBranch(  # noqa: N802
+        self, request: GitPullRequest, context: grpc.ServicerContext,
+    ) -> Struct:
+        """快进拉取远程分支并清理受影响知识索引。"""
+
+        return self._git_struct(
+            context,
+            self._require_git_service(context).pull_fast_forward,
+            user_id=request.user_id,
+            remote=request.remote,
+            branch=request.branch,
+        )
+
     def ListSystemPromptEntries(  # noqa: N802
         self, request: SystemPromptRequest, context: grpc.ServicerContext,
     ) -> SystemPromptEntriesResponse:
@@ -804,6 +964,27 @@ class AgentServiceServicer(BaseServicer):
         if self._knowledge_library_service is None:
             context.abort(grpc.StatusCode.UNAVAILABLE, "KnowledgeLibraryService not available")
         return self._knowledge_library_service  # type: ignore[return-value]
+
+    def _require_git_service(self, context: grpc.ServicerContext) -> GitService:
+        """返回注入的 GitService,未就绪时终止 RPC。"""
+
+        if self._git_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "GitService not available")
+        return self._git_service  # type: ignore[return-value]
+
+    @staticmethod
+    def _git_struct(
+        context: grpc.ServicerContext,
+        function: Any,
+        **kwargs: Any,
+    ) -> Struct:
+        """执行 Git 领域方法并转换为 protobuf Struct。"""
+
+        try:
+            payload = function(**kwargs)
+        except (GitServiceError, ValueError) as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(payload, Struct())
 
     @staticmethod
     def _stream_from_dicts(events_iter: Any) -> Any:

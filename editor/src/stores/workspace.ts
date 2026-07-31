@@ -2438,6 +2438,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           updateTreeNodeGraphStatus(tab.path, 'dirty')
         }
       }
+      window.dispatchEvent(new CustomEvent('metaweave-knowledge-file-change'))
     })
     eventSource.onerror = () => {
       eventSource.close()

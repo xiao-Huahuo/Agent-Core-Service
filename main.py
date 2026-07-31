@@ -84,6 +84,7 @@ from agent_service.services.memory.longterm_memory_service import LongTermMemory
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 from agent_service.services.settings_service import SettingsService
 from agent_service.services.knowledge_library_service import KnowledgeLibraryService
+from agent_service.services.git_service import GitService
 from agent_service.services.knowledge_graph_service import KnowledgeGraphService
 from agent_service.services.library_service import LibraryService
 from agent_service.services.memory.rag.knowledge_ingestion import KnowledgeIngestionService
@@ -158,6 +159,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         settings_service=settings_service,
         knowledge_graph_service=knowledge_graph_service,
     )
+    git_service = GitService(knowledge_library_service=knowledge_library_service)
     library_service = LibraryService(
         config=config,
         settings_service=settings_service,
@@ -169,6 +171,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     rest_deps._skill_service = skill_service
     rest_deps._knowledge_library_service = knowledge_library_service
     rest_deps._knowledge_graph_service = knowledge_graph_service
+    rest_deps._git_service = git_service
     rest_deps._library_service = library_service
     rest_deps._task_list_service = task_list_service
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
@@ -227,6 +230,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         message_service=message_service,
         settings_service=settings_service,
         knowledge_library_service=knowledge_library_service,
+        git_service=git_service,
     )
     rest_deps._agent = agent
     rest_deps._session_service = session_service
@@ -273,6 +277,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._skill_service = None
         rest_deps._knowledge_library_service = None
         rest_deps._knowledge_graph_service = None
+        rest_deps._git_service = None
         rest_deps._library_service = None
         rest_deps._todo_service = None
         logger.info("AgentService 已关闭")

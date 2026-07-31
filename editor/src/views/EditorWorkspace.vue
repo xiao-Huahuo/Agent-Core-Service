@@ -16,15 +16,18 @@ import ImagePreviewer from '@/components/common/ImagePreviewer.vue'
 import FileConflictDialog from '@/components/editor_workspace/FileConflictDialog.vue'
 import FileTreePanel from '@/components/editor_workspace/FileTreePanel.vue'
 import FileResourceManager from '@/components/editor_workspace/FileResourceManager.vue'
+import GitSidebar from '@/components/git_sidebar/GitSidebar.vue'
 import SelectionToolbar from '@/components/editor_workspace/SelectionToolbar.vue'
 import TodoSidebar from '@/components/editor_workspace/TodoSidebar.vue'
 import TopCommandBar from '@/components/editor_workspace/TopCommandBar.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useGitStore } from '@/stores/git'
 import type { KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graphTypes'
 
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
+const gitStore = useGitStore()
 const AgentPage = defineAsyncComponent(() => import('@/views/AgentPage.vue'))
 const GraphPane = defineAsyncComponent(() => import('@/components/editor_workspace/GraphPane.vue'))
 const DashboardView = defineAsyncComponent(() => import('@/views/DashboardView.vue'))
@@ -54,6 +57,8 @@ type ResizeTarget = 'file' | 'agent'
 const workspaceGrid = ref<HTMLElement | null>(null)
 const fileSidebarOpen = ref(true)
 const agentSidebarOpen = ref(true)
+const gitLeftOpen = ref(false)
+const gitRightOpen = ref(false)
 const fileWidth = ref(DEFAULT_FILE_WIDTH)
 const agentWidth = ref(DEFAULT_AGENT_WIDTH)
 const activeResizeTarget = ref<ResizeTarget | null>(null)
@@ -61,7 +66,9 @@ const isAgentPage = computed(() => workspaceStore.mainView === 'agent')
 const isGraphPage = computed(() => workspaceStore.mainView === 'graph')
 const sidebarHidden = computed(() => isAgentPage.value || isGraphPage.value)
 const visibleFileSidebarOpen = computed(() => fileSidebarOpen.value && !sidebarHidden.value)
-const visibleAgentSidebarOpen = computed(() => (agentSidebarOpen.value || todoSidebarOpen.value) && !sidebarHidden.value)
+const visibleAgentSidebarOpen = computed(() => (
+  (gitRightOpen.value || agentSidebarOpen.value || todoSidebarOpen.value) && !sidebarHidden.value
+))
 const showConflictDialog = computed(() => {
   return workspaceStore.conflictDialog.open
 })
@@ -110,6 +117,7 @@ function openFileSidebar() {
     workspaceStore.setMainView('editor')
   }
   fileSidebarOpen.value = true
+  gitLeftOpen.value = false
   fileWidth.value = Math.max(fileWidth.value, DEFAULT_FILE_WIDTH)
 }
 
@@ -117,6 +125,11 @@ function toggleFileSidebar() {
   if (sidebarHidden.value) {
     workspaceStore.setMainView('editor')
     openFileSidebar()
+    return
+  }
+  if (gitLeftOpen.value) {
+    gitLeftOpen.value = false
+    fileSidebarOpen.value = true
     return
   }
   if (fileSidebarOpen.value) {
@@ -127,6 +140,7 @@ function toggleFileSidebar() {
 }
 
 function toggleAgentSidebar() {
+  gitRightOpen.value = false
   if (sidebarHidden.value) {
     workspaceStore.setMainView('editor')
     agentSidebarOpen.value = true
@@ -151,6 +165,7 @@ watch(todoSidebarOpen, (val) => {
 })
 
 function toggleTodoSidebar() {
+  gitRightOpen.value = false
   if (sidebarHidden.value) {
     workspaceStore.setMainView('editor')
   }
@@ -158,6 +173,32 @@ function toggleTodoSidebar() {
   if (todoSidebarOpen.value) {
     agentWidth.value = Math.max(agentWidth.value, DEFAULT_AGENT_WIDTH)
     todoSplitRatio.value = 0.5
+  }
+}
+
+function toggleLeftGitSidebar() {
+  if (sidebarHidden.value) {
+    workspaceStore.setMainView('editor')
+  }
+  gitLeftOpen.value = !gitLeftOpen.value
+  if (gitLeftOpen.value) {
+    fileSidebarOpen.value = true
+    gitRightOpen.value = false
+    void gitStore.refresh()
+  }
+}
+
+function toggleRightGitSidebar() {
+  if (sidebarHidden.value) {
+    workspaceStore.setMainView('editor')
+  }
+  gitRightOpen.value = !gitRightOpen.value
+  if (gitRightOpen.value) {
+    gitLeftOpen.value = false
+    agentSidebarOpen.value = false
+    todoSidebarOpen.value = false
+    agentWidth.value = Math.max(agentWidth.value, DEFAULT_AGENT_WIDTH)
+    void gitStore.refresh()
   }
 }
 
@@ -336,6 +377,10 @@ function handleResizeMove(event: PointerEvent) {
 
   const nextWidth = rect.right - event.clientX
   if (nextWidth < COLLAPSE_THRESHOLD) {
+    if (gitRightOpen.value) {
+      gitRightOpen.value = false
+      return
+    }
     if (agentSidebarOpen.value) {
       agentSidebarOpen.value = false
     }
@@ -382,6 +427,7 @@ function handleKeydown(event: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
+  void gitStore.refresh()
 })
 
 onBeforeUnmount(() => {
@@ -389,11 +435,26 @@ onBeforeUnmount(() => {
   stopResize()
   stopTodoResize()
 })
+
+watch(
+  () => settingsStore.profile.knowledgeDir,
+  () => {
+    gitStore.reset()
+    void gitStore.refresh()
+  },
+)
 </script>
 
 <template>
   <div class="workspace-page" :class="{ resizing: activeResizeTarget || activeTodoResize }">
-    <TopCommandBar @toggle-agent="toggleAgentSidebar" @open-agent-page="openAgentPage" @open-settings="openSettings" @toggle-todo="toggleTodoSidebar" />
+    <TopCommandBar
+      :git-open="gitRightOpen"
+      @toggle-agent="toggleAgentSidebar"
+      @open-agent-page="openAgentPage"
+      @open-settings="openSettings"
+      @toggle-todo="toggleTodoSidebar"
+      @toggle-git="toggleRightGitSidebar"
+    />
     <div
       ref="workspaceGrid"
       class="workspace-grid"
@@ -407,7 +468,8 @@ onBeforeUnmount(() => {
     >
       <ActivityBar
         class="activity-col"
-        :file-open="visibleFileSidebarOpen"
+        :file-open="visibleFileSidebarOpen && !gitLeftOpen"
+        :git-active="gitLeftOpen"
         :agent-open="visibleAgentSidebarOpen"
         :resources-active="workspaceStore.mainView === 'resources'"
         :library-active="workspaceStore.mainView === 'library'"
@@ -422,6 +484,7 @@ onBeforeUnmount(() => {
         :settings-active="workspaceStore.mainView === 'settings'"
         :display-mode="settingsStore.sidebarDisplayMode"
         @toggle-file="toggleFileSidebar"
+        @toggle-git="toggleLeftGitSidebar"
         @open-resources="openResources"
         @open-library="openLibrary"
         @open-ingestion="openIngestion"
@@ -435,7 +498,10 @@ onBeforeUnmount(() => {
         @open-skills="openSkills"
         @open-settings="openSettings"
       />
-      <FileTreePanel class="file-col ide-panel" :aria-hidden="!visibleFileSidebarOpen" />
+      <div class="file-col ide-panel" :aria-hidden="!visibleFileSidebarOpen">
+        <GitSidebar v-if="gitLeftOpen" />
+        <FileTreePanel v-else />
+      </div>
       <div
         class="resize-handle file-resizer"
         role="separator"
@@ -468,6 +534,8 @@ onBeforeUnmount(() => {
         @pointerdown="startResize('agent', $event)"
       ></div>
       <div v-if="!isAgentPage" class="agent-col" :class="{ 'todo-open': todoSidebarOpen }" :aria-hidden="!visibleAgentSidebarOpen">
+        <GitSidebar v-if="gitRightOpen" />
+        <template v-else>
         <div class="todo-section" :style="{ flex: todoSidebarOpen ? (agentSidebarOpen ? todoSplitRatio : 1) : 0 }">
           <div class="todo-body-wrap" :class="{ visible: todoSidebarOpen }">
             <TodoSidebar />
@@ -483,6 +551,7 @@ onBeforeUnmount(() => {
             <AgentPanel @expand="openAgentPage" />
           </div>
         </div>
+        </template>
       </div>
     </div>
     <CommandPalette />

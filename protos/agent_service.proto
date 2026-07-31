@@ -80,6 +80,19 @@ service AgentService {
   rpc DeleteKnowledgePath(KnowledgePathDeleteRequest) returns (DeleteResponse);
   rpc RenameKnowledgePath(KnowledgePathRenameRequest) returns (KnowledgeFileNode);
 
+  // 当前 active 知识库的 Git 管理
+  rpc GetGitStatus(GitUserRequest) returns (google.protobuf.Struct);
+  rpc InitGitRepository(GitInitRequest) returns (google.protobuf.Struct);
+  rpc GetGitHistory(GitHistoryRequest) returns (google.protobuf.Struct);
+  rpc GetGitDiff(GitDiffRequest) returns (google.protobuf.Struct);
+  rpc RestoreGitPaths(GitPathsRequest) returns (google.protobuf.Struct);
+  rpc CommitGitPaths(GitCommitRequest) returns (google.protobuf.Struct);
+  rpc PushGitBranch(GitPushRequest) returns (google.protobuf.Struct);
+  rpc CreateGitBranch(GitBranchRequest) returns (google.protobuf.Struct);
+  rpc AddGitRemote(GitRemoteRequest) returns (google.protobuf.Struct);
+  rpc SwitchGitBranch(GitBranchRequest) returns (google.protobuf.Struct);
+  rpc PullGitBranch(GitPullRequest) returns (google.protobuf.Struct);
+
   // 系统提示词条目
   rpc ListSystemPromptEntries(SystemPromptRequest) returns (SystemPromptEntriesResponse);
   rpc AddSystemPromptEntry(SystemPromptAddRequest) returns (SystemPromptEntryResponse);
@@ -89,6 +102,69 @@ service AgentService {
   rpc ListCustomMemories(MemoryListRequest) returns (MemoryListResponse);
   rpc AddCustomMemory(MemoryAddRequest) returns (MemoryEntryResponse);
   rpc DeleteCustomMemory(MemoryDeleteRequest) returns (DeleteResponse);
+}
+
+// ---------------------------------------------------------------------------
+// 知识库 Git 管理
+// ---------------------------------------------------------------------------
+
+message GitUserRequest {
+  string user_id = 1;
+}
+
+message GitInitRequest {
+  string user_id = 1;
+  string initial_branch = 2;
+}
+
+message GitHistoryRequest {
+  string user_id = 1;
+  int32 limit = 2;
+}
+
+message GitDiffRequest {
+  string user_id = 1;
+  string path = 2;
+  bool staged = 3;
+}
+
+message GitPathsRequest {
+  string user_id = 1;
+  repeated string paths = 2;
+}
+
+message GitCommitRequest {
+  string user_id = 1;
+  repeated string paths = 2;
+  string message = 3;
+}
+
+message GitPushRequest {
+  string user_id = 1;
+  string local_branch = 2;
+  string remote = 3;
+  string remote_branch = 4;
+  bool force_with_lease = 5;
+  bool set_upstream = 6;
+  bool all_branches = 7;
+}
+
+message GitBranchRequest {
+  string user_id = 1;
+  string name = 2;
+  bool checkout = 3;
+}
+
+message GitRemoteRequest {
+  string user_id = 1;
+  string name = 2;
+  string url = 3;
+}
+
+message GitPullRequest {
+  string user_id = 1;
+  string remote = 2;
+  string branch = 3;
 }
 
 // ---------------------------------------------------------------------------

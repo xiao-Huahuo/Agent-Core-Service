@@ -62,6 +62,11 @@
   --color-success: #26a269;
   --color-warning: #e2a72e;
   --color-danger: #f05d5e;
+  --color-git-modified: #4b8edc;
+  --color-git-added: #55a36f;
+  --color-git-renamed: #4b8edc;
+  --color-git-untracked: #d05a67;
+  --color-git-deleted: #7d8291;
 }
 
 :root[data-theme="dark"] {

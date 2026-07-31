@@ -709,6 +709,9 @@ class KnowledgeLibraryService:
                 return target_path
             if normalized_strategy == "rename":
                 target_path = self._unique_child_path(target_dir=target_dir, preferred_name=safe_filename)
+            elif normalized_strategy == "overwrite":
+                relative_path = self._relative_path(path=target_path, root=root)
+                self.invalidate_paths(user_id=user_id, relative_paths=[relative_path])
         target_path.write_bytes(content)
         return target_path
 
@@ -760,6 +763,7 @@ class KnowledgeLibraryService:
                 ocr_enabled=ocr_enabled,
             )
             for path in sorted(root.iterdir(), key=self._sort_path)
+            if not self._is_vcs_metadata_path(path=path, root=root)
         ]
 
     def get_active_root_path(self, *, user_id: str) -> Path:
@@ -1475,13 +1479,17 @@ class KnowledgeLibraryService:
         """
         保存当前 active 知识库中的文本文件。
 
-        注意: 保存文件只写入磁盘,不会触发向量灌库; 灌库只由显式扫描/重建触发。
+        注意: 覆盖已有文件会先清理该来源的旧 frontmatter、向量切片与图谱数据。
+        新内容的重新入库仍由显式扫描/重建触发。
         """
 
         root = self._get_active_root(user_id=user_id)
         target = self._resolve_child_path(root=root, relative_path=path)
         if target.exists() and target.is_dir():
             raise ValueError("path is a directory")
+        if target.exists():
+            relative_path = self._relative_path(path=target, root=root)
+            self.invalidate_paths(user_id=user_id, relative_paths=[relative_path])
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return self._path_to_node(path=target, root=root)
@@ -1695,12 +1703,17 @@ class KnowledgeLibraryService:
             return {}
         signature: dict[str, tuple[int, int, str]] = {}
         for path in root.rglob("*"):
+            if self._is_vcs_metadata_path(path=path, root=root):
+                continue
+            # 目录 mtime 会因任一子项变化而改变。只跟踪文件可避免把整个目录
+            # 误判为失效目标；目录删除仍会表现为其中所有旧文件路径消失。
+            if not path.is_file():
+                continue
             stat = path.stat()
-            path_type = "dir" if path.is_dir() else "file"
             signature[self._relative_path(path=path, root=root)] = (
                 int(stat.st_mtime_ns),
                 stat.st_size,
-                path_type,
+                "file",
             )
         return signature
 
@@ -1846,6 +1859,7 @@ class KnowledgeLibraryService:
                     ocr_enabled=ocr_enabled,
                 )
                 for child in sorted(path.iterdir(), key=self._sort_path)
+                if not self._is_vcs_metadata_path(path=child, root=root)
             ]
             child_ingested_at = [
                 str(child.get("ingestedAt") or "")
@@ -1893,6 +1907,21 @@ class KnowledgeLibraryService:
 
         config = self.settings_service.get_knowledge_ingestion_config(user_id=user_id)
         return KnowledgeIgnoreMatcher(str(config.get("knowledge_ignore_patterns") or ""))
+
+    @staticmethod
+    def _is_vcs_metadata_path(*, path: Path, root: Path) -> bool:
+        """
+        判断路径是否属于版本控制内部元数据目录。
+
+        Git/Hg/SVN 元数据既不应展示在知识库文件树,也不能参与结构化、向量入库和
+        图谱抽取。这里只屏蔽目录本身及其后代,不会屏蔽用户可编辑的 `.gitignore`。
+        """
+
+        try:
+            relative_parts = path.resolve().relative_to(root.resolve()).parts
+        except ValueError:
+            return True
+        return any(part in {".git", ".hg", ".svn"} for part in relative_parts)
 
     def _can_ingest_source_file(self, path: Path) -> bool:
         """Return whether a file can enter the knowledge ingestion pipeline."""
@@ -2101,6 +2130,79 @@ class KnowledgeLibraryService:
                     document_id=source_id,
                 )
         return chunks_deleted
+
+    def invalidate_paths(self, *, user_id: str, relative_paths: list[str]) -> dict[str, int]:
+        """
+        使一组知识库来源文件的全部派生索引失效。
+
+        relative_paths: 文件或目录相对于当前 active 知识库根目录的路径。目录已经
+        被外部删除时,仍会从保留在 runtime/frontmatter 中的元数据恢复其原文件清单。
+
+        返回值包含实际失效的来源文件数和删除的向量切片数。调用方完成文件变更后
+        应刷新文件树,新内容保持 dirty 状态,等待显式重新入库与图谱抽取。
+        """
+
+        context = self._active_library_context(user_id=user_id)
+        root = context["root"]
+        frontmatter_root = self._resolve_user_frontmatter_dir(
+            context["user_id"],
+            context["library_id"],
+        ).resolve()
+        affected: set[str] = set()
+        for raw_path in relative_paths:
+            normalized_path = str(raw_path or "").replace("\\", "/").strip("/")
+            if not normalized_path or normalized_path == ".git" or normalized_path.startswith(".git/"):
+                continue
+            target = self._resolve_child_path(root=root, relative_path=normalized_path)
+            if target.is_dir():
+                affected.update(self._collect_relative_file_paths(target=target, root=root))
+            elif target.is_file():
+                affected.add(normalized_path)
+            else:
+                affected.update(
+                    self._frontmatter_sources_under_prefix(
+                        frontmatter_root=frontmatter_root,
+                        relative_prefix=normalized_path,
+                    )
+                )
+                if Path(normalized_path).suffix:
+                    affected.add(normalized_path)
+        normalized_affected = sorted(path for path in affected if path)
+        chunks_deleted = self._delete_index_artifacts(
+            user_id=user_id,
+            relative_paths=normalized_affected,
+        )
+        return {
+            "files_invalidated": len(normalized_affected),
+            "chunks_deleted": chunks_deleted,
+        }
+
+    @staticmethod
+    def _frontmatter_sources_under_prefix(
+        *,
+        frontmatter_root: Path,
+        relative_prefix: str,
+    ) -> set[str]:
+        """
+        从 frontmatter 元数据恢复已被外部删除或移动的来源路径。
+
+        该方法只读取 runtime 内的 JSON 元数据,不会信任 JSON 提供的绝对路径。
+        """
+
+        if not frontmatter_root.is_dir():
+            return set()
+        prefix = relative_prefix.replace("\\", "/").strip("/")
+        matched: set[str] = set()
+        for frontmatter_path in frontmatter_root.rglob("*.json"):
+            try:
+                payload = json.loads(frontmatter_path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+            source_path = str(metadata.get("relative_path") or "").replace("\\", "/").strip("/")
+            if source_path == prefix or source_path.startswith(f"{prefix}/"):
+                matched.add(source_path)
+        return matched
 
     def _source_needs_ocr_reindex(
         self,

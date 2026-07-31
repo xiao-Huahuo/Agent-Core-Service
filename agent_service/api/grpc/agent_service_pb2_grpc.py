@@ -214,6 +214,61 @@ class AgentServiceStub(object):
                 request_serializer=agent__service__pb2.KnowledgePathRenameRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.KnowledgeFileNode.FromString,
                 _registered_method=True)
+        self.GetGitStatus = channel.unary_unary(
+                '/agent_service.AgentService/GetGitStatus',
+                request_serializer=agent__service__pb2.GitUserRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.InitGitRepository = channel.unary_unary(
+                '/agent_service.AgentService/InitGitRepository',
+                request_serializer=agent__service__pb2.GitInitRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.GetGitHistory = channel.unary_unary(
+                '/agent_service.AgentService/GetGitHistory',
+                request_serializer=agent__service__pb2.GitHistoryRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.GetGitDiff = channel.unary_unary(
+                '/agent_service.AgentService/GetGitDiff',
+                request_serializer=agent__service__pb2.GitDiffRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.RestoreGitPaths = channel.unary_unary(
+                '/agent_service.AgentService/RestoreGitPaths',
+                request_serializer=agent__service__pb2.GitPathsRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.CommitGitPaths = channel.unary_unary(
+                '/agent_service.AgentService/CommitGitPaths',
+                request_serializer=agent__service__pb2.GitCommitRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.PushGitBranch = channel.unary_unary(
+                '/agent_service.AgentService/PushGitBranch',
+                request_serializer=agent__service__pb2.GitPushRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.CreateGitBranch = channel.unary_unary(
+                '/agent_service.AgentService/CreateGitBranch',
+                request_serializer=agent__service__pb2.GitBranchRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.AddGitRemote = channel.unary_unary(
+                '/agent_service.AgentService/AddGitRemote',
+                request_serializer=agent__service__pb2.GitRemoteRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.SwitchGitBranch = channel.unary_unary(
+                '/agent_service.AgentService/SwitchGitBranch',
+                request_serializer=agent__service__pb2.GitBranchRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.PullGitBranch = channel.unary_unary(
+                '/agent_service.AgentService/PullGitBranch',
+                request_serializer=agent__service__pb2.GitPullRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
         self.ListSystemPromptEntries = channel.unary_unary(
                 '/agent_service.AgentService/ListSystemPromptEntries',
                 request_serializer=agent__service__pb2.SystemPromptRequest.SerializeToString,
@@ -478,6 +533,73 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetGitStatus(self, request, context):
+        """当前 active 知识库的 Git 管理
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def InitGitRepository(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetGitHistory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetGitDiff(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RestoreGitPaths(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CommitGitPaths(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def PushGitBranch(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CreateGitBranch(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddGitRemote(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SwitchGitBranch(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def PullGitBranch(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def ListSystemPromptEntries(self, request, context):
         """系统提示词条目
         """
@@ -688,6 +810,61 @@ def add_AgentServiceServicer_to_server(servicer, server):
                     servicer.RenameKnowledgePath,
                     request_deserializer=agent__service__pb2.KnowledgePathRenameRequest.FromString,
                     response_serializer=agent__service__pb2.KnowledgeFileNode.SerializeToString,
+            ),
+            'GetGitStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetGitStatus,
+                    request_deserializer=agent__service__pb2.GitUserRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'InitGitRepository': grpc.unary_unary_rpc_method_handler(
+                    servicer.InitGitRepository,
+                    request_deserializer=agent__service__pb2.GitInitRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'GetGitHistory': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetGitHistory,
+                    request_deserializer=agent__service__pb2.GitHistoryRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'GetGitDiff': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetGitDiff,
+                    request_deserializer=agent__service__pb2.GitDiffRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'RestoreGitPaths': grpc.unary_unary_rpc_method_handler(
+                    servicer.RestoreGitPaths,
+                    request_deserializer=agent__service__pb2.GitPathsRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'CommitGitPaths': grpc.unary_unary_rpc_method_handler(
+                    servicer.CommitGitPaths,
+                    request_deserializer=agent__service__pb2.GitCommitRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'PushGitBranch': grpc.unary_unary_rpc_method_handler(
+                    servicer.PushGitBranch,
+                    request_deserializer=agent__service__pb2.GitPushRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'CreateGitBranch': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateGitBranch,
+                    request_deserializer=agent__service__pb2.GitBranchRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'AddGitRemote': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddGitRemote,
+                    request_deserializer=agent__service__pb2.GitRemoteRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'SwitchGitBranch': grpc.unary_unary_rpc_method_handler(
+                    servicer.SwitchGitBranch,
+                    request_deserializer=agent__service__pb2.GitBranchRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'PullGitBranch': grpc.unary_unary_rpc_method_handler(
+                    servicer.PullGitBranch,
+                    request_deserializer=agent__service__pb2.GitPullRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             ),
             'ListSystemPromptEntries': grpc.unary_unary_rpc_method_handler(
                     servicer.ListSystemPromptEntries,
@@ -1647,6 +1824,303 @@ class AgentService(object):
             '/agent_service.AgentService/RenameKnowledgePath',
             agent__service__pb2.KnowledgePathRenameRequest.SerializeToString,
             agent__service__pb2.KnowledgeFileNode.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetGitStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetGitStatus',
+            agent__service__pb2.GitUserRequest.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def InitGitRepository(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/InitGitRepository',
+            agent__service__pb2.GitInitRequest.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetGitHistory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetGitHistory',
+            agent__service__pb2.GitHistoryRequest.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetGitDiff(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetGitDiff',
+            agent__service__pb2.GitDiffRequest.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RestoreGitPaths(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/RestoreGitPaths',
+            agent__service__pb2.GitPathsRequest.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CommitGitPaths(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/CommitGitPaths',
+            agent__service__pb2.GitCommitRequest.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PushGitBranch(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/PushGitBranch',
+            agent__service__pb2.GitPushRequest.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CreateGitBranch(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/CreateGitBranch',
+            agent__service__pb2.GitBranchRequest.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddGitRemote(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/AddGitRemote',
+            agent__service__pb2.GitRemoteRequest.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SwitchGitBranch(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/SwitchGitBranch',
+            agent__service__pb2.GitBranchRequest.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PullGitBranch(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/PullGitBranch',
+            agent__service__pb2.GitPullRequest.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
             options,
             channel_credentials,
             insecure,

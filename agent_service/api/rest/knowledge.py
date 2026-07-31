@@ -45,22 +45,58 @@ class _KnowledgeFileEventHandler(FileSystemEventHandler):
     queue: 跨线程投递给 SSE 生成器的事件队列。
     """
 
-    def __init__(self, *, root: Path, loop: asyncio.AbstractEventLoop, queue: asyncio.Queue[str]) -> None:
+    def __init__(
+        self,
+        *,
+        root: Path,
+        loop: asyncio.AbstractEventLoop,
+        queue: asyncio.Queue[str],
+        service: Any,
+        user_id: str,
+    ) -> None:
         """保存 watcher 事件投递所需上下文。"""
 
         self.root = root
         self.loop = loop
         self.queue = queue
+        self.service = service
+        self.user_id = user_id
 
     def on_any_event(self, event: FileSystemEvent) -> None:
         """将 watchdog 线程中的文件变化投递到 asyncio 队列。"""
 
         if event.event_type in {"opened", "closed_no_write"}:
             return
-        event_path = Path(str(getattr(event, "dest_path", "") or event.src_path)).resolve()
-        relative_path = ""
-        with contextlib.suppress(ValueError):
-            relative_path = event_path.relative_to(self.root).as_posix()
+        raw_paths = [
+            str(getattr(event, "src_path", "") or ""),
+            str(getattr(event, "dest_path", "") or ""),
+        ]
+        relative_paths: list[str] = []
+        for raw_path in raw_paths:
+            if not raw_path:
+                continue
+            with contextlib.suppress(ValueError):
+                relative_path = Path(raw_path).resolve().relative_to(self.root).as_posix()
+                if (
+                    relative_path
+                    and relative_path != ".git"
+                    and not relative_path.startswith(".git/")
+                ):
+                    relative_paths.append(relative_path)
+        if not relative_paths:
+            return
+        try:
+            self.service.invalidate_paths(
+                user_id=self.user_id,
+                relative_paths=list(dict.fromkeys(relative_paths)),
+            )
+        except Exception:
+            logger.exception(
+                "外部文件变化索引失效失败 | user=%s paths=%s",
+                self.user_id,
+                relative_paths,
+            )
+        relative_path = relative_paths[-1]
         self.loop.call_soon_threadsafe(self.queue.put_nowait, relative_path)
 
 
@@ -778,7 +814,13 @@ async def _watchdog_event_stream(*, svc: Any, user_id: str):
     loop = asyncio.get_running_loop()
     observer = Observer()
     observer.schedule(
-        _KnowledgeFileEventHandler(root=root, loop=loop, queue=queue),
+        _KnowledgeFileEventHandler(
+            root=root,
+            loop=loop,
+            queue=queue,
+            service=svc,
+            user_id=user_id,
+        ),
         str(root),
         recursive=True,
     )
@@ -814,6 +856,19 @@ async def _polling_event_stream(*, svc: Any, user_id: str):
         current_signature = await run_in_threadpool(svc.build_tree_signature, user_id=user_id)
         if current_signature == previous_signature:
             continue
+        changed_paths = sorted(
+            path
+            for path in set(previous_signature) | set(current_signature)
+            if previous_signature.get(path) != current_signature.get(path)
+            and path != ".git"
+            and not path.startswith(".git/")
+        )
+        if changed_paths:
+            await run_in_threadpool(
+                svc.invalidate_paths,
+                user_id=user_id,
+                relative_paths=changed_paths,
+            )
         previous_signature = current_signature
         yield _sse("tree_dirty", {"type": "tree_dirty", "path": ""})
 

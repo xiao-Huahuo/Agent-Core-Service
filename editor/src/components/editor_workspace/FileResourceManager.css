@@ -912,3 +912,26 @@
 .close-btn:hover {
   opacity: 0.8;
 }
+.git-modified {
+  color: var(--color-git-modified);
+}
+
+.git-added {
+  color: var(--color-git-added);
+}
+
+.git-untracked {
+  color: var(--color-git-untracked);
+}
+
+.git-conflicted {
+  color: var(--color-danger);
+}
+
+.git-deleted {
+  color: var(--color-git-deleted);
+}
+
+.git-renamed {
+  color: var(--color-git-renamed);
+}

@@ -6,12 +6,13 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { Activity, BookOpen, Bug, DatabaseZap, FileCode, Files, Folder, Search, Settings, Share2, Sparkles } from 'lucide-vue-next'
+import { Activity, BookOpen, Bug, DatabaseZap, FileCode, Files, Folder, GitBranch, Search, Settings, Share2, Sparkles } from 'lucide-vue-next'
 import type { SidebarDisplayMode } from '@/types/settings'
 
 defineProps<{
   displayMode: SidebarDisplayMode
   fileOpen: boolean
+  gitActive: boolean
   agentOpen: boolean
   resourcesActive: boolean
   libraryActive: boolean
@@ -28,6 +29,7 @@ defineProps<{
 
 const emit = defineEmits<{
   toggleFile: []
+  toggleGit: []
   openResources: []
   openLibrary: []
   openIngestion: []
@@ -67,6 +69,18 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
     >
       <Files :size="18" />
       <span class="activity-label">文件</span>
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: gitActive }"
+      type="button"
+      title="Git"
+      aria-label="Git"
+      @mousedown.prevent="handleRipple"
+      @click="emit('toggleGit')"
+    >
+      <GitBranch :size="18" />
+      <span class="activity-label">Git</span>
     </button>
     <button
       class="activity-button"

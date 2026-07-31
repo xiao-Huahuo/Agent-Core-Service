@@ -50,6 +50,7 @@ import { materialFileIconForNode } from '@/components/editor_workspace/materialF
 import { previewKnowledgeFile, readKnowledgeFile } from '@/api/knowledge'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useGitStore } from '@/stores/git'
 import type { FilePreviewPayload, KnowledgeFileNode, KnowledgeTrashEntry } from '@/types/knowledge'
 
 defineOptions({ name: 'FileResourceManager' })
@@ -67,6 +68,7 @@ type SortDirection = 'asc' | 'desc'
 
 const workspaceStore = useWorkspaceStore()
 const settingsStore = useSettingsStore()
+const gitStore = useGitStore()
 const currentDir = ref('')
 const resourcePage = ref<ResourcePage>('files')
 const pageSwitchRef = ref<HTMLElement | null>(null)
@@ -383,6 +385,14 @@ function graphStatusClass(node: KnowledgeFileNode): string {
   if (node.graphStatus === 'graphed') return 'graphed'
   if (node.graphStatus === 'ignored') return 'ignored'
   return 'dirty'
+}
+
+function gitStatusClass(node: KnowledgeFileNode): string {
+  // Resource views share the same semantic Git colors as the recursive tree.
+
+  if (node.isDir) return ''
+  const state = gitStore.statusForPath(node.path)?.state
+  return state ? `git-${state}` : ''
 }
 
 function toggleStatusColumns() {
@@ -1069,7 +1079,7 @@ onUnmounted(() => {
           </span>
           <span class="name-cell">
             <img class="material-file-icon" :src="materialFileIconForNode(node).src" alt="" aria-hidden="true" />
-            <span class="file-name">{{ node.name }}</span>
+            <span class="file-name" :class="gitStatusClass(node)">{{ node.name }}</span>
           </span>
           <span>{{ displayMtime(node) }}</span>
           <span>{{ displayIngestedAt(node) }}</span>
@@ -1100,7 +1110,7 @@ onUnmounted(() => {
           >
             <img class="material-file-icon material-file-icon-content" :src="materialFileIconForNode(node).src" alt="" aria-hidden="true" />
             <span class="content-text">
-              <strong>{{ node.name }}</strong>
+              <strong :class="gitStatusClass(node)">{{ node.name }}</strong>
               <small>{{ previewSummary(node) }}</small>
             </span>
           </button>
@@ -1161,7 +1171,7 @@ onUnmounted(() => {
               aria-hidden="true"
             />
           </span>
-          <span class="tile-name">{{ node.name }}</span>
+          <span class="tile-name" :class="gitStatusClass(node)">{{ node.name }}</span>
           <small v-if="viewMode !== 'small'">{{ formatSize(nodeSize(node)) }}</small>
         </button>
       </div>
