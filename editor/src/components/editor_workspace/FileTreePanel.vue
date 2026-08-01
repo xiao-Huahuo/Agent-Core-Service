@@ -7,11 +7,15 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, FilePlus2, FolderPlus, History, ListFilter, RefreshCw, Search } from 'lucide-vue-next'
+import { ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, FilePlus2, FolderPlus, History, ListFilter, RefreshCw, Search, X } from 'lucide-vue-next'
 
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import RecentFileList from '@/components/editor_workspace/RecentFileList.vue'
 import TreeNode from '@/components/editor_workspace/TreeNode.vue'
+import {
+  collectExpandedPathsForFilteredTree,
+  filterTreeByQuery,
+} from '@/components/editor_workspace/fileTreeSearch'
 import { useSettingsStore } from '@/stores/settings'
 import { useGitStore } from '@/stores/git'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -42,6 +46,11 @@ const recentMode = ref(false)
 const recentSearchQuery = ref('')
 /** Stable visit ordering captured on entry or explicit refresh. */
 const recentVisitSnapshot = ref<RecentFileVisit[]>([])
+/** Whether the dropdown filename search box is open. */
+const treeSearchOpen = ref(false)
+/** Filename-only query applied to the normal recursive tree. */
+const treeSearchQuery = ref('')
+const treeSearchInput = ref<HTMLInputElement | null>(null)
 const recentFileGroups = computed(() => buildRecentFileGroups(
   recentVisitSnapshot.value,
   workspaceStore.flatNodes,
@@ -92,18 +101,29 @@ const actionError = ref('')
 const selectedTreePath = computed(() => workspaceStore.selectedTreePath || workspaceStore.selectedPath)
 const canPaste = computed(() => Boolean(workspaceStore.fileClipboard) || Boolean(window.agentEditorDesktop?.readClipboardFilePaths))
 const selectedTreeNode = computed(() => findNode(workspaceStore.tree, selectedTreePath.value))
-const visibleTreeNodes = computed(() => flattenVisibleNodes(displayTree.value, workspaceStore.expandedPaths))
+/** True while the filename dropdown is active with a non-empty query. */
+const searchActive = computed(() => !recentMode.value && treeSearchOpen.value && treeSearchQuery.value.trim().length > 0)
+const searchExpandedPaths = computed(() => (
+  searchActive.value
+    ? collectExpandedPathsForFilteredTree(filterTreeByQuery(sortedTree.value, treeSearchQuery.value))
+    : workspaceStore.expandedPaths
+))
+const effectiveExpandedPaths = computed(() => (
+  searchActive.value ? searchExpandedPaths.value : workspaceStore.expandedPaths
+))
+const visibleTreeNodes = computed(() => flattenVisibleNodes(displayTree.value, effectiveExpandedPaths.value))
 const displayTree = computed(() => {
+  let source = searchActive.value ? filterTreeByQuery(sortedTree.value, treeSearchQuery.value) : sortedTree.value
   const edit = inlineEdit.value
-  const source = edit?.mode === 'create'
-    ? insertDraftNode(sortedTree.value, edit.parentPath, {
-        name: edit.value,
-        path: edit.path,
-        isDir: edit.kind === 'folder',
-        children: edit.kind === 'folder' ? [] : undefined,
-        indexStatus: 'dirty',
-      })
-    : sortedTree.value
+  if (edit?.mode === 'create') {
+    source = insertDraftNode(source, edit.parentPath, {
+      name: edit.value,
+      path: edit.path,
+      isDir: edit.kind === 'folder',
+      children: edit.kind === 'folder' ? [] : undefined,
+      indexStatus: 'dirty',
+    })
+  }
   return source
 })
 
@@ -492,6 +512,7 @@ function handleGlobalKeydown(event: KeyboardEvent) {
   }
   if (key === 'escape') {
     closeContextMenu()
+    closeTreeSearch()
     cancelInlineEdit()
     deleteTarget.value = null
   }
@@ -642,6 +663,26 @@ async function askAgentFromMenu() {
   }
 }
 
+/** Toggles the dropdown filename search box and focuses its input on open. */
+function toggleTreeSearch() {
+  treeSearchOpen.value = !treeSearchOpen.value
+  if (!treeSearchOpen.value) {
+    treeSearchQuery.value = ''
+    return
+  }
+  void nextTick(() => treeSearchInput.value?.focus())
+}
+
+function closeTreeSearch() {
+  treeSearchOpen.value = false
+  treeSearchQuery.value = ''
+}
+
+function clearTreeSearch() {
+  treeSearchQuery.value = ''
+  void nextTick(() => treeSearchInput.value?.focus())
+}
+
 /** Enters recent mode and captures a stable list ordering for the session. */
 function openRecentMode() {
   if (recentMode.value) return
@@ -649,6 +690,7 @@ function openRecentMode() {
   recentMode.value = true
   sortMenuOpen.value = false
   contextMenu.value.open = false
+  closeTreeSearch()
 }
 
 /** Returns to the normal tree and clears transient recent-mode state. */
@@ -838,6 +880,18 @@ onUnmounted(() => {
       <button
         v-if="!recentMode"
         class="header-action"
+        :class="{ active: treeSearchOpen }"
+        type="button"
+        title="搜索文件"
+        aria-label="搜索文件"
+        :aria-pressed="treeSearchOpen"
+        @click="toggleTreeSearch"
+      >
+        <Search :size="18" />
+      </button>
+      <button
+        v-if="!recentMode"
+        class="header-action"
         :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn }"
         type="button"
         :title="(settingsStore.showIndexColumn || settingsStore.showGraphColumn) ? '隐藏索引与图谱状态' : '显示索引与图谱状态'"
@@ -926,6 +980,27 @@ onUnmounted(() => {
       />
     </div>
 
+    <div v-if="treeSearchOpen && !recentMode" class="tree-search">
+      <Search :size="15" aria-hidden="true" />
+      <input
+        ref="treeSearchInput"
+        v-model="treeSearchQuery"
+        type="search"
+        placeholder="按文件名搜索"
+        aria-label="按文件名搜索文件树"
+        @keydown.esc="closeTreeSearch"
+      />
+      <button
+        v-if="treeSearchQuery"
+        class="tree-search-clear"
+        type="button"
+        aria-label="清除搜索"
+        @click="clearTreeSearch"
+      >
+        <X :size="13" />
+      </button>
+    </div>
+
     <label v-if="recentMode" class="recent-search">
       <Search :size="15" aria-hidden="true" />
       <input
@@ -960,7 +1035,7 @@ onUnmounted(() => {
         :node="node"
         :depth="0"
         :stagger-index="nodeIndex"
-        :expanded-paths="workspaceStore.expandedPaths"
+        :expanded-paths="effectiveExpandedPaths"
         :selected-path="selectedTreePath"
         :selected-paths="workspaceStore.selectedTreePaths"
         :dirty-paths="workspaceStore.dirtyFilePaths"

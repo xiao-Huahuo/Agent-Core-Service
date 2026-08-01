@@ -67,6 +67,7 @@
   --color-git-renamed: #4b8edc;
   --color-git-untracked: #d05a67;
   --color-git-deleted: #7d8291;
+  --color-git-ignored: #a1842b;
 }
 
 :root[data-theme="dark"] {

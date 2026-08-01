@@ -40,6 +40,7 @@ const EMPTY_STATUS: GitStatus = {
   remotes: [],
   changes: [],
   untracked: [],
+  ignored: [],
   has_changes: false,
 }
 
@@ -50,6 +51,7 @@ const DIRECTORY_STATE_PRIORITY: GitFileChange['state'][] = [
   'renamed',
   'deleted',
   'untracked',
+  'ignored',
 ]
 
 function normalizeGitPathKey(path: string): string {
@@ -104,9 +106,16 @@ export const useGitStore = defineStore('git', () => {
   })
   const errorMessage = ref('')
 
-  const allFiles = computed(() => [...status.value.changes, ...status.value.untracked])
+  /** Ignored files are kept in the flat list so the tree can color them, but are never selectable. */
+  const allFiles = computed(() => [
+    ...status.value.changes,
+    ...status.value.untracked,
+    ...status.value.ignored,
+  ])
   const selectedFiles = computed(() => (
-    allFiles.value.filter((item) => selectedPaths.value.has(item.path))
+    allFiles.value.filter((item) => (
+      selectedPaths.value.has(item.path) && item.state !== 'ignored'
+    ))
   ))
   const selectedCount = computed(() => selectedFiles.value.length)
   const fileStatusMap = computed(() => {
@@ -122,7 +131,11 @@ export const useGitStore = defineStore('git', () => {
   }
 
   function syncSelection(): void {
-    const available = new Set(allFiles.value.map((item) => item.path))
+    const available = new Set(
+      allFiles.value
+        .filter((item) => item.state !== 'ignored')
+        .map((item) => item.path),
+    )
     selectedPaths.value = new Set(
       [...selectedPaths.value].filter((path) => available.has(path)),
     )
@@ -334,16 +347,26 @@ export const useGitStore = defineStore('git', () => {
   }
 
   function statusClassForPath(path: string, isDirectory = false): string {
-    /** Return the semantic Git color class for a file or a changed descendant directory. */
+    /** Return the semantic Git color class for a file, a changed descendant directory, or an ignored directory. */
 
     const normalizedPath = normalizeGitPathKey(path)
+    const directState = statusForPath(normalizedPath)?.state
     if (!isDirectory) {
-      const state = statusForPath(normalizedPath)?.state
-      return state ? `git-${state}` : ''
+      if (directState) return `git-${directState}`
+      // 整目录被 .gitignore 忽略时 Git 折叠为单条 `!! dir/`,文件节点按所在忽略目录推断。
+      const inIgnoredDirectory = allFiles.value.some(
+        (item) => item.state === 'ignored'
+          && item.path.endsWith('/')
+          && isGitPathInDirectory(normalizedPath, item.path),
+      )
+      return inIgnoredDirectory ? 'git-ignored' : ''
     }
     const states = allFiles.value
       .filter((item) => isGitPathInDirectory(item.path, normalizedPath))
       .map((item) => item.state)
+    if (directState) {
+      states.push(directState)
+    }
     const state = DIRECTORY_STATE_PRIORITY.find((candidate) => states.includes(candidate))
     return state ? `git-${state}` : ''
   }

@@ -52,8 +52,11 @@ class GitService:
         if repository_root is None:
             return self._empty_status(root=root)
         self._ensure_repository_matches_knowledge_root(root=root, repository_root=repository_root)
-        output = self._run(root=root, args=["status", "--porcelain=v1", "-z", "--branch"]).stdout
-        changes, untracked = self._parse_porcelain_status(output)
+        output = self._run(
+            root=root,
+            args=["status", "--porcelain=v1", "-z", "--branch", "--ignored"],
+        ).stdout
+        changes, untracked, ignored = self._parse_porcelain_status(output)
         current_branch = self._current_branch(root=root)
         upstream = self._upstream(root=root)
         ahead, behind = self._ahead_behind(root=root, upstream=upstream)
@@ -73,6 +76,7 @@ class GitService:
             "remotes": remotes,
             "changes": changes,
             "untracked": untracked,
+            "ignored": ignored,
             "has_changes": bool(changes or untracked),
         }
 
@@ -404,6 +408,7 @@ class GitService:
             "remotes": [],
             "changes": [],
             "untracked": [],
+            "ignored": [],
             "has_changes": False,
         }
 
@@ -446,12 +451,15 @@ class GitService:
         message = (result.stderr or result.stdout or "Git 操作失败").strip()
         return message[-4000:]
 
-    def _parse_porcelain_status(self, output: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        """解析 `git status --porcelain=v1 -z --branch` 输出。"""
+    def _parse_porcelain_status(self, output: str) -> tuple[
+        list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]
+    ]:
+        """解析 `git status --porcelain=v1 -z --branch --ignored` 输出。"""
 
         fields = output.split("\0")
         changes: list[dict[str, Any]] = []
         untracked: list[dict[str, Any]] = []
+        ignored: list[dict[str, Any]] = []
         index = 0
         while index < len(fields):
             field = fields[index]
@@ -469,15 +477,30 @@ class GitService:
             item = self._status_item(code=code, path=path, old_path=old_path)
             if code == "??":
                 untracked.append(item)
-            elif code != "!!":
+            elif code == "!!":
+                ignored.append(item)
+            else:
                 changes.append(item)
         changes.sort(key=lambda item: str(item["path"]).lower())
         untracked.sort(key=lambda item: str(item["path"]).lower())
-        return changes, untracked
+        ignored.sort(key=lambda item: str(item["path"]).lower())
+        return changes, untracked, ignored
 
     def _status_item(self, *, code: str, path: str, old_path: str = "") -> dict[str, Any]:
         """把 Git XY 状态码转换为前端可消费的语义状态。"""
 
+        if code == "!!":
+            parent = str(Path(path).parent).replace("\\", "/")
+            return {
+                "path": path,
+                "name": Path(path).name,
+                "directory": "" if parent == "." else parent,
+                "old_path": old_path,
+                "code": code,
+                "state": "ignored",
+                "staged": False,
+                "working_tree": False,
+            }
         if code == "??":
             state = "untracked"
         elif code in self._STATUS_CONFLICT_CODES:

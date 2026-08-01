@@ -16,6 +16,7 @@ export type GitFileState =
   | 'renamed'
   | 'conflicted'
   | 'untracked'
+  | 'ignored'
 
 export interface GitFileChange {
   path: string
@@ -47,6 +48,7 @@ export interface GitStatus {
   remotes: string[]
   changes: GitFileChange[]
   untracked: GitFileChange[]
+  ignored: GitFileChange[]
   has_changes: boolean
 }
 

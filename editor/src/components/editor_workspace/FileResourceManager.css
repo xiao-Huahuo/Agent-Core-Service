@@ -936,6 +936,10 @@
   color: var(--color-git-renamed);
 }
 
+.git-ignored {
+  color: var(--color-git-ignored);
+}
+
 .resource-row.git-modified .file-name,
 .content-item.git-modified strong,
 .icon-tile.git-modified .tile-name {
@@ -970,4 +974,10 @@
 .content-item.git-renamed strong,
 .icon-tile.git-renamed .tile-name {
   color: var(--color-git-renamed);
+}
+
+.resource-row.git-ignored .file-name,
+.content-item.git-ignored strong,
+.icon-tile.git-ignored .tile-name {
+  color: var(--color-git-ignored);
 }

@@ -63,6 +63,61 @@
   color: var(--color-text-muted);
 }
 
+.tree-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: 34px;
+  margin: 0 var(--space-8) var(--space-4);
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-canvas);
+  color: var(--color-text-muted);
+  transition: border-color var(--transition-fast);
+}
+
+.tree-search:focus-within {
+  border-color: var(--color-primary);
+}
+
+.tree-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: calc(12px * var(--font-scale));
+}
+
+.tree-search input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.tree-search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.tree-search-clear:hover {
+  background: var(--color-selection-blue-soft);
+  color: var(--color-selection-blue);
+}
+
 .header-action {
   display: inline-flex;
   align-items: center;

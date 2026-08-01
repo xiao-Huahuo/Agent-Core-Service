@@ -380,6 +380,10 @@ function handleRowDrop(event: DragEvent) {
   color: var(--color-git-renamed);
 }
 
+.node-name.git-ignored {
+  color: var(--color-git-ignored);
+}
+
 .tree-row.git-modified .node-name,
 .tree-row .node-name.git-modified {
   color: var(--color-git-modified);
@@ -408,6 +412,11 @@ function handleRowDrop(event: DragEvent) {
 .tree-row.git-renamed .node-name,
 .tree-row .node-name.git-renamed {
   color: var(--color-git-renamed);
+}
+
+.tree-row.git-ignored .node-name,
+.tree-row .node-name.git-ignored {
+  color: var(--color-git-ignored);
 }
 
 .node-editor {
