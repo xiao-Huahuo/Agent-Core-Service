@@ -84,6 +84,118 @@ def test_cleaner_extracts_docx_and_xlsx_sections(tmp_path: Path) -> None:
     assert "璃月 | 95" in xlsx_doc.sections[0].content
 
 
+def _build_docx(*, directory: Path, name: str, body_xml: str, rels_xml: str | None = None) -> Path:
+    """在临时目录构造一个最小 DOCX,便于清洗测试直接构造各类结构。"""
+
+    path = directory / name
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("word/document.xml", body_xml)
+        if rels_xml:
+            archive.writestr("word/_rels/document.xml.rels", rels_xml)
+    return path
+
+
+def test_cleaner_docx_preserves_order_and_avoids_table_duplication(tmp_path: Path) -> None:
+    """DOCX 段落-表格-段落应按原文顺序成章,且表格单元格文本不重复计入段落。"""
+
+    docx_path = _build_docx(
+        directory=tmp_path,
+        name="ordered.docx",
+        body_xml=(
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            "<w:body>"
+            "<w:p><w:r><w:t>表格前段落</w:t></w:r></w:p>"
+            "<w:tbl><w:tr>"
+            "<w:tc><w:p><w:r><w:t>单元格A</w:t></w:r></w:p></w:tc>"
+            "<w:tc><w:p><w:r><w:t>单元格B</w:t></w:r></w:p></w:tc>"
+            "</w:tr></w:tbl>"
+            "<w:p><w:r><w:t>表格后段落</w:t></w:r></w:p>"
+            "</w:body></w:document>"
+        ),
+    )
+    cleaned = MultimodalDocumentCleaner().clean(source_path=docx_path, title="ordered")
+
+    assert [section.content for section in cleaned.sections] == [
+        "表格前段落",
+        "单元格A | 单元格B",
+        "表格后段落",
+    ]
+
+
+def test_cleaner_docx_splits_sections_by_heading_style(tmp_path: Path) -> None:
+    """DOCX Heading1/Heading2 样式应按层级切分章节并生成 title_path。"""
+
+    docx_path = _build_docx(
+        directory=tmp_path,
+        name="headed.docx",
+        body_xml=(
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            "<w:body>"
+            '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>第一章</w:t></w:r></w:p>'
+            "<w:p><w:r><w:t>概述内容</w:t></w:r></w:p>"
+            '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>1.1 小节</w:t></w:r></w:p>'
+            "<w:p><w:r><w:t>小节内容</w:t></w:r></w:p>"
+            "</w:body></w:document>"
+        ),
+    )
+    cleaned = MultimodalDocumentCleaner().clean(source_path=docx_path, title="headed")
+
+    assert [section.heading for section in cleaned.sections] == ["第一章", "1.1 小节"]
+    assert [section.content for section in cleaned.sections] == ["概述内容", "小节内容"]
+    assert cleaned.sections[0].title_path == ["headed", "第一章"]
+    assert cleaned.sections[1].title_path == ["headed", "第一章", "1.1 小节"]
+
+
+def test_cleaner_docx_resolves_image_relationship_ids(tmp_path: Path) -> None:
+    """DOCX 图片引用应从裸 rId 升级为 rels 映射的真实媒体路径。"""
+
+    docx_path = _build_docx(
+        directory=tmp_path,
+        name="with_image.docx",
+        body_xml=(
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+            'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+            "<w:body>"
+            "<w:p><w:r><w:t>带图段落</w:t></w:r><w:r>"
+            '<w:drawing><a:blip r:embed="rId5"/></w:drawing>'
+            "</w:r></w:p>"
+            "</w:body></w:document>"
+        ),
+        rels_xml=(
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>'
+            "</Relationships>"
+        ),
+    )
+    cleaned = MultimodalDocumentCleaner().clean(source_path=docx_path, title="with_image")
+
+    assert cleaned.metadata["image_refs"] == ["[DOCX 图片引用: media/image1.png]"]
+    assert any("media/image1.png" in section.content for section in cleaned.sections)
+    assert not any("image relationship: rId5" in section.content for section in cleaned.sections)
+
+
+def test_cleaner_docx_plain_paragraphs_single_section(tmp_path: Path) -> None:
+    """无标题、无表格的 DOCX 仍应聚成单一章节,保持旧行为。"""
+
+    docx_path = _build_docx(
+        directory=tmp_path,
+        name="plain.docx",
+        body_xml=(
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            "<w:body>"
+            "<w:p><w:r><w:t>第一段</w:t></w:r></w:p>"
+            "<w:p><w:r><w:t>第二段</w:t></w:r></w:p>"
+            "</w:body></w:document>"
+        ),
+    )
+    cleaned = MultimodalDocumentCleaner().clean(source_path=docx_path, title="plain")
+
+    assert len(cleaned.sections) == 1
+    assert cleaned.sections[0].heading == "plain"
+    assert cleaned.sections[0].content == "第一段\n\n第二段"
+
+
 def test_cleaner_extracts_text_layer_pdf(tmp_path: Path) -> None:
     """非扫描型 PDF 应优先提取文本层进入可检索章节。"""
 

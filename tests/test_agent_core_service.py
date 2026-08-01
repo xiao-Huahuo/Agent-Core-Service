@@ -1571,6 +1571,47 @@ def test_write_long_term_rule_appends_system_prompt_entry() -> None:
     assert memories == []
 
 
+def test_write_long_term_memory_tool_does_not_raise_timezone_name_error() -> None:
+    """验证长期记忆写入工具不会因 timezone 未导入而抛 NameError。
+
+    回归:builtin.write_long_term_memory 内使用 datetime.now(timezone.utc),
+    此前 builtin.py 只导入 datetime 未导入 timezone,执行即抛
+    "name 'timezone' is not defined"。
+    """
+
+    config = AgentConfig.load_config(
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    memory_service = LongTermMemoryService(config=config, engine=engine, create_tables=False)
+    embedding_service = EmbeddingService(config=config, provider=FakeEmbeddingProvider(dimension=3))
+    retrieval_service = MemoryRetrievalService(
+        config=config,
+        embedding_service=embedding_service,
+        memory_service=memory_service,
+    )
+    set_tool_runtime(
+        config=config,
+        user_id="user_memory",
+        session_id="sess_memory",
+        retrieval_service=retrieval_service,
+        memory_service=memory_service,
+        embedding_service=embedding_service,
+    )
+    executor = ToolExecutor(registry=ToolRegistry.with_builtin_tools())
+
+    result = executor.execute("write_long_term_memory", {"content": "用户偏好简洁回答。"})
+    clear_tool_runtime()
+
+    memories = memory_service.list_user_memories(user_id="user_memory")
+
+    assert result == "已记住: 用户偏好简洁回答。"
+    assert [memory.content for memory in memories] == ["用户偏好简洁回答。"]
+
+
 def test_default_sqlite_path_points_to_runtime_db() -> None:
     """验证默认 SQLite 路径指向 runtime/db/relation。"""
 

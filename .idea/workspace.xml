@@ -5,23 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="Git v3">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/git_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/git_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/api/git.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/git.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/images/choosable/deepseek-color.svg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/images/choosable/deepseek.svg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/images/亮色标题.png" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/images/亮色标题.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/images/无底图标.png" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/images/无底图标.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/images/暗色标题.png" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/images/暗色标题.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/ui-system.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/ui-system.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/__tests__/gitStatusPresentation.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/__tests__/gitStatusPresentation.spec.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/git.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/git.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/rag/multimodal_cleaner.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/rag/multimodal_cleaner.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_multimodal_cleaner.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_multimodal_cleaner.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -310,15 +296,7 @@
       <workItem from="1785212115660" duration="1797000" />
       <workItem from="1785411230338" duration="12489000" />
       <workItem from="1785462181237" duration="9290000" />
-      <workItem from="1785553951295" duration="459000" />
-    </task>
-    <task id="LOCAL-00225" summary="美丽按钮">
-      <option name="closed" value="true" />
-      <created>1784899915225</created>
-      <option name="number" value="00225" />
-      <option name="presentableId" value="LOCAL-00225" />
-      <option name="project" value="LOCAL" />
-      <updated>1784899915226</updated>
+      <workItem from="1785553951295" duration="1333000" />
     </task>
     <task id="LOCAL-00226" summary="美丽按钮">
       <option name="closed" value="true" />
@@ -704,7 +682,15 @@
       <option name="project" value="LOCAL" />
       <updated>1785472859220</updated>
     </task>
-    <option name="localTasksCounter" value="274" />
+    <task id="LOCAL-00274" summary="Git v3">
+      <option name="closed" value="true" />
+      <created>1785554430398</created>
+      <option name="number" value="00274" />
+      <option name="presentableId" value="LOCAL-00274" />
+      <option name="project" value="LOCAL" />
+      <updated>1785554430398</updated>
+    </task>
+    <option name="localTasksCounter" value="275" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

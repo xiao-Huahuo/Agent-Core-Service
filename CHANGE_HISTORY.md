@@ -1,5 +1,18 @@
 # CHANGE HISTORY
 
+## 2026-08-01
+- [x] 修复写入长期记忆工具抛 `timezone is not defined` 的问题:
+  - 根因:`agent_service/tools/builtin.py` 的 `write_long_term_memory` 使用 `datetime.now(timezone.utc)`,但文件只导入了 `datetime` 未导入 `timezone`,执行写入即抛 `NameError`。
+  - 修复:`from datetime import datetime` 补为 `from datetime import datetime, timezone`,仅此一处,不涉及其他逻辑。
+  - 新增回归测试 `test_write_long_term_memory_tool_does_not_raise_timezone_name_error`,通过 ToolExecutor 实际执行写入工具并断言记忆落库;验证未修复时该测试精确复现 `builtin.py:485` 的 `NameError`,修复后通过。
+- [x] 修复 DOCX 多模态清洗的四个结构性问题:
+  - 表格单元格文本重复收录:原实现用 `root.iter()` 全树遍历,`w:tbl` 内的单元格 `w:p` 既进段落流又被表格抽取,入库后单元格内容在向量库出现两遍。现只遍历 `w:body` 直接子元素,表格按叶子块整体处理,重复消除。
+  - 段落与表格顺序丢失:原实现段落全部压成首个章节、表格独立章节排在末尾,原文"段落-表格-段落"交错结构被拆平。现按文档流顺序生成章节:无标题时段落/图片聚合为章节,遇表格先冲刷当前章节再新开章节,保序。
+  - 图片只留 relationship ID:原实现只输出 `image relationship: rId5` 裸 ID。现解析 `word/_rels/document.xml.rels` 把 rId 升级为真实媒体路径(`[DOCX 图片引用: media/image1.png]`),缺 rels 文件时回退旧格式。
+  - 标题层级丢失:原实现整篇压成单章节。现识别 `pStyle` 的 Heading1-6 样式按层级切分章节,并用标题栈生成 `title_path`(与 Markdown 章节结构对齐);无标题样式的 DOCX 行为不变。
+  - 删除不再使用的 `_collect_relationship_ids`;前端预览走 mammoth 独立解析,不受影响。
+  - 新增 4 个针对性测试(顺序与去重、标题切分、图片 rId 解析、纯段落兼容),全文件 20 个用例通过。
+
 ## 2026-07-31
 - [x] 修复整目录忽略时文件树内文件不变色:
   - `git status --ignored` 对整目录忽略会折叠成单条 `!! dir/`,此前只有目录节点能通过直配着色,目录下的具体文件节点匹配不到状态。现 `statusClassForPath` 对文件增加回退:无直接状态时检查是否位于某个忽略目录条目下,命中则返回 `git-ignored`。

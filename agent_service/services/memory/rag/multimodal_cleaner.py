@@ -224,7 +224,13 @@ class MultimodalDocumentCleaner:
         return _single_section_document(source_type="xml", title=title, content="\n".join(lines), metadata={"modality": "structured_data"})
 
     def _clean_docx(self, *, source_path: Path, title: str) -> CleanedDocument:
-        """从 DOCX 中抽取段落、表格文本和图片引用。"""
+        """从 DOCX 中按文档流顺序抽取段落、标题、表格文本与图片引用。
+
+        只遍历 w:body 的直接子元素而非整棵 document.xml:表格单元格内部的
+        w:p 不会被重复计入段落流,段落与表格的原文交替顺序得以保留;带
+        Heading1-6 样式时按标题层级切分章节,否则段落聚成单章节。图片引用
+        通过 word/_rels/document.xml.rels 解析为真实媒体路径。
+        """
 
         sections: list[StructuredKnowledgeSection] = []
         with zipfile.ZipFile(source_path) as archive:
@@ -232,26 +238,15 @@ class MultimodalDocumentCleaner:
             if not document_xml:
                 return _single_section_document(source_type="docx", title=title, content="", metadata={"modality": "document"})
             root = ElementTree.fromstring(document_xml)
-            paragraph_lines: list[str] = []
-            table_index = 0
-            image_refs: list[str] = []
-            for element in root.iter():
-                name = _local_name(element.tag)
-                if name == "p":
-                    text = _join_text_nodes(element)
-                    if text:
-                        paragraph_lines.append(text)
-                    image_refs.extend(_collect_relationship_ids(element))
-                elif name == "tbl":
-                    rows = _extract_docx_table(element)
-                    if rows:
-                        table_index += 1
-                        sections.append(_make_section(index=len(sections), heading=f"{title} 表格 {table_index}", content=_format_table_rows(rows)))
-            if paragraph_lines:
-                sections.insert(0, _make_section(index=0, heading=title, content="\n\n".join(paragraph_lines)))
-                sections = _renumber_sections(sections)
-            if image_refs:
-                sections.append(_make_section(index=len(sections), heading=f"{title} 图片引用", content="\n".join(f"image relationship: {item}" for item in image_refs)))
+            body = _find_body(root)
+            if body is None:
+                return _single_section_document(source_type="docx", title=title, content="", metadata={"modality": "document"})
+            rels_map = _read_docx_relationship_map(archive)
+            blocks, image_refs = _extract_docx_blocks(body=body, title=title, rels_map=rels_map)
+            if any(kind == "h" for kind, *_ in blocks):
+                sections = _build_docx_heading_sections(blocks=blocks, title=title)
+            else:
+                sections = _build_docx_flat_sections(blocks=blocks, title=title)
         return CleanedDocument(
             source_type="docx",
             sections=sections,
@@ -476,15 +471,207 @@ def _join_text_nodes(element: ElementTree.Element) -> str:
     return _normalize_text("".join(element.itertext()))
 
 
-def _collect_relationship_ids(element: ElementTree.Element) -> list[str]:
-    """收集 OOXML 图片等对象使用的关系 ID。"""
+def _find_body(root: ElementTree.Element) -> ElementTree.Element | None:
+    """定位 w:document 下的 w:body 节点,用于按文档流顺序遍历块级元素。"""
 
-    ids: list[str] = []
+    for child in root:
+        if _local_name(child.tag) == "body":
+            return child
+    return None
+
+
+def _attr_text(element: ElementTree.Element, local_name: str) -> str:
+    """按本地名读取 XML 属性值,兼容带/不带命名空间前缀的属性。"""
+
+    for key, value in element.attrib.items():
+        if _local_name(key) == local_name and value:
+            return value
+    return ""
+
+
+def _extract_docx_blocks(
+    *,
+    body: ElementTree.Element,
+    title: str,
+    rels_map: dict[str, str],
+) -> tuple[list[tuple[Any, ...]], list[str]]:
+    """把 w:body 直接子元素拆成带类型标签的块列表。
+
+    块类型:
+      ("h", level, text)      标题段落
+      ("p", text)             普通段落
+      ("table", heading, text) 表格
+      ("img", line)           图片引用行
+    返回 (blocks, image_refs):image_refs 为全部解析后的图片引用行。
+    只遍历 body 的直接子元素,表格内部的单元格段落不会重复计入段落流,
+    同时段落/表格的原文交替顺序得以保留。
+    """
+
+    blocks: list[tuple[Any, ...]] = []
+    image_refs: list[str] = []
+    table_index = 0
+    for element in body:
+        name = _local_name(element.tag)
+        if name == "tbl":
+            rows = _extract_docx_table(element)
+            if rows:
+                table_index += 1
+                blocks.append(("table", f"{title} 表格 {table_index}", _format_table_rows(rows)))
+            continue
+        if name != "p":
+            continue
+        heading_level = _docx_heading_level(element)
+        if heading_level is not None:
+            heading_text = _join_text_nodes(element)
+            if heading_text:
+                blocks.append(("h", heading_level, heading_text))
+            continue
+        text = _join_text_nodes(element)
+        if text:
+            blocks.append(("p", text))
+        for ref in _resolve_docx_image_refs(element, rels_map):
+            image_refs.append(ref)
+            blocks.append(("img", ref))
+    return blocks, image_refs
+
+
+def _build_docx_flat_sections(*, blocks: list[tuple[Any, ...]], title: str) -> list[StructuredKnowledgeSection]:
+    """无标题样式的 DOCX:按文档顺序把段落/图片聚成章节,表格独立成章。
+
+    段落块和图片块累积进同一章节,遇到表格先冲刷当前章节再开启新章节,
+    从而保留"段落-表格-段落"的原文顺序。
+    """
+
+    sections: list[StructuredKnowledgeSection] = []
+    paragraph_lines: list[str] = []
+
+    def flush_paragraphs() -> None:
+        if paragraph_lines:
+            sections.append(_make_section(index=len(sections), heading=title, content="\n\n".join(paragraph_lines)))
+            paragraph_lines.clear()
+
+    for block in blocks:
+        kind = block[0]
+        if kind in {"p", "img"}:
+            paragraph_lines.append(block[1])
+        elif kind == "table":
+            flush_paragraphs()
+            sections.append(_make_section(index=len(sections), heading=block[1], content=block[2]))
+    flush_paragraphs()
+    return _renumber_sections(sections)
+
+
+def _build_docx_heading_sections(*, blocks: list[tuple[Any, ...]], title: str) -> list[StructuredKnowledgeSection]:
+    """按标题层级把 DOCX 块流切分为章节。
+
+    命中 Heading1-6 时开启新章节,并依据标题层级堆栈生成 title_path
+    ([title, h1, h2, ...]),与 Markdown 章节结构对齐;标题以下的段落、
+    表格与图片并入该章节,直到下一个同级或更高级标题出现。
+    """
+
+    sections: list[StructuredKnowledgeSection] = []
+    heading_stack: list[tuple[int, str]] = []
+    current_heading = title
+    current_title_path = [title]
+    current_lines: list[str] = []
+
+    def flush() -> None:
+        if current_lines:
+            content = "\n\n".join(current_lines).strip()
+            sections.append(
+                StructuredKnowledgeSection(
+                    section_id=f"sec_{len(sections):04d}",
+                    heading=current_heading,
+                    title_path=list(current_title_path),
+                    content=content,
+                    start_char=0,
+                    end_char=len(content),
+                )
+            )
+            current_lines.clear()
+
+    for block in blocks:
+        kind = block[0]
+        if kind == "h":
+            level, heading_text = block[1], block[2]
+            flush()
+            heading_stack = [(stack_level, stack_heading) for stack_level, stack_heading in heading_stack if stack_level < level]
+            heading_stack.append((level, heading_text))
+            current_heading = heading_text
+            current_title_path = [title, *[stack_heading for _, stack_heading in heading_stack]]
+        elif kind in {"p", "img"}:
+            current_lines.append(block[1])
+        elif kind == "table":
+            current_lines.append(f"{block[1]}\n{block[2]}")
+    flush()
+    return _renumber_sections(sections)
+
+
+def _docx_heading_level(element: ElementTree.Element) -> int | None:
+    """识别 w:p 的标题样式,命中 Heading1-6 时返回对应层级。
+
+    兼容 "Heading1"/"Heading 1"/"1"/"标题 1" 等常见样式 ID 写法,
+    未命中时返回 None。
+    """
+
+    for node in element.iter():
+        if _local_name(node.tag) != "pPr":
+            continue
+        for child in node:
+            if _local_name(child.tag) != "pStyle":
+                continue
+            value = _attr_text(child, "val")
+            if not value:
+                continue
+            match = re.search(r"(?i)(?:heading|标题)?\s*([1-6])\b", value)
+            if match:
+                return int(match.group(1))
+    return None
+
+
+def _read_docx_relationship_map(archive: zipfile.ZipFile) -> dict[str, str]:
+    """读取 DOCX 文档级关系表,返回 rId -> 图片资源路径 的映射。
+
+    只保留图片类关系(media/imageN.png),Target 中多余的 ../ 前缀会被
+    归一化,使图片引用可从裸 rId 升级为真实资源路径。
+    """
+
+    rels_xml = _read_zip_text(archive, "word/_rels/document.xml.rels")
+    if not rels_xml:
+        return {}
+    try:
+        rels_root = ElementTree.fromstring(rels_xml)
+    except ElementTree.ParseError:
+        return {}
+    rels_map: dict[str, str] = {}
+    for rel in rels_root:
+        rel_id = _attr_text(rel, "Id")
+        target = _attr_text(rel, "Target")
+        rel_type = _attr_text(rel, "Type")
+        if not rel_id or not target or "image" not in rel_type:
+            continue
+        normalized = target.replace("\\", "/")
+        while normalized.startswith("../"):
+            normalized = normalized[3:]
+        rels_map[rel_id] = normalized
+    return rels_map
+
+
+def _resolve_docx_image_refs(element: ElementTree.Element, rels_map: dict[str, str]) -> list[str]:
+    """解析 w:p 中嵌入的图片引用,把 rId 升级为可读的媒体资源路径。
+
+    rels_map: _read_docx_relationship_map 解析出的 rId -> 路径 映射。
+    映射未命中时回退为原来的裸 rId 表示,保证缺 rels 文件的 DOCX 仍可解析。
+    """
+
+    refs: list[str] = []
     for node in element.iter():
         for key, value in node.attrib.items():
-            if _local_name(key) in {"embed", "link"} and value:
-                ids.append(value)
-    return ids
+            if _local_name(key) not in {"embed", "link"} or not value:
+                continue
+            target = rels_map.get(value)
+            refs.append(f"[DOCX 图片引用: {target}]" if target else f"image relationship: {value}")
+    return refs
 
 
 def _extract_docx_table(table: ElementTree.Element) -> list[list[str]]:
