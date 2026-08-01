@@ -28,7 +28,7 @@ const safeHtml = computed(() => DOMPurify.sanitize(props.preview?.html ?? '', {
 
 const imageFiles = computed(() => {
   if (props.preview?.kind !== 'image') return []
-  const src = props.preview.data_url || ''
+  const src = props.preview.raw_url ? buildApiUrl(props.preview.raw_url) : (props.preview.data_url || '')
   return [{ src, alt: props.preview.path || '' }]
 })
 

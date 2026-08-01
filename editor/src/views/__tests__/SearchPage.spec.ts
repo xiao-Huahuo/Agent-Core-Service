@@ -95,7 +95,7 @@ describe('SearchPage result opening', () => {
     expect(selectFile).toHaveBeenCalledOnce()
   })
 
-  it('does not pass lexical highlighting into a semantic-only result preview', async () => {
+  it('renders Markdown syntax highlighting in a readonly semantic result preview', async () => {
     const workspaceStore = useWorkspaceStore()
     workspaceStore.mainView = 'search'
     workspaceStore.searchQuery = 'concept'
@@ -128,7 +128,7 @@ describe('SearchPage result opening', () => {
     await flushPromises()
 
     expect(wrapper.get('.search-result-preview textarea').attributes('readonly')).toBeDefined()
-    expect(wrapper.find('.search-result-preview .highlight-layer').exists()).toBe(false)
+    expect(wrapper.find('.search-result-preview .syntax-highlight-layer').exists()).toBe(true)
   })
 
   it('shows the shared editor mode bar while keeping Edit readonly', async () => {

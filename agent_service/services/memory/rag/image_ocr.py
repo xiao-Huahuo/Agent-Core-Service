@@ -53,13 +53,15 @@ class ImageOcrService:
     config: 全局配置,用于读取 OCR 开关、PaddleOCR 模型名称、语言和置信度阈值。
     """
 
-    def __init__(self, *, config: AgentConfig) -> None:
-        """保存配置并延迟（异步）创建 PaddleOCR pipeline。"""
+    _pipeline_cache: dict[tuple[str, ...], Any] = {}
+    _pipeline_errors: dict[tuple[str, ...], Exception] = {}
+    _pipeline_lock = threading.Lock()
+
+    def __init__(self, *, config: AgentConfig, enabled: bool | None = None) -> None:
+        """保存配置；enabled 用于承载用户级 OCR 开关覆盖进程默认值。"""
 
         self.config = config
-        self._pipeline: Any | None = None
-        self._load_event = threading.Event()
-        self._load_error: Exception | None = None
+        self.enabled = config.ocr.enabled if enabled is None else bool(enabled)
 
     def extract_image_text(self, source_path: Path) -> ImageOcrResult:
         """
@@ -68,7 +70,7 @@ class ImageOcrService:
         source_path: 图片文件路径。
         """
 
-        if not self.config.ocr.enabled:
+        if not self.enabled:
             return ImageOcrResult()
         pipeline = self._get_pipeline()
         if pipeline is None:
@@ -94,24 +96,31 @@ class ImageOcrService:
         )
 
     def _get_pipeline(self) -> Any | None:
-        """异步导入 PaddleOCR 并创建 pipeline。
+        """同步获取可复用的 OCR pipeline，避免首次请求返回假空结果。"""
 
-        首次调用触发后台加载线程，后续调用若加载未完成则返回 None。
-        """
-
-        if self._pipeline is not None:
-            return self._pipeline
-        if self._load_error is not None:
+        key = (
+            self.config.ocr.language,
+            self.config.ocr.text_detection_model_name,
+            self.config.ocr.text_recognition_model_name,
+            self.config.ocr.device,
+            str(self.config.storage.paddleocr_model_dir / "text_detection"),
+            str(self.config.storage.paddleocr_model_dir / "text_recognition"),
+        )
+        if key in self._pipeline_cache:
+            return self._pipeline_cache[key]
+        if key in self._pipeline_errors:
             return None
-        if not self._load_event.is_set():
-            self._load_event.set()
-            t = threading.Thread(target=self._load_pipeline_in_thread, daemon=True)
-            t.start()
-            return None
-        return None
 
-    def _load_pipeline_in_thread(self) -> None:
-        """在后台线程中加载 PaddleOCR pipeline。"""
+        with self._pipeline_lock:
+            if key in self._pipeline_cache:
+                return self._pipeline_cache[key]
+            if key in self._pipeline_errors:
+                return None
+            self._load_pipeline(key)
+        return self._pipeline_cache.get(key)
+
+    def _load_pipeline(self, key: tuple[str, ...]) -> None:
+        """加载并缓存 PaddleOCR pipeline。"""
 
         from agent_service.core.model_status import ModelState, set_model_state
 
@@ -120,11 +129,11 @@ class ImageOcrService:
             from paddleocr import PaddleOCR  # type: ignore[import-untyped]
         except ImportError:
             set_model_state("paddleocr", ModelState.ERROR)
-            self._load_error = ImportError("缺少 PaddleOCR 依赖")
+            self._pipeline_errors[key] = ImportError("缺少 PaddleOCR 依赖")
             return
         set_model_state("paddleocr", ModelState.LOADING)
         try:
-            self._pipeline = _build_paddleocr_pipeline(
+            self._pipeline_cache[key] = _build_paddleocr_pipeline(
                 PaddleOCR=PaddleOCR,
                 language=self.config.ocr.language,
                 text_detection_model_name=self.config.ocr.text_detection_model_name,
@@ -134,8 +143,9 @@ class ImageOcrService:
                 text_recognition_model_dir=self.config.storage.paddleocr_model_dir / "text_recognition",
             )
             set_model_state("paddleocr", ModelState.READY)
-        except Exception:
+        except Exception as exc:
             set_model_state("paddleocr", ModelState.ERROR)
+            self._pipeline_errors[key] = exc
 
     @staticmethod
     def _run_pipeline(*, pipeline: Any, source_path: Path) -> Any:
@@ -160,6 +170,10 @@ class ImageOcrService:
 
     def _collect_items_from_dict(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
         """抽取 PaddleOCR 3.x 字典结构中的识别结果。"""
+
+        nested_result = payload.get("res")
+        if isinstance(nested_result, dict):
+            return self._collect_items_from_dict(nested_result)
 
         texts = payload.get("rec_texts") or payload.get("texts") or []
         scores = payload.get("rec_scores") or payload.get("scores") or []

@@ -18,6 +18,7 @@ import csv
 import io
 import json
 import re
+import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
@@ -243,6 +244,9 @@ class MultimodalDocumentCleaner:
                 return _single_section_document(source_type="docx", title=title, content="", metadata={"modality": "document"})
             rels_map = _read_docx_relationship_map(archive)
             blocks, image_refs = _extract_docx_blocks(body=body, title=title, rels_map=rels_map)
+            embedded_ocr = self._ocr_zip_images_by_ref(archive=archive, image_refs=image_refs)
+            if embedded_ocr:
+                blocks = _merge_docx_image_ocr_blocks(blocks=blocks, ocr_by_ref=embedded_ocr)
             if any(kind == "h" for kind, *_ in blocks):
                 sections = _build_docx_heading_sections(blocks=blocks, title=title)
             else:
@@ -281,7 +285,62 @@ class MultimodalDocumentCleaner:
                 text = _normalize_text("\n".join(ElementTree.fromstring(xml_text).itertext()))
                 if text:
                     sections.append(_make_section(index=len(sections), heading=f"{title} Slide {slide_index}", content=text))
-        return CleanedDocument(source_type="presentation", sections=sections, metadata={"modality": "slide", "slide_count": len(sections)})
+            image_refs = [{"path": name} for name in archive.namelist() if name.startswith("ppt/media/")]
+            embedded_ocr = self._ocr_zip_images(archive=archive, image_refs=image_refs)
+        if embedded_ocr:
+            sections.append(_make_section(index=len(sections), heading=f"{title} 嵌入图片 OCR", content="\n".join(embedded_ocr)))
+        return CleanedDocument(source_type="presentation", sections=sections, metadata={"modality": "slide", "slide_count": len(sections), "image_refs": image_refs, "ocr_enabled": self.ocr_enabled})
+
+    def _ocr_zip_images(self, *, archive: zipfile.ZipFile, image_refs: list[Any]) -> list[str]:
+        """对 OOXML 容器中的媒体图片执行 OCR。"""
+
+        results: list[str] = []
+        for archive_name, result in self._iter_zip_image_ocr_results(archive=archive, image_refs=image_refs):
+            if result.has_text:
+                results.append(f"{archive_name}: {result.content}")
+        return results
+
+    def _ocr_zip_images_by_ref(self, *, archive: zipfile.ZipFile, image_refs: list[Any]) -> dict[str, str]:
+        """按原始图片引用返回 OCR 文本,供 DOCX 按文档流位置合并。"""
+
+        results: dict[str, str] = {}
+        for _archive_name, result, original_ref in self._iter_zip_image_ocr_results(archive=archive, image_refs=image_refs, include_original=True):
+            if result.has_text:
+                results[str(original_ref)] = f"图片 OCR: {result.content}"
+        return results
+
+    def _iter_zip_image_ocr_results(self, *, archive: zipfile.ZipFile, image_refs: list[Any], include_original: bool = False):
+        """遍历 OOXML 媒体图片 OCR 结果,并复用引用状态回填逻辑。"""
+
+        if not self.ocr_enabled or not self.image_ocr_service:
+            return
+        with tempfile.TemporaryDirectory(prefix="metaweave-ocr-") as temp_dir:
+            root = Path(temp_dir)
+            for image_ref in image_refs:
+                original_ref = image_ref
+                if isinstance(image_ref, dict):
+                    archive_name = str(image_ref.get("path") or image_ref.get("target") or "")
+                else:
+                    archive_name = str(image_ref)
+                    match = re.search(r":\s*([^\]]+)\]?$", archive_name)
+                    archive_name = match.group(1).strip() if match else ""
+                archive_name = archive_name.lstrip("/")
+                if archive_name.startswith("media/"):
+                    media_prefix = "word/" if any(name.startswith("word/media/") for name in archive.namelist()) else "ppt/"
+                    archive_name = media_prefix + archive_name
+                if not archive_name or archive_name not in archive.namelist():
+                    continue
+                image_path = root / Path(archive_name).name
+                image_path.write_bytes(archive.read(archive_name))
+                result = self.image_ocr_service.extract_image_text(image_path)
+                if isinstance(image_ref, dict):
+                    image_ref["ocr_status"] = "completed" if result.has_text else ("no_text" if result.engine_available else "engine_unavailable")
+                    image_ref["ocr_word_count"] = result.word_count
+                    image_ref["ocr_average_confidence"] = result.average_confidence
+                if include_original:
+                    yield archive_name, result, original_ref
+                else:
+                    yield archive_name, result
 
     def _clean_pdf(
         self,
@@ -293,14 +352,50 @@ class MultimodalDocumentCleaner:
     ) -> CleanedDocument:
         """优先从非扫描型 PDF 提取文本层;扫描型 PDF 暂登记为待 OCR。"""
 
+        temp_dir: tempfile.TemporaryDirectory[str] | None = None
         try:
-            extracted = extract_pdf_text(
-                source_path,
-                image_output_dir=asset_output_dir,
-                image_public_prefix=asset_public_prefix,
-            )
+            image_output_dir = asset_output_dir
+            if self.ocr_enabled and self.image_ocr_service and image_output_dir is None:
+                temp_dir = tempfile.TemporaryDirectory(prefix="metaweave-pdf-ocr-")
+                image_output_dir = Path(temp_dir.name)
+            extracted = extract_pdf_text(source_path, image_output_dir=image_output_dir, image_public_prefix=asset_public_prefix)
         except Exception:
+            if temp_dir:
+                temp_dir.cleanup()
             return self._clean_binary_placeholder(source_path=source_path, title=title, source_type="pdf")
+        ocr_text: list[str] = []
+        if self.ocr_enabled and self.image_ocr_service:
+            for image_ref in extracted.image_refs:
+                image_path = image_ref.get("asset_path")
+                if not image_path:
+                    continue
+                result = self.image_ocr_service.extract_image_text(Path(str(image_path)))
+                image_ref["ocr_status"] = "completed" if result.has_text else ("no_text" if result.engine_available else "engine_unavailable")
+                image_ref["ocr_word_count"] = result.word_count
+                image_ref["ocr_average_confidence"] = result.average_confidence
+                if result.has_text:
+                    image_ref["ocr_text"] = result.content
+                    ocr_text.append(f"PDF 图片 OCR: {result.content}")
+            if extracted.is_scanned and not extracted.image_refs:
+                try:
+                    import fitz  # type: ignore[import-untyped]
+
+                    with tempfile.TemporaryDirectory(prefix="metaweave-pdf-pages-") as page_dir:
+                        document = fitz.open(source_path)
+                        for page_index, page in enumerate(document):
+                            page_path = Path(page_dir) / f"page-{page_index + 1}.png"
+                            page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False).save(page_path)
+                            result = self.image_ocr_service.extract_image_text(page_path)
+                            if result.has_text:
+                                ocr_text.append(f"PDF 第 {page_index + 1} 页 OCR: {result.content}")
+                        document.close()
+                except Exception:
+                    pass
+        if temp_dir:
+            temp_dir.cleanup()
+        content = _merge_pdf_image_ocr_content(extracted.content, extracted.image_refs).strip()
+        if ocr_text and content == extracted.content.strip():
+            content = "\n\n".join(part for part in (content, *ocr_text) if part)
         metadata = {
             "modality": "document",
             "ocr_enabled": self.ocr_enabled,
@@ -309,9 +404,9 @@ class MultimodalDocumentCleaner:
             "image_count": extracted.image_count,
             "image_refs": extracted.image_refs,
             "table_count": extracted.table_count,
-            "ocr_status": "pending" if extracted.is_scanned else "not_required",
+            "ocr_status": "completed" if ocr_text else ("no_text" if self.ocr_enabled and extracted.is_scanned else ("pending" if extracted.is_scanned else "not_required")),
         }
-        if not extracted.content.strip():
+        if not content:
             return _single_section_document(
                 source_type="pdf",
                 title=title,
@@ -326,7 +421,7 @@ class MultimodalDocumentCleaner:
         return _single_section_document(
             source_type="pdf",
             title=title,
-            content=extracted.content,
+            content=content,
             metadata=metadata,
         )
 
@@ -561,6 +656,20 @@ def _build_docx_flat_sections(*, blocks: list[tuple[Any, ...]], title: str) -> l
     return _renumber_sections(sections)
 
 
+def _merge_docx_image_ocr_blocks(*, blocks: list[tuple[Any, ...]], ocr_by_ref: dict[str, str]) -> list[tuple[Any, ...]]:
+    """把 DOCX 图片 OCR 文本替换到原图片块位置,保留文档流顺序。"""
+
+    merged: list[tuple[Any, ...]] = []
+    for block in blocks:
+        if block[0] == "img":
+            ocr_text = ocr_by_ref.get(str(block[1]))
+            if ocr_text:
+                merged.append(("img", ocr_text))
+                continue
+        merged.append(block)
+    return merged
+
+
 def _build_docx_heading_sections(*, blocks: list[tuple[Any, ...]], title: str) -> list[StructuredKnowledgeSection]:
     """按标题层级把 DOCX 块流切分为章节。
 
@@ -605,6 +714,24 @@ def _build_docx_heading_sections(*, blocks: list[tuple[Any, ...]], title: str) -
             current_lines.append(f"{block[1]}\n{block[2]}")
     flush()
     return _renumber_sections(sections)
+
+
+def _merge_pdf_image_ocr_content(content: str, image_refs: list[dict[str, Any]]) -> str:
+    """把 PDF 渲染 Markdown 中的图片占位替换为同位置 OCR 文本。"""
+
+    merged = content
+    for image_ref in image_refs:
+        ocr_text = str(image_ref.get("ocr_text") or "").strip()
+        public_url = str(image_ref.get("public_url") or "").strip()
+        if not ocr_text or not public_url:
+            continue
+        page = image_ref.get("page")
+        index = image_ref.get("index")
+        placeholder = f"![PDF page {page} image {index}]({public_url})"
+        replacement = f"PDF 图片 OCR: {ocr_text}"
+        if placeholder in merged:
+            merged = merged.replace(placeholder, replacement, 1)
+    return merged
 
 
 def _docx_heading_level(element: ElementTree.Element) -> int | None:

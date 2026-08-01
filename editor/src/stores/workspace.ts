@@ -171,6 +171,7 @@ const PREVIEW_ONLY_EXTENSIONS = new Set([
   'xlsx',
 ])
 const IMAGE_EXTENSIONS = new Set(['gif', 'jpeg', 'jpg', 'png', 'webp'])
+const DEFAULT_PREVIEW_MODE_EXTENSIONS = new Set(['docx', 'pdf'])
 
 function extensionOf(path: string): string {
   const name = getBaseName(path).toLowerCase()
@@ -188,6 +189,13 @@ function viewerKindForPath(path: string): FileViewerKind {
 
 function shouldUsePreviewEndpoint(path: string): boolean {
   return PREVIEW_ONLY_EXTENSIONS.has(extensionOf(path))
+}
+
+function shouldDefaultToPreviewMode(path: string): boolean {
+  /** 多模态文件每次打开默认展示原始预览,即使已有灌库文本也不抢占编辑视图。 */
+
+  const extension = extensionOf(path)
+  return IMAGE_EXTENSIONS.has(extension) || DEFAULT_PREVIEW_MODE_EXTENSIONS.has(extension)
 }
 
 function childDirectoryFor(node?: KnowledgeFileNode | null): string {
@@ -1248,6 +1256,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return
     }
     selectedPath.value = node.path
+    if (shouldDefaultToPreviewMode(node.path)) {
+      editorMode.value = 'preview'
+    }
     recordRecentFileVisit(node.path)
     if (!openTabs.value.some((tab) => tab.path === node.path)) {
       openTabs.value.push({ path: node.path, title: node.name, dirty: false, mtime: node.mtime })
@@ -1267,6 +1278,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function activateTab(path: string) {
     selectedPath.value = path
     selectedTreePath.value = path
+    if (shouldDefaultToPreviewMode(path)) {
+      editorMode.value = 'preview'
+    }
     recordRecentFileVisit(path)
     syncCurrentDocumentContext()
   }

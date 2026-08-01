@@ -6,7 +6,7 @@
  * without duplicating service addresses in front-end components.
  */
 
-import { apiGet } from '@/api/client'
+import { ApiError, apiGet } from '@/api/client'
 import { API_ROUTES } from '@/router/api_routes'
 
 export type RuntimeApiKind = 'rest' | 'grpc'
@@ -142,7 +142,7 @@ export async function fetchRuntimeApis(): Promise<RuntimeApisResponse> {
   try {
     return await apiGet<RuntimeApisResponse>(API_ROUTES.DEBUG_RUNTIME_APIS)
   } catch (error) {
-    if (error instanceof SyntaxError) {
+    if (shouldRetryFromBackendOrigin(error)) {
       return fetchRuntimeApisFromBackendOrigin()
     }
     throw error
@@ -154,7 +154,7 @@ async function fetchRuntimeApisFromBackendOrigin(): Promise<RuntimeApisResponse>
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status} ${response.statusText}`)
   }
-  return response.json() as Promise<RuntimeApisResponse>
+  return readDebugJson<RuntimeApisResponse>(response, `http://127.0.0.1:8002${API_ROUTES.DEBUG_RUNTIME_APIS}`)
 }
 
 export async function fetchMultimodalIngestionObservation(
@@ -169,7 +169,7 @@ export async function fetchMultimodalIngestionObservation(
       { signal, timeoutMs: 600_000 },
     )
   } catch (error) {
-    if (error instanceof SyntaxError) {
+    if (shouldRetryFromBackendOrigin(error)) {
       return fetchMultimodalIngestionObservationFromBackendOrigin(userId, path, signal)
     }
     throw error
@@ -187,7 +187,40 @@ async function fetchMultimodalIngestionObservationFromBackendOrigin(
 
   const response = await fetch(url, { signal })
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText}`)
+    throw new Error(await readDebugError(response, `Request failed: ${response.status} ${response.statusText}`))
   }
-  return response.json() as Promise<MultimodalIngestionObservation>
+  return readDebugJson<MultimodalIngestionObservation>(response, url.toString())
+}
+
+function shouldRetryFromBackendOrigin(error: unknown): boolean {
+  /** Dev server fallback can return index.html when the API proxy is unavailable. */
+
+  return error instanceof SyntaxError
+    || (error instanceof ApiError && error.message.includes('非 JSON 响应'))
+}
+
+async function readDebugJson<T>(response: Response, url: string): Promise<T> {
+  /** Parse debug fallback responses with a clear message for HTML/plain-text bodies. */
+
+  const contentType = response.headers.get('content-type') || 'unknown'
+  const body = await response.text()
+  try {
+    return JSON.parse(body) as T
+  } catch {
+    throw new Error(`接口 ${url} 返回了非 JSON 响应（Content-Type: ${contentType}）`)
+  }
+}
+
+async function readDebugError(response: Response, fallback: string): Promise<string> {
+  /** Extract FastAPI JSON error details from debug fallback requests. */
+
+  try {
+    const payload = await readDebugJson<{ detail?: unknown }>(response.clone(), response.url)
+    if (typeof payload.detail === 'string') {
+      return payload.detail
+    }
+  } catch {
+    return fallback
+  }
+  return fallback
 }

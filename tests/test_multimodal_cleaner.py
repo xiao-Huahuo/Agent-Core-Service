@@ -18,8 +18,77 @@ from agent_service.services.memory.rag.frontmatter_bootstrap import FrontmatterB
 from agent_service.services.memory.rag.frontmatter_document import StructuredKnowledgeDocument, StructuredKnowledgeSection
 from agent_service.services.memory.rag.knowledge_ingestion import KnowledgeIngestionService
 from agent_service.services.memory.rag.image_ocr import ImageOcrResult
+from agent_service.services.memory.rag.image_ocr import ImageOcrService
+import agent_service.services.memory.rag.multimodal_cleaner as multimodal_cleaner_module
 from agent_service.services.memory.rag.multimodal_cleaner import MultimodalDocumentCleaner
+from agent_service.services.memory.rag.pdf_cleaner import PdfExtractionResult
 from agent_service.services.knowledge_library_service import KnowledgeIgnoreMatcher
+
+
+def test_image_ocr_parses_paddleocr_v3_nested_result() -> None:
+    """PaddleOCR 3.x 的 OCRResult.json.res 结构应能进入统一文本结果。"""
+
+    config = AgentConfig.load_config({"ocr": {"enabled": False}}, load_env=False, ensure_directories=False, ensure_models=False)
+    service = ImageOcrService(config=config, enabled=True)
+    items = service._collect_items({"res": {"rec_texts": ["标题", "内容"], "rec_scores": [0.99, 0.8]}})
+
+    assert [item["text"] for item in items] == ["标题", "内容"]
+    assert items[0]["confidence"] == 0.99
+
+
+def test_docx_embedded_image_ocr_is_ingested(tmp_path: Path) -> None:
+    """DOCX 的 word/media 图片启用 OCR 后应生成可检索章节。"""
+
+    docx_path = _build_docx(
+        directory=tmp_path,
+        name="ocr.docx",
+        body_xml=(
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+            'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><w:body>'
+            '<w:p><w:r><w:drawing><a:blip r:embed="rId1"/></w:drawing></w:r></w:p>'
+            '</w:body></w:document>'
+        ),
+        rels_xml=(
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>'
+            '</Relationships>'
+        ),
+    )
+    with zipfile.ZipFile(docx_path, "a") as archive:
+        archive.writestr("word/media/image1.png", b"fake-png")
+
+    class FakeOcrService:
+        def extract_image_text(self, source_path: Path) -> ImageOcrResult:
+            assert source_path.exists()
+            return ImageOcrResult(content="嵌入图片文字", has_text=True, word_count=1, average_confidence=0.9, engine_available=True)
+
+    cleaned = MultimodalDocumentCleaner(ocr_enabled=True, image_ocr_service=FakeOcrService()).clean(source_path=docx_path, title="ocr")
+
+    assert any("嵌入图片文字" in section.content for section in cleaned.sections)
+
+
+def test_scanned_pdf_embedded_image_ocr_is_ingested(tmp_path: Path) -> None:
+    """扫描型 PDF 的页面图片启用 OCR 后应追加识别文本。"""
+
+    import fitz  # type: ignore[import-untyped]
+
+    pdf_path = tmp_path / "scan.pdf"
+    document = fitz.open()
+    page = document.new_page()
+    page.insert_image(fitz.Rect(0, 0, 72, 72), stream=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="))
+    document.save(pdf_path)
+    document.close()
+
+    class FakeOcrService:
+        def extract_image_text(self, source_path: Path) -> ImageOcrResult:
+            assert source_path.exists()
+            return ImageOcrResult(content="扫描件识别内容", has_text=True, word_count=1, average_confidence=0.95, engine_available=True)
+
+    cleaned = MultimodalDocumentCleaner(ocr_enabled=True, image_ocr_service=FakeOcrService()).clean(source_path=pdf_path, title="scan")
+
+    assert "扫描件识别内容" in cleaned.sections[0].content
+    assert cleaned.metadata["image_refs"][0]["ocr_status"] == "completed"
 
 
 def test_cleaner_extracts_csv_and_json_sections(tmp_path: Path) -> None:
@@ -93,6 +162,41 @@ def _build_docx(*, directory: Path, name: str, body_xml: str, rels_xml: str | No
         if rels_xml:
             archive.writestr("word/_rels/document.xml.rels", rels_xml)
     return path
+
+
+def test_docx_embedded_image_ocr_preserves_document_order(tmp_path: Path) -> None:
+    """DOCX 图片 OCR 文本应按原文档位置合并,不能追加到文末。"""
+
+    docx_path = _build_docx(
+        directory=tmp_path,
+        name="ordered_ocr.docx",
+        body_xml=(
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+            'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+            "<w:body>"
+            "<w:p><w:r><w:t>图片前文本</w:t></w:r></w:p>"
+            '<w:p><w:r><w:drawing><a:blip r:embed="rId1"/></w:drawing></w:r></w:p>'
+            "<w:p><w:r><w:t>图片后文本</w:t></w:r></w:p>"
+            "</w:body></w:document>"
+        ),
+        rels_xml=(
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>'
+            "</Relationships>"
+        ),
+    )
+    with zipfile.ZipFile(docx_path, "a") as archive:
+        archive.writestr("word/media/image1.png", b"fake-png")
+
+    class FakeOcrService:
+        def extract_image_text(self, source_path: Path) -> ImageOcrResult:
+            assert source_path.name == "image1.png"
+            return ImageOcrResult(content="图片内文字", has_text=True, word_count=1, average_confidence=0.9, engine_available=True)
+
+    cleaned = MultimodalDocumentCleaner(ocr_enabled=True, image_ocr_service=FakeOcrService()).clean(source_path=docx_path, title="ordered_ocr")
+
+    assert cleaned.sections[0].content == "图片前文本\n\n图片 OCR: 图片内文字\n\n图片后文本"
 
 
 def test_cleaner_docx_preserves_order_and_avoids_table_duplication(tmp_path: Path) -> None:
@@ -238,6 +342,43 @@ def test_cleaner_preserves_pdf_image_refs(tmp_path: Path) -> None:
     assert cleaned.metadata["image_refs"][0]["page"] == 1
     assert cleaned.metadata["image_refs"][0]["bbox"] == [72.0, 96.0, 120.0, 144.0]
     assert "[PDF 图片引用: image 1" in cleaned.sections[0].content
+
+
+def test_pdf_image_ocr_replaces_inline_render_placeholder(tmp_path: Path, monkeypatch) -> None:
+    """PDF 图片 OCR 文本应替换原图片占位,保持与文本层的页内顺序。"""
+
+    pdf_path = tmp_path / "inline.pdf"
+    image_path = tmp_path / "image-1.png"
+    pdf_path.write_bytes(b"%PDF-1.4")
+    image_path.write_bytes(b"fake image")
+
+    def fake_extract_pdf_text(*args: object, **kwargs: object) -> PdfExtractionResult:
+        return PdfExtractionResult(
+            content="## Page 1\n\n前置文本\n\n![PDF page 1 image 1](/knowledge/assets/pdf_preview/demo/image-1.png)\n\n后置文本",
+            page_count=1,
+            image_count=1,
+            table_count=0,
+            is_scanned=False,
+            image_refs=[
+                {
+                    "page": 1,
+                    "index": 1,
+                    "asset_path": str(image_path),
+                    "public_url": "/knowledge/assets/pdf_preview/demo/image-1.png",
+                }
+            ],
+        )
+
+    class FakeOcrService:
+        def extract_image_text(self, source_path: Path) -> ImageOcrResult:
+            assert source_path == image_path
+            return ImageOcrResult(content="图片 OCR 内容", has_text=True, word_count=3, average_confidence=0.92, engine_available=True)
+
+    monkeypatch.setattr(multimodal_cleaner_module, "extract_pdf_text", fake_extract_pdf_text)
+    cleaned = MultimodalDocumentCleaner(ocr_enabled=True, image_ocr_service=FakeOcrService()).clean(source_path=pdf_path, title="inline")
+
+    assert cleaned.sections[0].content == "## Page 1\n\n前置文本\n\nPDF 图片 OCR: 图片 OCR 内容\n\n后置文本"
+    assert cleaned.metadata["image_refs"][0]["ocr_status"] == "completed"
 
 
 def test_frontmatter_bootstrap_writes_pdf_image_markdown(tmp_path: Path) -> None:

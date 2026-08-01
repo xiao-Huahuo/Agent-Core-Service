@@ -91,7 +91,7 @@ const currentMatchIndex = ref(0)
 let programmaticScroll = false
 const isMarkdown = computed(() => ['md', 'markdown'].includes((props.language || '').toLowerCase()))
 const isSyntaxHighlightedLanguage = computed(() => (
-  !isMarkdown.value && isHighlightableLanguage(props.language || 'text')
+  isHighlightableLanguage(props.language || 'text')
 ))
 /** Uses the find-bar query when open, otherwise the external preview query. */
 const activeHighlightQuery = computed(() => (
@@ -400,8 +400,10 @@ function syncScroll() {
   const ta = textareaRef.value
   const hl = highlightRef.value
   if (ta && hl) {
-    hl.scrollTop = ta.scrollTop
-    hl.scrollLeft = ta.scrollLeft
+    // 用 transform 平移而非 scrollTop:div 的 scrollTop 会把 padding 一起滚走,
+    // 而 textarea 滚动时 padding 固定,导致滚动后高亮层与 textarea 文本错位。
+    // transform 平移整盒(含 padding),文本起点与 textarea 的 padding+内容滚动完全一致。
+    hl.style.transform = `translate3d(${-ta.scrollLeft}px, ${-ta.scrollTop}px, 0)`
   }
 }
 
@@ -655,7 +657,10 @@ onBeforeUnmount(() => {
         v-if="isSyntaxHighlightedLanguage || findBarOpen || Boolean(highlightQuery)"
         ref="highlightRef"
         class="highlight-layer"
-        :class="{ 'syntax-highlight-layer': isSyntaxHighlightedLanguage }"
+        :class="{
+          'syntax-highlight-layer': isSyntaxHighlightedLanguage,
+          'markdown-highlight-layer': isMarkdown,
+        }"
         v-html="highlightedHtml"
       ></div>
       <textarea
@@ -850,7 +855,7 @@ onBeforeUnmount(() => {
   pointer-events: none;
   z-index: 0;
   padding: var(--space-12);
-  font-family: var(--font-code);
+  font-family: var(--font-text);
   font-size: calc(13px * var(--font-scale));
   line-height: 1.6;
   tab-size: 2;
@@ -872,6 +877,35 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--color-primary) 40%, transparent);
   border-radius: 2px;
   outline: 1px solid var(--color-primary);
+}
+
+/* markdown 编辑区:只着色,不改字重/斜体/字体,保证与 textarea 透明层逐像素对齐 */
+.markdown-highlight-layer :deep(.hljs-section),
+.markdown-highlight-layer :deep(.hljs-bullet),
+.markdown-highlight-layer :deep(.hljs-link),
+.markdown-highlight-layer :deep(.hljs-string),
+.markdown-highlight-layer :deep(.hljs-strong) {
+  color: var(--color-primary);
+  font-weight: normal;
+  font-style: normal;
+}
+
+.markdown-highlight-layer :deep(.hljs-emphasis) {
+  color: var(--color-text-secondary);
+  font-weight: normal;
+  font-style: normal;
+}
+
+.markdown-highlight-layer :deep(.hljs-quote) {
+  color: var(--color-text-muted);
+  font-weight: normal;
+  font-style: normal;
+}
+
+.markdown-highlight-layer :deep(.hljs-code) {
+  color: var(--color-text-secondary);
+  background: var(--color-code-bg);
+  border-radius: 3px;
 }
 
 .code-editor-input {

@@ -166,6 +166,26 @@ async def raw_knowledge_file(
     )
 
 
+@router.get("/knowledge/assets/{path:path}")
+async def knowledge_preview_asset(path: str) -> FileResponse:
+    """返回 PDF 等多模态预览阶段导出的临时图片资产。"""
+
+    svc = _require_knowledge_library_service()
+    try:
+        file_path, media_type = await run_in_threadpool(
+            svc.resolve_knowledge_asset_for_response,
+            path=path,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return FileResponse(
+        file_path,
+        media_type=media_type,
+        filename=file_path.name,
+        content_disposition_type="inline",
+    )
+
+
 @router.post("/knowledge/files/content")
 async def write_knowledge_file(body: dict[str, Any]) -> dict[str, Any]:
     """

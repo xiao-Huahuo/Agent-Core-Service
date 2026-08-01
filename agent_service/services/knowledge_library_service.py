@@ -51,7 +51,6 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 from agent_service.services.memory.rag.embedding import EmbeddingService
 from agent_service.services.memory.rag.frontmatter_bootstrap import FrontmatterBootstrapService
-from agent_service.services.memory.rag.image_ocr import ImageOcrService
 from agent_service.services.memory.rag.knowledge_ingestion import KnowledgeIngestionService
 from agent_service.services.memory.rag.pdf_cleaner import extract_pdf_text
 from agent_service.services.settings_service import SettingsService
@@ -658,6 +657,9 @@ class KnowledgeLibraryService:
         except (OSError, json.JSONDecodeError):
             return "no_chunks", "文件已结构化,但没有生成可入库切片。"
         metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+        sections = payload.get("sections", []) if isinstance(payload, dict) else []
+        if files_ingested <= 0 and chunks_created <= 0 and isinstance(sections, list) and sections:
+            return "unchanged", "文件内容未变化,已有索引已保持不变。"
         if source_path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
             ocr_status = str(metadata.get("ocr_status") or "")
             if ocr_status == "no_text":
@@ -868,12 +870,15 @@ class KnowledgeLibraryService:
         }
         if suffix in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
             mime_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
-            image_preview = self._preview_image_ocr(user_id=user_id, path=target)
+            image_preview = self._preview_image_text_from_frontmatter(
+                user_id=user_id,
+                relative_path=str(base_payload["path"]),
+            )
             return {
                 **base_payload,
                 "kind": "image",
                 "mime_type": mime_type,
-                "data_url": self._file_data_url(path=target, mime_type=mime_type),
+                "raw_url": self._raw_file_url(user_id=user_id, relative_path=str(base_payload["path"])),
                 **image_preview,
                 "readonly": True,
             }
@@ -916,7 +921,11 @@ class KnowledgeLibraryService:
                         except Exception as exc:
                             logger.warning("PPTX→PDF generation failed: %s", exc)
                     if pdf_output.exists():
-                        pdf_preview = self._preview_pdf(path=pdf_output)
+                        pdf_preview = self._preview_pdf(
+                            user_id=user_id,
+                            relative_path=str(base_payload["path"]) + ".pdf",
+                            path=pdf_output,
+                        )
                         # Merge parsed PPTX text content into the PDF preview
                         # so Edit mode shows readable text, not empty scanned metadata.
                         pptx_content = self._preview_pptx(path=target).get("content", "")
@@ -941,6 +950,7 @@ class KnowledgeLibraryService:
                 **base_payload,
                 "kind": "document",
                 "html": self._preview_docx_html(path=target),
+                **self._preview_text_from_frontmatter(user_id=user_id, relative_path=str(base_payload["path"])),
                 "readonly": True,
             }
         try:
@@ -1020,6 +1030,20 @@ class KnowledgeLibraryService:
         target = self._resolve_child_path(root=root, relative_path=path)
         if not target.is_file():
             raise ValueError("file not found")
+        mime_type = self._resolve_raw_mime_type(target)
+        return target, mime_type
+
+    def resolve_knowledge_asset_for_response(self, *, path: str) -> tuple[Path, str]:
+        """
+        解析知识库预览导出的临时 asset 路径。
+
+        path: assets/knowledge 下的相对路径,例如 pdf_preview/<hash>/image.png。
+        """
+
+        root = (self.config.storage.assets_dir / "knowledge").resolve()
+        target = self._resolve_child_path(root=root, relative_path=path)
+        if not target.is_file():
+            raise ValueError("asset not found")
         mime_type = self._resolve_raw_mime_type(target)
         return target, mime_type
 
@@ -1387,7 +1411,7 @@ class KnowledgeLibraryService:
             }
 
     def _preview_pdf(self, *, user_id: str, relative_path: str, path: Path) -> dict:
-        """提取 PDF 文本层和图片资产,供 Edit 模式渲染 Markdown 内容。"""
+        """提取 PDF 渲染 Markdown,并从已灌库 frontmatter 读取文本模式正文。"""
 
         asset_key = hashlib.sha256(f"{user_id}:{relative_path}".encode("utf-8")).hexdigest()[:24]
         image_output_dir = self.config.storage.assets_dir / "knowledge" / "pdf_preview" / asset_key
@@ -1402,32 +1426,89 @@ class KnowledgeLibraryService:
         except Exception:
             return {
                 "content": "",
+                "render_content": "",
+                "text_status": "not_ingested",
                 "pdf_scanned": True,
                 "page_count": 0,
                 "image_count": 0,
                 "table_count": 0,
             }
+        text_preview = self._preview_text_from_frontmatter(user_id=user_id, relative_path=relative_path)
         return {
-            "content": extracted.content,
+            **text_preview,
+            "render_content": extracted.content,
             "pdf_scanned": extracted.is_scanned,
             "page_count": extracted.page_count,
             "image_count": extracted.image_count,
             "table_count": extracted.table_count,
         }
 
-    def _preview_image_ocr(self, *, user_id: str, path: Path) -> dict:
-        """对普通图片执行 OCR,供 Edit 模式展示识别文本。"""
+    def _preview_image_text_from_frontmatter(self, *, user_id: str, relative_path: str) -> dict:
+        """
+        从已有 frontmatter 读取图片 OCR 文本,避免点击预览时现场执行慢速 OCR。
 
-        if not self.settings_service.is_ocr_enabled_for_user(user_id=user_id):
-            return {"content": "", "ocr_status": "disabled", "ocr_word_count": 0}
-        result = ImageOcrService(config=self.config).extract_image_text(path)
+        user_id: 当前用户 ID。
+        relative_path: 图片相对 active 知识库根目录的路径。
+        """
+
+        preview = self._preview_text_from_frontmatter(user_id=user_id, relative_path=relative_path)
+        payload = self._read_frontmatter_payload_for_relative_path(user_id=user_id, relative_path=relative_path)
+        if not payload:
+            return {**preview, "ocr_status": "not_ingested", "ocr_word_count": 0}
+        metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
         return {
-            "content": result.content,
-            "ocr_status": "completed" if result.has_text else ("no_text" if result.engine_available else "engine_unavailable"),
-            "ocr_engine_available": result.engine_available,
-            "ocr_word_count": result.word_count,
-            "ocr_average_confidence": result.average_confidence,
+            **preview,
+            "ocr_status": str(metadata.get("ocr_status") or ("completed" if preview.get("content") else "no_text")),
+            "ocr_engine_available": bool(metadata.get("ocr_engine_available", False)),
+            "ocr_word_count": int(metadata.get("ocr_word_count") or 0),
+            "ocr_average_confidence": float(metadata.get("ocr_average_confidence") or 0.0),
         }
+
+    def _preview_text_from_frontmatter(self, *, user_id: str, relative_path: str) -> dict:
+        """从已灌库 frontmatter 拼接章节正文;未灌库时不开放文本 Edit。"""
+
+        payload = self._read_frontmatter_payload_for_relative_path(user_id=user_id, relative_path=relative_path)
+        if not payload:
+            return {"content": "", "text_status": "not_ingested"}
+        sections = payload.get("sections", [])
+        section_texts = [
+            str(section.get("content") or "").strip()
+            for section in sections
+            if isinstance(section, dict) and str(section.get("content") or "").strip()
+        ] if isinstance(sections, list) else []
+        content = "\n\n".join(section_texts).strip()
+        return {"content": content, "text_status": "ready" if content else "empty"}
+
+    def read_frontmatter_payload_for_file(self, *, user_id: str, path: str) -> dict[str, Any]:
+        """
+        读取 active 知识库内文件对应的完整 frontmatter JSON。
+
+        user_id: 当前用户 ID。
+        path: 文件相对 active 知识库根目录的路径。
+        """
+
+        payload = self._read_frontmatter_payload_for_relative_path(user_id=user_id, relative_path=path)
+        if payload is None:
+            raise ValueError("frontmatter json not found; refresh or ingest this file first")
+        return payload
+
+    def _read_frontmatter_payload_for_relative_path(self, *, user_id: str, relative_path: str) -> dict[str, Any] | None:
+        """按用户 active library 和相对路径读取 frontmatter JSON,不存在时返回 None。"""
+
+        if not hasattr(self.settings_service, "ensure_user_profile"):
+            return None
+        profile = self.settings_service.ensure_user_profile(user_id=user_id)
+        active_library = dict(profile["active_knowledge_library"])
+        normalized_user_id = str(profile["user_id"])
+        library_id = str(active_library["library_id"])
+        frontmatter_root = self._resolve_user_frontmatter_dir(normalized_user_id, library_id).resolve()
+        normalized_path = relative_path.replace("\\", "/").strip("/")
+        if not normalized_path:
+            return None
+        frontmatter_path = (frontmatter_root / normalized_path).with_suffix(".json").resolve()
+        if not self._is_relative_to(frontmatter_path, frontmatter_root) or not frontmatter_path.is_file():
+            return None
+        return json.loads(frontmatter_path.read_text(encoding="utf-8"))
 
     @staticmethod
     def _read_xlsx_shared_strings(archive: zipfile.ZipFile) -> list[str]:

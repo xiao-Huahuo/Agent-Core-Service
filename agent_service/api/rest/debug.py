@@ -57,6 +57,8 @@ async def multimodal_ingestion_observation(
         payload = await run_in_threadpool(_build_multimodal_ingestion_observation, user_id=user_id, relative_path=path)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"multimodal observation failed: {exc}") from exc
     return JSONResponse(payload, headers={"Access-Control-Allow-Origin": "*"})
 
 
@@ -78,16 +80,22 @@ def _build_multimodal_ingestion_observation(*, user_id: str, relative_path: str)
         if hasattr(settings_service, "is_ocr_enabled_for_user"):
             ocr_enabled = bool(settings_service.is_ocr_enabled_for_user(user_id=user_id))
 
-    with tempfile.TemporaryDirectory(prefix="metaweave_multimodal_observe_") as temp_dir:
-        frontmatter_root = Path(temp_dir)
-        _, output_path = FrontmatterBootstrapService(config=config, ocr_enabled=ocr_enabled).build_frontmatter_file(
-            source_path=source_path,
-            knowledge_dir=source_root,
-            frontmatter_dir=frontmatter_root,
-            supported_suffixes=set(config.constants.knowledge_supported_suffixes),
+    try:
+        structured_payload = library_service.read_frontmatter_payload_for_file(
+            user_id=user_id,
+            path=normalized_relative_path,
         )
-        structured_payload = json.loads(output_path.read_text(encoding="utf-8"))
-        document = StructuredKnowledgeDocument.from_dict(structured_payload)
+    except ValueError:
+        with tempfile.TemporaryDirectory(prefix="metaweave_multimodal_observe_") as temp_dir:
+            frontmatter_root = Path(temp_dir)
+            _, output_path = FrontmatterBootstrapService(config=config, ocr_enabled=ocr_enabled).build_frontmatter_file(
+                source_path=source_path,
+                knowledge_dir=source_root,
+                frontmatter_dir=frontmatter_root,
+                supported_suffixes=set(config.constants.knowledge_supported_suffixes),
+            )
+            structured_payload = json.loads(output_path.read_text(encoding="utf-8"))
+    document = StructuredKnowledgeDocument.from_dict(structured_payload)
 
     semantic_chunks: list[dict[str, Any]] = []
     overlap_chunks: list[dict[str, Any]] = []

@@ -85,7 +85,7 @@ function goToStorageSettings() {
     <div class="setting-row toggle-row">
       <label>OCR</label>
       <input v-model="ocrEnabledDraft" type="checkbox" @change="handleOcrToggle" />
-      <span class="hint-text">开启后需重启;重启时会检查并预热 PaddleOCR 中英文模型</span>
+      <span class="hint-text">开启后后续灌库会识别图片和内嵌图片中的文字</span>
     </div>
     <div class="setting-row ignore-row">
       <label>屏蔽区</label>

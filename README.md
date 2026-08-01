@@ -361,7 +361,7 @@ Python `html.parser.HTMLParser` 提取正文文本，跳过 `script/style`标签
 把 docx 当 zip 包读，然后解析 `word/document.xml`，再抽取段落、表格和图片关系引用,从而实现排版的保留.
 **段落**：按标题样式或段落结构生成 text block。
 **表格**：保留结构化表格，同时生成一段可检索摘要。
-**图片**：如果图片有 alt text，先用 alt text；否则走 OCR/视觉描述。
+**图片**：如果图片有 alt text，先用 alt text；否则走 OCR/视觉描述。当前已落地的是 PaddleOCR 识别,并按图片所在位置回填到 DOCX 文档流。
 - `.ppt` / `.pptx`  ：
 PPT和DOCX类似,把 PPT 当 zip 包读，解析 `ppt/slides/slide*.xml`.
 - `.xlsx`：
@@ -373,8 +373,8 @@ PPT和DOCX类似,把 PPT 当 zip 包读，解析 `ppt/slides/slide*.xml`.
 **超大或不适合语义检索的表**：只索引元信息，比如 sheet 名、列名、数据范围、文件说明，不把全部单元格灌进向量库。
 - 图片(`.jpg`,`.jpeg`,`.png`,`.webp`)：
 采用 PaddleOCR 作为 OCR 引擎,优先覆盖中英文文字和表格截图场景.
-默认不启用ocr,当用户在设置中设置成开启ocr的时候,会要求重启后生效,然后重启再预热 PaddleOCR 中英文检测/识别模型,模型缓存放在`runtime/models/paddleocr/`里面,前端也根据是否夹带图片或者本身就是图片来重新加载索引状态.
-图片不要默认都重度处理。先做轻量判定：
+默认不启用ocr,当用户在设置页开启 OCR 后,后续灌库立即生效,不需要重启;PaddleOCR 中英文检测/识别模型缓存放在`runtime/models/paddleocr/`里面.
+图片不要默认都重度处理。先做轻量判定,当前已落地的是文字 OCR:
 **有文字**：OCR，生成 text block。
 **是图表/截图/流程图**：视觉描述 + OCR + 可能的结构化摘要。
 **是普通照片**：生成 caption，但置信度标低。
@@ -382,12 +382,12 @@ PPT和DOCX类似,把 PPT 当 zip 包读，解析 `ppt/slides/slide*.xml`.
 - `.pdf`：
 PDF 必须先分类，因为“文档型 PDF”和“扫描型 PDF”完全不同。
 **文档型 PDF**：优先直接提取 text layout、表格、图片。
-**扫描型 PDF**：先按页渲染图片，再 OCR；必要时对整页做视觉描述。
+**扫描型 PDF**：先按页渲染图片，再 OCR；必要时对整页做视觉描述。当前已落地的是页级 OCR。
 **混合型 PDF**：每页判断，有文本层就直接提文本，没有文本层就 OCR。
 **表格 PDF**：能识别表格时输出 table block，不能稳定识别时至少输出 text block + page range。
 - 文档内嵌图片（`.docx` / `.pdf` 等内部）：
-图片本体不写入 JSON，也不写入向量库；只保存为可引用 asset, 然后在结构化 JSON 中记录引用和识别结果。
-图片提取为独立 asset 落盘，保存在`runtime/assets/users/{user_id}/{library_id}/{document_id}/images/{image_id}.png`.JSON 只保存 asset_path、位置和识别结果。
+内嵌图片本体不作为独立语义文档写入向量库；结构化 JSON 记录图片引用、OCR 状态和识别结果。
+当前 PDF 预览图片 asset 落在`runtime/assets/knowledge/pdf_preview/`下,并通过`/knowledge/assets/...`路由渲染;后续可继续统一为用户/知识库隔离的长期 asset 路径。
 对于图片 block,应把图片前后的标题、段落、表格编号、图注一起作为上下文.这样召回时既能搜到图片内容，也能知道它属于哪个文档、哪个章节、哪个原始位置。
   - 其他不支持格式
   首先判定文件是否为二进制:
@@ -421,10 +421,10 @@ PDF 必须先分类，因为“文档型 PDF”和“扫描型 PDF”完全不�
 
 - **Markdown** → 隐藏编辑功能的渲染视图, 保持与编辑模式一致的渲染效果, 图片可点击放大
 - **代码文件** → 语法高亮展示
-- **图片** → 内嵌预览, 支持缩放和拖拽
-- **PDF** → 内嵌 iframe 展示
+- **图片** → 默认内嵌预览,支持缩放和拖拽;已灌库产生 OCR 文本后可手动切到 Edit/Split 查看文本
+- **PDF** → 默认内嵌 iframe 展示;Edit/Split 中提供「文本/渲染」切换,「文本」只在灌库后可用
 - **表格(Excel/CSV)** → 后端解析为表格数据, 前端渲染为 HTML 表格
-- **文档(Word/HTML)** → 后端转为 HTML 后安全渲染, 文档内图片可点击放大
+- **文档(Word/HTML)** → 后端转为 HTML 后安全渲染, 文档内图片可点击放大;Word 灌库后可手动切到 Edit/Split 查看合并文本
 - **纯文本** → 原格式展示
 - **不支持格式** → 提示文案
 
@@ -925,7 +925,7 @@ flowchart TD
     D -->|"html / htm / xml"| H["标记语言清洗<br/>提取正文或节点路径"]
     D -->|"docx / xlsx / pptx"| I0["解包 OOXML<br/>docx/xlsx/pptx = zip + XML"]
     I0 --> I["读取核心 XML<br/>document.xml / worksheets/*.xml / slides/*.xml"]
-    D -->|"pdf / image"| J["多模态资产占位<br/>登记文件信息和 OCR pending"]
+    D -->|"pdf / image"| J["文本层 / 图片 OCR 清洗<br/>按设置页 OCR 开关执行"]
     D -->|"其他二进制"| K["资产占位<br/>保留来源和元信息"]
 
     E --> L["统一 StructuredKnowledgeDocument.sections"]

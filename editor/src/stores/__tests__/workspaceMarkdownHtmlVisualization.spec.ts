@@ -68,6 +68,23 @@ describe('workspace MD-HTML document selection', () => {
     expect(ingestSpy).not.toHaveBeenCalled()
   })
 
+  it('opens multimodal files in preview mode even when the previous file used edit mode', async () => {
+    const workspaceStore = useWorkspaceStore()
+    const nodes = [
+      { name: 'scan.png', path: 'docs/scan.png', isDir: false },
+      { name: 'report.docx', path: 'docs/report.docx', isDir: false },
+      { name: 'scan.pdf', path: 'docs/scan.pdf', isDir: false },
+    ]
+
+    for (const node of nodes) {
+      workspaceStore.editorMode = 'edit'
+      await workspaceStore.selectFile(node)
+
+      expect(workspaceStore.selectedPath).toBe(node.path)
+      expect(workspaceStore.editorMode).toBe('preview')
+    }
+  })
+
   it('clears mounted HTML when switching the MD-HTML selected document', async () => {
     const workspaceStore = useWorkspaceStore()
     const firstNode = { name: 'first.md', path: 'docs/first.md', isDir: false }
@@ -99,9 +116,19 @@ describe('workspace MD-HTML document selection', () => {
     workspaceStore.setMarkdownHtmlVisualizationOption('denseLayout', true)
     workspaceStore.setMarkdownHtmlVisualizationCustomRequirement('突出结论, 降低装饰密度')
     vi.mocked(ingestKnowledgeFileStream).mockResolvedValue({
+      user_id: 'user_1',
+      library_id: 'library_1',
+      knowledge_dir: '/tmp/knowledge',
+      frontmatter_dir: '/tmp/frontmatter',
+      frontmatter_files_seen: 1,
+      frontmatter_files_written: 1,
+      frontmatter_files_skipped: 0,
       files_seen: 1,
       files_ingested: 1,
+      files_skipped: 0,
       chunks_created: 2,
+      chunks_deleted: 0,
+      uploaded_path: 'docs/notes.md',
     })
     vi.mocked(listKnowledgeFiles).mockResolvedValue({
       tree: [{ name: 'docs', path: 'docs', isDir: true, children: [fileNode] }],

@@ -73,7 +73,10 @@ const isMarkdownViewer = computed(() => workspaceStore.activeViewerKind === 'mar
 const isCodeViewer = computed(() => ['code', 'text'].includes(workspaceStore.activeViewerKind))
 const isCodeOnlyViewer = computed(() => workspaceStore.activeViewerKind === 'code')
 const isPdfViewer = computed(() => workspaceStore.activeViewerKind === 'pdf')
-const isPdfTextViewer = computed(() => isPdfViewer.value && Boolean(workspaceStore.activePreview?.content))
+const pdfEditViewMode = ref<'text' | 'render'>('render')
+const pdfHasTextContent = computed(() => isPdfViewer.value && Boolean(workspaceStore.activePreview?.content))
+const pdfHasRenderContent = computed(() => isPdfViewer.value && Boolean(workspaceStore.activePreview?.render_content))
+const isPdfTextViewer = computed(() => isPdfViewer.value && (pdfHasTextContent.value || pdfHasRenderContent.value))
 const isDocumentViewer = computed(() => workspaceStore.activeViewerKind === 'document')
 const isDocumentTextViewer = computed(() => isDocumentViewer.value && Boolean(workspaceStore.activePreview?.content))
 const isImageViewer = computed(() => workspaceStore.activeViewerKind === 'image')
@@ -90,6 +93,13 @@ const splitBodyStyle = computed(() => {
   if (effectiveEditorMode.value !== 'split') return {}
   const r = Math.max(0.15, Math.min(0.85, splitRatio.value))
   return { gridTemplateColumns: `${r * 100}% 6px ${(1 - r) * 100}%` } as const
+})
+
+const pdfEditContent = computed(() => {
+  if (pdfEditViewMode.value === 'text') {
+    return activeContent.value
+  }
+  return workspaceStore.activePreview?.render_content ?? ''
 })
 
 const visualizationOptions = [
@@ -121,6 +131,13 @@ function setEditorMode(mode: EditorViewMode) {
   editorMode.value = mode
 }
 
+function setPdfEditViewMode(mode: 'text' | 'render') {
+  if (mode === 'text' && !pdfHasTextContent.value) {
+    return
+  }
+  pdfEditViewMode.value = mode
+}
+
 function handleEditorScroll(payload: { ratio: number; cursorOffset: number; contentLength: number }) {
   lastEditorScroll.value = payload
   if (effectiveEditorMode.value === 'split' && isMarkdownViewer.value) {
@@ -150,6 +167,16 @@ watch(effectiveEditorMode, async (mode, previousMode) => {
   const snapshot = codeEditorRef.value?.getScrollSnapshot() ?? lastEditorScroll.value
   lastEditorScroll.value = snapshot
   markdownPreviewRef.value?.scrollToSourceOffset(snapshot.cursorOffset, snapshot.contentLength)
+})
+
+watch(() => workspaceStore.selectedPath, () => {
+  pdfEditViewMode.value = 'render'
+})
+
+watch(pdfHasTextContent, (hasText) => {
+  if (!hasText && pdfEditViewMode.value === 'text') {
+    pdfEditViewMode.value = 'render'
+  }
 })
 
 function handleBeforeUnload(event: BeforeUnloadEvent) {
@@ -218,6 +245,32 @@ onErrorCaptured((err, vm, info) => {
       </div>
 
       <div class="tab-actions">
+        <div
+          v-if="isPdfViewer && !isPreviewOnlyViewer"
+          class="pdf-edit-source-switch"
+          :data-mode="pdfEditViewMode"
+          role="group"
+          aria-label="PDF 编辑内容来源"
+        >
+          <span class="pdf-edit-source-indicator"></span>
+          <button
+            type="button"
+            :disabled="!pdfHasTextContent"
+            :class="{ active: pdfEditViewMode === 'text' }"
+            title="显示灌库后合并 OCR 的全文文本"
+            @click="setPdfEditViewMode('text')"
+          >
+            文本
+          </button>
+          <button
+            type="button"
+            :class="{ active: pdfEditViewMode === 'render' }"
+            title="显示 PDF 页面与图片渲染内容"
+            @click="setPdfEditViewMode('render')"
+          >
+            渲染
+          </button>
+        </div>
         <EditorModeSwitch
           :model-value="effectiveEditorMode"
           :preview-only="isPreviewOnlyViewer"
@@ -290,7 +343,7 @@ onErrorCaptured((err, vm, info) => {
         <MarkdownPreview
           v-if="isPdfTextViewer"
           :key="workspaceStore.selectedPath"
-          :content="activeContent"
+          :content="pdfEditContent"
           :path="workspaceStore.selectedPath"
         />
         <CodeEditor
@@ -419,6 +472,71 @@ onErrorCaptured((err, vm, info) => {
   gap: var(--space-6);
   flex-shrink: 0;
   padding-bottom: var(--space-6);
+}
+
+.pdf-edit-source-switch {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 2px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-canvas-soft);
+}
+
+.pdf-edit-source-indicator {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / 2);
+  pointer-events: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  transition: transform 180ms ease;
+}
+
+.pdf-edit-source-switch[data-mode='render'] .pdf-edit-source-indicator {
+  transform: translateX(100%);
+}
+
+.pdf-edit-source-switch button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  min-width: 68px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-6);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.pdf-edit-source-switch button.active {
+  color: white;
+}
+
+.pdf-edit-source-switch button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.pdf-edit-source-switch button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf-edit-source-indicator {
+    transition: none;
+  }
 }
 
 .save-button {

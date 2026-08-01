@@ -59,7 +59,7 @@ class FrontmatterBootstrapService:
         self.ocr_enabled = config.ocr.enabled if ocr_enabled is None else bool(ocr_enabled)
         self.multimodal_cleaner = MultimodalDocumentCleaner(
             ocr_enabled=self.ocr_enabled,
-            image_ocr_service=ImageOcrService(config=config) if self.ocr_enabled else None,
+            image_ocr_service=ImageOcrService(config=config, enabled=self.ocr_enabled) if self.ocr_enabled else None,
         )
 
     def build_frontmatter_dir(

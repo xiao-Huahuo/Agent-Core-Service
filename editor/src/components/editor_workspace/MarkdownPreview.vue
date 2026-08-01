@@ -483,6 +483,76 @@ onBeforeUnmount(() => {
   line-height: 1.3 !important;
 }
 
+/* Vditor 内置注入亮色 GitHub hljs 主题,暗色下代码块文字会变黑字;
+   用项目 --hljs-* 变量覆盖,亮/暗随主题自动切换(与 agent 回答配色同源)。 */
+.markdown-preview :deep(.vditor-reset pre code.hljs) {
+  color: var(--hljs-fg, #e6e6e6) !important;
+}
+
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-keyword),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-selector-tag),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-literal),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-type),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-template-variable),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-variable.language_) {
+  color: var(--hljs-keyword, #ff79c6) !important;
+}
+
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-string),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-addition),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-regexp) {
+  color: var(--hljs-string, #50fa7b) !important;
+}
+
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-number),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-built_in),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-attr),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-attribute),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-operator),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-variable) {
+  color: var(--hljs-type, #8be9fd) !important;
+}
+
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-title),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-title.function_) {
+  color: var(--hljs-function, #50fa7b) !important;
+}
+
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-title.class_) {
+  color: var(--hljs-class, #f1fa8c) !important;
+}
+
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-comment),
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-quote) {
+  color: var(--hljs-comment, #6272a4) !important;
+}
+
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-strong) {
+  color: var(--hljs-fg, #e6e6e6) !important;
+  font-weight: normal;
+  font-style: normal;
+}
+
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-emphasis) {
+  color: var(--hljs-fg, #e6e6e6) !important;
+  font-weight: normal;
+  font-style: normal;
+}
+
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-section) {
+  color: var(--hljs-keyword, #ff79c6) !important;
+  font-weight: normal;
+  font-style: normal;
+}
+
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-bullet) {
+  color: var(--hljs-type, #8be9fd) !important;
+}
+
+.markdown-preview :deep(.vditor-reset pre code.hljs .hljs-link) {
+  color: var(--hljs-string, #50fa7b) !important;
+}
+
 .markdown-preview :deep(a) {
   color: var(--color-primary) !important;
 }

@@ -241,7 +241,7 @@ def _build_paddleocr_pipeline(
 def _disable_paddleocr_mkldnn_by_default() -> None:
     """默认关闭 PaddleX MKLDNN,规避 Windows CPU 下部分 OCR 模型 oneDNN 推理异常。"""
 
-    os.environ.setdefault("PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT", "False")
+    os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "False"
 
 
 def _existing_paddle_model_dir(model_dir: Path | None) -> str | None:

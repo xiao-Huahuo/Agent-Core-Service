@@ -1,0 +1,297 @@
+"""
+知识库多模态预览回归测试。
+
+功能说明:
+本文件覆盖图片 OCR 预览、PDF 预览 asset 响应以及单文件入库状态说明,避免
+多模态预览链路退化为 500、破图或误报 OCR 无切片。
+"""
+
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+from agent_service.api.rest import debug as debug_api
+import agent_service.services.knowledge_library_service as knowledge_library_module
+from agent_service.services.knowledge_library_service import KnowledgeLibraryService
+from agent_service.services.memory.rag.image_ocr import ImageOcrService
+from agent_service.services.memory.rag.pdf_cleaner import PdfExtractionResult
+
+
+class _SettingsServiceStub:
+    """测试用设置服务,只提供知识库根目录和 OCR 用户开关。"""
+
+    def __init__(self, *, knowledge_dir: Path, ocr_enabled: bool = True) -> None:
+        """保存当前测试知识库根目录。"""
+
+        self.knowledge_dir = str(knowledge_dir)
+        self.ocr_enabled = ocr_enabled
+        self.user_id = "user-1"
+        self.library_id = "library-1"
+
+    def ensure_user_profile(self, *, user_id: str) -> dict:
+        """返回包含 active library 的用户配置。"""
+
+        return {
+            "user_id": self.user_id,
+            "active_knowledge_library": {
+                "library_id": self.library_id,
+                "knowledge_dir": self.knowledge_dir,
+            },
+        }
+
+    def get_active_knowledge_library(self, *, user_id: str) -> dict[str, str]:
+        """返回当前 active 知识库目录。"""
+
+        return {"knowledge_dir": self.knowledge_dir}
+
+    def is_ocr_enabled_for_user(self, *, user_id: str) -> bool:
+        """返回测试指定的用户级 OCR 开关。"""
+
+        return self.ocr_enabled
+
+
+def _service(tmp_path: Path, knowledge_dir: Path, *, ocr_enabled: bool = True) -> KnowledgeLibraryService:
+    """构造只覆盖预览路径所需依赖的 KnowledgeLibraryService。"""
+
+    config = SimpleNamespace(
+        constants=SimpleNamespace(knowledge_supported_suffixes=[".md", ".txt", ".png", ".pdf", ".docx"]),
+        storage=SimpleNamespace(
+            assets_dir=tmp_path / "assets",
+            frontmatter_dir=tmp_path / "frontmatter",
+        ),
+    )
+    return KnowledgeLibraryService(
+        config=config,
+        memory_service=SimpleNamespace(),
+        settings_service=_SettingsServiceStub(knowledge_dir=knowledge_dir, ocr_enabled=ocr_enabled),
+        knowledge_graph_service=SimpleNamespace(),
+    )
+
+
+def _write_frontmatter(service: KnowledgeLibraryService, *, relative_path: str, content: str) -> None:
+    """写入测试用用户级 frontmatter JSON。"""
+
+    frontmatter_path = service._resolve_user_frontmatter_dir("user-1", "library-1") / relative_path
+    frontmatter_path = frontmatter_path.with_suffix(".json")
+    frontmatter_path.parent.mkdir(parents=True, exist_ok=True)
+    frontmatter_path.write_text(
+        json.dumps(
+            {
+                "metadata": {"ocr_status": "completed"},
+                "sections": [{"section_id": "sec_0000", "heading": "test", "content": content}],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_preview_image_does_not_run_ocr_before_ingestion(tmp_path: Path, monkeypatch) -> None:
+    """图片点击预览只应返回原图 URL,不能现场执行慢速 OCR。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    image_path = knowledge_dir / "note.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    def fail_extract(self: ImageOcrService, source_path: Path) -> None:
+        raise AssertionError("preview must not run OCR")
+
+    monkeypatch.setattr(ImageOcrService, "extract_image_text", fail_extract)
+    service = _service(tmp_path, knowledge_dir, ocr_enabled=True)
+
+    preview = service.preview_file(user_id="user-1", path="note.png")
+
+    assert preview["kind"] == "image"
+    assert preview["content"] == ""
+    assert preview["raw_url"].endswith("/knowledge/files/raw?user_id=user-1&path=note.png")
+    assert preview["ocr_status"] == "not_ingested"
+
+
+def test_preview_image_uses_existing_ocr_frontmatter_text(tmp_path: Path) -> None:
+    """图片已灌库产生 OCR sections 后,预览 payload 才暴露 edit/split 可显示文本。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    image_path = knowledge_dir / "note.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+    service = _service(tmp_path, knowledge_dir, ocr_enabled=True)
+    frontmatter_root = service._resolve_user_frontmatter_dir("user-1", "library-1")
+    frontmatter_path = frontmatter_root / "note.json"
+    frontmatter_path.parent.mkdir(parents=True)
+    frontmatter_path.write_text(
+        (
+            '{"metadata":{"ocr_status":"completed","ocr_word_count":2,'
+            '"ocr_engine_available":true,"ocr_average_confidence":0.97},'
+            '"sections":[{"section_id":"sec_0000","heading":"note","content":"OCR text"}]}'
+        ),
+        encoding="utf-8",
+    )
+
+    preview = service.preview_file(user_id="user-1", path="note.png")
+
+    assert preview["content"] == "OCR text"
+    assert preview["ocr_status"] == "completed"
+    assert preview["ocr_word_count"] == 2
+
+
+def test_preview_docx_exposes_text_only_after_ingestion(tmp_path: Path, monkeypatch) -> None:
+    """DOCX 默认走预览;只有已有 frontmatter 时才向编辑区暴露全文文本。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    docx_path = knowledge_dir / "report.docx"
+    docx_path.write_bytes(b"fake docx")
+    monkeypatch.setattr(KnowledgeLibraryService, "_preview_docx_html", lambda self, path: "<p>docx preview</p>")
+    service = _service(tmp_path, knowledge_dir)
+
+    before = service.preview_file(user_id="user-1", path="report.docx")
+    _write_frontmatter(service, relative_path="report.docx", content="段落文字\n\n图片 OCR 文字")
+    after = service.preview_file(user_id="user-1", path="report.docx")
+
+    assert before["kind"] == "document"
+    assert before["html"] == "<p>docx preview</p>"
+    assert before["content"] == ""
+    assert before["text_status"] == "not_ingested"
+    assert after["content"] == "段落文字\n\n图片 OCR 文字"
+    assert after["text_status"] == "ready"
+
+
+def test_preview_pdf_separates_render_content_from_ingested_text(tmp_path: Path, monkeypatch) -> None:
+    """PDF render 模式使用即时 Markdown,文本模式只使用已灌库 frontmatter。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    pdf_path = knowledge_dir / "scan.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+
+    def fake_extract_pdf_text(*args: object, **kwargs: object) -> PdfExtractionResult:
+        return PdfExtractionResult(
+            content="## Page 1\n\n![PDF page 1 image 1](/knowledge/assets/pdf_preview/demo/image-1.png)",
+            page_count=1,
+            image_count=1,
+            table_count=0,
+            is_scanned=True,
+        )
+
+    monkeypatch.setattr(knowledge_library_module, "extract_pdf_text", fake_extract_pdf_text)
+    service = _service(tmp_path, knowledge_dir)
+
+    before = service.preview_file(user_id="user-1", path="scan.pdf")
+    _write_frontmatter(service, relative_path="scan.pdf", content="扫描件 OCR 全文")
+    after = service.preview_file(user_id="user-1", path="scan.pdf")
+
+    assert before["content"] == ""
+    assert before["text_status"] == "not_ingested"
+    assert before["render_content"].startswith("## Page 1")
+    assert after["content"] == "扫描件 OCR 全文"
+    assert after["render_content"].startswith("## Page 1")
+
+
+def test_resolve_knowledge_asset_serves_pdf_preview_image(tmp_path: Path) -> None:
+    """PDF 预览导出的 /knowledge/assets 图片应能被后端解析为真实文件。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    asset_path = tmp_path / "assets" / "knowledge" / "pdf_preview" / "asset-key" / "image_0001.png"
+    asset_path.parent.mkdir(parents=True)
+    asset_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+    service = _service(tmp_path, knowledge_dir)
+
+    resolved_path, media_type = service.resolve_knowledge_asset_for_response(
+        path="pdf_preview/asset-key/image_0001.png",
+    )
+
+    assert resolved_path == asset_path.resolve()
+    assert media_type == "image/png"
+
+
+def test_single_file_result_reports_unchanged_when_sections_exist(tmp_path: Path) -> None:
+    """已有可入库 sections 但本轮 0 chunk 时,应按未变化跳过解释而非误报 OCR 无切片。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    source_path = knowledge_dir / "table.png"
+    source_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+    frontmatter_path = tmp_path / "frontmatter" / "table.json"
+    frontmatter_path.parent.mkdir()
+    frontmatter_path.write_text(
+        (
+            '{"metadata":{"ocr_status":"completed"},'
+            '"sections":[{"section_id":"sec_0000","heading":"table","content":"OCR text"}]}'
+        ),
+        encoding="utf-8",
+    )
+    service = _service(tmp_path, knowledge_dir)
+
+    reason, message = service._describe_single_file_ingestion_result(
+        source_path=source_path,
+        frontmatter_path=frontmatter_path,
+        files_ingested=0,
+        chunks_created=0,
+    )
+
+    assert reason == "unchanged"
+    assert "未变化" in message
+
+
+def test_debug_multimodal_observation_uses_existing_frontmatter(tmp_path: Path, monkeypatch) -> None:
+    """debug 多模态观测已有 frontmatter 时不应重跑结构化/OCR。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    source_path = knowledge_dir / "note.png"
+    source_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+    structured_payload = {
+        "document_id": "knowledge:note",
+        "source_type": "image",
+        "source_path": str(source_path),
+        "source_uri": str(source_path),
+        "source_hash": "hash-1",
+        "title": "note",
+        "summary": "",
+        "tags": [],
+        "authority": 0.7,
+        "valid_from": None,
+        "valid_until": None,
+        "metadata": {
+            "relative_path": "note.png",
+            "ocr_enabled": True,
+            "ocr_status": "completed",
+        },
+        "sections": [
+            {
+                "section_id": "sec_0000",
+                "heading": "note",
+                "title_path": ["note"],
+                "content": "OCR text for debug",
+                "start_char": 0,
+                "end_char": 18,
+            }
+        ],
+    }
+    config = SimpleNamespace(
+        constants=SimpleNamespace(knowledge_supported_suffixes=[".png"], knowledge_tag="knowledge"),
+        memory=SimpleNamespace(chunk_size=512, chunk_overlap=128),
+    )
+    library_service = SimpleNamespace(
+        get_active_root_path=lambda user_id: knowledge_dir,
+        read_frontmatter_payload_for_file=lambda user_id, path: structured_payload,
+        settings_service=SimpleNamespace(is_ocr_enabled_for_user=lambda user_id: True),
+    )
+
+    def fail_build_frontmatter_file(self, **kwargs):
+        raise AssertionError("debug observation should reuse existing frontmatter")
+
+    monkeypatch.setattr(debug_api, "_require_knowledge_library_service", lambda: library_service)
+    monkeypatch.setattr(debug_api, "_require_agent", lambda: SimpleNamespace(config=config))
+    monkeypatch.setattr(
+        debug_api.FrontmatterBootstrapService,
+        "build_frontmatter_file",
+        fail_build_frontmatter_file,
+    )
+
+    payload = debug_api._build_multimodal_ingestion_observation(user_id="user-1", relative_path="note.png")
+
+    assert payload["json_result"] == structured_payload
+    assert payload["semantic_chunks"][0]["content"] == "OCR text for debug"

@@ -40,6 +40,20 @@ describe('CodeEditor Markdown context menu', () => {
     })
   })
 
+  it('keeps the highlight layer pixel-aligned with the textarea via transform, not scrollTop', async () => {
+    const wrapper = mountMarkdownEditor('alpha\nbeta\ngamma')
+    const textarea = wrapper.get('textarea').element as HTMLTextAreaElement
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 300 })
+    Object.defineProperty(textarea, 'clientHeight', { configurable: true, value: 100 })
+    textarea.scrollTop = 100
+    textarea.scrollLeft = 40
+
+    await wrapper.get('textarea').trigger('scroll')
+
+    const layer = wrapper.get('.highlight-layer').element as HTMLElement
+    expect(layer.style.transform).toBe('translate3d(-40px, -100px, 0)')
+  })
+
   it('renders syntax highlighting directly in the editable source surface', () => {
     const wrapper = mount(CodeEditor, {
       props: {
@@ -50,6 +64,26 @@ describe('CodeEditor Markdown context menu', () => {
 
     expect(wrapper.find('.syntax-highlight-layer').exists()).toBe(true)
     expect(wrapper.find('.syntax-highlight-layer').html()).toContain('<span')
+    expect(wrapper.get('textarea').classes()).toContain('syntax-highlighted')
+  })
+
+  it('highlights Markdown symbols with preview-like colors', () => {
+    const wrapper = mount(CodeEditor, {
+      props: {
+        modelValue: '# 标题\n\n**加粗**\n\n- 列表\n\n> 引用\n\n`code` [链接](https://example.com)',
+        language: 'md',
+      },
+    })
+
+    const layer = wrapper.find('.syntax-highlight-layer')
+    expect(layer.exists()).toBe(true)
+    expect(layer.classes()).toContain('markdown-highlight-layer')
+    const html = layer.html()
+    expect(html).toContain('hljs-section')
+    expect(html).toContain('hljs-strong')
+    expect(html).toContain('hljs-bullet')
+    expect(html).toContain('hljs-quote')
+    expect(html).toContain('hljs-code')
     expect(wrapper.get('textarea').classes()).toContain('syntax-highlighted')
   })
 

@@ -231,6 +231,10 @@ export interface FilePreviewPayload {
   kind: FileViewerKind
   /** Optional UTF-8 text content for generic text previews. */
   content?: string
+  /** Optional Markdown used by PDF render mode, separate from ingested text. */
+  render_content?: string
+  /** Whether frontmatter-backed text content is ready for edit/split. */
+  text_status?: 'ready' | 'empty' | 'not_ingested' | string
   /** Optional sanitized-at-render HTML for DOCX previews. */
   html?: string
   /** Optional data URL for image/PDF embeds. */

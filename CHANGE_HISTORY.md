@@ -1,6 +1,36 @@
 # CHANGE HISTORY
 
 ## 2026-08-01
+- [x] 修复 Preview/Split 模式暗色下代码块文字变黑:
+  - 根因:Vditor 渲染 markdown 预览时内置注入亮色 GitHub hljs 主题(`.hljs{color:#24292e}`、keyword `#d73a49`、string `#032f62` 等深色值),暗色模式下代码块文字显示为黑字。用 Playwright 加载真实 Vditor + 暗色主题验证,计算样式确认代码块文字为 `rgb(36,41,46)` 等亮色主题深色值。
+  - 修复:MarkdownPreview.vue 中针对 `.vditor-reset pre code.hljs` 及旗下 `.hljs-*` 类用项目 `--hljs-*` 变量覆盖(与 agent 回答配色同源),亮/暗随 `[data-theme]` 自动切换。验证页暗色下文字变 `#e6e6e6`、keyword `#ff79c6`、string `#50fa7b`、number `#8be9fd`。
+  - 验证:相关 19 个测试通过。
+- [x] 同步 README 多模态解析/预览现状:仅修正与当前实现明确冲突的 OCR 生效方式、图片/PDF/Word 预览与灌库后文本模式说明,保留原有设计性内容。
+- [x] 统一 PDF「文本/渲染」toggle 与编辑器三模式 toggle 的视觉样式:
+  - PDF 二段切换改为同三模式切换一致的 grid 容器、2px 内边距、主色滑块 indicator、透明按钮、active 文字白色、disabled/focus/reduced-motion 行为。
+- [x] 修复编辑区高亮层滚动错位,光标不再随滚动偏移或落在文字中间:
+  - 根因:`syncScroll` 用 `hl.scrollTop = ta.scrollTop` 同步高亮层,但 textarea 与 div 滚动语义不同——textarea 滚动时 padding 固定不滚,而 div 的 scrollTop 会把 padding-top 一起滚走,滚动后高亮层文本相对 textarea 光标错位(偏差一个 padding 高度),长文滚动时光标视觉上落在错位的文字中间。
+  - 修复:改为 CSS transform 平移(`translate3d(-scrollLeft, -scrollTop, 0)`)代替 scrollTop 赋值。transform 平移整盒(含 padding),文本起点与 textarea 的 padding+内容滚动数学上逐像素一致,水平/垂直滚动均精确对齐。编辑器 font-family 统一为文字字体后,此对齐不再受字体差异影响。
+  - 验证:CodeEditor.spec.ts 新增回归测试断言高亮层 transform 跟随 textarea 的 scrollTop/scrollLeft;相关 19 个测试通过,`vue-tsc` 类型检查通过。
+- [x] 打通 Word/PDF 灌库文本与预览渲染的模式边界:
+  - DOCX 点击/激活默认进入 Preview;未灌库时保持 Preview-only,已有 frontmatter sections 后才开放 Edit/Split,编辑区显示按文档流顺序合并的全文文本。
+  - PDF preview payload 拆成 `render_content` 与 `content`:渲染模式使用即时 PDF Markdown/图片预览,文本模式只使用已灌库 frontmatter 全文;前端在三模式切换左侧新增 PDF「文本/渲染」开关,未灌库时禁用「文本」。
+  - DOCX 灌库时将嵌入图片 OCR 文本回填到图片所在 block,不再追加到文末;PDF 灌库时将内嵌图片 OCR 文本替换原图片占位,尽量保持页内原始顺序。
+  - 验证:`python -m pytest tests/test_multimodal_cleaner.py tests/test_knowledge_library_preview.py -q` 32 例通过;`npm.cmd run test:unit -- --run src/stores/__tests__/workspaceMarkdownHtmlVisualization.spec.ts` 4 例通过。`npm.cmd run type-check` 仍失败于既有无关类型错误(ImagePreviewer/CodeEditor/knowledge_graph/settings/LibraryView 等),本次改动文件未出现新增报错。
+- [x] Markdown 编辑模式符号语法高亮,让 Edit/Split 模式下的 Markdown 符号与 Preview 一样有颜色层次:
+  - `CodeEditor.vue` 的 `isSyntaxHighlightedLanguage` 不再排除 markdown(md/markdown 已在 `codeHighlight.ts` 注册),Edit/Split 模式编辑 .md 文件时启用 textarea 透明 + hljs 高亮层着色机制,`#`、`**`、`-`、`>`、行内代码、链接等符号均渲染出对应颜色。
+  - 高亮层 scoped style 中针对 `.markdown-highlight-layer` 补充 markdown 专属 hljs 类颜色:标题/列表/粗体/链接统一主色,斜体用次级色,引用用 muted,行内代码用代码底色;只改颜色不改字重/斜体/字体,保证与 textarea 透明层逐像素对齐(光标/选中不偏移)。同时重置全局 `.hljs-quote` 的斜体,避免引用行错位。
+  - 副作用:语义搜索结果只读预览的 markdown 文档现在同样显示语法高亮层(与 python 等语言结果预览行为一致)。
+  - 验证:CodeEditor.spec.ts 新增 markdown 高亮测试、SearchPage.spec.ts 更新预览断言,相关 21 个测试通过;`vue-tsc` 类型检查通过。注:全量测试仍有 5 个预先存在失败(session.spec.ts / tools.spec.ts / MarkdownHtmlVisualizationView.spec.ts),与本次改动无关。
+- [x] 修复知识库图片/OCR预览链路的运行时异常和 asset 图片响应:
+  - 修复图片预览开启 OCR 时 `_preview_image_ocr` 中 `result` 未赋值导致 `/knowledge/files/preview` 返回 500。
+  - 新增 `/knowledge/assets/{path}` 响应解析,让 PDF 预览导出的 `pdf_preview` 图片可以通过后端实际返回。
+  - 修正单文件灌库已有可入库 sections 但本轮因未变化跳过时的状态说明,避免误报 `ocr_no_chunks`。
+- [x] 降低图片点击预览和 debug 多模态观测的 OCR 性能耦合:
+  - 图片预览改为只返回原图 `raw_url`,不再现场执行 PaddleOCR 或把大图 base64 塞入 JSON。
+  - 图片只有在已有 frontmatter OCR sections 时才返回解析文本,从而允许 Edit/Split 展示已灌库文本;未灌库图片保持 Preview-only。
+  - debug 多模态入库观测优先读取已有 frontmatter,缺失时才临时结构化;后端未知异常统一转 JSON 错误,前端 debug fallback 兼容当前 ApiError 包装的非 JSON 响应。
+- [x] 调整图片文件打开策略:无论图片是否已经灌库或提取 OCR 文本,点击/激活图片 tab 时默认进入 Preview 模式,保留已有文本图片手动切换 Edit/Split 的能力。
 - [x] 常驻"查看可用工具"工具,让 agent 能主动发现并按需点名白名单外工具:
   - 复盘会话发现按需绑定瘦身轮后,模型只看得见绑定工具,对白名单外工具既不知道存在、也不知道确切名字,点名机制落空。典型场景:agent 读完文档生成 HTML 后想调 `show_markdown_html` 展示,但该工具不在白名单,模型看不到 schema,只能把整段 HTML 打进回答正文、在结尾写"下一轮放开后再调用",任务停在 in_progress。
   - 新增元工具 `list_available_tools`(中文名"查看可用工具"):枚举 `ToolRegistry` 全部定义(含 MCP 工具),每行输出 `中文名(工具名): 一句话用途`,总长约 4k 字符,远小于 46 个完整 schema。注册在 `UTILITY_TOOL_DEFINITIONS`。
@@ -68,6 +98,7 @@
     - 每轮都要对所有工具进行全量绑定.
       - 优化方案: 按需绑定,首轮绑定全部工具,后续只绑定`上轮实际用过的工具 ∪ 核心白名单(8~10个工具)`,瘦身轮在系统提示里加一句"如需白名单外工具请明确说明",或在"计划要结束时/拿不准时"自动回退全量绑定一轮。对绝大多数任务(搜索→读文件→写作)白名单够用。
   - bug: react图没有压缩节点,应该让react图跟plan图一样具备同样的压缩机制,同样的压缩节点.
+- [x] 系统性的真正打通多模态解析链,包括图片OCR解析,扫描件pdf的图片渲染,pptx的渲染与预览等.
 ## 2026-07-31
 - [x] 修复整目录忽略时文件树内文件不变色:
   - `git status --ignored` 对整目录忽略会折叠成单条 `!! dir/`,此前只有目录节点能通过直配着色,目录下的具体文件节点匹配不到状态。现 `statusClassForPath` 对文件增加回退:无直接状态时检查是否位于某个忽略目录条目下,命中则返回 `git-ignored`。
@@ -1486,3 +1517,5 @@
 - 修复 PDF/DOCX 静态图片资源被 Markdown 图片 URL 改写器误转为知识库 raw 文件路径的问题,确保 `/knowledge/assets/...` 图片通过后端静态资源路由加载。
 - 新增 Markdown Split 模式双向同步滚动,从 Edit 切换到 Split 时按当前光标在源文档中的位置初始化右侧预览滚动。
 - 调整 Markdown 从 Edit 切换到 Split 时的预览定位为平滑滚动,避免右侧预览瞬间跳转。
+- 打通用户级 OCR 灌库链路: 设置页开启 OCR 后,普通图片、PDF 内嵌图片、DOCX/PPTX 媒体图片都会在结构化预处理阶段调用 PaddleOCR;兼容 PaddleOCR 3.x `OCRResult.json.res` 返回结构,同步缓存模型并禁用默认 oneDNN 以避免首次推理失败;新增图片解析、DOCX 内嵌图片和扫描件 PDF OCR 白盒测试。
+- 更新 OCR 设置提示,明确开关保存后后续灌库立即使用图片 OCR,不再误导用户必须重启。
