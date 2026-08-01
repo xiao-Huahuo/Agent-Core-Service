@@ -14,4 +14,4 @@ editor/node_modules/
 .VSCodeCounter/
 resources/knowledge/
 .coverage
-.jbeval/
+.jbeval/editor/.tmp-*.yaml

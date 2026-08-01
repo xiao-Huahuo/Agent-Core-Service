@@ -134,12 +134,9 @@ class ContextBuilder:
             )
             if latest_summary is not None:
                 memories = [latest_summary]
-        knowledge_snapshot = self.retrieval_service.retrieve_knowledge_with_debug(
-            query=current_prompt,
-            user_id=user_id,
-            top_k=self.config.memory.rerank_top_k,
-        )
-        knowledge = knowledge_snapshot.post_rerank_results
+        # 不做知识库自动召回:知识库内容由 agent 需要时自行调用
+        # get_knowledge_context / search_knowledge 等工具获取,避免首 token 前
+        # 重复跑完整 embedding+rerank 链路。仅保留长期记忆自动召回。
         important_summary = self.retrieval_service.get_latest_important_fact_summary(
             user_id=user_id,
             session_id=session_id,
@@ -156,15 +153,12 @@ class ContextBuilder:
 
         # ---- 计算 RAG 指标 ----
         memory_count = len(memories)
-        knowledge_count = len(knowledge)
         important_count = 1 if important_summary is not None else 0
 
         memory_request = getattr(memory_snapshot, "request_limit", None) or max(self.config.memory.rerank_top_k, 1)
-        knowledge_request = getattr(knowledge_snapshot, "request_limit", None) or max(self.config.memory.rerank_top_k, 1)
-        total_request = memory_request + knowledge_request
-        fill_rate = round((memory_count + knowledge_count) / max(total_request, 1) * 100, 1)
+        fill_rate = round(memory_count / max(memory_request, 1) * 100, 1)
 
-        all_scored = list(memories) + list(knowledge)
+        all_scored = list(memories)
         if all_scored:
             avg_relevance = round(sum(item.final_score for item in all_scored) / len(all_scored) * 100, 1)
             confidence = avg_relevance
@@ -177,13 +171,11 @@ class ContextBuilder:
             "avg_relevance": avg_relevance,
             "confidence": confidence,
             "memory_count": memory_count,
-            "knowledge_count": knowledge_count,
             "important_count": important_count,
         }
         recall_details: dict[str, Any] = {
             "query": current_prompt,
             "memory_recall": self.retrieval_service.serialize_debug_snapshot(memory_snapshot),
-            "knowledge_recall": self.retrieval_service.serialize_debug_snapshot(knowledge_snapshot),
         }
 
         # ---- 构建上下文文本 ----
@@ -224,7 +216,7 @@ class ContextBuilder:
         )
         if has_history:
             sections.append("短期上下文状态: 当前 session 已存在历史消息,回答时优先使用这些历史事实。")
-        has_refs = important_summary is not None or memories or knowledge or bool(attachment_context and attachment_context.content)
+        has_refs = important_summary is not None or memories or bool(attachment_context and attachment_context.content)
         if has_refs:
             sections.append("--- 参考材料开始 ---")
         if important_summary is not None:
@@ -244,11 +236,6 @@ class ContextBuilder:
                     "source_uri": source_uri,
                     "content": content,
                 }
-        if knowledge:
-            sections.append(
-                f"知识库片段索引: 系统中检索到 {knowledge_count} 条与当前问题相关的知识库片段。"
-                f"如果你需要查看具体内容,请调用 get_knowledge_context 工具来获取全文。"
-            )
         if attachment_context and attachment_context.content:
             sections.append(attachment_context.content)
             citation_map.update(attachment_context.citation_map)

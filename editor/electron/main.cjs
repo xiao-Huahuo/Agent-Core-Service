@@ -13,6 +13,7 @@
 const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell, Tray, nativeImage } = require('electron')
 const childProcess = require('node:child_process')
 const fs = require('node:fs')
+const net = require('node:net')
 const path = require('node:path')
 const { handleEditShortcut } = require('./edit-shortcuts.cjs')
 
@@ -214,15 +215,35 @@ function shouldOpenDevTools() {
   return process.env.ELECTRON_OPEN_DEVTOOLS === 'true'
 }
 
-async function loadDevServer(window, attempts = 40) {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      await window.loadURL(DEV_SERVER_URL)
-      return
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 250))
+function waitForDevServer(attempts = 80, intervalMs = 250) {
+  // 轮询 TCP 端口而不是拿 loadURL 失败当探测手段:连接被拒时 Chromium 会
+  // 向终端刷 ERR_CONNECTION_REFUSED,且不受 catch 控制。端口探测成功后才真正加载。
+  const url = new URL(DEV_SERVER_URL)
+  const port = Number(url.port || 80)
+  return new Promise((resolve) => {
+    let count = 0
+    const tryConnect = () => {
+      const socket = net.connect(port, url.hostname)
+      socket.once('connect', () => {
+        socket.destroy()
+        resolve()
+      })
+      socket.once('error', () => {
+        socket.destroy()
+        count += 1
+        if (count >= attempts) {
+          resolve()
+        } else {
+          setTimeout(tryConnect, intervalMs)
+        }
+      })
     }
-  }
+    tryConnect()
+  })
+}
+
+async function loadDevServer(window) {
+  await waitForDevServer()
   await window.loadURL(DEV_SERVER_URL)
 }
 

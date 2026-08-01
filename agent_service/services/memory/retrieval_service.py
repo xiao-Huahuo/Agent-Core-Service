@@ -19,6 +19,9 @@ knowledge = service.retrieve_knowledge(query="海洋酸化影响什么", user_id
 from __future__ import annotations
 
 import math
+import threading
+import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -111,6 +114,12 @@ class MemoryRetrievalService:
             engine=self.engine,
         )
         self.rerank_service = rerank_service or RerankService(config=config)
+        self._memory_recall_cache: OrderedDict[str, tuple[float, RetrievalDebugSnapshot]] = OrderedDict()
+        self._memory_recall_cache_lock = threading.Lock()
+        # 同一 session 内相近查询在短 TTL 内复用召回结果,避免每轮重复
+        # 跑完整 embedding + rerank 链路(本地模型推理秒级,是首 token 前的主要耗时)。
+        self._memory_recall_cache_ttl_seconds = 30
+        self._memory_recall_cache_max_entries = 128
 
     def retrieve_long_term_memory(
         self,
@@ -170,6 +179,18 @@ class MemoryRetrievalService:
         top_k: 可选返回条数。
         """
 
+        final_top_k = top_k or self.config.memory.rerank_top_k
+        if session_id:
+            cache_key = self._memory_recall_cache_key(
+                user_id=user_id,
+                session_id=session_id,
+                query=query,
+                top_k=final_top_k,
+            )
+            cached = self._memory_recall_cache_get(cache_key)
+            if cached is not None:
+                return cached
+
         seen_pre_ids: set[str] = set()
         seen_post_ids: set[str] = set()
         merged_pre: list[HybridRetrievalCandidate] = []
@@ -214,12 +235,14 @@ class MemoryRetrievalService:
             reverse=True,
         )
         merged_post.sort(key=self._rank_key, reverse=True)
-        final_top_k = top_k or self.config.memory.rerank_top_k
-        return RetrievalDebugSnapshot(
+        snapshot = RetrievalDebugSnapshot(
             pre_rerank_candidates=merged_pre[: max(final_top_k, self.config.memory.rerank_top_k)],
             post_rerank_results=merged_post[:final_top_k],
             request_limit=final_top_k,
         )
+        if session_id:
+            self._memory_recall_cache_put(cache_key, snapshot)
+        return snapshot
 
     def retrieve_knowledge_with_debug(
         self,
@@ -835,6 +858,40 @@ class MemoryRetrievalService:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value
+
+    @staticmethod
+    def _memory_recall_cache_key(*, user_id: str, session_id: str, query: str, top_k: int) -> str:
+        """
+        生成长期记忆召回缓存 key:session 维度 + 查询归一化,避免跨会话串线,
+        也让同一 session 内措辞接近的追问命中同一缓存。
+        """
+
+        normalized_query = " ".join(query.lower().split())
+        return f"{user_id}\x00{session_id}\x00{normalized_query}\x00{top_k}"
+
+    def _memory_recall_cache_get(self, cache_key: str) -> RetrievalDebugSnapshot | None:
+        """读取未过期的召回缓存,命中时刷新到最新位置(近似 LRU)。"""
+
+        now = time.monotonic()
+        with self._memory_recall_cache_lock:
+            entry = self._memory_recall_cache.get(cache_key)
+            if entry is None:
+                return None
+            stored_at, snapshot = entry
+            if now - stored_at > self._memory_recall_cache_ttl_seconds:
+                del self._memory_recall_cache[cache_key]
+                return None
+            self._memory_recall_cache.move_to_end(cache_key)
+            return snapshot
+
+    def _memory_recall_cache_put(self, cache_key: str, snapshot: RetrievalDebugSnapshot) -> None:
+        """写入召回缓存,超上限时淘汰最久未命中的条目。"""
+
+        with self._memory_recall_cache_lock:
+            while len(self._memory_recall_cache) >= self._memory_recall_cache_max_entries:
+                self._memory_recall_cache.popitem(last=False)
+            self._memory_recall_cache[cache_key] = (time.monotonic(), snapshot)
+            self._memory_recall_cache.move_to_end(cache_key)
 
 
 def _to_iso(value: datetime | None) -> str:

@@ -115,6 +115,39 @@ def get_current_time(timezone_name: str = "UTC") -> str:
     return datetime.now(target_timezone).isoformat()
 
 
+def list_available_tools() -> str:
+    """
+    列出当前可用的全部工具名称与用途。
+
+    返回格式为每行一个工具:`- 中文名(工具名): 一句话用途`。
+    当本轮只预绑定了部分工具时,可调用本工具查看完整清单,
+    再在回复中说出所需工具名,下一轮即可放开绑定。
+    """
+
+    from agent_service.tools.tool_registry import ToolRegistry
+
+    runtime = get_tool_runtime()
+    registry = ToolRegistry.with_builtin_tools(config=runtime.config)
+    if not registry.definitions:
+        return "当前没有可用工具。"
+    lines = []
+    for definition in sorted(
+        registry.definitions.values(),
+        key=lambda d: (d.display_name or d.name),
+    ):
+        name = definition.name
+        display = definition.display_name or name
+        description = (definition.description or "").strip()
+        first_line = next(
+            (line.strip() for line in description.split("\n") if line.strip()),
+            "",
+        )
+        if len(first_line) > 100:
+            first_line = first_line[:100].rstrip() + "…"
+        lines.append(f"- {display}({name}): {first_line}")
+    return "\n".join(lines)
+
+
 def list_skills() -> str:
     """
     List all skills visible to the current user.

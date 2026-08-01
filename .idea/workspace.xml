@@ -4,23 +4,25 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="代码高亮问题解决">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="预览调整">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/CodeEditor.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/CodeEditor.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorModeSwitch.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorModeSwitch.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/EditorPane.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/MarkdownPreview.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/__tests__/CodeEditor.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/__tests__/CodeEditor.spec.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/__tests__/markdownImageUrls.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/__tests__/markdownImageUrls.spec.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MarkdownContent.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MarkdownContent.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/__tests__/MarkdownContent.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/__tests__/MarkdownContent.spec.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/codeHighlight.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/codeHighlight.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/markdownImageUrls.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/markdownImageUrls.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/workspace.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/workspace.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_graph_react.mmd" beforeDir="false" afterPath="$PROJECT_DIR$/agent_graph_react.mmd" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/graph.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/graph.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/nodes/model_decision.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/nodes/model_decision.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/context_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/context_builder.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/important_fact_summary_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/important_fact_summary_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/retrieval_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/retrieval_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/builtin.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/builtin.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/definitions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/definitions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/electron/main.cjs" beforeDir="false" afterPath="$PROJECT_DIR$/editor/electron/main.cjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/utils/yamlExport.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/utils/yamlExport.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_agent_core_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_agent_core_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_agent_loop_model_tier.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_agent_loop_model_tier.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -309,15 +311,7 @@
       <workItem from="1785212115660" duration="1797000" />
       <workItem from="1785411230338" duration="12489000" />
       <workItem from="1785462181237" duration="9290000" />
-      <workItem from="1785553951295" duration="6822000" />
-    </task>
-    <task id="LOCAL-00229" summary=".">
-      <option name="closed" value="true" />
-      <created>1784954721267</created>
-      <option name="number" value="00229" />
-      <option name="presentableId" value="LOCAL-00229" />
-      <option name="project" value="LOCAL" />
-      <updated>1784954721267</updated>
+      <workItem from="1785553951295" duration="13089000" />
     </task>
     <task id="LOCAL-00230" summary="重构设置页面接口层,按照设置页面的子页面进行模块设置划分.">
       <option name="closed" value="true" />
@@ -703,14 +697,21 @@
       <option name="project" value="LOCAL" />
       <updated>1785557598050</updated>
     </task>
-    <option name="localTasksCounter" value="278" />
+    <task id="LOCAL-00278" summary="预览调整">
+      <option name="closed" value="true" />
+      <created>1785561009699</created>
+      <option name="number" value="00278" />
+      <option name="presentableId" value="LOCAL-00278" />
+      <option name="project" value="LOCAL" />
+      <updated>1785561009699</updated>
+    </task>
+    <option name="localTasksCounter" value="279" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="任务列表工具名称" />
     <MESSAGE value="Skills v1" />
     <MESSAGE value="代码块样式" />
     <MESSAGE value="Skill v2" />
@@ -735,7 +736,8 @@
     <MESSAGE value="修复了claudecode认为的四个问题" />
     <MESSAGE value="高亮v1" />
     <MESSAGE value="代码高亮问题解决" />
-    <option name="LAST_COMMIT_MESSAGE" value="代码高亮问题解决" />
+    <MESSAGE value="预览调整" />
+    <option name="LAST_COMMIT_MESSAGE" value="预览调整" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />

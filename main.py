@@ -87,8 +87,6 @@ from agent_service.services.knowledge_library_service import KnowledgeLibrarySer
 from agent_service.services.git_service import GitService
 from agent_service.services.knowledge_graph_service import KnowledgeGraphService
 from agent_service.services.library_service import LibraryService
-from agent_service.services.memory.rag.knowledge_ingestion import KnowledgeIngestionService
-from agent_service.scripts.frontmatter_bootstrap import bootstrap_frontmatter
 import agent_service.api.rest.deps as rest_deps
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.session_service import SessionService
@@ -180,29 +178,8 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     rest_deps._todo_service = TodoService(data_dir=str(config.storage.base_data_dir))
     logger.info("SettingsService 初始化完成")
 
-    # 自动灌库: 扫描 resources/knowledge, 对已变更的文件执行 frontmatter 结构化 + Embedding + 入库
-    try:
-        frontmatter_result = bootstrap_frontmatter(
-            config=config,
-            exclude_path=_build_startup_frontmatter_exclude(
-                config=config,
-                settings_service=settings_service,
-            ),
-        )
-        ingestion_service = KnowledgeIngestionService(config=config, memory_service=memory_service)
-        ingestion_result = ingestion_service.ingest_frontmatter_dir()
-        logger.info(
-            "知识库灌库完成 | frontmatter: seen=%d written=%d skipped=%d | ingestion: seen=%d ingested=%d skipped=%d chunks=%d",
-            frontmatter_result["files_seen"],
-            frontmatter_result["files_written"],
-            frontmatter_result["files_skipped"],
-            ingestion_result.files_seen,
-            ingestion_result.files_ingested,
-            ingestion_result.files_skipped,
-            ingestion_result.chunks_created,
-        )
-    except Exception:
-        logger.exception("知识库灌库失败,服务继续启动")
+    # 启动不执行任何自动灌库。知识库由前端 /knowledge/rebuild、单文件灌库与
+    # 上传灌库按需触发,避免启动阶段占用 embedding/rerank 与磁盘资源。
 
     # 启动时自动加载已有 Embedding / ReRank 模型
     try:
@@ -324,67 +301,6 @@ app.mount(
     StaticFiles(directory=str(_visualizations_dir)),
     name="visualizations",
 )
-
-
-def _build_startup_frontmatter_exclude(
-    *,
-    config: AgentConfig,
-    settings_service: SettingsService,
-) -> Any:
-    """Exclude editor-managed user libraries from the global startup bootstrap."""
-
-    global_knowledge_dir = config.storage.knowledge_dir.resolve()
-    excluded_roots = [
-        library_dir
-        for library_dir in settings_service.list_knowledge_library_dirs()
-        if library_dir != global_knowledge_dir and _is_relative_to(library_dir, global_knowledge_dir)
-    ]
-    excluded_roots.extend(_startup_user_namespace_roots(config=config, base_dir=global_knowledge_dir))
-    excluded_roots = _deduplicate_paths(excluded_roots)
-    if not excluded_roots:
-        return None
-
-    def exclude_path(path: Path) -> bool:
-        resolved_path = path.resolve()
-        return any(_is_relative_to(resolved_path, root) for root in excluded_roots)
-
-    return exclude_path
-
-
-def _startup_user_namespace_roots(*, config: AgentConfig, base_dir: Path) -> list[Path]:
-    """Infer legacy editor-managed user namespace roots under a global directory."""
-
-    users_root = config.storage.frontmatter_dir / "users"
-    if not users_root.is_dir() or not base_dir.is_dir():
-        return []
-    roots: list[Path] = []
-    for user_dir in users_root.iterdir():
-        if not user_dir.is_dir():
-            continue
-        candidate = (base_dir / user_dir.name).resolve()
-        if candidate.is_dir():
-            roots.append(candidate)
-    return roots
-
-
-def _deduplicate_paths(paths: list[Path]) -> list[Path]:
-    seen: set[Path] = set()
-    result: list[Path] = []
-    for path in paths:
-        resolved = path.resolve()
-        if resolved in seen:
-            continue
-        seen.add(resolved)
-        result.append(resolved)
-    return result
-
-
-def _is_relative_to(path: Path, root: Path) -> bool:
-    try:
-        path.resolve().relative_to(root.resolve())
-        return True
-    except ValueError:
-        return False
 
 
 def _resolve_static_dir() -> Path | None:

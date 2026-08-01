@@ -73,14 +73,18 @@ class ImportantFactSummaryService:
         normalized_transcript = transcript.strip()
         if not normalized_transcript:
             return ""
-        api_key, base_url, small_api_key, small_base_url = self._resolve_llm_overrides(llm_config)
+        api_key, base_url, model_name, small_api_key, small_base_url, small_model_name = (
+            self._resolve_llm_overrides(llm_config)
+        )
         response = self.task_scheduler.invoke_chat(
             task_type=task_type,
             model_tier=SMALL_MODEL_TIER,
             api_key=api_key,
             base_url=base_url,
+            model_name=model_name,
             small_api_key=small_api_key,
             small_base_url=small_base_url,
+            small_model_name=small_model_name,
             messages=[
                 SystemMessage(content=self._build_system_prompt(mode=mode)),
                 HumanMessage(content=normalized_transcript),
@@ -91,16 +95,20 @@ class ImportantFactSummaryService:
     @staticmethod
     def _resolve_llm_overrides(
         llm_config: dict[str, Any] | None,
-    ) -> tuple[str | None, str | None, str | None, str | None]:
+    ) -> tuple[str | None, str | None, str | None, str | None, str | None, str | None]:
         """从用户 LLM 配置解析运行时覆盖项,small 配置缺省时回退到主模型配置。"""
 
         if not llm_config:
-            return None, None, None, None
+            return None, None, None, None, None, None
         api_key = ImportantFactSummaryService._normalize_optional_str(llm_config.get("api_key"))
         base_url = ImportantFactSummaryService._normalize_optional_str(llm_config.get("base_url"))
+        model_name = ImportantFactSummaryService._normalize_optional_str(llm_config.get("model_name"))
         small_api_key = ImportantFactSummaryService._normalize_optional_str(llm_config.get("small_api_key")) or api_key
         small_base_url = ImportantFactSummaryService._normalize_optional_str(llm_config.get("small_base_url")) or base_url
-        return api_key, base_url, small_api_key, small_base_url
+        small_model_name = (
+            ImportantFactSummaryService._normalize_optional_str(llm_config.get("small_model_name")) or model_name
+        )
+        return api_key, base_url, model_name, small_api_key, small_base_url, small_model_name
 
     @staticmethod
     def _normalize_optional_str(value: Any) -> str | None:

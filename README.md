@@ -46,7 +46,7 @@ pip install -r agent_service/requirements.txt
 # 启动服务（HTTP: 8002, gRPC: 50051）
 uvicorn main:app --host 0.0.0.0 --port 8002
 ```
-后端默认将项目目录下的`resources/knowledge/`作为知识库根目录,用户可在前端自行重新选择知识库目录,更换知识库时库内将进行多模态文档扫描,进入向量数据库供Agent使用.
+后端默认将项目目录下的`resources/knowledge/`作为知识库根目录,用户可在前端自行重新选择知识库目录,更换知识库时库内将进行多模态文档扫描,进入向量数据库供Agent使用. 服务启动不执行任何自动灌库,知识库由前端 `/knowledge/rebuild`、单文件灌库与上传灌库按需触发,启动阶段不占用 embedding/rerank 与磁盘资源.
 
 ### 3. 启动前端（Electron + Vite + Vue 3）
 
@@ -99,7 +99,7 @@ pyinstaller AgentService.spec
 ```
 AgentService.exe
 ├── resources/           # 自动生成空目录,放入文件即可覆盖 exe 内置默认
-│   ├── knowledge/       # 默认知识库,默认不启动自动灌库
+│   ├── knowledge/       # 默认知识库,启动不自动灌库,按需触发
 │   ├── mcp/             # 放 .json MCP 服务器配置,重启自动加载
 │   └── safety/          # 放 sensitive_words.json,覆盖内置安全词库
 └── runtime/             # 自动生成: db/ models/ frontmatter/ logs/
@@ -184,6 +184,8 @@ AgentService.exe
 采用 **Function Calling** 模式，对接 **MCP 协议** 接入外部工具。系统自带默认工具,包括记忆召回,知识库检索,规则创建,文件操作,联网搜索等。
    * 注册与执行架构：工具注册器`ToolRegistry` 维护 `工具名 → 工具功能` 映射，支持 JSON Schema 参数校验并自动转换为工具体；工具执行器`ToolExecutor` 负责运行时调度，通过 `get_tool_runtime()` 注入当前用户/会话上下文，确保跨用户隔离与工具函数无状态复用。
    * 工具可开关: 用户可在设置中对Agent可使用的工具进行开关,或者直接在Agent观测页面的工具注册表进行工具开关.
+   * 工具按需绑定: 每轮决策只预绑定"上轮实际用过的 ∪ 核心白名单(常用工具)",大幅减少长循环中每轮注入 46 个完整工具 schema 的固定开销;模型需要白名单外工具时,在回复正文中说出该工具名,下一轮自动放开全量绑定一轮.
+   * 工具自发现: 常驻"查看可用工具"工具(`list_available_tools`),任何时候都可查询全部工具的中文名、确切工具名与一句话用途(含 MCP 工具),配合按需绑定实现"查询 → 点名 → 下轮放开 → 调用"闭环,避免模型因看不到白名单外工具的 schema 而绕路或把长内容塞进回答正文.
    * 可观测性执行流程：每步工具调用逐一执行，产生 start 与 end 双向 trace（含工具名、参数摘要、结果摘要与条目数），通过异步回调实时推送前端观测面板, 工具调用结果则写回消息历史供后续观察节点 `observation`/`agent` 审视，形成完整的可追溯闭合回路。
     Agent可操作用户本地知识库文件.Agent既可以通过RAG获取用户指代的最相关文件,又可以通过通过文件管理系统API具体调查和操作任何所需的具体文档,实现了"中枢智能体"的理念.
 #### Skill能力
@@ -527,17 +529,18 @@ Simple 模式走轻量直答路径。不经过 LangGraph 循环，直接用小�
 flowchart TD
     START --> safety_input["safety_input\n安全输入审核"]
 
-    safety_input -->|"审核通过"| agent_react["agent\n模型决策节点"]
+    safety_input -->|"审核通过"| compress_react["compress\n上下文压缩(低阈值幂等跳过)"]
     safety_input -->|"审核拦截"| END_intercept["END"]
 
+    compress_react --> agent_react["agent\n模型决策节点"]
     agent_react -->|"有 tool_calls"| action_react["action\n工具执行"]
     agent_react -->|"无 tool_calls"| safety_output_react["safety_output\n安全输出审核"]
 
-    action_react -->|"工具结果返回"| agent_react
+    action_react -->|"工具结果返回"| compress_react
     safety_output_react --> END_react["END"]
 ```
 
-ReAct 模式是标准的"思考-行动-观察"循环。agent 节点同时充当决策者和观察者，每轮只调用一次 LLM。有工具调用就执行并回到 agent，没有工具调用就输出审核后结束。
+ReAct 模式是标准的"思考-行动-观察"循环。agent 节点同时充当决策者和观察者，每轮只调用一次 LLM。有工具调用就执行并回到 agent，没有工具调用就输出审核后结束。每次进入决策前与工具回环后都经 `compress` 节点估算上下文长度：低于阈值幂等跳过，高于阈值用小模型把早期消息压成重要事实摘要（写入长期记忆），防止长循环上下文单调膨胀。
 
 ##### Plan模式(Plan-and-Execute)
 
@@ -709,24 +712,23 @@ flowchart TD
 ```mermaid
 flowchart TD
     A["ContextBuilder.build_messages()"] --> B["加载近期历史消息\\n(list_recent_messages, 最多 N 条)"]
-    B --> C["检索长期记忆\\n(retrieve_long_term_memory)"]
-    C --> D["检索知识库片段\\n(retrieve_knowledge)"]
-    D --> E["获取重要事实摘要\\n(get_latest_important_fact_summary)"]
-    E --> F{"拼接检索上下文"}
-    F --> G["SystemMessage: 检索上下文\\n(记忆 + 知识库 + 重要事实)"]
-    G --> H["转换历史消息\\n(MessageOut → LangChain Message)"]
-    H --> I["追加 HumanMessage\\n(current_prompt)"]
-    I --> J{"Token 估算\\n超过 summary_trigger_tokens?"}
-    J -->|"未超过"| K["返回完整 messages 列表\\n[SystemMessage, ...history, HumanMessage]"]
-    J -->|"超过"| L["裁剪历史消息\\n(仅保留最近 tail 条)"]
-    L --> M["重建压缩上下文\\n_rebuild_messages_for_compressed_context"]
-    M --> K
-    K --> N["送入 Agent 图执行"]
+    B --> C["检索长期记忆\\n(retrieve_long_term_memory)<br/>按 session 短 TTL 缓存<br/>(30s, 命中直接复用)"]
+    C --> D["获取重要事实摘要\\n(get_latest_important_fact_summary)"]
+    D --> E{"拼接检索上下文"}
+    E --> F["SystemMessage: 检索上下文\\n(记忆 + 重要事实)"]
+    F --> G["转换历史消息\\n(MessageOut → LangChain Message)"]
+    G --> H["追加 HumanMessage\\n(current_prompt)"]
+    H --> I{"Token 估算\\n超过 summary_trigger_tokens?"}
+    I -->|"未超过"| J["返回完整 messages 列表\\n[SystemMessage, ...history, HumanMessage]"]
+    I -->|"超过"| K["裁剪历史消息\\n(仅保留最近 tail 条)"]
+    K --> L["重建压缩上下文\\n_rebuild_messages_for_compressed_context"]
+    L --> J
+    J --> M["送入 Agent 图执行"]
 ```
 
 **消息角色优先级（上下文拼装顺序）：**  
 `SystemMessage(检索上下文)` → `历史消息按时间正序` → `HumanMessage(当前输入)`  
-检索上下文内部优先级：`important_fact_summary > 长期记忆(已附原文) > 当前 session 摘要 > 知识库(需调工具)`
+检索上下文内部优先级：`important_fact_summary > 长期记忆(已附原文) > 当前 session 摘要`。知识库不再自动召回进上下文，由 Agent 需要时自行调用 `get_knowledge_context` / `search_knowledge` 等工具获取，避免首 token 前重复跑完整 embedding+rerank 链路。
 
 ##### 上下文压缩机制
 

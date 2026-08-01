@@ -62,29 +62,13 @@ function serializeValue(value: unknown, indent: number, indentSize: number): str
     if (value.length === 0) {
       return '[]'
     }
-    const allPrimitives = value.every(
-      (item) => item === null || typeof item !== 'object' || (Array.isArray(item) && item.length === 0),
-    )
-    if (allPrimitives) {
+    if (value.every((item) => isFlowScalar(item))) {
       return `[${value.map((item) => serializeValue(item, indent, indentSize)).join(', ')}]`
     }
     return value
       .map((item) => {
         if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-          const keys = Object.keys(item as Record<string, unknown>)
-          if (keys.length === 0) return `${pad}- {}`
-          const firstKey = keys[0]
-          const firstVal = (item as Record<string, unknown>)[firstKey]
-          const restKeys = keys.slice(1)
-          const firstLine = serializeValue(firstVal, indent + indentSize + 2, indentSize)
-          const header = `${pad}- ${firstKey}: ${firstLine}`
-          if (restKeys.length === 0) return header
-          return `${header}\n${restKeys
-            .map((key) => {
-              const val = (item as Record<string, unknown>)[key]
-              return `${pad}${' '.repeat(indentSize)}${key}: ${serializeValue(val, indent + indentSize, indentSize)}`
-            })
-            .join('\n')}`
+          return serializeObjectAsListItem(item as Record<string, unknown>, indent, indentSize)
         }
         return `${pad}- ${serializeValue(item, indent + indentSize, indentSize)}`
       })
@@ -94,15 +78,75 @@ function serializeValue(value: unknown, indent: number, indentSize: number): str
   if (typeof value === 'object') {
     const keys = Object.keys(value as Record<string, unknown>)
     if (keys.length === 0) return '{}'
+    const nestedIndent = indent + indentSize
     return keys
       .map((key) => {
         const val = (value as Record<string, unknown>)[key]
-        return `${pad}${key}: ${serializeValue(val, indent + indentSize, indentSize)}`
+        const rendered = serializeValue(val, nestedIndent, indentSize)
+        if (isInlineMountable(val)) {
+          return `${pad}${key}: ${rendered}`
+        }
+        return `${pad}${key}:\n${rendered}`
       })
       .join('\n')
   }
 
   return String(value)
+}
+
+/**
+ * 判断标量是否可用流式 `[a, b]` 内联。
+ *
+ * 多行字符串与对象不能进入流式序列，须展开为逐行列表。
+ */
+function isFlowScalar(value: unknown): boolean {
+  if (value === null || value === undefined) return true
+  if (typeof value === 'string') return !isMultiline(value)
+  if (typeof value === 'number' || typeof value === 'boolean') return true
+  if (Array.isArray(value)) return value.every((item) => isFlowScalar(item))
+  return false
+}
+
+/**
+ * 判断值能否直接拼在 `key: ` 之后（单行挂载）。
+ *
+ * 对象与含对象/多行字符串的数组必须换行挂载（`key:\n` + 已缩进的子内容），
+ * 否则首行会被拼到 key 同一行，产出 `key:   id: x` 这类非法映射。
+ * 注意单键对象/单元素对象数组的渲染也只有一行，不能靠换行判定，须看值类型。
+ * 多行字符串是块标量（`key: |`），必须保留在 key 同行，走内联分支。
+ */
+function isInlineMountable(value: unknown): boolean {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return Object.keys(value as Record<string, unknown>).length === 0
+  }
+  if (Array.isArray(value)) {
+    return value.every((item) => isFlowScalar(item))
+  }
+  return true
+}
+
+function serializeObjectAsListItem(
+  item: Record<string, unknown>,
+  indent: number,
+  indentSize: number,
+): string {
+  const pad = ' '.repeat(indent)
+  const keys = Object.keys(item)
+  if (keys.length === 0) return `${pad}- {}`
+  // 列表项映射的 key 对齐到 `- ` 之后（indent + 2），子级再缩进一层。
+  const keyPad = `${pad}${' '.repeat(indentSize)}`
+  const nestedIndent = indent + indentSize + indentSize
+  return keys
+    .map((key, index) => {
+      const val = item[key]
+      const rendered = serializeValue(val, nestedIndent, indentSize)
+      const prefix = index === 0 ? `${pad}- ` : keyPad
+      if (isInlineMountable(val)) {
+        return `${prefix}${key}: ${rendered}`
+      }
+      return `${prefix}${key}:\n${rendered}`
+    })
+    .join('\n')
 }
 
 export function toYaml(value: unknown, indentSize = 2): string {

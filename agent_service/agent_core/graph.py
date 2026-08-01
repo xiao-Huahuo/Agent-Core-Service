@@ -103,6 +103,16 @@ class AgentGraphBuilder:
                     tool_executor=self.tool_executor,
                 ),
             )
+        elif normalized_mode == "react":
+            # react 图同样接入压缩节点:在 agent 决策前检查上下文是否接近
+            # token 上限,溢出时用摘要压缩历史,避免长循环单调膨胀。
+            workflow.add_node(
+                "compress",
+                CompressNode(
+                    config=self.config,
+                    task_scheduler=self.task_scheduler,
+                ),
+            )
         workflow.add_node(
             "agent",
             ModelDecisionNode(
@@ -132,7 +142,7 @@ class AgentGraphBuilder:
             )
         if self.safety_service and self.safety_service.supports_input_audit:
             workflow.set_entry_point("safety_input")
-            safe_next = "agent" if normalized_mode == "react" else "planner"
+            safe_next = "compress" if normalized_mode == "react" else "planner"
             workflow.add_conditional_edges(
                 "safety_input",
                 self._route_after_safety_input,
@@ -141,11 +151,15 @@ class AgentGraphBuilder:
             self._branch_labels[("safety_input", safe_next)] = "审核通过"
             self._branch_labels[("safety_input", "__end__")] = "审核拦截"
         else:
-            workflow.set_entry_point("agent" if normalized_mode == "react" else "planner")
-        # compress 仅在 observation 判定上下文溢出时触发,压缩后回到 planner 重新规划
+            workflow.set_entry_point("compress" if normalized_mode == "react" else "planner")
+        # 压缩节点在进入模型决策前检查上下文是否接近上限;plan 由 observation
+        # 判定溢出触发,react 在每次 action 后回环时检查(阈值内为廉价估算,直接跳过)。
         if normalized_mode == "plan":
             workflow.add_edge("compress", "planner")
             workflow.add_edge("planner", "agent")
+        else:
+            workflow.add_edge("compress", "agent")
+            self._branch_labels[("compress", "agent")] = "压缩或跳过 → 继续决策"
         if self.safety_service is not None:
             workflow.add_conditional_edges(
                 "agent",
@@ -163,8 +177,8 @@ class AgentGraphBuilder:
             self._branch_labels[("agent", "action")] = "有 tool_calls"
             self._branch_labels[("agent", "__end__")] = "无 tool_calls → 结束"
         if normalized_mode == "react":
-            workflow.add_edge("action", "agent")
-            self._branch_labels[("action", "agent")] = "工具结果 → 继续决策"
+            workflow.add_edge("action", "compress")
+            self._branch_labels[("action", "compress")] = "工具结果 → 压缩检查 → 继续决策"
         else:
             workflow.add_edge("action", "observation")
             workflow.add_conditional_edges(

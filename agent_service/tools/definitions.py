@@ -42,6 +42,7 @@ from agent_service.tools.builtin import (
     get_knowledge_context,
     get_knowledge_file_url,
     get_long_term_memory,
+    list_available_tools,
     list_skills,
     list_knowledge_files,
     list_todos,
@@ -63,6 +64,21 @@ from agent_service.tools.builtin import (
 )
 
 UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
+    BuiltinToolDefinition(
+        name="list_available_tools",
+        description=(
+            "列出当前可用的全部工具(中文名、工具名、一句话用途),每行一个。"
+            "当本轮仅预绑定了部分工具时,可调用本工具查看完整清单,"
+            "再在回复中说出所需工具名,下一轮即可放开绑定使用。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        function=list_available_tools,
+        display_name="查看可用工具",
+    ),
     BuiltinToolDefinition(
         name="get_current_time",
         description="获取指定 IANA 时区的当前时间。默认使用 UTC。",

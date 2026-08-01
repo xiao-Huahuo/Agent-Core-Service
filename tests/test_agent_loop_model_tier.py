@@ -10,6 +10,8 @@ from agent_service.agent_core.nodes.planner import PlannerNode
 from agent_service.agent_core.nodes.tool_call import ToolCallNode
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.scheduler import SMALL_MODEL_TIER
+from agent_service.tools.builtin import list_available_tools
+from agent_service.tools.runtime_context import clear_tool_runtime, set_tool_runtime
 
 
 class _FakeScheduler:
@@ -273,4 +275,117 @@ def test_model_decision_compacts_tool_messages_before_llm_call() -> None:
     assert prepared[-1].tool_call_id == "call_1"
     assert len(str(prepared[-1].content)) < 1200
     assert "工具返回内容已压缩" in str(prepared[-1].content)
+
+
+def _make_node() -> ModelDecisionNode:
+    return object.__new__(ModelDecisionNode)
+
+
+def test_on_demand_tool_binding_first_round_binds_all() -> None:
+    node = _make_node()
+    names = ["web_search", "read_knowledge_file", "download_file"]
+
+    bound, trimmed = node._compute_bound_tool_names(
+        state={"messages": [HumanMessage(content="你好")]},
+        active_tool_names=names,
+    )
+
+    assert bound == names
+    assert trimmed is False
+
+
+def test_on_demand_tool_binding_trimmed_after_first_round() -> None:
+    node = _make_node()
+    names = ["web_search", "read_knowledge_file", "download_file", "search_knowledge", "get_current_time"]
+    messages = [
+        HumanMessage(content="看看项目里有没有安装说明"),
+        AIMessage(content="", tool_calls=[{"name": "read_knowledge_file", "args": {}, "id": "c1", "type": "tool_call"}]),
+        ToolMessage(content="ok", tool_call_id="c1"),
+        AIMessage(content="继续找", tool_calls=[{"name": "search_knowledge", "args": {}, "id": "c2", "type": "tool_call"}]),
+    ]
+
+    bound, trimmed = node._compute_bound_tool_names(
+        state={"messages": messages},
+        active_tool_names=names,
+    )
+
+    assert trimmed is True
+    # 白名单外且本轮未用过的工具不绑定;上轮用过的 search_knowledge 与白名单工具保留
+    assert "download_file" not in bound
+    assert {"read_knowledge_file", "search_knowledge", "web_search", "get_current_time"}.issubset(bound)
+
+
+def test_on_demand_tool_binding_falls_back_full_when_extra_named() -> None:
+    node = _make_node()
+    names = ["web_search", "read_knowledge_file", "download_file"]
+    messages = [
+        HumanMessage(content="帮我下载一张图片"),
+        AIMessage(content="", tool_calls=[{"name": "web_search", "args": {}, "id": "c1", "type": "tool_call"}]),
+        ToolMessage(content="ok", tool_call_id="c1"),
+        AIMessage(content="我需要 download_file 工具来下载这张图片"),
+    ]
+
+    bound, trimmed = node._compute_bound_tool_names(
+        state={"messages": messages},
+        active_tool_names=names,
+    )
+
+    assert bound == names
+    assert trimmed is False
+
+
+def test_list_available_tools_returns_full_tool_catalog() -> None:
+    set_tool_runtime(config=AgentConfig(), user_id="u1", session_id="s1")
+    try:
+        result = list_available_tools()
+    finally:
+        clear_tool_runtime()
+
+    assert "list_available_tools" in result
+    assert "web_search" in result
+    assert "show_markdown_html" in result
+    assert "download_file" in result
+    assert "create_task_list" in result
+
+
+def test_list_available_tools_always_bound_in_trimmed_round() -> None:
+    node = _make_node()
+    names = ["web_search", "read_knowledge_file", "download_file", "list_available_tools"]
+    messages = [
+        HumanMessage(content="任务"),
+        AIMessage(
+            content="",
+            tool_calls=[{"name": "web_search", "args": {}, "id": "c1", "type": "tool_call"}],
+        ),
+        ToolMessage(content="ok", tool_call_id="c1"),
+    ]
+
+    bound, trimmed = node._compute_bound_tool_names(
+        state={"messages": messages},
+        active_tool_names=names,
+    )
+
+    assert trimmed is True
+    # 白名单外且未用过的工具被瘦身,但常驻的 list_available_tools 与上轮用过的保留
+    assert "download_file" not in bound
+    assert "list_available_tools" in bound
+    assert "web_search" in bound
+
+
+def test_on_demand_tool_binding_falls_back_when_binding_would_be_empty() -> None:
+    node = _make_node()
+    names = ["git_status"]
+    messages = [
+        HumanMessage(content="下载文件"),
+        AIMessage(content="", tool_calls=[{"name": "download_file", "args": {}, "id": "c1", "type": "tool_call"}]),
+        ToolMessage(content="ok", tool_call_id="c1"),
+    ]
+
+    bound, trimmed = node._compute_bound_tool_names(
+        state={"messages": messages},
+        active_tool_names=names,
+    )
+
+    assert bound == names
+    assert trimmed is False
 

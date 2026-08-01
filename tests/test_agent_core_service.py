@@ -714,8 +714,8 @@ def test_context_builder_appends_current_prompt_and_converts_roles() -> None:
     assert messages[-1].content == "继续"
 
 
-def test_context_builder_passes_user_id_to_automatic_knowledge_retrieval() -> None:
-    """验证自动知识库召回使用当前用户范围,而不是默认 system 知识库。"""
+def test_context_builder_no_longer_calls_automatic_knowledge_retrieval() -> None:
+    """验证上下文构建不再触发自动知识库召回,知识库内容由 agent 按需调用工具获取。"""
 
     config = AgentConfig.load_config(
         {"memory": {"max_context_messages": 4}},
@@ -730,7 +730,7 @@ def test_context_builder_passes_user_id_to_automatic_knowledge_retrieval() -> No
     knowledge_calls: list[dict[str, Any]] = []
 
     def retrieve_knowledge_with_debug(**kwargs: Any) -> Any:
-        """记录自动知识库召回参数。"""
+        """记录自动知识库召回参数(应从未被调用)。"""
 
         knowledge_calls.append(kwargs)
         return empty_snapshot
@@ -746,13 +746,7 @@ def test_context_builder_passes_user_id_to_automatic_knowledge_retrieval() -> No
 
     builder.build_messages(user_id="user_1", session_id="sess_scope", current_prompt="查找知识库内容")
 
-    assert knowledge_calls == [
-        {
-            "query": "查找知识库内容",
-            "user_id": "user_1",
-            "top_k": config.memory.rerank_top_k,
-        }
-    ]
+    assert knowledge_calls == []
 
 
 def test_context_builder_keeps_references_in_history_and_compressed_current_prompt() -> None:

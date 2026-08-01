@@ -1,6 +1,27 @@
 # CHANGE HISTORY
 
 ## 2026-08-01
+- [x] 常驻"查看可用工具"工具,让 agent 能主动发现并按需点名白名单外工具:
+  - 复盘会话发现按需绑定瘦身轮后,模型只看得见绑定工具,对白名单外工具既不知道存在、也不知道确切名字,点名机制落空。典型场景:agent 读完文档生成 HTML 后想调 `show_markdown_html` 展示,但该工具不在白名单,模型看不到 schema,只能把整段 HTML 打进回答正文、在结尾写"下一轮放开后再调用",任务停在 in_progress。
+  - 新增元工具 `list_available_tools`(中文名"查看可用工具"):枚举 `ToolRegistry` 全部定义(含 MCP 工具),每行输出 `中文名(工具名): 一句话用途`,总长约 4k 字符,远小于 46 个完整 schema。注册在 `UTILITY_TOOL_DEFINITIONS`。
+  - `model_decision.py` 三处:白名单加入 `list_available_tools`(瘦身轮常驻,模型任何时候都能查询);`ON_DEMAND_BINDING_HINT` 引导模型"调用 list_available_tools 查看全部工具、需要白名单外工具时直接说出工具名"(`show_markdown_html`、`download_file`、Git 系列等);`_tool_message_max_chars` 给 `list_available_tools` 独立档位恒 6000(不随消息位置衰减),避免清单本身被截断。
+  - 新增 2 个测试(工具返回包含全清单 / 瘦身轮常驻),agent 循环测试 20 个全绿;compress 相关回归 2 个通过。注:运行中的 AgentService 需重启(或重新打包)后才生效。
+- [x] 修复会话 YAML 导出格式无效,导出的文件无法再导入:
+  - 复盘桌面会话 YAML 发现:`session:   id: x`、`messages:   - role: x`、`trace_details:     - event: x` 都是 key 与子内容挤在同一行。手写序列化器 `editor/src/utils/yamlExport.ts` 对对象/对象数组值走 `key: ${serializeValue(...)}` 单行内联,子内容首行自带缩进被拼到 key 同行,产出非法映射;后端 `/sessions/import-file` 用 `yaml.safe_load` 解析直接抛 ScannerError,导出的会话无法再导入。
+  - 修复:对象键值改为「值需换行挂载」判定——非空对象与含对象/多行字符串的数组一律 `key:\n` + 已缩进子内容换行挂载,单行标量(含多行字符串的 `key: |` 块标量)保持内联;列表项映射子级统一缩进到 `- ` 之后再加一层,消除首键与其他键缩进不一致(原代码首键用 `indent+indentSize+2`、其余键用 `indent+indentSize`)。数组流式内联判定改为递归 `isFlowScalar`(多行字符串不可入流)。
+  - 验证:新增 `yamlExport.spec.ts` 结构断言 4 例通过,并用真实导出对象落盘后经后端同款 PyYAML `safe_load` 解析成功、结构与内容完整往返;`vue-tsc` 全量类型检查通过。此前导出的旧文件为非法格式,重新导出后即可正常导入。
+- [x] 修复压缩摘要路径丢失用户模型名导致会话中途抛"大模型未配置模型名称":
+  - 会话复盘发现:上下文膨胀跨过压缩阈值时,compress 节点调用 `ImportantFactSummaryService.summarize_text` 触发小模型摘要,但该方法只从用户 `llm_config` 取 api_key/base_url,丢弃了 `model_name`/`small_model_name`。当用户模型只配置在设置页(per-user llm_config)、全局 `config.model.model_name` 为空时,调度器 `_resolve_model_runtime` 解析小模型名全为空 → 降级大模型 → 大模型名也为空 → 抛 `ValueError("大模型未配置模型名称,请先在设置页配置模型。")`,异常经 `api_content_filter` 写成 `node: error` 气泡中断会话。
+  - 修复:`important_fact_summary_service.py` 的 `_resolve_llm_overrides` 增加 `model_name`/`small_model_name` 解析(小模型缺省回退主模型名),`summarize_text` 透传给 `invoke_chat`。前台 compress 与后台摘要共用此路径,后台无 llm_config 时行为不变(仍依赖全局配置)。
+  - 验证:压缩节点测试与 18 个 agent 循环测试通过;解析与转发两层手工检查通过。注:运行中的 AgentService 需重启(或重新打包)后才生效。
+- [x] 优化 Agent 回答性能(启动、思考前首 token、循环三处):
+  - 启动:彻底移除自动灌库逻辑。`main.py` 不再调用 `bootstrap_frontmatter + ingest_frontmatter_dir`(含后台线程池方案一并删除),启动阶段不扫描、不写库、不占用 embedding/rerank 与磁盘资源;知识库仅由前端 `/knowledge/rebuild`、单文件灌库与上传灌库按需触发。
+  - 思考前首 token:`context_builder.py` 移除知识库自动召回,只保留长期记忆自动召回(知识库内容由 agent 需要时自行调用 `get_knowledge_context` / `search_knowledge` 等工具获取,避免首 token 前重复跑完整 embedding+rerank 链路);`retrieval_service.py` 为 `retrieve_long_term_memory_with_debug` 增加按 session 的短 TTL LRU 缓存(30s TTL / 128 条,key 为 `user\0session\0归一化查询\0top_k`,命中直接复用,避免同一会话连续提问重复召回)。
+  - 循环:react 图接入与 plan 图相同的上下文压缩节点。`graph.py` react 分支入口改为 `safety_input → compress → agent ⇄ action → compress`:每次 action 回环与首次决策前都经 compress 做 token 估算,低于阈值幂等跳过(`compression_skipped` 事件不修改消息),高于阈值用小模型摘要压缩历史并持久化到长记忆,防止长循环上下文单调膨胀。
+- [x] 每轮工具按需绑定,减少 46 个工具 schema 每轮的固定开销:
+  - `model_decision.py` 新增 `_compute_bound_tool_names`:首次决策(messages 中从未出现过 tool_calls)全量绑定全部工具;后续轮只保留 `上轮实际用过的 ∪ 核心白名单(10 个: get_current_time / web_search / run_terminal_command / get_knowledge_context / search_knowledge / list_knowledge_files / read_knowledge_file / read_multimodal_file_info / write_knowledge_file / get_long_term_memory)`,典型"搜索 → 读文件 → 写作"链路白名单内即可完成。
+  - 瘦身轮在系统提示追加说明:"如需白名单外工具请明确说明";模型在最近一轮正文中点名了未绑定工具(如 `download_file`)时,本轮回退全量绑定一轮让其直接可用;极端情况下(上轮用过的与白名单全部被禁用导致绑定为空)同样回退全量,避免空绑定。
+  - 该逻辑在 `model_decision.py` 的 `__call__` 内计算 `active_tool_names`,流式与非流式两条路径共用,react 图与 plan 图的 agent 节点同时受益。新增 4 个针对性测试(首轮全量 / 瘦身轮 / 点名回退 / 空绑定回退),与原有 14 个图测试共 18 个通过。
 - [x] agent 回答代码块改为流式增量高亮:代码块未输出完时也周期性高亮新增部分,不再等 agent 终止后才一次性高亮:
   - 根因:此前 `MarkdownContent.vue` 在流式期间(`watch` 里的 `if (props.isStreaming) return`)直接跳过代码高亮,且 `v-html` 每次更新会整体替换 DOM 冲掉已高亮 span,只能等输出终止后遍历 DOM 做一次 `hljs.highlightElement`。
   - 修复:把高亮前移到字符串层,用 `marked.Renderer` 覆盖 `code` 渲染,在 `sanitizedHtml` computed 里随内容刷新直接产出带高亮 span 的 HTML。新增字符串级缓存(key 为 `语言\0代码文本`,value 为已转义的高亮 HTML):流式刷新时已完成代码块直接命中缓存,只对正在输出的最后一个代码块做真正的词法分析,实现"边输出边高亮"且不整段重复计算。未知语言与超长代码块(超过 2 万字符)回退纯文本并保留原文标签;缓存条数超过 200 自动清空,组件卸载时清空。
@@ -36,6 +57,17 @@
   - 代码格式: 所有代码格式的edit模式应该直接显示代码高亮,并且不可进入preview模式,而不是edit模式光板子preview高亮.
 - [x] 修复写入长期记忆时timezone is not defined 的问题.
 - [x] 实现Markdown的Split模式同步滚动,并且从Edit模式换到Split模式时,右边的预览要自动滚动到左边的编辑区的光标所在位置.
+- [x] 优化Agent回答性能.为什么应用启动速度如此缓慢?为什么要每次都要先顿一段时间才开始思考?为什么循环的时间如此之长?
+  - 应用启动速度:启动阶段所有事都是同步串行、全做完才对外服务。
+    - 解决方案: 并行加载,互不阻塞,最后一个完成时即启动.项目已配备惰性灌库,应该将自动灌库移出启动流程.
+  - 思考前时间:首token之前要进行上下文构建(长期记忆+知识库两次检索完整链路).
+    - 优化方案: 没必要进行知识库检索,每次回答只进行长期记忆的自动召回;检索结果按照session进行短TTL缓存(按缓存key进行session查询归一化),有缓存则没必要重复自动召回.
+  - 循环时间:
+    - react图和plan图都要在入口处经过输入安全节点,一次llm调用.
+      - 已经解决,用户已经可以在前端关闭输入审核和输出审核.
+    - 每轮都要对所有工具进行全量绑定.
+      - 优化方案: 按需绑定,首轮绑定全部工具,后续只绑定`上轮实际用过的工具 ∪ 核心白名单(8~10个工具)`,瘦身轮在系统提示里加一句"如需白名单外工具请明确说明",或在"计划要结束时/拿不准时"自动回退全量绑定一轮。对绝大多数任务(搜索→读文件→写作)白名单够用。
+  - bug: react图没有压缩节点,应该让react图跟plan图一样具备同样的压缩机制,同样的压缩节点.
 ## 2026-07-31
 - [x] 修复整目录忽略时文件树内文件不变色:
   - `git status --ignored` 对整目录忽略会折叠成单条 `!! dir/`,此前只有目录节点能通过直配着色,目录下的具体文件节点匹配不到状态。现 `statusClassForPath` 对文件增加回退:无直接状态时检查是否位于某个忽略目录条目下,命中则返回 `git-ignored`。
