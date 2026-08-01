@@ -19,9 +19,11 @@ import {
   FolderPlus,
   HardDrive,
   Info,
+  LayoutGrid,
   Link,
   ListFilter,
   RefreshCw,
+  Rows,
   Save,
   Search,
   Tags,
@@ -37,6 +39,7 @@ import {
   updateLibraryItem,
 } from '@/api/library'
 import { uploadKnowledgeFile } from '@/api/knowledge'
+import LibraryBar from '@/components/library_view/LibraryBar.vue'
 import LibraryCard from '@/components/library_view/LibraryCard.vue'
 import LibraryCreateDialog from '@/components/library_view/LibraryCreateDialog.vue'
 import LibraryItemDialog from '@/components/library_view/LibraryItemDialog.vue'
@@ -61,6 +64,7 @@ const filterMenuOpen = ref(false)
 const TAGS_PER_PAGE = 10
 const tagPage = ref(0)
 const multiSelect = ref(false)
+const viewMode = ref<'card' | 'bar'>('card')
 const selectedIds = ref<Set<string>>(new Set())
 const selectedItem = ref<LibraryItem | null>(null)
 const detailOpen = ref(false)
@@ -659,6 +663,16 @@ function errorMessage(error: unknown): string {
           <Tags :size="16" />
           <span v-if="multiSelect" class="multi-indicator">{{ selectedIds.size }}</span>
         </button>
+        <button
+          class="icon-toolbar-btn"
+          :class="{ active: viewMode === 'bar' }"
+          type="button"
+          :title="viewMode === 'card' ? '切换为条形' : '切换为卡片'"
+          @click="viewMode = viewMode === 'card' ? 'bar' : 'card'"
+        >
+          <Rows v-if="viewMode === 'card'" :size="16" />
+          <LayoutGrid v-else :size="16" />
+        </button>
       </div>
     </header>
 
@@ -679,8 +693,15 @@ function errorMessage(error: unknown): string {
         <div v-if="items.length === 0 && !loading" class="empty-hint">
           当前集锦为空。新增文件或创建集锦后会出现在这里。
         </div>
-        <TransitionGroup v-else-if="items.length" appear name="card" tag="div" class="library-grid">
-          <LibraryCard
+        <TransitionGroup
+          v-else-if="items.length"
+          appear
+          name="card"
+          tag="div"
+          :class="viewMode === 'card' ? 'library-grid' : 'library-list'"
+        >
+          <component
+            :is="viewMode === 'card' ? LibraryCard : LibraryBar"
             v-for="(item, i) in items"
             :key="item.item_id"
             :style="{ '--i': i }"
@@ -1195,6 +1216,13 @@ function errorMessage(error: unknown): string {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
   gap: 16px;
+  align-items: start;
+  position: relative;
+}
+
+.library-list {
+  display: grid;
+  gap: 10px;
   align-items: start;
   position: relative;
 }

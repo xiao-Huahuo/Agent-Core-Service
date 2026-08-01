@@ -142,6 +142,15 @@ const showPromptStarters = computed(() => {
 const showPromptWaterfall = computed(() => {
   return !props.compact && props.centered && matchedPromptSuggestions.value.length > 0 && !props.reference && !props.attachments?.length
 })
+const viewportWidth = ref(0)
+const visiblePromptStarters = computed(() => {
+  const available = Math.min(920, (viewportWidth.value || 1200) - 48)
+  const count = Math.floor((available + 12) / 222)
+  return promptStarters.slice(0, Math.min(4, Math.max(1, count)))
+})
+function handleViewportResize() {
+  viewportWidth.value = window.innerWidth
+}
 
 function matchesPromptStarter(starter: PromptStarter, input: string) {
   return starter.prefix.startsWith(input) ||
@@ -356,11 +365,14 @@ function handleInputMouseMove(e: MouseEvent) {
 }
 
 onMounted(() => {
+  handleViewportResize()
   document.addEventListener('mousemove', handleInputMouseMove)
+  window.addEventListener('resize', handleViewportResize)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousemove', handleInputMouseMove)
+  window.removeEventListener('resize', handleViewportResize)
   document.removeEventListener('click', handleOutsideClick, true)
   window.removeEventListener('scroll', handleScrollResize, true)
   window.removeEventListener('resize', handleScrollResize)
@@ -514,7 +526,7 @@ function handleFileChange(event: Event) {
     <Transition name="starter-grid-panel">
       <div v-if="showPromptStarters" class="prompt-starter-grid" aria-label="Agent 快捷提示">
         <button
-          v-for="starter in promptStarters"
+          v-for="starter in visiblePromptStarters"
           :key="starter.prefix"
           class="prompt-starter-card"
           type="button"
@@ -705,11 +717,11 @@ function handleFileChange(event: Event) {
 }
 
 .prompt-starter-grid {
-  display: grid;
+  display: flex;
   left: 50%;
   right: auto;
-  width: min(920px, calc(100vw - 48px));
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: max-content;
+  max-width: min(920px, calc(100vw - 48px));
   gap: var(--space-12);
   transform: translateX(-50%);
 }
@@ -720,6 +732,7 @@ function handleFileChange(event: Event) {
   align-items: start;
   justify-content: space-between;
   gap: var(--space-16);
+  flex: 0 0 210px;
   min-width: 0;
   min-height: 124px;
   padding: var(--space-16);
@@ -1458,11 +1471,6 @@ function handleFileChange(event: Event) {
 }
 
 @container (max-width: 360px) {
-  .prompt-starter-grid {
-    width: min(520px, calc(100vw - 32px));
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .model-config-trigger {
     flex: 0 0 30px;
     width: 30px;
@@ -1481,10 +1489,6 @@ function handleFileChange(event: Event) {
 }
 
 @container (max-width: 288px) {
-  .prompt-starter-grid {
-    display: none;
-  }
-
   .web-search-toggle {
     display: none;
   }

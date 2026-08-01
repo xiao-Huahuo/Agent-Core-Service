@@ -1,9 +1,11 @@
 <!--
-  Virtual library large-icon card.
+  Virtual library bar (compact row) view.
 
   Usage:
-  Render one book or collection in the library grid. The card supports selection,
-  double-click opening, and drag-moving items into collection cards.
+  Render one book or collection as a horizontal bar in the library list.
+  Left thumb shows the cover image or a text key; right column stacks
+  title + tags, description, then date + child count. Same interaction
+  surface (selection, drag, context menu) as LibraryCard.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
@@ -21,7 +23,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   open: [item: LibraryItem]
-  edit: [item: LibraryItem]
   toggle: [item: LibraryItem]
   select: [item: LibraryItem]
   contextmenu: [event: MouseEvent, item: LibraryItem]
@@ -48,11 +49,6 @@ const coverUrl = computed(() => {
   }
   return ''
 })
-const sourceLabel = computed(() => {
-  if (isCollection.value) return '集锦'
-  if (props.item.content_type === 'web_url') return props.item.source_url
-  return props.item.source_name || props.item.source_path || '未关联真实内容'
-})
 const dateLabel = computed(() => {
   const raw = props.item.source_mtime || props.item.updated_at
   if (!raw) return ''
@@ -61,13 +57,10 @@ const dateLabel = computed(() => {
   const pad = (value: number) => String(value).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 })
-const statusText = computed(() => {
-  if (isCollection.value) return `${props.item.child_count} 项`
-  const parts = [
-    props.item.index_status ? `入库 ${props.item.index_status}` : '未入库',
-    props.item.graph_status ? `图谱 ${props.item.graph_status}` : '无图谱',
-  ]
-  return parts.join(' / ')
+const badgeText = computed(() => {
+  if (isCollection.value) return '集锦'
+  if (props.item.content_type === 'web_url') return props.item.source_url
+  return props.item.source_name || props.item.source_path || props.item.display_title
 })
 
 function handleClick() {
@@ -105,7 +98,7 @@ function handleDrop(event: DragEvent) {
 
 <template>
   <article
-    class="library-card"
+    class="library-bar"
     :class="{ selected, missing: !item.source_exists, 'drag-over': dragOver, collection: isCollection }"
     draggable="true"
     @click="handleClick"
@@ -116,9 +109,6 @@ function handleDrop(event: DragEvent) {
     @dragleave="dragOver = false"
     @drop="handleDrop"
   >
-    <header v-if="isCollection" class="collection-corner">
-      集锦
-    </header>
     <button
       v-if="multiSelect"
       class="select-button"
@@ -129,103 +119,93 @@ function handleDrop(event: DragEvent) {
     >
       <Check v-if="selected" :size="14" />
     </button>
-    <section class="cover">
-      <img v-if="coverUrl" class="cover-image" :src="coverUrl" alt="" />
-      <div v-else-if="item.cover_mode === 'description' && item.description" class="text-cover">
+    <section class="thumb">
+      <img v-if="coverUrl" class="thumb-image" :src="coverUrl" alt="" />
+      <div v-else-if="item.cover_mode === 'description' && item.description" class="thumb-text">
         {{ item.description }}
       </div>
-      <div v-else-if="item.cover_mode === 'title' || isCollection" class="title-cover">
+      <div v-else-if="item.cover_mode === 'title' || isCollection" class="thumb-title">
         {{ item.display_title }}
       </div>
-      <div v-else class="icon-cover">
-        <FolderOpen v-if="isCollection" :size="52" />
-        <Link v-else-if="item.content_type === 'web_url'" :size="52" />
-        <img v-else-if="fileIcon.src" class="file-icon" :src="fileIcon.src" alt="" />
-        <ImageIcon v-else :size="52" />
+      <div v-else class="thumb-icon">
+        <FolderOpen v-if="isCollection" :size="26" />
+        <Link v-else-if="item.content_type === 'web_url'" :size="26" />
+        <img v-else-if="fileIcon.src" class="thumb-file-icon" :src="fileIcon.src" alt="" />
+        <ImageIcon v-else :size="26" />
       </div>
-      <TriangleAlert v-if="!item.source_exists" class="missing-icon" :size="18" />
+      <TriangleAlert v-if="!item.source_exists" class="missing-icon" :size="14" />
     </section>
-    <section class="meta">
-      <div class="tag-row">
-        <span v-for="tag in item.tags" :key="tag" class="tag-pill" :title="tag">{{ tag }}</span>
+    <section class="bar-meta">
+      <div class="bar-title-row">
+        <span class="bar-type-icon">
+          <FolderOpen v-if="isCollection" :size="16" />
+          <Link v-else-if="item.content_type === 'web_url'" :size="16" />
+          <img v-else-if="fileIcon.src" class="bar-type-file-icon" :src="fileIcon.src" alt="" />
+          <ImageIcon v-else :size="16" />
+        </span>
+        <span class="bar-title" :title="item.display_title">{{ item.display_title }}</span>
+        <div class="bar-tag-row">
+          <span v-for="tag in item.tags" :key="tag" class="tag-pill" :title="tag">{{ tag }}</span>
+        </div>
+        <span
+          v-if="!multiSelect"
+          class="bar-badge"
+          :class="{ collection: isCollection }"
+          :title="badgeText"
+        >{{ badgeText }}</span>
       </div>
-      <div class="title" :title="item.display_title">{{ item.display_title }}</div>
-      <div v-if="!isCollection" class="source" :title="sourceLabel">
-        <img v-if="fileIcon.src" class="source-icon" :src="fileIcon.src" alt="" />
-        <Link v-else-if="item.content_type === 'web_url'" :size="13" />
-        <span>{{ sourceLabel }}</span>
-      </div>
-      <div class="description" :title="item.description">{{ item.description || '无描述' }}</div>
-      <div class="foot">
+      <div class="bar-description" :title="item.description">{{ item.description || '无描述' }}</div>
+      <div class="bar-foot">
         <span>{{ dateLabel }}</span>
-        <span>{{ statusText }}</span>
+        <span v-if="isCollection" class="bar-count">{{ item.child_count }} 项</span>
       </div>
     </section>
   </article>
 </template>
 
 <style scoped>
-.library-card {
+.library-bar {
   position: relative;
-  display: grid;
-  grid-template-rows: 5fr 5fr;
-  aspect-ratio: 2 / 3;
+  display: flex;
+  align-items: stretch;
   min-width: 0;
+  min-height: 88px;
   overflow: hidden;
-  border: 0;
+  border: 1px solid var(--color-border);
   border-radius: 18px;
   background: var(--color-surface);
   color: var(--color-text);
   font-family: var(--font-ui);
   font-size: calc(13px * var(--font-scale));
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.10);
   transition:
-    box-shadow 160ms ease,
-    transform 160ms ease,
+    border-color 160ms ease,
     background 160ms ease;
 }
 
-.library-card:hover,
-.library-card.selected {
+.library-bar:hover,
+.library-bar.selected {
   background: var(--color-surface-raised);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--color-primary) 42%, var(--color-border));
 }
 
-.library-card.selected {
+.library-bar.selected {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
-.library-card.drag-over {
+.library-bar.drag-over {
   outline: 2px dashed var(--color-primary);
   outline-offset: 4px;
 }
 
-.library-card.missing {
+.library-bar.missing {
   outline: 2px solid color-mix(in srgb, var(--color-danger) 72%, transparent);
 }
 
-.collection-corner {
-  position: absolute;
-  z-index: 3;
-  pointer-events: none;
-  top: 10px;
-  left: -28px;
-  transform: rotate(-45deg);
-  padding: 3px 36px;
-  background: var(--color-collection-corner);
-  color: #fff;
-  font-size: calc(12px * var(--font-scale));
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-
 .select-button {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   z-index: 2;
   display: flex;
   align-items: center;
@@ -250,90 +230,122 @@ function handleDrop(event: DragEvent) {
   color: #fff;
 }
 
-.cover {
+.thumb {
   position: relative;
-  min-height: 0;
+  flex: 0 0 104px;
+  min-width: 0;
   overflow: hidden;
   background: var(--color-surface-raised);
 }
 
-.cover-image {
+.thumb-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.text-cover,
-.title-cover,
-.icon-cover {
+.thumb-text,
+.thumb-title,
+.thumb-icon {
   display: grid;
   place-items: center;
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
-.text-cover {
-  padding: 18px;
+.thumb-text {
+  padding: 10px;
   color: var(--color-text);
-  line-height: 1.55;
-  overflow: hidden;
+  font-size: calc(10px * var(--font-scale));
+  line-height: 1.45;
+  text-align: center;
   white-space: pre-wrap;
 }
 
-.title-cover {
-  padding: 22px;
+.thumb-title {
+  padding: 12px;
   color: var(--color-text);
-  font-size: calc(22px * var(--font-scale));
+  font-size: calc(14px * var(--font-scale));
   line-height: 1.25;
   font-weight: 700;
   text-align: center;
   overflow-wrap: anywhere;
 }
 
-.icon-cover {
+.thumb-icon {
   color: var(--color-text-muted);
 }
 
-.file-icon {
-  width: 64px;
-  height: 64px;
+.thumb-file-icon {
+  width: 40px;
+  height: 40px;
   object-fit: contain;
 }
 
 .missing-icon {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
+  right: 6px;
+  bottom: 6px;
   color: var(--color-danger);
 }
 
-.meta {
-  display: grid;
-  grid-template-rows: minmax(24px, auto) 24px 22px minmax(32px, 1fr) 20px;
-  min-height: 0;
-  padding: 10px 12px 12px;
-  gap: 5px;
-}
-
-.library-card.collection .meta {
-  grid-template-rows: minmax(24px, auto) 22px minmax(32px, 1fr) 20px;
-}
-
-.tag-row {
+.bar-meta {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 10px 12px;
+}
+
+.bar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bar-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.bar-type-icon {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+}
+
+.bar-type-file-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.bar-tag-row {
+  display: flex;
+  flex-wrap: nowrap;
   gap: 5px;
   min-width: 0;
-  min-height: 24px;
   overflow: hidden;
 }
 
 .tag-pill {
   display: inline-flex;
   align-items: center;
-  max-width: 118px;
-  min-height: 22px;
+  flex: 0 0 auto;
+  max-width: 120px;
+  min-height: 20px;
   border-radius: 999px;
   background: var(--color-primary-soft);
   color: var(--color-primary);
@@ -344,53 +356,43 @@ function handleDrop(event: DragEvent) {
   white-space: nowrap;
 }
 
-.title,
-.source,
-.description,
-.foot {
+.bar-badge {
+  flex: 0 0 auto;
+  margin-left: auto;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(11px * var(--font-scale));
+  color: var(--color-text-tertiary);
+}
+
+.bar-badge.collection {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.bar-description {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.title,
-.source,
-.foot {
   white-space: nowrap;
+  color: var(--color-text-muted);
 }
 
-.title {
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.source {
+.bar-foot {
   display: flex;
   align-items: center;
-  gap: 5px;
-  color: var(--color-text-secondary);
-}
-
-.source-icon {
-  width: 14px;
-  height: 14px;
-  object-fit: contain;
-  flex: 0 0 auto;
-}
-
-.description {
-  display: -webkit-box;
-  color: var(--color-text-muted);
-  line-height: 1.4;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.foot {
-  display: flex;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
   font-size: calc(11px * var(--font-scale));
   color: var(--color-text-muted);
+}
+
+.bar-count {
+  flex: 0 0 auto;
+  color: var(--color-primary);
+  font-weight: 600;
 }
 </style>

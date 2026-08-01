@@ -31,6 +31,13 @@
 - [x] 实现 Markdown 的 Split 模式同步滚动,从 Edit 切到 Split 时右预览自动滚动到左编辑光标位置。
 - [x] 优化 Agent 回答性能(启动慢/首 token 停顿/循环长):启动并行加载并移除自动灌库;首 token 前只做长期记忆召回+短 TTL 缓存;每轮按需绑定工具;react 图缺压缩节点需补齐。
 - [x] 系统性的真正打通多模态解析链:图片 OCR 解析、扫描件 PDF 图片渲染、PPTX 渲染与预览等。
+- [x] 图书馆新增条形模式:新建 LibraryBar.vue 横向条形卡片,左侧缩略区(封面图/描述文字key/标题/类型图标),右侧从上到下为标题|标签(同行)、描述(单行省略)、日期|含内容数(右下角,集锦时主色显示);圆角阴影卡片并复用 TransitionGroup card 动效(enter 缩放上浮 + leave 淡出 + FLIP move)。LibraryView.vue 新增 viewMode(card/bar)状态与切换按钮(位于多选按钮右侧,卡片模式显示 Rows 图标、条形模式显示 LayoutGrid 且高亮),列表容器按模式切换 library-grid/library-list;切换时卡片 leave 与条形 enter 动画并发。Playwright 验证 10 项卡片⇄条形互切、布局计算样式(88px 高/12px 圆角/thumb 104px/标题标签同行/foot 两端对齐)、集锦含内容数主色、条形 enter 动画 20 项触发;vue-tsc 通过。
+- [x] 图书馆条形右上角加类型角标:集锦显示主题色加粗"集锦",普通图书显示文件名(source_name),网页直接显示 URL(source_url),统一小圆角 pill 样式(集锦主色、其余次要色),超长省略号并有 title 悬浮完整内容;多选时隐藏角标避免与右上角多选按钮重叠。Playwright 验证三种类型角标文本/颜色/右对齐,多选时角标隐藏。
+- [x] 图书馆条形角标样式与标题图标微调:角标去掉胶囊背景改纯文本(集锦主题色加粗、图书/网页次要淡色,右对齐省略号);标题左侧新增类型图标(集锦 FolderOpen、网页 Link、普通图书文件图标)。Playwright 验证角标计算样式(背景透明/无圆角/无 padding)与集锦/网页/图书三类型图标路径正确;vue-tsc 通过。
+- [x] 图书馆条形模式视觉调整:去掉卡片阴影(box-shadow: none),圆角从 12px 扩到 18px,改用 1px 细边框(var(--color-border));hover 不再上浮,改为边框淡主色 + 背景微亮,选中态保留主色 outline。Playwright 验证计算样式(阴影 none/圆角 18px/边框 1px、真实鼠标悬停边框变主色混合色且 transform none);vue-tsc 通过。
+- [x] 图书馆卡片模式圆角从 14px 扩到 18px,与条形模式圆角统一。
+
+
 ## 2026-07-31
 - [x] 修复整目录忽略时文件树内文件不变色:
   - `git status --ignored` 对整目录忽略会折叠成单条 `!! dir/`,此前只有目录节点能通过直配着色,目录下的具体文件节点匹配不到状态。现 `statusClassForPath` 对文件增加回退:无直接状态时检查是否位于某个忽略目录条目下,命中则返回 `git-ignored`。
@@ -1474,3 +1481,4 @@
   - 根因:上一版 `handlePreviewParse(element)` 把 `element`(`vditor.preview.element`,即 `.vditor-preview`)整体传给 `renderMathInPreviewDom`。该函数在字符串层用 `root.innerHTML = rendered` 还原数学占位符,当 root 是整个 `.vditor-preview` 时,这条赋值会**销毁并重建 `.vditor-preview` 的直接子元素 `.vditor-reset`(previewElement)**。重建后 Vditor 实例的 `preview.previewElement` 仍引用已被移出文档的旧 `.vditor-reset`(`isConnected === false`),于是之后每次 `Preview.render` 都只往这个离线节点写 `innerHTML`,屏幕上的 `.vditor-reset` 从此不再变化 —— 预览冻结,编辑不反映。
   - 修复:`handlePreviewParse` 改为把 `element.querySelector('.vditor-reset')`(屏幕上的活 `.vditor-reset`,即 `previewElement`)交给 `renderMathInPreviewDom`,重建只发生在 `.vditor-reset` 的 children 层,`.vditor-reset` 元素自身引用稳定,Vditor 后续写入仍然命中屏幕节点。占位符本就写在 `.vditor-reset` 内,还原范围不变。
   - 验证:Playwright 真实组件实测 Split 模式在左侧输入 `ZZZSPLITTEST 行内$a^2$块级$$b^3$$` 及 `行内 $E=mc^2$ 块级 $$\int_0^1 x dx$$`,右侧预览即时更新、`preview.previewElement === 屏幕 .vditor-reset` 且 `isConnected === true`;行内/块级公式实时渲染成 KaTeX,katex 计数随输入增长,无 `MWMATH` 占位符残留、无 katex-error;Preview 单面板模式 122 个行内 + 71 个块级公式渲染正常、无占位符残留。`mathRender.spec.ts` + `MarkdownPreview.spec.ts` 共 23 个测试全通过,`vue-tsc` 类型检查通过。
+- [x] Agent 欢迎页快捷提示块按宽度控制数量(始终一行):不再换行堆叠,改为根据视口宽度计算每行能放下的块数并只渲染该数量(每块固定 210px + 12px gap,available = min(920, vw-48),count = floor((available+12)/222)),宽屏 4 个、900px 档 3 个、620px 档 2 个、420px 以下 1 个;容器从 grid 换 auto-fit 改为 flex nowrap + width: max-content 整体居中,卡片 flex: 0 0 210px 宽度不变。Playwright 8 档宽度验证:始终单行、块宽恒 210px、数量随宽度变化、grid 居中;vue-tsc 通过。
