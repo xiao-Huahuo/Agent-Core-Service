@@ -51,6 +51,7 @@ from agent_service.tools.builtin import (
     rebuild_knowledge_base,
     rename_knowledge_file,
     run_terminal_command,
+    spawn_child_agent,
     save_uploaded_attachment_to_knowledge,
     search_knowledge,
     show_markdown_html,
@@ -58,6 +59,7 @@ from agent_service.tools.builtin import (
     use_skill,
     web_search,
     web_image_search,
+    wait_for_child_agents,
     write_knowledge_file,
     write_long_term_memory,
     write_long_term_rule,
@@ -458,7 +460,7 @@ KNOWLEDGE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
             "required": ["query"],
         },
         function=search_knowledge,
-        display_name="全库联合搜索",
+        display_name="搜索知识库",
     ),
     BuiltinToolDefinition(
         name="save_uploaded_attachment_to_knowledge",
@@ -694,6 +696,56 @@ TASK_LIST_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     ),
 ]
 
+
+CHILD_AGENT_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
+    BuiltinToolDefinition(
+        name="spawn_child_agent",
+        display_name="召唤子 Agent",
+        description=(
+            "创建一个不能继续召唤其他子 Agent 的子 Agent。必须提供明确目标。"
+            "mode=foreground 会阻塞直到子 Agent 完成并返回结果;"
+            "mode=background 只启动后台子 Agent 并立即返回 run_id,不会等待最终结果。"
+            "一旦使用 background 创建了本轮所需的全部子 Agent,必须反复调用 wait_for_child_agents "
+            "逐个收取结果;只要还有 created/running 子 Agent,就继续等待,不要输出最终结论。"
+            "子 Agent 默认继承主 Agent 工具,但主 Agent 可缩小工具范围和沙盒权限。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "goal": {"type": "string", "description": "子 Agent 必须完成的具体目标。"},
+                "mode": {"type": "string", "description": "foreground 或 background。默认 background。"},
+                "allowed_tools": {"type": "array", "description": "允许子 Agent 使用的工具名列表。"},
+                "access_mode": {"type": "string", "description": "readonly、sandbox 或 full_access。"},
+                "input_refs": {"type": "array", "description": "传给子 Agent 的输入引用列表。"},
+                "output_contract": {"type": "object", "description": "对子 Agent 结果格式的要求。"},
+            },
+            "required": ["goal"],
+        },
+        function=spawn_child_agent,
+    ),
+    BuiltinToolDefinition(
+        name="wait_for_child_agents",
+        display_name="等待子 Agent",
+        description=(
+            "等待当前父 Agent 已召唤的一个后台子 Agent 产出终态结果。"
+            "本工具一次最多返回一个子 Agent 的 completed/failed/stopped 结果;"
+            "如果结果队列已有结果会立即返回,否则阻塞到下一个结果或超时。"
+            "run_ids 为空时等待当前父 Agent 任意子 Agent 的下一个结果。"
+            "如果返回的 children 中仍有 created/running 子 Agent,必须继续调用本工具。"
+            "只有所有需要的后台子 Agent 都进入 completed/failed/stopped 后,才能汇总最终回答。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "run_ids": {"type": "array", "description": "可选,要等待的子 Agent run_id 列表。为空表示等待全部。"},
+                "timeout_seconds": {"type": "number", "description": "可选等待秒数,默认 600。超时会返回当时状态。"},
+            },
+            "required": [],
+        },
+        function=wait_for_child_agents,
+    ),
+]
+
 TODO_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="list_todos",
@@ -801,6 +853,7 @@ BUILTIN_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = (
     + KNOWLEDGE_TOOL_DEFINITIONS
     + FILE_TOOL_DEFINITIONS
     + TASK_LIST_TOOL_DEFINITIONS
+    + CHILD_AGENT_TOOL_DEFINITIONS
     + TODO_TOOL_DEFINITIONS
     + WEB_SEARCH_TOOL_DEFINITIONS
 )

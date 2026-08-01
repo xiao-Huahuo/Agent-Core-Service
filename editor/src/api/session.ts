@@ -114,6 +114,7 @@ export interface ImportedMessage {
   reference?: string
   tool_calls?: unknown[]
   trace_details?: unknown[]
+  child_agent_event?: unknown
   tool_call_id?: string
 }
 

@@ -5,7 +5,29 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="准备做多Agent">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2_grpc.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2_grpc.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/servicer.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/servicer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/agent.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/sessions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/sessions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/memory/context_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/memory/context_builder.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/builtin.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/builtin.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/definitions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/definitions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/tools/runtime_context.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/runtime_context.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/api/agent.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/agent.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/api/session.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/session.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageBubble.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageBubble.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageList.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/MessageList.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/__tests__/chat.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/__tests__/chat.spec.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/chat.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/chat.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/utils/sessionExport.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/utils/sessionExport.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/protos/agent_service.proto" beforeDir="false" afterPath="$PROJECT_DIR$/protos/agent_service.proto" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -295,14 +317,6 @@
       <workItem from="1785411230338" duration="12489000" />
       <workItem from="1785462181237" duration="9290000" />
       <workItem from="1785553951295" duration="16314000" />
-    </task>
-    <task id="LOCAL-00234" summary="优化了联网搜索工具的搜索结果">
-      <option name="closed" value="true" />
-      <created>1784978648643</created>
-      <option name="number" value="00234" />
-      <option name="presentableId" value="LOCAL-00234" />
-      <option name="project" value="LOCAL" />
-      <updated>1784978648643</updated>
     </task>
     <task id="LOCAL-00235" summary="优化了联网搜索工具的搜索结果">
       <option name="closed" value="true" />
@@ -688,7 +702,15 @@
       <option name="project" value="LOCAL" />
       <updated>1785588074089</updated>
     </task>
-    <option name="localTasksCounter" value="283" />
+    <task id="LOCAL-00283" summary="准备做多Agent">
+      <option name="closed" value="true" />
+      <created>1785588456938</created>
+      <option name="number" value="00283" />
+      <option name="presentableId" value="LOCAL-00283" />
+      <option name="project" value="LOCAL" />
+      <updated>1785588456938</updated>
+    </task>
+    <option name="localTasksCounter" value="284" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

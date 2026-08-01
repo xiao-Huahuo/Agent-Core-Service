@@ -40,6 +40,44 @@ from agent_service.services.todo_service import TodoService
 ToolFunction = Callable[..., str]
 
 
+def spawn_child_agent(
+    goal: str,
+    mode: str = "background",
+    allowed_tools: list[str] | None = None,
+    access_mode: str = "sandbox",
+    input_refs: list[str] | None = None,
+    output_contract: dict[str, Any] | None = None,
+) -> str:
+    """由主 Agent 创建一个前台或后台子 Agent,返回子任务运行信息。"""
+
+    runtime = get_tool_runtime()
+    if runtime.child_agent_spawner is None:
+        return "当前 Agent 运行时未启用子 Agent 能力。"
+    return runtime.child_agent_spawner(
+        goal=goal,
+        mode=mode,
+        allowed_tools=allowed_tools,
+        access_mode=access_mode,
+        input_refs=input_refs or [],
+        output_contract=output_contract or {},
+    )
+
+
+def wait_for_child_agents(
+    run_ids: list[str] | None = None,
+    timeout_seconds: float | None = 600,
+) -> str:
+    """由主 Agent 等待一个后台子 Agent 结果,返回结果和当前子任务快照。"""
+
+    runtime = get_tool_runtime()
+    if runtime.child_agent_waiter is None:
+        return "当前 Agent 运行时未启用等待子 Agent 的能力。"
+    return runtime.child_agent_waiter(
+        run_ids=run_ids or [],
+        timeout_seconds=timeout_seconds,
+    )
+
+
 def _is_readonly_access() -> bool:
     """判断当前工具运行时是否处于只读权限模式。"""
 

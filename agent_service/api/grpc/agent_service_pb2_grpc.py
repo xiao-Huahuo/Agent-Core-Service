@@ -104,6 +104,21 @@ class AgentServiceStub(object):
                 request_serializer=agent__service__pb2.CancelRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.CancelResponse.FromString,
                 _registered_method=True)
+        self.ListChildAgents = channel.unary_unary(
+                '/agent_service.AgentService/ListChildAgents',
+                request_serializer=agent__service__pb2.ChildAgentListRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.ChildAgentListResponse.FromString,
+                _registered_method=True)
+        self.StopChildAgent = channel.unary_unary(
+                '/agent_service.AgentService/StopChildAgent',
+                request_serializer=agent__service__pb2.ChildAgentControlRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.ChildAgentControlResponse.FromString,
+                _registered_method=True)
+        self.UpdateChildAgent = channel.unary_unary(
+                '/agent_service.AgentService/UpdateChildAgent',
+                request_serializer=agent__service__pb2.ChildAgentUpdateRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.ChildAgentControlResponse.FromString,
+                _registered_method=True)
         self.GetEvents = channel.unary_unary(
                 '/agent_service.AgentService/GetEvents',
                 request_serializer=agent__service__pb2.EventsRequest.SerializeToString,
@@ -392,6 +407,25 @@ class AgentServiceServicer(object):
 
         取消指定 session 正在执行的图,中断后部分输出自动保存。
         """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListChildAgents(self, request, context):
+        """---- 子 Agent ----
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def StopChildAgent(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateChildAgent(self, request, context):
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -700,6 +734,21 @@ def add_AgentServiceServicer_to_server(servicer, server):
                     servicer.CancelSession,
                     request_deserializer=agent__service__pb2.CancelRequest.FromString,
                     response_serializer=agent__service__pb2.CancelResponse.SerializeToString,
+            ),
+            'ListChildAgents': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListChildAgents,
+                    request_deserializer=agent__service__pb2.ChildAgentListRequest.FromString,
+                    response_serializer=agent__service__pb2.ChildAgentListResponse.SerializeToString,
+            ),
+            'StopChildAgent': grpc.unary_unary_rpc_method_handler(
+                    servicer.StopChildAgent,
+                    request_deserializer=agent__service__pb2.ChildAgentControlRequest.FromString,
+                    response_serializer=agent__service__pb2.ChildAgentControlResponse.SerializeToString,
+            ),
+            'UpdateChildAgent': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateChildAgent,
+                    request_deserializer=agent__service__pb2.ChildAgentUpdateRequest.FromString,
+                    response_serializer=agent__service__pb2.ChildAgentControlResponse.SerializeToString,
             ),
             'GetEvents': grpc.unary_unary_rpc_method_handler(
                     servicer.GetEvents,
@@ -1230,6 +1279,87 @@ class AgentService(object):
             '/agent_service.AgentService/CancelSession',
             agent__service__pb2.CancelRequest.SerializeToString,
             agent__service__pb2.CancelResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListChildAgents(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/ListChildAgents',
+            agent__service__pb2.ChildAgentListRequest.SerializeToString,
+            agent__service__pb2.ChildAgentListResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StopChildAgent(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/StopChildAgent',
+            agent__service__pb2.ChildAgentControlRequest.SerializeToString,
+            agent__service__pb2.ChildAgentControlResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateChildAgent(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/UpdateChildAgent',
+            agent__service__pb2.ChildAgentUpdateRequest.SerializeToString,
+            agent__service__pb2.ChildAgentControlResponse.FromString,
             options,
             channel_credentials,
             insecure,

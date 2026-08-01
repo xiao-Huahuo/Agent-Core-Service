@@ -277,6 +277,7 @@ export const useChatStore = defineStore('chat', () => {
             || message.content
             || (message.tool_calls && message.tool_calls.length > 0)
             || message.metadata?.node === 'action'
+            || message.metadata?.node === 'child_agent'
         })
         .map((message) => ({
           role: message.role === 'tool' ? 'assistant' : message.role as AgentChatMessage['role'],
@@ -468,6 +469,18 @@ export const useChatStore = defineStore('chat', () => {
 
         if (chunk.type === 'markdown_html_visualization' && chunk.visualization) {
           useWorkspaceStore().showMarkdownHtmlVisualization(chunk.visualization as MarkdownHtmlVisualizationPayload)
+          continue
+        }
+
+        if (chunk.type === 'child_agent_event') {
+          appendMessage({
+            role: 'assistant',
+            content: '',
+            node: 'child_agent',
+            metadata,
+            trace,
+            created_at: new Date().toISOString(),
+          })
           continue
         }
 

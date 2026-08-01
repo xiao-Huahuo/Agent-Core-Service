@@ -14,11 +14,12 @@ AgentService gRPC Servicer 实现。
 from __future__ import annotations
 
 import logging
+import json
 from datetime import datetime, timezone
 from typing import Any
 
 import grpc
-from google.protobuf.json_format import ParseDict
+from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.struct_pb2 import Struct
 
 from agent_service.agent_core.agent_core import AgentCore
@@ -26,6 +27,12 @@ from agent_service.api.recall_details import build_recall_details_payload
 from agent_service.api.grpc.agent_service_pb2 import (
     CancelRequest,
     CancelResponse,
+    ChildAgentControlRequest,
+    ChildAgentControlResponse,
+    ChildAgentListRequest,
+    ChildAgentListResponse,
+    ChildAgentRecord,
+    ChildAgentUpdateRequest,
     ChunkMessage,
     DeleteAllSessionsRequest,
     DeleteResponse,
@@ -259,6 +266,50 @@ class AgentServiceServicer(BaseServicer):
         logger.info("CancelSession session=%s", request.session_id)
         self._agent.cancel_session(request.session_id)
         return CancelResponse(ok=True)
+
+    def ListChildAgents(  # noqa: N802
+        self, request: ChildAgentListRequest, context: grpc.ServicerContext
+    ) -> ChildAgentListResponse:
+        """读取指定会话内子 Agent 的状态与结果。"""
+
+        children = self._agent.list_child_agents_for_session(request.session_id)
+        return ChildAgentListResponse(
+            session_id=request.session_id,
+            children=[
+                ChildAgentRecord(
+                    run_id=str(child.get("run_id", "")),
+                    parent_run_id=str(child.get("parent_run_id", "")),
+                    goal=str(child.get("goal", "")),
+                    mode=str(child.get("mode", "")),
+                    status=str(child.get("status", "")),
+                    access_mode=str(child.get("access_mode", "")),
+                    allowed_tools=list(child.get("allowed_tools", [])),
+                    summary=str(child.get("summary", "")),
+                    result_json=json.dumps(child.get("result"), ensure_ascii=False),
+                    error=str(child.get("error") or ""),
+                )
+                for child in children
+            ],
+        )
+
+    def StopChildAgent(  # noqa: N802
+        self, request: ChildAgentControlRequest, context: grpc.ServicerContext
+    ) -> ChildAgentControlResponse:
+        """停止指定子 Agent。"""
+
+        return ChildAgentControlResponse(
+            run_id=request.run_id,
+            ok=self._agent.stop_child_agent(request.run_id),
+        )
+
+    def UpdateChildAgent(  # noqa: N802
+        self, request: ChildAgentUpdateRequest, context: grpc.ServicerContext
+    ) -> ChildAgentControlResponse:
+        """向指定子 Agent 投递上下文更新。"""
+
+        update = MessageToDict(request.update) if request.HasField("update") else {}
+        self._agent.update_child_agent(request.run_id, update)
+        return ChildAgentControlResponse(run_id=request.run_id, ok=True)
 
     # ------------------------------------------------------------------
     # 消息历史 RPC

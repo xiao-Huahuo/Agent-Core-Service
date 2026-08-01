@@ -214,6 +214,12 @@ class ContextBuilder:
             "获取后在 Markdown 中以 `![描述](url)` 或 `[文件名](url)` 格式引用。"
             "下载到本地的文件可通过 /downloads/ 路径访问,例如 `![图片](/downloads/filename.png)`。"
         )
+        sections.append(
+            "子 Agent 等待规则: 如果你使用 spawn_child_agent 且 mode=background,应先派出本轮所需的全部后台子 Agent,"
+            "然后反复调用 wait_for_child_agents 逐个收取结果。该等待工具一次最多返回一个子 Agent 结果;"
+            "如果返回的 children 中仍有 created/running 状态,继续等待。等待期间可以简短告知用户进展,"
+            "但不能在所有需要的后台子 Agent 进入 completed/failed/stopped 前输出最终结论。"
+        )
         if has_history:
             sections.append("短期上下文状态: 当前 session 已存在历史消息,回答时优先使用这些历史事实。")
         has_refs = important_summary is not None or memories or bool(attachment_context and attachment_context.content)
@@ -309,19 +315,50 @@ class ContextBuilder:
     @staticmethod
     def _filter_orphaned_tool_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
         """
-        过滤孤立的 ToolMessage:其 tool_call_id 对应的 AIMessage 不在消息列表中。
-        历史加载窗口或上下文裁剪可能截断 AIMessage 而留下 ToolMessage,导致 API 400 错误。
+        过滤不满足 OpenAI tool-call 顺序约束的历史消息。
+
+        OpenAI 要求带 tool_calls 的 AIMessage 后面必须紧跟每个 tool_call_id
+        对应的 ToolMessage。历史加载窗口或事件消息插入可能截断这组消息,
+        因此这里按连续块校验:缺少任一 ToolMessage 时丢弃整组工具调用消息。
         """
 
-        valid_ids: set[str] = set()
-        for message in messages:
+        filtered: list[BaseMessage] = []
+        index = 0
+        while index < len(messages):
+            message = messages[index]
             if isinstance(message, AIMessage):
-                for tool_call in getattr(message, "tool_calls", []) or []:
-                    tool_call_id = tool_call.get("id") if isinstance(tool_call, dict) else getattr(tool_call, "id", None)
-                    if tool_call_id:
-                        valid_ids.add(str(tool_call_id))
-
-        return [m for m in messages if not (isinstance(m, ToolMessage) and getattr(m, "tool_call_id", None) not in valid_ids)]
+                tool_calls = list(getattr(message, "tool_calls", []) or [])
+                required_ids = [
+                    str(tool_call_id)
+                    for tool_call_id in (
+                        tool_call.get("id") if isinstance(tool_call, dict) else getattr(tool_call, "id", None)
+                        for tool_call in tool_calls
+                    )
+                    if tool_call_id
+                ]
+                if required_ids:
+                    required = set(required_ids)
+                    tool_block: list[ToolMessage] = []
+                    seen: set[str] = set()
+                    cursor = index + 1
+                    while cursor < len(messages) and isinstance(messages[cursor], ToolMessage):
+                        tool_message = messages[cursor]
+                        tool_call_id = str(getattr(tool_message, "tool_call_id", "") or "")
+                        if tool_call_id in required and tool_call_id not in seen:
+                            tool_block.append(tool_message)
+                            seen.add(tool_call_id)
+                        cursor += 1
+                    if seen == required:
+                        filtered.append(message)
+                        filtered.extend(tool_block)
+                    index = cursor
+                    continue
+            if isinstance(message, ToolMessage):
+                index += 1
+                continue
+            filtered.append(message)
+            index += 1
+        return filtered
 
     @staticmethod
     def _format_user_message_content(prompt: str, reference: str | None = None) -> str:

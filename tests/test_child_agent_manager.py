@@ -1,0 +1,228 @@
+"""
+子 Agent 管理器测试。
+
+功能说明:
+使用不依赖真实 LLM 的假执行器验证子任务合同、权限继承、生命周期、前后台模式、
+按父级隔离的结果队列、上下文更新和协作式停止。
+"""
+
+from __future__ import annotations
+
+from threading import Event
+import time
+
+import pytest
+
+from agent_service.services.child_agent import (
+    ChildAgentContract,
+    ChildAgentManager,
+    ChildAgentStatus,
+)
+
+
+def _contract(parent_run_id: str = "parent_1", **kwargs: object) -> ChildAgentContract:
+    """构造测试用子任务合同。"""
+
+    return ChildAgentContract(
+        goal=str(kwargs.pop("goal", "完成测试任务")),
+        parent_run_id=parent_run_id,
+        **kwargs,
+    )
+
+
+def test_foreground_child_waits_and_returns_result() -> None:
+    """前台子 Agent 应在 spawn 返回前完成。"""
+
+    manager = ChildAgentManager()
+    try:
+        record = manager.spawn(
+            contract=_contract(mode="foreground"),
+            executor=lambda context: "完成",
+            parent_tools=frozenset({"read_file"}),
+            parent_access_mode="sandbox",
+        )
+        assert record.status == ChildAgentStatus.COMPLETED
+        assert record.result is not None
+        assert record.result.result == "完成"
+        assert manager.drain_results("parent_1")[0].status == ChildAgentStatus.COMPLETED
+    finally:
+        manager.close()
+
+
+def test_background_children_run_concurrently_and_queue_results() -> None:
+    """后台子 Agent 不阻塞父调用,并且同一父级可并发收集多个结果。"""
+
+    manager = ChildAgentManager(max_workers=2)
+    started = Event()
+    release = Event()
+
+    def worker(context):
+        started.set()
+        release.wait(timeout=2)
+        return context.goal
+
+    try:
+        first = manager.spawn(
+            contract=_contract(goal="任务 A"),
+            executor=worker,
+            parent_tools=frozenset({"read_file"}),
+        )
+        second = manager.spawn(
+            contract=_contract(goal="任务 B"),
+            executor=worker,
+            parent_tools=frozenset({"read_file"}),
+        )
+        assert started.wait(timeout=1)
+        assert first.status in {ChildAgentStatus.CREATED, ChildAgentStatus.RUNNING}
+        assert second.status in {ChildAgentStatus.CREATED, ChildAgentStatus.RUNNING}
+        assert manager.drain_results("parent_1") == []
+        release.set()
+        collected = []
+        deadline = time.time() + 2
+        while len(collected) < 2 and time.time() < deadline:
+            collected.extend(manager.drain_results("parent_1"))
+            time.sleep(0.01)
+        assert {result.result for result in collected} == {"任务 A", "任务 B"}
+    finally:
+        release.set()
+        manager.close()
+
+
+def test_wait_for_children_returns_one_result_at_a_time() -> None:
+    """父 Agent 每次等待只应解除一个后台子 Agent 结果。"""
+
+    manager = ChildAgentManager(max_workers=2)
+    release = Event()
+
+    def worker(context):
+        release.wait(timeout=2)
+        return context.goal
+
+    try:
+        first = manager.spawn(contract=_contract(goal="任务 A"), executor=worker)
+        second = manager.spawn(contract=_contract(goal="任务 B"), executor=worker)
+        release.set()
+        first_result = manager.wait_for_children(parent_run_id="parent_1", timeout_seconds=2)
+        second_result = manager.wait_for_children(parent_run_id="parent_1", timeout_seconds=2)
+        assert first_result is not None
+        assert second_result is not None
+        assert {first_result.run_id, second_result.run_id} == {first.run_id, second.run_id}
+        assert {first_result.status, second_result.status} == {ChildAgentStatus.COMPLETED}
+    finally:
+        release.set()
+        manager.close()
+
+
+def test_wait_for_children_returns_queued_result_immediately() -> None:
+    """若子 Agent 已产出结果,父 Agent 后续等待应直接获取队列结果。"""
+
+    manager = ChildAgentManager()
+    try:
+        record = manager.spawn(
+            contract=_contract(mode="foreground"),
+            executor=lambda context: "已经完成",
+        )
+        started_at = time.perf_counter()
+        result = manager.wait_for_children(parent_run_id="parent_1", timeout_seconds=2)
+        elapsed = time.perf_counter() - started_at
+        assert result is not None
+        assert result.run_id == record.run_id
+        assert result.result == "已经完成"
+        assert elapsed < 0.2
+    finally:
+        manager.close()
+
+
+def test_child_agent_events_are_queued_by_session() -> None:
+    """子 Agent 生命周期事件应能按主会话投递给前端流。"""
+
+    manager = ChildAgentManager()
+    try:
+        record = manager.spawn(
+            contract=_contract(mode="foreground", session_id="session_1"),
+            executor=lambda context: "完成",
+        )
+        events = manager.drain_events_for_session("session_1")
+        assert [event.event_name for event in events] == [
+            "child_agent.created",
+            "child_agent.started",
+            "child_agent.completed",
+        ]
+        assert {event.run_id for event in events} == {record.run_id}
+        assert manager.drain_events_for_session("session_1") == []
+    finally:
+        manager.close()
+
+
+def test_child_permissions_are_intersection_of_parent_and_contract() -> None:
+    """子 Agent 不能获得父 Agent 没有的权限或工具。"""
+
+    manager = ChildAgentManager()
+    try:
+        with pytest.raises(PermissionError):
+            manager.spawn(
+                contract=_contract(access_mode="full_access"),
+                executor=lambda context: None,
+                parent_tools=frozenset({"read_file"}),
+                parent_access_mode="sandbox",
+            )
+
+        captured = []
+        manager.spawn(
+            contract=_contract(allowed_tools=frozenset({"read_file", "write_file"}), mode="foreground"),
+            executor=lambda context: captured.append((context.allowed_tools, context.access_mode)),
+            parent_tools=frozenset({"read_file"}),
+            parent_access_mode="full_access",
+        )
+        assert captured == [(frozenset({"read_file"}), "sandbox")]
+    finally:
+        manager.close()
+
+
+def test_child_cannot_spawn_another_child() -> None:
+    """管理器应在服务端拒绝子 Agent 的嵌套召唤。"""
+
+    manager = ChildAgentManager()
+    try:
+        with pytest.raises(PermissionError):
+            manager.spawn(
+                contract=_contract(),
+                executor=lambda context: None,
+                caller_is_child=True,
+            )
+    finally:
+        manager.close()
+
+
+def test_stop_and_context_update_are_observable_by_executor() -> None:
+    """子 Agent 应能读取父级更新并响应协作式停止。"""
+
+    manager = ChildAgentManager()
+    ready = Event()
+    stopped = Event()
+    seen_updates: list[dict] = []
+
+    def worker(context):
+        ready.set()
+        while True:
+            seen_updates.extend(dict(item) for item in context.drain_updates())
+            try:
+                context.raise_if_stopped()
+            except RuntimeError:
+                stopped.set()
+                raise
+            time.sleep(0.01)
+
+    try:
+        record = manager.spawn(contract=_contract(), executor=worker)
+        assert ready.wait(timeout=1)
+        manager.update_context(record.run_id, {"kind": "new_information", "value": "继续"})
+        manager.stop(record.run_id)
+        assert stopped.wait(timeout=1)
+        deadline = time.time() + 1
+        while record.status != ChildAgentStatus.STOPPED and time.time() < deadline:
+            time.sleep(0.01)
+        assert record.status == ChildAgentStatus.STOPPED
+        assert seen_updates == [{"kind": "new_information", "value": "继续"}]
+    finally:
+        manager.close()

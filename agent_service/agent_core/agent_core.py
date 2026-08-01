@@ -44,6 +44,7 @@ import threading
 import time
 from collections.abc import Iterator, Sequence
 from typing import Any
+from uuid import uuid4
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
@@ -54,6 +55,7 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.message import MessageCreate
 from agent_service.scripts.draw_agent_graph import draw_agent_graph
 from agent_service.services.memory.context_builder import ContextBuilder
+from agent_service.services.child_agent import ChildAgentContract, ChildAgentEvent, ChildAgentManager
 from agent_service.services.message_service import MessageService
 from agent_service.services.session_attachment_service import SessionAttachmentService
 from agent_service.services.safety import SafetyService
@@ -172,6 +174,7 @@ class AgentCore:
         self.task_list_service = task_list_service
         self.skill_service = skill_service
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
+        self.child_agent_manager = ChildAgentManager()
         self.tool_registry = ToolRegistry.with_builtin_tools(config=config) if tools is None else None
         self.tool_executor = ToolExecutor(registry=self.tool_registry) if self.tool_registry is not None else None
         self._cancel_events: dict[str, threading.Event] = {}
@@ -222,6 +225,7 @@ class AgentCore:
         session_id: str,
         agent_mode: str = AGENT_LOOP_PLAN,
         agent_access_mode: str = "sandbox",
+        allow_child_spawn: bool = True,
     ) -> Iterator[dict[str, Any]]:
         """
         运行一轮无状态 Agent 并逐节点产出 dict 事件。
@@ -243,6 +247,7 @@ class AgentCore:
             agent_mode=effective_mode,
             agent_access_mode=agent_access_mode,
             prompt=prompt,
+            allow_child_spawn=allow_child_spawn,
         )
         logger.debug("无状态流式运行完成 | user=%s session=%s mode=%s", user_id, session_id, effective_mode)
 
@@ -254,6 +259,7 @@ class AgentCore:
         session_id: str,
         agent_mode: str = AGENT_LOOP_PLAN,
         agent_access_mode: str = "sandbox",
+        allow_child_spawn: bool = True,
     ) -> dict[str, Any]:
         """
         运行一轮无状态 Agent 并返回结构化结果。
@@ -271,6 +277,7 @@ class AgentCore:
             session_id=session_id,
             agent_mode=effective_mode,
             agent_access_mode=agent_access_mode,
+            allow_child_spawn=allow_child_spawn,
         ))
         graph_diagram_path = self.graph_diagram_paths[effective_mode]
         graph_diagram = graph_diagram_path.read_text(encoding="utf-8")
@@ -280,6 +287,243 @@ class AgentCore:
             "final_output": self.extract_final_output(chunks),
             "events": chunks,
         }
+
+    def list_child_agents(self, parent_run_id: str) -> list[dict[str, Any]]:
+        """返回指定父 Agent 的子 Agent 状态快照。"""
+
+        return [self._child_record_to_dict(record) for record in self.child_agent_manager.list_children(parent_run_id)]
+
+    def list_child_agents_for_session(self, session_id: str) -> list[dict[str, Any]]:
+        """返回指定会话内主 Agent 创建的全部子 Agent,供前端面板查询。"""
+
+        records = self.child_agent_manager.list_children_for_session(session_id)
+        return [self._child_record_to_dict(record) for record in records]
+
+    def stop_child_agent(self, run_id: str) -> bool:
+        """向指定子 Agent 发送停止信号。"""
+
+        return self.child_agent_manager.stop(run_id)
+
+    def update_child_agent(self, run_id: str, update: dict[str, Any]) -> None:
+        """向指定子 Agent 下一次安全检查点投递上下文更新。"""
+
+        self.child_agent_manager.update_context(run_id, update)
+
+    @staticmethod
+    def _child_record_to_dict(record: Any) -> dict[str, Any]:
+        """将子 Agent 记录转为 REST/gRPC/前端共用的普通字典。"""
+
+        result = record.result
+        return {
+            "run_id": record.run_id,
+            "parent_run_id": record.contract.parent_run_id,
+            "goal": record.contract.goal,
+            "mode": record.contract.mode,
+            "status": record.status.value,
+            "access_mode": record.effective_access_mode,
+            "allowed_tools": sorted(record.effective_tools),
+            "result": result.result if result is not None else None,
+            "summary": result.summary if result is not None else "",
+            "error": result.error if result is not None else None,
+        }
+
+    def _child_event_to_payload(self, event: ChildAgentEvent) -> dict[str, Any] | None:
+        """将子 Agent 生命周期事件转换为前端可展示的 SSE payload。"""
+
+        return {
+            "type": "child_agent_event",
+            "node": "child_agent",
+            "content": self._child_event_content(event),
+            "tool_calls": [],
+            "trace": [],
+            "model_name": "",
+            "metadata": {
+                "child_agent_event": {
+                    "event_name": event.event_name,
+                    "created_at": event.created_at,
+                    "child": {
+                        "run_id": event.run_id,
+                        "parent_run_id": event.parent_run_id,
+                        "goal": event.goal,
+                        "mode": event.mode,
+                        "status": event.status.value,
+                        "access_mode": event.access_mode,
+                        "allowed_tools": list(event.allowed_tools),
+                        "result": event.result,
+                        "summary": event.summary,
+                        "error": event.error,
+                    },
+                },
+            },
+        }
+
+    @staticmethod
+    def _child_event_content(event: ChildAgentEvent) -> str:
+        """生成子 Agent 事件的历史上下文正文。"""
+
+        status_label = {
+            "created": "已创建",
+            "running": "开始任务",
+            "completed": "完成任务",
+            "failed": "任务失败",
+            "stopped": "已停止",
+        }.get(event.status.value, event.status.value)
+        parts = [
+            f"子 Agent {event.run_id} {status_label}: {event.goal}",
+            f"模式={event.mode}",
+            f"权限={event.access_mode}",
+            f"工具数={len(event.allowed_tools)}",
+        ]
+        if event.summary:
+            parts.append(f"摘要={event.summary}")
+        if event.error:
+            parts.append(f"错误={event.error}")
+        return " | ".join(parts)
+
+    def _drain_child_agent_event_payloads(
+        self,
+        *,
+        session_id: str,
+        user_id: str,
+        message_service: MessageService | None = None,
+    ) -> list[dict[str, Any]]:
+        """读取当前会话的子 Agent 事件队列,持久化后转为 SSE payload 列表。"""
+
+        payloads: list[dict[str, Any]] = []
+        for event in self.child_agent_manager.drain_events_for_session(session_id):
+            payload = self._child_event_to_payload(event)
+            if payload is not None:
+                self._save_child_agent_event_message(
+                    message_service=message_service,
+                    user_id=user_id,
+                    session_id=session_id,
+                    payload=payload,
+                )
+                payloads.append(payload)
+        return payloads
+
+    @staticmethod
+    def _save_child_agent_event_message(
+        *,
+        message_service: MessageService | None,
+        user_id: str,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> None:
+        """把子 Agent SSE 事件保存为可历史加载和导入导出的会话消息。"""
+
+        if message_service is None:
+            return
+        metadata = payload.get("metadata")
+        if not isinstance(metadata, dict):
+            metadata = {}
+        metadata = {
+            **metadata,
+            "node": "child_agent",
+            "source": "child_agent_event",
+        }
+        message_service.create_message(
+            MessageCreate(
+                session_id=session_id,
+                user_id=user_id,
+                role="assistant",
+                content=str(payload.get("content") or ""),
+                metadata_json=metadata,
+            )
+        )
+
+    def _spawn_child_from_runtime(
+        self,
+        *,
+        parent_run_id: str,
+        user_id: str,
+        session_id: str,
+        parent_access_mode: str,
+        goal: str,
+        mode: str = "background",
+        allowed_tools: list[str] | None = None,
+        access_mode: str = "sandbox",
+        input_refs: list[str] | None = None,
+        output_contract: dict[str, Any] | None = None,
+    ) -> str:
+        """由当前主 Agent 工具上下文创建真实子 Agent并返回 JSON 摘要。"""
+
+        parent_tools = frozenset(
+            definition.name
+            for definition in (self.tool_registry.definitions.values() if self.tool_registry else [])
+            if definition.name not in {"spawn_child_agent", "wait_for_child_agents"}
+        )
+        contract = ChildAgentContract(
+            goal=goal,
+            parent_run_id=parent_run_id,
+            user_id=user_id,
+            session_id=session_id,
+            mode=mode,
+            allowed_tools=frozenset(allowed_tools) if allowed_tools is not None else None,
+            access_mode=access_mode,
+            input_refs=tuple(input_refs or []),
+            output_contract=output_contract or {},
+        )
+
+        def execute_child(context: Any) -> str:
+            """在独立线程中执行一轮无状态 Agent,禁止继续召唤子 Agent。"""
+
+            context.raise_if_stopped()
+            result = self.run_once(
+                prompt=context.goal,
+                user_id=context.user_id,
+                session_id=f"{context.session_id}:{context.run_id}",
+                agent_mode=context.agent_mode,
+                agent_access_mode=context.access_mode,
+                allow_child_spawn=False,
+            )
+            context.raise_if_stopped()
+            return str(result.get("final_output") or "")
+
+        record = self.child_agent_manager.spawn(
+            contract=contract,
+            executor=execute_child,
+            parent_tools=parent_tools,
+            parent_access_mode=parent_access_mode,
+        )
+        return json.dumps(self._child_record_to_dict(record), ensure_ascii=False)
+
+    def _wait_child_agents_from_runtime(
+        self,
+        *,
+        parent_run_id: str,
+        run_ids: list[str] | None = None,
+        timeout_seconds: float | None = 600,
+    ) -> str:
+        """由当前主 Agent 工具上下文等待一个后台子 Agent 结果并返回 JSON。"""
+
+        result = self.child_agent_manager.wait_for_children(
+            parent_run_id=parent_run_id,
+            run_ids=run_ids or [],
+            timeout_seconds=timeout_seconds,
+        )
+        records = self.child_agent_manager.list_children(parent_run_id)
+        if run_ids:
+            target_run_ids = set(run_ids)
+            records = [record for record in records if record.run_id in target_run_ids]
+        return json.dumps(
+            {
+                "result": (
+                    {
+                        "run_id": result.run_id,
+                        "parent_run_id": result.parent_run_id,
+                        "status": result.status.value,
+                        "summary": result.summary,
+                        "result": result.result,
+                        "error": result.error,
+                    }
+                    if result is not None
+                    else None
+                ),
+                "children": [self._child_record_to_dict(record) for record in records],
+            },
+            ensure_ascii=False,
+        )
 
     def graph_diagram_for_mode(self, agent_mode: str) -> str:
         """返回指定 Agent Loop 模式对应的 Mermaid 图。"""
@@ -427,6 +671,17 @@ class AgentCore:
             user_id=user_id, session_id=session_id, current_prompt=prompt, reference=reference,
             web_search_max_results=web_search_max_results,
         )
+        child_results = self.child_agent_manager.drain_results_for_session(session_id)
+        if child_results:
+            messages.append(
+                SystemMessage(
+                    content="后台子 Agent 已返回以下结果，请结合当前任务处理：\n"
+                    + "\n".join(
+                        f"- 子任务 {result.run_id} [{result.status.value}]：{result.summary}"
+                        for result in child_results
+                    )
+                )
+            )
         turn_citation_map: dict[str, Any] = {}
         logger.debug("上下文构建完成 | message_count=%d", len(messages))
 
@@ -523,6 +778,7 @@ class AgentCore:
         """释放 AgentCore 持有的调度器等资源。"""
 
         logger.info("AgentCore 正在释放调度器资源...")
+        self.child_agent_manager.close()
         self.task_scheduler.shutdown()
         logger.info("AgentCore 资源释放完成")
 
@@ -539,6 +795,8 @@ class AgentCore:
         agent_access_mode: str = "sandbox",
         citation_map: dict[str, Any] | None = None,
         prompt: str = "",
+        run_id: str | None = None,
+        allow_child_spawn: bool = True,
     ) -> Iterator[dict[str, Any]]:
         """
         使用给定 LangChain messages 执行图并逐节点产出 dict 事件。
@@ -585,7 +843,8 @@ class AgentCore:
                 inputs["active_skills"] = []
         if initial_plan is not None:
             inputs["plan"] = initial_plan
-        runtime_config = {"configurable": {"thread_id": session_id}}
+        effective_run_id = run_id or f"agent_run_{uuid4().hex}"
+        runtime_config = {"configurable": {"thread_id": effective_run_id}}
         active_graph = graph or self.graphs.get(agent_mode) or self.graph
         effective_access_mode = normalize_agent_access_mode(agent_access_mode)
         retrieval_service = None
@@ -666,11 +925,31 @@ class AgentCore:
                 config=self.config,
                 user_id=user_id,
                 session_id=session_id,
+                run_id=effective_run_id,
                 retrieval_service=retrieval_service,
                 task_list_service=self.task_list_service,
                 skill_service=self.skill_service,
                 citation_map=_citation_map,
                 agent_access_mode=effective_access_mode,
+                child_agent_spawner=(
+                    None
+                    if not allow_child_spawn
+                    else lambda **kwargs: self._spawn_child_from_runtime(
+                        parent_run_id=effective_run_id,
+                        user_id=user_id,
+                        session_id=session_id,
+                        parent_access_mode=effective_access_mode,
+                        **kwargs,
+                    )
+                ),
+                child_agent_waiter=(
+                    None
+                    if not allow_child_spawn
+                    else lambda **kwargs: self._wait_child_agents_from_runtime(
+                        parent_run_id=effective_run_id,
+                        **kwargs,
+                    )
+                ),
             )
             set_agent_token_callback(on_token)
             set_tool_trace_callback(on_tool_trace)
@@ -708,6 +987,15 @@ class AgentCore:
                 try:
                     item = token_queue.get(timeout=0.3)
                 except queue_module.Empty:
+                    child_event_payloads = self._drain_child_agent_event_payloads(
+                        session_id=session_id,
+                        user_id=user_id,
+                        message_service=message_service,
+                    )
+                    if child_event_payloads:
+                        for payload in child_event_payloads:
+                            yield payload
+                        continue
                     if cancel_event.is_set():
                         partial = _streamed_content[0]
                         if message_service is not None and partial:
@@ -730,6 +1018,12 @@ class AgentCore:
                 item_type = item.get("type")
 
                 if item_type == "done":
+                    for payload in self._drain_child_agent_event_payloads(
+                        session_id=session_id,
+                        user_id=user_id,
+                        message_service=message_service,
+                    ):
+                        yield payload
                     final_plan = get_plan_state()
                     self._persist_session_plan(session_id, final_plan)
                     break

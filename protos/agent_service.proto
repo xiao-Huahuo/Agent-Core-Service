@@ -50,6 +50,11 @@ service AgentService {
   // 取消指定 session 正在执行的图,中断后部分输出自动保存。
   rpc CancelSession(CancelRequest) returns (CancelResponse);
 
+  // ---- 子 Agent ----
+  rpc ListChildAgents(ChildAgentListRequest) returns (ChildAgentListResponse);
+  rpc StopChildAgent(ChildAgentControlRequest) returns (ChildAgentControlResponse);
+  rpc UpdateChildAgent(ChildAgentUpdateRequest) returns (ChildAgentControlResponse);
+
   // ---- 观测 / trace 事件 ----
 
   rpc GetEvents(EventsRequest) returns (EventsResponse);
@@ -376,6 +381,42 @@ message CancelRequest {
 
 message CancelResponse {
   bool ok = 1;
+}
+
+message ChildAgentListRequest {
+  string session_id = 1;
+}
+
+message ChildAgentRecord {
+  string run_id = 1;
+  string parent_run_id = 2;
+  string goal = 3;
+  string mode = 4;
+  string status = 5;
+  string access_mode = 6;
+  repeated string allowed_tools = 7;
+  string summary = 8;
+  string result_json = 9;
+  string error = 10;
+}
+
+message ChildAgentListResponse {
+  string session_id = 1;
+  repeated ChildAgentRecord children = 2;
+}
+
+message ChildAgentControlRequest {
+  string run_id = 1;
+}
+
+message ChildAgentUpdateRequest {
+  string run_id = 1;
+  google.protobuf.Struct update = 2;
+}
+
+message ChildAgentControlResponse {
+  bool ok = 1;
+  string run_id = 2;
 }
 
 // ---------------------------------------------------------------------------

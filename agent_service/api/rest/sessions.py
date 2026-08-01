@@ -127,6 +127,7 @@ def _do_import(body: dict[str, Any]) -> dict[str, Any]:
         - reference (可选): 用户引用,写入 metadata.reference
         - tool_calls (可选): 工具调用列表
         - trace_details (可选): trace 事件列表,写入 metadata.trace
+        - child_agent_event (可选): 子 Agent 生命周期事件,写入 metadata.child_agent_event
     """
     user_id = body.get("user_id")
     if not user_id:
@@ -168,6 +169,9 @@ def _do_import(body: dict[str, Any]) -> dict[str, Any]:
             trace_details = raw.get("trace_details")
             if trace_details and isinstance(trace_details, list):
                 metadata["trace"] = trace_details
+            child_agent_event = raw.get("child_agent_event")
+            if child_agent_event and isinstance(child_agent_event, dict):
+                metadata["child_agent_event"] = child_agent_event
 
             tool_calls = raw.get("tool_calls")
             if not tool_calls or not isinstance(tool_calls, list):

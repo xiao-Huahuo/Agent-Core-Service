@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Check, ChevronDown, History, ListChecks, Maximize2, MessageSquarePlus, MessagesSquare, RefreshCw, SquarePen, Upload, UploadCloud } from 'lucide-vue-next'
+import { Check, ChevronDown, History, ListChecks, Maximize2, MessageSquarePlus, MessagesSquare, RefreshCw, SquarePen, Upload, UploadCloud, UsersRound } from 'lucide-vue-next'
 
 import darkTitle from '@/assets/images/暗色标题.png'
 import lightTitle from '@/assets/images/亮色标题.png'
@@ -18,6 +18,7 @@ import MessageList from '@/components/editor_workspace/agent_chat/MessageList.vu
 import SessionDrawer from '@/components/editor_workspace/agent_chat/SessionDrawer.vue'
 import StreamingIndicator from '@/components/editor_workspace/agent_chat/StreamingIndicator.vue'
 import TaskListDrawer from '@/components/editor_workspace/agent_chat/TaskListDrawer.vue'
+import ChildAgentPanel from '@/components/editor_workspace/agent_chat/ChildAgentPanel.vue'
 import { useChatStore } from '@/stores/chat'
 import type { AgentUploadedAttachment } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
@@ -49,6 +50,7 @@ const emit = defineEmits<{
   expand: []
 }>()
 const sessionDrawerOpen = ref(false)
+const childAgentSidebarOpen = ref(false)
 const isBootstrapping = ref(false)
 const referenceText = ref('')
 const messageListRef = ref<MessageListApi | null>(null)
@@ -526,6 +528,15 @@ onBeforeUnmount(() => {
         >
           <ListChecks :size="16" />
         </button>
+        <button
+          class="icon-button"
+          type="button"
+          title="子 Agent 任务"
+          :aria-pressed="childAgentSidebarOpen"
+          @click="childAgentSidebarOpen = !childAgentSidebarOpen"
+        >
+          <UsersRound :size="16" />
+        </button>
         <details ref="skillMenu" class="topbar-skill-dropdown" :class="{ disabled: !userId }">
           <summary
             class="topbar-skill-trigger"
@@ -717,6 +728,11 @@ onBeforeUnmount(() => {
     </div>
     </main>
     <TaskListDrawer />
+    <ChildAgentPanel
+      :session-id="sessionStore.currentSessionId || ''"
+      :open="childAgentSidebarOpen"
+      @close="childAgentSidebarOpen = false"
+    />
     </div>
     </div>
     </div>

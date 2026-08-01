@@ -22,6 +22,7 @@ interface ExportMessage {
   tool_calls?: unknown[]
   trace_human_readable?: string[]
   trace_details?: unknown[]
+  child_agent_event?: unknown
 }
 
 interface ExportData {
@@ -53,6 +54,9 @@ function formatMessages(records: SessionMessageRecord[]): ExportMessage[] {
       }
       if (metadata.reference) {
         exportMsg.reference = String(metadata.reference)
+      }
+      if (metadata.child_agent_event && typeof metadata.child_agent_event === 'object') {
+        exportMsg.child_agent_event = metadata.child_agent_event
       }
       if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
         exportMsg.tool_calls = msg.tool_calls.map(cleanToolCall)

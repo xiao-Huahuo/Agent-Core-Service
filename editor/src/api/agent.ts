@@ -213,3 +213,33 @@ export function fetchTokenUsageStats(
     session_sort: options.sessionSort || 'time',
   })
 }
+
+export interface ChildAgentRecord {
+  run_id: string
+  parent_run_id: string
+  goal: string
+  mode: 'foreground' | 'background'
+  status: 'created' | 'running' | 'completed' | 'failed' | 'stopped'
+  access_mode: AgentAccessMode
+  allowed_tools: string[]
+  result?: unknown
+  summary?: string
+  error?: string | null
+}
+
+export interface ChildAgentListResponse {
+  session_id: string
+  children: ChildAgentRecord[]
+}
+
+export function fetchChildAgents(sessionId: string): Promise<ChildAgentListResponse> {
+  return apiGet<ChildAgentListResponse>(API_ROUTES.AGENT_CHILDREN, { session_id: sessionId })
+}
+
+export function stopChildAgent(runId: string): Promise<{ run_id: string; ok: boolean }> {
+  return apiPost<{ run_id: string; ok: boolean }>(`${API_ROUTES.AGENT_CHILDREN}/${encodeURIComponent(runId)}/stop`, {})
+}
+
+export function updateChildAgent(runId: string, update: Record<string, unknown>): Promise<{ run_id: string; ok: boolean }> {
+  return apiPost<{ run_id: string; ok: boolean }>(`${API_ROUTES.AGENT_CHILDREN}/${encodeURIComponent(runId)}/update`, update)
+}

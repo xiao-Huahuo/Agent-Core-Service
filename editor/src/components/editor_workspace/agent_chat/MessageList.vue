@@ -31,7 +31,8 @@ const isThinkingActive = computed(() => Boolean(props.isStreaming))
 function mergeConsecutiveSameNode(messages: AgentChatMessage[]) {
   return messages.filter((message) => message.role !== 'system').reduce<AgentChatMessage[]>((acc, message) => {
     const previous = acc[acc.length - 1]
-    if (message.role === 'assistant' && previous?.role === 'assistant' && previous.node === message.node) {
+    const isChildAgentEvent = message.node === 'child_agent' || previous?.node === 'child_agent'
+    if (message.role === 'assistant' && previous?.role === 'assistant' && previous.node === message.node && !isChildAgentEvent) {
       const merged: AgentChatMessage = {
         ...previous,
         content: previous.content + message.content,

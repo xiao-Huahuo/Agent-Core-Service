@@ -1482,3 +1482,16 @@
   - 修复:`handlePreviewParse` 改为把 `element.querySelector('.vditor-reset')`(屏幕上的活 `.vditor-reset`,即 `previewElement`)交给 `renderMathInPreviewDom`,重建只发生在 `.vditor-reset` 的 children 层,`.vditor-reset` 元素自身引用稳定,Vditor 后续写入仍然命中屏幕节点。占位符本就写在 `.vditor-reset` 内,还原范围不变。
   - 验证:Playwright 真实组件实测 Split 模式在左侧输入 `ZZZSPLITTEST 行内$a^2$块级$$b^3$$` 及 `行内 $E=mc^2$ 块级 $$\int_0^1 x dx$$`,右侧预览即时更新、`preview.previewElement === 屏幕 .vditor-reset` 且 `isConnected === true`;行内/块级公式实时渲染成 KaTeX,katex 计数随输入增长,无 `MWMATH` 占位符残留、无 katex-error;Preview 单面板模式 122 个行内 + 71 个块级公式渲染正常、无占位符残留。`mathRender.spec.ts` + `MarkdownPreview.spec.ts` 共 23 个测试全通过,`vue-tsc` 类型检查通过。
 - [x] Agent 欢迎页快捷提示块按宽度控制数量(始终一行):不再换行堆叠,改为根据视口宽度计算每行能放下的块数并只渲染该数量(每块固定 210px + 12px gap,available = min(920, vw-48),count = floor((available+12)/222)),宽屏 4 个、900px 档 3 个、620px 档 2 个、420px 以下 1 个;容器从 grid 换 auto-fit 改为 flex nowrap + width: max-content 整体居中,卡片 flex: 0 0 210px 宽度不变。Playwright 8 档宽度验证:始终单行、块宽恒 210px、数量随宽度变化、grid 居中;vue-tsc 通过。
+- 新增子 Agent 运行时 MVP:增加子任务合同、created/running/completed/failed/stopped 生命周期、独立线程执行、前台/后台模式、按 parent_run_id 隔离的内存结果队列、权限求交、上下文更新和协作式停止;新增 5 个管理器单元测试,并与既有 Agent 权限测试一起通过。暂未接入真实 AgentCore 和前端事件。
+- 将子 Agent MVP 接入 AgentCore:新增 `spawn_child_agent` 内置工具,真实子 Agent 使用独立线程和子运行会话执行,子 Agent 禁止再次召唤;新增子 Agent列表/停止/上下文更新 REST 接口,并在编辑器 Agent 页面增加目标、模式、权限、状态、结果和停止按钮面板。前端状态通过现有 HTTP 客户端轮询,未引入额外消息中间件。
+- 恢复 `search_knowledge` 的既有展示名称“搜索知识库”,保持工具观测测试与现有前端文案兼容。
+- 完成子 Agent 基础设施的 REST/gRPC 同步:新增 ListChildAgents、StopChildAgent、UpdateChildAgent RPC 及对应 protobuf 消息;后台子 Agent 结果通过按 session 汇总的内存队列回流到父 Agent 下一轮上下文;新增协议导入、编译和 9 项核心回归测试验证。
+- 重做 Agent 会话内子 Agent UI:移除聊天区右侧独立面板和可见的周期性同步提示,将子 Agent 控制区放回主 Agent 消息列表与输入框之间;新增后台/前台召唤表单、权限继承提示、任务状态卡和停止操作;补充 REST/gRPC 的 SpawnChildAgent 入口,并让前端显式传递主 Agent 权限供后端做权限求交。
+- 按 Agent 页面现有任务列表侧栏重新布局子 Agent:顶部工具栏提供独立开关,侧栏采用与 TaskListDrawer 相同的右侧抽屉结构和开合动画;召唤表单、运行中任务、结果和停止操作全部收纳在该抽屉内,撤销消息区内嵌版本,避免干扰主 Agent 对话内容。
+- 修复子 Agent 侧栏嵌套滚动:移除任务列表固定 180px 高度和内部滚动,改为侧栏单一纵向滚动容器;侧栏宽度提高至最多 400px,任务目标/工具权限字段允许换行并阻止横向溢出。
+- 收回子 Agent 的用户侧召唤权限:删除前端召唤表单、REST POST /agent/children 和对应 gRPC SpawnChildAgent;右侧栏仅保留主 Agent 已召唤任务的状态、结果查看与停止操作,子 Agent 只能由主 Agent 运行时工具创建。
+- 优化子 Agent 侧栏任务块:每个子 Agent 改为圆角细边框卡片,头部可展开/收缩,内部按任务目标、运行信息、工具范围、阶段摘要、产出结果和错误信息分区展示,并清理旧召唤表单残留样式。
+- 完善后台子 Agent 等待与事件流:新增 `wait_for_child_agents` 主 Agent 工具,后台子 Agent 可被父 Agent 显式等待到全部完成或超时;子 Agent created/started/completed/failed/stopped 等生命周期事件进入 SSE,前端对话区新增可展开子 Agent 信息条展示任务、权限、工具范围和结果快照。
+- 调整 `wait_for_child_agents` 为逐结果消费语义:一次等待最多返回一个后台子 Agent 终态结果,已有队列结果则立即返回,未完成时阻塞到下一个结果或超时;工具说明和系统上下文要求主 Agent 在 background spawn 后反复等待,直到已召唤子 Agent 全部进入 completed/failed/stopped 后再汇总最终回答。
+- 持久化子 Agent 会话事件:子 Agent 生命周期 SSE 事件同步写入 `agent_messages`,历史加载保留 `node=child_agent` 的空正文/结构化事件消息;会话导出增加 `child_agent_event` 字段,导入时恢复到 metadata,确保子 Agent 事件可随会话历史加载、导出和导入。
+- 修复子 Agent 事件进入历史后第二轮对话的 OpenAI 400:ContextBuilder 现在按连续块校验 assistant tool_calls 与紧随其后的 ToolMessage,缺少任一 tool_call_id 响应时丢弃整组不完整工具调用消息,同时继续保留普通历史和子 Agent 事件摘要。

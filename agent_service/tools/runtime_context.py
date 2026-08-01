@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from threading import local
 from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
@@ -44,6 +45,7 @@ class ToolRuntimeState:
     config: AgentConfig
     user_id: str
     session_id: str
+    run_id: str
     retrieval_service: MemoryRetrievalService
     memory_service: LongTermMemoryService | None = None
     embedding_service: EmbeddingService | None = None
@@ -53,6 +55,8 @@ class ToolRuntimeState:
     citation_map: dict[str, dict[str, Any]] = field(default_factory=dict)
     tool_citation_counter: int = 0
     network_citation_counter: int = 0
+    child_agent_spawner: Callable[..., str] | None = None
+    child_agent_waiter: Callable[..., str] | None = None
 
 
 _TOOL_RUNTIME = local()
@@ -63,6 +67,7 @@ def set_tool_runtime(
     config: AgentConfig,
     user_id: str,
     session_id: str,
+    run_id: str | None = None,
     retrieval_service: MemoryRetrievalService | None = None,
     memory_service: LongTermMemoryService | None = None,
     embedding_service: EmbeddingService | None = None,
@@ -70,6 +75,8 @@ def set_tool_runtime(
     skill_service: Any = None,
     citation_map: dict[str, dict[str, Any]] | None = None,
     agent_access_mode: str = AGENT_ACCESS_SANDBOX,
+    child_agent_spawner: Callable[..., str] | None = None,
+    child_agent_waiter: Callable[..., str] | None = None,
 ) -> None:
     """
     设置当前线程的工具运行时状态。
@@ -89,6 +96,7 @@ def set_tool_runtime(
         config=config,
         user_id=user_id,
         session_id=session_id,
+        run_id=run_id or session_id,
         retrieval_service=retrieval_service or MemoryRetrievalService(config=config),
         memory_service=memory_service or LongTermMemoryService(config=config),
         embedding_service=embedding_service or EmbeddingService(config=config),
@@ -96,6 +104,8 @@ def set_tool_runtime(
         skill_service=skill_service,
         agent_access_mode=normalize_agent_access_mode(agent_access_mode),
         citation_map=citation_map if citation_map is not None else {},
+        child_agent_spawner=child_agent_spawner,
+        child_agent_waiter=child_agent_waiter,
     )
 
 
@@ -109,8 +119,6 @@ def clear_tool_runtime() -> None:
 # ------------------------------------------------------------------
 # 流式 Token 回调 (用于 ModelDecisionNode → AgentCore 实时推送)
 # ------------------------------------------------------------------
-
-from collections.abc import Callable
 
 _AGENT_TOKEN_CALLBACK: local = local()
 

@@ -340,6 +340,33 @@ async def agent_cancel(
     return {"ok": True}
 
 
+@router.get("/agent/children")
+async def agent_children(
+    session_id: str = Query(..., min_length=1, description="主 Agent 会话 ID"),
+) -> dict[str, Any]:
+    """读取指定会话内子 Agent 的目标、权限、状态和结果。"""
+
+    agent = _require_agent()
+    return {"session_id": session_id, "children": agent.list_child_agents_for_session(session_id)}
+
+
+@router.post("/agent/children/{run_id}/stop")
+async def stop_child_agent(run_id: str) -> dict[str, Any]:
+    """向指定子 Agent 发送停止信号。"""
+
+    agent = _require_agent()
+    return {"run_id": run_id, "ok": agent.stop_child_agent(run_id)}
+
+
+@router.post("/agent/children/{run_id}/update")
+async def update_child_agent(run_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    """向指定子 Agent 下一次安全检查点投递上下文更新。"""
+
+    agent = _require_agent()
+    agent.update_child_agent(run_id, body)
+    return {"run_id": run_id, "ok": True}
+
+
 # ------------------------------------------------------------------
 # 观测 / trace 事件
 # ------------------------------------------------------------------
