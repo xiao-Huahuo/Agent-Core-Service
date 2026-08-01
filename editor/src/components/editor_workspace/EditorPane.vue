@@ -6,7 +6,7 @@
   save/view-mode controls.
 -->
 <script setup lang="ts">
-import { computed, onErrorCaptured, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onErrorCaptured, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Save, Sparkles, X } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
@@ -22,6 +22,9 @@ import type { EditorViewMode } from '@/types/knowledge'
 const workspaceStore = useWorkspaceStore()
 const { editorMode } = storeToRefs(workspaceStore)
 const visualizeMenuOpen = ref(false)
+const codeEditorRef = ref<InstanceType<typeof CodeEditor> | null>(null)
+const markdownPreviewRef = ref<InstanceType<typeof MarkdownPreview> | null>(null)
+const lastEditorScroll = ref({ ratio: 0, cursorOffset: 0, contentLength: 0 })
 
 const splitRatio = ref(0.5)
 const splitBodyRef = ref<HTMLElement | null>(null)
@@ -68,6 +71,7 @@ const activeLanguage = computed(() => {
 
 const isMarkdownViewer = computed(() => workspaceStore.activeViewerKind === 'markdown')
 const isCodeViewer = computed(() => ['code', 'text'].includes(workspaceStore.activeViewerKind))
+const isCodeOnlyViewer = computed(() => workspaceStore.activeViewerKind === 'code')
 const isPdfViewer = computed(() => workspaceStore.activeViewerKind === 'pdf')
 const isPdfTextViewer = computed(() => isPdfViewer.value && Boolean(workspaceStore.activePreview?.content))
 const isDocumentViewer = computed(() => workspaceStore.activeViewerKind === 'document')
@@ -76,7 +80,11 @@ const isImageViewer = computed(() => workspaceStore.activeViewerKind === 'image'
 const isImageTextViewer = computed(() => isImageViewer.value && Boolean(workspaceStore.activePreview?.content))
 const isTextEditViewer = computed(() => isCodeViewer.value || isPdfTextViewer.value || isDocumentTextViewer.value || isImageTextViewer.value)
 const isPreviewOnlyViewer = computed(() => !isMarkdownViewer.value && !isTextEditViewer.value)
-const effectiveEditorMode = computed<EditorViewMode>(() => isPreviewOnlyViewer.value ? 'preview' : editorMode.value)
+const effectiveEditorMode = computed<EditorViewMode>(() => {
+  if (isPreviewOnlyViewer.value) return 'preview'
+  if (isCodeOnlyViewer.value) return 'edit'
+  return editorMode.value
+})
 
 const splitBodyStyle = computed(() => {
   if (effectiveEditorMode.value !== 'split') return {}
@@ -107,8 +115,42 @@ function setEditorMode(mode: EditorViewMode) {
   if (isPreviewOnlyViewer.value && mode !== 'preview') {
     return
   }
+  if (isCodeOnlyViewer.value && mode !== 'edit') {
+    return
+  }
   editorMode.value = mode
 }
+
+function handleEditorScroll(payload: { ratio: number; cursorOffset: number; contentLength: number }) {
+  lastEditorScroll.value = payload
+  if (effectiveEditorMode.value === 'split' && isMarkdownViewer.value) {
+    markdownPreviewRef.value?.scrollToRatio(payload.ratio)
+  }
+}
+
+function handlePreviewScroll(ratio: number) {
+  if (effectiveEditorMode.value === 'split' && isMarkdownViewer.value) {
+    codeEditorRef.value?.scrollToRatio(ratio)
+  }
+}
+
+function handleMarkdownPreviewReady() {
+  if (effectiveEditorMode.value !== 'split' || !isMarkdownViewer.value) {
+    return
+  }
+  const snapshot = codeEditorRef.value?.getScrollSnapshot() ?? lastEditorScroll.value
+  markdownPreviewRef.value?.scrollToSourceOffset(snapshot.cursorOffset, snapshot.contentLength)
+}
+
+watch(effectiveEditorMode, async (mode, previousMode) => {
+  if (mode !== 'split' || previousMode === 'split' || !isMarkdownViewer.value) {
+    return
+  }
+  await nextTick()
+  const snapshot = codeEditorRef.value?.getScrollSnapshot() ?? lastEditorScroll.value
+  lastEditorScroll.value = snapshot
+  markdownPreviewRef.value?.scrollToSourceOffset(snapshot.cursorOffset, snapshot.contentLength)
+})
 
 function handleBeforeUnload(event: BeforeUnloadEvent) {
   if (!workspaceStore.hasDirtyTabs) {
@@ -179,6 +221,7 @@ onErrorCaptured((err, vm, info) => {
         <EditorModeSwitch
           :model-value="effectiveEditorMode"
           :preview-only="isPreviewOnlyViewer"
+          :edit-only="isCodeOnlyViewer"
           @update:model-value="setEditorMode"
         />
         <div class="visualize-menu" :class="{ open: visualizeMenuOpen }">
@@ -244,12 +287,20 @@ onErrorCaptured((err, vm, info) => {
       <!-- Keep Edit and Preview as separate grid children. Split mode relies on
            this contract instead of Vditor's internal side-by-side preview. -->
       <section v-if="!isPreviewOnlyViewer && effectiveEditorMode !== 'preview'" class="editor-surface">
+        <MarkdownPreview
+          v-if="isPdfTextViewer"
+          :key="workspaceStore.selectedPath"
+          :content="activeContent"
+          :path="workspaceStore.selectedPath"
+        />
         <CodeEditor
-          v-if="isMarkdownViewer || isTextEditViewer"
+          v-else-if="isMarkdownViewer || isTextEditViewer"
+          ref="codeEditorRef"
           v-model="activeContent"
           :language="isImageTextViewer ? 'ocr' : activeLanguage"
           :readonly="workspaceStore.activeFileReadonly"
           @save="workspaceStore.saveActiveFile"
+          @scroll="handleEditorScroll"
         />
       </section>
       <div
@@ -260,9 +311,12 @@ onErrorCaptured((err, vm, info) => {
       <section v-if="isPreviewOnlyViewer || effectiveEditorMode !== 'edit'" class="preview-surface">
         <MarkdownPreview
           v-if="isMarkdownViewer"
+          ref="markdownPreviewRef"
           :key="workspaceStore.selectedPath"
           :content="activeContent"
           :path="workspaceStore.selectedPath"
+          @scroll="handlePreviewScroll"
+          @ready="handleMarkdownPreviewReady"
         />
         <CodePreview
           v-else-if="isCodeViewer && !isPdfViewer"

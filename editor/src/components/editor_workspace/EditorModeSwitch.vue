@@ -3,7 +3,8 @@
 
   Usage:
   Bind an EditorViewMode with v-model. Set preview-only when the current file
-  cannot expose text; Edit and Split then remain visible but disabled.
+  cannot expose text, or edit-only for source files that are rendered directly
+  in the editable surface.
 -->
 <script setup lang="ts">
 import { Columns2, Eye, Pencil } from 'lucide-vue-next'
@@ -15,8 +16,10 @@ defineOptions({ name: 'EditorModeSwitch' })
 const props = withDefaults(defineProps<{
   modelValue: EditorViewMode
   previewOnly?: boolean
+  editOnly?: boolean
 }>(), {
   previewOnly: false,
+  editOnly: false,
 })
 
 const emit = defineEmits<{
@@ -33,6 +36,7 @@ const modeButtons: Array<{ mode: EditorViewMode; label: string; icon: typeof Pen
 /** Selects an available view mode without changing the editor's write policy. */
 function selectMode(mode: EditorViewMode) {
   if (props.previewOnly && mode !== 'preview') return
+  if (props.editOnly && mode !== 'edit') return
   emit('update:modelValue', mode)
 }
 </script>
@@ -49,7 +53,7 @@ function selectMode(mode: EditorViewMode) {
       v-for="button in modeButtons"
       :key="button.mode"
       :class="{ active: modelValue === button.mode }"
-      :disabled="previewOnly && button.mode !== 'preview'"
+      :disabled="(previewOnly && button.mode !== 'preview') || (editOnly && button.mode !== 'edit')"
       :aria-pressed="modelValue === button.mode"
       type="button"
       @click="selectMode(button.mode)"

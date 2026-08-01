@@ -73,9 +73,17 @@ export function isKnowledgeRawUrl(src: string) {
   return src.includes('/knowledge/files/raw')
 }
 
+/** 判断后端静态挂载的 PDF/DOCX 图片资源 URL。 */
+export function isKnowledgeAssetUrl(src: string) {
+  return /^\/knowledge\/assets\//i.test(src)
+}
+
 export function buildRawFileUrl(rawSrc: string, context: MarkdownImageUrlContext) {
   if (!context.currentFilePath || !context.userId || isKnowledgeRawUrl(rawSrc)) {
     return rawSrc
+  }
+  if (isKnowledgeAssetUrl(rawSrc)) {
+    return buildApiUrl(rawSrc)
   }
   if (isBrowserHandledAssetUrl(rawSrc) && !isRootRelativeAssetUrl(rawSrc)) {
     return rawSrc
@@ -135,8 +143,10 @@ export function decorateRenderedMarkdownImages(root: HTMLElement, context: Markd
   const imgs = root.querySelectorAll<HTMLImageElement>('img[src]')
   for (const img of imgs) {
     const src = img.getAttribute('src') || ''
-    if (!((isBrowserHandledAssetUrl(src) && !isRootRelativeAssetUrl(src)) || isKnowledgeRawUrl(src))) {
+    if (!((isBrowserHandledAssetUrl(src) && !isRootRelativeAssetUrl(src)) || isKnowledgeRawUrl(src) || isKnowledgeAssetUrl(src))) {
       img.src = buildRawFileUrl(src, context)
+    } else if (isKnowledgeAssetUrl(src)) {
+      img.src = buildApiUrl(src)
     }
     img.classList.add('markdown-image')
     const parent = img.parentElement

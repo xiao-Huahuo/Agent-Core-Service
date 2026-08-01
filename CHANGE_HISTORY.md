@@ -1,6 +1,11 @@
 # CHANGE HISTORY
 
 ## 2026-08-01
+- [x] agent 回答代码块改为流式增量高亮:代码块未输出完时也周期性高亮新增部分,不再等 agent 终止后才一次性高亮:
+  - 根因:此前 `MarkdownContent.vue` 在流式期间(`watch` 里的 `if (props.isStreaming) return`)直接跳过代码高亮,且 `v-html` 每次更新会整体替换 DOM 冲掉已高亮 span,只能等输出终止后遍历 DOM 做一次 `hljs.highlightElement`。
+  - 修复:把高亮前移到字符串层,用 `marked.Renderer` 覆盖 `code` 渲染,在 `sanitizedHtml` computed 里随内容刷新直接产出带高亮 span 的 HTML。新增字符串级缓存(key 为 `语言\0代码文本`,value 为已转义的高亮 HTML):流式刷新时已完成代码块直接命中缓存,只对正在输出的最后一个代码块做真正的词法分析,实现"边输出边高亮"且不整段重复计算。未知语言与超长代码块(超过 2 万字符)回退纯文本并保留原文标签;缓存条数超过 200 自动清空,组件卸载时清空。
+  - 高亮既不再依赖流式状态也不依赖 DOM 二次遍历,`highlightCodeBlocks` 只保留文件名链接化与复制按钮挂接(流式结束后 `v-html` 不再更新,挂接不会被冲掉)。
+  - 新增回归测试:流式中(`isStreaming: true`)代码块已含 `hljs` class 与词法 span;未知语言回退纯文本且代码内 `<b>` 标签不丢失。改动文件 `vue-tsc` 零类型错误,相关组件测试 19 个通过。
 - [x] 优化 SSE 流式性能,修复输出代码卡顿、HTML 标签化语言"标签全丢大量空行"的问题:
   - 根因一(卡顿/突发输出):后端在 token 与 delta 两条路径无条件调用 `_strip_html_tags` 正则剥离 HTML 标签,命中标签即全量返回不完整内容;叠加 `_token_blocked` 永久锁在首次拦截后对所有后续 token 一律丢弃,导致流式输出到一半突然停滞,解除后再一次性吐出剩余全部内容。现删除 `_strip_html_tags` 与 `_token_blocked`:流式过滤只保留 JSON/内部标记的净化拦截,拦截时本轮返回不更新发送基线,后续按原文前向切片继续发增量,永不锁死。
   - 根因二(HTML 标签丢失):`_strip_html_tags` 用正则无条件剥掉 `<...>`(HTML 代码块里的 `<div>`、`<html>` 等标签被当标签删掉,只留大量空行)。删除该方法后,agent 回答侧 `MarkdownContent.vue` 同步移除 `stripHtml` DOM 解析(每次刷新最多 10 次全树遍历),`sanitizedHtml` 改为直接 `marked.parse`:代码围栏内的 HTML 由 marked 转义保留,裸 HTML 由 DOMPurify 统一净化防 XSS。
@@ -26,7 +31,11 @@
   - 标题层级丢失:原实现整篇压成单章节。现识别 `pStyle` 的 Heading1-6 样式按层级切分章节,并用标题栈生成 `title_path`(与 Markdown 章节结构对齐);无标题样式的 DOCX 行为不变。
   - 删除不再使用的 `_collect_relationship_ids`;前端预览走 mammoth 独立解析,不受影响。
   - 新增 4 个针对性测试(顺序与去重、标题切分、图片 rId 解析、纯段落兼容),全文件 20 个用例通过。
-
+- [x] 编辑区部分格式预览调整:
+  - pdf: pdf的edit模式应该像docx的preview模式一样,将嵌入的图片渲染出来,而不是只显示一个占位符.
+  - 代码格式: 所有代码格式的edit模式应该直接显示代码高亮,并且不可进入preview模式,而不是edit模式光板子preview高亮.
+- [x] 修复写入长期记忆时timezone is not defined 的问题.
+- [x] 实现Markdown的Split模式同步滚动,并且从Edit模式换到Split模式时,右边的预览要自动滚动到左边的编辑区的光标所在位置.
 ## 2026-07-31
 - [x] 修复整目录忽略时文件树内文件不变色:
   - `git status --ignored` 对整目录忽略会折叠成单条 `!! dir/`,此前只有目录节点能通过直配着色,目录下的具体文件节点匹配不到状态。现 `statusClassForPath` 对文件增加回退:无直接状态时检查是否位于某个忽略目录条目下,命中则返回 `git-ignored`。
@@ -1441,3 +1450,7 @@
 - 按编辑页可见区域重新清理边框: 移除文件 tab、模式切换、可视化/保存按钮、编辑主体、CodeEditor、CodePreview、MarkdownPreview、MultimodalPreview 根层以及 CodeEditor 顶部/查找栏分隔线的边框,保留临时菜单、输入框和表格内部网格线。
 - 针对 `EditorWorkspace.vue` 中直接挂载 `EditorPane` 的层级继续去除编辑页卡片感: 为 EditorPane 添加 `editor-main-content` 类,并让 editor 视图的 main-shell 透明、无圆角、无裁剪和无阴影,避免 EditorPane 作为主内容子页面时仍呈现额外外框。
 - 回退错误的 editor main-shell 透明化处理: 移除 `editor-page-main-shell` 和 `editor-main-content`,恢复编辑页使用默认大圆角主内容卡片,避免编辑区大圆角卡片消失。
+- 修正编辑区格式预览: PDF Edit 模式现在渲染 PDF 提取出的嵌入图片,代码文件 Edit 模式直接使用 highlight.js 高亮并强制隐藏 Preview/Split 模式入口。
+- 修复 PDF/DOCX 静态图片资源被 Markdown 图片 URL 改写器误转为知识库 raw 文件路径的问题,确保 `/knowledge/assets/...` 图片通过后端静态资源路由加载。
+- 新增 Markdown Split 模式双向同步滚动,从 Edit 切换到 Split 时按当前光标在源文档中的位置初始化右侧预览滚动。
+- 调整 Markdown 从 Edit 切换到 Split 时的预览定位为平滑滚动,避免右侧预览瞬间跳转。

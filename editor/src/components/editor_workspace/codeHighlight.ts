@@ -23,6 +23,7 @@ import javascript from 'highlight.js/lib/languages/javascript'
 import json from 'highlight.js/lib/languages/json'
 import kotlin from 'highlight.js/lib/languages/kotlin'
 import markdown from 'highlight.js/lib/languages/markdown'
+import php from 'highlight.js/lib/languages/php'
 import plaintext from 'highlight.js/lib/languages/plaintext'
 import python from 'highlight.js/lib/languages/python'
 import rust from 'highlight.js/lib/languages/rust'
@@ -44,6 +45,7 @@ hljs.registerLanguage('javascript', javascript)
 hljs.registerLanguage('json', json)
 hljs.registerLanguage('kotlin', kotlin)
 hljs.registerLanguage('markdown', markdown)
+hljs.registerLanguage('php', php)
 hljs.registerLanguage('plaintext', plaintext)
 hljs.registerLanguage('python', python)
 hljs.registerLanguage('rust', rust)

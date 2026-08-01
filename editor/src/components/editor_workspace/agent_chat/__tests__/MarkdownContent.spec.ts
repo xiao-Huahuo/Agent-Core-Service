@@ -79,3 +79,42 @@ describe('MarkdownContent source links', () => {
     expect(onNavigateSource).toHaveBeenCalledWith('1/3/special/09_ocean_acidification_noaa 2.md')
   })
 })
+
+describe('MarkdownContent streaming code highlight', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('highlights code blocks while still streaming (does not wait for finish)', async () => {
+    const wrapper = mount(MarkdownContent, {
+      props: {
+        content: '```python\nprint("hi")\n```',
+        isStreaming: true,
+        citationMap: {},
+      },
+    })
+    await nextTick()
+    const code = wrapper.find('.markdown-body pre code')
+    expect(code.exists()).toBe(true)
+    expect(code.classes()).toContain('hljs')
+    expect(code.element.innerHTML).toContain('<span')
+  })
+
+  it('falls back to plain text for unknown languages without dropping tags', async () => {
+    const wrapper = mount(MarkdownContent, {
+      props: {
+        content: '```not-a-real-lang\n<b>x</b>\n```',
+        citationMap: {},
+      },
+    })
+    await nextTick()
+    const code = wrapper.find('.markdown-body pre code')
+    expect(code.exists()).toBe(true)
+    expect(code.element.textContent).toContain('<b>x</b>')
+    expect(code.element.innerHTML).not.toContain('<span')
+  })
+})

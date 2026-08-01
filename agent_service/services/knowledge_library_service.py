@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import csv
 import fnmatch
+import hashlib
 import html
 import io
 import json
@@ -877,7 +878,11 @@ class KnowledgeLibraryService:
                 "readonly": True,
             }
         if suffix == ".pdf":
-            pdf_preview = self._preview_pdf(path=target)
+            pdf_preview = self._preview_pdf(
+                user_id=user_id,
+                relative_path=str(base_payload["path"]),
+                path=target,
+            )
             return {
                 **base_payload,
                 **pdf_preview,
@@ -1381,12 +1386,19 @@ class KnowledgeLibraryService:
                 "slide_count": 0,
             }
 
-    @staticmethod
-    def _preview_pdf(*, path: Path) -> dict:
-        """提取 PDF 文本层供 Edit 模式展示,Preview 模式仍使用原始 PDF。"""
+    def _preview_pdf(self, *, user_id: str, relative_path: str, path: Path) -> dict:
+        """提取 PDF 文本层和图片资产,供 Edit 模式渲染 Markdown 内容。"""
+
+        asset_key = hashlib.sha256(f"{user_id}:{relative_path}".encode("utf-8")).hexdigest()[:24]
+        image_output_dir = self.config.storage.assets_dir / "knowledge" / "pdf_preview" / asset_key
+        image_public_prefix = f"/knowledge/assets/pdf_preview/{asset_key}"
 
         try:
-            extracted = extract_pdf_text(path)
+            extracted = extract_pdf_text(
+                path,
+                image_output_dir=image_output_dir,
+                image_public_prefix=image_public_prefix,
+            )
         except Exception:
             return {
                 "content": "",

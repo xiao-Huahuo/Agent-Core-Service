@@ -26,6 +26,11 @@ const props = defineProps<{
   path?: string
 }>()
 
+const emit = defineEmits<{
+  scroll: [ratio: number]
+  ready: []
+}>()
+
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 
@@ -43,6 +48,8 @@ const previewHost = ref<HTMLDivElement | null>(null)
 let instance: Vditor | null = null
 let mounted = false
 let renderVersion = 0
+let programmaticScroll = false
+let programmaticScrollTimer: ReturnType<typeof setTimeout> | null = null
 
 function decodeUrlPath(path: string) {
   try {
@@ -141,6 +148,48 @@ function getPreviewScrollContainer(target: HTMLElement) {
   return null
 }
 
+function getPreviewScrollRatio() {
+  const previewElement = getPreviewElement()
+  if (!previewElement) return 0
+  const maxScrollTop = Math.max(0, previewElement.scrollHeight - previewElement.clientHeight)
+  return maxScrollTop > 0 ? previewElement.scrollTop / maxScrollTop : 0
+}
+
+function handlePreviewScroll() {
+  if (!programmaticScroll) {
+    emit('scroll', getPreviewScrollRatio())
+  }
+}
+
+/** Scrolls the rendered Markdown pane without sending a feedback event. */
+function scrollToRatio(ratio: number, behavior: ScrollBehavior = 'auto') {
+  const previewElement = getPreviewElement()
+  if (!previewElement) return
+  const maxScrollTop = Math.max(0, previewElement.scrollHeight - previewElement.clientHeight)
+  programmaticScroll = true
+  const top = Math.max(0, Math.min(1, ratio)) * maxScrollTop
+  if (behavior === 'smooth') {
+    previewElement.scrollTo({ top, behavior })
+    if (programmaticScrollTimer !== null) {
+      clearTimeout(programmaticScrollTimer)
+    }
+    programmaticScrollTimer = setTimeout(() => {
+      programmaticScroll = false
+      programmaticScrollTimer = null
+    }, 800)
+    return
+  }
+  previewElement.scrollTop = top
+  requestAnimationFrame(() => { programmaticScroll = false })
+}
+
+/** Maps the source caret offset to the corresponding proportional preview position. */
+function scrollToSourceOffset(offset: number, contentLength: number, behavior: ScrollBehavior = 'smooth') {
+  scrollToRatio(contentLength > 0 ? offset / contentLength : 0, behavior)
+}
+
+defineExpose({ scrollToRatio, scrollToSourceOffset })
+
 function injectCodeCopyButtons() {
   const root = getPreviewElement()
   if (!root) return
@@ -189,6 +238,7 @@ function syncPreviewContent() {
     fixImageUrls()
     highlightVueCodeBlocks(getPreviewElement())
     injectCodeCopyButtons()
+    emit('ready')
   } catch (err) {
     console.warn('[MarkdownPreview] syncPreviewContent failed:', err)
   }
@@ -285,6 +335,7 @@ onMounted(() => {
       },
       after() {
         mounted = true
+        getPreviewElement()?.addEventListener('scroll', handlePreviewScroll, { passive: true })
         try { instance?.disabledCache() } catch { /* best-effort */ }
         try { instance?.clearCache() } catch { /* best-effort */ }
         void queuePreviewRender()
@@ -311,6 +362,11 @@ watch(
 
 onBeforeUnmount(() => {
   mounted = false
+  if (programmaticScrollTimer !== null) {
+    clearTimeout(programmaticScrollTimer)
+    programmaticScrollTimer = null
+  }
+  getPreviewElement()?.removeEventListener('scroll', handlePreviewScroll)
   try {
     instance?.destroy()
   } catch (err) {

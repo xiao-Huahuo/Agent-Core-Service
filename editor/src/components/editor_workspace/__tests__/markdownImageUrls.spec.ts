@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   decorateRenderedMarkdownImages,
+  isKnowledgeAssetUrl,
   rewriteMarkdownImageUrls,
 } from '../markdownImageUrls'
 
@@ -32,6 +33,15 @@ describe('markdownImageUrls', () => {
 
     expect(html).toContain('path=notes%2Fassets%2Fmy+scan+1.png')
     expect(html).toContain('> "扫描件")')
+  })
+
+  it('keeps backend static asset URLs instead of converting them to raw-file paths', () => {
+    const src = '/knowledge/assets/pdf_preview/hash/image_0001.png'
+    const html = rewriteMarkdownImageUrls(`![scan](${src})`, context)
+
+    expect(isKnowledgeAssetUrl(src)).toBe(true)
+    expect(html).toContain(src)
+    expect(html).not.toContain('/knowledge/files/raw')
   })
 
   it('decorates standalone images as block images and mixed images as inline images', () => {

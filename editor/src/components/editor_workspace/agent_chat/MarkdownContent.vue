@@ -10,7 +10,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
-import { hljs } from '../codeHighlight'
+import { hljs, isHighlightableLanguage } from '../codeHighlight'
 
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { SourceItem } from '@/stores/chat'
@@ -57,16 +57,60 @@ const imagePreviewer = useImagePreviewer()
 const contentRef = ref<HTMLDivElement | null>(null)
 const workspaceStore = useWorkspaceStore()
 
+// 字符串级代码高亮缓存:key 为 `${lang}\0${code}`,value 为已转义的 hljs 高亮 HTML。
+// 流式刷新时已完成代码块直接命中缓存,只对正在输出的最后一个代码块做真正的高亮,
+// 实现"边输出边高亮"而不必等 agent 终止,同时避免整段重复词法分析拖慢渲染。
+const MAX_HIGHLIGHT_CHARS = 20000
+const MAX_CACHE_ENTRIES = 200
+const highlightCache = new Map<string, string>()
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+// 覆盖 marked 的代码块渲染:在字符串层面完成高亮,输出直接进入 v-html,
+// 不依赖流式结束后对 DOM 的二次遍历,因此每次刷新都带高亮。
+const codeRenderer = new marked.Renderer()
+codeRenderer.code = ({ text, lang }: { text: string; lang?: string }) => {
+  const language = ((lang ?? '').split(/\s+/)[0] ?? '').trim().toLowerCase()
+  const key = `${language}\u0000${text}`
+  let highlighted = highlightCache.get(key)
+  if (highlighted === undefined) {
+    if (language && isHighlightableLanguage(language) && text.length <= MAX_HIGHLIGHT_CHARS) {
+      try {
+        highlighted = hljs.highlight(text, { language }).value
+      } catch {
+        highlighted = escapeHtml(text)
+      }
+    } else {
+      // 未知语言或不完整超长代码:保持原样纯文本,不做可能抛错/拖慢的高亮。
+      highlighted = escapeHtml(text)
+    }
+    if (highlightCache.size >= MAX_CACHE_ENTRIES) {
+      highlightCache.clear()
+    }
+    highlightCache.set(key, highlighted)
+  }
+  const langAttr = language
+    ? ` class="language-${escapeHtml(language)} hljs"`
+    : ' class="hljs"'
+  return `<pre><code${langAttr}>${highlighted}</code></pre>\n`
+}
+
 const sanitizedHtml = computed(() => {
   // Allow citation-anchor class, data-citation-idx attribute, and img tags
   const purifyConfig = {
     ALLOWED_ATTR: ['data-citation-idx', 'class', 'src', 'alt', 'referrerpolicy'],
     ADD_TAGS: ['sup', 'img'],
   }
-  // 直接交给 marked 解析:代码 fence 内的 HTML 由 marked 转义,不在此处剥离标签,
-  // 避免合法 HTML 代码块标签被删掉;裸 HTML 由 DOMPurify 统一净化防 XSS。
+  // 代码高亮在 renderer 内完成:代码 fence 内的 HTML 由 hljs 转义保留(不再被剥离),
+  // 裸 HTML 由 DOMPurify 统一净化防 XSS。
   return DOMPurify.sanitize(
-    marked.parse(props.content, { async: false }) as string,
+    marked.parse(props.content, { async: false, renderer: codeRenderer }) as string,
     purifyConfig,
   )
 })
@@ -249,22 +293,13 @@ function linkSourceNames() {
   }
 }
 
-const MAX_HIGHLIGHT_CHARS = 20000
-
 async function highlightCodeBlocks() {
   await nextTick()
   linkSourceNames()
   const root = contentRef.value
   if (!root) return
-  // 高亮放到下一帧执行,避免同步阻塞主线程;流式累积长代码块时降低渲染卡顿。
-  await new Promise((resolve) => window.requestAnimationFrame(() => resolve()))
-  root.querySelectorAll('pre code').forEach((block) => {
-    // 已高亮的块跳过,防止 hljs.highlightElement 对 span 二次包裹。
-    if (block.classList.contains('hljs')) return
-    // 超长代码块跳过高亮,避免每次刷新全量词法分析拖死主线程。
-    if ((block.textContent ?? '').length > MAX_HIGHLIGHT_CHARS) return
-    hljs.highlightElement(block as HTMLElement)
-  })
+  // 代码高亮已在 sanitizedHtml(renderer)中随内容增量完成,此处只做 DOM 增强:
+  // 文件名链接化与复制按钮挂接(流式结束后 v-html 不再更新,不会被冲掉)。
   // Add copy buttons to pre blocks
   root.querySelectorAll('pre').forEach((pre) => {
     if (pre.querySelector('.code-copy-btn')) return
@@ -291,6 +326,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   contentRef.value?.removeEventListener('click', handleClick)
+  highlightCache.clear()
 })
 
 watch([sanitizedHtml, sourceLinkSignature], () => {

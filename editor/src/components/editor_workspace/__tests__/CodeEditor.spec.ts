@@ -23,6 +23,36 @@ function mountMarkdownEditor(value: string) {
 }
 
 describe('CodeEditor Markdown context menu', () => {
+  it('emits scroll ratio and caret offset for Split synchronization', async () => {
+    const wrapper = mountMarkdownEditor('alpha\nbeta\ngamma')
+    const textarea = wrapper.get('textarea').element as HTMLTextAreaElement
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 300 })
+    Object.defineProperty(textarea, 'clientHeight', { configurable: true, value: 100 })
+    textarea.scrollTop = 100
+    textarea.setSelectionRange(6, 6)
+
+    await wrapper.get('textarea').trigger('scroll')
+
+    expect(wrapper.emitted('scroll')?.[0]?.[0]).toEqual({
+      ratio: 0.5,
+      cursorOffset: 6,
+      contentLength: 16,
+    })
+  })
+
+  it('renders syntax highlighting directly in the editable source surface', () => {
+    const wrapper = mount(CodeEditor, {
+      props: {
+        modelValue: 'def greet():\n    return "hello"',
+        language: 'python',
+      },
+    })
+
+    expect(wrapper.find('.syntax-highlight-layer').exists()).toBe(true)
+    expect(wrapper.find('.syntax-highlight-layer').html()).toContain('<span')
+    expect(wrapper.get('textarea').classes()).toContain('syntax-highlighted')
+  })
+
   it('renders an external query as yellow highlights while remaining readonly', () => {
     const wrapper = mount(CodeEditor, {
       props: {

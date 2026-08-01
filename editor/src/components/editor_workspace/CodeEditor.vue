@@ -3,10 +3,13 @@
 
   Usage:
   Provides a lightweight textarea-based code editor for supported source files.
-  Syntax highlighting is handled by CodePreview.vue in Preview/Split mode.
+  Source files use the same highlight.js registry as CodePreview.vue while
+  keeping the textarea as the editable input layer.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+
+import { hljs, isHighlightableLanguage } from './codeHighlight'
 
 const model = defineModel<string>({ required: true })
 
@@ -17,8 +20,16 @@ const props = defineProps<{
   highlightQuery?: string
 }>()
 
+/** Scroll and caret data used by EditorPane to synchronize Markdown Split mode. */
+interface EditorScrollPayload {
+  ratio: number
+  cursorOffset: number
+  contentLength: number
+}
+
 const emit = defineEmits<{
   save: []
+  scroll: [payload: EditorScrollPayload]
 }>()
 
 type MarkdownCommand =
@@ -77,7 +88,11 @@ const findBarOpen = ref(false)
 const findQuery = ref('')
 const replaceQuery = ref('')
 const currentMatchIndex = ref(0)
+let programmaticScroll = false
 const isMarkdown = computed(() => ['md', 'markdown'].includes((props.language || '').toLowerCase()))
+const isSyntaxHighlightedLanguage = computed(() => (
+  !isMarkdown.value && isHighlightableLanguage(props.language || 'text')
+))
 /** Uses the find-bar query when open, otherwise the external preview query. */
 const activeHighlightQuery = computed(() => (
   findBarOpen.value ? findQuery.value : (props.highlightQuery?.trim() ?? '')
@@ -107,6 +122,9 @@ function escapeHtml(s: string): string {
 
 const highlightedHtml = computed(() => {
   const content = model.value
+  if (isSyntaxHighlightedLanguage.value && !activeHighlightQuery.value) {
+    return hljs.highlight(content, { language: props.language }).value
+  }
   if (!activeHighlightQuery.value || !content) {
     return escapeHtml(content)
   }
@@ -357,6 +375,27 @@ function selectMatch(index: number) {
   })
 }
 
+function getScrollSnapshot(): EditorScrollPayload {
+  const textarea = textareaRef.value
+  if (!textarea) {
+    return { ratio: 0, cursorOffset: 0, contentLength: model.value.length }
+  }
+  const maxScrollTop = Math.max(0, textarea.scrollHeight - textarea.clientHeight)
+  return {
+    ratio: maxScrollTop > 0 ? textarea.scrollTop / maxScrollTop : 0,
+    cursorOffset: textarea.selectionStart ?? 0,
+    contentLength: model.value.length,
+  }
+}
+
+function handleEditorScroll() {
+  syncScroll()
+  if (programmaticScroll) {
+    return
+  }
+  emit('scroll', getScrollSnapshot())
+}
+
 function syncScroll() {
   const ta = textareaRef.value
   const hl = highlightRef.value
@@ -365,6 +404,19 @@ function syncScroll() {
     hl.scrollLeft = ta.scrollLeft
   }
 }
+
+/** Scrolls the editable surface without emitting a synchronization feedback event. */
+function scrollToRatio(ratio: number) {
+  const textarea = textareaRef.value
+  if (!textarea) return
+  const maxScrollTop = Math.max(0, textarea.scrollHeight - textarea.clientHeight)
+  programmaticScroll = true
+  textarea.scrollTop = Math.max(0, Math.min(1, ratio)) * maxScrollTop
+  syncScroll()
+  requestAnimationFrame(() => { programmaticScroll = false })
+}
+
+defineExpose({ getScrollSnapshot, scrollToRatio })
 
 function findNext() {
   selectMatch(currentMatchIndex.value + 1)
@@ -600,23 +652,24 @@ onBeforeUnmount(() => {
     </div>
     <div class="editor-wrapper">
       <div
-        v-if="findBarOpen || Boolean(highlightQuery)"
+        v-if="isSyntaxHighlightedLanguage || findBarOpen || Boolean(highlightQuery)"
         ref="highlightRef"
         class="highlight-layer"
+        :class="{ 'syntax-highlight-layer': isSyntaxHighlightedLanguage }"
         v-html="highlightedHtml"
       ></div>
       <textarea
         ref="textareaRef"
         v-model="model"
         class="code-editor-input"
-        :class="{ readonly }"
+        :class="{ readonly, 'syntax-highlighted': isSyntaxHighlightedLanguage }"
         spellcheck="false"
         :readonly="readonly"
         @keydown.ctrl.s.prevent="handleSaveShortcut"
         @keydown.meta.s.prevent="handleSaveShortcut"
         @keydown="handleEditorKeydown"
         @input="flushTypingSnapshot"
-        @scroll="syncScroll"
+         @scroll="handleEditorScroll"
         @contextmenu="openContextMenu"
       ></textarea>
     </div>
@@ -797,13 +850,17 @@ onBeforeUnmount(() => {
   pointer-events: none;
   z-index: 0;
   padding: var(--space-12);
-  font-family: var(--font-text);
+  font-family: var(--font-code);
   font-size: calc(13px * var(--font-scale));
   line-height: 1.6;
   tab-size: 2;
   white-space: pre;
   color: transparent;
   word-wrap: normal;
+}
+
+.highlight-layer.syntax-highlight-layer {
+  color: var(--color-text);
 }
 
 .highlight-layer :deep(.match-highlight) {
@@ -838,6 +895,11 @@ onBeforeUnmount(() => {
 .code-editor-input.readonly {
   cursor: default;
   color: var(--color-text-secondary);
+}
+
+.code-editor-input.syntax-highlighted {
+  color: transparent;
+  caret-color: var(--color-text);
 }
 
 .markdown-context-menu {
