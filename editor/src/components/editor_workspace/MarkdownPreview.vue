@@ -14,6 +14,7 @@ import {
   decorateRenderedMarkdownImages,
   rewriteMarkdownImageUrls,
 } from '@/components/editor_workspace/markdownImageUrls'
+import { hljs } from './codeHighlight'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -162,6 +163,18 @@ function injectCodeCopyButtons() {
   })
 }
 
+function highlightVueCodeBlocks(root: HTMLElement | null) {
+  if (!root) return
+  root.querySelectorAll<HTMLElement>('pre code[class*="language-vue"]').forEach((code) => {
+    // Vditor 内置 hljs 不注册 vue 语言,未知围栏会回退为纯文本;
+    // 此处用 xml 语法补齐,仅在尚未产生高亮 span 时执行,避免破坏已高亮的块。
+    if (code.querySelector('.hljs-keyword, .hljs-string, .hljs-tag, .hljs-attr')) return
+    const raw = code.textContent ?? ''
+    code.innerHTML = hljs.highlight(raw, { language: 'xml' }).value
+    code.classList.add('hljs')
+  })
+}
+
 function syncPreviewContent() {
   if (!instance) {
     return
@@ -174,6 +187,7 @@ function syncPreviewContent() {
     ensurePreviewPaneIsRenderable()
     instance.renderPreview()
     fixImageUrls()
+    highlightVueCodeBlocks(getPreviewElement())
     injectCodeCopyButtons()
   } catch (err) {
     console.warn('[MarkdownPreview] syncPreviewContent failed:', err)

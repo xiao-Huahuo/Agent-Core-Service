@@ -10,38 +10,13 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
-import hljs from 'highlight.js/lib/core'
-import bash from 'highlight.js/lib/languages/bash'
-import css from 'highlight.js/lib/languages/css'
-import javascript from 'highlight.js/lib/languages/javascript'
-import json from 'highlight.js/lib/languages/json'
-import markdown from 'highlight.js/lib/languages/markdown'
-import python from 'highlight.js/lib/languages/python'
-import typescript from 'highlight.js/lib/languages/typescript'
-import xml from 'highlight.js/lib/languages/xml'
-import yaml from 'highlight.js/lib/languages/yaml'
+import { hljs } from '../codeHighlight'
 
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { SourceItem } from '@/stores/chat'
 
 import { useImagePreviewer } from '@/components/common/useImagePreviewer'
 import type { ImagePreviewItem } from '@/components/common/useImagePreviewer'
-
-hljs.registerLanguage('bash', bash)
-hljs.registerLanguage('css', css)
-hljs.registerLanguage('javascript', javascript)
-hljs.registerLanguage('json', json)
-hljs.registerLanguage('markdown', markdown)
-hljs.registerLanguage('python', python)
-hljs.registerLanguage('typescript', typescript)
-hljs.registerLanguage('xml', xml)
-hljs.registerLanguage('yaml', yaml)
-hljs.registerLanguage('js', javascript)
-hljs.registerLanguage('ts', typescript)
-hljs.registerLanguage('html', xml)
-hljs.registerLanguage('md', markdown)
-hljs.registerLanguage('py', python)
-hljs.registerLanguage('yml', yaml)
 
 marked.setOptions({
   gfm: true,
