@@ -1,13 +1,20 @@
 # CHANGE HISTORY
 
 ## 2026-08-01
+- [x] 优化 SSE 流式性能,修复输出代码卡顿、HTML 标签化语言"标签全丢大量空行"的问题:
+  - 根因一(卡顿/突发输出):后端在 token 与 delta 两条路径无条件调用 `_strip_html_tags` 正则剥离 HTML 标签,命中标签即全量返回不完整内容;叠加 `_token_blocked` 永久锁在首次拦截后对所有后续 token 一律丢弃,导致流式输出到一半突然停滞,解除后再一次性吐出剩余全部内容。现删除 `_strip_html_tags` 与 `_token_blocked`:流式过滤只保留 JSON/内部标记的净化拦截,拦截时本轮返回不更新发送基线,后续按原文前向切片继续发增量,永不锁死。
+  - 根因二(HTML 标签丢失):`_strip_html_tags` 用正则无条件剥掉 `<...>`(HTML 代码块里的 `<div>`、`<html>` 等标签被当标签删掉,只留大量空行)。删除该方法后,agent 回答侧 `MarkdownContent.vue` 同步移除 `stripHtml` DOM 解析(每次刷新最多 10 次全树遍历),`sanitizedHtml` 改为直接 `marked.parse`:代码围栏内的 HTML 由 marked 转义保留,裸 HTML 由 DOMPurify 统一净化防 XSS。
+  - 前端增量高亮:代码高亮改为跳过已带 `hljs` 类的代码块、跳过超过 2 万字符的超长块,高亮调度延后到下一帧,避免流式累积长代码块时同步阻塞主线程。
+  - 前端完整内容分支稳健化:`chat.ts` 非 delta 的完整 `content` 不再无条件整体替换,仅当没有累积正文、或以累积正文为前缀(流被拦截时后端补发完整正文)、或长度更长时才替换,避免文本跳变与缩短。
+  - 验证:前端 vitest(chat / MarkdownContent / codeHighlight)通过;后端 streaming 相关测试 3 个通过,`py_compile` 通过,全库无 `_strip_html_tags`/`_token_blocked`/`stripHtml` 残留。注:运行中的 AgentService 需重启或重新打包后才生效。
 - [x] 代码高亮扩展至更多高级语言,agent 回答 / markdown 预览 / 代码文件预览三处全覆盖:
   - 新增共享语言注册模块 `editor/src/components/editor_workspace/codeHighlight.ts`,集中注册 go、rust、c、cpp、java、javascript、kotlin、sql、html/css/js 三件套、vue、react 等目标语言,以及 `kt/kts/rs/h/hpp/cs/sh/golang/html/htm/vue/react` 等文件扩展名与代码围栏别名;jsx/tsx 由 javascript/typescript 模块内部自动注册,不做覆盖以保留 JSX 特有规则。
   - `MarkdownContent.vue`(agent 回答)与 `CodePreview.vue`(代码文件预览)删除各自内联语言注册列表,改为复用共享模块,消除两处重复维护导致的覆盖不一致;`.c` 文件由原先映射到 cpp 改为使用真正的 c 语言语法。
   - `MarkdownPreview.vue`(Vditor markdown 预览):Vditor 内置 hljs 已覆盖全部目标语言,仅缺 vue;渲染后对 `language-vue` 代码块用 xml 语法补齐高亮,未产生高亮 span 时才执行,幂等且不影响 Vditor 已高亮的块。
   - 新增 `codeHighlight.spec.ts` 回归测试:断言全部目标语言与别名注册齐全、各语言代表片段高亮产出词法 span、未知语言标识回退为不可高亮;相关组件测试与 `vue-tsc` 类型检查通过(改动文件零类型错误)。
-
-## 2026-08-01
+- [x] 修复文件树和资源管理器里面的文件名没有根据git状态进行变色的问题.理论上只要文件被修改,文件树里面这个文件的颜色就应该立刻刷新.并且特殊的是,只要.gitignore被修改,就要立刻将其忽略的文件变成暗棕黄色.
+- [x] 代码高亮问题: 应该给更多的高级语言提供代码高亮,比如go,rust,c,cpp,java,javascript,kotlin,sql,html三件套,vue,react等.
+  - 对前端SSE的性能做优化,避免在输出代码的时候输出到一半突然卡死然后突然输出最终全部回答,且要避免在输出html这种标签化语言的时候出现"所有的标签都消失,大量的空行".
 - [x] 修复写入长期记忆工具抛 `timezone is not defined` 的问题:
   - 根因:`agent_service/tools/builtin.py` 的 `write_long_term_memory` 使用 `datetime.now(timezone.utc)`,但文件只导入了 `datetime` 未导入 `timezone`,执行写入即抛 `NameError`。
   - 修复:`from datetime import datetime` 补为 `from datetime import datetime, timezone`,仅此一处,不涉及其他逻辑。

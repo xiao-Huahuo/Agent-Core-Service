@@ -57,27 +57,16 @@ const imagePreviewer = useImagePreviewer()
 const contentRef = ref<HTMLDivElement | null>(null)
 const workspaceStore = useWorkspaceStore()
 
-function stripHtml(value: string): string {
-  const container = document.createElement('div')
-  let text = value
-  for (let index = 0; index < 10; index += 1) {
-    container.innerHTML = text
-    if (container.textContent === text) {
-      break
-    }
-    text = container.textContent ?? ''
-  }
-  return text
-}
-
 const sanitizedHtml = computed(() => {
   // Allow citation-anchor class, data-citation-idx attribute, and img tags
   const purifyConfig = {
     ALLOWED_ATTR: ['data-citation-idx', 'class', 'src', 'alt', 'referrerpolicy'],
     ADD_TAGS: ['sup', 'img'],
   }
+  // 直接交给 marked 解析:代码 fence 内的 HTML 由 marked 转义,不在此处剥离标签,
+  // 避免合法 HTML 代码块标签被删掉;裸 HTML 由 DOMPurify 统一净化防 XSS。
   return DOMPurify.sanitize(
-    marked.parse(stripHtml(props.content), { async: false }) as string,
+    marked.parse(props.content, { async: false }) as string,
     purifyConfig,
   )
 })
@@ -260,12 +249,20 @@ function linkSourceNames() {
   }
 }
 
+const MAX_HIGHLIGHT_CHARS = 20000
+
 async function highlightCodeBlocks() {
   await nextTick()
   linkSourceNames()
   const root = contentRef.value
   if (!root) return
+  // 高亮放到下一帧执行,避免同步阻塞主线程;流式累积长代码块时降低渲染卡顿。
+  await new Promise((resolve) => window.requestAnimationFrame(() => resolve()))
   root.querySelectorAll('pre code').forEach((block) => {
+    // 已高亮的块跳过,防止 hljs.highlightElement 对 span 二次包裹。
+    if (block.classList.contains('hljs')) return
+    // 超长代码块跳过高亮,避免每次刷新全量词法分析拖死主线程。
+    if ((block.textContent ?? '').length > MAX_HIGHLIGHT_CHARS) return
     hljs.highlightElement(block as HTMLElement)
   })
   // Add copy buttons to pre blocks

@@ -494,9 +494,14 @@ export const useChatStore = defineStore('chat', () => {
             cancelPendingFlush()
             const last = findLastAssistant()
             if (last) {
+              // 完整 content 分支:仅当没有已累积正文、或新内容以累积正文为前缀
+              // (流被拦截时后端会补发完整正文)时才整体替换,避免文本跳变/缩短。
               if (!last.content) {
                 last.content = content
-              } else {
+              } else if (
+                content.startsWith(last.content)
+                || content.length > last.content.length
+              ) {
                 last.content = content
               }
             }

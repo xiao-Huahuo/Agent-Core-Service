@@ -600,29 +600,26 @@ class AgentCore:
         _streamed_content: list[str] = [""]
         _turn_traces: list[dict[str, Any]] = []
         _citation_map: dict[str, Any] = dict(citation_map or {})
-        _token_blocked: list[bool] = [False]
         _latest_plan: dict[str, Any] | None = initial_plan
         _last_sent_content: list[str] = [""]
         _last_node_completed_at: list[float] = [time.perf_counter()]
 
 
         def on_token(cumulative_text: str) -> None:
-            if _token_blocked[0]:
-                return
             content = AgentCore._sanitize_streaming_content(
                 cumulative_text,
                 min_chars=self.config.model.streaming_sanitize_min_chars,
             )
-            content = AgentCore._strip_html_tags(content)
             _streamed_content[0] = content
             if content != cumulative_text:
-                _token_blocked[0] = True
-                delta = content
-            else:
-                prev = _last_sent_content[0]
-                delta = content[len(prev):] if len(content) > len(prev) else content
-
+                # 命中 JSON/内部标记拦截:跳过本轮增量,不断流、不更新基线,
+                # 后续恢复正常文本时仍按原文前向切片发送。
+                return
+            prev = _last_sent_content[0]
+            delta = content[len(prev):] if len(content) > len(prev) else ""
             _last_sent_content[0] = content
+            if not delta:
+                return
             token_queue.put({
                 "type": "token",
                 "node": "agent",
@@ -1089,8 +1086,10 @@ class AgentCore:
                     cumulative,
                     min_chars=self.config.model.streaming_sanitize_min_chars,
                 )
-                safe_content = AgentCore._strip_html_tags(safe_content)
-                output_delta = safe_content[len(last_sent_content):] if len(safe_content) > len(last_sent_content) else safe_content
+                if safe_content != cumulative:
+                    # 命中 JSON/内部标记拦截:跳过本轮,避免把被拦截内容按增量发出。
+                    continue
+                output_delta = safe_content[len(last_sent_content):] if len(safe_content) > len(last_sent_content) else ""
                 if not output_delta:
                     last_sent_content = safe_content
                     continue
@@ -1106,7 +1105,6 @@ class AgentCore:
 
             content = AgentCore._stringify_content(getattr(final_message, "content", "") if final_message is not None else cumulative)
             content = AgentCore._sanitize_agent_output(content)
-            content = AgentCore._strip_html_tags(content)
             content = AgentCore._drop_unmapped_citation_anchors(content, citation_map)
             content = AgentCore._insert_missing_citation_anchors_inline(content, citation_map)
             citation_metadata = AgentCore._build_citation_metadata(content, citation_map)
@@ -1855,7 +1853,6 @@ class AgentCore:
             content = ""
             tool_calls = []
         content = AgentCore._sanitize_agent_output(content or "")
-        content = AgentCore._strip_html_tags(content)
         content = AgentCore._drop_unmapped_citation_anchors(content, citation_map)
         content = AgentCore._insert_missing_citation_anchors_inline(content, citation_map)
         metadata = AgentCore._build_citation_metadata(content, citation_map)
@@ -1894,30 +1891,6 @@ class AgentCore:
             except (json.JSONDecodeError, ValueError):
                 pass
         return cumulative_text
-
-    @staticmethod
-    def _strip_html_tags(content: str) -> str:
-        """
-        统一剥离所有 HTML 标签和实体编码, 不分 fence 内外。
-        DeepSeek 可能在 fence 内注入已高亮的 hljs span,
-        本方法将其彻底还原为纯文本, 由前端 marked+highlight.js 重新高亮。
-        """
-        import html as _html
-        import re as _re
-
-        if not content or not isinstance(content, str):
-            return content
-
-        # 深度解码: 循环 unescape 直到稳定 (处理多层 &amp;amp;lt; 嵌套)
-        prev = content
-        for _ in range(10):
-            decoded = _html.unescape(prev)
-            if decoded == prev:
-                break
-            prev = decoded
-
-        # 剥离所有 HTML 标签
-        return _re.sub(r"<[^>]*>", "", prev)
 
     @staticmethod
     def _sanitize_agent_output(content: str) -> str:
