@@ -74,6 +74,7 @@ interface MarkdownMenuItem {
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const findInputRef = ref<HTMLInputElement | null>(null)
 const highlightRef = ref<HTMLDivElement | null>(null)
+const highlightContentRef = ref<HTMLDivElement | null>(null)
 const contextMenuOpen = ref(false)
 const undoStack = ref<string[]>([])
 const redoStack = ref<string[]>([])
@@ -398,12 +399,12 @@ function handleEditorScroll() {
 
 function syncScroll() {
   const ta = textareaRef.value
-  const hl = highlightRef.value
-  if (ta && hl) {
+  const content = highlightContentRef.value
+  if (ta && content) {
     // 用 transform 平移而非 scrollTop:div 的 scrollTop 会把 padding 一起滚走,
     // 而 textarea 滚动时 padding 固定,导致滚动后高亮层与 textarea 文本错位。
-    // transform 平移整盒(含 padding),文本起点与 textarea 的 padding+内容滚动完全一致。
-    hl.style.transform = `translate3d(${-ta.scrollLeft}px, ${-ta.scrollTop}px, 0)`
+    // 只平移承载完整文本的内层,外层裁剪视口保持不动;否则滚动后整个视口层会被移走。
+    content.style.transform = `translate3d(${-ta.scrollLeft}px, ${-ta.scrollTop}px, 0)`
   }
 }
 
@@ -661,8 +662,13 @@ onBeforeUnmount(() => {
           'syntax-highlight-layer': isSyntaxHighlightedLanguage,
           'markdown-highlight-layer': isMarkdown,
         }"
-        v-html="highlightedHtml"
-      ></div>
+      >
+        <div
+          ref="highlightContentRef"
+          class="highlight-content"
+          v-html="highlightedHtml"
+        ></div>
+      </div>
       <textarea
         ref="textareaRef"
         v-model="model"
@@ -854,14 +860,21 @@ onBeforeUnmount(() => {
   overflow: hidden;
   pointer-events: none;
   z-index: 0;
+  color: transparent;
+}
+
+.highlight-content {
+  min-width: 100%;
+  min-height: 100%;
   padding: var(--space-12);
   font-family: var(--font-text);
   font-size: calc(13px * var(--font-scale));
   line-height: 1.6;
   tab-size: 2;
   white-space: pre;
-  color: transparent;
+  color: inherit;
   word-wrap: normal;
+  will-change: transform;
 }
 
 .highlight-layer.syntax-highlight-layer {
@@ -934,6 +947,16 @@ onBeforeUnmount(() => {
 .code-editor-input.syntax-highlighted {
   color: transparent;
   caret-color: var(--color-text);
+}
+
+.code-editor-input.syntax-highlighted::selection {
+  background: color-mix(in srgb, var(--color-primary) 28%, transparent);
+  color: transparent;
+}
+
+.code-editor-input.syntax-highlighted::-moz-selection {
+  background: color-mix(in srgb, var(--color-primary) 28%, transparent);
+  color: transparent;
 }
 
 .markdown-context-menu {

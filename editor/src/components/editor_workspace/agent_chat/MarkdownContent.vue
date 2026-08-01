@@ -11,6 +11,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { hljs, isHighlightableLanguage } from '../codeHighlight'
+import { renderMathInHtml } from '../mathRender'
 
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { SourceItem } from '@/stores/chat'
@@ -102,17 +103,17 @@ codeRenderer.code = ({ text, lang }: { text: string; lang?: string }) => {
 }
 
 const sanitizedHtml = computed(() => {
-  // Allow citation-anchor class, data-citation-idx attribute, and img tags
+  // Allow citation-anchor class, data-citation-idx attribute, img tags, and
+  // KaTeX style (katex 用 style 定位上下标/strut,DOMPurify 会清洗危险 CSS)。
   const purifyConfig = {
-    ALLOWED_ATTR: ['data-citation-idx', 'class', 'src', 'alt', 'referrerpolicy'],
+    ALLOWED_ATTR: ['data-citation-idx', 'class', 'src', 'alt', 'referrerpolicy', 'style'],
     ADD_TAGS: ['sup', 'img'],
   }
   // 代码高亮在 renderer 内完成:代码 fence 内的 HTML 由 hljs 转义保留(不再被剥离),
   // 裸 HTML 由 DOMPurify 统一净化防 XSS。
-  return DOMPurify.sanitize(
-    marked.parse(props.content, { async: false, renderer: codeRenderer }) as string,
-    purifyConfig,
-  )
+  // 数学渲染在 marked 之后、净化之前:把 $...$ / $$...$$ 转成 KaTeX span。
+  const parsed = marked.parse(props.content, { async: false, renderer: codeRenderer }) as string
+  return DOMPurify.sanitize(renderMathInHtml(parsed), purifyConfig)
 })
 
 const sourceLinkSignature = computed(() => {

@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
 import '@fontsource/jetbrains-mono'
+import 'katex/dist/katex.min.css'
 
 import App from './App.vue'
 import router from './router'

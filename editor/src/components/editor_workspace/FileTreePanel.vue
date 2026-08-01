@@ -96,11 +96,12 @@ const inlineEdit = ref<{
   value: string
   node: KnowledgeFileNode | null
 } | null>(null)
-const deleteTarget = ref<KnowledgeFileNode | null>(null)
+const deleteTargets = ref<KnowledgeFileNode[]>([])
 const actionError = ref('')
 const selectedTreePath = computed(() => workspaceStore.selectedTreePath || workspaceStore.selectedPath)
 const canPaste = computed(() => Boolean(workspaceStore.fileClipboard) || Boolean(window.agentEditorDesktop?.readClipboardFilePaths))
 const selectedTreeNode = computed(() => findNode(workspaceStore.tree, selectedTreePath.value))
+const contextSelectionCount = computed(() => contextTargetNodes().length)
 /** True while the filename dropdown is active with a non-empty query. */
 const searchActive = computed(() => !recentMode.value && treeSearchOpen.value && treeSearchQuery.value.trim().length > 0)
 const searchExpandedPaths = computed(() => (
@@ -156,6 +157,17 @@ function contextTargetDir(): string {
     return ''
   }
   return node.isDir ? node.path : getParentPath(node.path)
+}
+
+function contextTargetNodes(): KnowledgeFileNode[] {
+  const node = contextMenu.value.node
+  if (!node) {
+    return []
+  }
+  if (!workspaceStore.selectedTreePaths.has(node.path)) {
+    return [node]
+  }
+  return workspaceStore.getSelectedTreeNodes(node)
 }
 
 function selectedTargetDir(): string {
@@ -460,7 +472,7 @@ function handleGlobalKeydown(event: KeyboardEvent) {
   }
   if (hasCommandModifier && key === 'n') {
     event.preventDefault()
-    if (inlineEdit.value || deleteTarget.value) {
+    if (inlineEdit.value || deleteTargets.value.length > 0) {
       return
     }
     beginCreate(event.shiftKey ? 'folder' : 'file', selectedTargetDir())
@@ -468,7 +480,7 @@ function handleGlobalKeydown(event: KeyboardEvent) {
   }
   if (hasCommandModifier && key === 'm') {
     event.preventDefault()
-    if (inlineEdit.value || deleteTarget.value || !selectedTreeNode.value) {
+    if (inlineEdit.value || deleteTargets.value.length > 0 || !selectedTreeNode.value) {
       return
     }
     beginRename(selectedTreeNode.value)
@@ -495,10 +507,10 @@ function handleGlobalKeydown(event: KeyboardEvent) {
   }
   if (hasCommandModifier && key === 'd') {
     event.preventDefault()
-    if (inlineEdit.value || deleteTarget.value || !selectedTreeNode.value) {
+    if (inlineEdit.value || deleteTargets.value.length > 0 || !selectedTreeNode.value) {
       return
     }
-    deleteTarget.value = selectedTreeNode.value
+    deleteTargets.value = workspaceStore.getSelectedTreeNodes(selectedTreeNode.value)
     return
   }
   if (hasCommandModifier && key === 'g') {
@@ -514,7 +526,7 @@ function handleGlobalKeydown(event: KeyboardEvent) {
     closeContextMenu()
     closeTreeSearch()
     cancelInlineEdit()
-    deleteTarget.value = null
+    deleteTargets.value = []
   }
 }
 
@@ -613,16 +625,16 @@ function beginRename(node: KnowledgeFileNode) {
 }
 
 async function deleteFromMenu() {
-  const node = contextMenu.value.node
+  const nodes = contextTargetNodes()
   closeContextMenu()
-  if (!node) {
+  if (nodes.length === 0) {
     return
   }
-  deleteTarget.value = node
+  deleteTargets.value = nodes
 }
 
 async function showInFolderFromMenu() {
-  const node = contextMenu.value.node
+  const node = contextTargetNodes()[0] ?? contextMenu.value.node
   const absolutePath = node
     ? joinAbsoluteKnowledgePath(node.path)
     : settingsStore.profile.knowledgeDir
@@ -645,10 +657,10 @@ function showInGraphFromMenu() {
 }
 
 async function extractGraphFromMenu() {
-  const node = contextMenu.value.node
+  const nodes = contextTargetNodes()
   closeContextMenu()
-  if (!node) return
-  await workspaceStore.extractGraphForNode(node)
+  if (nodes.length === 0) return
+  await workspaceStore.extractGraphForNodes(nodes)
 }
 
 async function askAgentFromMenu() {
@@ -710,10 +722,11 @@ async function htmlVisualizeFromMenu() {
 }
 
 async function ingestFromMenu() {
-  const node = contextMenu.value.node
+  const nodes = contextTargetNodes()
   closeContextMenu()
-  if (!node) return
-  await workspaceStore.ingestFile(node)
+  for (const node of nodes) {
+    await workspaceStore.ingestFile(node)
+  }
 }
 
 function ignorePatternForNode(node: KnowledgeFileNode): string {
@@ -738,34 +751,35 @@ function isSameUnignorePattern(line: string, pattern: string): boolean {
 }
 
 async function toggleIgnoreFromMenu() {
-  const node = contextMenu.value.node
+  const nodes = contextTargetNodes()
   closeContextMenu()
-  if (!node) {
+  if (nodes.length === 0) {
     return
   }
-  const pattern = ignorePatternForNode(node)
-  const unignorePattern = unignorePatternForNode(node)
   const currentPatterns = settingsStore.profile.knowledgeIgnorePatterns ?? ''
-  const currentLines = currentPatterns
+  let nextLines = currentPatterns
     .split(/\r?\n/)
     .map((line) => line.trimEnd())
     .filter((line) => line.trim().length > 0)
-  const isCurrentlyIgnored = node.indexStatus === 'ignored'
-  const hasExactIgnore = currentLines.some((line) => isSameIgnorePattern(line, pattern))
-  const hasExactUnignore = currentLines.some((line) => isSameUnignorePattern(line, pattern))
-  let nextLines: string[]
-  if (isCurrentlyIgnored) {
-    nextLines = hasExactIgnore
-      ? currentLines.filter((line) => !isSameIgnorePattern(line, pattern))
-      : currentLines
-    if (!hasExactIgnore && !hasExactUnignore) {
-      nextLines = [...nextLines, unignorePattern]
-    }
-  } else {
-    nextLines = currentLines
-      .filter((line) => !isSameUnignorePattern(line, pattern))
-    if (!hasExactIgnore) {
-      nextLines = [...nextLines, pattern]
+  for (const node of nodes) {
+    const pattern = ignorePatternForNode(node)
+    const unignorePattern = unignorePatternForNode(node)
+    const isCurrentlyIgnored = node.indexStatus === 'ignored'
+    const hasExactIgnore = nextLines.some((line) => isSameIgnorePattern(line, pattern))
+    const hasExactUnignore = nextLines.some((line) => isSameUnignorePattern(line, pattern))
+    if (isCurrentlyIgnored) {
+      nextLines = hasExactIgnore
+        ? nextLines.filter((line) => !isSameIgnorePattern(line, pattern))
+        : nextLines
+      if (!hasExactIgnore && !hasExactUnignore) {
+        nextLines = [...nextLines, unignorePattern]
+      }
+    } else {
+      nextLines = nextLines
+        .filter((line) => !isSameUnignorePattern(line, pattern))
+      if (!hasExactIgnore) {
+        nextLines = [...nextLines, pattern]
+      }
     }
   }
   const nextPatterns = nextLines.join('\n')
@@ -773,7 +787,7 @@ async function toggleIgnoreFromMenu() {
   try {
     await settingsStore.saveKnowledgeIngestionSettings({ knowledgeIgnorePatterns: nextPatterns })
     await workspaceStore.loadKnowledgeTree()
-    workspaceStore.showToast(`${isCurrentlyIgnored ? 'Unignored' : 'Ignored'} ${node.isDir ? 'folder' : 'file'}: ${node.name}`)
+    workspaceStore.showToast(`已更新 ${nodes.length} 项屏蔽规则`)
   } catch (error) {
     actionError.value = error instanceof Error ? error.message : 'Failed to save ignore rules.'
   }
@@ -836,14 +850,16 @@ function cancelInlineEdit() {
 }
 
 async function confirmDelete() {
-  const node = deleteTarget.value
-  if (!node) {
+  const nodes = deleteTargets.value
+  if (nodes.length === 0) {
     return
   }
   actionError.value = ''
   try {
-    await workspaceStore.deleteNode(node)
-    deleteTarget.value = null
+    for (const node of [...nodes].sort((a, b) => b.path.split('/').length - a.path.split('/').length)) {
+      await workspaceStore.deleteNode(node)
+    }
+    deleteTargets.value = []
   } catch (error) {
     actionError.value = error instanceof Error ? error.message : 'Delete failed.'
   }
@@ -1061,6 +1077,7 @@ onUnmounted(() => {
       :node="contextMenu.node"
       :can-paste="canPaste"
       :menu-style="contextMenuStyle"
+      :selection-count="contextSelectionCount"
       @create-file="createFileFromMenu"
       @create-folder="createFolderFromMenu"
       @copy="copyFromMenu"
@@ -1081,12 +1098,18 @@ onUnmounted(() => {
       @delete="deleteFromMenu"
     />
 
-    <div v-if="deleteTarget" class="delete-backdrop" @click.self="deleteTarget = null">
+    <div v-if="deleteTargets.length > 0" class="delete-backdrop" @click.self="deleteTargets = []">
       <section class="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-title">
         <h2 id="delete-title">Confirm delete</h2>
-        <p>Delete {{ deleteTarget.name }} from the local knowledge directory.</p>
+        <p>
+          {{
+            deleteTargets.length === 1
+              ? `Delete ${deleteTargets[0]?.name ?? ''} from the local knowledge directory.`
+              : `Delete selected ${deleteTargets.length} items from the local knowledge directory.`
+          }}
+        </p>
         <div class="delete-actions">
-          <button type="button" @click="deleteTarget = null">取消</button>
+          <button type="button" @click="deleteTargets = []">取消</button>
           <button type="button" class="danger" @click="confirmDelete">删除</button>
         </div>
       </section>

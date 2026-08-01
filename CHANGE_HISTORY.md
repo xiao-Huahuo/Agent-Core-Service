@@ -1,104 +1,36 @@
 # CHANGE HISTORY
 
 ## 2026-08-01
-- [x] 修复 Preview/Split 模式暗色下代码块文字变黑:
-  - 根因:Vditor 渲染 markdown 预览时内置注入亮色 GitHub hljs 主题(`.hljs{color:#24292e}`、keyword `#d73a49`、string `#032f62` 等深色值),暗色模式下代码块文字显示为黑字。用 Playwright 加载真实 Vditor + 暗色主题验证,计算样式确认代码块文字为 `rgb(36,41,46)` 等亮色主题深色值。
-  - 修复:MarkdownPreview.vue 中针对 `.vditor-reset pre code.hljs` 及旗下 `.hljs-*` 类用项目 `--hljs-*` 变量覆盖(与 agent 回答配色同源),亮/暗随 `[data-theme]` 自动切换。验证页暗色下文字变 `#e6e6e6`、keyword `#ff79c6`、string `#50fa7b`、number `#8be9fd`。
-  - 验证:相关 19 个测试通过。
-- [x] 同步 README 多模态解析/预览现状:仅修正与当前实现明确冲突的 OCR 生效方式、图片/PDF/Word 预览与灌库后文本模式说明,保留原有设计性内容。
-- [x] 统一 PDF「文本/渲染」toggle 与编辑器三模式 toggle 的视觉样式:
-  - PDF 二段切换改为同三模式切换一致的 grid 容器、2px 内边距、主色滑块 indicator、透明按钮、active 文字白色、disabled/focus/reduced-motion 行为。
-- [x] 修复编辑区高亮层滚动错位,光标不再随滚动偏移或落在文字中间:
-  - 根因:`syncScroll` 用 `hl.scrollTop = ta.scrollTop` 同步高亮层,但 textarea 与 div 滚动语义不同——textarea 滚动时 padding 固定不滚,而 div 的 scrollTop 会把 padding-top 一起滚走,滚动后高亮层文本相对 textarea 光标错位(偏差一个 padding 高度),长文滚动时光标视觉上落在错位的文字中间。
-  - 修复:改为 CSS transform 平移(`translate3d(-scrollLeft, -scrollTop, 0)`)代替 scrollTop 赋值。transform 平移整盒(含 padding),文本起点与 textarea 的 padding+内容滚动数学上逐像素一致,水平/垂直滚动均精确对齐。编辑器 font-family 统一为文字字体后,此对齐不再受字体差异影响。
-  - 验证:CodeEditor.spec.ts 新增回归测试断言高亮层 transform 跟随 textarea 的 scrollTop/scrollLeft;相关 19 个测试通过,`vue-tsc` 类型检查通过。
-- [x] 打通 Word/PDF 灌库文本与预览渲染的模式边界:
-  - DOCX 点击/激活默认进入 Preview;未灌库时保持 Preview-only,已有 frontmatter sections 后才开放 Edit/Split,编辑区显示按文档流顺序合并的全文文本。
-  - PDF preview payload 拆成 `render_content` 与 `content`:渲染模式使用即时 PDF Markdown/图片预览,文本模式只使用已灌库 frontmatter 全文;前端在三模式切换左侧新增 PDF「文本/渲染」开关,未灌库时禁用「文本」。
-  - DOCX 灌库时将嵌入图片 OCR 文本回填到图片所在 block,不再追加到文末;PDF 灌库时将内嵌图片 OCR 文本替换原图片占位,尽量保持页内原始顺序。
-  - 验证:`python -m pytest tests/test_multimodal_cleaner.py tests/test_knowledge_library_preview.py -q` 32 例通过;`npm.cmd run test:unit -- --run src/stores/__tests__/workspaceMarkdownHtmlVisualization.spec.ts` 4 例通过。`npm.cmd run type-check` 仍失败于既有无关类型错误(ImagePreviewer/CodeEditor/knowledge_graph/settings/LibraryView 等),本次改动文件未出现新增报错。
-- [x] Markdown 编辑模式符号语法高亮,让 Edit/Split 模式下的 Markdown 符号与 Preview 一样有颜色层次:
-  - `CodeEditor.vue` 的 `isSyntaxHighlightedLanguage` 不再排除 markdown(md/markdown 已在 `codeHighlight.ts` 注册),Edit/Split 模式编辑 .md 文件时启用 textarea 透明 + hljs 高亮层着色机制,`#`、`**`、`-`、`>`、行内代码、链接等符号均渲染出对应颜色。
-  - 高亮层 scoped style 中针对 `.markdown-highlight-layer` 补充 markdown 专属 hljs 类颜色:标题/列表/粗体/链接统一主色,斜体用次级色,引用用 muted,行内代码用代码底色;只改颜色不改字重/斜体/字体,保证与 textarea 透明层逐像素对齐(光标/选中不偏移)。同时重置全局 `.hljs-quote` 的斜体,避免引用行错位。
-  - 副作用:语义搜索结果只读预览的 markdown 文档现在同样显示语法高亮层(与 python 等语言结果预览行为一致)。
-  - 验证:CodeEditor.spec.ts 新增 markdown 高亮测试、SearchPage.spec.ts 更新预览断言,相关 21 个测试通过;`vue-tsc` 类型检查通过。注:全量测试仍有 5 个预先存在失败(session.spec.ts / tools.spec.ts / MarkdownHtmlVisualizationView.spec.ts),与本次改动无关。
-- [x] 修复知识库图片/OCR预览链路的运行时异常和 asset 图片响应:
-  - 修复图片预览开启 OCR 时 `_preview_image_ocr` 中 `result` 未赋值导致 `/knowledge/files/preview` 返回 500。
-  - 新增 `/knowledge/assets/{path}` 响应解析,让 PDF 预览导出的 `pdf_preview` 图片可以通过后端实际返回。
-  - 修正单文件灌库已有可入库 sections 但本轮因未变化跳过时的状态说明,避免误报 `ocr_no_chunks`。
-- [x] 降低图片点击预览和 debug 多模态观测的 OCR 性能耦合:
-  - 图片预览改为只返回原图 `raw_url`,不再现场执行 PaddleOCR 或把大图 base64 塞入 JSON。
-  - 图片只有在已有 frontmatter OCR sections 时才返回解析文本,从而允许 Edit/Split 展示已灌库文本;未灌库图片保持 Preview-only。
-  - debug 多模态入库观测优先读取已有 frontmatter,缺失时才临时结构化;后端未知异常统一转 JSON 错误,前端 debug fallback 兼容当前 ApiError 包装的非 JSON 响应。
-- [x] 调整图片文件打开策略:无论图片是否已经灌库或提取 OCR 文本,点击/激活图片 tab 时默认进入 Preview 模式,保留已有文本图片手动切换 Edit/Split 的能力。
-- [x] 常驻"查看可用工具"工具,让 agent 能主动发现并按需点名白名单外工具:
-  - 复盘会话发现按需绑定瘦身轮后,模型只看得见绑定工具,对白名单外工具既不知道存在、也不知道确切名字,点名机制落空。典型场景:agent 读完文档生成 HTML 后想调 `show_markdown_html` 展示,但该工具不在白名单,模型看不到 schema,只能把整段 HTML 打进回答正文、在结尾写"下一轮放开后再调用",任务停在 in_progress。
-  - 新增元工具 `list_available_tools`(中文名"查看可用工具"):枚举 `ToolRegistry` 全部定义(含 MCP 工具),每行输出 `中文名(工具名): 一句话用途`,总长约 4k 字符,远小于 46 个完整 schema。注册在 `UTILITY_TOOL_DEFINITIONS`。
-  - `model_decision.py` 三处:白名单加入 `list_available_tools`(瘦身轮常驻,模型任何时候都能查询);`ON_DEMAND_BINDING_HINT` 引导模型"调用 list_available_tools 查看全部工具、需要白名单外工具时直接说出工具名"(`show_markdown_html`、`download_file`、Git 系列等);`_tool_message_max_chars` 给 `list_available_tools` 独立档位恒 6000(不随消息位置衰减),避免清单本身被截断。
-  - 新增 2 个测试(工具返回包含全清单 / 瘦身轮常驻),agent 循环测试 20 个全绿;compress 相关回归 2 个通过。注:运行中的 AgentService 需重启(或重新打包)后才生效。
-- [x] 修复会话 YAML 导出格式无效,导出的文件无法再导入:
-  - 复盘桌面会话 YAML 发现:`session:   id: x`、`messages:   - role: x`、`trace_details:     - event: x` 都是 key 与子内容挤在同一行。手写序列化器 `editor/src/utils/yamlExport.ts` 对对象/对象数组值走 `key: ${serializeValue(...)}` 单行内联,子内容首行自带缩进被拼到 key 同行,产出非法映射;后端 `/sessions/import-file` 用 `yaml.safe_load` 解析直接抛 ScannerError,导出的会话无法再导入。
-  - 修复:对象键值改为「值需换行挂载」判定——非空对象与含对象/多行字符串的数组一律 `key:\n` + 已缩进子内容换行挂载,单行标量(含多行字符串的 `key: |` 块标量)保持内联;列表项映射子级统一缩进到 `- ` 之后再加一层,消除首键与其他键缩进不一致(原代码首键用 `indent+indentSize+2`、其余键用 `indent+indentSize`)。数组流式内联判定改为递归 `isFlowScalar`(多行字符串不可入流)。
-  - 验证:新增 `yamlExport.spec.ts` 结构断言 4 例通过,并用真实导出对象落盘后经后端同款 PyYAML `safe_load` 解析成功、结构与内容完整往返;`vue-tsc` 全量类型检查通过。此前导出的旧文件为非法格式,重新导出后即可正常导入。
-- [x] 修复压缩摘要路径丢失用户模型名导致会话中途抛"大模型未配置模型名称":
-  - 会话复盘发现:上下文膨胀跨过压缩阈值时,compress 节点调用 `ImportantFactSummaryService.summarize_text` 触发小模型摘要,但该方法只从用户 `llm_config` 取 api_key/base_url,丢弃了 `model_name`/`small_model_name`。当用户模型只配置在设置页(per-user llm_config)、全局 `config.model.model_name` 为空时,调度器 `_resolve_model_runtime` 解析小模型名全为空 → 降级大模型 → 大模型名也为空 → 抛 `ValueError("大模型未配置模型名称,请先在设置页配置模型。")`,异常经 `api_content_filter` 写成 `node: error` 气泡中断会话。
-  - 修复:`important_fact_summary_service.py` 的 `_resolve_llm_overrides` 增加 `model_name`/`small_model_name` 解析(小模型缺省回退主模型名),`summarize_text` 透传给 `invoke_chat`。前台 compress 与后台摘要共用此路径,后台无 llm_config 时行为不变(仍依赖全局配置)。
-  - 验证:压缩节点测试与 18 个 agent 循环测试通过;解析与转发两层手工检查通过。注:运行中的 AgentService 需重启(或重新打包)后才生效。
-- [x] 优化 Agent 回答性能(启动、思考前首 token、循环三处):
-  - 启动:彻底移除自动灌库逻辑。`main.py` 不再调用 `bootstrap_frontmatter + ingest_frontmatter_dir`(含后台线程池方案一并删除),启动阶段不扫描、不写库、不占用 embedding/rerank 与磁盘资源;知识库仅由前端 `/knowledge/rebuild`、单文件灌库与上传灌库按需触发。
-  - 思考前首 token:`context_builder.py` 移除知识库自动召回,只保留长期记忆自动召回(知识库内容由 agent 需要时自行调用 `get_knowledge_context` / `search_knowledge` 等工具获取,避免首 token 前重复跑完整 embedding+rerank 链路);`retrieval_service.py` 为 `retrieve_long_term_memory_with_debug` 增加按 session 的短 TTL LRU 缓存(30s TTL / 128 条,key 为 `user\0session\0归一化查询\0top_k`,命中直接复用,避免同一会话连续提问重复召回)。
-  - 循环:react 图接入与 plan 图相同的上下文压缩节点。`graph.py` react 分支入口改为 `safety_input → compress → agent ⇄ action → compress`:每次 action 回环与首次决策前都经 compress 做 token 估算,低于阈值幂等跳过(`compression_skipped` 事件不修改消息),高于阈值用小模型摘要压缩历史并持久化到长记忆,防止长循环上下文单调膨胀。
-- [x] 每轮工具按需绑定,减少 46 个工具 schema 每轮的固定开销:
-  - `model_decision.py` 新增 `_compute_bound_tool_names`:首次决策(messages 中从未出现过 tool_calls)全量绑定全部工具;后续轮只保留 `上轮实际用过的 ∪ 核心白名单(10 个: get_current_time / web_search / run_terminal_command / get_knowledge_context / search_knowledge / list_knowledge_files / read_knowledge_file / read_multimodal_file_info / write_knowledge_file / get_long_term_memory)`,典型"搜索 → 读文件 → 写作"链路白名单内即可完成。
-  - 瘦身轮在系统提示追加说明:"如需白名单外工具请明确说明";模型在最近一轮正文中点名了未绑定工具(如 `download_file`)时,本轮回退全量绑定一轮让其直接可用;极端情况下(上轮用过的与白名单全部被禁用导致绑定为空)同样回退全量,避免空绑定。
-  - 该逻辑在 `model_decision.py` 的 `__call__` 内计算 `active_tool_names`,流式与非流式两条路径共用,react 图与 plan 图的 agent 节点同时受益。新增 4 个针对性测试(首轮全量 / 瘦身轮 / 点名回退 / 空绑定回退),与原有 14 个图测试共 18 个通过。
-- [x] agent 回答代码块改为流式增量高亮:代码块未输出完时也周期性高亮新增部分,不再等 agent 终止后才一次性高亮:
-  - 根因:此前 `MarkdownContent.vue` 在流式期间(`watch` 里的 `if (props.isStreaming) return`)直接跳过代码高亮,且 `v-html` 每次更新会整体替换 DOM 冲掉已高亮 span,只能等输出终止后遍历 DOM 做一次 `hljs.highlightElement`。
-  - 修复:把高亮前移到字符串层,用 `marked.Renderer` 覆盖 `code` 渲染,在 `sanitizedHtml` computed 里随内容刷新直接产出带高亮 span 的 HTML。新增字符串级缓存(key 为 `语言\0代码文本`,value 为已转义的高亮 HTML):流式刷新时已完成代码块直接命中缓存,只对正在输出的最后一个代码块做真正的词法分析,实现"边输出边高亮"且不整段重复计算。未知语言与超长代码块(超过 2 万字符)回退纯文本并保留原文标签;缓存条数超过 200 自动清空,组件卸载时清空。
-  - 高亮既不再依赖流式状态也不依赖 DOM 二次遍历,`highlightCodeBlocks` 只保留文件名链接化与复制按钮挂接(流式结束后 `v-html` 不再更新,挂接不会被冲掉)。
-  - 新增回归测试:流式中(`isStreaming: true`)代码块已含 `hljs` class 与词法 span;未知语言回退纯文本且代码内 `<b>` 标签不丢失。改动文件 `vue-tsc` 零类型错误,相关组件测试 19 个通过。
-- [x] 优化 SSE 流式性能,修复输出代码卡顿、HTML 标签化语言"标签全丢大量空行"的问题:
-  - 根因一(卡顿/突发输出):后端在 token 与 delta 两条路径无条件调用 `_strip_html_tags` 正则剥离 HTML 标签,命中标签即全量返回不完整内容;叠加 `_token_blocked` 永久锁在首次拦截后对所有后续 token 一律丢弃,导致流式输出到一半突然停滞,解除后再一次性吐出剩余全部内容。现删除 `_strip_html_tags` 与 `_token_blocked`:流式过滤只保留 JSON/内部标记的净化拦截,拦截时本轮返回不更新发送基线,后续按原文前向切片继续发增量,永不锁死。
-  - 根因二(HTML 标签丢失):`_strip_html_tags` 用正则无条件剥掉 `<...>`(HTML 代码块里的 `<div>`、`<html>` 等标签被当标签删掉,只留大量空行)。删除该方法后,agent 回答侧 `MarkdownContent.vue` 同步移除 `stripHtml` DOM 解析(每次刷新最多 10 次全树遍历),`sanitizedHtml` 改为直接 `marked.parse`:代码围栏内的 HTML 由 marked 转义保留,裸 HTML 由 DOMPurify 统一净化防 XSS。
-  - 前端增量高亮:代码高亮改为跳过已带 `hljs` 类的代码块、跳过超过 2 万字符的超长块,高亮调度延后到下一帧,避免流式累积长代码块时同步阻塞主线程。
-  - 前端完整内容分支稳健化:`chat.ts` 非 delta 的完整 `content` 不再无条件整体替换,仅当没有累积正文、或以累积正文为前缀(流被拦截时后端补发完整正文)、或长度更长时才替换,避免文本跳变与缩短。
-  - 验证:前端 vitest(chat / MarkdownContent / codeHighlight)通过;后端 streaming 相关测试 3 个通过,`py_compile` 通过,全库无 `_strip_html_tags`/`_token_blocked`/`stripHtml` 残留。注:运行中的 AgentService 需重启或重新打包后才生效。
-- [x] 代码高亮扩展至更多高级语言,agent 回答 / markdown 预览 / 代码文件预览三处全覆盖:
-  - 新增共享语言注册模块 `editor/src/components/editor_workspace/codeHighlight.ts`,集中注册 go、rust、c、cpp、java、javascript、kotlin、sql、html/css/js 三件套、vue、react 等目标语言,以及 `kt/kts/rs/h/hpp/cs/sh/golang/html/htm/vue/react` 等文件扩展名与代码围栏别名;jsx/tsx 由 javascript/typescript 模块内部自动注册,不做覆盖以保留 JSX 特有规则。
-  - `MarkdownContent.vue`(agent 回答)与 `CodePreview.vue`(代码文件预览)删除各自内联语言注册列表,改为复用共享模块,消除两处重复维护导致的覆盖不一致;`.c` 文件由原先映射到 cpp 改为使用真正的 c 语言语法。
-  - `MarkdownPreview.vue`(Vditor markdown 预览):Vditor 内置 hljs 已覆盖全部目标语言,仅缺 vue;渲染后对 `language-vue` 代码块用 xml 语法补齐高亮,未产生高亮 span 时才执行,幂等且不影响 Vditor 已高亮的块。
-  - 新增 `codeHighlight.spec.ts` 回归测试:断言全部目标语言与别名注册齐全、各语言代表片段高亮产出词法 span、未知语言标识回退为不可高亮;相关组件测试与 `vue-tsc` 类型检查通过(改动文件零类型错误)。
-- [x] 修复文件树和资源管理器里面的文件名没有根据git状态进行变色的问题.理论上只要文件被修改,文件树里面这个文件的颜色就应该立刻刷新.并且特殊的是,只要.gitignore被修改,就要立刻将其忽略的文件变成暗棕黄色.
-- [x] 代码高亮问题: 应该给更多的高级语言提供代码高亮,比如go,rust,c,cpp,java,javascript,kotlin,sql,html三件套,vue,react等.
-  - 对前端SSE的性能做优化,避免在输出代码的时候输出到一半突然卡死然后突然输出最终全部回答,且要避免在输出html这种标签化语言的时候出现"所有的标签都消失,大量的空行".
-- [x] 修复写入长期记忆工具抛 `timezone is not defined` 的问题:
-  - 根因:`agent_service/tools/builtin.py` 的 `write_long_term_memory` 使用 `datetime.now(timezone.utc)`,但文件只导入了 `datetime` 未导入 `timezone`,执行写入即抛 `NameError`。
-  - 修复:`from datetime import datetime` 补为 `from datetime import datetime, timezone`,仅此一处,不涉及其他逻辑。
-  - 新增回归测试 `test_write_long_term_memory_tool_does_not_raise_timezone_name_error`,通过 ToolExecutor 实际执行写入工具并断言记忆落库;验证未修复时该测试精确复现 `builtin.py:485` 的 `NameError`,修复后通过。
-- [x] 修复 DOCX 多模态清洗的四个结构性问题:
-  - 表格单元格文本重复收录:原实现用 `root.iter()` 全树遍历,`w:tbl` 内的单元格 `w:p` 既进段落流又被表格抽取,入库后单元格内容在向量库出现两遍。现只遍历 `w:body` 直接子元素,表格按叶子块整体处理,重复消除。
-  - 段落与表格顺序丢失:原实现段落全部压成首个章节、表格独立章节排在末尾,原文"段落-表格-段落"交错结构被拆平。现按文档流顺序生成章节:无标题时段落/图片聚合为章节,遇表格先冲刷当前章节再新开章节,保序。
-  - 图片只留 relationship ID:原实现只输出 `image relationship: rId5` 裸 ID。现解析 `word/_rels/document.xml.rels` 把 rId 升级为真实媒体路径(`[DOCX 图片引用: media/image1.png]`),缺 rels 文件时回退旧格式。
-  - 标题层级丢失:原实现整篇压成单章节。现识别 `pStyle` 的 Heading1-6 样式按层级切分章节,并用标题栈生成 `title_path`(与 Markdown 章节结构对齐);无标题样式的 DOCX 行为不变。
-  - 删除不再使用的 `_collect_relationship_ids`;前端预览走 mammoth 独立解析,不受影响。
-  - 新增 4 个针对性测试(顺序与去重、标题切分、图片 rId 解析、纯段落兼容),全文件 20 个用例通过。
-- [x] 编辑区部分格式预览调整:
-  - pdf: pdf的edit模式应该像docx的preview模式一样,将嵌入的图片渲染出来,而不是只显示一个占位符.
-  - 代码格式: 所有代码格式的edit模式应该直接显示代码高亮,并且不可进入preview模式,而不是edit模式光板子preview高亮.
-- [x] 修复写入长期记忆时timezone is not defined 的问题.
-- [x] 实现Markdown的Split模式同步滚动,并且从Edit模式换到Split模式时,右边的预览要自动滚动到左边的编辑区的光标所在位置.
-- [x] 优化Agent回答性能.为什么应用启动速度如此缓慢?为什么要每次都要先顿一段时间才开始思考?为什么循环的时间如此之长?
-  - 应用启动速度:启动阶段所有事都是同步串行、全做完才对外服务。
-    - 解决方案: 并行加载,互不阻塞,最后一个完成时即启动.项目已配备惰性灌库,应该将自动灌库移出启动流程.
-  - 思考前时间:首token之前要进行上下文构建(长期记忆+知识库两次检索完整链路).
-    - 优化方案: 没必要进行知识库检索,每次回答只进行长期记忆的自动召回;检索结果按照session进行短TTL缓存(按缓存key进行session查询归一化),有缓存则没必要重复自动召回.
-  - 循环时间:
-    - react图和plan图都要在入口处经过输入安全节点,一次llm调用.
-      - 已经解决,用户已经可以在前端关闭输入审核和输出审核.
-    - 每轮都要对所有工具进行全量绑定.
-      - 优化方案: 按需绑定,首轮绑定全部工具,后续只绑定`上轮实际用过的工具 ∪ 核心白名单(8~10个工具)`,瘦身轮在系统提示里加一句"如需白名单外工具请明确说明",或在"计划要结束时/拿不准时"自动回退全量绑定一轮。对绝大多数任务(搜索→读文件→写作)白名单够用。
-  - bug: react图没有压缩节点,应该让react图跟plan图一样具备同样的压缩机制,同样的压缩节点.
-- [x] 系统性的真正打通多模态解析链,包括图片OCR解析,扫描件pdf的图片渲染,pptx的渲染与预览等.
+- [x] 修复 Markdown Split 左侧编辑后右侧预览慢一拍:改为内容/路径变更后同步 setValue+renderPreview,不再排队到下一帧;新增 MarkdownPreview.spec.ts 锁定即时渲染。
+- [x] 修复 Preview/Split 的 LaTeX 公式全量样本:渲染前把块级 $$...$$ 与行内 $...$ 提取为占位符交给 Vditor,preview.parse 回调还原为 KaTeX;相邻行内公式 $a$$b$ 正确处理,货币 $10 和 $20 不误渲染;宽容写法 3^\sqrt{x} 归一化。
+- [x] 修复 Markdown 切到 Split 后左侧 Edit 向下滚动文字消失:高亮层拆为固定裁剪外层+承载完整文本内层,滚动只 transform 内层。
+- [x] 修复文件树/资源管理器多选右键只操作单个文件:FileContextMenu 增加多选禁用策略,批量目标取右键所在 selection,删除按路径深度倒序。
+- [x] 修复 Preview/Split 暗色下代码块文字变黑:用项目 --hljs-* 变量覆盖 Vditor 内置亮色 hljs 主题,随主题切换。
+- [x] 同步 README 多模态解析/预览现状:仅修正与当前实现冲突的 OCR 生效方式与预览说明。
+- [x] 统一 PDF「文本/渲染」toggle 与编辑器三模式 toggle 的视觉样式(grid 容器+主色滑块)。
+- [x] 修复编辑区高亮层滚动错位:改用 CSS transform 平移代替 scrollTop 赋值,与 textarea 滚动逐像素对齐;新增回归测试。
+- [x] 打通 Word/PDF 灌库文本与预览渲染模式边界:DOCX 按文档流顺序合并全文、已有 frontmatter 才开放 Edit/Split;PDF preview 拆 render_content/content 并新增文本/渲染开关;OCR 文本回填原位。
+- [x] Markdown 编辑模式符号语法高亮:Edit/Split 编辑 .md 启用 textarea 透明+hljs 高亮层着色。
+- [x] 修复知识库图片/OCR 预览运行时异常:_preview_image_ocr 的 result 未赋值返回 500、新增 /knowledge/assets 响应解析、修正误报 ocr_no_chunks。
+- [x] 降低图片点击预览与 debug 多模态观测的 OCR 性能耦合:预览只返回原图 raw_url 不现场 OCR,已灌库才返回解析文本。
+- [x] 调整图片文件打开策略:点击/激活图片 tab 默认进入 Preview,已灌库图片保留手动切 Edit/Split。
+- [x] 常驻"查看可用工具"list_available_tools:枚举 ToolRegistry 全部定义(含 MCP),注册在 UTILITY_TOOL_DEFINITIONS;model_decision 白名单加入并引导模型点名白名单外工具,独立 6000 档位不衰减。
+- [x] 修复会话 YAML 导出格式无效:对象/对象数组值改换行挂载、列表项映射子级统一缩进,导出文件可被 PyYAML safe_load 重新导入。
+- [x] 修复压缩摘要丢失用户模型名导致抛"大模型未配置模型名称":ImportantFactSummaryService 补透传 model_name/small_model_name。
+- [x] 优化 Agent 回答性能(启动/首 token/循环):移除启动自动灌库;移除知识库自动召回只留长期记忆并加 30s TTL 会话级缓存;react 图接入与 plan 相同的上下文压缩节点。
+- [x] 每轮工具按需绑定:首轮全量绑定,后续只绑上轮用过的∪白名单 10 个,模型点名未绑工具或空绑定时回退全量。
+- [x] agent 回答代码块流式增量高亮:marked.Renderer 覆盖 code 在字符串层产出高亮,字符串级缓存只对末个代码块做词法分析。
+- [x] 优化 SSE 流式性能并修复 HTML 标签丢失:删除 _strip_html_tags/_token_blocked 防永久锁死;前端 sanitizedHtml 直接 marked.parse,代码围栏 HTML 由 marked 转义、裸 HTML 由 DOMPurify 净化。
+- [x] 代码高亮扩展至更多高级语言:新增共享 codeHighlight.ts 集中注册 go/rust/c/cpp/java/javascript/kotlin/sql/html 三件套/vue/react 等,agent 回答/markdown 预览/代码预览三处复用。
+- [x] 修复文件树/资源管理器文件名不随 git 状态变色:文件被修改立即刷新颜色,.gitignore 修改后其忽略文件立即变暗棕黄色。
+- [x] 代码高亮需求:给 go/rust/c/cpp/java/javascript/kotlin/sql/html 三件套/vue/react 提供高亮;前端 SSE 性能优化,避免代码输出中途卡死与 HTML 标签全丢大量空行。
+- [x] 修复写入长期记忆工具抛 timezone is not defined:builtin.py 补 from datetime import timezone,新增回归测试。
+- [x] 修复 DOCX 多模态清洗四个结构性问题:表格单元格文本重复收录、段落与表格顺序丢失、图片只留 rId、标题层级丢失;新增 4 个测试。
+- [x] 编辑区格式预览调整:pdf edit 模式渲染嵌入图片而非占位符;代码格式 edit 模式直接高亮且不可进 preview。
+- [x] 修复写入长期记忆时 timezone is not defined 的问题。
+- [x] 实现 Markdown 的 Split 模式同步滚动,从 Edit 切到 Split 时右预览自动滚动到左编辑光标位置。
+- [x] 优化 Agent 回答性能(启动慢/首 token 停顿/循环长):启动并行加载并移除自动灌库;首 token 前只做长期记忆召回+短 TTL 缓存;每轮按需绑定工具;react 图缺压缩节点需补齐。
+- [x] 系统性的真正打通多模态解析链:图片 OCR 解析、扫描件 PDF 图片渲染、PPTX 渲染与预览等。
 ## 2026-07-31
 - [x] 修复整目录忽略时文件树内文件不变色:
   - `git status --ignored` 对整目录忽略会折叠成单条 `!! dir/`,此前只有目录节点能通过直配着色,目录下的具体文件节点匹配不到状态。现 `statusClassForPath` 对文件增加回退:无直接状态时检查是否位于某个忽略目录条目下,命中则返回 `git-ignored`。
@@ -1519,3 +1451,26 @@
 - 调整 Markdown 从 Edit 切换到 Split 时的预览定位为平滑滚动,避免右侧预览瞬间跳转。
 - 打通用户级 OCR 灌库链路: 设置页开启 OCR 后,普通图片、PDF 内嵌图片、DOCX/PPTX 媒体图片都会在结构化预处理阶段调用 PaddleOCR;兼容 PaddleOCR 3.x `OCRResult.json.res` 返回结构,同步缓存模型并禁用默认 oneDNN 以避免首次推理失败;新增图片解析、DOCX 内嵌图片和扫描件 PDF OCR 白盒测试。
 - 更新 OCR 设置提示,明确开关保存后后续灌库立即使用图片 OCR,不再误导用户必须重启。
+- [x] 数学公式渲染支持(Preview/Split + agent 回答):
+  - 诊断:Vditor(lute)默认不渲染无空格行内 `$...$`(避免货币误判);用户 Obsidian 宽容写法(标签与 `$$` 同行、缺闭合 `$$`)让 KaTeX 严格解析抛 ParseError;agent 回答用 marked 渲染无任何数学支持。
+  - 新建 `editor/src/components/editor_workspace/mathRender.ts` 统一识别 + KaTeX 渲染:`renderMathInHtml`(字符串层,供 agent 回答)与 `renderMathInDom`(DOM 层,供 Preview)共用同一套匹配规则。块级 `$$...$$` 非贪婪跨行匹配(`\$\$([\s\S]+?)\$\$`),行内 `$...$` 单行匹配且内部首字符非空格(避免误伤 `$10 each` 货币)。`<pre>/<code>` 用占位符保护,代码块里的 `$` 不渲染。统一 `throwOnError: false`,解析失败显示红色原文不抛错。结果按 tex 缓存 300 条(agent 流式高频刷新直接命中)。
+  - DOM 层用"最内层含 `$` 的元素"TreeWalker(子元素含 `$` 则 SKIP,否则 ACCEPT),并单独补上根节点自身;`<br>` 在渲染前清洗成 `\n`,`<p>` 内被 `<br>` 分隔的 `$$...$$` 也能跨行匹配。Vditor 已渲染的 `.katex` 输出不含字面 `$`,天然不重复处理。
+  - MarkdownContent.vue:`marked.parse` 之后、DOMPurify 之前对 HTML 跑 `renderMathInHtml`;`ALLOWED_ATTR` 增加 `style`(KaTeX 用 style 定位上下标/strut)。
+  - MarkdownPreview.vue:`syncPreviewContent` 中 `renderPreview()` 之后调用 `renderMathInDom(getPreviewElement())`,处理 Vditor 未渲染的行内 `$...$` 与宽容块级残留。
+  - `main.ts` 全局引入 `katex/dist/katex.min.css`(Preview 手动 KaTeX 与 agent 回答共用);`package.json` 增加 `katex@^0.16.47`。
+  - 验证:新增 `mathRender.spec.ts` 10 例(行内/块级独占行/单行块级/方程组/上下括号/宽容写法不抛错/代码块内不渲染/非法命令显示原文/货币 `$10` 不碰/DOM 文本节点渲染/DOM 代码块不碰),MarkdownContent 测试 2 例(公式渲染 + DOMPurify 保留 style),相关 72 个测试全通过;`vue-tsc` 类型检查通过;Playwright 真实 Vditor 验证行内、标准块级、单行块级、方程组、上括号全部渲染成 KaTeX,宽容写法被 Vditor 预解析打散成单个 `$$` 时保持原文不抛错。
+- [x] 数学公式渲染放宽:块级 `$$...$$` 不再矫情,任意位置都可渲染;行内货币误判修复:
+  - 问题定位(Playwright 真实 Vditor 逐格式实测):Vditor 内嵌 lute 的 `inlineMathDigit=false` 规则使 `$` 后紧跟数字的行内公式(如 `$1,2,3,\quad4$`)不被原生识别,但 `$ 1,2,3,\quad4$`(前有空格)反而被识别;而 `$$...$$` 只要不在行首(如 `文字$$x^2$$`、`求和:$$...$$`、`$$...$$ 尾部文字`),lute 会把 `$$` 当块级分隔符,把中间的后续内容整段吞进一个公式块,产出 KaTeX ParseError 加散落文本,渲染后无法修复。
+  - 修复:MarkdownPreview 渲染前新增 `extractDisplayMath`:把块级 `$$...$$`(任意位置,含标签同行/尾部文字/连续块/多行)提取成纯文本占位符 `MWMATHBLOCK{n}MW` 再交给 Vditor,fenced code 内的 `$$` 用 `MWMATHCODE{n}MW` 占位保护不提取;渲染后 `renderMathInPreviewDom` 在 `.vditor-reset` 的 innerHTML 字符串层把占位符还原成 KaTeX display,并顺带处理行内 `$...$`。绕开 lute 的块级撕裂,Preview 与 agent 回答行为统一(都走 KaTeX)。
+  - 行内正则加边界,修复 `价格 $10 和 $20` 这类双 `$` 货币被误渲染成公式:开头 `$` 前不能紧跟 ASCII 字母/数字(与 lute 词边界一致,避免 `abc$x$`),闭合 `$` 后也不能紧跟 ASCII 字母/数字/另一个 `$`(货币与量词边界)。
+  - 验证:`mathRender.spec.ts` 扩到 19 例(新增块级任意位置提取、fence 内不提取、未配对 `$$` 保留、占位符还原 + 行内、未知占位符不碰、双 `$` 货币不渲染、闭合 `$` 紧贴 ASCII word 不渲染、成对 `$10$` 正常渲染),editor_workspace 相关 81 个测试全通过;`vue-tsc` 类型检查通过;Playwright 真实 Vditor 验证:行内无空格、前空格、字母/中文/ASCII 前缀、块级独立行/行内有文字/尾部文字/标签同行/文字中间嵌公式/连续两个/多行独占行全部渲染成 KaTeX,`价格 $10 和 $20` 保持原文。
+- [x] 修复 Preview 中公式显示成 `MWMATHBLOCK{n}MW` 占位符(数学占位符还原时序错误):
+  - 现象:预览区块级公式全部显示为 `MWMATHBLOCK1MW` 等占位符原文,行内 `$1,2,3,\quad4$` 也不渲染。
+  - 根因:Vditor `Preview.prototype.render` 把真实渲染放进 `window.setTimeout(fn, preview.delay)`(即使 delay=0 也是异步宏任务),`renderPreview()` 之后**同步**执行的一切还原操作都作用于旧 DOM,随后 Vditor 异步写入含 `MWMATHBLOCK` 占位符的 HTML 并覆盖。此前 Playwright 验证能通过是因为验证页人为延迟 800ms 后再还原,真实代码没有这个延迟。
+  - 修复:改用 Vditor 官方 `preview.parse` 钩子(Vditor 每次渲染完成、`innerHTML` 写入之后同步回调,`IPreview` 类型原生声明 `parse?(element: HTMLElement): void`)。MarkdownPreview.vue 新增 `handlePreviewParse`,把数学占位符还原 `renderMathInPreviewDom`、图片 URL 装饰 `decoratePreviewImages`、vue 代码块高亮、代码复制按钮注入全部移到 parse 回调里,保证它们在渲染完成后执行;`syncPreviewContent` 只负责 `extractDisplayMath` 提取、`setValue`、`renderPreview`。顺带修复了图片 URL 装饰与代码复制按钮此前同样因时序问题一直失效的隐患。
+  - 验证:Playwright 用与真实组件相同的 parse 钩子流程跑 17 个格式用例,行内无空格/前空格/字母/中文/ASCII 前缀、块级独立行/行内有文字/尾部文字/标签同行/文字中间嵌公式/连续两个/块间紧贴文字/多行独占行全部渲染成单层 KaTeX,无占位符残留、无双重渲染,`价格 $10 和 $20` 保持原文;editor_workspace 相关 81 个测试与 `vue-tsc` 类型检查通过。
+- [x] 修复 Split 模式编辑左侧预览不更新(Split 预览永久冻结):
+  - 现象:Split 模式下在左侧 CodeEditor 输入,右侧预览始终停留在初次渲染的内容,30 秒都不更新;但直接调用 `vd.setValue()` + `renderPreview()` 同样不更新 DOM。
+  - 根因:上一版 `handlePreviewParse(element)` 把 `element`(`vditor.preview.element`,即 `.vditor-preview`)整体传给 `renderMathInPreviewDom`。该函数在字符串层用 `root.innerHTML = rendered` 还原数学占位符,当 root 是整个 `.vditor-preview` 时,这条赋值会**销毁并重建 `.vditor-preview` 的直接子元素 `.vditor-reset`(previewElement)**。重建后 Vditor 实例的 `preview.previewElement` 仍引用已被移出文档的旧 `.vditor-reset`(`isConnected === false`),于是之后每次 `Preview.render` 都只往这个离线节点写 `innerHTML`,屏幕上的 `.vditor-reset` 从此不再变化 —— 预览冻结,编辑不反映。
+  - 修复:`handlePreviewParse` 改为把 `element.querySelector('.vditor-reset')`(屏幕上的活 `.vditor-reset`,即 `previewElement`)交给 `renderMathInPreviewDom`,重建只发生在 `.vditor-reset` 的 children 层,`.vditor-reset` 元素自身引用稳定,Vditor 后续写入仍然命中屏幕节点。占位符本就写在 `.vditor-reset` 内,还原范围不变。
+  - 验证:Playwright 真实组件实测 Split 模式在左侧输入 `ZZZSPLITTEST 行内$a^2$块级$$b^3$$` 及 `行内 $E=mc^2$ 块级 $$\int_0^1 x dx$$`,右侧预览即时更新、`preview.previewElement === 屏幕 .vditor-reset` 且 `isConnected === true`;行内/块级公式实时渲染成 KaTeX,katex 计数随输入增长,无 `MWMATH` 占位符残留、无 katex-error;Preview 单面板模式 122 个行内 + 71 个块级公式渲染正常、无占位符残留。`mathRender.spec.ts` + `MarkdownPreview.spec.ts` 共 23 个测试全通过,`vue-tsc` 类型检查通过。

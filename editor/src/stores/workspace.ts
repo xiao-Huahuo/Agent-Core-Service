@@ -646,6 +646,34 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await _triggerGraphExtraction(node.path)
   }
 
+  async function extractGraphForNodes(nodes: KnowledgeFileNode[]) {
+    const targets = pruneNestedNodes(nodes)
+    if (targets.length === 0) {
+      return
+    }
+    if (targets.length === 1) {
+      const target = targets[0]
+      if (target) {
+        await extractGraphForNode(target)
+      }
+      return
+    }
+    const userId = useSettingsStore().profile.userId
+    if (!userId || graphQueue.value.length > 0 || graphRebuildPending.value) {
+      return
+    }
+    graphRebuildPending.value = true
+    try {
+      showToast(`开始灌库后抽取选中的 ${targets.length} 项图谱`)
+      for (const node of targets) {
+        await ingestFile(node)
+      }
+    } finally {
+      graphRebuildPending.value = false
+    }
+    await _triggerGraphExtraction()
+  }
+
   function clearGraphHistory() {
     graphHistory.value = []
     try { localStorage.removeItem(GRAPH_HISTORY_KEY) } catch { /* ignore */ }
@@ -2652,6 +2680,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     graphRebuildPending,
     startGraphRebuild,
     extractGraphForNode,
+    extractGraphForNodes,
     clearGraphHistory,
     performSearch,
     askAgent,

@@ -6,7 +6,7 @@
   node, paste availability, and menu position, then handle emitted actions.
 -->
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { useSettingsStore } from '@/stores/settings'
 import type { KnowledgeFileNode } from '@/types/knowledge'
@@ -15,11 +15,14 @@ defineOptions({ name: 'FileContextMenu' })
 
 const settingsStore = useSettingsStore()
 
-defineProps<{
+const props = withDefaults(defineProps<{
   node: KnowledgeFileNode | null
   canPaste: boolean
   menuStyle: Record<string, string>
-}>()
+  selectionCount?: number
+}>(), {
+  selectionCount: 0,
+})
 
 const emit = defineEmits<{
   createFile: []
@@ -43,6 +46,9 @@ const emit = defineEmits<{
 }>()
 
 const menuRef = ref<HTMLElement | null>(null)
+const isBatchSelection = computed(() => props.selectionCount > 1)
+const hasTarget = computed(() => Boolean(props.node))
+const canUseSingleOnlyAction = computed(() => !isBatchSelection.value && hasTarget.value)
 
 defineExpose({
   getBoundingClientRect: () => menuRef.value?.getBoundingClientRect() ?? new DOMRect(),
@@ -51,33 +57,33 @@ defineExpose({
 
 <template>
   <div ref="menuRef" class="context-menu" :class="{ dark: settingsStore.isDark }" :style="menuStyle" @click.stop>
-    <button type="button" @click="emit('createFile')"><span>新建文件</span><kbd>Ctrl+N</kbd></button>
-    <button type="button" @click="emit('createFolder')"><span>新建文件夹</span><kbd>Ctrl+Shift+N</kbd></button>
+    <button type="button" :disabled="isBatchSelection" @click="emit('createFile')"><span>新建文件</span><kbd>Ctrl+N</kbd></button>
+    <button type="button" :disabled="isBatchSelection" @click="emit('createFolder')"><span>新建文件夹</span><kbd>Ctrl+Shift+N</kbd></button>
     <hr class="context-separator" />
     <button type="button" :disabled="!node" @click="emit('copy')"><span>复制</span><kbd>Ctrl+C</kbd></button>
     <button type="button" :disabled="!node" @click="emit('cut')"><span>剪切</span><kbd>Ctrl+X</kbd></button>
-    <button type="button" :disabled="!node" @click="emit('copyName')"><span>复制名称</span></button>
-    <button type="button" :disabled="!node" @click="emit('copyAbsolutePath')"><span>复制绝对路径</span></button>
-    <button type="button" :disabled="!node" @click="emit('copyRelativePath')"><span>复制相对路径</span></button>
+    <button type="button" :disabled="!canUseSingleOnlyAction" @click="emit('copyName')"><span>复制名称</span></button>
+    <button type="button" :disabled="!canUseSingleOnlyAction" @click="emit('copyAbsolutePath')"><span>复制绝对路径</span></button>
+    <button type="button" :disabled="!canUseSingleOnlyAction" @click="emit('copyRelativePath')"><span>复制相对路径</span></button>
     <hr class="context-separator" />
     <button type="button" :disabled="!canPaste" @click="emit('paste')"><span>粘贴</span><kbd>Ctrl+V</kbd></button>
-    <button type="button" :disabled="!node" @click="emit('rename')"><span>重命名</span><kbd>Ctrl+M</kbd></button>
+    <button type="button" :disabled="!canUseSingleOnlyAction" @click="emit('rename')"><span>重命名</span><kbd>Ctrl+M</kbd></button>
     <hr class="context-separator" />
     <button type="button" @click="emit('showInFolder')">
       <span>{{ node ? '在文件夹中显示' : '打开知识库根目录' }}</span>
     </button>
-    <button type="button" :disabled="!node" @click="emit('openDefault')"><span>用默认程序打开</span></button>
+    <button type="button" :disabled="!canUseSingleOnlyAction" @click="emit('openDefault')"><span>用默认程序打开</span></button>
     <hr class="context-separator" />
-    <button type="button" :disabled="!node" @click="emit('showInGraph')"><span>在图谱中显示</span><kbd>Ctrl+G</kbd></button>
+    <button type="button" :disabled="!canUseSingleOnlyAction" @click="emit('showInGraph')"><span>在图谱中显示</span><kbd>Ctrl+G</kbd></button>
     <button type="button" :disabled="!node" @click="emit('extractGraph')">
       <span>{{ node?.isDir ? '文件夹抽取图谱' : '文件抽取图谱' }}</span>
     </button>
     <hr class="context-separator" />
-    <button type="button" @click="emit('askAgent')"><span>询问 Agent</span></button>
+    <button type="button" :disabled="isBatchSelection" @click="emit('askAgent')"><span>询问 Agent</span></button>
     <button
       type="button"
       data-action="html-visualize"
-      :disabled="!node || node.isDir"
+      :disabled="!canUseSingleOnlyAction || node?.isDir"
       @click="emit('htmlVisualize')"
     >
       <span>HTML可视化</span>

@@ -145,6 +145,7 @@ const selectedPaths = computed(() => workspaceStore.selectedTreePaths)
 const isMultiSelecting = computed(() => multiSelectMode.value || selectedPaths.value.size > 0)
 const canPaste = computed(() => Boolean(workspaceStore.fileClipboard) || Boolean(window.agentEditorDesktop?.readClipboardFilePaths))
 const selectedNode = computed(() => flatNodes.value.find((node) => node.path === workspaceStore.selectedTreePath) ?? null)
+const contextSelectionCount = computed(() => contextTargetNodes().length)
 const selectedPreviewPayload = computed(() => {
   const path = selectedNode.value?.path ?? ''
   return path ? previewPayloadByPath.value[path] ?? workspaceStore.activePreview : null
@@ -589,7 +590,7 @@ async function renameFromMenu() {
 }
 
 async function showInFolderFromMenu() {
-  const node = contextMenu.value.node
+  const node = contextTargetNodes()[0] ?? contextMenu.value.node
   const absolutePath = node ? joinAbsoluteKnowledgePath(node.path) : settingsStore.profile.knowledgeDir
   closeContextMenu()
   await window.agentEditorDesktop?.showItemInFolder?.(absolutePath)
@@ -608,10 +609,10 @@ function showInGraphFromMenu() {
 }
 
 async function extractGraphFromMenu() {
-  const node = contextMenu.value.node
+  const nodes = contextTargetNodes()
   closeContextMenu()
-  if (!node) return
-  await checkEmbeddingBefore(() => workspaceStore.extractGraphForNode(node))
+  if (nodes.length === 0) return
+  await checkEmbeddingBefore(() => workspaceStore.extractGraphForNodes(nodes))
 }
 
 async function askAgentFromMenu() {
@@ -682,7 +683,7 @@ async function deleteFromMenu() {
     return
   }
   if (nodes.length > 1 && window.confirm(`删除选中的 ${nodes.length} 项?`)) {
-    for (const node of nodes) {
+    for (const node of [...nodes].sort((a, b) => b.path.split('/').length - a.path.split('/').length)) {
       await workspaceStore.deleteNode(node)
     }
   }
@@ -1197,6 +1198,7 @@ onUnmounted(() => {
       :node="contextMenu.node"
       :can-paste="canPaste"
       :menu-style="contextMenuStyle"
+      :selection-count="contextSelectionCount"
       @create-file="createFileFromMenu"
       @create-folder="createFolderFromMenu"
       @copy="copyFromMenu"

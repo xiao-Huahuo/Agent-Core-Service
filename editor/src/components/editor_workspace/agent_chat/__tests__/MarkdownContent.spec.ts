@@ -48,6 +48,35 @@ describe('MarkdownContent source links', () => {
     expect(onNavigateSource).toHaveBeenCalledWith('1/3/01_climate_change_nasa.md')
   })
 
+  it('renders inline and display math after DOMPurify', async () => {
+    const wrapper = mount(MarkdownContent, {
+      props: {
+        content: '行内 $a^2+b^2$ 与块级\n\n$$\\sum_{i=1}^{n} i$$\n\n结束',
+        citationMap: {},
+      },
+    })
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+
+    expect(wrapper.find('.katex').exists()).toBe(true)
+    expect(wrapper.find('.katex-display').exists()).toBe(true)
+    // KaTeX 依赖的 style 定位属性经 DOMPurify 后保留(非空 style)
+    const styles = wrapper.findAll('.katex [style]')
+    expect(styles.length).toBeGreaterThan(0)
+  })
+
+  it('does not render math inside code fences', async () => {
+    const wrapper = mount(MarkdownContent, {
+      props: {
+        content: '代码: ```js\nconst price = "$5 and $10";\n```',
+        citationMap: {},
+      },
+    })
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+
+    expect(wrapper.find('.katex').exists()).toBe(false)
+    expect(wrapper.text()).toContain('$5 and $10')
+  })
+
   it('links filenames after the workspace tree loads later', async () => {
     const workspaceStore = useWorkspaceStore()
     workspaceStore.tree = []

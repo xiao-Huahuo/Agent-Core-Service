@@ -40,7 +40,7 @@ describe('CodeEditor Markdown context menu', () => {
     })
   })
 
-  it('keeps the highlight layer pixel-aligned with the textarea via transform, not scrollTop', async () => {
+  it('keeps the highlight content pixel-aligned while the clipping layer stays fixed', async () => {
     const wrapper = mountMarkdownEditor('alpha\nbeta\ngamma')
     const textarea = wrapper.get('textarea').element as HTMLTextAreaElement
     Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 300 })
@@ -51,7 +51,9 @@ describe('CodeEditor Markdown context menu', () => {
     await wrapper.get('textarea').trigger('scroll')
 
     const layer = wrapper.get('.highlight-layer').element as HTMLElement
-    expect(layer.style.transform).toBe('translate3d(-40px, -100px, 0)')
+    const content = wrapper.get('.highlight-content').element as HTMLElement
+    expect(layer.style.transform).toBe('')
+    expect(content.style.transform).toBe('translate3d(-40px, -100px, 0)')
   })
 
   it('renders syntax highlighting directly in the editable source surface', () => {

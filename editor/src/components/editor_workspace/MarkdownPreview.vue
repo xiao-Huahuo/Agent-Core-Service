@@ -15,6 +15,7 @@ import {
   rewriteMarkdownImageUrls,
 } from '@/components/editor_workspace/markdownImageUrls'
 import { hljs } from './codeHighlight'
+import { extractPreviewMath, renderMathInPreviewDom } from './mathRender'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -50,6 +51,16 @@ let mounted = false
 let renderVersion = 0
 let programmaticScroll = false
 let programmaticScrollTimer: ReturnType<typeof setTimeout> | null = null
+let displayBlocks: string[] = []
+let inlineBlocks: string[] = []
+
+function preparePreviewMarkdown(content: string): string {
+  const renderContent = rewriteMarkdownImageUrls(content, getImageUrlContext())
+  const { markdown, displayBlocks: nextDisplayBlocks, inlineBlocks: nextInlineBlocks } = extractPreviewMath(renderContent)
+  displayBlocks = nextDisplayBlocks
+  inlineBlocks = nextInlineBlocks
+  return markdown
+}
 
 function decodeUrlPath(path: string) {
   try {
@@ -81,8 +92,7 @@ function ensurePreviewPaneIsRenderable() {
   previewElement.style.display = 'block'
 }
 
-function fixImageUrls() {
-  const previewEl = getPreviewElement()
+function decoratePreviewImages(previewEl: HTMLElement | null) {
   if (!previewEl) {
     return
   }
@@ -224,20 +234,35 @@ function highlightVueCodeBlocks(root: HTMLElement | null) {
   })
 }
 
+// Vditor 的 Preview.render 在 setTimeout(preview.delay) 里才写入 innerHTML,renderPreview()
+// 之后同步执行的一切都会被随后写入的 HTML 覆盖。preview.parse 在每次渲染完成、innerHTML
+// 写入之后同步回调,是"渲染后处理"的可靠时机,数学占位符还原等必须放这里。
+function handlePreviewParse(element: HTMLElement) {
+  // element 是 vditor.preview.element(.vditor-preview)。数学占位符写入在 .vditor-reset
+  // (previewElement)里,必须把 .vditor-reset 而非 .vditor-preview 交给 renderMathInPreviewDom:
+  // 它在字符串层用 root.innerHTML 还原占位符,若 root 是整个 .vditor-preview 会把
+  // .vditor-reset 元素自身重建,导致 Vditor 的 previewElement 引用指向已销毁的节点,
+  // 后续 renderPreview 全部写进离线节点,预览从此冻结不再更新。
+  const resetEl = element.querySelector<HTMLElement>('.vditor-reset') ?? element
+  renderMathInPreviewDom(resetEl, displayBlocks, inlineBlocks)
+  decoratePreviewImages(element)
+  highlightVueCodeBlocks(element)
+  injectCodeCopyButtons()
+}
+
 function syncPreviewContent() {
   if (!instance) {
     return
   }
   try {
-    const renderContent = rewriteMarkdownImageUrls(props.content, getImageUrlContext())
-    if (instance.getValue() !== renderContent) {
-      instance.setValue(renderContent, true)
+    // 数学公式先提取为占位符再交给 Vditor:块级 $$...$$ 会被 lute 撕裂,行内 $...$
+    // 里的反斜杠/下划线也可能先被 Markdown 解析消费,统一占位后在 parse 钩子还原。
+    const markdown = preparePreviewMarkdown(props.content)
+    if (instance.getValue() !== markdown) {
+      instance.setValue(markdown, true)
     }
     ensurePreviewPaneIsRenderable()
     instance.renderPreview()
-    fixImageUrls()
-    highlightVueCodeBlocks(getPreviewElement())
-    injectCodeCopyButtons()
     emit('ready')
   } catch (err) {
     console.warn('[MarkdownPreview] syncPreviewContent failed:', err)
@@ -255,6 +280,14 @@ async function queuePreviewRender() {
   await nextTick()
   await waitForAnimationFrame()
   if (!mounted || version !== renderVersion) {
+    return
+  }
+  syncPreviewContent()
+}
+
+function syncPreviewContentImmediately() {
+  renderVersion += 1
+  if (!mounted) {
     return
   }
   syncPreviewContent()
@@ -320,7 +353,7 @@ onMounted(() => {
   previewHost.value.addEventListener('click', handleClick, { capture: true })
   try {
     instance = new Vditor(previewHost.value, {
-      value: rewriteMarkdownImageUrls(props.content, getImageUrlContext()),
+      value: preparePreviewMarkdown(props.content),
       height: '100%',
       mode: 'sv',
       cache: { enable: false },
@@ -332,6 +365,7 @@ onMounted(() => {
           codeBlockPreview: true,
           mathBlockPreview: true,
         },
+        parse: handlePreviewParse,
       },
       after() {
         mounted = true
@@ -353,10 +387,9 @@ onUnmounted(() => {
 watch(
   () => [props.content, props.path],
   () => {
-    if (!mounted) {
-      return
-    }
-    void queuePreviewRender()
+    // Split 模式输入时必须让右侧预览在同一个响应式 tick 里发起渲染。
+    // 这里不能再排队到 nextTick/requestAnimationFrame,否则用户会看到明显慢一拍。
+    syncPreviewContentImmediately()
   },
 )
 
