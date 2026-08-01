@@ -7,17 +7,17 @@
 - [ ] "随手一丢":以卡片形式呈现随手一写的内容,自动进行LLM重命名和Agent辅助指定存库地点,然后以md存入库中.
 - [ ] 多agent能力:
   - 采用父子Agent设计模式.
-  - 子Agent在独立于父Agent的线程中进行,拥有独立的上下文.
-  - 子Agent默认可以继承主Agent的全部工具,但是主Agent拥有对子Agent可用工具的配给权以及三种沙盒权限的控制权.**主Agent 不能授予自己没有的能力**。
-  - 子 Agent 由主Agent启动，完成后返回结果,主Agent可以查看后台任务，也可以停止它。子Agent的生命周期:
+  - 子 Agent 由主Agent启动，主Agent送给子Agent一个"子任务合同"(你是谁、要做什么、能用什么、不能做什么、最后交付什么),子Agent完成任务后,任务结果进入主Agent的消息队列(内存queue).子Agent的生命周期:
   ```     
       created → running → completed
                  ↘ failed
                  ↘ stopped
   ```
+  - 子Agent在独立于父Agent的线程中进行,拥有独立的上下文.
+  - 子Agent默认可以继承主Agent的全部工具,但是主Agent拥有对子Agent可用工具的配给权以及三种沙盒权限的控制权.**主Agent 不能授予自己没有的能力**。
   - 子Agent分为前台和后台两种模式(子Agent的目标,工具与权限,前后台,工作状态和结果都需要在前端展示,但过程不必显示在前端):
     - 前台子Agent(同步阻塞): 前台子Agent阻塞主Agent,主Agent在等待子Agent的工作结果完成之前一直等待.适合任务有前后依赖的情形.
-    - 后台子Agent(异步蜂群): 后台子Agent不阻塞主Agent,主Agent可以召唤多个后台子Agent并行做事,且在此期间主Agent可以继续做其他事情,子Agent完成任务后,任务结果进入主Agent的消息队列(内存queue).
+    - 后台子Agent(异步蜂群): 后台子Agent不阻塞主Agent,主Agent可以召唤多个后台子Agent并行做事,且在此期间主Agent可以继续做其他事情.主Agent可以查看后台任务，也可以停止子Agent,子Agent收到父Agent的信号(终止/者信息调整)后做出响应(立即终止/将信息注入上下文).
   - 子Agent不能召唤其他子Agent.
 ### BUGs
 
