@@ -9,8 +9,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { deleteAgentAttachment, fetchTaskSuggestions, streamPrompt } from '@/api/agent'
-import type { AgentAccessMode, AgentAttachmentUploadResponse, AgentLoopMode } from '@/api/agent'
+import { deleteAgentAttachment, fetchChildAgents, fetchTaskSuggestions, streamPrompt } from '@/api/agent'
+import type { AgentAccessMode, AgentAttachmentUploadResponse, AgentLoopMode, ChildAgentRecord } from '@/api/agent'
 import { fetchMessages } from '@/api/session'
 import type { AgentTaskList } from '@/api/taskList'
 import { useSessionStore } from '@/stores/session'
@@ -106,6 +106,7 @@ export const useChatStore = defineStore('chat', () => {
   let streamTimeoutId: number | null = null
   const streamTimeoutMs = 10 * 60 * 1000 // 10 minutes sliding window
   let suggestionRequestId = 0
+  let suggestionAbortController: AbortController | null = null
   let historyRequestId = 0
   let pendingContent = ''
   let flushTimer: number | null = null
@@ -309,13 +310,20 @@ export const useChatStore = defineStore('chat', () => {
 
   async function refreshTaskSuggestions(userId: string, sessionId: string) {
     const requestId = ++suggestionRequestId
+    suggestionAbortController?.abort()
+    suggestionAbortController = new AbortController()
     suggestionsLoading.value = true
     try {
-      const result = await fetchTaskSuggestions(userId, sessionId)
+      const result = await fetchTaskSuggestions(userId, sessionId, {
+        signal: suggestionAbortController.signal,
+      })
       if (requestId === suggestionRequestId) {
         taskSuggestions.value = result.suggestions ?? []
       }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return
+      }
       console.debug('生成任务推荐失败:', error)
       if (requestId === suggestionRequestId) {
         taskSuggestions.value = []
@@ -334,6 +342,7 @@ export const useChatStore = defineStore('chat', () => {
     reference = '',
     agentMode: AgentLoopMode = 'auto',
     agentAccessMode: AgentAccessMode = 'sandbox',
+    options: { wakeup?: boolean; childAgentEvent?: Record<string, unknown> } = {},
   ) {
     if (!prompt.trim()) {
       return
@@ -348,12 +357,16 @@ export const useChatStore = defineStore('chat', () => {
     const attachmentsForTurn = [...pendingAttachments.value]
     pendingAttachments.value = []
     taskSuggestions.value = []
+    // 用户气泡推出时立即阻断进行中的小模型任务推荐,避免旧结果回填与资源浪费
     suggestionRequestId += 1
+    suggestionAbortController?.abort()
+    suggestionAbortController = null
     appendMessage({
       role: 'user',
       content: prompt,
       reference: reference || undefined,
       attachments: attachmentsForTurn,
+      metadata: options.wakeup ? { wakeup: true, child_agent_event: options.childAgentEvent } : undefined,
       created_at: new Date().toISOString(),
     })
 
@@ -473,6 +486,15 @@ export const useChatStore = defineStore('chat', () => {
         }
 
         if (chunk.type === 'child_agent_event') {
+          // 流内已被 SSE 实时推送的子 Agent:记录终态,避免流结束后被 watcher 再次唤醒
+          const childEvent = metadata.child_agent_event as { child?: Record<string, unknown> } | undefined
+          const childPayload = childEvent?.child
+          if (childPayload && typeof childPayload.run_id === 'string') {
+            const childStatus = childPayload.status as ChildAgentRecord['status']
+            if (isTerminalChildStatus(childStatus)) {
+              seenChildStatus.set(childPayload.run_id, childStatus)
+            }
+          }
           appendMessage({
             role: 'assistant',
             content: '',
@@ -573,7 +595,134 @@ export const useChatStore = defineStore('chat', () => {
     taskSuggestions.value = []
     suggestionsLoading.value = false
     suggestionRequestId += 1
+    suggestionAbortController?.abort()
+    suggestionAbortController = null
     useTaskListStore().clear()
+  }
+
+  // ------------------------------------------------------------------
+  // 子 Agent 完成检测与唤醒（"死而复生"）
+  // ------------------------------------------------------------------
+  let childWatcherTimer: number | null = null
+  let childWatcherUserId = ''
+  let childWatcherSessionId = ''
+  const seenChildStatus = new Map<string, ChildAgentRecord['status']>()
+
+  function isTerminalChildStatus(status: ChildAgentRecord['status']) {
+    return status === 'completed' || status === 'failed' || status === 'stopped'
+  }
+
+  function terminalChildStatusLabel(status: ChildAgentRecord['status']) {
+    return {
+      completed: '已完成',
+      failed: '失败',
+      stopped: '已停止',
+    }[status] || status
+  }
+
+  async function wakeUpAgentForChild(child: ChildAgentRecord) {
+    const title = child.name?.trim() || child.goal
+    const summary = (child.summary || '').trim()
+    let resultText = ''
+    if (child.result !== undefined && child.result !== null) {
+      resultText = typeof child.result === 'string'
+        ? child.result
+        : (() => {
+          try {
+            return JSON.stringify(child.result)
+          } catch {
+            return String(child.result)
+          }
+        })()
+    }
+    const prompt = [
+      `【子任务完成提醒】后台子Agent「${title}」已完成（状态：${terminalChildStatusLabel(child.status)}）。`,
+      summary ? `摘要：${summary}` : '',
+      resultText ? `结果：${resultText}` : '',
+      '请结合以上产出继续当前任务，给用户一个完整答复。',
+    ].filter(Boolean).join('\n')
+    try {
+      await send(childWatcherUserId, childWatcherSessionId, prompt, '', 'auto', 'sandbox', {
+        wakeup: true,
+        childAgentEvent: {
+          event_name: `child_agent.${child.status}`,
+          child: {
+            run_id: child.run_id,
+            goal: child.goal,
+            name: child.name,
+            mode: child.mode,
+            status: child.status,
+            access_mode: child.access_mode,
+            category: child.category,
+            allowed_tools: child.allowed_tools,
+            result: child.result,
+            summary: child.summary,
+            error: child.error,
+          },
+        },
+      })
+    } catch (error) {
+      console.error('唤醒主 Agent 失败:', error)
+    }
+  }
+
+  async function checkChildAgentsForWakeup() {
+    if (!childWatcherSessionId || !childWatcherUserId) {
+      return
+    }
+    let records: ChildAgentRecord[]
+    try {
+      const response = await fetchChildAgents(childWatcherSessionId)
+      records = response.children
+    } catch (error) {
+      console.debug('子 Agent 完成检测失败:', error)
+      return
+    }
+    for (const child of records) {
+      const previous = seenChildStatus.get(child.run_id)
+      if (previous === undefined) {
+        // 首次见到:仅记录当前状态;若已是终态(历史会话),不触发唤醒
+        seenChildStatus.set(child.run_id, child.status)
+        continue
+      }
+      if (isTerminalChildStatus(previous)) {
+        continue
+      }
+      if (!isTerminalChildStatus(child.status)) {
+        seenChildStatus.set(child.run_id, child.status)
+        continue
+      }
+      // 活动态 → 终态转变
+      if (isStreaming.value) {
+        // 主 Agent 流仍活动:SSE 已实时推送,保持 seen 为活动态,流结束后补触发
+        continue
+      }
+      // 主 Agent 空闲:触发唤醒并记录终态,避免重复唤醒
+      seenChildStatus.set(child.run_id, child.status)
+      await wakeUpAgentForChild(child)
+    }
+  }
+
+  function startChildAgentWatcher(userId: string, sessionId: string) {
+    if (childWatcherTimer !== null) {
+      window.clearInterval(childWatcherTimer)
+      childWatcherTimer = null
+    }
+    childWatcherUserId = userId
+    childWatcherSessionId = sessionId
+    seenChildStatus.clear()
+    void checkChildAgentsForWakeup()
+    childWatcherTimer = window.setInterval(() => void checkChildAgentsForWakeup(), 2000)
+  }
+
+  function stopChildAgentWatcher() {
+    if (childWatcherTimer !== null) {
+      window.clearInterval(childWatcherTimer)
+      childWatcherTimer = null
+    }
+    seenChildStatus.clear()
+    childWatcherSessionId = ''
+    childWatcherUserId = ''
   }
 
   function clearStreamTimeout() {
@@ -667,5 +816,7 @@ export const useChatStore = defineStore('chat', () => {
     deleteAttachment,
     currentKnowledgeSources,
     currentCitationMap,
+    startChildAgentWatcher,
+    stopChildAgentWatcher,
   }
 })

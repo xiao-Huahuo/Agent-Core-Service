@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Sequence
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 
 from agent_service.agent_core.nodes.base import AgentState
@@ -143,31 +143,6 @@ class ModelDecisionNode:
     tools: 可供模型调用的 LangChain 工具列表;为空时模型只会进行普通对话。
     """
 
-    # 核心白名单:绝大多数任务(搜索 → 读文件 → 写作)够用。首轮全量绑定,
-    # 后续轮只保留"上轮实际用过的 ∪ 白名单",减少每轮 46 个工具 schema 的固定开销。
-    # list_available_tools 常驻,让模型随时能查询全部工具清单后点名。
-    CORE_TOOL_WHITELIST: frozenset[str] = frozenset({
-        "list_available_tools",
-        "get_current_time",
-        "web_search",
-        "run_terminal_command",
-        "get_knowledge_context",
-        "search_knowledge",
-        "list_knowledge_files",
-        "read_knowledge_file",
-        "read_multimodal_file_info",
-        "write_knowledge_file",
-        "get_long_term_memory",
-    })
-
-    # 瘦身轮追加的系统提示:引导模型用 list_available_tools 查清单、需要白名单外工具时点名。
-    ON_DEMAND_BINDING_HINT = (
-        "\n\n【工具可用范围】本轮仅预绑定部分常用工具。你随时可以调用 list_available_tools "
-        "查看全部可用工具及确切工具名。若当前任务需要本轮未绑定的工具,"
-        "请在回复正文中明确说出该工具名(如 show_markdown_html、download_file、Git 系列等),"
-        "下一轮将自动为你放开。"
-    )
-
     def __init__(
         self,
         *,
@@ -207,13 +182,7 @@ class ModelDecisionNode:
             except Exception:
                 pass
 
-        # 按需绑定工具:首轮全量,后续轮只保留"上轮实际用过的 ∪ 核心白名单",
-        # 瘦身轮在系统提示追加说明;模型点名需要白名单外工具时回退全量一轮。
-        active_tool_names, tools_trimmed = self._compute_bound_tool_names(
-            state=state,
-            active_tool_names=active_tool_names,
-        )
-
+        # 每轮全量绑定所有可用工具(已剔除禁用工具),保证任意工具随时可直接调用。
         system_content = self.config.model.system_prompt
 
         # 追加用户自定义系统提示词(数据库持久化,每次对话自动加载)
@@ -258,9 +227,6 @@ class ModelDecisionNode:
         skill_prompt = self._build_skill_prompt(state.get("skill_index"), state.get("active_skills"))
         if skill_prompt:
             system_content += skill_prompt
-
-        if tools_trimmed:
-            system_content += self.ON_DEMAND_BINDING_HINT
 
         system_message = SystemMessage(content=system_content)
         token_callback = get_agent_token_callback()
@@ -467,57 +433,6 @@ class ModelDecisionNode:
                 }
             ],
         }
-
-    def _compute_bound_tool_names(
-        self,
-        *,
-        state: AgentState,
-        active_tool_names: list[str],
-    ) -> tuple[list[str], bool]:
-        """
-        计算本轮实际绑定给模型的工具名,减少长循环中每轮全量 schema 的固定开销。
-
-        active_tool_names: 已剔除禁用工具的可用工具列表。
-        state: 当前图状态,用于判断是否为首次决策与上轮实际用过的工具。
-
-        返回 (bound_tool_names, tools_trimmed):tools_trimmed 为 True 表示本轮是
-        瘦身轮,调用方需要在系统提示中追加工具可用范围说明。
-        """
-
-        full_names = list(active_tool_names)
-        messages = state.get("messages") or []
-
-        # 历史中只要出现过 tool_calls 即非首轮;last_used 记录最近一轮实际用过的工具
-        last_used: set[str] = set()
-        has_tool_history = False
-        for msg in messages:
-            if not isinstance(msg, AIMessage):
-                continue
-            tool_calls = getattr(msg, "tool_calls", None) or []
-            if not tool_calls:
-                continue
-            has_tool_history = True
-            last_used = {
-                str(tc.get("name"))
-                for tc in tool_calls
-                if tc.get("name")
-            }
-
-        if not has_tool_history:
-            return full_names, False
-
-        # 模型在最近一轮正文中点名了白名单外工具 → 回退全量绑定一轮,让它直接可用
-        last_ai = next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
-        last_text = str(getattr(last_ai, "content", "") or "") if last_ai is not None else ""
-        current_bindings = last_used | self.CORE_TOOL_WHITELIST
-        if any(name in last_text for name in full_names if name not in current_bindings):
-            return full_names, False
-
-        bound = [name for name in full_names if name in current_bindings]
-        if not bound:
-            # 极端情况:上轮用过的与白名单全部被禁用 → 回退全量,避免空绑定
-            return full_names, False
-        return bound, True
 
     def _make_agent_readable(self, tool_calls: list, has_content: bool) -> str:
         """根据模型决策生成人类可读的思考描述。"""

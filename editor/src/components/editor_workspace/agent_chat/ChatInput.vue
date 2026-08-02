@@ -200,37 +200,36 @@ const taskModalVisible = ref(false)
 const taskTitle = ref('')
 const taskItemsText = ref('')
 
-async function handleSend() {
+function handleSend() {
   if (props.isStreaming) return
   const trimmed = text.value.trim()
   if (!trimmed) return
 
-  try {
-    const status = await checkModelDisk()
-    const blockedModels: string[] = []
-    if (status.embedding === 'not_downloaded' || status.embedding === 'error') {
-      blockedModels.push('Embedding')
-    }
-    if (status.rerank === 'not_downloaded' || status.rerank === 'error') {
-      blockedModels.push('ReRank')
-    }
-
-    if (blockedModels.length > 0) {
-      const hasError = status.embedding === 'error' || status.rerank === 'error'
-      modelModalMessage.value = hasError
-        ? `以下模型未就绪：${blockedModels.join('、')}，请先下载`
-        : `以下模型未就绪：${blockedModels.join('、')}，请先下载`
-      modelModalVisible.value = true
-      return
-    }
-  } catch {
-    // 模型状态检查失败时允许继续发送
-  }
-
+  // 先同步推出用户气泡,不被模型状态检查等网络请求阻塞
   const reference = props.reference?.trim() || undefined
   emit('send', trimmed, reference)
   text.value = ''
   emit('clear-reference')
+
+  // 模型状态检查放到发送之后后台执行,发现问题时仅提示不阻断
+  void (async () => {
+    try {
+      const status = await checkModelDisk()
+      const blockedModels: string[] = []
+      if (status.embedding === 'not_downloaded' || status.embedding === 'error') {
+        blockedModels.push('Embedding')
+      }
+      if (status.rerank === 'not_downloaded' || status.rerank === 'error') {
+        blockedModels.push('ReRank')
+      }
+      if (blockedModels.length > 0) {
+        modelModalMessage.value = `以下模型未就绪：${blockedModels.join('、')}，请先下载`
+        modelModalVisible.value = true
+      }
+    } catch {
+      // 模型状态检查失败时忽略
+    }
+  })()
 }
 
 async function handleModelModalRetry() {

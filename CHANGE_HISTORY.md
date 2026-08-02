@@ -1,5 +1,22 @@
 # CHANGE HISTORY
 
+## 2026-08-02
+- [x] 子 Agent 机制增强三:名字+头像+按目标合并+唤醒改事件条+唤醒去重。
+  - 后端 `types.py` 的 Contract/Event/ExecutionContext 加 `name`,`manager.py` 透传;`agent_core.py` `_spawn_child_from_runtime` 支持 `name` 参数,空名时按同 category 计数自动生成角色模板名(plan1/plan2/agent1),`_child_record_to_dict`/`_child_event_to_payload`/`_record_to_payload` 的 child dict 加 `name`,`_child_event_content` 首段用名字;`spawn_child_agent` 工具与 `definitions.py` 参数说明加 `name`;gRPC `ChildAgentRecord` 加 `name=12` 并重新生成 pb2,`ListChildAgents` 透传。前端 `agent.ts` 类型加 `name`。
+  - 新增 `editor/src/utils/childAgentAvatar.ts`:按 run_id 字符串哈希稳定分配 `assets/images/avatar/*.jpg` 头像,会话内刷新不变。
+  - `ChildAgentPanel.vue` 重构为按任务目标(goal)分组:同 goal 多次运行合并成一张卡片,折叠态只显示头像+名字+类别徽标(英文原文,预置类别首字母大写 Agent/Explore/Plan)+前后台+状态(取组内最后 spawn 的 run),展开态才显示该目标下各次运行详情(名字/状态、类别、模式、权限、工具、摘要、结果、错误、run_id、停止按钮);样式统一 `var(--font-ui)` + `calc(Npx * var(--font-scale))`。
+  - `ChildAgentEventInline.vue`:删除中文类别映射(不再显示"只读探索"等自造词),胶囊改英文原文;接口加 `name`,事件条标题用 `child.name || child.goal`。
+  - 唤醒"死而复生"改事件条:`chat.ts` `wakeUpAgentForChild` 的唤醒 prompt 用 `child.name || child.goal`,`send` 的 `options` 增加 `childAgentEvent` 并在 wakeup 消息 metadata 携带 `child_agent_event`(shape 与后端 `_child_event_to_payload` 一致);`MessageBubble.vue` 对携带 `child_agent_event` 的消息(含 wakeup)统一优先渲染 `ChildAgentEventInline` 事件条,无事件时才回退系统唤醒条。
+  - 唤醒去重:`send()` 流内 `child_agent_event` 分支把已终态(completed/failed/stopped)子 Agent 的 run_id/status 写入 `seenChildStatus`,流结束后 watcher 不再对已实时推送过的子 Agent 重复唤醒;仅"主 Agent 结束后才完成"的子 Agent 触发唤醒,修复"无限打工"。
+  - 验证:`npx vue-tsc --noEmit` 通过;`pytest tests/test_child_agent_manager.py` 10 passed(新增 `test_child_name_is_passed_through`);pb2 import 与 `ChildAgentRecord.name=12` 字段存在。
+- [x] 修复发送消息被小模型任务推荐阻塞:根因是 `ChatInput.handleSend` 在 `emit('send')` 前 `await checkModelDisk()`(磁盘级 POST),推荐生成期间后端负载高时该请求拖慢导致用户气泡迟迟不推出。改为先同步 emit 立即推出气泡,模型状态检查移到发送后后台执行(发现问题仅弹提示不阻断);`fetchTaskSuggestions` 支持传入 `ApiRequestInit` signal,`chat.ts` 用 `suggestionAbortController` 管理推荐请求,`send()`/`clear()` 在气泡推出时立即 abort 进行中的推荐,并加 AbortError 忽略。满足"不阻塞用户气泡推出,气泡推出即立刻阻断小模型任务推荐"。
+- [x] 子 Agent 机制增强一:新增"类别"能力模板。后端 `types.py` 的 Contract/Event/ExecutionContext 加 `category`,`manager.py` 透传;`agent_core.py` 新增 `CHILD_AGENT_CATEGORY_TEMPLATES`(agent 全能执行/explore 只读探索/plan 只读规划研究),自定义类别注入"【角色设定】{category}" 提示,`execute_child` 拼到子任务 prompt 前;`spawn_child_agent` 工具与 `definitions.py` 参数说明加 `category`;gRPC `ChildAgentRecord` 加 `category=11` 并重新生成 pb2,pb2_grpc 修正包路径导入,`ListChildAgents` 透传。前端 `agent.ts` 类型加 `category`,`ChildAgentPanel.vue` 折叠态卡片显示主色类别徽标+展开态"角色设定"说明,`ChildAgentEventInline.vue` 事件条标题加同强调样式类别徽标。
+- [x] 子 Agent 机制增强二:完成提醒+"死而复生"唤醒。根因:子 Agent 事件只在主 Agent SSE 流内被 `_drain_child_agent_event_payloads` 持久化+推送,主 Agent 先结束后后台完成事件落空。改法:事件落库移到 `ChildAgentManager` 事件回调 `_on_child_agent_event`(子 Agent 线程内无条件落库,MessageService 每次新建 Session 线程安全),drain 只负责流内 SSE 推送避免重复入库;前端 `chat.ts` 新增 `startChildAgentWatcher`/`stopChildAgentWatcher` 每 2s 轮询 `/agent/children`,检测 created/running→终态转变且主 Agent 空闲时组装提醒 prompt 自动 `send(..., {wakeup:true})`,`send` 加 `options.wakeup`,`AgentPanel.vue` 挂载/卸载 watcher,`MessageBubble.vue` 对 `role==='user' && metadata.wakeup` 渲染为独立"系统唤醒条"(弱化样式、居左、提示图标),不显示用户头像。
+- [x] TODO 持久化从按用户 JSON 文件迁移到现有 SQLite/SQLModel 数据库,新增提醒时间、分类、daily/weekly/monthly 循环规则与循环完成后的下次时间推进;旧 JSON 仅作为一次性导入源并通过 `todo_imports` 防止重复迁移;新增数据库服务回归测试。
+
+## 2026-08-02
+- [x] 回退工具按需绑定(瘦身轮)为每轮全量绑定:删除 `CORE_TOOL_WHITELIST`/`ON_DEMAND_BINDING_HINT`/`_compute_bound_tool_names` 及瘦身轮系统提示,`ModelDecisionNode` 每轮直接绑定禁用过滤后的全部工具,避免多轮任务中工具缺失/需正文点名导致模型可用性下降的负反馈体验;同步删除 `test_agent_loop_model_tier.py` 中 5 个瘦身轮专属测试与 `_make_node` 辅助,移除顶层未使用的 `AIMessage` 导入。注:2026-08-01 的"每轮工具按需绑定"已回退。
+
 ## 2026-08-01
 - [x] 修复 Markdown Split 左侧编辑后右侧预览慢一拍:改为内容/路径变更后同步 setValue+renderPreview,不再排队到下一帧;新增 MarkdownPreview.spec.ts 锁定即时渲染。
 - [x] 修复 Preview/Split 的 LaTeX 公式全量样本:渲染前把块级 $$...$$ 与行内 $...$ 提取为占位符交给 Vditor,preview.parse 回调还原为 KaTeX;相邻行内公式 $a$$b$ 正确处理,货币 $10 和 $20 不误渲染;宽容写法 3^\sqrt{x} 归一化。

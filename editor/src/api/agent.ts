@@ -7,6 +7,7 @@
  */
 
 import { apiDelete, apiGet, apiPost, apiPostForm, apiPut, buildApiUrl, streamLines } from '@/api/client'
+import type { ApiRequestInit } from '@/api/client'
 import { API_ROUTES } from '@/router/api_routes'
 import type { MarkdownHtmlVisualizationPayload } from '@/types/knowledge'
 
@@ -129,11 +130,15 @@ export interface TaskSuggestionsResponse {
   suggestions: string[]
 }
 
-export function fetchTaskSuggestions(userId: string, sessionId: string): Promise<TaskSuggestionsResponse> {
+export function fetchTaskSuggestions(
+  userId: string,
+  sessionId: string,
+  init?: ApiRequestInit,
+): Promise<TaskSuggestionsResponse> {
   return apiPost<TaskSuggestionsResponse>(API_ROUTES.AGENT_TASK_SUGGESTIONS, {
     user_id: userId,
     session_id: sessionId,
-  })
+  }, init)
 }
 
 export type TokenUsageInterval =
@@ -225,6 +230,8 @@ export interface ChildAgentRecord {
   result?: unknown
   summary?: string
   error?: string | null
+  category?: string
+  name?: string
 }
 
 export interface ChildAgentListResponse {

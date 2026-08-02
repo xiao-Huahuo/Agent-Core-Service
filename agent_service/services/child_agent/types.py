@@ -57,6 +57,8 @@ class ChildAgentContract:
     input_refs: tuple[str, ...] = ()
     output_contract: Mapping[str, Any] = field(default_factory=dict)
     timeout_seconds: float | None = None
+    category: str = ""
+    name: str = ""
 
 
 @dataclass(slots=True)
@@ -85,6 +87,8 @@ class ChildAgentEvent:
     access_mode: str
     allowed_tools: tuple[str, ...]
     created_at: float
+    category: str = ""
+    name: str = ""
     summary: str = ""
     result: Any = None
     error: str | None = None
@@ -110,6 +114,8 @@ class ChildAgentExecutionContext:
     input_refs: tuple[str, ...]
     output_contract: Mapping[str, Any]
     cancellation: Event
+    category: str = ""
+    name: str = ""
     _updates: list[Mapping[str, Any]] = field(default_factory=list)
     _updates_lock: Lock = field(default_factory=Lock)
 

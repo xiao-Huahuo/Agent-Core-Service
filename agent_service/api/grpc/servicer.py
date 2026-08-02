@@ -287,6 +287,8 @@ class AgentServiceServicer(BaseServicer):
                     summary=str(child.get("summary", "")),
                     result_json=json.dumps(child.get("result"), ensure_ascii=False),
                     error=str(child.get("error") or ""),
+                    category=str(child.get("category", "")),
+                    name=str(child.get("name", "")),
                 )
                 for child in children
             ],

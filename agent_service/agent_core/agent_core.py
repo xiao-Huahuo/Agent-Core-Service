@@ -103,6 +103,35 @@ AGENT_LOOP_DEEP_ALIAS = "deep"
 AGENT_LOOP_MODES = {AGENT_LOOP_AUTO, AGENT_LOOP_SIMPLE, AGENT_LOOP_REACT, AGENT_LOOP_PLAN, AGENT_LOOP_DEEP_ALIAS}
 CITATION_ANCHOR_PATTERN = re.compile(r"\[([A-Z]?\d+)\]")
 
+# 子 Agent 预置类别能力模板:主 Agent 通过 spawn_child_agent 的 category 选择,
+# 命中预置 key 用对应角色设定,空类别不注入,其他自定义字符串作为角色描述注入。
+CHILD_AGENT_CATEGORY_TEMPLATES = {
+    "agent": (
+        "【角色设定】你是全能 Agent，负责通用执行任务。"
+        "你可以进行复杂分析、多步骤任务和代码修改，目标是把任务彻底完成并给出可执行结果。"
+    ),
+    "explore": (
+        "【角色设定】你是只读探索 Agent，用于搜索文件、理解代码结构、定位实现细节。"
+        "【重要约束】你是只读的，禁止修改任何文件、禁止执行任何写操作。"
+    ),
+    "plan": (
+        "【角色设定】你是只读规划研究 Agent，在规划阶段收集代码上下文、辅助制定实施计划。"
+        "【重要约束】你是只读的，禁止修改任何文件，只输出分析与计划。"
+    ),
+}
+
+
+def _resolve_child_agent_category_template(category: str) -> str:
+    """把子 Agent 类别解析为注入 prompt 的角色设定模板。
+
+    命中预置 key 用对应模板;空类别返回空串不注入;其他自定义字符串视为角色描述。
+    """
+
+    text = (category or "").strip()
+    if not text:
+        return ""
+    return CHILD_AGENT_CATEGORY_TEMPLATES.get(text, f"【角色设定】{text}")
+
 
 def _extract_friendly_error(error_message: str) -> str:
     """从 LLM 调度层抛出的原始错误中提取对用户友好的提示信息。
@@ -174,7 +203,7 @@ class AgentCore:
         self.task_list_service = task_list_service
         self.skill_service = skill_service
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
-        self.child_agent_manager = ChildAgentManager()
+        self.child_agent_manager = ChildAgentManager(event_callback=self._on_child_agent_event)
         self.tool_registry = ToolRegistry.with_builtin_tools(config=config) if tools is None else None
         self.tool_executor = ToolExecutor(registry=self.tool_registry) if self.tool_registry is not None else None
         self._cancel_events: dict[str, threading.Event] = {}
@@ -318,6 +347,8 @@ class AgentCore:
             "run_id": record.run_id,
             "parent_run_id": record.contract.parent_run_id,
             "goal": record.contract.goal,
+            "category": record.contract.category,
+            "name": record.contract.name,
             "mode": record.contract.mode,
             "status": record.status.value,
             "access_mode": record.effective_access_mode,
@@ -345,6 +376,8 @@ class AgentCore:
                         "run_id": event.run_id,
                         "parent_run_id": event.parent_run_id,
                         "goal": event.goal,
+                        "category": event.category,
+                        "name": event.name,
                         "mode": event.mode,
                         "status": event.status.value,
                         "access_mode": event.access_mode,
@@ -369,7 +402,8 @@ class AgentCore:
             "stopped": "已停止",
         }.get(event.status.value, event.status.value)
         parts = [
-            f"子 Agent {event.run_id} {status_label}: {event.goal}",
+            f"子 Agent {event.name or event.run_id} {status_label}: {event.goal}",
+            f"类别={event.category or '通用'}",
             f"模式={event.mode}",
             f"权限={event.access_mode}",
             f"工具数={len(event.allowed_tools)}",
@@ -384,23 +418,92 @@ class AgentCore:
         self,
         *,
         session_id: str,
-        user_id: str,
-        message_service: MessageService | None = None,
     ) -> list[dict[str, Any]]:
-        """读取当前会话的子 Agent 事件队列,持久化后转为 SSE payload 列表。"""
+        """读取当前会话的子 Agent 事件队列,转为 SSE payload 列表。
+
+        事件落库已由 `_on_child_agent_event` 回调负责,此处只负责主 Agent 流内推送,
+        避免与回调重复入库。
+        """
 
         payloads: list[dict[str, Any]] = []
         for event in self.child_agent_manager.drain_events_for_session(session_id):
             payload = self._child_event_to_payload(event)
             if payload is not None:
-                self._save_child_agent_event_message(
-                    message_service=message_service,
-                    user_id=user_id,
-                    session_id=session_id,
-                    payload=payload,
-                )
                 payloads.append(payload)
         return payloads
+
+    def _on_child_agent_event(self, event_name: str, record: Any) -> None:
+        """ChildAgentManager 事件回调:子 Agent 每次状态变化立即落库。
+
+        此回调在子 Agent 执行线程中同步调用,保证主 Agent SSE 流结束后后台子 Agent
+        的完成事件也能持久化,前端刷新历史或轮询即可看到"已完成"提醒。
+        """
+
+        try:
+            payload = self._record_to_payload(event_name, record)
+            self._save_child_agent_event_message(
+                message_service=self._get_message_service(),
+                user_id=record.contract.user_id,
+                session_id=record.contract.session_id,
+                payload=payload,
+            )
+        except Exception:
+            logger.exception(
+                "子 Agent 事件落库失败 | event=%s run=%s", event_name, getattr(record, "run_id", "?")
+            )
+
+    @staticmethod
+    def _record_to_payload(event_name: str, record: Any) -> dict[str, Any]:
+        """从子 Agent 运行记录构造与 SSE payload 一致的 dict,供事件回调落库使用。"""
+
+        result = record.result
+        status_value = record.status.value if hasattr(record.status, "value") else str(record.status)
+        status_label = {
+            "created": "已创建",
+            "running": "开始任务",
+            "completed": "完成任务",
+            "failed": "任务失败",
+            "stopped": "已停止",
+        }.get(status_value, status_value)
+        parts = [
+            f"子 Agent {record.contract.name or record.run_id} {status_label}: {record.contract.goal}",
+            f"类别={record.contract.category or '通用'}",
+            f"模式={record.contract.mode}",
+            f"权限={record.effective_access_mode}",
+            f"工具数={len(record.effective_tools)}",
+        ]
+        if result is not None and result.summary:
+            parts.append(f"摘要={result.summary}")
+        if result is not None and result.error:
+            parts.append(f"错误={result.error}")
+        return {
+            "type": "child_agent_event",
+            "node": "child_agent",
+            "content": " | ".join(parts),
+            "tool_calls": [],
+            "trace": [],
+            "model_name": "",
+            "metadata": {
+                "child_agent_event": {
+                    "event_name": event_name,
+                    "created_at": time.time(),
+                    "child": {
+                        "run_id": record.run_id,
+                        "parent_run_id": record.contract.parent_run_id,
+                        "goal": record.contract.goal,
+                        "category": record.contract.category,
+                        "name": record.contract.name,
+                        "mode": record.contract.mode,
+                        "status": status_value,
+                        "access_mode": record.effective_access_mode,
+                        "allowed_tools": sorted(record.effective_tools),
+                        "result": result.result if result is not None else None,
+                        "summary": result.summary if result is not None else "",
+                        "error": result.error if result is not None else None,
+                    },
+                },
+            },
+        }
 
     @staticmethod
     def _save_child_agent_event_message(
@@ -445,9 +548,16 @@ class AgentCore:
         access_mode: str = "sandbox",
         input_refs: list[str] | None = None,
         output_contract: dict[str, Any] | None = None,
+        category: str | None = None,
+        name: str | None = None,
     ) -> str:
-        """由当前主 Agent 工具上下文创建真实子 Agent并返回 JSON 摘要。"""
+        """由当前主 Agent 工具上下文创建真实子 Agent并返回 JSON 摘要。
 
+        category: 子 Agent 能力模板 key(agent/explore/plan)或自定义角色描述,可留空。
+        name: 子 Agent 名字;留空时按同类别的已有数量自动生成(plan1/agent1/...)。
+        """
+
+        effective_name = (name or "").strip() or self._auto_child_agent_name(parent_run_id, category)
         parent_tools = frozenset(
             definition.name
             for definition in (self.tool_registry.definitions.values() if self.tool_registry else [])
@@ -463,14 +573,21 @@ class AgentCore:
             access_mode=access_mode,
             input_refs=tuple(input_refs or []),
             output_contract=output_contract or {},
+            category=category or "",
+            name=effective_name,
         )
 
         def execute_child(context: Any) -> str:
-            """在独立线程中执行一轮无状态 Agent,禁止继续召唤子 Agent。"""
+            """在独立线程中执行一轮无状态 Agent,禁止继续召唤子 Agent。
+
+            类别模板作为角色设定注入 prompt 前,让子 Agent 一进入就知道自己是谁。
+            """
 
             context.raise_if_stopped()
+            template = _resolve_child_agent_category_template(context.category)
+            prompt = f"{template}\n\n{context.goal}" if template else context.goal
             result = self.run_once(
-                prompt=context.goal,
+                prompt=prompt,
                 user_id=context.user_id,
                 session_id=f"{context.session_id}:{context.run_id}",
                 agent_mode=context.agent_mode,
@@ -487,6 +604,14 @@ class AgentCore:
             parent_access_mode=parent_access_mode,
         )
         return json.dumps(self._child_record_to_dict(record), ensure_ascii=False)
+
+    def _auto_child_agent_name(self, parent_run_id: str, category: str | None) -> str:
+        """按同类别的已有子 Agent 数量生成递增默认名(plan1/agent1/...)。"""
+
+        base = (category or "").strip() or "child"
+        siblings = self.child_agent_manager.list_children(parent_run_id)
+        same_category = sum(1 for record in siblings if record.contract.category == (category or ""))
+        return f"{base}{same_category + 1}"
 
     def _wait_child_agents_from_runtime(
         self,
@@ -989,8 +1114,6 @@ class AgentCore:
                 except queue_module.Empty:
                     child_event_payloads = self._drain_child_agent_event_payloads(
                         session_id=session_id,
-                        user_id=user_id,
-                        message_service=message_service,
                     )
                     if child_event_payloads:
                         for payload in child_event_payloads:
@@ -1020,8 +1143,6 @@ class AgentCore:
                 if item_type == "done":
                     for payload in self._drain_child_agent_event_payloads(
                         session_id=session_id,
-                        user_id=user_id,
-                        message_service=message_service,
                     ):
                         yield payload
                     final_plan = get_plan_state()

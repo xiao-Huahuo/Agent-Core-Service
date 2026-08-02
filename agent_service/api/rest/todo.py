@@ -26,7 +26,17 @@ async def api_add_todo(body: dict[str, Any]) -> dict[str, Any]:
     if not user_id or not text:
         raise HTTPException(status_code=422, detail="user_id and text are required")
     svc = _require_todo_service()
-    return svc.add_todo(user_id=str(user_id), text=str(text), due_date=body.get("due_date"))
+    try:
+        return svc.add_todo(
+            user_id=str(user_id),
+            text=str(text),
+            due_date=body.get("due_date"),
+            reminder_at=body.get("reminder_at"),
+            recurrence=body.get("recurrence"),
+            category=str(body.get("category") or "task"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/todo/toggle")
@@ -52,12 +62,18 @@ async def api_edit_todo(body: dict[str, Any]) -> dict[str, Any]:
     if not user_id or not todo_id:
         raise HTTPException(status_code=422, detail="user_id and todo_id are required")
     svc = _require_todo_service()
-    item = svc.edit_todo(
-        user_id=str(user_id),
-        todo_id=str(todo_id),
-        text=str(text),
-        due_date=body.get("due_date"),
-    )
+    try:
+        item = svc.edit_todo(
+            user_id=str(user_id),
+            todo_id=str(todo_id),
+            text=str(text),
+            due_date=body.get("due_date"),
+            reminder_at=body.get("reminder_at"),
+            recurrence=body.get("recurrence"),
+            category=str(body["category"]) if "category" in body else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if item is None:
         raise HTTPException(status_code=404, detail="Todo not found")
     return item

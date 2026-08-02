@@ -47,8 +47,14 @@ def spawn_child_agent(
     access_mode: str = "sandbox",
     input_refs: list[str] | None = None,
     output_contract: dict[str, Any] | None = None,
+    category: str = "",
+    name: str = "",
 ) -> str:
-    """由主 Agent 创建一个前台或后台子 Agent,返回子任务运行信息。"""
+    """由主 Agent 创建一个前台或后台子 Agent,返回子任务运行信息。
+
+    category: 子 Agent 能力模板 key(agent/explore/plan)或自定义角色描述,可留空。
+    name: 子 Agent 名字;留空时自动用角色模板名(plan1/agent1/...)。
+    """
 
     runtime = get_tool_runtime()
     if runtime.child_agent_spawner is None:
@@ -60,6 +66,8 @@ def spawn_child_agent(
         access_mode=access_mode,
         input_refs=input_refs or [],
         output_contract=output_contract or {},
+        category=category or None,
+        name=name or None,
     )
 
 
@@ -1412,8 +1420,13 @@ def _get_todo_service() -> TodoService:
     runtime = get_tool_runtime()
     if not runtime.config:
         raise RuntimeError("ToolRuntime.config 未初始化，无法创建 TodoService")
-    data_dir = str(runtime.config.storage.base_data_dir)
-    return TodoService(data_dir=data_dir)
+    memory_service = runtime.memory_service
+    if memory_service is None:
+        raise RuntimeError("ToolRuntime.memory_service 未初始化，无法创建 TodoService")
+    return TodoService(
+        engine=memory_service.engine,
+        legacy_data_dir=str(runtime.config.storage.base_data_dir),
+    )
 
 
 def list_todos() -> str:

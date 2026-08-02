@@ -175,7 +175,10 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
     rest_deps._retrieval_service = retrieval_service
     from agent_service.services.todo_service import TodoService
-    rest_deps._todo_service = TodoService(data_dir=str(config.storage.base_data_dir))
+    rest_deps._todo_service = TodoService(
+        engine=memory_service.engine,
+        legacy_data_dir=str(config.storage.base_data_dir),
+    )
     logger.info("SettingsService 初始化完成")
 
     # 启动不执行任何自动灌库。知识库由前端 /knowledge/rebuild、单文件灌库与

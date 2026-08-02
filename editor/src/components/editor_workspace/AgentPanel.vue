@@ -427,6 +427,17 @@ watch(
   },
 )
 
+function syncChildAgentWatcher() {
+  const sessionId = sessionStore.currentSessionId
+  if (userId.value && sessionId) {
+    chatStore.startChildAgentWatcher(userId.value, sessionId)
+  } else {
+    chatStore.stopChildAgentWatcher()
+  }
+}
+
+watch([userId, () => sessionStore.currentSessionId], syncChildAgentWatcher)
+
 onMounted(() => {
   window.addEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
   void reloadSessions()
@@ -434,11 +445,13 @@ onMounted(() => {
   void refreshSkills()
   void loadSafetyState()
   void settingsStore.fetchWebSearchSettings()
+  syncChildAgentWatcher()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
   taskListStore.setAutoOpenOnUpdate(true)
+  chatStore.stopChildAgentWatcher()
 })
 </script>
 

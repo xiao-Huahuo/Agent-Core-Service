@@ -18,6 +18,21 @@ interface ChildAgentEventChild {
   result?: unknown
   summary?: string
   error?: string | null
+  category?: string
+  name?: string
+}
+
+// 类别胶囊显示英文原文(预置类别首字母大写),不翻译成自造中文
+const presetCategoryLabels: Record<string, string> = {
+  agent: 'Agent',
+  explore: 'Explore',
+  plan: 'Plan',
+}
+
+function resolveCategoryLabel(category?: string) {
+  const text = category?.trim()
+  if (!text) return ''
+  return presetCategoryLabels[text] || text
 }
 
 const props = defineProps<{
@@ -47,13 +62,13 @@ const statusLabel = computed(() => {
 })
 
 const actionLabel = computed(() => {
-  const goal = child.value?.goal || '未命名任务'
-  if (eventName.value === 'child_agent.started') return `子 Agent 开始任务：${goal}`
-  if (eventName.value === 'child_agent.completed') return `子 Agent 完成任务：${goal}`
-  if (eventName.value === 'child_agent.failed') return `子 Agent 任务失败：${goal}`
-  if (eventName.value === 'child_agent.stopped') return `子 Agent 已停止：${goal}`
-  if (eventName.value === 'child_agent.stop_requested') return `子 Agent 收到停止请求：${goal}`
-  return `子 Agent 已创建：${goal}`
+  const title = child.value?.name?.trim() || child.value?.goal || '未命名任务'
+  if (eventName.value === 'child_agent.started') return `子 Agent 开始任务：${title}`
+  if (eventName.value === 'child_agent.completed') return `子 Agent 完成任务：${title}`
+  if (eventName.value === 'child_agent.failed') return `子 Agent 任务失败：${title}`
+  if (eventName.value === 'child_agent.stopped') return `子 Agent 已停止：${title}`
+  if (eventName.value === 'child_agent.stop_requested') return `子 Agent 收到停止请求：${title}`
+  return `子 Agent 已创建：${title}`
 })
 
 const modeLabel = computed(() => child.value?.mode === 'foreground' ? '前台' : '后台')
@@ -84,6 +99,7 @@ const shortRunId = computed(() => {
       @click="expanded = !expanded"
     >
       <ChevronDown class="child-agent-chevron" :class="{ expanded }" :size="15" />
+      <span v-if="resolveCategoryLabel(child.category)" class="child-agent-event-category">{{ resolveCategoryLabel(child.category) }}</span>
       <span class="child-agent-event-title">{{ actionLabel }}</span>
       <span class="child-agent-event-status">{{ statusLabel }}</span>
     </button>
@@ -182,6 +198,19 @@ const shortRunId = computed(() => {
   font-size: calc(12px * var(--font-scale));
   line-height: 1.45;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.child-agent-event-category {
+  flex: 0 0 auto;
+  padding: 0 var(--space-6);
+  border: 1px solid var(--color-primary);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+  font-size: calc(10px * var(--font-scale));
+  font-weight: 600;
+  line-height: 1.6;
   white-space: nowrap;
 }
 

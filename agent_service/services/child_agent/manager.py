@@ -119,6 +119,8 @@ class ChildAgentManager:
             input_refs=contract.input_refs,
             output_contract=contract.output_contract,
             cancellation=cancellation,
+            category=contract.category,
+            name=contract.name,
         )
         record = ChildAgentRecord(
             run_id=run_id,
@@ -351,6 +353,8 @@ class ChildAgentManager:
                     access_mode=record.effective_access_mode,
                     allowed_tools=tuple(sorted(record.effective_tools)),
                     created_at=time.time(),
+                    category=record.contract.category,
+                    name=record.contract.name,
                     summary=result.summary if result is not None else "",
                     result=result.result if result is not None else None,
                     error=result.error if result is not None else None,

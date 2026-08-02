@@ -398,6 +398,8 @@ message ChildAgentRecord {
   string summary = 8;
   string result_json = 9;
   string error = 10;
+  string category = 11;
+  string name = 12;
 }
 
 message ChildAgentListResponse {

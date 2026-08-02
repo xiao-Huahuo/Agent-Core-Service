@@ -15,18 +15,28 @@ import type { TodoItemData } from '@/api/todo'
 export interface TodoItem {
   id: string
   text: string
+  category: string
   done: boolean
   createdAt: string
+  updatedAt?: string
   dueDate?: string
+  reminderAt?: string
+  recurrence: { frequency: 'none' | 'daily' | 'weekly' | 'monthly'; interval: number }
+  lastCompletedAt?: string
 }
 
 function toItem(data: TodoItemData): TodoItem {
   return {
     id: data.id ?? '',
     text: data.text ?? '',
+    category: data.category ?? 'task',
     done: data.done ?? false,
     createdAt: data.createdAt ?? new Date().toISOString(),
+    updatedAt: data.updatedAt,
     dueDate: data.dueDate || undefined,
+    reminderAt: data.reminderAt || undefined,
+    recurrence: data.recurrence ?? { frequency: 'none', interval: 1 },
+    lastCompletedAt: data.lastCompletedAt || undefined,
   }
 }
 
@@ -81,7 +91,7 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
 
-  async function addTodo(text: string, dueDate?: string) {
+  async function addTodo(text: string, dueDate?: string, reminderAt?: string, recurrence?: TodoItem['recurrence']) {
     const trimmed = text.trim()
     if (!trimmed) return
     const { useSettingsStore } = await import('@/stores/settings')
@@ -93,15 +103,18 @@ export const useTodoStore = defineStore('todo', () => {
     const item: TodoItem = {
       id: localId,
       text: trimmed,
+      category: 'task',
       done: false,
       createdAt: new Date().toISOString(),
       dueDate: dueDate || undefined,
+      reminderAt: reminderAt || undefined,
+      recurrence: recurrence ?? { frequency: 'none', interval: 1 },
     }
     todos.value.unshift(item)
 
     pending.value = new Set([...pending.value, 'add'])
     try {
-      const serverItem = await apiAddTodo(userId, trimmed, dueDate)
+      const serverItem = await apiAddTodo(userId, trimmed, dueDate, reminderAt, recurrence)
       const idx = todos.value.findIndex((t) => t.id === localId)
       if (idx !== -1) {
         todos.value[idx] = toItem(serverItem)
@@ -165,7 +178,7 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
 
-  async function editTodo(id: string, text: string) {
+  async function editTodo(id: string, text: string, dueDate?: string, reminderAt?: string, recurrence?: TodoItem['recurrence']) {
     const trimmed = text.trim()
     if (!trimmed) return
     const { useSettingsStore } = await import('@/stores/settings')
@@ -180,7 +193,7 @@ export const useTodoStore = defineStore('todo', () => {
 
     pending.value = new Set([...pending.value, 'edit'])
     try {
-      const serverItem = await apiEditTodo(userId, id, trimmed)
+      const serverItem = await apiEditTodo(userId, id, trimmed, dueDate, reminderAt, recurrence)
       todos.value[idx] = toItem(serverItem)
     } catch (e) {
       todos.value[idx] = prev
@@ -206,7 +219,7 @@ export const useTodoStore = defineStore('todo', () => {
     // 后端没有单独的 setDueDate API，用 edit 把当前 text 一并提交
     pending.value = new Set([...pending.value, 'edit'])
     try {
-      const serverItem = await apiEditTodo(userId, id, prev.text, dueDate)
+      const serverItem = await apiEditTodo(userId, id, prev.text, dueDate, prev.reminderAt, prev.recurrence)
       todos.value[idx] = toItem(serverItem)
     } catch (e) {
       todos.value[idx] = prev

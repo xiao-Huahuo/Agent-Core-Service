@@ -718,6 +718,17 @@ CHILD_AGENT_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
                 "access_mode": {"type": "string", "description": "readonly、sandbox 或 full_access。"},
                 "input_refs": {"type": "array", "description": "传给子 Agent 的输入引用列表。"},
                 "output_contract": {"type": "object", "description": "对子 Agent 结果格式的要求。"},
+                "category": {
+                    "type": "string",
+                    "description": (
+                        "子 Agent 能力模板:agent(全能执行)/explore(只读探索)/plan(只读规划研究),"
+                        "或自定义角色描述。留空则不注入角色设定。"
+                    ),
+                },
+                "name": {
+                    "type": "string",
+                    "description": "子 Agent 名字,由主 Agent 起名;留空自动用角色模板名(如 plan1/agent1)。",
+                },
             },
             "required": ["goal"],
         },

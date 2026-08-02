@@ -15,6 +15,7 @@ import pytest
 
 from agent_service.services.child_agent import (
     ChildAgentContract,
+    ChildAgentEvent,
     ChildAgentManager,
     ChildAgentStatus,
 )
@@ -45,6 +46,52 @@ def test_foreground_child_waits_and_returns_result() -> None:
         assert record.result is not None
         assert record.result.result == "完成"
         assert manager.drain_results("parent_1")[0].status == ChildAgentStatus.COMPLETED
+    finally:
+        manager.close()
+
+
+def test_child_category_is_passed_through() -> None:
+    """子 Agent 类别应透传到执行上下文、记录与生命周期事件。"""
+
+    manager = ChildAgentManager()
+    try:
+        record = manager.spawn(
+            contract=_contract(mode="foreground", category="explore", session_id="session_cat"),
+            executor=lambda context: context.category,
+            parent_tools=frozenset({"read_file", "write_file"}),
+            parent_access_mode="sandbox",
+        )
+        assert record.contract.category == "explore"
+        assert record.context is not None
+        assert record.context.category == "explore"
+        assert record.result is not None
+        assert record.result.result == "explore"
+        events = manager.drain_events_for_session("session_cat")
+        assert len(events) >= 2
+        assert all(event.category == "explore" for event in events)
+    finally:
+        manager.close()
+
+
+def test_child_name_is_passed_through() -> None:
+    """子 Agent 名字应透传到执行上下文、记录与生命周期事件。"""
+
+    manager = ChildAgentManager()
+    try:
+        record = manager.spawn(
+            contract=_contract(mode="foreground", name="plan1", session_id="session_name"),
+            executor=lambda context: context.name,
+            parent_tools=frozenset({"read_file"}),
+            parent_access_mode="sandbox",
+        )
+        assert record.contract.name == "plan1"
+        assert record.context is not None
+        assert record.context.name == "plan1"
+        assert record.result is not None
+        assert record.result.result == "plan1"
+        events = manager.drain_events_for_session("session_name")
+        assert len(events) >= 2
+        assert all(event.name == "plan1" for event in events)
     finally:
         manager.close()
 
