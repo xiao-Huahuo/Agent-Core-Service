@@ -38,8 +38,20 @@
 - [x] 子 Agent 机制增强一:新增"类别"能力模板。后端 `types.py` 的 Contract/Event/ExecutionContext 加 `category`,`manager.py` 透传;`agent_core.py` 新增 `CHILD_AGENT_CATEGORY_TEMPLATES`(agent 全能执行/explore 只读探索/plan 只读规划研究),自定义类别注入"【角色设定】{category}" 提示,`execute_child` 拼到子任务 prompt 前;`spawn_child_agent` 工具与 `definitions.py` 参数说明加 `category`;gRPC `ChildAgentRecord` 加 `category=11` 并重新生成 pb2,pb2_grpc 修正包路径导入,`ListChildAgents` 透传。前端 `agent.ts` 类型加 `category`,`ChildAgentPanel.vue` 折叠态卡片显示主色类别徽标+展开态"角色设定"说明,`ChildAgentEventInline.vue` 事件条标题加同强调样式类别徽标。
 - [x] 子 Agent 机制增强二:完成提醒+"死而复生"唤醒。根因:子 Agent 事件只在主 Agent SSE 流内被 `_drain_child_agent_event_payloads` 持久化+推送,主 Agent 先结束后后台完成事件落空。改法:事件落库移到 `ChildAgentManager` 事件回调 `_on_child_agent_event`(子 Agent 线程内无条件落库,MessageService 每次新建 Session 线程安全),drain 只负责流内 SSE 推送避免重复入库;前端 `chat.ts` 新增 `startChildAgentWatcher`/`stopChildAgentWatcher` 每 2s 轮询 `/agent/children`,检测 created/running→终态转变且主 Agent 空闲时组装提醒 prompt 自动 `send(..., {wakeup:true})`,`send` 加 `options.wakeup`,`AgentPanel.vue` 挂载/卸载 watcher,`MessageBubble.vue` 对 `role==='user' && metadata.wakeup` 渲染为独立"系统唤醒条"(弱化样式、居左、提示图标),不显示用户头像。
 - [x] TODO 持久化从按用户 JSON 文件迁移到现有 SQLite/SQLModel 数据库,新增提醒时间、分类、daily/weekly/monthly 循环规则与循环完成后的下次时间推进;旧 JSON 仅作为一次性导入源并通过 `todo_imports` 防止重复迁移;新增数据库服务回归测试。
-
-## 2026-08-02
+- [x] 多agent能力:
+  - 采用父子Agent设计模式.
+  - 子 Agent 由主Agent启动，主Agent送给子Agent一个"子任务合同"(你是谁、要做什么、能用什么、不能做什么、最后交付什么),子Agent完成任务后,任务结果进入主Agent的消息队列(内存queue).子Agent的生命周期:
+  ```     
+      created → running → completed
+                 ↘ failed
+                 ↘ stopped
+  ```
+  - 子Agent在独立于父Agent的线程中进行,拥有独立的上下文.
+  - 子Agent默认可以继承主Agent的全部工具,但是主Agent拥有对子Agent可用工具的配给权以及三种沙盒权限的控制权.**主Agent 不能授予自己没有的能力**。
+  - 子Agent分为前台和后台两种模式(子Agent的目标,工具与权限,前后台,工作状态和结果都需要在前端展示,但过程不必显示在前端):
+    - 前台子Agent(同步阻塞): 前台子Agent阻塞主Agent,主Agent在等待子Agent的工作结果完成之前一直等待.适合任务有前后依赖的情形.
+    - 后台子Agent(异步蜂群): 后台子Agent不阻塞主Agent,主Agent可以召唤多个后台子Agent并行做事,且在此期间主Agent可以继续做其他事情.主Agent可以查看后台任务("显式汇合",主Agent可以等子Agent)，也可以停止子Agent,子Agent收到父Agent的信号(终止/者信息调整)后做出响应(立即终止/将信息注入上下文).
+  - 子Agent不能召唤其他子Agent.
 - [x] 回退工具按需绑定(瘦身轮)为每轮全量绑定:删除 `CORE_TOOL_WHITELIST`/`ON_DEMAND_BINDING_HINT`/`_compute_bound_tool_names` 及瘦身轮系统提示,`ModelDecisionNode` 每轮直接绑定禁用过滤后的全部工具,避免多轮任务中工具缺失/需正文点名导致模型可用性下降的负反馈体验;同步删除 `test_agent_loop_model_tier.py` 中 5 个瘦身轮专属测试与 `_make_node` 辅助,移除顶层未使用的 `AIMessage` 导入。注:2026-08-01 的"每轮工具按需绑定"已回退。
 
 ## 2026-08-01
