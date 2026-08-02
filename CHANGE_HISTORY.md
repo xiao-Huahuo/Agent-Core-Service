@@ -1,6 +1,9 @@
 # CHANGE HISTORY
 
 ## 2026-08-02
+- [x] 增加 TODO 搜索框的垂直内边距，使搜索框高度更充裕。
+- [x] 微调 TODO 待办行对齐：标题行与左侧复选框同高，日期保持在标题下方；清除日期按钮向右微移。
+- [x] 优化 TODO 侧边栏布局：移除搜索区域上下分隔线，将待办时间移动到标题下方的信息行。
 - [x] 顶栏按钮拆成两个,分别召唤任务列表/子 Agent 卡片:page 模式顶栏原一个合并按钮(按有无任务列表切换 ListChecks/UsersRound 图标)拆为两个 `new-session-round-btn`(ListChecks 任务列表、UsersRound 子 Agent);panel 模式 titlebar 原仅有的条件任务按钮(ListChecks, v-if hasTaskList)同样拆成两个 `icon-button`(去掉 v-if,始终显示)。新增 `toggleTaskListCard`/`toggleChildAgentCard`:卡片可见时收起(复用 close 逻辑,仅剩它则收整个侧边栏),不可见时打开卡片并确保侧边栏展开;`aria-pressed` 绑定各自卡片可见性。删除无引用的 `toggleAgentSidebar`/`closeAgentSidebar`。`npx vue-tsc --noEmit` 通过。
 - [x] 侧边栏两张卡片可独立叉掉:AgentPanel 新增 `taskListCardOpen`/`childAgentCardOpen` 两个可见性状态(默认 true),两张卡片 `v-show` 各自控制;叉掉任一卡片只关闭自己那张(`closeTaskListCard`/`closeChildAgentCard`),不影响另一张;仅剩一张时再叉掉则收起整个侧边栏(另一张不可见时直接 `agentSidebarOpen = false`)。重新打开侧边栏(toggle 从关闭转打开、任务列表自动打开 watch、引用打开)时 `resetSidebarCards` 重置两张卡片为可见。TaskListDrawer 标题行加 X 关闭按钮(与展开/收缩 chevron 并排),`emit('close')`;ChildAgentPanel 原 close 按钮改绑定 `closeChildAgentCard`(原直接收整个侧边栏)。`npx vue-tsc --noEmit` 通过。
 - [x] 子 Agent 卡片弹性适配 + 卡片紧凑化:子 Agent 卡片由 `flex: 1 1 0`(死板填满到侧边栏底部)改 `flex: 0 1 auto`(flex-basis auto 按内容弹性适配,内容少时收缩不顶到底;shrink 1 + min-height 0 使内容超高时被压缩到任务列表以下剩余空间内内部滚动;grow 0 不拉伸;顶部仍锚定任务列表底部)。ChildAgentPanel 紧凑化:顶栏 min-height 46→40px、内容区 gap/padding 12→8/10px、任务卡片 padding 10→8px 且内 gap 8→6px、任务头 gap 8→6px、头像 32→26px、名字 13→12px、任务间距 8→6px、run 内边距 8→6px、run 头 gap 8→6px、run 详情 gap/padding 8→6px。`npx vue-tsc --noEmit` 通过。

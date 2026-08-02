@@ -212,44 +212,45 @@ function isDatetimeExpired(iso: string): boolean {
         </label>
 
         <div class="todo-body">
-          <div v-if="editingId === item.id" class="todo-edit-wrap">
-            <input
-              :data-id="item.id"
-              v-model="editingText"
-              class="todo-edit-input"
-              type="text"
-              spellcheck="false"
-              @blur="commitEdit(item.id)"
-              @keydown.enter.prevent="commitEdit(item.id)"
-              @keydown.escape.prevent="cancelEdit"
-            />
+          <div class="todo-title-row">
+            <div v-if="editingId === item.id" class="todo-edit-wrap">
+              <input
+                :data-id="item.id"
+                v-model="editingText"
+                class="todo-edit-input"
+                type="text"
+                spellcheck="false"
+                @blur="commitEdit(item.id)"
+                @keydown.enter.prevent="commitEdit(item.id)"
+                @keydown.escape.prevent="cancelEdit"
+              />
+            </div>
+            <span
+              v-else
+              class="todo-text"
+              :title="item.text"
+              @dblclick="startEdit(item.id, item.text, item.dueDate)"
+            >
+              {{ item.text }}
+            </span>
           </div>
-          <span
-            v-else
-            class="todo-text"
-            :title="item.text"
-            @dblclick="startEdit(item.id, item.text, item.dueDate)"
-          >
-            {{ item.text }}
-          </span>
-        </div>
-
-        <div v-if="item.dueDate" class="todo-date-col">
-          <Calendar :size="10" />
-          <span
-            class="todo-date"
-            :class="{ expired: isDatetimeExpired(item.dueDate) && !item.done }"
-          >
-            {{ formatDatetime(item.dueDate) }}
-          </span>
-          <button
-            class="todo-date-clear"
-            type="button"
-            title="清除日期"
-            @click="todoStore.setDueDate(item.id, undefined)"
-          >
-            <X :size="10" />
-          </button>
+          <div v-if="item.dueDate" class="todo-date-col">
+            <Calendar :size="10" />
+            <span
+              class="todo-date"
+              :class="{ expired: isDatetimeExpired(item.dueDate) && !item.done }"
+            >
+              {{ formatDatetime(item.dueDate) }}
+            </span>
+            <button
+              class="todo-date-clear"
+              type="button"
+              title="清除日期"
+              @click="todoStore.setDueDate(item.id, undefined)"
+            >
+              <X :size="10" />
+            </button>
+          </div>
         </div>
 
         <div class="todo-actions">
@@ -356,7 +357,6 @@ function isDatetimeExpired(iso: string): boolean {
   align-items: center;
   justify-content: space-between;
   padding: var(--space-6) var(--space-8);
-  border-bottom: 1px solid var(--color-border);
 }
 
 .todo-title {
@@ -405,14 +405,13 @@ function isDatetimeExpired(iso: string): boolean {
   flex-direction: column;
   gap: var(--space-4);
   padding: var(--space-6) var(--space-8);
-  border-bottom: 1px solid var(--color-border);
 }
 
 .todo-search {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-2) var(--space-6);
+  padding: var(--space-4) var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-bg-input);
@@ -512,8 +511,8 @@ function isDatetimeExpired(iso: string): boolean {
 
 .todo-item {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto auto;
-  align-items: center;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: start;
   gap: var(--space-6);
   padding: var(--space-6) var(--space-8);
   border-bottom: 1px solid var(--color-border-soft);
@@ -616,7 +615,7 @@ function isDatetimeExpired(iso: string): boolean {
   cursor: pointer;
   position: relative;
   -webkit-tap-highlight-color: transparent;
-  margin-top: 6px;
+  margin-top: 0;
 }
 
 .creative-checkbox input {
@@ -704,6 +703,12 @@ function isDatetimeExpired(iso: string): boolean {
   overflow: hidden;
 }
 
+.todo-title-row {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+}
+
 .todo-text {
   display: block;
   overflow: hidden;
@@ -716,11 +721,12 @@ function isDatetimeExpired(iso: string): boolean {
 
 /* ── Date as separate column ── */
 .todo-date-col {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  width: fit-content;
   gap: var(--space-2);
-  flex: 0 0 auto;
   position: relative;
+  margin-top: var(--space-2);
   color: var(--color-text-muted);
   font-size: calc(10px * var(--font-scale));
   white-space: nowrap;
@@ -787,7 +793,7 @@ function isDatetimeExpired(iso: string): boolean {
 
 .todo-date-col .todo-date-clear {
   position: absolute;
-  right: -6px;
+  right: -10px;
   top: 50%;
   transform: translateY(-50%);
 }
