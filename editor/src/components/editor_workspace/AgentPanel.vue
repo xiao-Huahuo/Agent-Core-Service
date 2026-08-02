@@ -50,7 +50,11 @@ const emit = defineEmits<{
   expand: []
 }>()
 const sessionDrawerOpen = ref(false)
-const childAgentSidebarOpen = ref(false)
+// 融合侧边栏(任务列表 + 子 Agent)统一开关
+const agentSidebarOpen = ref(false)
+// 两张卡片独立可见:各自可叉掉,不影响另一张;仅剩一张时再叉掉则收起整个侧边栏
+const taskListCardOpen = ref(true)
+const childAgentCardOpen = ref(true)
 const isBootstrapping = ref(false)
 const referenceText = ref('')
 const messageListRef = ref<MessageListApi | null>(null)
@@ -77,6 +81,13 @@ const isDark = computed(() => settingsStore.isDark)
 const welcomeTitleSrc = computed(() => isDark.value ? darkTitle : lightTitle)
 const hasMessages = computed(() => chatStore.messages.filter((m) => m.role !== 'system').length > 0)
 const hasStreamingContent = computed(() => !!chatStore.lastMessage?.content)
+// 与 ChatInput 的 .task-suggestions 显示条件一致:非居中(有消息)、无附件、有建议
+const hasSuggestionOverlay = computed(() => {
+  if (chatStore.taskSuggestions.length === 0) return false
+  if (!hasMessages.value && !chatStore.isStreaming) return false
+  if (chatStore.pendingAttachments.length > 0) return false
+  return true
+})
 const isAttachmentDropActive = computed(() => dragDepth.value > 0 || isUploadingAttachment.value)
 const sessionTitle = computed(() => {
   const name = sessionStore.currentSession?.session_name || 'new session'
@@ -427,6 +438,55 @@ watch(
   },
 )
 
+function resetSidebarCards() {
+  taskListCardOpen.value = true
+  childAgentCardOpen.value = true
+}
+
+// 顶栏按钮召唤任务列表卡片:可见时收起(与卡片 X 逻辑一致,仅剩它则收整个侧边栏),不可见时打开
+function toggleTaskListCard() {
+  if (taskListCardOpen.value) {
+    closeTaskListCard()
+  } else {
+    taskListCardOpen.value = true
+    agentSidebarOpen.value = true
+  }
+}
+
+// 顶栏按钮召唤子 Agent 卡片:同上
+function toggleChildAgentCard() {
+  if (childAgentCardOpen.value) {
+    closeChildAgentCard()
+  } else {
+    childAgentCardOpen.value = true
+    agentSidebarOpen.value = true
+  }
+}
+
+// 叉掉任务列表卡片:若另一张(子 Agent)卡片也不可见则一并收起整个侧边栏
+function closeTaskListCard() {
+  taskListCardOpen.value = false
+  if (!childAgentCardOpen.value) {
+    agentSidebarOpen.value = false
+  }
+}
+
+// 叉掉子 Agent 卡片:若另一张(任务列表)卡片也不可见则一并收起整个侧边栏
+function closeChildAgentCard() {
+  childAgentCardOpen.value = false
+  if (!taskListCardOpen.value) {
+    agentSidebarOpen.value = false
+  }
+}
+
+// 任务列表创建/更新自动打开时,联动展开融合侧边栏
+watch(() => taskListStore.sidebarOpen, (open) => {
+  if (open) {
+    resetSidebarCards()
+    agentSidebarOpen.value = true
+  }
+})
+
 function syncChildAgentWatcher() {
   const sessionId = sessionStore.currentSessionId
   if (userId.value && sessionId) {
@@ -463,7 +523,6 @@ onBeforeUnmount(() => {
       'theme-light': !isDark,
       'agent-page-mode': props.mode === 'page',
       'agent-drawer-open': props.mode === 'page' && sessionDrawerOpen,
-      'agent-panel-task-list-open': props.mode === 'panel' && taskListStore.sidebarOpen,
       'attachment-drop-active': isAttachmentDropActive,
     }"
     @dragenter="handleDragEnter"
@@ -533,20 +592,20 @@ onBeforeUnmount(() => {
       <span class="topbar-title">{{ sessionTitle }}</span>
       <div class="topbar-right">
         <button
-          v-if="taskListStore.hasTaskList"
           class="new-session-round-btn"
           type="button"
-          title="Task list"
-          @click="taskListStore.toggleSidebar()"
+          title="任务列表"
+          :aria-pressed="taskListCardOpen"
+          @click="toggleTaskListCard"
         >
           <ListChecks :size="16" />
         </button>
         <button
-          class="icon-button"
+          class="new-session-round-btn"
           type="button"
-          title="子 Agent 任务"
-          :aria-pressed="childAgentSidebarOpen"
-          @click="childAgentSidebarOpen = !childAgentSidebarOpen"
+          title="子 Agent"
+          :aria-pressed="childAgentCardOpen"
+          @click="toggleChildAgentCard"
         >
           <UsersRound :size="16" />
         </button>
@@ -648,13 +707,22 @@ onBeforeUnmount(() => {
       </div>
       <div class="title-actions">
         <button
-          v-if="taskListStore.hasTaskList"
           class="icon-button"
           type="button"
-          title="Task list"
-          @click="taskListStore.toggleSidebar()"
+          title="任务列表"
+          :aria-pressed="taskListCardOpen"
+          @click="toggleTaskListCard"
         >
           <ListChecks :size="16" />
+        </button>
+        <button
+          class="icon-button"
+          type="button"
+          title="子 Agent"
+          :aria-pressed="childAgentCardOpen"
+          @click="toggleChildAgentCard"
+        >
+          <UsersRound :size="16" />
         </button>
         <button
           v-if="props.mode === 'panel'"
@@ -694,6 +762,7 @@ onBeforeUnmount(() => {
         :messages="chatStore.messages"
         :is-streaming="chatStore.isStreaming"
         :merge-assistants="settingsStore.chatMode === 'chat'"
+        :suggestion-overlay="hasSuggestionOverlay"
         @bottom-change="handleMessageBottomChange"
       />
       <StreamingIndicator :is-streaming="chatStore.isStreaming" :has-content="hasStreamingContent" />
@@ -740,12 +809,17 @@ onBeforeUnmount(() => {
       />
     </div>
     </main>
-    <TaskListDrawer />
-    <ChildAgentPanel
-      :session-id="sessionStore.currentSessionId || ''"
-      :open="childAgentSidebarOpen"
-      @close="childAgentSidebarOpen = false"
-    />
+    <aside class="agent-sidebar" :class="{ open: agentSidebarOpen }" aria-label="任务与子 Agent 侧边栏">
+      <section v-show="taskListCardOpen" class="agent-sidebar-card task-list-card">
+        <TaskListDrawer @close="closeTaskListCard" />
+      </section>
+      <section v-show="childAgentCardOpen" class="agent-sidebar-card child-agent-card">
+        <ChildAgentPanel
+          :session-id="sessionStore.currentSessionId || ''"
+          @close="closeChildAgentCard"
+        />
+      </section>
+    </aside>
     </div>
     </div>
     </div>
@@ -1419,16 +1493,52 @@ onBeforeUnmount(() => {
     opacity var(--transition-fast);
 }
 
-.agent-panel-task-list-open .chat-body {
-  flex: 0 1 0px;
-  opacity: 0;
-  pointer-events: none;
+/* 融合侧边栏:无边框透明容器,内部纵向排列两张独立圆角阴影卡片,打开时占据宽度挤压对话区 */
+.agent-sidebar {
+  flex: 0 0 0px;
+  display: flex;
+  width: min(400px, 38vw);
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-10);
+  overflow: hidden;
+  padding: 0;
+  transition: flex-basis 220ms cubic-bezier(0.4, 0, 0.2, 1), padding 220ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.agent-panel-task-list-open :deep(.task-list-drawer.open) {
-  flex-basis: 100%;
-  width: 100%;
-  border-left: 0;
+.agent-sidebar.open {
+  flex-basis: min(400px, 38vw);
+  overflow: visible;
+  padding: var(--space-10);
+}
+
+/* 圆角阴影卡片公共样式:用设计系统卡片底色 --color-bg-card(暗色 #111 / 亮色 #fff),
+   去边框,四周留白让阴影显形 */
+.agent-sidebar-card {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-card);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.1),
+    0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* 任务列表卡片:按内容弹性展示全部任务(不滚动),任务过多超高时才封顶内部滚动 */
+.task-list-card {
+  flex: 0 0 auto;
+  max-height: min(60vh, 520px);
+  overflow: hidden;
+}
+
+/* 子 Agent 卡片:按内容弹性适配高度(内容少时收缩不顶到底),超高时被压缩到任务列表以下
+   剩余空间内内部滚动。flex-basis auto + grow 0:不拉伸填满剩余;shrink 1 + min-height 0
+   允许卡片压缩到可用空间配合内部滚动。顶部始终锚定任务列表底部 */
+.child-agent-card {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .agent-page-mode :deep(.message-list) {

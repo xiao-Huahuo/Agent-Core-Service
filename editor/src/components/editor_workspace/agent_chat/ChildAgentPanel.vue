@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ChevronDown, ChevronRight, UsersRound, X } from 'lucide-vue-next'
+import { ChevronDown, UsersRound, X } from 'lucide-vue-next'
 
 import { fetchChildAgents, stopChildAgent } from '@/api/agent'
 import type { ChildAgentRecord } from '@/api/agent'
@@ -15,7 +15,6 @@ import { getChildAgentAvatar } from '@/utils/childAgentAvatar'
 
 const props = defineProps<{
   sessionId: string
-  open: boolean
 }>()
 
 const emit = defineEmits<{ close: [] }>()
@@ -23,6 +22,7 @@ const emit = defineEmits<{ close: [] }>()
 const children = ref<ChildAgentRecord[]>([])
 const error = ref('')
 const expandedGoals = ref<Set<string>>(new Set())
+const expandedRuns = ref<Set<string>>(new Set())
 let timer: number | null = null
 
 type GoalGroup = {
@@ -65,6 +65,20 @@ function toggleExpanded(group: GoalGroup) {
     next.add(group.goal)
   }
   expandedGoals.value = next
+}
+
+function isRunExpanded(runId: string) {
+  return expandedRuns.value.has(runId)
+}
+
+function toggleRun(runId: string) {
+  const next = new Set(expandedRuns.value)
+  if (next.has(runId)) {
+    next.delete(runId)
+  } else {
+    next.add(runId)
+  }
+  expandedRuns.value = next
 }
 
 async function reload() {
@@ -158,7 +172,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <aside class="child-agent-drawer" :class="{ open: props.open }" aria-label="子 Agent 任务">
+  <aside class="child-agent-drawer" aria-label="子 Agent 任务">
     <header class="child-agent-header">
       <div class="child-agent-title">
         <UsersRound :size="16" />
@@ -179,8 +193,7 @@ onBeforeUnmount(() => {
             :aria-expanded="isExpanded(group)"
             @click="toggleExpanded(group)"
           >
-            <ChevronDown v-if="isExpanded(group)" :size="15" />
-            <ChevronRight v-else :size="15" />
+            <ChevronDown class="child-agent-task-chevron" :class="{ expanded: isExpanded(group) }" :size="15" />
             <img
               :src="getChildAgentAvatar(latestRun(group).run_id)"
               class="child-agent-avatar"
@@ -192,61 +205,74 @@ onBeforeUnmount(() => {
             <span class="child-agent-status" :data-status="latestRun(group).status">{{ statusLabel(latestRun(group).status) }}</span>
           </button>
 
-          <div v-if="isExpanded(group)" class="child-agent-detail">
-            <section class="child-agent-section">
-              <h4>任务目标</h4>
-              <p>{{ group.goal }}</p>
-            </section>
+          <div class="child-agent-detail" :class="{ expanded: isExpanded(group) }">
+            <div class="child-agent-detail-inner">
+              <section class="child-agent-section">
+                <h4>任务目标</h4>
+                <p>{{ group.goal }}</p>
+              </section>
 
-            <div v-for="run in group.runs" :key="run.run_id" class="child-agent-run">
-              <div class="child-agent-run-head">
-                <strong>{{ childDisplayName(run) }}</strong>
-                <span class="child-agent-status" :data-status="run.status">{{ statusLabel(run.status) }}</span>
-              </div>
+              <div v-for="run in group.runs" :key="run.run_id" class="child-agent-run">
+                <button
+                  class="child-agent-run-head"
+                  type="button"
+                  :aria-expanded="isRunExpanded(run.run_id)"
+                  @click="toggleRun(run.run_id)"
+                >
+                  <span class="child-agent-run-dot" :data-status="run.status"></span>
+                  <strong>{{ childDisplayName(run) }}</strong>
+                  <span class="child-agent-status" :data-status="run.status">{{ statusLabel(run.status) }}</span>
+                  <ChevronDown class="child-agent-run-chevron" :class="{ expanded: isRunExpanded(run.run_id) }" :size="14" />
+                </button>
 
-              <section class="child-agent-section-grid" aria-label="子 Agent 运行信息">
-                <div>
-                  <span>类别</span>
-                  <strong>{{ categoryBadge(run) || '通用' }}</strong>
+                <div class="child-agent-run-detail" :class="{ expanded: isRunExpanded(run.run_id) }">
+                  <div class="child-agent-run-detail-inner">
+                    <section class="child-agent-section-grid" aria-label="子 Agent 运行信息">
+                      <div>
+                        <span>类别</span>
+                        <strong>{{ categoryBadge(run) || '通用' }}</strong>
+                      </div>
+                      <div>
+                        <span>模式</span>
+                        <strong>{{ modeLabel(run.mode) }}</strong>
+                      </div>
+                      <div>
+                        <span>沙盒权限</span>
+                        <strong>{{ accessModeLabel(run.access_mode) }}</strong>
+                      </div>
+                      <div>
+                        <span>工具数量</span>
+                        <strong>{{ run.allowed_tools.length }}</strong>
+                      </div>
+                    </section>
+
+                    <section v-if="run.allowed_tools.length" class="child-agent-section">
+                      <h4>工具范围</h4>
+                      <p class="child-agent-tools">{{ run.allowed_tools.join(', ') }}</p>
+                    </section>
+
+                    <section v-if="run.summary" class="child-agent-section">
+                      <h4>阶段摘要</h4>
+                      <p>{{ run.summary }}</p>
+                    </section>
+
+                    <section v-if="resultText(run.result)" class="child-agent-section">
+                      <h4>产出结果</h4>
+                      <pre>{{ resultText(run.result) }}</pre>
+                    </section>
+
+                    <section v-if="run.error" class="child-agent-section">
+                      <h4>错误信息</h4>
+                      <p class="child-agent-error">{{ run.error }}</p>
+                    </section>
+
+                    <p class="child-agent-run-id">ID {{ shortRunId(run.run_id) }}</p>
+
+                    <div v-if="isChildActive(run)" class="child-agent-actions">
+                      <button type="button" @click.stop="stopChild(run)">停止</button>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <span>模式</span>
-                  <strong>{{ modeLabel(run.mode) }}</strong>
-                </div>
-                <div>
-                  <span>沙盒权限</span>
-                  <strong>{{ accessModeLabel(run.access_mode) }}</strong>
-                </div>
-                <div>
-                  <span>工具数量</span>
-                  <strong>{{ run.allowed_tools.length }}</strong>
-                </div>
-              </section>
-
-              <section v-if="run.allowed_tools.length" class="child-agent-section">
-                <h4>工具范围</h4>
-                <p class="child-agent-tools">{{ run.allowed_tools.join(', ') }}</p>
-              </section>
-
-              <section v-if="run.summary" class="child-agent-section">
-                <h4>阶段摘要</h4>
-                <p>{{ run.summary }}</p>
-              </section>
-
-              <section v-if="resultText(run.result)" class="child-agent-section">
-                <h4>产出结果</h4>
-                <pre>{{ resultText(run.result) }}</pre>
-              </section>
-
-              <section v-if="run.error" class="child-agent-section">
-                <h4>错误信息</h4>
-                <p class="child-agent-error">{{ run.error }}</p>
-              </section>
-
-              <p class="child-agent-run-id">ID {{ shortRunId(run.run_id) }}</p>
-
-              <div v-if="isChildActive(run)" class="child-agent-actions">
-                <button type="button" @click.stop="stopChild(run)">停止</button>
               </div>
             </div>
           </div>
@@ -259,29 +285,23 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* 作为融合侧边栏卡片的下分区:无边框、无独立背景,宽度与展开由外层卡片容器控制 */
 .child-agent-drawer {
-  flex: 0 0 0px;
   display: flex;
-  width: min(400px, 38vw);
-  min-width: 0;
+  flex: 1;
   flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
-  border-left: 1px solid var(--color-border);
-  background: var(--color-surface-raised);
   color: var(--color-text-secondary);
   font-family: var(--font-ui);
-  transition: flex-basis 220ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.child-agent-drawer.open {
-  flex-basis: min(400px, 38vw);
 }
 
 .child-agent-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 46px;
+  min-height: 40px;
   padding: 0 var(--space-12);
   border-bottom: 1px solid var(--color-border);
 }
@@ -293,7 +313,7 @@ onBeforeUnmount(() => {
   gap: var(--space-8);
   color: var(--color-text);
   font-family: var(--font-ui);
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(12px * var(--font-scale));
   font-weight: 650;
 }
 
@@ -320,10 +340,10 @@ onBeforeUnmount(() => {
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: var(--space-12);
+  gap: var(--space-8);
   overflow-x: hidden;
   overflow-y: auto;
-  padding: var(--space-12);
+  padding: var(--space-10);
 }
 
 .child-agent-count,
@@ -336,18 +356,14 @@ onBeforeUnmount(() => {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--space-8);
-  padding: var(--space-10);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  gap: var(--space-6);
+  padding: var(--space-8);
+  border-radius: var(--radius-xl);
   background: var(--color-surface);
-  transition:
-    border-color 180ms ease,
-    background-color 180ms ease;
+  transition: background-color 180ms ease;
 }
 
 .child-agent-task:hover {
-  border-color: var(--color-border-strong);
   background: var(--color-surface-raised);
 }
 
@@ -362,7 +378,7 @@ onBeforeUnmount(() => {
 .child-agent-task-head {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--space-6);
   min-width: 0;
   padding: 0;
   border: 0;
@@ -378,15 +394,20 @@ onBeforeUnmount(() => {
   outline-offset: 2px;
 }
 
-.child-agent-task-head > svg {
+.child-agent-task-chevron {
   flex: 0 0 auto;
   color: var(--color-text-muted);
+  transition: transform 180ms ease;
+}
+
+.child-agent-task-chevron.expanded {
+  transform: rotate(180deg);
 }
 
 .child-agent-avatar {
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border: 1px solid var(--color-border);
   border-radius: 50%;
   background: var(--color-canvas);
@@ -397,7 +418,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   overflow: hidden;
   color: var(--color-text-primary);
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(12px * var(--font-scale));
   font-weight: 650;
   line-height: 1.35;
   text-overflow: ellipsis;
@@ -409,7 +430,6 @@ onBeforeUnmount(() => {
   padding: 0 var(--space-6);
   border: 1px solid var(--color-primary);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   color: var(--color-primary);
   font-size: calc(10px * var(--font-scale));
   font-weight: 600;
@@ -432,20 +452,38 @@ onBeforeUnmount(() => {
 
 .child-agent-tasks {
   display: grid;
-  gap: var(--space-8);
+  gap: var(--space-6);
 }
 
 .child-agent-detail {
   display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.child-agent-detail > .child-agent-detail-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.child-agent-detail.expanded {
+  grid-template-rows: 1fr;
+}
+
+.child-agent-detail-inner {
+  display: grid;
   gap: var(--space-8);
   padding-top: var(--space-8);
+}
+
+.child-agent-detail.expanded .child-agent-detail-inner {
   border-top: 1px solid var(--color-border);
 }
 
 .child-agent-run {
-  display: grid;
-  gap: var(--space-8);
-  padding: var(--space-8);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-canvas);
@@ -455,13 +493,26 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-8);
+  gap: var(--space-6);
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  text-align: left;
+}
+
+.child-agent-run-head:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .child-agent-run-head strong {
   min-width: 0;
   overflow: hidden;
+  flex: 1;
   color: var(--color-text-primary);
   font-size: calc(12px * var(--font-scale));
   text-overflow: ellipsis;
@@ -470,6 +521,58 @@ onBeforeUnmount(() => {
 
 .child-agent-run-head .child-agent-status {
   margin-left: 0;
+}
+
+.child-agent-run-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+}
+
+.child-agent-run-dot[data-status='running'] {
+  background: var(--color-primary);
+}
+
+.child-agent-run-dot[data-status='completed'] {
+  background: var(--color-success);
+}
+
+.child-agent-run-dot[data-status='failed'],
+.child-agent-run-dot[data-status='stopped'] {
+  background: var(--color-danger);
+}
+
+.child-agent-run-chevron {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+  transition: transform 180ms ease;
+}
+
+.child-agent-run-chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.child-agent-run-detail {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.child-agent-run-detail > .child-agent-run-detail-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.child-agent-run-detail.expanded {
+  grid-template-rows: 1fr;
+}
+
+.child-agent-run-detail-inner {
+  display: grid;
+  gap: var(--space-6);
+  padding-top: var(--space-6);
 }
 
 .child-agent-run-id {
@@ -581,8 +684,6 @@ onBeforeUnmount(() => {
 .child-agent-status[data-status='running'] { color: var(--color-primary); }
 
 @media (max-width: 640px) {
-  .child-agent-drawer,
-  .child-agent-drawer.open { width: min(88vw, 400px); flex-basis: min(88vw, 400px); }
   .child-agent-section-grid { grid-template-columns: 1fr; }
 }
 </style>

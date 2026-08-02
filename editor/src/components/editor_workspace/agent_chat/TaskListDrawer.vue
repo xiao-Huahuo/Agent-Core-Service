@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ChevronDown, ChevronRight, ListChecks, X } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, X } from 'lucide-vue-next'
 
 import type { AgentTaskListItem } from '@/api/taskList'
 import { useTaskListStore } from '@/stores/taskList'
 
 const taskListStore = useTaskListStore()
+const emit = defineEmits<{ close: [] }>()
 const expandedIds = ref<Set<string>>(new Set())
+const collapsed = ref(false)
 
 function toggleExpand(id: string) {
   const next = new Set(expandedIds.value)
@@ -20,17 +22,27 @@ function toggleExpand(id: string) {
 </script>
 
 <template>
-  <aside class="task-list-drawer" :class="{ open: taskListStore.sidebarOpen }">
-    <header class="task-list-header">
-      <div class="task-list-title">
-        <ListChecks :size="16" />
-        <span>{{ taskListStore.taskList?.title || 'Task list' }}</span>
+  <aside class="task-list-drawer" :class="{ collapsed }">
+    <div class="task-list-head">
+      <p class="task-list-title">{{ taskListStore.taskList?.title || 'Task list' }}</p>
+      <div class="task-list-head-actions">
+        <button
+          class="task-list-toggle"
+          type="button"
+          :title="collapsed ? '展开任务列表' : '收起任务列表'"
+          :aria-expanded="!collapsed"
+          @click="collapsed = !collapsed"
+        >
+          <ChevronDown class="task-list-toggle-chevron" :class="{ open: !collapsed }" :size="14" />
+        </button>
+        <button class="task-list-close" type="button" title="关闭任务列表" @click="emit('close')">
+          <X :size="14" />
+        </button>
       </div>
-      <button class="task-list-close" type="button" title="Close task list" @click="taskListStore.setSidebarOpen(false)">
-        <X :size="15" />
-      </button>
-    </header>
+    </div>
 
+    <Transition name="task-list-collapse">
+    <div v-show="!collapsed" class="task-list-body">
     <div v-if="taskListStore.taskList" class="task-list-content">
       <div class="task-list-status">
         <span :class="['status-dot', taskListStore.taskList.status]"></span>
@@ -92,68 +104,103 @@ function toggleExpand(id: string) {
     <div v-else class="task-list-empty">
       No task list
     </div>
+    </div>
+    </Transition>
   </aside>
 </template>
 
 <style scoped>
+/* 作为融合侧边栏卡片的上分区:无边框、无独立背景,宽度与展开由外层卡片容器控制。
+   高度链路:section(flex:0 0 auto + max-height 340) → drawer(flex:1 填满 section)
+   → body(flex:1 + min-height:0) → content(overflow-y:auto),确保超高时内部滚动不截断 */
 .task-list-drawer {
-  flex: 0 0 0px;
   display: flex;
-  width: min(340px, 88vw);
+  flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
-  border-left: 1px solid var(--color-border);
-  background: var(--color-surface-raised);
-  transition: flex-basis 220ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.task-list-drawer.open {
-  flex-basis: min(340px, 88vw);
+/* 收缩后只剩标题行,需要底部留白形成规整的单行,避免塌成胶囊 */
+.task-list-drawer.collapsed .task-list-head {
+  padding-bottom: var(--space-12);
 }
 
-.task-list-header {
+.task-list-head {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  min-height: 46px;
-  padding: 0 var(--space-12);
-  border-bottom: 1px solid var(--color-border);
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-12) 0;
 }
 
 .task-list-title {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: var(--space-8);
-  color: var(--color-text);
-  font-family: var(--font-ui);
-  font-size: calc(13px * var(--font-scale));
-  font-weight: 650;
-}
-
-.task-list-title span {
+  margin: 0;
   overflow: hidden;
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 650;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.task-list-head-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.task-list-toggle,
 .task-list-close {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
   align-items: center;
   justify-content: center;
+  width: 20px;
+  height: 20px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 50%;
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
+.task-list-toggle:hover,
 .task-list-close:hover {
   background: var(--color-primary-softer);
-  color: var(--color-text);
+  color: var(--color-primary);
+}
+
+.task-list-toggle-chevron {
+  transition: transform 180ms ease;
+}
+
+.task-list-toggle-chevron.open {
+  transform: rotate(180deg);
+}
+
+.task-list-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.task-list-collapse-enter-active,
+.task-list-collapse-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.task-list-collapse-enter-from,
+.task-list-collapse-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .task-list-content {

@@ -50,17 +50,6 @@ const child = computed(() => {
 
 const eventName = computed(() => typeof props.event?.event_name === 'string' ? props.event.event_name : '')
 
-const statusLabel = computed(() => {
-  const status = child.value?.status ?? 'created'
-  return {
-    created: '已创建',
-    running: '运行中',
-    completed: '已完成',
-    failed: '失败',
-    stopped: '已停止',
-  }[status]
-})
-
 const actionLabel = computed(() => {
   const title = child.value?.name?.trim() || child.value?.goal || '未命名任务'
   if (eventName.value === 'child_agent.started') return `子 Agent 开始任务：${title}`
@@ -98,13 +87,14 @@ const shortRunId = computed(() => {
       :aria-expanded="expanded"
       @click="expanded = !expanded"
     >
-      <ChevronDown class="child-agent-chevron" :class="{ expanded }" :size="15" />
+      <span class="child-agent-event-dot" :data-status="child.status"></span>
       <span v-if="resolveCategoryLabel(child.category)" class="child-agent-event-category">{{ resolveCategoryLabel(child.category) }}</span>
       <span class="child-agent-event-title">{{ actionLabel }}</span>
-      <span class="child-agent-event-status">{{ statusLabel }}</span>
+      <ChevronDown class="child-agent-chevron" :class="{ expanded }" :size="15" />
     </button>
 
-    <div v-if="expanded" class="child-agent-event-detail">
+    <div class="child-agent-event-detail" :class="{ expanded }">
+      <div class="child-agent-event-detail-inner">
       <div class="child-agent-event-grid">
         <div>
           <span>ID</span>
@@ -143,6 +133,7 @@ const shortRunId = computed(() => {
         <span>错误信息</span>
         <p class="is-error">{{ child.error }}</p>
       </section>
+      </div>
     </div>
   </article>
 </template>
@@ -152,8 +143,7 @@ const shortRunId = computed(() => {
   align-self: stretch;
   width: min(100%, 760px);
   margin: var(--space-6) 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-xl);
   background: var(--color-surface);
   color: var(--color-text-secondary);
   animation: child-agent-event-in 180ms ease-out;
@@ -201,12 +191,32 @@ const shortRunId = computed(() => {
   white-space: nowrap;
 }
 
+.child-agent-event-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+}
+
+.child-agent-event[data-status='running'] .child-agent-event-dot {
+  background: var(--color-primary);
+}
+
+.child-agent-event[data-status='completed'] .child-agent-event-dot {
+  background: var(--color-success);
+}
+
+.child-agent-event[data-status='failed'] .child-agent-event-dot,
+.child-agent-event[data-status='stopped'] .child-agent-event-dot {
+  background: var(--color-danger);
+}
+
 .child-agent-event-category {
   flex: 0 0 auto;
   padding: 0 var(--space-6);
   border: 1px solid var(--color-primary);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   color: var(--color-primary);
   font-size: calc(10px * var(--font-scale));
   font-weight: 600;
@@ -214,30 +224,31 @@ const shortRunId = computed(() => {
   white-space: nowrap;
 }
 
-.child-agent-event-status {
-  flex: 0 0 auto;
-  color: var(--color-text-muted);
-  font-size: calc(11px * var(--font-scale));
-  font-weight: 600;
-}
-
-.child-agent-event[data-status='running'] .child-agent-event-status {
-  color: var(--color-primary);
-}
-
-.child-agent-event[data-status='completed'] .child-agent-event-status {
-  color: var(--color-success);
-}
-
-.child-agent-event[data-status='failed'] .child-agent-event-status,
-.child-agent-event[data-status='stopped'] .child-agent-event-status,
-.is-error {
+.child-agent-event .is-error {
   color: var(--color-danger);
 }
 
 .child-agent-event-detail {
   display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.child-agent-event-detail > .child-agent-event-detail-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.child-agent-event-detail.expanded {
+  grid-template-rows: 1fr;
+}
+
+.child-agent-event-detail-inner {
+  display: grid;
   gap: var(--space-8);
+}
+
+.child-agent-event-detail.expanded .child-agent-event-detail-inner {
   padding: 0 var(--space-10) var(--space-10);
 }
 

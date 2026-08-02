@@ -486,12 +486,19 @@ export const useChatStore = defineStore('chat', () => {
         }
 
         if (chunk.type === 'child_agent_event') {
-          // 流内已被 SSE 实时推送的子 Agent:记录终态,避免流结束后被 watcher 再次唤醒
+          // 流内 SSE 实时推送的子 Agent 事件。同一 run_id 的终态事件只渲染一次:
+          // 唤醒流启动时后端会重推会话队列里残留的 completed 事件,若此前已见过
+          // 该 run_id 的终态(如 wakeUpAgentForChild 已设过),直接跳过避免重复"已完成"条。
           const childEvent = metadata.child_agent_event as { child?: Record<string, unknown> } | undefined
           const childPayload = childEvent?.child
           if (childPayload && typeof childPayload.run_id === 'string') {
             const childStatus = childPayload.status as ChildAgentRecord['status']
             if (isTerminalChildStatus(childStatus)) {
+              const previous = seenChildStatus.get(childPayload.run_id)
+              if (previous !== undefined && isTerminalChildStatus(previous)) {
+                seenChildStatus.set(childPayload.run_id, childStatus)
+                continue
+              }
               seenChildStatus.set(childPayload.run_id, childStatus)
             }
           }

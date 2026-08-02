@@ -17,6 +17,8 @@ const props = defineProps<{
   messages: AgentChatMessage[]
   isStreaming?: boolean
   mergeAssistants?: boolean
+  // 输入框上方悬浮小模型任务建议时,提高底部留白避免滚动底限遮住消息
+  suggestionOverlay?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -234,7 +236,12 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="containerRef" class="message-list" @scroll="handleScroll">
+  <div
+    ref="containerRef"
+    class="message-list"
+    :class="{ 'with-suggestion-overlay': suggestionOverlay }"
+    @scroll="handleScroll"
+  >
     <MessageBubble
       v-for="(message, index) in visibleMessages"
       :key="message.message_id ?? `${message.role}-${index}`"
@@ -266,6 +273,12 @@ defineExpose({
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
+}
+
+/* 任务建议悬浮在输入框上方(bottom: 输入框高 + 8px + 按钮高,单行约 142px,
+   两行约 174px),把滚动底限提高到建议之上,避免最后一条消息被建议遮挡 */
+.message-list.with-suggestion-overlay {
+  padding-bottom: 176px;
 }
 
 .message-list::-webkit-scrollbar {
