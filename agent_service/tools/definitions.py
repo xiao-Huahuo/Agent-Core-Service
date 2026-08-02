@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from agent_service.tools.builtin import (
     BuiltinToolDefinition,
+    add_automation,
     add_todo,
     complete_task_list_item,
     create_task_list,
@@ -778,6 +779,25 @@ TODO_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         },
         function=add_todo,
         display_name="新增待办",
+    ),
+    BuiltinToolDefinition(
+        name="add_automation",
+        description="创建一个定时自动化任务,到时间后独立唤醒 Agent 执行指定 prompt。涉及写文件、git commit 等操作时,需要明确指定合适的 access_mode。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "侧边栏中显示的自动化任务名称。"},
+                "prompt": {"type": "string", "description": "到时间后交给 Agent 执行的任务说明。"},
+                "next_run_at": {"type": "string", "description": "下一次执行时间,必须是带时区偏移的 ISO 时间,例如 2026-08-03T21:00:00+08:00。"},
+                "timezone_name": {"type": "string", "description": "循环使用的 IANA 时区,默认 Asia/Shanghai。"},
+                "recurrence_frequency": {"type": "string", "enum": ["none", "daily", "weekly", "monthly"]},
+                "recurrence_interval": {"type": "integer", "minimum": 1, "maximum": 365},
+                "access_mode": {"type": "string", "enum": ["readonly", "sandbox", "full_access"]},
+            },
+            "required": ["text", "prompt", "next_run_at"],
+        },
+        function=add_automation,
+        display_name="创建自动化任务",
     ),
     BuiltinToolDefinition(
         name="toggle_todo",

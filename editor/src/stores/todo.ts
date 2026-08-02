@@ -11,6 +11,8 @@ import { defineStore } from 'pinia'
 
 import { apiAddTodo, apiDeleteTodo, apiEditTodo, apiListTodos, apiToggleTodo } from '@/api/todo'
 import type { TodoItemData } from '@/api/todo'
+import { apiAddAutomation, apiListAutomations } from '@/api/automation'
+import type { AutomationTaskData } from '@/api/automation'
 
 export interface TodoItem {
   id: string
@@ -24,6 +26,8 @@ export interface TodoItem {
   recurrence: { frequency: 'none' | 'daily' | 'weekly' | 'monthly'; interval: number }
   lastCompletedAt?: string
 }
+
+export type AutomationTask = AutomationTaskData
 
 function toItem(data: TodoItemData): TodoItem {
   return {
@@ -45,6 +49,7 @@ type PendingOp = 'add' | 'toggle' | 'edit' | 'delete' | 'clear'
 
 export const useTodoStore = defineStore('todo', () => {
   const todos = ref<TodoItem[]>([])
+  const automations = ref<AutomationTask[]>([])
   const hideDone = ref(false)
   const searchQuery = ref('')
   const todoSidebarSplitRatio = ref(0.5)
@@ -83,11 +88,35 @@ export const useTodoStore = defineStore('todo', () => {
     try {
       const serverTodos = await apiListTodos(userId)
       todos.value = serverTodos.map(toItem)
+      automations.value = await apiListAutomations(userId)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       console.warn('[TodoStore] 从服务器刷新待办失败:', msg)
     } finally {
       pending.value = new Set([...pending.value].filter((p) => p !== 'add'))
+    }
+  }
+
+  async function addAutomation(
+    text: string,
+    prompt: string,
+    nextRunAt: string,
+    timezone: string,
+    recurrence: AutomationTask['recurrence'],
+    accessMode: AutomationTask['accessMode'],
+  ): Promise<{ success: boolean; error?: string }> {
+    const { useSettingsStore } = await import('@/stores/settings')
+    const userId = useSettingsStore().profile.userId
+    if (!userId) return { success: false, error: '当前没有登录用户。' }
+    try {
+      const automation = await apiAddAutomation(userId, text, prompt, nextRunAt, timezone, recurrence, accessMode)
+      automations.value = [...automations.value, automation]
+      await refreshFromServer()
+      return { success: true }
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e)
+      console.warn('[TodoStore] 创建自动化任务失败:', error)
+      return { success: false, error }
     }
   }
 
@@ -260,6 +289,7 @@ export const useTodoStore = defineStore('todo', () => {
 
   return {
     todos,
+    automations,
     hideDone,
     searchQuery,
     todoSidebarSplitRatio,
@@ -268,6 +298,7 @@ export const useTodoStore = defineStore('todo', () => {
     filteredTodos,
     pendingCount,
     addTodo,
+    addAutomation,
     toggleTodo,
     removeTodo,
     editTodo,

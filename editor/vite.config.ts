@@ -68,6 +68,7 @@ export default defineConfig({
       '/downloads': 'http://127.0.0.1:8002',
       '/visualizations': 'http://127.0.0.1:8002',
       '/todo': 'http://127.0.0.1:8002',
+      '/automation': 'http://127.0.0.1:8002',
       '/health': 'http://127.0.0.1:8002',
     },
   },

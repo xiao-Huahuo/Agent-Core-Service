@@ -35,6 +35,7 @@ from agent_service.tools.runtime_context import (
 )
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
 from agent_service.services.todo_service import TodoService
+from agent_service.services.automation_service import AutomationService
 
 
 ToolFunction = Callable[..., str]
@@ -1429,6 +1430,24 @@ def _get_todo_service() -> TodoService:
     )
 
 
+def _get_automation_service() -> AutomationService:
+    """获取当前运行时使用的自动化任务服务。"""
+
+    runtime = get_tool_runtime()
+    if not runtime.config:
+        raise RuntimeError("ToolRuntime.config 未初始化，无法创建 AutomationService")
+    memory_service = runtime.memory_service
+    if memory_service is None:
+        raise RuntimeError("ToolRuntime.memory_service 未初始化，无法创建 AutomationService")
+    return AutomationService(
+        engine=memory_service.engine,
+        todo_service=TodoService(
+            engine=memory_service.engine,
+            legacy_data_dir=str(runtime.config.storage.base_data_dir),
+        ),
+    )
+
+
 def list_todos() -> str:
     """
     列出当前用户的所有待办事项。返回格式化的待办列表,每行包含编号、ID、完成状态和截止日期。
@@ -1462,6 +1481,34 @@ def add_todo(text: str, due_date: str | None = None) -> str:
     item = service.add_todo(user_id=runtime.user_id, text=text, due_date=due_date)
     due = f", 截止日期: {item['dueDate']}" if item.get("dueDate") else ""
     return f"已创建待办 [{item['id']}]: {item['text']}{due}"
+
+
+def add_automation(
+    text: str,
+    prompt: str,
+    next_run_at: str,
+    timezone_name: str = "Asia/Shanghai",
+    recurrence_frequency: str = "daily",
+    recurrence_interval: int = 1,
+    access_mode: str = "sandbox",
+) -> str:
+    """创建一个定时唤醒 Agent 的自动化任务。"""
+
+    runtime = get_tool_runtime()
+    service = _get_automation_service()
+    try:
+        item = service.create_task(
+            user_id=runtime.user_id,
+            text=text,
+            prompt=prompt,
+            next_run_at=next_run_at,
+            timezone_name=timezone_name,
+            recurrence={"frequency": recurrence_frequency, "interval": recurrence_interval},
+            access_mode=access_mode,
+        )
+    except ValueError as exc:
+        return f"创建自动化任务失败: {exc}"
+    return f"已创建自动化任务 [{item['id']}], 下一次执行时间: {item['nextRunAt']}"
 
 
 def toggle_todo(todo_id: str) -> str:

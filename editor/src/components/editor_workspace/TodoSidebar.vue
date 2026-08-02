@@ -9,6 +9,7 @@
 import { onBeforeUnmount, onMounted, nextTick, ref } from 'vue'
 import {
   Calendar,
+  Clock3,
   Pencil,
   Plus,
   RefreshCw,
@@ -27,6 +28,14 @@ const editingText = ref('')
 const editingDate = ref('')
 const deletingId = ref('')
 const timeTick = ref(0)
+const automationFormOpen = ref(false)
+const newAutomationText = ref('')
+const newAutomationPrompt = ref('')
+const newAutomationRunAt = ref('')
+const newAutomationFrequency = ref<'none' | 'daily' | 'weekly' | 'monthly'>('daily')
+const newAutomationAccessMode = ref<'readonly' | 'sandbox' | 'full_access'>('sandbox')
+const automationSubmitting = ref(false)
+const automationError = ref('')
 
 let tickTimer: ReturnType<typeof setInterval> | undefined
 
@@ -67,6 +76,35 @@ function handleAdd() {
   todoStore.addTodo(trimmed, newTodoDatetime.value || undefined)
   newTodoText.value = ''
   newTodoDatetime.value = ''
+}
+
+async function handleAddAutomation() {
+  const text = newAutomationText.value.trim()
+  const prompt = newAutomationPrompt.value.trim()
+  if (!text || !prompt || !newAutomationRunAt.value || automationSubmitting.value) return
+  const runAt = new Date(newAutomationRunAt.value)
+  if (Number.isNaN(runAt.getTime())) return
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  automationSubmitting.value = true
+  automationError.value = ''
+  const created = await todoStore.addAutomation(
+    text,
+    prompt,
+    runAt.toISOString(),
+    timezone,
+    { frequency: newAutomationFrequency.value, interval: 1 },
+    newAutomationAccessMode.value,
+  )
+  automationSubmitting.value = false
+  if (!created.success) {
+    automationError.value = created.error || '自动化任务创建失败，请确认后端服务已重启并检查必填字段。'
+    return
+  }
+  newAutomationText.value = ''
+  newAutomationPrompt.value = ''
+  newAutomationRunAt.value = ''
+  automationError.value = ''
+  automationFormOpen.value = false
 }
 
 function startEdit(id: string, text: string, dueDate?: string) {
@@ -125,6 +163,10 @@ function formatDatetime(iso: string): string {
 function isDatetimeExpired(iso: string): boolean {
   if (!iso) return false
   return new Date(iso).getTime() < Date.now()
+}
+
+function getAutomationNextRun(todoId: string): string | undefined {
+  return todoStore.automations.find((item) => item.todoId === todoId)?.nextRunAt
 }
 </script>
 
@@ -234,15 +276,17 @@ function isDatetimeExpired(iso: string): boolean {
               {{ item.text }}
             </span>
           </div>
-          <div v-if="item.dueDate" class="todo-date-col">
-            <Calendar :size="10" />
+          <div v-if="item.dueDate || item.category === 'automation'" class="todo-date-col">
+            <Clock3 v-if="item.category === 'automation'" :size="10" />
+            <Calendar v-else :size="10" />
             <span
               class="todo-date"
-              :class="{ expired: isDatetimeExpired(item.dueDate) && !item.done }"
+              :class="{ expired: isDatetimeExpired(item.dueDate || getAutomationNextRun(item.id) || '') && !item.done }"
             >
-              {{ formatDatetime(item.dueDate) }}
+              {{ formatDatetime(item.dueDate || getAutomationNextRun(item.id) || '') }}
             </span>
             <button
+              v-if="item.dueDate"
               class="todo-date-clear"
               type="button"
               title="清除日期"
@@ -293,8 +337,53 @@ function isDatetimeExpired(iso: string): boolean {
       </div>
     </div>
 
+    <form v-if="automationFormOpen" class="todo-automation-form" @submit.prevent="handleAddAutomation">
+      <div class="todo-automation-heading">
+        <span>新建自动化任务</span>
+        <button class="todo-automation-close" type="button" title="关闭" @click="automationFormOpen = false">
+          <X :size="12" />
+        </button>
+      </div>
+      <input v-model="newAutomationText" class="todo-automation-input" type="text" placeholder="自动化任务名称" />
+      <textarea v-model="newAutomationPrompt" class="todo-automation-input todo-automation-prompt" rows="2" placeholder="到时间后让 Agent 做什么？" />
+      <p v-if="automationError" class="todo-automation-error">{{ automationError }}</p>
+      <div class="todo-automation-row">
+        <input v-model="newAutomationRunAt" class="todo-automation-input" type="datetime-local" />
+        <select v-model="newAutomationFrequency" class="todo-automation-select">
+          <option value="none">执行一次</option>
+          <option value="daily">每天</option>
+          <option value="weekly">每周</option>
+          <option value="monthly">每月</option>
+        </select>
+      </div>
+      <div class="todo-automation-row">
+        <select v-model="newAutomationAccessMode" class="todo-automation-select">
+          <option value="sandbox">沙盒权限</option>
+          <option value="readonly">只读权限</option>
+          <option value="full_access">完全访问</option>
+        </select>
+        <button
+          class="todo-add-btn todo-automation-submit"
+          type="submit"
+          :disabled="automationSubmitting || !newAutomationText.trim() || !newAutomationPrompt.trim() || !newAutomationRunAt"
+        >
+          <RefreshCw v-if="automationSubmitting" :size="14" class="todo-automation-spinner" />
+          <Plus v-else :size="14" />
+        </button>
+      </div>
+    </form>
+
     <div class="todo-add-bar">
       <div class="todo-add-row">
+        <button
+          class="todo-add-automation-btn"
+          type="button"
+          :class="{ active: automationFormOpen }"
+          title="新建自动化任务"
+          @click="automationFormOpen = !automationFormOpen"
+        >
+          <Clock3 :size="14" />
+        </button>
         <input
           v-model="newTodoText"
           class="todo-add-input"
@@ -391,6 +480,10 @@ function isDatetimeExpired(iso: string): boolean {
   color: var(--color-accent);
 }
 
+.todo-clear-done.active {
+  color: var(--color-primary);
+}
+
 .todo-clear-done:disabled {
   opacity: 0.35;
   cursor: default;
@@ -405,6 +498,84 @@ function isDatetimeExpired(iso: string): boolean {
   flex-direction: column;
   gap: var(--space-4);
   padding: var(--space-6) var(--space-8);
+}
+
+.todo-automation-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0 var(--space-8);
+  padding: var(--space-6) 0;
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.todo-automation-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--color-text-secondary);
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 650;
+}
+
+.todo-automation-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.todo-automation-close:hover {
+  color: var(--color-text);
+}
+
+.todo-automation-input,
+.todo-automation-select {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  background: var(--color-bg-input);
+  color: var(--color-text);
+  font: inherit;
+  font-size: calc(11px * var(--font-scale));
+}
+
+.todo-automation-input:focus,
+.todo-automation-select:focus {
+  border-color: var(--color-primary);
+}
+
+.todo-automation-prompt {
+  resize: vertical;
+}
+
+.todo-automation-error {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: calc(10px * var(--font-scale));
+}
+
+.todo-automation-spinner {
+  animation: todo-refresh-spin 800ms linear infinite;
+}
+
+.todo-automation-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.todo-automation-submit {
+  flex: 0 0 auto;
 }
 
 .todo-search {
@@ -907,6 +1078,29 @@ function isDatetimeExpired(iso: string): boolean {
   display: flex;
   align-items: center;
   gap: var(--space-4);
+}
+
+.todo-add-automation-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+
+.todo-add-automation-btn:hover,
+.todo-add-automation-btn.active {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  color: var(--color-primary);
 }
 
 .todo-add-input {

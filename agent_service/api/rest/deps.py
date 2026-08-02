@@ -22,6 +22,7 @@ from agent_service.services.session_attachment_service import SessionAttachmentS
 from agent_service.services.skill_service import SkillService
 from agent_service.services.task_list_service import TaskListService
 from agent_service.services.todo_service import TodoService
+from agent_service.services.automation_service import AutomationService
 
 _agent: AgentCore | None = None
 _session_service: SessionService | None = None
@@ -37,6 +38,7 @@ _skill_service: SkillService | None = None
 _task_list_service: TaskListService | None = None
 _grpc_running = False
 _todo_service: TodoService | None = None
+_automation_service: AutomationService | None = None
 
 
 def _require_agent() -> AgentCore:
@@ -105,6 +107,14 @@ def _require_todo_service() -> TodoService:
     if _todo_service is None:
         raise HTTPException(status_code=503, detail="TodoService not initialized yet")
     return _todo_service
+
+
+def _require_automation_service() -> AutomationService:
+    """返回启动阶段注入的自动化任务服务。"""
+
+    if _automation_service is None:
+        raise HTTPException(status_code=503, detail="AutomationService not initialized yet")
+    return _automation_service
 
 
 def _require_task_list_service() -> TaskListService:

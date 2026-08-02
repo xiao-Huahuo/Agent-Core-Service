@@ -175,10 +175,22 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
     rest_deps._retrieval_service = retrieval_service
     from agent_service.services.todo_service import TodoService
+    from agent_service.services.automation_service import AutomationService
+    from agent_service.services.automation_scheduler import AutomationScheduler
     rest_deps._todo_service = TodoService(
         engine=memory_service.engine,
         legacy_data_dir=str(config.storage.base_data_dir),
     )
+    rest_deps._automation_service = AutomationService(
+        engine=memory_service.engine,
+        todo_service=rest_deps._todo_service,
+    )
+    automation_scheduler = AutomationScheduler(
+        automation_service=rest_deps._automation_service,
+        agent=agent,
+        session_service=session_service,
+    )
+    automation_scheduler.start()
     logger.info("SettingsService 初始化完成")
 
     # 启动不执行任何自动灌库。知识库由前端 /knowledge/rebuild、单文件灌库与
@@ -242,6 +254,8 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         yield
     finally:
         logger.info("AgentService 正在关闭...")
+        if automation_scheduler is not None:
+            automation_scheduler.shutdown()
         if _grpc_server is not None:
             _grpc_server.stop(0)
             rest_deps._grpc_running = False
@@ -260,6 +274,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._git_service = None
         rest_deps._library_service = None
         rest_deps._todo_service = None
+        rest_deps._automation_service = None
         logger.info("AgentService 已关闭")
 
 

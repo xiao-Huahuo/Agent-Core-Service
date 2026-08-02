@@ -11,6 +11,7 @@ from pathlib import Path
 
 from sqlmodel import create_engine
 
+from agent_service.services.automation_service import AutomationService
 from agent_service.services.todo_service import TodoService
 
 
@@ -49,3 +50,35 @@ def test_repeating_todo_advances_due_and_reminder(tmp_path: Path) -> None:
     assert updated["lastCompletedAt"]
     assert updated["dueDate"] == "2026-08-03T21:00:00+00:00"
     assert updated["reminderAt"] == "2026-08-03T20:30:00+00:00"
+
+
+def test_automation_claim_and_finish_schedules_next_run(tmp_path: Path) -> None:
+    """到期自动化任务只能被抢占一次,成功后应安排下一次执行。"""
+
+    engine = create_engine("sqlite://")
+    todo_service = TodoService(engine=engine, legacy_data_dir=str(tmp_path))
+    service = AutomationService(engine=engine, todo_service=todo_service)
+    task = service.create_task(
+        user_id="u1",
+        text="每日提交代码",
+        prompt="检查变更并提交",
+        next_run_at="2026-08-02T21:00:00+08:00",
+        timezone_name="Asia/Shanghai",
+        recurrence={"frequency": "daily", "interval": 1},
+        access_mode="full_access",
+    )
+
+    claims = service.claim_due_tasks(now=service._parse_datetime("2026-08-02T21:01:00+08:00"))
+    assert len(claims) == 1
+    assert service.claim_due_tasks(now=service._parse_datetime("2026-08-02T21:01:01+08:00")) == []
+
+    service.finish_run(
+        automation_id=task["id"],
+        run_id=claims[0]["run"]["id"],
+        status="success",
+        output="done",
+    )
+    updated = service.list_tasks(user_id="u1")[0]
+    assert updated["enabled"] is True
+    assert updated["nextRunAt"] == "2026-08-03T13:00:00+00:00"
+    assert service.list_runs(user_id="u1", automation_id=task["id"])[0]["status"] == "success"
