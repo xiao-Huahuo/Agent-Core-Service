@@ -6,7 +6,7 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { Activity, BookOpen, Bug, DatabaseZap, FileCode, Files, Folder, GitBranch, Search, Settings, Share2, Sparkles } from 'lucide-vue-next'
+import { Activity, BookOpen, Bug, DatabaseZap, FileCode, Files, Folder, GitBranch, Search, Settings, Share2, Sparkles, Star } from 'lucide-vue-next'
 import type { SidebarDisplayMode } from '@/types/settings'
 
 defineProps<{
@@ -15,6 +15,7 @@ defineProps<{
   gitActive: boolean
   agentOpen: boolean
   resourcesActive: boolean
+  favoritesActive: boolean
   libraryActive: boolean
   ingestionActive: boolean
   visualizationActive: boolean
@@ -31,6 +32,7 @@ const emit = defineEmits<{
   toggleFile: []
   toggleGit: []
   openResources: []
+  openFavorites: []
   openLibrary: []
   openIngestion: []
   openVisualization: []
@@ -189,6 +191,18 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
     >
       <Activity :size="18" />
       <span class="activity-label">看板</span>
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: favoritesActive }"
+      type="button"
+      title="我的收藏"
+      aria-label="我的收藏"
+      @mousedown.prevent="handleRipple"
+      @click="emit('openFavorites')"
+    >
+      <Star :size="18" />
+      <span class="activity-label">收藏</span>
     </button>
     <div class="bottom-group">
       <button

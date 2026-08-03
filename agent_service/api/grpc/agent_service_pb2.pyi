@@ -240,6 +240,64 @@ class DeleteAllSessionsRequest(_message.Message):
     user_id: str
     def __init__(self, user_id: _Optional[str] = ...) -> None: ...
 
+class FavoriteListRequest(_message.Message):
+    __slots__ = ("user_id", "target_type", "library_id", "filter_library")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_TYPE_FIELD_NUMBER: _ClassVar[int]
+    LIBRARY_ID_FIELD_NUMBER: _ClassVar[int]
+    FILTER_LIBRARY_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    target_type: str
+    library_id: str
+    filter_library: bool
+    def __init__(self, user_id: _Optional[str] = ..., target_type: _Optional[str] = ..., library_id: _Optional[str] = ..., filter_library: bool = ...) -> None: ...
+
+class FavoriteCreateRequest(_message.Message):
+    __slots__ = ("user_id", "library_id", "target_type", "target_id")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    LIBRARY_ID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_TYPE_FIELD_NUMBER: _ClassVar[int]
+    TARGET_ID_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    library_id: str
+    target_type: str
+    target_id: str
+    def __init__(self, user_id: _Optional[str] = ..., library_id: _Optional[str] = ..., target_type: _Optional[str] = ..., target_id: _Optional[str] = ...) -> None: ...
+
+class FavoriteDeleteRequest(_message.Message):
+    __slots__ = ("user_id", "library_id", "target_type", "target_id")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    LIBRARY_ID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_TYPE_FIELD_NUMBER: _ClassVar[int]
+    TARGET_ID_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    library_id: str
+    target_type: str
+    target_id: str
+    def __init__(self, user_id: _Optional[str] = ..., library_id: _Optional[str] = ..., target_type: _Optional[str] = ..., target_id: _Optional[str] = ...) -> None: ...
+
+class FavoriteEntryResponse(_message.Message):
+    __slots__ = ("favorite_id", "user_id", "library_id", "target_type", "target_id", "created_at")
+    FAVORITE_ID_FIELD_NUMBER: _ClassVar[int]
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    LIBRARY_ID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_TYPE_FIELD_NUMBER: _ClassVar[int]
+    TARGET_ID_FIELD_NUMBER: _ClassVar[int]
+    CREATED_AT_FIELD_NUMBER: _ClassVar[int]
+    favorite_id: str
+    user_id: str
+    library_id: str
+    target_type: str
+    target_id: str
+    created_at: str
+    def __init__(self, favorite_id: _Optional[str] = ..., user_id: _Optional[str] = ..., library_id: _Optional[str] = ..., target_type: _Optional[str] = ..., target_id: _Optional[str] = ..., created_at: _Optional[str] = ...) -> None: ...
+
+class FavoriteListResponse(_message.Message):
+    __slots__ = ("favorites",)
+    FAVORITES_FIELD_NUMBER: _ClassVar[int]
+    favorites: _containers.RepeatedCompositeFieldContainer[FavoriteEntryResponse]
+    def __init__(self, favorites: _Optional[_Iterable[_Union[FavoriteEntryResponse, _Mapping]]] = ...) -> None: ...
+
 class ListMessagesRequest(_message.Message):
     __slots__ = ("user_id", "session_id", "limit")
     USER_ID_FIELD_NUMBER: _ClassVar[int]
@@ -403,6 +461,70 @@ class CancelResponse(_message.Message):
     OK_FIELD_NUMBER: _ClassVar[int]
     ok: bool
     def __init__(self, ok: bool = ...) -> None: ...
+
+class ChildAgentListRequest(_message.Message):
+    __slots__ = ("session_id",)
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    session_id: str
+    def __init__(self, session_id: _Optional[str] = ...) -> None: ...
+
+class ChildAgentRecord(_message.Message):
+    __slots__ = ("run_id", "parent_run_id", "goal", "mode", "status", "access_mode", "allowed_tools", "summary", "result_json", "error", "category", "name")
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    PARENT_RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    GOAL_FIELD_NUMBER: _ClassVar[int]
+    MODE_FIELD_NUMBER: _ClassVar[int]
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    ACCESS_MODE_FIELD_NUMBER: _ClassVar[int]
+    ALLOWED_TOOLS_FIELD_NUMBER: _ClassVar[int]
+    SUMMARY_FIELD_NUMBER: _ClassVar[int]
+    RESULT_JSON_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    CATEGORY_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    run_id: str
+    parent_run_id: str
+    goal: str
+    mode: str
+    status: str
+    access_mode: str
+    allowed_tools: _containers.RepeatedScalarFieldContainer[str]
+    summary: str
+    result_json: str
+    error: str
+    category: str
+    name: str
+    def __init__(self, run_id: _Optional[str] = ..., parent_run_id: _Optional[str] = ..., goal: _Optional[str] = ..., mode: _Optional[str] = ..., status: _Optional[str] = ..., access_mode: _Optional[str] = ..., allowed_tools: _Optional[_Iterable[str]] = ..., summary: _Optional[str] = ..., result_json: _Optional[str] = ..., error: _Optional[str] = ..., category: _Optional[str] = ..., name: _Optional[str] = ...) -> None: ...
+
+class ChildAgentListResponse(_message.Message):
+    __slots__ = ("session_id", "children")
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    CHILDREN_FIELD_NUMBER: _ClassVar[int]
+    session_id: str
+    children: _containers.RepeatedCompositeFieldContainer[ChildAgentRecord]
+    def __init__(self, session_id: _Optional[str] = ..., children: _Optional[_Iterable[_Union[ChildAgentRecord, _Mapping]]] = ...) -> None: ...
+
+class ChildAgentControlRequest(_message.Message):
+    __slots__ = ("run_id",)
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    run_id: str
+    def __init__(self, run_id: _Optional[str] = ...) -> None: ...
+
+class ChildAgentUpdateRequest(_message.Message):
+    __slots__ = ("run_id", "update")
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    UPDATE_FIELD_NUMBER: _ClassVar[int]
+    run_id: str
+    update: _struct_pb2.Struct
+    def __init__(self, run_id: _Optional[str] = ..., update: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ...) -> None: ...
+
+class ChildAgentControlResponse(_message.Message):
+    __slots__ = ("ok", "run_id")
+    OK_FIELD_NUMBER: _ClassVar[int]
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    ok: bool
+    run_id: str
+    def __init__(self, ok: bool = ..., run_id: _Optional[str] = ...) -> None: ...
 
 class UserProfileRequest(_message.Message):
     __slots__ = ("user_id",)

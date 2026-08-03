@@ -26,6 +26,7 @@ import {
   Rows,
   Save,
   Search,
+  Star,
   Tags,
   X,
 } from 'lucide-vue-next'
@@ -43,14 +44,22 @@ import LibraryBar from '@/components/library_view/LibraryBar.vue'
 import LibraryCard from '@/components/library_view/LibraryCard.vue'
 import LibraryCreateDialog from '@/components/library_view/LibraryCreateDialog.vue'
 import LibraryItemDialog from '@/components/library_view/LibraryItemDialog.vue'
+import { useFavoritesStore } from '@/stores/favorites'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { LibraryBreadcrumb, LibraryItem, LibraryTag } from '@/types/knowledge'
 
 defineOptions({ name: 'LibraryView' })
 
+const props = withDefaults(defineProps<{
+  favoritesOnlyLocked?: boolean
+}>(), {
+  favoritesOnlyLocked: false,
+})
+
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
+const favoritesStore = useFavoritesStore()
 
 const items = ref<LibraryItem[]>([])
 const tags = ref<LibraryTag[]>([])
@@ -60,6 +69,7 @@ const loading = ref(false)
 const query = ref('')
 const selectedTag = ref('')
 const selectedContentType = ref('')
+const favoritesOnly = ref(false)
 const filterMenuOpen = ref(false)
 const TAGS_PER_PAGE = 10
 const tagPage = ref(0)
@@ -92,6 +102,12 @@ function sortItems(list: LibraryItem[]): LibraryItem[] {
 }
 
 const selectedItems = computed(() => items.value.filter((item) => selectedIds.value.has(item.item_id)))
+const effectiveFavoritesOnly = computed(() => props.favoritesOnlyLocked || favoritesOnly.value)
+const renderedItems = computed(() => {
+  if (!effectiveFavoritesOnly.value) return items.value
+  const favoriteIds = favoritesStore.idsFor('library_item')
+  return items.value.filter((item) => favoriteIds.has(item.item_id))
+})
 const hasSelection = computed(() => selectedIds.value.size > 0)
 const canGoUp = computed(() => Boolean(currentParentId.value))
 const canGoBack = computed(() => backStack.value.length > 0)
@@ -142,7 +158,14 @@ watch(selectedItem, (item) => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadItems(), loadTags(), workspaceStore.loadKnowledgeTree()])
+  await Promise.all([
+    loadItems(),
+    loadTags(),
+    workspaceStore.loadKnowledgeTree(),
+    settingsStore.profile.userId
+      ? favoritesStore.load(settingsStore.profile.userId, 'library_item', favoritesStore.activeLibraryId())
+      : Promise.resolve(),
+  ])
   document.addEventListener('click', closeContextMenu)
 })
 
@@ -169,8 +192,9 @@ async function loadItems() {
     if (selectedItem.value) {
       selectedItem.value = response.items.find((item) => item.item_id === selectedItem.value?.item_id) ?? null
     }
-    if (pendingAutoSelect.value && response.items.length > 0) {
-      selectedItem.value = response.items[0]
+    const firstItem = response.items[0]
+    if (pendingAutoSelect.value && firstItem) {
+      selectedItem.value = firstItem
       pendingAutoSelect.value = false
     }
   } finally {
@@ -214,7 +238,7 @@ function navigateTo(parentId: string, recordHistory = true) {
 }
 
 function goBack() {
-  const target = backStack.value.at(-1)
+  const target = backStack.value[backStack.value.length - 1]
   if (target === undefined) return
   backStack.value = backStack.value.slice(0, -1)
   forwardStack.value = [...forwardStack.value, currentParentId.value]
@@ -222,7 +246,7 @@ function goBack() {
 }
 
 function goForward() {
-  const target = forwardStack.value.at(-1)
+  const target = forwardStack.value[forwardStack.value.length - 1]
   if (target === undefined) return
   forwardStack.value = forwardStack.value.slice(0, -1)
   backStack.value = [...backStack.value, currentParentId.value]
@@ -231,7 +255,7 @@ function goForward() {
 
 function goUp() {
   if (!currentParentId.value) return
-  const parent = breadcrumbs.value.at(-2)?.item_id ?? ''
+  const parent = breadcrumbs.value[breadcrumbs.value.length - 2]?.item_id ?? ''
   navigateTo(parent)
 }
 
@@ -241,11 +265,19 @@ function refreshLibrary() {
     loadTags(),
     selectedItem.value?.item_type === 'collection' ? loadDrawerChildren(selectedItem.value.item_id) : Promise.resolve(),
     workspaceStore.loadKnowledgeTree(),
+    settingsStore.profile.userId
+      ? favoritesStore.load(settingsStore.profile.userId, 'library_item', favoritesStore.activeLibraryId())
+      : Promise.resolve(),
   ])
 }
 
 function goBreadcrumb(itemId: string) {
   navigateTo(itemId)
+}
+
+function toggleFavoritesOnly() {
+  if (props.favoritesOnlyLocked) return
+  favoritesOnly.value = !favoritesOnly.value
 }
 
 function selectItem(item: LibraryItem) {
@@ -656,6 +688,17 @@ function errorMessage(error: unknown): string {
         <button class="icon-toolbar-btn" type="button" title="新增文件" @click="openCreateBookDialog">
           <FilePlus2 :size="16" />
         </button>
+        <button
+          class="icon-toolbar-btn"
+          :class="{ active: effectiveFavoritesOnly }"
+          type="button"
+          title="我的收藏"
+          :aria-pressed="effectiveFavoritesOnly"
+          :disabled="favoritesOnlyLocked"
+          @click="toggleFavoritesOnly"
+        >
+          <Star :size="16" />
+        </button>
         <button class="icon-toolbar-btn" type="button" title="新增集锦" @click="openCreateCollectionDialog">
           <FolderPlus :size="16" />
         </button>
@@ -690,11 +733,11 @@ function errorMessage(error: unknown): string {
 
     <section class="library-content">
       <main class="library-body">
-        <div v-if="items.length === 0 && !loading" class="empty-hint">
+        <div v-if="renderedItems.length === 0 && !loading" class="empty-hint">
           当前集锦为空。新增文件或创建集锦后会出现在这里。
         </div>
         <TransitionGroup
-          v-else-if="items.length"
+          v-else-if="renderedItems.length"
           appear
           name="card"
           tag="div"
@@ -702,7 +745,7 @@ function errorMessage(error: unknown): string {
         >
           <component
             :is="viewMode === 'card' ? LibraryCard : LibraryBar"
-            v-for="(item, i) in items"
+            v-for="(item, i) in renderedItems"
             :key="item.item_id"
             :style="{ '--i': i }"
             :item="item"

@@ -391,6 +391,12 @@
   white-space: nowrap;
 }
 
+.favorite-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .trash-row {
   height: 38px;
 }
@@ -586,7 +592,7 @@
 
 .content-item {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr) 24px;
   align-items: start;
   width: 100%;
   min-height: 64px;
@@ -597,6 +603,10 @@
   background: transparent;
   color: var(--color-text-secondary);
   text-align: left;
+}
+
+.content-favorite {
+  align-self: center;
 }
 
 .content-text {
@@ -697,7 +707,7 @@
 }
 
 .icon-small .icon-tile {
-  grid-template-columns: 18px 22px minmax(0, 1fr);
+  grid-template-columns: 18px 22px minmax(0, 1fr) 24px;
   align-content: center;
   align-items: center;
   justify-items: start;
@@ -708,7 +718,22 @@
 }
 
 .icon-small .icon-tile:not(:has(.selection-check)) {
-  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr) 24px;
+}
+
+.icon-small .tile-favorite {
+  grid-column: -2 / -1;
+  grid-row: 1;
+  position: static;
+  justify-self: end;
+}
+
+.icon-medium .tile-favorite,
+.icon-large .tile-favorite {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
 }
 
 .icon-medium .icon-tile {

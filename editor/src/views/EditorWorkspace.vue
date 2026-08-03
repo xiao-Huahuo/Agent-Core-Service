@@ -34,6 +34,7 @@ const DashboardView = defineAsyncComponent(() => import('@/views/DashboardView.v
 const DebugView = defineAsyncComponent(() => import('@/views/DebugView.vue'))
 const IngestionProgressView = defineAsyncComponent(() => import('@/views/IngestionProgressView.vue'))
 const LibraryView = defineAsyncComponent(() => import('@/views/LibraryView.vue'))
+const FavoritesView = defineAsyncComponent(() => import('@/views/FavoritesView.vue'))
 const MarkdownHtmlVisualizationView = defineAsyncComponent(() => import('@/views/MarkdownHtmlVisualizationView.vue'))
 const SearchPage = defineAsyncComponent(() => import('@/views/SearchPage.vue'))
 const SkillView = defineAsyncComponent(() => import('@/views/SkillView.vue'))
@@ -280,6 +281,15 @@ function openResources() {
   agentSidebarOpen.value = false
 }
 
+function openFavorites() {
+  const next = workspaceStore.mainView === 'favorites' ? 'editor' : 'favorites'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
+}
+
 function openLibrary() {
   const next = workspaceStore.mainView === 'library' ? 'editor' : 'library'
   workspaceStore.setMainView(next)
@@ -479,6 +489,7 @@ watch(
         :git-active="gitLeftOpen"
         :agent-open="visibleAgentSidebarOpen"
         :resources-active="workspaceStore.mainView === 'resources'"
+        :favorites-active="workspaceStore.mainView === 'favorites'"
         :library-active="workspaceStore.mainView === 'library'"
         :ingestion-active="workspaceStore.mainView === 'ingestion'"
         :visualization-active="workspaceStore.mainView === 'visualization'"
@@ -493,6 +504,7 @@ watch(
         @toggle-file="toggleFileSidebar"
         @toggle-git="toggleLeftGitSidebar"
         @open-resources="openResources"
+        @open-favorites="openFavorites"
         @open-library="openLibrary"
         @open-ingestion="openIngestion"
         @open-visualization="openVisualization"
@@ -523,6 +535,7 @@ watch(
       >
         <EditorPane v-if="workspaceStore.mainView === 'editor'" class="main-shell-content" />
         <FileResourceManager v-else-if="workspaceStore.mainView === 'resources'" class="main-shell-content" />
+        <FavoritesView v-else-if="workspaceStore.mainView === 'favorites'" class="main-shell-content" />
         <LibraryView v-else-if="workspaceStore.mainView === 'library'" class="main-shell-content" />
         <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="main-shell-content" />
         <MarkdownHtmlVisualizationView v-else-if="workspaceStore.mainView === 'visualization'" class="main-shell-content" />

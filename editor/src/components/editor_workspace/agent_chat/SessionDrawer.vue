@@ -6,9 +6,10 @@
   sessions for the current editor user_id.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { Download, PanelLeft, Trash2, Upload, X } from 'lucide-vue-next'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { CalendarDays, Download, MoreHorizontal, PanelLeft, Star, Trash2, Upload, X } from 'lucide-vue-next'
 
+import { useFavoritesStore } from '@/stores/favorites'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 import type { SessionRecord } from '@/api/session'
@@ -22,6 +23,7 @@ const props = defineProps<{
   open: boolean
   userId: string
   mode?: 'panel' | 'page'
+  favoritesOnlyLocked?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -32,10 +34,43 @@ const emit = defineEmits<{
 
 const sessionStore = useSessionStore()
 const settingsStore = useSettingsStore()
+const favoritesStore = useFavoritesStore()
 const titleSrc = computed(() => settingsStore.isDark ? darkTitle : lightTitle)
 const exportingId = ref<string | null>(null)
 const importing = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const favoritesOnly = ref(false)
+const openMenuId = ref<string | null>(null)
+const effectiveFavoritesOnly = computed(() => props.favoritesOnlyLocked || favoritesOnly.value)
+const renderedSessions = computed(() => {
+  if (!effectiveFavoritesOnly.value) return sessionStore.sessions
+  const favoriteIds = favoritesStore.idsFor('session', '')
+  return sessionStore.sessions.filter((session) => favoriteIds.has(session.session_id))
+})
+
+watch(
+  () => props.userId,
+  (userId) => {
+    if (userId) void favoritesStore.load(userId, 'session', '')
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  if (props.userId) {
+    void favoritesStore.load(props.userId, 'session', '')
+  }
+  document.addEventListener('click', closeSessionMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeSessionMenu)
+})
+
+function toggleFavoritesOnly() {
+  if (props.favoritesOnlyLocked) return
+  favoritesOnly.value = !favoritesOnly.value
+}
 
 function triggerImportFile() {
   fileInputRef.value?.click()
@@ -67,17 +102,35 @@ function displayName(session: SessionRecord) {
 }
 
 function selectSession(sessionId: string) {
+  closeSessionMenu()
   emit('select', sessionId)
 }
 
-async function deleteSession(sessionId: string, event: MouseEvent) {
+function toggleSessionMenu(sessionId: string, event: MouseEvent) {
   event.stopPropagation()
+  openMenuId.value = openMenuId.value === sessionId ? null : sessionId
+}
+
+function closeSessionMenu() {
+  openMenuId.value = null
+}
+
+function toggleSessionFavorite(sessionId: string, event: MouseEvent) {
+  event.stopPropagation()
+  void favoritesStore.toggle('session', sessionId, '')
+  closeSessionMenu()
+}
+
+async function deleteSession(sessionId: string, event: Event) {
+  event.stopPropagation()
+  closeSessionMenu()
   await sessionStore.remove(sessionId)
 }
 
-async function exportSessionHandler(session: SessionRecord, event: MouseEvent) {
+async function exportSessionHandler(session: SessionRecord, event: Event) {
   event.stopPropagation()
   if (exportingId.value) return
+  closeSessionMenu()
   exportingId.value = session.session_id
   try {
     await exportSession(session, props.userId)
@@ -105,6 +158,17 @@ async function clearAllSessions() {
       <button class="brand-copy" type="button" @click="emit('create')">
         <img :src="logoSrc" class="brand-logo" alt="" />
         <img :src="titleSrc" class="brand-title" alt="MetaWeave" />
+      </button>
+      <button
+        class="titlebar-icon-btn"
+        :class="{ active: effectiveFavoritesOnly }"
+        type="button"
+        title="我的收藏"
+        :aria-pressed="effectiveFavoritesOnly"
+        :disabled="favoritesOnlyLocked"
+        @click="toggleFavoritesOnly"
+      >
+        <Star :size="15" />
       </button>
       <button
         class="titlebar-icon-btn"
@@ -140,29 +204,58 @@ async function clearAllSessions() {
     <!-- history label removed per request -->
 
     <div class="session-list">
-      <button
-        v-for="session in sessionStore.sessions"
+      <div
+        v-for="session in renderedSessions"
         :key="session.session_id"
         class="session-item"
         :class="{ active: session.session_id === sessionStore.currentSessionId }"
-        type="button"
+        role="button"
+        tabindex="0"
         @click="selectSession(session.session_id)"
+        @keydown.enter.prevent="selectSession(session.session_id)"
+        @keydown.space.prevent="selectSession(session.session_id)"
       >
         <span class="session-name">{{ displayName(session) }}</span>
-        <span
-          class="session-export-btn"
-          :class="{ loading: exportingId === session.session_id }"
-          title="导出会话"
-          @click="exportSessionHandler(session, $event)"
+        <button
+          class="session-menu-btn"
+          :class="{ active: openMenuId === session.session_id }"
+          type="button"
+          title="更多"
+          aria-label="更多"
+          :aria-expanded="openMenuId === session.session_id"
+          @click="toggleSessionMenu(session.session_id, $event)"
         >
-          <Upload :size="12" />
-        </span>
-        <span class="session-time">{{ session.updated_at?.slice(0, 10) }}</span>
-        <span class="session-del-btn" title="删除会话" @click="deleteSession(session.session_id, $event)">
-          <X :size="12" />
-        </span>
-      </button>
-      <p v-if="!sessionStore.sessions.length" class="empty-hint">No sessions found</p>
+          <MoreHorizontal :size="15" />
+        </button>
+        <div v-if="openMenuId === session.session_id" class="session-action-menu" @click.stop>
+          <button
+            type="button"
+            :class="{ favorited: favoritesStore.isFavorite('session', session.session_id, '') }"
+            @click="toggleSessionFavorite(session.session_id, $event)"
+          >
+            <Star :size="14" />
+            <span>收藏</span>
+          </button>
+          <div class="session-menu-date">
+            <CalendarDays :size="14" />
+            <span>日期</span>
+            <time>{{ session.updated_at?.slice(0, 10) }}</time>
+          </div>
+          <button
+            type="button"
+            :class="{ loading: exportingId === session.session_id }"
+            @click="exportSessionHandler(session, $event)"
+          >
+            <Upload :size="14" />
+            <span>导出会话</span>
+          </button>
+          <button class="danger" type="button" @click="deleteSession(session.session_id, $event)">
+            <X :size="14" />
+            <span>删除</span>
+          </button>
+        </div>
+      </div>
+      <p v-if="!renderedSessions.length" class="empty-hint">No sessions found</p>
     </div>
 
     <div class="drawer-footer">
@@ -240,7 +333,7 @@ async function clearAllSessions() {
 }
 
 .drawer-titlebar {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   display: grid;
   align-items: center;
   gap: var(--space-4);
@@ -269,6 +362,10 @@ async function clearAllSessions() {
 .titlebar-icon-btn:hover:not(:disabled) {
   background: var(--drawer-page-hover);
   color: var(--color-text-primary);
+}
+
+.titlebar-icon-btn.active {
+  color: #f2b705;
 }
 
 .titlebar-icon-btn:disabled {
@@ -440,6 +537,7 @@ async function clearAllSessions() {
 }
 
 .session-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-8);
@@ -454,6 +552,7 @@ async function clearAllSessions() {
   font-family: var(--font-ui);
   font-size: calc(12px * var(--font-scale));
   text-align: left;
+  cursor: pointer;
 }
 
 .session-item:hover {
@@ -484,47 +583,89 @@ async function clearAllSessions() {
   white-space: nowrap;
 }
 
-.session-del-btn {
+.session-menu-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 20px;
   height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
   flex-shrink: 0;
-  opacity: 0;
   color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
 }
 
-.session-item:hover .session-del-btn {
-  opacity: 1;
-}
-
-.session-del-btn:hover {
-  color: #c56565;
-}
-
-.session-export-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  opacity: 0;
-  color: var(--color-text-tertiary);
-}
-
-.session-item:hover .session-export-btn {
-  opacity: 1;
-}
-
-.session-export-btn:hover {
+.session-menu-btn:hover,
+.session-menu-btn.active {
   background: var(--color-primary-softer);
   color: var(--color-primary);
 }
 
-.session-export-btn.loading {
-  opacity: 1;
+.session-action-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: var(--space-8);
+  z-index: 20;
+  display: grid;
+  min-width: 154px;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+  color: var(--color-text-secondary);
+}
+
+.session-action-menu button,
+.session-menu-date {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 30px;
+  padding: 0 var(--space-8);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: calc(12px * var(--font-scale));
+  text-align: left;
+}
+
+.session-action-menu button {
+  cursor: pointer;
+}
+
+.session-action-menu button:hover {
+  background: var(--drawer-page-hover);
+  color: var(--color-primary);
+}
+
+.session-action-menu button.favorited {
+  color: #f2b705;
+}
+
+.session-action-menu button.danger:hover {
+  background: rgba(197, 101, 101, 0.08);
+  color: #c56565;
+}
+
+.session-menu-date {
+  color: var(--color-text-tertiary);
+}
+
+.session-menu-date time {
+  font-size: calc(10px * var(--font-scale));
+}
+
+.session-action-menu .loading {
   animation: export-pulse 0.8s ease-in-out infinite;
 }
 

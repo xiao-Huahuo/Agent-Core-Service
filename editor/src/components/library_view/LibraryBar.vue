@@ -12,6 +12,7 @@ import { computed, ref } from 'vue'
 import { Check, FolderOpen, Image as ImageIcon, Link, TriangleAlert } from 'lucide-vue-next'
 
 import { buildApiUrl } from '@/api/client'
+import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import type { LibraryItem } from '@/types/knowledge'
 
@@ -137,6 +138,7 @@ function handleDrop(event: DragEvent) {
     </section>
     <section class="bar-meta">
       <div class="bar-title-row">
+        <FavoriteButton class="bar-favorite" target-type="library_item" :target-id="item.item_id" />
         <span class="bar-type-icon">
           <FolderOpen v-if="isCollection" :size="16" />
           <Link v-else-if="item.content_type === 'web_url'" :size="16" />
@@ -306,6 +308,10 @@ function handleDrop(event: DragEvent) {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.bar-favorite {
+  margin-left: -4px;
 }
 
 .bar-title {

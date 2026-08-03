@@ -12,6 +12,7 @@ import { Check, ChevronDown, History, ListChecks, Maximize2, MessageSquarePlus, 
 import darkTitle from '@/assets/images/暗色标题.png'
 import lightTitle from '@/assets/images/亮色标题.png'
 import logoSrc from '@/assets/images/无底图标.png'
+import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import ChatInput from '@/components/editor_workspace/agent_chat/ChatInput.vue'
 import LoaderCube from '@/components/editor_workspace/agent_chat/LoaderCube.vue'
 import MessageList from '@/components/editor_workspace/agent_chat/MessageList.vue'
@@ -25,6 +26,7 @@ import { useSessionStore } from '@/stores/session'
 import { exportSession } from '@/utils/sessionExport'
 import { useSettingsStore } from '@/stores/settings'
 import { useSkillsStore } from '@/stores/skills'
+import { useFavoritesStore } from '@/stores/favorites'
 import { useTaskListStore } from '@/stores/taskList'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
@@ -39,6 +41,7 @@ const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
 const skillsStore = useSkillsStore()
+const favoritesStore = useFavoritesStore()
 const taskListStore = useTaskListStore()
 const workspaceStore = useWorkspaceStore()
 const props = withDefaults(defineProps<{
@@ -397,6 +400,9 @@ async function uploadFiles(files: File[], sessionId: string) {
 
 watch(userId, () => {
   void reloadSessions()
+  if (userId.value) {
+    void favoritesStore.load(userId.value, 'session', '')
+  }
   void loadCurrentModelConfig()
 })
 
@@ -501,6 +507,9 @@ watch([userId, () => sessionStore.currentSessionId], syncChildAgentWatcher)
 onMounted(() => {
   window.addEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
   void reloadSessions()
+  if (userId.value) {
+    void favoritesStore.load(userId.value, 'session', '')
+  }
   void loadCurrentModelConfig()
   void refreshSkills()
   void loadSafetyState()
@@ -591,6 +600,11 @@ onBeforeUnmount(() => {
       </button>
       <span class="topbar-title">{{ sessionTitle }}</span>
       <div class="topbar-right">
+        <FavoriteButton
+          target-type="session"
+          :target-id="sessionStore.currentSessionId || ''"
+          :disabled="!sessionStore.currentSessionId"
+        />
         <button
           class="new-session-round-btn"
           type="button"

@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, FilePlus2, FolderPlus, History, ListFilter, RefreshCw, Search, X } from 'lucide-vue-next'
+import { ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, FilePlus2, FolderPlus, History, ListFilter, RefreshCw, Search, Star, X } from 'lucide-vue-next'
 
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import RecentFileList from '@/components/editor_workspace/RecentFileList.vue'
@@ -18,6 +18,7 @@ import {
 } from '@/components/editor_workspace/fileTreeSearch'
 import { useSettingsStore } from '@/stores/settings'
 import { useGitStore } from '@/stores/git'
+import { useFavoritesStore } from '@/stores/favorites'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 import { buildRecentFileGroups, type RecentFileVisit } from '@/utils/recentFileHistory'
@@ -26,6 +27,7 @@ const settingsStore = useSettingsStore()
 const isDark = computed(() => settingsStore.isDark)
 const workspaceStore = useWorkspaceStore()
 const gitStore = useGitStore()
+const favoritesStore = useFavoritesStore()
 const dragging = ref(false)
 const uploadPicker = ref<HTMLInputElement | null>(null)
 const contextMenu = ref<{
@@ -51,6 +53,8 @@ const treeSearchOpen = ref(false)
 /** Filename-only query applied to the normal recursive tree. */
 const treeSearchQuery = ref('')
 const treeSearchInput = ref<HTMLInputElement | null>(null)
+/** Whether normal tree mode only shows backend-persisted favorites. */
+const favoritesOnly = ref(false)
 const recentFileGroups = computed(() => buildRecentFileGroups(
   recentVisitSnapshot.value,
   workspaceStore.flatNodes,
@@ -115,6 +119,9 @@ const effectiveExpandedPaths = computed(() => (
 const visibleTreeNodes = computed(() => flattenVisibleNodes(displayTree.value, effectiveExpandedPaths.value))
 const displayTree = computed(() => {
   let source = searchActive.value ? filterTreeByQuery(sortedTree.value, treeSearchQuery.value) : sortedTree.value
+  if (favoritesOnly.value) {
+    source = filterTreeByFavorites(source)
+  }
   const edit = inlineEdit.value
   if (edit?.mode === 'create') {
     source = insertDraftNode(source, edit.parentPath, {
@@ -127,6 +134,17 @@ const displayTree = computed(() => {
   }
   return source
 })
+
+function filterTreeByFavorites(nodes: KnowledgeFileNode[]): KnowledgeFileNode[] {
+  const favoritePaths = favoritesStore.idsFor('knowledge_path')
+  return nodes.flatMap((node) => {
+    const children = node.children ? filterTreeByFavorites(node.children) : []
+    if (favoritePaths.has(node.path) || children.length > 0) {
+      return [{ ...node, children }]
+    }
+    return []
+  })
+}
 
 function normalizeTreePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
@@ -239,6 +257,9 @@ async function refreshFileTree() {
   actionError.value = ''
   treeVersion.value++
   await workspaceStore.loadKnowledgeTree()
+  if (settingsStore.profile.userId) {
+    await favoritesStore.load(settingsStore.profile.userId, 'knowledge_path', favoritesStore.activeLibraryId())
+  }
   if (recentMode.value) {
     recentVisitSnapshot.value = workspaceStore.recentFileVisits.map((visit) => ({ ...visit }))
   }
@@ -695,6 +716,13 @@ function clearTreeSearch() {
   void nextTick(() => treeSearchInput.value?.focus())
 }
 
+function toggleFavoritesOnly() {
+  favoritesOnly.value = !favoritesOnly.value
+  if (favoritesOnly.value) {
+    recentMode.value = false
+  }
+}
+
 /** Enters recent mode and captures a stable list ordering for the session. */
 function openRecentMode() {
   if (recentMode.value) return
@@ -727,6 +755,13 @@ async function ingestFromMenu() {
   for (const node of nodes) {
     await workspaceStore.ingestFile(node)
   }
+}
+
+function toggleFavoriteFromMenu() {
+  const node = contextMenu.value.node
+  closeContextMenu()
+  if (!node) return
+  void favoritesStore.toggle('knowledge_path', node.path)
 }
 
 function ignorePatternForNode(node: KnowledgeFileNode): string {
@@ -869,6 +904,9 @@ onMounted(async () => {
   document.addEventListener('click', closeContextMenu)
   window.addEventListener('keydown', handleGlobalKeydown)
   await workspaceStore.loadKnowledgeTree()
+  if (settingsStore.profile.userId) {
+    await favoritesStore.load(settingsStore.profile.userId, 'knowledge_path', favoritesStore.activeLibraryId())
+  }
   void gitStore.refresh()
   workspaceStore.startFileWatcher()
 })
@@ -883,110 +921,125 @@ onUnmounted(() => {
 <template>
   <aside class="file-panel surface-panel" :class="{ dragging, 'recent-mode': recentMode, 'theme-dark': isDark, 'theme-light': !isDark }">
     <div class="panel-header" :class="{ 'recent-header': recentMode }">
-      <button
-        v-if="recentMode"
-        class="header-action"
-        type="button"
-        title="返回普通文件树"
-        aria-label="返回普通文件树"
-        @click="leaveRecentMode"
-      >
-        <ArrowLeft :size="18" />
-      </button>
-      <button
-        v-if="!recentMode"
-        class="header-action"
-        :class="{ active: treeSearchOpen }"
-        type="button"
-        title="搜索文件"
-        aria-label="搜索文件"
-        :aria-pressed="treeSearchOpen"
-        @click="toggleTreeSearch"
-      >
-        <Search :size="18" />
-      </button>
-      <button
-        v-if="!recentMode"
-        class="header-action"
-        :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn }"
-        type="button"
-        :title="(settingsStore.showIndexColumn || settingsStore.showGraphColumn) ? '隐藏索引与图谱状态' : '显示索引与图谱状态'"
-        @click="toggleStatusColumns"
-      >
-        <ListFilter :size="18" />
-      </button>
-      <div v-if="!recentMode" class="sort-control" @click.stop>
+      <div class="header-row">
+        <button
+          v-if="recentMode"
+          class="header-action"
+          type="button"
+          title="返回普通文件树"
+          aria-label="返回普通文件树"
+          @click="leaveRecentMode"
+        >
+          <ArrowLeft :size="18" />
+        </button>
+        <button
+          v-if="!recentMode"
+          class="header-action"
+          :class="{ active: treeSearchOpen }"
+          type="button"
+          title="搜索文件"
+          aria-label="搜索文件"
+          :aria-pressed="treeSearchOpen"
+          @click="toggleTreeSearch"
+        >
+          <Search :size="18" />
+        </button>
+        <button
+          v-if="!recentMode"
+          class="header-action"
+          :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn }"
+          type="button"
+          :title="(settingsStore.showIndexColumn || settingsStore.showGraphColumn) ? '隐藏索引与图谱状态' : '显示索引与图谱状态'"
+          @click="toggleStatusColumns"
+        >
+          <ListFilter :size="18" />
+        </button>
+        <div v-if="!recentMode" class="sort-control" @click.stop>
+          <button
+            class="header-action"
+            :class="{ active: sortMenuOpen }"
+            type="button"
+            title="排序"
+            @click="sortMenuOpen = !sortMenuOpen"
+          >
+            <ArrowUpDown :size="18" />
+          </button>
+          <div v-if="sortMenuOpen" class="sort-menu" @click.stop>
+            <button
+              v-for="option in sortKeyOptions"
+              :key="option.value"
+              type="button"
+              @click="selectSortKey(option.value)"
+            >
+              <Check v-if="sortKey === option.value" :size="14" />
+              <span v-else class="sort-check-placeholder"></span>
+              <span class="sort-icon-placeholder"></span>
+              <span>{{ option.label }}</span>
+            </button>
+            <hr />
+            <button
+              v-for="option in sortDirectionOptions"
+              :key="option.value"
+              type="button"
+              @click="selectSortDirection(option.value)"
+            >
+              <Check v-if="sortDirection === option.value" :size="14" />
+              <span v-else class="sort-check-placeholder"></span>
+              <ArrowUp v-if="option.value === 'asc'" :size="14" />
+              <ArrowDown v-else :size="14" />
+              <span>{{ option.label }}</span>
+            </button>
+          </div>
+        </div>
+        <button
+          v-if="!recentMode"
+          class="header-action"
+          type="button"
+          title="展开/关闭所有文件夹"
+          @click="toggleExpandAll"
+        >
+          <ChevronsUpDown :size="18" />
+        </button>
+        <button
+          v-if="!recentMode"
+          class="header-action"
+          :class="{ active: favoritesOnly }"
+          type="button"
+          title="我的收藏"
+          :aria-pressed="favoritesOnly"
+          @click="toggleFavoritesOnly"
+        >
+          <Star :size="18" />
+        </button>
+      </div>
+      <div class="header-row header-row-secondary">
         <button
           class="header-action"
-          :class="{ active: sortMenuOpen }"
+          :class="{ loading: workspaceStore.treeLoading, 'refresh-btn': true }"
           type="button"
-          title="排序"
-          @click="sortMenuOpen = !sortMenuOpen"
+          title="刷新文件树"
+          :disabled="workspaceStore.treeLoading"
+          @click="refreshFileTree"
         >
-          <ArrowUpDown :size="18" />
+          <RefreshCw :size="18" />
         </button>
-        <div v-if="sortMenuOpen" class="sort-menu" @click.stop>
-          <button
-            v-for="option in sortKeyOptions"
-            :key="option.value"
-            type="button"
-            @click="selectSortKey(option.value)"
-          >
-            <Check v-if="sortKey === option.value" :size="14" />
-            <span v-else class="sort-check-placeholder"></span>
-            <span class="sort-icon-placeholder"></span>
-            <span>{{ option.label }}</span>
-          </button>
-          <hr />
-          <button
-            v-for="option in sortDirectionOptions"
-            :key="option.value"
-            type="button"
-            @click="selectSortDirection(option.value)"
-          >
-            <Check v-if="sortDirection === option.value" :size="14" />
-            <span v-else class="sort-check-placeholder"></span>
-            <ArrowUp v-if="option.value === 'asc'" :size="14" />
-            <ArrowDown v-else :size="14" />
-            <span>{{ option.label }}</span>
-          </button>
-        </div>
+        <button
+          class="header-action"
+          :class="{ active: recentMode }"
+          type="button"
+          title="最近浏览"
+          :aria-pressed="recentMode"
+          @click="openRecentMode"
+        >
+          <History :size="18" />
+        </button>
+        <button v-if="!recentMode" class="header-action" type="button" title="New folder" @click="beginCreate('folder', '')">
+          <FolderPlus :size="18" />
+        </button>
+        <button v-if="!recentMode" class="header-action" type="button" title="New file" @click="beginCreate('file', '')">
+          <FilePlus2 :size="18" />
+        </button>
       </div>
-      <button
-        v-if="!recentMode"
-        class="header-action"
-        type="button"
-        title="展开/关闭所有文件夹"
-        @click="toggleExpandAll"
-      >
-        <ChevronsUpDown :size="18" />
-      </button>
-      <button
-        class="header-action"
-        :class="{ loading: workspaceStore.treeLoading, 'refresh-btn': true }"
-        type="button"
-        title="刷新文件树"
-        :disabled="workspaceStore.treeLoading"
-        @click="refreshFileTree"
-      >
-        <RefreshCw :size="18" />
-      </button>
-      <button
-        class="header-action"
-        :class="{ active: recentMode }"
-        type="button"
-        title="最近浏览"
-        :aria-pressed="recentMode"
-        @click="openRecentMode"
-      >
-        <History :size="18" />
-      </button>
-      <button v-if="!recentMode" class="header-action" type="button" title="New folder" @click="beginCreate('folder', '')">
-        <FolderPlus :size="18" />
-      </button>
-      <button v-if="!recentMode" class="header-action" type="button" title="New file" @click="beginCreate('file', '')">
-        <FilePlus2 :size="18" />
-      </button>
       <input
         ref="uploadPicker"
         style="display:none"
@@ -1094,6 +1147,7 @@ onUnmounted(() => {
       @ask-agent="askAgentFromMenu"
       @html-visualize="htmlVisualizeFromMenu"
       @ingest="ingestFromMenu"
+      @toggle-favorite="toggleFavoriteFromMenu"
       @toggle-ignore="toggleIgnoreFromMenu"
       @delete="deleteFromMenu"
     />

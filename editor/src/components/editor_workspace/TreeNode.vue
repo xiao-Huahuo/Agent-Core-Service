@@ -16,6 +16,7 @@ import {
   Network,
 } from 'lucide-vue-next'
 
+import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 import { useSettingsStore } from '@/stores/settings'
@@ -239,6 +240,7 @@ function handleRowDrop(event: DragEvent) {
         />
         <span v-if="node.isDir && settingsStore.showGraphColumn" class="node-index-placeholder"></span>
       </span>
+      <FavoriteButton target-type="knowledge_path" :target-id="node.path" :size="13" />
     </div>
     <Transition
       name="tree-collapse"
@@ -279,7 +281,7 @@ function handleRowDrop(event: DragEvent) {
 .tree-row {
   position: relative;
   display: grid;
-  grid-template-columns: 14px 16px minmax(0, 1fr) var(--status-width, 58px);
+  grid-template-columns: 14px 16px minmax(0, 1fr) var(--status-width, 58px) 24px;
   animation: tree-node-enter 0.25s ease-out both;
   animation-delay: calc(var(--stagger, 0) * 40ms);
   align-items: center;

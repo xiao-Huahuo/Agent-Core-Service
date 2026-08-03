@@ -39,6 +39,11 @@ from agent_service.api.grpc.agent_service_pb2 import (
     EventEntry,
     EventsRequest,
     EventsResponse,
+    FavoriteCreateRequest,
+    FavoriteDeleteRequest,
+    FavoriteEntryResponse,
+    FavoriteListRequest,
+    FavoriteListResponse,
     GitBranchRequest,
     GitCommitRequest,
     GitDiffRequest,
@@ -108,6 +113,7 @@ from agent_service.api.grpc.agent_service_pb2 import (
 )
 from agent_service.api.grpc.agent_service_pb2_grpc import AgentServiceServicer as BaseServicer
 from agent_service.schemas.session import SessionCreate, SessionUpdate
+from agent_service.schemas.favorite import FavoriteCreate
 from agent_service.services.message_service import MessageService
 from agent_service.services.session_service import SessionService
 from agent_service.services.settings_service import SettingsService
@@ -115,6 +121,7 @@ from agent_service.services.knowledge_library_service import KnowledgeLibrarySer
 from agent_service.services.git_service import GitService, GitServiceError
 from agent_service.services.task_suggestion_service import TaskSuggestionService
 from agent_service.services.token_usage_service import SUPPORTED_INTERVALS, TokenUsageService
+from agent_service.services.favorite_service import FavoriteService
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +138,7 @@ class AgentServiceServicer(BaseServicer):
         settings_service: SettingsService | None = None,
         knowledge_library_service: KnowledgeLibraryService | None = None,
         git_service: GitService | None = None,
+        favorite_service: FavoriteService | None = None,
     ) -> None:
         self._agent = agent
         self._session_service = session_service
@@ -138,6 +146,7 @@ class AgentServiceServicer(BaseServicer):
         self._settings_service = settings_service
         self._knowledge_library_service = knowledge_library_service
         self._git_service = git_service
+        self._favorite_service = favorite_service
 
     def shutdown(self) -> None:
         self._agent.close()
@@ -256,6 +265,59 @@ class AgentServiceServicer(BaseServicer):
         logger.info("DeleteAllSessions user=%s", request.user_id)
         count = self._session_service.delete_all_user_sessions(request.user_id)
         return DeleteResponse(ok=True, deleted_count=count)
+
+    # ------------------------------------------------------------------
+    # 用户收藏 RPC
+    # ------------------------------------------------------------------
+
+    def ListFavorites(  # noqa: N802
+        self, request: FavoriteListRequest, context: grpc.ServicerContext,
+    ) -> FavoriteListResponse:
+        """列出用户收藏,与 REST /favorites 共用 FavoriteService。"""
+
+        try:
+            favorites = self._require_favorite_service(context).list_favorites(
+                user_id=request.user_id,
+                target_type=request.target_type or None,
+                library_id=request.library_id if request.filter_library else None,
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return FavoriteListResponse(favorites=[_favorite_to_response(item) for item in favorites])
+
+    def AddFavorite(  # noqa: N802
+        self, request: FavoriteCreateRequest, context: grpc.ServicerContext,
+    ) -> FavoriteEntryResponse:
+        """创建收藏;重复收藏返回已有记录。"""
+
+        try:
+            favorite = self._require_favorite_service(context).add_favorite(
+                FavoriteCreate(
+                    user_id=request.user_id,
+                    library_id=request.library_id,
+                    target_type=request.target_type,  # type: ignore[arg-type]
+                    target_id=request.target_id,
+                )
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return _favorite_to_response(favorite)
+
+    def DeleteFavorite(  # noqa: N802
+        self, request: FavoriteDeleteRequest, context: grpc.ServicerContext,
+    ) -> DeleteResponse:
+        """删除用户收藏。"""
+
+        try:
+            deleted = self._require_favorite_service(context).delete_favorite(
+                user_id=request.user_id,
+                library_id=request.library_id,
+                target_type=request.target_type,
+                target_id=request.target_id,
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return DeleteResponse(ok=True, deleted_count=1 if deleted else 0)
 
     # ------------------------------------------------------------------
     # 取消执行 RPC
@@ -1025,6 +1087,13 @@ class AgentServiceServicer(BaseServicer):
             context.abort(grpc.StatusCode.UNAVAILABLE, "GitService not available")
         return self._git_service  # type: ignore[return-value]
 
+    def _require_favorite_service(self, context: grpc.ServicerContext) -> FavoriteService:
+        """返回注入的 FavoriteService,未就绪时终止 RPC。"""
+
+        if self._favorite_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "FavoriteService not available")
+        return self._favorite_service  # type: ignore[return-value]
+
     @staticmethod
     def _git_struct(
         context: grpc.ServicerContext,
@@ -1131,6 +1200,19 @@ def _knowledge_rebuild_to_response(result: KnowledgeLibraryRebuildResult) -> Kno
         chunks_deleted=result.chunks_deleted,
         uploaded_path=result.uploaded_path,
         library_id=result.library_id,
+    )
+
+
+def _favorite_to_response(favorite: Any) -> FavoriteEntryResponse:
+    """将收藏 DTO 转换为 gRPC 响应。"""
+
+    return FavoriteEntryResponse(
+        favorite_id=str(favorite.favorite_id),
+        user_id=str(favorite.user_id),
+        library_id=str(favorite.library_id),
+        target_type=str(favorite.target_type),
+        target_id=str(favorite.target_id),
+        created_at=_to_iso(favorite.created_at),
     )
 
 

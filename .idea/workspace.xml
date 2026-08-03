@@ -6,7 +6,34 @@
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="任务自动化">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.pyi" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.pyi" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2_grpc.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2_grpc.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/servicer.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/servicer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/deps.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/deps.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/models/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/models/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/AgentPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileContextMenu.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileContextMenu.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/SessionDrawer.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/SessionDrawer.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/library_view/LibraryBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/library_view/LibraryBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/library_view/LibraryCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/library_view/LibraryCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/types/knowledge.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/types/knowledge.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/LibraryView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/LibraryView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/vite.config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/protos/agent_service.proto" beforeDir="false" afterPath="$PROJECT_DIR$/protos/agent_service.proto" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/开发规范.md" beforeDir="false" afterPath="$PROJECT_DIR$/开发规范.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -297,15 +324,7 @@
       <workItem from="1785462181237" duration="9290000" />
       <workItem from="1785553951295" duration="16314000" />
       <workItem from="1785639318407" duration="454000" />
-      <workItem from="1785746852479" duration="1431000" />
-    </task>
-    <task id="LOCAL-00241" summary=".">
-      <option name="closed" value="true" />
-      <created>1785057183638</created>
-      <option name="number" value="00241" />
-      <option name="presentableId" value="LOCAL-00241" />
-      <option name="project" value="LOCAL" />
-      <updated>1785057183639</updated>
+      <workItem from="1785746852479" duration="4541000" />
     </task>
     <task id="LOCAL-00242" summary="图书馆v1">
       <option name="closed" value="true" />
@@ -691,7 +710,15 @@
       <option name="project" value="LOCAL" />
       <updated>1785653735688</updated>
     </task>
-    <option name="localTasksCounter" value="290" />
+    <task id="LOCAL-00290" summary="任务自动化">
+      <option name="closed" value="true" />
+      <created>1785748536526</created>
+      <option name="number" value="00290" />
+      <option name="presentableId" value="LOCAL-00290" />
+      <option name="project" value="LOCAL" />
+      <updated>1785748536526</updated>
+    </task>
+    <option name="localTasksCounter" value="291" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

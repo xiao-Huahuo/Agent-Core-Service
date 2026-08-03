@@ -95,6 +95,7 @@ from agent_service.services.session_attachment_service import SessionAttachmentS
 from agent_service.services.skill_service import SkillService
 from agent_service.services.task_list_service import TaskListService
 from agent_service.services.logging_service import setup_logging
+from agent_service.services.favorite_service import FavoriteService
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +165,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         knowledge_library_service=knowledge_library_service,
         knowledge_graph_service=knowledge_graph_service,
     )
+    favorite_service = FavoriteService(engine=settings_service.engine)
     rest_deps._settings_service = settings_service
     rest_deps._attachment_service = attachment_service
     rest_deps._skill_service = skill_service
@@ -171,6 +173,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     rest_deps._knowledge_graph_service = knowledge_graph_service
     rest_deps._git_service = git_service
     rest_deps._library_service = library_service
+    rest_deps._favorite_service = favorite_service
     rest_deps._task_list_service = task_list_service
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
     rest_deps._retrieval_service = retrieval_service
@@ -223,6 +226,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         settings_service=settings_service,
         knowledge_library_service=knowledge_library_service,
         git_service=git_service,
+        favorite_service=favorite_service,
     )
     rest_deps._agent = agent
     rest_deps._session_service = session_service
@@ -273,6 +277,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._knowledge_graph_service = None
         rest_deps._git_service = None
         rest_deps._library_service = None
+        rest_deps._favorite_service = None
         rest_deps._todo_service = None
         rest_deps._automation_service = None
         logger.info("AgentService 已关闭")

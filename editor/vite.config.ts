@@ -62,6 +62,7 @@ export default defineConfig({
       '/git': 'http://127.0.0.1:8002',
       '/knowledge': 'http://127.0.0.1:8002',
       '/library': 'http://127.0.0.1:8002',
+      '/favorites': 'http://127.0.0.1:8002',
       '/sessions': 'http://127.0.0.1:8002',
       '/settings': 'http://127.0.0.1:8002',
       '/skills': 'http://127.0.0.1:8002',

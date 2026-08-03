@@ -107,6 +107,11 @@ service AgentService {
   rpc ListCustomMemories(MemoryListRequest) returns (MemoryListResponse);
   rpc AddCustomMemory(MemoryAddRequest) returns (MemoryEntryResponse);
   rpc DeleteCustomMemory(MemoryDeleteRequest) returns (DeleteResponse);
+
+  // 用户收藏
+  rpc ListFavorites(FavoriteListRequest) returns (FavoriteListResponse);
+  rpc AddFavorite(FavoriteCreateRequest) returns (FavoriteEntryResponse);
+  rpc DeleteFavorite(FavoriteDeleteRequest) returns (DeleteResponse);
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +274,44 @@ message DeleteResponse {
 
 message DeleteAllSessionsRequest {
   string user_id = 1;
+}
+
+// ---------------------------------------------------------------------------
+// 用户收藏
+// ---------------------------------------------------------------------------
+
+message FavoriteListRequest {
+  string user_id = 1;
+  string target_type = 2;
+  string library_id = 3;
+  bool filter_library = 4;
+}
+
+message FavoriteCreateRequest {
+  string user_id = 1;
+  string library_id = 2;
+  string target_type = 3;
+  string target_id = 4;
+}
+
+message FavoriteDeleteRequest {
+  string user_id = 1;
+  string library_id = 2;
+  string target_type = 3;
+  string target_id = 4;
+}
+
+message FavoriteEntryResponse {
+  string favorite_id = 1;
+  string user_id = 2;
+  string library_id = 3;
+  string target_type = 4;
+  string target_id = 5;
+  string created_at = 6;
+}
+
+message FavoriteListResponse {
+  repeated FavoriteEntryResponse favorites = 1;
 }
 
 // ---------------------------------------------------------------------------

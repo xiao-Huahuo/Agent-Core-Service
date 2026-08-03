@@ -10,6 +10,7 @@ import { computed, ref } from 'vue'
 import { Check, FolderOpen, Image as ImageIcon, Link, TriangleAlert } from 'lucide-vue-next'
 
 import { buildApiUrl } from '@/api/client'
+import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import type { LibraryItem } from '@/types/knowledge'
 
@@ -119,6 +120,7 @@ function handleDrop(event: DragEvent) {
     <header v-if="isCollection" class="collection-corner">
       集锦
     </header>
+    <FavoriteButton class="library-favorite" target-type="library_item" :target-id="item.item_id" />
     <button
       v-if="multiSelect"
       class="select-button"
@@ -225,7 +227,7 @@ function handleDrop(event: DragEvent) {
 .select-button {
   position: absolute;
   top: 10px;
-  right: 10px;
+  right: 40px;
   z-index: 2;
   display: flex;
   align-items: center;
@@ -238,6 +240,14 @@ function handleDrop(event: DragEvent) {
   color: var(--color-text-muted);
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.18);
   cursor: pointer;
+}
+
+.library-favorite {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  background: var(--color-canvas);
 }
 
 .select-button :deep(svg) {

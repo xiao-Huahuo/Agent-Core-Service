@@ -41,6 +41,7 @@ const emit = defineEmits<{
   askAgent: []
   htmlVisualize: []
   ingest: []
+  toggleFavorite: []
   toggleIgnore: []
   delete: []
 }>()
@@ -91,6 +92,9 @@ defineExpose({
     <hr class="context-separator" />
     <button type="button" :disabled="!node" @click="emit('ingest')">
       <span>{{ node?.isDir ? '灌库文件夹' : '灌库文件' }}</span>
+    </button>
+    <button type="button" :disabled="!node" @click="emit('toggleFavorite')">
+      <span>收藏 / 取消收藏</span>
     </button>
     <button type="button" :disabled="!node" @click="emit('toggleIgnore')">
       <span>

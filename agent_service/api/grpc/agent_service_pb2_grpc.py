@@ -314,6 +314,21 @@ class AgentServiceStub(object):
                 request_serializer=agent__service__pb2.MemoryDeleteRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.DeleteResponse.FromString,
                 _registered_method=True)
+        self.ListFavorites = channel.unary_unary(
+                '/agent_service.AgentService/ListFavorites',
+                request_serializer=agent__service__pb2.FavoriteListRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.FavoriteListResponse.FromString,
+                _registered_method=True)
+        self.AddFavorite = channel.unary_unary(
+                '/agent_service.AgentService/AddFavorite',
+                request_serializer=agent__service__pb2.FavoriteCreateRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.FavoriteEntryResponse.FromString,
+                _registered_method=True)
+        self.DeleteFavorite = channel.unary_unary(
+                '/agent_service.AgentService/DeleteFavorite',
+                request_serializer=agent__service__pb2.FavoriteDeleteRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.DeleteResponse.FromString,
+                _registered_method=True)
 
 
 class AgentServiceServicer(object):
@@ -672,6 +687,25 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ListFavorites(self, request, context):
+        """用户收藏
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddFavorite(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteFavorite(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AgentServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -943,6 +977,21 @@ def add_AgentServiceServicer_to_server(servicer, server):
             'DeleteCustomMemory': grpc.unary_unary_rpc_method_handler(
                     servicer.DeleteCustomMemory,
                     request_deserializer=agent__service__pb2.MemoryDeleteRequest.FromString,
+                    response_serializer=agent__service__pb2.DeleteResponse.SerializeToString,
+            ),
+            'ListFavorites': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListFavorites,
+                    request_deserializer=agent__service__pb2.FavoriteListRequest.FromString,
+                    response_serializer=agent__service__pb2.FavoriteListResponse.SerializeToString,
+            ),
+            'AddFavorite': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddFavorite,
+                    request_deserializer=agent__service__pb2.FavoriteCreateRequest.FromString,
+                    response_serializer=agent__service__pb2.FavoriteEntryResponse.SerializeToString,
+            ),
+            'DeleteFavorite': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteFavorite,
+                    request_deserializer=agent__service__pb2.FavoriteDeleteRequest.FromString,
                     response_serializer=agent__service__pb2.DeleteResponse.SerializeToString,
             ),
     }
@@ -2412,6 +2461,87 @@ class AgentService(object):
             target,
             '/agent_service.AgentService/DeleteCustomMemory',
             agent__service__pb2.MemoryDeleteRequest.SerializeToString,
+            agent__service__pb2.DeleteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListFavorites(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/ListFavorites',
+            agent__service__pb2.FavoriteListRequest.SerializeToString,
+            agent__service__pb2.FavoriteListResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddFavorite(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/AddFavorite',
+            agent__service__pb2.FavoriteCreateRequest.SerializeToString,
+            agent__service__pb2.FavoriteEntryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteFavorite(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/DeleteFavorite',
+            agent__service__pb2.FavoriteDeleteRequest.SerializeToString,
             agent__service__pb2.DeleteResponse.FromString,
             options,
             channel_credentials,

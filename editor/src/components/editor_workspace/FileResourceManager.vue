@@ -30,10 +30,12 @@ import {
   Network,
   RefreshCw,
   RotateCcw,
+  Star,
   Trash2,
   X,
 } from 'lucide-vue-next'
 
+import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import {
   displayIngestedAt,
@@ -51,14 +53,17 @@ import { previewKnowledgeFile, readKnowledgeFile } from '@/api/knowledge'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useGitStore } from '@/stores/git'
+import { useFavoritesStore } from '@/stores/favorites'
 import type { FilePreviewPayload, KnowledgeFileNode, KnowledgeTrashEntry } from '@/types/knowledge'
 
 defineOptions({ name: 'FileResourceManager' })
 
 const props = withDefaults(defineProps<{
   embeddedPicker?: boolean
+  favoritesOnlyLocked?: boolean
 }>(), {
   embeddedPicker: false,
+  favoritesOnlyLocked: false,
 })
 
 type ResourcePage = 'files' | 'trash'
@@ -69,6 +74,7 @@ type SortDirection = 'asc' | 'desc'
 const workspaceStore = useWorkspaceStore()
 const settingsStore = useSettingsStore()
 const gitStore = useGitStore()
+const favoritesStore = useFavoritesStore()
 const currentDir = ref('')
 const resourcePage = ref<ResourcePage>('files')
 const pageSwitchRef = ref<HTMLElement | null>(null)
@@ -80,6 +86,7 @@ const multiSelectMode = ref(false)
 const sortMenuOpen = ref(false)
 const sortKey = ref<SortKey>('name')
 const sortDirection = ref<SortDirection>('asc')
+const favoritesOnly = ref(false)
 const switchingRoot = ref(false)
 const rootError = ref('')
 const dragging = ref(false)
@@ -171,17 +178,19 @@ const pathCapsuleParts = computed(() => {
 
 const visibleItems = computed(() => {
   const targetParent = currentDir.value
+  const favoritePaths = favoritesStore.idsFor('knowledge_path')
   return flatNodes.value
-    .filter((node) => parentPath(node.path) === targetParent)
+    .filter((node) => effectiveFavoritesOnly.value ? favoritePaths.has(node.path) : parentPath(node.path) === targetParent)
     .sort(compareNodes)
 })
+const effectiveFavoritesOnly = computed(() => props.favoritesOnlyLocked || favoritesOnly.value)
 
 const listGridColumns = computed(() => {
   const selectionColumn = isMultiSelecting.value ? '28px ' : ''
   const indexColumn = settingsStore.showIndexColumn ? '118px' : ''
   const graphColumn = settingsStore.showGraphColumn ? '118px' : ''
   const statusColumns = [indexColumn, graphColumn].filter(Boolean).join(' ')
-  return `${selectionColumn}minmax(240px, 1fr) 168px 168px 112px 96px${statusColumns ? ` ${statusColumns}` : ''}`
+  return `${selectionColumn}minmax(240px, 1fr) 168px 168px 112px 96px 64px${statusColumns ? ` ${statusColumns}` : ''}`
 })
 const trashGridColumns = 'minmax(220px, 1fr) minmax(260px, 1.2fr) 156px 156px 96px 96px 132px'
 
@@ -316,6 +325,9 @@ async function refreshResources() {
     return
   }
   await workspaceStore.loadKnowledgeTree()
+  if (settingsStore.profile.userId) {
+    await favoritesStore.load(settingsStore.profile.userId, 'knowledge_path', favoritesStore.activeLibraryId())
+  }
   if (!flatNodes.value.some((node) => node.path === currentDir.value) && currentDir.value) {
     navigateToDirectory('', false)
   }
@@ -398,6 +410,11 @@ function toggleStatusColumns() {
   const nextVisible = !(settingsStore.showIndexColumn && settingsStore.showGraphColumn)
   settingsStore.setShowIndexColumn(nextVisible)
   settingsStore.setShowGraphColumn(nextVisible)
+}
+
+function toggleFavoritesOnly() {
+  if (props.favoritesOnlyLocked) return
+  favoritesOnly.value = !favoritesOnly.value
 }
 
 function visibleRangePaths(anchorPath: string, targetPath: string): string[] {
@@ -646,6 +663,13 @@ async function ingestFromMenu() {
   })
 }
 
+function toggleFavoriteFromMenu() {
+  const node = contextMenu.value.node
+  closeContextMenu()
+  if (!node) return
+  void favoritesStore.toggle('knowledge_path', node.path)
+}
+
 function ignorePatternForNode(node: KnowledgeFileNode): string {
   const normalizedPath = normalizeTreePath(node.path)
   return node.isDir ? `${normalizedPath}/` : normalizedPath
@@ -826,6 +850,9 @@ async function deleteTrash(entry: KnowledgeTrashEntry) {
 
 onMounted(() => {
   document.addEventListener('click', closeContextMenu)
+  if (settingsStore.profile.userId) {
+    void favoritesStore.load(settingsStore.profile.userId, 'knowledge_path', favoritesStore.activeLibraryId())
+  }
   void workspaceStore.loadKnowledgeTrash()
   void gitStore.refresh()
   updatePageSlider()
@@ -923,6 +950,19 @@ onUnmounted(() => {
         @click="toggleStatusColumns"
       >
         <ListFilter :size="15" />
+      </button>
+      <button
+        v-if="resourcePage === 'files'"
+        class="tool-button"
+        :class="{ active: effectiveFavoritesOnly }"
+        type="button"
+        title="我的收藏"
+        aria-label="我的收藏"
+        :aria-pressed="effectiveFavoritesOnly"
+        :disabled="favoritesOnlyLocked"
+        @click="toggleFavoritesOnly"
+      >
+        <Star :size="15" />
       </button>
       <button
         v-if="resourcePage === 'files'"
@@ -1053,6 +1093,7 @@ onUnmounted(() => {
           <span>入库日期</span>
           <span>类型</span>
           <span>大小</span>
+          <span>收藏</span>
           <span v-if="settingsStore.showIndexColumn">入库状态</span>
           <span v-if="settingsStore.showGraphColumn">图谱状态</span>
         </div>
@@ -1088,6 +1129,9 @@ onUnmounted(() => {
           <span>{{ displayIngestedAt(node) }}</span>
           <span>{{ fileKind(node) }}</span>
           <span>{{ formatSize(nodeSize(node)) }}</span>
+          <span class="favorite-cell">
+            <FavoriteButton target-type="knowledge_path" :target-id="node.path" />
+          </span>
           <span v-if="settingsStore.showIndexColumn" class="index-status-cell" :class="indexStatusClass(node)">
             <component v-if="!node.isDir" :is="indexStatusIcon(node)" :size="13" />
             <span>{{ node.isDir ? '-' : indexStatusTitle(node) }}</span>
@@ -1119,6 +1163,7 @@ onUnmounted(() => {
               <strong :class="gitStatusClass(node)">{{ node.name }}</strong>
               <small>{{ previewSummary(node) }}</small>
             </span>
+            <FavoriteButton class="content-favorite" target-type="knowledge_path" :target-id="node.path" />
           </button>
         </div>
         <aside class="preview-pane">
@@ -1160,6 +1205,7 @@ onUnmounted(() => {
           <span v-if="isMultiSelecting" class="selection-check tile-selection-check" :class="{ checked: selectedPaths.has(node.path) }">
             <Check v-if="selectedPaths.has(node.path)" :size="12" />
           </span>
+          <FavoriteButton class="tile-favorite" target-type="knowledge_path" :target-id="node.path" />
           <span class="tile-art">
             <img
               v-if="viewMode === 'large' && isImageNode(node) && imagePreviewUrls[node.path]"
@@ -1215,6 +1261,7 @@ onUnmounted(() => {
       @ask-agent="askAgentFromMenu"
       @html-visualize="htmlVisualizeFromMenu"
       @ingest="ingestFromMenu"
+      @toggle-favorite="toggleFavoriteFromMenu"
       @toggle-ignore="toggleIgnoreFromMenu"
       @delete="deleteFromMenu"
     />

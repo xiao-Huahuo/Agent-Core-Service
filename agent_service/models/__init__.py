@@ -10,6 +10,7 @@
 from agent_service.models.longterm_memory_spec import LongTermMemorySpec, LongTermMemorySpecBase
 from agent_service.models.attachment import SessionAttachmentRecord
 from agent_service.models.automation import AutomationRunRecord, AutomationTaskRecord
+from agent_service.models.favorite import FavoriteRecord
 from agent_service.models.message import MessageBase, MessageRecord
 from agent_service.models.session import SessionBase, SessionRecord
 from agent_service.models.token_usage import TokenUsageRecord
@@ -21,6 +22,7 @@ __all__ = [
     "SessionAttachmentRecord",
     "AutomationRunRecord",
     "AutomationTaskRecord",
+    "FavoriteRecord",
     "MessageBase",
     "MessageRecord",
     "SessionBase",

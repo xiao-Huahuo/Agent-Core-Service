@@ -55,6 +55,7 @@ export type FileViewerKind = 'markdown' | 'code' | 'image' | 'pdf' | 'table' | '
 export type WorkspaceMainView =
   | 'editor'
   | 'resources'
+  | 'favorites'
   | 'library'
   | 'ingestion'
   | 'visualization'

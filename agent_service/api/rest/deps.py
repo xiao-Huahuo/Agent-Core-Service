@@ -23,6 +23,7 @@ from agent_service.services.skill_service import SkillService
 from agent_service.services.task_list_service import TaskListService
 from agent_service.services.todo_service import TodoService
 from agent_service.services.automation_service import AutomationService
+from agent_service.services.favorite_service import FavoriteService
 
 _agent: AgentCore | None = None
 _session_service: SessionService | None = None
@@ -39,6 +40,7 @@ _task_list_service: TaskListService | None = None
 _grpc_running = False
 _todo_service: TodoService | None = None
 _automation_service: AutomationService | None = None
+_favorite_service: FavoriteService | None = None
 
 
 def _require_agent() -> AgentCore:
@@ -127,3 +129,11 @@ def _require_skill_service() -> SkillService:
     if _skill_service is None:
         raise HTTPException(status_code=503, detail="SkillService not initialized yet")
     return _skill_service
+
+
+def _require_favorite_service() -> FavoriteService:
+    """返回启动阶段注入的用户收藏服务。"""
+
+    if _favorite_service is None:
+        raise HTTPException(status_code=503, detail="FavoriteService not initialized yet")
+    return _favorite_service

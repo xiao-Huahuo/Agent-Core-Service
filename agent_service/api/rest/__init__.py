@@ -15,6 +15,7 @@ from agent_service.api.rest.task_lists import router as task_lists_router
 from agent_service.api.rest.token_usage import router as token_usage_router
 from agent_service.api.rest.todo import router as todo_router
 from agent_service.api.rest.automation import router as automation_router
+from agent_service.api.rest.favorites import router as favorites_router
 
 router = APIRouter()
 router.include_router(health_router)
@@ -30,5 +31,6 @@ router.include_router(task_lists_router)
 router.include_router(token_usage_router)
 router.include_router(todo_router)
 router.include_router(automation_router)
+router.include_router(favorites_router)
 
 __all__ = ["router"]
