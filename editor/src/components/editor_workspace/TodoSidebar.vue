@@ -10,6 +10,7 @@ import { onBeforeUnmount, onMounted, nextTick, ref } from 'vue'
 import {
   Calendar,
   Clock3,
+  ChevronRight,
   Pencil,
   Plus,
   RefreshCw,
@@ -36,6 +37,7 @@ const newAutomationFrequency = ref<'none' | 'daily' | 'weekly' | 'monthly'>('dai
 const newAutomationAccessMode = ref<'readonly' | 'sandbox' | 'full_access'>('sandbox')
 const automationSubmitting = ref(false)
 const automationError = ref('')
+const expandedAutomationId = ref('')
 
 let tickTimer: ReturnType<typeof setInterval> | undefined
 
@@ -168,6 +170,36 @@ function isDatetimeExpired(iso: string): boolean {
 function getAutomationNextRun(todoId: string): string | undefined {
   return todoStore.automations.find((item) => item.todoId === todoId)?.nextRunAt
 }
+
+function toggleAutomationDetails(todoId: string) {
+  expandedAutomationId.value = expandedAutomationId.value === todoId ? '' : todoId
+}
+
+function formatAutomationRecurrence(todoId: string): string {
+  const recurrence = todoStore.automations.find((item) => item.todoId === todoId)?.recurrence
+  if (!recurrence || recurrence.frequency === 'none') return '执行一次'
+  const labels: Record<'daily' | 'weekly' | 'monthly', { singular: string; interval: string }> = {
+    daily: { singular: '每天', interval: '天' },
+    weekly: { singular: '每周', interval: '周' },
+    monthly: { singular: '每月', interval: '个月' },
+  }
+  const label = labels[recurrence.frequency]
+  return recurrence.interval > 1 ? `每 ${recurrence.interval} ${label.interval}` : label.singular
+}
+
+function formatAutomationAccessMode(todoId: string): string {
+  const accessMode = todoStore.automations.find((item) => item.todoId === todoId)?.accessMode
+  const labels: Record<'readonly' | 'sandbox' | 'full_access', string> = {
+    readonly: '只读权限',
+    sandbox: '沙盒权限',
+    full_access: '完全访问',
+  }
+  return accessMode ? labels[accessMode] : '未知权限'
+}
+
+function getAutomationPrompt(todoId: string): string {
+  return todoStore.automations.find((item) => item.todoId === todoId)?.prompt || '暂无描述'
+}
 </script>
 
 <template>
@@ -275,6 +307,17 @@ function getAutomationNextRun(todoId: string): string | undefined {
             >
               {{ item.text }}
             </span>
+            <button
+              v-if="item.category === 'automation'"
+              class="todo-automation-expand"
+              type="button"
+              :title="expandedAutomationId === item.id ? '收起自动化详情' : '展开自动化详情'"
+              :aria-label="expandedAutomationId === item.id ? '收起自动化详情' : '展开自动化详情'"
+              :aria-expanded="expandedAutomationId === item.id"
+              @click.stop="toggleAutomationDetails(item.id)"
+            >
+              <ChevronRight :size="12" :class="{ expanded: expandedAutomationId === item.id }" />
+            </button>
           </div>
           <div v-if="item.dueDate || item.category === 'automation'" class="todo-date-col">
             <Clock3 v-if="item.category === 'automation'" :size="10" />
@@ -294,6 +337,27 @@ function getAutomationNextRun(todoId: string): string | undefined {
             >
               <X :size="10" />
             </button>
+          </div>
+          <div
+            v-if="item.category === 'automation' && expandedAutomationId === item.id"
+            class="todo-automation-details"
+          >
+            <div class="todo-automation-detail-row">
+              <span>时间</span>
+              <strong>{{ formatDatetime(getAutomationNextRun(item.id) || '') || '未设置' }}</strong>
+            </div>
+            <div class="todo-automation-detail-row">
+              <span>权限</span>
+              <strong>{{ formatAutomationAccessMode(item.id) }}</strong>
+            </div>
+            <div class="todo-automation-detail-row">
+              <span>周期</span>
+              <strong>{{ formatAutomationRecurrence(item.id) }}</strong>
+            </div>
+            <div class="todo-automation-detail-row todo-automation-detail-description">
+              <span>描述</span>
+              <p>{{ getAutomationPrompt(item.id) }}</p>
+            </div>
           </div>
         </div>
 
@@ -880,6 +944,35 @@ function getAutomationNextRun(todoId: string): string | undefined {
   min-height: 24px;
 }
 
+.todo-automation-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin-right: var(--space-2);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.todo-automation-expand:hover {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  color: var(--color-primary);
+}
+
+.todo-automation-expand svg {
+  transition: transform var(--transition-fast);
+}
+
+.todo-automation-expand svg.expanded {
+  transform: rotate(90deg);
+}
+
 .todo-text {
   display: block;
   overflow: hidden;
@@ -1078,6 +1171,42 @@ function getAutomationNextRun(todoId: string): string | undefined {
   display: flex;
   align-items: center;
   gap: var(--space-4);
+}
+
+.todo-automation-details {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  border-left: 2px solid var(--color-primary-soft);
+  color: var(--color-text-secondary);
+  font-size: calc(10px * var(--font-scale));
+}
+
+.todo-automation-detail-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.todo-automation-detail-row > span {
+  color: var(--color-text-muted);
+}
+
+.todo-automation-detail-row strong {
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.todo-automation-detail-description p {
+  min-width: 0;
+  margin: 0;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .todo-add-automation-btn {
