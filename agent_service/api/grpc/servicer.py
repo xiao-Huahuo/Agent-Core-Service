@@ -44,6 +44,12 @@ from agent_service.api.grpc.agent_service_pb2 import (
     FavoriteEntryResponse,
     FavoriteListRequest,
     FavoriteListResponse,
+    FeedbackCreateRequest,
+    FeedbackDeleteRequest,
+    FeedbackEntryResponse,
+    FeedbackListRequest,
+    FeedbackListResponse,
+    FeedbackUpdateRequest,
     GitBranchRequest,
     GitCommitRequest,
     GitDiffRequest,
@@ -114,6 +120,7 @@ from agent_service.api.grpc.agent_service_pb2 import (
 from agent_service.api.grpc.agent_service_pb2_grpc import AgentServiceServicer as BaseServicer
 from agent_service.schemas.session import SessionCreate, SessionUpdate
 from agent_service.schemas.favorite import FavoriteCreate
+from agent_service.schemas.feedback import FeedbackCreate, FeedbackUpdate
 from agent_service.services.message_service import MessageService
 from agent_service.services.session_service import SessionService
 from agent_service.services.settings_service import SettingsService
@@ -122,6 +129,7 @@ from agent_service.services.git_service import GitService, GitServiceError
 from agent_service.services.task_suggestion_service import TaskSuggestionService
 from agent_service.services.token_usage_service import SUPPORTED_INTERVALS, TokenUsageService
 from agent_service.services.favorite_service import FavoriteService
+from agent_service.services.feedback_service import FeedbackService
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +147,7 @@ class AgentServiceServicer(BaseServicer):
         knowledge_library_service: KnowledgeLibraryService | None = None,
         git_service: GitService | None = None,
         favorite_service: FavoriteService | None = None,
+        feedback_service: FeedbackService | None = None,
     ) -> None:
         self._agent = agent
         self._session_service = session_service
@@ -147,6 +156,7 @@ class AgentServiceServicer(BaseServicer):
         self._knowledge_library_service = knowledge_library_service
         self._git_service = git_service
         self._favorite_service = favorite_service
+        self._feedback_service = feedback_service
 
     def shutdown(self) -> None:
         self._agent.close()
@@ -314,6 +324,66 @@ class AgentServiceServicer(BaseServicer):
                 library_id=request.library_id,
                 target_type=request.target_type,
                 target_id=request.target_id,
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return DeleteResponse(ok=True, deleted_count=1 if deleted else 0)
+
+    def ListFeedback(  # noqa: N802
+        self, request: FeedbackListRequest, context: grpc.ServicerContext,
+    ) -> FeedbackListResponse:
+        """List the current user's feedback entries."""
+
+        try:
+            feedback = self._require_feedback_service(context).list_feedback(
+                user_id=request.user_id,
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return FeedbackListResponse(feedback=[_feedback_to_response(item) for item in feedback])
+
+    def AddFeedback(  # noqa: N802
+        self, request: FeedbackCreateRequest, context: grpc.ServicerContext,
+    ) -> FeedbackEntryResponse:
+        """提交并持久化一条用户反馈。"""
+
+        try:
+            feedback = self._require_feedback_service(context).add_feedback(
+                FeedbackCreate(
+                    user_id=request.user_id,
+                    content=request.content,
+                    source=request.source or "editor_activity_bar",
+                    page=request.page,
+                )
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return _feedback_to_response(feedback)
+
+    def UpdateFeedback(  # noqa: N802
+        self, request: FeedbackUpdateRequest, context: grpc.ServicerContext,
+    ) -> FeedbackEntryResponse:
+        """Update one persisted feedback entry."""
+
+        try:
+            feedback = self._require_feedback_service(context).update_feedback(
+                feedback_id=request.feedback_id,
+                payload=FeedbackUpdate(content=request.content),
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        if feedback is None:
+            context.abort(grpc.StatusCode.NOT_FOUND, "feedback not found")
+        return _feedback_to_response(feedback)
+
+    def DeleteFeedback(  # noqa: N802
+        self, request: FeedbackDeleteRequest, context: grpc.ServicerContext,
+    ) -> DeleteResponse:
+        """Delete one persisted feedback entry."""
+
+        try:
+            deleted = self._require_feedback_service(context).delete_feedback(
+                feedback_id=request.feedback_id,
             )
         except ValueError as exc:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
@@ -1094,6 +1164,13 @@ class AgentServiceServicer(BaseServicer):
             context.abort(grpc.StatusCode.UNAVAILABLE, "FavoriteService not available")
         return self._favorite_service  # type: ignore[return-value]
 
+    def _require_feedback_service(self, context: grpc.ServicerContext) -> FeedbackService:
+        """返回注入的 FeedbackService,未就绪时终止 RPC。"""
+
+        if self._feedback_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "FeedbackService not available")
+        return self._feedback_service  # type: ignore[return-value]
+
     @staticmethod
     def _git_struct(
         context: grpc.ServicerContext,
@@ -1213,6 +1290,19 @@ def _favorite_to_response(favorite: Any) -> FavoriteEntryResponse:
         target_type=str(favorite.target_type),
         target_id=str(favorite.target_id),
         created_at=_to_iso(favorite.created_at),
+    )
+
+
+def _feedback_to_response(feedback: Any) -> FeedbackEntryResponse:
+    """将反馈 DTO 转换为 gRPC 响应。"""
+
+    return FeedbackEntryResponse(
+        feedback_id=str(feedback.feedback_id),
+        user_id=str(feedback.user_id),
+        content=str(feedback.content),
+        source=str(feedback.source),
+        page=str(feedback.page),
+        created_at=_to_iso(feedback.created_at),
     )
 
 

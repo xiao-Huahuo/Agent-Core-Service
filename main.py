@@ -25,6 +25,7 @@ from typing import Any
 
 import grpc
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 warnings.filterwarnings("ignore", message=".*allowed_objects.*")
 
@@ -96,6 +97,7 @@ from agent_service.services.skill_service import SkillService
 from agent_service.services.task_list_service import TaskListService
 from agent_service.services.logging_service import setup_logging
 from agent_service.services.favorite_service import FavoriteService
+from agent_service.services.feedback_service import FeedbackService
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +168,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         knowledge_graph_service=knowledge_graph_service,
     )
     favorite_service = FavoriteService(engine=settings_service.engine)
+    feedback_service = FeedbackService(engine=settings_service.engine)
     rest_deps._settings_service = settings_service
     rest_deps._attachment_service = attachment_service
     rest_deps._skill_service = skill_service
@@ -174,6 +177,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     rest_deps._git_service = git_service
     rest_deps._library_service = library_service
     rest_deps._favorite_service = favorite_service
+    rest_deps._feedback_service = feedback_service
     rest_deps._task_list_service = task_list_service
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
     rest_deps._retrieval_service = retrieval_service
@@ -227,6 +231,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         knowledge_library_service=knowledge_library_service,
         git_service=git_service,
         favorite_service=favorite_service,
+        feedback_service=feedback_service,
     )
     rest_deps._agent = agent
     rest_deps._session_service = session_service
@@ -278,12 +283,34 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._git_service = None
         rest_deps._library_service = None
         rest_deps._favorite_service = None
+        rest_deps._feedback_service = None
         rest_deps._todo_service = None
         rest_deps._automation_service = None
         logger.info("AgentService 已关闭")
 
 
 app = FastAPI(title="Agent-Core-Service", lifespan=_lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["null"],
+    allow_origin_regex=r"^(https?://(127\.0\.0\.1|localhost)(:\d+)?|null)$",
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_private_network=True,
+)
+
+
+@app.middleware("http")
+async def _allow_local_private_network_requests(request: Any, call_next: Any) -> Any:
+    """允许 Electron/file renderer 访问本机后端的 Private Network 预检。"""
+
+    response = await call_next(request)
+    origin = request.headers.get("origin", "")
+    if origin == "null" or origin.startswith("http://127.0.0.1") or origin.startswith("http://localhost"):
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
+
+
 app.include_router(rest_router)
 
 _runtime_config = AgentConfig.load_config(ensure_directories=False, ensure_models=False)

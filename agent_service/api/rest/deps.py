@@ -24,6 +24,7 @@ from agent_service.services.task_list_service import TaskListService
 from agent_service.services.todo_service import TodoService
 from agent_service.services.automation_service import AutomationService
 from agent_service.services.favorite_service import FavoriteService
+from agent_service.services.feedback_service import FeedbackService
 
 _agent: AgentCore | None = None
 _session_service: SessionService | None = None
@@ -41,6 +42,7 @@ _grpc_running = False
 _todo_service: TodoService | None = None
 _automation_service: AutomationService | None = None
 _favorite_service: FavoriteService | None = None
+_feedback_service: FeedbackService | None = None
 
 
 def _require_agent() -> AgentCore:
@@ -137,3 +139,11 @@ def _require_favorite_service() -> FavoriteService:
     if _favorite_service is None:
         raise HTTPException(status_code=503, detail="FavoriteService not initialized yet")
     return _favorite_service
+
+
+def _require_feedback_service() -> FeedbackService:
+    """返回启动阶段注入的用户反馈服务。"""
+
+    if _feedback_service is None:
+        raise HTTPException(status_code=503, detail="FeedbackService not initialized yet")
+    return _feedback_service

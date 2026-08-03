@@ -298,6 +298,60 @@ class FavoriteListResponse(_message.Message):
     favorites: _containers.RepeatedCompositeFieldContainer[FavoriteEntryResponse]
     def __init__(self, favorites: _Optional[_Iterable[_Union[FavoriteEntryResponse, _Mapping]]] = ...) -> None: ...
 
+class FeedbackCreateRequest(_message.Message):
+    __slots__ = ("user_id", "content", "source", "page")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    CONTENT_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_FIELD_NUMBER: _ClassVar[int]
+    PAGE_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    content: str
+    source: str
+    page: str
+    def __init__(self, user_id: _Optional[str] = ..., content: _Optional[str] = ..., source: _Optional[str] = ..., page: _Optional[str] = ...) -> None: ...
+
+class FeedbackListRequest(_message.Message):
+    __slots__ = ("user_id",)
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    def __init__(self, user_id: _Optional[str] = ...) -> None: ...
+
+class FeedbackUpdateRequest(_message.Message):
+    __slots__ = ("feedback_id", "content")
+    FEEDBACK_ID_FIELD_NUMBER: _ClassVar[int]
+    CONTENT_FIELD_NUMBER: _ClassVar[int]
+    feedback_id: str
+    content: str
+    def __init__(self, feedback_id: _Optional[str] = ..., content: _Optional[str] = ...) -> None: ...
+
+class FeedbackDeleteRequest(_message.Message):
+    __slots__ = ("feedback_id",)
+    FEEDBACK_ID_FIELD_NUMBER: _ClassVar[int]
+    feedback_id: str
+    def __init__(self, feedback_id: _Optional[str] = ...) -> None: ...
+
+class FeedbackEntryResponse(_message.Message):
+    __slots__ = ("feedback_id", "user_id", "content", "source", "page", "created_at")
+    FEEDBACK_ID_FIELD_NUMBER: _ClassVar[int]
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    CONTENT_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_FIELD_NUMBER: _ClassVar[int]
+    PAGE_FIELD_NUMBER: _ClassVar[int]
+    CREATED_AT_FIELD_NUMBER: _ClassVar[int]
+    feedback_id: str
+    user_id: str
+    content: str
+    source: str
+    page: str
+    created_at: str
+    def __init__(self, feedback_id: _Optional[str] = ..., user_id: _Optional[str] = ..., content: _Optional[str] = ..., source: _Optional[str] = ..., page: _Optional[str] = ..., created_at: _Optional[str] = ...) -> None: ...
+
+class FeedbackListResponse(_message.Message):
+    __slots__ = ("feedback",)
+    FEEDBACK_FIELD_NUMBER: _ClassVar[int]
+    feedback: _containers.RepeatedCompositeFieldContainer[FeedbackEntryResponse]
+    def __init__(self, feedback: _Optional[_Iterable[_Union[FeedbackEntryResponse, _Mapping]]] = ...) -> None: ...
+
 class ListMessagesRequest(_message.Message):
     __slots__ = ("user_id", "session_id", "limit")
     USER_ID_FIELD_NUMBER: _ClassVar[int]

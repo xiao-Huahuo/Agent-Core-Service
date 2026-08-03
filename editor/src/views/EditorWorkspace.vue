@@ -14,6 +14,7 @@ import CommandPalette from '@/components/editor_workspace/CommandPalette.vue'
 import EditorPane from '@/components/editor_workspace/EditorPane.vue'
 import ImagePreviewer from '@/components/common/ImagePreviewer.vue'
 import FileConflictDialog from '@/components/editor_workspace/FileConflictDialog.vue'
+import FeedbackPopover from '@/components/editor_workspace/FeedbackPopover.vue'
 import FileTreePanel from '@/components/editor_workspace/FileTreePanel.vue'
 import FileResourceManager from '@/components/editor_workspace/FileResourceManager.vue'
 import GitSidebar from '@/components/git_sidebar/GitSidebar.vue'
@@ -60,9 +61,14 @@ const fileSidebarOpen = ref(true)
 const agentSidebarOpen = ref(true)
 const gitLeftOpen = ref(false)
 const gitRightOpen = ref(false)
+const feedbackOpen = ref(false)
 const fileWidth = ref(DEFAULT_FILE_WIDTH)
 const agentWidth = ref(DEFAULT_AGENT_WIDTH)
 const activeResizeTarget = ref<ResizeTarget | null>(null)
+let pendingResizeClientX = 0
+let resizeFrameId = 0
+let resizePointerTarget: HTMLElement | null = null
+let resizePointerId: number | null = null
 const isAgentPage = computed(() => workspaceStore.mainView === 'agent')
 const isGraphPage = computed(() => workspaceStore.mainView === 'graph')
 const sidebarHidden = computed(() => isAgentPage.value || isGraphPage.value)
@@ -107,6 +113,10 @@ const workspaceGridStyle = computed<Record<string, string>>(() => ({
   '--agent-resizer-width': visibleAgentSidebarOpen.value ? '4px' : '0px',
   '--file-mobile-row': visibleFileSidebarOpen.value ? '300px' : '0px',
   '--agent-mobile-row': visibleAgentSidebarOpen.value ? '360px' : '0px',
+}))
+
+const workspacePageStyle = computed<Record<string, string>>(() => ({
+  '--activity-col-width': `${activityBarWidth.value}px`,
 }))
 
 function clamp(value: number, min: number, max: number) {
@@ -265,10 +275,15 @@ function openDashboard() {
 function openDebug() {
   const next = workspaceStore.mainView === 'debug' ? 'editor' : 'debug'
   workspaceStore.setMainView(next)
+  feedbackOpen.value = false
   if (next !== 'editor') {
     fileSidebarOpen.value = false
     agentSidebarOpen.value = false
   }
+}
+
+function toggleFeedback() {
+  feedbackOpen.value = !feedbackOpen.value
 }
 
 function openResources() {
@@ -365,7 +380,7 @@ async function openGraphNode(node: KnowledgeGraphNodeEvent) {
   })
 }
 
-function handleResizeMove(event: PointerEvent) {
+function applyResizeMove(clientX: number) {
   const grid = workspaceGrid.value
   if (!grid || !activeResizeTarget.value) {
     return
@@ -375,7 +390,7 @@ function handleResizeMove(event: PointerEvent) {
   }
   const rect = grid.getBoundingClientRect()
   if (activeResizeTarget.value === 'file') {
-    const nextWidth = event.clientX - rect.left - activityBarWidth.value
+    const nextWidth = clientX - rect.left - activityBarWidth.value
     if (nextWidth < COLLAPSE_THRESHOLD) {
       fileSidebarOpen.value = false
       return
@@ -385,7 +400,7 @@ function handleResizeMove(event: PointerEvent) {
     return
   }
 
-  const nextWidth = rect.right - event.clientX
+  const nextWidth = rect.right - clientX
   if (nextWidth < COLLAPSE_THRESHOLD) {
     if (gitRightOpen.value) {
       gitRightOpen.value = false
@@ -404,17 +419,52 @@ function handleResizeMove(event: PointerEvent) {
   agentWidth.value = clamp(nextWidth, MIN_PANEL_WIDTH, maxAgentWidth)
 }
 
+function handleResizeMove(event: PointerEvent) {
+  event.preventDefault()
+  pendingResizeClientX = event.clientX
+  if (resizeFrameId) {
+    return
+  }
+  resizeFrameId = window.requestAnimationFrame(() => {
+    resizeFrameId = 0
+    applyResizeMove(pendingResizeClientX)
+  })
+}
+
 function stopResize() {
+  if (resizeFrameId) {
+    window.cancelAnimationFrame(resizeFrameId)
+    resizeFrameId = 0
+  }
+  if (resizePointerTarget && resizePointerId !== null) {
+    try {
+      resizePointerTarget.releasePointerCapture(resizePointerId)
+    } catch {
+      // Pointer capture may already be released by the browser.
+    }
+  }
+  resizePointerTarget = null
+  resizePointerId = null
   activeResizeTarget.value = null
   window.removeEventListener('pointermove', handleResizeMove)
   window.removeEventListener('pointerup', stopResize)
+  window.removeEventListener('pointercancel', stopResize)
 }
 
 function startResize(target: ResizeTarget, event: PointerEvent) {
   event.preventDefault()
+  resizePointerTarget = event.currentTarget as HTMLElement
+  resizePointerId = event.pointerId
+  try {
+    resizePointerTarget.setPointerCapture(event.pointerId)
+  } catch {
+    // Pointer capture is an optimization; window listeners still keep resizing usable.
+  }
   activeResizeTarget.value = target
+  pendingResizeClientX = event.clientX
   window.addEventListener('pointermove', handleResizeMove)
   window.addEventListener('pointerup', stopResize)
+  window.addEventListener('pointercancel', stopResize)
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -463,7 +513,15 @@ watch(
 </script>
 
 <template>
-  <div class="workspace-page" :class="{ resizing: activeResizeTarget || activeTodoResize }">
+  <div
+    class="workspace-page"
+    :class="{
+      resizing: activeResizeTarget || activeTodoResize,
+      'resizing-column': activeResizeTarget,
+      'resizing-row': activeTodoResize,
+    }"
+    :style="workspacePageStyle"
+  >
     <TopCommandBar
       :git-open="gitRightOpen"
       @toggle-agent="toggleAgentSidebar"
@@ -497,6 +555,7 @@ watch(
         :graph-active="workspaceStore.mainView === 'graph'"
         :dashboard-active="workspaceStore.mainView === 'dashboard'"
         :debug-active="workspaceStore.mainView === 'debug'"
+        :feedback-open="feedbackOpen"
         :search-active="workspaceStore.mainView === 'search'"
         :skills-active="workspaceStore.mainView === 'skills'"
         :settings-active="workspaceStore.mainView === 'settings'"
@@ -512,6 +571,7 @@ watch(
         @toggle-graph="toggleGraphView"
         @toggle-todo="toggleTodoSidebar"
         @open-dashboard="openDashboard"
+        @toggle-feedback="toggleFeedback"
         @open-debug="openDebug"
         @open-search="openSearch"
         @open-skills="openSkills"
@@ -578,11 +638,18 @@ watch(
     <SelectionToolbar @ask="handleAskAgent" />
     <FileConflictDialog v-if="showConflictDialog" />
     <ImagePreviewer />
+    <FeedbackPopover
+      :open="feedbackOpen"
+      :user-id="settingsStore.profile.userId"
+      :page="workspaceStore.mainView"
+      @close="feedbackOpen = false"
+    />
   </div>
 </template>
 
 <style scoped>
 .workspace-page {
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
@@ -803,10 +870,27 @@ watch(
   user-select: none;
 }
 
+.workspace-page.resizing-column,
+.workspace-page.resizing-column * {
+  cursor: col-resize !important;
+}
+
+.workspace-page.resizing-row,
+.workspace-page.resizing-row * {
+  cursor: row-resize !important;
+}
+
 .workspace-page.resizing .workspace-grid,
 .workspace-page.resizing .file-col,
+.workspace-page.resizing .editor-col,
 .workspace-page.resizing .agent-col {
   transition: none;
+}
+
+.workspace-page.resizing-column .file-col,
+.workspace-page.resizing-column .editor-col,
+.workspace-page.resizing-column .agent-col {
+  pointer-events: none;
 }
 
 @media (max-width: 1180px) {

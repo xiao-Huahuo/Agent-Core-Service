@@ -112,6 +112,12 @@ service AgentService {
   rpc ListFavorites(FavoriteListRequest) returns (FavoriteListResponse);
   rpc AddFavorite(FavoriteCreateRequest) returns (FavoriteEntryResponse);
   rpc DeleteFavorite(FavoriteDeleteRequest) returns (DeleteResponse);
+
+  // 用户反馈
+  rpc ListFeedback(FeedbackListRequest) returns (FeedbackListResponse);
+  rpc AddFeedback(FeedbackCreateRequest) returns (FeedbackEntryResponse);
+  rpc UpdateFeedback(FeedbackUpdateRequest) returns (FeedbackEntryResponse);
+  rpc DeleteFeedback(FeedbackDeleteRequest) returns (DeleteResponse);
 }
 
 // ---------------------------------------------------------------------------
@@ -312,6 +318,43 @@ message FavoriteEntryResponse {
 
 message FavoriteListResponse {
   repeated FavoriteEntryResponse favorites = 1;
+}
+
+// ---------------------------------------------------------------------------
+// 用户反馈
+// ---------------------------------------------------------------------------
+
+message FeedbackCreateRequest {
+  string user_id = 1;
+  string content = 2;
+  string source = 3;
+  string page = 4;
+}
+
+message FeedbackListRequest {
+  string user_id = 1;
+}
+
+message FeedbackUpdateRequest {
+  string feedback_id = 1;
+  string content = 2;
+}
+
+message FeedbackDeleteRequest {
+  string feedback_id = 1;
+}
+
+message FeedbackEntryResponse {
+  string feedback_id = 1;
+  string user_id = 2;
+  string content = 3;
+  string source = 4;
+  string page = 5;
+  string created_at = 6;
+}
+
+message FeedbackListResponse {
+  repeated FeedbackEntryResponse feedback = 1;
 }
 
 // ---------------------------------------------------------------------------

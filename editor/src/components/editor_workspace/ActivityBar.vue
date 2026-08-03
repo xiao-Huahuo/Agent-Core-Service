@@ -6,7 +6,7 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { Activity, BookOpen, Bug, DatabaseZap, FileCode, Files, Folder, GitBranch, Search, Settings, Share2, Sparkles, Star } from 'lucide-vue-next'
+import { Activity, BookOpen, Bug, DatabaseZap, FileCode, Files, Folder, GitBranch, MessageSquare, Search, Settings, Share2, Sparkles, Star } from 'lucide-vue-next'
 import type { SidebarDisplayMode } from '@/types/settings'
 
 defineProps<{
@@ -23,6 +23,7 @@ defineProps<{
   graphActive: boolean
   dashboardActive: boolean
   debugActive: boolean
+  feedbackOpen: boolean
   searchActive: boolean
   skillsActive: boolean
   settingsActive: boolean
@@ -39,6 +40,7 @@ const emit = defineEmits<{
   toggleAgent: []
   toggleGraph: []
   openDashboard: []
+  toggleFeedback: []
   openDebug: []
   openSearch: []
   openSkills: []
@@ -205,6 +207,18 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
       <span class="activity-label">收藏</span>
     </button>
     <div class="bottom-group">
+      <button
+        class="activity-button"
+        :class="{ active: feedbackOpen }"
+        type="button"
+        title="用户反馈"
+        aria-label="用户反馈"
+        @mousedown.prevent="handleRipple"
+        @click="emit('toggleFeedback')"
+      >
+        <MessageSquare :size="18" />
+        <span class="activity-label">反馈</span>
+      </button>
       <button
         class="activity-button"
         :class="{ active: debugActive }"

@@ -329,6 +329,26 @@ class AgentServiceStub(object):
                 request_serializer=agent__service__pb2.FavoriteDeleteRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.DeleteResponse.FromString,
                 _registered_method=True)
+        self.ListFeedback = channel.unary_unary(
+                '/agent_service.AgentService/ListFeedback',
+                request_serializer=agent__service__pb2.FeedbackListRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.FeedbackListResponse.FromString,
+                _registered_method=True)
+        self.AddFeedback = channel.unary_unary(
+                '/agent_service.AgentService/AddFeedback',
+                request_serializer=agent__service__pb2.FeedbackCreateRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.FeedbackEntryResponse.FromString,
+                _registered_method=True)
+        self.UpdateFeedback = channel.unary_unary(
+                '/agent_service.AgentService/UpdateFeedback',
+                request_serializer=agent__service__pb2.FeedbackUpdateRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.FeedbackEntryResponse.FromString,
+                _registered_method=True)
+        self.DeleteFeedback = channel.unary_unary(
+                '/agent_service.AgentService/DeleteFeedback',
+                request_serializer=agent__service__pb2.FeedbackDeleteRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.DeleteResponse.FromString,
+                _registered_method=True)
 
 
 class AgentServiceServicer(object):
@@ -706,6 +726,31 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ListFeedback(self, request, context):
+        """用户反馈
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddFeedback(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateFeedback(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteFeedback(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AgentServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -992,6 +1037,26 @@ def add_AgentServiceServicer_to_server(servicer, server):
             'DeleteFavorite': grpc.unary_unary_rpc_method_handler(
                     servicer.DeleteFavorite,
                     request_deserializer=agent__service__pb2.FavoriteDeleteRequest.FromString,
+                    response_serializer=agent__service__pb2.DeleteResponse.SerializeToString,
+            ),
+            'ListFeedback': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListFeedback,
+                    request_deserializer=agent__service__pb2.FeedbackListRequest.FromString,
+                    response_serializer=agent__service__pb2.FeedbackListResponse.SerializeToString,
+            ),
+            'AddFeedback': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddFeedback,
+                    request_deserializer=agent__service__pb2.FeedbackCreateRequest.FromString,
+                    response_serializer=agent__service__pb2.FeedbackEntryResponse.SerializeToString,
+            ),
+            'UpdateFeedback': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateFeedback,
+                    request_deserializer=agent__service__pb2.FeedbackUpdateRequest.FromString,
+                    response_serializer=agent__service__pb2.FeedbackEntryResponse.SerializeToString,
+            ),
+            'DeleteFeedback': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteFeedback,
+                    request_deserializer=agent__service__pb2.FeedbackDeleteRequest.FromString,
                     response_serializer=agent__service__pb2.DeleteResponse.SerializeToString,
             ),
     }
@@ -2542,6 +2607,114 @@ class AgentService(object):
             target,
             '/agent_service.AgentService/DeleteFavorite',
             agent__service__pb2.FavoriteDeleteRequest.SerializeToString,
+            agent__service__pb2.DeleteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListFeedback(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/ListFeedback',
+            agent__service__pb2.FeedbackListRequest.SerializeToString,
+            agent__service__pb2.FeedbackListResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddFeedback(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/AddFeedback',
+            agent__service__pb2.FeedbackCreateRequest.SerializeToString,
+            agent__service__pb2.FeedbackEntryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateFeedback(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/UpdateFeedback',
+            agent__service__pb2.FeedbackUpdateRequest.SerializeToString,
+            agent__service__pb2.FeedbackEntryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteFeedback(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/DeleteFeedback',
+            agent__service__pb2.FeedbackDeleteRequest.SerializeToString,
             agent__service__pb2.DeleteResponse.FromString,
             options,
             channel_credentials,

@@ -70,6 +70,7 @@ export const API_ROUTES = {
   LIBRARY_TAGS: '/library/tags',
   LIBRARY_COVER_UPLOAD: '/library/assets/cover',
   FAVORITES: '/favorites',
+  FEEDBACK: '/feedback',
   SETTINGS_MODEL_CONFIG: '/settings/llm/config',
   SETTINGS_MODEL_CONFIG_SAVED: '/settings/llm/config/saved',
   SETTINGS_WEB_SEARCH: '/settings/web-search/config',

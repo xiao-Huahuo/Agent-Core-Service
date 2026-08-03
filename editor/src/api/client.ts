@@ -22,6 +22,9 @@ function getApiOrigin(): string {
   if (import.meta.env.VITE_AGENT_API_BASE) {
     return import.meta.env.VITE_AGENT_API_BASE
   }
+  if (window.agentEditorDesktop?.isDesktop) {
+    return 'http://127.0.0.1:8002'
+  }
   if (window.location.protocol === 'file:') {
     return 'http://127.0.0.1:8002'
   }
