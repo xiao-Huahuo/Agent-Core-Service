@@ -805,6 +805,7 @@ class AgentCore:
         effective_access_mode = normalize_agent_access_mode(agent_access_mode)
         message_service = self._get_message_service()
         context_builder = self._get_context_builder(message_service=message_service)
+        long_term_memory_enabled = self._get_long_term_memory_enabled(user_id)
         logger.info(
             "开始 session 流式运行 | user=%s session=%s prompt_len=%d mode=%s requested_mode=%s",
             user_id,
@@ -817,6 +818,7 @@ class AgentCore:
         messages = context_builder.build_messages(
             user_id=user_id, session_id=session_id, current_prompt=prompt, reference=reference,
             web_search_max_results=web_search_max_results,
+            long_term_memory_enabled=long_term_memory_enabled,
         )
         mark_latency("context_build_ms", context_started_at)
         child_results_started_at = time.perf_counter()
@@ -879,6 +881,7 @@ class AgentCore:
                 system_meta["agent_mode"] = effective_mode
                 system_meta["requested_agent_mode"] = agent_mode
                 system_meta["agent_access_mode"] = effective_access_mode
+                system_meta["long_term_memory_enabled"] = long_term_memory_enabled
                 system_meta.update(latency_metadata())
                 yield {
                     "node": "context_builder",
@@ -913,6 +916,7 @@ class AgentCore:
             graph=self.graphs[effective_mode],
             agent_mode=effective_mode,
             agent_access_mode=effective_access_mode,
+            long_term_memory_enabled=long_term_memory_enabled,
             citation_map=turn_citation_map,
             prompt=prompt,
             latency_marks=latency_marks,
@@ -954,6 +958,7 @@ class AgentCore:
         allow_child_spawn: bool = True,
         latency_marks: dict[str, float] | None = None,
         turn_started_at: float | None = None,
+        long_term_memory_enabled: bool = True,
     ) -> Iterator[dict[str, Any]]:
         """
         使用给定 LangChain messages 执行图并逐节点产出 dict 事件。
@@ -979,6 +984,7 @@ class AgentCore:
             "session_id": session_id,
             "trace": [],
             "llm_config": llm_config,
+            "long_term_memory_enabled": long_term_memory_enabled,
         }
         if self.task_list_service is not None:
             inputs["task_list"] = self.task_list_service.get_task_list(session_id)
@@ -1100,6 +1106,7 @@ class AgentCore:
                 skill_service=self.skill_service,
                 citation_map=_citation_map,
                 agent_access_mode=effective_access_mode,
+                long_term_memory_enabled=long_term_memory_enabled,
                 child_agent_spawner=(
                     None
                     if not allow_child_spawn
@@ -2353,6 +2360,19 @@ class AgentCore:
             return _settings_service.get_llm_config(user_id=user_id)
         except Exception:
             return None
+
+    @staticmethod
+    def _get_long_term_memory_enabled(user_id: str) -> bool:
+        """读取用户的长期记忆开关,读取失败时保持默认开启。"""
+        if not user_id:
+            return True
+        try:
+            from agent_service.api.rest.deps import _settings_service
+            if _settings_service is None:
+                return True
+            return bool(_settings_service.get_memory_config(user_id=user_id).get("long_term_memory_enabled", True))
+        except Exception:
+            return True
 
     @staticmethod
     def _build_stream_payload(

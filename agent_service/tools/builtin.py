@@ -182,6 +182,9 @@ def list_available_tools() -> str:
         registry.definitions.values(),
         key=lambda d: (d.display_name or d.name),
     ):
+        from agent_service.tools.definitions import MEMORY_TOOL_NAMES
+        if definition.name in MEMORY_TOOL_NAMES and not runtime.long_term_memory_enabled:
+            continue
         name = definition.name
         display = definition.display_name or name
         description = (definition.description or "").strip()

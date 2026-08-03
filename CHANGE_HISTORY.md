@@ -1,6 +1,9 @@
 # CHANGE HISTORY
 
 ## 2026-08-03
+- [x] 统一移除已注入系统提示胶囊条边框,使系统提示与记忆注入条目保持一致的无边框样式。
+- [x] 优化记忆与指令设置展示:为记忆注入列表增加独立标题,移除已注入记忆条目的边框,保持系统提示条目样式不变。
+- [x] 新增长期记忆用户级总开关:设置页支持持久化开启/关闭;关闭时跳过 Agent 每轮固定长期记忆召回,从模型可见工具与工具执行兜底中移除长期记忆工具,阻止 React 上下文压缩和后台会话摘要把内容写回长期记忆;保留已有记忆数据不删除,重新开启后可继续使用。后端定向测试 21 项通过,前端 `vue-tsc --noEmit` 通过。
 - [x] 增加 Agent 首答耗时真实计时与后端阶段诊断: 后端 `stream_session_prompt` 为路由、任务列表读取、上下文构建、子 Agent 结果 drain、首个 agent delta、simple 模型总耗时和安全审核附加 `metadata.latency`,不改变任何路由/模型/工具行为;前端从用户气泡推出到首个最终 assistant 内容到达记录 `thinking_seconds`,并在 Chat/Tool 两种 assistant 气泡上方显示 `思考了Ns`(0.1s 精度),同时保留后端首 delta 秒数到消息 metadata 便于后续定位方差来源。目标前端单测通过,后端语法检查通过;后端 `tests/test_agent_core_service.py` 当前仍有既有 ReRank 未就绪等失败阻塞全套通过。
 - [x] 修复 Electron 中反馈读取失败: 桌面端 API 默认直连 `http://127.0.0.1:8002`,避免 Electron 运行态误读 Vite/静态页面 HTML;后端补充 localhost/null origin CORS 与 Private Network Access 支持,让 Electron file renderer 可访问本机反馈接口。已用真实 uvicorn + Chromium file origin 验证反馈 POST/GET/DELETE 全链路返回 JSON。
 - [x] 修复用户反馈面板用户态未同步时无法读取: `GET /feedback` 支持不传 `user_id` 时按创建时间倒序读取全部反馈,前端反馈弹窗在 `userId` 为空时走无用户过滤读取路径;新增反馈 REST 定向测试覆盖按用户读取与无用户读取。

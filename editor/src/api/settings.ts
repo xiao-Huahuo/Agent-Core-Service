@@ -314,6 +314,21 @@ export function deleteMemory(memoryId: string): Promise<{ ok: boolean }> {
   return apiDelete<{ ok: boolean }>(`${API_ROUTES.SETTINGS_MEMORIES}/${memoryId}`)
 }
 
+export interface MemoryConfigResponse {
+  long_term_memory_enabled: boolean
+}
+
+export function fetchMemoryConfig(userId: string): Promise<MemoryConfigResponse> {
+  return apiGet<MemoryConfigResponse>(API_ROUTES.SETTINGS_MEMORY_CONFIG, { user_id: userId })
+}
+
+export function saveMemoryConfig(userId: string, enabled: boolean): Promise<MemoryConfigResponse> {
+  return apiPut<MemoryConfigResponse>(API_ROUTES.SETTINGS_MEMORY_CONFIG, {
+    user_id: userId,
+    long_term_memory_enabled: enabled,
+  })
+}
+
 /* ---- LLM model config ---- */
 
 export interface LLMConfigResponse {

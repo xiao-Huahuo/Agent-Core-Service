@@ -94,19 +94,20 @@ class CompressNode:
             state["user_id"],
             transcript,
         )
-        self.summary_service.persist_summary_memory(
-            user_id=state["user_id"],
-            session_id=state["session_id"],
-            summary_text=summary_text,
-            memory_type=self.config.constants.important_fact_summary_memory_type,
-            source_type="context_compression",
-            source_id=state["session_id"],
-            source_hash=source_hash,
-            source_range_json={"mode": "compress"},
-            metadata_json={"estimated_tokens": estimated_tokens},
-            importance=0.95,
-            authority=0.6,
-        )
+        if state.get("long_term_memory_enabled", True):
+            self.summary_service.persist_summary_memory(
+                user_id=state["user_id"],
+                session_id=state["session_id"],
+                summary_text=summary_text,
+                memory_type=self.config.constants.important_fact_summary_memory_type,
+                source_type="context_compression",
+                source_id=state["session_id"],
+                source_hash=source_hash,
+                source_range_json={"mode": "compress"},
+                metadata_json={"estimated_tokens": estimated_tokens},
+                importance=0.95,
+                authority=0.6,
+            )
         compressed_messages = self._build_compressed_messages(
             original_messages=state["messages"],
             summary_text=summary_text,

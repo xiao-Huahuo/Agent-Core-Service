@@ -535,6 +535,26 @@ async def save_terminal_sandbox_config(body: dict[str, Any]) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+# ---- 长期记忆配置与自定义内容 ----
+
+@router.get("/settings/memory/config")
+async def get_memory_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+    """获取用户的长期记忆总开关。"""
+    return _require_settings_service().get_memory_config(user_id=user_id)
+
+
+@router.put("/settings/memory/config")
+async def save_memory_config(body: dict[str, Any]) -> dict[str, Any]:
+    """保存用户的长期记忆总开关。"""
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id or not isinstance(body.get("long_term_memory_enabled"), bool):
+        raise HTTPException(status_code=422, detail="user_id and long_term_memory_enabled are required")
+    return _require_settings_service().save_memory_config(
+        user_id=user_id,
+        long_term_memory_enabled=body["long_term_memory_enabled"],
+    )
+
+
 # ---- 自定义长期记忆 ----
 
 @router.get("/settings/memory/memories")

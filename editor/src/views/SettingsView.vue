@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchLLMConfig, saveLLMConfig, fetchSavedLLMConfigs, saveLLMConfigPreset, deleteLLMConfigPreset, fetchWebSearchConfig, saveWebSearchConfig, fetchTerminalSandboxConfig, saveTerminalSandboxConfig } from '@/api/settings'
+import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchMemoryConfig, saveMemoryConfig, fetchLLMConfig, saveLLMConfig, fetchSavedLLMConfigs, saveLLMConfigPreset, deleteLLMConfigPreset, fetchWebSearchConfig, saveWebSearchConfig, fetchTerminalSandboxConfig, saveTerminalSandboxConfig } from '@/api/settings'
 import type { SystemPromptEntry, MemoryEntry, SavedLLMConfig, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
 import AppearanceSettingsSection from '@/components/settings_view/AppearanceSettingsSection.vue'
 import BasicSettingsSection from '@/components/settings_view/BasicSettingsSection.vue'
@@ -288,6 +288,7 @@ const memories = ref<MemoryEntry[]>([])
 const newMemoryContent = ref('')
 const addingMemory = ref(false)
 const memoryMsg = ref('')
+const longTermMemoryEnabled = ref(true)
 
 function showMessage(refObj: ReturnType<typeof ref<string>>, text: string, duration = 2000) {
   refObj.value = text
@@ -295,15 +296,36 @@ function showMessage(refObj: ReturnType<typeof ref<string>>, text: string, durat
 }
 
 async function loadAgentSettings() {
+  const userId = settingsStore.profile.userId
+  if (!userId) return
+
+  const [promptResult, memoryResult, configResult] = await Promise.allSettled([
+    fetchSystemPrompts(userId),
+    fetchMemories(userId),
+    fetchMemoryConfig(userId),
+  ])
+
+  if (promptResult.status === 'fulfilled') {
+    promptEntries.value = promptResult.value.entries ?? []
+  }
+  if (memoryResult.status === 'fulfilled') {
+    memories.value = memoryResult.value ?? []
+  }
+  if (configResult.status === 'fulfilled') {
+    longTermMemoryEnabled.value = configResult.value.long_term_memory_enabled
+  }
+}
+
+async function handleSaveMemoryConfig() {
   if (!settingsStore.profile.userId) return
   try {
-    const [promptRes, memoryRes] = await Promise.all([
-      fetchSystemPrompts(settingsStore.profile.userId),
-      fetchMemories(settingsStore.profile.userId),
-    ])
-    promptEntries.value = promptRes.entries ?? []
-    memories.value = memoryRes ?? []
-  } catch { /* API not critical for workspace */ }
+    const result = await saveMemoryConfig(settingsStore.profile.userId, longTermMemoryEnabled.value)
+    longTermMemoryEnabled.value = result.long_term_memory_enabled
+    showMessage(memoryMsg, result.long_term_memory_enabled ? '长期记忆已开启' : '长期记忆已关闭')
+  } catch {
+    longTermMemoryEnabled.value = !longTermMemoryEnabled.value
+    showMessage(memoryMsg, '保存长期记忆设置失败')
+  }
 }
 
 async function handleAddPrompt() {
@@ -655,6 +677,7 @@ onBeforeUnmount(() => {
         v-if="activeTab === 'memory'"
         v-model:new-memory-content="newMemoryContent"
         v-model:new-prompt-content="newPromptContent"
+        v-model:long-term-memory-enabled="longTermMemoryEnabled"
         :adding-memory="addingMemory"
         :adding-prompt="addingPrompt"
         :memories="memories"
@@ -667,6 +690,7 @@ onBeforeUnmount(() => {
         @add-prompt="handleAddPrompt"
         @delete-memory="handleDeleteMemory"
         @delete-prompt="handleDeletePrompt"
+        @save-memory-config="handleSaveMemoryConfig"
         @set-show-graph-column="settingsStore.setShowGraphColumn"
         @set-show-index-column="settingsStore.setShowIndexColumn"
       />
@@ -1581,9 +1605,17 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: var(--space-6);
   padding: var(--space-4) var(--space-8);
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: 999px;
   background: var(--color-canvas);
+}
+
+.memory-title {
+  margin-top: var(--space-16) !important;
+}
+
+.memory-entry-row {
+  border: 0;
 }
 
 .entry-text {

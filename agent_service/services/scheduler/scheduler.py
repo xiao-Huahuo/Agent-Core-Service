@@ -899,6 +899,13 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
     def _run_summary_business_task(self, *, user_id: str, session_id: str) -> str | None:
         """执行 Summary 业务任务。"""
 
+        from agent_service.api.rest.deps import _settings_service
+        if _settings_service is not None and not _settings_service.get_memory_config(
+            user_id=user_id
+        ).get("long_term_memory_enabled", True):
+            logger.info("长期记忆已关闭,跳过会话摘要写入 | user=%s session=%s", user_id, session_id)
+            return None
+
         from agent_service.services.memory.summary_service import SessionSummaryService
 
         summary_service = SessionSummaryService(

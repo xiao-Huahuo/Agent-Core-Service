@@ -182,6 +182,11 @@ class ModelDecisionNode:
             except Exception:
                 pass
 
+        if not state.get("long_term_memory_enabled", True):
+            from agent_service.tools.definitions import MEMORY_TOOL_NAMES
+
+            active_tool_names = [name for name in active_tool_names if name not in MEMORY_TOOL_NAMES]
+
         # 每轮全量绑定所有可用工具(已剔除禁用工具),保证任意工具随时可直接调用。
         system_content = self.config.model.system_prompt
 

@@ -20,7 +20,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.message import MessageOut
-from agent_service.services.memory.retrieval_service import MemoryRetrievalService
+from agent_service.services.memory.retrieval_service import MemoryRetrievalService, RetrievalDebugSnapshot
 from agent_service.services.message_service import MessageService
 
 if TYPE_CHECKING:
@@ -53,7 +53,7 @@ class ContextBuilder:
 
     def build_messages(
         self, *, user_id: str, session_id: str, current_prompt: str, reference: str | None = None,
-        web_search_max_results: int = 10,
+        web_search_max_results: int = 10, long_term_memory_enabled: bool = True,
     ) -> list[BaseMessage]:
         """
         构建当前轮 Agent 调用需要的 LangChain messages。
@@ -77,6 +77,7 @@ class ContextBuilder:
             current_prompt=current_prompt,
             has_history=bool(history),
             web_search_max_results=web_search_max_results,
+            long_term_memory_enabled=long_term_memory_enabled,
         )
         if memory_context:
             messages.append(
@@ -97,6 +98,7 @@ class ContextBuilder:
                 history=compressed_history,
                 reference=reference,
                 web_search_max_results=web_search_max_results,
+                long_term_memory_enabled=long_term_memory_enabled,
             )
         return messages
 
@@ -108,6 +110,7 @@ class ContextBuilder:
         current_prompt: str,
         has_history: bool,
         web_search_max_results: int = 10,
+        long_term_memory_enabled: bool = True,
     ) -> tuple[str, dict[str, float | int], dict[str, Any]]:
         """
         构建长期记忆和知识库召回上下文文本,并产出检索指标。
@@ -120,26 +123,30 @@ class ContextBuilder:
         返回 (context_text, rag_metrics, recall_details)。
         """
 
-        memory_snapshot = self.retrieval_service.retrieve_long_term_memory_with_debug(
-            query=current_prompt,
-            user_id=user_id,
-            session_id=session_id,
-            top_k=self.config.memory.rerank_top_k,
-        )
-        memories = memory_snapshot.post_rerank_results
-        if not memories:
-            latest_summary = self.retrieval_service.get_latest_session_summary(
+        memory_snapshot = RetrievalDebugSnapshot()
+        memories = []
+        if long_term_memory_enabled:
+            memory_snapshot = self.retrieval_service.retrieve_long_term_memory_with_debug(
+                query=current_prompt,
                 user_id=user_id,
                 session_id=session_id,
+                top_k=self.config.memory.rerank_top_k,
             )
-            if latest_summary is not None:
-                memories = [latest_summary]
+            memories = memory_snapshot.post_rerank_results
+            if not memories:
+                latest_summary = self.retrieval_service.get_latest_session_summary(
+                    user_id=user_id,
+                    session_id=session_id,
+                )
+                if latest_summary is not None:
+                    memories = [latest_summary]
         # 不做知识库自动召回:知识库内容由 agent 需要时自行调用
         # get_knowledge_context / search_knowledge 等工具获取,避免首 token 前
         # 重复跑完整 embedding+rerank 链路。仅保留长期记忆自动召回。
-        important_summary = self.retrieval_service.get_latest_important_fact_summary(
-            user_id=user_id,
-            session_id=session_id,
+        important_summary = (
+            self.retrieval_service.get_latest_important_fact_summary(user_id=user_id, session_id=session_id)
+            if long_term_memory_enabled
+            else None
         )
         attachment_context = (
             self.attachment_service.build_context(
@@ -265,6 +272,7 @@ class ContextBuilder:
         history: list[MessageOut],
         reference: str | None = None,
         web_search_max_results: int = 10,
+        long_term_memory_enabled: bool = True,
     ) -> list[BaseMessage]:
         """
         在上下文接近 token 上限时重建更紧凑的消息列表。
@@ -283,6 +291,7 @@ class ContextBuilder:
             current_prompt=current_prompt,
             has_history=bool(history),
             web_search_max_results=web_search_max_results,
+            long_term_memory_enabled=long_term_memory_enabled,
         )
         if memory_context:
             messages.append(

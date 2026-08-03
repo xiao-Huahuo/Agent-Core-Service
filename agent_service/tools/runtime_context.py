@@ -52,6 +52,7 @@ class ToolRuntimeState:
     task_list_service: TaskListService | None = None
     skill_service: SkillService | None = None
     agent_access_mode: str = AGENT_ACCESS_SANDBOX
+    long_term_memory_enabled: bool = True
     citation_map: dict[str, dict[str, Any]] = field(default_factory=dict)
     tool_citation_counter: int = 0
     network_citation_counter: int = 0
@@ -75,6 +76,7 @@ def set_tool_runtime(
     skill_service: Any = None,
     citation_map: dict[str, dict[str, Any]] | None = None,
     agent_access_mode: str = AGENT_ACCESS_SANDBOX,
+    long_term_memory_enabled: bool = True,
     child_agent_spawner: Callable[..., str] | None = None,
     child_agent_waiter: Callable[..., str] | None = None,
 ) -> None:
@@ -103,6 +105,7 @@ def set_tool_runtime(
         task_list_service=task_list_service,
         skill_service=skill_service,
         agent_access_mode=normalize_agent_access_mode(agent_access_mode),
+        long_term_memory_enabled=bool(long_term_memory_enabled),
         citation_map=citation_map if citation_map is not None else {},
         child_agent_spawner=child_agent_spawner,
         child_agent_waiter=child_agent_waiter,

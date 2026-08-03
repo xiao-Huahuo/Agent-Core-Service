@@ -15,6 +15,7 @@ export const API_ROUTES = {
   SETTINGS_SYSTEM_PROMPT: '/settings/memory/system-prompts',
   SETTINGS_SYSTEM_PROMPT_ENTRIES: '/settings/memory/system-prompts',
   SETTINGS_MEMORIES: '/settings/memory/memories',
+  SETTINGS_MEMORY_CONFIG: '/settings/memory/config',
   KNOWLEDGE_REBUILD: '/knowledge/rebuild',
   KNOWLEDGE_REBUILD_STREAM: '/knowledge/rebuild/stream',
   KNOWLEDGE_FILES: '/knowledge/files',

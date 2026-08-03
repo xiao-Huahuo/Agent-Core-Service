@@ -84,6 +84,7 @@ class SettingsService:
                 "web_search_enabled": "BOOLEAN NOT NULL DEFAULT 0",
                 "auto_ingest_on_upload": "BOOLEAN NOT NULL DEFAULT 0",
                 "ocr_enabled": "BOOLEAN NOT NULL DEFAULT 0",
+                "long_term_memory_enabled": "BOOLEAN NOT NULL DEFAULT 1",
                 "knowledge_ignore_patterns": "TEXT NOT NULL DEFAULT ''",
                 "disabled_tools": "TEXT NOT NULL DEFAULT ''",
                 "terminal_sandbox_config": "TEXT NOT NULL DEFAULT ''",
@@ -514,6 +515,7 @@ class SettingsService:
             "knowledge_libraries": [self._serialize_knowledge_library(item) for item in libraries],
             "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
             "ocr_enabled": bool(record.ocr_enabled),
+            "long_term_memory_enabled": bool(record.long_term_memory_enabled),
             "knowledge_ignore_patterns": record.knowledge_ignore_patterns,
             "terminal_sandbox": self._load_terminal_sandbox_payload(record.terminal_sandbox_config),
             "ui_font_families": self._load_font_families(record.ui_font_families),
@@ -1083,6 +1085,39 @@ class SettingsService:
                 "web_search_max_results": getattr(record, "web_search_max_results", 10) or 10,
             }
 
+    # ---- 长期记忆配置 ----
+
+    def get_memory_config(self, *, user_id: str) -> dict:
+        """获取用户的长期记忆总开关。"""
+
+        normalized_user_id = user_id.strip()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            return {"long_term_memory_enabled": bool(record.long_term_memory_enabled) if record else True}
+
+    def save_memory_config(self, *, user_id: str, long_term_memory_enabled: bool) -> dict:
+        """保存用户的长期记忆总开关。"""
+
+        normalized_user_id = user_id.strip()
+        now = self._utc_now()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                record = UserSettingsRecord(
+                    user_id=normalized_user_id,
+                    knowledge_dir=str(self.config.storage.knowledge_dir),
+                    long_term_memory_enabled=bool(long_term_memory_enabled),
+                    created_at=now,
+                    updated_at=now,
+                )
+            else:
+                record.long_term_memory_enabled = bool(long_term_memory_enabled)
+                record.updated_at = now
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            return {"long_term_memory_enabled": bool(record.long_term_memory_enabled)}
+
     # ---- 可开关工具 ----
 
     def get_disabled_tools(self, *, user_id: str) -> list[str]:
@@ -1144,6 +1179,8 @@ class SettingsService:
         ]
 
         disabled = set(self.get_disabled_tools(user_id=user_id))
+        memory_enabled = self.get_memory_config(user_id=user_id)["long_term_memory_enabled"]
+        memory_tool_names = {item.name for item in MEMORY_TOOL_DEFINITIONS}
         groups: list[dict] = []
         for category_key, display_name, definitions in CATEGORIES:
             tools = []
@@ -1152,7 +1189,9 @@ class SettingsService:
                     "name": definition.name,
                     "display_name": getattr(definition, "display_name", "") or definition.name,
                     "description": definition.description,
-                    "enabled": definition.name not in disabled,
+                    "enabled": definition.name not in disabled and (
+                        definition.name not in memory_tool_names or memory_enabled
+                    ),
                 })
             groups.append({
                 "category": category_key,

@@ -414,6 +414,8 @@ MEMORY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     ),
 ]
 
+MEMORY_TOOL_NAMES = frozenset(definition.name for definition in MEMORY_TOOL_DEFINITIONS)
+
 KNOWLEDGE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="get_knowledge_context",

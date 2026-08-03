@@ -134,7 +134,17 @@ class ToolCallNode:
             before_citations = get_tool_citation_map()
             started_at = time.perf_counter()
             try:
-                content = self.tool_executor.execute(tool_name, arguments)
+                from agent_service.tools.definitions import MEMORY_TOOL_NAMES
+                from agent_service.tools.runtime_context import get_tool_runtime
+
+                try:
+                    runtime = get_tool_runtime()
+                except RuntimeError:
+                    runtime = None
+                if runtime is not None and tool_name in MEMORY_TOOL_NAMES and not runtime.long_term_memory_enabled:
+                    content = "长期记忆功能已关闭,当前工具不可用。"
+                else:
+                    content = self.tool_executor.execute(tool_name, arguments)
             except Exception as exc:
                 content = f"工具 {tool_name} 执行失败: {exc}"
             if tool_name in TASK_LIST_TOOL_NAMES:

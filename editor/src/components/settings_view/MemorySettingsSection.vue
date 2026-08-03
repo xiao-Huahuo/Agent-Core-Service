@@ -10,6 +10,7 @@ import type { MemoryEntry, SystemPromptEntry } from '@/api/settings'
 
 const newPromptContent = defineModel<string>('newPromptContent', { required: true })
 const newMemoryContent = defineModel<string>('newMemoryContent', { required: true })
+const longTermMemoryEnabled = defineModel<boolean>('longTermMemoryEnabled', { required: true })
 
 defineProps<{
   promptEntries: SystemPromptEntry[]
@@ -29,11 +30,18 @@ defineEmits<{
   deleteMemory: [memoryId: string]
   setShowIndexColumn: [value: boolean]
   setShowGraphColumn: [value: boolean]
+  saveMemoryConfig: []
 }>()
 </script>
 
 <template>
   <div class="setting-section">
+    <h3>长期记忆</h3>
+    <div class="setting-row toggle-row">
+      <label>启用长期记忆</label>
+      <input v-model="longTermMemoryEnabled" type="checkbox" @change="$emit('saveMemoryConfig')" />
+      <span class="hint-text">关闭后跳过固定召回，并移除 Agent 的长期记忆工具</span>
+    </div>
     <h3>系统提示</h3>
     <div class="input-row">
       <input
@@ -53,7 +61,7 @@ defineEmits<{
       </li>
     </ul>
 
-    <h3 style="margin-top: 20px">长期记忆</h3>
+    <h3 class="memory-title">记忆注入</h3>
     <div class="input-row">
       <input
         v-model="newMemoryContent"
@@ -65,8 +73,8 @@ defineEmits<{
       </button>
     </div>
     <p v-if="memoryMsg" class="feedback">{{ memoryMsg }}</p>
-    <ul v-if="memories.length" class="entry-list">
-      <li v-for="entry in memories" :key="entry.memory_id" class="entry-row">
+    <ul v-if="memories.length" class="entry-list memory-entry-list">
+      <li v-for="entry in memories" :key="entry.memory_id" class="entry-row memory-entry-row">
         <span class="entry-text">{{ entry.content }}</span>
         <button class="entry-del" title="删除" @click="$emit('deleteMemory', entry.memory_id)">&times;</button>
       </li>

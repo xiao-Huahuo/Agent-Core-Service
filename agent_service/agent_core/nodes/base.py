@@ -46,3 +46,4 @@ class AgentState(TypedDict):
     active_skills: list[dict[str, Any]] | None
     observation_decision: str
     llm_config: dict[str, Any] | None
+    long_term_memory_enabled: bool
