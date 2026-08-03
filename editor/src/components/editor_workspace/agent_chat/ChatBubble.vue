@@ -93,6 +93,12 @@ const hasAssistantContent = computed(() => {
   return Boolean(props.message.content && props.message.content !== '​')
 })
 
+const thinkingLabel = computed(() => {
+  return typeof props.message.thinking_seconds === 'number'
+    ? `思考了${props.message.thinking_seconds.toFixed(1)}s`
+    : ''
+})
+
 const shouldRenderAssistant = computed(() => {
   return props.message.role === 'assistant'
     && (hasAssistantContent.value || thinkingTraces.value.length > 0 || props.isStreaming)
@@ -212,6 +218,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           思考过程
         </button>
       </Transition>
+      <span v-if="thinkingLabel && hasAssistantContent" class="thinking-duration">{{ thinkingLabel }}</span>
       <div v-if="shouldRenderAssistantBubble" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
         <MarkdownContent
           v-if="hasAssistantContent"
@@ -345,6 +352,12 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 
 .bubble-row.assistant .bubble-col {
   align-items: flex-start;
+}
+
+.thinking-duration {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-xs);
+  line-height: 1.35;
 }
 
 .bubble-row.user .bubble-col {

@@ -8,21 +8,12 @@
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.pyi" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2.pyi" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2_grpc.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/agent_service_pb2_grpc.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/grpc/servicer.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/grpc/servicer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/deps.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/deps.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/models/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/models/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/api/client.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/client.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/vite.config.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/protos/agent_service.proto" beforeDir="false" afterPath="$PROJECT_DIR$/protos/agent_service.proto" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/开发规范.md" beforeDir="false" afterPath="$PROJECT_DIR$/开发规范.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/agent_core/agent_core.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatBubble.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ChatBubble.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolBubble.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolBubble.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/__tests__/ChatBubble.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/__tests__/ChatBubble.spec.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/__tests__/chat.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/__tests__/chat.spec.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/chat.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/chat.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

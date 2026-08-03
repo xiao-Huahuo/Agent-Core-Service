@@ -34,4 +34,25 @@ describe('ChatBubble user references', () => {
       .toBeTruthy()
     expect(wrapper.get('.bubble.user').text()).toBe('请解释这段话')
   })
+
+  it('renders assistant thinking duration above final content', () => {
+    const wrapper = mount(ChatBubble, {
+      global: {
+        plugins: [createPinia()],
+      },
+      props: {
+        message: {
+          role: 'assistant',
+          content: '你好，我在。',
+          node: 'agent',
+          thinking_seconds: 3.6,
+        },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+        isStreaming: false,
+      },
+    })
+
+    expect(wrapper.get('.thinking-duration').text()).toBe('思考了3.6s')
+  })
 })

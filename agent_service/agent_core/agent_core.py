@@ -771,14 +771,35 @@ class AgentCore:
         web_search_max_results: 联网搜索每次最大结果数,用于系统提示词引导 agent 行为。
         """
 
+        turn_started_at = time.perf_counter()
+        latency_marks: dict[str, float] = {}
+
+        def mark_latency(name: str, started_at: float) -> None:
+            """Record one backend stage duration for turn latency diagnostics."""
+
+            latency_marks[name] = max(0.01, round((time.perf_counter() - started_at) * 1000, 2))
+
+        def latency_metadata(extra: dict[str, float] | None = None) -> dict[str, Any]:
+            """Build a serializable latency payload shared by streamed events."""
+
+            timings = dict(latency_marks)
+            if extra:
+                timings.update(extra)
+            timings["backend_elapsed_ms"] = max(0.01, round((time.perf_counter() - turn_started_at) * 1000, 2))
+            return {"latency": timings}
+
         reference = reference.strip() if reference and reference.strip() else None
+        route_started_at = time.perf_counter()
         effective_mode = self._resolve_agent_loop_mode(
             agent_mode=agent_mode,
             prompt=prompt,
             reference=reference,
             user_id=user_id,
         )
+        mark_latency("route_ms", route_started_at)
+        task_list_started_at = time.perf_counter()
         active_task_list = self.task_list_service.get_task_list(session_id) if self.task_list_service is not None else None
+        mark_latency("task_list_ms", task_list_started_at)
         if active_task_list is not None and effective_mode == AGENT_LOOP_SIMPLE:
             effective_mode = AGENT_LOOP_REACT
         effective_access_mode = normalize_agent_access_mode(agent_access_mode)
@@ -792,11 +813,15 @@ class AgentCore:
             effective_mode,
             agent_mode,
         )
+        context_started_at = time.perf_counter()
         messages = context_builder.build_messages(
             user_id=user_id, session_id=session_id, current_prompt=prompt, reference=reference,
             web_search_max_results=web_search_max_results,
         )
+        mark_latency("context_build_ms", context_started_at)
+        child_results_started_at = time.perf_counter()
         child_results = self.child_agent_manager.drain_results_for_session(session_id)
+        mark_latency("child_results_ms", child_results_started_at)
         if child_results:
             messages.append(
                 SystemMessage(
@@ -854,6 +879,7 @@ class AgentCore:
                 system_meta["agent_mode"] = effective_mode
                 system_meta["requested_agent_mode"] = agent_mode
                 system_meta["agent_access_mode"] = effective_access_mode
+                system_meta.update(latency_metadata())
                 yield {
                     "node": "context_builder",
                     "type": "system_prompt",
@@ -872,6 +898,8 @@ class AgentCore:
                 session_id=session_id,
                 message_service=message_service,
                 citation_map=turn_citation_map,
+                latency_marks=latency_marks,
+                turn_started_at=turn_started_at,
             )
             _launch_auto_rename(self, user_id=user_id, session_id=session_id)
             return
@@ -887,6 +915,8 @@ class AgentCore:
             agent_access_mode=effective_access_mode,
             citation_map=turn_citation_map,
             prompt=prompt,
+            latency_marks=latency_marks,
+            turn_started_at=turn_started_at,
         )
         _launch_auto_rename(self, user_id=user_id, session_id=session_id)
 
@@ -922,6 +952,8 @@ class AgentCore:
         prompt: str = "",
         run_id: str | None = None,
         allow_child_spawn: bool = True,
+        latency_marks: dict[str, float] | None = None,
+        turn_started_at: float | None = None,
     ) -> Iterator[dict[str, Any]]:
         """
         使用给定 LangChain messages 执行图并逐节点产出 dict 事件。
@@ -987,6 +1019,18 @@ class AgentCore:
         _latest_plan: dict[str, Any] | None = initial_plan
         _last_sent_content: list[str] = [""]
         _last_node_completed_at: list[float] = [time.perf_counter()]
+        _first_agent_delta_sent = False
+
+        def latency_metadata(extra: dict[str, float] | None = None) -> dict[str, Any]:
+            """Attach backend latency diagnostics without affecting agent behavior."""
+
+            if turn_started_at is None:
+                return {}
+            timings = dict(latency_marks or {})
+            if extra:
+                timings.update(extra)
+            timings["backend_elapsed_ms"] = max(0.01, round((time.perf_counter() - turn_started_at) * 1000, 2))
+            return {"latency": timings}
 
 
         def on_token(cumulative_text: str) -> None:
@@ -1179,6 +1223,19 @@ class AgentCore:
                     break
 
                 if item_type == "token":
+                    extra_latency = None
+                    if not _first_agent_delta_sent:
+                        _first_agent_delta_sent = True
+                        extra_latency = (
+                            {
+                                "first_agent_delta_ms": max(
+                                    0.01,
+                                    round((time.perf_counter() - turn_started_at) * 1000, 2),
+                                )
+                            }
+                            if turn_started_at is not None
+                            else None
+                        )
                     yield {
                         "type": "delta",
                         "node": item.get("node", "agent"),
@@ -1186,6 +1243,7 @@ class AgentCore:
                         "tool_calls": item.get("tool_calls", []),
                         "trace": item.get("trace", []),
                         "model_name": self._model_name_for_node(item.get("node", "agent")),
+                        "metadata": latency_metadata(extra_latency),
                     }
 
                 elif item_type == "tool_trace":
@@ -1210,7 +1268,10 @@ class AgentCore:
                         "tool_calls": [],
                         "trace": [public_trace] if public_trace else [],
                         "model_name": self._model_name_for_node(trace.get("node", "action")),
-                        "metadata": {"citation_map": dict(_citation_map)} if _citation_map else {},
+                        "metadata": {
+                            **({"citation_map": dict(_citation_map)} if _citation_map else {}),
+                            **latency_metadata(),
+                        },
                     }
 
                 elif item_type == "planner_content":
@@ -1323,6 +1384,11 @@ class AgentCore:
                             citation_map=_citation_map,
                         )
                         payload["model_name"] = self._model_name_for_node(node_name)
+                        payload_metadata = payload.get("metadata")
+                        if isinstance(payload_metadata, dict):
+                            payload["metadata"] = {**payload_metadata, **latency_metadata()}
+                        else:
+                            payload["metadata"] = latency_metadata()
                         yield payload
         except GeneratorExit:
             cancel_event.set()
@@ -1381,6 +1447,8 @@ class AgentCore:
         session_id: str,
         message_service: MessageService,
         citation_map: dict[str, Any] | None = None,
+        latency_marks: dict[str, float] | None = None,
+        turn_started_at: float | None = None,
     ) -> Iterator[dict[str, Any]]:
         """
         对明显不需要工具的短输入走轻量直答路径。
@@ -1402,6 +1470,19 @@ class AgentCore:
         last_sent_content = ""
         final_message: BaseMessage | None = None
         user_prompt = ""
+        first_delta_sent = False
+
+        def latency_metadata(extra: dict[str, float] | None = None) -> dict[str, Any]:
+            """Attach backend latency diagnostics to simple-mode SSE events."""
+
+            if turn_started_at is None:
+                return {}
+            timings = dict(latency_marks or {})
+            if extra:
+                timings.update(extra)
+            timings["backend_elapsed_ms"] = max(0.01, round((time.perf_counter() - turn_started_at) * 1000, 2))
+            return {"latency": timings}
+
         for msg in reversed(messages):
             if isinstance(msg, HumanMessage):
                 user_prompt = AgentCore._stringify_content(msg.content)
@@ -1440,6 +1521,7 @@ class AgentCore:
                 "tool_calls": [],
                 "trace": [safety_input_trace],
                 "model_name": "",
+                "metadata": latency_metadata({"safety_input_ms": safety_input_trace["duration_ms"]}),
             }
             if input_audit.blocked:
                 block_message = self.safety_service.generate_block_message(
@@ -1466,6 +1548,7 @@ class AgentCore:
                     "tool_calls": [],
                     "trace": [],
                     "model_name": "",
+                    "metadata": latency_metadata(),
                 }
                 return
             started_at = time.perf_counter()
@@ -1477,6 +1560,7 @@ class AgentCore:
                 "trace": [],
                 "model_name": self._model_name_for_node("agent_simple"),
                 "context_messages": self._serialize_runtime_messages(runtime_messages),
+                "metadata": latency_metadata(),
             }
             for chunk in self.task_scheduler.stream_chat(
                 task_type=FOREGROUND_AGENT_TASK,
@@ -1509,6 +1593,19 @@ class AgentCore:
                     last_sent_content = safe_content
                     continue
                 last_sent_content = safe_content
+                extra_latency = None
+                if not first_delta_sent:
+                    first_delta_sent = True
+                    extra_latency = (
+                        {
+                            "first_agent_delta_ms": max(
+                                0.01,
+                                round((time.perf_counter() - turn_started_at) * 1000, 2),
+                            )
+                        }
+                        if turn_started_at is not None
+                        else None
+                    )
                 yield {
                     "type": "delta",
                     "node": "agent",
@@ -1516,6 +1613,7 @@ class AgentCore:
                     "tool_calls": [],
                     "trace": [],
                     "model_name": self._model_name_for_node("agent_simple"),
+                    "metadata": latency_metadata(extra_latency),
                 }
 
             content = AgentCore._stringify_content(getattr(final_message, "content", "") if final_message is not None else cumulative)
@@ -1568,7 +1666,15 @@ class AgentCore:
                 "tool_calls": [],
                 "trace": [simple_trace, safety_output_trace],
                 "model_name": self._model_name_for_node("agent_simple"),
-                "metadata": citation_metadata,
+                "metadata": {
+                    **citation_metadata,
+                    **latency_metadata(
+                        {
+                            "simple_model_total_ms": duration_ms,
+                            "safety_output_ms": safety_output_trace["duration_ms"],
+                        }
+                    ),
+                },
             }
         except GeneratorExit:
             raise

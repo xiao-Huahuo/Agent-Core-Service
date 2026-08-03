@@ -29,6 +29,7 @@ export interface AgentChatMessage {
   created_at?: string
   reference?: string
   attachments?: AgentUploadedAttachment[]
+  thinking_seconds?: number
 }
 
 export type AgentUploadedAttachment = AgentAttachmentUploadResponse['attachment']
@@ -55,6 +56,10 @@ function asTrace(value: unknown): Array<Record<string, unknown>> {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : []
+}
+
+function asFiniteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 function asSourceMap(value: unknown): Record<string, SourceItem> {
@@ -110,6 +115,7 @@ export const useChatStore = defineStore('chat', () => {
   let historyRequestId = 0
   let pendingContent = ''
   let flushTimer: number | null = null
+  let turnStartedAtMs = 0
   const contentFlushMs = 50
 
   const lastMessage = computed(() => messages.value.length > 0 ? messages.value[messages.value.length - 1] : null)
@@ -244,6 +250,25 @@ export const useChatStore = defineStore('chat', () => {
     scheduleContentFlush()
   }
 
+  function nowMs() {
+    return typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now()
+  }
+
+  function markThinkingDurationIfNeeded(message: AgentChatMessage, hasFinalContent = Boolean(message.content?.trim())) {
+    if (!turnStartedAtMs || message.thinking_seconds !== undefined) {
+      return
+    }
+    const node = asString(message.node) || asString(message.metadata?.node)
+    const isFinalAssistantNode = node === 'agent' || node === 'agent_simple' || node === 'error' || node === 'interrupted' || !node
+    if (!isFinalAssistantNode || !hasFinalContent) {
+      return
+    }
+    const elapsedSeconds = Math.max(0, (nowMs() - turnStartedAtMs) / 1000)
+    message.thinking_seconds = Math.round(elapsedSeconds * 10) / 10
+  }
+
   function cancelPendingFlush() {
     if (flushTimer !== null) {
       window.clearTimeout(flushTimer)
@@ -369,6 +394,7 @@ export const useChatStore = defineStore('chat', () => {
       metadata: options.wakeup ? { wakeup: true, child_agent_event: options.childAgentEvent } : undefined,
       created_at: new Date().toISOString(),
     })
+    turnStartedAtMs = nowMs()
 
     streamAbortController = new AbortController()
     const signal = streamAbortController.signal
@@ -532,6 +558,10 @@ export const useChatStore = defineStore('chat', () => {
           ensureAssistant(node)
           if (chunk.type === 'delta') {
             appendStreamContent(content)
+            const last = findLastAssistant()
+            if (last) {
+              markThinkingDurationIfNeeded(last, true)
+            }
           } else {
             cancelPendingFlush()
             const last = findLastAssistant()
@@ -546,9 +576,18 @@ export const useChatStore = defineStore('chat', () => {
               ) {
                 last.content = content
               }
+              markThinkingDurationIfNeeded(last)
             }
           }
           attachMetadataToLastAssistant(metadata)
+          const last = findLastAssistant()
+          const backendFirstDeltaMs = asFiniteNumber(asRecord(last?.metadata?.latency).first_agent_delta_ms)
+          if (last && backendFirstDeltaMs !== null) {
+            last.metadata = {
+              ...(last.metadata ?? {}),
+              backend_first_delta_seconds: Math.round((backendFirstDeltaMs / 1000) * 10) / 10,
+            }
+          }
           updateLastMessage(undefined, node, asArray(chunk.tool_calls), trace)
         } else if (trace.length > 0) {
           appendTraceToCurrentAssistant(node || asString(trace[0]?.node) || 'agent', trace)

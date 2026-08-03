@@ -12,6 +12,9 @@ import { useChatStore } from '../chat'
 const apiMocks = vi.hoisted(() => ({
   fetchMessages: vi.fn(),
   streamPrompt: vi.fn(),
+  fetchTaskSuggestions: vi.fn(),
+  fetchChildAgents: vi.fn(),
+  deleteAgentAttachment: vi.fn(),
   listSessions: vi.fn(),
   createSession: vi.fn(),
   deleteSession: vi.fn(),
@@ -27,7 +30,12 @@ vi.mock('@/api/session', () => ({
   updateSessionName: apiMocks.updateSessionName,
   clearAllSessions: apiMocks.clearAllSessions,
 }))
-vi.mock('@/api/agent', () => ({ streamPrompt: apiMocks.streamPrompt }))
+vi.mock('@/api/agent', () => ({
+  streamPrompt: apiMocks.streamPrompt,
+  fetchTaskSuggestions: apiMocks.fetchTaskSuggestions,
+  fetchChildAgents: apiMocks.fetchChildAgents,
+  deleteAgentAttachment: apiMocks.deleteAgentAttachment,
+}))
 
 describe('chat reference history', () => {
   beforeEach(() => {
@@ -83,6 +91,31 @@ describe('chat reference history', () => {
     expect(store.messages).toHaveLength(1)
     expect(store.messages[0]?.node).toBe('child_agent')
     expect(store.messages[0]?.metadata?.child_agent_event).toEqual(childAgentEvent)
+  })
+
+  it('records thinking seconds from user bubble append to first final assistant content', async () => {
+    const nowSpy = vi.spyOn(performance, 'now')
+    nowSpy.mockReturnValueOnce(1000).mockReturnValueOnce(2234)
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield {
+        type: 'delta',
+        node: 'agent',
+        content: '你好',
+        metadata: {
+          latency: {
+            first_agent_delta_ms: 1234,
+          },
+        },
+      }
+    })
+    const store = useChatStore()
+
+    await store.send('user-1', 'session-1', '你好')
+
+    const assistant = store.messages.find((message) => message.role === 'assistant')
+    expect(assistant?.thinking_seconds).toBe(1.2)
+    expect(assistant?.metadata?.backend_first_delta_seconds).toBe(1.2)
+    nowSpy.mockRestore()
   })
 
 })

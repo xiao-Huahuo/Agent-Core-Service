@@ -41,6 +41,12 @@ const hasContent = computed(() => {
   return content && content !== '​'
 })
 
+const thinkingLabel = computed(() => {
+  return typeof props.message.thinking_seconds === 'number'
+    ? `思考了${props.message.thinking_seconds.toFixed(1)}s`
+    : ''
+})
+
 const statusTraces = computed(() => {
   const seen = new Set<string>()
   return (props.message.trace ?? []).filter((trace) => {
@@ -164,6 +170,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           {{ trace.human_readable }}
         </p>
       </div>
+      <span v-if="thinkingLabel && hasContent" class="thinking-duration">{{ thinkingLabel }}</span>
       <div v-if="hasContent || (isStreaming && statusTraces.length === 0)" class="assistant-article">
         <MarkdownContent
           v-if="hasContent"
@@ -290,6 +297,12 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 .bubble-row.assistant .bubble-col {
   align-items: stretch;
   width: 100%;
+}
+
+.thinking-duration {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-xs);
+  line-height: 1.35;
 }
 
 .bubble-row.user .bubble-col {

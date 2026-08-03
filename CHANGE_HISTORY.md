@@ -1,6 +1,7 @@
 # CHANGE HISTORY
 
 ## 2026-08-03
+- [x] 增加 Agent 首答耗时真实计时与后端阶段诊断: 后端 `stream_session_prompt` 为路由、任务列表读取、上下文构建、子 Agent 结果 drain、首个 agent delta、simple 模型总耗时和安全审核附加 `metadata.latency`,不改变任何路由/模型/工具行为;前端从用户气泡推出到首个最终 assistant 内容到达记录 `thinking_seconds`,并在 Chat/Tool 两种 assistant 气泡上方显示 `思考了Ns`(0.1s 精度),同时保留后端首 delta 秒数到消息 metadata 便于后续定位方差来源。目标前端单测通过,后端语法检查通过;后端 `tests/test_agent_core_service.py` 当前仍有既有 ReRank 未就绪等失败阻塞全套通过。
 - [x] 修复 Electron 中反馈读取失败: 桌面端 API 默认直连 `http://127.0.0.1:8002`,避免 Electron 运行态误读 Vite/静态页面 HTML;后端补充 localhost/null origin CORS 与 Private Network Access 支持,让 Electron file renderer 可访问本机反馈接口。已用真实 uvicorn + Chromium file origin 验证反馈 POST/GET/DELETE 全链路返回 JSON。
 - [x] 修复用户反馈面板用户态未同步时无法读取: `GET /feedback` 支持不传 `user_id` 时按创建时间倒序读取全部反馈,前端反馈弹窗在 `userId` 为空时走无用户过滤读取路径;新增反馈 REST 定向测试覆盖按用户读取与无用户读取。
 - [x] 修复用户反馈读取成功后仍显示失败空态: `loadFeedback` 成功返回时显式清理旧 `errorText`,无用户、提交成功、修改成功和删除成功也同步清理错误状态,避免后端已经连通但右侧仍残留“暂时无法读取反馈”。
