@@ -13,6 +13,8 @@ import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { checkModelDisk } from '@/api/settings'
+import lightLogo from '@/assets/images/亮色无底图标.png'
+import darkLogo from '@/assets/images/暗色无底图标.png'
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 defineProps<{ gitOpen: boolean }>()
@@ -55,7 +57,7 @@ const emit = defineEmits<{
 const graphRebuilding = computed(() => workspaceStore.graphQueue.length > 0)
 const agentActive = computed(() => workspaceStore.agentSidebarOpen)
 const todoActive = computed(() => workspaceStore.todoSidebarOpen)
-const logoSrc = new URL('../../assets/images/无底图标.png', import.meta.url).href
+const logoSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
 
 const switchingRoot = ref(false)
 const savingLibraryName = ref(false)

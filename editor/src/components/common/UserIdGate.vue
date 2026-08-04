@@ -11,7 +11,8 @@ import { computed, ref } from 'vue'
 import { ensureSettingsProfile } from '@/api/settings'
 import darkTitle from '@/assets/images/暗色标题.png'
 import lightTitle from '@/assets/images/亮色标题.png'
-import logoSrc from '@/assets/images/无底图标.png'
+import lightLogo from '@/assets/images/亮色无底图标.png'
+import darkLogo from '@/assets/images/暗色无底图标.png'
 import { useSettingsStore } from '@/stores/settings'
 
 defineOptions({ name: 'UserIdGate' })
@@ -22,6 +23,7 @@ const errorMessage = ref('')
 const loading = ref(false)
 const isDark = computed(() => settingsStore.isDark)
 const welcomeTitleSrc = computed(() => isDark.value ? darkTitle : lightTitle)
+const logoSrc = computed(() => isDark.value ? darkLogo : lightLogo)
 
 async function submitUserId() {
   const normalizedUserId = draftUserId.value.trim()

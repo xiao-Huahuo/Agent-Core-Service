@@ -15,7 +15,8 @@ import { useSettingsStore } from '@/stores/settings'
 import type { SessionRecord } from '@/api/session'
 import { importSessionFile } from '@/api/session'
 import { exportSession } from '@/utils/sessionExport'
-import logoSrc from '@/assets/images/无底图标.png'
+import lightLogo from '@/assets/images/亮色无底图标.png'
+import darkLogo from '@/assets/images/暗色无底图标.png'
 import lightTitle from '@/assets/images/亮色标题.png'
 import darkTitle from '@/assets/images/暗色标题.png'
 
@@ -36,6 +37,7 @@ const sessionStore = useSessionStore()
 const settingsStore = useSettingsStore()
 const favoritesStore = useFavoritesStore()
 const titleSrc = computed(() => settingsStore.isDark ? darkTitle : lightTitle)
+const logoSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
 const exportingId = ref<string | null>(null)
 const importing = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)

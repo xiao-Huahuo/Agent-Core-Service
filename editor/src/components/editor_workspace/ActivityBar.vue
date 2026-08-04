@@ -6,7 +6,12 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
+import { computed } from 'vue'
+
 import IcIcon from '@/components/common/IcIcon.vue'
+import lightLogo from '@/assets/images/亮色无底图标.png'
+import darkLogo from '@/assets/images/暗色无底图标.png'
+import { useSettingsStore } from '@/stores/settings'
 import type { SidebarDisplayMode } from '@/types/settings'
 
 defineProps<{
@@ -57,7 +62,8 @@ function handleRipple(e: MouseEvent) {
   window.setTimeout(() => ripple.remove(), 450)
 }
 
-const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta.url).href
+const settingsStore = useSettingsStore()
+const agentIconSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
 </script>
 
 <template>

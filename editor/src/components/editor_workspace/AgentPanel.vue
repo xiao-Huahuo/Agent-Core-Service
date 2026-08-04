@@ -11,7 +11,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import darkTitle from '@/assets/images/暗色标题.png'
 import lightTitle from '@/assets/images/亮色标题.png'
-import logoSrc from '@/assets/images/无底图标.png'
+import lightLogo from '@/assets/images/亮色无底图标.png'
+import darkLogo from '@/assets/images/暗色无底图标.png'
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import ChatInput from '@/components/editor_workspace/agent_chat/ChatInput.vue'
 import LoaderCube from '@/components/editor_workspace/agent_chat/LoaderCube.vue'
@@ -82,6 +83,7 @@ const modeIndicatorStyle = computed(() => {
 const userId = computed(() => settingsStore.profile.userId)
 const isDark = computed(() => settingsStore.isDark)
 const welcomeTitleSrc = computed(() => isDark.value ? darkTitle : lightTitle)
+const logoSrc = computed(() => isDark.value ? darkLogo : lightLogo)
 const hasMessages = computed(() => chatStore.messages.filter((m) => m.role !== 'system').length > 0)
 const hasStreamingContent = computed(() => !!chatStore.lastMessage?.content)
 // 与 ChatInput 的 .task-suggestions 显示条件一致:非居中(有消息)、无附件、有建议
@@ -1720,14 +1722,14 @@ onBeforeUnmount(() => {
   width: 120px;
   height: auto;
   object-fit: contain;
-  margin-bottom: -6px;
+  margin-bottom: 8px;
   pointer-events: auto;
   animation: welcome-cap-in 1.2s ease-out forwards;
 }
 
 .welcome-logo {
   display: block;
-  width: 240px;
+  width: 200px;
   height: auto;
   object-fit: contain;
   pointer-events: auto;
