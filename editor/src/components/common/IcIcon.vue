@@ -38,6 +38,11 @@ const ICON_FILES: Record<string, string> = {
   close: 'ic--outline-close.svg',
   'arrow-up': 'ic--outline-arrow-upward.svg',
   'arrow-down': 'ic--outline-arrow-downward.svg',
+  'folder-open': 'ic--outline-folder-open.svg',
+  git: 'ic--outline-account-tree.svg',
+  todo: 'ic--outline-check-box.svg',
+  graph: 'ic--outline-bubble-chart.svg',
+  ingest: 'ic--outline-storage.svg',
 }
 
 const svgContent = computed(() => {

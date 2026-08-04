@@ -7,8 +7,9 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onMounted } from 'vue'
-import { CheckSquare, DatabaseZap, FolderOpen, GitBranch, Maximize2, Minus, Network, X } from 'lucide-vue-next'
+import { Maximize2, Minus, X } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -142,7 +143,7 @@ onMounted(() => nextTick(autoResizeInput))
           :title="settingsStore.profile.knowledgeDir"
           @click="openRootPicker"
         >
-          <FolderOpen :size="15" />
+          <IcIcon name="folder-open" :size="15" />
         </button>
         <input
           ref="nameInputRef"
@@ -199,7 +200,7 @@ onMounted(() => nextTick(autoResizeInput))
         aria-label="切换右侧 Git 面板"
         @click="emit('toggleGit')"
       >
-        <GitBranch :size="14" />
+        <IcIcon name="git" :size="14" />
       </button>
       <button
         class="todo-link topbar-optional"
@@ -208,7 +209,7 @@ onMounted(() => nextTick(autoResizeInput))
         title="待办"
         @click="emit('toggleTodo')"
       >
-        <CheckSquare :size="14" />
+        <IcIcon name="todo" :size="14" />
       </button>
       <button
         class="todo-link topbar-optional"
@@ -218,7 +219,7 @@ onMounted(() => nextTick(autoResizeInput))
         title="图谱抽取"
         @click="checkEmbeddingBefore(() => { workspaceStore.ingestionViewTab = 'graph-queue'; workspaceStore.mainView = 'ingestion'; workspaceStore.startGraphRebuild(); })"
       >
-        <Network :size="14" />
+        <IcIcon name="graph" :size="14" />
       </button>
       <button
         class="todo-link topbar-optional"
@@ -228,7 +229,7 @@ onMounted(() => nextTick(autoResizeInput))
         title="重新灌库"
         @click="checkEmbeddingBefore(() => { workspaceStore.ingestionViewTab = 'queue'; workspaceStore.mainView = 'ingestion'; workspaceStore.markIndexing(); })"
       >
-        <DatabaseZap :size="14" />
+        <IcIcon name="ingest" :size="14" />
       </button>
       <label class="switch" title="切换主题">
         <input

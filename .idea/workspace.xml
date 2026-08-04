@@ -4,68 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="可选的记忆">
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--clipboard.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--file-cancel.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--file-document-plus.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--file-document.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--file-download.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--file-export.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--file-import.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--file-plus.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--file-remove.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--file-search-filled.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--file-upload.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--file.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--filter-alt.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--filter-remove.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--filter.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--folder-cancel.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--folder-plus.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--folder-remove.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--folder.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--home.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--image-filled.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--link.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--list.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--loading-alt-loop.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--loading-loop.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--loading-twotone-loop.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--log-in.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--log-out.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--map-marker-multiple-alt.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--map-marker.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--plus-circle.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--plus.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--question-circle.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--question.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--search.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--security.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--square-to-confirm-square-transition.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--star.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--thumbs-down.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--thumbs-up.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--trash.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--upload.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--volume-high-filled.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--volume-high-off-filled.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--volume-high-off.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--volume-high.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--volume-low-filled.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/editor/src/assets/icons/svg/line-md/line-md--volume-low.svg" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/electron/main.cjs" beforeDir="false" afterPath="$PROJECT_DIR$/editor/electron/main.cjs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/ui-system.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/ui-system.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TreeNode.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/MemorySettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/MemorySettingsSection.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/settings.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/开发规范.md" beforeDir="false" afterPath="$PROJECT_DIR$/开发规范.md" afterDir="false" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="图标,历史小改">
+      <change beforePath="$PROJECT_DIR$/editor/src/components/common/IcIcon.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/common/IcIcon.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -358,15 +300,7 @@
       <workItem from="1785639318407" duration="454000" />
       <workItem from="1785746852479" duration="9173000" />
       <workItem from="1785760259593" duration="1427000" />
-      <workItem from="1785840846651" duration="4344000" />
-    </task>
-    <task id="LOCAL-00247" summary="Skills v1">
-      <option name="closed" value="true" />
-      <created>1785080918356</created>
-      <option name="number" value="00247" />
-      <option name="presentableId" value="LOCAL-00247" />
-      <option name="project" value="LOCAL" />
-      <updated>1785080918356</updated>
+      <workItem from="1785840846651" duration="4745000" />
     </task>
     <task id="LOCAL-00248" summary="代码块样式">
       <option name="closed" value="true" />
@@ -752,14 +686,21 @@
       <option name="project" value="LOCAL" />
       <updated>1785768261960</updated>
     </task>
-    <option name="localTasksCounter" value="296" />
+    <task id="LOCAL-00296" summary="图标,历史小改">
+      <option name="closed" value="true" />
+      <created>1785847864783</created>
+      <option name="number" value="00296" />
+      <option name="presentableId" value="LOCAL-00296" />
+      <option name="project" value="LOCAL" />
+      <updated>1785847864783</updated>
+    </task>
+    <option name="localTasksCounter" value="297" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="神秘的skill问题" />
     <MESSAGE value="工具条样式小改" />
     <MESSAGE value="大卡片" />
     <MESSAGE value="dashboard小改" />
@@ -784,7 +725,8 @@
     <MESSAGE value="收藏功能" />
     <MESSAGE value="计时器" />
     <MESSAGE value="可选的记忆" />
-    <option name="LAST_COMMIT_MESSAGE" value="可选的记忆" />
+    <MESSAGE value="图标,历史小改" />
+    <option name="LAST_COMMIT_MESSAGE" value="图标,历史小改" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
