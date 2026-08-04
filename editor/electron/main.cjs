@@ -291,8 +291,8 @@ function createMainWindow() {
     width: 1440,
     height: 920,
     frame: false,
+    transparent: true,
     show: false,
-    backgroundColor: '#101010',
     title: 'AgentService Editor',
     icon: APP_ICON_PATH,
     webPreferences: {
@@ -306,6 +306,16 @@ function createMainWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
   })
+
+  // Notify the renderer about maximize state so the window corner radius can
+  // be dropped while maximized (transparent corners would otherwise show through).
+  const sendMaximizedState = () => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window:maximized-changed', mainWindow.isMaximized())
+    }
+  }
+  mainWindow.on('maximize', sendMaximizedState)
+  mainWindow.on('unmaximize', sendMaximizedState)
 
   createTray()
 

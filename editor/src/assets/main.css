@@ -99,6 +99,23 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Electron shell: the window is transparent, so the app root draws the
+   background and a large corner radius. Maximized windows drop the radius. */
+html.electron-window body {
+  background: transparent;
+}
+
+html.electron-window #app {
+  background: var(--color-canvas);
+  border-radius: 28px;
+  overflow: hidden;
+  contain: paint;
+}
+
+html.electron-window.maximized #app {
+  border-radius: 0;
+}
+
 button,
 input,
 textarea {

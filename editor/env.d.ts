@@ -7,6 +7,7 @@ interface AgentEditorDesktopApi {
   platform: NodeJS.Platform
   minimize: () => void
   toggleMaximize: () => Promise<boolean>
+  onMaximizedChange: (callback: (maximized: boolean) => void) => () => void
   close: () => void
   openExternal: (url: string) => Promise<void>
   selectDirectory: () => Promise<string>
