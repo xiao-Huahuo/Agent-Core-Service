@@ -170,7 +170,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           {{ trace.human_readable }}
         </p>
       </div>
-      <span v-if="thinkingLabel && hasContent" class="thinking-duration">{{ thinkingLabel }}</span>
+      <span v-if="thinkingLabel && hasContent && showActions === true" class="thinking-duration">{{ thinkingLabel }}</span>
       <div v-if="hasContent || (isStreaming && statusTraces.length === 0)" class="assistant-article">
         <MarkdownContent
           v-if="hasContent"

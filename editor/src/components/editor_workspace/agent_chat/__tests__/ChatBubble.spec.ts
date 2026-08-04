@@ -9,6 +9,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 
 import ChatBubble from '../ChatBubble.vue'
+import MessageList from '../MessageList.vue'
 
 describe('ChatBubble user references', () => {
   it('renders the reference above the user message', () => {
@@ -54,5 +55,31 @@ describe('ChatBubble user references', () => {
     })
 
     expect(wrapper.get('.thinking-duration').text()).toBe('思考了3.6s')
+  })
+
+  it('shows assistant metadata only on the final answer of each user turn', () => {
+    HTMLElement.prototype.scrollTo = () => {}
+    const wrapper = mount(MessageList, {
+      global: {
+        plugins: [createPinia()],
+      },
+      props: {
+        messages: [
+          { role: 'user', content: '请开始' },
+          { role: 'assistant', content: '中间进度', node: 'agent', thinking_seconds: 1.1 },
+          { role: 'assistant', content: '', node: 'child_agent' },
+          { role: 'assistant', content: '最终答案', node: 'agent', thinking_seconds: 2.2 },
+          { role: 'user', content: '第二个问题' },
+          { role: 'assistant', content: '第二轮答案', node: 'agent', thinking_seconds: 3.3 },
+        ],
+        isStreaming: false,
+      },
+    })
+
+    expect(wrapper.findAll('.message-actions')).toHaveLength(2)
+    expect(wrapper.findAll('.thinking-duration').map((item) => item.text())).toEqual([
+      '思考了2.2s',
+      '思考了3.3s',
+    ])
   })
 })

@@ -51,7 +51,11 @@ const isWakeupMessage = computed(() => {
     </svg>
     <span>子任务完成，主Agent继续</span>
   </div>
-  <ChatBubble v-else-if="settingsStore.chatMode === 'chat'" v-bind="props" />
+  <ChatBubble
+    v-else-if="settingsStore.chatMode === 'chat'"
+    v-bind="props"
+    :show-actions="showActions"
+  />
   <ToolBubble v-else v-bind="props" />
 </template>
 

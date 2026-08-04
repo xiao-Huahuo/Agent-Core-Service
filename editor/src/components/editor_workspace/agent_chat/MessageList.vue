@@ -127,11 +127,32 @@ function isCompletedAssistantContentMessage(message: AgentChatMessage) {
   return hasCopyableAssistantContent(message) && isFinalAnswerNode(message)
 }
 
-function shouldShowActions(message: AgentChatMessage) {
+function isFinalAssistantAnswer(message: AgentChatMessage, index: number) {
+  if (!hasCopyableAssistantContent(message)) {
+    return false
+  }
+
+  // A turn ends at the next user message. Only the last assistant message
+  // with visible content in that turn is the final answer shown to the user.
+  for (let nextIndex = index + 1; nextIndex < visibleMessages.value.length; nextIndex += 1) {
+    const nextMessage = visibleMessages.value[nextIndex]
+    if (nextMessage.role === 'user') {
+      break
+    }
+    if (hasCopyableAssistantContent(nextMessage)) {
+      return false
+    }
+  }
+  return true
+}
+
+function shouldShowActions(message: AgentChatMessage, index: number) {
   if (message.role !== 'assistant') {
     return true
   }
-  return !isThinkingActive.value && isCompletedAssistantContentMessage(message)
+  return !isThinkingActive.value
+    && isCompletedAssistantContentMessage(message)
+    && isFinalAssistantAnswer(message, index)
 }
 
 function asSourceMap(value: unknown): Record<string, SourceItem> {
@@ -251,7 +272,7 @@ defineExpose({
       :user-avatar="userAvatar"
       :agent-avatar="agentAvatar"
       :show-avatar="shouldShowAvatar(message, index)"
-      :show-actions="shouldShowActions(message)"
+      :show-actions="shouldShowActions(message, index)"
       :knowledge-sources="message.role === 'assistant' ? knowledgeSourcesForMessage(message) : []"
       :citation-map="message.role === 'assistant' ? citationMapForMessage(message) : {}"
     />

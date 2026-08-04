@@ -18,7 +18,7 @@ import { useChatStore } from '@/stores/chat'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { AgentChatMessage, AgentUploadedAttachment, SourceItem } from '@/stores/chat'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   message: AgentChatMessage
   isStreaming?: boolean
   isThinkingActive?: boolean
@@ -28,7 +28,9 @@ const props = defineProps<{
   showActions?: boolean
   knowledgeSources?: SourceItem[]
   citationMap?: Record<string, SourceItem>
-}>()
+}>(), {
+  showActions: true,
+})
 
 const workspaceStore = useWorkspaceStore()
 const chatStore = useChatStore()
@@ -218,7 +220,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           思考过程
         </button>
       </Transition>
-      <span v-if="thinkingLabel && hasAssistantContent" class="thinking-duration">{{ thinkingLabel }}</span>
+      <span v-if="thinkingLabel && hasAssistantContent && showActions === true" class="thinking-duration">{{ thinkingLabel }}</span>
       <div v-if="shouldRenderAssistantBubble" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
         <MarkdownContent
           v-if="hasAssistantContent"
