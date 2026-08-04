@@ -34,6 +34,7 @@ const ICON_FILES: Record<string, string> = {
   'new-folder': 'ic--outline-create-new-folder.svg',
   'new-file': 'ic--outline-note-add.svg',
   back: 'ic--outline-arrow-left.svg',
+  'arrow-left': 'ic--outline-arrow-back.svg',
   check: 'ic--outline-check.svg',
   close: 'ic--outline-close.svg',
   'arrow-up': 'ic--outline-arrow-upward.svg',
@@ -43,6 +44,18 @@ const ICON_FILES: Record<string, string> = {
   todo: 'ic--outline-check-box.svg',
   graph: 'ic--outline-bubble-chart.svg',
   ingest: 'ic--outline-storage.svg',
+  'arrow-right': 'ic--outline-arrow-forward.svg',
+  'multi-select': 'ic--outline-checklist.svg',
+  trash: 'ic--outline-delete.svg',
+  document: 'ic--outline-description.svg',
+  folder: 'ic--outline-folder.svg',
+  book: 'ic--outline-menu-book.svg',
+  code: 'ic--outline-code.svg',
+  'auto-awesome': 'ic--outline-auto-awesome.svg',
+  dashboard: 'ic--outline-space-dashboard.svg',
+  feedback: 'ic--outline-feedback.svg',
+  bug: 'ic--outline-bug-report.svg',
+  settings: 'ic--outline-settings.svg',
 }
 
 const svgContent = computed(() => {

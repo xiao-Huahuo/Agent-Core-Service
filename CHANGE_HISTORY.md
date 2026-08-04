@@ -5,6 +5,7 @@
 - [x] 文件树顶部图标切换为 Material outlined(ic)本地 SVG: 新增 `IcIcon.vue` 通用组件,通过 `import.meta.glob ?raw` 内联渲染 `assets/icons/svg/ic/` 下 14 个 `ic:outline-*` 图标(搜索/过滤/排序/展开/星标/刷新/历史/新建文件夹/新建文件/返回/勾选/关闭/上下箭头),`currentColor` 跟随按钮文字色。文件树顶栏 9 个按钮与排序菜单、最近浏览、搜索框图标全部从 lucide-vue-next 换为 IcIcon,移除对应 lucide 导入。已用 vite dev 验证 glob 编译与 svg raw 返回正常。
 - [x] 暗色模式下对调外围与内容卡片底色: 仅交换 `ui-system.css` dark 块的数值(变量名与引用不动)。顶栏/左侧边栏/文件树所用 `--color-chrome-topbar-bg`、`--color-chrome-rail-bg` 由 `rgba(18,18,20,.92)` 换为原大卡片外框色 `#0a0a0a`;大卡片外框与内容(`--color-bg-app`、`--color-canvas`、`--color-canvas-soft`、`--color-surface`、`--color-surface-raised`、`--color-bg-primary` 及设置页 `--color-chrome-bg-*`)由近黑换为原外围色 `#121214`。亮色模式不变。
 - [x] 文件树收藏状态可随索引/图谱状态一起隐藏: 文件树顶部「隐藏索引与图谱状态」按钮改为同时切换索引、图谱与收藏三列;TreeNode 收藏按钮按 `showFavoriteColumn` 显隐,新增 `--favorite-width` 变量,隐藏时列宽归零、不占文件名空间。同步资源管理器列表/内容/图标视图的收藏按钮与 grid 列、切换按钮文案,并在设置页「显示」区新增「收藏状态」开关,与索引/图谱状态一致。
+- [x] 资源管理器顶栏、多选横幅与左侧活动栏图标切换为 ic: 资源管理器内部顶栏除右侧四个视图模式按钮(列表/小/中/大)外全部换为 `IcIcon`(导航四键、根目录、最近删除胶囊、状态切换、收藏、多选、排序及排序菜单内勾选/上下箭头),两个 toggle(文件/最近删除)文字左侧加图标;左侧 ActivityBar 全部 13 个 lucide 图标换为 ic(文件/资源/Git/图书馆/入库/搜索/MD-HTML/Skills/图谱/看板/收藏/反馈/Debug/设置),Agent 自定义 PNG 保留。`IcIcon.vue` 新增 folder/book/code/auto-awesome/dashboard/feedback/bug/settings 映射并下载 8 个 `ic:outline-*` SVG。`npx vue-tsc --noEmit` 通过。
 
 ## 2026-08-03
 - [x] 增加 macOS 图标与字体适配:根据平台让 Electron 使用 `app.icns` 或 `app.ico`,并补充 macOS 用户字体、PingFang、Hiragino、Songti 与 Arial Unicode 字体路径。

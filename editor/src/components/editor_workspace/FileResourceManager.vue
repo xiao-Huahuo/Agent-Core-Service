@@ -10,31 +10,22 @@
 import { checkModelDisk } from '@/api/settings'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ArrowUpDown,
   Ban,
   Check,
   CircleAlert,
   CircleCheck,
-  FolderOpen,
   GitBranch,
   Grid2X2,
   ImageIcon,
   LayoutList,
   List,
-  ListChecks,
-  ListFilter,
   Network,
-  RefreshCw,
   RotateCcw,
-  Star,
   Trash2,
   X,
 } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import {
@@ -888,7 +879,8 @@ onUnmounted(() => {
           type="button"
           @click="switchResourcePage('files')"
         >
-          文件
+          <IcIcon name="document" :size="17" />
+          <span>文件</span>
         </button>
         <button
           class="page-switch-button"
@@ -896,19 +888,20 @@ onUnmounted(() => {
           type="button"
           @click="switchResourcePage('trash')"
         >
-          最近删除
+          <IcIcon name="trash" :size="17" />
+          <span>最近删除</span>
         </button>
       </div>
       <span class="toolbar-separator"></span>
       <div class="nav-controls" aria-label="Folder navigation">
         <button class="tool-button" type="button" title="回退" :disabled="!canGoBack" @click="goBackDirectory">
-          <ArrowLeft :size="15" />
+          <IcIcon name="arrow-left" :size="17" />
         </button>
         <button class="tool-button" type="button" title="反回退" :disabled="!canGoForward" @click="goForwardDirectory">
-          <ArrowRight :size="15" />
+          <IcIcon name="arrow-right" :size="17" />
         </button>
         <button class="tool-button" type="button" title="去上级文件夹" :disabled="!canGoUp" @click="goUpDirectory">
-          <ArrowUp :size="15" />
+          <IcIcon name="arrow-up" :size="17" />
         </button>
         <button
           class="tool-button"
@@ -918,7 +911,7 @@ onUnmounted(() => {
           :disabled="workspaceStore.treeLoading || workspaceStore.trashLoading"
           @click="refreshResources"
         >
-          <RefreshCw :size="15" />
+          <IcIcon name="refresh" :size="17" />
         </button>
       </div>
       <span class="toolbar-separator"></span>
@@ -929,7 +922,7 @@ onUnmounted(() => {
         :title="rootError || 'Switch knowledge root'"
         @click="openRootPicker"
       >
-        <FolderOpen :size="18" />
+        <IcIcon name="folder-open" :size="20" />
       </button>
       <div v-if="resourcePage === 'files'" class="path-capsule" aria-label="Current path">
         <button
@@ -943,7 +936,7 @@ onUnmounted(() => {
         </button>
       </div>
       <div v-else class="path-capsule trash-path-capsule" aria-label="Current page">
-        <Trash2 :size="15" />
+        <IcIcon name="trash" :size="17" />
         <span>最近删除</span>
       </div>
       <button
@@ -955,7 +948,7 @@ onUnmounted(() => {
         :aria-label="(settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn) ? '隐藏索引、图谱与收藏状态' : '显示索引、图谱与收藏状态'"
         @click="toggleStatusColumns"
       >
-        <ListFilter :size="15" />
+        <IcIcon name="filter" :size="17" />
       </button>
       <button
         v-if="resourcePage === 'files'"
@@ -968,7 +961,7 @@ onUnmounted(() => {
         :disabled="favoritesOnlyLocked"
         @click="toggleFavoritesOnly"
       >
-        <Star :size="15" />
+        <IcIcon name="star" :size="17" />
       </button>
       <button
         v-if="resourcePage === 'files'"
@@ -979,7 +972,7 @@ onUnmounted(() => {
         aria-label="多选"
         @click="toggleMultiSelectMode"
       >
-        <ListChecks :size="15" />
+        <IcIcon name="multi-select" :size="17" />
       </button>
       <div v-if="resourcePage === 'files'" class="sort-control">
         <button
@@ -990,7 +983,7 @@ onUnmounted(() => {
           aria-label="排序"
           @click="sortMenuOpen = !sortMenuOpen"
         >
-          <ArrowUpDown :size="15" />
+          <IcIcon name="sort" :size="17" />
         </button>
         <div v-if="sortMenuOpen" class="sort-menu" @click.stop>
           <button
@@ -999,7 +992,7 @@ onUnmounted(() => {
             type="button"
             @click="selectSortKey(option.value)"
           >
-            <Check v-if="sortKey === option.value" :size="14" />
+            <IcIcon v-if="sortKey === option.value" name="check" :size="16" />
             <span v-else class="sort-check-placeholder"></span>
             <span class="sort-icon-placeholder"></span>
             <span>{{ option.label }}</span>
@@ -1011,10 +1004,10 @@ onUnmounted(() => {
             type="button"
             @click="selectSortDirection(option.value)"
           >
-            <Check v-if="sortDirection === option.value" :size="14" />
+            <IcIcon v-if="sortDirection === option.value" name="check" :size="16" />
             <span v-else class="sort-check-placeholder"></span>
-            <ArrowUp v-if="option.value === 'asc'" :size="14" />
-            <ArrowDown v-else :size="14" />
+            <IcIcon v-if="option.value === 'asc'" name="arrow-up" :size="16" />
+            <IcIcon v-else name="arrow-down" :size="16" />
             <span>{{ option.label }}</span>
           </button>
         </div>
@@ -1029,10 +1022,10 @@ onUnmounted(() => {
           :title="mode.title"
           @click="viewMode = mode.value"
         >
-          <List v-if="mode.value === 'list'" :size="15" />
-          <LayoutList v-else-if="mode.value === 'small'" :size="15" />
-          <Grid2X2 v-else-if="mode.value === 'medium'" :size="15" />
-          <ImageIcon v-else :size="15" />
+          <List v-if="mode.value === 'list'" :size="17" />
+          <LayoutList v-else-if="mode.value === 'small'" :size="17" />
+          <Grid2X2 v-else-if="mode.value === 'medium'" :size="17" />
+          <ImageIcon v-else :size="17" />
           <span>{{ mode.label }}</span>
         </button>
       </div>

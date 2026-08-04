@@ -6,7 +6,7 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { Activity, BookOpen, Bug, DatabaseZap, FileCode, Files, Folder, GitBranch, MessageSquare, Search, Settings, Share2, Sparkles, Star } from 'lucide-vue-next'
+import IcIcon from '@/components/common/IcIcon.vue'
 import type { SidebarDisplayMode } from '@/types/settings'
 
 defineProps<{
@@ -71,7 +71,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
       @mousedown.prevent="handleRipple"
       @click="emit('toggleFile')"
     >
-      <Files :size="18" />
+      <IcIcon name="folder" :size="18" />
       <span class="activity-label">文件</span>
     </button>
     <button
@@ -83,7 +83,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
       @mousedown.prevent="handleRipple"
       @click="emit('toggleGit')"
     >
-      <GitBranch :size="18" />
+      <IcIcon name="git" :size="18" />
       <span class="activity-label">Git</span>
     </button>
     <button
@@ -95,7 +95,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
       @mousedown.prevent="handleRipple"
       @click="emit('openResources')"
     >
-      <Folder :size="18" />
+      <IcIcon name="folder-open" :size="18" />
       <span class="activity-label">资源</span>
     </button>
     <button
@@ -107,7 +107,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
       @mousedown.prevent="handleRipple"
       @click="emit('openLibrary')"
     >
-      <BookOpen :size="18" />
+      <IcIcon name="book" :size="18" />
       <span class="activity-label">图书馆</span>
     </button>
     <button
@@ -119,7 +119,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
       @mousedown.prevent="handleRipple"
       @click="emit('openIngestion')"
     >
-      <DatabaseZap :size="18" />
+      <IcIcon name="ingest" :size="18" />
       <span class="activity-label">入库</span>
     </button>
     <button
@@ -131,7 +131,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
       @mousedown.prevent="handleRipple"
       @click="emit('openSearch')"
     >
-      <Search :size="18" />
+      <IcIcon name="search" :size="18" />
       <span class="activity-label">搜索</span>
     </button>
     <button
@@ -143,7 +143,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
       @mousedown.prevent="handleRipple"
       @click="emit('openVisualization')"
     >
-      <FileCode :size="18" />
+      <IcIcon name="code" :size="18" />
       <span class="activity-label">MD-HTML</span>
     </button>
     <button
@@ -167,7 +167,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
       @mousedown.prevent="handleRipple"
       @click="emit('openSkills')"
     >
-      <Sparkles :size="18" />
+      <IcIcon name="auto-awesome" :size="18" />
       <span class="activity-label">Skills</span>
     </button>
     <button
@@ -179,7 +179,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
       @mousedown.prevent="handleRipple"
       @click="emit('toggleGraph')"
     >
-      <Share2 :size="18" />
+      <IcIcon name="graph" :size="18" />
       <span class="activity-label">图谱</span>
     </button>
     <button
@@ -191,7 +191,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
       @mousedown.prevent="handleRipple"
       @click="emit('openDashboard')"
     >
-      <Activity :size="18" />
+      <IcIcon name="dashboard" :size="18" />
       <span class="activity-label">看板</span>
     </button>
     <button
@@ -203,7 +203,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
       @mousedown.prevent="handleRipple"
       @click="emit('openFavorites')"
     >
-      <Star :size="18" />
+      <IcIcon name="star" :size="18" />
       <span class="activity-label">收藏</span>
     </button>
     <div class="bottom-group">
@@ -216,7 +216,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
         @mousedown.prevent="handleRipple"
         @click="emit('toggleFeedback')"
       >
-        <MessageSquare :size="18" />
+        <IcIcon name="feedback" :size="18" />
         <span class="activity-label">反馈</span>
       </button>
       <button
@@ -228,7 +228,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
         @mousedown.prevent="handleRipple"
       @click="emit('openDebug')"
       >
-        <Bug :size="18" />
+        <IcIcon name="bug" :size="18" />
         <span class="activity-label">Debug</span>
       </button>
       <button
@@ -240,7 +240,7 @@ const agentIconSrc = new URL('../../assets/images/无底图标.png', import.meta
         @mousedown.prevent="handleRipple"
       @click="emit('openSettings')"
       >
-        <Settings :size="18" />
+        <IcIcon name="settings" :size="18" />
         <span class="activity-label">设置</span>
       </button>
     </div>

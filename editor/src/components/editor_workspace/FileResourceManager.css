@@ -52,7 +52,11 @@
 .page-switch-button {
   position: relative;
   z-index: 1;
-  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  height: 28px;
   padding: 0 var(--space-10);
   border: none;
   border-radius: 999px;
