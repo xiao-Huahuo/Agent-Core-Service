@@ -8,8 +8,8 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Layers, List } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { highlightMatch } from '@/utils/highlight'
 import { useWorkspaceStore } from '@/stores/workspace'
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
@@ -242,7 +242,8 @@ onMounted(() => {
               :class="{ active: unifiedMode }"
               @click="unifiedMode = !unifiedMode"
             >
-              <component :is="unifiedMode ? Layers : List" :size="12" />
+              <IcIcon v-if="unifiedMode" name="layers" :size="12" />
+              <IcIcon v-else name="view-list" :size="12" />
               <span>{{ unifiedMode ? '联合搜索' : '搜索分离' }}</span>
             </button>
           </div>

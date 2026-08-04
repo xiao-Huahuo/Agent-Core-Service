@@ -8,8 +8,8 @@
 -->
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { Loader, X } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { previewKnowledgeFile, readKnowledgeFile } from '@/api/knowledge'
 import CodeEditor from '@/components/editor_workspace/CodeEditor.vue'
 import CodePreview from '@/components/editor_workspace/CodePreview.vue'
@@ -126,12 +126,12 @@ onUnmounted(() => requestController?.abort())
         @update:model-value="editorMode = $event"
       />
       <button type="button" title="关闭预览" aria-label="关闭预览" @click="emit('close')">
-        <X :size="16" />
+        <IcIcon name="close" :size="16" />
       </button>
     </header>
 
     <div v-if="loading" class="preview-state">
-      <Loader :size="18" class="preview-spinner" />
+      <IcIcon name="spinner" :size="18" class="preview-spinner" />
       <span>正在加载文件…</span>
     </div>
     <div v-else-if="error" class="preview-state preview-error">{{ error }}</div>

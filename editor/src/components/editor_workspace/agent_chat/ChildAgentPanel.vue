@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ChevronDown, UsersRound, X } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { fetchChildAgents, stopChildAgent } from '@/api/agent'
 import type { ChildAgentRecord } from '@/api/agent'
 import { getChildAgentAvatar } from '@/utils/childAgentAvatar'
@@ -175,12 +175,12 @@ onBeforeUnmount(() => {
   <aside class="child-agent-drawer" aria-label="子 Agent 任务">
     <header class="child-agent-header">
       <div class="child-agent-title">
-        <UsersRound :size="16" />
+        <IcIcon name="group" :size="16" />
         <span>子 Agent</span>
         <span class="child-agent-count">{{ activeGroups.length }} 个运行中</span>
       </div>
       <button class="child-agent-close" type="button" title="关闭子 Agent 侧栏" @click="emit('close')">
-        <X :size="15" />
+        <IcIcon name="close" :size="15" />
       </button>
     </header>
 
@@ -193,7 +193,7 @@ onBeforeUnmount(() => {
             :aria-expanded="isExpanded(group)"
             @click="toggleExpanded(group)"
           >
-            <ChevronDown class="child-agent-task-chevron" :class="{ expanded: isExpanded(group) }" :size="15" />
+            <IcIcon name="chevron-down" class="child-agent-task-chevron" :class="{ expanded: isExpanded(group) }" :size="15" />
             <img
               :src="getChildAgentAvatar(latestRun(group).run_id)"
               class="child-agent-avatar"
@@ -222,7 +222,7 @@ onBeforeUnmount(() => {
                   <span class="child-agent-run-dot" :data-status="run.status"></span>
                   <strong>{{ childDisplayName(run) }}</strong>
                   <span class="child-agent-status" :data-status="run.status">{{ statusLabel(run.status) }}</span>
-                  <ChevronDown class="child-agent-run-chevron" :class="{ expanded: isRunExpanded(run.run_id) }" :size="14" />
+                  <IcIcon name="chevron-down" class="child-agent-run-chevron" :class="{ expanded: isRunExpanded(run.run_id) }" :size="14" />
                 </button>
 
                 <div class="child-agent-run-detail" :class="{ expanded: isRunExpanded(run.run_id) }">

@@ -6,14 +6,7 @@
   index/graph status. File opening is delegated to the parent panel.
 -->
 <script setup lang="ts">
-import {
-  Ban,
-  CircleAlert,
-  CircleCheck,
-  GitBranch,
-  Network,
-} from 'lucide-vue-next'
-
+import IcIcon from '@/components/common/IcIcon.vue'
 import RecentFileThumbnail from '@/components/editor_workspace/RecentFileThumbnail.vue'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 import type { RecentFileGroup } from '@/utils/recentFileHistory'
@@ -45,26 +38,26 @@ function formatViewedAt(value: string): string {
 /** Maps vector-index state to its accessible icon presentation. */
 function indexStatus(node: KnowledgeFileNode) {
   if (node.indexStatus === 'indexed' || node.indexStatus === 'clean') {
-    return { icon: CircleCheck, className: 'is-ready', label: '已索引' }
+    return { icon: 'check-circle', className: 'is-ready', label: '已索引' }
   }
   if (node.indexStatus === 'ignored') {
-    return { icon: Ban, className: 'is-muted', label: '已忽略' }
+    return { icon: 'block', className: 'is-muted', label: '已忽略' }
   }
   if (node.indexStatus === 'failed') {
-    return { icon: CircleAlert, className: 'is-error', label: '索引失败' }
+    return { icon: 'error-outline', className: 'is-error', label: '索引失败' }
   }
-  return { icon: CircleAlert, className: 'is-pending', label: '未索引' }
+  return { icon: 'error-outline', className: 'is-pending', label: '未索引' }
 }
 
 /** Maps graph-extraction state to its accessible icon presentation. */
 function graphStatus(node: KnowledgeFileNode) {
   if (node.graphStatus === 'graphed') {
-    return { icon: Network, className: 'is-ready', label: '已入图' }
+    return { icon: 'hub', className: 'is-ready', label: '已入图' }
   }
   if (node.graphStatus === 'ignored') {
-    return { icon: Ban, className: 'is-muted', label: '已忽略' }
+    return { icon: 'block', className: 'is-muted', label: '已忽略' }
   }
-  return { icon: GitBranch, className: 'is-pending', label: '未入图' }
+  return { icon: 'git', className: 'is-pending', label: '未入图' }
 }
 </script>
 
@@ -97,14 +90,14 @@ function graphStatus(node: KnowledgeFileNode) {
                   :title="indexStatus(item.node).label"
                   :aria-label="indexStatus(item.node).label"
                 >
-                  <component :is="indexStatus(item.node).icon" :size="12" />
+                  <IcIcon :name="indexStatus(item.node).icon" :size="12" />
                 </span>
                 <span
                   :class="['recent-file-status', graphStatus(item.node).className]"
                   :title="graphStatus(item.node).label"
                   :aria-label="graphStatus(item.node).label"
                 >
-                  <component :is="graphStatus(item.node).icon" :size="12" />
+                  <IcIcon :name="graphStatus(item.node).icon" :size="12" />
                 </span>
               </span>
             </span>

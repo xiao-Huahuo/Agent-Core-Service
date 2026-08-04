@@ -6,8 +6,7 @@
   actions owned by the workspace store.
 -->
 <script setup lang="ts">
-import { Download, FolderOpen, X } from 'lucide-vue-next'
-
+import IcIcon from '@/components/common/IcIcon.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 const workspaceStore = useWorkspaceStore()
@@ -25,13 +24,13 @@ const workspaceStore = useWorkspaceStore()
       </div>
       <div class="visualization-actions">
         <button type="button" title="保存到知识库" @click="workspaceStore.saveMarkdownHtmlVisualizationToKnowledge">
-          <Download :size="15" />
+          <IcIcon name="download" :size="15" />
         </button>
         <button type="button" title="在资源管理器中显示" @click="workspaceStore.revealMarkdownHtmlVisualization">
-          <FolderOpen :size="15" />
+          <IcIcon name="folder-open" :size="15" />
         </button>
         <button type="button" title="关闭" @click="workspaceStore.closeMarkdownHtmlVisualization">
-          <X :size="15" />
+          <IcIcon name="close" :size="15" />
         </button>
       </div>
     </header>

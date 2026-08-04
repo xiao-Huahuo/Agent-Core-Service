@@ -7,21 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import {
-  BrainCircuit,
-  CheckCircle2,
-  CircleDashed,
-  DatabaseZap,
-  FileText,
-  Folder,
-  History,
-  Loader2,
-  Network,
-  RefreshCw,
-  Trash2,
-  XCircle,
-} from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { HistorySourceType, IngestionHistoryItem, IngestionQueueItem } from '@/types/knowledge'
 
@@ -194,7 +181,7 @@ function historySummary(row: IngestionHistoryItem): string {
           aria-label="重新灌库"
           @click="startIngestion"
         >
-          <DatabaseZap :size="14" />
+          <IcIcon name="ingest" :size="14" />
         </button>
         <button
           v-else-if="activeTab === 'graph-queue'"
@@ -206,10 +193,10 @@ function historySummary(row: IngestionHistoryItem): string {
           aria-label="图谱抽取"
           @click="startGraphExtraction"
         >
-          <Network :size="14" />
+          <IcIcon name="graph" :size="14" />
         </button>
         <button class="refresh-btn" type="button" title="刷新" aria-label="刷新" @click="refresh">
-          <RefreshCw :size="16" class="refresh-svg" />
+          <IcIcon name="refresh" :size="16" class="refresh-svg" />
         </button>
         <button
           v-if="activeTab === 'history' && historyRows.length > 0"
@@ -219,7 +206,7 @@ function historySummary(row: IngestionHistoryItem): string {
           aria-label="清空历史"
           @click="workspaceStore.clearIngestionHistory(); workspaceStore.clearGraphHistory()"
         >
-          <Trash2 :size="16" />
+          <IcIcon name="trash" :size="16" />
         </button>
       </div>
     </header>
@@ -242,16 +229,16 @@ function historySummary(row: IngestionHistoryItem): string {
           :style="{ gridTemplateColumns: queueColumns }"
         >
           <span class="name-cell">
-            <Folder v-if="row.isDir" :size="16" class="kind-icon folder" />
-            <FileText v-else :size="16" class="kind-icon file" />
+            <IcIcon v-if="row.isDir" name="folder" :size="16" class="kind-icon folder" />
+            <IcIcon v-else name="document" :size="16" class="kind-icon file" />
             <span class="file-name" :title="row.path">{{ row.name }}</span>
           </span>
           <span>{{ row.mtime ?? '-' }}</span>
           <span>{{ fileKind(row) }}</span>
           <span>{{ formatSize(row.size) }}</span>
           <span class="status-cell">
-            <Loader2 v-if="row.status === 'running'" :size="14" class="spin" />
-            <CircleDashed v-else :size="14" />
+            <IcIcon v-if="row.status === 'running'" name="spinner" :size="14" class="spin" />
+            <IcIcon v-else name="radio-unchecked" :size="14" />
             <span class="status-pill" :class="row.status">{{ queueStatusLabel(row.status) }}</span>
           </span>
         </div>
@@ -280,7 +267,7 @@ function historySummary(row: IngestionHistoryItem): string {
           :style="{ gridTemplateColumns: graphQueueColumns }"
         >
           <span class="name-cell">
-            <FileText :size="16" class="kind-icon file" />
+            <IcIcon name="document" :size="16" class="kind-icon file" />
             <span class="file-name" :title="row.path">{{ row.name }}</span>
           </span>
           <span>{{ row.mtime ?? '-' }}</span>
@@ -294,8 +281,8 @@ function historySummary(row: IngestionHistoryItem): string {
             <span v-else class="progress-na">-</span>
           </span>
           <span class="status-cell">
-            <Loader2 v-if="row.status === 'running'" :size="14" class="spin" />
-            <CircleDashed v-else :size="14" />
+            <IcIcon v-if="row.status === 'running'" name="spinner" :size="14" class="spin" />
+            <IcIcon v-else name="radio-unchecked" :size="14" />
             <span class="status-pill" :class="row.status">{{ row.status === 'running' ? '正在抽取' : '等待抽取' }}</span>
           </span>
         </div>
@@ -344,9 +331,9 @@ function historySummary(row: IngestionHistoryItem): string {
           :style="{ gridTemplateColumns: historyColumns }"
         >
           <span class="name-cell">
-            <Folder v-if="row.isDir" :size="16" class="kind-icon folder" />
-            <FileText v-else-if="row.sourceType !== 'graph'" :size="16" class="kind-icon file" />
-            <BrainCircuit v-else :size="16" class="kind-icon graph" />
+            <IcIcon v-if="row.isDir" name="folder" :size="16" class="kind-icon folder" />
+            <IcIcon v-else-if="row.sourceType !== 'graph'" name="document" :size="16" class="kind-icon file" />
+            <IcIcon v-else name="psychology" :size="16" class="kind-icon graph" />
             <span class="file-name" :title="row.path || row.name">{{ row.name }}</span>
           </span>
           <span class="history-source-cell">
@@ -354,9 +341,9 @@ function historySummary(row: IngestionHistoryItem): string {
           </span>
           <span>{{ fileKind(row) }}</span>
           <span class="status-cell">
-            <CheckCircle2 v-if="row.status === 'finished'" :size="14" />
-            <CircleDashed v-else-if="row.status === 'skipped'" :size="14" />
-            <XCircle v-else :size="14" />
+            <IcIcon v-if="row.status === 'finished'" name="check-circle" :size="14" />
+            <IcIcon v-else-if="row.status === 'skipped'" name="radio-unchecked" :size="14" />
+            <IcIcon v-else name="cancel" :size="14" />
             <span class="status-pill" :class="row.status">{{ historyStatusLabel(row.status) }}</span>
           </span>
           <span>{{ formatDate(row.finishedAt) }}</span>

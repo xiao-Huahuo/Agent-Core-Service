@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ChevronRight, X } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import GitPushFileTree from '@/components/git_sidebar/GitPushFileTree.vue'
 import GitPushTargetCreateDialog from '@/components/git_sidebar/GitPushTargetCreateDialog.vue'
 import { buildGitPushTree } from '@/components/git_sidebar/gitPushTree'
@@ -158,7 +158,7 @@ async function submitPush(): Promise<void> {
             </p>
           </div>
           <button type="button" aria-label="关闭" @click="gitStore.pushOpen = false">
-            <X :size="16" />
+            <IcIcon name="close" :size="16" />
           </button>
         </header>
 
@@ -177,7 +177,7 @@ async function submitPush(): Promise<void> {
               <option :value="CREATE_LOCAL_VALUE">新建本地分支…</option>
             </select>
           </label>
-          <ChevronRight :size="16" />
+          <IcIcon name="chevron-right" :size="16" />
           <label>
             <span>远程仓库</span>
             <select :value="remote" @change="handleRemoteSelection">

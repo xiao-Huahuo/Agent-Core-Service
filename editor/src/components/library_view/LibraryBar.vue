@@ -9,8 +9,8 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Check, FolderOpen, Image as ImageIcon, Link, TriangleAlert } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { buildApiUrl } from '@/api/client'
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
@@ -118,7 +118,7 @@ function handleDrop(event: DragEvent) {
       :title="selected ? '取消选择' : '选择'"
       @click.stop="emit('toggle', item)"
     >
-      <Check v-if="selected" :size="14" />
+      <IcIcon v-if="selected" name="check" :size="14" />
     </button>
     <section class="thumb">
       <img v-if="coverUrl" class="thumb-image" :src="coverUrl" alt="" />
@@ -129,21 +129,21 @@ function handleDrop(event: DragEvent) {
         {{ item.display_title }}
       </div>
       <div v-else class="thumb-icon">
-        <FolderOpen v-if="isCollection" :size="26" />
-        <Link v-else-if="item.content_type === 'web_url'" :size="26" />
+        <IcIcon v-if="isCollection" name="folder-open" :size="26" />
+        <IcIcon v-else-if="item.content_type === 'web_url'" name="link" :size="26" />
         <img v-else-if="fileIcon.src" class="thumb-file-icon" :src="fileIcon.src" alt="" />
-        <ImageIcon v-else :size="26" />
+        <IcIcon v-else name="image" :size="26" />
       </div>
-      <TriangleAlert v-if="!item.source_exists" class="missing-icon" :size="14" />
+      <IcIcon v-if="!item.source_exists" name="warning" class="missing-icon" :size="14" />
     </section>
     <section class="bar-meta">
       <div class="bar-title-row">
         <FavoriteButton class="bar-favorite" target-type="library_item" :target-id="item.item_id" />
         <span class="bar-type-icon">
-          <FolderOpen v-if="isCollection" :size="16" />
-          <Link v-else-if="item.content_type === 'web_url'" :size="16" />
+          <IcIcon v-if="isCollection" name="folder-open" :size="16" />
+          <IcIcon v-else-if="item.content_type === 'web_url'" name="link" :size="16" />
           <img v-else-if="fileIcon.src" class="bar-type-file-icon" :src="fileIcon.src" alt="" />
-          <ImageIcon v-else :size="16" />
+          <IcIcon v-else name="image" :size="16" />
         </span>
         <span class="bar-title" :title="item.display_title">{{ item.display_title }}</span>
         <div class="bar-tag-row">

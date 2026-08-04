@@ -6,8 +6,8 @@
   file entries. Each source can be clicked to navigate to that file.
 -->
 <script setup lang="ts">
-import { ChevronDown, ExternalLink } from 'lucide-vue-next'
 import { ref } from 'vue'
+import IcIcon from '@/components/common/IcIcon.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { SourceItem } from '@/stores/chat'
 
@@ -64,7 +64,7 @@ function openSource(uri: string) {
 <template>
   <div v-if="sources.length > 0" class="knowledge-sources">
     <button class="sources-toggle" type="button" @click="toggle">
-      <ChevronDown :size="12" class="toggle-chevron" :class="{ rotated: expanded }" />
+      <IcIcon name="chevron-down" :size="12" class="toggle-chevron" :class="{ rotated: expanded }" />
       <span class="sources-label">来源</span>
       <span class="sources-count">{{ sources.length }}</span>
     </button>
@@ -78,7 +78,7 @@ function openSource(uri: string) {
       >
         <span class="source-index">{{ source.citation_id ?? index + 1 }}</span>
         <span class="source-name">{{ sourceName(source) }}</span>
-        <ExternalLink :size="10" class="source-link-icon" />
+        <IcIcon name="open-in-new" :size="10" class="source-link-icon" />
       </button>
     </div>
   </div>

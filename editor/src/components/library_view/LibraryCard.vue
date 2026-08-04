@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Check, FolderOpen, Image as ImageIcon, Link, TriangleAlert } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { buildApiUrl } from '@/api/client'
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
@@ -129,7 +129,7 @@ function handleDrop(event: DragEvent) {
       :title="selected ? '取消选择' : '选择'"
       @click.stop="emit('toggle', item)"
     >
-      <Check v-if="selected" :size="14" />
+      <IcIcon v-if="selected" name="check" :size="14" />
     </button>
     <section class="cover">
       <img v-if="coverUrl" class="cover-image" :src="coverUrl" alt="" />
@@ -140,12 +140,12 @@ function handleDrop(event: DragEvent) {
         {{ item.display_title }}
       </div>
       <div v-else class="icon-cover">
-        <FolderOpen v-if="isCollection" :size="52" />
-        <Link v-else-if="item.content_type === 'web_url'" :size="52" />
+        <IcIcon v-if="isCollection" name="folder-open" :size="52" />
+        <IcIcon v-else-if="item.content_type === 'web_url'" name="link" :size="52" />
         <img v-else-if="fileIcon.src" class="file-icon" :src="fileIcon.src" alt="" />
-        <ImageIcon v-else :size="52" />
+        <IcIcon v-else name="image" :size="52" />
       </div>
-      <TriangleAlert v-if="!item.source_exists" class="missing-icon" :size="18" />
+      <IcIcon v-if="!item.source_exists" name="warning" class="missing-icon" :size="18" />
     </section>
     <section class="meta">
       <div class="tag-row">
@@ -154,7 +154,7 @@ function handleDrop(event: DragEvent) {
       <div class="title" :title="item.display_title">{{ item.display_title }}</div>
       <div v-if="!isCollection" class="source" :title="sourceLabel">
         <img v-if="fileIcon.src" class="source-icon" :src="fileIcon.src" alt="" />
-        <Link v-else-if="item.content_type === 'web_url'" :size="13" />
+        <IcIcon v-else-if="item.content_type === 'web_url'" name="link" :size="13" />
         <span>{{ sourceLabel }}</span>
       </div>
       <div class="description" :title="item.description">{{ item.description || '无描述' }}</div>

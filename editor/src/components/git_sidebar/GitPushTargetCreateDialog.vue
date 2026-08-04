@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { X } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { useGitStore } from '@/stores/git'
 
 type GitPushTargetCreateMode = 'local' | 'remote' | 'remote-branch'
@@ -88,7 +88,7 @@ async function submit(): Promise<void> {
         <header>
           <h3>{{ title }}</h3>
           <button type="button" aria-label="关闭创建弹窗" @click="emit('close')">
-            <X :size="16" />
+            <IcIcon name="close" :size="16" />
           </button>
         </header>
 

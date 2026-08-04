@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Search } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { CommandAction } from '@/types/knowledge'
@@ -49,7 +49,7 @@ function runCommand(command: CommandAction) {
     <div v-if="workspaceStore.commandPaletteOpen" class="palette-overlay" @click="workspaceStore.closeCommandPalette">
       <section class="palette" @click.stop>
         <div class="palette-search">
-          <Search :size="18" />
+          <IcIcon name="search" :size="18" />
           <input v-model="query" autofocus placeholder="Type a command" />
         </div>
         <div class="command-list">

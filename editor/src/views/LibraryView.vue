@@ -8,29 +8,8 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import {
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  CalendarClock,
-  Check,
-  FilePlus2,
-  FolderOpen,
-  FolderPlus,
-  HardDrive,
-  Info,
-  LayoutGrid,
-  Link,
-  ListFilter,
-  RefreshCw,
-  Rows,
-  Save,
-  Search,
-  Star,
-  Tags,
-  X,
-} from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import {
   createLibraryBook,
   createLibraryCollection,
@@ -585,16 +564,16 @@ function errorMessage(error: unknown): string {
       <div class="nav-row">
         <div class="nav-buttons">
           <button class="icon-toolbar-btn" type="button" title="回退" :disabled="!canGoBack" @click="goBack">
-            <ArrowLeft :size="16" />
+            <IcIcon name="arrow-left" :size="16" />
           </button>
           <button class="icon-toolbar-btn" type="button" title="反回退" :disabled="!canGoForward" @click="goForward">
-            <ArrowRight :size="16" />
+            <IcIcon name="arrow-right" :size="16" />
           </button>
           <button class="icon-toolbar-btn" type="button" title="回到上级目录" :disabled="!canGoUp" @click="goUp">
-            <ArrowUp :size="16" />
+            <IcIcon name="arrow-up" :size="16" />
           </button>
           <button class="icon-toolbar-btn" type="button" title="刷新" @click="refreshLibrary">
-            <RefreshCw :size="16" />
+            <IcIcon name="refresh" :size="16" />
           </button>
         </div>
         <nav class="path-box" :title="virtualPath">
@@ -607,33 +586,33 @@ function errorMessage(error: unknown): string {
           </template>
         </nav>
         <label class="search-box">
-          <Search :size="14" />
+          <IcIcon name="search" :size="14" />
           <input v-model="query" type="search" placeholder="查找" />
         </label>
         <div class="filter-control">
           <button class="filter-capsule-btn" type="button" title="筛选" @click="filterMenuOpen = !filterMenuOpen">
-            <ListFilter :size="16" />
+            <IcIcon name="filter" :size="16" />
             <span>筛选</span>
           </button>
           <div v-if="filterMenuOpen" class="filter-menu" @click.stop>
             <button type="button" class="filter-label-btn" disabled>类型</button>
             <button type="button" @click="selectContentTypeFilter('')">
-              <Check v-if="!selectedContentType" :size="14" />
+              <IcIcon v-if="!selectedContentType" name="check" :size="14" />
               <span v-else class="filter-check-placeholder"></span>
               <span>全部</span>
             </button>
             <button type="button" @click="selectContentTypeFilter('knowledge_file')">
-              <Check v-if="selectedContentType === 'knowledge_file'" :size="14" />
+              <IcIcon v-if="selectedContentType === 'knowledge_file'" name="check" :size="14" />
               <span v-else class="filter-check-placeholder"></span>
               <span>知识库文件</span>
             </button>
             <button type="button" @click="selectContentTypeFilter('web_url')">
-              <Check v-if="selectedContentType === 'web_url'" :size="14" />
+              <IcIcon v-if="selectedContentType === 'web_url'" name="check" :size="14" />
               <span v-else class="filter-check-placeholder"></span>
               <span>网页</span>
             </button>
             <button type="button" @click="selectContentTypeFilter('collection')">
-              <Check v-if="selectedContentType === 'collection'" :size="14" />
+              <IcIcon v-if="selectedContentType === 'collection'" name="check" :size="14" />
               <span v-else class="filter-check-placeholder"></span>
               <span>集锦</span>
             </button>
@@ -645,7 +624,7 @@ function errorMessage(error: unknown): string {
               :class="{ active: !selectedTag }"
               @click="selectTagFilter('')"
             >
-              <Check v-if="!selectedTag" :size="14" />
+              <IcIcon v-if="!selectedTag" name="check" :size="14" />
               <span v-else class="filter-check-placeholder"></span>
               <span class="filter-tag-name">全部</span>
             </button>
@@ -659,7 +638,7 @@ function errorMessage(error: unknown): string {
                 :title="tag.name"
                 @click="selectTagFilter(tag.name)"
               >
-                <Check v-if="selectedTag === tag.name" :size="14" />
+                <IcIcon v-if="selectedTag === tag.name" name="check" :size="14" />
                 <span v-else class="filter-check-placeholder"></span>
                 <span class="filter-tag-name">{{ tag.name }}</span>
               </button>
@@ -686,7 +665,7 @@ function errorMessage(error: unknown): string {
           </div>
         </div>
         <button class="icon-toolbar-btn" type="button" title="新增文件" @click="openCreateBookDialog">
-          <FilePlus2 :size="16" />
+          <IcIcon name="new-file" :size="16" />
         </button>
         <button
           class="icon-toolbar-btn"
@@ -697,13 +676,13 @@ function errorMessage(error: unknown): string {
           :disabled="favoritesOnlyLocked"
           @click="toggleFavoritesOnly"
         >
-          <Star :size="16" />
+          <IcIcon name="star" :size="16" />
         </button>
         <button class="icon-toolbar-btn" type="button" title="新增集锦" @click="openCreateCollectionDialog">
-          <FolderPlus :size="16" />
+          <IcIcon name="new-folder" :size="16" />
         </button>
         <button class="icon-toolbar-btn" :class="{ active: multiSelect }" type="button" title="多选" @click="multiSelect = !multiSelect">
-          <Tags :size="16" />
+          <IcIcon name="label" :size="16" />
           <span v-if="multiSelect" class="multi-indicator">{{ selectedIds.size }}</span>
         </button>
         <button
@@ -713,8 +692,8 @@ function errorMessage(error: unknown): string {
           :title="viewMode === 'card' ? '切换为条形' : '切换为卡片'"
           @click="viewMode = viewMode === 'card' ? 'bar' : 'card'"
         >
-          <Rows v-if="viewMode === 'card'" :size="16" />
-          <LayoutGrid v-else :size="16" />
+          <IcIcon v-if="viewMode === 'card'" name="view-stream" :size="16" />
+          <IcIcon v-else name="grid-view" :size="16" />
         </button>
       </div>
     </header>
@@ -726,7 +705,7 @@ function errorMessage(error: unknown): string {
           <svg viewBox="0 0 448 512" class="svgIcon"><path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32L53.2 467c1.6 25.3 22.6 45 47.9 45H346.9c25.3 0 46.3-19.7 47.9-45L416 128z"></path></svg>
         </button>
         <button class="banner-close" type="button" title="取消多选" @click="cancelMultiSelect">
-          <X :size="14" />
+          <IcIcon name="close" :size="14" />
         </button>
       </div>
     </section>
@@ -766,22 +745,22 @@ function errorMessage(error: unknown): string {
           <header class="drawer-head">
             <div class="drawer-title" :title="selectedItem.display_title">{{ selectedItem.display_title }}</div>
             <button class="icon-toolbar-btn" type="button" title="关闭" @click="closeDetails">
-              <X :size="15" />
+              <IcIcon name="close" :size="15" />
             </button>
           </header>
           <div class="drawer-section">
             <div class="drawer-kv">
-              <FolderOpen v-if="selectedItem.item_type === 'collection'" :size="15" />
-              <Link v-else-if="selectedItem.content_type === 'web_url'" :size="15" />
-              <HardDrive v-else :size="15" />
+              <IcIcon v-if="selectedItem.item_type === 'collection'" name="folder-open" :size="15" />
+              <IcIcon v-else-if="selectedItem.content_type === 'web_url'" name="link" :size="15" />
+              <IcIcon v-else name="ingest" :size="15" />
               <span>{{ selectedItem.item_type === 'collection' ? '集锦' : selectedItem.source_name || selectedItem.source_path }}</span>
             </div>
             <div class="drawer-kv">
-              <CalendarClock :size="15" />
+              <IcIcon name="event" :size="15" />
               <span>{{ selectedDate || '无日期' }}</span>
             </div>
             <div class="drawer-kv">
-              <HardDrive :size="15" />
+              <IcIcon name="ingest" :size="15" />
               <span>{{ selectedItem.item_type === 'collection' ? `${selectedItem.child_count} 项` : `${selectedItem.source_size || 0} bytes` }}</span>
             </div>
           </div>
@@ -809,9 +788,9 @@ function errorMessage(error: unknown): string {
                 @click="selectItem(child)"
                 @dblclick.stop="openItem(child)"
               >
-                <FolderOpen v-if="child.item_type === 'collection'" :size="14" />
-                <Link v-else-if="child.content_type === 'web_url'" :size="14" />
-                <HardDrive v-else :size="14" />
+                <IcIcon v-if="child.item_type === 'collection'" name="folder-open" :size="14" />
+                <IcIcon v-else-if="child.content_type === 'web_url'" name="link" :size="14" />
+                <IcIcon v-else name="ingest" :size="14" />
                 <span>{{ child.display_title }}</span>
               </button>
             </template>
@@ -822,28 +801,28 @@ function errorMessage(error: unknown): string {
 
     <ul v-if="contextMenuOpen" class="context-menu" :style="contextMenuStyle" @click.stop>
       <li class="context-item" @click="openCreateBookDialog(); closeContextMenu()">
-        <FilePlus2 :size="14" />
+        <IcIcon name="new-file" :size="14" />
         <span>新增文件</span>
       </li>
       <li class="context-item" @click="openCreateCollectionDialog(); closeContextMenu()">
-        <FolderPlus :size="14" />
+        <IcIcon name="new-folder" :size="14" />
         <span>新增集锦</span>
       </li>
       <li class="context-item" @click="contextDetails()">
-        <Info :size="14" />
+        <IcIcon name="info" :size="14" />
         <span>详细信息</span>
       </li>
       <li class="context-item" @click="contextEdit()">
-        <Save :size="14" />
+        <IcIcon name="save" :size="14" />
         <span>编辑</span>
       </li>
       <li class="context-item" @click="contextMoveToParent()">
-        <ArrowUp :size="14" />
+        <IcIcon name="arrow-up" :size="14" />
         <span>移动到上一级集锦</span>
       </li>
       <hr class="context-sep" />
       <li class="context-item danger" @click="contextDelete()">
-        <X :size="14" />
+        <IcIcon name="close" :size="14" />
         <span>删除</span>
       </li>
     </ul>

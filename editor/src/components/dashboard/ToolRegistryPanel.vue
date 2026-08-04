@@ -3,8 +3,8 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ChevronDown, RefreshCw, Search } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { fetchAgentTools, type AgentToolInfo } from '@/api/tools'
 import { fetchAvailableTools, saveDisabledTools, type ToolGroup } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
@@ -152,11 +152,11 @@ onMounted(() => {
           <span>{{ filteredGroups.reduce((s, g) => s + g.tools.length, 0) }} visible</span>
         </div>
         <div class="registry-search">
-          <Search :size="14" />
+          <IcIcon name="search" :size="14" />
           <input v-model="query" type="text" placeholder="搜索工具" />
         </div>
         <button class="icon-button" type="button" title="刷新" :disabled="loading" @click="loadTools">
-          <RefreshCw :size="15" />
+          <IcIcon name="refresh" :size="15" />
         </button>
       </div>
 
@@ -168,7 +168,8 @@ onMounted(() => {
             <div v-if="loading" class="empty-state"><span>$ 正在读取</span></div>
             <template v-for="group in filteredGroups" :key="group.category">
               <div class="category-header" @click="toggleCategory(group.category)">
-                <ChevronDown
+                <IcIcon
+                  name="chevron-down"
                   :size="14"
                   class="collapse-icon"
                   :class="{ collapsed: collapsedCategories.has(group.category) }"

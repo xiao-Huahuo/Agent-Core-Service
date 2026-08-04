@@ -8,8 +8,8 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Check, Copy, ThumbsDown, ThumbsUp } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import KnowledgeSources from '@/components/editor_workspace/agent_chat/KnowledgeSources.vue'
 import MarkdownContent from '@/components/editor_workspace/agent_chat/MarkdownContent.vue'
@@ -237,8 +237,8 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           :aria-label="copied ? 'Copied' : 'Copy message'"
           @click="copyBubbleContent"
         >
-          <Check v-if="copied" :size="22" />
-          <Copy v-else :size="22" />
+          <IcIcon v-if="copied" name="check" :size="14" />
+          <IcIcon v-else name="copy" :size="14" />
         </button>
         <button
           class="feedback-action feedback-up"
@@ -248,7 +248,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           aria-label="Like response"
           @click="setFeedback('up')"
         >
-          <ThumbsUp :size="22" />
+          <IcIcon name="thumb-up" :size="14" />
         </button>
         <button
           class="feedback-action feedback-down"
@@ -258,7 +258,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           aria-label="Dislike response"
           @click="setFeedback('down')"
         >
-          <ThumbsDown :size="22" />
+          <IcIcon name="thumb-down" :size="14" />
         </button>
       </div>
       <KnowledgeSources
@@ -291,8 +291,8 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
         :aria-label="copied ? 'Copied' : 'Copy message'"
         @click="copyBubbleContent"
       >
-        <Check v-if="copied" :size="18" />
-        <Copy v-else :size="18" />
+        <IcIcon v-if="copied" name="check" :size="14" />
+        <IcIcon v-else name="copy" :size="14" />
       </button>
     </div>
     <img :src="userAvatar" class="avatar" alt="user" />
@@ -311,8 +311,8 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
       :aria-label="copied ? 'Copied' : 'Copy message'"
       @click="copyBubbleContent"
     >
-      <Check v-if="copied" :size="18" />
-      <Copy v-else :size="18" />
+      <Check v-if="copied" :size="14" />
+      <Copy v-else :size="14" />
     </button>
   </div>
 </template>
@@ -468,8 +468,8 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   margin-top: var(--space-4);
   border: 0;
   border-radius: 6px;
@@ -503,8 +503,8 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   border: 0;
   border-radius: 6px;
   background: transparent;

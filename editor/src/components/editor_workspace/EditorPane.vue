@@ -7,9 +7,9 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onErrorCaptured, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Save, Sparkles, X } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import CodeEditor from '@/components/editor_workspace/CodeEditor.vue'
 import CodePreview from '@/components/editor_workspace/CodePreview.vue'
 import EditorModeSwitch from '@/components/editor_workspace/EditorModeSwitch.vue'
@@ -240,7 +240,7 @@ onErrorCaptured((err, vm, info) => {
         >
           <span class="tab-title">{{ workspaceStore.activeTab.title }}</span>
           <i v-if="workspaceStore.activeTab.dirty" class="dirty-dot"></i>
-          <X class="tab-close" :size="13" @click.stop="workspaceStore.closeTab(workspaceStore.activeTab.path)" />
+          <IcIcon name="close" class="tab-close" :size="13" @click.stop="workspaceStore.closeTab(workspaceStore.activeTab.path)" />
         </button>
       </div>
 
@@ -284,7 +284,7 @@ onErrorCaptured((err, vm, info) => {
             :disabled="!workspaceStore.activeTab || workspaceStore.selectedNode?.isDir"
             @click="visualizeMenuOpen = !visualizeMenuOpen"
           >
-            <Sparkles :size="15" />
+            <IcIcon name="auto-awesome" :size="15" />
           </button>
           <div v-if="visualizeMenuOpen" class="visualize-popover">
             <div class="visualize-mode">
@@ -324,7 +324,7 @@ onErrorCaptured((err, vm, info) => {
           :disabled="workspaceStore.activeFileReadonly"
           @click="workspaceStore.saveActiveFile"
         >
-          <Save :size="15" />
+          <IcIcon name="save" :size="15" />
           <span>Save</span>
         </button>
       </div>

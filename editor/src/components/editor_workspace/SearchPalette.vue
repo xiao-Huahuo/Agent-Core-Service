@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Clock, FileSearch, Loader, Search, Sparkles, Trash2, X } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 defineOptions({ name: 'SearchPalette' })
@@ -146,7 +146,7 @@ defineExpose({ focus })
     :class="{ focused: focused, 'page-variant': variant === 'page' }"
   >
     <div class="search-bar">
-      <Search :size="16" class="search-icon" />
+      <IcIcon name="search" :size="16" class="search-icon" />
       <input
         ref="inputEl"
         v-model="workspaceStore.searchQuery"
@@ -157,14 +157,14 @@ defineExpose({ focus })
         aria-haspopup="listbox"
         @focus="onFocus"
       />
-      <Loader v-if="workspaceStore.searching" :size="14" class="spinner" />
+      <IcIcon v-if="workspaceStore.searching" name="spinner" :size="14" class="spinner" />
       <button
         v-if="workspaceStore.searchQuery && !workspaceStore.searching"
         class="clear-btn"
         type="button"
         @click="clearQuery"
       >
-        <X :size="12" />
+        <IcIcon name="close" :size="12" />
       </button>
       <button
         class="search-submit-btn"
@@ -172,7 +172,7 @@ defineExpose({ focus })
         type="button"
         @click="handleSubmit"
       >
-        <Search :size="12" class="submit-icon" />
+        <IcIcon name="search" :size="12" class="submit-icon" />
         <span class="submit-label">Search</span>
       </button>
     </div>
@@ -205,7 +205,7 @@ defineExpose({ focus })
             </div>
             <div class="toggle-overlay">
               <div class="toggle-overlay-inner">
-                <FileSearch :size="12" />
+                <IcIcon name="manage-search" :size="12" />
                 <span>内容搜索</span>
                 <svg xmlns="http://www.w3.org/2000/svg" class="toggle-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h14"></path>
@@ -243,7 +243,7 @@ defineExpose({ focus })
             title="AI 帮你搜索"
             @mousedown.prevent="askAgentSearch"
           >
-            <Sparkles :size="12" />
+            <IcIcon name="auto-awesome" :size="12" />
           </button>
         </div>
 
@@ -253,7 +253,7 @@ defineExpose({ focus })
             <div class="history-header">
               <span class="group-label">最近搜索</span>
               <button class="history-clear-btn" type="button" title="清除历史" @mousedown.prevent="workspaceStore.clearSearchHistory()">
-                <Trash2 :size="11" />
+                <IcIcon name="trash" :size="11" />
               </button>
             </div>
             <button
@@ -263,7 +263,7 @@ defineExpose({ focus })
               type="button"
               @mousedown.prevent="selectHistory(item)"
             >
-              <Clock :size="12" class="history-icon" />
+              <IcIcon name="schedule" :size="12" class="history-icon" />
               <span class="history-text">{{ item }}</span>
             </button>
           </div>

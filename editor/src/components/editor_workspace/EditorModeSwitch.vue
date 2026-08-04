@@ -7,8 +7,7 @@
   in the editable surface.
 -->
 <script setup lang="ts">
-import { Columns2, Eye, Pencil } from 'lucide-vue-next'
-
+import IcIcon from '@/components/common/IcIcon.vue'
 import type { EditorViewMode } from '@/types/knowledge'
 
 defineOptions({ name: 'EditorModeSwitch' })
@@ -27,10 +26,10 @@ const emit = defineEmits<{
 }>()
 
 /** Stable mode definitions shared by the formal editor and readonly preview. */
-const modeButtons: Array<{ mode: EditorViewMode; label: string; icon: typeof Pencil }> = [
-  { mode: 'edit', label: 'Edit', icon: Pencil },
-  { mode: 'preview', label: 'Preview', icon: Eye },
-  { mode: 'split', label: 'Split', icon: Columns2 },
+const modeButtons: Array<{ mode: EditorViewMode; label: string; icon: string }> = [
+  { mode: 'edit', label: 'Edit', icon: 'edit' },
+  { mode: 'preview', label: 'Preview', icon: 'visibility' },
+  { mode: 'split', label: 'Split', icon: 'view-column' },
 ]
 
 /** Selects an available view mode without changing the editor's write policy. */
@@ -58,7 +57,7 @@ function selectMode(mode: EditorViewMode) {
       type="button"
       @click="selectMode(button.mode)"
     >
-      <component :is="button.icon" :size="14" />
+      <IcIcon :name="button.icon" :size="14" />
       <span>{{ button.label }}</span>
     </button>
   </div>

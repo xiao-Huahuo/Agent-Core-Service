@@ -8,8 +8,8 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Upload, X } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import { useFavoritesStore } from '@/stores/favorites'
 import { useSessionStore } from '@/stores/session'
@@ -113,13 +113,13 @@ async function deleteSession(sessionId: string, event: Event) {
         title="导出会话"
         @click="exportSessionHandler(session, $event)"
       >
-        <Upload :size="15" />
+        <IcIcon name="upload" :size="15" />
       </span>
       <span class="row-icon-btn">
         <FavoriteButton target-type="session" :target-id="session.session_id" />
       </span>
       <span class="row-icon-btn danger" title="删除会话" @click="deleteSession(session.session_id, $event)">
-        <X :size="15" />
+        <IcIcon name="close" :size="15" />
       </span>
     </div>
     <p v-if="!favoriteSessions.length" class="empty-hint">没有收藏的会话</p>

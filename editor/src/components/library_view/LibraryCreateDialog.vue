@@ -8,8 +8,8 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { FileText, Globe, ImagePlus, Save, UploadCloud, X, XCircle } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { uploadLibraryCover } from '@/api/library'
 import type { LibraryItem } from '@/types/knowledge'
 
@@ -162,7 +162,7 @@ function submit() {
         <header class="dialog-head">
           <h2>{{ heading }}</h2>
           <button class="icon-btn" type="button" title="关闭" @click="emit('close')">
-            <X :size="16" />
+            <IcIcon name="close" :size="16" />
           </button>
         </header>
 
@@ -198,7 +198,7 @@ function submit() {
                   @click="removeTag(tag)"
                 >
                   <span>{{ tag }}</span>
-                  <XCircle :size="13" />
+                  <IcIcon name="cancel" :size="13" />
                 </button>
               </div>
             </div>
@@ -219,7 +219,7 @@ function submit() {
             >
               <img v-if="coverPreviewUrl" class="cover-preview" :src="coverPreviewUrl" alt="" />
               <template v-else>
-                <ImagePlus :size="30" />
+                <IcIcon name="add-photo" :size="30" />
                 <span>{{ coverUploading ? '上传中' : '点击或拖拽上传封面' }}</span>
               </template>
             </button>
@@ -238,7 +238,7 @@ function submit() {
             @dragleave.prevent="dragActive = false"
             @drop.prevent="dropRealFile"
           >
-            <UploadCloud :size="24" />
+            <IcIcon name="cloud-upload" :size="24" />
             <span>{{ realFile?.name || '拖拽真实文件到这里' }}</span>
           </button>
         </section>
@@ -252,7 +252,7 @@ function submit() {
 
         <section v-else-if="isBook && sourceMode === 'url'" class="url-zone">
           <label class="url-input-wrap">
-            <Globe :size="15" />
+            <IcIcon name="language" :size="15" />
             <input v-model="sourceUrl" type="url" spellcheck="false" placeholder="URL" />
           </label>
         </section>
@@ -267,7 +267,7 @@ function submit() {
               aria-label="文本"
               @click="setSourceMode(sourceMode === 'text' ? 'file' : 'text')"
             >
-              <FileText :size="16" />
+              <IcIcon name="document" :size="16" />
             </button>
             <button
               class="source-mode-btn"
@@ -277,13 +277,13 @@ function submit() {
               aria-label="网页"
               @click="setSourceMode(sourceMode === 'url' ? 'file' : 'url')"
             >
-              <Globe :size="16" />
+              <IcIcon name="language" :size="16" />
             </button>
           </div>
           <div class="submit-actions">
             <button class="secondary-btn" type="button" @click="emit('close')">取消</button>
             <button class="primary-btn" type="button" @click="submit">
-              <Save :size="14" />
+              <IcIcon name="save" :size="14" />
               创建
             </button>
           </div>

@@ -6,7 +6,8 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ChevronDown } from 'lucide-vue-next'
+
+import IcIcon from '@/components/common/IcIcon.vue'
 
 interface ChildAgentEventChild {
   run_id: string
@@ -90,7 +91,7 @@ const shortRunId = computed(() => {
       <span class="child-agent-event-dot" :data-status="child.status"></span>
       <span v-if="resolveCategoryLabel(child.category)" class="child-agent-event-category">{{ resolveCategoryLabel(child.category) }}</span>
       <span class="child-agent-event-title">{{ actionLabel }}</span>
-      <ChevronDown class="child-agent-chevron" :class="{ expanded }" :size="15" />
+      <IcIcon name="chevron-down" class="child-agent-chevron" :class="{ expanded }" :size="15" />
     </button>
 
     <div class="child-agent-event-detail" :class="{ expanded }">

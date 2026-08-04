@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Pencil, Send, Trash2, X } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { deleteFeedback, listFeedback, submitFeedback, updateFeedback, type FeedbackRecord } from '@/api/feedback'
 
 defineOptions({ name: 'FeedbackPopover' })
@@ -185,7 +185,7 @@ function getFeedbackErrorMessage(error: unknown, fallback: string) {
       <header class="feedback-header">
         <strong>用户反馈</strong>
         <button class="feedback-close" type="button" title="关闭" aria-label="关闭" @click="emit('close')">
-          <X :size="15" />
+          <IcIcon name="close" :size="15" />
         </button>
       </header>
 
@@ -212,7 +212,7 @@ function getFeedbackErrorMessage(error: unknown, fallback: string) {
                 取消
               </button>
               <button class="feedback-submit" type="submit" :disabled="!canSubmit">
-                <Send :size="14" />
+                <IcIcon name="send" :size="14" />
                 <span>{{ submitLabel }}</span>
               </button>
             </div>
@@ -245,10 +245,10 @@ function getFeedbackErrorMessage(error: unknown, fallback: string) {
               </button>
               <div class="feedback-chip-actions">
                 <button type="button" title="修改" aria-label="修改" @click="startEdit(item)">
-                  <Pencil :size="13" />
+                  <IcIcon name="edit" :size="13" />
                 </button>
                 <button type="button" title="删除" aria-label="删除" @click="removeFeedback(item)">
-                  <Trash2 :size="13" />
+                  <IcIcon name="trash" :size="13" />
                 </button>
               </div>
             </article>

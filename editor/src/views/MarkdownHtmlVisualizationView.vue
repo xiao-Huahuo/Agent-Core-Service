@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { ChevronDown, Download, FileCode, FolderOpen, Play, SlidersHorizontal, X } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import FloatingFileResourcePicker from '@/components/editor_workspace/FloatingFileResourcePicker.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useTaskListStore } from '@/stores/taskList'
@@ -179,7 +179,7 @@ function startVisualization() {
   <section class="visualization-page">
     <header class="visualization-toolbar">
       <div class="toolbar-title">
-        <FileCode :size="18" />
+        <IcIcon name="code" :size="18" />
         <div>
           <h1>MD-HTML</h1>
           <p>{{ selectedDocumentLabel }}</p>
@@ -202,7 +202,7 @@ function startVisualization() {
       </div>
       <div class="toolbar-actions">
         <button type="button" class="secondary-action" @click="pickerOpen = true">
-          <FolderOpen :size="15" />
+          <IcIcon name="folder-open" :size="15" />
           <span>选择文件</span>
         </button>
         <div class="advanced-menu-wrap">
@@ -214,9 +214,9 @@ function startVisualization() {
             aria-haspopup="menu"
             @click="advancedOptionsOpen = !advancedOptionsOpen"
           >
-            <SlidersHorizontal :size="15" />
+            <IcIcon name="tune" :size="15" />
             <span>高级选项</span>
-            <ChevronDown :size="14" />
+            <IcIcon name="chevron-down" :size="14" />
           </button>
           <div v-if="advancedOptionsOpen" class="advanced-menu" role="menu">
             <section class="advanced-section">
@@ -274,7 +274,7 @@ function startVisualization() {
           :disabled="!workspaceStore.selectedNode || workspaceStore.selectedNode.isDir || workspaceStore.refreshing"
           @click="startVisualization"
         >
-          <Play :size="15" />
+          <IcIcon name="play" :size="15" />
           <span>{{ visualizationActionLabel }}</span>
         </button>
       </div>
@@ -293,7 +293,7 @@ function startVisualization() {
             :aria-expanded="taskProgressExpanded"
             @click="taskProgressExpanded = !taskProgressExpanded"
           >
-            <ChevronDown :size="14" />
+            <IcIcon name="chevron-down" :size="14" />
           </button>
         </div>
         <div class="task-progress-bar" aria-hidden="true">
@@ -330,13 +330,13 @@ function startVisualization() {
             :title="`保存到知识库 ${knowledgeSaveDirectory}`"
             @click="workspaceStore.saveMarkdownHtmlVisualizationToKnowledge"
           >
-            <Download :size="15" />
+            <IcIcon name="download" :size="15" />
           </button>
           <button type="button" title="打开系统资源管理器保存" @click="workspaceStore.revealMarkdownHtmlVisualization">
-            <FolderOpen :size="15" />
+            <IcIcon name="folder-open" :size="15" />
           </button>
           <button type="button" title="关闭" @click="workspaceStore.closeMarkdownHtmlVisualization">
-            <X :size="15" />
+            <IcIcon name="close" :size="15" />
           </button>
         </div>
       </header>
@@ -348,7 +348,7 @@ function startVisualization() {
     </section>
 
     <section v-else class="visualization-empty">
-      <FileCode :size="28" />
+      <IcIcon name="code" :size="28" />
       <strong>还没有生成 HTML 可视化</strong>
       <span>右键文件选择“HTML可视化”，或在本页选择文件后再一键可视化。</span>
     </section>

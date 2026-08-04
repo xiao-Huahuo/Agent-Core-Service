@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Star } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import type { FavoriteTargetType } from '@/api/favorites'
 import { useFavoritesStore } from '@/stores/favorites'
 
@@ -54,7 +54,7 @@ function toggleFavorite() {
     @dblclick.stop.prevent
     @mousedown.stop
   >
-    <Star class="favorite-icon" :size="size" />
+    <IcIcon name="star" class="favorite-icon" :size="size" />
   </button>
 </template>
 

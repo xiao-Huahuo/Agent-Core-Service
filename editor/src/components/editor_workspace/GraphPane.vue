@@ -8,9 +8,9 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Crosshair, Pause, Play, RefreshCw, Search, Tags, Type, X } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { deduplicateKnowledgeGraph, fetchKnowledgeGraph, getDedupStatus } from '@/api/knowledge'
 import { listLibraryItems, listLibraryTags } from '@/api/library'
 import KnowledgeGraphCanvas from '@/components/knowledge_graph/KnowledgeGraphCanvas.vue'
@@ -397,7 +397,7 @@ watch(
           :title="libraryTagTitle"
           @click="cycleLibraryTag"
         >
-          <Tags :size="15" />
+          <IcIcon name="label" :size="15" />
           <span>{{ selectedLibraryTag || '全部' }}</span>
         </button>
         <button
@@ -407,11 +407,11 @@ watch(
           :title="showGraphLabels ? 'Hide labels until hover' : 'Show labels'"
           @click="showGraphLabels = !showGraphLabels"
         >
-          <Type :size="15" />
+          <IcIcon name="text-fields" :size="15" />
           <span>{{ showGraphLabels ? '标签' : '悬停' }}</span>
         </button>
         <button class="graph-action" type="button" title="Fit view" @click="graphCanvasRef?.fitToView()">
-          <Crosshair :size="15" />
+          <IcIcon name="center-focus" :size="15" />
           <span>适应</span>
         </button>
         <button
@@ -422,7 +422,7 @@ watch(
           :disabled="treeLoading || semanticLoading || libraryLoading"
           @click="refreshGraph"
         >
-          <RefreshCw :size="15" />
+          <IcIcon name="refresh" :size="15" />
           <span>刷新</span>
         </button>
         <button
@@ -434,11 +434,12 @@ watch(
           :disabled="dedupLoading || treeLoading || semanticLoading || libraryLoading"
           @click="handleDedup"
         >
-          <RefreshCw :size="15" />
+          <IcIcon name="refresh" :size="15" />
           <span>去重</span>
         </button>
         <button class="graph-action" type="button" :title="graphCanvasRef?.frozen ? '释放' : '定格'" @click="toggleFreeze">
-          <component :is="graphCanvasRef?.frozen ? Play : Pause" :size="15" />
+          <IcIcon v-if="graphCanvasRef?.frozen" name="play" :size="15" />
+          <IcIcon v-else name="pause" :size="15" />
           <span>{{ graphCanvasRef?.frozen ? '释放' : '定格' }}</span>
         </button>
       </div>
@@ -469,7 +470,7 @@ watch(
         :title="sidebarOpen ? '关闭节点面板' : '节点面板'"
         @click="sidebarOpen = !sidebarOpen"
       >
-        <Search :size="14" />
+        <IcIcon name="search" :size="14" />
       </button>
 
       <!-- Sidebar -->
@@ -477,13 +478,13 @@ watch(
         <div class="sidebar-header">
           <span class="sidebar-title">节点搜索</span>
           <button class="sidebar-close" type="button" @click="sidebarOpen = false">
-            <X :size="14" />
+            <IcIcon name="close" :size="14" />
           </button>
         </div>
 
         <!-- Search input -->
         <div class="sidebar-search">
-          <Search :size="14" class="search-icon" />
+          <IcIcon name="search" :size="14" class="search-icon" />
           <input
             v-model="searchQuery"
             class="search-input"

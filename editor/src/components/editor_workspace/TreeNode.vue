@@ -7,16 +7,9 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import {
-  Ban,
-  ChevronRight,
-  CircleAlert,
-  CircleCheck,
-  GitBranch,
-  Network,
-} from 'lucide-vue-next'
 
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
+import IcIcon from '@/components/common/IcIcon.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 import { useSettingsStore } from '@/stores/settings'
@@ -83,9 +76,9 @@ const indexStatusTitle = computed(() => {
 })
 
 const indexStatusIcon = computed(() => {
-  if (props.node.indexStatus === 'indexed' || props.node.indexStatus === 'clean') return CircleCheck
-  if (props.node.indexStatus === 'ignored') return Ban
-  return CircleAlert
+  if (props.node.indexStatus === 'indexed' || props.node.indexStatus === 'clean') return 'check-circle'
+  if (props.node.indexStatus === 'ignored') return 'block'
+  return 'error-outline'
 })
 
 const graphStatusClass = computed(() => {
@@ -101,9 +94,9 @@ const graphStatusTitle = computed(() => {
 })
 
 const graphStatusIcon = computed(() => {
-  if (props.node.graphStatus === 'graphed') return Network
-  if (props.node.graphStatus === 'ignored') return Ban
-  return GitBranch
+  if (props.node.graphStatus === 'graphed') return 'hub'
+  if (props.node.graphStatus === 'ignored') return 'block'
+  return 'git'
 })
 
 watch(
@@ -205,7 +198,7 @@ function handleRowDrop(event: DragEvent) {
       @keydown.enter="emit('select', node, $event)"
       @contextmenu.prevent.stop="emit('contextMenu', node, $event)"
     >
-      <ChevronRight v-if="node.isDir" :size="14" class="chevron" :class="{ expanded: expandedPaths.has(node.path) }" />
+      <IcIcon v-if="node.isDir" name="chevron-right" :size="14" class="chevron" :class="{ expanded: expandedPaths.has(node.path) }" />
       <span v-else class="spacer"></span>
       <img class="material-file-icon" :src="materialIcon.src" :alt="materialIcon.alt" aria-hidden="true" />
       <input
@@ -222,18 +215,18 @@ function handleRowDrop(event: DragEvent) {
       <span v-else class="node-name" :class="gitStatusClass">{{ node.name }}</span>
       <span class="node-status-cluster">
         <i class="node-dirty-dot" :class="{ show: dirtyPaths.has(node.path) }"></i>
-        <component
+        <IcIcon
           v-if="!node.isDir && settingsStore.showIndexColumn"
-          :is="indexStatusIcon"
+          :name="indexStatusIcon"
           class="node-index-dot"
           :class="indexStatusClass"
           :size="13"
           :title="indexStatusTitle"
         />
         <span v-if="node.isDir && settingsStore.showIndexColumn" class="node-index-placeholder"></span>
-        <component
+        <IcIcon
           v-if="!node.isDir && settingsStore.showGraphColumn"
-          :is="graphStatusIcon"
+          :name="graphStatusIcon"
           class="node-graph-dot"
           :class="graphStatusClass"
           :size="13"

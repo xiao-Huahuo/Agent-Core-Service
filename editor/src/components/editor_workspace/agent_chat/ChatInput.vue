@@ -8,7 +8,8 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Bug, Check, ChevronDown, ClipboardCheck, Globe, Hammer, Plus, SearchCode, Send, Settings, Shield, Square, X } from 'lucide-vue-next'
+
+import IcIcon from '@/components/common/IcIcon.vue'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import ContextProgress from '@/components/editor_workspace/agent_chat/ContextProgress.vue'
 import { checkModelDisk, fetchModelStatus } from '@/api/settings'
@@ -58,7 +59,7 @@ const activeStarterPrefix = ref('')
 type PromptStarter = {
   prefix: string
   title: string
-  icon: typeof SearchCode
+  icon: string
   suggestions: string[]
 }
 
@@ -66,7 +67,7 @@ const promptStarters: PromptStarter[] = [
   {
     prefix: '探索',
     title: '探索并理解代码',
-    icon: SearchCode,
+    icon: 'manage-search',
     suggestions: [
       '探索并了解功能的工作原理',
       '探索当前代码库的模块结构',
@@ -77,7 +78,7 @@ const promptStarters: PromptStarter[] = [
   {
     prefix: '构建',
     title: '构建新功能应用或工具',
-    icon: Hammer,
+    icon: 'build',
     suggestions: [
       '构建一个新功能并接入现有界面',
       '构建一个可复用的工具组件',
@@ -88,7 +89,7 @@ const promptStarters: PromptStarter[] = [
   {
     prefix: '审查',
     title: '审查代码并提出修改建议',
-    icon: ClipboardCheck,
+    icon: 'fact-check',
     suggestions: [
       '审查当前改动并指出潜在问题',
       '审查这段实现是否符合项目规范',
@@ -99,7 +100,7 @@ const promptStarters: PromptStarter[] = [
   {
     prefix: '修复',
     title: '修复问题和失败',
-    icon: Bug,
+    icon: 'bug',
     suggestions: [
       '修复这个报错并解释根因',
       '修复失败的测试并保持行为一致',
@@ -415,7 +416,7 @@ function handleFileChange(event: Event) {
       <div v-if="reference" class="reference-bar">
         <span class="reference-text">{{ reference }}</span>
         <button class="reference-close" type="button" title="移除引用" @click="emit('clear-reference')">
-          <X :size="13" />
+          <IcIcon name="close" :size="13" />
         </button>
       </div>
       <textarea
@@ -437,7 +438,7 @@ function handleFileChange(event: Event) {
             :disabled="disabled"
             @click="triggerFilePicker"
           >
-            <Plus :size="14" />
+            <IcIcon name="add" :size="14" />
           </button>
           <input
             ref="fileInput"
@@ -453,7 +454,7 @@ function handleFileChange(event: Event) {
             :disabled="disabled"
             @click="emit('toggle-web-search')"
           >
-            <Globe :size="14" />
+            <IcIcon name="language" :size="14" />
           </button>
           <details ref="accessModeMenu" class="access-mode-dropdown" :class="{ disabled }" @toggle="handleAccessModeToggle">
             <summary
@@ -463,9 +464,9 @@ function handleFileChange(event: Event) {
               aria-label="Agent 权限"
               @click="handleAccessModeSummaryClick"
             >
-              <Shield :size="12" />
+              <IcIcon name="shield" :size="12" />
               <span class="access-mode-label">{{ selectedAccessModeLabel }}</span>
-              <ChevronDown :size="11" class="access-mode-caret" />
+              <IcIcon name="chevron-down" :size="11" class="access-mode-caret" />
             </summary>
           </details>
           <Teleport to="body">
@@ -482,7 +483,7 @@ function handleFileChange(event: Event) {
               >
                 <span class="access-mode-option-label">{{ option.label }}</span>
                 <span class="access-mode-option-hint">{{ option.hint }}</span>
-                <Check v-if="selectedAccessMode === option.value" :size="13" class="access-mode-check" />
+                <IcIcon v-if="selectedAccessMode === option.value" name="check" :size="13" class="access-mode-check" />
               </button>
             </div>
           </Teleport>
@@ -494,7 +495,7 @@ function handleFileChange(event: Event) {
           title="配置模型"
           @click="emit('configure-model')"
         >
-          <Settings :size="13" />
+          <IcIcon name="settings" :size="13" />
           <span>{{ displayedModelLabel }}</span>
         </button>
         <ContextProgress
@@ -508,7 +509,7 @@ function handleFileChange(event: Event) {
           title="中断输出"
           @click="emit('cancel-stream')"
         >
-          <Square :size="14" />
+          <IcIcon name="stop" :size="14" />
         </button>
         <button
           v-else
@@ -518,7 +519,7 @@ function handleFileChange(event: Event) {
           title="发送"
           @click="handleSend"
         >
-          <Send :size="15" />
+          <IcIcon name="send" :size="15" />
         </button>
       </div>
     </div>
@@ -532,7 +533,7 @@ function handleFileChange(event: Event) {
           :disabled="disabled"
           @click="applyPromptStarter(starter)"
         >
-          <component :is="starter.icon" class="prompt-starter-icon" :size="16" aria-hidden="true" />
+          <IcIcon :name="starter.icon" class="prompt-starter-icon" :size="16" aria-hidden="true" />
           <span class="prompt-starter-title">{{ starter.title }}</span>
         </button>
       </div>
@@ -548,8 +549,8 @@ function handleFileChange(event: Event) {
           :style="{ '--waterfall-index': String(index) }"
           @click="applyPromptSuggestion(suggestion)"
         >
-          <component
-            :is="activeStarter?.icon"
+          <IcIcon
+            :name="activeStarter?.icon"
             class="prompt-waterfall-icon"
             :size="15"
             aria-hidden="true"

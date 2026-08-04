@@ -6,18 +6,8 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import {
-  File,
-  FileArchive,
-  FileCode2,
-  FileImage,
-  FileJson,
-  FilePenLine,
-  FileSpreadsheet,
-  FileText,
-  FileType2,
-  X,
-} from 'lucide-vue-next'
+
+import IcIcon from '@/components/common/IcIcon.vue'
 import type { AgentUploadedAttachment } from '@/stores/chat'
 
 const props = withDefaults(defineProps<{
@@ -40,16 +30,16 @@ function extensionOf(filename: string) {
 
 function iconFor(filename: string) {
   const ext = extensionOf(filename)
-  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'ico'].includes(ext)) return FileImage
-  if (['xlsx', 'xls', 'csv', 'tsv'].includes(ext)) return FileSpreadsheet
-  if (['docx', 'doc'].includes(ext)) return FileType2
-  if (['md', 'markdown'].includes(ext)) return FilePenLine
-  if (['json', 'jsonl'].includes(ext)) return FileJson
-  if (['html', 'htm', 'xml'].includes(ext)) return FileCode2
-  if (['cpp', 'cc', 'cxx', 'c', 'h', 'hpp', 'py', 'ts', 'tsx', 'js', 'jsx', 'vue', 'java', 'go', 'rs'].includes(ext)) return FileCode2
-  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return FileArchive
-  if (['pdf', 'txt', 'log'].includes(ext)) return FileText
-  return File
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'ico'].includes(ext)) return 'image'
+  if (['xlsx', 'xls', 'csv', 'tsv'].includes(ext)) return 'table-chart'
+  if (['docx', 'doc'].includes(ext)) return 'title'
+  if (['md', 'markdown'].includes(ext)) return 'edit-note'
+  if (['json', 'jsonl'].includes(ext)) return 'code'
+  if (['html', 'htm', 'xml'].includes(ext)) return 'code'
+  if (['cpp', 'cc', 'cxx', 'c', 'h', 'hpp', 'py', 'ts', 'tsx', 'js', 'jsx', 'vue', 'java', 'go', 'rs'].includes(ext)) return 'code'
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'archive'
+  if (['pdf', 'txt', 'log'].includes(ext)) return 'file'
+  return 'file'
 }
 
 function kindFor(filename: string) {
@@ -81,7 +71,7 @@ function toneFor(filename: string) {
       :title="attachment.filename || attachment.stored_name"
     >
       <div class="attachment-icon-box">
-        <component :is="iconFor(attachment.filename || attachment.stored_name)" :size="24" stroke-width="1.8" />
+        <IcIcon :name="iconFor(attachment.filename || attachment.stored_name)" :size="24" />
         <span class="attachment-kind">{{ kindFor(attachment.filename || attachment.stored_name) }}</span>
       </div>
       <span class="attachment-name">{{ attachment.filename || attachment.stored_name }}</span>
@@ -92,7 +82,7 @@ function toneFor(filename: string) {
         aria-label="Remove attachment"
         @click.stop="emit('remove', attachment)"
       >
-        <X :size="15" stroke-width="2.6" />
+        <IcIcon name="close" :size="15" />
       </button>
     </div>
   </div>

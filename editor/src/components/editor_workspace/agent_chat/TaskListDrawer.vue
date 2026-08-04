@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ChevronDown, ChevronRight, X } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import type { AgentTaskListItem } from '@/api/taskList'
 import { useTaskListStore } from '@/stores/taskList'
 
@@ -33,10 +33,10 @@ function toggleExpand(id: string) {
           :aria-expanded="!collapsed"
           @click="collapsed = !collapsed"
         >
-          <ChevronDown class="task-list-toggle-chevron" :class="{ open: !collapsed }" :size="14" />
+          <IcIcon name="chevron-down" class="task-list-toggle-chevron" :class="{ open: !collapsed }" :size="14" />
         </button>
         <button class="task-list-close" type="button" title="关闭任务列表" @click="emit('close')">
-          <X :size="14" />
+          <IcIcon name="close" :size="14" />
         </button>
       </div>
     </div>
@@ -85,8 +85,8 @@ function toggleExpand(id: string) {
                 :title="expandedIds.has(item.id) ? '收起摘要' : '展开摘要'"
                 @click="toggleExpand(item.id)"
               >
-                <ChevronDown v-if="expandedIds.has(item.id)" :size="14" />
-                <ChevronRight v-else :size="14" />
+                <IcIcon v-if="expandedIds.has(item.id)" name="chevron-down" :size="14" />
+                <IcIcon v-else name="chevron-right" :size="14" />
               </button>
             </div>
             <div v-if="item.completion_summary" class="task-item-summary-wrap" :class="{ expanded: expandedIds.has(item.id) }">

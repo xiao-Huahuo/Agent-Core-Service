@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ImagePlus, Save, X, XCircle } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { uploadLibraryCover } from '@/api/library'
 import type { LibraryItem } from '@/types/knowledge'
 
@@ -123,7 +123,7 @@ async function uploadCoverFile(file: File) {
             <p>{{ isCollection ? '只修改虚拟集锦信息' : item.source_name || item.source_url }}</p>
           </div>
           <button class="icon-btn" type="button" title="关闭" @click="emit('close')">
-            <X :size="16" />
+            <IcIcon name="close" :size="16" />
           </button>
         </header>
 
@@ -159,7 +159,7 @@ async function uploadCoverFile(file: File) {
                   @click="removeTag(tag)"
                 >
                   <span>{{ tag }}</span>
-                  <XCircle :size="13" />
+                  <IcIcon name="cancel" :size="13" />
                 </button>
               </div>
             </div>
@@ -180,7 +180,7 @@ async function uploadCoverFile(file: File) {
             >
               <img v-if="coverPreviewUrl" class="cover-preview" :src="coverPreviewUrl" alt="" />
               <template v-else>
-                <ImagePlus :size="30" />
+                <IcIcon name="add-photo" :size="30" />
                 <span>{{ uploading ? '上传中' : '点击或拖拽上传封面' }}</span>
               </template>
             </button>
@@ -201,7 +201,7 @@ async function uploadCoverFile(file: File) {
         <footer class="dialog-actions">
           <button class="secondary-btn" type="button" @click="emit('close')">取消</button>
           <button class="primary-btn" type="button" @click="submit">
-            <Save :size="14" />
+            <IcIcon name="save" :size="14" />
             保存
           </button>
         </footer>

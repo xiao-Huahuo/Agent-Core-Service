@@ -9,21 +9,6 @@
 <script setup lang="ts">
 import { checkModelDisk } from '@/api/settings'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import {
-  Ban,
-  Check,
-  CircleAlert,
-  CircleCheck,
-  GitBranch,
-  Grid2X2,
-  ImageIcon,
-  LayoutList,
-  List,
-  Network,
-  RotateCcw,
-  Trash2,
-  X,
-} from 'lucide-vue-next'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
@@ -355,9 +340,9 @@ function materialIconForEntry(entry: KnowledgeTrashEntry) {
 }
 
 function indexStatusIcon(node: KnowledgeFileNode) {
-  if (node.indexStatus === 'indexed' || node.indexStatus === 'clean') return CircleCheck
-  if (node.indexStatus === 'ignored') return Ban
-  return CircleAlert
+  if (node.indexStatus === 'indexed' || node.indexStatus === 'clean') return 'check-circle'
+  if (node.indexStatus === 'ignored') return 'block'
+  return 'error-outline'
 }
 
 function indexStatusTitle(node: KnowledgeFileNode): string {
@@ -375,9 +360,9 @@ function indexStatusClass(node: KnowledgeFileNode): string {
 }
 
 function graphStatusIcon(node: KnowledgeFileNode) {
-  if (node.graphStatus === 'graphed') return Network
-  if (node.graphStatus === 'ignored') return Ban
-  return GitBranch
+  if (node.graphStatus === 'graphed') return 'hub'
+  if (node.graphStatus === 'ignored') return 'block'
+  return 'git'
 }
 
 function graphStatusTitle(node: KnowledgeFileNode): string {
@@ -1022,10 +1007,10 @@ onUnmounted(() => {
           :title="mode.title"
           @click="viewMode = mode.value"
         >
-          <List v-if="mode.value === 'list'" :size="17" />
-          <LayoutList v-else-if="mode.value === 'small'" :size="17" />
-          <Grid2X2 v-else-if="mode.value === 'medium'" :size="17" />
-          <ImageIcon v-else :size="17" />
+          <IcIcon v-if="mode.value === 'list'" name="view-stream" :size="17" />
+          <IcIcon v-else-if="mode.value === 'small'" name="view-list" :size="17" />
+          <IcIcon v-else-if="mode.value === 'medium'" name="grid-view" :size="17" />
+          <IcIcon v-else name="image" :size="17" />
           <span>{{ mode.label }}</span>
         </button>
       </div>
@@ -1034,7 +1019,7 @@ onUnmounted(() => {
     <div v-if="resourcePage === 'files' && isMultiSelecting" class="multi-banner">
       <span>{{ selectedPaths.size > 0 ? `已选择 ${selectedPaths.size} 项` : '多选模式' }}</span>
       <button class="banner-close" type="button" title="取消多选" @click="cancelMultiSelection">
-        <X :size="15" />
+        <IcIcon name="close" :size="15" />
       </button>
     </div>
 
@@ -1073,11 +1058,11 @@ onUnmounted(() => {
             <span>{{ formatSize(entry.size) }}</span>
             <span class="trash-actions">
               <button class="trash-action-button" type="button" title="恢复" @click="restoreTrash(entry)">
-                <RotateCcw :size="14" />
+                <IcIcon name="replay" :size="14" />
                 <span>恢复</span>
               </button>
               <button class="trash-action-button danger" type="button" title="彻底删除" @click="deleteTrash(entry)">
-                <Trash2 :size="14" />
+                <IcIcon name="trash" :size="14" />
               </button>
             </span>
           </div>
@@ -1118,7 +1103,7 @@ onUnmounted(() => {
           @contextmenu.prevent.stop="openContextMenu(node, $event)"
         >
           <span v-if="isMultiSelecting" class="selection-check" :class="{ checked: selectedPaths.has(node.path) }">
-            <Check v-if="selectedPaths.has(node.path)" :size="12" />
+            <IcIcon v-if="selectedPaths.has(node.path)" name="check" :size="12" />
           </span>
           <span class="name-cell">
             <img class="material-file-icon" :src="materialFileIconForNode(node).src" alt="" aria-hidden="true" />
@@ -1132,11 +1117,11 @@ onUnmounted(() => {
             <FavoriteButton target-type="knowledge_path" :target-id="node.path" />
           </span>
           <span v-if="settingsStore.showIndexColumn" class="index-status-cell" :class="indexStatusClass(node)">
-            <component v-if="!node.isDir" :is="indexStatusIcon(node)" :size="13" />
+            <IcIcon v-if="!node.isDir" :name="indexStatusIcon(node)" :size="13" />
             <span>{{ node.isDir ? '-' : indexStatusTitle(node) }}</span>
           </span>
           <span v-if="settingsStore.showGraphColumn" class="graph-status-cell" :class="graphStatusClass(node)">
-            <component v-if="!node.isDir" :is="graphStatusIcon(node)" :size="13" />
+            <IcIcon v-if="!node.isDir" :name="graphStatusIcon(node)" :size="13" />
             <span>{{ node.isDir ? '-' : graphStatusTitle(node) }}</span>
           </span>
         </button>
@@ -1207,7 +1192,7 @@ onUnmounted(() => {
           @contextmenu.prevent.stop="openContextMenu(node, $event)"
         >
           <span v-if="isMultiSelecting" class="selection-check tile-selection-check" :class="{ checked: selectedPaths.has(node.path) }">
-            <Check v-if="selectedPaths.has(node.path)" :size="12" />
+            <IcIcon v-if="selectedPaths.has(node.path)" name="check" :size="12" />
           </span>
           <FavoriteButton
             v-if="settingsStore.showFavoriteColumn"

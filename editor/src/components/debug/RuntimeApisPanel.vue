@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ChevronDown, RefreshCw } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { fetchRuntimeApis, type RuntimeApiInfo, type RuntimeSchemaNode } from '@/api/debug'
 import SchemaTree from '@/components/debug/SchemaTree.vue'
 
@@ -97,7 +97,7 @@ onMounted(() => {
           </button>
         </div>
         <button class="icon-button" type="button" title="刷新 API 信息" :disabled="loading" @click="loadApis">
-          <RefreshCw :size="15" />
+          <IcIcon name="refresh" :size="15" />
         </button>
       </header>
 
@@ -117,7 +117,7 @@ onMounted(() => {
 
           <template v-for="api in visibleApis" :key="apiKey(api)">
             <button class="api-row api-button" type="button" @click="toggleApi(api)">
-              <ChevronDown class="chevron" :class="{ expanded: isExpanded(api) }" :size="14" />
+              <IcIcon name="chevron-down" class="chevron" :class="{ expanded: isExpanded(api) }" :size="14" />
               <span class="api-name">{{ api.name }}</span>
               <code>{{ streamLabel(api) }}</code>
               <code class="path-cell">{{ api.path }}</code>

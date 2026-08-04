@@ -3,7 +3,7 @@
 -->
 
 <script setup lang="ts">
-import { Plus, Trash2 } from 'lucide-vue-next'
+import IcIcon from '@/components/common/IcIcon.vue'
 import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
 
 export interface InjectedEntry {
@@ -47,7 +47,7 @@ defineEmits<{
           :disabled="isAdding || isLoading || !newContent.trim()"
           @click="$emit('add')"
         >
-          <Plus :size="14" />
+          <IcIcon name="add" :size="14" />
         </button>
       </div>
 
@@ -66,7 +66,7 @@ defineEmits<{
             title="删除"
             @click="$emit('delete', entry.id)"
           >
-            <Trash2 :size="13" />
+            <IcIcon name="trash" :size="13" />
           </button>
         </div>
       </div>

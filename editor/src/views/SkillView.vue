@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { BookOpen, FileText, FolderPlus, RefreshCw, SlidersHorizontal, X } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { useSkillsStore } from '@/stores/skills'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -88,10 +88,10 @@ watch(
       </div>
       <div class="header-actions">
         <button type="button" class="icon-button" title="刷新" aria-label="刷新" @click="skillsStore.loadSkills">
-          <RefreshCw :size="16" />
+          <IcIcon name="refresh" :size="16" />
         </button>
         <button type="button" class="icon-button" title="规范" aria-label="规范" @click="openSpec">
-          <BookOpen :size="16" />
+          <IcIcon name="book" :size="16" />
         </button>
       </div>
     </header>
@@ -99,11 +99,11 @@ watch(
     <div ref="tabSwitchRef" class="resource-page-switch" role="tablist" aria-label="Skill views">
       <div class="page-slider" :style="tabSliderStyle"></div>
       <button type="button" class="page-switch-button" :class="{ active: activeTab === 'overview' }" @click="switchTab('overview')">
-        <FileText :size="15" />
+        <IcIcon name="document" :size="15" />
         <span>概览</span>
       </button>
       <button type="button" class="page-switch-button" :class="{ active: activeTab === 'custom' }" @click="switchTab('custom')">
-        <SlidersHorizontal :size="15" />
+        <IcIcon name="tune" :size="15" />
         <span>定制</span>
       </button>
     </div>
@@ -169,7 +169,7 @@ watch(
         <textarea v-model="body" rows="12" placeholder="写入 SKILL.md 的正文指令"></textarea>
       </label>
       <button type="submit" class="primary-button" :disabled="skillsStore.saving || !name.trim()">
-        <FolderPlus :size="16" />
+        <IcIcon name="new-folder" :size="16" />
         <span>创建 Skill</span>
       </button>
     </form>
@@ -179,7 +179,7 @@ watch(
         <header>
           <h2>Skill 规范文档</h2>
           <button type="button" class="icon-button" title="关闭" aria-label="关闭" @click="specOpen = false">
-            <X :size="18" />
+            <IcIcon name="close" :size="18" />
           </button>
         </header>
 

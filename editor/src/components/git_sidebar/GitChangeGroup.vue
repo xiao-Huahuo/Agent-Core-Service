@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ChevronRight } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import GitCheckbox from '@/components/git_sidebar/GitCheckbox.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import type { GitFileChange } from '@/api/git'
@@ -56,7 +56,7 @@ function statusLabel(item: GitFileChange): string {
         :aria-expanded="expanded"
         @click="emit('toggleExpanded')"
       >
-        <ChevronRight :size="14" :class="{ expanded }" />
+        <IcIcon name="chevron-right" :size="14" :class="{ expanded }" />
         <span>{{ title }}</span>
       </button>
       <span class="group-count">{{ files.length }} 个文件</span>

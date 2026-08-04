@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Check, ChevronDown, History, ListChecks, Maximize2, MessageSquarePlus, MessagesSquare, RefreshCw, SquarePen, Upload, UploadCloud, UsersRound } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import darkTitle from '@/assets/images/暗色标题.png'
 import lightTitle from '@/assets/images/亮色标题.png'
 import logoSrc from '@/assets/images/无底图标.png'
@@ -541,7 +541,7 @@ onBeforeUnmount(() => {
   >
     <Transition name="attachment-drop-fade">
       <div v-if="isAttachmentDropActive" class="attachment-drop-overlay" aria-live="polite">
-        <UploadCloud :size="38" />
+        <IcIcon name="cloud-upload" :size="38" />
         <span>{{ uploadStatusText || 'Drop files to attach to this session' }}</span>
       </div>
     </Transition>
@@ -612,7 +612,7 @@ onBeforeUnmount(() => {
           :aria-pressed="taskListCardOpen"
           @click="toggleTaskListCard"
         >
-          <ListChecks :size="16" />
+          <IcIcon name="checklist" :size="16" />
         </button>
         <button
           class="new-session-round-btn"
@@ -621,7 +621,7 @@ onBeforeUnmount(() => {
           :aria-pressed="childAgentCardOpen"
           @click="toggleChildAgentCard"
         >
-          <UsersRound :size="16" />
+          <IcIcon name="group" :size="16" />
         </button>
         <details ref="skillMenu" class="topbar-skill-dropdown" :class="{ disabled: !userId }">
           <summary
@@ -630,7 +630,7 @@ onBeforeUnmount(() => {
             aria-label="Skill"
           >
             <span>Skill</span>
-            <ChevronDown :size="12" />
+            <IcIcon name="chevron-down" :size="12" />
           </summary>
           <div class="topbar-skill-menu" role="listbox" aria-label="Skill">
             <div class="topbar-skill-menu-head">
@@ -642,7 +642,7 @@ onBeforeUnmount(() => {
                 :disabled="skillsStore.loading"
                 @click.prevent.stop="refreshSkills"
               >
-                <RefreshCw :size="13" :class="{ spinning: skillsStore.loading }" />
+                <IcIcon name="refresh" :size="13" :class="{ spinning: skillsStore.loading }" />
               </button>
             </div>
             <button
@@ -672,7 +672,7 @@ onBeforeUnmount(() => {
             @click="handleLoopModeSummaryClick"
           >
             <span>{{ selectedLoopModeLabel }}</span>
-            <ChevronDown :size="12" />
+            <IcIcon name="chevron-down" :size="12" />
           </summary>
           <div class="topbar-loop-mode-menu" role="listbox" aria-label="Agent Loop 模式">
             <button
@@ -687,7 +687,7 @@ onBeforeUnmount(() => {
             >
               <span class="topbar-loop-mode-label">{{ option.label }}</span>
               <span class="topbar-loop-mode-hint">{{ option.hint }}</span>
-              <Check v-if="settingsStore.agentLoopMode === option.value" :size="13" />
+              <IcIcon v-if="settingsStore.agentLoopMode === option.value" name="check" :size="13" />
             </button>
           </div>
         </details>
@@ -698,10 +698,10 @@ onBeforeUnmount(() => {
           :disabled="sessionExporting"
           @click="exportCurrentSession"
         >
-          <Upload :size="16" />
+          <IcIcon name="upload" :size="16" />
         </button>
         <button class="new-session-round-btn" type="button" title="New session" @click="createSession">
-          <SquarePen :size="16" />
+          <IcIcon name="edit" :size="16" />
         </button>
       </div>
     </header>
@@ -714,7 +714,7 @@ onBeforeUnmount(() => {
         title="Open sessions"
         @click="sessionDrawerOpen = !sessionDrawerOpen"
       >
-        <MessagesSquare :size="16" />
+        <IcIcon name="forum" :size="16" />
       </button>
       <div class="title-meta">
         <strong>{{ sessionTitle }}</strong>
@@ -727,7 +727,7 @@ onBeforeUnmount(() => {
           :aria-pressed="taskListCardOpen"
           @click="toggleTaskListCard"
         >
-          <ListChecks :size="16" />
+          <IcIcon name="checklist" :size="16" />
         </button>
         <button
           class="icon-button"
@@ -736,7 +736,7 @@ onBeforeUnmount(() => {
           :aria-pressed="childAgentCardOpen"
           @click="toggleChildAgentCard"
         >
-          <UsersRound :size="16" />
+          <IcIcon name="group" :size="16" />
         </button>
         <button
           v-if="props.mode === 'panel'"
@@ -745,13 +745,13 @@ onBeforeUnmount(() => {
           title="Expand Agent page"
           @click="emit('expand')"
         >
-          <Maximize2 :size="16" />
+          <IcIcon name="open-in-full" :size="16" />
         </button>
         <button class="icon-button" type="button" title="New session" @click="createSession">
-          <MessageSquarePlus :size="16" />
+          <IcIcon name="add-comment" :size="16" />
         </button>
         <button class="mode-button" type="button" title="Toggle chat render mode" @click="settingsStore.toggleChatMode">
-          <History :size="15" />
+          <IcIcon name="history" :size="15" />
           <span>{{ chatModeLabel }}</span>
         </button>
       </div>

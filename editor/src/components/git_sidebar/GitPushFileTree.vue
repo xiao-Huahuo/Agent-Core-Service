@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ChevronRight } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import type { GitPushTreeNode } from '@/components/git_sidebar/gitPushTree'
 
@@ -46,7 +46,7 @@ function toggleDirectory(path: string): void {
         :aria-expanded="!collapsedPaths.has(node.path)"
         @click="toggleDirectory(node.path)"
       >
-        <ChevronRight :size="13" :class="{ expanded: !collapsedPaths.has(node.path) }" />
+        <IcIcon name="chevron-right" :size="13" :class="{ expanded: !collapsedPaths.has(node.path) }" />
         <img
           :src="materialFileIconForNode({ name: node.name, path: node.path, isDir: true }).src"
           alt=""

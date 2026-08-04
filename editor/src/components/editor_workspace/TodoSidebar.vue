@@ -7,17 +7,8 @@
 -->
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, nextTick, ref } from 'vue'
-import {
-  Calendar,
-  Clock3,
-  ChevronRight,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Search,
-  Trash2,
-  X,
-} from 'lucide-vue-next'
+
+import IcIcon from '@/components/common/IcIcon.vue'
 import { useTodoStore } from '@/stores/todo'
 
 const todoStore = useTodoStore()
@@ -222,7 +213,7 @@ function getAutomationPrompt(todoId: string): string {
           :disabled="todoStore.pending.has('add')"
           @click="todoStore.refreshFromServer()"
         >
-          <RefreshCw :size="12" />
+          <IcIcon name="refresh" :size="12" />
         </button>
         <button
           class="todo-clear-done"
@@ -231,14 +222,14 @@ function getAutomationPrompt(todoId: string): string {
           :disabled="!todoStore.todos.some((t) => t.done)"
           @click="todoStore.clearDone()"
         >
-          <Trash2 :size="12" />
+          <IcIcon name="trash" :size="12" />
         </button>
       </div>
     </div>
 
     <div class="todo-toolbar">
       <div class="todo-search">
-        <Search :size="12" class="todo-search-icon" />
+        <IcIcon name="search" :size="12" class="todo-search-icon" />
         <input
           v-model="todoStore.searchQuery"
           class="todo-search-input"
@@ -252,7 +243,7 @@ function getAutomationPrompt(todoId: string): string {
           type="button"
           @click="todoStore.searchQuery = ''"
         >
-          <X :size="10" />
+          <IcIcon name="close" :size="10" />
         </button>
       </div>
     </div>
@@ -316,12 +307,12 @@ function getAutomationPrompt(todoId: string): string {
               :aria-expanded="expandedAutomationId === item.id"
               @click.stop="toggleAutomationDetails(item.id)"
             >
-              <ChevronRight :size="12" :class="{ expanded: expandedAutomationId === item.id }" />
+              <IcIcon name="chevron-right" :size="12" :class="{ expanded: expandedAutomationId === item.id }" />
             </button>
           </div>
           <div v-if="item.dueDate || item.category === 'automation'" class="todo-date-col">
-            <Clock3 v-if="item.category === 'automation'" :size="10" />
-            <Calendar v-else :size="10" />
+            <IcIcon v-if="item.category === 'automation'" name="schedule" :size="10" />
+            <IcIcon v-else name="calendar" :size="10" />
             <span
               class="todo-date"
               :class="{ expired: isDatetimeExpired(item.dueDate || getAutomationNextRun(item.id) || '') && !item.done }"
@@ -335,7 +326,7 @@ function getAutomationPrompt(todoId: string): string {
               title="清除日期"
               @click="todoStore.setDueDate(item.id, undefined)"
             >
-              <X :size="10" />
+              <IcIcon name="close" :size="10" />
             </button>
           </div>
           <div
@@ -368,7 +359,7 @@ function getAutomationPrompt(todoId: string): string {
             title="编辑"
             @click="startEdit(item.id, item.text, item.dueDate)"
           >
-            <Pencil :size="11" />
+            <IcIcon name="edit" :size="11" />
           </button>
           <button
             class="todo-action-btn"
@@ -376,7 +367,7 @@ function getAutomationPrompt(todoId: string): string {
             :title="item.dueDate ? '修改日期' : '添加日期'"
             @click="triggerPicker(item.id)"
           >
-            <Calendar :size="11" />
+            <IcIcon name="calendar" :size="11" />
           </button>
           <input
             :id="'picker-' + item.id"
@@ -391,7 +382,7 @@ function getAutomationPrompt(todoId: string): string {
             title="删除"
             @click="removeWithAnimation(item.id)"
           >
-            <X :size="11" />
+            <IcIcon name="close" :size="11" />
           </button>
         </div>
       </div>
@@ -405,7 +396,7 @@ function getAutomationPrompt(todoId: string): string {
       <div class="todo-automation-heading">
         <span>新建自动化任务</span>
         <button class="todo-automation-close" type="button" title="关闭" @click="automationFormOpen = false">
-          <X :size="12" />
+          <IcIcon name="close" :size="12" />
         </button>
       </div>
       <input v-model="newAutomationText" class="todo-automation-input" type="text" placeholder="自动化任务名称" />
@@ -431,8 +422,8 @@ function getAutomationPrompt(todoId: string): string {
           type="submit"
           :disabled="automationSubmitting || !newAutomationText.trim() || !newAutomationPrompt.trim() || !newAutomationRunAt"
         >
-          <RefreshCw v-if="automationSubmitting" :size="14" class="todo-automation-spinner" />
-          <Plus v-else :size="14" />
+          <IcIcon v-if="automationSubmitting" name="refresh" :size="14" class="todo-automation-spinner" />
+          <IcIcon v-else name="add" :size="14" />
         </button>
       </div>
     </form>
@@ -446,7 +437,7 @@ function getAutomationPrompt(todoId: string): string {
           title="新建自动化任务"
           @click="automationFormOpen = !automationFormOpen"
         >
-          <Clock3 :size="14" />
+          <IcIcon name="schedule" :size="14" />
         </button>
         <input
           v-model="newTodoText"
@@ -463,7 +454,7 @@ function getAutomationPrompt(todoId: string): string {
           :class="{ hasDate: !!newTodoDatetime }"
           @click="triggerPicker('new')"
         >
-          <Calendar :size="14" />
+          <IcIcon name="calendar" :size="14" />
         </button>
         <input id="picker-new" class="todo-inline-picker" type="datetime-local" data-target="new" @change="onSharedPick" />
         <button
@@ -473,11 +464,11 @@ function getAutomationPrompt(todoId: string): string {
           title="添加"
           @click="handleAdd"
         >
-          <Plus :size="14" />
+          <IcIcon name="add" :size="14" />
         </button>
       </div>
       <div v-if="newTodoDatetime" class="todo-new-date-display">
-        <Calendar :size="10" />
+        <IcIcon name="calendar" :size="10" />
         <span>{{ formatDatetime(newTodoDatetime) }}</span>
         <button
           class="todo-date-clear"
@@ -485,7 +476,7 @@ function getAutomationPrompt(todoId: string): string {
           title="清除日期"
           @click="newTodoDatetime = ''"
         >
-          <X :size="10" />
+          <IcIcon name="close" :size="10" />
         </button>
       </div>
     </div>

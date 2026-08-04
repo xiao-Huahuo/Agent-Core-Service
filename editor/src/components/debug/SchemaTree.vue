@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ChevronRight } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import type { RuntimeSchemaNode } from '@/api/debug'
 
 const props = defineProps<{
@@ -75,8 +75,9 @@ function formatValue(value: unknown): string {
       @click="toggle(item.key, item.node)"
     >
       <span class="schema-name" :style="{ '--schema-depth': item.depth }">
-        <ChevronRight
+        <IcIcon
           v-if="item.node.children?.length"
+          name="chevron-right"
           class="schema-chevron"
           :class="{ collapsed: collapsed.has(item.key) }"
           :size="13"

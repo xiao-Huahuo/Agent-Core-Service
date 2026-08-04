@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { CalendarDays, Download, MoreHorizontal, PanelLeft, Star, Trash2, Upload, X } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { useFavoritesStore } from '@/stores/favorites'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
@@ -168,7 +168,7 @@ async function clearAllSessions() {
         :disabled="favoritesOnlyLocked"
         @click="toggleFavoritesOnly"
       >
-        <Star :size="15" />
+        <IcIcon name="star" :size="15" />
       </button>
       <button
         class="titlebar-icon-btn"
@@ -177,10 +177,10 @@ async function clearAllSessions() {
         :title="importing ? '导入中...' : '导入会话文件'"
         @click="triggerImportFile"
       >
-        <Download :size="15" />
+        <IcIcon name="download" :size="15" />
       </button>
       <button class="titlebar-icon-btn" type="button" title="收起侧边栏" @click="emit('close')">
-        <PanelLeft :size="15" />
+        <IcIcon name="view-sidebar" :size="15" />
       </button>
     </div>
 
@@ -225,7 +225,7 @@ async function clearAllSessions() {
           :aria-expanded="openMenuId === session.session_id"
           @click="toggleSessionMenu(session.session_id, $event)"
         >
-          <MoreHorizontal :size="15" />
+          <IcIcon name="more-horiz" :size="15" />
         </button>
         <div v-if="openMenuId === session.session_id" class="session-action-menu" @click.stop>
           <button
@@ -233,11 +233,11 @@ async function clearAllSessions() {
             :class="{ favorited: favoritesStore.isFavorite('session', session.session_id, '') }"
             @click="toggleSessionFavorite(session.session_id, $event)"
           >
-            <Star :size="14" />
+            <IcIcon name="star" :size="14" />
             <span>收藏</span>
           </button>
           <div class="session-menu-date">
-            <CalendarDays :size="14" />
+            <IcIcon name="calendar" :size="14" />
             <span>日期</span>
             <time>{{ session.updated_at?.slice(0, 10) }}</time>
           </div>
@@ -246,11 +246,11 @@ async function clearAllSessions() {
             :class="{ loading: exportingId === session.session_id }"
             @click="exportSessionHandler(session, $event)"
           >
-            <Upload :size="14" />
+            <IcIcon name="upload" :size="14" />
             <span>导出会话</span>
           </button>
           <button class="danger" type="button" @click="deleteSession(session.session_id, $event)">
-            <X :size="14" />
+            <IcIcon name="close" :size="14" />
             <span>删除</span>
           </button>
         </div>
@@ -260,7 +260,7 @@ async function clearAllSessions() {
 
     <div class="drawer-footer">
       <button v-if="sessionStore.sessions.length > 0" class="clear-all-btn" type="button" @click="clearAllSessions">
-        <Trash2 :size="12" />
+        <IcIcon name="trash" :size="12" />
         <span>清空全部</span>
       </button>
       <div class="user-strip">

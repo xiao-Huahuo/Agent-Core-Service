@@ -7,17 +7,8 @@
 -->
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
-import {
-  ChevronsDownUp,
-  ChevronsUpDown,
-  GitBranch,
-  History,
-  Plus,
-  RefreshCw,
-  RotateCcw,
-  Upload,
-} from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import GitChangeGroup from '@/components/git_sidebar/GitChangeGroup.vue'
 import GitHistoryDropdown from '@/components/git_sidebar/GitHistoryDropdown.vue'
 import GitPushDialog from '@/components/git_sidebar/GitPushDialog.vue'
@@ -75,7 +66,7 @@ async function toggleHistoryDropdown(): Promise<void> {
   <aside class="git-sidebar" aria-label="Git 版本控制">
     <header class="git-header">
       <div class="git-title">
-        <GitBranch :size="15" />
+        <IcIcon name="git" :size="15" />
         <strong>Git</strong>
         <span v-if="gitStore.status.initialized">{{ gitStore.status.current_branch || 'DETACHED' }}</span>
       </div>
@@ -87,7 +78,7 @@ async function toggleHistoryDropdown(): Promise<void> {
           :disabled="gitStore.loading"
           @click="gitStore.refresh"
         >
-          <RefreshCw :size="14" :class="{ spinning: gitStore.loading }" />
+          <IcIcon name="refresh" :size="14" :class="{ spinning: gitStore.loading }" />
         </button>
         <button
           type="button"
@@ -96,13 +87,13 @@ async function toggleHistoryDropdown(): Promise<void> {
           :disabled="gitStore.selectedCount === 0 || gitStore.mutating"
           @click="restoreSelected"
         >
-          <RotateCcw :size="14" />
+          <IcIcon name="replay" :size="14" />
         </button>
         <button type="button" title="全部展开" aria-label="全部展开" @click="gitStore.expandAll">
-          <ChevronsUpDown :size="14" />
+          <IcIcon name="unfold" :size="14" />
         </button>
         <button type="button" title="全部收缩" aria-label="全部收缩" @click="gitStore.collapseAll">
-          <ChevronsDownUp :size="14" />
+          <IcIcon name="unfold-less" :size="14" />
         </button>
       </div>
     </header>
@@ -118,7 +109,7 @@ async function toggleHistoryDropdown(): Promise<void> {
         :disabled="gitStore.mutating"
         @click="gitStore.initialize().catch(() => undefined)"
       >
-        <Plus :size="34" />
+        <IcIcon name="add" :size="34" />
         <span>创建 Git 仓库</span>
         <small>在当前知识库根目录执行 git init</small>
       </button>
@@ -157,7 +148,7 @@ async function toggleHistoryDropdown(): Promise<void> {
               aria-haspopup="listbox"
               @click="toggleHistoryDropdown().catch(() => undefined)"
             >
-              <History :size="13" />
+              <IcIcon name="history" :size="13" />
               历史提交记录
             </button>
             <GitHistoryDropdown v-if="gitStore.historyOpen" />
@@ -204,7 +195,7 @@ async function toggleHistoryDropdown(): Promise<void> {
             :disabled="gitStore.selectedCount === 0 || !gitStore.commitMessage.trim() || gitStore.mutating"
             @click="commitAndOpenPush().catch(() => undefined)"
           >
-            <Upload :size="13" />
+            <IcIcon name="upload" :size="13" />
             提交并推送
           </button>
         </div>

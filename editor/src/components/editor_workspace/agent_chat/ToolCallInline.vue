@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ChevronDown, Copy } from 'lucide-vue-next'
+import IcIcon from '@/components/common/IcIcon.vue'
 
 const props = defineProps<{
   traces?: Array<Record<string, unknown>>
@@ -556,7 +556,7 @@ const toolEntries = computed(() => {
         :aria-label="expanded.has(entry.key) ? '收起结果' : '展开结果'"
         @click="toggleExpand(entry.key)"
       >
-        <ChevronDown :size="16" />
+        <IcIcon name="chevron-down" :size="16" />
       </button>
       <span class="tool-text" :class="{ pending: entry.pending }">{{ entry.text }}</span>
     </div>
@@ -577,7 +577,7 @@ const toolEntries = computed(() => {
           title="复制内容"
           @click="copyContent(entry.key, getCopyText(entry.rawContents))"
         >
-          <Copy :size="14" />
+          <IcIcon name="copy" :size="14" />
         </button>
         <template v-for="(rawContent, idx) in entry.rawContents" :key="idx">
           <!-- Search results: numbered items with source -->

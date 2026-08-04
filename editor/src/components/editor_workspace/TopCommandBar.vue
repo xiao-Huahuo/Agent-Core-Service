@@ -7,7 +7,6 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onMounted } from 'vue'
-import { Maximize2, Minus, X } from 'lucide-vue-next'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
@@ -273,13 +272,13 @@ onMounted(() => nextTick(autoResizeInput))
       </label>
       <div v-if="desktopApi?.isDesktop" class="window-controls" aria-label="Window controls">
         <button type="button" title="最小化" @click="desktopApi.minimize">
-          <Minus :size="13" />
+          <IcIcon name="remove" :size="13" />
         </button>
         <button type="button" title="最大化" @click="desktopApi.toggleMaximize">
-          <Maximize2 :size="13" />
+          <IcIcon name="open-in-full" :size="13" />
         </button>
         <button class="close-window" type="button" title="关闭" @click="handleCloseWindow">
-          <X :size="13" />
+          <IcIcon name="close" :size="13" />
         </button>
       </div>
     </div>

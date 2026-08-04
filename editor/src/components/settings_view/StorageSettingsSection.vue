@@ -9,7 +9,7 @@
 import { ref, onMounted, computed } from 'vue'
 import VChart from 'vue-echarts'
 import 'echarts'
-import { FolderOpen, RefreshCw, ChevronRight } from 'lucide-vue-next'
+import IcIcon from '@/components/common/IcIcon.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { API_ROUTES } from '@/router/api_routes'
 
@@ -520,7 +520,7 @@ onMounted(() => {
     <div class="section-header">
       <h3>存储管理</h3>
       <button class="icon-btn" :disabled="loading" title="刷新统计" @click="loadStorageConfig">
-        <RefreshCw :size="15" :class="{ spinning: loading }" />
+        <IcIcon name="refresh" :size="15" :class="{ spinning: loading }" />
       </button>
     </div>
 
@@ -574,7 +574,7 @@ onMounted(() => {
                 class="tree-collapse-btn"
                 @click="toggleCollapse(item.entry.key)"
               >
-                <ChevronRight :size="13" :class="{ rotated: !collapsedKeys.has(item.entry.key) }" />
+                <IcIcon name="chevron-right" :size="13" :class="{ rotated: !collapsedKeys.has(item.entry.key) }" />
               </button>
               <span v-else class="tree-spacer"></span>
               <span class="tree-name" :class="{ 'child-name': item.depth > 0 }">{{ item.entry.label }}</span>
@@ -583,7 +583,7 @@ onMounted(() => {
               <template v-if="item.depth === 0 && item.entry.key === 'knowledge_dir'">
                 <input v-model="knowledgeDirDraft" type="text" class="tree-input" :disabled="savingKey === item.entry.key" />
                 <button class="tree-explore-btn" title="在资源管理器中打开" @click="openInExplorer(item.entry.value)">
-                  <FolderOpen :size="14" />
+                  <IcIcon name="folder-open" :size="14" />
                 </button>
                 <button class="save-model-btn" :disabled="savingKey === item.entry.key || knowledgeDirDraft === item.entry.value" @click="handleSaveKnowledgeDir">
                   {{ savingKey === item.entry.key ? '...' : '保存' }}
@@ -592,7 +592,7 @@ onMounted(() => {
               <template v-else-if="item.entry.key === 'library_storage_dir'">
                 <input v-model="libraryStorageDirDraft" type="text" class="tree-input" :disabled="savingKey === item.entry.key" />
                 <button class="tree-explore-btn" title="在资源管理器中打开" @click="openInExplorer(item.entry.value)">
-                  <FolderOpen :size="14" />
+                  <IcIcon name="folder-open" :size="14" />
                 </button>
                 <button class="save-model-btn" :disabled="savingKey === item.entry.key || libraryStorageDirDraft === item.entry.value" @click="handleSaveLibraryStorageDir">
                   {{ savingKey === item.entry.key ? '...' : '保存' }}
@@ -601,7 +601,7 @@ onMounted(() => {
               <template v-else-if="item.depth === 0 && item.entry.key === 'base_data_dir'">
                 <input v-model="baseDataDirDraft" type="text" class="tree-input" :disabled="savingKey === item.entry.key" />
                 <button class="tree-explore-btn" title="在资源管理器中打开" @click="openInExplorer(item.entry.value)">
-                  <FolderOpen :size="14" />
+                  <IcIcon name="folder-open" :size="14" />
                 </button>
                 <button class="save-model-btn" :disabled="savingKey === item.entry.key || baseDataDirDraft === item.entry.value" @click="handleSaveBaseDataDir">
                   {{ savingKey === item.entry.key ? '...' : '保存（需重启）' }}

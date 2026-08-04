@@ -7,19 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import {
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ArrowUpDown,
-  Check,
-  ChevronDown,
-  FileSearch,
-  ListFilter,
-  RefreshCw,
-  X,
-} from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import { fetchMultimodalIngestionObservation } from '@/api/debug'
 import type {
   MultimodalIngestionObservation,
@@ -275,13 +264,13 @@ onBeforeUnmount(() => {
       <div class="browser-toolbar" @click.stop>
         <div class="navigation-tools">
           <button class="icon-button" type="button" title="回退" :disabled="!canGoBack" @click="goBackDirectory">
-            <ArrowLeft :size="15" />
+            <IcIcon name="arrow-left" :size="15" />
           </button>
           <button class="icon-button" type="button" title="反回退" :disabled="!canGoForward" @click="goForwardDirectory">
-            <ArrowRight :size="15" />
+            <IcIcon name="arrow-right" :size="15" />
           </button>
           <button class="icon-button" type="button" title="去上级文件夹" :disabled="!canGoUp" @click="goUpDirectory">
-            <ArrowUp :size="15" />
+            <IcIcon name="arrow-up" :size="15" />
           </button>
         </div>
         <div class="path-label">{{ currentDirLabel }}</div>
@@ -293,7 +282,7 @@ onBeforeUnmount(() => {
             :title="settingsStore.showIndexColumn ? '隐藏索引状态' : '显示索引状态'"
             @click="settingsStore.setShowIndexColumn(!settingsStore.showIndexColumn)"
           >
-            <ListFilter :size="15" />
+            <IcIcon name="filter" :size="15" />
           </button>
           <div class="sort-control">
             <button
@@ -303,11 +292,11 @@ onBeforeUnmount(() => {
               title="排序"
               @click="sortMenuOpen = !sortMenuOpen"
             >
-              <ArrowUpDown :size="15" />
+              <IcIcon name="sort" :size="15" />
             </button>
             <div v-if="sortMenuOpen" class="sort-menu" @click.stop>
               <button v-for="option in sortKeyOptions" :key="option.value" type="button" @click="selectSortKey(option.value)">
-                <Check v-if="sortKey === option.value" :size="14" />
+                <IcIcon v-if="sortKey === option.value" name="check" :size="14" />
                 <span v-else class="sort-check-placeholder"></span>
                 <span>{{ option.label }}</span>
               </button>
@@ -318,14 +307,14 @@ onBeforeUnmount(() => {
                 type="button"
                 @click="selectSortDirection(option.value)"
               >
-                <Check v-if="sortDirection === option.value" :size="14" />
+                <IcIcon v-if="sortDirection === option.value" name="check" :size="14" />
                 <span v-else class="sort-check-placeholder"></span>
                 <span>{{ option.label }}</span>
               </button>
             </div>
           </div>
           <button class="icon-button" type="button" title="刷新" :disabled="workspaceStore.treeLoading" @click="refreshTree">
-            <RefreshCw :size="15" />
+            <IcIcon name="refresh" :size="15" />
           </button>
         </div>
       </div>
@@ -368,12 +357,12 @@ onBeforeUnmount(() => {
         <span>多模态入库</span>
         <strong>{{ observation?.name || selectedPath }}</strong>
         <button class="icon-button close-button" type="button" title="关闭侧边栏" @click="closeObservationPane">
-          <X :size="15" />
+          <IcIcon name="close" :size="15" />
         </button>
       </div>
 
       <div v-if="loading" class="empty-state">
-        <FileSearch :size="20" />
+        <IcIcon name="manage-search" :size="20" />
         <span>正在生成观测结果</span>
       </div>
       <div v-else-if="error" class="empty-state error">
@@ -439,7 +428,7 @@ onBeforeUnmount(() => {
                 :title="isSemanticChunkCollapsed(chunk) ? '展开切片' : '关闭切片'"
                 @click="toggleSemanticChunk(chunk)"
               >
-                <ChevronDown :size="14" />
+                <IcIcon name="chevron-down" :size="14" />
               </button>
             </header>
             <div class="chunk-body">
@@ -466,7 +455,7 @@ onBeforeUnmount(() => {
                 :title="isOverlapChunkCollapsed(chunk) ? '展开切片' : '关闭切片'"
                 @click="toggleOverlapChunk(chunk)"
               >
-                <ChevronDown :size="14" />
+                <IcIcon name="chevron-down" :size="14" />
               </button>
             </header>
             <div class="chunk-body">

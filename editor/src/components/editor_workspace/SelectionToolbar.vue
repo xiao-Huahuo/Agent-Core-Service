@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { Clipboard, Scissors, ClipboardPaste, MessageSquareText } from 'lucide-vue-next'
+
+import IcIcon from '@/components/common/IcIcon.vue'
 
 const emit = defineEmits<{
   ask: [text: string]
@@ -118,20 +119,20 @@ onBeforeUnmount(() => {
       @mousedown.prevent
     >
       <button class="tb-btn" type="button" title="复制" @click="handleCopy">
-        <Clipboard :size="13" />
+        <IcIcon name="copy" :size="13" />
         <span>复制</span>
       </button>
       <button class="tb-btn" type="button" title="剪切" @click="handleCut">
-        <Scissors :size="13" />
+        <IcIcon name="cut" :size="13" />
         <span>剪切</span>
       </button>
       <button class="tb-btn" type="button" title="粘贴" @click="handlePaste">
-        <ClipboardPaste :size="13" />
+        <IcIcon name="paste" :size="13" />
         <span>粘贴</span>
       </button>
       <div class="tb-divider"></div>
       <button class="tb-btn tb-btn-ask" type="button" title="提问" @click="handleAsk">
-        <MessageSquareText :size="13" />
+        <IcIcon name="forum" :size="13" />
         <span>提问</span>
       </button>
     </div>
