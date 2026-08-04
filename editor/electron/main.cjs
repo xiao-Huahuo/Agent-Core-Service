@@ -292,6 +292,12 @@ function createMainWindow() {
     height: 920,
     frame: false,
     transparent: true,
+    // 透明窗口默认仍带系统阴影,Windows 会在四角绘制直角的半透明阴影边框,
+    // 与 CSS 圆角不匹配(暗色下明显)。关闭阴影让四角真正透明。
+    hasShadow: false,
+    // 必须显式全透明:Electron 未设置 backgroundColor 时窗口默认绘制白色,
+    // 暗色模式下 #app 圆角裁剪掉的四角会露出白色直角层
+    backgroundColor: '#00000000',
     show: false,
     title: 'AgentService Editor',
     icon: APP_ICON_PATH,
@@ -304,6 +310,9 @@ function createMainWindow() {
   })
 
   mainWindow.once('ready-to-show', () => {
+    // 运行时兜底:部分 Windows 构建下构造参数里的透明背景不生效,
+    // 圆角裁剪掉的四角会残留窗口默认白色直角层
+    mainWindow.setBackgroundColor('#00000000')
     mainWindow.show()
   })
 
