@@ -189,8 +189,9 @@ const listGridColumns = computed(() => {
   const selectionColumn = isMultiSelecting.value ? '28px ' : ''
   const indexColumn = settingsStore.showIndexColumn ? '118px' : ''
   const graphColumn = settingsStore.showGraphColumn ? '118px' : ''
-  const statusColumns = [indexColumn, graphColumn].filter(Boolean).join(' ')
-  return `${selectionColumn}minmax(240px, 1fr) 168px 168px 112px 96px 64px${statusColumns ? ` ${statusColumns}` : ''}`
+  const favoriteColumn = settingsStore.showFavoriteColumn ? '64px' : ''
+  const trailingColumns = [favoriteColumn, indexColumn, graphColumn].filter(Boolean).join(' ')
+  return `${selectionColumn}minmax(240px, 1fr) 168px 168px 112px 96px${trailingColumns ? ` ${trailingColumns}` : ''}`
 })
 const trashGridColumns = 'minmax(220px, 1fr) minmax(260px, 1.2fr) 156px 156px 96px 96px 132px'
 
@@ -407,9 +408,14 @@ function gitStatusClass(node: KnowledgeFileNode): string {
 }
 
 function toggleStatusColumns() {
-  const nextVisible = !(settingsStore.showIndexColumn && settingsStore.showGraphColumn)
+  const nextVisible = !(
+    settingsStore.showIndexColumn
+    && settingsStore.showGraphColumn
+    && settingsStore.showFavoriteColumn
+  )
   settingsStore.setShowIndexColumn(nextVisible)
   settingsStore.setShowGraphColumn(nextVisible)
+  settingsStore.setShowFavoriteColumn(nextVisible)
 }
 
 function toggleFavoritesOnly() {
@@ -943,10 +949,10 @@ onUnmounted(() => {
       <button
         v-if="resourcePage === 'files'"
         class="tool-button"
-        :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn }"
+        :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn }"
         type="button"
-        :title="(settingsStore.showIndexColumn || settingsStore.showGraphColumn) ? '隐藏索引与图谱状态' : '显示索引与图谱状态'"
-        :aria-label="(settingsStore.showIndexColumn || settingsStore.showGraphColumn) ? '隐藏索引与图谱状态' : '显示索引与图谱状态'"
+        :title="(settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn) ? '隐藏索引、图谱与收藏状态' : '显示索引、图谱与收藏状态'"
+        :aria-label="(settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn) ? '隐藏索引、图谱与收藏状态' : '显示索引、图谱与收藏状态'"
         @click="toggleStatusColumns"
       >
         <ListFilter :size="15" />
@@ -1129,7 +1135,7 @@ onUnmounted(() => {
           <span>{{ displayIngestedAt(node) }}</span>
           <span>{{ fileKind(node) }}</span>
           <span>{{ formatSize(nodeSize(node)) }}</span>
-          <span class="favorite-cell">
+          <span v-if="settingsStore.showFavoriteColumn" class="favorite-cell">
             <FavoriteButton target-type="knowledge_path" :target-id="node.path" />
           </span>
           <span v-if="settingsStore.showIndexColumn" class="index-status-cell" :class="indexStatusClass(node)">
@@ -1163,7 +1169,12 @@ onUnmounted(() => {
               <strong :class="gitStatusClass(node)">{{ node.name }}</strong>
               <small>{{ previewSummary(node) }}</small>
             </span>
-            <FavoriteButton class="content-favorite" target-type="knowledge_path" :target-id="node.path" />
+            <FavoriteButton
+              v-if="settingsStore.showFavoriteColumn"
+              class="content-favorite"
+              target-type="knowledge_path"
+              :target-id="node.path"
+            />
           </button>
         </div>
         <aside class="preview-pane">
@@ -1205,7 +1216,12 @@ onUnmounted(() => {
           <span v-if="isMultiSelecting" class="selection-check tile-selection-check" :class="{ checked: selectedPaths.has(node.path) }">
             <Check v-if="selectedPaths.has(node.path)" :size="12" />
           </span>
-          <FavoriteButton class="tile-favorite" target-type="knowledge_path" :target-id="node.path" />
+          <FavoriteButton
+            v-if="settingsStore.showFavoriteColumn"
+            class="tile-favorite"
+            target-type="knowledge_path"
+            :target-id="node.path"
+          />
           <span class="tile-art">
             <img
               v-if="viewMode === 'large' && isImageNode(node) && imagePreviewUrls[node.path]"

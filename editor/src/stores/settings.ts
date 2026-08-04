@@ -24,6 +24,7 @@ const AGENT_LOOP_MODE_KEY = 'agent_editor_loop_mode'
 const AGENT_ACCESS_MODE_KEY = 'agent_editor_access_mode'
 const SHOW_INDEX_COLUMN_KEY = 'agent_editor_show_index_column'
 const SHOW_GRAPH_COLUMN_KEY = 'agent_editor_show_graph_column'
+const SHOW_FAVORITE_COLUMN_KEY = 'agent_editor_show_favorite_column'
 const SIDEBAR_DISPLAY_MODE_KEY = 'agent_editor_sidebar_display_mode'
 
 const DEFAULT_UI_FONT_STACK = 'var(--font-ui-default)'
@@ -242,6 +243,9 @@ export const useSettingsStore = defineStore('settings', () => {
   /** Whether to show semantic graph status column/icons in file tree and file resource manager. */
   const showGraphColumn = ref(localStorage.getItem(SHOW_GRAPH_COLUMN_KEY) !== 'false')
 
+  /** Whether to show favorite status buttons in the file tree. */
+  const showFavoriteColumn = ref(localStorage.getItem(SHOW_FAVORITE_COLUMN_KEY) !== 'false')
+
   /** Left workspace sidebar mode: icon-only rail or wider management rail. */
   const sidebarDisplayMode = ref<SidebarDisplayMode>(normalizeSidebarDisplayMode(localStorage.getItem(SIDEBAR_DISPLAY_MODE_KEY)))
 
@@ -369,6 +373,11 @@ export const useSettingsStore = defineStore('settings', () => {
   function setShowGraphColumn(value: boolean) {
     showGraphColumn.value = value
     localStorage.setItem(SHOW_GRAPH_COLUMN_KEY, String(value))
+  }
+
+  function setShowFavoriteColumn(value: boolean) {
+    showFavoriteColumn.value = value
+    localStorage.setItem(SHOW_FAVORITE_COLUMN_KEY, String(value))
   }
 
   function setSidebarDisplayMode(mode: SidebarDisplayMode) {
@@ -644,5 +653,7 @@ export const useSettingsStore = defineStore('settings', () => {
     setShowIndexColumn,
     showGraphColumn,
     setShowGraphColumn,
+    showFavoriteColumn,
+    setShowFavoriteColumn,
   }
 })

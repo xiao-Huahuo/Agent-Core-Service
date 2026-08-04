@@ -21,6 +21,7 @@ defineProps<{
   memoryMsg: string
   showIndexColumn: boolean
   showGraphColumn: boolean
+  showFavoriteColumn: boolean
 }>()
 
 defineEmits<{
@@ -30,6 +31,7 @@ defineEmits<{
   deleteMemory: [memoryId: string]
   setShowIndexColumn: [value: boolean]
   setShowGraphColumn: [value: boolean]
+  setShowFavoriteColumn: [value: boolean]
   saveMemoryConfig: []
 }>()
 </script>
@@ -97,6 +99,15 @@ defineEmits<{
         @change="$emit('setShowGraphColumn', ($event.target as HTMLInputElement).checked)"
       />
       <span class="hint-text">在文件树和文件资源管理器中显示语义图谱状态</span>
+    </div>
+    <div class="setting-row toggle-row">
+      <label>收藏状态</label>
+      <input
+        :checked="showFavoriteColumn"
+        type="checkbox"
+        @change="$emit('setShowFavoriteColumn', ($event.target as HTMLInputElement).checked)"
+      />
+      <span class="hint-text">在文件树中显示收藏按钮</span>
     </div>
   </div>
 </template>

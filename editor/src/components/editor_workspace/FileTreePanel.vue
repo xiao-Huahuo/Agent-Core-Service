@@ -7,8 +7,8 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronsUpDown, FilePlus2, FolderPlus, History, ListFilter, RefreshCw, Search, Star, X } from 'lucide-vue-next'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import RecentFileList from '@/components/editor_workspace/RecentFileList.vue'
 import TreeNode from '@/components/editor_workspace/TreeNode.vue'
@@ -40,6 +40,7 @@ const contextMenuStyle = ref<Record<string, string>>({ left: '0px', top: '0px' }
 const contextMenuRef = ref<{ getBoundingClientRect: () => DOMRect } | null>(null)
 const treeVersion = ref(0)
 const sortMenuOpen = ref(false)
+const secondaryExpanded = ref(false)
 const sortKey = ref<'name' | 'mtime' | 'ingested' | 'size'>('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
 /** Whether the panel is displaying the recent-files layout. */
@@ -312,9 +313,14 @@ function selectSortDirection(value: 'asc' | 'desc') {
 }
 
 function toggleStatusColumns() {
-  const nextVisible = !(settingsStore.showIndexColumn && settingsStore.showGraphColumn)
+  const nextVisible = !(
+    settingsStore.showIndexColumn
+    && settingsStore.showGraphColumn
+    && settingsStore.showFavoriteColumn
+  )
   settingsStore.setShowIndexColumn(nextVisible)
   settingsStore.setShowGraphColumn(nextVisible)
+  settingsStore.setShowFavoriteColumn(nextVisible)
 }
 
 function filesFromEvent(event: DragEvent): File[] {
@@ -921,125 +927,154 @@ onUnmounted(() => {
 <template>
   <aside class="file-panel surface-panel" :class="{ dragging, 'recent-mode': recentMode, 'theme-dark': isDark, 'theme-light': !isDark }">
     <div class="panel-header" :class="{ 'recent-header': recentMode }">
-      <div class="header-row">
-        <button
-          v-if="recentMode"
-          class="header-action"
-          type="button"
-          title="返回普通文件树"
-          aria-label="返回普通文件树"
-          @click="leaveRecentMode"
-        >
-          <ArrowLeft :size="18" />
-        </button>
-        <button
-          v-if="!recentMode"
-          class="header-action"
-          :class="{ active: treeSearchOpen }"
-          type="button"
-          title="搜索文件"
-          aria-label="搜索文件"
-          :aria-pressed="treeSearchOpen"
-          @click="toggleTreeSearch"
-        >
-          <Search :size="18" />
-        </button>
-        <button
-          v-if="!recentMode"
-          class="header-action"
-          :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn }"
-          type="button"
-          :title="(settingsStore.showIndexColumn || settingsStore.showGraphColumn) ? '隐藏索引与图谱状态' : '显示索引与图谱状态'"
-          @click="toggleStatusColumns"
-        >
-          <ListFilter :size="18" />
-        </button>
-        <div v-if="!recentMode" class="sort-control" @click.stop>
+      <template v-if="!recentMode">
+        <div class="header-row">
           <button
             class="header-action"
-            :class="{ active: sortMenuOpen }"
+            :class="{ active: treeSearchOpen }"
             type="button"
-            title="排序"
-            @click="sortMenuOpen = !sortMenuOpen"
+            title="搜索文件"
+            aria-label="搜索文件"
+            :aria-pressed="treeSearchOpen"
+            @click="toggleTreeSearch"
           >
-            <ArrowUpDown :size="18" />
+            <IcIcon name="search" :size="18" />
           </button>
-          <div v-if="sortMenuOpen" class="sort-menu" @click.stop>
+          <button
+            class="header-action"
+            :class="{ loading: workspaceStore.treeLoading, 'refresh-btn': true }"
+            type="button"
+            title="刷新文件树"
+            :disabled="workspaceStore.treeLoading"
+            @click="refreshFileTree"
+          >
+            <IcIcon name="refresh" :size="18" />
+          </button>
+          <button
+            class="header-action"
+            type="button"
+            title="展开/关闭所有文件夹"
+            @click="toggleExpandAll"
+          >
+            <IcIcon name="unfold" :size="18" />
+          </button>
+          <button class="header-action" type="button" title="新建文件夹" @click="beginCreate('folder', '')">
+            <IcIcon name="new-folder" :size="18" />
+          </button>
+          <button class="header-action" type="button" title="新建文件" @click="beginCreate('file', '')">
+            <IcIcon name="new-file" :size="18" />
+          </button>
+          <div class="sort-control" @click.stop>
             <button
-              v-for="option in sortKeyOptions"
-              :key="option.value"
+              class="header-action pill"
+              :class="{ active: sortMenuOpen }"
               type="button"
-              @click="selectSortKey(option.value)"
+              title="排序"
+              aria-label="排序"
+              :aria-expanded="sortMenuOpen"
+              @click="sortMenuOpen = !sortMenuOpen"
             >
-              <Check v-if="sortKey === option.value" :size="14" />
-              <span v-else class="sort-check-placeholder"></span>
-              <span class="sort-icon-placeholder"></span>
-              <span>{{ option.label }}</span>
+              <IcIcon name="sort" :size="14" />
+              <span>排序</span>
             </button>
-            <hr />
+            <div v-if="sortMenuOpen" class="sort-menu" @click.stop>
+              <button
+                v-for="option in sortKeyOptions"
+                :key="option.value"
+                type="button"
+                @click="selectSortKey(option.value)"
+              >
+                <IcIcon name="check" v-if="sortKey === option.value" :size="14" />
+                <span v-else class="sort-check-placeholder"></span>
+                <span class="sort-icon-placeholder"></span>
+                <span>{{ option.label }}</span>
+              </button>
+              <hr />
+              <button
+                v-for="option in sortDirectionOptions"
+                :key="option.value"
+                type="button"
+                @click="selectSortDirection(option.value)"
+              >
+                <IcIcon name="check" v-if="sortDirection === option.value" :size="14" />
+                <span v-else class="sort-check-placeholder"></span>
+                <IcIcon name="arrow-up" v-if="option.value === 'asc'" :size="14" />
+                <IcIcon name="arrow-down" v-else :size="14" />
+                <span>{{ option.label }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="header-row-secondary-wrap" :class="{ expanded: secondaryExpanded }">
+          <div class="header-row header-row-secondary">
             <button
-              v-for="option in sortDirectionOptions"
-              :key="option.value"
+              class="header-action"
+              :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn }"
               type="button"
-              @click="selectSortDirection(option.value)"
+              :title="(settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn) ? '隐藏索引、图谱与收藏状态' : '显示索引、图谱与收藏状态'"
+              @click="toggleStatusColumns"
             >
-              <Check v-if="sortDirection === option.value" :size="14" />
-              <span v-else class="sort-check-placeholder"></span>
-              <ArrowUp v-if="option.value === 'asc'" :size="14" />
-              <ArrowDown v-else :size="14" />
-              <span>{{ option.label }}</span>
+              <IcIcon name="filter" :size="18" />
+            </button>
+            <button
+              class="header-action"
+              :class="{ active: favoritesOnly }"
+              type="button"
+              title="我的收藏"
+              :aria-pressed="favoritesOnly"
+              @click="toggleFavoritesOnly"
+            >
+              <IcIcon name="star" :size="18" />
+            </button>
+            <button
+              class="header-action pill"
+              :class="{ active: recentMode }"
+              type="button"
+              title="最近浏览"
+              aria-label="最近浏览"
+              :aria-pressed="recentMode"
+              @click="openRecentMode"
+            >
+              <IcIcon name="history" :size="14" />
+              <span>最近浏览</span>
             </button>
           </div>
         </div>
         <button
-          v-if="!recentMode"
-          class="header-action"
+          class="header-toggle"
+          :class="{ expanded: secondaryExpanded }"
           type="button"
-          title="展开/关闭所有文件夹"
-          @click="toggleExpandAll"
+          :title="secondaryExpanded ? '收起更多工具' : '展开更多工具'"
+          :aria-label="secondaryExpanded ? '收起更多工具' : '展开更多工具'"
+          :aria-expanded="secondaryExpanded"
+          @click="secondaryExpanded = !secondaryExpanded"
         >
-          <ChevronsUpDown :size="18" />
+          <IcIcon :name="secondaryExpanded ? 'arrow-up' : 'arrow-down'" :size="13" />
         </button>
-        <button
-          v-if="!recentMode"
-          class="header-action"
-          :class="{ active: favoritesOnly }"
-          type="button"
-          title="我的收藏"
-          :aria-pressed="favoritesOnly"
-          @click="toggleFavoritesOnly"
-        >
-          <Star :size="18" />
-        </button>
-      </div>
-      <div class="header-row header-row-secondary">
-        <button
-          class="header-action"
-          :class="{ loading: workspaceStore.treeLoading, 'refresh-btn': true }"
-          type="button"
-          title="刷新文件树"
-          :disabled="workspaceStore.treeLoading"
-          @click="refreshFileTree"
-        >
-          <RefreshCw :size="18" />
-        </button>
-        <button
-          class="header-action"
-          :class="{ active: recentMode }"
-          type="button"
-          title="最近浏览"
-          :aria-pressed="recentMode"
-          @click="openRecentMode"
-        >
-          <History :size="18" />
-        </button>
-        <button v-if="!recentMode" class="header-action" type="button" title="New folder" @click="beginCreate('folder', '')">
-          <FolderPlus :size="18" />
-        </button>
-        <button v-if="!recentMode" class="header-action" type="button" title="New file" @click="beginCreate('file', '')">
-          <FilePlus2 :size="18" />
-        </button>
-      </div>
+      </template>
+      <template v-else>
+        <div class="header-row">
+          <button
+            class="header-action"
+            type="button"
+            title="返回普通文件树"
+            aria-label="返回普通文件树"
+            @click="leaveRecentMode"
+          >
+            <IcIcon name="back" :size="18" />
+          </button>
+          <button
+            class="header-action"
+            :class="{ loading: workspaceStore.treeLoading, 'refresh-btn': true }"
+            type="button"
+            title="刷新文件树"
+            :disabled="workspaceStore.treeLoading"
+            @click="refreshFileTree"
+          >
+            <IcIcon name="refresh" :size="18" />
+          </button>
+        </div>
+      </template>
       <input
         ref="uploadPicker"
         style="display:none"
@@ -1050,7 +1085,7 @@ onUnmounted(() => {
     </div>
 
     <div v-if="treeSearchOpen && !recentMode" class="tree-search">
-      <Search :size="15" aria-hidden="true" />
+      <IcIcon name="search" :size="15" aria-hidden="true" />
       <input
         ref="treeSearchInput"
         v-model="treeSearchQuery"
@@ -1066,12 +1101,12 @@ onUnmounted(() => {
         aria-label="清除搜索"
         @click="clearTreeSearch"
       >
-        <X :size="13" />
+        <IcIcon name="close" :size="13" />
       </button>
     </div>
 
     <label v-if="recentMode" class="recent-search">
-      <Search :size="15" aria-hidden="true" />
+      <IcIcon name="search" :size="15" aria-hidden="true" />
       <input
         v-model="recentSearchQuery"
         type="search"

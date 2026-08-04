@@ -1,29 +1,22 @@
 # CHANGE HISTORY
 
+## 2026-08-04
+- [x] 文件树顶部按钮重排为可折叠两行布局: 「排序」「最近浏览」改为图标+文字的镂空胶囊(新增 `.header-action.pill` 内联 flex 布局,描边圆角 + 主色 active 态)。第一行固定展示 搜索|刷新|展开/折叠|新建文件夹|新建文件|排序(排序在最右);第二行收纳 状态切换|收藏|最近浏览(最近浏览在最右),默认隐藏,以 `grid-template-rows: 0fr↔1fr` 实现平滑 slide 动效。展开/收起箭头按钮位于第二行下方,占满文件树宽度、矩形透明底、hover 时全宽高亮背景,展开时随第二行下移;排序菜单与最近浏览切换逻辑不变。
+- [x] 文件树顶部图标切换为 Material outlined(ic)本地 SVG: 新增 `IcIcon.vue` 通用组件,通过 `import.meta.glob ?raw` 内联渲染 `assets/icons/svg/ic/` 下 14 个 `ic:outline-*` 图标(搜索/过滤/排序/展开/星标/刷新/历史/新建文件夹/新建文件/返回/勾选/关闭/上下箭头),`currentColor` 跟随按钮文字色。文件树顶栏 9 个按钮与排序菜单、最近浏览、搜索框图标全部从 lucide-vue-next 换为 IcIcon,移除对应 lucide 导入。已用 vite dev 验证 glob 编译与 svg raw 返回正常。
+- [x] 暗色模式下对调外围与内容卡片底色: 仅交换 `ui-system.css` dark 块的数值(变量名与引用不动)。顶栏/左侧边栏/文件树所用 `--color-chrome-topbar-bg`、`--color-chrome-rail-bg` 由 `rgba(18,18,20,.92)` 换为原大卡片外框色 `#0a0a0a`;大卡片外框与内容(`--color-bg-app`、`--color-canvas`、`--color-canvas-soft`、`--color-surface`、`--color-surface-raised`、`--color-bg-primary` 及设置页 `--color-chrome-bg-*`)由近黑换为原外围色 `#121214`。亮色模式不变。
+- [x] 文件树收藏状态可随索引/图谱状态一起隐藏: 文件树顶部「隐藏索引与图谱状态」按钮改为同时切换索引、图谱与收藏三列;TreeNode 收藏按钮按 `showFavoriteColumn` 显隐,新增 `--favorite-width` 变量,隐藏时列宽归零、不占文件名空间。同步资源管理器列表/内容/图标视图的收藏按钮与 grid 列、切换按钮文案,并在设置页「显示」区新增「收藏状态」开关,与索引/图谱状态一致。
+
 ## 2026-08-03
-- [x] 调整自动化任务展开按钮位置:移动到任务标题右侧,保持普通 TODO 展示不变。
+- [x] 增加 macOS 图标与字体适配:根据平台让 Electron 使用 `app.icns` 或 `app.ico`,并补充 macOS 用户字体、PingFang、Hiragino、Songti 与 Arial Unicode 字体路径。
 - [x] 优化待办侧边栏自动化任务:自动化待办可展开查看执行时间、权限、周期和具体描述,普通 TODO 保持原有展示与交互不变。
-- [x] 统一移除已注入系统提示胶囊条边框,使系统提示与记忆注入条目保持一致的无边框样式。
-- [x] 优化记忆与指令设置展示:为记忆注入列表增加独立标题,移除已注入记忆条目的边框,保持系统提示条目样式不变。
 - [x] 新增长期记忆用户级总开关:设置页支持持久化开启/关闭;关闭时跳过 Agent 每轮固定长期记忆召回,从模型可见工具与工具执行兜底中移除长期记忆工具,阻止 React 上下文压缩和后台会话摘要把内容写回长期记忆;保留已有记忆数据不删除,重新开启后可继续使用。后端定向测试 21 项通过,前端 `vue-tsc --noEmit` 通过。
 - [x] 增加 Agent 首答耗时真实计时与后端阶段诊断: 后端 `stream_session_prompt` 为路由、任务列表读取、上下文构建、子 Agent 结果 drain、首个 agent delta、simple 模型总耗时和安全审核附加 `metadata.latency`,不改变任何路由/模型/工具行为;前端从用户气泡推出到首个最终 assistant 内容到达记录 `thinking_seconds`,并在 Chat/Tool 两种 assistant 气泡上方显示 `思考了Ns`(0.1s 精度),同时保留后端首 delta 秒数到消息 metadata 便于后续定位方差来源。目标前端单测通过,后端语法检查通过;后端 `tests/test_agent_core_service.py` 当前仍有既有 ReRank 未就绪等失败阻塞全套通过。
 - [x] 修复 Electron 中反馈读取失败: 桌面端 API 默认直连 `http://127.0.0.1:8002`,避免 Electron 运行态误读 Vite/静态页面 HTML;后端补充 localhost/null origin CORS 与 Private Network Access 支持,让 Electron file renderer 可访问本机反馈接口。已用真实 uvicorn + Chromium file origin 验证反馈 POST/GET/DELETE 全链路返回 JSON。
 - [x] 修复用户反馈面板用户态未同步时无法读取: `GET /feedback` 支持不传 `user_id` 时按创建时间倒序读取全部反馈,前端反馈弹窗在 `userId` 为空时走无用户过滤读取路径;新增反馈 REST 定向测试覆盖按用户读取与无用户读取。
 - [x] 修复用户反馈读取成功后仍显示失败空态: `loadFeedback` 成功返回时显式清理旧 `errorText`,无用户、提交成功、修改成功和删除成功也同步清理错误状态,避免后端已经连通但右侧仍残留“暂时无法读取反馈”。
-- [x] 移除用户反馈弹窗 footer 裸露错误文案: 底部状态不再占据视觉布局,footer 只负责右侧提交动作;接口读取/提交失败统一在右侧反馈区域以中性空态提示呈现,彻底避免红色错误文本破坏输入框下方布局。
-- [x] 修复用户反馈弹窗底部错误状态破坏布局: 接口未连接提示改为短文案,状态区域加 title 保留完整信息,并强制单行省略与垂直居中,避免红色错误文本换行挤裂提交按钮所在 footer。
-- [x] 继续精修用户反馈弹窗空态与密度: 右侧暂无反馈从顶部边框条改为无边框居中轻量空态;弹窗头部/底部间距收紧,输入区高度提高,左右分区间距压缩,减少亮色模式下表单拼贴感。
-- [x] 精修用户反馈弹窗 UI: 卡片圆角对齐 EditorWorkspace 主内容 28px,输入框与反馈条统一 16px 圆角;提交按钮改为有底色胶囊按钮并加入 hover/active 动效;右侧反馈条改为圆角矩形,内容与日期同排展示,超出一行省略并支持点击展开;关闭、编辑、删除等纯图标按钮移除边框包裹感。
-- [x] 修正用户反馈弹窗主题适配: 移除默认态硬编码暗色卡片,亮色模式改用设计系统亮色背景/文本/输入框变量,仅在 `data-theme="dark"` 下启用暗色反馈卡片与深遮罩,避免亮色页面出现整块黑色弹窗。
-- [x] 修正用户反馈弹窗错误呈现与按钮换行: 当 `/feedback` 误返回 HTML 时转换为明确的接口未连接提示,避免原始 Content-Type 错误挤坏弹窗;提交按钮固定最小宽度并禁止文字换行;通过前端开发端口 5173 对反馈 GET/POST/PUT/DELETE 执行真实请求验证。
 - [x] 完善用户反馈面板: `/feedback` 补充列表、修改、删除 REST 接口并同步 gRPC `ListFeedback`/`UpdateFeedback`/`DeleteFeedback`;反馈弹窗改为页面居中暗色遮罩卡片,带阴影,右侧以圆角条堆叠已入库反馈并支持编辑/删除,输入框 Enter 自动提交、Shift+Enter 保留换行。
 - [x] 新增用户反馈入口: 左侧边栏 Debug 上方增加“用户反馈”按钮,点击后显示悬浮圆角反馈卡片;提交反馈时通过 `/feedback` 后端接口写入新增 `feedback` SQLite 表,并同步补充 gRPC `AddFeedback` 能力与 Vite 代理配置。
 - [x] 优化文件树/编辑区分隔条拖动: 横向 resize 改为 requestAnimationFrame 合帧更新,拖动期间启用 pointer capture、全局 col-resize 光标锁定并临时禁用内容区 pointer events,减少编辑区重排卡顿和鼠标光标闪烁。
-- [x] 细化收藏页会话列表: 顶栏去除底部分割线;收藏会话列表改为学习资源管理器列表模式的 sticky 表头、34px 行高、底部分割线和入场动画;单击只选中会话,双击或键盘 Enter 加载会话历史并跳转 Agent 页面。
-- [x] 重构 Agent 历史会话操作呈现: 侧边栏宽度下每条会话只保留三点菜单,菜单内提供收藏/日期/导出会话/删除;收藏页改用专用会话收藏列表组件,仅显示已收藏会话,并按会话名/日期/导出/收藏/删除列呈现,不再展示新对话、导入或清空全部等抽屉工具。
-- [x] 统一收藏页顶部三段 toggle 样式为资源管理器同款 pill + 滑块样式,切换文件/图书馆/会话时滑块按当前按钮宽度移动。
-- [x] 将红心按钮的弹性点击动效移植到通用收藏星标按钮: 保持 Star 图标不变,收藏/取消收藏时使用 400ms 缩放回弹动画,并按按钮 size 自动适配外框尺寸。
-- [x] 调整文件树顶部按钮布局: 普通文件树模式拆成两行,第一行放搜索/状态/排序/展开/收藏等查看控制,第二行放刷新/最近浏览/新建文件夹/新建文件,缓解顶部按钮过密。
 - [x] 补充开发规范持久化红线: 用户级、业务级、跨设备或需要后端/多端一致读取的数据必须走后端模型、服务层、数据库表和 API, 默认禁止用浏览器存储、前端内存、JSON/YAML/文本文件或临时脚本冒充业务持久化。
 - [x] 新增收藏功能最小闭环: 后端新增 `favorites` SQLModel 表、服务层、REST API 与 gRPC RPC; 前端新增后端缓存型收藏 store、星标按钮组件、文件/文件夹、图书馆条目和 Agent 会话收藏入口, 并在文件树、资源管理器、图书馆、会话历史与左侧「收藏」页面支持「我的收藏」过滤。
 - [x] 增加"收藏"功能.收藏按钮为一个空心星图标,点击变为黄色星,可取消收藏.
@@ -42,23 +35,11 @@
 - [x] 修复自动化任务开发环境 404：Vite 开发代理补充 `/automation` 到后端 8002 的转发配置。运行态验证 `/automation/add` 返回 200，创建/删除探针成功。
 - [x] 补充自动化任务创建错误反馈：前端保留后端实际错误信息，便于区分后端未重启、参数校验失败和服务端异常。
 - [x] 修复自动化任务提交无反馈：提交按钮现在等待后端结果，成功后才关闭独立表单，失败时在表单内显示提示并保留输入内容。
-- [x] 调整自动化任务入口：新建按钮移动到添加新待办输入框左侧，自动化表单改为底部独立展开面板，并增加独立关闭按钮。
 - [x] 新增定时自动化任务最小闭环：SQLite 持久化自动化定义与运行记录，后台调度器按数据库租约抢占到期任务并独立唤醒 Agent；支持单次/daily/weekly/monthly、IANA 时区、权限模式和运行历史。新增自动化 REST API、Agent `add_automation` 工具及 TODO 侧边栏创建自动化表单。定向自动化测试 3 项通过；前端定向 ESLint 通过。全量 `npm run type-check` 仍受既有非本次文件 TypeScript 错误阻塞。
-- [x] 增加 TODO 搜索框的垂直内边距，使搜索框高度更充裕。
-- [x] 微调 TODO 待办行对齐：标题行与左侧复选框同高，日期保持在标题下方；清除日期按钮向右微移。
-- [x] 优化 TODO 侧边栏布局：移除搜索区域上下分隔线，将待办时间移动到标题下方的信息行。
-- [x] 顶栏按钮拆成两个,分别召唤任务列表/子 Agent 卡片:page 模式顶栏原一个合并按钮(按有无任务列表切换 ListChecks/UsersRound 图标)拆为两个 `new-session-round-btn`(ListChecks 任务列表、UsersRound 子 Agent);panel 模式 titlebar 原仅有的条件任务按钮(ListChecks, v-if hasTaskList)同样拆成两个 `icon-button`(去掉 v-if,始终显示)。新增 `toggleTaskListCard`/`toggleChildAgentCard`:卡片可见时收起(复用 close 逻辑,仅剩它则收整个侧边栏),不可见时打开卡片并确保侧边栏展开;`aria-pressed` 绑定各自卡片可见性。删除无引用的 `toggleAgentSidebar`/`closeAgentSidebar`。`npx vue-tsc --noEmit` 通过。
 - [x] 侧边栏两张卡片可独立叉掉:AgentPanel 新增 `taskListCardOpen`/`childAgentCardOpen` 两个可见性状态(默认 true),两张卡片 `v-show` 各自控制;叉掉任一卡片只关闭自己那张(`closeTaskListCard`/`closeChildAgentCard`),不影响另一张;仅剩一张时再叉掉则收起整个侧边栏(另一张不可见时直接 `agentSidebarOpen = false`)。重新打开侧边栏(toggle 从关闭转打开、任务列表自动打开 watch、引用打开)时 `resetSidebarCards` 重置两张卡片为可见。TaskListDrawer 标题行加 X 关闭按钮(与展开/收缩 chevron 并排),`emit('close')`;ChildAgentPanel 原 close 按钮改绑定 `closeChildAgentCard`(原直接收整个侧边栏)。`npx vue-tsc --noEmit` 通过。
-- [x] 子 Agent 卡片弹性适配 + 卡片紧凑化:子 Agent 卡片由 `flex: 1 1 0`(死板填满到侧边栏底部)改 `flex: 0 1 auto`(flex-basis auto 按内容弹性适配,内容少时收缩不顶到底;shrink 1 + min-height 0 使内容超高时被压缩到任务列表以下剩余空间内内部滚动;grow 0 不拉伸;顶部仍锚定任务列表底部)。ChildAgentPanel 紧凑化:顶栏 min-height 46→40px、内容区 gap/padding 12→8/10px、任务卡片 padding 10→8px 且内 gap 8→6px、任务头 gap 8→6px、头像 32→26px、名字 13→12px、任务间距 8→6px、run 内边距 8→6px、run 头 gap 8→6px、run 详情 gap/padding 8→6px。`npx vue-tsc --noEmit` 通过。
 - [x] 子 Agent 区块不翼而飞修复 + 侧边栏改双卡片布局:根因是 `.child-agent-section` 用了 `flex: 1 1 0`(flex-basis 0),而其父卡片 `.agent-sidebar-card` 是 `flex: 0 1 auto`(高度由内容决定)——auto 高度的 flex 容器里 basis-0 子项无剩余空间可分配直接塌陷为 0,子 Agent 区消失。修复:侧边栏直接纵向排两张独立圆角卡片(`gap: var(--space-10)`),任务列表卡片 `flex: 0 0 auto`(弹性展示全部任务不滚动,`max-height: min(60vh, 520px)` 超高才内部滚动),子 Agent 卡片 `flex: 1 1 0`(容器 `.agent-sidebar` 高度确定 stretch 撑满,填满任务列表以下剩余空间,顶部锚定任务列表底部,超高内部滚动);删除 `.agent-sidebar-section` 单卡片嵌套结构。`npx vue-tsc --noEmit` 通过。
 - [x] 修复右侧边栏高度失控(任务列表被截断/收缩坍缩成胶囊):根因是 `.task-list-section` 用了 `max-height: 45%` 百分比高度,而父卡片 `.agent-sidebar-card` 是 `flex: 0 1 auto`(flex-basis auto,高度由内容决定)——子元素百分比高度无解析基准,浏览器按 auto 处理,导致任务列表被异常压扁截断、收缩时 section 塌成窄条。修复:百分比上限改 `max-height: min(40vh, 360px)`(vh 相对视口,稳定可靠,超高时内部滚动,内容少时按内容自适应完整展示);补全滚动高度链路 `.task-list-drawer`(flex:1 填满 section)→ `.task-list-body`(flex:1 + min-height:0)→ `.task-list-content`(flex:1 + overflow-y:auto + min-height:0),超高时在内容区滚动而非被父容器截断;收缩态 `.task-list-drawer.collapsed` 给标题行加底部 `padding-bottom: 12px`,只剩标题行时仍呈规整单行而非塌成胶囊。`npx vue-tsc --noEmit` 通过。
 - [x] 侧边栏布局锚定与任务列表折叠:AgentPanel 分区 flex 调整——任务列表 `task-list-section` 由 `flex: 0 1 auto` 改 `flex: 0 0 auto`(按内容高自适应但不可被子 Agent 挤压),子 Agent `child-agent-section` 改 `flex: 1 1 0` 填满剩余空间,使子 Agent 区顶部锚定在任务列表区最低点、展开子 Agent 时顶部不动(超高时在自身区内滚动)。TaskListDrawer 新增展开/收缩按钮:标题行 `.task-list-head` 右端加旋转 chevron(展开时 180°),内容包 `.task-list-body` 用 `v-show` + `<Transition name="task-list-collapse">` 淡入淡出(180ms),默认展开。
-- [x] 子 Agent 区折叠细节修正:goal 分组下拉区的分隔细线 `border-top` 从 `.child-agent-detail-inner` 移到 `.child-agent-detail.expanded .child-agent-detail-inner`,折叠时不再显示细线;类别胶囊 `.child-agent-category` 去除底色(仅保留 primary 描边与文字,与事件条胶囊一致)。
-- [x] 对话区事件条去边框大圆角:`.child-agent-event` 去除 `1px solid var(--color-border)` 边框、圆角 `--radius-md`→`--radius-xl`(仅保留 `--color-surface` 底色区分);detail 内层 padding 移到 `.expanded` 态,未展开时下拉内容彻底隐藏不泄漏。`npx vue-tsc --noEmit` 通过。
-- [x] 子 Agent 面板与对话区事件条视觉迭代:ChildAgentPanel 任务卡片圆角扩大 `--radius-md`→`--radius-xl`、去除边框(仅保留底色, hover 只变背景);goal 分组下拉区改 grid `0fr→1fr` 折叠动效(220ms cubic-bezier),组内每次运行(run)新增独立折叠:run 头变为可点击按钮(状态圆点+名字+状态+右侧旋转 chevron),默认收缩,展开才显示运行信息网格/工具/摘要/结果/错误/停止按钮,同样配 grid 折叠动画。ChildAgentEventInline 事件条:左侧新增状态圆点(颜色按 data-status: running=primary/completed=success/failed·stopped=danger/默认 muted),删除右侧状态文字与 statusLabel 逻辑,下拉 chevron 从左侧移到最右侧,类别胶囊去除底色(仅保留 primary 描边与文字),detail 改 grid `0fr→1fr` 折叠动效(替代原 `v-if` 生硬显隐)。`npx vue-tsc --noEmit` 通过。
-- [x] 融合侧边栏卡片底色定案:卡片底色改用设计系统专用令牌 `--color-bg-card`(暗色 #111 / 亮色 #fff,全项目此前 0 处使用),替代上轮自调的中性灰 `color-mix`;去边框、高度自适应内容(`flex: 0 1 auto; max-height: 100%`,任务列表封顶 45% 内部滚动,子 Agent 按内容自适应,卡片底部贴合子 Agent 内容底部)保持不变。`npx vue-tsc --noEmit` 通过。
-- [x] 融合侧边栏卡片再调:卡片紫色根因是 `background: var(--color-surface-active)`(暗色 #282836 带紫调),改为中性 `color-mix(in srgb, var(--color-canvas) 85%, var(--color-text) 15%)`(暗色约 #2b2b2b、亮色约 #dcdcde,均无紫);去除卡片边框(删除 `border: 1px solid var(--color-border-strong)`),靠中性底色+阴影区分;卡片高度自适应内容(`flex: 0 1 auto; max-height: 100%`),任务列表上分区 `flex: 0 1 auto; max-height: 45%` 内部滚动,子 Agent 下分区 `flex: 0 1 auto` 按内容高度自适应,使卡片底部贴合子 Agent 内容底部(内容少时卡片收缩,不再撑满侧边栏留大片空白)。`npx vue-tsc --noEmit` 通过。
-- [x] 融合侧边栏卡片微调:阴影减小(双层 0 2px 6px/0 6px 18px,原 0 4px 12px/0 12px 32px),卡片边框改 `var(--color-border-strong)` 增强边界;任务区块顶栏去除(TaskListDrawer 移除 ListChecks 图标、X 关闭按钮、border-bottom,`emit('close')` 及相关 import 一并删除),改为朴素标题 `<p class="task-list-title">`(次要色 12px 650,`padding: 12px 12px 0`);AgentPanel 移除 TaskListDrawer 的 `@close` 绑定。`npx vue-tsc --noEmit` 通过。
 - [x] 修复融合侧边栏卡片不可见与分区高度:
   - 根因:`.agent-sidebar-card` 用了 `box-shadow: var(--shadow-lg)`,但 `--shadow-lg` 在项目 CSS 中从未定义(全局仅 `--shadow-window`),阴影不渲染;且卡片背景 `--color-surface-raised`(暗色 #000)与对话区背景 `--color-bg-app`(#0a0a0a)几乎相同,无对比,导致"只看到侧边栏看不到卡片"。
   - 修复:卡片改用内联阴影(`0 4px 12px/0 12px 32px` 双层投影)并加 `1px solid var(--color-border)` 边框、背景改 `--color-surface-active`(#282836/#ecebff,明显高于对话区);`.agent-sidebar` 打开时 `overflow: visible` + `padding: var(--space-10)`,让阴影在四周留白内显形,关闭时 `overflow: hidden` + `padding: 0` 防内容外泄。
@@ -109,7 +90,6 @@
 - [x] 修复文件树/资源管理器多选右键只操作单个文件:FileContextMenu 增加多选禁用策略,批量目标取右键所在 selection,删除按路径深度倒序。
 - [x] 修复 Preview/Split 暗色下代码块文字变黑:用项目 --hljs-* 变量覆盖 Vditor 内置亮色 hljs 主题,随主题切换。
 - [x] 同步 README 多模态解析/预览现状:仅修正与当前实现冲突的 OCR 生效方式与预览说明。
-- [x] 统一 PDF「文本/渲染」toggle 与编辑器三模式 toggle 的视觉样式(grid 容器+主色滑块)。
 - [x] 修复编辑区高亮层滚动错位:改用 CSS transform 平移代替 scrollTop 赋值,与 textarea 滚动逐像素对齐;新增回归测试。
 - [x] 打通 Word/PDF 灌库文本与预览渲染模式边界:DOCX 按文档流顺序合并全文、已有 frontmatter 才开放 Edit/Split;PDF preview 拆 render_content/content 并新增文本/渲染开关;OCR 文本回填原位。
 - [x] Markdown 编辑模式符号语法高亮:Edit/Split 编辑 .md 启用 textarea 透明+hljs 高亮层着色。
@@ -134,11 +114,6 @@
 - [x] 优化 Agent 回答性能(启动慢/首 token 停顿/循环长):启动并行加载并移除自动灌库;首 token 前只做长期记忆召回+短 TTL 缓存;每轮按需绑定工具;react 图缺压缩节点需补齐。
 - [x] 系统性的真正打通多模态解析链:图片 OCR 解析、扫描件 PDF 图片渲染、PPTX 渲染与预览等。
 - [x] 图书馆新增条形模式:新建 LibraryBar.vue 横向条形卡片,左侧缩略区(封面图/描述文字key/标题/类型图标),右侧从上到下为标题|标签(同行)、描述(单行省略)、日期|含内容数(右下角,集锦时主色显示);圆角阴影卡片并复用 TransitionGroup card 动效(enter 缩放上浮 + leave 淡出 + FLIP move)。LibraryView.vue 新增 viewMode(card/bar)状态与切换按钮(位于多选按钮右侧,卡片模式显示 Rows 图标、条形模式显示 LayoutGrid 且高亮),列表容器按模式切换 library-grid/library-list;切换时卡片 leave 与条形 enter 动画并发。Playwright 验证 10 项卡片⇄条形互切、布局计算样式(88px 高/12px 圆角/thumb 104px/标题标签同行/foot 两端对齐)、集锦含内容数主色、条形 enter 动画 20 项触发;vue-tsc 通过。
-- [x] 图书馆条形右上角加类型角标:集锦显示主题色加粗"集锦",普通图书显示文件名(source_name),网页直接显示 URL(source_url),统一小圆角 pill 样式(集锦主色、其余次要色),超长省略号并有 title 悬浮完整内容;多选时隐藏角标避免与右上角多选按钮重叠。Playwright 验证三种类型角标文本/颜色/右对齐,多选时角标隐藏。
-- [x] 图书馆条形角标样式与标题图标微调:角标去掉胶囊背景改纯文本(集锦主题色加粗、图书/网页次要淡色,右对齐省略号);标题左侧新增类型图标(集锦 FolderOpen、网页 Link、普通图书文件图标)。Playwright 验证角标计算样式(背景透明/无圆角/无 padding)与集锦/网页/图书三类型图标路径正确;vue-tsc 通过。
-- [x] 图书馆条形模式视觉调整:去掉卡片阴影(box-shadow: none),圆角从 12px 扩到 18px,改用 1px 细边框(var(--color-border));hover 不再上浮,改为边框淡主色 + 背景微亮,选中态保留主色 outline。Playwright 验证计算样式(阴影 none/圆角 18px/边框 1px、真实鼠标悬停边框变主色混合色且 transform none);vue-tsc 通过。
-- [x] 图书馆卡片模式圆角从 14px 扩到 18px,与条形模式圆角统一。
-
 
 ## 2026-07-31
 - [x] 修复整目录忽略时文件树内文件不变色:
@@ -177,12 +152,8 @@
   - 修复 Git 边栏提交底栏高度随文件数量变化的问题:当无错误提示时 `.git-error` 不渲染,会导致文件列表落到第 2 行、底栏落入第 3 行(1fr)而被拉伸或压缩;现在为文件列表与提交底栏显式指定网格行(`grid-row: 3` / `grid-row: 4`),底栏固定在底部 auto 行,高度恒定。
   - Git 边栏的"更改/未进行版本管理的文件"区域条与各文件条原生复选框改为可复用 `GitCheckbox.vue` 动画复选组件:勾选时方框描边消隐、对勾按延迟顺序绘制,悬停出现主题色光环;颜色全部改用主题变量(主色/柔和主色/次要文字色),原生 input 视觉隐藏但仍保留 aria-label 可访问性。
   - GitCheckbox 点击判定改为朴素判定:悬停光环伪元素设置 `pointer-events: none`,点击命中区域收敛为 18px 方框本体,不再把 48px 光环范围计入可点击区域,避免框旁误触。
-  - 顶栏 Git 按钮移动到待办按钮左侧(紧邻待办),保持相邻的操作按钮分组;同时移除四个 `.todo-link` 圆钮(Git/待办/图谱抽取/重新灌库)悬停时图标旋转 90° 的动画效果,仅保留边框与底色高亮,加载中的 refresh-spin 动画不受影响。
-  - 顶栏明暗切换开关整体缩小 1/4:`.switch` 用 `transform: scale(0.75)` 等比缩放滑块、月亮球、云朵与星星全部内部元素,并以对称负 margin 收敛布局占位(视觉 43.5×21px),避免旁边按钮出现多余空隙。
-  - 顶栏 GitHub 按钮明暗样式对调:明色模式改为白底黑图标并加 1px 黑边,暗色模式改为黑底白图标并加 1px 白边,与周围明暗主题对比度保持一致。
 - [x] 修正搜索页聚焦、下拉悬停与多模态预览:
   - 从左侧进入搜索页时不再自动聚焦大搜索框,仅在用户主动点击输入框后展开历史或结果下拉栏。
-  - 顶栏与搜索页共用下拉栏的结果行和历史清理按钮统一使用全局柔和主题色作为悬停反馈。
   - 搜索侧栏的 Preview/Split 模式优先渲染 PDF、Office、图片等原生多模态预览载荷,Edit 模式继续显示可用的提取文本。
 - [x] 搜索页面交互扩展: 
   - 在单击搜索结果后,应在搜索结果右边(仍在搜索框之下)拉出一个较宽的侧边栏,里面原样放此文件的编辑区组件(但是只读),并且也用黄色高光显示匹配的部分(如果是语义匹配的结果则不高光).
@@ -214,21 +185,6 @@
   - 最近浏览列表进入时冻结排序,打开文件不再导致卡片立即跳位;顶部刷新或重新进入时才更新快照。
   - 最近浏览顶栏新增独立回退按钮;缩略图移除边框,索引与图谱状态改为保留提示和无障碍标签的纯图标。
   - 最近文件卡片支持与普通文件树一致的右键菜单;重命名和新建操作会返回普通文件树继续内联编辑。
-- [x] 入库/图谱队列页面按钮统一大小; 待办按钮从左侧边栏移到顶栏; 队列/Skill/MD-HTML页面toggle样式与文件资源管理器对齐:
-  - `IngestionProgressView.vue`: `.topbar-action-clone` 改为 32x32 圆形按钮, 与 `.refresh-btn` 大小一致; `.tab-switch`/`.tab-slider`/`.tab-button` 样式改为与 `FileResourceManager.css` 的 `.resource-page-switch`/`.page-slider`/`.page-switch-button` 一致(26px 高度、13px 字号、2px 内边距、`--color-primary-softer` 滑块)
-  - `SkillView.vue`: `.tabs`(概览/定制) 替换为 `.resource-page-switch`/`.page-slider`/`.page-switch-button` 结构, 增加 `tabSwitchRef`/`tabSliderStyle`/`updateTabSlider`/`switchTab` 实现滑动指示器
-  - `MarkdownHtmlVisualizationView.vue`: 添加 `.mode-pill`/`.mode-slider`/`.mode-button` 滑块切换(原结构模式/AI提炼模式)到工具栏, 移除高级下拉中的重复模式选择
-  - `ActivityBar.vue`: 移除待办按钮(CheckSquare图标), 移除 `toggleTodo` emit
-  - `TopCommandBar.vue`: 在 Agent 按钮右侧新增待办按钮(CheckSquare), 使用 `.todo-link` 样式(24x24 pill), 与右侧图谱抽取/重新灌库按钮大小一致; 新增 `toggleTodo` emit、`todoActive` 计算属性
-  - `EditorWorkspace.vue`: 连接 `TopCommandBar` 的 `@toggle-todo` 到 `toggleTodoSidebar`, 移除 `ActivityBar` 上不再需要的 `:todo-active` prop
-- [x] 编辑区打开文件选项卡改为圆角矩形并进一步改为胶囊、可视化按钮改为圆形图标:
-  - 新增 `--color-tab-active` 主题变量: 暗色 `#1a1a2e`(更亮), 亮色 `#eceef0`(更灰)
-  - `.tab-item` 改为全圆角 `var(--radius-md)`(8px), 再改为 `border-radius: 999px` 胶囊形状, 去掉 `translateY(2px)` 底部重叠
-  - 可视化按钮去掉 `<span>可视化</span>` 文字, 改为等宽高 22px 圆形按钮 (`border-radius: 50%`)
-  - 可视化按钮 hover/open 状态背景改为 `var(--color-accent)`(红) + 白色图标
-- [x] 图书馆集锦卡片横幅改为灰色、"集锦"文字增大; 双击集锦导航时不关闭侧边栏; 集锦横幅改为左上角斜45度对角标签:
-  - `LibraryCard.vue`: 水平 `collection-strip` 改为绝对定位左上角的斜45度对角标签 `.collection-corner`, 利用 `overflow: hidden` 自然裁切; "集锦"文字跟随整体旋转; 文字颜色固定白色, 背景色使用新变量 `--color-collection-corner`
-  - `ui-system.css`: 新增 `--color-collection-corner` — 暗色 `#1f1f1f`(偏暗), 亮色 `#c8c8cc`(偏灰)
 - [x] Dashboard 长期观测统计改为跨 Session 完整历史:
   - 新增用户完整消息历史查询,REST 与 gRPC 均可读取跨 Session 消息。
   - RAG 曲线改用全部历史 Session 的检索样本;Message 耗时曲线按时间铺开全部 Session 的独立 message 耗时与节点占比。
@@ -268,14 +224,6 @@
   - MD-HTML 工作流提示词明确禁止通过终端、Python 库、`get_knowledge_file_url`、`download_file` 或系统源文件路径自行解析知识库文档。
   - 强化 `read_knowledge_file`、`read_multimodal_file_info` 和 `run_terminal_command` 的工具说明, 明确文本与多模态文档的专用读取路径。
   - Agent 工具消息保留工具名, 上下文压缩时对最近的文档读取结果提高保留预算, 并移除“章节/关键词补读”这类当前工具不支持的误导性提示。
-- [x] 收窄悬浮文件资源管理器标题栏留白:
-  - 将标题栏左右内边距从 24px 档位收回到 16px 档位, 标题和关闭按钮外侧补偿从 8px 收回到 4px, 保留边距但避免距离过大.
-- [x] 调整悬浮文件资源管理器标题栏留白:
-  - `FloatingFileResourcePicker.vue` 增大标题栏左右内边距, 并给“选择文件”标题和右上角关闭按钮增加外侧间距, 避免两端贴边.
-- [x] 微调 MD-HTML 与文件资源管理器界面:
-  - 悬浮文件资源管理器标题左侧留白加大, 让“选择文件”标题向右移动.
-  - 文件资源管理器列表列名行改为不透明画布背景, 避免滚动内容透出.
-  - MD-HTML 的“原结构模式 / AI提炼模式”和高级生成勾选项统一收纳到工具栏“高级选项”下拉中, 保持顶部只显示“选择文件”“高级选项”“一键可视化”.
 - [x] 修复 MD-HTML 生成结果无法在前端 iframe 渲染:
   - `vite.config.ts` 新增 `/visualizations` 开发代理, 让 Agent 写入 `runtime/visualizations` 的 HTML 可以通过 Vite dev server 正确转发到后端静态目录.
   - 生产 CSP 新增 `frame-src 'self' http://127.0.0.1:8002 http://localhost:8002`, 避免打包环境中后端静态 HTML iframe 被 CSP 拦截.
@@ -303,10 +251,6 @@
   - `agent_config.py` 与内置 `create_task_list` 工具描述明确区分 Task List 和 Todo: Task List 仅用于当前会话内的分步执行进度,Todo 仅用于跨会话长期待办事项,并要求凡是需要分步完成的执行型任务都创建 Task List。
   - `taskList.ts` 新增任务列表更新时是否自动展开的上下文开关,让 Agent 侧边栏模式下创建或流式更新任务列表时不再自动展开抽屉,页面模式继续沿用自动展开行为。
   - `AgentPanel.vue` 在侧边栏模式手动展开任务列表时让任务列表抽屉占满侧边栏内容区,对话区收缩到 0 并禁用交互,避免只挤压一部分对话区。
-- [x] 美化: 
-  - 顶栏左边的无底图标去颜色化.
-  - 缩小Agent对话区工具条之间的距离.
-  - 将除了左侧边栏和顶栏之外的所有页面都包裹在一个阴影圆角矩形之内.其他的部分在亮色模式下则改成类似于codex的"液态玻璃".暗色模式不变.
 
 ## 2026-07-28
 - [x] 修复管理栏点击波纹遮挡文字:
@@ -316,14 +260,6 @@
   - `TopCommandBar.vue` 将知识库名称区域改为内容宽度驱动并限制区域占位,避免名称实际宽度之外的顶栏空间被占用。
   - `settings.ts` 新增本地持久化的 `sidebarDisplayMode`,外观设置新增“页面 / 侧边栏展示”开关,支持“图标栏”和“管理栏”。
   - `ActivityBar.vue` 与 `EditorWorkspace.vue` 支持管理栏模式,在图标右侧显示文字并平滑切换栏宽和文字显隐。
-- [x] 调整编辑器主界面工具栏与队列入口:
-  - 暗色主题顶栏背景统一为纯黑,并取消 Electron 主窗口最小宽高限制。
-  - `TopCommandBar.vue` 改为弹性布局,搜索框保留且不再与知识库名称或右侧图标重叠;顶栏动作按钮在窄宽度下逐步收缩或隐藏。
-  - `ActivityBar.vue` 将 Agent 图标替换为无底图标图片,并把待办入口移动到图谱按钮下方。
-  - `IngestionProgressView.vue` 在入库队列和图谱抽取队列右上角刷新按钮左侧分别新增对应动作按钮。
-- [x] 调整顶部工具栏知识库切换入口:
-  - `TopCommandBar.vue` 移除知识库名称下方的路径文字按钮,改为在知识库名称左侧显示无背景文件夹图标按钮;点击仍复用原有目录选择与知识库切换流程,悬停通过标题显示完整知识库路径.
-  - 新增 `TopCommandBar.spec.ts` 回归测试,覆盖路径不再作为左侧文字渲染、文件夹按钮保留路径悬停提示以及点击按钮触发原有切库流程.
 - [x] 重做 Agent 工具清理与工具条摘要文案:
   - 从内置工具注册与实现中删除 `get_current_utc_time`、回显文本、UUID、数学计算、JSON 解析/字段提取、文本统计、内置工具自查和 `update_exploration_state` 等冗余工具。
   - `search_knowledge` 中文名改为“全库联合搜索”,并明确 `get_knowledge_context`、`search_knowledge`、`list_knowledge_files` 在正文召回、文件名/全文搜索和目录列举之间的使用边界。
@@ -333,18 +269,6 @@
   - `KnowledgeGraphService` 在小模型只抽出实体、漏掉关系时,对同一 section 内已抽出的实体补充窄范围明示关系规则: `A像B`、`A类似B`、`A相似B` 等会写入 `related_to` 语义边。
   - 后备规则已接入单文档抽取和后台批量抽取两条路径,避免只生成“文档 mentions A/B”而没有 A-B 关联。
   - `test_knowledge_graph_service.py` 新增 `A像B` 复现测试,先确认旧逻辑 `relations_written == 0`,修复后验证写入 1 条 `related_to` 边。
-- [x] 修正 Agent 首页快捷块状态切换动画:
-  - `ChatInput.vue` 将快捷块容器与提示条列表拆成不同 Transition，快捷块在清空输入重新出现和点击块消失时保留 `translateX(-50%)` 居中定位，只叠加缩放与透明度动画，避免横向进出。
-- [x] 调整 Agent 首页快捷提示动画:
-  - `ChatInput.vue` 将快捷提示块和提示条的进入/退出动效从位移淡入淡出改为缩放淡入淡出，避免出现右进右出的观感。
-- [x] 区分快捷提示块图标颜色:
-  - `ChatInput.vue` 为探索、构建、审查、修复四个快捷提示块分别设置不同的低饱和图标色。
-- [x] 微调 Agent 首页快捷提示块排版:
-  - `ChatInput.vue` 将快捷提示块高度从 112px 增至 124px，并改为纵向 flex 布局，使单行文字固定在块底部。
-- [x] 放宽 Agent 首页快捷提示块宽度:
-  - `ChatInput.vue` 将四个快捷提示块的横向总宽从输入框宽度中解耦，独立居中显示，默认最大 920px；同时增大块高度、内边距和圆角，使其恢复为更接近初始形态的大卡片。
-- [x] 调整 Agent 首页快捷提示块形态:
-  - `ChatInput.vue` 将快捷提示恢复为有高度和内边距的卡片块，仅保留单行功能文字，并将块圆角调大到 16px。
 - [x] 调整 Agent 首页快捷提示样式与匹配行为:
   - `ChatInput.vue` 的四个快捷提示块改为单行文字、默认四列横排，窄容器下响应式堆叠或隐藏。
   - 长提示条移除边框，左侧显示对应快捷提示图标，并根据输入框当前文本做前缀匹配过滤；清空输入框时恢复四个快捷提示块。
@@ -437,7 +361,6 @@
   - 打开图书馆页不再自动展开真实文件树侧边栏。
   - 删除图书馆页顶部根"图书馆"按钮和"加入文件"按钮,图书馆操作不再依赖左侧文件树。
   - 上传文件/新增文件/新增集锦/加入网页增加显式触发函数和失败 toast,避免操作失败时静默。
-  - 图书馆工具栏和 4:3 卡片样式向文件资源管理器页面的细边框、低装饰、紧凑控件风格对齐。
 - [x] 修复图书馆页新增/上传交互:
   - Vite 开发代理新增 `/library` 转发到后端 8002,修复开发环境图书馆 API 404。
   - 删除单独"网页"按钮,网页链接合并进"新增文件"弹窗的真实内容来源。
@@ -546,9 +469,7 @@
   - workspace.ts 新增 `todoSidebarOpen` 状态,EditorWorkspace 中实现上下分割拖拽(resize)和一键切换。
   - TopCommandBar 新增 CheckSquare 待办按钮,点击后 agent 压缩到下半、待办从上半展开。
 - [x] Agent 输出中断与超时熔断: ChatInput 发送按钮在流式输出时切换为红色脉冲停止按钮(Square 图标);点击停止后 `chatStore.cancelStream()` 立即中止 fetch、刷新缓冲内容并将最后一条 assistant 消息标记为 `interrupted` 节点,中断消息和已有 Agent 输出会保留在会话上下文中;自动启动 5 分钟超时定时器,超时后自动熔断取消输出。
-- [x] Markdown 代码块明暗切换与 ActivityBar Debug/Settings 按钮次序。
 - [x] Markdown 代码块明暗切换: 为 `MarkdownContent.vue` 添加 unscoped highlight.js 主题样式,所有 hljs 类使用 CSS 变量,亮色/暗色主题跟随 `data-theme` 自动切换,无需 JS 干预。
-- [x] 调整 ActivityBar 按钮次序: 将 Debug 按钮和 Settings 按钮包裹在 `bottom-group` 容器中,两个按钮一起置底,Debug 在上、Settings 在下。
 - [x] 增加简单的右侧边栏:待办列表.
   - 待办可以勾选,可隐藏已完成的待办,可以按日期和文件名搜索待办.
   - 待办可以无日期,也可以带有终止时间,终止时间一过自动变红.
@@ -559,7 +480,6 @@
   - 让完全访问态拥有更高权限,比如杀进程.
 - [x] 在agent输入框上方右边加一个小小的上下文进度,展示当前的上下文占最大上下文百分比.
 - [x] 为markdown代码块提供明暗切换能力.
-- [x] 将Debug页面的按钮放在设置按钮的上面.
 - [x] 修复markdown预览模式显示不了嵌入的图片的问题(显示图片破碎).
 - [x] 修复agent不输出中间内容的问题.
 - [x] agent输出时,发送按钮要变成红色可暂停的状态,用户中断后停止一切输出,并且将中断的message和agent输出也要追加上下文. 并且给agent输出加上超时上限,超时自动熔断.超时上限用户可在LLM配置里面配置.
@@ -567,7 +487,7 @@
 - [x] 设置页面增加一页安全配置,可以编辑安全审核词库(每个词一个块),并同步到`resources/safety/sensitive_words.json`.
 - [x] 给软件的Ctrl+C解禁,可以直接在任何位置复制任何东西.
 ## 2026-07-23
-- [x] 修正 Markdown 编辑菜单与查找替换细节: 右键二级菜单子项加宽并固定快捷键列,避免“纯文本粘贴 Ctrl+Shift+V”文字穿模;查找替换栏改为两行圆角输入框与右侧圆角按钮组;编辑区选中文字后直接输入 `*`、反引号、`$`、`=`、`~` 等符号时会包裹选区,不再替换掉选中文本。
+- [x] 修正 Markdown 编辑菜单与查找替换细节: 编辑区选中文字后直接输入 `*`、反引号、`$`、`=`、`~` 等符号时会包裹选区,不再替换掉选中文本。
 - [x] 完善 Markdown 编辑区快捷键与查找替换: 右键二级菜单标注保存、加粗、倾斜、删除线、剪切、复制、粘贴、纯文本粘贴、全选、查找替换、撤销/反撤销等核心快捷键;编辑区内支持 Ctrl+B/I/D 快速包裹选区、Ctrl+F 打开顶部查找替换栏并支持上/下一个、单次替换和全部替换;编辑面板内支持 Ctrl+E/P/T 切换 Edit/Preview/Split,不会作用到文件树快捷键上下文。
 - [x] 语义知识图谱: 提取实体关系,形成语义图谱.
 - [x] 为agent配备终端能力,项目沙盒.
@@ -603,10 +523,6 @@
 - [x] 修复图谱抽取继续误用旧小模型配置: 当用户设置页存在 LLM 配置时,图谱抽取只使用用户配置并按“小模型为空继承大模型”解析,不再混用 `.env` 或进程配置里残留的小模型 Key/Base URL;同时当所有待抽取文档均失败时将后台进度标记为 failed,避免前端横幅误报“图谱抽取完成”。
 - [x] 修复图谱抽取模型配置回退: 图谱 LLM 抽取现在会把 `model_name` 与 `small_model_name` 一并传入调度器,小模型未配置时完整继承大模型的模型名、API Key 和 Base URL;缺少模型名或 Key 时返回明确失败信息,避免横幅显示完成但图谱状态不变。
 - [x] 文件右键菜单新增图谱抽取: 文件树和文件资源管理器共用右键菜单新增“文件抽取图谱/文件夹抽取图谱”,执行时先灌库当前路径,再只抽取该文件或文件夹范围内的 frontmatter 图谱;后端 `/knowledge/graph/rebuild` 支持可选 `path` 参数并校验目标必须位于当前知识库内,局部抽取不会清理其它文件已生成的图谱。
-- [x] 调整图谱状态颜色: 文件树和文件资源管理器中“未入图谱”状态改为使用错误红色,与已入图谱和屏蔽状态形成明确区分。
-- [x] 去除编辑器 chrome 分隔边缘: 保留顶栏与左侧活动栏的轻微灰度背景差异,移除刚添加的顶栏底边线和左侧栏右边线。
-- [x] 调整编辑器 chrome 灰度层级: 新增顶栏与左侧活动栏专用背景色变量,让顶栏相对工作区略浅、左侧栏略深,并补充细边界线以和周围区域形成更清晰的灰度区别。
-- [x] 调整未登录入口标题尺寸: 将 `UserIdGate` 的“元织”逐字浮动标题从首页级大字收敛为与知识库搜索页标题一致的 32px 字号,并同步压缩标题与登录卡片间距。
 - [x] 基础设置新增退出登录入口: 在“基础设置”页底部增加“当前身份”区域和“退出登录”按钮,点击后清空本地 user_id 并回到未登录入口,不会删除知识库或用户配置数据。
 - [x] 优化未登录用户入口: 删除 `UserIdGate` 卡片内的 `AgentService Editor` 英文标识,在卡片上方复用 `SplitText` 增加逐字浮动大标题“元织”,并丰富本地 user_id 输入卡片的说明文案、按钮状态和移动端布局。
 - [x] 准备多模型配置能力: 后端移除大/小模型名称和 Base URL 的内置默认值,模型运行时完全使用用户配置或调用方传入配置;小模型未独立配置时自动继承大模型的模型名、Base URL 和 API Key,独立配置时优先使用小模型自身字段。设置页 LLM 配置新增“已保存的配置”卡片,支持保存当前大/小模型为可复用配置、导入为大模型或小模型、删除已保存配置;同步补齐 REST/gRPC 接口与持久化表。Agent 页面将思考模式切换移动到顶栏右侧,输入框原位置改为显示当前大模型的镂空胶囊,点击可跳转到设置页 LLM 配置。
@@ -617,11 +533,8 @@
 - [x] 新增根目录 `启动.bat`: 可按端口关闭已有后端 HTTP/gRPC 和前端 Vite 服务,再分别打开新命令行窗口重启 `python main.py` 与 `npm run dev`。
 - [x] 修复 Markdown 预览图片破碎: 预览渲染前后统一将知识库相对图片路径改写为 `/knowledge/files/raw` 原始文件 URL,兼容带空格路径、HTML `<img>` 和已改写 URL;渲染后自动区分单独成段图片与夹在文字中的行内图片,分别应用整行和行内显示样式。
 - [x] 扩展 Token 统计口径: 新增非会话 LLM 调用记录入口,任务推荐和知识图谱 section 抽取的小/大模型 token 用量会进入“每次调用”和“时间刻度”图表;非会话后台调用不进入不同 session 总用量统计。
-- [x] 调整 Dashboard Token 图表默认页签: Token 卡片默认展示“时间刻度”,并将“时间刻度”按钮放在“每次调用”左侧。
 - [x] 修正 Dashboard Token 图表能力: “每次调用 / 时间刻度 / Session 总量”三类统计均支持在同区域切换柱状图与曲线图;曲线图增加同色发光面积层;后端时间刻度改为按 Asia/Shanghai 本地时间取整聚合,并在首尾有数据的刻度间补齐 0 消耗空桶。
-- [x] 修正 Dashboard Token 区域呈现方式: 撤回错误的三表格铺开布局,恢复原有 Token 卡片所在区域和 Time/Consumption 页排布; Token 卡片内部改为“每次调用 / 时间刻度 / Session 总量”三张 ECharts 图表同区域切换。
 - [x] 重构 Dashboard Token 用量统计: 新增 `agent_token_usage` 持久化表和 `TokenUsageService`, 从 assistant trace 中抽取模型调用 token 事件并支持历史消息回填; REST `/agent/token-usage` 与 gRPC `GetTokenUsage` 返回每次模型调用、固定时间刻度大小模型汇总、不同 session 总用量三类统计; 前端 Token 区域改为三张后端驱动图表, 原图表标题语义改为“每次模型调用 token 用量”。
-- [x] 去除 Agent 任务推荐加载文案: 输入框上方不再显示“正在生成下一步”, 后台仍异步生成推荐, 仅在拿到真实推荐项后渲染推荐按钮。
 - [x] 调整 Agent 任务推荐模型兜底顺序: 小模型额度不足、限流或调用异常时会自动回退到主模型重新生成推荐; 只有主模型也失败或两级模型均未产出有效推荐时, 才使用最近对话生成本地兜底推荐, 并补充 small->large 回退测试。
 - [x] 修复 Agent 任务推荐不可见的失败路径: `/agent/task-suggestions` 在小模型额度不足、限流或调用异常时不再返回 500, 而是记录 warning 并基于最近对话生成 3 条本地兜底推荐, 保证输入框推荐区可正常出现; 同步恢复任务推荐服务与测试文件中的 UTF-8 中文文案。
 - [x] 新增 Agent 任务推荐功能: 每轮 Agent 回答结束后,前端异步请求 `/agent/task-suggestions`,后端复用小模型调度器基于当前 session 历史生成 3 条下一步问题/任务;推荐挂载在输入框上方,点击后自动作为下一轮消息发送,同步补齐 gRPC `GetTaskSuggestions` 并补充服务层解析测试。
@@ -640,7 +553,6 @@
 - [x] 修正终端沙盒默认工作区边界: 终端沙盒配置读取和保存时,会把空白或旧项目根目录工作区自动迁移到当前 active 知识库目录,避免 Agent 从 `MetaWeave` 项目根越权查看知识库外的项目文件;同时终端工具条按完整终端命令分组,不再把不同命令合并成一个 `× N` 展开项。
 - [x] 修复知识图谱侧边栏折叠布局: 图谱侧边栏关闭时宽度收缩为 0,不再仅用 transform 隐藏而保留 280px 空白轨道,使画布区域在折叠后自动弹性填满剩余空间;同时接回语义图谱抽取按钮并让刷新按钮消费 loading 状态,保证组件 lint 通过。
 - [x] 修复语义图谱同名实体重复节点: 实体稳定 ID 从 `实体类型 + 名称` 改为按规范化名称归一,避免同一实体在不同文档中被模型抽成不同类型时生成多个节点;查询图谱时会兼容合并历史旧实体节点并重映射关系边,两个文档共享“原神”等同名实体时前端只显示一个实体节点。
-- [x] 调整知识图谱节点视觉: Canvas 图谱节点默认不再使用背景色描边,避免语义实体球出现白色/黑色边缘;暗色主题下节点会按自身颜色绘制一层微弱光晕,悬停和选中态仍保留更强的同色强调效果。
 - [x] 修复 Agent 工具条偶发一直转圈: 工具调用结束事件会按实际 merge key 关闭 pending 状态,并在 start/end 摘要键不一致时按工具名清理旧的 pending 记录,避免终端命令已完成但卡片仍显示加载中;文件树新增刷新按钮,文件资源管理器刷新按钮接入 loading/disabled 状态,可重新读取当前知识库文件列表或最近删除列表。
 - [x] 新增 Agent 权限分层: 输入框联网搜索按钮右侧新增权限按钮,支持只读、沙盒、完全访问三档并随每轮请求传递到 REST/gRPC/ToolRuntime;只读模式允许终端内部读取指令全目录读取但禁止外部程序和知识库写类工具,沙盒模式保持知识库/终端工作区边界,完全访问放宽终端路径边界但继续保留结构化命令和危险参数拦截。
 - [x] 补齐权限分层测试与全量验证: 新增终端权限和内置文件写工具只读拒绝测试,同步 ChatInput 权限菜单测试;修复全量测试中暴露的 gRPC 生成文件包内 import、RAG debug mock 兼容、图谱删除 mock 兼容、前端 unused 和 type-check 类型收窄问题。
@@ -653,55 +565,33 @@
 - [x] 合并灌库历史与图谱历史: 入库历史页将 `ingestionHistory` 与 `graphHistory` 按完成时间合并排序并统一展示,新增"来源"列通过圆角标签区分"灌库/图谱",顶部增加全部/灌库/图谱筛选按钮;清除历史同时清除两种历史记录。
 - [x] 修复语义知识图谱 LLM 抽取流程：打通知识图谱重建流程，后端新增异步后台抽取、进度追踪与轮询接口，前端 GraphPane 接入重建按钮、进度条与自动轮询。
 - [x] 修复小模型 API Key 缺失导致的 LLM 抽取逐一失败与熔断问题：新增 `_build_llm_config` 自动降级至主模型配置，前置检查 key 有效性并给出清晰进度提示。
-- [x] 移除 GraphPane 底部状态栏（"点击节点在编辑器中打开"等提示），重建进度完成状态改为复用进度条区域显示。
-- [x] 语义图谱实体节点标签改为显示 `entity_type: entity_name` 格式，避免与文件树节点混淆。
 
 ## 2026-07-19
 - [x] 恢复 Agent 流式中间消息展示: Chat 模式不再跨 assistant 节点合并消息, 仅合并同一节点的连续片段; 中间节点内容照常输出, 复制/赞踩按钮和来源仍由“正在思考”状态与最终回答节点单独控制.
 - [x] 修正 Agent 思考态按钮与来源隔离: 以全局“正在思考”状态作为唯一显示门禁, 流式输出期间所有 assistant 消息都不显示复制/赞踩按钮和来源; 流结束后每条最终回答只读取自身 metadata 中固化的 citation map, 不再从全局当前来源兜底到最后一条消息.
 - [x] 修正 Agent 轨迹与聊天最终态挂载: Agent 轨迹空态移除虚线框; Chat 模式用户/Agent 气泡边框、背景与发光改为全局主题色派生; 来源与复制/赞踩按钮只挂到最终回答节点, 流式结束时将累计 citation map 合并进最后一条最终 assistant 消息.
-- [x] 收紧 Debug 与 Agent 聊天完成态 UI: 记忆与知识页四个空态表格移除矩形虚线框; 工具注册表搜索占位字号缩小并移除选中工具左侧竖色条; Agent 复制/赞踩按钮和知识来源只在最终 assistant 内容完成后显示, 流式思考与中间消息不再携带来源.
-- [x] 增强多模态入库观测展开动效: 文件列表行按资源管理器列表节奏渐入展开; 语义切块与重叠切片卡片新增可折叠箭头, 正文区域支持平滑关闭与展开.
-- [x] 微调多模态入库观测抽屉动画: 移除右侧栏阴影, 将文件列表收缩改为与右侧抽屉同速的横向过渡, 避免侧栏展开时表格宽度瞬移.
+- [x] 收紧 Debug 与 Agent 聊天完成态 UI: Agent 复制/赞踩按钮和知识来源只在最终 assistant 内容完成后显示, 流式思考与中间消息不再携带来源.
 - [x] 细化 Debug 多模态入库观测交互: 观测文件列表补齐回退、反回退、上级、索引状态、排序和刷新按钮; 右侧观测栏改为可关闭的平移抽屉; 统计数字增加圆角矩形边框, 语义切块与重叠切片卡片不再被高度压缩并可滚动浏览.
 - [x] 调整 Debug 多模态入库观测面板: 修复开发模式下观测接口误读 Vite HTML 导致的 JSON 解析失败, 面板改为无外层包框的文件列表与右侧抽屉式观测栏, 并清理组件内损坏的中文模板文本.
-- [x] 去除 Agent 页面与侧边栏上下渐变: Agent 独立页面、AgentPanel page 模式、顶部栏、左侧 ActivityBar 和 Agent 会话抽屉统一改为纯黑/纯白背景,移除 page 抽屉背景 blur.
 - [x] 新增 Debug 多模态入库观测面板: 在 Agent 轨迹右侧新增“多模态入库”页签,以文件资源管理器列表模式选择文件,双击后左右分屏展示 Json 结构化结果、语义切块和重叠切片;后端新增无副作用 Debug 接口,使用临时 frontmatter 目录生成观测数据且不写入向量库.
 - [x] 文件树与文件资源管理器接入 Material 文件图标: 新增 `material-icon-theme` 依赖,复用其完整 VS Code 图标主题映射,按文件名、复合后缀、普通后缀和目录名解析 SVG 图标,列表/内容/图标视图及最近删除页统一显示 Material 图标.
-- [x] 调整知识图谱 hover 高亮动效: 鼠标悬浮或拖拽节点时,中心节点先渐变发光,随后高亮从中心沿相邻边匀速扩散,最后相邻节点渐变发光;选中态仍保持即时高亮,不影响图谱布局和数据模型.
 - [x] 修正入库历史切片数记录: 历史行优先使用逐文件入库完成事件的 `file_chunks_created`,不再把整批总切片数或批次级“已生成 N 个切片”消息复制到每个文件;旧的错误批次历史会在前端加载时清洗掉错误切片摘要.
 - [x] 修正 header 灌库进度条语义: 进度条改为当前计划入库队列中已完成文件数/计划文件总数,不再使用 frontmatter 或单文件阶段 processed/total 计算,避免进度从高数值回退到低数值.
 - [x] 入库状态列接入逐文件进度刷新: 前端根据 SSE 入库事件局部更新文件树节点 `indexStatus`,队列中的文件会实时从 dirty/failed 切到 indexing/indexed/ignored/failed,已入库且不在队列中的文件不会因全库扫描事件闪烁.
 - [x] 优化不支持格式文件入库检测: 支持白名单内格式继续走原解析器;白名单外文件先做二进制采样检测,非二进制按普通文本生成 frontmatter 并入库,二进制文件跳过且在文件树中标记为 ignored.
 - [x] 新增知识库项目回收站: 删除文件/文件夹时先清理来源切片与 frontmatter,再移动到按用户和知识库隔离的 `runtime/trash` 回收站并记录原路径、删除时间和 90 天过期时间;新增最近删除列表、恢复与彻底删除接口,文件资源管理器加入“最近删除”页面.
-- [x] 调整亮色模式 Debug/观测页底色: 记忆与知识卡片、工具注册表、API 表格与 schema 展开区域不再使用灰色 `--color-bg-primary` 或透明白叠加,统一切换为亮色下纯白的 `--color-surface-raised`.
 - [x] 提升灌库进度粒度: 后端 frontmatter 与向量入库阶段通过 SSE 逐文件返回 `phase/status/path/processed/total` 等进度事件,目录灌库按整目录总文件数计算进度;前端入库队列按后端 path 精确切换正在/等待/出队,header 灌库进度条同步使用后端 processed/total.
 - [x] 新增可视化入库进度页: 左侧活动栏第三项加入“入库进度”,页面内提供入库队列与入库历史两个子页、刷新按钮和历史清空;队列以文件资源管理器列表模式展示正在/等待灌库的文件且不显示入库日期,灌库流程状态写入前端持久化历史并配备行入队/出队动效.
-- [x] 微调编辑区当前文件标签位置: 标签整体下移 2px,让标签下沿与编辑区上边界重合.
-- [x] 简化编辑区打开文件坞: 顶部只显示当前打开文件标签,隐藏其他已打开文件标签;当前文件标签与编辑区外壳合并为连续圆角边框,内部编辑/预览组件去除重复外框.
-- [x] Agent 会话侧边栏选中态接入柔和主题色: 会话抽屉 hover/active 状态改用 `--color-primary-softer` 与 `--color-primary-soft`,移除 page 模式固定 rgba 紫色/白色背景.
-- [x] 补齐 Debug API 表格圆角: 在不恢复外层框的前提下,为 API 表头、底行与展开详情补 8px 圆角并裁剪滚动容器.
-- [x] 调整 Debug API 页表格呈现: 移除表格外层圆角框,API 列表直接以表格形式铺开,表头改为 sticky 固定不随内容滚动.
-- [x] 重构 Debug 工具注册表与 API 页视觉: 移除工具注册表旧 macOS 红绿灯外壳,API 页去掉旧内嵌标题栏,统一为外部标题/工具条加 8px 圆角内容面板,按钮与协议切换接入系统主题色.
 - [x] 将 Agent 轨迹与记忆与知识从 Dashboard 迁入 Debug: Debug 子页前两页改为 Agent 轨迹、记忆与知识并保留历史加载逻辑;Dashboard 收敛为时间与消耗页.
 - [x] 重构记忆与知识页布局: 知识库召回移到左侧,长期记忆召回缩到右上;右下新增长期规则注入与长期记忆注入卡片,复用设置页系统提示/长期记忆接口并支持增删,补齐响应式布局.
-- [x] 调整观测页信息架构: 顶部 Agent 轨迹/时间与消耗/记忆与知识切换接入系统主题色;原记忆与知识页更名为时间与消耗并保留 RAG、Token、耗时,长期记忆召回与知识库召回迁入新的记忆与知识页.
 - [x] 可视化入库: 含有入库队列子页,实时读取文件灌库队列,并实时展示正在灌库的和等待灌库的,配备有入队和出队动效.(视觉表现不是队列而是文件页面).
 - [x] 删除的文件不应该直接删除,而是应该进入项目内回收站,记录原始路径,保留删除逻辑(先删除来源于此文档的切片然后再移动到回收站).用户可以在内置的文件资源管理器新的一个"最近删除"页面查看他们,3个月后彻底清除,3个月内可以恢复,用户可手动彻底删除.
 - [x] 优化不支持格式文件的入库检测: 如果是不支持的格式,检测是不是二进制,如果不是二进制则按普通文本入库,二进制忽略.
 - [x] 增加多模态文档的 Json结构化结果观测-语义切块观测-重叠切片观测 全流程观测面板: 初始状态和列表模式文件资源管理器一模一样,但是不同的一点在于文件双击后的效果不是跳转到编辑区,而是自动进行左右分屏,左边是文件列表,右边是观测区,观测区可以切换三页,分别是- Json结构化结果-语义切块-重叠切片.
 - [x] 为文件树增加Material图标显示,根据不同的后缀名选择不同图标.
-- [x] 图谱样式调整: 从常态到鼠标悬浮或抓住某个节点的过程之间发光的节点和边应该要有一个从常态到发光的渐变动画过程,具体表现是被悬浮的节点渐变发光,然后光泽从这个节点出发,沿着相邻的边逐渐匀速扩散,最终将相邻的节点都渐变的发光.
 - [x] 修复markdown模式点击`[执行摘要](#执行摘要)`这种跳转链接时会打开新窗口的问题.
 ## 2026-07-18
-- [x] 修正 Token 用量累计块高度: 统计块对齐上下文拼装统计行的 58px 最小高度、圆角和左右数字布局,避免卡片内部高度塌陷或挤压图表.
 - [x] 修复记忆与知识页图表高度链断裂: 共享卡片外壳改为 flex surface,恢复 RAG 三率曲线图与 Token 图表渲染;切换按钮统一接入系统主题色,Token 累计块改为圆角左文右数并强调数字.
-- [x] 重构记忆与知识页视觉外壳: RAG 指标、Token 用量、长期记忆召回、知识库召回与耗时卡片移除红绿灯标题栏,统一为外部标题加 8px 圆角内容面板,保留原有数据与交互.
-- [x] 去除语言轨迹思考过程外框: 精确覆盖 `ThinkingSteps` 的 `.thinking-panel` 边框及内部步骤分隔线,让思考过程直接融入语言轨迹外壳.
-- [x] 细调 Agent 轨迹视觉: 上下文统计块加高;思考模式胶囊移入语言轨迹外壳右上;移除语言轨迹会话/轨迹步数摘要;压平思考过程内部圆角边框.
-- [x] 调整 Agent 轨迹页视觉: 语言轨迹/上下文拼装去除红绿灯顶栏,标题移到圆角外壳左上;思考模式改为胶囊,上下文统计改为左文右数且数字接入主题强调色.
-- [x] 简化 Agent 轨迹页: 删除状态转移图、队列任务、节点执行、工具轨迹与观察决策 UI,改为左侧语言轨迹、右侧上下文拼装;语言轨迹头部显示当前思考模式.
-- [x] 修正 API schema 展示形态: 移除扁平路径表展示,后端改传 schema tree,前端用可展开 object/array/message 树逐层展示字段.
 - [x] 增强 API 调试页结构展示: API 外壳改为随工作区伸缩滚动;REST/gRPC 展开详情可完整列出 object、array、嵌套字段、必填、默认值、枚举与消息字段信息.
 - [x] 增强调试页 API 详情: API 页拆分 REST/gRPC 子页,每个接口可点击展开;REST 详情来自 OpenAPI 参数、请求体与响应定义,gRPC 详情来自 protobuf descriptor 的消息字段与流式标志,并移除旧端口展示接口.
 - [x] 调试页 API 展示改为真实接口清单: 后端新增 `/debug/runtime-apis` 统一返回 FastAPI REST 路由与 proto gRPC 方法,前端按 REST/gRPC 分组渲染接口.
@@ -709,12 +599,9 @@
 - [x] 修复调试页 API 端口加载: 开发模式下端口接口命中前端 HTML 时自动回退到后端 `127.0.0.1:8002`,避免 JSON 解析失败.
 - [x] 新增调试页: 左侧活动栏加入 Debug 入口,调试页内承载工具注册表与后端运行时 API 端口列表;工具注册表从 Agent 观测页移出.
 - [x] 更新桌面应用图标: 将 `docs/assets/无底图标.png` 转换为多尺寸 `editor/src/assets/icons/app.ico`,并接入 Electron `BrowserWindow` 与 PyInstaller `AgentService.spec` 图标配置.
-- [x] 文件树选中条目接入柔和主题色: 移除 `TreeNode.vue` 选中态/拖拽态蓝紫 rgba 硬编码,改用 `--color-primary-soft`、`--color-primary-softer` 与主色派生边框.
-- [x] 知识图谱 Markdown 节点接入主题主色: 移除 md/markdown 节点 `#4224eb` 硬编码,图谱网格接入柔和主题色,主题色预览/保存时主动通知 canvas 重绘.
 - [x] 修复自定义主题色预览不可见的问题: 调色板输入改为显式读取最新颜色后实时预览,自定义色同步覆盖 `--color-blue`,并移除 Agent 面板对蓝紫气泡/hover 颜色的局部硬编码遮蔽.
 - [x] 外观主题色调色板改为拖动实时预览并新增“保存主题色”按钮: 调色时只写 CSS 变量预览,点击保存后再持久化到后端与本地 profile.
 - [x] 外观设置新增自定义主题色: 支持配置主主题色与柔和主题色,通过调色板写入 `--color-primary`/`--color-primary-soft` 等全局变量,并持久化到 `user_settings` 的外观配置接口.
-- [x] 将“索引状态”显示开关从外观页迁移到“记忆与指令”页,保持原 `settingsStore.setShowIndexColumn` 持久化逻辑不变.
 - [x] 设置页新增第二位“外观”页面: 将主题切换、界面/文字字体家族管理和索引状态显示开关从基础设置迁移到外观页,基础设置保留知识库与灌库相关配置.
 - [x] 移除 Edit 模式字体后缀白名单: `CodeEditor` 不再按文件格式判断字体,所有进入 Edit 模式的内容统一使用文字字体变量,不支持格式默认按文本场景受全局文字字体控制.
 - [x] 补齐编辑区非 Markdown 文本与不支持格式提示的字体切换: PDF/DOCX/HTML/OCR 提取文本在 Edit 模式使用文字字体,多模态预览的表格内容使用文字字体,不支持格式提示和编辑区 tab/模式按钮使用界面字体.
@@ -732,7 +619,6 @@
   - 工具注册表页面,把agent观测页里面的工具注册表直接搬过来,原来的页面删掉.
   - API端口展示页面(需要是后端真实传来的实际所有端口),包括REST端口和gRPC端口两种.
 ## 2026-07-17
-- [x] 暗色模式下编辑区底色改为彻底黑色: `--color-surface-raised` 从 `#202026` 改为 `#000000`，使编辑区与周围 chrome 背景一致。
 - [x] 修复 markdown 预览中嵌入图片破碎的问题: 改用 Vditor 渲染后的 DOM 遍历修复图片 URL（相对路径重写为 `/knowledge/files/raw` 端点），替换了原先的 markdown 文本级替换方案。
 - [x] 编辑模式改为纯文本: 移除 VditorEditor（WYSIWYG），markdown 在 edit/split 模式下统一用 CodeEditor 纯 textarea，preview 模式仍用 Vditor 完整渲染。
 - [x] 文件树展开/折叠修复和动画: `handleSelect` 增加 `toggleDirectory()` 调用；`ChevronRight` 旋转动画（200ms ease）；子列表用 `<Transition>` + JS 高度测量实现高度动态动画。
@@ -781,7 +667,6 @@
   - [x] Agent回复的文档名也要渲染成蓝色,可点击跳转.这可能要求Agent回复的文件名必须要含有全路径,而不能仅仅是一个单纯的文件名.
   - [x] 联网搜索也要溯源,将联网搜索的结果(url来源,也应该是被使用的,而不是所有都放进去)也放在气泡下面,联网的行内索引则使用[N1],[N2]这种来表示,点击后用默认浏览器打开此网页.
 - [x] 增加"上传"功能,可以拖拽到智能体页面并上传文件,上传文件会保存在`runtime/uploads/{user_id}/{library}/{session_id}/`文件夹里面.
-- [x] 美化Agent思考过程UI.
 ## 2026-07-14
 - 调整知识库灌库前端超时与进度条: `apiPost` 支持单请求 `timeoutMs`,全库/目录/单文件灌库请求超时放宽到 10 分钟,避免 OCR 长任务被 30 秒 Abort;灌库进度条改为等待期间缓慢推进到 86%-88%,完成后再跳到 100%,不再固定瞬跳 44%/92%。
 - 修复 PaddleOCR Windows CPU 推理异常被误判为“无文字”的问题: 图片 OCR 推理异常现在记录 warning 并返回 `engine_unavailable`;启动预热和图片 OCR 延迟导入 PaddleOCR 前默认设置 `PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT=False`,规避部分 PP-OCRv5 模型在 oneDNN/MKLDNN 路径下的 `ConvertPirAttribute2RuntimeAttribute` 异常。
@@ -796,14 +681,13 @@
     - [y] 知识库的图谱,展示各文档之间展示的隐藏联系.和文件树图谱展示方式有点不同,不同的节点之间可以孤立存在,相互吸引而相互排斥,点云看起来像圆形,像obsidian图谱一样.
       - 完成方法: 不使用Neo4j(需要docker容器装着服务),直接使用SQLite建表(节点表+边表).
       - 在多模态文档转化为Json之后,分成两路:一路是灌库流程,一路则是"实体关系解析"流程:调用小模型,从知识库文档（frontmatter JSON 里的 sections）中抽取实体和关系(排队抽取),存储到专门的知识图谱表,然后送到前端进行D3可视化.
-    
+
 ## 2026-07-13
 - 修正图片 OCR 状态语义: 当缺少 OCR 依赖或模型导致 OCR 引擎不可用时,图片 frontmatter/preview 返回 `ocr_status=engine_unavailable`,不再误标为 `no_text`,便于区分“确实无文字”和“OCR 没跑起来”。
 - 接入普通图片 OCR 基础链路: 新增 `ImageOcrService` 按用户 OCR 开关、模型目录、语言、置信度和超时配置识别图片文字;图片预览接口返回 OCR 文本、状态、词数和平均置信度;图片入库在识别到文字/表格文本时生成语义章节,无文字时不生成向量语义内容;editor 对有 OCR 文本的图片在 Edit/Split 显示只读识别文本,Preview 显示原图,无文字图片锁定为 Preview。
 - 增强非扫描型 PDF 处理: 新增 PyMuPDF 文本层提取工具,PDF 预览接口会返回提取到的正文、页数、图片数和基础表格数;多模态 cleaner 入库时优先使用 PDF 文本层,扫描型 PDF 继续标记为待 OCR;editor 打开有文本层的 PDF 时 Edit 显示只读提取文本,Preview/Split 继续使用浏览器内置 PDF 预览。
 - 新增 OCR 默认关闭与重启生效基础设施: 用户知识库灌库设置增加 `ocr_enabled`,保存变更返回 `restart_required`;服务启动后若发现已有用户开启 OCR,会检查并预热 OCR 模型;frontmatter 写入 `ocr_enabled` 元数据,文件树在 OCR 开启后会把图片/PDF/含内嵌 media 的 Office 旧索引标记为需重灌。
 - 隐藏 Agent 聊天区中的内部规划/审视硬编码状态文案: 后端 planner/agent/observation trace 标记为 `chat_visible: false`,工具结束 trace 标记为 `chat_visible: true`;editor/console 的 chat/tool 思考展示只渲染工具结果或显式可见 trace,避免“正在更新探索策略”“模型正在决策下一步”“正在审视工具结果”“已找到...”等内部状态句反复出现在工具模式输出中。
-- 重做 editor Agent 输入框右下角的思考模式选择下拉栏: `ChatInput.vue` 去掉原生 `select/option`,改为组件内自定义 dropdown trigger 与菜单项,保留 `set-agent-mode` 事件契约并显式控制暗色模式下文字、背景、hover 和选中态颜色。
 - 彻底移除 Agent tool 模式首尾异常出现的 `ASSISTANT` 兜底气泡: tool 气泡不再渲染任何非 user/assistant 可见消息和 role 标签,chat 气泡也隐藏 `node=assistant` 的节点标签;思考过程开关改为原生 `details/summary` 下拉栏,保留自定义灰色控制条样式并隐藏浏览器默认 marker。
 - 修复 tool 模式中无可见内容的 assistant 被兜底渲染成虚线 system 气泡的问题;美化 chat 模式思考过程折叠栏,改为紧凑灰色控制条并使用固定中性灰文字,避免暗色模式下文字发白。
 - 修复 Agent 聊天区流式过程中空气泡和虚空间距: chat 模式下只有思考 trace 时不再额外渲染空 assistant 气泡,仅显示思考过程;tool 模式下无内容的非 action 节点改为显示紧凑状态行,没有任何可见内容时整行不渲染;action 工具行只有存在工具 start/end trace 时才占位,避免每一步思考产生空白换行。
@@ -871,7 +755,6 @@
 - 调整文件树入库状态展示与屏蔽规则保存行为: 入库状态从小圆点改为明确图标,已入库显示绿色勾选、未入库显示红色提示、屏蔽显示灰色禁止; 保存屏蔽区规则时立即按新规则清理 active 知识库中已被屏蔽文件的 frontmatter 和向量切片,并刷新文件树状态。
 - 文件树右键菜单新增“屏蔽此文件/屏蔽此文件夹”: 点击后自动把文件相对路径或文件夹目录规则追加到知识库屏蔽区文本中,去重保存并刷新文件树,复用已有屏蔽清理流程删除对应入库切片。
 - 文件树右键菜单补齐反屏蔽: 已屏蔽节点显示“取消屏蔽此文件/文件夹”,若存在精确屏蔽规则则删除该规则,若是被父目录或通配符命中则追加 `!path` / `!path/` 反规则,保存后刷新文件树状态。
-- 优化文件树状态区布局: 将未保存红点和入库状态图标合并到独立的右侧状态簇,通过固定双列间距和细分隔线区分编辑保存状态与索引状态,避免二者看起来处于同一列或互相冲突。
 - 修复文件树复制到外部资源管理器无粘贴内容的问题: Electron 43 没有稳定的 `clipboard.writeFiles/readFiles` API,主进程改为在 Windows 下通过系统剪贴板 `FileDropList` 写入真实文件列表和 `Preferred DropEffect`,让资源管理器右键菜单能识别“粘贴”。
 - 覆盖策略先删旧文件再复制: 在 `importFilesToPath`、`importExternalPathsToPath` 和 `pasteExternalClipboardPaths` 中,策略为 `overwrite` 时先调用 `deleteKnowledgePath` 触发后端向量库切片清理,再写入新文件。避免旧文件的向量切片残留。
 - 修复主动灌库状态反馈: header `Ingest` 和单文件灌库完成后会重新拉取文件树状态; 不支持或被屏蔽的文件按 skipped 处理,不再显示 `File Indexing failed`; header 灌库进度改为红色细长胶囊,展示百分比、成功/总数和失败数,仅在主动灌库期间显示并在完成 1 秒后隐藏。
@@ -879,8 +762,6 @@
 
 ## 2026-07-11
 - 新增验收 Git 历史重建方案与脚本: `docs/Git验收历史重建方案.md` 说明如何从当前最终快照生成干净的功能分块提交历史,`scripts/rebuild_acceptance_history.ps1` 会创建备份分支和临时 worktree,按四位成员职责拆分 commit,用于验收前整理 main 分支历史。
-- 细化独立 Agent 页侧边栏交互: `New Chat` 胶囊内容居中,对话模式切换移到右侧圆形图标按钮并提供悬停提示,折叠侧栏图标替换为更轻量的左栏图标;光弦背景、Agent 页底色和页面模式会话侧边栏补齐亮/暗主题适配。
-- 调整独立 Agent 页 UI: 页面模式移除内部矩形外框和顶部对话 titlebar,将新建对话与对话模式切换迁入会话侧边栏;侧边栏默认展开、可关闭,关闭后左侧 hover 热区可重新打开;会话侧边栏按 DeepSeek 风格重构为顶部 AI 标识/折叠按钮、胶囊新对话按钮、历史列表和底部用户 ID。
 - 新增独立 Agent 页: 左侧 ActivityBar 的 Agent 入口改为打开主工作区 Agent 页面,该页面保留 header 和左侧栏但折叠文件树与右侧 Agent 栏;复用 `AgentPanel` 的聊天主体、输入框和会话抽屉,侧边栏新增扩展按钮可切到页面模式;页面背景新增 supercomponents 光弦动态背景,并在页面模式下将对话区域限制到约屏幕宽度三分之一。
 - 完成图谱/多模态入库小功能: 图谱右上角新增文字显示切换按钮,可切到仅 hover 节点时显示节点名;Agent 新增 `read_multimodal_file_info` 工具,可读取已灌库文件对应的 frontmatter JSON 并返回模态、元数据和章节预览;editor header 在上传新文件和手动刷新灌库时显示细进度条。
 - 修复 PDF 预览触发系统下载目录的问题: `/knowledge/files/raw` 返回 `FileResponse` 时显式设置 `Content-Disposition: inline`,避免 Electron/Chromium 将 iframe 内 PDF 当附件下载。
@@ -894,7 +775,6 @@
 - 补全 README 中空置的多模态文件入库流程图: 用 Mermaid 描述 active library 扫描、按文件类型清洗、统一 StructuredKnowledgeDocument.sections、写入 runtime/frontmatter、语义切块、Embedding、knowledge_chunk 入库和 Agent RAG 召回的完整链路。
 - 完善 editor 文件树便携文件操作: 新增文件树多选状态与 Shift 连续选择、Ctrl/Meta 离散选择,支持对多选文件/文件夹批量 Ctrl+C/Ctrl+X/Ctrl+V;文件树节点支持内部拖拽移动到文件夹或根目录;Electron 剪贴板桥接新增读取系统文件剪贴板与外部文件复制/剪切导入能力,使资源管理器复制/剪切文件后点击文件树 Ctrl+V 可落入当前知识库目标目录。
 - 新增多模态知识源清洗第一版: 增加 `MultimodalDocumentCleaner`,支持 JSON/JSONL/CSV/TSV/HTML/XML/DOCX/XLSX/PPTX/PDF/图片等文件先清洗为统一 `StructuredKnowledgeDocument.sections`,并接入 `FrontmatterBootstrapService`;默认知识库后缀白名单扩展到常见文档、表格、演示、网页、结构化数据和图片/PDF 资产,后续灌库函数继续统一消费 frontmatter JSON。
-- 调整观测面板 UI: 工具注册表页改为单个红绿灯小圆角无阴影卡片,搜索框移动到标题右侧并使用胶囊形态,统计数字合入标题栏;记忆与知识页统一去除内部卡片阴影。
 - 修复工具注册表 fallback 直连后端时触发 CORS 预检失败: 前端 fallback 改为无自定义 header 的简单 GET,后端 `/agent/tools` GET/OPTIONS 返回 CORS 允许头,避免 `OPTIONS /agent/tools 405` 导致 `Failed to fetch`。
 - 修复工具注册表观测页在部分前端运行环境中请求到 `index.html` 的问题: `fetchAgentTools()` 在相对路径返回 HTML/JSON 解析失败时自动回退到 `http://127.0.0.1:8002/agent/tools`,避免出现 `Unexpected token '<'` 后无法刷新显示。
 - 在 Agent 观测面板新增“工具注册表”页: 后端从 AgentCore 最终工具注册表导出 `/agent/tools` 与 gRPC `GetRegisteredTools`,前端新增工具清单/详情双栏视图,可查看工具名称、说明、参数 schema 和注册数量统计。
@@ -907,7 +787,6 @@
 - 修复安全输出审核节点误杀正常内容问题: politics 分类下的 regex `(台|藏|疆|港).*(独|独立)` 使用 `.*` 跨任意距离匹配，导致包含"港+独"（如"璃月港……独特"）的正常段落被拦截。改为 exact 精确匹配"台湾独立"等具体短语。violence 分类同理: `(获取).*(武器)` 会拦截游戏讨论中"获取武器"等正常表述，改为 exact 匹配"购买武器"等明确违规短语。
 - 图谱暗色模式背景新增点阵效果: 新建 `editor/src/supercomponents/DotGridBackground.vue` 可复用点阵 SVG 组件，暗色模式下图谱 Canvas 背景为透明，点阵通过 CSS 层渲染在 Canvas 下方，亮色模式网格背景保持不变。
 - 修复 editor header 设置图标点按后白屏: `TopCommandBar.vue` 设置按钮原本使用 `<RouterLink to="/settings">`，但路由表中只有 `/` 一条路由，Vue Router 无法匹配导致白屏。改为 `<button>` emit `openSettings` 事件，由 `EditorWorkspace.vue` 通过 `workspaceStore.setMainView('settings')` 切换视图；同步修复 `CommandPalette.vue` 中 `router.push('/settings')` 同一问题，改为 `workspaceStore.setMainView('settings')`。
-- 美化设置页所有输入框、按钮和勾选框样式: `SettingsView.vue` 所有 `border-radius: 0` 改为 `border-radius: 999px` 胶囊形，原始终复选框改为自定义 pill toggle 开关；主题按钮激活态配色按开发规范使用主色蓝宝石 #4224EB 与点缀色 #EB2463，跟随系统按钮使用左红右蓝渐变。
 - 新增编辑区文本选择工具栏: 新建 `SelectionToolbar.vue` 浮动工具栏，选中文本后出现，提供复制/剪切/粘贴/提问四个按钮。点击"提问"将选中文本作为引用发送到 Agent 对话区，在输入框上方显示灰色引用条。
 - 后端新增引用文本上下文注入: `context_builder.py` 的 `build_messages()` 增加 `reference` 参数，注入为 `SystemMessage` 告知模型用户引用的内容；`agent_core.py` 的 `stream_session_prompt()` 和 REST `/agent/stream` 端点同步透传该参数。
 - 前端引用流: `ChatInput.vue` 新增 `reference` prop 和引用条显示；`AgentPanel.vue` 监听 `workspaceStore.pendingAgentReference`，消费后打开 Agent 侧栏并将引用文本传给 ChatInput 和 chatStore；`chat.ts` 的 `send()` 增加 `reference` 参数透传到 API；`agent.ts` 的 `streamPrompt()` 增加 `reference` 参数。
@@ -943,7 +822,6 @@
 - [x] 文件复制到文件树:可以拖拽到文件树或者文件树的一个文件夹,并复制进去.
 - [x] 解决文件复制失败的问题: 任何文件都可以复制,但是只有规定的类型的文件才会灌库,类型可以写在全局常量里面且可以配置.
 - [x] 将console的所有内容都搬运到editor中,弃用console这个前端.
-- [x] 为从console搬过来的这些agent观测条目的滚动条都配备明暗切换.
 - [x] 修复agent工具的别名不能正确的在前端agent对话区出现的问题.
 - [x] 为文件树上面加一个搜索框:
   - 可以进行 文件名部分匹配搜索+文件内容部分匹配搜索+文件内容语义搜索(RAG) 大搜特搜.
@@ -979,50 +857,24 @@
   - [x] 知识库文件API: 针对本地知识库文件的增删改查,以及对于文件夹以及批量文件操作的api.
   - [x] 文件监听: watchdog监听文件的实时变化,实时通知前端并刷新文件树,用户切换根目录时重启监听.
 - [x] 编辑器的Edit模式不知为何会在右半边显示预览,而且固定是Agent architecture;Preview模式也有问题,不知为何预览只在左半边出现,而且也是Agent architecture;Split模式和Edit模式一样,但是预览也是这东西.应该修正这些,每个模式有每个模式的不同功能.
-- [x] 编辑区的已打开文件横条里面,关闭的叉出现在了文件长度结束的右边,但是需求是把叉固定的放在每个已打开文件条的右边.文件名不用动,不要把文件名居中了.
 - [x] "重命名"的快捷键可以是Ctrl+M,包括对文件夹的重命名和对文件的重命名.
-- [x] 右键菜单应该像Pycharm一样在每个条目的右边加上操作,比如"新建 (Ctrl+N)".
 - [x] 复制路径这个功能不要了,变成三个: 复制文件名,复制绝对路径,复制相对于知识库的路径.
-- [x] 知识库路径那一块应该分两行,第一行放知识库名(用户可编辑),第二行用较浅的一行写完整的绝对路径;
-- [x] 切换知识库的按钮,以及右边两个按钮,图标都太小了,放大一些.
-- [x] 根据开发规范,进行样式调整;
-  - Edit/Preview/Split三切换toggle,被选中的一个的圆角矩形应该为蓝色.切换时应该有平滑过渡动画.
-  - header上的右侧按钮之中,console的底色应该换为蓝色,文字和图标换成白色.
 - [x] 在编辑文件时,当焦点在编辑器内Ctrl+S的时候应该保存,而不是在文件树里面保存.
-- [x] 已打开的文件列表的文件名较长的情况下可以用...隐藏,不要搞得文件名和叉子重叠了,或者甚至是冲出框子之外.
-- [x] 右键菜单中,复制和剪切和粘贴没有写快捷键.
-- [x] 已打开的文件的文件名居中了,应该像原来一样靠左.
-- [x] 已打开的文件列表无论打开多少文件,每个文件的宽度是固定的,不应该缩小.
-- [x] 干脆去掉editor toolbar按钮吧.
 - [x] 已修改但是未保存的文件还应该在文件树的右边也显示红点;且当用户退出而未保存时,应该先冒一个提示框提问要不要保存所有.
-- [x] 多选文件按钮右边那个像指纹一样的图标是干什么的,何意味,删掉.
 - [x] "复制"对应的是复制文件,而不是复制文件名,应该是说复制了之后可以在真正的文件资源管理器里面粘贴,也可以在文件树的根目录和任何文件夹里面真正的粘贴.
-- 美化 editor Agent 对话区: 移除标题栏左侧红绿灯,将 sessions 抽屉切换按钮移至该位置; 无对话时显示居中欢迎屏("MetaWeave"大字 + "在知识库XXX中有什么问题?"小字),输入框居中,发送消息后输入框平滑沉到底部; 气泡配色改为用户红色(#EB2463)发光、Agent蓝色(#4224EB)发光,明暗主题下发光亮度不同; 面板背景改为与编辑区一致的纯白/纯黑(var(--color-canvas-soft))。
-- 编辑 `AgentPanel.vue`: 新增 `hasMessages`/`knowledgeTitle`/`isDark` computed,模板增加欢迎屏和 theme class 绑定,重写气泡 CSS 变量和背景色。
-- 编辑 `ChatInput.vue`: 新增 `centered` prop,居中定位通过 absolute + translate 实现,与底部常态间用 350ms cubic-bezier 过渡。
 - 修复 editor Agent 输入框动画: 改为始终 absolute + left:50% + translateX(-50%),两态都使用 bottom 数值(16px ↔ 50%),width 同步过渡(calc(100%-32px) ↔ min(90%,400px)),解决 auto↔数值无法 CSS 动画的问题; 欢迎屏底部定位改为 calc(50%+100px) 紧贴居中输入框上方; MessageList 增加 padding-bottom:80px 防止消息被底部输入框遮挡。
 - 修复删除文件后同级文件及文件夹内文件错误显示红点: `ignoreNextTreeEvent` 从 boolean 改为 counter(`ref(0)`),所有文件系统变更操作(`saveFileByPath`/`importFilesToPath`/`deleteNode`/`createFileAt`/`createFolderAt`/`pasteNode`/`renameNode`)在执行前递增计数器,`tree_dirty` 事件处理中递减并仅在计数器归零时调用 `markOpenTabsDirty()`,避免单个操作触发多次 SSE 事件导致兄弟文件被错误标记为 dirty。
 - [x] 增加用户本机文件服务MCP(已被自带的文件管理系统API优化,不需要了)
 - [x] 把console的agent对话区和逻辑复制到editor中来(删掉当前的占位agent对话区内容),也就是ChatView那一块,不包括可观测面板和Settings区,只要Chat区.与此同时,会话记录也搬,作为editor的agent对话区旁边的一个按钮点击后平滑移动出的抽屉侧边栏,稍微高一点样式.
 - [x] 修复Preview以及Split的markdown无法渲染的问题(观察到从Edit切换到Preview的时候底下的蓝色块没有动),并将默认模式设置为Edit模式.
 - [x] 将文件系统管理API的函数对接到Agent的内置工具,如此即可不使用文件MCP却让Agent拥有操作文件系统的能力吗?
-- [x] 美化Agent对话区,具体美化:
-  - [x] 将背景变为和编辑区一致的纯白色/纯黑色,气泡则遵循开发规范的双主色系模式,用户发出红色气泡,Agent发出蓝色气泡,都要发光,且明暗色下亮度有不同.
-  - [x] 初始无对话状态下,输入框应该居中,放在Agent对话区的正中间偏下一点,然后上面像KIMI一样写大字"MetaWeave",一行小字"在知识库XXX中有什么问题?",当用户输入并发送消息时输入框平滑平移地沉下去.
-  - [x] 去掉Agent对话区标题左边的红绿灯,将右边的展开侧边栏按钮放在这个位置.
-- [x] 让编辑区已打开的文件列表下面横向的滑动条也可以明暗切换.
 - [x] 修复删除一个文件后同级文件及文件夹内文件会错误的重新在文件树中显示红点的问题.
 - [x] 修复对话框会遮住对话气泡的问题,对话气泡应该以对话框输入框的上半部分作为边界.
-
-
 
 ## 2026-07-07
 - 更新 PyInstaller `AgentService.spec`: 打包清单补齐 `editor/dist`,并改为显式校验 `console/dist`、`editor/dist` 与 `resources` 目录存在后再构建,产物仍输出为 `dist/AgentService.exe`。
 - 修复 editor Agent 会话框亮色主题仍显示暗色的问题: `AgentPanel.vue` 的面板、标题栏、assistant 气泡和输入框背景改为消费 editor 全局主题变量; 同时将 Agent 会话框右上角两个图标按钮改为圆形、模式按钮改为胶囊形。
-- 细化 editor 顶栏明暗切换按钮: 亮色状态改为白底红边红太阳,暗色状态改为深黑底淡黄边与淡黄色实心月亮,降低亮色按钮饱和度。
-- 调整 editor 顶栏明暗切换按钮: 亮色主题显示开发规范红色按钮与太阳图标,暗色主题显示深黑按钮与淡黄色实心月亮图标,继续复用现有 Lucide Sun/Moon 图标。
 - 修正 editor 顶栏 Console 按钮语义: 恢复原实心蓝色样式,点击行为改为复用左侧 ActivityBar 的 Agent 按钮逻辑,用于展开/收起右侧 Agent 对话栏,不再跳转 `/console`。
-- 调整 editor IDE 顶栏与 Agent 侧栏样式: 右侧 Agent 对话区去掉浮动卡片外边距、圆角和上下/右侧外框,改为与工作区矩形栏直角融合; 顶栏 Command/Console 使用胶囊按钮,中间图标按钮与主题按钮使用圆形按钮; 顶栏左侧标题从 `Editor` 改为 `知识库-[知识库名]`。
 - 调整 editor Electron 开发启动行为: `npm run dev:electron` 不再默认打开 detached Developer Tools; 如需临时调试,可设置 `ELECTRON_OPEN_DEVTOOLS=true` 后再启动。
 - 修正 editor Agent 面板迁移偏差: 消息渲染层改回 console 的 `MessageBubble -> ChatBubble/ToolBubble` 路由结构,补齐 `ThinkingInline`、`ToolCallInline` 与 `LoaderCube`; tool 模式 action 节点只显示聚合后的工具调用条,不再显示节点名或重复思考过程。会话选择改为父层显式执行 `select -> clear -> loadHistory`,输入框在流式过程中保持可输入并复用 chat store 的中断上一轮逻辑。
 - 将 console 的 Agent Chat 核心能力迁入 editor 右侧 Agent 面板: 新增 editor 侧 `/sessions`、`/agent/stream` API 封装、会话 store、聊天 store、Markdown 渲染和流式消息组件; `AgentPanel.vue` 删除旧占位问答,改为 console 风格聊天区、会话历史抽屉、新建会话和聊天/工具渲染模式切换,同一 `user_id` 与 console 共享会话历史。
@@ -1033,9 +885,6 @@
 - 恢复 editor Edit 模式的 Vditor 所见即所得体验: `VditorEditor.vue` 从源码 `sv` 模式改回 `wysiwyg`,重新启用代码块与数学块预览,并移除全局隐藏 `.vditor-preview` 的 CSS,避免标题井号不隐藏、PlantUML/代码块预览被禁用; `MarkdownPreview.vue` 增加渲染失败 fallback 便于定位预览异常。
 - 修复 editor Preview/Split 首次切换时 Markdown 预览可能为空或不渲染的问题: `MarkdownPreview.vue` 在 DOM 挂载后补执行 Vditor preview 渲染,避免 watcher 早于预览容器 ref 执行后丢失首帧渲染; 同时将 editor 默认模式从 Split 改为 Edit,并完成对应 TODO。
 - 修复 editor Preview 模式 Markdown 渲染不完整的问题: `MarkdownPreview.vue` 不再使用只识别 `#`/`##` 的临时行级字符串规则,改为调用 Vditor preview 渲染器,使 `###` 及更低级标题、列表、代码块等 Markdown 语法按完整规则渲染。
-- 优化 editor 左侧活动栏交互: 文件树与 Agent 侧边栏不再通过 `display:none` 瞬间隐藏,改为布局列宽、透明度和位移的平滑收缩/展开动画; 拖拽调整侧栏宽度时临时关闭过渡,保持 resize 手感稳定。
-- 统一 editor 蓝色交互样式: 移除文件树 hover/选中、拖拽投放、活动栏激活态和文件类型图标中的天蓝色残留,改用开发规范规定的主蓝 `#4224EB` 及浅主蓝变量; Edit/Preview/Split 三段切换指示块改为按当前按钮真实宽度和位置滑动,避免 Edit 状态下覆盖到 Preview。
-- 调整 editor 细节动效: Edit/Preview/Split 三段切换改为蓝色指示块平滑滑动; 文件树条目 hover 改为浅蓝主题色; 根目录右侧新建和多选按钮 hover 改为圆形浅蓝主题反馈。
 - 移除 editor workspace store 中残留的 `agent_architecture.md` mock 文件树、mock 内容和默认打开 tab,避免后端文件树加载竞态或失败时回退显示固定的 `Agent architecture` 文本; 编辑区无打开文件时改为显示空态提示。
 - 修复 editor Edit/Preview/Split 间歇性混入 Vditor 内置预览的问题: Vditor 改为 source-view 编辑模式,初始化参数和 after 回调都强制 `preview.mode='editor'` 并清理内部缓存; 同时在全局样式中隐藏 Vditor 自带旁路预览容器,确保 Edit 只显示编辑器、Preview 只显示自定义预览、Split 才显示双栏。
 - 修复 editor 已打开文件 tab 的长文件名溢出: tab 使用固定宽度网格布局,标题列强制 `ellipsis` 截断,dirty 红点和关闭按钮固定在右侧列,避免长文件名与关闭按钮重叠或冲出 tab。
@@ -1055,7 +904,6 @@
 - 完成新 editor 前端后端设施第五步: `knowledge.py` 的文件事件流优先使用 watchdog 监听 active 知识库目录,通过 SSE 通知前端刷新文件树; watchdog 缺失时回退到文件树签名轮询。用户切换根目录时前端重启事件流,等价重启后端 observer。
 - 对接 editor 前端文件树与编辑器: 新增 `editor/src/api/knowledge.ts`,扩展 `workspace.ts` 和 `FileTreePanel.vue`,实现从后端加载文件树、点击文件读取真实内容、保存文件落盘、拖拽上传到根目录或目标文件夹、根目录切换后刷新树并重启 watcher。
 
-## 2026-07-06
 ### 前端 — 新增 editor 知识库编辑器前端骨架
 
 - 在 `editor/` Vite + Vue + TypeScript 脚手架中实现首版知识库工作台: 顶部命令栏、左侧文件树、中间 Vditor 编辑/预览/分屏区域、右侧 Agent 占位对话面板、命令面板、设置页和知识图谱占位页。
@@ -1078,51 +926,16 @@
 - 修改 `editor/index.html`: 移除开发源码中的 CSP meta,保留页面标题 `AgentService Editor`; 同时固定 Vite dev server 为 `127.0.0.1:5173` 且 `strictPort: true`,避免 Electron 连接到错误端口。
 - 构建、lint 和单元测试均通过,并确认源码 HTML 不含 CSP、`dist/index.html` 含生产 CSP。
 
-### 前端 — editor 移除文件树状态标签
-
-- 修改 `editor/src/components/editor_workspace/TreeNode.vue`: 移除左侧文件树中每个文件/目录后的彩色索引状态标签,文件树仅保留展开箭头、文件类型图标和名称,减少导航区视觉噪音。
-- 构建、lint 和单元测试均通过。
-
-### 前端 — editor 文件树与编辑器改为 IDE 无缝面板
-
-- 修改 `editor/src/views/EditorWorkspace.vue`: 将左侧文件树和中间编辑器从独立圆角卡片调整为类似 PyCharm 的无缝 IDE 面板,移除两者之间的外部间距和圆角,仅保留细边框分隔; 右侧 Agent 对话区继续保留卡片式独立面板。
-- 修改 `editor/src/components/editor_workspace/FileTreePanel.vue` 与 `EditorPane.vue`: 调整面板背景和标签栏/编辑区背景,让文件树与编辑区更像同一个编辑器壳体的一部分。
-- 构建、lint 和单元测试均通过。
-
-### 前端 — editor 完成 TODO 中的编辑器视觉细化
-
-- 修改 `editor/src/components/editor_workspace/TreeNode.vue` 与 `FileTreePanel.vue`: 左侧文件树选中态从红蓝渐变圆角块改为无圆角、左右贴边的蓝色细边框条形。
-- 修改 `editor/src/components/editor_workspace/EditorPane.vue` 与 `VditorEditor.vue`: 将编辑模式切换和保存按钮移动到文件标签栏右侧,移除独立文件元信息栏; Vditor 工具条默认隐藏,通过标签栏右侧的小按钮展开。
-- 修改 `editor/src/views/EditorWorkspace.vue`: 移除工作区背后的红蓝径向渐变,改为与文件树一致的 `canvas-soft` 背景。
-- 修改 `editor/src/components/editor_workspace/TopCommandBar.vue`: 顶栏左侧统一显示 `Editor`,移除 `AgentService Editor`、知识库路径和红蓝胶囊标识。
-- 修改 `editor/src/assets/ui-system.css` 与 `main.css`: 收敛界面字体和代码字体变量,增强 Vditor 编辑区对全局字体变量的使用。
-- 同步将 `TODO.md` 中对应 5 个 editor 子任务标记为完成; 构建、lint 和单元测试均通过。
-
-### 前端 — editor 完成新增编辑器交互 TODO
-
-- 修改 `editor/src/stores/workspace.ts`、`FileTreePanel.vue` 与 `TreeNode.vue`: 新增独立的文件树选中路径,让目录点击也能高亮; 文件树选中态改为浅蓝色细边框条形,并加入 150ms 的短滑动反馈。
-- 修改 `editor/src/components/editor_workspace/TopCommandBar.vue`: 将无边框 Electron 顶栏高度和右侧按钮尺寸压缩到更接近编辑器工具条的密度。
-- 修改 `editor/src/components/editor_workspace/EditorPane.vue` 与 `editor/src/assets/main.css`: 压缩已打开文件标签栏高度、移除标签栏横向滚动条,并将 Vditor 功能条改为覆盖式显示,避免展开时横向挤压主要编辑区。
-- 同步将 `TODO.md` 中新增 5 个 editor 子任务标记为完成。
-
 ### 前端 — editor 修复文件树选中蓝条不可见
 
 - 修改 `editor/src/components/editor_workspace/FileTreePanel.vue`: 文件树选中路径增加 `selectedPath` 兜底,避免运行中热更新后的 Pinia store 缺少 `selectedTreePath` 时选中态丢失。
 - 修改 `editor/src/components/editor_workspace/TreeNode.vue`: 将选中蓝条改为明确的 3px `::after` 左侧条,并移除 `color-mix()` 依赖,确保文件和文件夹点击后都能稳定显示浅蓝选中条。
-
-### 前端 — editor 移除文件树选中深蓝竖条
-
-- 修改 `editor/src/components/editor_workspace/TreeNode.vue`: 移除文件树选中态左侧 3px 深蓝竖条和对应动画,保留浅蓝背景与细边框作为选中反馈。
 
 ### 前端 — editor 实现文件树拖拽导入与根目录切换占位逻辑
 
 - 修改 `editor/src/components/editor_workspace/FileTreePanel.vue`: 移除独立的 `Drop files here` 投放框,改为整个文件树区域接收拖拽文件; 在 `knowledge root` 左侧新增目录切换按钮,通过前端目录选择器更新本地根目录并触发扫描/灌库占位流程。
 - 修改 `editor/src/components/editor_workspace/TreeNode.vue`: 为目录节点增加拖拽投放事件,拖到文件夹时阻止冒泡并把文件导入该目录; 拖到普通文件或树空白处时继续由根目录投放逻辑处理。
 - 修改 `editor/src/stores/workspace.ts` 与 `settings.ts`: 新增前端 mock 的文件导入、目录扫描、内容预览读取和索引中状态更新逻辑,为后续后端复制文件与灌库 API 接入预留交互入口。
-
-### 前端 — editor 收紧根目录栏
-
-- 修改 `editor/src/components/editor_workspace/FileTreePanel.vue`: 根目录切换按钮改为无边框图标按钮,移除 `KNOWLEDGE ROOT` 标签文案,并将根目录栏竖直高度压缩为更窄的编辑器侧栏标题条。
 
 ### 前端 — editor 增加活动栏与可拖拽三栏布局
 
@@ -1169,7 +982,6 @@
 - 修改 `editor/src/api/settings.ts`、`stores/settings.ts` 与 `FileTreePanel.vue`: 根目录按钮在 Electron 中选择目录后调用 `/knowledge/rebuild`,由后端保存 active 知识库并重灌库,前端刷新 profile 展示新根目录。
 - 修改 `TODO.md`: 将新前端后端设施第三步标记为完成。
 
-
 ## 2026-05-17
 - 修复 Obs 面板在工具模式下所有卡片数据不完整的问题: `useObsData.js` 中 `currentMessageTraces` 原来只取最后一条 assistant 消息的 trace, 在工具模式下每个图节点 (planner/agent/action/observation) 各自一条 assistant 消息, 导致语言轨迹、节点执行时间线、工具轨迹和运行时路径都只展示最后一个节点的数据。改为从尾部向前扫描, 收集最后一条 user 消息之后的所有 assistant trace, 使语言轨迹/节点时间线/工具轨迹/运行时路径在工具模式下正确聚合整个轮次的数据。(对话模式行为不变)
 - 修复 Obs 面板上下文拼装在流式过程中只显示用户 prompt 的问题: 后端 `agent_core.py` 的 `stream_session_prompt()` 在启动图执行前新增 `system_prompt` SSE 事件, 将 ContextBuilder 构建的完整系统提示 (含记忆索引、知识库索引、重要事实摘要、检索指标) 下发给前端; 前端 `chat.js` 接收该事件后将系统消息注入 `messages` 数组, `useObsData` 的 `contextAssembly` 和 `ragMetrics` 即可实时解析完整上下文拼装。
@@ -1200,12 +1012,6 @@
   - 按时刻和模型的的token用量变化柱状-曲线图
   - 每次message的思考时间耗时折线图,点击一个耗时则放大并划分为每个步骤的耗时占比
   - agent超参数可视化展示
-### 前端 - Obs 饼图重叠修复
-- 调整 `console/src/components/dashboard/RagMetricsCard.vue` 的环形图配置: 收紧 donut 半径并下移图内标签文案,同时将三图并排布局改为可按断点换行的响应式网格,修复 Obs 面板窄宽度下饼状图图形与文字重叠的问题。
-- 进一步调整 `console/src/components/dashboard/RagMetricsCard.vue` 的 donut 标签布局: 去掉图心覆盖文字,改为在饼图外侧通过标签线显示百分比和指标名称,并左移图心为外侧标签留出空间,避免数字和文字继续压在图形内部。
-- 将 `console/src/components/dashboard/RagMetricsCard.vue` 的 donut 文案展示方式改为原生 DOM 布局: ECharts 仅负责绘制环形图,百分比和指标名由卡片右侧独立渲染,避免 `overflow: hidden` 裁掉图表外侧标签导致文字消失。
-- 继续调整 `console/src/components/dashboard/RagMetricsCard.vue` 的三指标排布: 每个指标块改为“上方环形图 + 下方数值/名称”的纵向结构,避免右侧文案挤压图形,使三个饼图的视觉主体尺寸重新大于数字文本。
-- 修正 `console/src/components/dashboard/RagMetricsCard.vue` 的移动端 donut 布局: 手机端保持三列紧凑排布,限制单图最大宽度并收紧文字尺寸,避免窄屏下单个饼图被拉得过大且视觉偏移。
 
 ### 前端 - Obs 召回卡片语义纠偏
 - 调整 `console/src/components/dashboard/LongTermMemoryCard.vue` 与 `KnowledgeRecallCard.vue`: 去掉误导性的 “ReRank 前 / ReRank 后” 切换,改为明确展示当前已注入 system context 的记忆/知识索引提示。修复前端用同一份注入后摘要伪造“前后对比”导致界面语义与后端真实数据不一致的问题。
@@ -1220,12 +1026,8 @@
 - 进一步调整 `console/src/stores/chat.js`: 在插入 user / assistant 占位消息后显式 `await nextTick()`,先让浏览器完成首帧渲染,再进入流式请求循环,缩短“用户发送消息”和“占位气泡出现”之间仍然存在的可感知延迟。
 - 继续调整 `console/src/stores/chat.js`: 在 `nextTick()` 之后额外等待一次浏览器绘制帧 (`requestAnimationFrame`),确保 assistant 占位气泡在网络请求正式推进前已经真正绘制到屏幕上,进一步压缩发送瞬间的空档。
 
-### 前端 - 暗色聊天气泡配色
-- 调整 `console/src/assets/ui-system.css` 与 `console/src/components/chat/MessageBubble.vue`: 仅在暗色主题下将用户气泡改为磨砂玻璃发光蓝色,将 AI 气泡改为磨砂玻璃发光红色; 亮色主题继续保持原有低干扰样式。
-- 进一步修正 `console/src/assets/ui-system.css`: 将暗色主题下用户气泡的底色与边框也切换到蓝色系,避免只改发光层但主体仍残留原橙色的问题。
-- 继续调整 `console/src/assets/ui-system.css`: 为亮色主题下的用户 / AI 气泡也补上蓝 / 红主体配色,但保持无发光效果,避免亮色界面过于刺眼。
+### 前端 - Obs 面板数据与召回修复
 - 修正 `console/src/components/dashboard/MemoryKnowledgePanel.vue` 的召回快照刷新时机: 不再依赖前端消息列表中已被过滤掉的 `system` 消息作为刷新键,改为在 assistant 消息落库且流式结束后重新拉取 `recall-details`,解决 Obs 面板长期记忆 / 知识库召回长期空白的问题。
-- 调整 `console/src/components/dashboard/LongTermMemoryCard.vue` 与 `KnowledgeRecallCard.vue` 的 ReRank 切换按钮样式: 将按钮从标题栏移到正文工具条,并复用 `RagMetricsCard` 同款切换视觉,避免原先标题栏里的小按钮过丑且不统一。
 - 修正 `agent_service/api/rest/agent.py` 与 `agent_service/api/grpc/servicer.py` 的召回详情接口: 新增共用的 `agent_service/api/recall_details.py`,当历史 system message 没有持久化 `recall_details` 时,使用最近用户问题实时补算长期记忆和知识库的 `pre_rerank` / `post_rerank` 快照,避免旧会话或未携带快照的消息在 Obs 面板中显示空白。
 - 修正 `agent_service/api/grpc/agent_service_pb2_grpc.py` 的生成代码导入路径: 将顶层 `import agent_service_pb2` 改为包内绝对导入,避免从 `main.py` 启动时出现 `ModuleNotFoundError: No module named 'agent_service_pb2'`。
 - 修复 `console/src/components/dashboard/LatencyCard.vue` 的数据来源问题: 调整 `useObsData.js` 的耗时轮次派生逻辑,支持流式中的 pending turn、过滤空 assistant 消息,并让 Obs 页面补拉最多 200 条历史消息; 同时将 `chat.js` 的流式请求与历史加载拆成独立 AbortController,避免补拉历史时误中断当前发送状态,导致“每次 message 思考耗时”卡片显示无数据。
@@ -1233,20 +1035,10 @@
 - 进一步修正 Obs 页面无数据时的入口状态: `DashboardView.vue` 在未设置 `user_id` 时直接显示 Obs 专用输入框,避免直接打开 `/dashboard` 后静默空白; `LatencyCard.vue` 的空态补充当前 session 与消息数量,方便确认是未选会话、未加载消息还是确实没有完整轮次。
 - 修正 `console/src/components/dashboard/LatencyCard.vue` 在无耗时数据时整块图表消失的问题: 折线图容器现在始终渲染,即使没有 turn 数据也会显示坐标轴和占位刻度,避免卡片内部看起来完全空白。
 
-### 前端 - Obs 面板响应式适配
+### 前端 - Obs 面板真实卡片化
 - 为 Obs 面板新增 `console/src/composable/useObsData.js` 统一观测数据派生层，集中从 chat/session store 提取当前节点、trace、上下文来源、RAG 指标、Token 趋势、耗时趋势、运行路径和调度池快照，避免每张卡片重复解析消息与 trace。
 - 重做 `console/src/components/dashboard/LanguageTraceCard.vue`、`ExecutionTraceCard.vue`、`RagMetricsCard.vue`、`TokenUsageCard.vue`、`LongTermMemoryCard.vue`、`KnowledgeRecallCard.vue`、`LatencyCard.vue` 与 `StateGraphCard.vue` 的卡片内容：由原先的占位文案改为真实 Obs 面板，分别展示思考轨迹、上下文拼装、节点时间线、工具输入输出、调度池状态、RAG 命中指标、large/small token 估算柱图、长期记忆/知识线索切换视图以及每轮消息耗时拆分。
 - 重写 `console/src/components/dashboard/StateGraphCard.vue` 的状态图刷新逻辑：LangGraph Mermaid 图结构改为首次挂载时只渲染一次，后续 `currentNode` 变化仅通过 DOM class 更新节点与边高亮，不再因状态切换重复执行 `mermaid.render()`，修复状态切换时整图闪烁、短暂消失和布局抖动的问题。
-- 调整 `console/src/views/DashboardView.vue` 的 Obs 页面外层结构,新增 `dashboard-content` 容器,补充 `min-height` 与移动端滚动策略,并让顶部 tab 在窄屏下支持换行与粘性定位,避免移动端切页后内容被固定高度容器截断。
-- 调整 `console/src/components/dashboard/AgentTracePanel.vue` 的桌面三栏布局为断点响应式网格: 宽屏保持三列,中屏改为“状态图整行 + 语言轨迹/执行轨迹双列”,小屏改为单列顺序堆叠,使 Agent 轨迹页同时适配桌面端与手机端。
-- 调整 `console/src/components/dashboard/MemoryKnowledgePanel.vue` 的双层固定横向布局为断点响应式布局: 宽屏保留原有信息分区,中屏改为上层纵向堆叠与下层两列网格,小屏改为全部卡片单列堆叠,避免记忆/知识面板在移动端横向溢出。
-- 放大桌面端 `StateGraphCard` 的展示空间: 提升 `AgentTracePanel` 左栏宽度,并收紧状态图卡片桌面端内边距与最小图宽,修复状态转移图在桌面端看起来过小的问题。
-- 修复 Obs 面板在移动端单列布局下卡片未拉满容器宽度的问题: 为 `AgentTracePanel` 与 `MemoryKnowledgePanel` 的列容器及其直接子卡片补充 `width: 100%` 和 `min-width: 0`,避免卡片按内容宽度收缩后在右侧留下空档。
-- 进一步修复 Obs 面板移动端右侧留白问题: 将 `DashboardView.vue` 中移动端的 `dashboard-content` 从横向 flex 容器切换为 `block + width: 100%`,并强制其直接子页面面板占满宽度,避免整页 panel 作为 flex item 按内容宽度收缩。
-- 调整桌面端状态转移图的尺寸判定策略: 超宽桌面布局下改为优先参考视口高度推导 `AgentTracePanel` 左栏宽度,使状态图更接近按竖直空间放大; 普通桌面宽度区间继续维持按横向宽度分配列宽,移动端布局保持不变。
-- 收紧桌面端“按高度优先”触发条件: 仅在超宽且横向比例明显大于方屏的桌面环境下启用高度优先的状态图布局,避免 `1:1` 或接近方屏的桌面错误进入高度优先模式,这些桌面继续按宽度优先布局处理。
-
-## 2026-05-15
 
 ### 后端 — Agent 思考轨迹 (trace human_readable)
 
@@ -1269,10 +1061,6 @@
 - 强化 `system_prompt`：新增规则明确要求用户搜索类请求必须主动调用工具；禁止输出方括号标签格式（如 `[Memory]`）；禁止反问用户。
 - 增强 `_sanitize_streaming_content()` 和 `_sanitize_agent_output()`：新增正则检测 `^[标签]` 格式的内部标记输出并拦截。
 - 新增工具调用流式推送机制：在 `runtime_context.py` 增加 `set_tool_trace_callback` / `get_tool_trace_callback` / `clear_tool_trace_callback`，遵循与 `agent_token_callback` 一致的线程本地模式。`ToolCallNode` 在每个工具执行前后通过 callback 实时推送 trace 事件到 `token_queue`，`_stream_events` 主循环处理新的 `tool_trace` 事件类型并作为 SSE 事件产出，使工具调用轨迹（工具名、参数、返回摘要）在前端流式展示。
-
-### 前端 — 调整思考步骤样式
-
-- 将 `ThinkingSteps.vue` 边框从左侧粗线改为 1px 圆角矩形（`border-radius: var(--radius-md)`），与外部气泡风格一致；步骤项之间用分割线分隔，最后一项无底线，展开区域增加暗色背景。
 
 ### 后端 — 流式输出缓冲防止内容闪现
 
@@ -1326,9 +1114,6 @@
   - 修改 `agent_core.py` 的 `_stream_events()`: 队列收到 `error` 事件时不再 `raise item["error"]`,改为 `yield` 一个 `node="error"` 的 SSE 事件并 `break` 终止流,使错误消息通过标准 SSE 通道传递给客户端。
   - HTTP SSE (`agent.py`) 和 gRPC (`servicer.py`) 共享同一 `_stream_events()` 核心,无需额外修改。
 - **影响**: 敏感内容拦截不再导致服务端异常日志,客户端可收到有意义的错误提示并据此引导用户修改输入。
-
-
-## 2026-05-14
 
 ### 后端 — Bug 修复
 - 修复 `safety_service.py` 中 `audit_output()` 访问不存在的 `result.scrubbed` 属性的 bug,改为正确的 `result.sanitized`（`OutputAuditResult` 的属性名为 `sanitized`）。此 bug 导致 safety_output 节点每次执行都抛出 `AttributeError`,Agent 流式对话在输出审核阶段异常终止。
@@ -1534,32 +1319,13 @@
 - 收敛 Skill 加载策略: README 改为本地候选召回 + 小模型 top-k 路由 + 当前轮正文注入; 后端主模型上下文不再注入全量已启用 Skill 索引, 小模型路由前先按当前输入筛选少量候选,降低 Skill 数量增长造成的上下文膨胀。
 - 调整 Agent 侧边栏输入体验: AgentPanel 在侧边栏模式下向 ChatInput 传入 compact 状态,隐藏欢迎态输入框下方的四个快捷提示块,保留独立 Agent 页面中的快捷提示。
 - 修复 Skill 上下文可观测性缺口: 无候选命中时仍向主模型注入极简 Skill 路由协议,并让 Obs 上下文拼装面板将 Skill routing、候选摘要和本轮正文拆成独立 Skill 块展示。
-- 强化 Agent 任务列表提示词,要求所有需要分步推进、持续执行或可验收交付的任务先创建 Task List; 同时将顶栏左侧透明底图标去饱和,并收紧 Agent 输入工具条按钮间距。
+- 强化 Agent 任务列表提示词,要求所有需要分步推进、持续执行或可验收交付的任务先创建 Task List。
 - 统一工具模式工具条结构: ToolCallInline 将同一 action 内的每个工具调用都渲染为独立 action-row,不再按 action 消息分组造成相邻工具条视觉间距不一致。
-- 为 EditorWorkspace 主页面区新增统一圆角阴影内容 shell,将编辑器、资源、库、灌库、可视化、Agent、图谱、仪表盘、调试、搜索、Skill 和设置页面包裹在同一主内容矩形内,顶栏、ActivityBar、文件树和右侧 Agent 侧栏保持原布局。
-- 调整 EditorWorkspace 主内容 shell 外观: 背景改为与顶栏/侧栏一致的 chrome 色,移除边框和外边距,仅保留阴影并扩大圆角,让主内容与周围工作区更自然融合。
-- 将 EditorWorkspace 主内容 shell 阴影改为无方向偏移的四周扩散阴影,避免只向下投影造成卡片边界不均衡。
-- 调整 EditorWorkspace chrome 视觉: 顶栏、左侧栏和 workspace 背景统一为同一半透明灰/黑色; 主内容 shell 移除阴影,仅保留右侧和底部间距以形成圆角边界。
-- 统一文件树与 chrome 背景色,并为 EditorWorkspace 主内容 shell 恢复四周小阴影; shell 设置更高层级,让阴影覆盖在顶栏、文件树和左侧栏之上。
 - 修正资源管理器在主内容 shell 内的宽度适配: FileResourceManager 根容器和内容区显式填满父容器并使用画布背景; 主内容 shell 背景恢复为应用画布色,避免亮色模式出现灰色卡片底。
-- 减弱 EditorWorkspace 主内容 shell 的四周阴影强度,让圆角卡片边界更克制。
-- 调整 Agent 主页面历史侧边栏布局: 仅在 page 模式下放开外层主内容 shell 裁剪,让 SessionDrawer 使用左侧栏 chrome 背景显示在聊天卡片之外; 聊天区改为独立圆角内容卡片并保留原有打开/收起控制逻辑,侧边栏模式不变。
-- 统一 Agent 侧栏 chrome 视觉: 右侧 Agent 侧边栏与其历史 SessionDrawer 改为左侧栏同色背景并移除边框; 主内容大卡片显式清除 outline,阴影改为轻微下投影以避免四边呈现边框感。
-- 为主内容卡片恢复明确的 1px 圆角细边框,并同步给 Agent 独立页面的聊天卡片添加同样边框,让边界沿圆角连续闭合。
-- 将主内容卡片与 Agent 独立页面聊天卡片边框临时加粗到 6px,用于明确验证可见边界是否来自卡片本体。
-- 撤销主内容卡片与 Agent 独立页面聊天卡片的厚边框,改为参考示例卡片的无边框双层阴影: `0 10px 15px -3px` 与 `0 4px 6px -2px`。
-- 移除主内容卡片直接包裹页面的贴边细线: 清理编辑器主区域、资源管理器工具栏/表头/内容分隔、库页工具栏、可视化工具栏/结果容器、图谱工具栏/侧栏分隔、设置页侧栏分隔和移动端调试页顶部 tabs 分隔线。
-- 继续去除编辑区组件根层边框: CodeEditor、CodePreview 和 MarkdownPreview 根容器改为无边框无圆角,并移除 CodeEditor 顶部栏底线; 同时让 Agent SessionDrawer 关闭态禁用 pointer-events,避免未展开时截获左侧栏点击。
-- 更正编辑区边框处理范围: 恢复 CodeEditor、CodePreview、MarkdownPreview 和编辑器 tab/body 的内部边框,仅让 editor 主视图的 main-shell 去掉外层阴影包裹感,对应“囊括文件 tab、模式切换和编辑区的大块外框”。
-- 按编辑页可见区域重新清理边框: 移除文件 tab、模式切换、可视化/保存按钮、编辑主体、CodeEditor、CodePreview、MarkdownPreview、MultimodalPreview 根层以及 CodeEditor 顶部/查找栏分隔线的边框,保留临时菜单、输入框和表格内部网格线。
-- 针对 `EditorWorkspace.vue` 中直接挂载 `EditorPane` 的层级继续去除编辑页卡片感: 为 EditorPane 添加 `editor-main-content` 类,并让 editor 视图的 main-shell 透明、无圆角、无裁剪和无阴影,避免 EditorPane 作为主内容子页面时仍呈现额外外框。
-- 回退错误的 editor main-shell 透明化处理: 移除 `editor-page-main-shell` 和 `editor-main-content`,恢复编辑页使用默认大圆角主内容卡片,避免编辑区大圆角卡片消失。
 - 修正编辑区格式预览: PDF Edit 模式现在渲染 PDF 提取出的嵌入图片,代码文件 Edit 模式直接使用 highlight.js 高亮并强制隐藏 Preview/Split 模式入口。
 - 修复 PDF/DOCX 静态图片资源被 Markdown 图片 URL 改写器误转为知识库 raw 文件路径的问题,确保 `/knowledge/assets/...` 图片通过后端静态资源路由加载。
 - 新增 Markdown Split 模式双向同步滚动,从 Edit 切换到 Split 时按当前光标在源文档中的位置初始化右侧预览滚动。
-- 调整 Markdown 从 Edit 切换到 Split 时的预览定位为平滑滚动,避免右侧预览瞬间跳转。
 - 打通用户级 OCR 灌库链路: 设置页开启 OCR 后,普通图片、PDF 内嵌图片、DOCX/PPTX 媒体图片都会在结构化预处理阶段调用 PaddleOCR;兼容 PaddleOCR 3.x `OCRResult.json.res` 返回结构,同步缓存模型并禁用默认 oneDNN 以避免首次推理失败;新增图片解析、DOCX 内嵌图片和扫描件 PDF OCR 白盒测试。
-- 更新 OCR 设置提示,明确开关保存后后续灌库立即使用图片 OCR,不再误导用户必须重启。
 - [x] 数学公式渲染支持(Preview/Split + agent 回答):
   - 诊断:Vditor(lute)默认不渲染无空格行内 `$...$`(避免货币误判);用户 Obsidian 宽容写法(标签与 `$$` 同行、缺闭合 `$$`)让 KaTeX 严格解析抛 ParseError;agent 回答用 marked 渲染无任何数学支持。
   - 新建 `editor/src/components/editor_workspace/mathRender.ts` 统一识别 + KaTeX 渲染:`renderMathInHtml`(字符串层,供 agent 回答)与 `renderMathInDom`(DOM 层,供 Preview)共用同一套匹配规则。块级 `$$...$$` 非贪婪跨行匹配(`\$\$([\s\S]+?)\$\$`),行内 `$...$` 单行匹配且内部首字符非空格(避免误伤 `$10 each` 货币)。`<pre>/<code>` 用占位符保护,代码块里的 `$` 不渲染。统一 `throwOnError: false`,解析失败显示红色原文不抛错。结果按 tex 缓存 300 条(agent 流式高频刷新直接命中)。
@@ -1592,7 +1358,6 @@
 - 按 Agent 页面现有任务列表侧栏重新布局子 Agent:顶部工具栏提供独立开关,侧栏采用与 TaskListDrawer 相同的右侧抽屉结构和开合动画;召唤表单、运行中任务、结果和停止操作全部收纳在该抽屉内,撤销消息区内嵌版本,避免干扰主 Agent 对话内容。
 - 修复子 Agent 侧栏嵌套滚动:移除任务列表固定 180px 高度和内部滚动,改为侧栏单一纵向滚动容器;侧栏宽度提高至最多 400px,任务目标/工具权限字段允许换行并阻止横向溢出。
 - 收回子 Agent 的用户侧召唤权限:删除前端召唤表单、REST POST /agent/children 和对应 gRPC SpawnChildAgent;右侧栏仅保留主 Agent 已召唤任务的状态、结果查看与停止操作,子 Agent 只能由主 Agent 运行时工具创建。
-- 优化子 Agent 侧栏任务块:每个子 Agent 改为圆角细边框卡片,头部可展开/收缩,内部按任务目标、运行信息、工具范围、阶段摘要、产出结果和错误信息分区展示,并清理旧召唤表单残留样式。
 - 完善后台子 Agent 等待与事件流:新增 `wait_for_child_agents` 主 Agent 工具,后台子 Agent 可被父 Agent 显式等待到全部完成或超时;子 Agent created/started/completed/failed/stopped 等生命周期事件进入 SSE,前端对话区新增可展开子 Agent 信息条展示任务、权限、工具范围和结果快照。
 - 调整 `wait_for_child_agents` 为逐结果消费语义:一次等待最多返回一个后台子 Agent 终态结果,已有队列结果则立即返回,未完成时阻塞到下一个结果或超时;工具说明和系统上下文要求主 Agent 在 background spawn 后反复等待,直到已召唤子 Agent 全部进入 completed/failed/stopped 后再汇总最终回答。
 - 持久化子 Agent 会话事件:子 Agent 生命周期 SSE 事件同步写入 `agent_messages`,历史加载保留 `node=child_agent` 的空正文/结构化事件消息;会话导出增加 `child_agent_event` 字段,导入时恢复到 metadata,确保子 Agent 事件可随会话历史加载、导出和导入。

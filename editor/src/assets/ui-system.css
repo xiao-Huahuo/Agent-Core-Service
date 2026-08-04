@@ -71,15 +71,15 @@
 }
 
 :root[data-theme="dark"] {
-  --color-chrome-bg-top: rgba(8, 8, 8, 0.96);
-  --color-chrome-bg-bottom: rgba(0, 0, 0, 0.94);
-  --color-chrome-bg-solid: rgba(0, 0, 0, 0.90);
-  --color-chrome-topbar-bg: rgba(18, 18, 20, 0.92);
-  --color-chrome-rail-bg: rgba(18, 18, 20, 0.92);
-  --color-canvas: #080808;
-  --color-canvas-soft: #000000;
-  --color-surface: #0a0a0a;
-  --color-surface-raised: #000000;
+  --color-chrome-bg-top: rgba(18, 18, 20, 0.96);
+  --color-chrome-bg-bottom: rgba(18, 18, 20, 0.94);
+  --color-chrome-bg-solid: rgba(18, 18, 20, 0.90);
+  --color-chrome-topbar-bg: #0a0a0a;
+  --color-chrome-rail-bg: #0a0a0a;
+  --color-canvas: #121214;
+  --color-canvas-soft: #121214;
+  --color-surface: #121214;
+  --color-surface-raised: #121214;
   --color-surface-active: #282836;
   --color-border: #33323a;
   --color-border-strong: #484653;
@@ -90,12 +90,12 @@
 
   --color-text-primary: #ededed;
   --color-text-tertiary: rgba(237, 237, 237, 0.35);
-  --color-bg-primary: #0a0a0a;
+  --color-bg-primary: #121214;
   --color-bg-card: #111;
   --color-bg-muted: #262626;
   --color-bg-hover: rgba(255, 255, 255, 0.05);
   --color-bg-active: rgba(255, 255, 255, 0.08);
-  --color-bg-app: #0a0a0a;
+  --color-bg-app: #121214;
   --color-accent-muted: rgba(217, 145, 120, 0.12);
   --color-accent-glow: rgba(217, 145, 120, 0.1);
   --color-green: #00c758;

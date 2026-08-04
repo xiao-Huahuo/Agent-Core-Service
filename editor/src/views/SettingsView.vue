@@ -684,6 +684,7 @@ onBeforeUnmount(() => {
         :memory-msg="memoryMsg"
         :prompt-entries="promptEntries"
         :prompt-msg="promptMsg"
+        :show-favorite-column="settingsStore.showFavoriteColumn"
         :show-graph-column="settingsStore.showGraphColumn"
         :show-index-column="settingsStore.showIndexColumn"
         @add-memory="handleAddMemory"
@@ -691,6 +692,7 @@ onBeforeUnmount(() => {
         @delete-memory="handleDeleteMemory"
         @delete-prompt="handleDeletePrompt"
         @save-memory-config="handleSaveMemoryConfig"
+        @set-show-favorite-column="settingsStore.setShowFavoriteColumn"
         @set-show-graph-column="settingsStore.setShowGraphColumn"
         @set-show-index-column="settingsStore.setShowIndexColumn"
       />
