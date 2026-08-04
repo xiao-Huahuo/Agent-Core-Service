@@ -453,12 +453,13 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 }
 
 .bubble.user {
-  border-color: var(--color-user-bubble-border);
-  background: var(--color-user-bubble);
-  box-shadow:
-    inset 0 1px 0 var(--color-user-bubble-highlight),
-    0 0 0 1px rgba(255, 255, 255, 0.03),
-    0 0 18px var(--color-user-bubble-glow);
+  border: none;
+  background: color-mix(in srgb, var(--color-primary) 85%, transparent);
+  box-shadow: none;
+}
+
+.bubble.user .content {
+  color: #fff;
 }
 
 .bubble.assistant {

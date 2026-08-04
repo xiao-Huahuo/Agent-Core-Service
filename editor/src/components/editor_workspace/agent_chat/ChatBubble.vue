@@ -574,21 +574,43 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 }
 
 .bubble.user {
-  border-color: var(--color-user-bubble-border);
-  background: var(--color-user-bubble);
-  box-shadow:
-    inset 0 1px 0 var(--color-user-bubble-highlight),
-    0 0 0 1px rgba(255, 255, 255, 0.03),
-    0 0 18px var(--color-user-bubble-glow);
+  border: none;
+  background: color-mix(in srgb, var(--color-primary) 85%, transparent);
+  box-shadow: none;
 }
 
 .bubble.assistant {
-  border-color: var(--color-agent-bubble-border);
-  background: var(--color-agent-bubble);
-  box-shadow:
-    inset 0 1px 0 var(--color-agent-bubble-highlight),
-    0 0 0 1px rgba(255, 255, 255, 0.03),
-    0 0 18px var(--color-agent-bubble-glow);
+  border: none;
+  background: color-mix(in srgb, var(--color-primary) 85%, transparent);
+  box-shadow: none;
+}
+
+.bubble.user .content {
+  color: #fff;
+}
+
+/* Solid theme-color bubble keeps markdown text readable inside. */
+.bubble.assistant :deep(.markdown-body) {
+  color: #fff;
+}
+
+.bubble.assistant :deep(.markdown-body h1),
+.bubble.assistant :deep(.markdown-body h2),
+.bubble.assistant :deep(.markdown-body h3),
+.bubble.assistant :deep(.markdown-body h4),
+.bubble.assistant :deep(.markdown-body h5),
+.bubble.assistant :deep(.markdown-body h6),
+.bubble.assistant :deep(.markdown-body .citation-anchor),
+.bubble.assistant :deep(.markdown-body .source-file-link) {
+  color: #fff;
+}
+
+.bubble.assistant :deep(.markdown-body blockquote) {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.bubble.assistant :deep(.markdown-body li)::marker {
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .content {
