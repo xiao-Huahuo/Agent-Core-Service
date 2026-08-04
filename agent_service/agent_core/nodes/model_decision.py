@@ -299,7 +299,7 @@ class ModelDecisionNode:
             f"Status: {status}",
             f"Title: {task_list.get('title') or 'Task list'}",
             "Your later work in this session must continue this task list until finish_task_list is called.",
-            "When an item is actually completed, call complete_task_list_item with that item id and a factual completion_summary before starting another item.",
+            "Right after you actually complete each item, immediately call complete_task_list_item with that item id and a factual completion_summary, before starting the next item.",
             "Items may be completed in any order. When no useful items remain, call finish_task_list.",
         ]
         for item in items:

@@ -636,12 +636,12 @@ TASK_LIST_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="create_task_list",
         description=(
-            "Create a persistent session task list for execution work that must be completed in ordered steps. "
-            "Use it for coding, debugging, file operations, document processing, data analysis, tool-chain work, "
-            "or any user request that needs multiple concrete steps before the final result. "
-            "Task List is only for this Agent session's execution progress; it is completely unrelated to user Todo items. "
-            "Do not use it for direct single-step answers or for creating, editing, completing, or deleting long-term user Todo items. "
-            "After creating it, continue working toward this list until finish_task_list is called."
+            "【强制规则】在开始执行任何需要多步骤、分阶段或可验收交付的任务之前,必须先调用本工具创建任务列表。"
+            "适用场景包括:代码修改、调试、文件操作、文档处理、数据分析、工具链操作、多文件检查、"
+            "分阶段调研/调查、资料整理、方案实现等所有需要先后完成多个具体步骤的请求。"
+            "【例外】只有直接问答、单步说明、无需执行推进的概念解释或用户明确要求管理长期 Todo 时,才不创建。"
+            "Task List 仅用于当前 Agent 会话内的执行进度跟踪,与用户长期 Todo 完全无关,二者不得混用。"
+            "创建后,必须持续推进该列表,直到调用 finish_task_list 为止。"
         ),
         args_schema={
             "type": "object",
@@ -660,6 +660,8 @@ TASK_LIST_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="complete_task_list_item",
         description=(
+            "每实际完成一个任务列表项,必须立即调用本工具将其标记完成,"
+            "并填写具体的事实性完成摘要(做了什么、得到什么结论),再开始下一项。"
             "Mark one task list item complete. You must call this after actually completing an item, "
             "and include a concrete completion summary before starting another item."
         ),
@@ -684,6 +686,7 @@ TASK_LIST_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="finish_task_list",
         description=(
+            "所有有用任务项都完成后,必须调用本工具结束当前任务列表并做总体收尾。"
             "End the active session task list after the long-running task is complete. "
             "Do not call this until no useful task list work remains."
         ),
@@ -705,6 +708,10 @@ CHILD_AGENT_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         name="spawn_child_agent",
         display_name="召唤子 Agent",
         description=(
+            "【何时必须使用】当用户请求需要彻底调研或全面盘点一个范围(如调研整个知识库含有什么内容、"
+            "理解项目全部文件/代码结构)、或需要并行分析多个相互独立的方向(如分别比较多个方案)时,"
+            "必须先调用本工具创建只读 explore 子 Agent 分头探索,再用 wait_for_child_agents 收取结果。"
+            "不确定是否需要并行探索时,优先派 explore 子 Agent 探索,它只读不写、成本更低。"
             "创建一个不能继续召唤其他子 Agent 的子 Agent。必须提供明确目标。"
             "mode=foreground 会阻塞直到子 Agent 完成并返回结果;"
             "mode=background 只启动后台子 Agent 并立即返回 run_id,不会等待最终结果。"
@@ -742,6 +749,7 @@ CHILD_AGENT_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         display_name="等待子 Agent",
         description=(
             "等待当前父 Agent 已召唤的一个后台子 Agent 产出终态结果。"
+            "使用 spawn_child_agent 派发后台子 Agent 后,必须调用本工具逐个收取结果,否则子 Agent 结果不会出现在本轮。"
             "本工具一次最多返回一个子 Agent 的 completed/failed/stopped 结果;"
             "如果结果队列已有结果会立即返回,否则阻塞到下一个结果或超时。"
             "run_ids 为空时等待当前父 Agent 任意子 Agent 的下一个结果。"

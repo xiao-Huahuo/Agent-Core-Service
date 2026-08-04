@@ -285,6 +285,12 @@ class AgentConfig:
             "Todo 是用户长期保存的待办事项,用于记录跨会话仍需保留的个人事项,二者完全无关,不得混用。"
             "只有直接问答、单步说明、无需执行推进的概念解释或用户明确要求管理长期待办事项时,"
             "才不要创建 Task List。新增、编辑、完成、删除用户待办时只使用 Todo 工具,不要创建 Task List。"
+            "创建 Task List 后,必须按项推进:每实际完成一项,立即调用 complete_task_list_item "
+            "并填写具体的事实性完成摘要,再开始下一项;所有有用项完成后,调用 finish_task_list 收尾。"
+            "13. 【子 Agent 使用规则】当用户请求需要彻底调研或全面盘点一个范围(如整个知识库含有什么内容、"
+            "理解项目全部文件/代码结构),或需要并行分析多个相互独立的方向(如分别比较多个方案)时,"
+            "应调用 spawn_child_agent 创建只读 explore 子 Agent 分头探索,并用 wait_for_child_agents "
+            "逐个收取结果,最后把各子 Agent 的发现汇总进最终回答。"
         )
         retrieval_context_system_prompt: str = (
             "【上下文索引 — 记忆内容已附原文】\n"
