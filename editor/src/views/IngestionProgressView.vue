@@ -149,7 +149,8 @@ function historySummary(row: IngestionHistoryItem): string {
           role="tab"
           @click="activeTab = 'queue'"
         >
-          入库队列
+          <IcIcon name="ingest" :size="17" />
+          <span>入库队列</span>
         </button>
         <button
           class="tab-button"
@@ -158,7 +159,8 @@ function historySummary(row: IngestionHistoryItem): string {
           role="tab"
           @click="activeTab = 'graph-queue'"
         >
-          图谱抽取队列
+          <IcIcon name="graph" :size="17" />
+          <span>图谱抽取队列</span>
         </button>
         <button
           class="tab-button"
@@ -167,7 +169,8 @@ function historySummary(row: IngestionHistoryItem): string {
           role="tab"
           @click="activeTab = 'history'"
         >
-          入库历史
+          <IcIcon name="history" :size="17" />
+          <span>入库历史</span>
         </button>
       </div>
       <div class="heading-actions">
@@ -421,6 +424,7 @@ function historySummary(row: IngestionHistoryItem): string {
   z-index: 1;
   height: 26px;
   padding: 0 var(--space-10);
+  gap: var(--space-6);
   border: none;
   border-radius: 999px;
   background: transparent;

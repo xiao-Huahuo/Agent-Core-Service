@@ -192,13 +192,19 @@ function startVisualization() {
           class="mode-button"
           :class="{ active: workspaceStore.markdownHtmlVisualizationMode === 'structure' }"
           @click="setMode('structure')"
-        >原结构模式</button>
+        >
+          <IcIcon name="view-column" :size="17" />
+          <span>原结构模式</span>
+        </button>
         <button
           type="button"
           class="mode-button"
           :class="{ active: workspaceStore.markdownHtmlVisualizationMode === 'insight' }"
           @click="setMode('insight')"
-        >AI提炼模式</button>
+        >
+          <IcIcon name="auto-awesome" :size="17" />
+          <span>AI提炼模式</span>
+        </button>
       </div>
       <div class="toolbar-actions">
         <button type="button" class="secondary-action" @click="pickerOpen = true">
@@ -440,6 +446,10 @@ function startVisualization() {
 .mode-button {
   position: relative;
   z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
   height: 26px;
   padding: 0 var(--space-10);
   border: none;

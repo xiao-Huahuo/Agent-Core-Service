@@ -9,6 +9,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from 'vue'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import FileResourceManager from '@/components/editor_workspace/FileResourceManager.vue'
 import FavoriteSessionList from '@/components/editor_workspace/agent_chat/FavoriteSessionList.vue'
 import LibraryView from '@/views/LibraryView.vue'
@@ -24,10 +25,10 @@ const workspaceStore = useWorkspaceStore()
 const activeTab = ref<FavoriteTab>('files')
 const switchRef = ref<HTMLElement | null>(null)
 const sliderStyle = ref({ width: '0px', left: '0px' })
-const tabs: Array<{ value: FavoriteTab; label: string }> = [
-  { value: 'files', label: '文件' },
-  { value: 'library', label: '图书馆' },
-  { value: 'sessions', label: '会话' },
+const tabs: Array<{ value: FavoriteTab; label: string; icon: string }> = [
+  { value: 'files', label: '文件', icon: 'document' },
+  { value: 'library', label: '图书馆', icon: 'book' },
+  { value: 'sessions', label: '会话', icon: 'forum' },
 ]
 
 function updateSlider() {
@@ -68,7 +69,8 @@ onMounted(updateSlider)
           type="button"
           @click="switchTab(tab.value)"
         >
-          {{ tab.label }}
+          <IcIcon :name="tab.icon" :size="17" />
+          <span>{{ tab.label }}</span>
         </button>
       </div>
     </header>
@@ -125,6 +127,10 @@ onMounted(updateSlider)
 .favorites-switch-button {
   position: relative;
   z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
   height: 26px;
   padding: 0 var(--space-10);
   border: none;

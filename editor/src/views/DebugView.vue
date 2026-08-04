@@ -7,6 +7,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from 'vue'
 
+import IcIcon from '@/components/common/IcIcon.vue'
 import AgentTracePanel from '@/components/dashboard/AgentTracePanel.vue'
 import MemoryKnowledgePanel from '@/components/dashboard/MemoryKnowledgePanel.vue'
 import ToolRegistryPanel from '@/components/dashboard/ToolRegistryPanel.vue'
@@ -81,7 +82,8 @@ onMounted(() => {
         type="button"
         @click="activeTab = 'trace'"
       >
-        Agent 轨迹
+        <IcIcon name="bug" :size="17" />
+        <span>Agent 轨迹</span>
       </button>
       <button
         class="debug-tab"
@@ -89,7 +91,8 @@ onMounted(() => {
         type="button"
         @click="activeTab = 'multimodal'"
       >
-        多模态入库
+        <IcIcon name="image" :size="17" />
+        <span>多模态入库</span>
       </button>
       <button
         class="debug-tab"
@@ -97,7 +100,8 @@ onMounted(() => {
         type="button"
         @click="activeTab = 'mk'"
       >
-        记忆与知识
+        <IcIcon name="psychology" :size="17" />
+        <span>记忆与知识</span>
       </button>
       <button
         class="debug-tab"
@@ -105,7 +109,8 @@ onMounted(() => {
         type="button"
         @click="activeTab = 'tools'"
       >
-        工具注册表
+        <IcIcon name="build" :size="17" />
+        <span>工具注册表</span>
       </button>
       <button
         class="debug-tab"
@@ -113,7 +118,8 @@ onMounted(() => {
         type="button"
         @click="activeTab = 'apis'"
       >
-        API
+        <IcIcon name="code" :size="17" />
+        <span>API</span>
       </button>
     </div>
 
@@ -164,6 +170,10 @@ onMounted(() => {
 .debug-tab {
   position: relative;
   z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
   font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);

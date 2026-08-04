@@ -368,7 +368,8 @@ watch(
           type="button"
           @click="graphMode = 'semantic'"
         >
-          语义
+          <IcIcon name="hub" :size="17" />
+          <span>语义</span>
         </button>
         <button
           class="graph-mode-button"
@@ -376,7 +377,8 @@ watch(
           type="button"
           @click="graphMode = 'tree'"
         >
-          文件树
+          <IcIcon name="git" :size="17" />
+          <span>文件树</span>
         </button>
         <button
           class="graph-mode-button"
@@ -384,7 +386,8 @@ watch(
           type="button"
           @click="graphMode = 'library'"
         >
-          图书馆
+          <IcIcon name="book" :size="17" />
+          <span>图书馆</span>
         </button>
       </div>
       <div class="graph-actions">
@@ -642,6 +645,7 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: var(--space-6);
   min-height: 24px;
   padding: 0 12px;
   border: none;
