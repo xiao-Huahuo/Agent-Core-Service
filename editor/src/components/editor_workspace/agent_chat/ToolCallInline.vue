@@ -78,22 +78,73 @@ function getCopyText(rawContents: string[]) {
 }
 
 const FALLBACK_DISPLAY: Record<string, string> = {
+  // 通用工具
+  list_available_tools: '查看可用工具',
   get_current_time: '获取当前时间',
+  run_terminal_command: '终端命令',
+  download_file: '下载文件',
+  // Git 工具
+  git_status: 'Git 状态',
+  git_diff: 'Git 差异',
+  git_history: 'Git 历史',
+  git_init_repository: '初始化 Git',
+  git_restore_files: 'Git 回滚',
+  git_commit_files: 'Git 提交',
+  git_push_branch: 'Git 推送',
+  git_create_branch: '创建 Git 分支',
+  git_add_remote: '新增 Git 远程',
+  git_switch_branch: '切换 Git 分支',
+  git_pull_branch: 'Git 拉取',
+  // 技能工具
   list_skills: '列出技能',
   use_skill: '使用技能',
+  // 记忆工具
   get_long_term_memory: '检索记忆',
   write_long_term_memory: '写入记忆',
+  write_long_term_rule: '写入长期规则',
+  delete_long_term_memory: '删除记忆',
+  delete_long_term_rule: '删除长期规则',
+  // 知识库工具
   get_knowledge_context: '检索知识',
-  search_knowledge: '全库联合搜索',
   rebuild_knowledge_base: '重建知识库',
+  search_knowledge: '全库联合搜索',
+  save_uploaded_attachment_to_knowledge: '附件存入知识库',
+  get_knowledge_file_url: '获取文件URL',
+  // 图书馆工具
+  list_library_items: '列出图书馆',
+  list_library_tags: '列出图书馆标签',
+  add_library_book: '新增图书',
+  add_library_collection: '新增集锦',
+  update_library_item: '更新图书馆条目',
+  remove_library_item: '移出图书馆',
+  // 文件管理工具
   get_current_viewing_document: '获取当前文档',
   list_knowledge_files: '列出文件',
   read_knowledge_file: '阅读文件',
+  read_multimodal_file_info: '读取多模态文件信息',
   write_knowledge_file: '创作文件',
+  show_markdown_html: '展示Markdown-HTML',
   delete_knowledge_file: '删除文件',
   rename_knowledge_file: '重命名文件',
   create_knowledge_folder: '创建文件夹',
-  run_terminal_command: '终端命令',
+  // 任务列表工具
+  get_task_list_status: '获取任务列表状态',
+  create_task_list: '创建任务列表',
+  complete_task_list_item: '完成任务项',
+  finish_task_list: '完成任务列表',
+  // 子 Agent 工具
+  spawn_child_agent: '召唤子 Agent',
+  wait_for_child_agents: '等待子 Agent',
+  // 待办工具
+  list_todos: '列出待办',
+  add_todo: '新增待办',
+  add_automation: '创建自动化任务',
+  toggle_todo: '切换待办状态',
+  edit_todo: '编辑待办',
+  delete_todo: '删除待办',
+  // 联网搜索工具
+  web_search: '联网搜索',
+  web_image_search: '联网搜索图片',
 }
 
 function asString(value: unknown) {

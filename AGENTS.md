@@ -152,4 +152,4 @@ When compacting context, preserve the following information with highest priorit
 Do not discard user constraints, architecture decisions, or task progress.
 If context is near the limit, update TASK_STATE.md before continuing.
 
-统一采用UTF-8编码,**禁止使用Powershell**,禁止将文件写中文乱码; 没必要总是在编写后重新编译,除非用户要求.
+所有的Skill不在.claude/或.codex/中,而是在.agents/中.凡是要用到Skill都应该到.agents/中去找.

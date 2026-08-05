@@ -16,6 +16,7 @@ import type { SidebarDisplayMode } from '@/types/settings'
 
 defineProps<{
   displayMode: SidebarDisplayMode
+  homeActive: boolean
   fileOpen: boolean
   gitActive: boolean
   agentOpen: boolean
@@ -35,6 +36,7 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
+  openHome: []
   toggleFile: []
   toggleGit: []
   openResources: []
@@ -68,6 +70,18 @@ const agentIconSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
 
 <template>
   <nav class="activity-bar" :class="{ management: displayMode === 'management' }" aria-label="Editor activity bar">
+    <button
+      class="activity-button"
+      :class="{ active: homeActive }"
+      type="button"
+      title="主页"
+      aria-label="主页"
+      @mousedown.prevent="handleRipple"
+      @click="emit('openHome')"
+    >
+      <IcIcon name="home" :size="18" />
+      <span class="activity-label">主页</span>
+    </button>
     <button
       class="activity-button"
       :class="{ active: fileOpen }"

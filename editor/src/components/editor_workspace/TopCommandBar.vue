@@ -49,7 +49,7 @@ function goToStorageSettings() {
 const desktopApi = window.agentEditorDesktop
 const emit = defineEmits<{
   toggleAgent: []
-  openAgentPage: []
+  openHome: []
   openSettings: []
   toggleTodo: []
   toggleGit: []
@@ -132,7 +132,7 @@ onMounted(() => nextTick(autoResizeInput))
 <template>
   <header class="topbar">
     <div class="brand">
-      <button class="logo-btn" type="button" title="打开 Agent 页面" @click="emit('openAgentPage')">
+      <button class="logo-btn" type="button" title="回到首页" @click="emit('openHome')">
         <img :src="logoSrc" class="logo-img" alt="MetaWeave" />
       </button>
       <div class="brand-copy">

@@ -24,6 +24,7 @@ const rawIcons = import.meta.glob('@/assets/icons/svg/ic/*.svg', {
 }) as Record<string, string>
 
 const ICON_FILES: Record<string, string> = {
+  home: 'ic--outline-home.svg',
   search: 'ic--outline-search.svg',
   filter: 'ic--outline-filter.svg',
   sort: 'ic--outline-swap-vert.svg',

@@ -15,6 +15,8 @@ from __future__ import annotations
 from agent_service.tools.builtin import (
     BuiltinToolDefinition,
     add_automation,
+    add_library_book,
+    add_library_collection,
     add_todo,
     complete_task_list_item,
     create_task_list,
@@ -44,12 +46,15 @@ from agent_service.tools.builtin import (
     get_knowledge_file_url,
     get_long_term_memory,
     list_available_tools,
+    list_library_items,
+    list_library_tags,
     list_skills,
     list_knowledge_files,
     list_todos,
     read_knowledge_file,
     read_multimodal_file_info,
     rebuild_knowledge_base,
+    remove_library_item,
     rename_knowledge_file,
     run_terminal_command,
     spawn_child_agent,
@@ -57,6 +62,7 @@ from agent_service.tools.builtin import (
     search_knowledge,
     show_markdown_html,
     toggle_todo,
+    update_library_item,
     use_skill,
     web_search,
     web_image_search,
@@ -621,6 +627,116 @@ FILE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     ),
 ]
 
+LIBRARY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
+    BuiltinToolDefinition(
+        name="list_library_items",
+        description=(
+            "列出当前用户知识库的图书馆条目(图书与集锦),返回条目标题、item_id、路径、状态与标签。"
+            "parent_id 传集锦 item_id 可进入对应集锦,传空表示图书馆根层。"
+            "返回的 item_id 供 add_library_book/add_library_collection 的 parent_id、update_library_item、remove_library_item 使用。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "parent_id": {"type": "string", "description": "集锦 item_id;为空表示图书馆根层。"},
+                "query": {"type": "string", "description": "按标题、描述或真实文件名关键词过滤。"},
+                "tag": {"type": "string", "description": "按标签名过滤。"},
+                "content_type": {"type": "string", "description": "knowledge_file/web_url/external_file/collection 过滤。"},
+                "sort": {"type": "string", "description": "title/source_mtime/updated_at/created_at/sort_order。"},
+                "direction": {"type": "string", "description": "asc 或 desc。"},
+            },
+            "required": [],
+        },
+        function=list_library_items,
+        display_name="列出图书馆",
+    ),
+    BuiltinToolDefinition(
+        name="list_library_tags",
+        description="列出当前用户知识库的图书馆标签,供新增条目时复用已有标签。",
+        args_schema={"type": "object", "properties": {}, "required": []},
+        function=list_library_tags,
+        display_name="列出图书馆标签",
+    ),
+    BuiltinToolDefinition(
+        name="add_library_book",
+        description=(
+            "将一份资料加入图书馆成为图书卡片。content_type 为 knowledge_file 时用 source_path 指定知识库相对路径,"
+            "web_url 时用 source_url 指定网页地址,external_file 时用 source_path 指定外部本地文件路径。"
+            "parent_id 传入集锦 item_id 可放入对应集锦;用户要求整理、收藏、归档资料到图书馆时使用。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "content_type": {"type": "string", "description": "knowledge_file/web_url/external_file,默认 knowledge_file。"},
+                "source_path": {"type": "string", "description": "knowledge_file/external_file 时的源文件路径(知识库相对路径或外部绝对路径)。"},
+                "source_url": {"type": "string", "description": "web_url 时的网页地址。"},
+                "parent_id": {"type": "string", "description": "目标集锦 item_id;为空放入图书馆根层。"},
+                "title": {"type": "string", "description": "图书标题;为空自动用源文件名。"},
+                "description": {"type": "string", "description": "图书描述。"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "标签名列表。"},
+            },
+            "required": [],
+        },
+        function=add_library_book,
+        display_name="新增图书",
+    ),
+    BuiltinToolDefinition(
+        name="add_library_collection",
+        description=(
+            "在图书馆中新增一个集锦(资料分组),可嵌套到其他集锦。"
+            "用户要求整理、归类、建分组、收藏主题资料时使用。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "集锦名称,会自动转换成可用文件夹名。"},
+                "description": {"type": "string", "description": "集锦描述。"},
+                "parent_id": {"type": "string", "description": "父集锦 item_id;为空放在图书馆根层。"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "标签名列表。"},
+            },
+            "required": ["title"],
+        },
+        function=add_library_collection,
+        display_name="新增集锦",
+    ),
+    BuiltinToolDefinition(
+        name="update_library_item",
+        description=(
+            "更新图书馆条目的虚拟元数据:改名(title)、移动集锦(parent_id,传空字符串移回根层)、改描述(description)、换标签(tags)。"
+            "不传的字段保持不变。item_id 由 list_library_items 返回。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "item_id": {"type": "string", "description": "目标条目 ID,由 list_library_items 返回。"},
+                "title": {"type": "string", "description": "新标题;不传保留原标题。"},
+                "parent_id": {"type": "string", "description": "新所在集锦 ID;传空字符串移回根层;不传不移动。"},
+                "description": {"type": "string", "description": "新描述。"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "新的标签列表;传空数组清空标签;不传不修改。"},
+            },
+            "required": ["item_id"],
+        },
+        function=update_library_item,
+        display_name="更新图书馆条目",
+    ),
+    BuiltinToolDefinition(
+        name="remove_library_item",
+        description=(
+            "将条目移出图书馆,不删除真实文件。删除集锦时连带移除其嵌套子项。"
+            "item_id 由 list_library_items 返回。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "item_id": {"type": "string", "description": "目标条目 ID;集锦会连带移除嵌套子项。"},
+            },
+            "required": ["item_id"],
+        },
+        function=remove_library_item,
+        display_name="移出图书馆",
+    ),
+]
+
 TASK_LIST_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="get_task_list_status",
@@ -892,6 +1008,7 @@ BUILTIN_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = (
     + SKILL_TOOL_DEFINITIONS
     + MEMORY_TOOL_DEFINITIONS
     + KNOWLEDGE_TOOL_DEFINITIONS
+    + LIBRARY_TOOL_DEFINITIONS
     + FILE_TOOL_DEFINITIONS
     + TASK_LIST_TOOL_DEFINITIONS
     + CHILD_AGENT_TOOL_DEFINITIONS

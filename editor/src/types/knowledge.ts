@@ -53,6 +53,7 @@ export type FileViewerKind = 'markdown' | 'code' | 'image' | 'pdf' | 'table' | '
 
 /** Main center workspace surface controlled by activity bar and commands. */
 export type WorkspaceMainView =
+  | 'home'
   | 'editor'
   | 'resources'
   | 'favorites'

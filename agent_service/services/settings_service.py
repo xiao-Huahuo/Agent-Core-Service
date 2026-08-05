@@ -1157,8 +1157,11 @@ class SettingsService:
     def list_available_tools(self, *, user_id: str) -> list[dict]:
         """列出全部可用的内置工具及每项在当前用户的开关状态,按类别分组返回。"""
         from agent_service.tools.definitions import (
+            CHILD_AGENT_TOOL_DEFINITIONS,
             FILE_TOOL_DEFINITIONS,
+            GIT_TOOL_DEFINITIONS,
             KNOWLEDGE_TOOL_DEFINITIONS,
+            LIBRARY_TOOL_DEFINITIONS,
             MEMORY_TOOL_DEFINITIONS,
             SKILL_TOOL_DEFINITIONS,
             TASK_LIST_TOOL_DEFINITIONS,
@@ -1169,11 +1172,14 @@ class SettingsService:
 
         CATEGORIES: list[tuple[str, str, list]] = [
             ("UTILITY", "通用工具", UTILITY_TOOL_DEFINITIONS),
+            ("GIT", "Git 工具", GIT_TOOL_DEFINITIONS),
+            ("SKILL", "技能工具", SKILL_TOOL_DEFINITIONS),
             ("MEMORY", "记忆工具", MEMORY_TOOL_DEFINITIONS),
             ("KNOWLEDGE", "知识库工具", KNOWLEDGE_TOOL_DEFINITIONS),
+            ("LIBRARY", "图书馆工具", LIBRARY_TOOL_DEFINITIONS),
             ("FILE", "文件管理工具", FILE_TOOL_DEFINITIONS),
-            ("SKILL", "技能工具", SKILL_TOOL_DEFINITIONS),
             ("TASK_LIST", "任务列表工具", TASK_LIST_TOOL_DEFINITIONS),
+            ("CHILD_AGENT", "子 Agent 工具", CHILD_AGENT_TOOL_DEFINITIONS),
             ("TODO", "待办工具", TODO_TOOL_DEFINITIONS),
             ("WEB_SEARCH", "联网搜索工具", WEB_SEARCH_TOOL_DEFINITIONS),
         ]

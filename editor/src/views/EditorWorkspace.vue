@@ -29,6 +29,7 @@ import type { KnowledgeGraphNodeEvent } from '@/components/knowledge_graph/graph
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 const gitStore = useGitStore()
+const HomeView = defineAsyncComponent(() => import('@/views/HomeView.vue'))
 const AgentPage = defineAsyncComponent(() => import('@/views/AgentPage.vue'))
 const GraphPane = defineAsyncComponent(() => import('@/components/editor_workspace/GraphPane.vue'))
 const DashboardView = defineAsyncComponent(() => import('@/views/DashboardView.vue'))
@@ -71,7 +72,8 @@ let resizePointerTarget: HTMLElement | null = null
 let resizePointerId: number | null = null
 const isAgentPage = computed(() => workspaceStore.mainView === 'agent')
 const isGraphPage = computed(() => workspaceStore.mainView === 'graph')
-const sidebarHidden = computed(() => isAgentPage.value || isGraphPage.value)
+const isHomePage = computed(() => workspaceStore.mainView === 'home')
+const sidebarHidden = computed(() => isAgentPage.value || isGraphPage.value || isHomePage.value)
 const visibleFileSidebarOpen = computed(() => fileSidebarOpen.value && !sidebarHidden.value)
 const visibleAgentSidebarOpen = computed(() => (
   (gitRightOpen.value || agentSidebarOpen.value || todoSidebarOpen.value) && !sidebarHidden.value
@@ -246,6 +248,12 @@ function stopTodoResize() {
   activeTodoResize = false
   window.removeEventListener('pointermove', handleTodoResizeMove)
   window.removeEventListener('pointerup', stopTodoResize)
+}
+
+function openHome() {
+  workspaceStore.setMainView('home')
+  fileSidebarOpen.value = false
+  agentSidebarOpen.value = false
 }
 
 function openAgentPage() {
@@ -525,7 +533,7 @@ watch(
     <TopCommandBar
       :git-open="gitRightOpen"
       @toggle-agent="toggleAgentSidebar"
-      @open-agent-page="openAgentPage"
+      @open-home="openHome"
       @open-settings="openSettings"
       @toggle-todo="toggleTodoSidebar"
       @toggle-git="toggleRightGitSidebar"
@@ -543,6 +551,7 @@ watch(
     >
       <ActivityBar
         class="activity-col"
+        :home-active="workspaceStore.mainView === 'home'"
         :file-open="visibleFileSidebarOpen && !gitLeftOpen"
         :git-active="gitLeftOpen"
         :agent-open="visibleAgentSidebarOpen"
@@ -560,6 +569,7 @@ watch(
         :skills-active="workspaceStore.mainView === 'skills'"
         :settings-active="workspaceStore.mainView === 'settings'"
         :display-mode="settingsStore.sidebarDisplayMode"
+        @open-home="openHome"
         @toggle-file="toggleFileSidebar"
         @toggle-git="toggleLeftGitSidebar"
         @open-resources="openResources"
@@ -593,7 +603,8 @@ watch(
           'agent-page-main-shell': isAgentPage,
         }"
       >
-        <EditorPane v-if="workspaceStore.mainView === 'editor'" class="main-shell-content" />
+        <HomeView v-if="workspaceStore.mainView === 'home'" class="main-shell-content" />
+        <EditorPane v-else-if="workspaceStore.mainView === 'editor'" class="main-shell-content" />
         <FileResourceManager v-else-if="workspaceStore.mainView === 'resources'" class="main-shell-content" />
         <FavoritesView v-else-if="workspaceStore.mainView === 'favorites'" class="main-shell-content" />
         <LibraryView v-else-if="workspaceStore.mainView === 'library'" class="main-shell-content" />

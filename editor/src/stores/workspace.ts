@@ -301,8 +301,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** Active editor mode. */
   const editorMode = ref<EditorViewMode>('edit')
 
-  /** Active center workspace view. */
-  const mainView = ref<WorkspaceMainView>('agent')
+  /** Active center workspace view. 默认进入主页。 */
+  const mainView = ref<WorkspaceMainView>('home')
 
   /** Pending virtual-library collection to open when LibraryView is mounted. */
   const pendingLibraryParentId = ref('')

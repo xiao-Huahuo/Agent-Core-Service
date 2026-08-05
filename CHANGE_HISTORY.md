@@ -1,5 +1,19 @@
 # CHANGE HISTORY
 
+## 2026-08-05
+- [x] 主页卡片布局再调整:①NavBlock 的「进入 →」改为绝对定位到右下角,悬浮时淡入,不再占文档流,消除了文案改一行后下方遗留的第二行空隙(块底仅剩 padding);②CarouselBlock 恢复两行文字——大标题独占一行,第二行为小字副标题 + 右侧胶囊(原 hover 提示 pill),胶囊 `flex:0 0 auto`、副标题超长省略号截断。`vue-tsc` 无新错误,Playwright 验证 NavBlock 底空隙=padding、hint 绝对定位、carousel 副标题与胶囊同行且胶囊在右、carousel hover 光效仍在。
+- [x] 主页卡片文案与光效微调:①CarouselBlock 补上与 NavBlock 一致的悬停光效(`::after` 径向渐变,亮色柔和主题色/暗色白色,`--home-hover-glow`),hover 时边框同步变亮,圆点导航 `z-index` 提升保证可点;②NavBlock 与 CarouselBlock 的大标题+小副标题由两行改为同一行展示(`display:flex; align-items:baseline`,大字标题 + 小字副标题,副标题超长时省略号截断,外层 `.nav-block-copy`/`.carousel-copy` 承载原 z-index 与 max-width)。`vue-tsc` 无新错误,Playwright 验证 carousel hover 光效 opacity 1、两组文案同行且副标题单行截断。
+- [x] TopCommandBar 最左侧无底图标改为跳转首页:logo 按钮事件由 `openAgentPage` 改为新增的 `openHome` emit(复用 `EditorWorkspace.openHome` 切到主页并收起侧栏),标题改为「回到首页」,移除 `openAgentPage` emit;`EditorWorkspace.vue` 对应绑定 `@open-home="openHome"`。`vue-tsc` 无新错误,Playwright 验证从搜索页点击 logo 能回到主页。
+- [x] 主页卡片样式调整:去除 NavBlock 与 CarouselBlock 的全部渐变底色(移除各 `variant` 配色变体、`CarouselSlide`/`HomeTile` 接口的 `variant` 字段),统一为纯 `--color-surface` 底;卡片圆角改为直角(`border-radius: 0`);原先"块无阴影"改为小阴影,新增亮/暗主题变量 `--home-card-shadow`(暗色 0 2px 8px rgba(0,0,0,.5),亮色 0 1px 2px + 0 4px 12px rgba(17,17,23,...)),悬停时阴影与光效保留。`vue-tsc` 无新增错误,Playwright 验证无渐变/直角/阴影生效及 hover 光效仍在。
+- [x] 新增主页(TODO 项「展示性: 制作一个主页」):GTAOL 风格图片分块引导各页面入口,最大区块为轮播。布局为 3 列网格,上半左 2/3 为 `CarouselBlock` 自动轮播、右 1/3 上下切两块(Agent/知识图谱);下半左/中 1/3 各一块(图书馆/搜索)、右 1/3 上下切两块(MD-HTML/看板)。`NavBlock` 与 `CarouselBlock` 分块均无阴影、带间隙、悬停光效(亮色为柔和主题色 `--home-hover-glow` 跟随主色,暗色为白色),点击经 `workspaceStore.setMainView` 跳转对应视图。软件默认首页即主页(`workspace.ts` 默认 `mainView` 由 `agent` 改为 `home`),主页时隐藏文件树/Agent 侧边栏(`sidebarHidden` 纳入 home)。左侧 ActivityBar 顶部新增「主页」按钮,下载 Material `ic:outline-home` SVG 并注册到 `IcIcon.vue`。桌面 3 列、平板 2 列、窄屏单列纵向堆叠,已通过 Playwright 验证几何布局/悬停光效/轮播/跳转与默认首页,`npx vue-tsc` 无新增类型错误。
+- [x] 新增 Agent 图书馆工具闭环(TODO 项「提供 agent 图书馆工具」):后端 `builtin.py` 新增 `list_library_items` / `list_library_tags` / `add_library_book` / `add_library_collection` / `update_library_item` / `remove_library_item` 六个工具,通过启动注入的 `LibraryService` 读写虚拟编目,写操作沿用只读权限拦截;`definitions.py` 登记 `LIBRARY_TOOL_DEFINITIONS` 并挂入 `BUILTIN_TOOL_DEFINITIONS`。`settings_service.list_available_tools` 注册「图书馆工具」分组,同时补齐此前遗漏登记的「Git 工具」与「子 Agent 工具」两组,使 Debug 工具注册表分组与全部内置工具一一对应。前端 `ToolCallInline.vue` 与 `ThinkingInline.vue` 的 `FALLBACK_DISPLAY` 补齐全部工具中文名(含新增图书馆工具与既往未登记的工具)。`test_agent_tool_registry` / 工具目录相关定向测试通过,`npx vue-tsc --noEmit` 通过。
+- [x] 展示性: 制作一个"主页",以类似于GTAOL主页图片分块引导各种内容,最大的区是carousel.
+  - 分成上半和下半.
+    - 上半:左边2/3是一块,右边1/3上下切割为两块.
+    - 下半:左边1/3是一块,中间1/3是一块,右边1/3上下切割为两块.
+  - 块无阴影,每块之间要有一定的间隙,悬停时要有悬停光效(亮色为柔和主题色,暗色为白色).点击后跳转到相应页面.
+  - 块要有响应式布局.
+- [x] 提供agent图书馆工具.
 ## 2026-08-04
 - [x] Agent 对话操作区仅挂载到每个用户问题对应的最终 assistant 回答:中间 assistant 输出不再显示思考时长与复制/赞/踩按钮,Chat/Tool 两种模式均已覆盖并补充回归测试。
 - [x] 全项目 lucide 图标统一迁移为本地 Material outlined(ic) SVG(`IcIcon.vue`),移除全部 `lucide-vue-next` 引用(文件树、资源管理器、图谱、Debug、Agent、Git、图书馆、搜索、设置、Skill、收藏等全部页面),并为文件树/资源管理器/队列/图谱/MD-HTML/收藏/Debug 各页 toggle 加图标、滑块自动适配;`IcIcon.vue` 新增 `ic:outline-*` 映射并下载 SVG。`npx vue-tsc --noEmit` 通过。
