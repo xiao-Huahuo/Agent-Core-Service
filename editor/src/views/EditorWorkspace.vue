@@ -193,12 +193,16 @@ function toggleLeftGitSidebar() {
   if (sidebarHidden.value) {
     workspaceStore.setMainView('editor')
   }
-  gitLeftOpen.value = !gitLeftOpen.value
   if (gitLeftOpen.value) {
-    fileSidebarOpen.value = true
-    gitRightOpen.value = false
-    void gitStore.refresh()
+    // Git 面板已打开时再次点击: 直接关闭整个左侧栏, 不回落到文件树。
+    gitLeftOpen.value = false
+    fileSidebarOpen.value = false
+    return
   }
+  gitLeftOpen.value = true
+  fileSidebarOpen.value = true
+  gitRightOpen.value = false
+  void gitStore.refresh()
 }
 
 function toggleRightGitSidebar() {

@@ -1389,3 +1389,5 @@
 - 修正看板背景图目录:右下角工具轮播中看板 slide 的 image 由不存在的 dashboard 目录改为 visualization(与 MD-HTML 共用该图池,各 slide 独立取图)。
 
 - 右下角工具轮播新增"设置"页:settings slide(icon=settings, target=settings)复用新增的 assets/images/home/settings 图池(block/rectangle 各 2 张),点击可跳转设置视图。
+
+- 修复左侧 Git 面板再次点击回落文件树: toggleLeftGitSidebar 在 gitLeftOpen 已为 true 时再次点击改为同时关闭 git 面板与整个文件侧边栏(fileSidebarOpen=false), 不再只关 git 而露出文件树。Git 面板与文件树各自独立, 文件图标点击仍可从容纳 Git 的状态切回文件树。
