@@ -23,6 +23,12 @@ const APP_ICON_PATH = path.join(__dirname, '..', 'src', 'assets', 'icons', APP_I
 
 let mainWindow = null
 let tray = null
+let floatingWindow = null
+
+/** Resolve the window that owns a given IPC event, falling back to mainWindow. */
+function windowFromEvent(event) {
+  return BrowserWindow.fromWebContents(event.sender) || mainWindow
+}
 
 function buildDropEffectBuffer(mode) {
   const effect = mode === 'cut' ? 2 : 1
@@ -243,9 +249,12 @@ function waitForDevServer(attempts = 80, intervalMs = 250) {
   })
 }
 
-async function loadDevServer(window) {
+async function loadDevServer(window, query) {
   await waitForDevServer()
-  await window.loadURL(DEV_SERVER_URL)
+  const url = query
+    ? `${DEV_SERVER_URL}?${new URLSearchParams(query).toString()}`
+    : DEV_SERVER_URL
+  await window.loadURL(url)
 }
 
 function createTray() {
@@ -272,6 +281,12 @@ function createTray() {
           mainWindow.show()
           mainWindow.focus()
         }
+      },
+    },
+    {
+      label: '悬浮窗 / Floating',
+      click: () => {
+        toggleFloatingWindow()
       },
     },
     { type: 'separator' },
@@ -309,10 +324,22 @@ function createMainWindow() {
     },
   })
 
+  // 最大化时窗口铺满工作区,shape 内缩会让四边露出 1px 桌面,故最大化
+  // 清除 shape;非最大化时裁掉 DWM 边缘线。
+  const applyMainWindowShape = () => {
+    if (mainWindow.isDestroyed()) return
+    if (mainWindow.isMaximized()) {
+      mainWindow.setShape([])
+    } else {
+      applyTransparentShape(mainWindow)
+    }
+  }
+
   mainWindow.once('ready-to-show', () => {
     // 运行时兜底:部分 Windows 构建下构造参数里的透明背景不生效,
     // 圆角裁剪掉的四角会残留窗口默认白色直角层
     mainWindow.setBackgroundColor('#00000000')
+    applyMainWindowShape()
     mainWindow.show()
   })
 
@@ -323,8 +350,16 @@ function createMainWindow() {
       mainWindow.webContents.send('window:maximized-changed', mainWindow.isMaximized())
     }
   }
-  mainWindow.on('maximize', sendMaximizedState)
-  mainWindow.on('unmaximize', sendMaximizedState)
+  mainWindow.on('maximize', () => {
+    sendMaximizedState()
+    applyMainWindowShape()
+  })
+  mainWindow.on('unmaximize', () => {
+    sendMaximizedState()
+    applyMainWindowShape()
+  })
+  // setShape 区域是绝对像素,窗口 resize(拖动)后必须重新套用
+  mainWindow.on('resize', applyMainWindowShape)
 
   createTray()
 
@@ -350,6 +385,88 @@ function createMainWindow() {
     }
   } else {
     void mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+  }
+}
+
+const FLOATING_DEFAULT_WIDTH = 460
+const FLOATING_DEFAULT_HEIGHT = 172
+const FLOATING_CHAT_HEIGHT = 600
+
+// Windows 透明无边框窗口在矩形边缘仍会残留一条 1px 边框线(暗色下可见,
+// 直角的、紧贴窗口矩形)。thickFrame: false 对这种 DWM/Chromium 绘制无效。
+// 用 setShape 把窗口绘制区域内缩 1px,从原生层直接裁掉这条线。
+// 悬浮窗卡片是 20px margin、阴影最大扩散 10px;主窗口内容四周有留白,
+// 内缩 1px 不会影响任何内容。
+function applyTransparentShape(win) {
+  if (process.platform !== 'win32' || !win || win.isDestroyed()) {
+    return
+  }
+  const [width, height] = win.getSize()
+  win.setShape([
+    { x: 1, y: 1, width: Math.max(width - 2, 1), height: Math.max(height - 2, 1) },
+  ])
+}
+
+function createFloatingWindow() {
+  if (floatingWindow && !floatingWindow.isDestroyed()) {
+    return floatingWindow
+  }
+  floatingWindow = new BrowserWindow({
+    width: FLOATING_DEFAULT_WIDTH,
+    height: FLOATING_DEFAULT_HEIGHT,
+    frame: false,
+    transparent: true,
+    hasShadow: false,
+    // Windows 上无边框窗口默认仍用 WS_THICKFRAME 样式,会保留一圈系统
+    // 描边线(暗色透明窗口下露出直角细线)。关闭它改为 WS_POPUP,去掉这条线。
+    thickFrame: false,
+    backgroundColor: '#00000000',
+    show: false,
+    skipTaskbar: true,
+    resizable: false,
+    title: 'MetaWeave Floating',
+    icon: APP_ICON_PATH,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  })
+
+  floatingWindow.once('ready-to-show', () => {
+    floatingWindow.setBackgroundColor('#00000000')
+    applyTransparentShape(floatingWindow)
+    floatingWindow.showInactive()
+  })
+
+  // Close hides the floating window instead of destroying it.
+  floatingWindow.on('close', (event) => {
+    if (!app.isQuitting) {
+      event.preventDefault()
+      floatingWindow.hide()
+    }
+  })
+
+  if (isDevelopment()) {
+    void loadDevServer(floatingWindow, { floating: '1' })
+    if (shouldOpenDevTools()) {
+      floatingWindow.webContents.openDevTools({ mode: 'detach' })
+    }
+  } else {
+    void floatingWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), {
+      query: { floating: '1' },
+    })
+  }
+  return floatingWindow
+}
+
+function toggleFloatingWindow() {
+  const win = createFloatingWindow()
+  if (win.isVisible()) {
+    win.hide()
+  } else {
+    win.showInactive()
   }
 }
 
@@ -388,19 +505,20 @@ app.on('will-quit', () => {
   }
 })
 
-ipcMain.on('window:minimize', () => {
-  mainWindow?.minimize()
+ipcMain.on('window:minimize', (event) => {
+  windowFromEvent(event)?.minimize()
 })
 
-ipcMain.handle('window:toggle-maximize', () => {
-  if (!mainWindow) {
+ipcMain.handle('window:toggle-maximize', (event) => {
+  const win = windowFromEvent(event)
+  if (!win) {
     return false
   }
-  if (mainWindow.isMaximized()) {
-    mainWindow.unmaximize()
+  if (win.isMaximized()) {
+    win.unmaximize()
     return false
   }
-  mainWindow.maximize()
+  win.maximize()
   return true
 })
 
@@ -413,8 +531,8 @@ ipcMain.handle('system:list-font-families', async () => {
     .filter(Boolean)
 })
 
-ipcMain.on('window:close', () => {
-  mainWindow?.close()
+ipcMain.on('window:close', (event) => {
+  windowFromEvent(event)?.close()
 })
 
 ipcMain.handle('shell:open-external', async (_event, url) => {
@@ -441,11 +559,12 @@ ipcMain.handle('shell:show-item-in-folder', async (_event, filePath) => {
   shell.showItemInFolder(filePath)
 })
 
-ipcMain.handle('dialog:select-directory', async () => {
-  if (!mainWindow) {
+ipcMain.handle('dialog:select-directory', async (event) => {
+  const win = windowFromEvent(event)
+  if (!win) {
     return ''
   }
-  const result = await dialog.showOpenDialog(mainWindow, {
+  const result = await dialog.showOpenDialog(win, {
     properties: ['openDirectory'],
   })
   if (result.canceled || result.filePaths.length === 0) {
@@ -522,4 +641,83 @@ ipcMain.handle('files:copy-into-directory', async (_event, sourcePaths, targetDi
     copiedPaths.push(targetPath)
   }
   return { ok: copiedPaths.length > 0, paths: copiedPaths }
+})
+
+/* ---- Floating window IPC ---- */
+
+ipcMain.handle('floating:set-bounds', (event, size) => {
+  const win = windowFromEvent(event)
+  if (!win || win !== floatingWindow) {
+    return false
+  }
+  const width = Number.isFinite(size?.width) ? size.width : FLOATING_DEFAULT_WIDTH
+  const height = Number.isFinite(size?.height) ? size.height : FLOATING_DEFAULT_HEIGHT
+  const bounds = win.getBounds()
+  win.setBounds({ x: bounds.x, y: bounds.y, width, height })
+  // setShape 区域是绝对像素,窗口 resize 后必须重新套用,否则边缘线会回来
+  applyTransparentShape(floatingWindow)
+  return true
+})
+
+ipcMain.handle('floating:set-always-on-top', (event, mode) => {
+  const win = windowFromEvent(event)
+  if (!win || win !== floatingWindow) {
+    return false
+  }
+  if (mode === 'global') {
+    win.setAlwaysOnTop(true, 'screen-saver')
+  } else if (mode === 'normal') {
+    win.setAlwaysOnTop(true, 'normal')
+  } else {
+    win.setAlwaysOnTop(false)
+  }
+  return true
+})
+
+ipcMain.on('floating:close', (event) => {
+  const win = windowFromEvent(event)
+  if (win && win === floatingWindow) {
+    win.close()
+  }
+})
+
+ipcMain.handle('floating:set-visible', (_event, options) => {
+  if (!floatingWindow || floatingWindow.isDestroyed()) {
+    return false
+  }
+  if (options?.visible) {
+    floatingWindow.showInactive()
+  } else {
+    floatingWindow.hide()
+  }
+  return true
+})
+
+ipcMain.handle('floating:get-state', () => {
+  if (!floatingWindow || floatingWindow.isDestroyed()) {
+    return { visible: false, pinMode: 'off' }
+  }
+  return { visible: floatingWindow.isVisible() }
+})
+
+ipcMain.on('floating:toggle', () => {
+  toggleFloatingWindow()
+})
+
+// Forward theme / session changes from the main window to the floating window.
+// localStorage storage events do not cross Electron BrowserWindows, so sync
+// happens over IPC instead.
+ipcMain.on('agent:window-sync', (event, payload) => {
+  if (!floatingWindow || floatingWindow.isDestroyed()) {
+    return
+  }
+  // Ignore echoes coming back from the floating window itself to avoid a loop.
+  const sender = BrowserWindow.fromWebContents(event.sender)
+  if (sender === floatingWindow) {
+    return
+  }
+  const { type, value } = payload || {}
+  if (type === 'theme' || type === 'session') {
+    floatingWindow.webContents.send('agent:window-sync', { type, value })
+  }
 })

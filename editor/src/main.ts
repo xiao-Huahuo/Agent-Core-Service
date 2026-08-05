@@ -5,6 +5,7 @@ import '@fontsource/jetbrains-mono'
 import 'katex/dist/katex.min.css'
 
 import App from './App.vue'
+import { isFloatingWindow } from './floating/isFloating'
 import router from './router'
 import './assets/main.css'
 
@@ -15,13 +16,21 @@ const app = createApp(App)
 const desktopApi = window.agentEditorDesktop
 if (desktopApi?.isDesktop) {
   document.documentElement.classList.add('electron-window')
-  const syncMaximized = (maximized: boolean) => {
-    document.documentElement.classList.toggle('maximized', maximized)
+  if (isFloatingWindow) {
+    // The floating window keeps the app root fully transparent so the widget's
+    // CSS shadow can render in the surrounding gutter.
+    document.documentElement.classList.add('floating-window')
+  } else {
+    const syncMaximized = (maximized: boolean) => {
+      document.documentElement.classList.toggle('maximized', maximized)
+    }
+    desktopApi.onMaximizedChange(syncMaximized)
   }
-  desktopApi.onMaximizedChange(syncMaximized)
 }
 
 app.use(createPinia())
-app.use(router)
+if (!isFloatingWindow) {
+  app.use(router)
+}
 
 app.mount('#app')

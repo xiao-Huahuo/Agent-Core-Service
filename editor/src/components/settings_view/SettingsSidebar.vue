@@ -6,7 +6,7 @@
   selected key when the user switches sections.
 -->
 <script setup lang="ts">
-export type SettingsTabKey = 'basic' | 'appearance' | 'llm' | 'tools' | 'terminal' | 'web' | 'memory' | 'graph' | 'safety' | 'storage'
+export type SettingsTabKey = 'basic' | 'appearance' | 'llm' | 'tools' | 'terminal' | 'web' | 'memory' | 'graph' | 'safety' | 'storage' | 'floating'
 
 defineProps<{
   tabs: Array<{ key: SettingsTabKey; label: string }>

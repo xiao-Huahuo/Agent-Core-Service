@@ -26,6 +26,8 @@ const SHOW_INDEX_COLUMN_KEY = 'agent_editor_show_index_column'
 const SHOW_GRAPH_COLUMN_KEY = 'agent_editor_show_graph_column'
 const SHOW_FAVORITE_COLUMN_KEY = 'agent_editor_show_favorite_column'
 const SIDEBAR_DISPLAY_MODE_KEY = 'agent_editor_sidebar_display_mode'
+const FLOATING_ENABLED_KEY = 'agent_editor_floating_enabled'
+const FLOATING_PIN_MODE_KEY = 'agent_editor_floating_pin_mode'
 
 const DEFAULT_UI_FONT_STACK = 'var(--font-ui-default)'
 const DEFAULT_TEXT_FONT_STACK = 'var(--font-text-default)'
@@ -206,6 +208,10 @@ function normalizeSidebarDisplayMode(mode: string | null): SidebarDisplayMode {
   return mode === 'management' ? 'management' : 'icons'
 }
 
+function normalizeFloatingPinMode(mode: string | null): 'off' | 'normal' | 'global' {
+  return mode === 'off' || mode === 'global' ? mode : 'normal'
+}
+
 function loadProfile(): UserSettingsProfile {
   const raw = localStorage.getItem(PROFILE_KEY)
   if (!raw) {
@@ -248,6 +254,12 @@ export const useSettingsStore = defineStore('settings', () => {
 
   /** Left workspace sidebar mode: icon-only rail or wider management rail. */
   const sidebarDisplayMode = ref<SidebarDisplayMode>(normalizeSidebarDisplayMode(localStorage.getItem(SIDEBAR_DISPLAY_MODE_KEY)))
+
+  /** Whether the floating Agent window is available from tray / settings. */
+  const floatingEnabled = ref(localStorage.getItem(FLOATING_ENABLED_KEY) !== 'false')
+
+  /** Floating Agent window pin mode: off / normal (above normal apps) / global (above all). */
+  const floatingPinMode = ref<'off' | 'normal' | 'global'>(normalizeFloatingPinMode(localStorage.getItem(FLOATING_PIN_MODE_KEY)))
 
   /** Whether the editor shell can enter workspace routes. */
   const hasUserId = computed(() => profile.value.userId.trim().length > 0)
@@ -352,6 +364,8 @@ export const useSettingsStore = defineStore('settings', () => {
     themeMode.value = mode
     localStorage.setItem(THEME_KEY, mode)
     applyTheme()
+    // Keep the floating Agent window's theme in sync.
+    window.agentEditorDesktop?.windowSync?.('theme', mode)
   }
 
   /** Toggle between dark and light for the toolbar button. */
@@ -383,6 +397,16 @@ export const useSettingsStore = defineStore('settings', () => {
   function setSidebarDisplayMode(mode: SidebarDisplayMode) {
     sidebarDisplayMode.value = normalizeSidebarDisplayMode(mode)
     localStorage.setItem(SIDEBAR_DISPLAY_MODE_KEY, sidebarDisplayMode.value)
+  }
+
+  function setFloatingEnabled(value: boolean) {
+    floatingEnabled.value = value
+    localStorage.setItem(FLOATING_ENABLED_KEY, String(value))
+  }
+
+  function setFloatingPinMode(mode: 'off' | 'normal' | 'global') {
+    floatingPinMode.value = normalizeFloatingPinMode(mode)
+    localStorage.setItem(FLOATING_PIN_MODE_KEY, floatingPinMode.value)
   }
 
   function setAgentLoopMode(mode: AgentLoopMode) {
@@ -630,6 +654,10 @@ export const useSettingsStore = defineStore('settings', () => {
     setAgentLoopMode,
     setAgentAccessMode,
     setSidebarDisplayMode,
+    floatingEnabled,
+    setFloatingEnabled,
+    floatingPinMode,
+    setFloatingPinMode,
     updateProfile,
     setUiFontFamilies,
     setTextFontFamilies,

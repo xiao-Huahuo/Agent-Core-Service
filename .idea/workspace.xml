@@ -5,8 +5,19 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="主页v2">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/electron/main.cjs" beforeDir="false" afterPath="$PROJECT_DIR$/editor/electron/main.cjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/electron/preload.cjs" beforeDir="false" afterPath="$PROJECT_DIR$/editor/electron/preload.cjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/env.d.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/env.d.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/App.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/App.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/assets/main.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/main.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/SettingsSidebar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/SettingsSidebar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/main.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/main.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/session.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/session.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/settings.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -300,15 +311,7 @@
       <workItem from="1785746852479" duration="9173000" />
       <workItem from="1785760259593" duration="1427000" />
       <workItem from="1785840846651" duration="11558000" />
-      <workItem from="1785904382886" duration="8857000" />
-    </task>
-    <task id="LOCAL-00259" summary="侧边栏任务列表小改">
-      <option name="closed" value="true" />
-      <created>1785256462710</created>
-      <option name="number" value="00259" />
-      <option name="presentableId" value="LOCAL-00259" />
-      <option name="project" value="LOCAL" />
-      <updated>1785256462710</updated>
+      <workItem from="1785904382886" duration="14513000" />
     </task>
     <task id="LOCAL-00260" summary="MD-HTML可视化v1">
       <option name="closed" value="true" />
@@ -694,7 +697,15 @@
       <option name="project" value="LOCAL" />
       <updated>1785915474310</updated>
     </task>
-    <option name="localTasksCounter" value="308" />
+    <task id="LOCAL-00308" summary="主页v2">
+      <option name="closed" value="true" />
+      <created>1785915851932</created>
+      <option name="number" value="00308" />
+      <option name="presentableId" value="LOCAL-00308" />
+      <option name="project" value="LOCAL" />
+      <updated>1785915851932</updated>
+    </task>
+    <option name="localTasksCounter" value="309" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

@@ -116,6 +116,21 @@ html.electron-window.maximized #app {
   border-radius: 0;
 }
 
+/* Floating Agent window: the app root must stay fully transparent so the
+   widget's shadow can paint in the gutter around it. Without this the opaque
+   rounded #app background paints a "larger rectangle" behind the widget. */
+html.floating-window,
+html.floating-window body,
+html.floating-window #app {
+  background: transparent !important;
+}
+
+html.floating-window #app {
+  border-radius: 0 !important;
+  overflow: visible !important;
+  contain: none !important;
+}
+
 button,
 input,
 textarea {

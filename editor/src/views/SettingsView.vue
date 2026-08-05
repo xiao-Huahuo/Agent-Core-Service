@@ -15,6 +15,7 @@ import WebSearchSettingsSection from '@/components/settings_view/WebSearchSettin
 import GraphSettingsSection from '@/components/settings_view/GraphSettingsSection.vue'
 import SafetySettingsSection from '@/components/settings_view/SafetySettingsSection.vue'
 import StorageSettingsSection from '@/components/settings_view/StorageSettingsSection.vue'
+import FloatingSettingsSection from '@/components/settings_view/FloatingSettingsSection.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { ThemeMode } from '@/types/settings'
@@ -35,6 +36,7 @@ const tabs = [
   { key: 'graph' as const, label: '图谱' },
   { key: 'safety' as const, label: '安全审核' },
   { key: 'storage' as const, label: '存储管理' },
+  { key: 'floating' as const, label: '悬浮窗' },
 ]
 
 watch(activeTab, (tab) => {
@@ -707,6 +709,9 @@ onBeforeUnmount(() => {
       />
       <StorageSettingsSection
         v-if="activeTab === 'storage'"
+      />
+      <FloatingSettingsSection
+        v-if="activeTab === 'floating'"
       />
     </div>
   </div>

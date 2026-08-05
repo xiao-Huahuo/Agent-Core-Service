@@ -24,6 +24,9 @@ export const useSessionStore = defineStore('session', () => {
   const currentSessionId = ref<string | null>(null)
   const isLoading = ref(false)
 
+  /** Cross-window signal: mirrors the session id for the floating Agent window. */
+  const ACTIVE_SESSION_KEY = 'agent_editor_active_session_id'
+
   const currentSession = computed(
     () => sessions.value.find((session) => session.session_id === currentSessionId.value) ?? null,
   )
@@ -49,15 +52,21 @@ export const useSessionStore = defineStore('session', () => {
     const session = await createSession(userId, sessionName)
     sessions.value = [session, ...sessions.value.filter((item) => item.session_id !== session.session_id)]
     currentSessionId.value = session.session_id
+    localStorage.setItem(ACTIVE_SESSION_KEY, session.session_id)
+    window.agentEditorDesktop?.windowSync?.('session', session.session_id)
     return session.session_id
   }
 
   function select(sessionId: string) {
     currentSessionId.value = sessionId
+    localStorage.setItem(ACTIVE_SESSION_KEY, sessionId)
+    window.agentEditorDesktop?.windowSync?.('session', sessionId)
   }
 
   function clearSelection() {
     currentSessionId.value = null
+    localStorage.removeItem(ACTIVE_SESSION_KEY)
+    window.agentEditorDesktop?.windowSync?.('session', null)
   }
 
   async function remove(sessionId: string) {

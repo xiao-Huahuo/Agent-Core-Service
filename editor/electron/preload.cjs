@@ -34,4 +34,19 @@ contextBridge.exposeInMainWorld('agentEditorDesktop', {
   listFontFamilies: () => ipcRenderer.invoke('system:list-font-families'),
   getPathForFile: (file) => webUtils?.getPathForFile ? webUtils.getPathForFile(file) : (file?.path || ''),
   writeClipboardText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
+  // Floating window bridge.
+  floatingSetBounds: (size) => ipcRenderer.invoke('floating:set-bounds', size),
+  floatingSetAlwaysOnTop: (mode) => ipcRenderer.invoke('floating:set-always-on-top', mode),
+  floatingClose: () => ipcRenderer.send('floating:close'),
+  floatingSetVisible: (visible) => ipcRenderer.invoke('floating:set-visible', { visible }),
+  floatingGetState: () => ipcRenderer.invoke('floating:get-state'),
+  floatingToggle: () => ipcRenderer.send('floating:toggle'),
+  // Cross-window sync: the main window broadcasts theme/session changes to the
+  // floating window; the floating window subscribes with onWindowSync.
+  windowSync: (type, value) => ipcRenderer.send('agent:window-sync', { type, value }),
+  onWindowSync: (callback) => {
+    const handler = (_event, payload) => callback(payload)
+    ipcRenderer.on('agent:window-sync', handler)
+    return () => ipcRenderer.removeListener('agent:window-sync', handler)
+  },
 })

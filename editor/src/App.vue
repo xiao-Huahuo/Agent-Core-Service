@@ -11,6 +11,8 @@ import { RouterView } from 'vue-router'
 
 import WifiLoader from '@/components/common/WifiLoader.vue'
 import UserIdGate from '@/components/common/UserIdGate.vue'
+import FloatingAgentRoot from '@/components/floating/FloatingAgentRoot.vue'
+import { isFloatingWindow } from '@/floating/isFloating'
 import { useSettingsStore } from '@/stores/settings'
 
 const settingsStore = useSettingsStore()
@@ -64,6 +66,7 @@ onMounted(async () => {
   <div v-if="!backendReady" class="app-loading">
     <WifiLoader />
   </div>
+  <FloatingAgentRoot v-else-if="isFloatingWindow && settingsStore.hasUserId" />
   <RouterView v-else-if="settingsStore.hasUserId" />
   <UserIdGate v-else />
 </template>
