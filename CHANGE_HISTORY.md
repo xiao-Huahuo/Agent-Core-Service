@@ -21,6 +21,7 @@
   - 块无阴影,每块之间要有一定的间隙,悬停时要有悬停光效(亮色为柔和主题色,暗色为白色).点击后跳转到相应页面.
   - 块要有响应式布局.
 - [x] 提供agent图书馆工具.
+- [x] 娱乐功能：一体化Agent悬浮框.
 ## 2026-08-04
 - [x] Agent 对话操作区仅挂载到每个用户问题对应的最终 assistant 回答:中间 assistant 输出不再显示思考时长与复制/赞/踩按钮,Chat/Tool 两种模式均已覆盖并补充回归测试。
 - [x] 全项目 lucide 图标统一迁移为本地 Material outlined(ic) SVG(`IcIcon.vue`),移除全部 `lucide-vue-next` 引用(文件树、资源管理器、图谱、Debug、Agent、Git、图书馆、搜索、设置、Skill、收藏等全部页面),并为文件树/资源管理器/队列/图谱/MD-HTML/收藏/Debug 各页 toggle 加图标、滑块自动适配;`IcIcon.vue` 新增 `ic:outline-*` 映射并下载 SVG。`npx vue-tsc --noEmit` 通过。
