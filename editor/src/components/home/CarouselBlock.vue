@@ -4,14 +4,14 @@
   用法:
   GTAOL 风格主视觉轮播,占据主页最大区块。每张幻灯片为可点击入口,
   点击后通过 open 事件上抛跳转目标。默认自动播放,悬停或聚焦时暂停。
+  compact 紧凑模式用于右下角工具轮播:标题/图标与导航块一致、不显示胶囊。
+  每张幻灯片由 CarouselSlide 子组件独立渲染,自带背景图切换与文字动态对比。
 -->
-<script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-
-import IcIcon from '@/components/common/IcIcon.vue'
+<script lang="ts">
 import type { WorkspaceMainView } from '@/types/knowledge'
 
-interface CarouselSlide {
+/** 轮播幻灯片数据。 */
+export interface CarouselSlide {
   /** IcIcon 图标名。 */
   icon: string
   /** 幻灯片标题。 */
@@ -22,11 +22,26 @@ interface CarouselSlide {
   hint: string
   /** 点击后跳转的工作区视图。 */
   target: WorkspaceMainView
+  /** 背景图对应的块目录名(assets/images/home/<名>), 缺省则纯色底。 */
+  image?: string
 }
+</script>
 
-const props = defineProps<{ slides?: CarouselSlide[] }>()
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+
+import type { WorkspaceMainView } from '@/types/knowledge'
+import CarouselSlide from './CarouselSlide.vue'
+
+const props = defineProps<{
+  slides?: CarouselSlide[]
+  /** 紧凑模式: 用于小卡片轮播,标题/图标与导航块一致且不显示胶囊。 */
+  compact?: boolean
+}>()
 
 const emit = defineEmits<{ open: [view: WorkspaceMainView] }>()
+
+const isCompact = computed(() => props.compact)
 
 const DEFAULT_SLIDES: CarouselSlide[] = [
   {
@@ -35,6 +50,7 @@ const DEFAULT_SLIDES: CarouselSlide[] = [
     subtitle: '与 AI 对话,让智能体协助你总结、整理与可视化知识库内容',
     hint: '开始对话',
     target: 'agent',
+    image: 'agent',
   },
   {
     icon: 'graph',
@@ -42,6 +58,7 @@ const DEFAULT_SLIDES: CarouselSlide[] = [
     subtitle: '将文档抽取为实体与关系,一键洞察知识库的整体结构',
     hint: '查看图谱',
     target: 'graph',
+    image: 'graph',
   },
   {
     icon: 'book',
@@ -49,6 +66,7 @@ const DEFAULT_SLIDES: CarouselSlide[] = [
     subtitle: '浏览、收藏与管理你的知识库文档与文件夹',
     hint: '进入图书馆',
     target: 'library',
+    image: 'library',
   },
   {
     icon: 'search',
@@ -56,6 +74,7 @@ const DEFAULT_SLIDES: CarouselSlide[] = [
     subtitle: '全文检索与语义检索双通道,快速定位目标文档',
     hint: '开始搜索',
     target: 'search',
+    image: 'search',
   },
   {
     icon: 'code',
@@ -63,6 +82,7 @@ const DEFAULT_SLIDES: CarouselSlide[] = [
     subtitle: '让 AI 将文档重排为更精美的 HTML 可视化页面',
     hint: '去可视化',
     target: 'visualization',
+    image: 'md-html',
   },
 ]
 
@@ -100,6 +120,7 @@ onBeforeUnmount(stopAutoplay)
 <template>
   <div
     class="carousel-block"
+    :class="{ compact: isCompact }"
     @mouseenter="paused = true"
     @mouseleave="paused = false"
     @focusin="paused = true"
@@ -109,22 +130,13 @@ onBeforeUnmount(stopAutoplay)
       class="carousel-track"
       :style="{ transform: `translateX(-${activeIndex * 100}%)` }"
     >
-      <button
-        v-for="(slide, index) in slides"
+      <CarouselSlide
+        v-for="slide in slides"
         :key="slide.target"
-        class="carousel-slide"
-        type="button"
-        :aria-label="`进入${slide.title}`"
-        @click="emit('open', slide.target)"
-      >
-        <span class="carousel-index">{{ String(index + 1).padStart(2, '0') }}</span>
-        <IcIcon :name="slide.icon" :size="64" class="carousel-icon" aria-hidden="true" />
-        <span class="carousel-title">{{ slide.title }}</span>
-        <div class="carousel-sub-row">
-          <span class="carousel-subtitle">{{ slide.subtitle }}</span>
-          <span class="carousel-hint">{{ slide.hint }} →</span>
-        </div>
-      </button>
+        :slide="slide"
+        :compact="isCompact"
+        @open="(view) => emit('open', view)"
+      />
     </div>
     <div class="carousel-dots">
       <button
@@ -181,98 +193,6 @@ onBeforeUnmount(stopAutoplay)
   transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.carousel-slide {
-  position: relative;
-  flex: 0 0 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-end;
-  gap: var(--space-8);
-  min-width: 0;
-  padding: var(--space-32);
-  border: 0;
-  background: var(--color-surface);
-  color: var(--color-text);
-  text-align: left;
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.carousel-index {
-  position: absolute;
-  top: var(--space-24);
-  left: var(--space-32);
-  font-family: var(--font-code);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  letter-spacing: 0.12em;
-}
-
-.carousel-icon {
-  position: absolute;
-  top: 50%;
-  right: var(--space-32);
-  transform: translateY(-50%);
-  opacity: 0.4;
-  color: var(--color-text-secondary);
-  transition: opacity var(--transition-normal), transform var(--transition-normal);
-}
-
-.carousel-slide:hover .carousel-icon {
-  opacity: 0.66;
-  transform: translateY(-50%) scale(1.06);
-}
-
-.carousel-title,
-.carousel-sub-row {
-  position: relative;
-  z-index: 1;
-}
-
-.carousel-title {
-  max-width: min(70%, 720px);
-  font-size: calc(1.9rem * var(--font-scale));
-  font-weight: var(--font-weight-semibold);
-  line-height: 1.15;
-}
-
-/* 第二行: 小字副标题 + 右侧胶囊 */
-.carousel-sub-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-12);
-  max-width: min(70%, 720px);
-}
-
-.carousel-subtitle {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: calc(0.95rem * var(--font-scale));
-  line-height: 1.5;
-  color: var(--color-text-secondary);
-}
-
-.carousel-hint {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  padding: var(--space-6) var(--space-16);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
-  color: var(--color-primary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  transition: background var(--transition-fast);
-}
-
-.carousel-slide:hover .carousel-hint {
-  background: color-mix(in srgb, var(--color-primary) 26%, transparent);
-}
-
 .carousel-dots {
   position: absolute;
   bottom: var(--space-16);
@@ -303,11 +223,6 @@ onBeforeUnmount(stopAutoplay)
   background: var(--color-primary);
 }
 
-.carousel-slide:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: -2px;
-}
-
 .carousel-dot:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
@@ -315,9 +230,7 @@ onBeforeUnmount(stopAutoplay)
 
 @media (prefers-reduced-motion: reduce) {
   .carousel-block::after,
-  .carousel-track,
-  .carousel-icon,
-  .carousel-hint {
+  .carousel-track {
     transition: none;
   }
 }

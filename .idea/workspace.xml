@@ -4,26 +4,50 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="提示词小改">
-      <change beforePath="$PROJECT_DIR$/.idea/MetaWeave.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/MetaWeave.iml" afterDir="false" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="主页v1">
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/agent/block/anaterate-woman-8026954_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/agent/block/juliush-ai-generated-7775990_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/agent/rectangle/brianpenny-artificial-intelligence-7450797_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/agent/rectangle/rox_buwa-electronic-5902163_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/debug/block/clarkdonald413-linux-4259595_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/debug/block/suixin390-data-5606639_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/debug/rectangle/fernandoz-work-environment-10392555_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/debug/rectangle/stocksnap-coding-924920_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/files/block/godoycordoba-firm-2003808_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/files/block/jarmoluk-architect-254579_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/files/rectangle/bru-no-coffee-2737047_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/files/rectangle/vargazs-folder-1049826_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/graph/block/6db9dcb0f4e3bc1d662bb2aeff324500.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/graph/block/PixPin_2026-08-05_14-53-50.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/graph/rectangle/PixPin_2026-08-05_14-53-03.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/graph/rectangle/PixPin_2026-08-05_14-54-33.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/library/block/nelistaneva-woman-9064449_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/library/block/stocksnap-books-2596809_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/library/rectangle/alexandra_koch-library-7976837_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/library/rectangle/ejaera-library-7598247_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/md-html/block/chas_artist-laptop-10381734_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/md-html/block/pexels-laptop-1836990_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/md-html/rectangle/marijana1-science-3480102_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/md-html/rectangle/pexels-blur-1853262_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/search/block/422737-google-485611_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/search/block/anatoly777-newspaper-3844071_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/search/rectangle/fernandozhiminaicela-technology-3184426_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/search/rectangle/roksana96-telescope-5154664_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/settings/block/nabeelshoukat-hd-iphone-wallpaper-8431262_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/settings/block/stocksnap-gear-stick-923294_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/skills/block/clarencealford-music-7504778_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/skills/block/geralt-adult-education-3812693_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/skills/rectangle/mrha-pottery-10258355_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/skills/rectangle/yousafbhutta-watercolor-7292245_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/visualization/block/pix1861-chart-1905225_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/visualization/block/sergeitokmakov-stock-market-6693060_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/visualization/rectangle/sergeitokmakov-stock-6283760_1920.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/editor/src/assets/images/home/visualization/rectangle/sergeitokmakov-stock-6682491_1920.jpg" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/AGENTS.md" beforeDir="false" afterPath="$PROJECT_DIR$/AGENTS.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/settings_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/settings_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/tools/builtin.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/builtin.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/tools/definitions.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/tools/definitions.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/assets/ui-system.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/ui-system.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/common/IcIcon.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/common/IcIcon.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ThinkingInline.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ThinkingInline.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/agent_chat/ToolCallInline.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/workspace.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/workspace.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/types/knowledge.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/types/knowledge.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/开发规范.md" beforeDir="false" afterPath="$PROJECT_DIR$/开发规范.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/home/CarouselBlock.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/home/CarouselBlock.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/home/NavBlock.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/home/NavBlock.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/HomeView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/HomeView.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -79,52 +103,52 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Batch.启动.executor&quot;: &quot;Run&quot;,
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;Python.main.executor&quot;: &quot;Run&quot;,
-    &quot;Python.requests_test.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_agent_core_service.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;aidebugger.tracer.lastRunConfigName&quot;: &quot;main&quot;,
-    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;last_opened_file_path&quot;: &quot;D:/Projects/Python/MetaWeave/editor/src/assets/icons/svg/flags/cif&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;prettierjs.PrettierConfiguration.Package&quot;: &quot;D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\prettier&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;project.propVCSSupport.DirectoryMappings&quot;,
-    &quot;ts.external.directory.path&quot;: &quot;D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\typescript\\lib&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Batch.启动.executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.main.executor": "Run",
+    "Python.requests_test.executor": "Run",
+    "Python.test_agent_core_service.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "aidebugger.tracer.lastRunConfigName": "main",
+    "dart.analysis.tool.window.visible": "false",
+    "git-widget-placeholder": "master",
+    "last_opened_file_path": "D:/Projects/Python/MetaWeave/editor/src/assets/images/home/settings/block",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "prettierjs.PrettierConfiguration.Package": "D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\prettier",
+    "settings.editor.selected.configurable": "project.propVCSSupport.DirectoryMappings",
+    "ts.external.directory.path": "D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\typescript\\lib",
+    "vue.rearranger.settings.migration": "true"
   },
-  &quot;keyToStringList&quot;: {
-    &quot;vue.recent.templates&quot;: [
-      &quot;Vue Composition API Component&quot;,
-      &quot;Vue Options API Component&quot;
+  "keyToStringList": {
+    "vue.recent.templates": [
+      "Vue Composition API Component",
+      "Vue Options API Component"
     ]
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
-      <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\icons\svg\flags\cif" />
-      <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\icons\svg\flags" />
-      <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\icons\svg\circle-flags" />
-      <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\icons\svg" />
-      <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\icons\svg\line-md" />
+      <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\images\home\settings\block" />
+      <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\images\home\skills\block" />
+      <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\images\home\skills\rectangle" />
+      <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\images\home\search\rectangle" />
+      <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\images\home\search\block" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\images\home\debug\block" />
       <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\icons\svg\dynamic" />
       <recent name="D:\Projects\Python\MetaWeave\supercomponents\new\明暗切换" />
       <recent name="D:\Projects\Python\MetaWeave\supercomponents\new\agent" />
       <recent name="D:\Projects\Python\MetaWeave\supercomponents\new" />
-      <recent name="D:\Projects\Python\MetaWeave\supercomponents\old" />
     </key>
   </component>
   <component name="RunManager" selected="Batch.启动">
@@ -317,15 +341,7 @@
       <workItem from="1785746852479" duration="9173000" />
       <workItem from="1785760259593" duration="1427000" />
       <workItem from="1785840846651" duration="11558000" />
-      <workItem from="1785904382886" duration="3187000" />
-    </task>
-    <task id="LOCAL-00257" summary="管理栏模式">
-      <option name="closed" value="true" />
-      <created>1785253943837</created>
-      <option name="number" value="00257" />
-      <option name="presentableId" value="LOCAL-00257" />
-      <option name="project" value="LOCAL" />
-      <updated>1785253943837</updated>
+      <workItem from="1785904382886" duration="8298000" />
     </task>
     <task id="LOCAL-00258" summary="管理栏模式">
       <option name="closed" value="true" />
@@ -711,14 +727,21 @@
       <option name="project" value="LOCAL" />
       <updated>1785860444356</updated>
     </task>
-    <option name="localTasksCounter" value="306" />
+    <task id="LOCAL-00306" summary="主页v1">
+      <option name="closed" value="true" />
+      <created>1785910200848</created>
+      <option name="number" value="00306" />
+      <option name="presentableId" value="LOCAL-00306" />
+      <option name="project" value="LOCAL" />
+      <updated>1785910200848</updated>
+    </task>
+    <option name="localTasksCounter" value="307" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Git v1" />
     <MESSAGE value="Git v2" />
     <MESSAGE value="Git v3" />
     <MESSAGE value="修复了claudecode认为的四个问题" />
@@ -743,7 +766,8 @@
     <MESSAGE value="codex图标" />
     <MESSAGE value="electron大圆角" />
     <MESSAGE value="提示词小改" />
-    <option name="LAST_COMMIT_MESSAGE" value="提示词小改" />
+    <MESSAGE value="主页v1" />
+    <option name="LAST_COMMIT_MESSAGE" value="主页v1" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
