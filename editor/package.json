@@ -106,9 +106,10 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
+      "createDesktopShortcut": false,
       "createStartMenuShortcut": true,
-      "shortcutName": "MetaWeave"
+      "shortcutName": "MetaWeave",
+      "include": "scripts/installer.nsh"
     }
   }
 }

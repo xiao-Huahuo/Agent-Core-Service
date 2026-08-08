@@ -24,6 +24,12 @@ const APP_ICON_PATH = path.join(__dirname, '..', 'src', 'assets', 'icons', APP_I
 
 app.setName('MetaWeave')
 
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
+if (!hasSingleInstanceLock) {
+  app.quit()
+  process.exit(0)
+}
+
 let mainWindow = null
 let tray = null
 let floatingWindow = null
@@ -237,13 +243,13 @@ function waitForServerUrl(serverUrl, attempts = 80, intervalMs = 250) {
       const socket = net.connect(port, url.hostname)
       socket.once('connect', () => {
         socket.destroy()
-        resolve()
+        resolve(true)
       })
       socket.once('error', () => {
         socket.destroy()
         count += 1
         if (count >= attempts) {
-          resolve()
+          resolve(false)
         } else {
           setTimeout(tryConnect, intervalMs)
         }
@@ -258,7 +264,9 @@ function waitForDevServer(attempts = 80, intervalMs = 250) {
 }
 
 async function loadDevServer(window, query) {
-  await waitForDevServer()
+  if (!await waitForDevServer()) {
+    throw new Error(`Vite development server is unavailable: ${DEV_SERVER_URL}`)
+  }
   const url = query
     ? `${DEV_SERVER_URL}?${new URLSearchParams(query).toString()}`
     : DEV_SERVER_URL
@@ -271,6 +279,37 @@ function packagedBackendPath() {
 
 function packagedDefaultResourcesPath() {
   return path.join(process.resourcesPath, 'default-resources')
+}
+
+function startupPage(title, message, isError = false) {
+  const accent = isError ? '#ff6b7a' : '#8b7bff'
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #11121a; color: #f4f4f7; }
+    body { display: grid; place-items: center; }
+    main { width: min(560px, calc(100vw - 64px)); padding: 32px; box-sizing: border-box; border: 1px solid #303243; border-radius: 16px; background: #191b27; box-shadow: 0 20px 60px #0008; }
+    h1 { margin: 0 0 12px; font-size: 22px; font-weight: 600; }
+    p { margin: 0; color: #aeb1c2; line-height: 1.6; white-space: pre-wrap; }
+    .mark { width: 10px; height: 10px; margin-bottom: 20px; border-radius: 50%; background: ${accent}; box-shadow: 0 0 18px ${accent}; }
+  </style></head><body><main><div class="mark"></div><h1>${title}</h1><p>${message}</p></main></body></html>`
+}
+
+async function loadStartupPage(window) {
+  await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(startupPage('MetaWeave', '正在启动本地 Agent 服务，请稍候…'))}`)
+}
+
+function isAbortedNavigation(error) {
+  return String(error).includes('ERR_ABORTED')
+}
+
+async function showStartupError(window, error) {
+  if (!window || window.isDestroyed()) {
+    return
+  }
+  const message = error instanceof Error ? error.message : String(error)
+  await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(startupPage('MetaWeave 启动失败', message, true))}`)
+  window.show()
+  window.focus()
 }
 
 function userProjectRoot() {
@@ -335,6 +374,24 @@ async function startPackagedBackend() {
   })
 }
 
+function stopPackagedBackend() {
+  if (!backendProcess) {
+    return
+  }
+  const processToStop = backendProcess
+  const pid = processToStop.pid
+  processToStop.removeAllListeners()
+  backendProcess = null
+  if (process.platform === 'win32') {
+    childProcess.spawnSync('taskkill.exe', ['/pid', String(pid), '/t', '/f'], {
+      windowsHide: true,
+      stdio: 'ignore',
+    })
+    return
+  }
+  processToStop.kill()
+}
+
 function isTcpServerReady(serverUrl) {
   const url = new URL(serverUrl)
   const port = Number(url.port || 80)
@@ -352,7 +409,9 @@ function isTcpServerReady(serverUrl) {
 }
 
 async function loadPackagedBackend(window, query) {
-  await waitForServerUrl(BACKEND_SERVER_URL, 240, 500)
+  if (!await waitForServerUrl(BACKEND_SERVER_URL, 240, 500)) {
+    throw new Error(`内置 Agent 服务未能在规定时间内启动: ${BACKEND_SERVER_URL}`)
+  }
   const url = query
     ? `${BACKEND_SERVER_URL}?${new URLSearchParams(query).toString()}`
     : BACKEND_SERVER_URL
@@ -493,7 +552,11 @@ function createMainWindow() {
       mainWindow.webContents.openDevTools({ mode: 'detach' })
     }
   } else {
-    void loadPackagedBackend(mainWindow)
+    void loadStartupPage(mainWindow).catch((error) => {
+      if (!isAbortedNavigation(error)) {
+        console.error('Failed to load startup page:', error)
+      }
+    })
   }
 }
 
@@ -577,9 +640,32 @@ function toggleFloatingWindow() {
   }
 }
 
+if (hasSingleInstanceLock) {
+  app.on('second-instance', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return
+    }
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore()
+    }
+    mainWindow.show()
+    mainWindow.focus()
+  })
+}
+
 app.whenReady().then(async () => {
-  await startPackagedBackend()
   createMainWindow()
+
+  if (!isDevelopment()) {
+    try {
+      await startPackagedBackend()
+      await loadPackagedBackend(mainWindow)
+    } catch (error) {
+      await showStartupError(mainWindow, error)
+      return
+    }
+  }
+
   // 悬浮窗随主窗口同步启动。
   createFloatingWindow()
 
@@ -613,10 +699,7 @@ app.on('will-quit', () => {
     tray.destroy()
     tray = null
   }
-  if (backendProcess) {
-    backendProcess.kill()
-    backendProcess = null
-  }
+  stopPackagedBackend()
 })
 
 ipcMain.on('window:minimize', (event) => {

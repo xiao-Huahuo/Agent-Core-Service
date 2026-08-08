@@ -1406,3 +1406,9 @@
 - 修复 Windows 安装包启动器: `build-win-installer.cjs` 不再通过 `spawnSync` 直接启动 `.cmd` 文件,改为使用当前 Node 进程执行 electron-builder CLI,解决 `spawnSync electron-builder.cmd EINVAL`。
 - 调整 Electron Builder 使用本地 `node_modules/electron/dist` 作为运行时来源,避免安装包构建阶段重复访问 Electron 下载地址导致网络超时。
 - README 技术与结构章节新增“项目结构”功能树:补充后端 API、AgentCore、工具、服务、RAG、资源目录,以及 Electron 主进程、Vue 页面、组件、API、状态和构建脚本职责,并标注运行时数据与发布产物边界。
+- 修复 Electron 生产启动体验:加入单实例锁和重复启动聚焦已有窗口;主窗口先显示本地启动页再等待 PyInstaller 后端;后端超时或失败时在窗口内显示错误,避免长时间透明空窗。
+- 修复 PyInstaller 后端启动崩溃:移除 `AgentService.spec` 对 `setuptools` 的排除,保留 `pkg_resources` 运行时钩子所需的 `jaraco` 依赖,解决 `ModuleNotFoundError: No module named 'jaraco'`。
+- 调整 PyInstaller 排除项:同步移除对 `wheel` 的排除,避免 setuptools 运行时钩子与 `ExcludedModule('wheel')` 冲突导致后端构建失败。
+# Packaging: added an assisted NSIS installer page with a default-enabled desktop shortcut checkbox; disabled fixed desktop shortcut creation while keeping the Start Menu shortcut.
+# Fixed packaged startup navigation race and Windows backend cleanup: ignore the expected startup-page `ERR_ABORTED` when the real page loads, and terminate the packaged backend process tree on quit; NSIS desktop shortcuts now use an installed `.ico` file explicitly.
+# Adjusted desktop shortcut icon resolution to read icon index 0 directly from `MetaWeave.exe` and notify Windows Explorer after shortcut creation, avoiding stale or unresolved external `.ico` shortcut icons.

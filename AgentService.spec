@@ -43,8 +43,6 @@ a = Analysis(
     excludes=[
         'pytest',
         'pip',
-        'setuptools',
-        'wheel',
         'torchaudio',
         'torchvision',
         'nvidia',
