@@ -18,12 +18,16 @@ const path = require('node:path')
 const { handleEditShortcut } = require('./edit-shortcuts.cjs')
 
 const DEV_SERVER_URL = process.env.ELECTRON_RENDERER_URL || 'http://127.0.0.1:5173'
+const BACKEND_SERVER_URL = process.env.METAWEAVE_BACKEND_URL || 'http://127.0.0.1:8002'
 const APP_ICON_FILENAME = process.platform === 'darwin' ? 'app.icns' : 'app.ico'
 const APP_ICON_PATH = path.join(__dirname, '..', 'src', 'assets', 'icons', APP_ICON_FILENAME)
+
+app.setName('MetaWeave')
 
 let mainWindow = null
 let tray = null
 let floatingWindow = null
+let backendProcess = null
 
 /** Resolve the window that owns a given IPC event, falling back to mainWindow. */
 function windowFromEvent(event) {
@@ -222,10 +226,10 @@ function shouldOpenDevTools() {
   return process.env.ELECTRON_OPEN_DEVTOOLS === 'true'
 }
 
-function waitForDevServer(attempts = 80, intervalMs = 250) {
+function waitForServerUrl(serverUrl, attempts = 80, intervalMs = 250) {
   // 轮询 TCP 端口而不是拿 loadURL 失败当探测手段:连接被拒时 Chromium 会
   // 向终端刷 ERR_CONNECTION_REFUSED,且不受 catch 控制。端口探测成功后才真正加载。
-  const url = new URL(DEV_SERVER_URL)
+  const url = new URL(serverUrl)
   const port = Number(url.port || 80)
   return new Promise((resolve) => {
     let count = 0
@@ -249,11 +253,109 @@ function waitForDevServer(attempts = 80, intervalMs = 250) {
   })
 }
 
+function waitForDevServer(attempts = 80, intervalMs = 250) {
+  return waitForServerUrl(DEV_SERVER_URL, attempts, intervalMs)
+}
+
 async function loadDevServer(window, query) {
   await waitForDevServer()
   const url = query
     ? `${DEV_SERVER_URL}?${new URLSearchParams(query).toString()}`
     : DEV_SERVER_URL
+  await window.loadURL(url)
+}
+
+function packagedBackendPath() {
+  return path.join(process.resourcesPath, 'backend', 'AgentService.exe')
+}
+
+function packagedDefaultResourcesPath() {
+  return path.join(process.resourcesPath, 'default-resources')
+}
+
+function userProjectRoot() {
+  return app.getPath('userData')
+}
+
+function copyMissing(source, target) {
+  if (!fs.existsSync(source) || fs.existsSync(target)) {
+    return
+  }
+  fs.cpSync(source, target, { recursive: true })
+}
+
+function ensurePackagedUserResources() {
+  if (!app.isPackaged) {
+    return userProjectRoot()
+  }
+  const projectRoot = userProjectRoot()
+  const resourcesRoot = path.join(projectRoot, 'resources')
+  const defaultsRoot = packagedDefaultResourcesPath()
+
+  fs.mkdirSync(path.join(resourcesRoot, 'knowledge'), { recursive: true })
+  fs.mkdirSync(path.join(resourcesRoot, 'mcp'), { recursive: true })
+  copyMissing(path.join(defaultsRoot, 'mcp', 'example.json'), path.join(resourcesRoot, 'mcp', 'example.json'))
+  copyMissing(path.join(defaultsRoot, 'safety'), path.join(resourcesRoot, 'safety'))
+  copyMissing(path.join(defaultsRoot, 'skills'), path.join(resourcesRoot, 'skills'))
+
+  return projectRoot
+}
+
+async function startPackagedBackend() {
+  if (!app.isPackaged || process.platform !== 'win32') {
+    return
+  }
+  if (await isTcpServerReady(BACKEND_SERVER_URL)) {
+    return
+  }
+  const backendExe = packagedBackendPath()
+  if (!fs.existsSync(backendExe)) {
+    dialog.showErrorBox('MetaWeave 后端缺失', `未找到内置后端: ${backendExe}`)
+    app.quit()
+    return
+  }
+  const projectRoot = ensurePackagedUserResources()
+  backendProcess = childProcess.spawn(backendExe, [], {
+    cwd: projectRoot,
+    detached: false,
+    env: {
+      ...process.env,
+      AGENT_PROJECT_ROOT: projectRoot,
+      AGENT_BASE_DATA_DIR: path.join(projectRoot, 'runtime'),
+    },
+    stdio: 'ignore',
+    windowsHide: true,
+  })
+  backendProcess.once('error', (error) => {
+    dialog.showErrorBox('MetaWeave 后端启动失败', String(error))
+    app.quit()
+  })
+  backendProcess.once('exit', () => {
+    backendProcess = null
+  })
+}
+
+function isTcpServerReady(serverUrl) {
+  const url = new URL(serverUrl)
+  const port = Number(url.port || 80)
+  return new Promise((resolve) => {
+    const socket = net.connect(port, url.hostname)
+    socket.once('connect', () => {
+      socket.destroy()
+      resolve(true)
+    })
+    socket.once('error', () => {
+      socket.destroy()
+      resolve(false)
+    })
+  })
+}
+
+async function loadPackagedBackend(window, query) {
+  await waitForServerUrl(BACKEND_SERVER_URL, 240, 500)
+  const url = query
+    ? `${BACKEND_SERVER_URL}?${new URLSearchParams(query).toString()}`
+    : BACKEND_SERVER_URL
   await window.loadURL(url)
 }
 
@@ -310,6 +412,13 @@ function createMainWindow() {
     // 透明窗口默认仍带系统阴影,Windows 会在四角绘制直角的半透明阴影边框,
     // 与 CSS 圆角不匹配(暗色下明显)。关闭阴影让四角真正透明。
     hasShadow: false,
+    // Windows 关键约束:可调整大小的 frameless 窗口必须保留 WS_THICKFRAME 样式
+    // 才能从边缘拖拽改尺寸,该样式会强制窗口带一圈系统装饰(雾化/阴影"隔层",
+    // 暗色下可见),并让 thickFrame:false 失效。与悬浮窗完全一致:resizable:false
+    // + thickFrame:false 改用 WS_POPUP,彻底去掉这层装饰。代价:主窗口不再支持
+    // 从边缘拖拽调整大小,改为最大化/还原按钮控制。
+    resizable: false,
+    thickFrame: false,
     // 必须显式全透明:Electron 未设置 backgroundColor 时窗口默认绘制白色,
     // 暗色模式下 #app 圆角裁剪掉的四角会露出白色直角层
     backgroundColor: '#00000000',
@@ -384,7 +493,7 @@ function createMainWindow() {
       mainWindow.webContents.openDevTools({ mode: 'detach' })
     }
   } else {
-    void mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+    void loadPackagedBackend(mainWindow)
   }
 }
 
@@ -454,9 +563,7 @@ function createFloatingWindow() {
       floatingWindow.webContents.openDevTools({ mode: 'detach' })
     }
   } else {
-    void floatingWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), {
-      query: { floating: '1' },
-    })
+    void loadPackagedBackend(floatingWindow, { floating: '1' })
   }
   return floatingWindow
 }
@@ -470,8 +577,11 @@ function toggleFloatingWindow() {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await startPackagedBackend()
   createMainWindow()
+  // 悬浮窗随主窗口同步启动。
+  createFloatingWindow()
 
   // Keep clipboard roles available without claiming renderer-owned history keys.
   const template = [
@@ -502,6 +612,10 @@ app.on('will-quit', () => {
   if (tray) {
     tray.destroy()
     tray = null
+  }
+  if (backendProcess) {
+    backendProcess.kill()
+    backendProcess = null
   }
 })
 
@@ -720,4 +834,18 @@ ipcMain.on('agent:window-sync', (event, payload) => {
   if (type === 'theme' || type === 'session') {
     floatingWindow.webContents.send('agent:window-sync', { type, value })
   }
+})
+
+// Floating "Expand Agent page" → bring the main window forward and switch it
+// to the Agent view. The main window renderer subscribes via onOpenAgentPage.
+ipcMain.on('floating:open-agent-page', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return
+  }
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore()
+  }
+  mainWindow.show()
+  mainWindow.focus()
+  mainWindow.webContents.send('agent:open-agent-page')
 })

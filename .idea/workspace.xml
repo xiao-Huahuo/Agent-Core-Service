@@ -4,20 +4,23 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="主页v2">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="小窗v1,去掉了暗色窗口直角隔层">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/AgentService.spec" beforeDir="false" afterPath="$PROJECT_DIR$/AgentService.spec" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/editor/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/electron/main.cjs" beforeDir="false" afterPath="$PROJECT_DIR$/editor/electron/main.cjs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/electron/preload.cjs" beforeDir="false" afterPath="$PROJECT_DIR$/editor/electron/preload.cjs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/env.d.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/env.d.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/App.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/App.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/editor/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/editor/package.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/assets/main.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/main.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/SettingsSidebar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/SettingsSidebar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/main.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/main.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/session.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/session.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/floating/FloatingAgent.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/floating/FloatingAgent.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/FloatingSettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/FloatingSettingsSection.vue" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/stores/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/settings.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SettingsView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -73,38 +76,38 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Batch.启动.executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.main.executor": "Run",
-    "Python.requests_test.executor": "Run",
-    "Python.test_agent_core_service.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "aidebugger.tracer.lastRunConfigName": "main",
-    "dart.analysis.tool.window.visible": "false",
-    "git-widget-placeholder": "master",
-    "last_opened_file_path": "D:/Projects/Python/MetaWeave/editor/src/assets/images/home/settings/rectangle",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "prettierjs.PrettierConfiguration.Package": "D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\prettier",
-    "settings.editor.selected.configurable": "project.propVCSSupport.DirectoryMappings",
-    "ts.external.directory.path": "D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\typescript\\lib",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Batch.启动.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.main.executor&quot;: &quot;Run&quot;,
+    &quot;Python.requests_test.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_agent_core_service.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;aidebugger.tracer.lastRunConfigName&quot;: &quot;main&quot;,
+    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/Projects/Python/MetaWeave/editor/src/assets/images/home/settings/rectangle&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;prettierjs.PrettierConfiguration.Package&quot;: &quot;D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\prettier&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;project.propVCSSupport.DirectoryMappings&quot;,
+    &quot;ts.external.directory.path&quot;: &quot;D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\typescript\\lib&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   },
-  "keyToStringList": {
-    "vue.recent.templates": [
-      "Vue Composition API Component",
-      "Vue Options API Component"
+  &quot;keyToStringList&quot;: {
+    &quot;vue.recent.templates&quot;: [
+      &quot;Vue Composition API Component&quot;,
+      &quot;Vue Options API Component&quot;
     ]
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="D:\Projects\Python\MetaWeave\editor\src\assets\images\home\settings\rectangle" />
@@ -311,23 +314,9 @@
       <workItem from="1785746852479" duration="9173000" />
       <workItem from="1785760259593" duration="1427000" />
       <workItem from="1785840846651" duration="11558000" />
-      <workItem from="1785904382886" duration="14513000" />
-    </task>
-    <task id="LOCAL-00260" summary="MD-HTML可视化v1">
-      <option name="closed" value="true" />
-      <created>1785317400947</created>
-      <option name="number" value="00260" />
-      <option name="presentableId" value="LOCAL-00260" />
-      <option name="project" value="LOCAL" />
-      <updated>1785317400947</updated>
-    </task>
-    <task id="LOCAL-00261" summary="MD-HTML可视化v2">
-      <option name="closed" value="true" />
-      <created>1785320392881</created>
-      <option name="number" value="00261" />
-      <option name="presentableId" value="LOCAL-00261" />
-      <option name="project" value="LOCAL" />
-      <updated>1785320392881</updated>
+      <workItem from="1785904382886" duration="16827000" />
+      <workItem from="1786174906065" duration="703000" />
+      <workItem from="1786190105430" duration="6524000" />
     </task>
     <task id="LOCAL-00262" summary="MD-HTML可视化v2">
       <option name="closed" value="true" />
@@ -705,14 +694,29 @@
       <option name="project" value="LOCAL" />
       <updated>1785915851932</updated>
     </task>
-    <option name="localTasksCounter" value="309" />
+    <task id="LOCAL-00309" summary="小窗v1,去掉了暗色窗口直角隔层">
+      <option name="closed" value="true" />
+      <created>1785923499663</created>
+      <option name="number" value="00309" />
+      <option name="presentableId" value="LOCAL-00309" />
+      <option name="project" value="LOCAL" />
+      <updated>1785923499663</updated>
+    </task>
+    <task id="LOCAL-00310" summary="小窗v1,去掉了暗色窗口直角隔层">
+      <option name="closed" value="true" />
+      <created>1785923518567</created>
+      <option name="number" value="00310" />
+      <option name="presentableId" value="LOCAL-00310" />
+      <option name="project" value="LOCAL" />
+      <updated>1785923518567</updated>
+    </task>
+    <option name="localTasksCounter" value="311" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Git v3" />
     <MESSAGE value="修复了claudecode认为的四个问题" />
     <MESSAGE value="高亮v1" />
     <MESSAGE value="代码高亮问题解决" />
@@ -737,7 +741,8 @@
     <MESSAGE value="提示词小改" />
     <MESSAGE value="主页v1" />
     <MESSAGE value="主页v2" />
-    <option name="LAST_COMMIT_MESSAGE" value="主页v2" />
+    <MESSAGE value="小窗v1,去掉了暗色窗口直角隔层" />
+    <option name="LAST_COMMIT_MESSAGE" value="小窗v1,去掉了暗色窗口直角隔层" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />

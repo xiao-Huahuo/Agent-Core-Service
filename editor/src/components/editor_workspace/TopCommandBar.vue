@@ -232,6 +232,16 @@ onMounted(() => nextTick(autoResizeInput))
       >
         <IcIcon name="ingest" :size="14" />
       </button>
+      <button
+        v-if="desktopApi?.isDesktop"
+        class="todo-link floating-window-btn"
+        type="button"
+        title="Agent 悬浮窗"
+        aria-label="打开或收起 Agent 悬浮窗"
+        @click="desktopApi.floatingToggle()"
+      >
+        <IcIcon name="open-in-new" :size="14" />
+      </button>
       <label class="switch" title="切换主题">
         <input
           type="checkbox"

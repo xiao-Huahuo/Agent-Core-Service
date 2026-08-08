@@ -17,7 +17,7 @@ MetaWeave 是一个面向复杂任务处理的智能 Agent 服务与可视化工
 - 希望快速使用Agent接口,而不希望手动搭建复杂智能体思考链的人.
 
 ##### 项目小心得
-做了agent之后发现,用agent骨架是无法弥补LLM自己的幻觉能力的,LLM往往会基于自己的认知就认为这个东西怎么怎么样,而懒得去搜.幻觉和迷之自信是LLM与生俱来的,外部Agent框架只会提供给LLM知识的能力,而不能本质上改变LLM的底层认知.
+做了agent之后发现,用agent骨架是无法弥补LLM自己的幻觉能力的,LLM往往会基于自己的认知就认为这个东西怎么怎么样,懒得去搜,即使在提示词中说100遍.幻觉和迷之自信是LLM与生俱来的,外部Agent框架只会提供给LLM知识的能力,而不能本质上改变LLM的底层认知.
 
 ## 快速启动
 
@@ -71,15 +71,52 @@ npm run dev:electron # 开发模式 → http://localhost:5173
 
 ## 构建
 
-### 前端 — 静态 HTML
-##### 编辑器(Editor)
+### Electron 桌面安装包（推荐）
+
+当前正式发布形态是 **Electron 桌面端 + 内置后端 exe + NSIS 安装包**：
+
+- Electron 负责桌面窗口、托盘、悬浮窗和安装器。
+- `AgentService.exe` 作为内置后端放入安装包的 `resources/backend/`。
+- 默认资源模板放入安装包的 `resources/default-resources/`。
+- 运行时由 Electron 拉起后端,窗口加载 `http://127.0.0.1:8002`。
+- 安装器允许用户选择安装目录。
+- `runtime/` 不进入安装包。数据库、模型缓存、日志、上传文件和 frontmatter 都在用户数据目录首次运行时自动生成。
+
 ```bash
 cd editor
-npm i --verbose
-npm run build:electron # 输出 → editor/dist/
+npm install
+npm run dist:win
 ```
 
-### 后端 — 单文件 exe
+构建过程会依次执行：
+
+1. `npm run build-only`: 构建前端静态资源到 `editor/dist/`。
+2. `npm run prepare:default-resources`: 生成安装包资源模板到 `editor/.packaging/default-resources/`。
+3. `npm run build:backend`: 调用 PyInstaller 读取根目录 `AgentService.spec`,生成 `dist/AgentService.exe`。
+4. `electron-builder --win nsis`: 生成 Windows NSIS 安装包,输出到 `editor/release/`。
+
+资源模板规则：
+
+```text
+editor/.packaging/default-resources/
+├── mcp/
+│   └── example.json      # MCP 配置模板
+├── safety/               # 从 resources/safety 原样复制
+├── skills/               # 从 resources/skills 原样复制
+└── knowledge/            # 只创建空目录,不复制本地知识库内容
+```
+
+最终产物：
+
+```text
+editor/release/
+├── MetaWeave Setup <version>.exe   # 安装包,安装时可选择路径
+└── win-unpacked/                   # 免安装展开目录,用于调试
+```
+
+### 后端 exe（单独构建）
+
+如果只需要后端单文件 exe,可在根目录单独执行：
 
 ```bash
 # 安装 PyInstaller
@@ -90,37 +127,53 @@ pip install -r agent_service/requirements.txt
 pyinstaller AgentService.spec
 ```
 
-产物为 `dist/AgentService.exe`。`.spec` 配置将 `editor/dist/`（前端静态资源）和 `resources/`（知识库、MCP 配置、安全词库）一并打包进 exe。
+产物为 `dist/AgentService.exe`。`.spec` 配置只打包程序和 `editor/dist/` 前端静态资源。**不要把 `resources/` 或 `runtime/` 放入 PyInstaller datas**；默认资源由 Electron 安装包外置携带。
 
 ### 部署结构
 
-首次启动自动生成空 `resources/` 和 `runtime/` 目录骨架:
+安装后的结构大致如下：
 
+```text
+MetaWeave/
+├── MetaWeave.exe
+├── resources/
+│   ├── backend/
+│   │   └── AgentService.exe
+│   └── default-resources/
+│       ├── mcp/
+│       ├── safety/
+│       ├── skills/
+│       └── knowledge/
+└── ...
 ```
-AgentService.exe
+
+首次运行后,Electron 会把默认资源模板复制到用户数据目录,并通过环境变量让后端使用该目录：
+
+```text
+%APPDATA%/MetaWeave/
+├── .env
 ├── resources/           # 自动生成空目录,放入文件即可覆盖 exe 内置默认
 │   ├── knowledge/       # 默认知识库,启动不自动灌库,按需触发
-│   ├── mcp/             # 放 .json MCP 服务器配置,重启自动加载
+│   ├── mcp/             # 首次复制 example.json 模板,可放 .json MCP 服务器配置
 │   └── safety/          # 放 sensitive_words.json,覆盖内置安全词库
 └── runtime/             # 自动生成: db/ models/ frontmatter/ logs/
 ```
 
-> **读取规则**: 外置目录有文件则用外置,外置为空则回退到 exe 内置副本。按需在外置目录增删文件即生效,无需重新打包。
+> **读取规则**: 正式安装包运行时以后端收到的 `AGENT_PROJECT_ROOT=%APPDATA%/MetaWeave` 为准。`resources/` 是用户可编辑目录,`runtime/` 是运行期数据目录,二者都不写入安装目录和后端 exe。
 
-### 单 exe 运行
+### 运行方式
 
-双击启动或命令行:
+桌面安装包安装完成后,直接启动 `MetaWeave`。Electron 会自动拉起内置后端并打开桌面窗口。
+
+如需调试后端 exe,也可以单独运行：
 
 ```bash
 AgentService.exe
 ```
 
-启动时自动启动默认浏览器访问 `http://localhost:8002`，后端同时提供 API 和前端界面。`runtime/` 和 `resources/` 目录和 `.env` 空文件首次启动自动生成。
-首次启动时无法使用.需要在`.env`里面配置大小模型API-KEY,然后才能启动exe.
+后端单独运行时提供 API 和前端页面：`http://localhost:8002`。`runtime/`、外置 `resources/` 和 `.env` 空文件首次启动自动生成。首次启动后需要在 `.env` 或客户端设置中配置大小模型 API Key、模型名和 API 地址,否则 Agent 功能不可用。单独运行后端 exe 时如果希望模拟安装包行为,可手动设置 `AGENT_PROJECT_ROOT` 和 `AGENT_BASE_DATA_DIR`。
 
-## 技术与要求
-
-
+## 技术与结构
 
 ### 技术栈
 
@@ -143,6 +196,179 @@ AgentService.exe
 * OCR引擎: PaddleOCR
 * 日志与监控：logging / structlog + Prometheus + Grafana
 * 测试与质量：Pytest + Ruff + mypy
+
+### 项目结构
+
+项目由 Python 后端服务、Electron/Vue 前端工作台、可编辑资源和运行时数据四部分组成。`dist/`、`build/`、`editor/dist/`、`editor/release/` 和 `runtime/` 属于构建产物或运行时数据，不作为源码结构维护。
+
+```text
+MetaWeave/
+├── main.py                         # 后端入口: 创建 FastAPI 应用、注册 REST/gRPC、启动服务
+├── AgentService.spec               # PyInstaller 配置: 将后端和 editor/dist 打包为 AgentService.exe
+├── protos/                         # gRPC 协议源文件
+│   └── agent_service.proto         # REST/gRPC 对等服务、请求和响应消息定义
+├── agent_service/                  # 后端核心源码
+│   ├── core/                       # 进程级配置和模型状态
+│   │   ├── agent_config.py         # AgentConfig: 环境变量、默认值和运行参数
+│   │   └── model_status.py         # 模型可用性和状态检查
+│   ├── api/                        # 对外接口层
+│   │   ├── rest/                   # FastAPI REST 路由
+│   │   │   ├── agent.py            # Agent 流式/非流式运行、取消和事件
+│   │   │   ├── knowledge.py        # 知识库搜索、入库、图谱和多模态处理
+│   │   │   ├── library.py          # 知识库目录和库切换
+│   │   │   ├── sessions.py         # 会话和消息历史
+│   │   │   ├── settings.py         # 用户设置、提示词和自定义记忆
+│   │   │   ├── skills.py           # Skill 扫描、索引和调用
+│   │   │   ├── automation.py       # 自动化任务和调度
+│   │   │   ├── debug.py            # 调试、运行时和摄取观测接口
+│   │   │   ├── favorites.py        # 收藏管理
+│   │   │   ├── feedback.py         # 用户反馈
+│   │   │   ├── git.py              # Git 操作接口
+│   │   │   ├── health.py           # 健康检查
+│   │   │   ├── task_lists.py       # 任务列表
+│   │   │   ├── todo.py             # Todo 管理
+│   │   │   └── token_usage.py      # Token 用量统计
+│   │   ├── grpc/                   # gRPC 服务实现和生成代码
+│   │   │   ├── servicer.py         # gRPC 方法实现, 与 REST 共享服务层
+│   │   │   ├── agent_service_pb2.py
+│   │   │   └── agent_service_pb2_grpc.py # protobuf 生成的消息和客户端/服务端桩
+│   │   └── recall_details.py       # RAG 召回详情的统一序列化
+│   ├── agent_core/                 # Agent 状态图和主循环
+│   │   ├── agent_core.py           # AgentCore: 上下文、模型、工具和执行生命周期
+│   │   ├── graph.py                # LangGraph 图构建和模式路由
+│   │   └── nodes/                  # 图节点实现
+│   │       ├── base.py             # 节点基类和公共上下文
+│   │       ├── model_decision.py   # simple/react/plan 模式决策
+│   │       ├── planner.py          # Plan-and-Execute 规划
+│   │       ├── tool_call.py        # 工具选择和调用节点
+│   │       ├── observation.py      # 工具观察、方向判断和循环控制
+│   │       ├── safety.py           # 输入/输出安全审核节点
+│   │       ├── compress.py         # 上下文压缩
+│   │       └── summary.py          # 会话和执行摘要
+│   ├── tools/                      # 内置工具、MCP 工具和执行器
+│   │   ├── builtin.py              # 文件、知识库、记忆、搜索等内置工具
+│   │   ├── definitions.py          # 工具元数据和 JSON Schema
+│   │   ├── executor.py             # 工具运行时调度和结果封装
+│   │   ├── tool_registry.py        # 工具注册、启停和查询
+│   │   ├── runtime_context.py      # 用户、会话、权限和项目目录上下文
+│   │   ├── tool_math.py            # 工具参数和数学辅助逻辑
+│   │   └── mcp/                    # MCP 外部工具接入
+│   │       ├── client.py           # MCP stdio 客户端
+│   │       └── registry.py         # MCP 服务发现、工具注册和生命周期
+│   ├── services/                   # 业务服务层
+│   │   ├── memory/                 # 记忆、上下文和 RAG
+│   │   │   ├── context_builder.py  # 拼装系统提示词、历史、附件和召回上下文
+│   │   │   ├── retrieval_service.py# 记忆/知识库混合召回和 ReRank
+│   │   │   ├── longterm_memory_service.py # 长期记忆写入和查询
+│   │   │   ├── memory_resolver.py  # 记忆来源和引用解析
+│   │   │   ├── summary_service.py  # 会话摘要
+│   │   │   ├── important_fact_summary_service.py # 重要事实提取和持久化
+│   │   │   ├── valid_filter.py     # 召回结果过滤
+│   │   │   └── rag/                # 文档清洗、切块、向量化、检索和重排
+│   │   │       ├── frontmatter_bootstrap.py # 文件扫描和结构化 frontmatter
+│   │   │       ├── frontmatter_document.py  # 结构化文档模型
+│   │   │       ├── multimodal_cleaner.py    # 多模态文档统一清洗
+│   │   │       ├── knowledge_ingestion.py   # 知识库切块和入库
+│   │   │       ├── hybrid_retrieval.py      # 关键词/向量混合检索
+│   │   │       ├── rerank.py                # ReRank 精排
+│   │   │       ├── embedding.py              # Embedding 模型调用
+│   │   │       ├── chunk.py / slice.py       # 文档切块
+│   │   │       ├── pdf_cleaner.py            # PDF 文本和图片清洗
+│   │   │       └── image_ocr.py              # 图片 OCR
+│   │   ├── safety/                 # 安全审核链
+│   │   │   ├── safety_service.py   # 输入审核和输出审核总协调
+│   │   │   ├── sensitive_word_checker.py # 敏感词快速匹配
+│   │   │   ├── intent_auditor.py   # 小模型意图审核
+│   │   │   └── output_auditor.py   # 输出清洗、脱敏和拦截
+│   │   ├── knowledge_library_service.py # 知识库文件树和库管理
+│   │   ├── knowledge_graph_service.py   # 图谱实体、关系和去重
+│   │   ├── library_service.py      # 用户知识库配置
+│   │   ├── session_service.py      # 会话生命周期
+│   │   ├── message_service.py      # 消息持久化和历史读取
+│   │   ├── session_attachment_service.py # 会话附件保存和解析
+│   │   ├── settings_service.py     # 用户级设置覆盖
+│   │   ├── skill_service.py        # Skill 元信息扫描和路由
+│   │   ├── child_agent/             # 子 Agent 生命周期、权限和结果
+│   │   ├── scheduler/               # 任务调度、运行时和熔断
+│   │   ├── terminal/                # 终端命令沙箱
+│   │   ├── automation_service.py   # 自动化任务业务逻辑
+│   │   ├── automation_scheduler.py # 自动化触发调度
+│   │   ├── git_service.py           # Git 工作区操作
+│   │   ├── storage_service.py       # 数据库和存储初始化
+│   │   ├── logging_service.py       # 日志和运行轨迹
+│   │   └── ...                      # favorites、feedback、todo、token usage 等业务服务
+│   ├── models/                      # SQLModel 数据库模型
+│   ├── schemas/                     # REST/gRPC DTO 和校验模型
+│   ├── scripts/                     # 数据库初始化、模型下载、知识库引导和演示脚本
+│   └── requirements.txt             # 后端 Python 依赖
+├── resources/                      # 用户可编辑的默认资源源码
+│   ├── mcp/example.json             # MCP 配置模板
+│   ├── safety/                      # 安全词表和安全规则
+│   ├── skills/                      # 内置 Skill 正文、脚本、引用和资源
+│   └── knowledge/                   # 本地开发知识库, 不进入安装包
+├── editor/                          # Electron + Vite + Vue 3 前端
+│   ├── electron/                    # Electron 主进程
+│   │   ├── main.cjs                 # 创建窗口、启动内置后端、初始化用户资源、退出清理
+│   │   ├── preload.cjs              # 主进程与渲染进程之间的受控桥接
+│   │   └── edit-shortcuts.cjs       # Electron 编辑快捷键
+│   ├── src/                         # Vue 渲染进程源码
+│   │   ├── main.ts                  # Vue 应用、Pinia 和路由启动
+│   │   ├── App.vue                  # 根组件
+│   │   ├── views/                   # 页面级组件
+│   │   │   ├── HomeView.vue         # 首页和入口导航
+│   │   │   ├── EditorWorkspace.vue  # 文件编辑、预览、Agent 和图谱工作区
+│   │   │   ├── AgentPage.vue        # Agent 对话和流式执行
+│   │   │   ├── DashboardView.vue    # 执行轨迹、Token、RAG 和耗时观测
+│   │   │   ├── LibraryView.vue      # 知识库管理
+│   │   │   ├── SearchPage.vue       # 文件、全文和语义搜索
+│   │   │   ├── SkillView.vue        # Skill 管理
+│   │   │   ├── SettingsView.vue     # 用户设置
+│   │   │   ├── DebugView.vue        # 调试和运行时观测
+│   │   │   ├── FavoritesView.vue / IngestionProgressView.vue
+│   │   │   └── MarkdownHtmlVisualizationView.vue # Markdown/HTML 可视化
+│   │   ├── components/              # 页面子组件, 按业务域分组
+│   │   │   ├── editor_workspace/    # 编辑器、文件树、预览、Agent 面板、搜索和图谱面板
+│   │   │   ├── dashboard/           # 各类观测卡片和轨迹面板
+│   │   │   ├── knowledge_graph/     # 图谱 Canvas、布局和数据适配器
+│   │   │   ├── settings_view/       # 设置页各配置分区
+│   │   │   ├── library_view/         # 知识库卡片和创建/编辑对话框
+│   │   │   ├── git_sidebar/          # Git 侧栏和提交/推送对话框
+│   │   │   ├── home/                 # 首页导航块和轮播
+│   │   │   ├── floating/              # 悬浮 Agent 窗口
+│   │   │   ├── debug/                 # 调试面板
+│   │   │   ├── chat/                  # 对话过程组件
+│   │   │   └── common/                # 可复用按钮、图标、预览和状态组件
+│   │   ├── api/                    # 前端 API 客户端, 与后端 REST 路由对应
+│   │   │   ├── client.ts            # HTTP 客户端、错误处理和基础请求
+│   │   │   ├── agent.ts / session.ts# Agent 流式请求和会话
+│   │   │   ├── knowledge.ts / library.ts # 知识库和库管理
+│   │   │   ├── settings.ts / skills.ts # 设置和 Skill
+│   │   │   └── automation.ts / debug.ts / git.ts / tools.ts / taskList.ts / todo.ts
+│   │   ├── router/                  # 路由和 API 路由登记
+│   │   │   ├── index.ts             # 页面路由
+│   │   │   └── api_routes.ts        # API 前缀和请求路由约定
+│   │   ├── stores/                  # Pinia 状态: session、chat、workspace、settings 等
+│   │   ├── composable/              # 可复用组合式逻辑、首页图片和观测数据
+│   │   ├── types/                   # 前端领域类型
+│   │   ├── utils/                   # 导入导出、格式化和辅助工具
+│   │   └── assets/                  # 字体、图标、图片和全局 CSS
+│   ├── scripts/                     # 构建辅助脚本
+│   │   ├── prepare-default-resources.cjs # 生成安装包默认资源模板
+│   │   ├── build-win-installer.cjs       # 生成时间戳隔离的 Windows NSIS 安装包
+│   │   └── clean-electron-release.cjs    # 清理被锁定的旧构建目录
+│   ├── vite.config.ts               # Vite 开发服务器、代理和构建配置
+│   ├── package.json                 # 前端依赖、Electron 和 electron-builder 脚本
+│   ├── playwright.config.ts         # E2E 测试配置
+│   └── vitest.config.ts             # 单元测试配置
+├── runtime/                        # 运行时数据: 数据库、模型缓存、日志、上传和 frontmatter
+├── tests/                          # 后端测试
+├── docs/                           # 设计、接口和开发文档
+├── agent_graph*.mmd                 # Agent 状态图 Mermaid 源文件
+├── CHANGE_HISTORY.md                # 代码修改历史
+└── README.md                        # 项目说明、启动、构建和架构文档
+```
+
+运行时路径和发布路径需要区分：开发模式默认读取项目根目录的 `resources/`；Electron 安装包首次启动时把默认模板复制到用户数据目录，并通过 `AGENT_PROJECT_ROOT` 和 `AGENT_BASE_DATA_DIR` 指向该目录。`resources/knowledge/`、`runtime/` 和模型文件属于用户数据，不随 `AgentService.exe` 打包。
 
 ## 功能与设计
 

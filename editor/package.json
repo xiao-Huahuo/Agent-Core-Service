@@ -9,6 +9,11 @@
     "dev:electron": "run-p dev electron",
     "electron": "electron electron/main.cjs",
     "build": "run-p type-check \"build-only {@}\" --",
+    "build:backend": "cd .. && pyinstaller --clean AgentService.spec",
+    "build:win-installer": "node scripts/build-win-installer.cjs",
+    "clean:electron-release": "node scripts/clean-electron-release.cjs",
+    "prepare:default-resources": "node scripts/prepare-default-resources.cjs",
+    "dist:win": "npm run build-only && npm run prepare:default-resources && npm run build:backend && npm run build:win-installer",
     "preview": "vite preview",
     "test:unit": "vitest",
     "test:e2e": "playwright test",
@@ -53,6 +58,7 @@
     "electron": "^43.0.0",
     "eslint": "^10.5.0",
     "eslint-config-prettier": "^10.1.8",
+    "electron-builder": "^26.0.12",
     "eslint-plugin-oxlint": "~1.69.0",
     "eslint-plugin-playwright": "^2.10.4",
     "eslint-plugin-vue": "~10.9.2",
@@ -70,5 +76,39 @@
   },
   "engines": {
     "node": "^22.18.0 || >=24.12.0"
+  },
+  "build": {
+    "appId": "cn.metaweave.desktop",
+    "productName": "MetaWeave",
+    "directories": {
+      "output": "release"
+    },
+    "electronDist": "node_modules/electron/dist",
+    "files": [
+      "electron/**/*",
+      "src/assets/icons/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist/AgentService.exe",
+        "to": "backend/AgentService.exe"
+      },
+      {
+        "from": ".packaging/default-resources",
+        "to": "default-resources"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "src/assets/icons/app.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MetaWeave"
+    }
   }
 }

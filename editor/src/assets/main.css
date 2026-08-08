@@ -99,14 +99,16 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Electron shell: the window is transparent, so the app root draws the
-   background and a large corner radius. Maximized windows drop the radius. */
+/* Electron shell: the window is transparent, so the app root only provides a
+   large corner radius + clipping. The background is drawn by the content layer
+   (workspace-page / loading / gate) so no opaque "membrane" shows behind it.
+   Maximized windows drop the radius. */
 html.electron-window body {
   background: transparent;
 }
 
 html.electron-window #app {
-  background: var(--color-canvas);
+  background: transparent;
   border-radius: 28px;
   overflow: hidden;
   contain: paint;

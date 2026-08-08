@@ -49,4 +49,11 @@ contextBridge.exposeInMainWorld('agentEditorDesktop', {
     ipcRenderer.on('agent:window-sync', handler)
     return () => ipcRenderer.removeListener('agent:window-sync', handler)
   },
+  // Open the full Agent page in the main window from the floating window.
+  openAgentPage: () => ipcRenderer.send('floating:open-agent-page'),
+  onOpenAgentPage: (callback) => {
+    const handler = () => callback()
+    ipcRenderer.on('agent:open-agent-page', handler)
+    return () => ipcRenderer.removeListener('agent:open-agent-page', handler)
+  },
 })

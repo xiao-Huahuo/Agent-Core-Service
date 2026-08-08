@@ -2,7 +2,7 @@
   悬浮窗设置区域组件。
 
   Usage:
-    悬浮窗启用开关、三档置顶模式与手动唤起按钮。
+    三档置顶模式与"启动小窗"按钮。悬浮窗随主窗口启动,开合按钮在顶栏。
     <FloatingSettingsSection />
 -->
 <script setup lang="ts">
@@ -25,15 +25,6 @@ function handleOpenFloating() {
   <div class="setting-section">
     <h3>悬浮窗设置</h3>
 
-    <div class="setting-row toggle-row">
-      <label>启用悬浮窗</label>
-      <input
-        type="checkbox"
-        :checked="settingsStore.floatingEnabled"
-        @change="settingsStore.setFloatingEnabled(($event.target as HTMLInputElement).checked)"
-      />
-    </div>
-
     <div class="setting-row">
       <label>置顶模式</label>
       <div class="theme-row">
@@ -50,17 +41,12 @@ function handleOpenFloating() {
     </div>
 
     <div class="setting-row">
-      <label></label>
-      <button
-        class="add-btn"
-        type="button"
-        :disabled="!settingsStore.floatingEnabled"
-        @click="handleOpenFloating"
-      >
+      <label>启动小窗</label>
+      <button class="add-btn" type="button" @click="handleOpenFloating">
         打开悬浮窗
       </button>
     </div>
 
-    <p class="setting-hint">悬浮窗可从托盘菜单唤起,也可固定在桌面其他窗口之上。</p>
+    <p class="setting-hint">悬浮窗随主窗口一同启动,可从顶栏按钮唤起,也可固定在桌面其他窗口之上。</p>
   </div>
 </template>

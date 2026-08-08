@@ -37,6 +37,8 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+.packaging/
 
 test-results/
 playwright-report/
+release/

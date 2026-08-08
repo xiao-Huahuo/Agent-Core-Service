@@ -502,15 +502,22 @@ function refreshGitAfterKnowledgeFileChange(): void {
   void gitStore.refresh()
 }
 
+let unsubscribeOpenAgentPage: (() => void) | undefined
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('metaweave-knowledge-file-change', refreshGitAfterKnowledgeFileChange)
+  // Floating "Expand Agent page" → switch to the full Agent view.
+  unsubscribeOpenAgentPage = window.agentEditorDesktop?.onOpenAgentPage?.(() => {
+    workspaceStore.setMainView('agent')
+  })
   void gitStore.refresh()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('metaweave-knowledge-file-change', refreshGitAfterKnowledgeFileChange)
+  unsubscribeOpenAgentPage?.()
   stopResize()
   stopTodoResize()
 })
@@ -722,15 +729,13 @@ watch(
   display: flex;
   min-width: 0;
   min-height: 0;
-  margin: 0 var(--space-12) var(--space-12) 0;
+  margin: 0;
   overflow: hidden;
   border: 0;
   outline: none;
-  border-radius: 28px;
+  border-radius: 0;
   background: var(--color-bg-app);
-  box-shadow:
-    0 10px 15px -3px rgba(0, 0, 0, 0.1),
-    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  box-shadow: none;
 }
 
 .main-shell.ide-panel.agent-page-main-shell {
@@ -943,8 +948,8 @@ watch(
   }
 
   .main-shell.ide-panel {
-    margin: 0 var(--space-8) var(--space-8) 0;
-    border-radius: 24px;
+    margin: 0;
+    border-radius: 0;
   }
 
   .agent-col {

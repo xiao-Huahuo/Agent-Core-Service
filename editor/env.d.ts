@@ -33,6 +33,8 @@ interface AgentEditorDesktopApi {
   floatingToggle: () => void
   windowSync: (type: string, value: string | null) => void
   onWindowSync: (callback: (payload: { type: string; value: string | null }) => void) => () => void
+  openAgentPage: () => void
+  onOpenAgentPage: (callback: () => void) => () => void
 }
 
 interface Window {
