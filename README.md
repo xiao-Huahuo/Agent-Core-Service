@@ -9,7 +9,7 @@
 ##### 项目简介
 
 MetaWeave 是一个面向复杂任务处理的智能 Agent 服务与可视化工作台，集成多轮对话、工具调用、长期记忆、知识库召回、RAG 指标观测、任务队列与多模式推理流程，支持在 simple、react、plan 等不同思考模式下完成问答、检索、文档理解和自动化执行，并通过前端观测面板实时展示模型用量、节点耗时、召回质量与执行轨迹，帮助用户更清晰地理解 Agent 的决策过程与运行状态。
-
+![主页](docs/assets/主页.png)
 ##### 主要服务人群
 
 - 希望在个人文件系统上建立Agent中枢的智能知识库的人.
@@ -19,159 +19,6 @@ MetaWeave 是一个面向复杂任务处理的智能 Agent 服务与可视化工
 ##### 项目小心得
 做了agent之后发现,用agent骨架是无法弥补LLM自己的幻觉能力的,LLM往往会基于自己的认知就认为这个东西怎么怎么样,懒得去搜,即使在提示词中说100遍.幻觉和迷之自信是LLM与生俱来的,外部Agent框架只会提供给LLM知识的能力,而不能本质上改变LLM的底层认知.
 
-## 快速启动
-
-### 环境要求
-
-* Python 3.12+
-* Node.js 18+
-* 已配置 LLM API（OpenAI 兼容接口）
-
-### 1. 配置环境变量
-
-在根目录创建.env文件,配置如下环境变量：
-
-```bash
-# 必填：大小模型API-KEY,主模型默认为deepseek-v4-flash,小模型默认为moonshot-v1-8k
-AGENT_MODEL_API_KEY=sk-xxxxxxxx
-AGENT_SMALL_MODEL_API_KEY=sk-yyyyyyyy
-```
-
-### 2. 启动后端（FastAPI）
-
-```bash
-# 安装后端依赖
-pip install -r agent_service/requirements.txt
-
-# 启动服务（HTTP: 8002, gRPC: 50051）
-uvicorn main:app --host 0.0.0.0 --port 8002
-```
-后端默认将项目目录下的`resources/knowledge/`作为知识库根目录,用户可在前端自行重新选择知识库目录,更换知识库时库内将进行多模态文档扫描,进入向量数据库供Agent使用. 服务启动不执行任何自动灌库,知识库由前端 `/knowledge/rebuild`、单文件灌库与上传灌库按需触发,启动阶段不占用 embedding/rerank 与磁盘资源.
-
-### 3. 启动前端（Electron + Vite + Vue 3）
-
-##### 编辑器(Editor)--主要关注知识库与图谱的可视化
-```bash
-cd editor
-npm i --verbose
-npm run dev:electron # 开发模式 → http://localhost:5173
-```
-
-### 4. 验证
-
-编辑器: `npm run dev:electron`时Electron自动打开浏览器内核窗口.或者在浏览器中访问 `http://localhost:5173`,但浏览器模式下可能某些文件服务不兼容.
-
-后端健康检查：`curl http://localhost:8002/health`
-
-### 5. 必要设置
-
-1. **务必在editor客户端的设置中配置大小模型的api-key,api-name,api-url**,大模型默认为`deepseek-v4-flash`(`https://api.deepseek.com`),小模型默认为`Moonshot-v1-8k`(`https://api.moonshot.cn/v1`).
-    **未配置模型字段时无法使用Agent功能**.
-2. 如果需要启用联网搜索引擎,则需要在设置中配置好代理地址(如:`http://127.0.0.1:11719`),因为DuckDuckGo需要连接外网才能正常使用,否则即使启用了联网引擎也无法使用联网.
-
-## 构建
-
-### Electron 桌面安装包（推荐）
-
-当前正式发布形态是 **Electron 桌面端 + 内置后端 exe + NSIS 安装包**：
-
-- Electron 负责桌面窗口、托盘、悬浮窗和安装器。
-- `AgentService.exe` 作为内置后端放入安装包的 `resources/backend/`。
-- 默认资源模板放入安装包的 `resources/default-resources/`。
-- 运行时由 Electron 拉起后端,窗口加载 `http://127.0.0.1:8002`。
-- 安装器允许用户选择安装目录。
-- `runtime/` 不进入安装包。数据库、模型缓存、日志、上传文件和 frontmatter 都在用户数据目录首次运行时自动生成。
-
-```bash
-cd editor
-npm install
-npm run dist:win
-```
-
-构建过程会依次执行：
-
-1. `npm run build-only`: 构建前端静态资源到 `editor/dist/`。
-2. `npm run prepare:default-resources`: 生成安装包资源模板到 `editor/.packaging/default-resources/`。
-3. `npm run build:backend`: 调用 PyInstaller 读取根目录 `AgentService.spec`,生成 `dist/AgentService.exe`。
-4. `electron-builder --win nsis`: 生成 Windows NSIS 安装包,输出到 `editor/release/`。
-
-资源模板规则：
-
-```text
-editor/.packaging/default-resources/
-├── mcp/
-│   └── example.json      # MCP 配置模板
-├── safety/               # 从 resources/safety 原样复制
-├── skills/               # 从 resources/skills 原样复制
-└── knowledge/            # 只创建空目录,不复制本地知识库内容
-```
-
-最终产物：
-
-```text
-editor/release/
-├── MetaWeave Setup <version>.exe   # 安装包,安装时可选择路径
-└── win-unpacked/                   # 免安装展开目录,用于调试
-```
-
-### 后端 exe（单独构建）
-
-如果只需要后端单文件 exe,可在根目录单独执行：
-
-```bash
-# 安装 PyInstaller
-pip install pyinstaller
-# 安装后端依赖
-pip install -r agent_service/requirements.txt
-# 打包（读取 AgentService.spec）
-pyinstaller AgentService.spec
-```
-
-产物为 `dist/AgentService.exe`。`.spec` 配置只打包程序和 `editor/dist/` 前端静态资源。**不要把 `resources/` 或 `runtime/` 放入 PyInstaller datas**；默认资源由 Electron 安装包外置携带。
-
-### 部署结构
-
-安装后的结构大致如下：
-
-```text
-MetaWeave/
-├── MetaWeave.exe
-├── resources/
-│   ├── backend/
-│   │   └── AgentService.exe
-│   └── default-resources/
-│       ├── mcp/
-│       ├── safety/
-│       ├── skills/
-│       └── knowledge/
-└── ...
-```
-
-首次运行后,Electron 会把默认资源模板复制到用户数据目录,并通过环境变量让后端使用该目录：
-
-```text
-%APPDATA%/MetaWeave/
-├── .env
-├── resources/           # 自动生成空目录,放入文件即可覆盖 exe 内置默认
-│   ├── knowledge/       # 默认知识库,启动不自动灌库,按需触发
-│   ├── mcp/             # 首次复制 example.json 模板,可放 .json MCP 服务器配置
-│   └── safety/          # 放 sensitive_words.json,覆盖内置安全词库
-└── runtime/             # 自动生成: db/ models/ frontmatter/ logs/
-```
-
-> **读取规则**: 正式安装包运行时以后端收到的 `AGENT_PROJECT_ROOT=%APPDATA%/MetaWeave` 为准。`resources/` 是用户可编辑目录,`runtime/` 是运行期数据目录,二者都不写入安装目录和后端 exe。
-
-### 运行方式
-
-桌面安装包安装完成后,直接启动 `MetaWeave`。Electron 会自动拉起内置后端并打开桌面窗口。
-
-如需调试后端 exe,也可以单独运行：
-
-```bash
-AgentService.exe
-```
-
-后端单独运行时提供 API 和前端页面：`http://localhost:8002`。`runtime/`、外置 `resources/` 和 `.env` 空文件首次启动自动生成。首次启动后需要在 `.env` 或客户端设置中配置大小模型 API Key、模型名和 API 地址,否则 Agent 功能不可用。单独运行后端 exe 时如果希望模拟安装包行为,可手动设置 `AGENT_PROJECT_ROOT` 和 `AGENT_BASE_DATA_DIR`。
 
 ## 技术与结构
 
@@ -375,6 +222,7 @@ MetaWeave/
 后端服务设计遵循分布式设计原则，配备 REST + gRPC 两套对外接口,形成可插拔、可定制的独立微服务。
 
 ### Agent设计
+![Agent](docs/assets/Agent对话.png)
 #### 智能体状态转移设计
 在LangGraph状态转移图入口处有一个入口节点,调用一次小模型,按照用户提问内容区分三种模式的入口,用户在同一session前后提出简单和困难的问题时,会以小模型决策以下三种图的模式:
       1. 简答模式: 对于明显不需要思考的短输入,不经过循环,只保留 RAG 上下文构建,用小模型直接输出.
@@ -414,6 +262,7 @@ MetaWeave/
    * 工具自发现: 常驻"查看可用工具"工具(`list_available_tools`),任何时候都可查询全部工具的中文名、确切工具名与一句话用途(含 MCP 工具),便于模型快速掌握当前可用工具的完整面貌.
    * 可观测性执行流程：每步工具调用逐一执行，产生 start 与 end 双向 trace（含工具名、参数摘要、结果摘要与条目数），通过异步回调实时推送前端观测面板, 工具调用结果则写回消息历史供后续观察节点 `observation`/`agent` 审视，形成完整的可追溯闭合回路。
     Agent可操作用户本地知识库文件.Agent既可以通过RAG获取用户指代的最相关文件,又可以通过通过文件管理系统API具体调查和操作任何所需的具体文档,实现了"中枢智能体"的理念.
+![工具](docs/assets/工具.png)
 #### Skill能力
 
 Skill能力是Agent从通用Agent走向专用Agent的关键。其设计如下：
@@ -445,6 +294,7 @@ Agent观测面板实时展示 Agent 行动轨迹，包括节点状态、上下�
   * Token 用量：只统计真实模型调用返回的 token 用量，不按文本长度估算，也不把工具执行、安全审核等运行时节点计入模型用量。模型节点按池归并为大模型和小模型：$$TokenPool_t(p)=\sum_{i=1}^{t}\sum_{调用\in p} tokens(调用)$$ 其中 $p\in\{大模型,小模型\}$，前端图表只展示“大模型 / 小模型”两类。
   * 思考耗时：优先使用节点记录的真实耗时；缺失时才回退到相邻轨迹时间戳或消息时间差估计。每轮耗时为该轮节点耗时之和：$$Latency_k=\sum_{节点\in 第k轮} duration(节点)$$ 折线图展示累计耗时：$$CumulativeLatency_t=\sum_{k=1}^{t}Latency_k$$ 节点饼图和柱状图展示截至当前轮次的累计节点占比：$$Share_t(节点)=\frac{\sum_{k=1}^{t}duration_k(节点)}{\sum_{k=1}^{t}\sum_{n}duration_k(n)}\times100$$
   * 召回条目与上下文：长期记忆召回、知识库片段召回和上下文拼装视图都按当前会话累计展示，自动召回与工具召回分别保留来源、分数、重排序前后状态和引用映射，便于追溯最终回答引用了哪些材料。
+![观测](docs/assets/观测.png)
 #### 记忆系统
 ##### 短期记忆
 即会话内上下文管理.
@@ -599,6 +449,18 @@ Agent可以召唤子Agent,采用父子Agent设计模式.
    - 已入库的文件,未入库或者格式不可识别的文件,屏蔽的文件,三类文件将以不同的索引状态图标(绿,红,灰)显示在文件树中.
    - 惰性灌库: 默认在文件入库时不自动灌库,用户可手动将单文件灌入向量库,或点击header的灌库按钮时进行全知识库范围内的灌库.
    - 屏蔽单个文件/建立屏蔽区: 用户可设置部分文件或者文件夹内文件的屏蔽,被屏蔽的文件将禁止入库,入了也要出库,文档被写入屏蔽区之后也会将以之为来源的切片删除.灌库函数自动忽略屏蔽的文档和屏蔽区子树全部文档.
+#### 联合搜索
+
+三路联合搜索面向当前选中的知识库，一次输入即可从文件名、文件内容和语义相关性三个维度查找资料。搜索结果按来源分组返回，用户可以根据任务需要打开或关闭全文检索、语义检索；文件名检索始终保留，因此即使关闭其他检索方式，也可以快速定位文件。
+
+- **文件名搜索**：递归遍历当前知识库的文件树，按文件名进行不区分大小写的包含匹配。它适合查找明确知道名称或关键词的文档，并且不依赖文件是否已经完成知识库索引。
+- **全文内容搜索**：在知识库文本切片中进行模糊匹配，返回命中文件及其上下文片段。对于尚未完成索引或索引尚未更新的文件，系统还会直接扫描当前知识库文件内容作为兜底；相同文件的重复命中会被合并。
+- **语义搜索**：将查询转换为语义检索条件，通过混合召回与 ReRank 排序寻找概念相关的知识片段。语义结果不要求文件中出现完全相同的关键词，适合描述性提问、同义表达和不确定文件名称的查找。
+
+搜索输入采用 300 毫秒防抖，用户连续输入时只提交最后一次查询。顶栏搜索框和搜索页面共用同一套搜索状态、最近搜索历史、检索开关和结果预览；搜索页面还可以在“搜索分离”和“联合搜索”之间切换：分离模式分别查看三类结果，联合模式会按文件合并同一文档的文件名命中、全文片段和语义证据，并保留可点击预览能力。
+
+所有结果都会限定在当前用户的 active 知识库范围内，避免不同知识库之间串库。全文结果展示命中位置附近的摘要，语义结果展示召回片段；点击结果即可打开对应文件或预览内容。全文和语义检索均可独立关闭，关闭后不会影响文件名搜索。
+![联合搜索](docs/assets/搜索.png)
 #### 文件入库全流程
 ##### 第一步: 多模态扫描
 系统会扫描知识库中的多模态文件,并将不同模态文件以不同方式转化为JSON(不同知识库隔离存入`runtime/frontmatter/{user_id}/{library_id}/`),切片入ChromaDB向量数据库,供Agent使用.
@@ -685,12 +547,14 @@ PDF 必须先分类，因为“文档型 PDF”和“扫描型 PDF”完全不�
 - **不支持格式** → 提示文案
 
 全局图片放大功能: 毛玻璃浮层, 支持左右切换、滚轮缩放、拖拽平移。在 Markdown 预览、Word 文档预览、AI 对话中点击图片均可触发。
+![编辑区](docs/assets/多模态编辑区.png)
 ##### Markdown-to-HTML功能
 Markdown可视化功能: 让Agent针对某个文档(不只是md,多模态文档则直接看JSON提取结果)写HTML,然后在前端展示出来.
   - 对文件树或者文件资源管理器的任何文件右键,点击右键菜单的"HTML可视化",则自动先将文档灌库,然后跳转到`HTML可视化`页面,并自动收缩文件树并展开Agent侧边栏给Agent下任务.
   - 可切换"原结构模式"和"AI提炼模式",原结构模式让Agent根据文档原本的结构进行HTML化,AI提炼模式则是Agent将自己理解的相关知识进行总结并写进HTML.HTML放在`runtime/`文件夹.配备一个"展示Markdown-HTML"工具,这个工具会自动触发前端的HTML渲染和挂载.
   - 高级生成配置:可勾选"强动效""阴影""圆角""emoji"...这些HTML的概念配置.
   - 生成后的HTML可以保存到知识库`{user_id}_html/`,或者打开系统资源管理器保存.
+![mdhtml](docs/assets/MD-HTML.png)
 #### 语义知识图谱
 在多模态文件入库的路径中,当文档被解析为JSON后,一路进行切片入向量库,另一路则进行异步的小模型实体关系提取.
 语义知识图谱提取各文档内的实体,用LLM(小模型)异步解析**文档内各实体**的关联,将知识库多模态文件的结构化 JSON 转译为实体-关系图,最终持久化到 SQLite,前端通过 D3.js Canvas 实时渲染.
@@ -720,7 +584,7 @@ Markdown可视化功能: 让Agent针对某个文档(不只是md,多模态文档�
   - 文件树图谱(父子层级)与语义图谱(自由网状)通过前端按钮切换,共享同一个 Canvas 渲染器
   - 对于实体节点,连接了1条边的大小为基础大小,每多连接1条边,则实体节点大小增加基础大小的10%,最多500%,更多则大小固定.
   - 图谱默认为释放态(电荷小球物理排斥),可以进行定格.
-
+![语义知识图谱](docs/assets/语义知识图谱.png)
 > **注意**: 首次打开图谱页面时,语义图谱默认模式需要显式加载。`GraphPane.vue` 在 `onMounted` 中会调用 `loadSemanticGraph()` 加载语义数据,无需手动切换模式。
 #### 图书馆
 
@@ -1389,70 +1253,159 @@ flowchart TD
 - 图片直接用 Markdown 热链接展示，不调 `download_file` 下载
 - 每次搜索用 `max_results` 参数一次性获取足够多结果，减少搜索轮次
 - 信息足够后立即停止搜索，直接生成回复
+## 快速启动
 
-## 接口设计
+### 环境要求
 
-本服务同时提供 **REST (FastAPI)** 和 **gRPC (protobuf)** 两套接口，二者功能完全等价、返回结构一致，可根据客户端需求任选其一。
+* Python 3.12+
+* Node.js 18+
+* 已配置 LLM API（OpenAI 兼容接口）
 
-> 约定：下表中参数字段名在 REST 和 gRPC 中相同；REST 使用 JSON body / query string，gRPC 使用对应的 proto message。
+### 1. 配置环境变量
 
-### 一、Session 管理
+在根目录创建.env文件,配置如下环境变量：
 
-|方法|REST|gRPC|功能|请求参数|返回结构|
-|-|-|-|-|-|-|
-|ListSessions|`GET /sessions?user_id=`|`ListUserSessions`|列出用户全部会话，按更新时间倒序|`user_id` (string, 必填)|`[{session_id, user_id, session_name, created_at, updated_at}]`|
-|CreateSession|`POST /sessions`|`CreateSession`|创建新会话|`user_id` (string, 必填), `session_name` (string, 可选)|`{session_id, user_id, session_name, created_at, updated_at}`|
-|GetSession|`GET /sessions/{id}`|`GetSession`|获取单个会话详情|`session_id` (string, 必填)|`{session_id, user_id, session_name, created_at, updated_at}`|
-|UpdateSessionName|`PUT /sessions/{id}/name`|`UpdateSessionName`|重命名会话|`session_id` (string, 必填), `session_name` (string, 必填)|`{session_id, user_id, session_name, created_at, updated_at}`|
-|DeleteSession|`DELETE /sessions/{id}`|`DeleteSession`|删除单个会话|`session_id` (string, 必填)|`{ok, deleted_count}`|
-|DeleteAllSessions|`DELETE /sessions?user_id=`|`DeleteAllSessions`|清空用户全部会话|`user_id` (string, 必填)|`{ok, deleted_count}`|
+```bash
+# 必填：大小模型API-KEY,主模型默认为deepseek-v4-flash,小模型默认为moonshot-v1-8k
+AGENT_MODEL_API_KEY=sk-xxxxxxxx
+AGENT_SMALL_MODEL_API_KEY=sk-yyyyyyyy
+```
 
-### 二、消息历史
+### 2. 启动后端（FastAPI）
 
-|方法|REST|gRPC|功能|请求参数|返回结构|
-|-|-|-|-|-|-|
-|ListMessages|`GET /sessions/{id}/messages?user_id=&limit=`|`ListMessages`|拉取会话历史消息|`session_id` (string, 必填), `user_id` (string, 必填), `limit` (int, 默认 50)|`[{message_id, session_id, user_id, role, content, tool_calls, metadata, created_at}]`|
+```bash
+# 安装后端依赖
+pip install -r agent_service/requirements.txt
 
-### 三、Agent 流式对话
+# 启动服务（HTTP: 8002, gRPC: 50051）
+uvicorn main:app --host 0.0.0.0 --port 8002
+```
+后端默认将项目目录下的`resources/knowledge/`作为知识库根目录,用户可在前端自行重新选择知识库目录,更换知识库时库内将进行多模态文档扫描,进入向量数据库供Agent使用. 服务启动不执行任何自动灌库,知识库由前端 `/knowledge/rebuild`、单文件灌库与上传灌库按需触发,启动阶段不占用 embedding/rerank 与磁盘资源.
 
-|方法|REST|gRPC|功能|请求参数|流事件字段|
-|-|-|-|-|-|-|
-|StreamSessionPrompt|`GET /agent/stream?prompt=&user_id=&session_id=`|`StreamSessionPrompt`|带 Session 上下文的 SSE 流式对话（长期记忆 + 知识库 + 持久化）|`prompt` (string, 必填), `user_id` (string, 必填), `session_id` (string, 必填)|`node, content, tool_calls, trace, model_name, type, context_messages, metadata, error, done`|
-|StreamRun|`GET /agent/stream-run?prompt=&user_id=&session_id=`|`StreamRun`|无状态 SSE 流式运行（无记忆/召回/持久化）|同上|同上|
+### 3. 启动前端（Electron + Vite + Vue 3）
 
-> 流事件说明：
-> - `type`: 普通 chunk 为空；`"system_prompt"` 时 `metadata` 含 RAG 指标；`"context_mirror"` 时 `context_messages` 含模型完整上下文
-> - `done`: 流结束标志（REST 以 `data: [DONE]\\n\\n` 结束）
-> - `error`: 仅在发生错误时非空，含友好错误描述
+##### 编辑器(Editor)--主要关注知识库与图谱的可视化
+```bash
+cd editor
+npm i --verbose
+npm run dev:electron # 开发模式 → http://localhost:5173
+```
 
-### 四、Agent 非流式调用
+### 4. 验证
 
-|方法|REST|gRPC|功能|请求参数|返回结构|
-|-|-|-|-|-|-|
-|RunSessionPrompt|`POST /agent/run`|`RunSessionPrompt`|带 Session 上下文的单次运行|`prompt` (string, 必填), `user_id` (string, 必填), `session_id` (string, 必填)|`{graph_diagram_path, graph_diagram, final_output, events}`|
-|RunOnce|`POST /agent/run-once`|`RunOnce`|无状态单次运行|同上|同上|
-|CancelSession|`POST /agent/cancel`|`CancelSession`|取消正在执行的 Agent 图|`session_id` (string, 必填)|`{ok}`|
+编辑器: `npm run dev:electron`时Electron自动打开浏览器内核窗口.或者在浏览器中访问 `http://localhost:5173`,但浏览器模式下可能某些文件服务不兼容.
 
-### 五、观测
+后端健康检查：`curl http://localhost:8002/health`
 
-|方法|REST|gRPC|功能|请求参数|返回结构|
-|-|-|-|-|-|-|
-|GetEvents|`GET /agent/events?session_id=&user_id=`|`GetEvents`|获取最近一次执行的 trace 事件列表|`session_id` (string, 必填), `user_id` (string, 必填)|`{session_id, user_id, event_count, events: [{message_id, role, node, content, tool_calls, created_at, metadata}]}`|
-|GetRecallDetails|`GET /agent/recall-details?session_id=&user_id=`|`GetRecallDetails`|获取最近一次 RAG 召回快照（pre/post rerank）|同上|`{session_id, user_id, created_at, query, rag_metrics, memory_recall, knowledge_recall}`|
+### 5. 必要设置
 
-### 六、用户设置
+1. **务必在editor客户端的设置中配置大小模型的api-key,api-name,api-url**,大模型默认为`deepseek-v4-flash`(`https://api.deepseek.com`),小模型默认为`Moonshot-v1-8k`(`https://api.moonshot.cn/v1`).
+    **未配置模型字段时无法使用Agent功能**.
+2. 如果需要启用联网搜索引擎,则需要在设置中配置好代理地址(如:`http://127.0.0.1:11719`),因为DuckDuckGo需要连接外网才能正常使用,否则即使启用了联网引擎也无法使用联网.
 
-|方法|REST|gRPC|功能|请求参数|返回结构|
-|-|-|-|-|-|-|
-|ListSystemPromptEntries|`GET /settings/system-prompt?user_id=`|`ListSystemPromptEntries`|列出用户全部系统提示词条目|`user_id` (string, 必填)|`{entries: [{prompt_id, content, created_at}]}`|
-|AddSystemPromptEntry|`POST /settings/system-prompt/entries`|`AddSystemPromptEntry`|添加一条系统提示词条目|`user_id` (string, 必填), `content` (string, 必填)|`{prompt_id, content, created_at}`|
-|DeleteSystemPromptEntry|`DELETE /settings/system-prompt/entries/{prompt_id}`|`DeleteSystemPromptEntry`|删除指定提示词条目|`prompt_id` (string, 必填)|`{ok, deleted_count}`|
-|ListCustomMemories|`GET /settings/memories?user_id=`|`ListCustomMemories`|列出用户全部自定义长期记忆|`user_id` (string, 必填)|`[{memory_id, content, importance, created_at}]`|
-|AddCustomMemory|`POST /settings/memories`|`AddCustomMemory`|添加一条自定义长期记忆（自动向量化入库）|`user_id` (string, 必填), `content` (string, 必填), `importance` (float, 可选, 默认 0.5)|`{memory_id, content, importance, created_at}`|
-|DeleteCustomMemory|`DELETE /settings/memories/{memory_id}`|`DeleteCustomMemory`|删除指定自定义长期记忆|`memory_id` (string, 必填)|`{ok, deleted_count}`|
+## 构建
 
-> 系统提示词条目在每次 Agent 对话时自动全部加载并拼接到系统提示词末尾；自定义长期记忆通过向量检索在相关对话中自动召回。
+### Electron 桌面安装包（推荐）
 
+当前正式发布形态是 **Electron 桌面端 + 内置后端 exe + NSIS 安装包**：
+
+- Electron 负责桌面窗口、托盘、悬浮窗和安装器。
+- `AgentService.exe` 作为内置后端放入安装包的 `resources/backend/`。
+- 默认资源模板放入安装包的 `resources/default-resources/`。
+- 运行时由 Electron 拉起后端,窗口加载 `http://127.0.0.1:8002`。
+- 安装器允许用户选择安装目录。
+- `runtime/` 不进入安装包。数据库、模型缓存、日志、上传文件和 frontmatter 都在用户数据目录首次运行时自动生成。
+
+```bash
+cd editor
+npm install
+npm run dist:win
+```
+
+构建过程会依次执行：
+
+1. `npm run build-only`: 构建前端静态资源到 `editor/dist/`。
+2. `npm run prepare:default-resources`: 生成安装包资源模板到 `editor/.packaging/default-resources/`。
+3. `npm run build:backend`: 调用 PyInstaller 读取根目录 `AgentService.spec`,生成 `dist/AgentService.exe`。
+4. `electron-builder --win nsis`: 生成 Windows NSIS 安装包,输出到 `editor/release/`。
+
+资源模板规则：
+
+```text
+editor/.packaging/default-resources/
+├── mcp/
+│   └── example.json      # MCP 配置模板
+├── safety/               # 从 resources/safety 原样复制
+├── skills/               # 从 resources/skills 原样复制
+└── knowledge/            # 只创建空目录,不复制本地知识库内容
+```
+
+最终产物：
+
+```text
+editor/release/
+├── MetaWeave Setup <version>.exe   # 安装包,安装时可选择路径
+└── win-unpacked/                   # 免安装展开目录,用于调试
+```
+
+### 后端 exe（单独构建）
+
+如果只需要后端单文件 exe,可在根目录单独执行：
+
+```bash
+# 安装 PyInstaller
+pip install pyinstaller
+# 安装后端依赖
+pip install -r agent_service/requirements.txt
+# 打包（读取 AgentService.spec）
+pyinstaller AgentService.spec
+```
+
+产物为 `dist/AgentService.exe`。`.spec` 配置只打包程序和 `editor/dist/` 前端静态资源。**不要把 `resources/` 或 `runtime/` 放入 PyInstaller datas**；默认资源由 Electron 安装包外置携带。
+
+### 部署结构
+
+安装后的结构大致如下：
+
+```text
+MetaWeave/
+├── MetaWeave.exe
+├── resources/
+│   ├── backend/
+│   │   └── AgentService.exe
+│   └── default-resources/
+│       ├── mcp/
+│       ├── safety/
+│       ├── skills/
+│       └── knowledge/
+└── ...
+```
+
+首次运行后,Electron 会把默认资源模板复制到用户数据目录,并通过环境变量让后端使用该目录：
+
+```text
+%APPDATA%/MetaWeave/
+├── .env
+├── resources/           # 自动生成空目录,放入文件即可覆盖 exe 内置默认
+│   ├── knowledge/       # 默认知识库,启动不自动灌库,按需触发
+│   ├── mcp/             # 首次复制 example.json 模板,可放 .json MCP 服务器配置
+│   └── safety/          # 放 sensitive_words.json,覆盖内置安全词库
+└── runtime/             # 自动生成: db/ models/ frontmatter/ logs/
+```
+
+> **读取规则**: 正式安装包运行时以后端收到的 `AGENT_PROJECT_ROOT=%APPDATA%/MetaWeave` 为准。`resources/` 是用户可编辑目录,`runtime/` 是运行期数据目录,二者都不写入安装目录和后端 exe。
+
+### 运行方式
+
+桌面安装包安装完成后,直接启动 `MetaWeave`。Electron 会自动拉起内置后端并打开桌面窗口。
+
+如需调试后端 exe,也可以单独运行：
+
+```bash
+AgentService.exe
+```
+
+后端单独运行时提供 API 和前端页面：`http://localhost:8002`。`runtime/`、外置 `resources/` 和 `.env` 空文件首次启动自动生成。首次启动后需要在 `.env` 或客户端设置中配置大小模型 API Key、模型名和 API 地址,否则 Agent 功能不可用。单独运行后端 exe 时如果希望模拟安装包行为,可手动设置 `AGENT_PROJECT_ROOT` 和 `AGENT_BASE_DATA_DIR`。
 
 ## MCP 工具接入
 
