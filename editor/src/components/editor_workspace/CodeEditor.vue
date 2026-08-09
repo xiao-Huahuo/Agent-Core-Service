@@ -10,6 +10,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import { useSubmenuIntent } from '@/components/editor_workspace/submenuIntent'
 
 import { hljs, isHighlightableLanguage } from './codeHighlight'
 
@@ -87,6 +88,13 @@ if (model.value) {
 }
 const contextMenuStyle = ref<Record<string, string>>({ left: '0px', top: '0px' })
 const activeMenuGroup = ref('')
+const markdownSubmenuRefs: Record<string, HTMLElement | null> = {}
+const {
+  openSubmenu: openMarkdownSubmenu,
+  keepSubmenuOpen: keepMarkdownSubmenuOpen,
+  scheduleSubmenuClose: scheduleMarkdownSubmenuClose,
+  closeSubmenu: closeMarkdownSubmenu,
+} = useSubmenuIntent(activeMenuGroup)
 const findBarOpen = ref(false)
 const findQuery = ref('')
 const replaceQuery = ref('')
@@ -659,7 +667,19 @@ function openContextMenu(event: MouseEvent) {
 
 function closeContextMenu() {
   contextMenuOpen.value = false
+  closeMarkdownSubmenu()
   activeMenuGroup.value = ''
+}
+
+function setMarkdownSubmenuRef(key: string, element: unknown) {
+  markdownSubmenuRefs[key] = element instanceof HTMLElement ? element : null
+}
+
+function handleMarkdownSubmenuLeave(key: string, event: MouseEvent) {
+  const parent = event.currentTarget
+  if (parent instanceof HTMLElement) {
+    scheduleMarkdownSubmenuClose(key, event, parent, markdownSubmenuRefs[key] ?? null)
+  }
 }
 
 onBeforeUnmount(() => {
@@ -745,7 +765,8 @@ onBeforeUnmount(() => {
           v-for="group in menuGroups"
           :key="group.title"
           class="markdown-context-group"
-          @mouseenter="activeMenuGroup = group.title"
+          @mouseenter="openMarkdownSubmenu(group.title)"
+          @mouseleave="handleMarkdownSubmenuLeave(group.title, $event)"
         >
           <button
             class="markdown-context-parent"
@@ -757,7 +778,13 @@ onBeforeUnmount(() => {
             <span>{{ group.title }}</span>
             <span aria-hidden="true">›</span>
           </button>
-          <div v-if="activeMenuGroup === group.title" class="markdown-context-submenu">
+          <div
+            v-if="activeMenuGroup === group.title"
+            :ref="(element) => setMarkdownSubmenuRef(group.title, element)"
+            class="markdown-context-submenu"
+            @mouseenter="keepMarkdownSubmenuOpen"
+            @mouseleave="handleMarkdownSubmenuLeave(group.title, $event)"
+          >
             <button
               v-for="item in group.items"
               :key="item.command"

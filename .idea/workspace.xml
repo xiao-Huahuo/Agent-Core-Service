@@ -5,7 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="看板小改">
-      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/LatencyCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/LatencyCard.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/CodeEditor.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/CodeEditor.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileContextMenu.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileContextMenu.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileTreePanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/stores/workspace.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/workspace.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -303,15 +309,7 @@
       <workItem from="1786174906065" duration="703000" />
       <workItem from="1786190105430" duration="11711000" />
       <workItem from="1786248468206" duration="9378000" />
-      <workItem from="1786261492021" duration="1456000" />
-    </task>
-    <task id="LOCAL-00272" summary="Git v2">
-      <option name="closed" value="true" />
-      <created>1785471241768</created>
-      <option name="number" value="00272" />
-      <option name="presentableId" value="LOCAL-00272" />
-      <option name="project" value="LOCAL" />
-      <updated>1785471241768</updated>
+      <workItem from="1786261492021" duration="6488000" />
     </task>
     <task id="LOCAL-00273" summary="Git v3">
       <option name="closed" value="true" />
@@ -697,7 +695,15 @@
       <option name="project" value="LOCAL" />
       <updated>1786263666991</updated>
     </task>
-    <option name="localTasksCounter" value="321" />
+    <task id="LOCAL-00321" summary="看板小改">
+      <option name="closed" value="true" />
+      <created>1786264196414</created>
+      <option name="number" value="00321" />
+      <option name="presentableId" value="LOCAL-00321" />
+      <option name="project" value="LOCAL" />
+      <updated>1786264196414</updated>
+    </task>
+    <option name="localTasksCounter" value="322" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

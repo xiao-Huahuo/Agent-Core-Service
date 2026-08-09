@@ -1,5 +1,9 @@
 # CHANGE HISTORY
 
+## 2026-08-09
+- [x] 优化右键菜单二级菜单防误消失:新增 submenu intent 三角区域判断工具,文件树与资源管理器共用的 `FileContextMenu` 改为状态驱动子菜单,Markdown 编辑器右键菜单接入同一套鼠标轨迹延迟关闭逻辑;补充几何回归测试。
+- [x] 修复文件树 Ctrl/Meta + 鼠标点击离散多选: additive 选择首次启动时保留当前单选项,避免 Ctrl 点击第二个文件时把原选中项丢掉;再次 Ctrl 点击已选中项会从复选集合中移除,最后一项移除时显式清空树高亮且不关闭已打开编辑文件;新增 store 回归测试覆盖保留、移除和清空三种状态。
+
 ## 2026-08-05
 - [x] 悬浮窗外圆角与主窗口一致:`.floating-agent` 卡片 `border-radius` 由 16px 改为 28px(主窗口 `#app` 的 28px)。小窗不可调整大小,无需处理最大化归零。
 - [x] 悬浮窗空态欢迎区 + 输入框侧边栏式响应式布局 + 设置页"启动小窗"按钮:①`FloatingAgent.vue` 无会话消息时展开显示 Agent 侧边栏同款欢迎区(`welcome-center` 两张图片——图标 + 明/暗标题——与 `在知识库 {{knowledgeTitle}} 中有什么问题?` 欢迎词,图片按小窗 420px 收窄为 64/110px),`bottom:calc(50% + 60px)` 定位使欢迎词底部刚好贴住居中输入框上方,与 AgentPanel 侧边栏视觉一致;②`ChatInput` 参数对齐侧边栏模式:`:centered` 由「展开且无消息且非流式」驱动(无消息时输入框上浮到窗口 42% 处、有消息/流式时贴底),`:compact` 恒为 `true`(panel 模式,不再在小窗里显示探索/构建/审查/修复提示卡片),补全 `--input-btn-bg`/`--input-send-disabled` 输入框变量;居中时消息区高度预留归零(`.input-wrap-centered{height:0}`)让欢迎区占满整窗;③`FloatingSettingsSection.vue` 新增"启动小窗"按钮(点击 `floatingToggle()`),置顶模式设置保留。`vue-tsc`/eslint 通过。

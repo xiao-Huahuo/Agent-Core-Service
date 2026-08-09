@@ -298,6 +298,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** Current file or directory path highlighted in the tree. */
   const selectedTreePath = ref('')
 
+  /** Whether the user explicitly cleared the tree highlight while keeping the editor file open. */
+  const treeSelectionCleared = ref(false)
+
   /** Active editor mode. */
   const editorMode = ref<EditorViewMode>('edit')
 
@@ -1232,11 +1235,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function setTreeSelection(paths: string[], anchorPath = paths[paths.length - 1] ?? '') {
     selectedTreePaths.value = new Set(paths.map(normalizeTreePath).filter(Boolean))
     selectionAnchorPath.value = anchorPath
+    treeSelectionCleared.value = false
   }
 
   function clearTreeSelection() {
     selectedTreePaths.value = new Set()
     selectionAnchorPath.value = ''
+    selectedTreePath.value = ''
+    treeSelectionCleared.value = true
   }
 
   function selectTreeNode(node: KnowledgeFileNode, options: { rangePaths?: string[]; additive?: boolean } = {}) {
@@ -1248,19 +1254,26 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     if (options.additive) {
       const next = new Set(selectedTreePaths.value)
+      const currentPath = normalizeTreePath(selectedTreePath.value || selectedPath.value)
+      if (next.size === 0 && currentPath) {
+        next.add(currentPath)
+      }
       if (next.has(path)) {
         next.delete(path)
       } else {
         next.add(path)
       }
+      const nextPaths = Array.from(next)
       selectedTreePaths.value = next
-      selectionAnchorPath.value = path
-      selectedTreePath.value = path
+      selectedTreePath.value = next.has(path) ? path : nextPaths[nextPaths.length - 1] ?? ''
+      selectionAnchorPath.value = selectedTreePath.value
+      treeSelectionCleared.value = next.size === 0
       return
     }
     selectedTreePaths.value = new Set()
     selectionAnchorPath.value = path
     selectedTreePath.value = path
+    treeSelectionCleared.value = false
   }
 
   function getSelectedTreeNodes(fallbackNode?: KnowledgeFileNode | null): KnowledgeFileNode[] {
@@ -1280,6 +1293,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   async function selectFile(node: KnowledgeFileNode) {
     selectedTreePath.value = node.path
+    treeSelectionCleared.value = false
     if (node.isDir) {
       return
     }
@@ -1306,6 +1320,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function activateTab(path: string) {
     selectedPath.value = path
     selectedTreePath.value = path
+    treeSelectionCleared.value = false
     if (shouldDefaultToPreviewMode(path)) {
       editorMode.value = 'preview'
     }
@@ -2583,6 +2598,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     expandedPaths,
     selectedPath,
     selectedTreePath,
+    treeSelectionCleared,
     selectedTreePaths,
     selectionAnchorPath,
     selectedNode,

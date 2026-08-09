@@ -9,6 +9,7 @@
 import { computed, ref } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import { useSubmenuIntent } from '@/components/editor_workspace/submenuIntent'
 import { useFavoritesStore } from '@/stores/favorites'
 import { useSettingsStore } from '@/stores/settings'
 import type { KnowledgeFileNode } from '@/types/knowledge'
@@ -50,12 +51,30 @@ const emit = defineEmits<{
 }>()
 
 const menuRef = ref<HTMLElement | null>(null)
+const activeSubmenu = ref('')
+const submenuRefs: Record<string, HTMLElement | null> = {}
+const {
+  openSubmenu,
+  keepSubmenuOpen,
+  scheduleSubmenuClose,
+} = useSubmenuIntent(activeSubmenu)
 const isBatchSelection = computed(() => props.selectionCount > 1)
 const hasTarget = computed(() => Boolean(props.node))
 const canUseSingleOnlyAction = computed(() => !isBatchSelection.value && hasTarget.value)
 const isTargetFavorite = computed(() => (
   props.node ? favoritesStore.isFavorite('knowledge_path', props.node.path, favoritesStore.activeLibraryId()) : false
 ))
+
+function setSubmenuRef(key: string, element: unknown) {
+  submenuRefs[key] = element instanceof HTMLElement ? element : null
+}
+
+function handleSubmenuLeave(key: string, event: MouseEvent) {
+  const parent = event.currentTarget
+  if (parent instanceof HTMLElement) {
+    scheduleSubmenuClose(key, event, parent, submenuRefs[key] ?? null)
+  }
+}
 
 defineExpose({
   getBoundingClientRect: () => menuRef.value?.getBoundingClientRect() ?? new DOMRect(),
@@ -64,9 +83,20 @@ defineExpose({
 
 <template>
   <div ref="menuRef" class="context-menu" :class="{ dark: settingsStore.isDark }" :style="menuStyle" @click.stop>
-    <div class="context-submenu-item" :class="{ disabled: isBatchSelection }">
+    <div
+      class="context-submenu-item"
+      :class="{ active: activeSubmenu === 'create', disabled: isBatchSelection }"
+      @mouseenter="!isBatchSelection && openSubmenu('create')"
+      @mouseleave="handleSubmenuLeave('create', $event)"
+    >
       <button type="button" :disabled="isBatchSelection"><IcIcon name="add" :size="15" /><span>新建</span><IcIcon name="chevron-right" :size="15" /></button>
-      <div class="context-submenu">
+      <div
+        v-show="activeSubmenu === 'create' && !isBatchSelection"
+        :ref="(element) => setSubmenuRef('create', element)"
+        class="context-submenu"
+        @mouseenter="keepSubmenuOpen"
+        @mouseleave="handleSubmenuLeave('create', $event)"
+      >
         <button type="button" :disabled="isBatchSelection" @click="emit('createFile')"><IcIcon name="new-file" :size="15" /><span>新建文件</span><kbd>Ctrl+N</kbd></button>
         <button type="button" :disabled="isBatchSelection" @click="emit('createFolder')"><IcIcon name="new-folder" :size="15" /><span>新建文件夹</span><kbd>Ctrl+Shift+N</kbd></button>
       </div>
@@ -74,9 +104,20 @@ defineExpose({
     <hr class="context-separator" />
     <button type="button" :disabled="!node" @click="emit('copy')"><IcIcon name="copy" :size="15" /><span>复制</span><kbd>Ctrl+C</kbd></button>
     <button type="button" :disabled="!node" @click="emit('cut')"><IcIcon name="cut" :size="15" /><span>剪切</span><kbd>Ctrl+X</kbd></button>
-    <div class="context-submenu-item" :class="{ disabled: !canUseSingleOnlyAction }">
+    <div
+      class="context-submenu-item"
+      :class="{ active: activeSubmenu === 'copy-info', disabled: !canUseSingleOnlyAction }"
+      @mouseenter="canUseSingleOnlyAction && openSubmenu('copy-info')"
+      @mouseleave="handleSubmenuLeave('copy-info', $event)"
+    >
       <button type="button" :disabled="!canUseSingleOnlyAction"><IcIcon name="text-fields" :size="15" /><span>复制信息</span><IcIcon name="chevron-right" :size="15" /></button>
-      <div class="context-submenu">
+      <div
+        v-show="activeSubmenu === 'copy-info' && canUseSingleOnlyAction"
+        :ref="(element) => setSubmenuRef('copy-info', element)"
+        class="context-submenu"
+        @mouseenter="keepSubmenuOpen"
+        @mouseleave="handleSubmenuLeave('copy-info', $event)"
+      >
         <button type="button" :disabled="!canUseSingleOnlyAction" @click="emit('copyName')"><IcIcon name="text-fields" :size="15" /><span>复制名称</span></button>
         <button type="button" :disabled="!canUseSingleOnlyAction" @click="emit('copyAbsolutePath')"><IcIcon name="link" :size="15" /><span>复制绝对路径</span></button>
         <button type="button" :disabled="!canUseSingleOnlyAction" @click="emit('copyRelativePath')"><IcIcon name="arrow-right" :size="15" /><span>复制相对路径</span></button>
@@ -202,7 +243,7 @@ defineExpose({
   top: calc(-1 * var(--space-6));
   left: calc(100% + var(--space-8));
   z-index: 1;
-  display: none;
+  display: grid;
   min-width: 260px;
   padding: var(--space-6);
   border: 1px solid var(--color-border);
@@ -215,14 +256,9 @@ defineExpose({
   background: #151820;
 }
 
-.context-submenu-item:hover > .context-submenu,
-.context-submenu-item:focus-within > .context-submenu {
-  display: grid;
-}
-
-.context-submenu-item.disabled:hover > .context-submenu,
-.context-submenu-item.disabled:focus-within > .context-submenu {
-  display: none;
+.context-submenu-item.active > button {
+  background: var(--color-selection-blue-soft);
+  color: var(--color-text);
 }
 
 .context-separator {
