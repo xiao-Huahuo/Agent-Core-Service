@@ -73,23 +73,45 @@ const uploadInputByRow = ref<Record<string, HTMLInputElement | null>>({})
 const imagePreviewByPath = ref<Record<string, string>>({})
 const tagEditorKey = ref('')
 const tagDraft = ref('')
+const dropdownOpen = ref('')
+const swappedColumnId = ref('')
+const swappedRowId = ref('')
+let swapAnimationTimer: ReturnType<typeof setTimeout> | undefined
 
 type TableContextTarget =
   | { kind: 'table' }
   | { kind: 'column'; columnId: string }
   | { kind: 'row'; rowId: string }
   | { kind: 'cell'; rowId: string; columnId: string }
+  | { kind: 'selection' }
+
+interface CellCoord {
+  rowId: string
+  columnId: string
+}
+
+interface SmartFillResult {
+  ready: number
+  failed: number
+}
 
 type TableClipboard =
   | { kind: 'cell'; cell: SmartCell }
   | { kind: 'row'; cells: Record<string, SmartCell> }
   | { kind: 'column'; values: Record<string, SmartCell> }
+  | { kind: 'selection'; cells: Record<string, SmartCell> }
 
 const tableContextTarget = ref<TableContextTarget | null>(null)
 const tableContextMenuStyle = ref<Record<string, string>>({ left: '0px', top: '0px' })
 const tableContextSubmenu = ref('')
 const tableContextSubmenuRefs: Record<string, HTMLElement | null> = {}
 const tableClipboard = ref<TableClipboard | null>(null)
+const selectedCellKeys = ref<string[]>([])
+const dragAnchorCell = ref<CellCoord | null>(null)
+const draggedColumnId = ref('')
+const draggedRowId = ref('')
+let autoSaveTimer: ReturnType<typeof setTimeout> | undefined
+let formRevision = 0
 const {
   openSubmenu: openTableSubmenu,
   keepSubmenuOpen: keepTableSubmenuOpen,
@@ -104,6 +126,16 @@ const activeFormCsvFile = computed(() => form.value ? `${form.value.title}.csv` 
 const activeFormAssetDir = computed(() => activeFormDir.value ? `${activeFormDir.value}/assets` : '')
 const updatedAtLabel = computed(() => form.value ? new Date(form.value.updatedAt).toLocaleString() : '')
 const hasUserId = computed(() => Boolean(settingsStore.profile.userId))
+const activeFormName = computed(() => formEntries.value.find((entry) => entry.formId === activeFormId.value)?.name || '切换表格')
+const tagFilterOptions = computed(() => [{ value: '', label: '全部标签' }, ...tagFilters.value.map((tag) => ({ value: tag, label: tag }))])
+const tagFilterLabel = computed(() => tagFilter.value || '全部标签')
+const ratingFilterOptions = [
+  { value: 0, label: '全部星级' },
+  { value: 5, label: '5 星' },
+  { value: 4, label: '4 星以上' },
+  { value: 3, label: '3 星以上' },
+]
+const ratingFilterLabel = computed(() => ratingFilterOptions.find((option) => option.value === minRating.value)?.label || '全部星级')
 
 const customColumnTypes: { value: SmartColumnType; label: string }[] = [
   { value: 'text', label: '文本' },
@@ -116,10 +148,14 @@ const customColumnTypes: { value: SmartColumnType; label: string }[] = [
 ]
 
 onMounted(() => {
+  window.addEventListener('mouseup', stopCellSelection)
   void loadForm()
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('mouseup', stopCellSelection)
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+  if (swapAnimationTimer) clearTimeout(swapAnimationTimer)
   closeTableContextMenu()
 })
 
@@ -136,6 +172,8 @@ async function loadForm(): Promise<void> {
       form.value = null
       activeFormId.value = ''
       activeFormDir.value = ''
+      selectedCell.value = null
+      selectedCellKeys.value = []
       return
     }
     await openForm(entries[0]!)
@@ -189,6 +227,7 @@ async function openForm(entry: SmartFormEntry): Promise<void> {
     activeFormId.value = response.form_id
     activeFormDir.value = response.asset_dir || entry.assetDir
     selectedCell.value = null
+    selectedCellKeys.value = []
     await loadImagePreviews()
   } catch (error) {
     workspaceStore.showToast(`打开表格失败 - ${errorMessage(error)}`)
@@ -199,6 +238,31 @@ async function openForm(entry: SmartFormEntry): Promise<void> {
 function openFormById(formId: string): void {
   const entry = formEntries.value.find((item) => item.formId === formId)
   if (entry) void openForm(entry)
+}
+
+function toggleDropdown(key: string): void {
+  closeTableContextMenu()
+  closeTagEditor()
+  dropdownOpen.value = dropdownOpen.value === key ? '' : key
+}
+
+function closeDropdownMenus(): void {
+  dropdownOpen.value = ''
+}
+
+function selectFormById(formId: string): void {
+  openFormById(formId)
+  closeDropdownMenus()
+}
+
+function selectTagFilter(value: string): void {
+  tagFilter.value = value
+  closeDropdownMenus()
+}
+
+function selectMinRating(value: number): void {
+  minRating.value = value
+  closeDropdownMenus()
 }
 
 /** Creates a user-named table and persists its initial state in the database. */
@@ -217,6 +281,8 @@ async function createSmartForm(): Promise<void> {
     form.value = createDefaultLiteratureForm(title)
     activeFormId.value = ''
     activeFormDir.value = dir
+    selectedCell.value = null
+    selectedCellKeys.value = []
     await persistForm(false)
     formEntries.value = await listSmartForms()
     newFormTitle.value = ''
@@ -243,25 +309,29 @@ function uniqueFormDir(title: string): string {
   return candidate
 }
 
-async function saveForm(): Promise<void> {
-  await persistForm(true)
-}
-
 async function persistForm(showSuccessToast: boolean): Promise<void> {
   if (!settingsStore.profile.userId || !form.value || !activeFormDir.value) return
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+    autoSaveTimer = undefined
+  }
+  const saveRevision = formRevision
   saving.value = true
   try {
     await ensureFormFolders()
-    form.value = { ...form.value, updatedAt: new Date().toISOString() }
+    const formToSave = { ...form.value, updatedAt: new Date().toISOString() }
+    form.value = formToSave
     const response = await saveSmartFormDb({
       user_id: settingsStore.profile.userId,
       form_id: activeFormId.value || undefined,
       asset_dir: activeFormDir.value,
-      form: form.value,
+      form: formToSave,
     })
     activeFormId.value = response.form_id
     activeFormDir.value = response.asset_dir
-    form.value = normalizeForm(response.form)
+    if (formRevision === saveRevision) {
+      form.value = normalizeForm(response.form)
+    }
     if (showSuccessToast) {
       workspaceStore.showToast('智能表格已保存')
     }
@@ -270,6 +340,21 @@ async function persistForm(showSuccessToast: boolean): Promise<void> {
   } finally {
     saving.value = false
   }
+}
+
+function setForm(nextForm: SmartLiteratureForm, autosave = true): void {
+  formRevision += 1
+  form.value = nextForm
+  if (autosave) scheduleAutoSave()
+}
+
+function scheduleAutoSave(): void {
+  if (!settingsStore.profile.userId || !form.value || !activeFormDir.value) return
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+  autoSaveTimer = setTimeout(() => {
+    autoSaveTimer = undefined
+    void persistForm(false)
+  }, 250)
 }
 
 async function ensureFormFolders(): Promise<void> {
@@ -293,33 +378,46 @@ function addRowAt(rowId: string | undefined, direction: -1 | 1): void {
   const insertionIndex = Math.max(0, index + (direction > 0 ? 1 : 0))
   const rows = [...form.value.rows]
   rows.splice(insertionIndex, 0, createEmptyRow(form.value.columns))
-  form.value = {
+  setForm({
     ...form.value,
     updatedAt: new Date().toISOString(),
     rows,
-  }
+  })
 }
 
 function deleteRecord(rowId: string): void {
   if (!form.value) return
-  form.value = {
+  setForm({
     ...form.value,
     updatedAt: new Date().toISOString(),
     rows: form.value.rows.filter((row) => row.id !== rowId),
-  }
+  })
 }
 
 function editCell(row: SmartRow, column: SmartColumn, value: string): void {
   if (!form.value) return
-  form.value = {
+  setForm({
     ...form.value,
     updatedAt: new Date().toISOString(),
     rows: form.value.rows.map((item) => item.id === row.id ? updateCell(item, column, value) : item),
-  }
+  })
 }
 
 function setRating(row: SmartRow, column: SmartColumn, rating: number): void {
   editCell(row, column, String(rating))
+}
+
+function booleanDropdownKey(rowId: string, columnId: string): string {
+  return `boolean:${rowId}:${columnId}`
+}
+
+function booleanCellLabel(row: SmartRow, column: SmartColumn): string {
+  return row.cells[column.id]?.value || '未设置'
+}
+
+function selectBooleanValue(row: SmartRow, column: SmartColumn, value: string): void {
+  editCell(row, column, value)
+  closeDropdownMenus()
 }
 
 function addColumnAt(column: SmartColumn, direction: -1 | 1): void {
@@ -335,7 +433,7 @@ function addColumnAt(column: SmartColumn, direction: -1 | 1): void {
     ? form.value.columns.findIndex((item) => item.id === targetColumnId)
     : form.value.columns.length
   const insertionIndex = Math.max(0, targetIndex + (direction > 0 ? 1 : 0))
-  form.value = addColumn(form.value, { ...column }, insertionIndex)
+  setForm(addColumn(form.value, { ...column }, insertionIndex))
 }
 
 function addCustomColumnAt(type: SmartColumnType, direction: -1 | 1): void {
@@ -346,23 +444,88 @@ function addCustomColumnAt(type: SmartColumnType, direction: -1 | 1): void {
   const targetIndex = targetColumnId
     ? form.value.columns.findIndex((item) => item.id === targetColumnId)
     : form.value.columns.length
-  form.value = addColumn(form.value, createCustomColumn(customColumnTitle.value, type), Math.max(0, targetIndex + (direction > 0 ? 1 : 0)))
+  setForm(addColumn(form.value, createCustomColumn(customColumnTitle.value, type), Math.max(0, targetIndex + (direction > 0 ? 1 : 0))))
   customColumnTitle.value = ''
 }
 
 function removeColumnById(columnId: string): void {
   if (!form.value) return
-  form.value = removeColumn(form.value, columnId)
+  setForm(removeColumn(form.value, columnId))
 }
 
 function moveColumnById(columnId: string, direction: -1 | 1): void {
   if (!form.value) return
-  form.value = moveColumn(form.value, columnId, direction)
+  setForm(moveColumn(form.value, columnId, direction))
 }
 
 function moveRowById(rowId: string, direction: -1 | 1): void {
   if (!form.value) return
-  form.value = moveRow(form.value, rowId, direction)
+  setForm(moveRow(form.value, rowId, direction))
+}
+
+function startColumnDrag(columnId: string, event: DragEvent): void {
+  draggedColumnId.value = columnId
+  event.dataTransfer?.setData('text/plain', columnId)
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+}
+
+function dropColumn(columnId: string): void {
+  if (!form.value || !draggedColumnId.value || draggedColumnId.value === columnId) return
+  const sourceColumnId = draggedColumnId.value
+  setForm({
+    ...form.value,
+    updatedAt: new Date().toISOString(),
+    columns: moveItemToTarget(form.value.columns, sourceColumnId, columnId, (column) => column.id),
+  })
+  markSwapAnimation(sourceColumnId, '')
+  draggedColumnId.value = ''
+}
+
+function endColumnDrag(): void {
+  draggedColumnId.value = ''
+}
+
+function startRowDrag(rowId: string, event: DragEvent): void {
+  draggedRowId.value = rowId
+  event.dataTransfer?.setData('text/plain', rowId)
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+}
+
+function dropRow(rowId: string): void {
+  if (!form.value || !draggedRowId.value || draggedRowId.value === rowId) return
+  const sourceRowId = draggedRowId.value
+  setForm({
+    ...form.value,
+    updatedAt: new Date().toISOString(),
+    rows: moveItemToTarget(form.value.rows, sourceRowId, rowId, (row) => row.id),
+  })
+  markSwapAnimation('', sourceRowId)
+  draggedRowId.value = ''
+}
+
+function endRowDrag(): void {
+  draggedRowId.value = ''
+}
+
+function moveItemToTarget<T>(items: T[], sourceId: string, targetId: string, getId: (item: T) => string): T[] {
+  const nextItems = [...items]
+  const sourceIndex = nextItems.findIndex((item) => getId(item) === sourceId)
+  const targetIndex = nextItems.findIndex((item) => getId(item) === targetId)
+  if (sourceIndex < 0 || targetIndex < 0) return items
+  const [source] = nextItems.splice(sourceIndex, 1)
+  if (!source) return items
+  nextItems.splice(targetIndex, 0, source)
+  return nextItems
+}
+
+function markSwapAnimation(columnId: string, rowId: string): void {
+  swappedColumnId.value = columnId
+  swappedRowId.value = rowId
+  if (swapAnimationTimer) clearTimeout(swapAnimationTimer)
+  swapAnimationTimer = setTimeout(() => {
+    swappedColumnId.value = ''
+    swappedRowId.value = ''
+  }, 360)
 }
 
 function setTableContextSubmenuRef(key: string, element: unknown): void {
@@ -392,8 +555,64 @@ function closeTableContextMenu(): void {
 }
 
 function closeFloatingMenus(): void {
+  closeDropdownMenus()
   closeTableContextMenu()
   closeTagEditor()
+}
+
+function cellKey(rowId: string, columnId: string): string {
+  return `${rowId}:${columnId}`
+}
+
+function isCellSelected(rowId: string, columnId: string): boolean {
+  return selectedCellKeys.value.includes(cellKey(rowId, columnId))
+}
+
+function selectedCells(): CellCoord[] {
+  return selectedCellKeys.value.map((key) => {
+    const [rowId = '', columnId = ''] = key.split(':')
+    return { rowId, columnId }
+  }).filter((cell) => cell.rowId && cell.columnId)
+}
+
+function selectSingleCell(rowId: string, columnId: string): void {
+  selectedCell.value = { rowId, columnId }
+  selectedCellKeys.value = [cellKey(rowId, columnId)]
+}
+
+function startCellSelection(rowId: string, columnId: string, event: MouseEvent): void {
+  if (event.button !== 0) return
+  closeFloatingMenus()
+  dragAnchorCell.value = { rowId, columnId }
+  selectSingleCell(rowId, columnId)
+}
+
+function extendCellSelection(rowId: string, columnId: string): void {
+  if (!form.value || !dragAnchorCell.value) return
+  const rowIds = visibleRows.value.map((row) => row.id)
+  const columnIds = form.value.columns.map((column) => column.id)
+  const rowStart = rowIds.indexOf(dragAnchorCell.value.rowId)
+  const rowEnd = rowIds.indexOf(rowId)
+  const columnStart = columnIds.indexOf(dragAnchorCell.value.columnId)
+  const columnEnd = columnIds.indexOf(columnId)
+  if (rowStart < 0 || rowEnd < 0 || columnStart < 0 || columnEnd < 0) return
+  const [minRow, maxRow] = [Math.min(rowStart, rowEnd), Math.max(rowStart, rowEnd)]
+  const [minColumn, maxColumn] = [Math.min(columnStart, columnEnd), Math.max(columnStart, columnEnd)]
+  selectedCell.value = { rowId, columnId }
+  selectedCellKeys.value = rowIds
+    .slice(minRow, maxRow + 1)
+    .flatMap((selectedRowId) => columnIds.slice(minColumn, maxColumn + 1).map((selectedColumnId) => cellKey(selectedRowId, selectedColumnId)))
+}
+
+function stopCellSelection(): void {
+  dragAnchorCell.value = null
+}
+
+function openCellContextMenu(row: SmartRow, column: SmartColumn, event: MouseEvent): void {
+  if (!isCellSelected(row.id, column.id)) {
+    selectSingleCell(row.id, column.id)
+  }
+  openTableContextMenu(selectedCellKeys.value.length > 1 ? { kind: 'selection' } : { kind: 'cell', rowId: row.id, columnId: column.id }, event)
 }
 
 function addNewRow(): void {
@@ -487,18 +706,93 @@ function contextCell(): SmartCell | undefined {
   return contextRow()?.cells[target.columnId]
 }
 
+function contextRowId(): string | undefined {
+  const target = tableContextTarget.value
+  return target && (target.kind === 'row' || target.kind === 'cell') ? target.rowId : undefined
+}
+
+function contextColumnId(): string | undefined {
+  const target = tableContextTarget.value
+  return target && (target.kind === 'column' || target.kind === 'cell') ? target.columnId : undefined
+}
+
+function contextCells(): CellCoord[] {
+  const target = tableContextTarget.value
+  if (!target) return []
+  if (target.kind === 'selection') return selectedCells()
+  if (target.kind === 'cell') return [{ rowId: target.rowId, columnId: target.columnId }]
+  return []
+}
+
+function contextRowIds(): string[] {
+  const target = tableContextTarget.value
+  if (!target) return []
+  if (target.kind === 'selection') return [...new Set(selectedCells().map((cell) => cell.rowId))]
+  const rowId = contextRowId()
+  return rowId ? [rowId] : []
+}
+
+function contextColumnIds(): string[] {
+  const target = tableContextTarget.value
+  if (!target || !form.value) return []
+  if (target.kind === 'selection') return [...new Set(selectedCells().map((cell) => cell.columnId))]
+  const columnId = contextColumnId()
+  return columnId ? [columnId] : []
+}
+
 function canSmartFillContext(): boolean {
   const target = tableContextTarget.value
   if (!form.value || !target) return false
+  if (target.kind === 'selection') {
+    return contextCells().some((cell) => ['smart_text', 'smart_tag'].includes(form.value!.columns.find((column) => column.id === cell.columnId)?.type ?? ''))
+  }
   if (target.kind === 'cell') return ['smart_text', 'smart_tag'].includes(contextColumn()?.type ?? '')
   if (target.kind === 'column') return ['smart_text', 'smart_tag'].includes(contextColumn()?.type ?? '')
   return form.value.columns.some((column) => column.type === 'smart_text' || column.type === 'smart_tag')
 }
 
+function canDeleteContextColumn(): boolean {
+  if (tableContextTarget.value?.kind === 'selection') {
+    return contextColumnIds().some((columnId) => form.value?.columns.find((column) => column.id === columnId)?.removable)
+  }
+  const column = contextColumn()
+  return Boolean(column?.removable)
+}
+
+function deleteContextRow(): void {
+  const rowIds = new Set(contextRowIds())
+  if (!form.value || !rowIds.size) return
+  setForm({
+    ...form.value,
+    updatedAt: new Date().toISOString(),
+    rows: form.value.rows.filter((row) => !rowIds.has(row.id)),
+  })
+  selectedCellKeys.value = []
+  closeTableContextMenu()
+}
+
+function deleteContextColumn(): void {
+  if (!form.value) return
+  const columnIds = contextColumnIds()
+    .filter((columnId) => form.value?.columns.find((column) => column.id === columnId)?.removable)
+  if (!columnIds.length) return
+  setForm(columnIds.reduce((currentForm, columnId) => removeColumn(currentForm, columnId), form.value))
+  selectedCellKeys.value = []
+  closeTableContextMenu()
+}
+
 function copyTableContext(): void {
   const target = tableContextTarget.value
   if (!target) return
-  if (target.kind === 'cell') {
+  if (target.kind === 'selection' && form.value) {
+    tableClipboard.value = {
+      kind: 'selection',
+      cells: Object.fromEntries(contextCells().map((cell) => {
+        const row = form.value!.rows.find((item) => item.id === cell.rowId)
+        return [cellKey(cell.rowId, cell.columnId), structuredClone(row?.cells[cell.columnId] ?? { value: '' })]
+      })),
+    }
+  } else if (target.kind === 'cell') {
     const cell = contextCell()
     if (cell) tableClipboard.value = { kind: 'cell', cell: { ...cell } }
   } else if (target.kind === 'row') {
@@ -517,61 +811,123 @@ function pasteTableContext(): void {
   const target = tableContextTarget.value
   const clipboard = tableClipboard.value
   if (!target || !clipboard || !form.value) return
-  if (target.kind === 'cell' && clipboard.kind === 'cell') {
+  if (target.kind === 'selection' && clipboard.kind === 'cell') {
+    pasteCellToSelection(clipboard.cell)
+  } else if (target.kind === 'selection' && clipboard.kind === 'selection') {
+    pasteSelectionClipboard(clipboard.cells)
+  } else if (target.kind === 'cell' && clipboard.kind === 'cell') {
     editCell(contextRow()!, contextColumn()!, clipboard.cell.value)
   } else if (target.kind === 'row' && clipboard.kind === 'row') {
-    form.value = {
+    setForm({
       ...form.value,
       updatedAt: new Date().toISOString(),
       rows: form.value.rows.map((row) => row.id === target.rowId ? { ...row, cells: structuredClone(clipboard.cells) } : row),
-    }
+    })
   } else if (target.kind === 'column' && clipboard.kind === 'column') {
-    form.value = {
+    setForm({
       ...form.value,
       updatedAt: new Date().toISOString(),
       rows: form.value.rows.map((row) => ({
         ...row,
         cells: { ...row.cells, [target.columnId]: structuredClone(clipboard.values[row.id] ?? { value: '' }) },
       })),
-    }
+    })
   }
   closeTableContextMenu()
+}
+
+function pasteCellToSelection(cell: SmartCell): void {
+  if (!form.value) return
+  const cells = contextCells()
+  setForm({
+    ...form.value,
+    updatedAt: new Date().toISOString(),
+    rows: form.value.rows.map((row) => ({
+      ...row,
+      cells: {
+        ...row.cells,
+        ...Object.fromEntries(cells.filter((item) => item.rowId === row.id).map((item) => [item.columnId, { ...row.cells[item.columnId], ...cell }])),
+      },
+    })),
+  })
+}
+
+function pasteSelectionClipboard(cellsByKey: Record<string, SmartCell>): void {
+  if (!form.value) return
+  setForm({
+    ...form.value,
+    updatedAt: new Date().toISOString(),
+    rows: form.value.rows.map((row) => ({
+      ...row,
+      cells: {
+        ...row.cells,
+        ...Object.fromEntries(contextCells()
+          .filter((cell) => cell.rowId === row.id && cellsByKey[cellKey(cell.rowId, cell.columnId)])
+          .map((cell) => [cell.columnId, { ...row.cells[cell.columnId], ...cellsByKey[cellKey(cell.rowId, cell.columnId)] }])),
+      },
+    })),
+  })
 }
 
 function clearTableContext(): void {
   const target = tableContextTarget.value
   if (!target || !form.value) return
-  if (target.kind === 'cell') {
+  if (target.kind === 'selection') {
+    const cells = contextCells()
+    setForm({
+      ...form.value,
+      updatedAt: new Date().toISOString(),
+      rows: form.value.rows.map((row) => ({
+        ...row,
+        cells: {
+          ...row.cells,
+          ...Object.fromEntries(cells.filter((cell) => cell.rowId === row.id).map((cell) => [cell.columnId, { ...row.cells[cell.columnId], value: '' }])),
+        },
+      })),
+    })
+  } else if (target.kind === 'cell') {
     editCell(contextRow()!, contextColumn()!, '')
   } else if (target.kind === 'row') {
-    form.value = {
+    setForm({
       ...form.value,
       updatedAt: new Date().toISOString(),
       rows: form.value.rows.map((row) => row.id === target.rowId ? { ...row, cells: Object.fromEntries(form.value!.columns.map((column) => [column.id, { ...row.cells[column.id], value: '' }])) } : row),
-    }
+    })
   } else if (target.kind === 'column') {
-    form.value = {
+    setForm({
       ...form.value,
       updatedAt: new Date().toISOString(),
       rows: form.value.rows.map((row) => ({ ...row, cells: { ...row.cells, [target.columnId]: { ...row.cells[target.columnId], value: '' } } })),
-    }
+    })
   }
   closeTableContextMenu()
 }
 
-async function smartFillTableContext(): Promise<void> {
+function smartFillTableContext(): void {
   const target = tableContextTarget.value
   if (!target || !form.value) return
-  if (target.kind === 'cell') {
-    await generateSmartCellsForRows([target.rowId], [target.columnId], true)
-  } else if (target.kind === 'column') {
-    await generateSmartCellsForRows(form.value.rows.map((row) => row.id), [target.columnId], true)
-  } else if (target.kind === 'row') {
-    await generateSmartCellsForRows([target.rowId], undefined, true)
-  } else {
-    await generateSmartCellsForRows(form.value.rows.map((row) => row.id), undefined, true)
-  }
   closeTableContextMenu()
+  if (target.kind === 'selection') {
+    void generateSmartCellsForSelection(contextCells(), true)
+  } else if (target.kind === 'cell') {
+    void generateSmartCellsForRows([target.rowId], [target.columnId], true)
+  } else if (target.kind === 'column') {
+    void generateSmartCellsForRows(form.value.rows.map((row) => row.id), [target.columnId], true)
+  } else if (target.kind === 'row') {
+    void generateSmartCellsForRows([target.rowId], undefined, true)
+  } else {
+    void generateSmartCellsForRows(form.value.rows.map((row) => row.id), undefined, true)
+  }
+}
+
+async function generateSmartCellsForSelection(cells: CellCoord[], showSuccessToast = false): Promise<void> {
+  if (!form.value) return
+  const smartCells = cells.filter((cell) => {
+    const column = form.value?.columns.find((item) => item.id === cell.columnId)
+    return column?.type === 'smart_text' || column?.type === 'smart_tag'
+  })
+  const results = await Promise.all(smartCells.map((cell) => generateSmartCellsForRows([cell.rowId], [cell.columnId], false)))
+  if (showSuccessToast) showSmartFillToast(sumSmartFillResults(results))
 }
 
 function addContextColumn(column: SmartColumn, direction: -1 | 1): void {
@@ -584,7 +940,7 @@ function addContextCustomColumn(type: SmartColumnType, direction: -1 | 1): void 
   closeTableContextMenu()
 }
 
-async function generateSmartCells(scope: 'selected' | 'all'): Promise<void> {
+function generateSmartCells(scope: 'selected' | 'all'): void {
   if (!form.value) return
   const target = selectedCell.value
   if (scope === 'selected') {
@@ -594,7 +950,7 @@ async function generateSmartCells(scope: 'selected' | 'all'): Promise<void> {
       return
     }
   }
-  await generateSmartCellsForRows(
+  void generateSmartCellsForRows(
     scope === 'all' ? form.value.rows.map((row) => row.id) : [target!.rowId],
     scope === 'selected' ? [target!.columnId] : undefined,
     true,
@@ -602,16 +958,18 @@ async function generateSmartCells(scope: 'selected' | 'all'): Promise<void> {
 }
 
 /** Regenerates a single smart cell from the row's extracted literature content. */
-async function generateSmartCellsForRows(rowIds: string[], columnIds?: string[], showSuccessToast = false): Promise<void> {
-  if (!form.value) return
+async function generateSmartCellsForRows(rowIds: string[], columnIds?: string[], showSuccessToast = false): Promise<SmartFillResult> {
+  const result: SmartFillResult = { ready: 0, failed: 0 }
+  if (!form.value) return result
   const currentForm = form.value
   const smartColumns = currentForm.columns.filter((column) => {
     const isSmart = column.type === 'smart_text' || column.type === 'smart_tag'
     return isSmart && (!columnIds || columnIds.includes(column.id))
   })
-  if (!smartColumns.length || !settingsStore.profile.userId) return
+  if (!smartColumns.length || !settingsStore.profile.userId) return result
   const rowIdSet = new Set(rowIds)
-  form.value = {
+  result.failed = rowIds.length * smartColumns.length
+  setForm({
     ...currentForm,
     updatedAt: new Date().toISOString(),
     rows: currentForm.rows.map((row) => ({
@@ -622,7 +980,7 @@ async function generateSmartCellsForRows(rowIds: string[], columnIds?: string[],
         return [column.id, isTarget ? { ...cell, status: 'pending' } : cell]
       })),
     })),
-  }
+  }, false)
   for (const rowId of rowIds) {
     const currentRow = form.value.rows.find((item) => item.id === rowId)
     if (!currentRow) continue
@@ -630,31 +988,53 @@ async function generateSmartCellsForRows(rowIds: string[], columnIds?: string[],
     if (!literatureContent) {
       patchRowCells(rowId, Object.fromEntries(smartColumns.map((column) => [
         column.id,
-        { ...currentRow.cells[column.id], value: '', status: 'failed' },
+        { ...currentRow.cells[column.id], value: '缺少文献内容，无法生成', status: 'failed' },
       ])))
       continue
     }
     try {
       const values = await generateStructuredValues(literatureContent, smartColumns)
+      let readyCount = 0
       patchRowCells(rowId, Object.fromEntries(smartColumns.map((column) => [
         column.id,
-        {
-          ...currentRow.cells[column.id],
-          value: String(values[column.id] ?? '').trim(),
-          status: values[column.id] === undefined ? 'failed' : 'ready',
-        },
+        smartFillCellResult(currentRow.cells[column.id], values[column.id], () => { readyCount += 1 }),
       ])))
+      result.ready += readyCount
+      result.failed -= readyCount
     } catch (error) {
       patchRowCells(rowId, Object.fromEntries(smartColumns.map((column) => [
         column.id,
-        { ...currentRow.cells[column.id], value: currentRow.cells[column.id]?.value ?? '', status: 'failed' },
+        { ...currentRow.cells[column.id], value: `生成失败: ${errorMessage(error)}`, status: 'failed' },
       ])))
-      workspaceStore.showToast(`智能填充失败 - ${errorMessage(error)}`)
     }
   }
   await persistForm(false)
-  if (showSuccessToast) {
-    workspaceStore.showToast('智能列已生成')
+  if (showSuccessToast) showSmartFillToast(result)
+  return result
+}
+
+function smartFillCellResult(cell: SmartCell | undefined, value: string | undefined, markReady: () => void): SmartCell {
+  const nextValue = String(value ?? '').trim()
+  if (!nextValue) {
+    return { ...cell, value: '未生成有效内容', status: 'failed' }
+  }
+  markReady()
+  return { ...cell, value: nextValue, status: 'ready' }
+}
+
+function sumSmartFillResults(results: SmartFillResult[]): SmartFillResult {
+  return results.reduce((sum, item) => ({ ready: sum.ready + item.ready, failed: sum.failed + item.failed }), { ready: 0, failed: 0 })
+}
+
+function showSmartFillToast(result: SmartFillResult): void {
+  if (result.ready && !result.failed) {
+    workspaceStore.showToast(`智能列已生成 ${result.ready} 项`)
+  } else if (result.ready && result.failed) {
+    workspaceStore.showToast(`智能填充完成: ${result.ready} 项成功, ${result.failed} 项失败/为空`)
+  } else if (result.failed) {
+    workspaceStore.showToast(`智能填充失败或为空: ${result.failed} 项`)
+  } else {
+    workspaceStore.showToast('没有可生成的智能列')
   }
 }
 
@@ -702,9 +1082,7 @@ async function uploadLiterature(row: SmartRow, event: Event): Promise<void> {
         ? { value: content, status: 'ready' }
         : { value: '文献已入库，但暂未取得可显示文本。请检查文件是否为扫描件或 OCR 设置。', status: 'failed' },
     })
-    if (content) {
-      await generateSmartCellsForRows([row.id])
-    }
+    if (content) void generateSmartCellsForRows([row.id])
     await persistForm(false)
     await workspaceStore.loadKnowledgeTree()
     workspaceStore.showToast('文献已上传并完成内容回填')
@@ -745,7 +1123,7 @@ function fileIconForCell(fileName: string) {
 
 function patchRowCells(rowId: string, cells: Record<string, SmartCell>): void {
   if (!form.value) return
-  form.value = {
+  setForm({
     ...form.value,
     updatedAt: new Date().toISOString(),
     rows: form.value.rows.map((item) => item.id === rowId ? {
@@ -758,7 +1136,7 @@ function patchRowCells(rowId: string, cells: Record<string, SmartCell>): void {
         ])),
       },
     } : item),
-  }
+  })
 }
 
 async function extractUploadedLiteratureContent(assetPath: string): Promise<string> {
@@ -814,11 +1192,14 @@ async function generateStructuredValues(literatureContent: string, columns: Smar
         raw += chunk.final_output
       }
     }
-  } catch {
-    return extractStructuredFallback(literatureContent, columns)
+  } catch (error) {
+    throw new Error(`模型请求失败: ${errorMessage(error)}`)
   }
   const parsed = parseJsonObject(raw)
-  return Object.keys(parsed).length ? parsed : extractStructuredFallback(literatureContent, columns)
+  if (!Object.keys(parsed).length) {
+    throw new Error('模型未返回有效 JSON')
+  }
+  return parsed
 }
 
 /** Parses the agent's JSON-only answer without throwing on empty or noisy output. */
@@ -948,14 +1329,111 @@ function downloadMarkdown(): void {
   downloadText(`${form.value.title}.md`, exportMarkdown(form.value), 'text/markdown;charset=utf-8')
 }
 
+function downloadZip(): void {
+  if (!form.value) return
+  const baseName = safeExportFileName(form.value.title)
+  downloadBlob(`${baseName}.zip`, createZipBlob([
+    { name: `${baseName}.md`, content: exportMarkdown(form.value) },
+    { name: `${baseName}.csv`, content: exportCsv(form.value) },
+    { name: 'form.json', content: JSON.stringify(form.value, null, 2) },
+  ]))
+}
+
 function downloadText(fileName: string, content: string, type: string): void {
-  const blob = new Blob([content], { type })
+  downloadBlob(fileName, new Blob([content], { type }))
+}
+
+function downloadBlob(fileName: string, blob: Blob): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
   anchor.download = fileName
   anchor.click()
   URL.revokeObjectURL(url)
+}
+
+interface ZipSourceFile {
+  name: string
+  content: string
+}
+
+function createZipBlob(files: ZipSourceFile[]): Blob {
+  const encoder = new TextEncoder()
+  const locals: BlobPart[] = []
+  const centrals: BlobPart[] = []
+  let offset = 0
+  for (const file of files) {
+    const name = encoder.encode(file.name)
+    const data = encoder.encode(file.content)
+    const crc = crc32(data)
+    const local = zipLocalHeader(name, data.length, crc)
+    const central = zipCentralHeader(name, data.length, crc, offset)
+    locals.push(local, name, data)
+    centrals.push(central, name)
+    offset += local.byteLength + name.byteLength + data.byteLength
+  }
+  const centralSize = centrals.reduce((sum, part) => sum + (part instanceof Uint8Array ? part.byteLength : 0), 0)
+  return new Blob([...locals, ...centrals, zipEndHeader(files.length, centralSize, offset)], { type: 'application/zip' })
+}
+
+function zipLocalHeader(fileName: Uint8Array, size: number, crc: number): Uint8Array {
+  const header = new Uint8Array(30)
+  const view = new DataView(header.buffer)
+  view.setUint32(0, 0x04034b50, true)
+  view.setUint16(4, 20, true)
+  view.setUint16(6, 0x0800, true)
+  view.setUint16(8, 0, true)
+  view.setUint16(10, 0, true)
+  view.setUint16(12, 0, true)
+  view.setUint32(14, crc, true)
+  view.setUint32(18, size, true)
+  view.setUint32(22, size, true)
+  view.setUint16(26, fileName.byteLength, true)
+  return header
+}
+
+function zipCentralHeader(fileName: Uint8Array, size: number, crc: number, offset: number): Uint8Array {
+  const header = new Uint8Array(46)
+  const view = new DataView(header.buffer)
+  view.setUint32(0, 0x02014b50, true)
+  view.setUint16(4, 20, true)
+  view.setUint16(6, 20, true)
+  view.setUint16(8, 0x0800, true)
+  view.setUint16(10, 0, true)
+  view.setUint16(12, 0, true)
+  view.setUint16(14, 0, true)
+  view.setUint32(16, crc, true)
+  view.setUint32(20, size, true)
+  view.setUint32(24, size, true)
+  view.setUint16(28, fileName.byteLength, true)
+  view.setUint32(42, offset, true)
+  return header
+}
+
+function zipEndHeader(fileCount: number, centralSize: number, centralOffset: number): Uint8Array {
+  const header = new Uint8Array(22)
+  const view = new DataView(header.buffer)
+  view.setUint32(0, 0x06054b50, true)
+  view.setUint16(8, fileCount, true)
+  view.setUint16(10, fileCount, true)
+  view.setUint32(12, centralSize, true)
+  view.setUint32(16, centralOffset, true)
+  return header
+}
+
+function crc32(data: Uint8Array): number {
+  let crc = 0xffffffff
+  for (const byte of data) {
+    crc ^= byte
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0)
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function safeExportFileName(value: string): string {
+  return value.replace(/[\\/:*?"<>|]+/g, '-').trim() || 'smart-form'
 }
 
 function relativeUploadedPath(uploadedPath: string, knowledgeDir: string): string {
@@ -980,33 +1458,45 @@ function errorMessage(error: unknown): string {
         <h1>{{ form?.title || '创建你的第一张表' }}</h1>
       </div>
       <div class="header-actions">
-        <select
+        <div
           v-if="formEntries.length > 1"
-          class="form-select"
-          :value="activeFormId"
-          title="切换表格"
-          @change="openFormById(($event.target as HTMLSelectElement).value)"
+          class="smart-dropdown"
+          @click.stop
         >
-          <option v-for="entry in formEntries" :key="entry.formId" :value="entry.formId">{{ entry.name }}</option>
-        </select>
+          <button class="smart-dropdown-trigger" type="button" title="切换表格" @click="toggleDropdown('forms')">
+            <IcIcon name="table-chart" :size="15" />
+            <span>{{ activeFormName }}</span>
+            <IcIcon name="chevron-down" :size="14" />
+          </button>
+          <div v-if="dropdownOpen === 'forms'" class="smart-dropdown-menu" @click.stop>
+            <button
+              v-for="(entry, index) in formEntries"
+              :key="entry.formId"
+              type="button"
+              :style="{ '--item-index': index }"
+              @click="selectFormById(entry.formId)"
+            >
+              <IcIcon v-if="activeFormId === entry.formId" name="check" :size="16" />
+              <span v-else class="sort-check-placeholder"></span>
+              <span>{{ entry.name }}</span>
+            </button>
+          </div>
+        </div>
         <button class="ghost-btn" type="button" title="新建表格" @click="createFormOpen = true">
           <IcIcon name="add" :size="16" />
           <span>新建表格</span>
         </button>
-        <details v-if="form" class="export-menu">
-          <summary class="ghost-btn" title="导出表格">
+        <div v-if="form" class="smart-dropdown export-menu" @click.stop>
+          <button class="ghost-btn" type="button" title="导出表格" @click="toggleDropdown('export')">
             <IcIcon name="download" :size="16" />
             <span>导出</span>
-          </summary>
-          <div class="export-menu-panel">
-            <button type="button" @click="downloadMarkdown">Markdown</button>
-            <button type="button" @click="downloadCsv">CSV</button>
+          </button>
+          <div v-if="dropdownOpen === 'export'" class="smart-dropdown-menu export-menu-panel">
+            <button type="button" :style="{ '--item-index': 0 }" @click="downloadMarkdown">Markdown</button>
+            <button type="button" :style="{ '--item-index': 1 }" @click="downloadCsv">CSV</button>
+            <button type="button" :style="{ '--item-index': 2 }" @click="downloadZip">ZIP</button>
           </div>
-        </details>
-        <button class="primary-btn" type="button" :disabled="saving || !hasUserId || !form" @click="saveForm">
-          <IcIcon name="save" :size="16" />
-          <span>{{ saving ? '保存中' : '保存' }}</span>
-        </button>
+        </div>
       </div>
     </header>
 
@@ -1034,7 +1524,7 @@ function errorMessage(error: unknown): string {
 
     <div v-if="!form" class="form-empty-state">
       <IcIcon name="table-chart" :size="32" />
-      <p>还没有表格。输入表名后创建，数据会保存到知识库 forms/ 下。</p>
+      <p>还没有表格。输入表名后创建，数据会自动保存到数据库。</p>
     </div>
 
     <div v-if="form" class="forms-toolbar">
@@ -1050,28 +1540,63 @@ function errorMessage(error: unknown): string {
         <IcIcon name="search" :size="15" />
         <input v-model="query" type="search" placeholder="搜索全表" />
       </label>
-      <select v-model="tagFilter" class="filter-select" title="标签筛选">
-        <option value="">全部标签</option>
-        <option v-for="tag in tagFilters" :key="tag" :value="tag">{{ tag }}</option>
-      </select>
-      <select v-model.number="minRating" class="filter-select" title="星级筛选">
-        <option :value="0">全部星级</option>
-        <option :value="5">5 星</option>
-        <option :value="4">4 星以上</option>
-        <option :value="3">3 星以上</option>
-      </select>
+      <div class="smart-dropdown" @click.stop>
+        <button class="smart-dropdown-trigger" type="button" title="标签筛选" @click="toggleDropdown('tag-filter')">
+          <IcIcon name="label" :size="15" />
+          <span>{{ tagFilterLabel }}</span>
+          <IcIcon name="chevron-down" :size="14" />
+        </button>
+        <div v-if="dropdownOpen === 'tag-filter'" class="smart-dropdown-menu" @click.stop>
+          <button
+            v-for="(option, index) in tagFilterOptions"
+            :key="option.value || 'all-tags'"
+            type="button"
+            :style="{ '--item-index': index }"
+            @click="selectTagFilter(option.value)"
+          >
+            <IcIcon v-if="tagFilter === option.value" name="check" :size="16" />
+            <span v-else class="sort-check-placeholder"></span>
+            <span>{{ option.label }}</span>
+          </button>
+        </div>
+      </div>
+      <div class="smart-dropdown" @click.stop>
+        <button class="smart-dropdown-trigger" type="button" title="星级筛选" @click="toggleDropdown('rating-filter')">
+          <IcIcon name="star" :size="15" />
+          <span>{{ ratingFilterLabel }}</span>
+          <IcIcon name="chevron-down" :size="14" />
+        </button>
+        <div v-if="dropdownOpen === 'rating-filter'" class="smart-dropdown-menu" @click.stop>
+          <button
+            v-for="(option, index) in ratingFilterOptions"
+            :key="option.value"
+            type="button"
+            :style="{ '--item-index': index }"
+            @click="selectMinRating(option.value)"
+          >
+            <IcIcon v-if="minRating === option.value" name="check" :size="16" />
+            <span v-else class="sort-check-placeholder"></span>
+            <span>{{ option.label }}</span>
+          </button>
+        </div>
+      </div>
       <span class="row-count">{{ rowCountLabel }}</span>
     </div>
 
-    <div v-if="form" class="table-frame" :class="{ loading }" @contextmenu.prevent.stop="openTableContextMenu({ kind: 'table' }, $event)">
+    <div v-if="form" class="table-frame" :class="{ loading }" @mouseup="stopCellSelection" @contextmenu.prevent.stop="openTableContextMenu({ kind: 'table' }, $event)">
       <table class="smart-table">
         <thead>
           <tr>
             <th
               v-for="(column, columnIndex) in form.columns"
               :key="column.id"
-              :class="['tone-' + (column.tone || 'none'), { sticky: column.id === 'row_index' }]"
+              draggable="true"
+              :class="['tone-' + (column.tone || 'none'), { sticky: column.id === 'row_index', dragging: draggedColumnId === column.id, swapped: swappedColumnId === column.id }]"
               :style="{ width: `${column.width}px`, minWidth: `${column.width}px` }"
+              @dragstart="startColumnDrag(column.id, $event)"
+              @dragover.prevent
+              @drop.prevent="dropColumn(column.id)"
+              @dragend="endColumnDrag"
               @contextmenu.prevent.stop="openTableContextMenu({ kind: 'column', columnId: column.id }, $event)"
             >
               <div class="column-head">
@@ -1097,9 +1622,16 @@ function errorMessage(error: unknown): string {
               v-for="column in form.columns"
               :key="column.id"
               :data-column-id="column.id"
-              :class="['cell', 'tone-' + (column.tone || 'none'), { sticky: column.id === 'row_index', selected: selectedCell?.rowId === row.id && selectedCell?.columnId === column.id }]"
-              @click="selectedCell = { rowId: row.id, columnId: column.id }"
-              @contextmenu.prevent.stop="column.type === 'index' ? openTableContextMenu({ kind: 'row', rowId: row.id }, $event) : openTableContextMenu({ kind: 'cell', rowId: row.id, columnId: column.id }, $event)"
+              :draggable="column.type === 'index'"
+              :class="['cell', 'tone-' + (column.tone || 'none'), { sticky: column.id === 'row_index', selected: isCellSelected(row.id, column.id), dragging: draggedRowId === row.id && column.type === 'index', 'row-swapped': swappedRowId === row.id }]"
+              @dragstart="column.type === 'index' && startRowDrag(row.id, $event)"
+              @dragover.prevent="column.type === 'index'"
+              @drop.prevent="column.type === 'index' && dropRow(row.id)"
+              @dragend="endRowDrag"
+              @mousedown.left="column.type !== 'index' && startCellSelection(row.id, column.id, $event)"
+              @mouseenter="extendCellSelection(row.id, column.id)"
+              @click="selectSingleCell(row.id, column.id)"
+              @contextmenu.prevent.stop="column.type === 'index' ? openTableContextMenu({ kind: 'row', rowId: row.id }, $event) : openCellContextMenu(row, column, $event)"
             >
               <span v-if="column.type === 'index'" class="row-index">{{ rowIndex + 1 }}</span>
               <div v-else-if="column.type === 'file'" class="file-cell">
@@ -1165,12 +1697,12 @@ function errorMessage(error: unknown): string {
                   </div>
                   <div v-if="column.options?.length" class="tag-option-list">
                     <button
-                      v-for="option in column.options"
+                      v-for="(option, index) in column.options"
                       :key="option"
                       type="button"
                       class="tag-option-pill"
                       :class="{ selected: isTagSelected(row, column, option) }"
-                      :style="tagPillStyle(option)"
+                      :style="{ ...tagPillStyle(option), '--item-index': index }"
                       @click="toggleTag(row, column, option)"
                     >
                       {{ option }}
@@ -1189,14 +1721,34 @@ function errorMessage(error: unknown): string {
                   </div>
                 </div>
               </div>
-              <select
+              <div
                 v-else-if="column.type === 'boolean'"
-                :value="row.cells[column.id]?.value || ''"
-                @change="editCell(row, column, ($event.target as HTMLSelectElement).value)"
+                class="cell-dropdown"
+                @click.stop
               >
-                <option value="">未设置</option>
-                <option v-for="option in column.options || []" :key="option" :value="option">{{ option }}</option>
-              </select>
+                <button class="cell-dropdown-trigger" type="button" @click="toggleDropdown(booleanDropdownKey(row.id, column.id))">
+                  <span>{{ booleanCellLabel(row, column) }}</span>
+                  <IcIcon name="chevron-down" :size="14" />
+                </button>
+                <div v-if="dropdownOpen === booleanDropdownKey(row.id, column.id)" class="smart-dropdown-menu cell-dropdown-menu">
+                  <button type="button" :style="{ '--item-index': 0 }" @click="selectBooleanValue(row, column, '')">
+                    <IcIcon v-if="!row.cells[column.id]?.value" name="check" :size="16" />
+                    <span v-else class="sort-check-placeholder"></span>
+                    <span>未设置</span>
+                  </button>
+                  <button
+                    v-for="(option, index) in column.options || []"
+                    :key="option"
+                    type="button"
+                    :style="{ '--item-index': index + 1 }"
+                    @click="selectBooleanValue(row, column, option)"
+                  >
+                    <IcIcon v-if="row.cells[column.id]?.value === option" name="check" :size="16" />
+                    <span v-else class="sort-check-placeholder"></span>
+                    <span>{{ option }}</span>
+                  </button>
+                </div>
+              </div>
               <div v-else-if="column.type === 'star'" class="star-cell">
                 <button
                   v-for="rating in 5"
@@ -1221,7 +1773,13 @@ function errorMessage(error: unknown): string {
                 :placeholder="row.cells[column.id]?.status === 'pending' ? '等待结构化 LLM 服务生成' : ''"
                 @input="column.editable && editCell(row, column, ($event.target as HTMLTextAreaElement).value)"
               ></textarea>
-              <span v-if="row.cells[column.id]?.status === 'pending'" class="status-dot">生成中</span>
+              <span
+                v-if="row.cells[column.id]?.status === 'pending' || row.cells[column.id]?.status === 'failed'"
+                class="status-dot"
+                :class="row.cells[column.id]?.status"
+              >
+                {{ row.cells[column.id]?.status === 'pending' ? '生成中' : '失败/空' }}
+              </span>
             </td>
           </tr>
         </tbody>
@@ -1317,9 +1875,28 @@ function errorMessage(error: unknown): string {
         </div>
       </div>
 
+      <div
+        class="table-context-submenu-item"
+        :class="{ active: tableContextSubmenu === 'delete' }"
+        @mouseenter="openTableSubmenu('delete')"
+        @mouseleave="handleTableSubmenuLeave('delete', $event)"
+      >
+        <button type="button"><IcIcon name="delete" :size="15" /><span>删除</span><IcIcon name="chevron-right" :size="15" /></button>
+        <div
+          v-show="tableContextSubmenu === 'delete'"
+          :ref="(element) => setTableContextSubmenuRef('delete', element)"
+          class="table-context-submenu"
+          @mouseenter="keepTableSubmenuOpen"
+          @mouseleave="handleTableSubmenuLeave('delete', $event)"
+        >
+          <button type="button" :disabled="!contextRowIds().length" class="danger-menu-item" @click="deleteContextRow"><IcIcon name="delete" :size="15" /><span>删除整行</span></button>
+          <button type="button" :disabled="!canDeleteContextColumn()" class="danger-menu-item" @click="deleteContextColumn"><IcIcon name="delete" :size="15" /><span>删除整列</span></button>
+        </div>
+      </div>
+
       <hr class="table-context-separator" />
       <button type="button" :disabled="!canSmartFillContext()" @click="smartFillTableContext"><IcIcon name="psychology" :size="15" /><span>智能填充</span></button>
-      <button type="button" :disabled="!['cell', 'row', 'column'].includes(tableContextTarget.kind)" @click="copyTableContext"><IcIcon name="copy" :size="15" /><span>复制</span><kbd>Ctrl+C</kbd></button>
+      <button type="button" :disabled="!['cell', 'row', 'column', 'selection'].includes(tableContextTarget.kind)" @click="copyTableContext"><IcIcon name="copy" :size="15" /><span>复制</span><kbd>Ctrl+C</kbd></button>
       <button type="button" :disabled="!tableClipboard" @click="pasteTableContext"><IcIcon name="paste" :size="15" /><span>粘贴</span><kbd>Ctrl+V</kbd></button>
       <button type="button" :disabled="tableContextTarget.kind === 'table'" @click="clearTableContext"><IcIcon name="remove" :size="15" /><span>清空</span></button>
     </div>
@@ -1462,6 +2039,8 @@ button:disabled {
 .ghost-btn:hover,
 .toolbar-btn:hover,
 .new-row-btn:hover,
+.smart-dropdown-trigger:hover,
+.cell-dropdown-trigger:hover,
 .icon-btn:hover {
   background: var(--color-primary-softer);
   color: var(--color-primary);
@@ -1493,8 +2072,7 @@ button:disabled {
 }
 
 .search-box input,
-.filter-select,
-.form-select {
+.cell-dropdown-trigger {
   border: 0;
   outline: 0;
   background: transparent;
@@ -1506,15 +2084,6 @@ button:disabled {
   width: 100%;
 }
 
-.filter-select {
-  height: 28px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  padding: 0 var(--space-10);
-  background: var(--color-canvas);
-}
-
-.form-select,
 .new-form-input {
   height: 28px;
   border: 1px solid var(--color-border);
@@ -1536,43 +2105,79 @@ button:disabled {
   text-align: center;
 }
 
+.smart-dropdown,
 .export-menu {
   position: relative;
+  display: inline-flex;
 }
 
-.export-menu summary {
-  list-style: none;
+.smart-dropdown-trigger,
+.cell-dropdown-trigger {
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-6);
+  height: 28px;
+  min-width: 124px;
+  max-width: 220px;
+  padding: 0 var(--space-8);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
 }
 
-.export-menu summary::-webkit-details-marker {
-  display: none;
+.smart-dropdown-trigger span,
+.cell-dropdown-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+.smart-dropdown-menu,
 .export-menu-panel {
   position: absolute;
   z-index: 20;
   top: calc(100% + 6px);
   right: 0;
   display: grid;
-  min-width: 132px;
+  min-width: 172px;
   padding: var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-canvas);
+  opacity: 1;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  animation: smart-menu-pop 140ms ease-out both;
 }
 
+.smart-dropdown-menu button,
 .export-menu-panel button {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-6);
+  height: 30px;
   border: 0;
-  padding: 8px 10px;
+  padding: 0 var(--space-6);
   background: transparent;
-  color: var(--color-text);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
   text-align: left;
   cursor: pointer;
+  opacity: 0;
+  transform: translateY(-4px);
+  animation: smart-menu-row-drop 150ms ease-out both;
+  animation-delay: calc(20ms + var(--item-index, 0) * 18ms);
 }
 
+.smart-dropdown-menu button:hover,
 .export-menu-panel button:hover {
   background: var(--color-selection-blue-soft);
+  color: var(--color-text);
 }
 
 .form-dialog-backdrop {
@@ -1674,6 +2279,7 @@ button:disabled {
   border-radius: var(--radius-sm);
   background: #ffffff;
   box-shadow: var(--shadow-lg);
+  animation: smart-menu-pop 140ms ease-out both;
 }
 
 .table-context-menu.dark {
@@ -1699,6 +2305,7 @@ button:disabled {
   border-radius: var(--radius-sm);
   background: #ffffff;
   box-shadow: var(--shadow-lg);
+  animation: smart-menu-pop 140ms ease-out both;
 }
 
 .table-context-menu.dark .table-context-submenu {
@@ -1723,10 +2330,45 @@ button:disabled {
   text-align: left;
 }
 
+.table-context-menu > button,
+.table-context-menu > .table-context-submenu-item,
+.table-context-submenu > button,
+.table-context-submenu > .table-context-submenu-item {
+  opacity: 0;
+  transform: translateY(-4px);
+  animation: smart-menu-row-drop 150ms ease-out both;
+}
+
+.table-context-menu > button:nth-of-type(1),
+.table-context-menu > .table-context-submenu-item:nth-of-type(1),
+.table-context-submenu > button:nth-of-type(1),
+.table-context-submenu > .table-context-submenu-item:nth-of-type(1) { animation-delay: 20ms; }
+
+.table-context-menu > button:nth-of-type(2),
+.table-context-menu > .table-context-submenu-item:nth-of-type(2),
+.table-context-submenu > button:nth-of-type(2),
+.table-context-submenu > .table-context-submenu-item:nth-of-type(2) { animation-delay: 38ms; }
+
+.table-context-menu > button:nth-of-type(3),
+.table-context-menu > .table-context-submenu-item:nth-of-type(3),
+.table-context-submenu > button:nth-of-type(3),
+.table-context-submenu > .table-context-submenu-item:nth-of-type(3) { animation-delay: 56ms; }
+
+.table-context-menu > button:nth-of-type(4),
+.table-context-submenu > button:nth-of-type(4) { animation-delay: 74ms; }
+
+.table-context-menu > button:nth-of-type(5),
+.table-context-submenu > button:nth-of-type(5) { animation-delay: 92ms; }
+
 .table-context-menu button:hover:not(:disabled),
 .table-context-submenu-item.active > button {
   background: var(--color-selection-blue-soft);
   color: var(--color-text);
+}
+
+.table-context-menu .danger-menu-item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-danger) 12%, var(--color-canvas));
+  color: var(--color-danger);
 }
 
 .table-context-menu button:disabled {
@@ -1827,6 +2469,21 @@ th {
   font-weight: 500;
 }
 
+th[draggable="true"],
+td[draggable="true"] .row-index {
+  cursor: grab;
+}
+
+th.dragging,
+.cell.dragging {
+  opacity: 0.55;
+}
+
+th.swapped,
+.cell.row-swapped {
+  animation: smart-swap-settle 320ms ease-out both;
+}
+
 .column-head {
   position: relative;
   display: flex;
@@ -1880,6 +2537,25 @@ th:hover .column-actions {
   height: 112px;
   box-sizing: border-box;
   background: transparent;
+}
+
+.cell-dropdown {
+  position: relative;
+  height: 100%;
+  padding: 12px;
+}
+
+.cell-dropdown-trigger {
+  width: 100%;
+  max-width: none;
+  background: var(--color-canvas);
+}
+
+.cell-dropdown-menu {
+  top: 44px;
+  left: 12px;
+  right: auto;
+  z-index: 18;
 }
 
 tbody tr:hover .cell,
@@ -2016,6 +2692,7 @@ th.sticky {
   border-radius: var(--radius-sm);
   background: var(--color-surface-raised);
   box-shadow: var(--shadow-lg);
+  animation: smart-menu-pop 140ms ease-out both;
 }
 
 .tag-editor-selected {
@@ -2117,6 +2794,10 @@ th.sticky {
   text-align: center;
   white-space: nowrap;
   cursor: pointer;
+  opacity: 0;
+  transform: translateY(-4px);
+  animation: smart-menu-row-drop 150ms ease-out both;
+  animation-delay: calc(20ms + var(--item-index, 0) * 18ms);
 }
 
 .tag-option-pill.selected {
@@ -2211,6 +2892,11 @@ th.sticky {
   font-size: 10px;
 }
 
+.status-dot.failed {
+  background: color-mix(in srgb, var(--color-danger) 12%, var(--color-canvas));
+  color: var(--color-danger);
+}
+
 .tone-blue {
   background: color-mix(in srgb, var(--color-primary) 4%, transparent);
 }
@@ -2239,11 +2925,49 @@ th.sticky {
   color: var(--color-text-muted);
 }
 
+.sort-check-placeholder {
+  width: 16px;
+  height: 16px;
+}
+
 .forms-footer {
   min-height: 32px;
   padding: 0 var(--space-12);
   color: var(--color-text-muted);
   font-size: calc(12px * var(--font-scale));
+}
+
+@keyframes smart-menu-pop {
+  from {
+    transform: translateY(-6px);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes smart-menu-row-drop {
+  from {
+    transform: translateY(-6px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes smart-swap-settle {
+  0% {
+    transform: translateY(-4px);
+    background: var(--color-primary-softer);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 760px) {

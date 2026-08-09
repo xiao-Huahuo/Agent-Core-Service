@@ -151,6 +151,21 @@ describe('smartLiteratureTable', () => {
     expect(normalized.rows[0]?.cells.literature_content?.value).toBe('')
   })
 
+  it('preserves persisted column order while normalizing required columns', () => {
+    const form = createDefaultLiteratureForm()
+    const reordered = normalizeForm({
+      ...form,
+      columns: [form.columns[0]!, form.columns[1]!, form.columns[3]!, form.columns[2]!],
+    })
+
+    expect(reordered.columns.map((column) => column.id).slice(0, 4)).toEqual([
+      'row_index',
+      'literature_file',
+      'title',
+      'literature_content',
+    ])
+  })
+
   it('renames the persisted literature upload column to literature upload', () => {
     const normalized = normalizeForm({
       columns: [{ ...createDefaultLiteratureForm().columns.find((column) => column.id === 'literature_file')!, title: '文献PDF上传' }],

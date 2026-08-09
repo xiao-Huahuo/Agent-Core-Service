@@ -142,7 +142,7 @@ const agentIconSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
       @click="emit('openForms')"
     >
       <IcIcon name="table-chart" :size="18" />
-      <span class="activity-label">表格</span>
+      <span class="activity-label">智能表格</span>
     </button>
     <button
       class="activity-button"

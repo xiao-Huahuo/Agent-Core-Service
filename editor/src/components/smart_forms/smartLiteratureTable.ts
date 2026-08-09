@@ -158,14 +158,14 @@ export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefin
       if (column.id === 'rating') return { ...column, title: '重要性' }
       return column
     })
-  const indexColumn = sourceColumns.find((column) => column.id === 'row_index')
-  const literatureFileColumn = sourceColumns.find((column) => column.id === 'literature_file')
-  const literatureContentColumn = sourceColumns.find((column) => column.id === 'literature_content')
-  const titleColumn = sourceColumns.find((column) => column.id === 'title')
-  const requiredColumnIds = new Set(['row_index', 'literature_file', 'literature_content', 'title'])
-  const columns = indexColumn && literatureFileColumn && literatureContentColumn && titleColumn
-    ? [indexColumn, literatureFileColumn, literatureContentColumn, titleColumn, ...sourceColumns.filter((column) => !requiredColumnIds.has(column.id))]
-    : sourceColumns
+  const requiredColumnIds = ['row_index', 'literature_file', 'literature_content', 'title']
+  const requiredColumns = requiredColumnIds
+    .map((columnId) => sourceColumns.find((column) => column.id === columnId) ?? fallback.columns.find((column) => column.id === columnId))
+    .filter(Boolean) as SmartColumn[]
+  const columns = [
+    ...sourceColumns,
+    ...requiredColumns.filter((column) => !sourceColumns.some((sourceColumn) => sourceColumn.id === column.id)),
+  ]
   const rows = Array.isArray(raw?.rows) ? raw.rows : fallback.rows
   return {
     version: 1,

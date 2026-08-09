@@ -4,21 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="看板小改">
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="智能表格v1">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/deps.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/deps.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/models/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/models/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/schemas/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/schemas/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/components/smart_forms/__tests__/smartLiteratureTable.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/smart_forms/__tests__/smartLiteratureTable.spec.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/components/smart_forms/smartLiteratureTable.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/smart_forms/smartLiteratureTable.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/views/SmartFormsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SmartFormsView.vue" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/views/__tests__/SmartFormsView.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/__tests__/SmartFormsView.spec.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/vite.config.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -317,15 +310,7 @@
       <workItem from="1786190105430" duration="11711000" />
       <workItem from="1786248468206" duration="9378000" />
       <workItem from="1786261492021" duration="12834000" />
-      <workItem from="1786284868131" duration="4379000" />
-    </task>
-    <task id="LOCAL-00275" summary="修复了claudecode认为的四个问题">
-      <option name="closed" value="true" />
-      <created>1785555541341</created>
-      <option name="number" value="00275" />
-      <option name="presentableId" value="LOCAL-00275" />
-      <option name="project" value="LOCAL" />
-      <updated>1785555541341</updated>
+      <workItem from="1786284868131" duration="6812000" />
     </task>
     <task id="LOCAL-00276" summary="高亮v1">
       <option name="closed" value="true" />
@@ -711,14 +696,21 @@
       <option name="project" value="LOCAL" />
       <updated>1786269131959</updated>
     </task>
-    <option name="localTasksCounter" value="324" />
+    <task id="LOCAL-00324" summary="智能表格v1">
+      <option name="closed" value="true" />
+      <created>1786294431290</created>
+      <option name="number" value="00324" />
+      <option name="presentableId" value="LOCAL-00324" />
+      <option name="project" value="LOCAL" />
+      <updated>1786294431290</updated>
+    </task>
+    <option name="localTasksCounter" value="325" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="代码高亮问题解决" />
     <MESSAGE value="预览调整" />
     <MESSAGE value="去除启动时自动灌库" />
     <MESSAGE value="多模态的ocr" />
@@ -743,7 +735,8 @@
     <MESSAGE value="exe打包化" />
     <MESSAGE value="ui小改" />
     <MESSAGE value="看板小改" />
-    <option name="LAST_COMMIT_MESSAGE" value="看板小改" />
+    <MESSAGE value="智能表格v1" />
+    <option name="LAST_COMMIT_MESSAGE" value="智能表格v1" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
