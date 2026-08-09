@@ -1412,3 +1412,7 @@
 # Packaging: added an assisted NSIS installer page with a default-enabled desktop shortcut checkbox; disabled fixed desktop shortcut creation while keeping the Start Menu shortcut.
 # Fixed packaged startup navigation race and Windows backend cleanup: ignore the expected startup-page `ERR_ABORTED` when the real page loads, and terminate the packaged backend process tree on quit; NSIS desktop shortcuts now use an installed `.ico` file explicitly.
 # Adjusted desktop shortcut icon resolution to read icon index 0 directly from `MetaWeave.exe` and notify Windows Explorer after shortcut creation, avoiding stale or unresolved external `.ico` shortcut icons.
+## 2026-08-09
+- [x] 修复自动化任务调度扫描在 SQLite 读取过期 `lease_until` 后触发 naive/aware datetime 比较异常:批量抢占更新关闭 SQLAlchemy 的 Python 条件同步评估,改由 SQLite 执行条件,并补充过期租约回归测试。
+- [x] 优化资源管理器中等/大图标模式为响应式弹性网格，并为 Electron 透明无边框主窗口增加自定义边缘拖拽缩放，避免恢复系统 thickFrame 直角边框。
+- [x] 修复 Electron 自定义缩放层干扰顶栏拖动的问题，并微调资源管理器中/大图标块圆角与大图标尺寸。

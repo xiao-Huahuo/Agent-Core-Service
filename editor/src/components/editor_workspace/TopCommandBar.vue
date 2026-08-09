@@ -325,7 +325,7 @@ onMounted(() => nextTick(autoResizeInput))
   gap: var(--space-8);
   min-height: 56px;
   padding: 6px var(--space-10);
-  background: var(--color-chrome-topbar-bg);
+  background: var(--color-chrome-rail-bg);
   -webkit-app-region: drag;
   user-select: none;
   position: relative;

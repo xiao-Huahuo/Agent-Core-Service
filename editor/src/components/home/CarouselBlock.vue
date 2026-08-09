@@ -163,7 +163,9 @@ onBeforeUnmount(stopAutoplay)
   /* 小阴影 */
   box-shadow: var(--home-card-shadow);
   background: var(--color-surface);
-  transition: border-color var(--transition-normal);
+  transition:
+    border-color var(--transition-normal),
+    box-shadow var(--transition-normal);
 }
 
 /* 悬停光效: 与导航块一致的柔和主题色(亮) / 白色(暗) */
@@ -180,6 +182,7 @@ onBeforeUnmount(stopAutoplay)
 
 .carousel-block:hover {
   border-color: var(--home-hover-border);
+  box-shadow: var(--home-hover-shadow, var(--home-card-shadow));
 }
 
 .carousel-block:hover::after {

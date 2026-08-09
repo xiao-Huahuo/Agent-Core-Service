@@ -5,7 +5,21 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="exe打包化">
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/services/automation_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/automation_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/electron/main.cjs" beforeDir="false" afterPath="$PROJECT_DIR$/editor/electron/main.cjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/electron/preload.cjs" beforeDir="false" afterPath="$PROJECT_DIR$/editor/electron/preload.cjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/env.d.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/env.d.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/assets/main.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/main.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/assets/ui-system.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/assets/ui-system.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/FileResourceManager.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/TopCommandBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/home/CarouselBlock.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/home/CarouselBlock.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/home/NavBlock.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/home/NavBlock.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/main.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/main.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_todo_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_todo_service.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -61,38 +75,38 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Batch.启动.executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.main.executor": "Run",
-    "Python.requests_test.executor": "Run",
-    "Python.test_agent_core_service.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "aidebugger.tracer.lastRunConfigName": "main",
-    "dart.analysis.tool.window.visible": "false",
-    "git-widget-placeholder": "master",
-    "last_opened_file_path": "D:/Projects/Python/MetaWeave/docs/assets",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "prettierjs.PrettierConfiguration.Package": "D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\prettier",
-    "settings.editor.selected.configurable": "project.propVCSSupport.DirectoryMappings",
-    "ts.external.directory.path": "D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\typescript\\lib",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Batch.启动.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.main.executor&quot;: &quot;Run&quot;,
+    &quot;Python.requests_test.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_agent_core_service.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;aidebugger.tracer.lastRunConfigName&quot;: &quot;main&quot;,
+    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/Projects/Python/MetaWeave/docs/assets&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;prettierjs.PrettierConfiguration.Package&quot;: &quot;D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\prettier&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;project.propVCSSupport.DirectoryMappings&quot;,
+    &quot;ts.external.directory.path&quot;: &quot;D:\\Projects\\Python\\MetaWeave\\editor\\node_modules\\typescript\\lib&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   },
-  "keyToStringList": {
-    "vue.recent.templates": [
-      "Vue Composition API Component",
-      "Vue Options API Component"
+  &quot;keyToStringList&quot;: {
+    &quot;vue.recent.templates&quot;: [
+      &quot;Vue Composition API Component&quot;,
+      &quot;Vue Options API Component&quot;
     ]
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="D:\Projects\Python\MetaWeave\docs\assets" />
@@ -301,23 +315,8 @@
       <workItem from="1785840846651" duration="11558000" />
       <workItem from="1785904382886" duration="16827000" />
       <workItem from="1786174906065" duration="703000" />
-      <workItem from="1786190105430" duration="11260000" />
-    </task>
-    <task id="LOCAL-00264" summary="工具条样式小改">
-      <option name="closed" value="true" />
-      <created>1785325552472</created>
-      <option name="number" value="00264" />
-      <option name="presentableId" value="LOCAL-00264" />
-      <option name="project" value="LOCAL" />
-      <updated>1785325552473</updated>
-    </task>
-    <task id="LOCAL-00265" summary="大卡片">
-      <option name="closed" value="true" />
-      <created>1785328723303</created>
-      <option name="number" value="00265" />
-      <option name="presentableId" value="LOCAL-00265" />
-      <option name="project" value="LOCAL" />
-      <updated>1785328723303</updated>
+      <workItem from="1786190105430" duration="11711000" />
+      <workItem from="1786248468206" duration="4878000" />
     </task>
     <task id="LOCAL-00266" summary="大卡片">
       <option name="closed" value="true" />
@@ -695,7 +694,23 @@
       <option name="project" value="LOCAL" />
       <updated>1786214053941</updated>
     </task>
-    <option name="localTasksCounter" value="313" />
+    <task id="LOCAL-00313" summary="exe打包化">
+      <option name="closed" value="true" />
+      <created>1786216628138</created>
+      <option name="number" value="00313" />
+      <option name="presentableId" value="LOCAL-00313" />
+      <option name="project" value="LOCAL" />
+      <updated>1786216628138</updated>
+    </task>
+    <task id="LOCAL-00314" summary="exe打包化">
+      <option name="closed" value="true" />
+      <created>1786216875639</created>
+      <option name="number" value="00314" />
+      <option name="presentableId" value="LOCAL-00314" />
+      <option name="project" value="LOCAL" />
+      <updated>1786216875639</updated>
+    </task>
+    <option name="localTasksCounter" value="315" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

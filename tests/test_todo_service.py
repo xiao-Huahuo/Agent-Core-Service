@@ -7,10 +7,12 @@ TODO 数据库服务测试。
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlmodel import create_engine
+from sqlmodel import Session, create_engine
 
+from agent_service.models.automation import AutomationTaskRecord
 from agent_service.services.automation_service import AutomationService
 from agent_service.services.todo_service import TodoService
 
@@ -82,3 +84,28 @@ def test_automation_claim_and_finish_schedules_next_run(tmp_path: Path) -> None:
     assert updated["enabled"] is True
     assert updated["nextRunAt"] == "2026-08-03T13:00:00+00:00"
     assert service.list_runs(user_id="u1", automation_id=task["id"])[0]["status"] == "success"
+
+
+def test_automation_claim_handles_expired_sqlite_lease(tmp_path: Path) -> None:
+    """SQLite 读出的无时区租约过期时间也应能参与任务抢占。"""
+
+    engine = create_engine("sqlite://")
+    todo_service = TodoService(engine=engine, legacy_data_dir=str(tmp_path))
+    service = AutomationService(engine=engine, todo_service=todo_service)
+    task = service.create_task(
+        user_id="u1",
+        text="过期租约任务",
+        prompt="检查任务",
+        next_run_at="2026-08-02T21:00:00+08:00",
+        timezone_name="Asia/Shanghai",
+    )
+
+    with Session(engine) as db:
+        record = db.get(AutomationTaskRecord, task["id"])
+        assert record is not None
+        record.lease_until = datetime(2026, 8, 2, 12, 59, tzinfo=timezone.utc)
+        db.add(record)
+        db.commit()
+
+    claims = service.claim_due_tasks(now=service._parse_datetime("2026-08-02T21:01:00+08:00"))
+    assert len(claims) == 1

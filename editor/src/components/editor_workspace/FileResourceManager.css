@@ -579,8 +579,8 @@
 }
 
 .material-file-icon-large {
-  width: 54px;
-  height: 54px;
+  width: 112px;
+  height: 112px;
 }
 
 .content-view {
@@ -663,8 +663,8 @@
 .icon-view {
   display: grid;
   align-content: start;
-  justify-content: start;
-  gap: var(--space-10);
+  justify-content: stretch;
+  gap: clamp(10px, 1.2vw, 18px);
   height: 100%;
   overflow: auto;
   padding: var(--space-12);
@@ -678,11 +678,11 @@
 }
 
 .icon-medium {
-  grid-template-columns: repeat(auto-fill, 112px);
+  grid-template-columns: repeat(auto-fill, minmax(clamp(112px, 14vw, 156px), 1fr));
 }
 
 .icon-large {
-  grid-template-columns: repeat(auto-fill, 136px);
+  grid-template-columns: repeat(auto-fill, minmax(clamp(168px, 18vw, 240px), 1fr));
 }
 
 .icon-tile {
@@ -742,17 +742,44 @@
 }
 
 .icon-medium .icon-tile {
-  width: 112px;
+  width: 100%;
   aspect-ratio: 1 / 1;
+  grid-template-rows: auto auto auto;
+  align-content: center;
+  border-radius: 28px;
   padding: var(--space-10);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .icon-large .icon-tile {
-  width: 136px;
+  width: 100%;
   aspect-ratio: 1 / 1;
-  grid-template-rows: 82px 18px 14px;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   align-content: center;
-  padding: var(--space-6);
+  border-radius: 28px;
+  padding: clamp(6px, 1vw, 12px);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.icon-medium .icon-tile:hover,
+.icon-large .icon-tile:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 32%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.icon-medium .icon-tile.selected,
+.icon-large .icon-tile.selected {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 36%, transparent);
 }
 
 .icon-tile.glass {
@@ -779,21 +806,21 @@
 }
 
 .icon-medium .tile-art {
-  height: 42px;
+  height: clamp(42px, 7vw, 58px);
   min-height: 42px;
 }
 
 .icon-large .tile-art {
-  height: 82px;
-  min-height: 82px;
+  height: 100%;
+  min-height: clamp(112px, 13.5vw, 150px);
 }
 
 .tile-image {
   width: 100%;
-  height: 82px;
+  height: 100%;
   object-fit: cover;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: 22px;
 }
 
 .drop-overlay {

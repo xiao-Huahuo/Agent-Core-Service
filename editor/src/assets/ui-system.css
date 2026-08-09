@@ -152,8 +152,9 @@
   --color-tab-active: #eceef0;
   --color-collection-corner: #c8c8cc;
   /* 主页分块悬停光效: 亮色为柔和主题色,跟随用户主色设置 */
-  --home-hover-glow: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  --home-hover-glow: transparent;
   --home-hover-border: var(--color-primary);
+  --home-hover-shadow: var(--home-card-shadow), 0 0 0 1px var(--home-hover-border), 0 0 12px color-mix(in srgb, var(--color-primary) 24%, transparent);
   /* 主页分块小阴影 */
   --home-card-shadow: 0 1px 2px rgba(17, 17, 23, 0.08), 0 4px 12px rgba(17, 17, 23, 0.07);
 }

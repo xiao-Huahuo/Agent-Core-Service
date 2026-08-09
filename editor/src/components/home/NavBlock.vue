@@ -120,7 +120,7 @@ const { frontUrl, textTone } = useHomeBlockImage(props.image ?? '', rootRef)
 .nav-block:hover {
   border-color: var(--home-hover-border);
   transform: translateY(-1px);
-  box-shadow: var(--home-card-shadow);
+  box-shadow: var(--home-hover-shadow, var(--home-card-shadow));
 }
 
 .nav-block:hover::after {

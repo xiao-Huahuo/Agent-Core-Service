@@ -34,6 +34,10 @@ let mainWindow = null
 let tray = null
 let floatingWindow = null
 let backendProcess = null
+let mainResizeSession = null
+
+const MAIN_MIN_WIDTH = 960
+const MAIN_MIN_HEIGHT = 620
 
 /** Resolve the window that owns a given IPC event, falling back to mainWindow. */
 function windowFromEvent(event) {
@@ -466,6 +470,8 @@ function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 920,
+    minWidth: MAIN_MIN_WIDTH,
+    minHeight: MAIN_MIN_HEIGHT,
     frame: false,
     transparent: true,
     // 透明窗口默认仍带系统阴影,Windows 会在四角绘制直角的半透明阴影边框,
@@ -577,6 +583,29 @@ function applyTransparentShape(win) {
   win.setShape([
     { x: 1, y: 1, width: Math.max(width - 2, 1), height: Math.max(height - 2, 1) },
   ])
+}
+
+function boundsForMainResize(session, screenX, screenY) {
+  const dx = Math.round(screenX - session.screenX)
+  const dy = Math.round(screenY - session.screenY)
+  const next = { ...session.bounds }
+  if (session.edge.includes('e')) {
+    next.width = Math.max(MAIN_MIN_WIDTH, session.bounds.width + dx)
+  }
+  if (session.edge.includes('s')) {
+    next.height = Math.max(MAIN_MIN_HEIGHT, session.bounds.height + dy)
+  }
+  if (session.edge.includes('w')) {
+    const width = Math.max(MAIN_MIN_WIDTH, session.bounds.width - dx)
+    next.x = session.bounds.x + session.bounds.width - width
+    next.width = width
+  }
+  if (session.edge.includes('n')) {
+    const height = Math.max(MAIN_MIN_HEIGHT, session.bounds.height - dy)
+    next.y = session.bounds.y + session.bounds.height - height
+    next.height = height
+  }
+  return next
 }
 
 function createFloatingWindow() {
@@ -717,6 +746,46 @@ ipcMain.handle('window:toggle-maximize', (event) => {
   }
   win.maximize()
   return true
+})
+
+ipcMain.handle('window:begin-resize', (event, payload) => {
+  const win = windowFromEvent(event)
+  const edge = typeof payload?.edge === 'string' ? payload.edge : ''
+  if (!win || win !== mainWindow || win.isMaximized() || !/^(n|e|s|w|ne|nw|se|sw)$/u.test(edge)) {
+    return false
+  }
+  mainResizeSession = {
+    webContentsId: event.sender.id,
+    edge,
+    screenX: Number(payload.screenX) || 0,
+    screenY: Number(payload.screenY) || 0,
+    bounds: win.getBounds(),
+  }
+  return true
+})
+
+ipcMain.on('window:resize-to', (event, payload) => {
+  if (!mainResizeSession || mainResizeSession.webContentsId !== event.sender.id) {
+    return
+  }
+  const win = windowFromEvent(event)
+  if (!win || win !== mainWindow || win.isMaximized()) {
+    mainResizeSession = null
+    return
+  }
+  const screenX = Number(payload?.screenX)
+  const screenY = Number(payload?.screenY)
+  if (!Number.isFinite(screenX) || !Number.isFinite(screenY)) {
+    return
+  }
+  win.setBounds(boundsForMainResize(mainResizeSession, screenX, screenY))
+  applyTransparentShape(win)
+})
+
+ipcMain.on('window:end-resize', (event) => {
+  if (mainResizeSession?.webContentsId === event.sender.id) {
+    mainResizeSession = null
+  }
 })
 
 ipcMain.handle('system:list-font-families', async () => {

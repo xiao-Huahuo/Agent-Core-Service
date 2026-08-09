@@ -277,6 +277,9 @@ class AutomationService:
                 lease_id = f"lease_{uuid4().hex[:12]}"
                 result = db.exec(
                     update(AutomationTaskRecord)
+                    # SQLite returns naive datetimes; let the database evaluate
+                    # this predicate instead of SQLAlchemy comparing them in Python.
+                    .execution_options(synchronize_session=False)
                     .where(
                         AutomationTaskRecord.automation_id == candidate.automation_id,
                         AutomationTaskRecord.enabled.is_(True),

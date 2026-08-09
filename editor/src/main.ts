@@ -11,6 +11,41 @@ import './assets/main.css'
 
 const app = createApp(App)
 
+type WindowResizeEdge = 'n' | 'e' | 's' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+
+function installWindowResizeHandles(desktopApi: AgentEditorDesktopApi): void {
+  const edges: WindowResizeEdge[] = ['n', 'e', 's', 'w', 'ne', 'nw', 'se', 'sw']
+  const layer = document.createElement('div')
+  layer.className = 'window-resize-handles'
+
+  for (const edge of edges) {
+    const handle = document.createElement('div')
+    handle.className = `window-resize-handle window-resize-${edge}`
+    handle.addEventListener('pointerdown', async (event) => {
+      if (event.button !== 0) return
+      event.preventDefault()
+      const started = await desktopApi.beginWindowResize(edge, event.screenX, event.screenY)
+      if (!started) return
+      handle.setPointerCapture(event.pointerId)
+      const move = (moveEvent: PointerEvent) => {
+        desktopApi.updateWindowResize(moveEvent.screenX, moveEvent.screenY)
+      }
+      const end = () => {
+        desktopApi.endWindowResize()
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', end)
+        window.removeEventListener('pointercancel', end)
+      }
+      window.addEventListener('pointermove', move)
+      window.addEventListener('pointerup', end)
+      window.addEventListener('pointercancel', end)
+    })
+    layer.appendChild(handle)
+  }
+
+  document.body.appendChild(layer)
+}
+
 // In the Electron shell the window is transparent and rounded by CSS, so the
 // app root carries the border-radius. Maximized windows drop the radius.
 const desktopApi = window.agentEditorDesktop
@@ -25,6 +60,7 @@ if (desktopApi?.isDesktop) {
       document.documentElement.classList.toggle('maximized', maximized)
     }
     desktopApi.onMaximizedChange(syncMaximized)
+    installWindowResizeHandles(desktopApi)
   }
 }
 

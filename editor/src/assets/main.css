@@ -99,16 +99,15 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Electron shell: the window is transparent, so the app root only provides a
-   large corner radius + clipping. The background is drawn by the content layer
-   (workspace-page / loading / gate) so no opaque "membrane" shows behind it.
-   Maximized windows drop the radius. */
+/* Electron shell: the native window is transparent, so the main app root draws
+   a stable chrome background plus the large corner clipping. Floating windows
+   override this below because their widget shadow must paint outside #app. */
 html.electron-window body {
   background: transparent;
 }
 
 html.electron-window #app {
-  background: transparent;
+  background: var(--color-chrome-rail-bg);
   border-radius: 28px;
   overflow: hidden;
   contain: paint;
@@ -116,6 +115,94 @@ html.electron-window #app {
 
 html.electron-window.maximized #app {
   border-radius: 0;
+}
+
+.window-resize-handles {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.window-resize-handle {
+  position: absolute;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+
+.window-resize-n,
+.window-resize-s {
+  right: 8px;
+  left: 8px;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.window-resize-e,
+.window-resize-w {
+  top: 8px;
+  bottom: 8px;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.window-resize-n {
+  top: 0;
+}
+
+.window-resize-e {
+  right: 0;
+}
+
+.window-resize-s {
+  bottom: 0;
+}
+
+.window-resize-w {
+  left: 0;
+}
+
+.window-resize-ne,
+.window-resize-nw,
+.window-resize-se,
+.window-resize-sw {
+  width: 10px;
+  height: 10px;
+}
+
+.window-resize-ne,
+.window-resize-sw {
+  cursor: nesw-resize;
+}
+
+.window-resize-nw,
+.window-resize-se {
+  cursor: nwse-resize;
+}
+
+.window-resize-ne {
+  top: 0;
+  right: 0;
+}
+
+.window-resize-nw {
+  top: 0;
+  left: 0;
+}
+
+.window-resize-se {
+  right: 0;
+  bottom: 0;
+}
+
+.window-resize-sw {
+  bottom: 0;
+  left: 0;
+}
+
+html.electron-window.maximized .window-resize-handles,
+html.floating-window .window-resize-handles {
+  display: none;
 }
 
 /* Floating Agent window: the app root must stay fully transparent so the

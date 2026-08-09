@@ -100,6 +100,10 @@ watch(agentSidebarOpen, (val) => {
 watch(
   [() => workspaceStore.mainView, () => workspaceStore.agentSidebarOpen],
   ([mainView, agentOpen]) => {
+    if (mainView !== 'editor') {
+      gitLeftOpen.value = false
+      gitRightOpen.value = false
+    }
     if (mainView === 'visualization' && agentOpen) {
       fileSidebarOpen.value = false
     }
@@ -676,7 +680,7 @@ watch(
   grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
-  background: var(--color-chrome-topbar-bg);
+  background: var(--color-chrome-rail-bg);
 }
 
 .workspace-grid {
@@ -729,13 +733,15 @@ watch(
   display: flex;
   min-width: 0;
   min-height: 0;
-  margin: 0;
+  margin: 0 var(--space-12) var(--space-12) 0;
   overflow: hidden;
   border: 0;
   outline: none;
-  border-radius: 0;
+  border-radius: 28px;
   background: var(--color-bg-app);
-  box-shadow: none;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 .main-shell.ide-panel.agent-page-main-shell {
@@ -948,8 +954,8 @@ watch(
   }
 
   .main-shell.ide-panel {
-    margin: 0;
-    border-radius: 0;
+    margin: 0 var(--space-8) var(--space-8) 0;
+    border-radius: 24px;
   }
 
   .agent-col {

@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('agentEditorDesktop', {
   platform: process.platform,
   minimize: () => ipcRenderer.send('window:minimize'),
   toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize'),
+  beginWindowResize: (edge, screenX, screenY) => ipcRenderer.invoke('window:begin-resize', { edge, screenX, screenY }),
+  updateWindowResize: (screenX, screenY) => ipcRenderer.send('window:resize-to', { screenX, screenY }),
+  endWindowResize: () => ipcRenderer.send('window:end-resize'),
   onMaximizedChange: (callback) => {
     const handler = (_event, value) => callback(value)
     ipcRenderer.on('window:maximized-changed', handler)
