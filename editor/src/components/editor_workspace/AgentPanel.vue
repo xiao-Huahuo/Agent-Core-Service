@@ -64,6 +64,7 @@ const referenceText = ref('')
 const messageListRef = ref<MessageListApi | null>(null)
 const isMessageListAtBottom = ref(true)
 const sessionLoading = ref(false)
+const loadingSessionId = ref('')
 const contextWindowTokens = ref(128000)
 const safetyDisabled = ref(false)
 const safetyLoading = ref(false)
@@ -129,6 +130,9 @@ async function reloadSessions() {
   isBootstrapping.value = true
   try {
     await sessionStore.load(userId.value)
+    if (sessionStore.currentSessionId) {
+      await loadSelectedSessionHistory(sessionStore.currentSessionId)
+    }
   } finally {
     isBootstrapping.value = false
   }
@@ -173,12 +177,21 @@ async function createSession() {
 
 async function selectSession(sessionId: string) {
   sessionStore.select(sessionId)
+  await loadSelectedSessionHistory(sessionId)
+}
+
+async function loadSelectedSessionHistory(sessionId: string) {
+  if (!userId.value || loadingSessionId.value === sessionId || chatStore.loadedSessionId === sessionId) {
+    return
+  }
+  loadingSessionId.value = sessionId
   chatStore.clear()
   sessionLoading.value = true
   try {
     await chatStore.loadHistory(sessionId, userId.value)
   } finally {
     sessionLoading.value = false
+    loadingSessionId.value = ''
   }
 }
 
@@ -505,6 +518,15 @@ function syncChildAgentWatcher() {
 }
 
 watch([userId, () => sessionStore.currentSessionId], syncChildAgentWatcher)
+
+watch(
+  () => sessionStore.currentSessionId,
+  (sessionId) => {
+    if (sessionId) {
+      void loadSelectedSessionHistory(sessionId)
+    }
+  },
+)
 
 onMounted(() => {
   window.addEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)

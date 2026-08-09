@@ -158,6 +158,12 @@ async function loadLibraryBookCount() {
   }
 }
 
+function openAgentSession(sessionId: string) {
+  if (!userId.value) return
+  sessionStore.select(sessionId)
+  workspaceStore.setMainView('agent')
+}
+
 function fileTypeOf(node: KnowledgeFileNode): string {
   const name = node.name || node.path
   const dotIndex = name.lastIndexOf('.')
@@ -202,7 +208,16 @@ function formatSessionTime(value: string): string {
           </div>
 
           <div class="agent-session-list">
-            <div v-if="latestAgentSession" class="agent-session-detail">
+            <div
+              v-if="latestAgentSession"
+              class="agent-session-detail"
+              role="button"
+              tabindex="0"
+              title="打开 Agent 会话"
+              @click="openAgentSession(latestAgentSession.session_id)"
+              @keydown.enter.prevent="openAgentSession(latestAgentSession.session_id)"
+              @keydown.space.prevent="openAgentSession(latestAgentSession.session_id)"
+            >
               <div class="session-detail-head">
                 <span class="session-title">{{ sessionTitle(latestAgentSession) }}</span>
                 <span class="session-time">{{ formatSessionTime(latestAgentSession.updated_at) }}</span>
@@ -357,7 +372,19 @@ function formatSessionTime(value: string): string {
   padding: var(--space-8);
   background: color-mix(in srgb, var(--color-surface) 72%, transparent);
   color: var(--color-text-secondary);
+  cursor: pointer;
   font-family: var(--font-ui);
+  outline: none;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.agent-session-detail:hover,
+.agent-session-detail:focus-visible {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
 }
 
 .session-detail-head {
