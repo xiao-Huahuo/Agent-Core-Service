@@ -50,6 +50,8 @@ export interface UserSettingsProfile {
   themeSoftColor?: string
   /** Maximum number of nodes to return in the knowledge graph. */
   graphNodeLimit?: number
+  /** Whether to show the floating Agent window when the desktop shell starts. */
+  floatingLaunchEnabled?: boolean
   /** Legacy single-value localStorage field, normalized into uiFontFamilies. */
   uiFontFamily?: string
   /** Legacy single-value localStorage field, normalized into textFontFamilies. */

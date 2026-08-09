@@ -36,6 +36,7 @@ const DashboardView = defineAsyncComponent(() => import('@/views/DashboardView.v
 const DebugView = defineAsyncComponent(() => import('@/views/DebugView.vue'))
 const IngestionProgressView = defineAsyncComponent(() => import('@/views/IngestionProgressView.vue'))
 const LibraryView = defineAsyncComponent(() => import('@/views/LibraryView.vue'))
+const SmartFormsView = defineAsyncComponent(() => import('@/views/SmartFormsView.vue'))
 const FavoritesView = defineAsyncComponent(() => import('@/views/FavoritesView.vue'))
 const MarkdownHtmlVisualizationView = defineAsyncComponent(() => import('@/views/MarkdownHtmlVisualizationView.vue'))
 const SearchPage = defineAsyncComponent(() => import('@/views/SearchPage.vue'))
@@ -330,6 +331,15 @@ function openLibrary() {
   }
 }
 
+function openForms() {
+  const next = workspaceStore.mainView === 'forms' ? 'editor' : 'forms'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
+}
+
 function openIngestion() {
   const next = workspaceStore.mainView === 'ingestion' ? 'editor' : 'ingestion'
   workspaceStore.setMainView(next)
@@ -573,6 +583,7 @@ watch(
         :resources-active="workspaceStore.mainView === 'resources'"
         :favorites-active="workspaceStore.mainView === 'favorites'"
         :library-active="workspaceStore.mainView === 'library'"
+        :forms-active="workspaceStore.mainView === 'forms'"
         :ingestion-active="workspaceStore.mainView === 'ingestion'"
         :visualization-active="workspaceStore.mainView === 'visualization'"
         :agent-active="workspaceStore.mainView === 'agent'"
@@ -590,6 +601,7 @@ watch(
         @open-resources="openResources"
         @open-favorites="openFavorites"
         @open-library="openLibrary"
+        @open-forms="openForms"
         @open-ingestion="openIngestion"
         @open-visualization="openVisualization"
         @toggle-agent="openAgentPage"
@@ -623,6 +635,7 @@ watch(
         <FileResourceManager v-else-if="workspaceStore.mainView === 'resources'" class="main-shell-content" />
         <FavoritesView v-else-if="workspaceStore.mainView === 'favorites'" class="main-shell-content" />
         <LibraryView v-else-if="workspaceStore.mainView === 'library'" class="main-shell-content" />
+        <SmartFormsView v-else-if="workspaceStore.mainView === 'forms'" class="main-shell-content" />
         <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="main-shell-content" />
         <MarkdownHtmlVisualizationView v-else-if="workspaceStore.mainView === 'visualization'" class="main-shell-content" />
         <AgentPage v-else-if="workspaceStore.mainView === 'agent'" class="main-shell-content" />

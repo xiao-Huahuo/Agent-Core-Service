@@ -320,6 +320,24 @@ async def save_knowledge_ingestion_config(body: dict[str, Any]) -> dict[str, Any
     return result
 
 
+@router.post("/settings/floating/config")
+@router.put("/settings/floating/config")
+async def save_floating_config(body: dict[str, Any]) -> dict[str, Any]:
+    """保存用户悬浮窗启动配置。body: user_id 必填,floating_launch_enabled 可选。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    svc = _require_settings_service()
+    try:
+        return svc.save_floating_config(
+            user_id=user_id,
+            floating_launch_enabled=body.get("floating_launch_enabled"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.put("/settings/graph/config")
 async def save_graph_config(body: dict[str, Any]) -> dict[str, Any]:
     """保存用户图谱配置。body: user_id 必填,graph_node_limit 可选。"""

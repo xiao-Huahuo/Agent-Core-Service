@@ -23,6 +23,7 @@ defineProps<{
   resourcesActive: boolean
   favoritesActive: boolean
   libraryActive: boolean
+  formsActive: boolean
   ingestionActive: boolean
   visualizationActive: boolean
   agentActive: boolean
@@ -42,6 +43,7 @@ const emit = defineEmits<{
   openResources: []
   openFavorites: []
   openLibrary: []
+  openForms: []
   openIngestion: []
   openVisualization: []
   toggleAgent: []
@@ -129,6 +131,18 @@ const agentIconSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
     >
       <IcIcon name="book" :size="18" />
       <span class="activity-label">图书馆</span>
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: formsActive }"
+      type="button"
+      title="智能表格"
+      aria-label="智能表格"
+      @mousedown.prevent="handleRipple"
+      @click="emit('openForms')"
+    >
+      <IcIcon name="table-chart" :size="18" />
+      <span class="activity-label">表格</span>
     </button>
     <button
       class="activity-button"

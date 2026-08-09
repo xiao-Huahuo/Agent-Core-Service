@@ -55,6 +55,9 @@ onMounted(async () => {
   if (settingsStore.hasUserId) {
     try {
       await settingsStore.refreshUserProfile()
+      if (!isFloatingWindow) {
+        await window.agentEditorDesktop?.floatingSetVisible?.(Boolean(settingsStore.profile.floatingLaunchEnabled))
+      }
     } catch {
       settingsStore.clearUserId()
     }

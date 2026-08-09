@@ -75,6 +75,7 @@ export const API_ROUTES = {
   SETTINGS_MODEL_CONFIG: '/settings/llm/config',
   SETTINGS_MODEL_CONFIG_SAVED: '/settings/llm/config/saved',
   SETTINGS_WEB_SEARCH: '/settings/web-search/config',
+  SETTINGS_FLOATING_CONFIG: '/settings/floating/config',
   SETTINGS_DISABLED_TOOLS: '/settings/tools/disabled',
   SETTINGS_AVAILABLE_TOOLS: '/settings/tools/available',
   SETTINGS_TERMINAL_SANDBOX: '/settings/terminal/sandbox',

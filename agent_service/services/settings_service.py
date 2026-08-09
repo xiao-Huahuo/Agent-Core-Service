@@ -94,6 +94,7 @@ class SettingsService:
                 "theme_primary_color": "VARCHAR(16) NOT NULL DEFAULT ''",
                 "theme_soft_color": "VARCHAR(16) NOT NULL DEFAULT ''",
                 "graph_node_limit": "INTEGER NOT NULL DEFAULT 2000",
+                "floating_launch_enabled": "BOOLEAN NOT NULL DEFAULT 0",
                 "web_search_max_results": "INTEGER NOT NULL DEFAULT 10",
                 "storage_path_overrides": "TEXT NOT NULL DEFAULT ''",
             }
@@ -524,6 +525,7 @@ class SettingsService:
             "theme_primary_color": record.theme_primary_color,
             "theme_soft_color": record.theme_soft_color,
             "graph_node_limit": record.graph_node_limit,
+            "floating_launch_enabled": bool(record.floating_launch_enabled),
             "created_at": record.created_at.isoformat(),
             "updated_at": record.updated_at.isoformat(),
         }
@@ -1428,6 +1430,41 @@ class SettingsService:
             db.refresh(record)
             return {
                 "graph_node_limit": record.graph_node_limit,
+            }
+
+    def save_floating_config(
+        self,
+        *,
+        user_id: str,
+        floating_launch_enabled: bool | None = None,
+    ) -> dict:
+        """保存用户悬浮窗启动配置。"""
+
+        normalized_user_id = user_id.strip()
+        if not normalized_user_id:
+            raise ValueError("user_id is required")
+        now = self._utc_now()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                record = UserSettingsRecord(
+                    user_id=normalized_user_id,
+                    knowledge_dir=str(self.config.storage.knowledge_dir),
+                    floating_launch_enabled=bool(floating_launch_enabled),
+                    created_at=now,
+                    updated_at=now,
+                )
+            else:
+                if floating_launch_enabled is not None:
+                    record.floating_launch_enabled = bool(floating_launch_enabled)
+                record.updated_at = now
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            return {
+                "user_id": record.user_id,
+                "floating_launch_enabled": bool(record.floating_launch_enabled),
+                "updated_at": record.updated_at.isoformat(),
             }
 
     def is_ocr_enabled_for_user(self, *, user_id: str) -> bool:

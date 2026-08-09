@@ -222,6 +222,30 @@ def test_list_files_hides_git_metadata_directory(tmp_path: Path) -> None:
     assert [node["name"] for node in nodes] == ["notes.md"]
 
 
+def test_forms_metadata_is_ignored_but_assets_can_ingest(tmp_path: Path) -> None:
+    """智能表格元数据默认忽略,但上传到 assets/ 的文献仍可灌库。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    forms_dir = knowledge_dir / "forms"
+    assets_dir = forms_dir / "AI文献阅读解析多维表" / "assets"
+    assets_dir.mkdir(parents=True)
+    (forms_dir / "data.csv").write_text("title\nhello", encoding="utf-8")
+    (assets_dir / "paper.md").write_text("paper text", encoding="utf-8")
+    service, _memory_service, _settings_service, _graph_service = _service(tmp_path, knowledge_dir)
+
+    nodes = service.list_files(user_id="user-1")
+    form_node = nodes[0]
+    children_by_name = {node["name"]: node for node in form_node["children"]}
+    table_node = children_by_name["AI文献阅读解析多维表"]
+    table_children_by_name = {node["name"]: node for node in table_node["children"]}
+    asset_node = table_children_by_name["assets"]["children"][0]
+
+    assert form_node["name"] == "forms"
+    assert form_node["indexStatus"] == "ignored"
+    assert children_by_name["data.csv"]["indexStatus"] == "ignored"
+    assert asset_node["indexStatus"] == "dirty"
+
+
 def test_tree_signature_tracks_files_without_parent_directories(tmp_path: Path) -> None:
     """轮询签名不应因目录 mtime 变化而误使同目录其他文件索引失效。"""
 

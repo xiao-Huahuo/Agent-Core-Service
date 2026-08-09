@@ -25,6 +25,7 @@ export interface SettingsProfileResponse {
   theme_primary_color?: string
   theme_soft_color?: string
   graph_node_limit?: number
+  floating_launch_enabled?: boolean
   created_at: string
   updated_at: string
 }
@@ -185,6 +186,23 @@ export function saveGraphConfig(
   const body: Record<string, string | number> = { user_id: userId }
   if (params.graphNodeLimit !== undefined) body.graph_node_limit = params.graphNodeLimit
   return apiPut<GraphConfigResponse>(API_ROUTES.SETTINGS_GRAPH_CONFIG, body)
+}
+
+export interface FloatingConfigResponse {
+  user_id: string
+  floating_launch_enabled: boolean
+  updated_at: string
+}
+
+export function saveFloatingConfig(
+  userId: string,
+  params: { floatingLaunchEnabled?: boolean },
+): Promise<FloatingConfigResponse> {
+  const body: Record<string, string | boolean> = { user_id: userId }
+  if (params.floatingLaunchEnabled !== undefined) {
+    body.floating_launch_enabled = params.floatingLaunchEnabled
+  }
+  return apiPut<FloatingConfigResponse>(API_ROUTES.SETTINGS_FLOATING_CONFIG, body)
 }
 
 export function rebuildKnowledgeRoot(

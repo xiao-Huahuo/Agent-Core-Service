@@ -119,3 +119,13 @@ def test_memory_tools_are_disabled_in_available_tool_catalog_when_memory_is_off(
 
     assert memory_group["tools"]
     assert all(tool["enabled"] is False for tool in memory_group["tools"])
+
+
+def test_floating_launch_setting_persists_in_user_profile() -> None:
+    service = make_settings_service()
+
+    saved = service.save_floating_config(user_id="u1", floating_launch_enabled=True)
+    profile = service.ensure_user_profile(user_id="u1")
+
+    assert saved["floating_launch_enabled"] is True
+    assert profile["floating_launch_enabled"] is True

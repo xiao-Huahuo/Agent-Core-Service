@@ -11,7 +11,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { ApiError } from '@/api/client'
-import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, saveAppearanceConfig, saveFontConfig, saveGraphConfig, saveKnowledgeIngestionConfig, saveWebSearchConfig, updateSettingsKnowledgeDir } from '@/api/settings'
+import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, saveAppearanceConfig, saveFloatingConfig, saveFontConfig, saveGraphConfig, saveKnowledgeIngestionConfig, saveWebSearchConfig, updateSettingsKnowledgeDir } from '@/api/settings'
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
 import type { SettingsKnowledgeLibraryResponse, SettingsProfileResponse } from '@/api/settings'
 import type { KnowledgeLibraryProfile } from '@/types/settings'
@@ -52,6 +52,7 @@ const DEFAULT_PROFILE: UserSettingsProfile = {
   themePrimaryColor: '',
   themeSoftColor: '',
   graphNodeLimit: 2000,
+  floatingLaunchEnabled: false,
 }
 
 function normalizeThemeColor(value: string | undefined): string {
@@ -175,6 +176,7 @@ function mapBackendProfile(profileResponse: SettingsProfileResponse): Partial<Us
     themePrimaryColor: profileResponse.theme_primary_color ?? '',
     themeSoftColor: profileResponse.theme_soft_color ?? '',
     graphNodeLimit: profileResponse.graph_node_limit ?? 2000,
+    floatingLaunchEnabled: Boolean(profileResponse.floating_launch_enabled),
   }
 }
 
@@ -626,6 +628,26 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  async function saveFloatingSettings(params: { floatingLaunchEnabled?: boolean }) {
+    const nextFloatingLaunchEnabled = params.floatingLaunchEnabled ?? Boolean(profile.value.floatingLaunchEnabled)
+    if (!hasUserId.value) {
+      updateProfile({ floatingLaunchEnabled: nextFloatingLaunchEnabled })
+      return null
+    }
+    const prev = { floatingLaunchEnabled: Boolean(profile.value.floatingLaunchEnabled) }
+    updateProfile({ floatingLaunchEnabled: nextFloatingLaunchEnabled })
+    try {
+      const result = await saveFloatingConfig(profile.value.userId, {
+        floatingLaunchEnabled: nextFloatingLaunchEnabled,
+      })
+      updateProfile({ floatingLaunchEnabled: result.floating_launch_enabled })
+      return result
+    } catch {
+      updateProfile(prev)
+      throw new Error('保存悬浮窗设置失败')
+    }
+  }
+
   return {
     themeMode,
     colorScheme,
@@ -665,6 +687,7 @@ export const useSettingsStore = defineStore('settings', () => {
     toggleWebSearch,
     saveKnowledgeIngestionSettings,
     saveGraphSettings,
+    saveFloatingSettings,
     setAutoIngestOnUpload,
     showIndexColumn,
     setShowIndexColumn,

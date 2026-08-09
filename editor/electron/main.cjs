@@ -638,7 +638,6 @@ function createFloatingWindow() {
   floatingWindow.once('ready-to-show', () => {
     floatingWindow.setBackgroundColor('#00000000')
     applyTransparentShape(floatingWindow)
-    floatingWindow.showInactive()
   })
 
   // Close hides the floating window instead of destroying it.
@@ -948,13 +947,14 @@ ipcMain.on('floating:close', (event) => {
 })
 
 ipcMain.handle('floating:set-visible', (_event, options) => {
-  if (!floatingWindow || floatingWindow.isDestroyed()) {
+  const win = options?.visible ? createFloatingWindow() : floatingWindow
+  if (!win || win.isDestroyed()) {
     return false
   }
   if (options?.visible) {
-    floatingWindow.showInactive()
+    win.showInactive()
   } else {
-    floatingWindow.hide()
+    win.hide()
   }
   return true
 })

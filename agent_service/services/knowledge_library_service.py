@@ -70,6 +70,8 @@ class KnowledgeIgnoreMatcher:
         if not path:
             return False
         parts = path.split("/")
+        if parts[0] == "forms" and "assets" not in parts[1:]:
+            return True
         if any(part in HARD_IGNORED_KNOWLEDGE_DIR_NAMES for part in parts):
             return True
         ignored = False
