@@ -92,8 +92,8 @@ export const BUILTIN_COLUMNS: SmartColumn[] = [
 
 const REQUIRED_COLUMNS: SmartColumn[] = [
   { id: 'row_index', title: '序号', type: 'index', removable: false, editable: false, width: 64 },
-  { id: 'literature_file', title: '文献上传', type: 'file', removable: false, editable: false, width: 168 },
-  { id: 'literature_content', title: '文献内容', type: 'readonly_text', removable: false, editable: false, width: 240 },
+  { id: 'literature_file', title: '文献上传', type: 'file', removable: true, editable: false, width: 168 },
+  { id: 'literature_content', title: '文献内容', type: 'readonly_text', removable: true, editable: false, width: 240 },
   { id: 'title', title: '标题', type: 'smart_text', removable: false, editable: true, width: 230, tone: 'blue' },
 ]
 
@@ -151,14 +151,17 @@ export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefin
   const fallback = createDefaultLiteratureForm()
   const sourceColumns = (Array.isArray(raw?.columns) && raw.columns.length ? raw.columns : fallback.columns)
     .map((column) => {
-      if (column.id === 'literature_file') return { ...column, title: '文献上传', removable: false, editable: false }
-      if (column.id === 'literature_content') return { ...column, removable: false, editable: false }
+      if (column.id === 'literature_file') return { ...column, title: '文献上传', removable: true, editable: false }
+      if (column.id === 'literature_content') return { ...column, removable: true, editable: false }
       if (column.id === 'title') return { ...column, removable: false }
       if (column.id === 'reading_progress') return { ...column, options: ['未读', '已读', '阅读中'] }
       if (column.id === 'rating') return { ...column, title: '重要性' }
       return column
     })
-  const requiredColumnIds = ['row_index', 'literature_file', 'literature_content', 'title']
+  const hasLiteratureSource = sourceColumns.some((column) => column.id === 'literature_file' || column.id === 'literature_content')
+  const requiredColumnIds = hasLiteratureSource
+    ? ['row_index', 'literature_file', 'literature_content', 'title']
+    : ['row_index', 'title']
   const requiredColumns = requiredColumnIds
     .map((columnId) => sourceColumns.find((column) => column.id === columnId) ?? fallback.columns.find((column) => column.id === columnId))
     .filter(Boolean) as SmartColumn[]
@@ -166,6 +169,13 @@ export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefin
     ...sourceColumns,
     ...requiredColumns.filter((column) => !sourceColumns.some((sourceColumn) => sourceColumn.id === column.id)),
   ]
+  const normalizedColumns = hasLiteratureSource
+    ? columns
+    : columns.map((column) => column.type === 'smart_text'
+      ? { ...column, type: 'text' as const }
+      : column.type === 'smart_tag'
+        ? { ...column, type: 'tag' as const }
+        : column)
   const rows = Array.isArray(raw?.rows) ? raw.rows : fallback.rows
   return {
     version: 1,
@@ -174,7 +184,7 @@ export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefin
     columns,
     rows: rows.map((row) => ({
       id: row.id || createRowId(),
-      cells: Object.fromEntries(columns.map((column) => {
+      cells: Object.fromEntries(normalizedColumns.map((column) => {
         const existing = row.cells?.[column.id]
         const value = column.id === 'reading_progress' && (!existing?.value || existing.value === '未阅读') ? '未读' : existing?.value
         return [column.id, existing ? { value: value ?? '', status: existing.status, assetPath: existing.assetPath, fileName: existing.fileName } : createCell(column)]

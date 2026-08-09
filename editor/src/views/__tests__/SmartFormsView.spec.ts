@@ -12,7 +12,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 import { generateStructuredFields, getSmartFormDb, listSmartFormsDb, saveSmartFormDb } from '@/api/smartForms'
-import { BUILTIN_COLUMNS, addColumn, createDefaultLiteratureForm, createEmptyRow, type SmartLiteratureForm } from '@/components/smart_forms/smartLiteratureTable'
+import { BUILTIN_COLUMNS, addColumn, createCustomColumn, createDefaultLiteratureForm, createEmptyRow, type SmartLiteratureForm } from '@/components/smart_forms/smartLiteratureTable'
 import { previewKnowledgeFile, readKnowledgeFile, uploadKnowledgeFile } from '@/api/knowledge'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -215,6 +215,23 @@ describe('SmartFormsView', () => {
     expect(wrapper.text()).not.toContain('新建列')
   })
 
+  it('clears failed and empty fields while preserving valid values', async () => {
+    const form = addColumn(addColumn(createDefaultLiteratureForm('我的文献表'), BUILTIN_COLUMNS.find((column) => column.id === 'keywords')!), BUILTIN_COLUMNS.find((column) => column.id === 'journal')!)
+    form.rows[0]!.cells.title = { value: '生成失败: 模型错误', status: 'failed' }
+    form.rows[0]!.cells.keywords = { value: '', status: 'idle' }
+    form.rows[0]!.cells.journal = { value: 'Plant Cell', status: 'ready' }
+    vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(form))
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    await wrapper.findAll('button').find((button) => button.text().includes('清空无效字段'))?.trigger('click')
+
+    expect(wrapper.find('td[data-column-id="title"] textarea').element).toMatchObject({ value: '' })
+    expect(wrapper.find('td[data-column-id="title"] .status-dot').exists()).toBe(false)
+    expect(wrapper.find('td[data-column-id="keywords"] textarea').element).toMatchObject({ value: '' })
+    expect(wrapper.find('td[data-column-id="journal"] textarea').element).toMatchObject({ value: 'Plant Cell' })
+  })
+
   it('creates a user-named form under the knowledge forms folder', async () => {
     vi.mocked(listSmartFormsDb).mockResolvedValueOnce([])
     const wrapper = mount(SmartFormsView)
@@ -288,6 +305,30 @@ describe('SmartFormsView', () => {
     await hoverContextButton('删除')
     await clickContextButton('删除整行')
     expect(wrapper.findAll('tbody tr')).toHaveLength(0)
+  })
+
+  it('downgrades to a plain table when the literature source is deleted', async () => {
+    const form = addColumn(addColumn(createDefaultLiteratureForm('我的文献表'), BUILTIN_COLUMNS.find((column) => column.id === 'paper_type')!), BUILTIN_COLUMNS.find((column) => column.id === 'keywords')!)
+    vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(form))
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    await wrapper.find('th[data-column-id="literature_file"]').trigger('contextmenu')
+    await hoverContextButton('删除')
+    await clickContextButton('删除整列')
+
+    expect(wrapper.find('th[data-column-id="literature_file"]').exists()).toBe(false)
+    expect(wrapper.find('th[data-column-id="literature_content"]').exists()).toBe(false)
+    expect(wrapper.findAll('button').some((button) => button.text().includes('全表智能填充'))).toBe(false)
+
+    await wrapper.find('th[data-column-id="title"]').trigger('contextmenu')
+    await hoverContextButton('添加列')
+    await hoverContextButton('左侧添加')
+    expect(contextButton('关键词')?.disabled).toBe(true)
+    expect(contextButton('重要性')?.disabled).toBe(false)
+    await hoverContextButton('右侧添加')
+    expect(contextButton('智能文本')?.disabled).toBe(true)
+    expect(contextButton('文本')?.disabled).toBe(false)
   })
 
   it('drag-selects multiple cells and applies context actions to each selected item', async () => {
@@ -430,6 +471,21 @@ describe('SmartFormsView', () => {
     }))
   })
 
+  it('edits a user-created column title in place and does not freeze columns', async () => {
+    const form = addColumn(createDefaultLiteratureForm('我的文献表'), createCustomColumn('自定义字段', 'text'))
+    vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(form))
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    const customHeader = wrapper.find('th[data-column-id^="col_"]')
+    await customHeader.find('.editable-column-title').trigger('click')
+    await customHeader.find('.column-title-input').setValue('新的字段名')
+    await customHeader.find('.column-title-input').trigger('keydown', { key: 'Enter' })
+
+    expect(customHeader.text()).toContain('新的字段名')
+    expect(wrapper.findAll('.sticky')).toHaveLength(0)
+  })
+
   it('reorders whole rows by dragging the index column and recalculates row numbers', async () => {
     const multiRowForm = createDefaultLiteratureForm('我的文献表')
     const secondRow = createEmptyRow(multiRowForm.columns)
@@ -470,8 +526,29 @@ describe('SmartFormsView', () => {
     await wrapper.find('td[data-column-id="paper_type"] .tag-add-button').trigger('click')
     expect(wrapper.find('.tag-editor').exists()).toBe(true)
 
+    await wrapper.find('.tag-editor-input-row input').trigger('mousedown')
+    await wrapper.find('.tag-editor-input-row input').trigger('click')
+    expect(wrapper.find('.tag-editor').exists()).toBe(true)
+
+    await wrapper.find('.tag-editor-head button').trigger('click')
+    expect(wrapper.find('.tag-editor').exists()).toBe(false)
+
+    await wrapper.find('td[data-column-id="paper_type"] .tag-add-button').trigger('click')
+
     await wrapper.find('.forms-header').trigger('click')
     expect(wrapper.find('.tag-editor').exists()).toBe(false)
+  })
+
+  it('prevents text selection on cell drag while preserving text input selection', async () => {
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+    const table = wrapper.find('.smart-table')
+    const cellEvent = new Event('selectstart', { bubbles: true, cancelable: true })
+    table.find('td[data-column-id="title"]').element.dispatchEvent(cellEvent)
+    expect(cellEvent.defaultPrevented).toBe(true)
+    const inputEvent = new Event('selectstart', { bubbles: true, cancelable: true })
+    table.find('td[data-column-id="title"] textarea').element.dispatchEvent(inputEvent)
+    expect(inputEvent.defaultPrevented).toBe(false)
   })
 
   it('adds multiple tags into one cell and toggles each off', async () => {

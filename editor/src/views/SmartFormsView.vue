@@ -77,6 +77,8 @@ const swappedColumnId = ref('')
 const swappedRowId = ref('')
 const generationTokens = ref<Record<string, string>>({})
 const tableContextSubmenuSide = ref<'right' | 'left'>('right')
+const editingColumnId = ref('')
+const columnTitleDraft = ref('')
 const structuredGenerationQueue: Array<() => Promise<void>> = []
 const structuredGenerationConcurrency = 2
 let structuredGenerationActive = 0
@@ -124,6 +126,9 @@ const {
 
 const visibleRows = computed(() => form.value ? filterRows(form.value, query.value, tagFilter.value, minRating.value) : [])
 const tagFilters = computed(() => form.value ? uniqueTagValues(form.value) : [])
+const isLiteratureTable = computed(() => Boolean(form.value?.columns.some((column) => column.id === 'literature_file' || column.id === 'literature_content')))
+const availableBuiltinColumns = computed(() => BUILTIN_COLUMNS)
+const availableCustomColumnTypes = computed(() => customColumnTypes)
 const rowCountLabel = computed(() => form.value ? `${visibleRows.value.length} / ${form.value.rows.length} 条记录` : '0 / 0 条记录')
 const activeFormStorageLabel = computed(() => activeFormId.value ? `SQLite: smart_forms/${activeFormId.value}` : '')
 const activeFormCsvFile = computed(() => form.value ? `${form.value.title}.csv` : '')
@@ -454,12 +459,61 @@ function addCustomColumnAt(type: SmartColumnType, direction: -1 | 1): void {
 
 function removeColumnById(columnId: string): void {
   if (!form.value) return
-  setForm(removeColumn(form.value, columnId))
+  removeColumnsFromTable([columnId])
+}
+
+/** Removes literature source columns together and downgrades smart fields for ordinary tables. */
+function removeColumnsFromTable(columnIds: string[]): void {
+  if (!form.value) return
+  const removesLiterature = columnIds.some((columnId) => columnId === 'literature_file' || columnId === 'literature_content')
+  const ids = removesLiterature
+    ? [...new Set([...columnIds, 'literature_file', 'literature_content'])]
+    : columnIds
+  let nextForm = ids.reduce((currentForm, columnId) => removeColumn(currentForm, columnId), form.value)
+  if (removesLiterature) {
+    nextForm = {
+      ...nextForm,
+      columns: nextForm.columns.map((column) => column.type === 'smart_text'
+        ? { ...column, type: 'text' as const }
+        : column.type === 'smart_tag'
+          ? { ...column, type: 'tag' as const }
+          : column),
+    }
+  }
+  setForm(nextForm)
 }
 
 function moveColumnById(columnId: string, direction: -1 | 1): void {
   if (!form.value) return
   setForm(moveColumn(form.value, columnId, direction))
+}
+
+/** Starts in-place editing for a user-created column header. */
+function startColumnTitleEdit(column: SmartColumn): void {
+  if (!column.id.startsWith('col_')) return
+  editingColumnId.value = column.id
+  columnTitleDraft.value = column.title
+}
+
+/** Commits a custom column title and lets the existing autosave persist it. */
+function commitColumnTitleEdit(column: SmartColumn): void {
+  if (!form.value || editingColumnId.value !== column.id) return
+  const title = columnTitleDraft.value.trim()
+  if (title) {
+    setForm({
+      ...form.value,
+      updatedAt: new Date().toISOString(),
+      columns: form.value.columns.map((item) => item.id === column.id ? { ...item, title } : item),
+    })
+  }
+  editingColumnId.value = ''
+  columnTitleDraft.value = ''
+}
+
+/** Cancels custom column title editing without changing the stored title. */
+function cancelColumnTitleEdit(): void {
+  editingColumnId.value = ''
+  columnTitleDraft.value = ''
 }
 
 function moveRowById(rowId: string, direction: -1 | 1): void {
@@ -621,6 +675,13 @@ function extendCellSelection(rowId: string, columnId: string): void {
 
 function stopCellSelection(): void {
   dragAnchorCell.value = null
+}
+
+/** Prevents browser text selection during cell drag-selection while preserving input selection. */
+function preventTableTextSelection(event: Event): void {
+  const target = event.target
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
+  event.preventDefault()
 }
 
 function openCellContextMenu(row: SmartRow, column: SmartColumn, event: MouseEvent): void {
@@ -791,7 +852,7 @@ function deleteContextColumn(): void {
   const columnIds = contextColumnIds()
     .filter((columnId) => form.value?.columns.find((column) => column.id === columnId)?.removable)
   if (!columnIds.length) return
-  setForm(columnIds.reduce((currentForm, columnId) => removeColumn(currentForm, columnId), form.value))
+  removeColumnsFromTable(columnIds)
   selectedCellKeys.value = []
   closeTableContextMenu()
 }
@@ -918,6 +979,28 @@ function clearTableContext(): void {
   closeTableContextMenu()
 }
 
+/** Clears failed or non-pending empty cells without removing uploaded file metadata. */
+function clearInvalidFields(): void {
+  if (!form.value) return
+  let clearedCount = 0
+  const rows = form.value.rows.map((row) => ({
+    ...row,
+    cells: Object.fromEntries(form.value!.columns.map((column) => {
+      const cell = row.cells[column.id] ?? { value: '' }
+      const invalid = cell.status === 'failed' || (cell.status !== 'pending' && !cell.value.trim())
+      if (!invalid) return [column.id, cell]
+      clearedCount += 1
+      return [column.id, { ...cell, value: '', status: undefined } as SmartCell]
+    })),
+  }))
+  if (!clearedCount) {
+    workspaceStore.showToast('没有可清空的无效字段')
+    return
+  }
+  setForm({ ...form.value, updatedAt: new Date().toISOString(), rows })
+  workspaceStore.showToast(`已清空 ${clearedCount} 个无效字段`)
+}
+
 function smartFillTableContext(): void {
   const target = tableContextTarget.value
   if (!target || !form.value) return
@@ -952,11 +1035,13 @@ async function generateSmartCellsForSelection(cells: CellCoord[], showSuccessToa
 }
 
 function addContextColumn(column: SmartColumn, direction: -1 | 1): void {
+  if (!isLiteratureTable.value && (column.type === 'smart_text' || column.type === 'smart_tag')) return
   addColumnAt(column, direction)
   closeTableContextMenu()
 }
 
 function addContextCustomColumn(type: SmartColumnType, direction: -1 | 1): void {
+  if (!isLiteratureTable.value && (type === 'smart_text' || type === 'smart_tag')) return
   addCustomColumnAt(type, direction)
   closeTableContextMenu()
 }
@@ -1486,7 +1571,7 @@ function errorMessage(error: unknown): string {
         <IcIcon name="add" :size="16" />
         <span>新建行</span>
       </button>
-      <button class="toolbar-btn" type="button" @click="generateSmartCells('all')">
+      <button v-if="isLiteratureTable" class="toolbar-btn" type="button" @click="generateSmartCells('all')">
         <IcIcon name="psychology" :size="16" />
         <span>全表智能填充</span>
       </button>
@@ -1534,18 +1619,23 @@ function errorMessage(error: unknown): string {
           </button>
         </div>
       </div>
+      <button class="toolbar-btn" type="button" title="清除失败或空字段" @click="clearInvalidFields">
+        <IcIcon name="trash" :size="16" />
+        <span>清空无效字段</span>
+      </button>
       <span class="row-count">{{ rowCountLabel }}</span>
     </div>
 
     <div v-if="form" class="table-frame" :class="{ loading }" @mouseup="stopCellSelection" @contextmenu.prevent.stop="openTableContextMenu({ kind: 'table' }, $event)">
-      <table class="smart-table">
+      <table class="smart-table" @selectstart="preventTableTextSelection">
         <thead>
           <tr>
             <th
               v-for="(column, columnIndex) in form.columns"
               :key="column.id"
               draggable="true"
-              :class="['tone-' + (column.tone || 'none'), { sticky: column.id === 'row_index', dragging: draggedColumnId === column.id, swapped: swappedColumnId === column.id }]"
+              :data-column-id="column.id"
+              :class="['tone-' + (column.tone || 'none'), { dragging: draggedColumnId === column.id, swapped: swappedColumnId === column.id }]"
               :style="{ width: `${column.width}px`, minWidth: `${column.width}px` }"
               @dragstart="startColumnDrag(column.id, $event)"
               @dragover.prevent
@@ -1554,7 +1644,22 @@ function errorMessage(error: unknown): string {
               @contextmenu.prevent.stop="openTableContextMenu({ kind: 'column', columnId: column.id }, $event)"
             >
               <div class="column-head">
-                <span>{{ column.title }}</span>
+                <span
+                  v-if="editingColumnId !== column.id"
+                  :class="{ 'editable-column-title': column.id.startsWith('col_') }"
+                  @click.stop="startColumnTitleEdit(column)"
+                >{{ column.title }}</span>
+                <input
+                  v-else
+                  v-model="columnTitleDraft"
+                  class="column-title-input"
+                  type="text"
+                  @click.stop
+                  @mousedown.stop
+                  @keydown.enter.prevent="commitColumnTitleEdit(column)"
+                  @keydown.esc.prevent="cancelColumnTitleEdit"
+                  @blur="commitColumnTitleEdit(column)"
+                />
                 <div class="column-actions">
                   <button type="button" title="左移" :disabled="columnIndex === 0" @click="moveColumnById(column.id, -1)">
                     <IcIcon name="arrow-left" :size="13" />
@@ -1577,7 +1682,7 @@ function errorMessage(error: unknown): string {
               :key="column.id"
               :data-column-id="column.id"
               :draggable="column.type === 'index'"
-              :class="['cell', 'tone-' + (column.tone || 'none'), { sticky: column.id === 'row_index', selected: isCellSelected(row.id, column.id), dragging: draggedRowId === row.id && column.type === 'index', 'row-swapped': swappedRowId === row.id }]"
+              :class="['cell', 'tone-' + (column.tone || 'none'), { selected: isCellSelected(row.id, column.id), dragging: draggedRowId === row.id && column.type === 'index', 'row-swapped': swappedRowId === row.id }]"
               @dragstart="column.type === 'index' && startRowDrag(row.id, $event)"
               @dragover.prevent="column.type === 'index'"
               @drop.prevent="column.type === 'index' && dropRow(row.id)"
@@ -1634,7 +1739,13 @@ function errorMessage(error: unknown): string {
                   <IcIcon name="add" :size="13" />
                   <span>{{ cellTags(row, column).length ? '标签' : '添加标签' }}</span>
                 </button>
-                <div v-if="isTagEditorOpen(row.id, column.id)" class="tag-editor" @click.stop>
+                <div v-if="isTagEditorOpen(row.id, column.id)" class="tag-editor" @click.stop @mousedown.stop>
+                  <div class="tag-editor-head">
+                    <span>标签</span>
+                    <button type="button" title="关闭标签编辑" @click.stop="closeTagEditor">
+                      <IcIcon name="close" :size="12" />
+                    </button>
+                  </div>
                   <div v-if="cellTags(row, column).length" class="tag-editor-selected">
                     <button
                       v-for="tag in cellTags(row, column)"
@@ -1786,10 +1897,10 @@ function errorMessage(error: unknown): string {
             >
               <span class="table-context-section-title">内置字段</span>
               <button
-                v-for="column in BUILTIN_COLUMNS"
+                v-for="column in availableBuiltinColumns"
                 :key="column.id"
                 type="button"
-                :disabled="Boolean(form?.columns.some((item) => item.id === column.id))"
+                :disabled="Boolean(form?.columns.some((item) => item.id === column.id)) || (!isLiteratureTable && (column.type === 'smart_text' || column.type === 'smart_tag'))"
                 @click="addContextColumn(column, direction.value as -1 | 1)"
               >
                 <IcIcon name="view-column" :size="15" /><span>{{ column.title }}</span>
@@ -1801,9 +1912,10 @@ function errorMessage(error: unknown): string {
               </label>
               <span class="table-context-section-title">字段类型</span>
               <button
-                v-for="type in customColumnTypes"
+                v-for="type in availableCustomColumnTypes"
                 :key="type.value"
                 type="button"
+                :disabled="!isLiteratureTable && (type.value === 'smart_text' || type.value === 'smart_tag')"
                 @click="addContextCustomColumn(type.value, direction.value as -1 | 1)"
               >
                 <IcIcon name="add" :size="15" /><span>{{ type.label }}</span>
@@ -2414,6 +2526,12 @@ button:disabled {
   width: max-content;
   min-width: 100%;
   table-layout: fixed;
+  user-select: none;
+}
+
+.smart-table input,
+.smart-table textarea {
+  user-select: text;
 }
 
 th,
@@ -2465,6 +2583,24 @@ th.swapped,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.editable-column-title {
+  cursor: text;
+  border-bottom: 1px dashed var(--color-text-muted);
+}
+
+.column-title-input {
+  min-width: 0;
+  width: 100%;
+  height: 24px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1px solid var(--color-primary);
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
 }
 
 .column-actions {
@@ -2658,6 +2794,32 @@ th.sticky {
   background: var(--color-surface-raised);
   box-shadow: var(--shadow-lg);
   animation: smart-menu-pop 140ms ease-out both;
+}
+
+.tag-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 22px;
+  color: var(--color-text-muted);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.tag-editor-head button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.tag-editor-head button:hover {
+  color: var(--color-danger);
 }
 
 .tag-editor-selected {
