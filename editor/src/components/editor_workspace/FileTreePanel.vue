@@ -103,7 +103,9 @@ const inlineEdit = ref<{
 } | null>(null)
 const deleteTargets = ref<KnowledgeFileNode[]>([])
 const actionError = ref('')
-const selectedTreePath = computed(() => workspaceStore.selectedTreePath || workspaceStore.selectedPath)
+const selectedTreePath = computed(() => (
+  workspaceStore.selectedTreePath || (workspaceStore.treeSelectionCleared ? '' : workspaceStore.selectedPath)
+))
 const canPaste = computed(() => Boolean(workspaceStore.fileClipboard) || Boolean(window.agentEditorDesktop?.readClipboardFilePaths))
 const selectedTreeNode = computed(() => findNode(workspaceStore.tree, selectedTreePath.value))
 const contextSelectionCount = computed(() => contextTargetNodes().length)
