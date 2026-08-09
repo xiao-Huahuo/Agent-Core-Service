@@ -169,6 +169,8 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     )
     favorite_service = FavoriteService(engine=settings_service.engine)
     feedback_service = FeedbackService(engine=settings_service.engine)
+    from agent_service.services.smart_form_service import SmartFormService
+    smart_form_service = SmartFormService(engine=settings_service.engine)
     rest_deps._settings_service = settings_service
     rest_deps._attachment_service = attachment_service
     rest_deps._skill_service = skill_service
@@ -178,6 +180,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     rest_deps._library_service = library_service
     rest_deps._favorite_service = favorite_service
     rest_deps._feedback_service = feedback_service
+    rest_deps._smart_form_service = smart_form_service
     rest_deps._task_list_service = task_list_service
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
     rest_deps._retrieval_service = retrieval_service
@@ -284,6 +287,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._library_service = None
         rest_deps._favorite_service = None
         rest_deps._feedback_service = None
+        rest_deps._smart_form_service = None
         rest_deps._todo_service = None
         rest_deps._automation_service = None
         logger.info("AgentService 已关闭")

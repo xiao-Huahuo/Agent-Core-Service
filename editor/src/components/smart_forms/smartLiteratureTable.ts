@@ -71,31 +71,52 @@ export interface SmartLiteratureForm {
 }
 
 export const BUILTIN_COLUMNS: SmartColumn[] = [
-  { id: 'title', title: '标题', type: 'smart_text', removable: true, editable: true, width: 220, tone: 'blue' },
+  { id: 'paper_type', title: '文献类型', type: 'smart_tag', removable: true, editable: true, width: 200, options: ['研究论文', '综述论文', '方法论文', '病例报告'], tone: 'green' },
+  { id: 'rating', title: '重要性', type: 'star', removable: true, editable: true, width: 150 },
+  { id: 'reading_progress', title: '阅读进度', type: 'tag', removable: true, editable: true, width: 180, options: ['未读', '已读', '阅读中'] },
   { id: 'keywords', title: '关键词', type: 'smart_text', removable: true, editable: true, width: 180, tone: 'violet' },
-  { id: 'paper_type', title: '文献类型', type: 'smart_tag', removable: true, editable: true, width: 150, options: ['研究论文', '综述论文', '方法论文', '病例报告'], tone: 'green' },
-  { id: 'journal', title: '期刊', type: 'smart_text', removable: true, editable: true, width: 170, tone: 'amber' },
-  { id: 'year', title: '年份', type: 'smart_text', removable: true, editable: true, width: 100, tone: 'neutral' },
   { id: 'abstract', title: '摘要', type: 'smart_text', removable: true, editable: true, width: 260, tone: 'blue' },
+  { id: 'journal', title: '期刊', type: 'smart_text', removable: true, editable: true, width: 170, tone: 'amber' },
+  { id: 'authors', title: '作者', type: 'smart_text', removable: true, editable: true, width: 180, tone: 'green' },
+  { id: 'year', title: '年份', type: 'smart_text', removable: true, editable: true, width: 100, tone: 'neutral' },
   { id: 'why', title: '研究背景(why)', type: 'smart_text', removable: true, editable: true, width: 260, tone: 'rose' },
   { id: 'what', title: '研究内容(what)', type: 'smart_text', removable: true, editable: true, width: 260, tone: 'green' },
   { id: 'how', title: '研究方法(how)', type: 'smart_text', removable: true, editable: true, width: 260, tone: 'violet' },
   { id: 'result', title: '研究结果', type: 'smart_text', removable: true, editable: true, width: 260, tone: 'amber' },
+  { id: 'innovation', title: '创新点', type: 'smart_text', removable: true, editable: true, width: 240, tone: 'blue' },
+  { id: 'limitations', title: '局限性', type: 'smart_text', removable: true, editable: true, width: 240, tone: 'rose' },
+  { id: 'future_work', title: '未来展望', type: 'smart_text', removable: true, editable: true, width: 240, tone: 'violet' },
   { id: 'doi', title: 'DOI', type: 'smart_text', removable: true, editable: true, width: 180, tone: 'neutral' },
   { id: 'url', title: 'URL', type: 'smart_text', removable: true, editable: true, width: 200, tone: 'neutral' },
 ]
 
 const REQUIRED_COLUMNS: SmartColumn[] = [
   { id: 'row_index', title: '序号', type: 'index', removable: false, editable: false, width: 64 },
-  { id: 'literature_file', title: '文献上传', type: 'file', removable: true, editable: false, width: 168 },
-  { id: 'literature_content', title: '文献内容', type: 'readonly_text', removable: true, editable: false, width: 220 },
-  { id: 'title', title: '标题', type: 'smart_text', removable: true, editable: true, width: 230, tone: 'blue' },
-  { id: 'keywords', title: '关键词', type: 'smart_text', removable: true, editable: true, width: 180, tone: 'violet' },
-  { id: 'reading_progress', title: '阅读进度', type: 'tag', removable: true, editable: true, width: 132, options: ['未阅读', '阅读中', '已阅读'] },
-  { id: 'rating', title: '评级', type: 'star', removable: true, editable: true, width: 150 },
-  { id: 'paper_type', title: '文献类型', type: 'smart_tag', removable: true, editable: true, width: 148, options: ['研究论文', '综述论文', '方法论文', '病例报告'], tone: 'green' },
-  { id: 'journal', title: '期刊', type: 'smart_text', removable: true, editable: true, width: 190, tone: 'amber' },
+  { id: 'literature_file', title: '文献上传', type: 'file', removable: false, editable: false, width: 168 },
+  { id: 'literature_content', title: '文献内容', type: 'readonly_text', removable: false, editable: false, width: 240 },
+  { id: 'title', title: '标题', type: 'smart_text', removable: false, editable: true, width: 230, tone: 'blue' },
 ]
+
+/** Separator between multiple tags inside a tag-like cell value. */
+const TAG_SEPARATOR = ';'
+
+/** Splits a tag cell value into trimmed, non-empty tags. */
+export function splitTags(value: string): string[] {
+  return value.split(TAG_SEPARATOR).map((tag) => tag.trim()).filter(Boolean)
+}
+
+/** Joins tags into a single cell value, dropping blanks and duplicates in order. */
+export function joinTags(tags: string[]): string {
+  const seen = new Set<string>()
+  return tags
+    .map((tag) => tag.trim())
+    .filter((tag) => {
+      if (!tag || seen.has(tag)) return false
+      seen.add(tag)
+      return true
+    })
+    .join(`${TAG_SEPARATOR} `)
+}
 
 function createRowId(): string {
   return `row_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
@@ -103,7 +124,7 @@ function createRowId(): string {
 
 function createCell(column: SmartColumn, value = ''): SmartCell {
   return {
-    value,
+    value: column.id === 'reading_progress' && !value ? '未读' : value,
     status: column.type === 'smart_text' || column.type === 'smart_tag' ? 'idle' : undefined,
   }
 }
@@ -128,7 +149,23 @@ export function createDefaultLiteratureForm(title = '未命名表格'): SmartLit
 
 export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefined): SmartLiteratureForm {
   const fallback = createDefaultLiteratureForm()
-  const columns = Array.isArray(raw?.columns) && raw.columns.length ? raw.columns : fallback.columns
+  const sourceColumns = (Array.isArray(raw?.columns) && raw.columns.length ? raw.columns : fallback.columns)
+    .map((column) => {
+      if (column.id === 'literature_file') return { ...column, title: '文献上传', removable: false, editable: false }
+      if (column.id === 'literature_content') return { ...column, removable: false, editable: false }
+      if (column.id === 'title') return { ...column, removable: false }
+      if (column.id === 'reading_progress') return { ...column, options: ['未读', '已读', '阅读中'] }
+      if (column.id === 'rating') return { ...column, title: '重要性' }
+      return column
+    })
+  const indexColumn = sourceColumns.find((column) => column.id === 'row_index')
+  const literatureFileColumn = sourceColumns.find((column) => column.id === 'literature_file')
+  const literatureContentColumn = sourceColumns.find((column) => column.id === 'literature_content')
+  const titleColumn = sourceColumns.find((column) => column.id === 'title')
+  const requiredColumnIds = new Set(['row_index', 'literature_file', 'literature_content', 'title'])
+  const columns = indexColumn && literatureFileColumn && literatureContentColumn && titleColumn
+    ? [indexColumn, literatureFileColumn, literatureContentColumn, titleColumn, ...sourceColumns.filter((column) => !requiredColumnIds.has(column.id))]
+    : sourceColumns
   const rows = Array.isArray(raw?.rows) ? raw.rows : fallback.rows
   return {
     version: 1,
@@ -139,7 +176,8 @@ export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefin
       id: row.id || createRowId(),
       cells: Object.fromEntries(columns.map((column) => {
         const existing = row.cells?.[column.id]
-        return [column.id, existing ? { value: existing.value ?? '', status: existing.status, assetPath: existing.assetPath, fileName: existing.fileName } : createCell(column)]
+        const value = column.id === 'reading_progress' && (!existing?.value || existing.value === '未阅读') ? '未读' : existing?.value
+        return [column.id, existing ? { value: value ?? '', status: existing.status, assetPath: existing.assetPath, fileName: existing.fileName } : createCell(column)]
       })),
     })),
   }
@@ -217,7 +255,7 @@ export function filterRows(form: SmartLiteratureForm, query: string, tagFilter: 
     })
     const matchesTag = !tagFilter || form.columns.some((column) => {
       if (column.type !== 'tag' && column.type !== 'smart_tag') return false
-      return row.cells[column.id]?.value === tagFilter
+      return splitTags(row.cells[column.id]?.value ?? '').includes(tagFilter)
     })
     const ratingValue = Number(row.cells.rating?.value || 0)
     const matchesRating = !minRating || ratingValue >= minRating
@@ -268,8 +306,7 @@ export function uniqueTagValues(form: SmartLiteratureForm): string[] {
   form.rows.forEach((row) => {
     form.columns.forEach((column) => {
       if (column.type === 'tag' || column.type === 'smart_tag') {
-        const value = row.cells[column.id]?.value.trim()
-        if (value) values.add(value)
+        splitTags(row.cells[column.id]?.value ?? '').forEach((tag) => values.add(tag))
       }
     })
   })
@@ -284,7 +321,7 @@ export function createCustomColumn(title: string, type: SmartColumnType): SmartC
     type,
     removable: true,
     editable: type !== 'index' && type !== 'readonly_text' && type !== 'file',
-    width: type === 'star' ? 140 : type === 'boolean' ? 112 : 180,
+    width: type === 'star' ? 140 : type === 'boolean' ? 112 : type === 'tag' || type === 'smart_tag' ? 200 : 180,
     options: type === 'boolean' ? ['是', '否'] : undefined,
     tone: type === 'smart_text' || type === 'smart_tag' ? 'blue' : undefined,
   }

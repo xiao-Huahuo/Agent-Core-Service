@@ -1432,3 +1432,5 @@
 - [x] 修复 Electron 自定义缩放层干扰顶栏拖动的问题，并微调资源管理器中/大图标块圆角与大图标尺寸。
 - [x] 为文件树、资源管理器、图书馆与 Markdown 编辑区右键菜单补齐本地 Material 图标，并调整菜单列宽以适配图标与快捷键。
 - [x] 重组文件树与资源管理器右键菜单：新建与复制信息改为二级菜单，收藏入口按当前状态显示收藏/取消收藏，并移除询问 Agent 入口。
+## 2026-08-10
+- [x] 将智能表格主数据从知识库 `form.json/data.csv` 文件迁移为 SQLite 关系表存储:新增 smart_forms/smart_form_columns/smart_form_rows/smart_form_cells 模型、服务和 REST API,前端改走数据库读写,附件仍保存在知识库 assets 并可灌库抽取。

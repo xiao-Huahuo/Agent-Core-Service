@@ -8,23 +8,17 @@
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CHANGE_HISTORY.md" beforeDir="false" afterPath="$PROJECT_DIR$/CHANGE_HISTORY.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/models/user_settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/models/user_settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/knowledge_library_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/agent_service/services/settings_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/services/settings_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/electron/main.cjs" beforeDir="false" afterPath="$PROJECT_DIR$/editor/electron/main.cjs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/App.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/App.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/api/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/api/settings.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/ActivityBar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/settings_view/FloatingSettingsSection.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/settings_view/FloatingSettingsSection.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/api/rest/deps.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/api/rest/deps.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/models/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/models/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/agent_service/schemas/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/agent_service/schemas/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/smart_forms/__tests__/smartLiteratureTable.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/smart_forms/__tests__/smartLiteratureTable.spec.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/smart_forms/smartLiteratureTable.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/smart_forms/smartLiteratureTable.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/editor/src/router/api_routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/router/api_routes.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/stores/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/stores/settings.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/types/knowledge.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/types/knowledge.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/types/settings.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/types/settings.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/EditorWorkspace.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_knowledge_library_trash.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_knowledge_library_trash.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_settings_llm_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_settings_llm_config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/开发规范.md" beforeDir="false" afterPath="$PROJECT_DIR$/开发规范.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/SmartFormsView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/SmartFormsView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/views/__tests__/SmartFormsView.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/views/__tests__/SmartFormsView.spec.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/editor/vite.config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -323,6 +317,7 @@
       <workItem from="1786190105430" duration="11711000" />
       <workItem from="1786248468206" duration="9378000" />
       <workItem from="1786261492021" duration="12834000" />
+      <workItem from="1786284868131" duration="4379000" />
     </task>
     <task id="LOCAL-00275" summary="修复了claudecode认为的四个问题">
       <option name="closed" value="true" />

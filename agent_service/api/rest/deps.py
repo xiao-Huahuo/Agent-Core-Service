@@ -25,6 +25,7 @@ from agent_service.services.todo_service import TodoService
 from agent_service.services.automation_service import AutomationService
 from agent_service.services.favorite_service import FavoriteService
 from agent_service.services.feedback_service import FeedbackService
+from agent_service.services.smart_form_service import SmartFormService
 
 _agent: AgentCore | None = None
 _session_service: SessionService | None = None
@@ -43,6 +44,7 @@ _todo_service: TodoService | None = None
 _automation_service: AutomationService | None = None
 _favorite_service: FavoriteService | None = None
 _feedback_service: FeedbackService | None = None
+_smart_form_service: SmartFormService | None = None
 
 
 def _require_agent() -> AgentCore:
@@ -147,3 +149,11 @@ def _require_feedback_service() -> FeedbackService:
     if _feedback_service is None:
         raise HTTPException(status_code=503, detail="FeedbackService not initialized yet")
     return _feedback_service
+
+
+def _require_smart_form_service() -> SmartFormService:
+    """返回启动阶段注入的智能表格服务。"""
+
+    if _smart_form_service is None:
+        raise HTTPException(status_code=503, detail="SmartFormService not initialized yet")
+    return _smart_form_service

@@ -7,11 +7,14 @@
   assets, filter rows, and export CSV/Markdown without leaving the workspace.
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { streamPrompt } from '@/api/agent'
-import { createKnowledgeFolder, listKnowledgeFiles, previewKnowledgeFile, readKnowledgeFile, uploadKnowledgeFile, writeKnowledgeFile } from '@/api/knowledge'
+import { createKnowledgeFolder, listKnowledgeFiles, previewKnowledgeFile, readKnowledgeFile, uploadKnowledgeFile } from '@/api/knowledge'
+import { getSmartFormDb, listSmartFormsDb, saveSmartFormDb } from '@/api/smartForms'
 import IcIcon from '@/components/common/IcIcon.vue'
+import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
+import { useSubmenuIntent } from '@/components/editor_workspace/submenuIntent'
 import {
   BUILTIN_COLUMNS,
   addColumn,
@@ -23,8 +26,10 @@ import {
   filterRows,
   moveColumn,
   moveRow,
+  joinTags,
   normalizeForm,
   removeColumn,
+  splitTags,
   uniqueTagValues,
   updateCell,
   type SmartColumn,
@@ -42,17 +47,18 @@ const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 
 interface SmartFormEntry {
-  /** Table folder name under knowledge/forms. */
+  /** Database form id. */
+  formId: string
+  /** Display name. */
   name: string
-  /** Table folder path relative to the knowledge root. */
-  dir: string
-  /** Metadata file path relative to the knowledge root. */
-  metaPath: string
+  /** Attachment folder path relative to the knowledge root. */
+  assetDir: string
 }
 
 const FORMS_ROOT_DIR = 'forms'
 const form = ref<SmartLiteratureForm | null>(null)
 const formEntries = ref<SmartFormEntry[]>([])
+const activeFormId = ref('')
 const activeFormDir = ref('')
 const loading = ref(false)
 const saving = ref(false)
@@ -63,15 +69,38 @@ const newFormTitle = ref('')
 const createFormOpen = ref(false)
 const selectedCell = ref<{ rowId: string; columnId: string } | null>(null)
 const customColumnTitle = ref('')
-const customColumnType = ref<SmartColumnType>('text')
-const addColumnMenuOpen = ref(false)
 const uploadInputByRow = ref<Record<string, HTMLInputElement | null>>({})
+const imagePreviewByPath = ref<Record<string, string>>({})
+const tagEditorKey = ref('')
+const tagDraft = ref('')
+
+type TableContextTarget =
+  | { kind: 'table' }
+  | { kind: 'column'; columnId: string }
+  | { kind: 'row'; rowId: string }
+  | { kind: 'cell'; rowId: string; columnId: string }
+
+type TableClipboard =
+  | { kind: 'cell'; cell: SmartCell }
+  | { kind: 'row'; cells: Record<string, SmartCell> }
+  | { kind: 'column'; values: Record<string, SmartCell> }
+
+const tableContextTarget = ref<TableContextTarget | null>(null)
+const tableContextMenuStyle = ref<Record<string, string>>({ left: '0px', top: '0px' })
+const tableContextSubmenu = ref('')
+const tableContextSubmenuRefs: Record<string, HTMLElement | null> = {}
+const tableClipboard = ref<TableClipboard | null>(null)
+const {
+  openSubmenu: openTableSubmenu,
+  keepSubmenuOpen: keepTableSubmenuOpen,
+  scheduleSubmenuClose: scheduleTableSubmenuClose,
+} = useSubmenuIntent(tableContextSubmenu)
 
 const visibleRows = computed(() => form.value ? filterRows(form.value, query.value, tagFilter.value, minRating.value) : [])
 const tagFilters = computed(() => form.value ? uniqueTagValues(form.value) : [])
 const rowCountLabel = computed(() => form.value ? `${visibleRows.value.length} / ${form.value.rows.length} 条记录` : '0 / 0 条记录')
-const activeFormMetaFile = computed(() => activeFormDir.value ? `${activeFormDir.value}/form.json` : '')
-const activeFormCsvFile = computed(() => activeFormDir.value ? `${activeFormDir.value}/data.csv` : '')
+const activeFormStorageLabel = computed(() => activeFormId.value ? `SQLite: smart_forms/${activeFormId.value}` : '')
+const activeFormCsvFile = computed(() => form.value ? `${form.value.title}.csv` : '')
 const activeFormAssetDir = computed(() => activeFormDir.value ? `${activeFormDir.value}/assets` : '')
 const updatedAtLabel = computed(() => form.value ? new Date(form.value.updatedAt).toLocaleString() : '')
 const hasUserId = computed(() => Boolean(settingsStore.profile.userId))
@@ -90,14 +119,22 @@ onMounted(() => {
   void loadForm()
 })
 
+onBeforeUnmount(() => {
+  closeTableContextMenu()
+})
+
 async function loadForm(): Promise<void> {
   if (!settingsStore.profile.userId) return
   loading.value = true
   try {
-    const entries = await listSmartForms()
+    let entries = await listSmartForms()
+    if (!entries.length) {
+      entries = await importLegacySmartForms()
+    }
     formEntries.value = entries
     if (!entries.length) {
       form.value = null
+      activeFormId.value = ''
       activeFormDir.value = ''
       return
     }
@@ -109,41 +146,62 @@ async function loadForm(): Promise<void> {
   }
 }
 
-/** Loads real user-created table folders from knowledge/forms. */
+/** Loads user-created smart forms from the database. */
 async function listSmartForms(): Promise<SmartFormEntry[]> {
+  if (!settingsStore.profile.userId) return []
+  const entries = await listSmartFormsDb(settingsStore.profile.userId)
+  return entries.map((entry) => ({
+    formId: entry.form_id,
+    name: entry.title,
+    assetDir: entry.asset_dir,
+  }))
+}
+
+/** Imports legacy smart-form JSON files once when the database is empty. */
+async function importLegacySmartForms(): Promise<SmartFormEntry[]> {
   if (!settingsStore.profile.userId) return []
   const response = await listKnowledgeFiles(settingsStore.profile.userId)
   const formsRoot = response.tree.find((node) => node.isDir && node.path === FORMS_ROOT_DIR)
-  return (formsRoot?.children ?? [])
-    .filter((node) => node.isDir)
-    .map((node) => ({
-      name: node.name,
-      dir: node.path,
-      metaPath: `${node.path}/form.json`,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const legacyDirs = (formsRoot?.children ?? []).filter((node) => node.isDir)
+  if (!legacyDirs.length) return []
+  for (const node of legacyDirs) {
+    try {
+      const legacy = await readKnowledgeFile(settingsStore.profile.userId, `${node.path}/form.json`)
+      const legacyForm = normalizeForm(JSON.parse(legacy.content) as SmartLiteratureForm)
+      await saveSmartFormDb({
+        user_id: settingsStore.profile.userId,
+        asset_dir: node.path,
+        form: legacyForm,
+      })
+    } catch {
+      // Ignore invalid legacy folders; database storage is the source of truth after import.
+    }
+  }
+  return listSmartForms()
 }
 
-/** Opens an existing table metadata file from its knowledge/forms folder. */
+/** Opens an existing smart form from the database. */
 async function openForm(entry: SmartFormEntry): Promise<void> {
   if (!settingsStore.profile.userId) return
   try {
-    const response = await readKnowledgeFile(settingsStore.profile.userId, entry.metaPath)
-    form.value = normalizeForm(JSON.parse(response.content) as SmartLiteratureForm)
-    activeFormDir.value = entry.dir
+    const response = await getSmartFormDb(settingsStore.profile.userId, entry.formId)
+    form.value = normalizeForm(response.form)
+    activeFormId.value = response.form_id
+    activeFormDir.value = response.asset_dir || entry.assetDir
     selectedCell.value = null
+    await loadImagePreviews()
   } catch (error) {
     workspaceStore.showToast(`打开表格失败 - ${errorMessage(error)}`)
   }
 }
 
-/** Opens a table selected from the real forms list. */
-function openFormByDir(dir: string): void {
-  const entry = formEntries.value.find((item) => item.dir === dir)
+/** Opens a table selected from the database forms list. */
+function openFormById(formId: string): void {
+  const entry = formEntries.value.find((item) => item.formId === formId)
   if (entry) void openForm(entry)
 }
 
-/** Creates a user-named table folder and persists its initial metadata. */
+/** Creates a user-named table and persists its initial state in the database. */
 async function createSmartForm(): Promise<void> {
   if (!settingsStore.profile.userId) return
   const title = newFormTitle.value.trim()
@@ -157,6 +215,7 @@ async function createSmartForm(): Promise<void> {
     await createFolderIfMissing(dir)
     await createFolderIfMissing(`${dir}/assets`)
     form.value = createDefaultLiteratureForm(title)
+    activeFormId.value = ''
     activeFormDir.value = dir
     await persistForm(false)
     formEntries.value = await listSmartForms()
@@ -174,7 +233,7 @@ function uniqueFormDir(title: string): string {
     .replace(/[\\/:*?"<>|#%&{}$!'@+`=\s]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 64) || 'table'
-  const existingDirs = new Set(formEntries.value.map((entry) => entry.dir))
+  const existingDirs = new Set(formEntries.value.map((entry) => entry.assetDir))
   let candidate = `${FORMS_ROOT_DIR}/${base}`
   let index = 2
   while (existingDirs.has(candidate)) {
@@ -194,9 +253,15 @@ async function persistForm(showSuccessToast: boolean): Promise<void> {
   try {
     await ensureFormFolders()
     form.value = { ...form.value, updatedAt: new Date().toISOString() }
-    await writeKnowledgeFile(settingsStore.profile.userId, activeFormMetaFile.value, JSON.stringify(form.value, null, 2))
-    await writeKnowledgeFile(settingsStore.profile.userId, activeFormCsvFile.value, exportCsv(form.value))
-    await workspaceStore.loadKnowledgeTree()
+    const response = await saveSmartFormDb({
+      user_id: settingsStore.profile.userId,
+      form_id: activeFormId.value || undefined,
+      asset_dir: activeFormDir.value,
+      form: form.value,
+    })
+    activeFormId.value = response.form_id
+    activeFormDir.value = response.asset_dir
+    form.value = normalizeForm(response.form)
     if (showSuccessToast) {
       workspaceStore.showToast('智能表格已保存')
     }
@@ -222,12 +287,16 @@ async function createFolderIfMissing(path: string): Promise<void> {
   }
 }
 
-function addRecord(): void {
+function addRowAt(rowId: string | undefined, direction: -1 | 1): void {
   if (!form.value) return
+  const index = rowId ? form.value.rows.findIndex((row) => row.id === rowId) : form.value.rows.length - 1
+  const insertionIndex = Math.max(0, index + (direction > 0 ? 1 : 0))
+  const rows = [...form.value.rows]
+  rows.splice(insertionIndex, 0, createEmptyRow(form.value.columns))
   form.value = {
     ...form.value,
     updatedAt: new Date().toISOString(),
-    rows: [...form.value.rows, createEmptyRow(form.value.columns)],
+    rows,
   }
 }
 
@@ -253,21 +322,32 @@ function setRating(row: SmartRow, column: SmartColumn, rating: number): void {
   editCell(row, column, String(rating))
 }
 
-function insertBuiltinColumn(column: SmartColumn): void {
+function addColumnAt(column: SmartColumn, direction: -1 | 1): void {
   if (!form.value) return
   if (form.value.columns.some((item) => item.id === column.id)) {
     workspaceStore.showToast('该内置列已存在')
     return
   }
-  form.value = addColumn(form.value, { ...column })
-  addColumnMenuOpen.value = false
+  const targetColumnId = tableContextTarget.value && 'columnId' in tableContextTarget.value
+    ? tableContextTarget.value.columnId
+    : undefined
+  const targetIndex = targetColumnId
+    ? form.value.columns.findIndex((item) => item.id === targetColumnId)
+    : form.value.columns.length
+  const insertionIndex = Math.max(0, targetIndex + (direction > 0 ? 1 : 0))
+  form.value = addColumn(form.value, { ...column }, insertionIndex)
 }
 
-function insertCustomColumn(): void {
+function addCustomColumnAt(type: SmartColumnType, direction: -1 | 1): void {
   if (!form.value) return
-  form.value = addColumn(form.value, createCustomColumn(customColumnTitle.value, customColumnType.value))
+  const targetColumnId = tableContextTarget.value && 'columnId' in tableContextTarget.value
+    ? tableContextTarget.value.columnId
+    : undefined
+  const targetIndex = targetColumnId
+    ? form.value.columns.findIndex((item) => item.id === targetColumnId)
+    : form.value.columns.length
+  form.value = addColumn(form.value, createCustomColumn(customColumnTitle.value, type), Math.max(0, targetIndex + (direction > 0 ? 1 : 0)))
   customColumnTitle.value = ''
-  addColumnMenuOpen.value = false
 }
 
 function removeColumnById(columnId: string): void {
@@ -283,6 +363,225 @@ function moveColumnById(columnId: string, direction: -1 | 1): void {
 function moveRowById(rowId: string, direction: -1 | 1): void {
   if (!form.value) return
   form.value = moveRow(form.value, rowId, direction)
+}
+
+function setTableContextSubmenuRef(key: string, element: unknown): void {
+  tableContextSubmenuRefs[key] = element instanceof HTMLElement ? element : null
+}
+
+function handleTableSubmenuLeave(key: string, event: MouseEvent): void {
+  const parent = event.currentTarget
+  if (parent instanceof HTMLElement) {
+    scheduleTableSubmenuClose(key, event, parent, tableContextSubmenuRefs[key] ?? null)
+  }
+}
+
+function openTableContextMenu(target: TableContextTarget, event: MouseEvent): void {
+  closeTagEditor()
+  tableContextTarget.value = target
+  tableContextSubmenu.value = ''
+  tableContextMenuStyle.value = {
+    left: `${event.clientX}px`,
+    top: `${event.clientY}px`,
+  }
+}
+
+function closeTableContextMenu(): void {
+  tableContextTarget.value = null
+  tableContextSubmenu.value = ''
+}
+
+function closeFloatingMenus(): void {
+  closeTableContextMenu()
+  closeTagEditor()
+}
+
+function addNewRow(): void {
+  addRowAt(undefined, 1)
+}
+
+const TAG_COLORS = ['#7c5cfc', '#eb2463', '#26a269', '#2f88d5', '#e2a72e', '#0ea5b6']
+
+/** Stable tag color derived from the tag text, independent of the theme primary color. */
+function tagColor(value: string): string {
+  let hash = 0
+  for (const ch of value) hash = (hash * 31 + (ch.codePointAt(0) ?? 0)) >>> 0
+  return TAG_COLORS[hash % TAG_COLORS.length]!
+}
+
+function tagPillStyle(value: string): Record<string, string> {
+  const color = tagColor(value)
+  return {
+    background: `color-mix(in srgb, ${color} 16%, var(--color-surface-raised))`,
+    color,
+  }
+}
+
+function tagKey(rowId: string, columnId: string): string {
+  return `${rowId}:${columnId}`
+}
+
+function isTagEditorOpen(rowId: string, columnId: string): boolean {
+  return tagEditorKey.value === tagKey(rowId, columnId)
+}
+
+function openTagEditor(row: SmartRow, column: SmartColumn): void {
+  const key = tagKey(row.id, column.id)
+  if (tagEditorKey.value === key) {
+    closeTagEditor()
+    return
+  }
+  tagEditorKey.value = key
+  tagDraft.value = ''
+}
+
+function closeTagEditor(): void {
+  tagEditorKey.value = ''
+  tagDraft.value = ''
+}
+
+function cellTags(row: SmartRow, column: SmartColumn): string[] {
+  return splitTags(row.cells[column.id]?.value ?? '')
+}
+
+function updateTags(row: SmartRow, column: SmartColumn, tags: string[]): void {
+  editCell(row, column, joinTags(tags))
+}
+
+function toggleTag(row: SmartRow, column: SmartColumn, tag: string): void {
+  const tags = cellTags(row, column)
+  updateTags(row, column, tags.includes(tag) ? tags.filter((item) => item !== tag) : [...tags, tag])
+}
+
+function removeTag(row: SmartRow, column: SmartColumn, tag: string): void {
+  updateTags(row, column, cellTags(row, column).filter((item) => item !== tag))
+}
+
+function addTagFromDraft(row: SmartRow, column: SmartColumn): void {
+  const draft = tagDraft.value.trim()
+  if (!draft) return
+  const tags = cellTags(row, column)
+  if (!tags.includes(draft)) updateTags(row, column, [...tags, draft])
+  tagDraft.value = ''
+}
+
+function isTagSelected(row: SmartRow, column: SmartColumn, tag: string): boolean {
+  return cellTags(row, column).includes(tag)
+}
+
+function contextColumn(): SmartColumn | undefined {
+  const target = tableContextTarget.value
+  if (!form.value || !target || (target.kind !== 'column' && target.kind !== 'cell')) return undefined
+  return form.value.columns.find((column) => column.id === target.columnId)
+}
+
+function contextRow(): SmartRow | undefined {
+  const target = tableContextTarget.value
+  if (!form.value || !target || (target.kind !== 'row' && target.kind !== 'cell')) return undefined
+  return form.value.rows.find((row) => row.id === target.rowId)
+}
+
+function contextCell(): SmartCell | undefined {
+  const target = tableContextTarget.value
+  if (!target || target.kind !== 'cell') return undefined
+  return contextRow()?.cells[target.columnId]
+}
+
+function canSmartFillContext(): boolean {
+  const target = tableContextTarget.value
+  if (!form.value || !target) return false
+  if (target.kind === 'cell') return ['smart_text', 'smart_tag'].includes(contextColumn()?.type ?? '')
+  if (target.kind === 'column') return ['smart_text', 'smart_tag'].includes(contextColumn()?.type ?? '')
+  return form.value.columns.some((column) => column.type === 'smart_text' || column.type === 'smart_tag')
+}
+
+function copyTableContext(): void {
+  const target = tableContextTarget.value
+  if (!target) return
+  if (target.kind === 'cell') {
+    const cell = contextCell()
+    if (cell) tableClipboard.value = { kind: 'cell', cell: { ...cell } }
+  } else if (target.kind === 'row') {
+    const row = contextRow()
+    if (row) tableClipboard.value = { kind: 'row', cells: structuredClone(row.cells) }
+  } else if (target.kind === 'column' && form.value) {
+    tableClipboard.value = {
+      kind: 'column',
+      values: Object.fromEntries(form.value.rows.map((row) => [row.id, structuredClone(row.cells[target.columnId] ?? { value: '' })])),
+    }
+  }
+  closeTableContextMenu()
+}
+
+function pasteTableContext(): void {
+  const target = tableContextTarget.value
+  const clipboard = tableClipboard.value
+  if (!target || !clipboard || !form.value) return
+  if (target.kind === 'cell' && clipboard.kind === 'cell') {
+    editCell(contextRow()!, contextColumn()!, clipboard.cell.value)
+  } else if (target.kind === 'row' && clipboard.kind === 'row') {
+    form.value = {
+      ...form.value,
+      updatedAt: new Date().toISOString(),
+      rows: form.value.rows.map((row) => row.id === target.rowId ? { ...row, cells: structuredClone(clipboard.cells) } : row),
+    }
+  } else if (target.kind === 'column' && clipboard.kind === 'column') {
+    form.value = {
+      ...form.value,
+      updatedAt: new Date().toISOString(),
+      rows: form.value.rows.map((row) => ({
+        ...row,
+        cells: { ...row.cells, [target.columnId]: structuredClone(clipboard.values[row.id] ?? { value: '' }) },
+      })),
+    }
+  }
+  closeTableContextMenu()
+}
+
+function clearTableContext(): void {
+  const target = tableContextTarget.value
+  if (!target || !form.value) return
+  if (target.kind === 'cell') {
+    editCell(contextRow()!, contextColumn()!, '')
+  } else if (target.kind === 'row') {
+    form.value = {
+      ...form.value,
+      updatedAt: new Date().toISOString(),
+      rows: form.value.rows.map((row) => row.id === target.rowId ? { ...row, cells: Object.fromEntries(form.value!.columns.map((column) => [column.id, { ...row.cells[column.id], value: '' }])) } : row),
+    }
+  } else if (target.kind === 'column') {
+    form.value = {
+      ...form.value,
+      updatedAt: new Date().toISOString(),
+      rows: form.value.rows.map((row) => ({ ...row, cells: { ...row.cells, [target.columnId]: { ...row.cells[target.columnId], value: '' } } })),
+    }
+  }
+  closeTableContextMenu()
+}
+
+async function smartFillTableContext(): Promise<void> {
+  const target = tableContextTarget.value
+  if (!target || !form.value) return
+  if (target.kind === 'cell') {
+    await generateSmartCellsForRows([target.rowId], [target.columnId], true)
+  } else if (target.kind === 'column') {
+    await generateSmartCellsForRows(form.value.rows.map((row) => row.id), [target.columnId], true)
+  } else if (target.kind === 'row') {
+    await generateSmartCellsForRows([target.rowId], undefined, true)
+  } else {
+    await generateSmartCellsForRows(form.value.rows.map((row) => row.id), undefined, true)
+  }
+  closeTableContextMenu()
+}
+
+function addContextColumn(column: SmartColumn, direction: -1 | 1): void {
+  addColumnAt(column, direction)
+  closeTableContextMenu()
+}
+
+function addContextCustomColumn(type: SmartColumnType, direction: -1 | 1): void {
+  addCustomColumnAt(type, direction)
+  closeTableContextMenu()
 }
 
 async function generateSmartCells(scope: 'selected' | 'all'): Promise<void> {
@@ -303,25 +602,21 @@ async function generateSmartCells(scope: 'selected' | 'all'): Promise<void> {
 }
 
 /** Regenerates a single smart cell from the row's extracted literature content. */
-async function regenerateSmartCell(rowId: string, columnId: string): Promise<void> {
-  selectedCell.value = { rowId, columnId }
-  await generateSmartCellsForRows([rowId], [columnId], true)
-}
-
 async function generateSmartCellsForRows(rowIds: string[], columnIds?: string[], showSuccessToast = false): Promise<void> {
   if (!form.value) return
-  const smartColumns = form.value.columns.filter((column) => {
+  const currentForm = form.value
+  const smartColumns = currentForm.columns.filter((column) => {
     const isSmart = column.type === 'smart_text' || column.type === 'smart_tag'
     return isSmart && (!columnIds || columnIds.includes(column.id))
   })
   if (!smartColumns.length || !settingsStore.profile.userId) return
   const rowIdSet = new Set(rowIds)
   form.value = {
-    ...form.value,
+    ...currentForm,
     updatedAt: new Date().toISOString(),
-    rows: form.value.rows.map((row) => ({
+    rows: currentForm.rows.map((row) => ({
       ...row,
-      cells: Object.fromEntries(form.value.columns.map((column) => {
+      cells: Object.fromEntries(currentForm.columns.map((column) => {
         const cell = row.cells[column.id] ?? { value: '' }
         const isTarget = rowIdSet.has(row.id) && smartColumns.some((item) => item.id === column.id)
         return [column.id, isTarget ? { ...cell, status: 'pending' } : cell]
@@ -383,6 +678,9 @@ async function uploadLiterature(row: SmartRow, event: Event): Promise<void> {
       knowledge_dir?: string
     }
     const assetPath = relativeUploadedPath(result.uploaded_path ?? '', result.knowledge_dir ?? settingsStore.profile.knowledgeDir)
+    if (assetPath && isImageFile(file.name)) {
+      await loadImagePreview(assetPath)
+    }
     patchRowCells(row.id, {
       literature_file: { value: file.name, fileName: file.name, assetPath },
       literature_content: {
@@ -416,6 +714,33 @@ async function uploadLiterature(row: SmartRow, event: Event): Promise<void> {
     })
     workspaceStore.showToast(`上传失败 - ${errorMessage(error)}`)
   }
+}
+
+async function loadImagePreviews(): Promise<void> {
+  const imagePaths = form.value?.rows
+    .map((row) => row.cells.literature_file?.assetPath || '')
+    .filter((path) => path && isImageFile(path) && imagePreviewByPath.value[path] === undefined) ?? []
+  for (const path of imagePaths) {
+    await loadImagePreview(path)
+  }
+}
+
+async function loadImagePreview(path: string): Promise<void> {
+  if (!settingsStore.profile.userId || imagePreviewByPath.value[path] !== undefined) return
+  try {
+    const preview = await previewKnowledgeFile(settingsStore.profile.userId, path)
+    imagePreviewByPath.value = { ...imagePreviewByPath.value, [path]: preview.data_url || preview.raw_url || '' }
+  } catch {
+    imagePreviewByPath.value = { ...imagePreviewByPath.value, [path]: '' }
+  }
+}
+
+function isImageFile(fileName: string): boolean {
+  return /\.(avif|gif|jpe?g|png|webp)$/i.test(fileName)
+}
+
+function fileIconForCell(fileName: string) {
+  return materialFileIconForNode({ name: fileName, path: fileName, isDir: false })
 }
 
 function patchRowCells(rowId: string, cells: Record<string, SmartCell>): void {
@@ -648,7 +973,7 @@ function errorMessage(error: unknown): string {
 </script>
 
 <template>
-  <section class="smart-forms-view">
+  <section class="smart-forms-view" @click="closeFloatingMenus">
     <header class="forms-header">
       <div class="header-copy">
         <p class="forms-eyebrow">智能表格</p>
@@ -658,11 +983,11 @@ function errorMessage(error: unknown): string {
         <select
           v-if="formEntries.length > 1"
           class="form-select"
-          :value="activeFormDir"
+          :value="activeFormId"
           title="切换表格"
-          @change="openFormByDir(($event.target as HTMLSelectElement).value)"
+          @change="openFormById(($event.target as HTMLSelectElement).value)"
         >
-          <option v-for="entry in formEntries" :key="entry.dir" :value="entry.dir">{{ entry.name }}</option>
+          <option v-for="entry in formEntries" :key="entry.formId" :value="entry.formId">{{ entry.name }}</option>
         </select>
         <button class="ghost-btn" type="button" title="新建表格" @click="createFormOpen = true">
           <IcIcon name="add" :size="16" />
@@ -713,38 +1038,10 @@ function errorMessage(error: unknown): string {
     </div>
 
     <div v-if="form" class="forms-toolbar">
-      <button class="toolbar-btn strong" type="button" @click="addRecord">
+      <button class="new-row-btn" type="button" @click.stop="addNewRow">
         <IcIcon name="add" :size="16" />
-        <span>添加记录</span>
+        <span>新建行</span>
       </button>
-      <div class="column-menu-wrap">
-        <button class="toolbar-btn" type="button" @click="addColumnMenuOpen = !addColumnMenuOpen">
-          <IcIcon name="view-column" :size="16" />
-          <span>字段配置</span>
-        </button>
-        <div v-if="addColumnMenuOpen" class="column-menu">
-          <p>内置智能列</p>
-          <div class="builtin-column-grid">
-            <button
-              v-for="column in BUILTIN_COLUMNS"
-              :key="column.id"
-              type="button"
-              :disabled="form.columns.some((item) => item.id === column.id)"
-              @click="insertBuiltinColumn(column)"
-            >
-              {{ column.title }}
-            </button>
-          </div>
-          <hr />
-          <div class="custom-column-editor">
-            <input v-model="customColumnTitle" type="text" placeholder="列名" />
-            <select v-model="customColumnType">
-              <option v-for="type in customColumnTypes" :key="type.value" :value="type.value">{{ type.label }}</option>
-            </select>
-          </div>
-          <button class="menu-primary" type="button" @click="insertCustomColumn">插入自定义列</button>
-        </div>
-      </div>
       <button class="toolbar-btn" type="button" @click="generateSmartCells('all')">
         <IcIcon name="psychology" :size="16" />
         <span>全表智能填充</span>
@@ -763,23 +1060,19 @@ function errorMessage(error: unknown): string {
         <option :value="4">4 星以上</option>
         <option :value="3">3 星以上</option>
       </select>
-      <span class="fill-chip">
-        <IcIcon name="tune" :size="15" />
-        <span>14 填色</span>
-      </span>
       <span class="row-count">{{ rowCountLabel }}</span>
     </div>
 
-    <div v-if="form" class="table-frame" :class="{ loading }">
+    <div v-if="form" class="table-frame" :class="{ loading }" @contextmenu.prevent.stop="openTableContextMenu({ kind: 'table' }, $event)">
       <table class="smart-table">
         <thead>
           <tr>
-            <th class="row-actions-col"></th>
             <th
               v-for="(column, columnIndex) in form.columns"
               :key="column.id"
               :class="['tone-' + (column.tone || 'none'), { sticky: column.id === 'row_index' }]"
               :style="{ width: `${column.width}px`, minWidth: `${column.width}px` }"
+              @contextmenu.prevent.stop="openTableContextMenu({ kind: 'column', columnId: column.id }, $event)"
             >
               <div class="column-head">
                 <span>{{ column.title }}</span>
@@ -800,39 +1093,104 @@ function errorMessage(error: unknown): string {
         </thead>
         <tbody>
           <tr v-for="(row, rowIndex) in visibleRows" :key="row.id">
-            <td class="row-actions-col">
-              <button type="button" title="上移" @click="moveRowById(row.id, -1)">
-                <IcIcon name="arrow-up" :size="13" />
-              </button>
-              <button type="button" title="下移" @click="moveRowById(row.id, 1)">
-                <IcIcon name="arrow-down" :size="13" />
-              </button>
-              <button type="button" title="删除行" @click="deleteRecord(row.id)">
-                <IcIcon name="trash" :size="13" />
-              </button>
-            </td>
             <td
               v-for="column in form.columns"
               :key="column.id"
+              :data-column-id="column.id"
               :class="['cell', 'tone-' + (column.tone || 'none'), { sticky: column.id === 'row_index', selected: selectedCell?.rowId === row.id && selectedCell?.columnId === column.id }]"
               @click="selectedCell = { rowId: row.id, columnId: column.id }"
+              @contextmenu.prevent.stop="column.type === 'index' ? openTableContextMenu({ kind: 'row', rowId: row.id }, $event) : openTableContextMenu({ kind: 'cell', rowId: row.id, columnId: column.id }, $event)"
             >
               <span v-if="column.type === 'index'" class="row-index">{{ rowIndex + 1 }}</span>
               <div v-else-if="column.type === 'file'" class="file-cell">
-                <button class="pdf-card" type="button" @click="openUpload(row.id)">
-                  <IcIcon name="document" :size="20" />
-                  <span>{{ row.cells[column.id]?.fileName || row.cells[column.id]?.value || '上传文献' }}</span>
+                <button class="file-picker" type="button" @click="openUpload(row.id)">
+                  <img
+                    v-if="row.cells[column.id]?.assetPath && isImageFile(row.cells[column.id]?.fileName || row.cells[column.id]?.assetPath || '') && imagePreviewByPath[row.cells[column.id]?.assetPath || '']"
+                    class="file-preview-image"
+                    :src="imagePreviewByPath[row.cells[column.id]?.assetPath || '']"
+                    :alt="row.cells[column.id]?.fileName || '图片文档'"
+                  />
+                  <img
+                    v-else-if="row.cells[column.id]?.fileName || row.cells[column.id]?.value"
+                    class="file-material-icon"
+                    :src="fileIconForCell(row.cells[column.id]?.fileName || row.cells[column.id]?.value || '').src"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <IcIcon v-else name="upload" :size="24" />
+                  <span>{{ row.cells[column.id]?.fileName || row.cells[column.id]?.value || '添加文档' }}</span>
                 </button>
                 <input
                   :ref="(el) => setUploadRef(row.id, el)"
                   class="hidden-input"
                   type="file"
-                  accept=".pdf,.doc,.docx,.txt,.md"
                   @change="uploadLiterature(row, $event)"
                 />
               </div>
+              <div
+                v-else-if="column.type === 'tag' || column.type === 'smart_tag'"
+                class="tag-cell"
+                @click.stop="openTagEditor(row, column)"
+              >
+                <span
+                  v-for="tag in cellTags(row, column)"
+                  :key="tag"
+                  class="tag-pill"
+                  :style="tagPillStyle(tag)"
+                  @click.stop="openTagEditor(row, column)"
+                >
+                  <span class="tag-pill-label">{{ tag }}</span>
+                  <button type="button" class="tag-pill-action danger" title="删除标签" @click.stop="removeTag(row, column, tag)">
+                    <IcIcon name="close" :size="12" />
+                  </button>
+                </span>
+                <button type="button" class="tag-add-button" @click.stop="openTagEditor(row, column)">
+                  <IcIcon name="add" :size="13" />
+                  <span>{{ cellTags(row, column).length ? '标签' : '添加标签' }}</span>
+                </button>
+                <div v-if="isTagEditorOpen(row.id, column.id)" class="tag-editor" @click.stop>
+                  <div v-if="cellTags(row, column).length" class="tag-editor-selected">
+                    <button
+                      v-for="tag in cellTags(row, column)"
+                      :key="tag"
+                      type="button"
+                      class="tag-selected-pill"
+                      :style="tagPillStyle(tag)"
+                      title="移除标签"
+                      @click="removeTag(row, column, tag)"
+                    >
+                      {{ tag }}
+                      <IcIcon name="close" :size="10" />
+                    </button>
+                  </div>
+                  <div v-if="column.options?.length" class="tag-option-list">
+                    <button
+                      v-for="option in column.options"
+                      :key="option"
+                      type="button"
+                      class="tag-option-pill"
+                      :class="{ selected: isTagSelected(row, column, option) }"
+                      :style="tagPillStyle(option)"
+                      @click="toggleTag(row, column, option)"
+                    >
+                      {{ option }}
+                    </button>
+                  </div>
+                  <div class="tag-editor-input-row">
+                    <input
+                      v-model="tagDraft"
+                      type="text"
+                      placeholder="输入标签"
+                      @keydown.enter.prevent="addTagFromDraft(row, column)"
+                    />
+                    <button type="button" title="添加标签" @click="addTagFromDraft(row, column)">
+                      <IcIcon name="check" :size="13" />
+                    </button>
+                  </div>
+                </div>
+              </div>
               <select
-                v-else-if="column.type === 'tag' || column.type === 'smart_tag' || column.type === 'boolean'"
+                v-else-if="column.type === 'boolean'"
                 :value="row.cells[column.id]?.value || ''"
                 @change="editCell(row, column, ($event.target as HTMLSelectElement).value)"
               >
@@ -861,18 +1219,8 @@ function errorMessage(error: unknown): string {
                 :readonly="!column.editable"
                 :value="row.cells[column.id]?.value || ''"
                 :placeholder="row.cells[column.id]?.status === 'pending' ? '等待结构化 LLM 服务生成' : ''"
-                @input="editCell(row, column, ($event.target as HTMLTextAreaElement).value)"
+                @input="column.editable && editCell(row, column, ($event.target as HTMLTextAreaElement).value)"
               ></textarea>
-              <button
-                v-if="column.type === 'smart_text' || column.type === 'smart_tag'"
-                class="cell-generate-btn"
-                type="button"
-                title="重新生成该格"
-                :disabled="row.cells[column.id]?.status === 'pending'"
-                @click.stop="regenerateSmartCell(row.id, column.id)"
-              >
-                <IcIcon name="auto-awesome" :size="14" />
-              </button>
               <span v-if="row.cells[column.id]?.status === 'pending'" class="status-dot">生成中</span>
             </td>
           </tr>
@@ -884,9 +1232,101 @@ function errorMessage(error: unknown): string {
       </div>
     </div>
 
+    <div
+      v-if="tableContextTarget"
+      class="table-context-menu"
+      :class="{ dark: settingsStore.isDark }"
+      :style="tableContextMenuStyle"
+      @click.stop
+    >
+      <div
+        class="table-context-submenu-item"
+        :class="{ active: tableContextSubmenu.startsWith('add-column') }"
+        @mouseenter="openTableSubmenu('add-column')"
+        @mouseleave="handleTableSubmenuLeave('add-column', $event)"
+      >
+        <button type="button"><IcIcon name="view-column" :size="15" /><span>添加列</span><IcIcon name="chevron-right" :size="15" /></button>
+        <div
+          v-show="tableContextSubmenu.startsWith('add-column')"
+          :ref="(element) => setTableContextSubmenuRef('add-column', element)"
+          class="table-context-submenu"
+          @mouseenter="keepTableSubmenuOpen"
+          @mouseleave="handleTableSubmenuLeave('add-column', $event)"
+        >
+          <div
+            v-for="direction in [{ key: 'left', label: '左侧添加', value: -1 }, { key: 'right', label: '右侧添加', value: 1 }]"
+            :key="direction.key"
+            class="table-context-submenu-item table-context-submenu-level-two"
+            :class="{ active: tableContextSubmenu === `add-column-${direction.key}` }"
+            @mouseenter="openTableSubmenu(`add-column-${direction.key}`)"
+            @mouseleave="handleTableSubmenuLeave(`add-column-${direction.key}`, $event)"
+          >
+            <button type="button"><IcIcon name="add" :size="15" /><span>{{ direction.label }}</span><IcIcon name="chevron-right" :size="15" /></button>
+            <div
+              v-show="tableContextSubmenu === `add-column-${direction.key}`"
+              :ref="(element) => setTableContextSubmenuRef(`add-column-${direction.key}`, element)"
+              class="table-context-submenu table-context-submenu-level-three"
+              @mouseenter="keepTableSubmenuOpen"
+              @mouseleave="handleTableSubmenuLeave(`add-column-${direction.key}`, $event)"
+            >
+              <span class="table-context-section-title">内置字段</span>
+              <button
+                v-for="column in BUILTIN_COLUMNS"
+                :key="column.id"
+                type="button"
+                :disabled="Boolean(form?.columns.some((item) => item.id === column.id))"
+                @click="addContextColumn(column, direction.value as -1 | 1)"
+              >
+                <IcIcon name="view-column" :size="15" /><span>{{ column.title }}</span>
+              </button>
+              <hr class="table-context-separator" />
+              <label class="table-context-input">
+                <span>自定义字段名</span>
+                <input v-model="customColumnTitle" type="text" placeholder="例如：备注" @click.stop />
+              </label>
+              <span class="table-context-section-title">字段类型</span>
+              <button
+                v-for="type in customColumnTypes"
+                :key="type.value"
+                type="button"
+                @click="addContextCustomColumn(type.value, direction.value as -1 | 1)"
+              >
+                <IcIcon name="add" :size="15" /><span>{{ type.label }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        class="table-context-submenu-item"
+        :class="{ active: tableContextSubmenu === 'add-row' }"
+        @mouseenter="openTableSubmenu('add-row')"
+        @mouseleave="handleTableSubmenuLeave('add-row', $event)"
+      >
+        <button type="button"><IcIcon name="add" :size="15" /><span>添加行</span><IcIcon name="chevron-right" :size="15" /></button>
+        <div
+          v-show="tableContextSubmenu === 'add-row'"
+          :ref="(element) => setTableContextSubmenuRef('add-row', element)"
+          class="table-context-submenu"
+          @mouseenter="keepTableSubmenuOpen"
+          @mouseleave="handleTableSubmenuLeave('add-row', $event)"
+        >
+          <button type="button" @click="addRowAt('rowId' in tableContextTarget ? tableContextTarget.rowId : undefined, -1); closeTableContextMenu()"><IcIcon name="arrow-up" :size="15" /><span>在上方添加</span></button>
+          <button type="button" @click="addRowAt('rowId' in tableContextTarget ? tableContextTarget.rowId : undefined, 1); closeTableContextMenu()"><IcIcon name="arrow-down" :size="15" /><span>在下方添加</span></button>
+        </div>
+      </div>
+
+      <hr class="table-context-separator" />
+      <button type="button" :disabled="!canSmartFillContext()" @click="smartFillTableContext"><IcIcon name="psychology" :size="15" /><span>智能填充</span></button>
+      <button type="button" :disabled="!['cell', 'row', 'column'].includes(tableContextTarget.kind)" @click="copyTableContext"><IcIcon name="copy" :size="15" /><span>复制</span><kbd>Ctrl+C</kbd></button>
+      <button type="button" :disabled="!tableClipboard" @click="pasteTableContext"><IcIcon name="paste" :size="15" /><span>粘贴</span><kbd>Ctrl+V</kbd></button>
+      <button type="button" :disabled="tableContextTarget.kind === 'table'" @click="clearTableContext"><IcIcon name="remove" :size="15" /><span>清空</span></button>
+    </div>
+
     <footer v-if="form" class="forms-footer">
-      <span>存储: {{ activeFormMetaFile }}</span>
-      <span>CSV 镜像: {{ activeFormCsvFile }}</span>
+      <span>存储: {{ activeFormStorageLabel }}</span>
+      <span>导出: {{ activeFormCsvFile }}</span>
       <span>更新: {{ updatedAtLabel }}</span>
     </footer>
   </section>
@@ -895,43 +1335,70 @@ function errorMessage(error: unknown): string {
 <style scoped>
 .smart-forms-view {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   min-height: 0;
   height: 100%;
   background: var(--color-canvas);
   color: var(--color-text);
+  font-family: var(--font-ui);
 }
 
 .forms-header,
 .forms-toolbar,
-.view-tabs,
 .forms-footer {
   display: flex;
   align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface);
+  gap: var(--space-8);
+  border-bottom: 0;
+  background: var(--color-surface-raised);
 }
 
 .forms-header {
+  min-height: 44px;
   justify-content: space-between;
-  padding: 14px 18px 12px;
+  padding: var(--space-8) var(--space-12);
 }
 
 .header-copy {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: var(--space-8);
   min-width: 0;
+  min-height: 28px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-canvas);
+  overflow: hidden;
 }
 
 .forms-eyebrow {
-  margin: 0 0 4px;
+  margin: 0;
   color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+  font-size: calc(12px * var(--font-scale));
+  white-space: nowrap;
+}
+
+.header-copy .forms-eyebrow::after {
+  margin-left: var(--space-8);
+  color: var(--color-text-muted);
+  content: ">";
+}
+
+.form-dialog .forms-eyebrow {
+  margin-bottom: 4px;
 }
 
 .forms-header h1 {
   margin: 0;
-  font-size: var(--font-size-lg);
-  font-weight: 650;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-actions,
@@ -946,36 +1413,44 @@ function errorMessage(error: unknown): string {
 .primary-btn,
 .ghost-btn,
 .toolbar-btn,
+.new-row-btn,
 .view-tab,
 .icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  height: 30px;
-  border: 1px solid var(--color-border);
+  gap: var(--space-6);
+  height: 28px;
+  border: 0;
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
   cursor: pointer;
 }
 
 .primary-btn {
   border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: #fff;
-  padding: 0 12px;
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+  padding: 0 var(--space-10);
 }
 
 .ghost-btn,
-.toolbar-btn {
-  padding: 0 10px;
+.toolbar-btn,
+.new-row-btn {
+  padding: 0 var(--space-8);
+}
+
+.new-row-btn {
+  background: var(--color-primary);
+  color: #ffffff;
 }
 
 .toolbar-btn.strong {
+  background: var(--color-primary-softer);
   color: var(--color-primary);
-  border-color: color-mix(in srgb, var(--color-primary) 42%, var(--color-border));
 }
 
 button:disabled {
@@ -983,53 +1458,43 @@ button:disabled {
   opacity: 0.45;
 }
 
-.view-tabs {
-  padding: 0 16px;
-  height: 42px;
-  gap: 4px;
-  overflow-x: auto;
-}
-
-.view-tab {
-  height: 32px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--color-text-secondary);
-}
-
-.view-tab.active {
+.primary-btn:hover,
+.ghost-btn:hover,
+.toolbar-btn:hover,
+.new-row-btn:hover,
+.icon-btn:hover {
   background: var(--color-primary-softer);
   color: var(--color-primary);
 }
 
-.add-tab {
-  width: 32px;
+.new-row-btn:hover {
+  background: var(--color-primary-hover, var(--color-primary));
+  color: #ffffff;
 }
 
 .forms-toolbar {
   position: relative;
-  padding: 9px 16px;
+  min-height: 44px;
+  padding: var(--space-8) var(--space-12);
   flex-wrap: wrap;
 }
 
 .search-box {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-6);
   min-width: 180px;
-  height: 30px;
-  padding: 0 9px;
+  height: 28px;
+  padding: 0 var(--space-10);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-raised);
+  border-radius: 999px;
+  background: var(--color-canvas);
   color: var(--color-text-muted);
 }
 
 .search-box input,
 .filter-select,
-.form-select,
-.column-menu input,
-.column-menu select {
+.form-select {
   border: 0;
   outline: 0;
   background: transparent;
@@ -1042,21 +1507,21 @@ button:disabled {
 }
 
 .filter-select {
-  height: 30px;
+  height: 28px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 0 8px;
-  background: var(--color-surface);
+  border-radius: 999px;
+  padding: 0 var(--space-10);
+  background: var(--color-canvas);
 }
 
 .form-select,
 .new-form-input {
-  height: 30px;
+  height: 28px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 0 8px;
-  background: var(--color-surface);
-  color: var(--color-text);
+  border-radius: 999px;
+  padding: 0 var(--space-10);
+  background: var(--color-canvas);
+  color: var(--color-text-secondary);
 }
 
 .form-empty-state {
@@ -1067,7 +1532,7 @@ button:disabled {
   min-height: 280px;
   padding: 24px;
   color: var(--color-text-muted);
-  background: var(--color-surface);
+  background: var(--color-canvas);
   text-align: center;
 }
 
@@ -1090,11 +1555,11 @@ button:disabled {
   right: 0;
   display: grid;
   min-width: 132px;
-  padding: 4px;
+  padding: var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-md);
+  background: var(--color-canvas);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
 }
 
 .export-menu-panel button {
@@ -1107,7 +1572,7 @@ button:disabled {
 }
 
 .export-menu-panel button:hover {
-  background: var(--color-surface-raised);
+  background: var(--color-selection-blue-soft);
 }
 
 .form-dialog-backdrop {
@@ -1124,7 +1589,7 @@ button:disabled {
   width: min(420px, 100%);
   padding: 20px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--color-surface);
   box-shadow: var(--shadow-lg);
 }
@@ -1169,7 +1634,7 @@ button:disabled {
   padding: 0 10px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-surface-raised);
+  background: var(--color-canvas);
   color: var(--color-text);
   font: inherit;
 }
@@ -1185,90 +1650,155 @@ button:disabled {
   margin: 0;
 }
 
-.fill-chip,
 .row-count {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
   height: 28px;
-  padding: 0 9px;
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
+  padding: 0 var(--space-8);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  font-size: calc(12px * var(--font-scale));
 }
 
 .row-count {
   margin-left: auto;
-  background: transparent;
 }
 
-.column-menu-wrap {
+.table-context-menu {
+  position: fixed;
+  z-index: 50;
+  display: grid;
+  min-width: 252px;
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  box-shadow: var(--shadow-lg);
+}
+
+.table-context-menu.dark {
+  background: #151820;
+}
+
+.table-context-menu,
+.table-context-submenu {
+  color: var(--color-text-secondary);
+}
+
+.table-context-submenu {
+  position: absolute;
+  top: calc(-1 * var(--space-6));
+  left: calc(100% + var(--space-8));
+  z-index: 1;
+  display: grid;
+  min-width: 248px;
+  box-sizing: border-box;
+  overflow: visible;
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  box-shadow: var(--shadow-lg);
+}
+
+.table-context-menu.dark .table-context-submenu {
+  background: #151820;
+}
+
+.table-context-menu button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-10);
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 30px;
+  padding: 0 var(--space-8);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
+  text-align: left;
+}
+
+.table-context-menu button:hover:not(:disabled),
+.table-context-submenu-item.active > button {
+  background: var(--color-selection-blue-soft);
+  color: var(--color-text);
+}
+
+.table-context-menu button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.table-context-submenu-item {
   position: relative;
 }
 
-.column-menu {
-  position: absolute;
-  top: 34px;
-  left: 0;
-  z-index: 20;
-  display: grid;
-  gap: 8px;
-  width: 340px;
-  padding: 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
-  box-shadow: var(--shadow-window);
+.table-context-submenu-item > button {
+  width: 100%;
 }
 
-.column-menu p {
-  margin: 0;
+.table-context-submenu-level-two {
+  position: relative;
+}
+
+.table-context-submenu-level-three {
+  min-width: 300px;
+  max-height: min(620px, calc(100vh - 24px));
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.table-context-menu kbd {
   color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+  font-family: var(--font-ui);
+  font-size: calc(11px * var(--font-scale));
 }
 
-.builtin-column-grid,
-.custom-column-editor {
+.table-context-section-title {
+  display: block;
+  padding: 4px var(--space-8);
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
+}
+
+.table-context-input {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: 4px;
+  padding: 4px var(--space-8) var(--space-6);
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
 }
 
-.column-menu button,
-.column-menu input,
-.column-menu select {
+.table-context-input input {
   width: 100%;
-  min-height: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 var(--space-8);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  border-radius: var(--radius-xs);
+  outline: 0;
+  background: var(--color-canvas);
   color: var(--color-text);
-  text-align: left;
-  padding: 4px 8px;
+  font: inherit;
 }
 
-.column-menu input {
-  text-align: left;
-}
-
-.column-menu hr {
+.table-context-separator {
   width: 100%;
+  margin: var(--space-6) 0;
   border: 0;
   border-top: 1px solid var(--color-border);
-}
-
-.column-menu .menu-primary {
-  text-align: center;
-  border-color: var(--color-primary);
-  color: var(--color-primary);
 }
 
 .table-frame {
   position: relative;
   min-height: 0;
   overflow: auto;
-  background: var(--color-surface);
+  background: var(--color-canvas);
 }
 
 .smart-table {
@@ -1281,8 +1811,8 @@ button:disabled {
 
 th,
 td {
-  border-right: 1px solid var(--color-border);
-  border-bottom: 1px solid var(--color-border);
+  border-right: 0;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.12);
   vertical-align: top;
 }
 
@@ -1290,11 +1820,11 @@ th {
   position: sticky;
   top: 0;
   z-index: 4;
-  height: 42px;
-  background: var(--color-surface-raised);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
+  height: 34px;
+  background: var(--color-canvas);
+  color: var(--color-text-muted);
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 500;
 }
 
 .column-head {
@@ -1304,7 +1834,7 @@ th {
   justify-content: flex-start;
   gap: 6px;
   min-width: 0;
-  padding: 8px 32px 8px 8px;
+  padding: 0 32px 0 var(--space-12);
 }
 
 .column-head > span {
@@ -1328,48 +1858,42 @@ th:hover .column-actions {
   opacity: 1;
 }
 
-.column-actions button,
-.row-actions-col button {
+.column-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 22px;
   height: 22px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 50%;
   background: transparent;
   color: var(--color-text-muted);
 }
 
-.row-actions-col {
-  position: sticky;
-  left: 0;
-  z-index: 5;
-  width: 78px;
-  min-width: 78px;
-  background: var(--color-surface-raised);
-}
-
-td.row-actions-col {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-height: 112px;
-  padding: 6px;
+.column-actions button:hover {
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
 }
 
 .cell {
   position: relative;
   height: 112px;
-  background: var(--color-surface);
+  box-sizing: border-box;
+  background: transparent;
+}
+
+tbody tr:hover .cell,
+tbody tr:hover .cell {
+  background: var(--color-selection-blue-soft);
 }
 
 .cell.selected {
-  outline: 2px solid var(--color-primary);
-  outline-offset: -2px;
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
 .sticky {
   position: sticky;
-  left: 78px;
+  left: 0;
   z-index: 3;
 }
 
@@ -1387,9 +1911,10 @@ th.sticky {
 .cell textarea,
 .cell select,
 .cell input {
+  box-sizing: border-box;
   width: 100%;
   height: 100%;
-  min-height: 110px;
+  min-height: 0;
   resize: none;
   border: 0;
   outline: 0;
@@ -1400,73 +1925,255 @@ th.sticky {
   line-height: 1.35;
 }
 
-.cell:has(.cell-generate-btn) textarea,
-.cell:has(.cell-generate-btn) select,
-.cell:has(.cell-generate-btn) input {
-  padding-right: 34px;
-}
-
 .cell select,
 .cell input {
   min-height: 40px;
   height: 40px;
 }
 
-.cell-generate-btn {
-  position: absolute;
-  top: 7px;
-  right: 7px;
+.tag-cell {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 100%;
+  padding: 12px;
+}
+
+.tag-pill,
+.tag-add-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  border-radius: 999px;
+  font-size: calc(12px * var(--font-scale));
+}
+
+.tag-pill {
+  max-width: 100%;
+  padding: 0 4px 0 10px;
+  border: 0;
+  background: var(--color-surface-active);
+  color: var(--color-text-secondary);
+}
+
+.tag-pill-label {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-add-button {
+  padding: 0 10px;
+  border: 1px dashed var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.tag-add-button:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text-secondary);
+}
+
+.tag-pill-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tag-pill-action:hover {
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+
+.tag-pill-action.danger:hover {
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+  color: var(--color-danger);
+}
+
+.tag-editor {
+  position: absolute;
+  top: 42px;
+  left: 8px;
+  z-index: 12;
+  display: grid;
+  gap: 8px;
+  min-width: 188px;
+  max-width: 220px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-lg);
+}
+
+.tag-editor-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tag-selected-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
+}
+
+.tag-editor-input-row {
+  display: grid;
+  grid-template-columns: 132px 24px;
+  gap: 6px;
+  justify-content: start;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.tag-editor-input-row input {
+  width: 132px;
+  height: 24px;
+  min-height: 24px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  outline: 0;
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-canvas));
+  color: var(--color-text);
+  font: inherit;
+}
+
+.tag-editor-input-row button {
   width: 24px;
   height: 24px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
-  color: var(--color-primary);
-  opacity: 0;
-  cursor: pointer;
-  transition: opacity 120ms ease, background 120ms ease;
-}
-
-.cell:hover .cell-generate-btn,
-.cell.selected .cell-generate-btn,
-.cell-generate-btn:focus-visible {
-  opacity: 1;
-}
-
-.cell-generate-btn:hover:not(:disabled) {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
   background: var(--color-primary-softer);
+  color: var(--color-primary);
+  font: inherit;
+  font-size: calc(12px * var(--font-scale));
+  text-align: left;
+  cursor: pointer;
+}
+
+.tag-editor-input-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tag-editor-input-row button:hover {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.tag-option-list {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  align-items: start;
+  justify-content: start;
+  gap: 6px;
+  max-height: 140px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.tag-option-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-surface-active);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: calc(12px * var(--font-scale));
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tag-option-pill.selected {
+  filter: saturate(1.9) brightness(1.18);
+}
+
+.tag-option-pill:hover {
+  filter: brightness(1.06);
 }
 
 .file-cell {
-  padding: 10px;
+  height: 100%;
+  padding: 0;
 }
 
-.pdf-card {
+.file-picker {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: 1fr auto;
   align-items: center;
   justify-items: center;
-  gap: 8px;
+  gap: 5px;
   width: 100%;
-  height: 92px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent);
+  height: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   overflow: hidden;
 }
 
-.pdf-card span {
+.file-picker:hover {
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
+.file-picker span {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.file-preview-image,
+.file-material-icon {
+  display: block;
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+}
+
+.file-preview-image {
+  border-radius: var(--radius-sm);
+  object-fit: cover;
 }
 
 .hidden-input {
@@ -1505,23 +2212,23 @@ th.sticky {
 }
 
 .tone-blue {
-  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-primary) 4%, transparent);
 }
 
 .tone-green {
-  background: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-success) 6%, transparent);
 }
 
 .tone-amber {
-  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-warning) 7%, transparent);
 }
 
 .tone-rose {
-  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-accent) 5%, transparent);
 }
 
 .tone-violet {
-  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
 }
 
 .empty-state {
@@ -1534,9 +2241,9 @@ th.sticky {
 
 .forms-footer {
   min-height: 32px;
-  padding: 0 16px;
+  padding: 0 var(--space-12);
   color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+  font-size: calc(12px * var(--font-scale));
 }
 
 @media (max-width: 760px) {

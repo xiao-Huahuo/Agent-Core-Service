@@ -12,6 +12,7 @@ from agent_service.schemas.longterm_memory_spec import (
 )
 from agent_service.schemas.message import MessageCreate, MessageOut, MessageUpdate
 from agent_service.schemas.session import SessionCreate, SessionOut, SessionUpdate
+from agent_service.schemas.smart_form import SmartFormListItem, SmartFormOut, SmartFormSaveRequest
 
 __all__ = [
     "LongTermMemorySpecCreate",
@@ -23,4 +24,7 @@ __all__ = [
     "SessionCreate",
     "SessionOut",
     "SessionUpdate",
+    "SmartFormListItem",
+    "SmartFormOut",
+    "SmartFormSaveRequest",
 ]

@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  BUILTIN_COLUMNS,
   addColumn,
   createCustomColumn,
   createDefaultLiteratureForm,
@@ -16,10 +17,12 @@ import {
   exportCsv,
   exportMarkdown,
   filterRows,
+  joinTags,
   moveColumn,
   moveRow,
   normalizeForm,
   removeColumn,
+  splitTags,
   uniqueTagValues,
   updateCell,
   type SmartColumn,
@@ -42,19 +45,16 @@ describe('smartLiteratureTable', () => {
       'literature_file',
       'literature_content',
       'title',
-      'keywords',
-      'reading_progress',
-      'rating',
-      'paper_type',
-      'journal',
     ])
+    expect(form.columns.find((column) => column.id === 'literature_file')?.title).toBe('文献上传')
+    expect(form.columns.find((column) => column.id === 'literature_content')?.editable).toBe(false)
     expect(form.rows).toHaveLength(1)
     expect(form.rows[0]?.cells.title?.value).toBe('')
     expect(form.rows[0]?.cells.literature_content?.value).toBe('')
   })
 
   it('updates smart cells as ready and keeps non-smart status untouched', () => {
-    const form = createDefaultLiteratureForm()
+    const form = addColumn(createDefaultLiteratureForm(), BUILTIN_COLUMNS.find((column) => column.id === 'rating')!)
     const titleColumn = form.columns.find((column) => column.id === 'title') as SmartColumn
     const ratingColumn = form.columns.find((column) => column.id === 'rating') as SmartColumn
 
@@ -102,7 +102,8 @@ describe('smartLiteratureTable', () => {
   })
 
   it('filters by full-table query, tag value, and minimum rating', () => {
-    const form = createDefaultLiteratureForm()
+    const formWithPaperType = addColumn(createDefaultLiteratureForm(), BUILTIN_COLUMNS.find((column) => column.id === 'paper_type')!)
+    const form = addColumn(formWithPaperType, BUILTIN_COLUMNS.find((column) => column.id === 'rating')!)
     form.rows = [
       rowWithValues(form, {
         title: 'Autophagy mediates temporary reprogramming',
@@ -147,17 +148,57 @@ describe('smartLiteratureTable', () => {
     expect(normalized.title).toBe('恢复表')
     expect(normalized.rows[0]?.id).toMatch(/^row_/)
     expect(normalized.rows[0]?.cells.title?.value).toBe('Only title')
-    expect(normalized.rows[0]?.cells.rating?.value).toBe('')
+    expect(normalized.rows[0]?.cells.literature_content?.value).toBe('')
+  })
+
+  it('renames the persisted literature upload column to literature upload', () => {
+    const normalized = normalizeForm({
+      columns: [{ ...createDefaultLiteratureForm().columns.find((column) => column.id === 'literature_file')!, title: '文献PDF上传' }],
+      rows: [],
+    })
+
+    expect(normalized.columns[0]?.title).toBe('文献上传')
   })
 
   it('collects tag values from all tag-like columns', () => {
-    const form = createDefaultLiteratureForm()
-    form.rows[0]!.cells.reading_progress = { value: '已阅读' }
+    const withReadingProgress = addColumn(createDefaultLiteratureForm(), BUILTIN_COLUMNS.find((column) => column.id === 'reading_progress')!)
+    const form = addColumn(withReadingProgress, BUILTIN_COLUMNS.find((column) => column.id === 'paper_type')!)
+    form.rows[0]!.cells.reading_progress = { value: '已读' }
     form.rows[0]!.cells.paper_type = { value: '方法论文', status: 'ready' }
 
     const tags = uniqueTagValues(form)
 
-    expect(tags).toContain('已阅读')
+    expect(tags).toContain('已读')
     expect(tags).toContain('方法论文')
+  })
+
+  it('splits and joins multi-tag cell values', () => {
+    expect(splitTags('研究论文; 重点;  综述论文 ')).toEqual(['研究论文', '重点', '综述论文'])
+    expect(splitTags('')).toEqual([])
+    expect(splitTags('未读')).toEqual(['未读'])
+    expect(joinTags([' 研究论文 ', '重点', '', '研究论文'])).toBe('研究论文; 重点')
+  })
+
+  it('filters rows by any single tag inside a multi-tag cell', () => {
+    const withReadingProgress = addColumn(createDefaultLiteratureForm(), BUILTIN_COLUMNS.find((column) => column.id === 'reading_progress')!)
+    const form = addColumn(withReadingProgress, BUILTIN_COLUMNS.find((column) => column.id === 'paper_type')!)
+    form.rows[0]!.cells.paper_type = { value: '研究论文; 重点', status: 'ready' }
+    form.rows[0]!.cells.reading_progress = { value: '未读' }
+
+    expect(filterRows(form, '', '重点', 0)).toHaveLength(1)
+    expect(filterRows(form, '', '研究论文', 0)).toHaveLength(1)
+    expect(filterRows(form, '', '未读', 0)).toHaveLength(1)
+    expect(filterRows(form, '', '已读', 0)).toHaveLength(0)
+  })
+
+  it('collects every tag from multi-tag cells', () => {
+    const withReadingProgress = addColumn(createDefaultLiteratureForm(), BUILTIN_COLUMNS.find((column) => column.id === 'reading_progress')!)
+    const form = addColumn(withReadingProgress, BUILTIN_COLUMNS.find((column) => column.id === 'paper_type')!)
+    form.rows[0]!.cells.reading_progress = { value: '未读; 重点' }
+    form.rows[0]!.cells.paper_type = { value: '研究论文', status: 'ready' }
+
+    const tags = uniqueTagValues(form)
+
+    expect(tags).toEqual(expect.arrayContaining(['未读', '重点', '研究论文']))
   })
 })

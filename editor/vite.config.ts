@@ -64,6 +64,7 @@ export default defineConfig({
       '/library': 'http://127.0.0.1:8002',
       '/favorites': 'http://127.0.0.1:8002',
       '/feedback': 'http://127.0.0.1:8002',
+      '/smart-forms': 'http://127.0.0.1:8002',
       '/sessions': 'http://127.0.0.1:8002',
       '/settings': 'http://127.0.0.1:8002',
       '/skills': 'http://127.0.0.1:8002',
