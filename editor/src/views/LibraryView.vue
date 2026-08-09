@@ -718,7 +718,7 @@ function errorMessage(error: unknown): string {
         <TransitionGroup
           v-else-if="renderedItems.length"
           appear
-          name="card"
+          :name="viewMode === 'card' ? 'card' : 'bar'"
           tag="div"
           :class="viewMode === 'card' ? 'library-grid' : 'library-list'"
         >
@@ -1235,15 +1235,14 @@ function errorMessage(error: unknown): string {
 }
 
 .library-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
-  gap: 16px;
-  align-items: start;
+  column-width: 248px;
+  column-gap: 16px;
   position: relative;
 }
 
 .library-list {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
   gap: 10px;
   align-items: start;
   position: relative;
@@ -1275,6 +1274,62 @@ function errorMessage(error: unknown): string {
 
 .card-leave-to {
   opacity: 0;
+}
+
+.bar-move {
+  transition: transform 360ms ease;
+}
+
+.bar-enter-active {
+  position: relative;
+  animation: bar-scan-in 420ms ease both;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+
+.bar-enter-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-primary) 18%, transparent) 42%,
+    transparent 78%
+  );
+  transform: translateX(-110%);
+  animation: bar-scan-light 420ms ease both;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+
+.bar-leave-active {
+  transition: opacity 220ms ease;
+}
+
+.bar-leave-to {
+  opacity: 0;
+}
+
+@keyframes bar-scan-in {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translateX(0);
+  }
+}
+
+@keyframes bar-scan-light {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(110%);
+  }
 }
 
 .empty-hint {
@@ -1474,6 +1529,10 @@ function errorMessage(error: unknown): string {
   }
 
   .library-grid {
+    column-width: 220px;
+  }
+
+  .library-list {
     grid-template-columns: minmax(0, 1fr);
   }
 
