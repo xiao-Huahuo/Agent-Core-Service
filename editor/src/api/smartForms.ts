@@ -25,6 +25,28 @@ export interface SmartFormResponse {
   updated_at: string
 }
 
+export interface StructuredGenerationField {
+  id: string
+  title: string
+  type: 'text' | 'tag' | 'number' | 'boolean' | 'date'
+  description?: string
+  options?: string[]
+  required?: boolean
+}
+
+export interface StructuredGenerationFieldResult {
+  field_id: string
+  status: 'ready' | 'failed'
+  value: string
+  error?: string
+  raw_value?: unknown
+}
+
+export interface StructuredGenerationResponse {
+  results: StructuredGenerationFieldResult[]
+  raw_output: string
+}
+
 export function listSmartFormsDb(userId: string): Promise<SmartFormListItem[]> {
   return apiGet<SmartFormListItem[]>(API_ROUTES.SMART_FORMS_LIST, { user_id: userId })
 }
@@ -40,4 +62,20 @@ export function saveSmartFormDb(payload: {
   form: SmartLiteratureForm
 }): Promise<SmartFormResponse> {
   return apiPost<SmartFormResponse>(API_ROUTES.SMART_FORMS_SAVE, payload)
+}
+
+export function generateStructuredFields(payload: {
+  user_id: string
+  source: {
+    kind: string
+    content: string
+    metadata?: Record<string, unknown>
+  }
+  fields: StructuredGenerationField[]
+  options?: {
+    language?: string
+    strict_json?: boolean
+  }
+}): Promise<StructuredGenerationResponse> {
+  return apiPost<StructuredGenerationResponse>(API_ROUTES.STRUCTURED_GENERATION_FIELDS, payload, { timeoutMs: 120_000 })
 }

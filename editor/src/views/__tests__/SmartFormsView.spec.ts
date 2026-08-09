@@ -9,9 +9,9 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 
-import { streamPrompt } from '@/api/agent'
-import { getSmartFormDb, listSmartFormsDb, saveSmartFormDb } from '@/api/smartForms'
+import { generateStructuredFields, getSmartFormDb, listSmartFormsDb, saveSmartFormDb } from '@/api/smartForms'
 import { BUILTIN_COLUMNS, addColumn, createDefaultLiteratureForm, createEmptyRow, type SmartLiteratureForm } from '@/components/smart_forms/smartLiteratureTable'
 import { previewKnowledgeFile, readKnowledgeFile, uploadKnowledgeFile } from '@/api/knowledge'
 import { useSettingsStore } from '@/stores/settings'
@@ -19,9 +19,6 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import SmartFormsView from '@/views/SmartFormsView.vue'
 
 vi.mock('@/api/agent', () => ({
-  streamPrompt: vi.fn(async function* () {
-    yield { content: '{"title":"LLM extracted title","keywords":"ROS; signaling","paper_type":"研究论文","journal":"Plant Cell"}' }
-  }),
   updateCurrentDocumentContext: vi.fn().mockResolvedValue(undefined),
 }))
 
@@ -30,6 +27,7 @@ vi.mock('@/api/settings', () => ({
 }))
 
 vi.mock('@/api/smartForms', () => ({
+  generateStructuredFields: vi.fn(),
   getSmartFormDb: vi.fn(),
   listSmartFormsDb: vi.fn(),
   saveSmartFormDb: vi.fn(),
@@ -63,6 +61,23 @@ vi.mock('@/api/knowledge', () => ({
 }))
 
 describe('SmartFormsView', () => {
+  function contextButton(label: string, includes = false): HTMLButtonElement | undefined {
+    const menus = [...document.querySelectorAll<HTMLElement>('.table-context-menu')]
+    const menu = menus[menus.length - 1]
+    return [...(menu?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
+      .find((button) => includes ? button.textContent?.includes(label) : button.textContent === label)
+  }
+
+  async function hoverContextButton(label: string, includes = false): Promise<void> {
+    contextButton(label, includes)?.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
+    await nextTick()
+  }
+
+  async function clickContextButton(label: string, includes = false): Promise<void> {
+    contextButton(label, includes)?.click()
+    await nextTick()
+  }
+
   function dbResponse(form: SmartLiteratureForm, formId = 'sf_demo') {
     return {
       form_id: formId,
@@ -89,6 +104,15 @@ describe('SmartFormsView', () => {
     vi.mocked(saveSmartFormDb).mockImplementation(async (payload) => {
       return dbResponse(payload.form, payload.form_id || 'sf_saved')
     })
+    vi.mocked(generateStructuredFields).mockResolvedValue({
+      raw_output: '{"fields":[]}',
+      results: [
+        { field_id: 'title', status: 'ready', value: 'LLM extracted title' },
+        { field_id: 'keywords', status: 'ready', value: 'ROS; signaling' },
+        { field_id: 'paper_type', status: 'ready', value: '研究论文' },
+        { field_id: 'journal', status: 'ready', value: 'Plant Cell' },
+      ],
+    })
   })
 
   afterEach(() => {
@@ -105,6 +129,23 @@ describe('SmartFormsView', () => {
     expect(wrapper.findAll('tbody tr')).toHaveLength(1)
     expect(wrapper.findAll('button').some((button) => button.text() === '保存')).toBe(false)
     expect(wrapper.text()).not.toContain('The missing link')
+  })
+
+  it('opens context submenus toward the available viewport side', async () => {
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    await wrapper.find('td[data-column-id="title"]').trigger('contextmenu', { clientX: 900, clientY: 700 })
+    await nextTick()
+
+    const menu = document.querySelector('.table-context-menu') as HTMLElement | null
+    expect(menu?.classList.contains('submenu-left')).toBe(true)
+    expect(Number.parseInt(menu?.style.left || '0', 10)).toBeGreaterThan(0)
+
+    await hoverContextButton('添加列')
+    await hoverContextButton('左侧添加')
+    const levelThree = document.querySelector('.table-context-submenu-level-three')
+    expect(levelThree?.classList.contains('submenu-left')).toBe(true)
   })
 
   it('autosaves after table content changes', async () => {
@@ -196,8 +237,8 @@ describe('SmartFormsView', () => {
     await flushPromises()
 
     await wrapper.find('tbody tr').trigger('contextmenu')
-    await wrapper.findAll('button').find((button) => button.text().includes('添加行'))?.trigger('mouseenter')
-    await wrapper.findAll('button').find((button) => button.text().includes('在下方添加'))?.trigger('click')
+    await hoverContextButton('添加行', true)
+    await clickContextButton('在下方添加', true)
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
 
     vi.mocked(uploadKnowledgeFile).mockResolvedValueOnce({
@@ -222,7 +263,7 @@ describe('SmartFormsView', () => {
     await flushPromises()
 
     await wrapper.find('td[data-column-id="title"]').trigger('contextmenu')
-    await wrapper.findAll('button').find((button) => button.text().includes('智能填充'))?.trigger('click')
+    await clickContextButton('智能填充', true)
     await flushPromises()
 
     const textareaValues = wrapper.findAll('textarea').map((textarea) => {
@@ -239,13 +280,13 @@ describe('SmartFormsView', () => {
     await flushPromises()
 
     await wrapper.find('td[data-column-id="paper_type"]').trigger('contextmenu')
-    await wrapper.findAll('button').find((button) => button.text() === '删除')?.trigger('mouseenter')
-    await wrapper.findAll('button').find((button) => button.text() === '删除整列')?.trigger('click')
+    await hoverContextButton('删除')
+    await clickContextButton('删除整列')
     expect(wrapper.find('td[data-column-id="paper_type"]').exists()).toBe(false)
 
     await wrapper.find('td[data-column-id="title"]').trigger('contextmenu')
-    await wrapper.findAll('button').find((button) => button.text() === '删除')?.trigger('mouseenter')
-    await wrapper.findAll('button').find((button) => button.text() === '删除整行')?.trigger('click')
+    await hoverContextButton('删除')
+    await clickContextButton('删除整行')
     expect(wrapper.findAll('tbody tr')).toHaveLength(0)
   })
 
@@ -279,14 +320,92 @@ describe('SmartFormsView', () => {
     expect(wrapper.findAll('td.selected')).toHaveLength(2)
 
     await wrapper.findAll('td[data-column-id="title"]')[1]!.trigger('contextmenu')
-    await wrapper.findAll('button').find((button) => button.text() === '清空')?.trigger('click')
+    await clickContextButton('清空')
     await flushPromises()
     expect(wrapper.findAll('td[data-column-id="title"] textarea').map((textarea) => (textarea.element as HTMLTextAreaElement).value)).toEqual(['', ''])
 
     await titleCells[1]!.trigger('contextmenu')
-    await wrapper.findAll('button').find((button) => button.text() === '删除')?.trigger('mouseenter')
-    await wrapper.findAll('button').find((button) => button.text() === '删除整行')?.trigger('click')
+    await hoverContextButton('删除')
+    await clickContextButton('删除整行')
     expect(wrapper.findAll('tbody tr')).toHaveLength(0)
+  })
+
+  it('fills every smart column in a multi-cell selection', async () => {
+    const baseForm = createDefaultLiteratureForm('我的文献表')
+    const form = addColumn(addColumn(baseForm, BUILTIN_COLUMNS.find((column) => column.id === 'keywords')!), BUILTIN_COLUMNS.find((column) => column.id === 'journal')!)
+    const secondRow = createEmptyRow(form.columns)
+    form.rows = [form.rows[0]!, secondRow]
+    form.rows.forEach((row, index) => {
+      row.cells.literature_content = { value: `文献内容 ${index + 1}`, status: 'ready' }
+    })
+    vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(form))
+    vi.mocked(generateStructuredFields).mockImplementation(async (request) => ({
+      raw_output: '{}',
+      results: request.fields.map((field) => ({
+        field_id: field.id,
+        status: 'ready' as const,
+        value: `${field.id}-${request.source.metadata?.row_id}`,
+      })),
+    }))
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    const titleCells = wrapper.findAll('td[data-column-id="title"]')
+    const journalCells = wrapper.findAll('td[data-column-id="journal"]')
+    await titleCells[0]!.trigger('mousedown', { button: 0 })
+    await journalCells[1]!.trigger('mouseenter')
+    await wrapper.find('.table-frame').trigger('mouseup')
+    await journalCells[1]!.trigger('contextmenu')
+    await clickContextButton('智能填充', true)
+    await flushPromises()
+
+    expect(vi.mocked(generateStructuredFields)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(generateStructuredFields).mock.calls.every(([request]) => request.fields.map((field) => field.id).sort().join(',') === 'journal,keywords,title')).toBe(true)
+    expect(wrapper.findAll('td[data-column-id="title"] textarea').map((textarea) => (textarea.element as HTMLTextAreaElement).value)).toEqual([
+      `title-${form.rows[0]!.id}`,
+      `title-${form.rows[1]!.id}`,
+    ])
+    expect(wrapper.findAll('td[data-column-id="keywords"] textarea').map((textarea) => (textarea.element as HTMLTextAreaElement).value)).toEqual([
+      `keywords-${form.rows[0]!.id}`,
+      `keywords-${form.rows[1]!.id}`,
+    ])
+    expect(wrapper.findAll('td[data-column-id="journal"] textarea').map((textarea) => (textarea.element as HTMLTextAreaElement).value)).toEqual([
+      `journal-${form.rows[0]!.id}`,
+      `journal-${form.rows[1]!.id}`,
+    ])
+  })
+
+  it('fills all rows and all smart columns from the whole-table action', async () => {
+    const baseForm = createDefaultLiteratureForm('我的文献表')
+    const form = addColumn(addColumn(baseForm, BUILTIN_COLUMNS.find((column) => column.id === 'keywords')!), BUILTIN_COLUMNS.find((column) => column.id === 'journal')!)
+    const secondRow = createEmptyRow(form.columns)
+    form.rows = [form.rows[0]!, secondRow]
+    form.rows.forEach((row, index) => {
+      row.cells.literature_content = { value: `文献内容 ${index + 1}`, status: 'ready' }
+    })
+    vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(form))
+    vi.mocked(generateStructuredFields).mockImplementation(async (request) => ({
+      raw_output: '{}',
+      results: request.fields.map((field) => ({
+        field_id: field.id,
+        status: 'ready' as const,
+        value: `${field.id}-${request.source.metadata?.row_id}`,
+      })),
+    }))
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    await wrapper.findAll('button').find((button) => button.text().includes('全表智能填充'))?.trigger('click')
+    await flushPromises()
+
+    expect(vi.mocked(generateStructuredFields)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(generateStructuredFields).mock.calls.every(([request]) => request.fields.map((field) => field.id).sort().join(',') === 'journal,keywords,title')).toBe(true)
+    for (const columnId of ['title', 'keywords', 'journal']) {
+      expect(wrapper.findAll(`td[data-column-id="${columnId}"] textarea`).map((textarea) => (textarea.element as HTMLTextAreaElement).value)).toEqual([
+        `${columnId}-${form.rows[0]!.id}`,
+        `${columnId}-${form.rows[1]!.id}`,
+      ])
+    }
   })
 
   it('reorders columns by dragging header cells', async () => {
@@ -394,9 +513,12 @@ describe('SmartFormsView', () => {
     expect(cell.find('.tag-pill').attributes('style')).toContain('background')
   })
 
-  it('marks smart fill as failed when the model returns invalid JSON', async () => {
-    vi.mocked(streamPrompt).mockImplementationOnce(async function* () {
-      yield { content: 'not json' }
+  it('marks smart fill as failed when structured generation returns failed results', async () => {
+    vi.mocked(generateStructuredFields).mockResolvedValueOnce({
+      raw_output: 'not json',
+      results: [
+        { field_id: 'title', status: 'failed', value: '', error: '模型未返回有效 JSON' },
+      ],
     })
     const wrapper = mount(SmartFormsView)
     await flushPromises()
@@ -445,11 +567,14 @@ describe('SmartFormsView', () => {
   })
 
   it('starts smart fill asynchronously so another cell can be selected while it runs', async () => {
-    let resolveStream!: () => void
-    const gate = new Promise<void>((resolve) => { resolveStream = resolve })
-    vi.mocked(streamPrompt).mockImplementationOnce(async function* () {
+    let resolveGeneration!: () => void
+    const gate = new Promise<void>((resolve) => { resolveGeneration = resolve })
+    vi.mocked(generateStructuredFields).mockImplementationOnce(async () => {
       await gate
-      yield { content: '{"title":"晚到标题"}' }
+      return {
+        raw_output: '{"title":"晚到标题"}',
+        results: [{ field_id: 'title', status: 'ready', value: '晚到标题' }],
+      }
     })
     const form = createDefaultLiteratureForm('我的文献表')
     form.rows[0]!.cells.literature_content = { value: 'A real paper body for async extraction.', status: 'ready' }
@@ -458,16 +583,81 @@ describe('SmartFormsView', () => {
     await flushPromises()
 
     await wrapper.find('td[data-column-id="title"]').trigger('contextmenu')
-    await wrapper.findAll('button').find((button) => button.text().includes('智能填充'))?.trigger('click')
+    await clickContextButton('智能填充', true)
     await wrapper.find('td[data-column-id="literature_content"]').trigger('click')
 
     expect(wrapper.find('td[data-column-id="title"] .status-dot').text()).toBe('生成中')
     expect(wrapper.find('td[data-column-id="literature_content"]').classes()).toContain('selected')
 
-    resolveStream()
+    resolveGeneration()
     await flushPromises()
     expect(wrapper.find('td[data-column-id="title"] textarea').element).toMatchObject({ value: '晚到标题' })
     expect(wrapper.find('td[data-column-id="title"] .status-dot').exists()).toBe(false)
+  })
+
+  it('queues repeated smart fills from different rows without dropping later requests', async () => {
+    const requests: Array<{ resolve: () => void }> = []
+    vi.mocked(generateStructuredFields).mockImplementation((request) => new Promise((resolve) => {
+      requests.push({ resolve: () => resolve({
+        raw_output: '{}',
+        results: [{ field_id: 'title', status: 'ready', value: `标题-${request.source.metadata?.row_id}` }],
+      }) })
+    }))
+    const form = createDefaultLiteratureForm('我的文献表')
+    form.rows.push(createEmptyRow(form.columns))
+    form.rows.forEach((row) => { row.cells.literature_content = { value: 'paper content', status: 'ready' } })
+    vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(form))
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    for (const row of wrapper.findAll('td[data-column-id="title"]')) {
+      await row.trigger('contextmenu')
+      await clickContextButton('智能填充', true)
+    }
+    await nextTick()
+    expect(vi.mocked(generateStructuredFields)).toHaveBeenCalledTimes(2)
+
+    requests.shift()?.resolve()
+    await flushPromises()
+    expect(vi.mocked(generateStructuredFields)).toHaveBeenCalledTimes(2)
+    requests.shift()?.resolve()
+    await flushPromises()
+    expect(wrapper.findAll('td[data-column-id="title"] .status-dot').length).toBe(0)
+    expect(wrapper.findAll('td[data-column-id="title"] textarea').every((textarea) => (textarea.element as HTMLTextAreaElement).value.startsWith('标题-'))).toBe(true)
+  })
+
+  it('does not let an older smart fill response overwrite a newer one for the same cell', async () => {
+    let resolveFirst!: () => void
+    let resolveSecond!: () => void
+    const firstGate = new Promise<void>((resolve) => { resolveFirst = resolve })
+    const secondGate = new Promise<void>((resolve) => { resolveSecond = resolve })
+    vi.mocked(generateStructuredFields)
+      .mockImplementationOnce(async () => {
+        await firstGate
+        return { raw_output: '{"title":"旧标题"}', results: [{ field_id: 'title', status: 'ready', value: '旧标题' }] }
+      })
+      .mockImplementationOnce(async () => {
+        await secondGate
+        return { raw_output: '{"title":"新标题"}', results: [{ field_id: 'title', status: 'ready', value: '新标题' }] }
+      })
+    const form = createDefaultLiteratureForm('我的文献表')
+    form.rows[0]!.cells.literature_content = { value: 'A real paper body for async extraction.', status: 'ready' }
+    vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(form))
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    await wrapper.find('td[data-column-id="title"]').trigger('contextmenu')
+    await clickContextButton('智能填充', true)
+    await wrapper.find('td[data-column-id="title"]').trigger('contextmenu')
+    await clickContextButton('智能填充', true)
+
+    resolveSecond()
+    await flushPromises()
+    expect(wrapper.find('td[data-column-id="title"] textarea').element).toMatchObject({ value: '新标题' })
+
+    resolveFirst()
+    await flushPromises()
+    expect(wrapper.find('td[data-column-id="title"] textarea').element).toMatchObject({ value: '新标题' })
   })
 
   it('uploads literature assets without hidden auto ingest and submits stream ingestion', async () => {
@@ -529,5 +719,69 @@ describe('SmartFormsView', () => {
       }),
     }))
     expect(wrapper.find('.status-dot').exists()).toBe(false)
+  })
+
+  it('uses structured table and document previews as literature text', async () => {
+    vi.mocked(uploadKnowledgeFile).mockImplementation(async (_userId, file) => ({
+      uploaded_path: `D:/Knowledge/forms/我的文献表/assets/${file.name}`,
+      knowledge_dir: 'D:/Knowledge',
+    }))
+    vi.mocked(previewKnowledgeFile).mockImplementation(async (_userId, path) => {
+      if (path.endsWith('.csv')) {
+        return {
+          path,
+          kind: 'table',
+          sheets: [{ name: 'csv', rows: [['标题', '作者'], ['表格论文', '作者甲']] }],
+          mtime: '2026-08-09T10:00:00',
+          size: 128,
+          extension: '.csv',
+          readonly: true,
+        }
+      }
+      if (path.endsWith('.xlsx')) {
+        return {
+          path,
+          kind: 'table',
+          sheets: [{ name: 'Sheet 1', rows: [['年份', '期刊'], ['2026', 'Plant Cell']] }],
+          mtime: '2026-08-09T10:00:00',
+          size: 128,
+          extension: '.xlsx',
+          readonly: true,
+        }
+      }
+      return {
+        path,
+        kind: 'document',
+        html: '<h1>Word 标题</h1><p>Word 正文内容</p>',
+        mtime: '2026-08-09T10:00:00',
+        size: 128,
+        extension: '.docx',
+        readonly: true,
+      }
+    })
+    const workspaceStore = useWorkspaceStore()
+    vi.spyOn(workspaceStore, 'ingestFile').mockResolvedValue(undefined)
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    for (const [index, fileName] of ['paper.csv', 'paper.xlsx', 'paper.docx'].entries()) {
+      if (index > 0) {
+        await wrapper.findAll('button').find((button) => button.text().includes('新建行'))?.trigger('click')
+        await flushPromises()
+      }
+      const input = wrapper.findAll('input[type="file"]')[index]!.element as HTMLInputElement
+      Object.defineProperty(input, 'files', {
+        value: [new File(['file'], fileName)],
+        configurable: true,
+      })
+      await wrapper.findAll('input[type="file"]')[index]!.trigger('change')
+      await flushPromises()
+    }
+
+    expect(wrapper.findAll('td[data-column-id="literature_content"] textarea').map((textarea) => (textarea.element as HTMLTextAreaElement).value)).toEqual([
+      'csv\n标题\t作者\n表格论文\t作者甲',
+      'Sheet 1\n年份\t期刊\n2026\tPlant Cell',
+      'Word 标题Word 正文内容',
+    ])
   })
 })

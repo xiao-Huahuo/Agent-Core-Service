@@ -75,6 +75,7 @@ export const API_ROUTES = {
   SMART_FORMS_LIST: '/smart-forms/list',
   SMART_FORMS_SAVE: '/smart-forms/save',
   SMART_FORM_DETAIL: (formId: string) => `/smart-forms/${encodeURIComponent(formId)}`,
+  STRUCTURED_GENERATION_FIELDS: '/structured-generation/fields',
   SETTINGS_MODEL_CONFIG: '/settings/llm/config',
   SETTINGS_MODEL_CONFIG_SAVED: '/settings/llm/config/saved',
   SETTINGS_WEB_SEARCH: '/settings/web-search/config',

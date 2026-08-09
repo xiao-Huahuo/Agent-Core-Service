@@ -9,9 +9,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
-import { streamPrompt } from '@/api/agent'
 import { createKnowledgeFolder, listKnowledgeFiles, previewKnowledgeFile, readKnowledgeFile, uploadKnowledgeFile } from '@/api/knowledge'
-import { getSmartFormDb, listSmartFormsDb, saveSmartFormDb } from '@/api/smartForms'
+import { generateStructuredFields, getSmartFormDb, listSmartFormsDb, saveSmartFormDb, type StructuredGenerationFieldResult } from '@/api/smartForms'
 import IcIcon from '@/components/common/IcIcon.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import { useSubmenuIntent } from '@/components/editor_workspace/submenuIntent'
@@ -76,6 +75,11 @@ const tagDraft = ref('')
 const dropdownOpen = ref('')
 const swappedColumnId = ref('')
 const swappedRowId = ref('')
+const generationTokens = ref<Record<string, string>>({})
+const tableContextSubmenuSide = ref<'right' | 'left'>('right')
+const structuredGenerationQueue: Array<() => Promise<void>> = []
+const structuredGenerationConcurrency = 2
+let structuredGenerationActive = 0
 let swapAnimationTimer: ReturnType<typeof setTimeout> | undefined
 
 type TableContextTarget =
@@ -543,9 +547,20 @@ function openTableContextMenu(target: TableContextTarget, event: MouseEvent): vo
   closeTagEditor()
   tableContextTarget.value = target
   tableContextSubmenu.value = ''
+  const edge = 8
+  const menuWidth = 252
+  const submenuWidth = 248
+  const gap = 8
+  const viewportWidth = window.innerWidth || 1024
+  const rightOpeningLimit = viewportWidth - menuWidth - submenuWidth - gap - edge
+  const opensLeft = event.clientX > rightOpeningLimit
+  tableContextSubmenuSide.value = opensLeft ? 'left' : 'right'
+  const left = opensLeft
+    ? Math.min(Math.max(event.clientX, edge + submenuWidth + gap), viewportWidth - menuWidth - edge)
+    : Math.min(Math.max(event.clientX, edge), rightOpeningLimit)
   tableContextMenuStyle.value = {
-    left: `${event.clientX}px`,
-    top: `${event.clientY}px`,
+    left: `${Math.max(edge, left)}px`,
+    top: `${Math.min(Math.max(event.clientY, edge), Math.max(edge, (window.innerHeight || 768) - 300))}px`,
   }
 }
 
@@ -906,9 +921,10 @@ function clearTableContext(): void {
 function smartFillTableContext(): void {
   const target = tableContextTarget.value
   if (!target || !form.value) return
+  const selectionCells = target.kind === 'selection' ? contextCells() : []
   closeTableContextMenu()
   if (target.kind === 'selection') {
-    void generateSmartCellsForSelection(contextCells(), true)
+    void generateSmartCellsForSelection(selectionCells, true)
   } else if (target.kind === 'cell') {
     void generateSmartCellsForRows([target.rowId], [target.columnId], true)
   } else if (target.kind === 'column') {
@@ -922,12 +938,17 @@ function smartFillTableContext(): void {
 
 async function generateSmartCellsForSelection(cells: CellCoord[], showSuccessToast = false): Promise<void> {
   if (!form.value) return
-  const smartCells = cells.filter((cell) => {
-    const column = form.value?.columns.find((item) => item.id === cell.columnId)
-    return column?.type === 'smart_text' || column?.type === 'smart_tag'
-  })
-  const results = await Promise.all(smartCells.map((cell) => generateSmartCellsForRows([cell.rowId], [cell.columnId], false)))
-  if (showSuccessToast) showSmartFillToast(sumSmartFillResults(results))
+  const smartColumnIds = [...new Set(cells
+    .map((cell) => form.value?.columns.find((item) => item.id === cell.columnId))
+    .filter((column) => column?.type === 'smart_text' || column?.type === 'smart_tag')
+    .map((column) => column!.id))]
+  const rowIds = [...new Set(cells.map((cell) => cell.rowId))]
+  if (!smartColumnIds.length || !rowIds.length) {
+    if (showSuccessToast) showSmartFillToast({ ready: 0, failed: 0 })
+    return
+  }
+  const result = await generateSmartCellsForRows(rowIds, smartColumnIds, false)
+  if (showSuccessToast) showSmartFillToast(result)
 }
 
 function addContextColumn(column: SmartColumn, direction: -1 | 1): void {
@@ -968,7 +989,93 @@ async function generateSmartCellsForRows(rowIds: string[], columnIds?: string[],
   })
   if (!smartColumns.length || !settingsStore.profile.userId) return result
   const rowIdSet = new Set(rowIds)
-  result.failed = rowIds.length * smartColumns.length
+  const tokensByCell = markSmartCellsPending(rowIdSet, smartColumns, currentForm)
+  if (!Object.keys(tokensByCell).length) return result
+  const results = await Promise.all(rowIds.map(async (rowId): Promise<SmartFillResult> => {
+    const rowResult: SmartFillResult = { ready: 0, failed: 0 }
+    const currentRow = form.value.rows.find((item) => item.id === rowId)
+    if (!currentRow) return rowResult
+    const literatureContent = currentRow.cells.literature_content?.value.trim() ?? ''
+    if (!literatureContent) {
+      const applied = patchStructuredGenerationResults(rowId, smartColumns, smartColumns.map((column) => ({
+        field_id: column.id,
+        status: 'failed',
+        value: '',
+        error: '缺少文献内容，无法生成',
+      })), tokensByCell)
+      rowResult.ready += applied.ready
+      rowResult.failed += applied.failed
+      return rowResult
+    }
+    try {
+      const response = await enqueueStructuredGeneration(() => generateStructuredFields({
+          user_id: settingsStore.profile.userId,
+          source: {
+            kind: 'literature_document',
+            content: literatureContent,
+            metadata: { form_id: activeFormId.value, row_id: rowId },
+          },
+          fields: smartColumns.map((column) => ({
+            id: column.id,
+            title: column.title,
+            type: column.type === 'smart_tag' ? 'tag' : 'text',
+            options: column.options ?? [],
+            required: true,
+          })),
+          options: { language: 'zh', strict_json: true },
+        }))
+      const applied = patchStructuredGenerationResults(rowId, smartColumns, response.results, tokensByCell)
+      rowResult.ready += applied.ready
+      rowResult.failed += applied.failed
+    } catch (error) {
+      const applied = patchStructuredGenerationResults(rowId, smartColumns, smartColumns.map((column) => ({
+        field_id: column.id,
+        status: 'failed',
+        value: '',
+        error: errorMessage(error),
+      })), tokensByCell)
+      rowResult.ready += applied.ready
+      rowResult.failed += applied.failed
+    }
+    return rowResult
+  }))
+  result.ready = results.reduce((sum, item) => sum + item.ready, 0)
+  result.failed = results.reduce((sum, item) => sum + item.failed, 0)
+  await persistForm(false)
+  if (showSuccessToast) showSmartFillToast(result)
+  return result
+}
+
+/** Keeps table generation asynchronous while limiting pressure on the shared LLM scheduler. */
+function enqueueStructuredGeneration<T>(job: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    structuredGenerationQueue.push(async () => {
+      try {
+        resolve(await job())
+      } catch (error) {
+        reject(error)
+      }
+    })
+    void drainStructuredGenerationQueue()
+  })
+}
+
+/** Starts at most two requests and leaves later requests queued until a slot is released. */
+function drainStructuredGenerationQueue(): void {
+  while (structuredGenerationActive < structuredGenerationConcurrency && structuredGenerationQueue.length) {
+    const nextJob = structuredGenerationQueue.shift()
+    if (!nextJob) return
+    structuredGenerationActive += 1
+    void nextJob().finally(() => {
+      structuredGenerationActive -= 1
+      drainStructuredGenerationQueue()
+    })
+  }
+}
+
+function markSmartCellsPending(rowIdSet: Set<string>, smartColumns: SmartColumn[], currentForm: SmartLiteratureForm): Record<string, string> {
+  const nextTokens = { ...generationTokens.value }
+  const tokensByCell: Record<string, string> = {}
   setForm({
     ...currentForm,
     updatedAt: new Date().toISOString(),
@@ -977,49 +1084,45 @@ async function generateSmartCellsForRows(rowIds: string[], columnIds?: string[],
       cells: Object.fromEntries(currentForm.columns.map((column) => {
         const cell = row.cells[column.id] ?? { value: '' }
         const isTarget = rowIdSet.has(row.id) && smartColumns.some((item) => item.id === column.id)
-        return [column.id, isTarget ? { ...cell, status: 'pending' } : cell]
+        if (!isTarget) return [column.id, cell]
+        const key = cellKey(row.id, column.id)
+        const token = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`
+        nextTokens[key] = token
+        tokensByCell[key] = token
+        return [column.id, { ...cell, status: 'pending' }]
       })),
     })),
   }, false)
-  for (const rowId of rowIds) {
-    const currentRow = form.value.rows.find((item) => item.id === rowId)
-    if (!currentRow) continue
-    const literatureContent = currentRow.cells.literature_content?.value.trim() ?? ''
-    if (!literatureContent) {
-      patchRowCells(rowId, Object.fromEntries(smartColumns.map((column) => [
-        column.id,
-        { ...currentRow.cells[column.id], value: '缺少文献内容，无法生成', status: 'failed' },
-      ])))
-      continue
-    }
-    try {
-      const values = await generateStructuredValues(literatureContent, smartColumns)
-      let readyCount = 0
-      patchRowCells(rowId, Object.fromEntries(smartColumns.map((column) => [
-        column.id,
-        smartFillCellResult(currentRow.cells[column.id], values[column.id], () => { readyCount += 1 }),
-      ])))
-      result.ready += readyCount
-      result.failed -= readyCount
-    } catch (error) {
-      patchRowCells(rowId, Object.fromEntries(smartColumns.map((column) => [
-        column.id,
-        { ...currentRow.cells[column.id], value: `生成失败: ${errorMessage(error)}`, status: 'failed' },
-      ])))
-    }
-  }
-  await persistForm(false)
-  if (showSuccessToast) showSmartFillToast(result)
-  return result
+  generationTokens.value = nextTokens
+  return tokensByCell
 }
 
-function smartFillCellResult(cell: SmartCell | undefined, value: string | undefined, markReady: () => void): SmartCell {
-  const nextValue = String(value ?? '').trim()
-  if (!nextValue) {
-    return { ...cell, value: '未生成有效内容', status: 'failed' }
-  }
-  markReady()
-  return { ...cell, value: nextValue, status: 'ready' }
+function patchStructuredGenerationResults(rowId: string, columns: SmartColumn[], results: StructuredGenerationFieldResult[], tokensByCell: Record<string, string>): SmartFillResult {
+  if (!form.value) return { ready: 0, failed: 0 }
+  let ready = 0
+  let failed = 0
+  const currentRow = form.value.rows.find((row) => row.id === rowId)
+  const nextTokens = { ...generationTokens.value }
+  const resultByColumn = new Map(results.map((item) => [item.field_id, item]))
+  const cells = Object.fromEntries(columns.flatMap((column) => {
+    const key = cellKey(rowId, column.id)
+    if (generationTokens.value[key] !== tokensByCell[key]) return []
+    delete nextTokens[key]
+    const result = resultByColumn.get(column.id)
+    if (result?.status === 'ready' && result.value.trim()) {
+      ready += 1
+      return [[column.id, { ...currentRow?.cells[column.id], value: result.value.trim(), status: 'ready' as const }]]
+    }
+    failed += 1
+    return [[column.id, {
+      ...currentRow?.cells[column.id],
+      value: result?.error ? `生成失败: ${result.error}` : '未生成有效内容',
+      status: 'failed' as const,
+    }]]
+  }))
+  generationTokens.value = nextTokens
+  if (Object.keys(cells).length) patchRowCells(rowId, cells)
+  return { ready, failed }
 }
 
 function sumSmartFillResults(results: SmartFillResult[]): SmartFillResult {
@@ -1143,9 +1246,18 @@ async function extractUploadedLiteratureContent(assetPath: string): Promise<stri
   if (!settingsStore.profile.userId) return ''
   try {
     const preview = await previewKnowledgeFile(settingsStore.profile.userId, assetPath)
-    const content = [preview.content, preview.render_content, preview.message]
+    const content = [preview.content, preview.render_content]
       .find((value) => typeof value === 'string' && value.trim())
     if (content) return normalizeLiteratureContent(content)
+    const tableContent = preview.sheets
+      ?.flatMap((sheet) => [sheet.name, ...sheet.rows.map((row) => row.join('\t'))])
+      .join('\n')
+    if (tableContent?.trim()) return normalizeLiteratureContent(tableContent)
+    if (preview.html?.trim()) {
+      const document = new DOMParser().parseFromString(preview.html, 'text/html')
+      const htmlContent = document.body.textContent?.trim() ?? ''
+      if (htmlContent) return normalizeLiteratureContent(htmlContent)
+    }
   } catch {
     // Fall through to direct text read for editable text/markdown uploads.
   }
@@ -1159,164 +1271,6 @@ async function extractUploadedLiteratureContent(assetPath: string): Promise<stri
 
 function normalizeLiteratureContent(content: string): string {
   return content.replace(/\r\n/g, '\n').trim().slice(0, 12000)
-}
-
-async function generateStructuredValues(literatureContent: string, columns: SmartColumn[]): Promise<Record<string, string>> {
-  const prompt = [
-    '你是科研文献表格的结构化抽取器。只输出一个 JSON 对象,不要输出 Markdown 或解释。',
-    'JSON 的 key 必须使用给定列 id,value 必须是字符串。无法确定时返回空字符串。',
-    '智能标签列如果有 options,优先从 options 中选择一个最贴切的标签。',
-    '',
-    '需要填充的列:',
-    JSON.stringify(columns.map((column) => ({
-      id: column.id,
-      title: column.title,
-      type: column.type,
-      options: column.options ?? [],
-    })), null, 2),
-    '',
-    '文献内容:',
-    literatureContent.slice(0, 16000),
-  ].join('\n')
-  let raw = ''
-  const sessionId = `smart-form-${Date.now().toString(36)}`
-  try {
-    for await (const chunk of streamPrompt(settingsStore.profile.userId, sessionId, prompt, {
-      agentMode: 'simple',
-      agentAccessMode: 'readonly',
-    })) {
-      if (typeof chunk.content === 'string') {
-        raw += chunk.content
-      }
-      if (typeof chunk.final_output === 'string') {
-        raw += chunk.final_output
-      }
-    }
-  } catch (error) {
-    throw new Error(`模型请求失败: ${errorMessage(error)}`)
-  }
-  const parsed = parseJsonObject(raw)
-  if (!Object.keys(parsed).length) {
-    throw new Error('模型未返回有效 JSON')
-  }
-  return parsed
-}
-
-/** Parses the agent's JSON-only answer without throwing on empty or noisy output. */
-function parseJsonObject(text: string): Record<string, string> {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]
-  const source = fenced ?? text
-  const candidate = findFirstJsonObject(source)
-  if (!candidate) return {}
-  try {
-    const parsed = JSON.parse(candidate) as Record<string, unknown>
-    return Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, value == null ? '' : String(value)]))
-  } catch {
-    return {}
-  }
-}
-
-/** Returns the first complete top-level JSON object from a noisy stream buffer. */
-function findFirstJsonObject(text: string): string {
-  const start = text.indexOf('{')
-  if (start < 0) return ''
-  let depth = 0
-  let inString = false
-  let escaped = false
-  for (let index = start; index < text.length; index += 1) {
-    const char = text.charAt(index)
-    if (escaped) {
-      escaped = false
-      continue
-    }
-    if (char === '\\') {
-      escaped = inString
-      continue
-    }
-    if (char === '"') {
-      inString = !inString
-      continue
-    }
-    if (inString) continue
-    if (char === '{') depth += 1
-    if (char === '}') depth -= 1
-    if (depth === 0) return text.slice(start, index + 1)
-  }
-  return ''
-}
-
-/** Builds conservative values from the extracted document text when the model stream is invalid. */
-function extractStructuredFallback(literatureContent: string, columns: SmartColumn[]): Record<string, string> {
-  return Object.fromEntries(columns.map((column) => [column.id, extractStructuredFallbackValue(literatureContent, column)]))
-}
-
-/** Extracts common literature fields using document headings and stable regexes. */
-function extractStructuredFallbackValue(literatureContent: string, column: SmartColumn): string {
-  const key = `${column.id} ${column.title}`.toLowerCase()
-  if (key.includes('title') || key.includes('标题')) return extractFallbackTitle(literatureContent)
-  if (key.includes('keyword') || key.includes('关键词')) return extractFallbackKeywords(literatureContent)
-  if (key.includes('doi')) return extractFirstMatch(literatureContent, /\b10\.\d{4,9}\/[-._;()/:A-Z0-9]+/i)
-  if (key.includes('url')) return extractFirstMatch(literatureContent, /https?:\/\/\S+/i)
-  if (key.includes('year') || key.includes('年份')) return extractFirstMatch(literatureContent, /\b(?:19|20)\d{2}\b/)
-  if (key.includes('abstract') || key.includes('摘要')) return extractFallbackAbstract(literatureContent)
-  if (key.includes('journal') || key.includes('期刊')) return extractLabelledLine(literatureContent, /(?:journal|期刊)[:：]\s*(.+)/i)
-  if (key.includes('type') || key.includes('类型')) return inferFallbackPaperType(literatureContent, column.options)
-  return ''
-}
-
-/** Uses the first meaningful non-metadata line as a safe title fallback. */
-function extractFallbackTitle(literatureContent: string): string {
-  const line = literatureContent.split('\n')
-    .map((value) => value.replace(/^#+\s*/, '').trim())
-    .find((value) => value && !/^page\s+\d+$/i.test(value) && !/^doi[:：]/i.test(value))
-  return trimCellText(line ?? '', 140)
-}
-
-/** Extracts explicit keywords first, otherwise returns a short list of frequent terms. */
-function extractFallbackKeywords(literatureContent: string): string {
-  const labelled = extractLabelledLine(literatureContent, /(?:keywords?|关键词)[:：]\s*(.+)/i)
-  if (labelled) return trimCellText(labelled, 120)
-  const terms = literatureContent
-    .replace(/[^\p{Script=Han}A-Za-z0-9\s-]/gu, ' ')
-    .split(/\s+/)
-    .map((word) => word.trim())
-    .filter((word) => word.length >= 4 && !/^(page|abstract|introduction|references)$/i.test(word))
-  return [...new Set(terms)].slice(0, 6).join('; ')
-}
-
-/** Pulls a compact abstract block from common English/Chinese headings. */
-function extractFallbackAbstract(literatureContent: string): string {
-  const match = literatureContent.match(/(?:^|\n)\s*(?:abstract|摘要)\s*[:：]?\s*([\s\S]{40,900}?)(?=\n\s*(?:keywords?|关键词|introduction|引言|references|参考文献)\b|$)/i)
-  return trimCellText(match?.[1] ?? '', 360)
-}
-
-/** Finds the first labelled line value for metadata-like fields. */
-function extractLabelledLine(literatureContent: string, pattern: RegExp): string {
-  return trimCellText(literatureContent.match(pattern)?.[1] ?? '', 120)
-}
-
-/** Finds and trims the first regex match. */
-function extractFirstMatch(literatureContent: string, pattern: RegExp): string {
-  return trimCellText(literatureContent.match(pattern)?.[0] ?? '', 120)
-}
-
-/** Chooses a compatible paper type option from obvious document cues. */
-function inferFallbackPaperType(literatureContent: string, options: string[] | undefined): string {
-  const text = literatureContent.toLowerCase()
-  const preferred = text.includes('review') || literatureContent.includes('综述')
-    ? '综述论文'
-    : text.includes('method') || literatureContent.includes('方法')
-      ? '方法论文'
-      : text.includes('case report') || literatureContent.includes('病例')
-        ? '病例报告'
-        : '研究论文'
-  return options?.includes(preferred) ? preferred : (options?.[0] ?? preferred)
-}
-
-/** Normalizes generated text so cells do not grow without bound. */
-function trimCellText(value: string, maxLength: number): string {
-  const normalized = value.replace(/\s+/g, ' ').trim()
-  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}…` : normalized
 }
 
 function downloadCsv(): void {
@@ -1790,13 +1744,14 @@ function errorMessage(error: unknown): string {
       </div>
     </div>
 
-    <div
-      v-if="tableContextTarget"
-      class="table-context-menu"
-      :class="{ dark: settingsStore.isDark }"
-      :style="tableContextMenuStyle"
-      @click.stop
-    >
+    <Teleport to="body">
+      <div
+        v-if="tableContextTarget"
+        class="table-context-menu"
+        :class="{ dark: settingsStore.isDark, 'submenu-left': tableContextSubmenuSide === 'left' }"
+        :style="tableContextMenuStyle"
+        @click.stop
+      >
       <div
         class="table-context-submenu-item"
         :class="{ active: tableContextSubmenu.startsWith('add-column') }"
@@ -1808,6 +1763,7 @@ function errorMessage(error: unknown): string {
           v-show="tableContextSubmenu.startsWith('add-column')"
           :ref="(element) => setTableContextSubmenuRef('add-column', element)"
           class="table-context-submenu"
+          :class="{ 'submenu-left': tableContextSubmenuSide === 'left' }"
           @mouseenter="keepTableSubmenuOpen"
           @mouseleave="handleTableSubmenuLeave('add-column', $event)"
         >
@@ -1824,6 +1780,7 @@ function errorMessage(error: unknown): string {
               v-show="tableContextSubmenu === `add-column-${direction.key}`"
               :ref="(element) => setTableContextSubmenuRef(`add-column-${direction.key}`, element)"
               class="table-context-submenu table-context-submenu-level-three"
+              :class="{ 'submenu-left': tableContextSubmenuSide === 'left' }"
               @mouseenter="keepTableSubmenuOpen"
               @mouseleave="handleTableSubmenuLeave(`add-column-${direction.key}`, $event)"
             >
@@ -1867,6 +1824,7 @@ function errorMessage(error: unknown): string {
           v-show="tableContextSubmenu === 'add-row'"
           :ref="(element) => setTableContextSubmenuRef('add-row', element)"
           class="table-context-submenu"
+          :class="{ 'submenu-left': tableContextSubmenuSide === 'left' }"
           @mouseenter="keepTableSubmenuOpen"
           @mouseleave="handleTableSubmenuLeave('add-row', $event)"
         >
@@ -1886,6 +1844,7 @@ function errorMessage(error: unknown): string {
           v-show="tableContextSubmenu === 'delete'"
           :ref="(element) => setTableContextSubmenuRef('delete', element)"
           class="table-context-submenu"
+          :class="{ 'submenu-left': tableContextSubmenuSide === 'left' }"
           @mouseenter="keepTableSubmenuOpen"
           @mouseleave="handleTableSubmenuLeave('delete', $event)"
         >
@@ -1899,7 +1858,8 @@ function errorMessage(error: unknown): string {
       <button type="button" :disabled="!['cell', 'row', 'column', 'selection'].includes(tableContextTarget.kind)" @click="copyTableContext"><IcIcon name="copy" :size="15" /><span>复制</span><kbd>Ctrl+C</kbd></button>
       <button type="button" :disabled="!tableClipboard" @click="pasteTableContext"><IcIcon name="paste" :size="15" /><span>粘贴</span><kbd>Ctrl+V</kbd></button>
       <button type="button" :disabled="tableContextTarget.kind === 'table'" @click="clearTableContext"><IcIcon name="remove" :size="15" /><span>清空</span></button>
-    </div>
+      </div>
+    </Teleport>
 
     <footer v-if="form" class="forms-footer">
       <span>存储: {{ activeFormStorageLabel }}</span>
@@ -2271,7 +2231,7 @@ button:disabled {
 
 .table-context-menu {
   position: fixed;
-  z-index: 50;
+  z-index: 100000;
   display: grid;
   min-width: 252px;
   padding: var(--space-6);
@@ -2289,6 +2249,11 @@ button:disabled {
 .table-context-menu,
 .table-context-submenu {
   color: var(--color-text-secondary);
+}
+
+.table-context-submenu.submenu-left {
+  right: calc(100% + var(--space-8));
+  left: auto;
 }
 
 .table-context-submenu {

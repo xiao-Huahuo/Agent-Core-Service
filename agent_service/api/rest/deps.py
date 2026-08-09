@@ -26,6 +26,7 @@ from agent_service.services.automation_service import AutomationService
 from agent_service.services.favorite_service import FavoriteService
 from agent_service.services.feedback_service import FeedbackService
 from agent_service.services.smart_form_service import SmartFormService
+from agent_service.services.structured_generation_service import StructuredGenerationService
 
 _agent: AgentCore | None = None
 _session_service: SessionService | None = None
@@ -45,6 +46,7 @@ _automation_service: AutomationService | None = None
 _favorite_service: FavoriteService | None = None
 _feedback_service: FeedbackService | None = None
 _smart_form_service: SmartFormService | None = None
+_structured_generation_service: StructuredGenerationService | None = None
 
 
 def _require_agent() -> AgentCore:
@@ -157,3 +159,11 @@ def _require_smart_form_service() -> SmartFormService:
     if _smart_form_service is None:
         raise HTTPException(status_code=503, detail="SmartFormService not initialized yet")
     return _smart_form_service
+
+
+def _require_structured_generation_service() -> StructuredGenerationService:
+    """返回启动阶段注入的通用结构化字段生成服务。"""
+
+    if _structured_generation_service is None:
+        raise HTTPException(status_code=503, detail="StructuredGenerationService not initialized yet")
+    return _structured_generation_service
