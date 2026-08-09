@@ -813,7 +813,7 @@ function errorMessage(error: unknown): string {
         <span>详细信息</span>
       </li>
       <li class="context-item" @click="contextEdit()">
-        <IcIcon name="save" :size="14" />
+        <IcIcon name="edit" :size="14" />
         <span>编辑</span>
       </li>
       <li class="context-item" @click="contextMoveToParent()">
@@ -822,7 +822,7 @@ function errorMessage(error: unknown): string {
       </li>
       <hr class="context-sep" />
       <li class="context-item danger" @click="contextDelete()">
-        <IcIcon name="close" :size="14" />
+        <IcIcon name="trash" :size="14" />
         <span>删除</span>
       </li>
     </ul>
@@ -1419,7 +1419,7 @@ function errorMessage(error: unknown): string {
   position: fixed;
   z-index: 100;
   display: grid;
-  min-width: 180px;
+  min-width: 220px;
   padding: 6px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -1430,7 +1430,8 @@ function errorMessage(error: unknown): string {
 }
 
 .context-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   height: 30px;
@@ -1442,6 +1443,12 @@ function errorMessage(error: unknown): string {
   font-size: calc(13px * var(--font-scale));
   cursor: pointer;
   white-space: nowrap;
+}
+
+.context-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .context-item:hover {

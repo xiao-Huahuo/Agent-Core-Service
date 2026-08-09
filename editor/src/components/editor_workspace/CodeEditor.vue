@@ -9,6 +9,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
+import IcIcon from '@/components/common/IcIcon.vue'
+
 import { hljs, isHighlightableLanguage } from './codeHighlight'
 
 const model = defineModel<string>({ required: true })
@@ -206,6 +208,53 @@ const menuGroups: Array<{
     ],
   },
 ]
+
+function markdownGroupIcon(title: string): string {
+  const icons: Record<string, string> = {
+    '文本格式': 'text-fields',
+    '段落设置': 'view-list',
+    '插入': 'add',
+    '编辑': 'edit',
+  }
+  return icons[title] ?? 'more-horiz'
+}
+
+function markdownCommandIcon(command: MarkdownCommand): string {
+  const icons: Record<MarkdownCommand, string> = {
+    save: 'save',
+    bold: 'title',
+    italic: 'edit-note',
+    strike: 'remove',
+    highlight: 'auto-awesome',
+    'inline-code': 'code',
+    'code-fence': 'code',
+    'inline-math': 'table-chart',
+    comment: 'add-comment',
+    ul: 'checklist',
+    ol: 'view-list',
+    quote: 'forum',
+    paragraph: 'text-fields',
+    'heading-1': 'title',
+    'heading-2': 'title',
+    'heading-3': 'title',
+    'heading-4': 'title',
+    'heading-5': 'title',
+    'heading-6': 'title',
+    table: 'table-chart',
+    hr: 'remove',
+    'insert-code-block': 'code',
+    'math-block': 'table-chart',
+    cut: 'cut',
+    copy: 'copy',
+    paste: 'paste',
+    'paste-plain': 'paste',
+    'select-all': 'multi-select',
+    'find-replace': 'search',
+    undo: 'replay',
+    redo: 'refresh',
+  }
+  return icons[command]
+}
 
 watch(findQuery, () => {
   if (findBarOpen.value) {
@@ -704,6 +753,7 @@ onBeforeUnmount(() => {
             type="button"
             @click.stop="activeMenuGroup = activeMenuGroup === group.title ? '' : group.title"
           >
+            <IcIcon :name="markdownGroupIcon(group.title)" :size="15" />
             <span>{{ group.title }}</span>
             <span aria-hidden="true">›</span>
           </button>
@@ -714,6 +764,7 @@ onBeforeUnmount(() => {
               type="button"
               @click="runCommand(item.command)"
             >
+              <IcIcon :name="markdownCommandIcon(item.command)" :size="15" />
               <span>{{ item.label }}</span>
               <kbd v-if="item.shortcut">{{ item.shortcut }}</kbd>
             </button>
@@ -962,7 +1013,7 @@ onBeforeUnmount(() => {
 .markdown-context-menu {
   position: fixed;
   z-index: 1200;
-  width: 148px;
+  width: 178px;
   padding: var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -981,9 +1032,9 @@ onBeforeUnmount(() => {
 }
 
 .markdown-context-parent {
-  display: flex;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   width: 100%;
 }
 
@@ -992,7 +1043,7 @@ onBeforeUnmount(() => {
   top: -6px;
   left: calc(100% + 8px);
   display: grid;
-  min-width: 210px;
+  min-width: 248px;
   max-height: min(360px, calc(100vh - 24px));
   overflow: auto;
   padding: var(--space-6);
@@ -1004,10 +1055,10 @@ onBeforeUnmount(() => {
 
 .markdown-context-group button,
 .markdown-context-submenu button {
-  display: flex;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-12);
+  column-gap: var(--space-10);
   height: 26px;
   padding: 0 var(--space-8);
   border: 0;
@@ -1019,6 +1070,7 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 
+.markdown-context-parent span,
 .markdown-context-submenu button span {
   min-width: 0;
   overflow: hidden;

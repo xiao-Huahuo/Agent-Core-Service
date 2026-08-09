@@ -74,15 +74,16 @@ describe('FileContextMenu HTML visualization', () => {
       '删除Ctrl+D',
     ]
     const disabledLabels = [
+      '新建',
       '新建文件Ctrl+N',
       '新建文件夹Ctrl+Shift+N',
+      '复制信息',
       '复制名称',
       '复制绝对路径',
       '复制相对路径',
       '重命名Ctrl+M',
       '用默认程序打开',
       '在图谱中显示Ctrl+G',
-      '询问 Agent',
       'HTML可视化',
     ]
 
