@@ -180,12 +180,10 @@ onUnmounted(() => requestController?.abort())
   min-height: calc(100vh - 180px);
   flex-direction: column;
   overflow: hidden;
-  border: 0;
-  border-radius: calc(var(--radius-md) + 8px);
+  border: 1px solid var(--color-border);
+  border-radius: 0;
   background: var(--color-canvas);
-  box-shadow:
-    0 6px 18px color-mix(in srgb, black 8%, transparent),
-    0 1px 4px color-mix(in srgb, black 5%, transparent);
+  box-shadow: none;
 }
 
 .preview-header {

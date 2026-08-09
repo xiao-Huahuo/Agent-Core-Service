@@ -764,8 +764,8 @@ onMounted(() => {
 }
 
 .results-workspace.preview-open {
-  width: min(96%, 1280px);
-  grid-template-columns: minmax(300px, 0.82fr) minmax(460px, 1.25fr);
+  width: 100%;
+  grid-template-columns: minmax(320px, 520px) minmax(0, 1fr);
 }
 
 .results-list-pane {

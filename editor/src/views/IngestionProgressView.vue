@@ -530,7 +530,7 @@ function historySummary(row: IngestionHistoryItem): string {
   border: 0;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: none;
 }
 
 .file-table-head,

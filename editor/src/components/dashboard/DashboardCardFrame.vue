@@ -71,7 +71,7 @@ withDefaults(defineProps<{
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
 }
 </style>

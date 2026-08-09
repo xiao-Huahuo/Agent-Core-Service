@@ -453,25 +453,29 @@ tools: (可选) 需要启用的工具列表
 }
 
 .skill-grid-inner {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: var(--space-12);
+  column-width: 360px;
+  column-gap: var(--space-12);
 }
 
 .skill-card {
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
   gap: var(--space-10);
+  width: 100%;
   min-width: 0;
+  margin-bottom: var(--space-12);
   padding: var(--space-16) var(--space-20);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: 18px;
   background: var(--color-bg-panel);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.10);
   transition:
     box-shadow 160ms ease,
     transform 160ms ease,
     background 160ms ease;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  vertical-align: top;
 }
 
 .skill-card:hover {
@@ -527,7 +531,6 @@ tools: (可选) 需要启用的工具列表
 }
 
 .description {
-  flex: 1;
   font-size: 13px;
   line-height: 1.55;
   color: var(--color-text-secondary);
