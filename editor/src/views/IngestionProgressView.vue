@@ -159,7 +159,7 @@ function historySummary(row: IngestionHistoryItem): string {
           role="tab"
           @click="activeTab = 'graph-queue'"
         >
-          <IcIcon name="graph" :size="17" />
+          <IcIcon name="hub" :size="17" />
           <span>图谱抽取队列</span>
         </button>
         <button
@@ -196,7 +196,7 @@ function historySummary(row: IngestionHistoryItem): string {
           aria-label="图谱抽取"
           @click="startGraphExtraction"
         >
-          <IcIcon name="graph" :size="14" />
+          <IcIcon name="hub" :size="14" />
         </button>
         <button class="refresh-btn" type="button" title="刷新" aria-label="刷新" @click="refresh">
           <IcIcon name="refresh" :size="16" class="refresh-svg" />

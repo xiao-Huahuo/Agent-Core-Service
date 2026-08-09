@@ -220,7 +220,7 @@ onMounted(() => nextTick(autoResizeInput))
         title="图谱抽取"
         @click="checkEmbeddingBefore(() => { workspaceStore.ingestionViewTab = 'graph-queue'; workspaceStore.mainView = 'ingestion'; workspaceStore.startGraphRebuild(); })"
       >
-        <IcIcon name="graph" :size="14" />
+        <IcIcon name="hub" :size="14" />
       </button>
       <button
         class="todo-link topbar-optional"
