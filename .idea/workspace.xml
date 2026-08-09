@@ -5,7 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="ui小改">
-      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/common/ImagePreviewer.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/common/ImagePreviewer.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/TimeConsumptionPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/TimeConsumptionPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/MultimodalPreview.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/MultimodalPreview.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -302,15 +305,8 @@
       <workItem from="1785904382886" duration="16827000" />
       <workItem from="1786174906065" duration="703000" />
       <workItem from="1786190105430" duration="11711000" />
-      <workItem from="1786248468206" duration="8163000" />
-    </task>
-    <task id="LOCAL-00269" summary="搜索交互扩展">
-      <option name="closed" value="true" />
-      <created>1785425345219</created>
-      <option name="number" value="00269" />
-      <option name="presentableId" value="LOCAL-00269" />
-      <option name="project" value="LOCAL" />
-      <updated>1785425345219</updated>
+      <workItem from="1786248468206" duration="9378000" />
+      <workItem from="1786261492021" duration="816000" />
     </task>
     <task id="LOCAL-00270" summary="搜索交互扩展">
       <option name="closed" value="true" />
@@ -696,7 +692,15 @@
       <option name="project" value="LOCAL" />
       <updated>1786259847735</updated>
     </task>
-    <option name="localTasksCounter" value="318" />
+    <task id="LOCAL-00318" summary="ui小改">
+      <option name="closed" value="true" />
+      <created>1786260633322</created>
+      <option name="number" value="00318" />
+      <option name="presentableId" value="LOCAL-00318" />
+      <option name="project" value="LOCAL" />
+      <updated>1786260633322</updated>
+    </task>
+    <option name="localTasksCounter" value="319" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

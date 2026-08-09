@@ -128,6 +128,16 @@ function handleDocumentClick(event: MouseEvent) {
   min-width: 0;
   min-height: 0;
   border: 0;
+  background: var(--color-canvas);
+  color-scheme: light dark;
+}
+
+:global(:root[data-theme="light"]) .pdf-preview {
+  color-scheme: light;
+}
+
+:global(:root[data-theme="dark"]) .pdf-preview {
+  color-scheme: dark;
 }
 
 .table-preview,
