@@ -4,11 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="ui小改">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/common/ImagePreviewer.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/common/ImagePreviewer.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/TimeConsumptionPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/TimeConsumptionPanel.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/components/editor_workspace/MultimodalPreview.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/editor_workspace/MultimodalPreview.vue" afterDir="false" />
+    <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="看板小改">
+      <change beforePath="$PROJECT_DIR$/editor/src/components/dashboard/LatencyCard.vue" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/components/dashboard/LatencyCard.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -306,23 +303,7 @@
       <workItem from="1786174906065" duration="703000" />
       <workItem from="1786190105430" duration="11711000" />
       <workItem from="1786248468206" duration="9378000" />
-      <workItem from="1786261492021" duration="816000" />
-    </task>
-    <task id="LOCAL-00270" summary="搜索交互扩展">
-      <option name="closed" value="true" />
-      <created>1785427443749</created>
-      <option name="number" value="00270" />
-      <option name="presentableId" value="LOCAL-00270" />
-      <option name="project" value="LOCAL" />
-      <updated>1785427443749</updated>
-    </task>
-    <task id="LOCAL-00271" summary="Git v1">
-      <option name="closed" value="true" />
-      <created>1785469428095</created>
-      <option name="number" value="00271" />
-      <option name="presentableId" value="LOCAL-00271" />
-      <option name="project" value="LOCAL" />
-      <updated>1785469428095</updated>
+      <workItem from="1786261492021" duration="1456000" />
     </task>
     <task id="LOCAL-00272" summary="Git v2">
       <option name="closed" value="true" />
@@ -700,14 +681,29 @@
       <option name="project" value="LOCAL" />
       <updated>1786260633322</updated>
     </task>
-    <option name="localTasksCounter" value="319" />
+    <task id="LOCAL-00319" summary="看板小改">
+      <option name="closed" value="true" />
+      <created>1786263404733</created>
+      <option name="number" value="00319" />
+      <option name="presentableId" value="LOCAL-00319" />
+      <option name="project" value="LOCAL" />
+      <updated>1786263404734</updated>
+    </task>
+    <task id="LOCAL-00320" summary="看板小改">
+      <option name="closed" value="true" />
+      <created>1786263666991</created>
+      <option name="number" value="00320" />
+      <option name="presentableId" value="LOCAL-00320" />
+      <option name="project" value="LOCAL" />
+      <updated>1786263666991</updated>
+    </task>
+    <option name="localTasksCounter" value="321" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="高亮v1" />
     <MESSAGE value="代码高亮问题解决" />
     <MESSAGE value="预览调整" />
     <MESSAGE value="去除启动时自动灌库" />
@@ -732,7 +728,8 @@
     <MESSAGE value="小窗v1,去掉了暗色窗口直角隔层" />
     <MESSAGE value="exe打包化" />
     <MESSAGE value="ui小改" />
-    <option name="LAST_COMMIT_MESSAGE" value="ui小改" />
+    <MESSAGE value="看板小改" />
+    <option name="LAST_COMMIT_MESSAGE" value="看板小改" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/MetaWeave$requests_test.coverage" NAME="requests_test 覆盖结果" MODIFIED="1784163697235" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />

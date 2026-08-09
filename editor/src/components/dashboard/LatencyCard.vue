@@ -14,16 +14,46 @@ import {
   useObsHistory,
   type ObsHistoryRange,
 } from '@/composable/useObsHistory'
+import { useObsData, type LatencyTurn } from '@/composable/useObsData'
 import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 
 const history = useObsHistory()
+const obsData = useObsData()
 const sessionStore = useSessionStore()
 const settingsStore = useSettingsStore()
 const selectedIdx = ref(-1)
 
-const turns = computed(() => history.latencyTurns.value)
+const turns = computed<LatencyTurn[]>(() => {
+  const sessionId = sessionStore.currentSessionId
+  const liveTurns = obsData.latencyTurns.value
+  if (!sessionId || liveTurns.length === 0) return history.latencyTurns.value
+  const sessionName = sessionStore.currentSession?.session_name || sessionId
+  const mergedTurns = [
+    ...history.latencyTurns.value.filter((turn) => turn.sessionId !== sessionId),
+    ...liveTurns.map((turn) => ({
+      ...turn,
+      id: `${sessionId}:live:${turn.id}`,
+      sessionId,
+      sessionName,
+    })),
+  ].sort((left, right) => {
+    const leftTime = Date.parse(left.createdAt || '')
+    const rightTime = Date.parse(right.createdAt || '')
+    if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) return 0
+    return leftTime - rightTime
+  })
+  let cumulativeSeconds = 0
+  return mergedTurns.map((turn, index) => {
+    cumulativeSeconds += turn.seconds
+    return {
+      ...turn,
+      index: index + 1,
+      cumulativeSeconds: Number(cumulativeSeconds.toFixed(2)),
+    }
+  })
+})
 const hasTurns = computed(() => turns.value.length > 0)
 const selectedRange = computed<ObsHistoryRange>({
   get: () => history.latencyLimit.value,
@@ -52,7 +82,7 @@ watch(turns, (val) => {
   if (val.length > 0) {
     selectedIdx.value = val.length - 1
   }
-})
+}, { immediate: true })
 
 const summaryLabel = computed(() => {
   const range = formatObsHistoryRange(selectedRange.value, '条', 'message')
@@ -71,6 +101,19 @@ const emptyHint = computed(() => {
 const selectedTurn = computed(() => {
   if (selectedIdx.value < 0 || selectedIdx.value >= turns.value.length) return null
   return turns.value[selectedIdx.value]
+})
+
+const selectedBreakdown = computed(() => {
+  const turn = selectedTurn.value
+  if (!turn) return []
+  if (turn.nodeBreakdown.length > 0) return turn.nodeBreakdown
+  return [{
+    node: 'agent',
+    count: 1,
+    durationMs: turn.seconds * 1000,
+    seconds: turn.seconds,
+    share: 100,
+  }]
 })
 
 const ACCENT = '#d99178'
@@ -152,9 +195,8 @@ const lineOption = computed(() => {
 
 /** 纵向柱状图 — 选中轮次的节点占比 */
 const barOption = computed(() => {
-  const turn = selectedTurn.value
-  if (!turn || turn.nodeBreakdown.length === 0) return {}
-  const items = turn.nodeBreakdown
+  const items = selectedBreakdown.value
+  if (items.length === 0) return {}
   return {
     backgroundColor: 'transparent',
     grid: { top: 14, right: 8, bottom: 24, left: 30 },
@@ -184,9 +226,8 @@ const barOption = computed(() => {
 
 /** 南丁格尔玫瑰图 — 选中轮次的节点占比 */
 const roseOption = computed(() => {
-  const turn = selectedTurn.value
-  if (!turn || turn.nodeBreakdown.length === 0) return {}
-  const items = turn.nodeBreakdown
+  const items = selectedBreakdown.value
+  if (items.length === 0) return {}
   return {
     backgroundColor: 'transparent',
     legend: {
@@ -272,9 +313,7 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
           <span class="detail-title">{{ selectedTurn.sessionName || selectedTurn.sessionId }} · Message {{ selectedTurn.index }}</span>
           <span class="detail-time">{{ selectedTurn.seconds }}s{{ selectedTurn.estimated ? ' (est.)' : '' }}</span>
         </div>
-        <p class="detail-prompt">{{ selectedTurn.userPrompt }}</p>
-
-        <div v-if="selectedTurn.nodeBreakdown.length > 0" class="breakdown-charts">
+        <div v-if="selectedBreakdown.length > 0" class="breakdown-charts">
           <div class="breakdown-col">
             <span class="col-label">步骤占比（柱状）</span>
             <v-chart :option="barOption" autoresize class="breakdown-chart" />
@@ -284,6 +323,8 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
             <v-chart :option="roseOption" autoresize class="breakdown-chart" />
           </div>
         </div>
+
+        <p class="detail-prompt">{{ selectedTurn.userPrompt }}</p>
       </div>
 
       <div v-else-if="turns.length > 0" class="no-selection">
@@ -403,13 +444,13 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
   border-top: 1px solid var(--color-border-light);
   padding-top: var(--space-8);
   flex-shrink: 0;
-  min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .detail-summary {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-8);
   margin-bottom: var(--space-4);
 }
@@ -418,6 +459,8 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
   font-family: var(--font-ui);
   font-size: calc(10px * var(--font-scale));
   color: var(--color-text-primary);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .detail-time {
@@ -434,9 +477,8 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
   line-height: var(--line-height-relaxed);
   white-space: pre-wrap;
   word-break: break-word;
-  margin: 0 0 var(--space-8);
-  max-height: 48px;
-  overflow: hidden;
+  margin: var(--space-8) 0 0;
+  overflow: visible;
 }
 
 /* ---- 步骤占比 ---- */
@@ -444,6 +486,8 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-10);
+  margin-top: var(--space-8);
+  min-height: 142px;
 }
 
 @media (max-width: 480px) {
@@ -469,9 +513,9 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
 
 .breakdown-chart {
   width: 100%;
-  height: 130px;
-  min-height: 0;
-  flex-shrink: 1;
+  height: 118px;
+  min-height: 118px;
+  flex-shrink: 0;
 }
 
 /* ---- 提示 / 空状态 ---- */
