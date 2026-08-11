@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   BUILTIN_COLUMNS,
+  DEFAULT_ROW_HEIGHT,
   addColumn,
   createCustomColumn,
   createDefaultLiteratureForm,
@@ -22,7 +23,10 @@ import {
   moveRow,
   normalizeForm,
   removeColumn,
+  resizeColumn,
+  resizeRow,
   splitTags,
+  insertMarkdownImage,
   uniqueTagValues,
   updateCell,
   type SmartColumn,
@@ -49,6 +53,7 @@ describe('smartLiteratureTable', () => {
     expect(form.columns.find((column) => column.id === 'literature_file')?.title).toBe('文献上传')
     expect(form.columns.find((column) => column.id === 'literature_content')?.editable).toBe(false)
     expect(form.rows).toHaveLength(1)
+    expect(form.rows[0]?.height).toBe(DEFAULT_ROW_HEIGHT)
     expect(form.rows[0]?.cells.title?.value).toBe('')
     expect(form.rows[0]?.cells.literature_content?.value).toBe('')
   })
@@ -99,6 +104,38 @@ describe('smartLiteratureTable', () => {
 
     expect(moved.rows[0]?.id).toBe(secondRowId)
     expect(unchanged.rows[0]?.id).toBe(secondRowId)
+  })
+
+  it('persists bounded row and column dimensions', () => {
+    const form = createDefaultLiteratureForm()
+    const resized = resizeRow(resizeColumn(form, 'title', 320), form.rows[0]!.id, 180)
+    const bounded = resizeRow(resizeColumn(resized, 'title', 1), form.rows[0]!.id, 1)
+
+    expect(resized.columns.find((column) => column.id === 'title')?.width).toBe(320)
+    expect(resized.rows[0]?.height).toBe(180)
+    expect(bounded.columns.find((column) => column.id === 'title')?.width).toBe(64)
+    expect(bounded.rows[0]?.height).toBe(56)
+    expect(normalizeForm(bounded).rows[0]?.height).toBe(56)
+  })
+
+  it('uses the 15-line default for missing and legacy row heights', () => {
+    const form = createDefaultLiteratureForm()
+    const normalized = normalizeForm({
+      ...form,
+      rows: [
+        { ...form.rows[0]!, height: undefined },
+        { ...form.rows[0]!, id: 'legacy', height: 112 },
+      ],
+    })
+
+    expect(normalized.rows.map((row) => row.height)).toEqual([DEFAULT_ROW_HEIGHT, DEFAULT_ROW_HEIGHT])
+  })
+
+  it('inserts uploaded images at the Markdown caret', () => {
+    expect(insertMarkdownImage('前文后文', 2, 'figure 1.png', 'assets/figure 1.png')).toEqual({
+      value: '前文\n![figure 1.png](assets/figure%201.png)\n后文',
+      cursor: 42,
+    })
   })
 
   it('filters by full-table query, tag value, and minimum rating', () => {

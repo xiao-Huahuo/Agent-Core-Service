@@ -13,16 +13,20 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, delete, select
 
 import agent_service.models  # noqa: F401
 from agent_service.models.smart_form import (
+    DEFAULT_SMART_FORM_ROW_HEIGHT,
     SmartFormCellRecord,
     SmartFormColumnRecord,
     SmartFormRecord,
     SmartFormRowRecord,
 )
+
+LEGACY_DEFAULT_SMART_FORM_ROW_HEIGHT = 112
 
 
 class SmartFormService:
@@ -34,6 +38,16 @@ class SmartFormService:
         self.engine = engine
         if create_tables:
             SQLModel.metadata.create_all(self.engine)
+            self._ensure_row_height_column()
+
+    def _ensure_row_height_column(self) -> None:
+        """为旧数据库补充行高列,保持现有智能表格可原地升级。"""
+
+        columns = {column["name"] for column in inspect(self.engine).get_columns("smart_form_rows")}
+        if "height" in columns:
+            return
+        with self.engine.begin() as connection:
+            connection.execute(text("ALTER TABLE smart_form_rows ADD COLUMN height INTEGER NOT NULL DEFAULT 282"))
 
     def list_forms(self, *, user_id: str) -> list[dict[str, Any]]:
         """列出用户智能表格。"""
@@ -165,11 +179,15 @@ class SmartFormService:
             row_id = str(row.get("id") or "").strip()
             if not row_id:
                 continue
+            row_height = int(row.get("height") or DEFAULT_SMART_FORM_ROW_HEIGHT)
+            if row_height == LEGACY_DEFAULT_SMART_FORM_ROW_HEIGHT:
+                row_height = DEFAULT_SMART_FORM_ROW_HEIGHT
             db.add(SmartFormRowRecord(
                 row_record_id=self._row_record_id(form_id, row_id),
                 form_id=form_id,
                 row_id=row_id,
                 order_index=row_index,
+                height=max(56, row_height),
             ))
             cells = row.get("cells") if isinstance(row.get("cells"), dict) else {}
             for column_id, cell in cells.items():
@@ -217,7 +235,7 @@ class SmartFormService:
             "title": record.title,
             "updatedAt": record.updated_at.isoformat(),
             "columns": [self._serialize_column(column) for column in columns],
-            "rows": [{"id": row.row_id, "cells": cells_by_row.get(row.row_id, {})} for row in rows],
+            "rows": [{"id": row.row_id, "height": row.height, "cells": cells_by_row.get(row.row_id, {})} for row in rows],
         }
         return {
             "form_id": record.form_id,

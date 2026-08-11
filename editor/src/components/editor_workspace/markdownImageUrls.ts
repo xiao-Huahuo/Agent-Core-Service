@@ -78,6 +78,19 @@ export function isKnowledgeAssetUrl(src: string) {
   return /^\/knowledge\/assets\//i.test(src)
 }
 
+/** Adds the backend attachment flag to knowledge-library image URLs. */
+export function buildMarkdownDownloadUrl(src: string): string {
+  try {
+    const url = new URL(src, window.location.origin)
+    if (isKnowledgeRawUrl(url.pathname)) {
+      url.searchParams.set('download', '1')
+    }
+    return url.toString()
+  } catch {
+    return src
+  }
+}
+
 export function buildRawFileUrl(rawSrc: string, context: MarkdownImageUrlContext) {
   if (!context.currentFilePath || !context.userId || isKnowledgeRawUrl(rawSrc)) {
     return rawSrc

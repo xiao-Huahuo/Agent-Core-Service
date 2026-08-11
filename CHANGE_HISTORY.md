@@ -2,6 +2,14 @@
 
 ## 2026-08-11
 
+- 修复文献原文件下载误打开预览查看器的问题；下载改为抓取文件 Blob 后触发保存，并释放临时下载地址。
+- 修正桌面端原文件下载失败问题；后端原始文件接口新增 `download=1` 附件响应，前端改为直接触发带下载标记的地址。
+- 修复智能表格 Markdown 图片按钮只打开图片的问题；图片原始地址现在同样使用 `download=1` 附件响应。
+- 修复智能表格 Markdown 文本内容撑破默认行高的问题；单元格现在遵循行高并在内容区域内部滚动。
+- 为智能表格每个单元格写入明确行高，确保 Markdown 子组件能获得滚动视口，不再因百分比高度解析失败而失去滚动能力。
+- 将列拖动按钮移到列名上方的独立表头行；文本和智能填充文本默认显示前 200 字，支持右上角平滑展开/收缩并同步调整行高。
+- 智能表格文本、智能填充文本和只读文本表项默认使用约 15 行的紧凑高度（282px）；保留行高拖拽扩展，并将此前 112px 的旧默认值迁移到新默认值。
+
 - 支持 Markdown 编辑区直接粘贴剪贴板图片：图片保存到当前文件目录下的可配置资源目录,并自动插入 `![](...)` 链接。
 - 修正剪贴板图片链接路径重复 `./` 的问题,默认资源路径现在输出为 `./assets/...`。
 - 为 Markdown 表格补充右键插入行/列、边缘拖动行/列和右/下边缘快速添加空列/空行能力。
@@ -1496,6 +1504,7 @@
 # Packaging: added an assisted NSIS installer page with a default-enabled desktop shortcut checkbox; disabled fixed desktop shortcut creation while keeping the Start Menu shortcut.
 # Fixed packaged startup navigation race and Windows backend cleanup: ignore the expected startup-page `ERR_ABORTED` when the real page loads, and terminate the packaged backend process tree on quit; NSIS desktop shortcuts now use an installed `.ico` file explicitly.
 # Adjusted desktop shortcut icon resolution to read icon index 0 directly from `MetaWeave.exe` and notify Windows Explorer after shortcut creation, avoiding stale or unresolved external `.ico` shortcut icons.
+- [x] 完成智能表格扩展:文献文件单元格支持打开编辑区、下载原文件和重新上传;文本/智能文本单元格支持 Markdown、LaTeX、代码块、表格与阅读/编辑切换;Ctrl+V 图片固定上传到当前 `forms/**/assets/` 并提供图片下载;列宽与行高可拖动并持久化;智能表格本体及单元格 Markdown 表格均提供边缘拖动和边缘插入控件。旧 SQLite 智能表格自动补充行高字段。验证:前端相关 48 项、后端 2 项测试通过,`vite build` 通过。
 ## 2026-08-09
 - [x] 修复自动化任务调度扫描在 SQLite 读取过期 `lease_until` 后触发 naive/aware datetime 比较异常:批量抢占更新关闭 SQLAlchemy 的 Python 条件同步评估,改由 SQLite 执行条件,并补充过期租约回归测试。
 - [x] 优化资源管理器中等/大图标模式为响应式弹性网格，并为 Electron 透明无边框主窗口增加自定义边缘拖拽缩放，避免恢复系统 thickFrame 直角边框。

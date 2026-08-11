@@ -9,13 +9,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
+import { buildApiUrl } from '@/api/client'
 import { createKnowledgeFolder, listKnowledgeFiles, previewKnowledgeFile, readKnowledgeFile, uploadKnowledgeFile } from '@/api/knowledge'
 import { generateStructuredFields, getSmartFormDb, listSmartFormsDb, saveSmartFormDb, type StructuredGenerationFieldResult } from '@/api/smartForms'
 import IcIcon from '@/components/common/IcIcon.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import { useSubmenuIntent } from '@/components/editor_workspace/submenuIntent'
+import SmartMarkdownCell from '@/components/smart_forms/SmartMarkdownCell.vue'
 import {
   BUILTIN_COLUMNS,
+  DEFAULT_ROW_HEIGHT,
   addColumn,
   createCustomColumn,
   createDefaultLiteratureForm,
@@ -28,6 +31,8 @@ import {
   joinTags,
   normalizeForm,
   removeColumn,
+  resizeColumn,
+  resizeRow,
   splitTags,
   uniqueTagValues,
   updateCell,
@@ -83,6 +88,7 @@ const structuredGenerationQueue: Array<() => Promise<void>> = []
 const structuredGenerationConcurrency = 2
 let structuredGenerationActive = 0
 let swapAnimationTimer: ReturnType<typeof setTimeout> | undefined
+let tableResize: { kind: 'column' | 'row'; id: string; start: number; size: number } | null = null
 
 type TableContextTarget =
   | { kind: 'table' }
@@ -116,6 +122,7 @@ const selectedCellKeys = ref<string[]>([])
 const dragAnchorCell = ref<CellCoord | null>(null)
 const draggedColumnId = ref('')
 const draggedRowId = ref('')
+const expandedTextRowHeights = new Map<string, number>()
 let autoSaveTimer: ReturnType<typeof setTimeout> | undefined
 let formRevision = 0
 const {
@@ -165,6 +172,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('mouseup', stopCellSelection)
   if (autoSaveTimer) clearTimeout(autoSaveTimer)
   if (swapAnimationTimer) clearTimeout(swapAnimationTimer)
+  stopTableResize()
   closeTableContextMenu()
 })
 
@@ -394,6 +402,12 @@ function addRowAt(rowId: string | undefined, direction: -1 | 1): void {
   })
 }
 
+/** Appends a plain text column from the smart table's right edge button. */
+function appendTableColumn(): void {
+  if (!form.value) return
+  setForm(addColumn(form.value, createCustomColumn('新列', 'text')))
+}
+
 function deleteRecord(rowId: string): void {
   if (!form.value) return
   setForm({
@@ -410,6 +424,53 @@ function editCell(row: SmartRow, column: SmartColumn, value: string): void {
     updatedAt: new Date().toISOString(),
     rows: form.value.rows.map((item) => item.id === row.id ? updateCell(item, column, value) : item),
   })
+}
+
+/** Starts resizing a column from its right table boundary. */
+function startColumnResize(column: SmartColumn, event: PointerEvent): void {
+  event.preventDefault()
+  event.stopPropagation()
+  tableResize = { kind: 'column', id: column.id, start: event.clientX, size: column.width }
+  window.addEventListener('pointermove', continueTableResize)
+  window.addEventListener('pointerup', stopTableResize)
+}
+
+/** Starts resizing a row from its bottom table boundary. */
+function startRowResize(row: SmartRow, event: PointerEvent): void {
+  event.preventDefault()
+  event.stopPropagation()
+  tableResize = { kind: 'row', id: row.id, start: event.clientY, size: row.height || DEFAULT_ROW_HEIGHT }
+  window.addEventListener('pointermove', continueTableResize)
+  window.addEventListener('pointerup', stopTableResize)
+}
+
+/** Applies the active table-boundary drag to the persisted form dimensions. */
+function continueTableResize(event: PointerEvent): void {
+  if (!tableResize || !form.value) return
+  const delta = tableResize.kind === 'column' ? event.clientX - tableResize.start : event.clientY - tableResize.start
+  setForm(tableResize.kind === 'column'
+    ? resizeColumn(form.value, tableResize.id, tableResize.size + delta)
+    : resizeRow(form.value, tableResize.id, tableResize.size + delta))
+}
+
+/** Ends table resizing and removes global pointer listeners. */
+function stopTableResize(): void {
+  tableResize = null
+  window.removeEventListener('pointermove', continueTableResize)
+  window.removeEventListener('pointerup', stopTableResize)
+}
+
+/** Adjusts a row for an expanded Markdown cell and restores its previous height on collapse. */
+function resizeExpandedTextCell(row: SmartRow, expanded: boolean, contentHeight: number): void {
+  if (!form.value) return
+  if (expanded) {
+    if (!expandedTextRowHeights.has(row.id)) expandedTextRowHeights.set(row.id, row.height || DEFAULT_ROW_HEIGHT)
+    setForm(resizeRow(form.value, row.id, Math.max(row.height || DEFAULT_ROW_HEIGHT, contentHeight)))
+    return
+  }
+  const previousHeight = expandedTextRowHeights.get(row.id)
+  expandedTextRowHeights.delete(row.id)
+  setForm(resizeRow(form.value, row.id, previousHeight || DEFAULT_ROW_HEIGHT))
 }
 
 function setRating(row: SmartRow, column: SmartColumn, rating: number): void {
@@ -1234,18 +1295,70 @@ function openUpload(rowId: string): void {
   uploadInputByRow.value[rowId]?.click()
 }
 
+/** Uploads one file into the active form's fixed assets directory. */
+async function uploadFormAsset(file: File): Promise<string> {
+  if (!settingsStore.profile.userId) return ''
+  await ensureFormFolders()
+  const result = await uploadKnowledgeFile(settingsStore.profile.userId, file, activeFormAssetDir.value, false, 'rename') as {
+    uploaded_path?: string
+    knowledge_dir?: string
+  }
+  return relativeUploadedPath(result.uploaded_path ?? '', result.knowledge_dir ?? settingsStore.profile.knowledgeDir)
+}
+
+/** Opens an uploaded literature source in the main editor workspace. */
+async function openLiteratureFile(row: SmartRow): Promise<void> {
+  const cell = row.cells.literature_file
+  if (!cell?.assetPath) {
+    openUpload(row.id)
+    return
+  }
+  workspaceStore.setMainView('editor')
+  await workspaceStore.selectFile({
+    name: cell.fileName || cell.value,
+    path: cell.assetPath,
+    isDir: false,
+  })
+}
+
+/** Downloads an uploaded source file without changing the selected workspace file. */
+async function downloadLiteratureFile(row: SmartRow): Promise<void> {
+  const cell = row.cells.literature_file
+  if (!cell?.assetPath || !settingsStore.profile.userId) return
+  try {
+    const preview = await previewKnowledgeFile(settingsStore.profile.userId, cell.assetPath)
+    const sourceUrl = preview.raw_url ? buildApiUrl(preview.raw_url) : preview.data_url
+    if (!sourceUrl) throw new Error('原文件下载地址不可用')
+    const downloadUrl = new URL(sourceUrl, window.location.origin)
+    downloadUrl.searchParams.set('download', '1')
+    const anchor = document.createElement('a')
+    anchor.href = downloadUrl.toString()
+    anchor.download = cell.fileName || cell.value || 'download'
+    anchor.click()
+  } catch (error) {
+    workspaceStore.showToast(`下载失败 - ${errorMessage(error)}`)
+  }
+}
+
+/** Uploads a pasted cell image and returns its form-relative Markdown path. */
+async function uploadCellImage(file: File): Promise<{ name: string; relativePath: string }> {
+  const assetPath = await uploadFormAsset(file)
+  if (!assetPath) throw new Error('图片上传未返回文件路径')
+  await workspaceStore.loadKnowledgeTree()
+  const name = assetPath.split('/').pop() || file.name || 'image.png'
+  const relativePath = assetPath.startsWith(`${activeFormDir.value}/`)
+    ? assetPath.slice(activeFormDir.value.length + 1)
+    : `assets/${name}`
+  return { name, relativePath }
+}
+
 async function uploadLiterature(row: SmartRow, event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
   if (!file || !settingsStore.profile.userId || !form.value) return
   try {
-    await ensureFormFolders()
-    const result = await uploadKnowledgeFile(settingsStore.profile.userId, file, activeFormAssetDir.value, false, 'rename') as {
-      uploaded_path?: string
-      knowledge_dir?: string
-    }
-    const assetPath = relativeUploadedPath(result.uploaded_path ?? '', result.knowledge_dir ?? settingsStore.profile.knowledgeDir)
+    const assetPath = await uploadFormAsset(file)
     if (assetPath && isImageFile(file.name)) {
       await loadImagePreview(assetPath)
     }
@@ -1627,8 +1740,21 @@ function errorMessage(error: unknown): string {
     </div>
 
     <div v-if="form" class="table-frame" :class="{ loading }" @mouseup="stopCellSelection" @contextmenu.prevent.stop="openTableContextMenu({ kind: 'table' }, $event)">
+      <div class="smart-table-shell">
       <table class="smart-table" @selectstart="preventTableTextSelection">
         <thead>
+          <tr class="table-column-drag-row">
+            <th v-for="column in form.columns" :key="column.id" :style="{ width: `${column.width}px`, minWidth: `${column.width}px` }">
+              <button
+                class="table-edge-column-drag"
+                type="button"
+                draggable="true"
+                title="拖动表格列"
+                @dragstart.stop="startColumnDrag(column.id, $event)"
+                @dragend.stop="endColumnDrag"
+              ><IcIcon name="unfold" :size="10" /></button>
+            </th>
+          </tr>
           <tr>
             <th
               v-for="(column, columnIndex) in form.columns"
@@ -1671,15 +1797,22 @@ function errorMessage(error: unknown): string {
                     <IcIcon name="remove" :size="13" />
                   </button>
                 </div>
+                <button
+                  class="column-resize-handle"
+                  type="button"
+                  title="拖动调整列宽"
+                  @pointerdown="startColumnResize(column, $event)"
+                ></button>
               </div>
             </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, rowIndex) in visibleRows" :key="row.id">
+          <tr v-for="(row, rowIndex) in visibleRows" :key="row.id" :style="{ height: `${row.height || DEFAULT_ROW_HEIGHT}px` }">
             <td
               v-for="column in form.columns"
               :key="column.id"
+              :style="{ height: `${row.height || DEFAULT_ROW_HEIGHT}px` }"
               :data-column-id="column.id"
               :draggable="column.type === 'index'"
               :class="['cell', 'tone-' + (column.tone || 'none'), { selected: isCellSelected(row.id, column.id), dragging: draggedRowId === row.id && column.type === 'index', 'row-swapped': swappedRowId === row.id }]"
@@ -1692,9 +1825,25 @@ function errorMessage(error: unknown): string {
               @click="selectSingleCell(row.id, column.id)"
               @contextmenu.prevent.stop="column.type === 'index' ? openTableContextMenu({ kind: 'row', rowId: row.id }, $event) : openCellContextMenu(row, column, $event)"
             >
-              <span v-if="column.type === 'index'" class="row-index">{{ rowIndex + 1 }}</span>
+              <span v-if="column.type === 'index'" class="row-index">
+                {{ rowIndex + 1 }}
+                <button
+                  class="table-edge-row-drag"
+                  type="button"
+                  draggable="true"
+                  title="拖动表格行"
+                  @dragstart.stop="startRowDrag(row.id, $event)"
+                  @dragend.stop="endRowDrag"
+                ><IcIcon name="unfold" :size="10" /></button>
+                <button
+                  class="row-resize-handle"
+                  type="button"
+                  title="拖动调整行高"
+                  @pointerdown="startRowResize(row, $event)"
+                ></button>
+              </span>
               <div v-else-if="column.type === 'file'" class="file-cell">
-                <button class="file-picker" type="button" @click="openUpload(row.id)">
+                <button class="file-picker" type="button" @click.stop="openLiteratureFile(row)">
                   <img
                     v-if="row.cells[column.id]?.assetPath && isImageFile(row.cells[column.id]?.fileName || row.cells[column.id]?.assetPath || '') && imagePreviewByPath[row.cells[column.id]?.assetPath || '']"
                     class="file-preview-image"
@@ -1711,6 +1860,14 @@ function errorMessage(error: unknown): string {
                   <IcIcon v-else name="upload" :size="24" />
                   <span>{{ row.cells[column.id]?.fileName || row.cells[column.id]?.value || '添加文档' }}</span>
                 </button>
+                <div v-if="row.cells[column.id]?.assetPath" class="file-cell-actions">
+                  <button type="button" title="下载原文件" @click.stop="downloadLiteratureFile(row)">
+                    <IcIcon name="download" :size="13" />
+                  </button>
+                  <button type="button" title="重新上传" @click.stop="openUpload(row.id)">
+                    <IcIcon name="upload" :size="13" />
+                  </button>
+                </div>
                 <input
                   :ref="(el) => setUploadRef(row.id, el)"
                   class="hidden-input"
@@ -1831,6 +1988,16 @@ function errorMessage(error: unknown): string {
                 :value="row.cells[column.id]?.value || ''"
                 @input="editCell(row, column, ($event.target as HTMLInputElement).value)"
               />
+              <SmartMarkdownCell
+                v-else-if="column.type === 'text' || column.type === 'smart_text' || column.type === 'readonly_text'"
+                :value="row.cells[column.id]?.value || ''"
+                :path="`${activeFormDir}/table.md`"
+                :editable="column.editable"
+                :upload-image="uploadCellImage"
+                @update="editCell(row, column, $event)"
+                @resize="(expanded, height) => resizeExpandedTextCell(row, expanded, height)"
+                @upload-error="workspaceStore.showToast(`图片上传失败 - ${errorMessage($event)}`)"
+              />
               <textarea
                 v-else
                 :readonly="!column.editable"
@@ -1849,6 +2016,13 @@ function errorMessage(error: unknown): string {
           </tr>
         </tbody>
       </table>
+      <button class="table-edge-add-row" type="button" title="添加空行" @click.stop="addRowAt(undefined, 1)">
+        <IcIcon name="add" :size="10" />
+      </button>
+      <button class="table-edge-add-column" type="button" title="添加空列" @click.stop="appendTableColumn">
+        <IcIcon name="add" :size="10" />
+      </button>
+      </div>
       <div v-if="!visibleRows.length" class="empty-state">
         <IcIcon name="table-chart" :size="28" />
         <p>没有符合条件的记录</p>
@@ -2520,6 +2694,13 @@ button:disabled {
   background: var(--color-canvas);
 }
 
+.smart-table-shell {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+  padding: 0 9px 9px 0;
+}
+
 .smart-table {
   border-collapse: separate;
   border-spacing: 0;
@@ -2552,6 +2733,21 @@ th {
   font-weight: 500;
 }
 
+.table-column-drag-row th {
+  top: 0;
+  height: 10px;
+  padding: 0;
+  z-index: 6;
+}
+
+.smart-table thead tr:nth-child(2) th {
+  top: 10px;
+}
+
+.smart-table tbody tr {
+  transition: height 220ms ease;
+}
+
 th[draggable="true"],
 td[draggable="true"] .row-index {
   cursor: grab;
@@ -2575,6 +2771,75 @@ th.swapped,
   gap: 6px;
   min-width: 0;
   padding: 0 32px 0 var(--space-12);
+}
+
+.table-edge-column-drag,
+.table-edge-row-drag,
+.table-edge-add-row,
+.table-edge-add-column {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  background: var(--color-surface-raised);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+
+.table-edge-column-drag:hover,
+.table-edge-row-drag:hover,
+.table-edge-add-row:hover,
+.table-edge-add-column:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+  color: var(--color-primary);
+}
+
+.table-edge-column-drag {
+  position: static;
+  width: 100%;
+  height: 10px;
+  border-width: 0 0 1px;
+  cursor: grab;
+}
+
+.table-edge-column-drag :deep(svg) {
+  transform: rotate(90deg);
+}
+
+.table-edge-add-row {
+  position: absolute;
+  right: 9px;
+  bottom: 0;
+  left: 0;
+  height: 9px;
+}
+
+.table-edge-add-column {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 9px;
+  width: 9px;
+}
+
+.column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  z-index: 8;
+  width: 10px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+}
+
+.column-resize-handle:hover {
+  background: color-mix(in srgb, var(--color-primary) 45%, transparent);
 }
 
 .column-head > span {
@@ -2635,9 +2900,12 @@ th:hover .column-actions {
 
 .cell {
   position: relative;
-  height: 112px;
+  /* Give each cell a definite viewport so child Markdown scroll areas can resolve 100% height. */
+  height: 100%;
+  min-height: 0;
   box-sizing: border-box;
   background: transparent;
+  overflow: hidden;
 }
 
 .cell-dropdown {
@@ -2659,9 +2927,9 @@ th:hover .column-actions {
   z-index: 18;
 }
 
-tbody tr:hover .cell,
-tbody tr:hover .cell {
-  background: var(--color-selection-blue-soft);
+.cell:hover {
+  /* Hover only the active cell; do not tint the whole row. */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
 }
 
 .cell.selected {
@@ -2679,10 +2947,47 @@ th.sticky {
 }
 
 .row-index {
+  position: relative;
   display: block;
+  height: 100%;
+  box-sizing: border-box;
   padding: 12px;
   color: var(--color-text-muted);
   text-align: center;
+}
+
+.table-edge-row-drag {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 8px;
+  height: 100%;
+  border-width: 0 1px 0 0;
+  cursor: grab;
+  opacity: 0;
+}
+
+.row-index:hover .table-edge-row-drag {
+  opacity: 1;
+}
+
+.row-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: -5px;
+  left: 0;
+  z-index: 7;
+  width: 100%;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: row-resize;
+}
+
+.row-resize-handle:hover {
+  background: color-mix(in srgb, var(--color-primary) 45%, transparent);
 }
 
 .cell textarea,
@@ -2936,8 +3241,42 @@ th.sticky {
 }
 
 .file-cell {
+  position: relative;
   height: 100%;
   padding: 0;
+}
+
+.file-cell-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.file-cell:hover .file-cell-actions,
+.file-cell:focus-within .file-cell-actions {
+  opacity: 1;
+}
+
+.file-cell-actions button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.file-cell-actions button:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  color: var(--color-primary);
 }
 
 .file-picker {

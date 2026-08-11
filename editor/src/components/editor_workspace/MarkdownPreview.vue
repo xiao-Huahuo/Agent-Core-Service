@@ -26,12 +26,17 @@ import type { ImagePreviewItem } from '@/components/common/useImagePreviewer'
 const props = defineProps<{
   content: string
   path?: string
+  /** Reduces preview spacing and typography for embedded table cells. */
+  compact?: boolean
+  /** Adds a download action to each rendered image. */
+  imageDownload?: boolean
 }>()
 
 const emit = defineEmits<{
   scroll: [ratio: number]
   ready: []
   updateContent: [content: string]
+  downloadImage: [src: string, name: string]
 }>()
 
 interface SourceMarkdownTable {
@@ -284,6 +289,29 @@ function decoratePreviewImages(previewEl: HTMLElement | null) {
     return
   }
   decorateRenderedMarkdownImages(previewEl, context)
+}
+
+/** Adds per-image download controls only for callers that explicitly request them. */
+function injectImageDownloadButtons(previewEl: HTMLElement | null) {
+  if (!props.imageDownload || !previewEl) return
+  previewEl.querySelectorAll<HTMLImageElement>('img.markdown-image').forEach((image) => {
+    if (image.parentElement?.classList.contains('markdown-image-download-wrap')) return
+    const wrapper = document.createElement('span')
+    wrapper.className = 'markdown-image-download-wrap'
+    image.parentNode?.insertBefore(wrapper, image)
+    wrapper.appendChild(image)
+    const button = document.createElement('button')
+    button.className = 'markdown-image-download-button'
+    button.type = 'button'
+    button.title = '下载图片'
+    button.textContent = '↓'
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      emit('downloadImage', image.currentSrc || image.src, image.alt || 'image')
+    })
+    wrapper.appendChild(button)
+  })
 }
 
 function getAnchorHash(link: HTMLAnchorElement) {
@@ -655,6 +683,7 @@ function handlePreviewParse(element: HTMLElement) {
   const resetEl = element.querySelector<HTMLElement>('.vditor-reset') ?? element
   renderMathInPreviewDom(resetEl, displayBlocks, inlineBlocks)
   decoratePreviewImages(element)
+  injectImageDownloadButtons(element)
   highlightVueCodeBlocks(element)
   injectCodeCopyButtons()
   tableOverlay.value.visible = false
@@ -823,6 +852,7 @@ onBeforeUnmount(() => {
 <template>
   <article
     class="markdown-preview"
+    :class="{ compact: props.compact }"
     @mousemove="updateTableOverlayFromEvent"
     @mouseleave="tableOverlay.visible = false"
   >
@@ -1146,6 +1176,49 @@ onBeforeUnmount(() => {
   max-height: min(72vh, 960px);
   object-fit: contain;
 }
+
+.markdown-preview :deep(.markdown-image-download-wrap) {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+}
+
+.markdown-preview :deep(.markdown-image-download-button) {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.markdown-preview :deep(.markdown-image-download-wrap:hover .markdown-image-download-button) {
+  opacity: 1;
+}
+
+.markdown-preview.compact :deep(.vditor-preview > .vditor-reset) {
+  padding: 9px 11px !important;
+  font-size: calc(13px * var(--font-scale));
+  line-height: 1.35;
+}
+
+.markdown-preview.compact :deep(.vditor-reset > :first-child) { margin-top: 0 !important; }
+.markdown-preview.compact :deep(.vditor-reset > :last-child) { margin-bottom: 0 !important; }
+.markdown-preview.compact :deep(h1) { font-size: calc(1.35rem * var(--font-scale)) !important; }
+.markdown-preview.compact :deep(h2) { font-size: calc(1.15rem * var(--font-scale)) !important; }
+.markdown-preview.compact :deep(h3),
+.markdown-preview.compact :deep(h4),
+.markdown-preview.compact :deep(h5),
+.markdown-preview.compact :deep(h6) { font-size: calc(1rem * var(--font-scale)) !important; }
 
 .markdown-preview :deep(blockquote) {
   border-left-color: var(--color-primary) !important;

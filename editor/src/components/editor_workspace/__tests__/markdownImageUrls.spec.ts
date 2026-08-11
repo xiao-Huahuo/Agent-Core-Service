@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildMarkdownDownloadUrl,
   decorateRenderedMarkdownImages,
   isKnowledgeAssetUrl,
   rewriteMarkdownImageUrls,
@@ -20,6 +21,11 @@ const context = {
 }
 
 describe('markdownImageUrls', () => {
+  it('marks knowledge raw image URLs as downloads', () => {
+    expect(buildMarkdownDownloadUrl('/knowledge/files/raw?user_id=u&path=forms/demo/assets/a.png'))
+      .toContain('download=1')
+  })
+
   it('rewrites relative markdown images against the current file directory', () => {
     const html = rewriteMarkdownImageUrls('before ![cat](images/cat.png) after', context)
 

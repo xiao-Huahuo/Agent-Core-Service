@@ -131,6 +131,85 @@ describe('SmartFormsView', () => {
     expect(wrapper.text()).not.toContain('The missing link')
   })
 
+  it('opens uploaded literature in the editor and exposes file actions', async () => {
+    const storedForm = createDefaultLiteratureForm('我的文献表')
+    storedForm.rows[0]!.cells.literature_file = {
+      value: 'paper.pdf',
+      fileName: 'paper.pdf',
+      assetPath: 'forms/我的文献表/assets/paper.pdf',
+    }
+    vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(storedForm))
+    const workspaceStore = useWorkspaceStore()
+    const setMainView = vi.spyOn(workspaceStore, 'setMainView')
+    const selectFile = vi.spyOn(workspaceStore, 'selectFile').mockResolvedValue(undefined)
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    vi.mocked(previewKnowledgeFile).mockResolvedValueOnce({
+      path: 'forms/我的文献表/assets/paper.pdf',
+      kind: 'pdf',
+      raw_url: '/knowledge/raw/paper.pdf',
+      mtime: '2026-08-09T10:00:00',
+      size: 128,
+      extension: '.pdf',
+      readonly: true,
+    })
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    await wrapper.get('.file-picker').trigger('click')
+
+    expect(setMainView).toHaveBeenCalledWith('editor')
+    expect(selectFile).toHaveBeenCalledWith({
+      name: 'paper.pdf',
+      path: 'forms/我的文献表/assets/paper.pdf',
+      isDir: false,
+    })
+    expect(wrapper.find('button[title="下载原文件"]').exists()).toBe(true)
+    expect(wrapper.find('button[title="重新上传"]').exists()).toBe(true)
+    await wrapper.get('button[title="下载原文件"]').trigger('click')
+    await flushPromises()
+    expect(previewKnowledgeFile).toHaveBeenCalledWith('local-test', 'forms/我的文献表/assets/paper.pdf')
+    expect(anchorClick).toHaveBeenCalled()
+    anchorClick.mockRestore()
+  })
+
+  it('resizes column and row boundaries with minimum dimensions', async () => {
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+    const columnHandle = wrapper.get('th[data-column-id="title"] .column-resize-handle')
+    const rowHandle = wrapper.get('.row-resize-handle')
+
+    const pointerEvent = (type: string, clientX: number, clientY: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true })
+      Object.defineProperties(event, { clientX: { value: clientX }, clientY: { value: clientY } })
+      return event
+    }
+    columnHandle.element.dispatchEvent(pointerEvent('pointerdown', 200, 0))
+    window.dispatchEvent(pointerEvent('pointermove', 260, 0))
+    window.dispatchEvent(pointerEvent('pointerup', 0, 0))
+    rowHandle.element.dispatchEvent(pointerEvent('pointerdown', 0, 200))
+    window.dispatchEvent(pointerEvent('pointermove', 0, 250))
+    window.dispatchEvent(pointerEvent('pointerup', 0, 0))
+    await nextTick()
+
+    expect(wrapper.get('th[data-column-id="title"]').attributes('style')).toContain('290px')
+    expect(wrapper.get('tbody tr').attributes('style')).toContain('332px')
+    expect(wrapper.get('tbody td[data-column-id="title"]').attributes('style')).toContain('332px')
+  })
+
+  it('inserts rows and columns from table edge controls', async () => {
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    await wrapper.get('.table-edge-add-row').trigger('click')
+    await wrapper.get('.table-edge-add-column').trigger('click')
+
+    expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+    expect(wrapper.findAll('thead tr:nth-child(2) th')).toHaveLength(5)
+    expect(wrapper.findAll('.table-edge-column-drag')).toHaveLength(5)
+    expect(wrapper.find('button[title="拖动表格行"]').exists()).toBe(true)
+    expect(wrapper.find('button[title="拖动表格列"]').exists()).toBe(true)
+  })
+
   it('opens context submenus toward the available viewport side', async () => {
     const wrapper = mount(SmartFormsView)
     await flushPromises()
@@ -454,10 +533,10 @@ describe('SmartFormsView', () => {
     await flushPromises()
     vi.mocked(saveSmartFormDb).mockClear()
     vi.useFakeTimers()
-    const headers = () => wrapper.findAll('thead th').map((header) => header.text())
+    const headers = () => wrapper.findAll('thead tr:nth-child(2) th').map((header) => header.text())
 
-    await wrapper.findAll('thead th')[3]!.trigger('dragstart')
-    await wrapper.findAll('thead th')[2]!.trigger('drop')
+    await wrapper.findAll('thead tr:nth-child(2) th')[3]!.trigger('dragstart')
+    await wrapper.findAll('thead tr:nth-child(2) th')[2]!.trigger('drop')
     await vi.advanceTimersByTimeAsync(300)
     await flushPromises()
 

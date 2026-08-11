@@ -53,9 +53,18 @@ export interface SmartCell {
 export interface SmartRow {
   /** Stable row id. */
   id: string
+  /** Persisted row height in pixels. */
+  height?: number
   /** Cell map keyed by column id. */
   cells: Record<string, SmartCell>
 }
+
+/** Minimum dimensions keep controls usable while resizing table boundaries. */
+export const MIN_COLUMN_WIDTH = 64
+export const MIN_ROW_HEIGHT = 56
+/** Default compact Markdown cell height: approximately 15 lines at 13px/1.35 with 9px vertical padding. */
+export const DEFAULT_ROW_HEIGHT = 282
+const LEGACY_DEFAULT_ROW_HEIGHT = 112
 
 export interface SmartLiteratureForm {
   /** Schema version for future migrations. */
@@ -132,6 +141,7 @@ function createCell(column: SmartColumn, value = ''): SmartCell {
 export function createEmptyRow(columns: SmartColumn[]): SmartRow {
   return {
     id: createRowId(),
+    height: DEFAULT_ROW_HEIGHT,
     cells: Object.fromEntries(columns.map((column) => [column.id, createCell(column)])),
   }
 }
@@ -184,6 +194,12 @@ export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefin
     columns,
     rows: rows.map((row) => ({
       id: row.id || createRowId(),
+      height: Math.max(
+        MIN_ROW_HEIGHT,
+        !Number(row.height) || Number(row.height) === LEGACY_DEFAULT_ROW_HEIGHT
+          ? DEFAULT_ROW_HEIGHT
+          : Number(row.height),
+      ),
       cells: Object.fromEntries(normalizedColumns.map((column) => {
         const existing = row.cells?.[column.id]
         const value = column.id === 'reading_progress' && (!existing?.value || existing.value === '未阅读') ? '未读' : existing?.value
@@ -191,6 +207,40 @@ export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefin
       })),
     })),
   }
+}
+
+/** Returns a form with one column resized to a usable width. */
+export function resizeColumn(form: SmartLiteratureForm, columnId: string, width: number): SmartLiteratureForm {
+  return {
+    ...form,
+    updatedAt: new Date().toISOString(),
+    columns: form.columns.map((column) => column.id === columnId
+      ? { ...column, width: Math.max(MIN_COLUMN_WIDTH, Math.round(width)) }
+      : column),
+  }
+}
+
+/** Returns a form with one row resized to a usable height. */
+export function resizeRow(form: SmartLiteratureForm, rowId: string, height: number): SmartLiteratureForm {
+  return {
+    ...form,
+    updatedAt: new Date().toISOString(),
+    rows: form.rows.map((row) => row.id === rowId
+      ? { ...row, height: Math.max(MIN_ROW_HEIGHT, Math.round(height)) }
+      : row),
+  }
+}
+
+/** Inserts an uploaded image at the textarea caret using Markdown syntax. */
+export function insertMarkdownImage(value: string, cursor: number, name: string, relativePath: string): { value: string; cursor: number } {
+  const safeName = name.replace(/[\[\]]/g, '') || 'image'
+  const markdown = `![${safeName}](${encodeURI(relativePath)})`
+  const before = value.slice(0, cursor)
+  const after = value.slice(cursor)
+  const prefix = before && !before.endsWith('\n') ? '\n' : ''
+  const suffix = after && !after.startsWith('\n') ? '\n' : ''
+  const insertion = `${prefix}${markdown}${suffix}`
+  return { value: `${before}${insertion}${after}`, cursor: cursor + insertion.length }
 }
 
 export function updateCell(row: SmartRow, column: SmartColumn, value: string): SmartRow {

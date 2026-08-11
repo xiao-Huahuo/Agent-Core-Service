@@ -11,6 +11,7 @@ Smart form service tests.
 
 from __future__ import annotations
 
+from sqlalchemy import inspect, text
 from sqlmodel import create_engine
 
 from agent_service.services.smart_form_service import SmartFormService
@@ -36,6 +37,7 @@ def test_smart_form_service_round_trips_all_column_types() -> None:
         ],
         "rows": [{
             "id": "row_1",
+            "height": 176,
             "cells": {
                 "literature_file": {"value": "paper.pdf", "fileName": "paper.pdf", "assetPath": "forms/项目阅读表/assets/paper.pdf"},
                 "literature_content": {"value": "抽取正文", "status": "ready"},
@@ -56,6 +58,26 @@ def test_smart_form_service_round_trips_all_column_types() -> None:
     paper_type = next(column for column in loaded_form["columns"] if column["id"] == "paper_type")
     assert paper_type["options"] == ["研究论文", "综述论文"]
     row_cells = loaded_form["rows"][0]["cells"]
+    assert loaded_form["rows"][0]["height"] == 176
     assert row_cells["paper_type"]["value"] == "研究论文, 综述论文"
     assert row_cells["literature_file"]["assetPath"] == "forms/项目阅读表/assets/paper.pdf"
     assert row_cells["title"]["status"] == "ready"
+
+
+def test_smart_form_service_adds_row_height_to_existing_database() -> None:
+    """旧版行表缺少 height 列时应自动迁移且保留已有数据。"""
+
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TABLE smart_form_rows ("
+            "row_record_id VARCHAR(160) PRIMARY KEY, "
+            "form_id VARCHAR(64) NOT NULL, "
+            "row_id VARCHAR(96) NOT NULL, "
+            "order_index INTEGER NOT NULL)"
+        ))
+
+    SmartFormService(engine=engine)
+
+    columns = {column["name"] for column in inspect(engine).get_columns("smart_form_rows")}
+    assert "height" in columns

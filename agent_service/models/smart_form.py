@@ -20,6 +20,8 @@ from sqlmodel import Field, SQLModel
 
 from agent_service.models.session import utc_now
 
+DEFAULT_SMART_FORM_ROW_HEIGHT = 282
+
 
 class SmartFormRecord(SQLModel, table=True):
     """智能表格主表。"""
@@ -68,6 +70,7 @@ class SmartFormRowRecord(SQLModel, table=True):
     form_id: str = Field(index=True, max_length=64)
     row_id: str = Field(index=True, max_length=96)
     order_index: int = Field(index=True)
+    height: int = Field(default=282)
 
 
 class SmartFormCellRecord(SQLModel, table=True):

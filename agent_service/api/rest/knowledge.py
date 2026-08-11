@@ -146,6 +146,7 @@ async def preview_knowledge_file(
 async def raw_knowledge_file(
     user_id: str = Query(..., min_length=1, description="用户 ID"),
     path: str = Query(..., min_length=1, description="知识库内相对路径"),
+    download: bool = Query(False, description="是否以附件方式下载"),
 ) -> FileResponse:
     """返回当前 active 知识库中文件的原始字节流,用于 PDF 等 iframe 预览。"""
 
@@ -162,7 +163,7 @@ async def raw_knowledge_file(
         file_path,
         media_type=media_type,
         filename=file_path.name,
-        content_disposition_type="inline",
+        content_disposition_type="attachment" if download else "inline",
     )
 
 
