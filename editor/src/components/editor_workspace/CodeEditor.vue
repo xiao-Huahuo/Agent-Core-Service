@@ -58,6 +58,12 @@ type MarkdownCommand =
   | 'heading-5'
   | 'heading-6'
   | 'table'
+  | 'table-row-above'
+  | 'table-row-below'
+  | 'table-column-left'
+  | 'table-column-right'
+  | 'table-row-delete'
+  | 'table-column-delete'
   | 'hr'
   | 'insert-code-block'
   | 'math-block'
@@ -74,6 +80,16 @@ interface MarkdownMenuItem {
   command: MarkdownCommand
   label: string
   shortcut?: string
+}
+
+interface MarkdownTableContext {
+  startLine: number
+  endLine: number
+  separatorLine: number
+  currentLine: number
+  currentColumn: number
+  lines: string[]
+  offsets: number[]
 }
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
@@ -101,6 +117,43 @@ const findBarOpen = ref(false)
 const findQuery = ref('')
 const replaceQuery = ref('')
 const currentMatchIndex = ref(0)
+const tableOverlay = ref<{
+  visible: boolean
+  showLeftEdge: boolean
+  showTopEdge: boolean
+  showRightEdge: boolean
+  showBottomEdge: boolean
+  left: number
+  top: number
+  width: number
+  height: number
+  rowTop: number
+  rowHeight: number
+  columnLeft: number
+  columnWidth: number
+  rowIndex: number
+  columnIndex: number
+}>({
+  visible: false,
+  showLeftEdge: false,
+  showTopEdge: false,
+  showRightEdge: false,
+  showBottomEdge: false,
+  left: 0,
+  top: 0,
+  width: 0,
+  height: 0,
+  rowTop: 0,
+  rowHeight: 0,
+  columnLeft: 0,
+  columnWidth: 0,
+  rowIndex: 0,
+  columnIndex: 0,
+})
+const tableOverlayElement = ref<HTMLDivElement | null>(null)
+const TABLE_EDGE_BUTTON_SIZE = 9
+const TABLE_EDGE_HIT_ZONE = 14
+let tableDrag: { type: 'row' | 'column'; source: number } | null = null
 let programmaticScroll = false
 const isMarkdown = computed(() => ['md', 'markdown'].includes((props.language || '').toLowerCase()))
 const isSyntaxHighlightedLanguage = computed(() => (
@@ -149,6 +202,9 @@ const highlightedHtml = computed(() => {
   let pos = 0
   for (let i = 0; i < ms.length; i++) {
     const m = ms[i]
+    if (!m) {
+      continue
+    }
     if (m.start > pos) {
       result += escapeHtml(content.slice(pos, m.start))
     }
@@ -204,6 +260,27 @@ const menuGroups: Array<{
     ],
   },
   {
+    title: '插入行',
+    items: [
+      { command: 'table-row-above', label: '上方插入' },
+      { command: 'table-row-below', label: '下方插入' },
+    ],
+  },
+  {
+    title: '插入列',
+    items: [
+      { command: 'table-column-left', label: '左侧插入' },
+      { command: 'table-column-right', label: '右侧插入' },
+    ],
+  },
+  {
+    title: '删除',
+    items: [
+      { command: 'table-row-delete', label: '删除整行' },
+      { command: 'table-column-delete', label: '删除整列' },
+    ],
+  },
+  {
     title: '编辑',
     items: [
       { command: 'save', label: '保存', shortcut: 'Ctrl+S' },
@@ -224,6 +301,9 @@ function markdownGroupIcon(title: string): string {
     '文本格式': 'text-fields',
     '段落设置': 'view-list',
     '插入': 'add',
+    '插入行': 'table-chart',
+    '插入列': 'view-column',
+    '删除': 'trash',
     '编辑': 'edit',
   }
   return icons[title] ?? 'more-horiz'
@@ -251,6 +331,12 @@ function markdownCommandIcon(command: MarkdownCommand): string {
     'heading-5': 'title',
     'heading-6': 'title',
     table: 'table-chart',
+    'table-row-above': 'arrow-upward',
+    'table-row-below': 'arrow-downward',
+    'table-column-left': 'arrow-left',
+    'table-column-right': 'arrow-right',
+    'table-row-delete': 'trash',
+    'table-column-delete': 'trash',
     hr: 'remove',
     'insert-code-block': 'code',
     'math-block': 'table-chart',
@@ -352,6 +438,256 @@ function lineBounds(start: number, end: number) {
   let lineEnd = content.indexOf('\n', end)
   if (lineEnd < 0) lineEnd = content.length
   return { lineStart, lineEnd }
+}
+
+function lineStartOffsets(content: string): number[] {
+  const offsets = [0]
+  for (let index = 0; index < content.length; index += 1) {
+    if (content[index] === '\n') {
+      offsets.push(index + 1)
+    }
+  }
+  return offsets
+}
+
+function lineIndexAtOffset(offsets: number[], offset: number): number {
+  for (let index = offsets.length - 1; index >= 0; index -= 1) {
+    const lineOffset = offsets[index]
+    if (lineOffset !== undefined && offset >= lineOffset) {
+      return index
+    }
+  }
+  return 0
+}
+
+function isMarkdownTableRow(line: string): boolean {
+  const trimmed = line.trim()
+  return trimmed.includes('|') && trimmed.split('|').length >= 3
+}
+
+function isMarkdownTableSeparator(line: string): boolean {
+  const cells = parseTableRow(line)
+  if (cells.length < 2) {
+    return false
+  }
+  return cells.every((cell) => /^:?-{3,}:?$/u.test(cell.trim()))
+}
+
+function parseTableRow(line: string): string[] {
+  const trimmed = line.trim()
+  const body = trimmed.replace(/^\|/u, '').replace(/\|$/u, '')
+  return body.split('|').map((cell) => cell.trim())
+}
+
+function formatTableRow(cells: string[]): string {
+  return `| ${cells.map((cell) => cell.trim() || ' ').join(' | ')} |`
+}
+
+function formatTableSeparator(columnCount: number): string {
+  return `| ${Array.from({ length: Math.max(1, columnCount) }, () => '---').join(' | ')} |`
+}
+
+function normalizeTableRows(lines: string[]): string[] {
+  const columnCount = Math.max(...lines.map((line) => parseTableRow(line).length), 1)
+  return lines.map((line) => {
+    if (isMarkdownTableSeparator(line)) {
+      return formatTableSeparator(columnCount)
+    }
+    const cells = parseTableRow(line)
+    while (cells.length < columnCount) {
+      cells.push('')
+    }
+    return formatTableRow(cells.slice(0, columnCount))
+  })
+}
+
+function columnIndexForLine(line: string, columnOffset: number): number {
+  const pipePositions: number[] = []
+  for (let index = 0; index < line.length; index += 1) {
+    if (line[index] === '|') {
+      pipePositions.push(index)
+    }
+  }
+  if (pipePositions.length < 2) {
+    return 0
+  }
+  for (let index = 0; index < pipePositions.length - 1; index += 1) {
+    const start = pipePositions[index] ?? 0
+    const end = pipePositions[index + 1] ?? line.length
+    if (columnOffset <= end) {
+      return Math.max(0, index)
+    }
+    if (columnOffset >= start && columnOffset <= end) {
+      return Math.max(0, index)
+    }
+  }
+  return Math.max(0, pipePositions.length - 2)
+}
+
+function findMarkdownTableContext(offset = selectedRange().start): MarkdownTableContext | null {
+  const content = model.value
+  const lines = content.split('\n')
+  const offsets = lineStartOffsets(content)
+  const currentLine = lineIndexAtOffset(offsets, offset)
+  const currentText = lines[currentLine] ?? ''
+  if (!isMarkdownTableRow(currentText)) {
+    return null
+  }
+  let startLine = currentLine
+  while (startLine > 0 && isMarkdownTableRow(lines[startLine - 1] ?? '')) {
+    startLine -= 1
+  }
+  let endLine = currentLine
+  while (endLine < lines.length - 1 && isMarkdownTableRow(lines[endLine + 1] ?? '')) {
+    endLine += 1
+  }
+  const separatorLine = lines.findIndex((line, index) => (
+    index >= startLine && index <= endLine && isMarkdownTableSeparator(line)
+  ))
+  if (separatorLine < startLine || separatorLine > endLine) {
+    return null
+  }
+  const columnOffset = offset - (offsets[currentLine] ?? 0)
+  return {
+    startLine,
+    endLine,
+    separatorLine,
+    currentLine,
+    currentColumn: columnIndexForLine(currentText, columnOffset),
+    lines: lines.slice(startLine, endLine + 1),
+    offsets,
+  }
+}
+
+function markdownTableContexts(offsets = lineStartOffsets(model.value)): MarkdownTableContext[] {
+  const lines = model.value.split('\n')
+  const contexts: MarkdownTableContext[] = []
+  let lineIndex = 0
+  while (lineIndex < lines.length) {
+    if (!isMarkdownTableRow(lines[lineIndex] ?? '')) {
+      lineIndex += 1
+      continue
+    }
+    const startLine = lineIndex
+    let endLine = lineIndex
+    while (endLine < lines.length - 1 && isMarkdownTableRow(lines[endLine + 1] ?? '')) {
+      endLine += 1
+    }
+    const separatorLine = lines.findIndex((line, index) => (
+      index >= startLine && index <= endLine && isMarkdownTableSeparator(line)
+    ))
+    if (separatorLine >= startLine && separatorLine <= endLine) {
+      contexts.push({
+        startLine,
+        endLine,
+        separatorLine,
+        currentLine: startLine,
+        currentColumn: 0,
+        lines: lines.slice(startLine, endLine + 1),
+        offsets,
+      })
+    }
+    lineIndex = endLine + 1
+  }
+  return contexts
+}
+
+function replaceTableLines(ctx: MarkdownTableContext, nextLines: string[], selectionLine = ctx.currentLine) {
+  const startOffset = ctx.offsets[ctx.startLine] ?? 0
+  const afterEndLineOffset = ctx.endLine + 1 < ctx.offsets.length
+    ? (ctx.offsets[ctx.endLine + 1] ?? model.value.length)
+    : model.value.length
+  const normalized = normalizeTableRows(nextLines).join('\n')
+  const keepsTrailingBreak = afterEndLineOffset < model.value.length && model.value[afterEndLineOffset - 1] === '\n'
+  const nextText = keepsTrailingBreak ? `${normalized}\n` : normalized
+  const targetLine = Math.max(ctx.startLine, Math.min(ctx.startLine + nextLines.length - 1, selectionLine))
+  replaceRange(startOffset, afterEndLineOffset, nextText, ctx.offsets[targetLine] ?? startOffset, ctx.offsets[targetLine] ?? startOffset)
+}
+
+function insertMarkdownTableRow(position: 'above' | 'below') {
+  const ctx = findMarkdownTableContext()
+  if (!ctx) return
+  const rows = normalizeTableRows(ctx.lines)
+  const columnCount = parseTableRow(rows[0] ?? '').length || 2
+  const emptyRow = formatTableRow(Array.from({ length: columnCount }, () => ''))
+  const relativeLine = ctx.currentLine - ctx.startLine
+  const separatorRelativeLine = ctx.separatorLine - ctx.startLine
+  let insertAt = position === 'above' ? relativeLine : relativeLine + 1
+  if (insertAt <= separatorRelativeLine) {
+    insertAt = separatorRelativeLine + 1
+  }
+  rows.splice(insertAt, 0, emptyRow)
+  replaceTableLines(ctx, rows, ctx.startLine + insertAt)
+}
+
+function insertMarkdownTableColumn(side: 'left' | 'right') {
+  const ctx = findMarkdownTableContext()
+  if (!ctx) return
+  const rows = normalizeTableRows(ctx.lines)
+  const insertAt = ctx.currentColumn + (side === 'right' ? 1 : 0)
+  const nextRows = rows.map((line) => {
+    const cells = parseTableRow(line)
+    cells.splice(Math.max(0, Math.min(insertAt, cells.length)), 0, '')
+    return isMarkdownTableSeparator(line) ? formatTableSeparator(cells.length) : formatTableRow(cells)
+  })
+  replaceTableLines(ctx, nextRows)
+}
+
+function deleteMarkdownTableRow() {
+  const ctx = findMarkdownTableContext()
+  if (!ctx || ctx.currentLine === ctx.separatorLine) return
+  const rows = normalizeTableRows(ctx.lines)
+  const relativeLine = ctx.currentLine - ctx.startLine
+  if (rows.length <= 2) return
+  rows.splice(relativeLine, 1)
+  replaceTableLines(ctx, rows, Math.min(ctx.endLine - 1, ctx.currentLine))
+}
+
+function deleteMarkdownTableColumn() {
+  const ctx = findMarkdownTableContext()
+  if (!ctx) return
+  const rows = normalizeTableRows(ctx.lines)
+  const columnCount = parseTableRow(rows[0] ?? '').length
+  if (columnCount <= 1) return
+  const deleteAt = Math.max(0, Math.min(ctx.currentColumn, columnCount - 1))
+  const nextRows = rows.map((line) => {
+    const cells = parseTableRow(line)
+    cells.splice(deleteAt, 1)
+    return isMarkdownTableSeparator(line) ? formatTableSeparator(cells.length) : formatTableRow(cells)
+  })
+  replaceTableLines(ctx, nextRows)
+}
+
+function moveMarkdownTableRow(sourceLine: number, targetLine: number) {
+  const ctx = findMarkdownTableContext(ctxOffsetForLine(sourceLine))
+  if (!ctx || sourceLine === ctx.separatorLine || targetLine === ctx.separatorLine) return
+  const rows = normalizeTableRows(ctx.lines)
+  const sourceIndex = sourceLine - ctx.startLine
+  const targetIndex = Math.max(0, Math.min(rows.length - 1, targetLine - ctx.startLine))
+  const [row] = rows.splice(sourceIndex, 1)
+  if (!row) return
+  rows.splice(targetIndex, 0, row)
+  replaceTableLines(ctx, rows, ctx.startLine + targetIndex)
+}
+
+function moveMarkdownTableColumn(sourceColumn: number, targetColumn: number) {
+  const ctx = findMarkdownTableContext()
+  if (!ctx || sourceColumn === targetColumn) return
+  const rows = normalizeTableRows(ctx.lines)
+  const nextRows = rows.map((line) => {
+    const cells = parseTableRow(line)
+    const sourceIndex = Math.max(0, Math.min(sourceColumn, cells.length - 1))
+    const targetIndex = Math.max(0, Math.min(targetColumn, cells.length - 1))
+    const [cell] = cells.splice(sourceIndex, 1)
+    if (cell === undefined) return line
+    cells.splice(targetIndex, 0, cell)
+    return isMarkdownTableSeparator(line) ? formatTableSeparator(cells.length) : formatTableRow(cells)
+  })
+  replaceTableLines(ctx, nextRows)
+}
+
+function ctxOffsetForLine(lineIndex: number): number {
+  return lineStartOffsets(model.value)[lineIndex] ?? 0
 }
 
 function transformSelectedLines(transform: (line: string, index: number) => string) {
@@ -492,6 +828,7 @@ function getScrollSnapshot(): EditorScrollPayload {
 
 function handleEditorScroll() {
   syncScroll()
+  tableOverlay.value.visible = false
   if (programmaticScroll) {
     return
   }
@@ -521,6 +858,188 @@ function scrollToRatio(ratio: number) {
 }
 
 defineExpose({ getScrollSnapshot, scrollToRatio })
+
+function editorLineHeight(textarea: HTMLTextAreaElement): number {
+  const computedStyle = window.getComputedStyle(textarea)
+  const parsed = Number.parseFloat(computedStyle.lineHeight)
+  if (Number.isFinite(parsed)) {
+    return parsed
+  }
+  return Number.parseFloat(computedStyle.fontSize || '13') * 1.6
+}
+
+function editorCharWidth(textarea: HTMLTextAreaElement): number {
+  const computedStyle = window.getComputedStyle(textarea)
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return 8
+  ctx.font = `${computedStyle.fontSize} ${computedStyle.fontFamily}`
+  return Math.max(6, ctx.measureText('| --- |').width / 7)
+}
+
+function tableContextFromPointer(event: MouseEvent): MarkdownTableContext | null {
+  const textarea = textareaRef.value
+  if (!textarea || !isMarkdown.value || props.readonly) {
+    return null
+  }
+  const rect = textarea.getBoundingClientRect()
+  const computedStyle = window.getComputedStyle(textarea)
+  const paddingTop = Number.parseFloat(computedStyle.paddingTop || '0')
+  const paddingLeft = Number.parseFloat(computedStyle.paddingLeft || '0')
+  const lineHeight = editorLineHeight(textarea)
+  const charWidth = editorCharWidth(textarea)
+  const lineIndex = Math.max(0, Math.floor((event.clientY - rect.top - paddingTop + textarea.scrollTop) / lineHeight))
+  const columnOffset = Math.max(0, Math.floor((event.clientX - rect.left - paddingLeft + textarea.scrollLeft) / charWidth))
+  const offsets = lineStartOffsets(model.value)
+  const directContext = findMarkdownTableContext((offsets[lineIndex] ?? 0) + columnOffset)
+  if (directContext) {
+    return directContext
+  }
+  const tableContexts = markdownTableContexts(offsets)
+  const edgeContext = tableContexts.find((ctx) => {
+    const maxLineLength = Math.max(...ctx.lines.map((line) => line.length), 8)
+    const left = rect.left + paddingLeft - textarea.scrollLeft
+    const top = rect.top + paddingTop + ctx.startLine * lineHeight - textarea.scrollTop
+    const right = left + Math.max(120, maxLineLength * charWidth)
+    const bottom = top + (ctx.endLine - ctx.startLine + 1) * lineHeight
+    return event.clientX >= left - TABLE_EDGE_BUTTON_SIZE
+      && event.clientX <= right + TABLE_EDGE_BUTTON_SIZE
+      && event.clientY >= top - TABLE_EDGE_BUTTON_SIZE
+      && event.clientY <= bottom + TABLE_EDGE_BUTTON_SIZE
+  })
+  if (!edgeContext) {
+    return null
+  }
+  const currentLine = Math.max(edgeContext.startLine, Math.min(edgeContext.endLine, lineIndex))
+  const currentText = model.value.split('\n')[currentLine] ?? ''
+  return {
+    ...edgeContext,
+    currentLine,
+    currentColumn: columnIndexForLine(currentText, columnOffset),
+  }
+}
+
+function updateTableOverlay(event: MouseEvent) {
+  const textarea = textareaRef.value
+  if (!textarea || tableDrag) {
+    return
+  }
+  const eventTarget = event.target instanceof Element ? event.target : null
+  if (eventTarget && tableOverlayElement.value?.contains(eventTarget)) {
+    return
+  }
+  const ctx = tableContextFromPointer(event)
+  if (!ctx) {
+    tableOverlay.value.visible = false
+    return
+  }
+  const rect = textarea.getBoundingClientRect()
+  const computedStyle = window.getComputedStyle(textarea)
+  const paddingTop = Number.parseFloat(computedStyle.paddingTop || '0')
+  const paddingLeft = Number.parseFloat(computedStyle.paddingLeft || '0')
+  const lineHeight = editorLineHeight(textarea)
+  const charWidth = editorCharWidth(textarea)
+  const maxLineLength = Math.max(...ctx.lines.map((line) => line.length), 8)
+  const tableLeft = paddingLeft - textarea.scrollLeft
+  const tableTop = paddingTop + ctx.startLine * lineHeight - textarea.scrollTop
+  const tableWidth = Math.max(120, maxLineLength * charWidth)
+  const tableHeight = (ctx.endLine - ctx.startLine + 1) * lineHeight
+  const pointerX = event.clientX - rect.left
+  const pointerY = event.clientY - rect.top
+  const withinHorizontalEdgeBand = pointerX >= tableLeft - TABLE_EDGE_BUTTON_SIZE
+    && pointerX <= tableLeft + tableWidth + TABLE_EDGE_BUTTON_SIZE
+  const withinVerticalEdgeBand = pointerY >= tableTop - TABLE_EDGE_BUTTON_SIZE
+    && pointerY <= tableTop + tableHeight + TABLE_EDGE_BUTTON_SIZE
+  const showLeftEdge = withinVerticalEdgeBand
+    && pointerX >= tableLeft - TABLE_EDGE_BUTTON_SIZE
+    && pointerX <= tableLeft + TABLE_EDGE_HIT_ZONE
+  const showTopEdge = withinHorizontalEdgeBand
+    && pointerY >= tableTop - TABLE_EDGE_BUTTON_SIZE
+    && pointerY <= tableTop + TABLE_EDGE_HIT_ZONE
+  const showRightEdge = withinVerticalEdgeBand
+    && pointerX >= tableLeft + tableWidth - TABLE_EDGE_HIT_ZONE
+    && pointerX <= tableLeft + tableWidth + TABLE_EDGE_BUTTON_SIZE
+  const showBottomEdge = withinHorizontalEdgeBand
+    && pointerY >= tableTop + tableHeight - TABLE_EDGE_HIT_ZONE
+    && pointerY <= tableTop + tableHeight + TABLE_EDGE_BUTTON_SIZE
+  if (!showLeftEdge && !showTopEdge && !showRightEdge && !showBottomEdge) {
+    tableOverlay.value.visible = false
+    return
+  }
+  const currentLine = model.value.split('\n')[ctx.currentLine] ?? ''
+  const pipes: number[] = []
+  for (let index = 0; index < currentLine.length; index += 1) {
+    if (currentLine[index] === '|') pipes.push(index)
+  }
+  const columnStart = pipes[ctx.currentColumn] ?? 0
+  const columnEnd = pipes[ctx.currentColumn + 1] ?? (columnStart + 8)
+  tableOverlay.value = {
+    visible: true,
+    showLeftEdge,
+    showTopEdge,
+    showRightEdge,
+    showBottomEdge,
+    left: tableLeft,
+    top: tableTop,
+    width: tableWidth,
+    height: tableHeight,
+    rowTop: paddingTop + ctx.currentLine * lineHeight - textarea.scrollTop,
+    rowHeight: lineHeight,
+    columnLeft: paddingLeft + columnStart * charWidth - textarea.scrollLeft,
+    columnWidth: Math.max(24, (columnEnd - columnStart) * charWidth),
+    rowIndex: ctx.currentLine,
+    columnIndex: ctx.currentColumn,
+  }
+}
+
+function offsetForTableCell(lineIndex: number, columnIndex: number): number {
+  const lines = model.value.split('\n')
+  const line = lines[lineIndex] ?? ''
+  const offsets = lineStartOffsets(model.value)
+  const pipes: number[] = []
+  for (let index = 0; index < line.length; index += 1) {
+    if (line[index] === '|') pipes.push(index)
+  }
+  return (offsets[lineIndex] ?? 0) + (pipes[columnIndex] ?? 0) + 1
+}
+
+function focusTablePosition(lineIndex: number, columnIndex: number) {
+  const offset = offsetForTableCell(lineIndex, columnIndex)
+  textareaRef.value?.focus()
+  textareaRef.value?.setSelectionRange(offset, offset)
+}
+
+function addOverlayTableRow() {
+  focusTablePosition(tableOverlay.value.rowIndex, tableOverlay.value.columnIndex)
+  insertMarkdownTableRow('below')
+}
+
+function addOverlayTableColumn() {
+  focusTablePosition(tableOverlay.value.rowIndex, tableOverlay.value.columnIndex)
+  insertMarkdownTableColumn('right')
+}
+
+function beginTableDrag(type: 'row' | 'column', event: PointerEvent) {
+  if (!tableOverlay.value.visible) return
+  event.preventDefault()
+  tableDrag = { type, source: type === 'row' ? tableOverlay.value.rowIndex : tableOverlay.value.columnIndex }
+  document.addEventListener('pointerup', finishTableDrag)
+}
+
+function finishTableDrag(event: PointerEvent) {
+  document.removeEventListener('pointerup', finishTableDrag)
+  const drag = tableDrag
+  tableDrag = null
+  if (!drag) return
+  const ctx = tableContextFromPointer(event)
+  if (!ctx) return
+  if (drag.type === 'row') {
+    moveMarkdownTableRow(drag.source, ctx.currentLine)
+  } else {
+    focusTablePosition(ctx.currentLine, ctx.currentColumn)
+    moveMarkdownTableColumn(drag.source, ctx.currentColumn)
+  }
+}
 
 function findNext() {
   selectMatch(currentMatchIndex.value + 1)
@@ -597,6 +1116,12 @@ async function runCommand(command: MarkdownCommand) {
     case 'heading-5': applyHeading(5); break
     case 'heading-6': applyHeading(6); break
     case 'table': insertBlock('| 列 1 | 列 2 |\n| --- | --- |\n| 内容 | 内容 |'); break
+    case 'table-row-above': insertMarkdownTableRow('above'); break
+    case 'table-row-below': insertMarkdownTableRow('below'); break
+    case 'table-column-left': insertMarkdownTableColumn('left'); break
+    case 'table-column-right': insertMarkdownTableColumn('right'); break
+    case 'table-row-delete': deleteMarkdownTableRow(); break
+    case 'table-column-delete': deleteMarkdownTableColumn(); break
     case 'hr': insertBlock('---'); break
     case 'insert-code-block': insertBlock('```\n\n```', 4); break
     case 'math-block': insertBlock('$$\n\n$$', 3); break
@@ -766,7 +1291,11 @@ onBeforeUnmount(() => {
         <button type="button" class="action-btn close-btn" @click="closeFindBar">关闭</button>
       </div>
     </div>
-    <div class="editor-wrapper">
+    <div
+      class="editor-wrapper"
+      @mousemove="updateTableOverlay"
+      @mouseleave="tableOverlay.visible = false"
+    >
       <div
         v-if="isSyntaxHighlightedLanguage || findBarOpen || Boolean(highlightQuery)"
         ref="highlightRef"
@@ -797,6 +1326,56 @@ onBeforeUnmount(() => {
         @scroll="handleEditorScroll"
         @contextmenu="openContextMenu"
       ></textarea>
+      <div
+        v-if="tableOverlay.visible"
+        ref="tableOverlayElement"
+        class="markdown-table-overlay"
+        :style="{
+          left: `${tableOverlay.left}px`,
+          top: `${tableOverlay.top}px`,
+          width: `${tableOverlay.width}px`,
+          height: `${tableOverlay.height}px`,
+        }"
+      >
+        <button
+          v-if="tableOverlay.showLeftEdge"
+          class="table-row-drag-handle"
+          type="button"
+          title="拖动表格行"
+          :style="{ top: `${tableOverlay.rowTop - tableOverlay.top}px`, height: `${tableOverlay.rowHeight}px` }"
+          @pointerdown="beginTableDrag('row', $event)"
+        >
+          <IcIcon name="unfold" :size="10" />
+        </button>
+        <button
+          v-if="tableOverlay.showTopEdge"
+          class="table-column-drag-handle"
+          type="button"
+          title="拖动表格列"
+          :style="{ left: `${tableOverlay.columnLeft - tableOverlay.left}px`, width: `${tableOverlay.columnWidth}px` }"
+          @pointerdown="beginTableDrag('column', $event)"
+        >
+          <IcIcon name="unfold" :size="10" />
+        </button>
+        <button
+          v-if="tableOverlay.showBottomEdge"
+          class="table-add-row-button"
+          type="button"
+          title="添加空行"
+          @click="addOverlayTableRow"
+        >
+          <IcIcon name="add" :size="10" />
+        </button>
+        <button
+          v-if="tableOverlay.showRightEdge"
+          class="table-add-column-button"
+          type="button"
+          title="添加空列"
+          @click="addOverlayTableColumn"
+        >
+          <IcIcon name="add" :size="10" />
+        </button>
+      </div>
     </div>
     <div
       v-if="contextMenuOpen"
@@ -1080,6 +1659,74 @@ onBeforeUnmount(() => {
 .code-editor-input.syntax-highlighted::-moz-selection {
   background: color-mix(in srgb, var(--color-primary) 28%, transparent);
   color: transparent;
+}
+
+.markdown-table-overlay {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.markdown-table-overlay button {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  background: var(--color-surface-raised);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 34%, transparent);
+  color: var(--color-text-tertiary);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.markdown-table-overlay button:hover {
+  border-color: color-mix(in srgb, var(--color-text-tertiary) 45%, var(--color-border));
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+
+.markdown-table-overlay button :deep(svg) {
+  display: block;
+  opacity: 0.72;
+}
+
+.table-row-drag-handle {
+  left: -9px;
+  width: 9px;
+  cursor: grab;
+}
+
+.table-column-drag-handle {
+  top: -9px;
+  height: 9px;
+  cursor: grab;
+}
+
+.table-column-drag-handle :deep(svg) {
+  transform: rotate(90deg);
+}
+
+.table-row-drag-handle:active,
+.table-column-drag-handle:active {
+  cursor: grabbing;
+}
+
+.table-add-row-button {
+  left: 0;
+  right: 0;
+  bottom: -9px;
+  height: 9px;
+}
+
+.table-add-column-button {
+  top: 0;
+  right: -9px;
+  bottom: 0;
+  width: 9px;
 }
 
 .markdown-context-menu {

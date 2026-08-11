@@ -93,4 +93,50 @@ describe('MarkdownPreview Split synchronization', () => {
 
     frameSpy.mockRestore()
   })
+
+  it('emits updated Markdown when adding a row from a rendered preview table', async () => {
+    const wrapper = mount(MarkdownPreview, {
+      props: {
+        content: '| A | B |\n| --- | --- |\n| 1 | 2 |',
+        path: 'notes/test.md',
+      },
+    })
+    const host = wrapper.get('.markdown-preview-renderer').element as HTMLElement
+    host.appendChild(vditorMocks.previewElement)
+    vditorMocks.previewElement.innerHTML = '<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>'
+    const table = vditorMocks.previewElement.querySelector('table') as HTMLTableElement
+    const headerRow = table.rows[0] as HTMLTableRowElement
+    const bodyRow = table.rows[1] as HTMLTableRowElement
+    const cell = table.querySelector('tbody td') as HTMLTableCellElement
+    const headerCells = [...table.querySelectorAll<HTMLTableCellElement>('thead th')]
+    const bodyCells = [...table.querySelectorAll<HTMLTableCellElement>('tbody td')]
+    Object.defineProperty(host, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 400, height: 200, right: 400, bottom: 200 }) })
+    Object.defineProperty(table, 'getBoundingClientRect', { value: () => ({ left: 20, top: 20, width: 280, height: 60, right: 300, bottom: 80 }) })
+    Object.defineProperty(headerRow, 'getBoundingClientRect', { value: () => ({ left: 20, top: 20, width: 200, height: 30, right: 220, bottom: 50 }) })
+    Object.defineProperty(bodyRow, 'getBoundingClientRect', { value: () => ({ left: 20, top: 50, width: 200, height: 30, right: 220, bottom: 80 }) })
+    Object.defineProperty(headerCells[0], 'getBoundingClientRect', { value: () => ({ left: 20, top: 20, width: 100, height: 30, right: 120, bottom: 50 }) })
+    Object.defineProperty(headerCells[1], 'getBoundingClientRect', { value: () => ({ left: 120, top: 20, width: 100, height: 30, right: 220, bottom: 50 }) })
+    Object.defineProperty(cell, 'getBoundingClientRect', { value: () => ({ left: 20, top: 50, width: 100, height: 30, right: 120, bottom: 80 }) })
+    Object.defineProperty(bodyCells[1], 'getBoundingClientRect', { value: () => ({ left: 120, top: 50, width: 100, height: 30, right: 220, bottom: 80 }) })
+
+    cell.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 80, clientY: 60 }))
+    await nextTick()
+    expect(wrapper.find('.markdown-preview-table-overlay').exists()).toBe(false)
+
+    const previewSurface = wrapper.get('.markdown-preview').element as HTMLElement
+    previewSurface.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 30, clientY: 84 }))
+    await nextTick()
+    const overlay = wrapper.get('.markdown-preview-table-overlay').element as HTMLElement
+    expect(overlay.style.left).toBe('20px')
+    expect(overlay.style.width).toBe('200px')
+    expect(wrapper.find('.preview-table-add-row-button').exists()).toBe(true)
+    expect(wrapper.find('.preview-table-column-drag-handle').exists()).toBe(false)
+    overlay.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 18, clientY: 60 }))
+    await nextTick()
+    expect(wrapper.find('.preview-table-add-row-button').exists()).toBe(true)
+
+    await wrapper.get('.preview-table-add-row-button').trigger('click')
+
+    expect(wrapper.emitted('updateContent')?.[0]?.[0]).toBe('| A | B |\n| --- | --- |\n| 1 | 2 |\n|   |   |')
+  })
 })

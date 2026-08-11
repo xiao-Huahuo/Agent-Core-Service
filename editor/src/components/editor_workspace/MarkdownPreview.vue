@@ -14,6 +14,7 @@ import {
   decorateRenderedMarkdownImages,
   rewriteMarkdownImageUrls,
 } from '@/components/editor_workspace/markdownImageUrls'
+import IcIcon from '@/components/common/IcIcon.vue'
 import { hljs } from './codeHighlight'
 import { extractPreviewMath, renderMathInPreviewDom } from './mathRender'
 import { useSettingsStore } from '@/stores/settings'
@@ -30,7 +31,15 @@ const props = defineProps<{
 const emit = defineEmits<{
   scroll: [ratio: number]
   ready: []
+  updateContent: [content: string]
 }>()
+
+interface SourceMarkdownTable {
+  startLine: number
+  endLine: number
+  separatorLine: number
+  lines: string[]
+}
 
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
@@ -46,6 +55,44 @@ type VditorPreviewInternals = Vditor & {
 
 const imagePreviewer = useImagePreviewer()
 const previewHost = ref<HTMLDivElement | null>(null)
+const tableOverlayElement = ref<HTMLDivElement | null>(null)
+const TABLE_EDGE_BUTTON_SIZE = 9
+const TABLE_EDGE_HIT_ZONE = 14
+const tableOverlay = ref<{
+  visible: boolean
+  showLeftEdge: boolean
+  showTopEdge: boolean
+  showRightEdge: boolean
+  showBottomEdge: boolean
+  left: number
+  top: number
+  width: number
+  height: number
+  rowTop: number
+  rowHeight: number
+  columnLeft: number
+  columnWidth: number
+  tableIndex: number
+  rowIndex: number
+  columnIndex: number
+}>({
+  visible: false,
+  showLeftEdge: false,
+  showTopEdge: false,
+  showRightEdge: false,
+  showBottomEdge: false,
+  left: 0,
+  top: 0,
+  width: 0,
+  height: 0,
+  rowTop: 0,
+  rowHeight: 0,
+  columnLeft: 0,
+  columnWidth: 0,
+  tableIndex: 0,
+  rowIndex: 0,
+  columnIndex: 0,
+})
 let instance: Vditor | null = null
 let mounted = false
 let renderVersion = 0
@@ -53,6 +100,142 @@ let programmaticScroll = false
 let programmaticScrollTimer: ReturnType<typeof setTimeout> | null = null
 let displayBlocks: string[] = []
 let inlineBlocks: string[] = []
+let previewTableDrag: { type: 'row' | 'column'; tableIndex: number; source: number } | null = null
+
+function parseTableRow(line: string): string[] {
+  const trimmed = line.trim()
+  const body = trimmed.replace(/^\|/u, '').replace(/\|$/u, '')
+  return body.split('|').map((cell) => cell.trim())
+}
+
+function isMarkdownTableRow(line: string): boolean {
+  const trimmed = line.trim()
+  return trimmed.includes('|') && trimmed.split('|').length >= 3
+}
+
+function isMarkdownTableSeparator(line: string): boolean {
+  const cells = parseTableRow(line)
+  if (cells.length < 2) {
+    return false
+  }
+  return cells.every((cell) => /^:?-{3,}:?$/u.test(cell.trim()))
+}
+
+function formatTableRow(cells: string[]): string {
+  return `| ${cells.map((cell) => cell.trim() || ' ').join(' | ')} |`
+}
+
+function formatTableSeparator(columnCount: number): string {
+  return `| ${Array.from({ length: Math.max(1, columnCount) }, () => '---').join(' | ')} |`
+}
+
+function normalizeTableRows(lines: string[]): string[] {
+  const columnCount = Math.max(...lines.map((line) => parseTableRow(line).length), 1)
+  return lines.map((line) => {
+    if (isMarkdownTableSeparator(line)) {
+      return formatTableSeparator(columnCount)
+    }
+    const cells = parseTableRow(line)
+    while (cells.length < columnCount) {
+      cells.push('')
+    }
+    return formatTableRow(cells.slice(0, columnCount))
+  })
+}
+
+function sourceMarkdownTables(content: string): SourceMarkdownTable[] {
+  const lines = content.split('\n')
+  const tables: SourceMarkdownTable[] = []
+  let lineIndex = 0
+  while (lineIndex < lines.length) {
+    if (!isMarkdownTableRow(lines[lineIndex] ?? '')) {
+      lineIndex += 1
+      continue
+    }
+    const startLine = lineIndex
+    let endLine = lineIndex
+    while (endLine < lines.length - 1 && isMarkdownTableRow(lines[endLine + 1] ?? '')) {
+      endLine += 1
+    }
+    const separatorLine = lines.findIndex((line, index) => (
+      index >= startLine && index <= endLine && isMarkdownTableSeparator(line)
+    ))
+    if (separatorLine >= startLine && separatorLine <= endLine) {
+      tables.push({ startLine, endLine, separatorLine, lines: lines.slice(startLine, endLine + 1) })
+    }
+    lineIndex = endLine + 1
+  }
+  return tables
+}
+
+function replaceSourceTable(table: SourceMarkdownTable, nextLines: string[]) {
+  const lines = props.content.split('\n')
+  lines.splice(table.startLine, table.endLine - table.startLine + 1, ...normalizeTableRows(nextLines))
+  emit('updateContent', lines.join('\n'))
+}
+
+function insertSourceTableRow(tableIndex: number, rowIndex: number, position: 'above' | 'below') {
+  const table = sourceMarkdownTables(props.content)[tableIndex]
+  if (!table) return
+  const rows = normalizeTableRows(table.lines)
+  const columnCount = parseTableRow(rows[0] ?? '').length || 2
+  const emptyRow = formatTableRow(Array.from({ length: columnCount }, () => ''))
+  const separatorIndex = table.separatorLine - table.startLine
+  let insertAt = position === 'above' ? rowIndex : rowIndex + 1
+  if (insertAt <= separatorIndex) {
+    insertAt = separatorIndex + 1
+  }
+  rows.splice(insertAt, 0, emptyRow)
+  replaceSourceTable(table, rows)
+}
+
+function renderedRowToSourceRow(tableIndex: number, renderedRowIndex: number): number {
+  const table = sourceMarkdownTables(props.content)[tableIndex]
+  if (!table) return renderedRowIndex
+  const separatorIndex = table.separatorLine - table.startLine
+  return renderedRowIndex >= separatorIndex ? renderedRowIndex + 1 : renderedRowIndex
+}
+
+function insertSourceTableColumn(tableIndex: number, columnIndex: number, side: 'left' | 'right') {
+  const table = sourceMarkdownTables(props.content)[tableIndex]
+  if (!table) return
+  const rows = normalizeTableRows(table.lines)
+  const insertAt = columnIndex + (side === 'right' ? 1 : 0)
+  const nextRows = rows.map((line) => {
+    const cells = parseTableRow(line)
+    cells.splice(Math.max(0, Math.min(insertAt, cells.length)), 0, '')
+    return isMarkdownTableSeparator(line) ? formatTableSeparator(cells.length) : formatTableRow(cells)
+  })
+  replaceSourceTable(table, nextRows)
+}
+
+function moveSourceTableRow(tableIndex: number, sourceRow: number, targetRow: number) {
+  const table = sourceMarkdownTables(props.content)[tableIndex]
+  if (!table || sourceRow === targetRow) return
+  const separatorIndex = table.separatorLine - table.startLine
+  if (sourceRow === separatorIndex || targetRow === separatorIndex) return
+  const rows = normalizeTableRows(table.lines)
+  const [row] = rows.splice(sourceRow, 1)
+  if (!row) return
+  rows.splice(Math.max(0, Math.min(targetRow, rows.length)), 0, row)
+  replaceSourceTable(table, rows)
+}
+
+function moveSourceTableColumn(tableIndex: number, sourceColumn: number, targetColumn: number) {
+  const table = sourceMarkdownTables(props.content)[tableIndex]
+  if (!table || sourceColumn === targetColumn) return
+  const rows = normalizeTableRows(table.lines)
+  const nextRows = rows.map((line) => {
+    const cells = parseTableRow(line)
+    const sourceIndex = Math.max(0, Math.min(sourceColumn, cells.length - 1))
+    const targetIndex = Math.max(0, Math.min(targetColumn, cells.length - 1))
+    const [cell] = cells.splice(sourceIndex, 1)
+    if (cell === undefined) return line
+    cells.splice(targetIndex, 0, cell)
+    return isMarkdownTableSeparator(line) ? formatTableSeparator(cells.length) : formatTableRow(cells)
+  })
+  replaceSourceTable(table, nextRows)
+}
 
 function preparePreviewMarkdown(content: string): string {
   const renderContent = rewriteMarkdownImageUrls(content, getImageUrlContext())
@@ -158,6 +341,231 @@ function getPreviewScrollContainer(target: HTMLElement) {
   return null
 }
 
+function tableFromPointerTarget(target: Element | null) {
+  const table = target?.closest<HTMLTableElement>('table')
+  const previewElement = getPreviewElement()
+  if (!table || !previewElement?.contains(table)) {
+    return null
+  }
+  const tables = [...previewElement.querySelectorAll<HTMLTableElement>('table')]
+  const tableIndex = tables.indexOf(table)
+  if (tableIndex < 0) {
+    return null
+  }
+  return { table, tableIndex }
+}
+
+function rectContainsPoint(rect: DOMRect, clientX: number, clientY: number, padding = 0): boolean {
+  return clientX >= rect.left - padding
+    && clientX <= rect.right + padding
+    && clientY >= rect.top - padding
+    && clientY <= rect.bottom + padding
+}
+
+function tableFromPointerEvent(event: MouseEvent) {
+  const eventTarget = event.target instanceof Element ? event.target : null
+  const targetHit = tableFromPointerTarget(eventTarget)
+  if (targetHit) {
+    return targetHit
+  }
+  const previewElement = getPreviewElement()
+  if (!previewElement) {
+    return null
+  }
+  const tables = [...previewElement.querySelectorAll<HTMLTableElement>('table')]
+  const table = tables.find((candidate) => (
+    rectContainsPoint(tableContentRect(candidate), event.clientX, event.clientY, TABLE_EDGE_BUTTON_SIZE)
+  ))
+  if (!table) {
+    return null
+  }
+  return { table, tableIndex: tables.indexOf(table) }
+}
+
+function tableCellFromPointer(table: HTMLTableElement, event: MouseEvent) {
+  const cells = [...table.querySelectorAll<HTMLTableCellElement>('th,td')]
+  return cells.find((cell) => {
+    const rect = cell.getBoundingClientRect()
+    return event.clientX >= rect.left
+      && event.clientX <= rect.right
+      && event.clientY >= rect.top
+      && event.clientY <= rect.bottom
+  }) ?? null
+}
+
+function tableRowIndex(table: HTMLTableElement, cell: HTMLTableCellElement | null): number {
+  const row = cell?.parentElement instanceof HTMLTableRowElement ? cell.parentElement : null
+  return row ? [...table.rows].indexOf(row) : 0
+}
+
+function tableColumnIndex(cell: HTMLTableCellElement | null): number {
+  if (!cell?.parentElement) return 0
+  return [...cell.parentElement.children].indexOf(cell)
+}
+
+function tableRowIndexFromPointer(table: HTMLTableElement, event: MouseEvent, fallbackCell: HTMLTableCellElement | null): number {
+  const tableRect = tableContentRect(table)
+  if (event.clientY < tableRect.top) return 0
+  if (event.clientY > tableRect.bottom) return Math.max(0, table.rows.length - 1)
+  const rowIndex = [...table.rows].findIndex((row) => {
+    const rect = tableRowContentRect(row, tableRect)
+    return event.clientY >= rect.top && event.clientY <= rect.bottom
+  })
+  return rowIndex >= 0 ? rowIndex : tableRowIndex(table, fallbackCell)
+}
+
+function tableColumnIndexFromPointer(table: HTMLTableElement, event: MouseEvent, fallbackCell: HTMLTableCellElement | null): number {
+  const tableRect = tableContentRect(table)
+  const firstRow = table.rows[0]
+  const fallbackColumn = tableColumnIndex(fallbackCell)
+  if (!firstRow) return fallbackColumn
+  if (event.clientX < tableRect.left) return 0
+  if (event.clientX > tableRect.right) return Math.max(0, firstRow.cells.length - 1)
+  const columnIndex = [...firstRow.cells].findIndex((_, index) => {
+    const rect = tableColumnContentRect(table, index, tableRect)
+    return event.clientX >= rect.left && event.clientX <= rect.right
+  })
+  return columnIndex >= 0 ? columnIndex : fallbackColumn
+}
+
+function unionRects(rects: DOMRect[]): DOMRect | null {
+  if (!rects.length) return null
+  const left = Math.min(...rects.map((rect) => rect.left))
+  const top = Math.min(...rects.map((rect) => rect.top))
+  const right = Math.max(...rects.map((rect) => rect.right))
+  const bottom = Math.max(...rects.map((rect) => rect.bottom))
+  return DOMRect.fromRect({ x: left, y: top, width: right - left, height: bottom - top })
+}
+
+function renderedCellRects(cells: Iterable<HTMLTableCellElement>): DOMRect[] {
+  return [...cells]
+    .map((cell) => cell.getBoundingClientRect())
+    .filter((rect) => rect.width > 0 && rect.height > 0)
+}
+
+function tableContentRect(table: HTMLTableElement): DOMRect {
+  return unionRects(renderedCellRects(table.querySelectorAll<HTMLTableCellElement>('th,td')))
+    ?? table.getBoundingClientRect()
+}
+
+function tableRowContentRect(row: HTMLTableRowElement | undefined, fallback: DOMRect): DOMRect {
+  return row ? (unionRects(renderedCellRects(row.querySelectorAll<HTMLTableCellElement>('th,td'))) ?? fallback) : fallback
+}
+
+function tableColumnContentRect(table: HTMLTableElement, columnIndex: number, fallback: DOMRect): DOMRect {
+  const columnCells = [...table.rows]
+    .map((row) => row.cells[columnIndex])
+    .filter((cell): cell is HTMLTableCellElement => cell instanceof HTMLTableCellElement)
+  return unionRects(renderedCellRects(columnCells)) ?? fallback
+}
+
+function updateTableOverlayFromEvent(event: MouseEvent) {
+  if (previewTableDrag) {
+    return
+  }
+  const eventTarget = event.target instanceof Element ? event.target : null
+  if (eventTarget && tableOverlayElement.value?.contains(eventTarget)) {
+    return
+  }
+  const tableHit = tableFromPointerEvent(event)
+  if (!tableHit) {
+    tableOverlay.value.visible = false
+    return
+  }
+  const cell = tableCellFromPointer(tableHit.table, event)
+  const rowIndex = Math.max(0, tableRowIndexFromPointer(tableHit.table, event, cell))
+  const columnIndex = Math.max(0, tableColumnIndexFromPointer(tableHit.table, event, cell))
+  const hostRect = previewHost.value?.getBoundingClientRect()
+  if (!hostRect) {
+    tableOverlay.value.visible = false
+    return
+  }
+  const tableRect = tableContentRect(tableHit.table)
+  const withinHorizontalEdgeBand = event.clientX >= tableRect.left - TABLE_EDGE_BUTTON_SIZE
+    && event.clientX <= tableRect.right + TABLE_EDGE_BUTTON_SIZE
+  const withinVerticalEdgeBand = event.clientY >= tableRect.top - TABLE_EDGE_BUTTON_SIZE
+    && event.clientY <= tableRect.bottom + TABLE_EDGE_BUTTON_SIZE
+  const showLeftEdge = withinVerticalEdgeBand
+    && event.clientX >= tableRect.left - TABLE_EDGE_BUTTON_SIZE
+    && event.clientX <= tableRect.left + TABLE_EDGE_HIT_ZONE
+  const showTopEdge = withinHorizontalEdgeBand
+    && event.clientY >= tableRect.top - TABLE_EDGE_BUTTON_SIZE
+    && event.clientY <= tableRect.top + TABLE_EDGE_HIT_ZONE
+  const showRightEdge = withinVerticalEdgeBand
+    && event.clientX >= tableRect.right - TABLE_EDGE_HIT_ZONE
+    && event.clientX <= tableRect.right + TABLE_EDGE_BUTTON_SIZE
+  const showBottomEdge = withinHorizontalEdgeBand
+    && event.clientY >= tableRect.bottom - TABLE_EDGE_HIT_ZONE
+    && event.clientY <= tableRect.bottom + TABLE_EDGE_BUTTON_SIZE
+  if (!showLeftEdge && !showTopEdge && !showRightEdge && !showBottomEdge) {
+    tableOverlay.value.visible = false
+    return
+  }
+  const rowRect = tableRowContentRect(tableHit.table.rows[rowIndex], tableRect)
+  const columnRect = tableColumnContentRect(tableHit.table, columnIndex, cell?.getBoundingClientRect() ?? tableRect)
+  tableOverlay.value = {
+    visible: true,
+    showLeftEdge,
+    showTopEdge,
+    showRightEdge,
+    showBottomEdge,
+    left: tableRect.left - hostRect.left,
+    top: tableRect.top - hostRect.top,
+    width: tableRect.width,
+    height: tableRect.height,
+    rowTop: rowRect.top - hostRect.top,
+    rowHeight: rowRect.height,
+    columnLeft: columnRect.left - hostRect.left,
+    columnWidth: columnRect.width,
+    tableIndex: tableHit.tableIndex,
+    rowIndex,
+    columnIndex,
+  }
+}
+
+function addPreviewTableRow() {
+  const overlay = tableOverlay.value
+  insertSourceTableRow(overlay.tableIndex, renderedRowToSourceRow(overlay.tableIndex, overlay.rowIndex), 'below')
+}
+
+function addPreviewTableColumn() {
+  const overlay = tableOverlay.value
+  insertSourceTableColumn(overlay.tableIndex, overlay.columnIndex, 'right')
+}
+
+function beginPreviewTableDrag(type: 'row' | 'column', event: PointerEvent) {
+  if (!tableOverlay.value.visible) return
+  event.preventDefault()
+  previewTableDrag = {
+    type,
+    tableIndex: tableOverlay.value.tableIndex,
+    source: type === 'row' ? tableOverlay.value.rowIndex : tableOverlay.value.columnIndex,
+  }
+  document.addEventListener('pointerup', finishPreviewTableDrag)
+}
+
+function finishPreviewTableDrag(event: PointerEvent) {
+  document.removeEventListener('pointerup', finishPreviewTableDrag)
+  const drag = previewTableDrag
+  previewTableDrag = null
+  if (!drag) return
+  const eventTarget = event.target instanceof Element ? event.target : null
+  const tableHit = tableFromPointerTarget(eventTarget)
+  if (!tableHit || tableHit.tableIndex !== drag.tableIndex) {
+    return
+  }
+  const cell = tableCellFromPointer(tableHit.table, event)
+  if (drag.type === 'row') {
+    moveSourceTableRow(
+      drag.tableIndex,
+      renderedRowToSourceRow(drag.tableIndex, drag.source),
+      renderedRowToSourceRow(drag.tableIndex, Math.max(0, tableRowIndex(tableHit.table, cell))),
+    )
+  } else {
+    moveSourceTableColumn(drag.tableIndex, drag.source, Math.max(0, tableColumnIndex(cell)))
+  }
+}
+
 function getPreviewScrollRatio() {
   const previewElement = getPreviewElement()
   if (!previewElement) return 0
@@ -166,6 +574,7 @@ function getPreviewScrollRatio() {
 }
 
 function handlePreviewScroll() {
+  tableOverlay.value.visible = false
   if (!programmaticScroll) {
     emit('scroll', getPreviewScrollRatio())
   }
@@ -248,6 +657,7 @@ function handlePreviewParse(element: HTMLElement) {
   decoratePreviewImages(element)
   highlightVueCodeBlocks(element)
   injectCodeCopyButtons()
+  tableOverlay.value.visible = false
 }
 
 function syncPreviewContent() {
@@ -395,6 +805,7 @@ watch(
 
 onBeforeUnmount(() => {
   mounted = false
+  document.removeEventListener('pointerup', finishPreviewTableDrag)
   if (programmaticScrollTimer !== null) {
     clearTimeout(programmaticScrollTimer)
     programmaticScrollTimer = null
@@ -410,14 +821,72 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <article class="markdown-preview">
-    <div ref="previewHost" class="markdown-preview-renderer"></div>
+  <article
+    class="markdown-preview"
+    @mousemove="updateTableOverlayFromEvent"
+    @mouseleave="tableOverlay.visible = false"
+  >
+    <div
+      ref="previewHost"
+      class="markdown-preview-renderer"
+    ></div>
+    <div
+      ref="tableOverlayElement"
+      v-if="tableOverlay.visible"
+      class="markdown-preview-table-overlay"
+      :style="{
+        left: `${tableOverlay.left}px`,
+        top: `${tableOverlay.top}px`,
+        width: `${tableOverlay.width}px`,
+        height: `${tableOverlay.height}px`,
+      }"
+    >
+      <button
+        v-if="tableOverlay.showLeftEdge"
+        class="preview-table-row-drag-handle"
+        type="button"
+        title="拖动表格行"
+        :style="{ top: `${tableOverlay.rowTop - tableOverlay.top}px`, height: `${tableOverlay.rowHeight}px` }"
+        @pointerdown="beginPreviewTableDrag('row', $event)"
+      >
+        <IcIcon name="unfold" :size="10" />
+      </button>
+      <button
+        v-if="tableOverlay.showTopEdge"
+        class="preview-table-column-drag-handle"
+        type="button"
+        title="拖动表格列"
+        :style="{ left: `${tableOverlay.columnLeft - tableOverlay.left}px`, width: `${tableOverlay.columnWidth}px` }"
+        @pointerdown="beginPreviewTableDrag('column', $event)"
+      >
+        <IcIcon name="unfold" :size="10" />
+      </button>
+      <button
+        v-if="tableOverlay.showBottomEdge"
+        class="preview-table-add-row-button"
+        type="button"
+        title="添加空行"
+        @click="addPreviewTableRow"
+      >
+        <IcIcon name="add" :size="10" />
+      </button>
+      <button
+        v-if="tableOverlay.showRightEdge"
+        class="preview-table-add-column-button"
+        type="button"
+        title="添加空列"
+        @click="addPreviewTableColumn"
+      >
+        <IcIcon name="add" :size="10" />
+      </button>
+    </div>
   </article>
 </template>
 
 <style scoped>
 .markdown-preview {
   display: flex;
+  position: relative;
   height: 100%;
   min-width: 0;
   min-height: 0;
@@ -432,6 +901,74 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   min-height: 0;
+}
+
+.markdown-preview-table-overlay {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.markdown-preview-table-overlay button {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  background: var(--color-surface-raised);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 34%, transparent);
+  color: var(--color-text-tertiary);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.markdown-preview-table-overlay button:hover {
+  border-color: color-mix(in srgb, var(--color-text-tertiary) 45%, var(--color-border));
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+
+.markdown-preview-table-overlay button :deep(svg) {
+  display: block;
+  opacity: 0.72;
+}
+
+.preview-table-row-drag-handle {
+  left: -9px;
+  width: 9px;
+  cursor: grab;
+}
+
+.preview-table-column-drag-handle {
+  top: -9px;
+  height: 9px;
+  cursor: grab;
+}
+
+.preview-table-column-drag-handle :deep(svg) {
+  transform: rotate(90deg);
+}
+
+.preview-table-row-drag-handle:active,
+.preview-table-column-drag-handle:active {
+  cursor: grabbing;
+}
+
+.preview-table-add-row-button {
+  left: 0;
+  right: 0;
+  bottom: -9px;
+  height: 9px;
+}
+
+.preview-table-add-column-button {
+  top: 0;
+  right: -9px;
+  bottom: 0;
+  width: 9px;
 }
 
 .markdown-preview :deep(.vditor) {

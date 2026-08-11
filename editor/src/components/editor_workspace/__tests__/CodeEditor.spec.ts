@@ -212,6 +212,58 @@ describe('CodeEditor Markdown context menu', () => {
     expect((wrapper.props() as { modelValue: string }).modelValue).toBe('alpha\n## beta')
   })
 
+  it('inserts a Markdown table row from the context menu', async () => {
+    const wrapper = mountMarkdownEditor('| A | B |\n| --- | --- |\n| 1 | 2 |')
+    const textarea = wrapper.get('textarea').element as HTMLTextAreaElement
+    textarea.setSelectionRange(25, 25)
+
+    await wrapper.get('textarea').trigger('contextmenu', { clientX: 12, clientY: 12 })
+    await wrapper.findAll('.markdown-context-parent').find((button) => button.text().includes('插入行'))?.trigger('click')
+    const rowButton = wrapper.findAll('.markdown-context-submenu button').find((button) => button.text().includes('下方插入'))
+    await rowButton?.trigger('click')
+
+    expect((wrapper.props() as { modelValue: string }).modelValue).toBe('| A | B |\n| --- | --- |\n| 1 | 2 |\n|   |   |')
+  })
+
+  it('inserts a Markdown table column from the context menu', async () => {
+    const wrapper = mountMarkdownEditor('| A | B |\n| --- | --- |\n| 1 | 2 |')
+    const textarea = wrapper.get('textarea').element as HTMLTextAreaElement
+    textarea.setSelectionRange(30, 30)
+
+    await wrapper.get('textarea').trigger('contextmenu', { clientX: 12, clientY: 12 })
+    await wrapper.findAll('.markdown-context-parent').find((button) => button.text().includes('插入列'))?.trigger('click')
+    const columnButton = wrapper.findAll('.markdown-context-submenu button').find((button) => button.text().includes('右侧插入'))
+    await columnButton?.trigger('click')
+
+    expect((wrapper.props() as { modelValue: string }).modelValue).toBe('| A | B |   |\n| --- | --- | --- |\n| 1 | 2 |   |')
+  })
+
+  it('deletes a Markdown table row from the context menu', async () => {
+    const wrapper = mountMarkdownEditor('| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |')
+    const textarea = wrapper.get('textarea').element as HTMLTextAreaElement
+    textarea.setSelectionRange(25, 25)
+
+    await wrapper.get('textarea').trigger('contextmenu', { clientX: 12, clientY: 12 })
+    await wrapper.findAll('.markdown-context-parent').find((button) => button.text().includes('删除'))?.trigger('click')
+    const rowButton = wrapper.findAll('.markdown-context-submenu button').find((button) => button.text().includes('删除整行'))
+    await rowButton?.trigger('click')
+
+    expect((wrapper.props() as { modelValue: string }).modelValue).toBe('| A | B |\n| --- | --- |\n| 3 | 4 |')
+  })
+
+  it('deletes a Markdown table column from the context menu', async () => {
+    const wrapper = mountMarkdownEditor('| A | B | C |\n| --- | --- | --- |\n| 1 | 2 | 3 |')
+    const textarea = wrapper.get('textarea').element as HTMLTextAreaElement
+    textarea.setSelectionRange(8, 8)
+
+    await wrapper.get('textarea').trigger('contextmenu', { clientX: 12, clientY: 12 })
+    await wrapper.findAll('.markdown-context-parent').find((button) => button.text().includes('删除'))?.trigger('click')
+    const columnButton = wrapper.findAll('.markdown-context-submenu button').find((button) => button.text().includes('删除整列'))
+    await columnButton?.trigger('click')
+
+    expect((wrapper.props() as { modelValue: string }).modelValue).toBe('| A | C |\n| --- | --- |\n| 1 | 3 |')
+  })
+
   it('applies bold with Ctrl+B inside the editor', async () => {
     const wrapper = mountMarkdownEditor('hello')
     const textareaWrapper = wrapper.get('textarea')

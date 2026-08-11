@@ -370,6 +370,7 @@ onErrorCaptured((err, vm, info) => {
           :content="activeContent"
           :path="workspaceStore.selectedPath"
           @scroll="handlePreviewScroll"
+          @update-content="activeContent = $event"
           @ready="handleMarkdownPreviewReady"
         />
         <CodePreview
