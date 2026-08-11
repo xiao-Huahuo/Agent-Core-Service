@@ -95,6 +95,7 @@ class SettingsService:
                 "theme_soft_color": "VARCHAR(16) NOT NULL DEFAULT ''",
                 "graph_node_limit": "INTEGER NOT NULL DEFAULT 2000",
                 "floating_launch_enabled": "BOOLEAN NOT NULL DEFAULT 0",
+                "editor_image_assets_dir": "VARCHAR(1024) NOT NULL DEFAULT './assets/'",
                 "web_search_max_results": "INTEGER NOT NULL DEFAULT 10",
                 "storage_path_overrides": "TEXT NOT NULL DEFAULT ''",
             }
@@ -526,6 +527,7 @@ class SettingsService:
             "theme_soft_color": record.theme_soft_color,
             "graph_node_limit": record.graph_node_limit,
             "floating_launch_enabled": bool(record.floating_launch_enabled),
+            "editor_image_assets_dir": self._normalize_editor_image_assets_dir(record.editor_image_assets_dir),
             "created_at": record.created_at.isoformat(),
             "updated_at": record.updated_at.isoformat(),
         }
@@ -663,6 +665,58 @@ class SettingsService:
                 "user_id": record.user_id,
                 "theme_primary_color": record.theme_primary_color,
                 "theme_soft_color": record.theme_soft_color,
+                "updated_at": record.updated_at.isoformat(),
+            }
+
+    @staticmethod
+    def _normalize_editor_image_assets_dir(value: str | None) -> str:
+        """Return the relative image asset directory used by editor paste."""
+
+        raw_value = str(value or "./assets/").strip().replace("\\", "/")
+        if not raw_value:
+            return "./assets/"
+        if "\x00" in raw_value:
+            raise ValueError("editor_image_assets_dir contains invalid characters")
+        parts: list[str] = []
+        for part in raw_value.split("/"):
+            if not part or part == ".":
+                continue
+            if part == "..":
+                raise ValueError("editor_image_assets_dir cannot contain ..")
+            parts.append(part)
+        normalized = "/".join(parts) or "assets"
+        return f"./{normalized}/"
+
+    def save_editor_paste_config(
+        self,
+        *,
+        user_id: str,
+        editor_image_assets_dir: str | None = None,
+    ) -> dict:
+        """Persist editor paste settings for clipboard image insertion."""
+
+        normalized_user_id = user_id.strip()
+        if not normalized_user_id:
+            raise ValueError("user_id is required")
+        now = self._utc_now()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                record = UserSettingsRecord(
+                    user_id=normalized_user_id,
+                    knowledge_dir=str(self.config.storage.knowledge_dir),
+                    created_at=now,
+                    updated_at=now,
+                )
+            if editor_image_assets_dir is not None:
+                record.editor_image_assets_dir = self._normalize_editor_image_assets_dir(editor_image_assets_dir)
+            record.updated_at = now
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            return {
+                "user_id": record.user_id,
+                "editor_image_assets_dir": self._normalize_editor_image_assets_dir(record.editor_image_assets_dir),
                 "updated_at": record.updated_at.isoformat(),
             }
 

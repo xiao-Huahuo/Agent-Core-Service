@@ -21,6 +21,8 @@ const props = defineProps<{
   readonly?: boolean
   /** Optional query highlighted by readonly consumers such as search preview. */
   highlightQuery?: string
+  /** Saves a pasted clipboard image and returns the Markdown image token. */
+  pasteImage?: (file: File) => Promise<string>
 }>()
 
 /** Scroll and caret data used by EditorPane to synchronize Markdown Split mode. */
@@ -384,7 +386,35 @@ function insertBlock(text: string, cursorOffset = text.length) {
   replaceRange(start, end, insertion, cursor, cursor)
 }
 
+async function insertPastedImageFile(file: File): Promise<boolean> {
+  if (!props.pasteImage || !isMarkdown.value) {
+    return false
+  }
+  const markdown = await props.pasteImage(file)
+  if (!markdown) {
+    return false
+  }
+  const { start, end } = selectedRange()
+  replaceRange(start, end, markdown)
+  return true
+}
+
 async function pasteFromClipboard() {
+  if (props.pasteImage && isMarkdown.value) {
+    try {
+      const items = await navigator.clipboard?.read?.()
+      const imageItem = items?.find((item) => item.types.some((type) => type.startsWith('image/')))
+      const imageType = imageItem?.types.find((type) => type.startsWith('image/'))
+      if (imageItem && imageType) {
+        const blob = await imageItem.getType(imageType)
+        if (await insertPastedImageFile(new File([blob], 'clipboard-image', { type: blob.type || imageType }))) {
+          return
+        }
+      }
+    } catch {
+      // Non-image clipboard paths should keep the existing text paste behavior.
+    }
+  }
   try {
     const text = await navigator.clipboard?.readText()
     if (text !== undefined) {
@@ -396,6 +426,20 @@ async function pasteFromClipboard() {
     // Fall through to browser command for Electron/system clipboard paths.
   }
   document.execCommand('paste')
+}
+
+function handleNativePaste(event: ClipboardEvent) {
+  if (!props.pasteImage || !isMarkdown.value || props.readonly) {
+    return
+  }
+  const items = Array.from(event.clipboardData?.items ?? [])
+  const imageItem = items.find((item) => item.type.startsWith('image/'))
+  const file = imageItem?.getAsFile()
+  if (!file) {
+    return
+  }
+  event.preventDefault()
+  void insertPastedImageFile(file)
 }
 
 function openFindBar() {
@@ -749,7 +793,8 @@ onBeforeUnmount(() => {
         @keydown.meta.s.prevent="handleSaveShortcut"
         @keydown="handleEditorKeydown"
         @input="flushTypingSnapshot"
-         @scroll="handleEditorScroll"
+        @paste="handleNativePaste"
+        @scroll="handleEditorScroll"
         @contextmenu="openContextMenu"
       ></textarea>
     </div>

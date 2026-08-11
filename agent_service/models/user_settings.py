@@ -50,6 +50,7 @@ class UserSettingsRecord(SQLModel, table=True):
     theme_soft_color: str = Field(default="", max_length=16)
     graph_node_limit: int = Field(default=2000)
     floating_launch_enabled: bool = Field(default=False)
+    editor_image_assets_dir: str = Field(default="./assets/", max_length=1024)
     storage_path_overrides: str = Field(default="", sa_column=Column(Text))
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

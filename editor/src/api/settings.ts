@@ -26,6 +26,7 @@ export interface SettingsProfileResponse {
   theme_soft_color?: string
   graph_node_limit?: number
   floating_launch_enabled?: boolean
+  editor_image_assets_dir?: string
   created_at: string
   updated_at: string
 }
@@ -147,6 +148,21 @@ export function saveAppearanceConfig(
   if (params.themePrimaryColor !== undefined) body.theme_primary_color = params.themePrimaryColor
   if (params.themeSoftColor !== undefined) body.theme_soft_color = params.themeSoftColor
   return apiPut<AppearanceConfigResponse>(API_ROUTES.SETTINGS_APPEARANCE_CONFIG, body)
+}
+
+export interface EditorPasteConfigResponse {
+  user_id: string
+  editor_image_assets_dir: string
+  updated_at: string
+}
+
+export function saveEditorPasteConfig(
+  userId: string,
+  params: { editorImageAssetsDir?: string },
+): Promise<EditorPasteConfigResponse> {
+  const body: { user_id: string; editor_image_assets_dir?: string } = { user_id: userId }
+  if (params.editorImageAssetsDir !== undefined) body.editor_image_assets_dir = params.editorImageAssetsDir
+  return apiPut<EditorPasteConfigResponse>(API_ROUTES.SETTINGS_EDITOR_PASTE_CONFIG, body)
 }
 
 export interface KnowledgeIngestionConfigResponse {

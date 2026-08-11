@@ -289,6 +289,24 @@ async def save_appearance_config(body: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.post("/settings/editor/paste")
+@router.put("/settings/editor/paste")
+async def save_editor_paste_config(body: dict[str, Any]) -> dict[str, Any]:
+    """保存编辑器粘贴设置。body: user_id 必填,editor_image_assets_dir 可选。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    svc = _require_settings_service()
+    try:
+        return svc.save_editor_paste_config(
+            user_id=user_id,
+            editor_image_assets_dir=body.get("editor_image_assets_dir"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/settings/profile/ingestion")
 async def get_knowledge_ingestion_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
     """获取知识库灌库配置。"""

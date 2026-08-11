@@ -57,6 +57,7 @@ const watchEnabledDraft = ref(settingsStore.profile.knowledgeWatchEnabled)
 const autoIngestOnUploadDraft = ref(Boolean(settingsStore.profile.autoIngestOnUpload))
 const ocrEnabledDraft = ref(Boolean(settingsStore.profile.ocrEnabled))
 const knowledgeIgnorePatternsDraft = ref(settingsStore.profile.knowledgeIgnorePatterns ?? '')
+const editorImageAssetsDirDraft = ref(settingsStore.profile.editorImageAssetsDir ?? './assets/')
 const uiFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.uiFontFamilies ?? [])])
 const textFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.textFontFamilies ?? [])])
 const fontSizePercentDraft = ref(settingsStore.profile.fontSizePercent ?? 100)
@@ -77,7 +78,8 @@ const hasChanges = computed(() => {
     watchEnabledDraft.value !== settingsStore.profile.knowledgeWatchEnabled ||
     autoIngestOnUploadDraft.value !== Boolean(settingsStore.profile.autoIngestOnUpload) ||
     ocrEnabledDraft.value !== Boolean(settingsStore.profile.ocrEnabled) ||
-    knowledgeIgnorePatternsDraft.value !== (settingsStore.profile.knowledgeIgnorePatterns ?? '')
+    knowledgeIgnorePatternsDraft.value !== (settingsStore.profile.knowledgeIgnorePatterns ?? '') ||
+    editorImageAssetsDirDraft.value !== (settingsStore.profile.editorImageAssetsDir ?? './assets/')
   )
 })
 
@@ -104,6 +106,11 @@ watch(
 watch(
   () => settingsStore.profile.knowledgeIgnorePatterns,
   (value) => { knowledgeIgnorePatternsDraft.value = value ?? '' },
+)
+
+watch(
+  () => settingsStore.profile.editorImageAssetsDir,
+  (value) => { editorImageAssetsDirDraft.value = value ?? './assets/' },
 )
 
 watch(
@@ -234,6 +241,7 @@ async function saveProfile() {
   const nextLibraryName = libraryNameDraft.value.trim()
   const ignorePatternsChanged = knowledgeIgnorePatternsDraft.value !== (settingsStore.profile.knowledgeIgnorePatterns ?? '')
   const ocrEnabledChanged = ocrEnabledDraft.value !== Boolean(settingsStore.profile.ocrEnabled)
+  const editorImageAssetsDirChanged = editorImageAssetsDirDraft.value !== (settingsStore.profile.editorImageAssetsDir ?? './assets/')
   try {
     settingsStore.updateProfile({ knowledgeWatchEnabled: watchEnabledDraft.value })
     if (nextKnowledgeDir !== settingsStore.profile.knowledgeDir) {
@@ -258,6 +266,9 @@ async function saveProfile() {
     }
     if (ignorePatternsChanged || ocrEnabledChanged) {
       await workspaceStore.loadKnowledgeTree()
+    }
+    if (editorImageAssetsDirChanged) {
+      await settingsStore.saveEditorPasteSettings({ editorImageAssetsDir: editorImageAssetsDirDraft.value })
     }
   } catch (error) {
     saveError.value = error instanceof Error ? error.message : '保存失败'
@@ -600,6 +611,7 @@ onBeforeUnmount(() => {
       <BasicSettingsSection
         v-if="activeTab === 'basic'"
         v-model:auto-ingest-on-upload-draft="autoIngestOnUploadDraft"
+        v-model:editor-image-assets-dir-draft="editorImageAssetsDirDraft"
         v-model:knowledge-dir-draft="knowledgeDirDraft"
         v-model:knowledge-ignore-patterns-draft="knowledgeIgnorePatternsDraft"
         v-model:library-name-draft="libraryNameDraft"

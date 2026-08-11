@@ -52,6 +52,8 @@ export interface UserSettingsProfile {
   graphNodeLimit?: number
   /** Whether to show the floating Agent window when the desktop shell starts. */
   floatingLaunchEnabled?: boolean
+  /** Relative directory used when Markdown Edit mode saves pasted clipboard images. */
+  editorImageAssetsDir?: string
   /** Legacy single-value localStorage field, normalized into uiFontFamilies. */
   uiFontFamily?: string
   /** Legacy single-value localStorage field, normalized into textFontFamilies. */

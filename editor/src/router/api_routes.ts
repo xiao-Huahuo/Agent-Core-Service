@@ -11,6 +11,7 @@ export const API_ROUTES = {
   SETTINGS_KNOWLEDGE_DIR: '/settings/profile/knowledge-dir',
   SETTINGS_FONT_CONFIG: '/settings/appearance/font',
   SETTINGS_APPEARANCE_CONFIG: '/settings/appearance/config',
+  SETTINGS_EDITOR_PASTE_CONFIG: '/settings/editor/paste',
   SETTINGS_KNOWLEDGE_INGESTION: '/settings/profile/ingestion',
   SETTINGS_SYSTEM_PROMPT: '/settings/memory/system-prompts',
   SETTINGS_SYSTEM_PROMPT_ENTRIES: '/settings/memory/system-prompts',

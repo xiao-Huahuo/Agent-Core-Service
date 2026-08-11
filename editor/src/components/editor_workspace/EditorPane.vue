@@ -351,6 +351,7 @@ onErrorCaptured((err, vm, info) => {
           ref="codeEditorRef"
           v-model="activeContent"
           :language="isImageTextViewer ? 'ocr' : activeLanguage"
+          :paste-image="workspaceStore.savePastedEditorImage"
           :readonly="workspaceStore.activeFileReadonly"
           @save="workspaceStore.saveActiveFile"
           @scroll="handleEditorScroll"

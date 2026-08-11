@@ -11,7 +11,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { ApiError } from '@/api/client'
-import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, saveAppearanceConfig, saveFloatingConfig, saveFontConfig, saveGraphConfig, saveKnowledgeIngestionConfig, saveWebSearchConfig, updateSettingsKnowledgeDir } from '@/api/settings'
+import { ensureSettingsProfile, fetchWebSearchConfig, rebuildKnowledgeRoot, saveAppearanceConfig, saveEditorPasteConfig, saveFloatingConfig, saveFontConfig, saveGraphConfig, saveKnowledgeIngestionConfig, saveWebSearchConfig, updateSettingsKnowledgeDir } from '@/api/settings'
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
 import type { SettingsKnowledgeLibraryResponse, SettingsProfileResponse } from '@/api/settings'
 import type { KnowledgeLibraryProfile } from '@/types/settings'
@@ -53,6 +53,7 @@ const DEFAULT_PROFILE: UserSettingsProfile = {
   themeSoftColor: '',
   graphNodeLimit: 2000,
   floatingLaunchEnabled: false,
+  editorImageAssetsDir: './assets/',
 }
 
 function normalizeThemeColor(value: string | undefined): string {
@@ -119,6 +120,14 @@ function normalizeFontSizePercent(value: number | string | undefined): number {
   return Math.max(50, Math.min(150, Math.round(parsed)))
 }
 
+function normalizeEditorImageAssetsDir(value: string | undefined): string {
+  const rawValue = (value ?? './assets/').trim().replace(/\\/g, '/')
+  if (!rawValue) return './assets/'
+  const parts = rawValue.split('/').filter((part) => part && part !== '.' && part !== '..')
+  const normalized = parts.join('/') || 'assets'
+  return `./${normalized}/`
+}
+
 function quoteFontFamily(value: string): string {
   if (value.startsWith('var(') || /^[-_a-zA-Z][-_a-zA-Z0-9]*$/u.test(value)) {
     return value
@@ -144,6 +153,7 @@ function normalizeProfile(profile: UserSettingsProfile): UserSettingsProfile {
     fontSizePercent: normalizeFontSizePercent(profile.fontSizePercent),
     themePrimaryColor: normalizeThemeColor(profile.themePrimaryColor),
     themeSoftColor: normalizeThemeColor(profile.themeSoftColor),
+    editorImageAssetsDir: normalizeEditorImageAssetsDir(profile.editorImageAssetsDir),
   }
   if (nextProfile.userId === 'local-user') {
     nextProfile.userId = ''
@@ -177,6 +187,7 @@ function mapBackendProfile(profileResponse: SettingsProfileResponse): Partial<Us
     themeSoftColor: profileResponse.theme_soft_color ?? '',
     graphNodeLimit: profileResponse.graph_node_limit ?? 2000,
     floatingLaunchEnabled: Boolean(profileResponse.floating_launch_enabled),
+    editorImageAssetsDir: profileResponse.editor_image_assets_dir ?? './assets/',
   }
 }
 
@@ -648,6 +659,26 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  async function saveEditorPasteSettings(params: { editorImageAssetsDir?: string }) {
+    const nextEditorImageAssetsDir = normalizeEditorImageAssetsDir(params.editorImageAssetsDir ?? profile.value.editorImageAssetsDir)
+    if (!hasUserId.value) {
+      updateProfile({ editorImageAssetsDir: nextEditorImageAssetsDir })
+      return null
+    }
+    const prev = { editorImageAssetsDir: profile.value.editorImageAssetsDir }
+    updateProfile({ editorImageAssetsDir: nextEditorImageAssetsDir })
+    try {
+      const result = await saveEditorPasteConfig(profile.value.userId, {
+        editorImageAssetsDir: nextEditorImageAssetsDir,
+      })
+      updateProfile({ editorImageAssetsDir: result.editor_image_assets_dir })
+      return result
+    } catch {
+      updateProfile(prev)
+      throw new Error('保存粘贴设置失败')
+    }
+  }
+
   return {
     themeMode,
     colorScheme,
@@ -688,6 +719,7 @@ export const useSettingsStore = defineStore('settings', () => {
     saveKnowledgeIngestionSettings,
     saveGraphSettings,
     saveFloatingSettings,
+    saveEditorPasteSettings,
     setAutoIngestOnUpload,
     showIndexColumn,
     setShowIndexColumn,

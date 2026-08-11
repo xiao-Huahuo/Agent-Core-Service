@@ -128,6 +128,65 @@ describe('CodeEditor Markdown context menu', () => {
     expect(wrapper.emitted('save')).toBeUndefined()
   })
 
+  it('inserts a Markdown image link when clipboard contains an image', async () => {
+    const read = vi.fn().mockResolvedValue([
+      {
+        types: ['image/png'],
+        getType: vi.fn().mockResolvedValue(new Blob(['image'], { type: 'image/png' })),
+      },
+    ])
+    const readText = vi.fn().mockResolvedValue('plain text')
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { read, readText },
+    })
+    const pasteImage = vi.fn().mockResolvedValue('![](./assets/image.png)')
+    const wrapper = mount(CodeEditor, {
+      props: {
+        modelValue: 'before ',
+        language: 'md',
+        pasteImage,
+        'onUpdate:modelValue': (nextValue: string) => wrapper.setProps({ modelValue: nextValue }),
+      },
+    })
+    const textareaWrapper = wrapper.get('textarea')
+    const textarea = textareaWrapper.element as HTMLTextAreaElement
+    textarea.setSelectionRange(7, 7)
+
+    await textareaWrapper.trigger('keydown', { key: 'v', ctrlKey: true, shiftKey: true })
+    await flushPromises()
+
+    expect(pasteImage).toHaveBeenCalledOnce()
+    expect(readText).not.toHaveBeenCalled()
+    expect((wrapper.props() as { modelValue: string }).modelValue).toBe('before ![](./assets/image.png)')
+  })
+
+  it('handles native paste events for clipboard images', async () => {
+    const pasteImage = vi.fn().mockResolvedValue('![](./assets/native.png)')
+    const wrapper = mount(CodeEditor, {
+      props: {
+        modelValue: '',
+        language: 'md',
+        pasteImage,
+        'onUpdate:modelValue': (nextValue: string) => wrapper.setProps({ modelValue: nextValue }),
+      },
+    })
+    const preventDefault = vi.fn()
+    const getAsFile = vi.fn().mockReturnValue(new File(['image'], 'clipboard.png', { type: 'image/png' }))
+    const pasteEvent = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: { items: [{ type: 'image/png', getAsFile }] },
+    })
+    pasteEvent.preventDefault = preventDefault
+
+    wrapper.get('textarea').element.dispatchEvent(pasteEvent)
+    await flushPromises()
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(pasteImage).toHaveBeenCalledOnce()
+    expect((wrapper.props() as { modelValue: string }).modelValue).toBe('![](./assets/native.png)')
+  })
+
   it('wraps the selected text as bold Markdown', async () => {
     const wrapper = mountMarkdownEditor('hello')
     const textarea = wrapper.get('textarea').element as HTMLTextAreaElement

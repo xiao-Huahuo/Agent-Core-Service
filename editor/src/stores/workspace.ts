@@ -129,6 +129,22 @@ function splitExtension(name: string): { stem: string; extension: string } {
   return { stem: name.slice(0, dotIndex), extension: name.slice(dotIndex) }
 }
 
+function extensionForImageMimeType(mimeType: string): string {
+  const normalized = mimeType.toLowerCase()
+  if (normalized.includes('jpeg')) return '.jpg'
+  if (normalized.includes('gif')) return '.gif'
+  if (normalized.includes('webp')) return '.webp'
+  return '.png'
+}
+
+function normalizeEditorAssetDirectory(value: string | undefined): string {
+  const parts = (value ?? './assets/')
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter((part) => part && part !== '.' && part !== '..')
+  return parts.join('/') || 'assets'
+}
+
 type FileConflictStrategy = 'overwrite' | 'skip' | 'rename'
 type FileConflictDialogOwner = 'tree' | 'resources'
 
@@ -2247,6 +2263,26 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     syncCurrentDocumentContext()
   }
 
+  async function savePastedEditorImage(file: File): Promise<string> {
+    const settingsStore = useSettingsStore()
+    const activePath = selectedPath.value
+    if (!settingsStore.profile.userId || !activePath || selectedNode.value?.isDir) {
+      showToast('请选择可编辑文件后再粘贴图片')
+      return ''
+    }
+    const configuredDir = normalizeEditorAssetDirectory(settingsStore.profile.editorImageAssetsDir)
+    const targetDir = joinTreePath(getParentPath(activePath), configuredDir)
+    const extension = extensionForImageMimeType(file.type || 'image/png')
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/u, '').replace('T', '-')
+    const targetPath = uniquePathInDirectory(targetDir, `image-${timestamp}${extension}`)
+    const filename = getBaseName(targetPath)
+    const uploadFile = new File([file], filename, { type: file.type || 'image/png' })
+    ignoreNextTreeEvent.value += 1
+    await uploadKnowledgeFile(settingsStore.profile.userId, uploadFile, targetDir, false, 'overwrite')
+    await loadKnowledgeTree()
+    return `![](./${joinTreePath(configuredDir, filename)})`
+  }
+
   async function renameNode(node: KnowledgeFileNode, nextName: string) {
     const normalizedName = normalizeTreePath(nextName)
     if (!normalizedName || normalizedName.includes('/')) {
@@ -2708,6 +2744,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     copyNode,
     cutNode,
     pasteNode,
+    savePastedEditorImage,
     moveNodesToDirectory,
     renameNode,
     deleteNode,

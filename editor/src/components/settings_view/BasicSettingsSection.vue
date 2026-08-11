@@ -12,6 +12,7 @@ import { API_ROUTES } from '@/router/api_routes'
 
 const libraryNameDraft = defineModel<string>('libraryNameDraft', { required: true })
 const knowledgeDirDraft = defineModel<string>('knowledgeDirDraft', { required: true })
+const editorImageAssetsDirDraft = defineModel<string>('editorImageAssetsDirDraft', { required: true })
 const watchEnabledDraft = defineModel<boolean>('watchEnabledDraft', { required: true })
 const autoIngestOnUploadDraft = defineModel<boolean>('autoIngestOnUploadDraft', { required: true })
 const ocrEnabledDraft = defineModel<boolean>('ocrEnabledDraft', { required: true })
@@ -71,6 +72,10 @@ function goToStorageSettings() {
     <div class="setting-row">
       <label>知识目录</label>
       <input v-model="knowledgeDirDraft" spellcheck="false" @blur="$emit('save')" />
+    </div>
+    <div class="setting-row">
+      <label>图片目录</label>
+      <input v-model="editorImageAssetsDirDraft" spellcheck="false" placeholder="./assets/" @blur="$emit('save')" />
     </div>
 
     <div class="setting-row toggle-row">
