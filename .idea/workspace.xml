@@ -6,7 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="580a0f92-3d64-4c6a-94b1-67ab9a08df39" name="更改" comment="智能表格体验扩展">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -308,14 +307,6 @@
       <workItem from="1786284868131" duration="13782000" />
       <workItem from="1786369945771" duration="10815000" />
       <workItem from="1786419381908" duration="1916000" />
-    </task>
-    <task id="LOCAL-00283" summary="准备做多Agent">
-      <option name="closed" value="true" />
-      <created>1785588456938</created>
-      <option name="number" value="00283" />
-      <option name="presentableId" value="LOCAL-00283" />
-      <option name="project" value="LOCAL" />
-      <updated>1785588456938</updated>
     </task>
     <task id="LOCAL-00284" summary="多Agent v1">
       <option name="closed" value="true" />
@@ -701,7 +692,15 @@
       <option name="project" value="LOCAL" />
       <updated>1786442309085</updated>
     </task>
-    <option name="localTasksCounter" value="332" />
+    <task id="LOCAL-00332" summary="智能表格体验扩展">
+      <option name="closed" value="true" />
+      <created>1786443470838</created>
+      <option name="number" value="00332" />
+      <option name="presentableId" value="LOCAL-00332" />
+      <option name="project" value="LOCAL" />
+      <updated>1786443470838</updated>
+    </task>
+    <option name="localTasksCounter" value="333" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
