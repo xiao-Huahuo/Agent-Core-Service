@@ -130,6 +130,7 @@ from agent_service.services.task_suggestion_service import TaskSuggestionService
 from agent_service.services.token_usage_service import SUPPORTED_INTERVALS, TokenUsageService
 from agent_service.services.favorite_service import FavoriteService
 from agent_service.services.feedback_service import FeedbackService
+from agent_service.services.vault_service import VaultService
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +149,7 @@ class AgentServiceServicer(BaseServicer):
         git_service: GitService | None = None,
         favorite_service: FavoriteService | None = None,
         feedback_service: FeedbackService | None = None,
+        vault_service: VaultService | None = None,
     ) -> None:
         self._agent = agent
         self._session_service = session_service
@@ -157,6 +159,7 @@ class AgentServiceServicer(BaseServicer):
         self._git_service = git_service
         self._favorite_service = favorite_service
         self._feedback_service = feedback_service
+        self._vault_service = vault_service
 
     def shutdown(self) -> None:
         self._agent.close()
@@ -388,6 +391,155 @@ class AgentServiceServicer(BaseServicer):
         except ValueError as exc:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
         return DeleteResponse(ok=True, deleted_count=1 if deleted else 0)
+
+    def VaultStatus(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """读取密码库设置状态。"""
+
+        payload = MessageToDict(request)
+        return self._vault_struct(context, self._require_vault_service(context).status, user_id=str(payload.get("user_id", "")))
+
+    def VaultDebugMasterPassword(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """读取密码库调试主密码。"""
+
+        payload = MessageToDict(request)
+        return self._vault_struct(
+            context,
+            self._require_vault_service(context).debug_master_password,
+            user_id=str(payload.get("user_id", "")),
+        )
+
+    def VaultSetup(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """设置密码库主密码并返回独立 token。"""
+
+        payload = MessageToDict(request)
+        return self._vault_struct(
+            context,
+            self._require_vault_service(context).setup,
+            user_id=str(payload.get("user_id", "")),
+            master_password=str(payload.get("master_password", "")),
+        )
+
+    def VaultUnlock(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """验证主密码并返回独立 token。"""
+
+        payload = MessageToDict(request)
+        return self._vault_struct(
+            context,
+            self._require_vault_service(context).unlock,
+            user_id=str(payload.get("user_id", "")),
+            master_password=str(payload.get("master_password", "")),
+        )
+
+    def VaultLock(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """主动锁定一个密码库 token。"""
+
+        payload = MessageToDict(request)
+        return self._vault_struct(
+            context,
+            self._require_vault_service(context).lock,
+            token=str(payload.get("token", "")),
+        )
+
+    def VaultListItems(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """列出密码库条目。"""
+
+        payload = MessageToDict(request)
+        session = self._vault_session_from_payload(context, payload)
+        return self._vault_struct(
+            context,
+            self._require_vault_service(context).list_items,
+            session=session,
+            query=str(payload.get("query", "")),
+            tag=str(payload.get("tag", "")),
+            item_type=str(payload.get("item_type", "")),
+            trash=bool(payload.get("trash", False)),
+        )
+
+    def VaultGetItem(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """读取密码库条目。"""
+
+        payload = MessageToDict(request)
+        return self._vault_struct(
+            context,
+            self._require_vault_service(context).get_item,
+            session=self._vault_session_from_payload(context, payload),
+            item_id=str(payload.get("item_id", "")),
+        )
+
+    def VaultCreateItem(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """创建密码库条目。"""
+
+        payload = MessageToDict(request)
+        return self._vault_struct(
+            context,
+            self._require_vault_service(context).create_item,
+            session=self._vault_session_from_payload(context, payload),
+            item_type=str(payload.get("item_type", "")),
+            fields=dict(payload.get("fields", {}) or {}),
+            tags=[str(item) for item in payload.get("tags", [])],
+            asset_ids=[str(item) for item in payload.get("asset_ids", [])],
+        )
+
+    def VaultUpdateItem(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """更新密码库条目。"""
+
+        payload = MessageToDict(request)
+        item_id = str(payload.pop("item_id", ""))
+        token = str(payload.pop("token", ""))
+        return self._vault_struct(
+            context,
+            self._require_vault_service(context).update_item,
+            session=self._vault_session_from_payload(context, {"token": token}),
+            item_id=item_id,
+            payload=payload,
+        )
+
+    def VaultMoveToTrash(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """密码库条目移入回收站。"""
+
+        return self._vault_item_ids_call(request, context, self._require_vault_service(context).move_to_trash)
+
+    def VaultRestoreItems(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """恢复密码库回收站条目。"""
+
+        return self._vault_item_ids_call(request, context, self._require_vault_service(context).restore_items)
+
+    def VaultPurgeItems(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """永久删除密码库条目。"""
+
+        return self._vault_item_ids_call(request, context, self._require_vault_service(context).purge_items)
+
+    def VaultExportItems(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """导出密码库条目。"""
+
+        payload = MessageToDict(request)
+        return self._vault_struct(
+            context,
+            self._require_vault_service(context).export_items,
+            session=self._vault_session_from_payload(context, payload),
+            item_ids=[str(item) for item in payload.get("item_ids", [])] or None,
+        )
+
+    def VaultImportItems(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """导入密码库条目。"""
+
+        payload = MessageToDict(request)
+        return self._vault_struct(
+            context,
+            self._require_vault_service(context).import_items,
+            session=self._vault_session_from_payload(context, payload),
+            raw_items=list(payload.get("items", []) or []),
+        )
+
+    def VaultListTags(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """列出密码库标签。"""
+
+        payload = MessageToDict(request)
+        return self._vault_struct(
+            context,
+            self._require_vault_service(context).list_tags,
+            session=self._vault_session_from_payload(context, payload),
+        )
 
     # ------------------------------------------------------------------
     # 取消执行 RPC
@@ -1170,6 +1322,42 @@ class AgentServiceServicer(BaseServicer):
         if self._feedback_service is None:
             context.abort(grpc.StatusCode.UNAVAILABLE, "FeedbackService not available")
         return self._feedback_service  # type: ignore[return-value]
+
+    def _require_vault_service(self, context: grpc.ServicerContext) -> VaultService:
+        """返回注入的 VaultService,未就绪时终止 RPC。"""
+
+        if self._vault_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "VaultService not available")
+        return self._vault_service  # type: ignore[return-value]
+
+    def _vault_session_from_payload(self, context: grpc.ServicerContext, payload: dict[str, Any]) -> Any:
+        """从 Struct payload 中校验 vault token。"""
+
+        try:
+            return self._require_vault_service(context).verify_token(str(payload.get("token", "")))
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.UNAUTHENTICATED, str(exc))
+
+    def _vault_item_ids_call(self, request: Struct, context: grpc.ServicerContext, function: Any) -> Struct:
+        """执行只需要 token 和 item_ids 的密码库方法。"""
+
+        payload = MessageToDict(request)
+        return self._vault_struct(
+            context,
+            function,
+            session=self._vault_session_from_payload(context, payload),
+            item_ids=[str(item) for item in payload.get("item_ids", [])],
+        )
+
+    @staticmethod
+    def _vault_struct(context: grpc.ServicerContext, function: Any, **kwargs: Any) -> Struct:
+        """执行密码库方法并转换为 protobuf Struct。"""
+
+        try:
+            payload = function(**kwargs)
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(payload, Struct())
 
     @staticmethod
     def _git_struct(

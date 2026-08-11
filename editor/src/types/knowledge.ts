@@ -58,6 +58,7 @@ export type WorkspaceMainView =
   | 'resources'
   | 'favorites'
   | 'library'
+  | 'vault'
   | 'forms'
   | 'ingestion'
   | 'visualization'

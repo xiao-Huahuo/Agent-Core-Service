@@ -9,6 +9,7 @@ from agent_service.api.rest.debug import router as debug_router
 from agent_service.api.rest.knowledge import router as knowledge_router
 from agent_service.api.rest.git import router as git_router
 from agent_service.api.rest.library import router as library_router
+from agent_service.api.rest.vault import router as vault_router
 from agent_service.api.rest.settings import router as settings_router
 from agent_service.api.rest.skills import router as skills_router
 from agent_service.api.rest.task_lists import router as task_lists_router
@@ -28,6 +29,7 @@ router.include_router(debug_router)
 router.include_router(knowledge_router)
 router.include_router(git_router)
 router.include_router(library_router)
+router.include_router(vault_router)
 router.include_router(settings_router)
 router.include_router(skills_router)
 router.include_router(task_lists_router)

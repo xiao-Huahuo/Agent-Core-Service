@@ -34,7 +34,7 @@ const tabs = [
   { key: 'web' as const, label: '联网配置' },
   { key: 'memory' as const, label: '记忆与指令' },
   { key: 'graph' as const, label: '图谱' },
-  { key: 'safety' as const, label: '安全审核' },
+  { key: 'safety' as const, label: '密码与安全' },
   { key: 'storage' as const, label: '存储管理' },
   { key: 'floating' as const, label: '悬浮窗' },
 ]

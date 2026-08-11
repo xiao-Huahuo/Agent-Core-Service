@@ -23,6 +23,7 @@ const props = defineProps<{
   resourcesActive: boolean
   favoritesActive: boolean
   libraryActive: boolean
+  vaultActive: boolean
   formsActive: boolean
   ingestionActive: boolean
   visualizationActive: boolean
@@ -43,6 +44,7 @@ const emit = defineEmits<{
   openResources: []
   openFavorites: []
   openLibrary: []
+  openVault: []
   openForms: []
   openIngestion: []
   openVisualization: []
@@ -69,18 +71,18 @@ function handleRipple(e: MouseEvent) {
 const settingsStore = useSettingsStore()
 const agentIconSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
 const knowledgeMenuOpen = ref(false)
-const knowledgeActive = computed(() => props.resourcesActive || props.libraryActive || props.formsActive)
+const knowledgeActive = computed(() => props.resourcesActive || props.libraryActive || props.vaultActive || props.formsActive)
 
 function toggleKnowledgeMenu() {
   knowledgeMenuOpen.value = !knowledgeMenuOpen.value
 }
 
 function openKnowledgeMenuOnHover() {
-  if (props.displayMode === 'icon') knowledgeMenuOpen.value = true
+  if (props.displayMode === 'icons') knowledgeMenuOpen.value = true
 }
 
 function closeKnowledgeMenuOnLeave() {
-  if (props.displayMode === 'icon') knowledgeMenuOpen.value = false
+  if (props.displayMode === 'icons') knowledgeMenuOpen.value = false
 }
 
 function closeKnowledgeMenu() {
@@ -170,6 +172,18 @@ function closeKnowledgeMenu() {
           >
             <IcIcon name="book" :size="18" />
             <span class="activity-label">图书馆</span>
+          </button>
+          <button
+            class="activity-button"
+            :class="{ active: vaultActive }"
+            type="button"
+            title="密码库"
+            aria-label="密码库"
+            @mousedown.prevent="handleRipple"
+            @click="emit('openVault'); closeKnowledgeMenu()"
+          >
+            <IcIcon name="shield" :size="18" />
+            <span class="activity-label">密码库</span>
           </button>
           <button
             class="activity-button"

@@ -88,6 +88,7 @@ from agent_service.services.knowledge_library_service import KnowledgeLibrarySer
 from agent_service.services.git_service import GitService
 from agent_service.services.knowledge_graph_service import KnowledgeGraphService
 from agent_service.services.library_service import LibraryService
+from agent_service.services.vault_service import VaultService
 import agent_service.api.rest.deps as rest_deps
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.session_service import SessionService
@@ -167,6 +168,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         knowledge_library_service=knowledge_library_service,
         knowledge_graph_service=knowledge_graph_service,
     )
+    vault_service = VaultService(config=config, engine=settings_service.engine)
     favorite_service = FavoriteService(engine=settings_service.engine)
     feedback_service = FeedbackService(engine=settings_service.engine)
     from agent_service.services.smart_form_service import SmartFormService
@@ -180,6 +182,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     rest_deps._knowledge_graph_service = knowledge_graph_service
     rest_deps._git_service = git_service
     rest_deps._library_service = library_service
+    rest_deps._vault_service = vault_service
     rest_deps._favorite_service = favorite_service
     rest_deps._feedback_service = feedback_service
     rest_deps._smart_form_service = smart_form_service
@@ -238,6 +241,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         git_service=git_service,
         favorite_service=favorite_service,
         feedback_service=feedback_service,
+        vault_service=vault_service,
     )
     rest_deps._agent = agent
     rest_deps._session_service = session_service
@@ -288,6 +292,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._knowledge_graph_service = None
         rest_deps._git_service = None
         rest_deps._library_service = None
+        rest_deps._vault_service = None
         rest_deps._favorite_service = None
         rest_deps._feedback_service = None
         rest_deps._smart_form_service = None

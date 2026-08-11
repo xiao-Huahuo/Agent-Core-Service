@@ -8,7 +8,9 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { getVaultDebugMasterPassword, getVaultStatus, type VaultStatusResponse } from '@/api/vault'
 import { fetchSensitiveWords, saveSensitiveWords } from '@/api/settings'
+import { useSettingsStore } from '@/stores/settings'
 
 interface CategoryData {
   name: string
@@ -32,6 +34,7 @@ const data = reactive<WordData>({
   categories: {},
 })
 
+const settingsStore = useSettingsStore()
 const categoryKeys = ref<string[]>([])
 const newCategoryKey = ref('')
 const newCategoryName = ref('')
@@ -40,7 +43,14 @@ const newRegexText = ref<Record<string, string>>({})
 const saving = ref(false)
 const saveMsg = ref('')
 const loading = ref(true)
+const vaultDebugLoading = ref(false)
+const vaultDebug = ref<VaultStatusResponse | null>(null)
+const vaultPasswordDebug = ref('')
+const vaultDebugPasswordVisible = ref(false)
 
+const categoryEntries = computed(() => categoryKeys.value
+  .map((key) => ({ key, category: data.categories[key] }))
+  .filter((entry): entry is { key: string; category: CategoryData } => Boolean(entry.category)))
 const safetyDisabled = computed(() => data._safety_disabled)
 const sensitiveDisabled = computed(() => data._sensitive_words_disabled)
 
@@ -153,11 +163,52 @@ async function handleSave() {
   }
 }
 
+async function handleFetchVaultPasswordDebug() {
+  const userId = settingsStore.profile.userId
+  if (!userId) {
+    vaultPasswordDebug.value = '当前没有用户 ID'
+    return
+  }
+  vaultDebugLoading.value = true
+  vaultPasswordDebug.value = ''
+  try {
+    const [status, debug] = await Promise.all([
+      getVaultStatus(userId),
+      getVaultDebugMasterPassword(userId),
+    ])
+    vaultDebug.value = status
+    vaultPasswordDebug.value = debug.available ? debug.master_password : debug.message
+    vaultDebugPasswordVisible.value = debug.available
+  } catch (error) {
+    vaultPasswordDebug.value = error instanceof Error ? error.message : '读取密码库调试信息失败'
+    vaultDebugPasswordVisible.value = false
+  } finally {
+    vaultDebugLoading.value = false
+  }
+}
+
 onMounted(loadData)
 </script>
 
 <template>
   <div class="setting-section">
+    <h3>密码库</h3>
+    <div class="vault-debug-card">
+      <div class="vault-debug-main">
+        <strong>密码库调试</strong>
+        <span>当前用户: {{ settingsStore.profile.userId || '未设置' }}</span>
+        <span v-if="vaultDebug">
+          状态: {{ vaultDebug.configured ? '已设置主密码' : '未设置主密码' }} · 条目 {{ vaultDebug.item_count }}
+        </span>
+      </div>
+      <button class="save-model-btn" :disabled="vaultDebugLoading" type="button" @click="handleFetchVaultPasswordDebug">
+        {{ vaultDebugLoading ? '获取中...' : '获取密码库主密码' }}
+      </button>
+      <p v-if="vaultPasswordDebug" class="vault-debug-result" :class="{ secret: vaultDebugPasswordVisible }">
+        {{ vaultDebugPasswordVisible ? `主密码: ${vaultPasswordDebug}` : vaultPasswordDebug }}
+      </p>
+    </div>
+
     <h3>安全审核词库</h3>
     <p class="safety-desc">{{ data._description }}</p>
 
@@ -204,81 +255,81 @@ onMounted(loadData)
     <p v-if="loading" class="safety-loading">加载中...</p>
 
     <!-- Category list -->
-    <div v-for="catKey in categoryKeys" :key="catKey" class="safety-category-card">
+    <div v-for="entry in categoryEntries" :key="entry.key" class="safety-category-card">
       <div class="safety-cat-header">
-        <strong class="safety-cat-key">{{ catKey }}</strong>
+        <strong class="safety-cat-key">{{ entry.key }}</strong>
         <input
-          v-model="data.categories[catKey].name"
+          v-model="entry.category.name"
           class="safety-cat-name-input"
           placeholder="分类名称"
           spellcheck="false"
         />
-        <button class="entry-del" title="删除此分类" @click="removeCategory(catKey)">&times;</button>
+        <button class="entry-del" title="删除此分类" @click="removeCategory(entry.key)">&times;</button>
       </div>
 
       <div class="safety-cat-meta">
         <label class="safety-label">风险等级</label>
-        <select v-model="data.categories[catKey].risk_level" class="safety-select">
+        <select v-model="entry.category.risk_level" class="safety-select">
           <option value="high">高</option>
           <option value="medium">中</option>
           <option value="low">低</option>
         </select>
         <label class="safety-label" style="margin-left: 16px">拦截</label>
         <input
-          :checked="data.categories[catKey].block"
+          :checked="entry.category.block"
           type="checkbox"
           class="safety-toggle"
-          @change="data.categories[catKey].block = ($event.target as HTMLInputElement).checked"
+          @change="entry.category.block = ($event.target as HTMLInputElement).checked"
         />
       </div>
 
       <!-- Exact words -->
       <div class="safety-subsection">
         <span class="safety-subtitle">精确匹配</span>
-        <div v-if="data.categories[catKey].exact.length" class="safety-chip-row">
+        <div v-if="entry.category.exact.length" class="safety-chip-row">
           <span
-            v-for="(word, i) in data.categories[catKey].exact"
+            v-for="(word, i) in entry.category.exact"
             :key="i"
             class="safety-chip"
           >
             <span class="safety-chip-text">{{ word }}</span>
-            <button class="safety-chip-del" @click="removeExact(catKey, i)">&times;</button>
+            <button class="safety-chip-del" @click="removeExact(entry.key, i)">&times;</button>
           </span>
         </div>
         <div class="safety-chip-input-row">
           <input
-            v-model="newExactText[catKey]"
+            v-model="newExactText[entry.key]"
             class="safety-chip-input"
             placeholder="添加精确匹配词"
             spellcheck="false"
-            @keydown="handleKeydownInput($event, catKey, 'exact')"
+            @keydown="handleKeydownInput($event, entry.key, 'exact')"
           />
-          <button class="add-btn" :disabled="!(newExactText[catKey] || '').trim()" @click="addExact(catKey)">添加</button>
+          <button class="add-btn" :disabled="!(newExactText[entry.key] || '').trim()" @click="addExact(entry.key)">添加</button>
         </div>
       </div>
 
       <!-- Regex patterns -->
       <div class="safety-subsection">
         <span class="safety-subtitle">正则匹配</span>
-        <div v-if="data.categories[catKey].regex.length" class="safety-chip-row">
+        <div v-if="entry.category.regex.length" class="safety-chip-row">
           <span
-            v-for="(pattern, i) in data.categories[catKey].regex"
+            v-for="(pattern, i) in entry.category.regex"
             :key="i"
             class="safety-chip safety-chip-regex"
           >
             <span class="safety-chip-text safety-chip-code">{{ pattern }}</span>
-            <button class="safety-chip-del" @click="removeRegex(catKey, i)">&times;</button>
+            <button class="safety-chip-del" @click="removeRegex(entry.key, i)">&times;</button>
           </span>
         </div>
         <div class="safety-chip-input-row">
           <input
-            v-model="newRegexText[catKey]"
+            v-model="newRegexText[entry.key]"
             class="safety-chip-input safety-chip-input-code"
             placeholder="添加正则模式"
             spellcheck="false"
-            @keydown="handleKeydownInput($event, catKey, 'regex')"
+            @keydown="handleKeydownInput($event, entry.key, 'regex')"
           />
-          <button class="add-btn" :disabled="!(newRegexText[catKey] || '').trim()" @click="addRegex(catKey)">添加</button>
+          <button class="add-btn" :disabled="!(newRegexText[entry.key] || '').trim()" @click="addRegex(entry.key)">添加</button>
         </div>
       </div>
     </div>
@@ -310,6 +361,47 @@ onMounted(loadData)
 </template>
 
 <style scoped>
+.vault-debug-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-8);
+  align-items: center;
+  margin-bottom: var(--space-16);
+  padding: var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+}
+
+.vault-debug-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vault-debug-main strong {
+  color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.vault-debug-main span,
+.vault-debug-result {
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
+  line-height: 1.45;
+}
+
+.vault-debug-result {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.vault-debug-result.secret {
+  color: var(--color-danger);
+  font-family: var(--font-code);
+  user-select: text;
+}
+
 .safety-desc {
   margin: -4px 0 var(--space-10);
   color: var(--color-text-muted);

@@ -118,6 +118,23 @@ service AgentService {
   rpc AddFeedback(FeedbackCreateRequest) returns (FeedbackEntryResponse);
   rpc UpdateFeedback(FeedbackUpdateRequest) returns (FeedbackEntryResponse);
   rpc DeleteFeedback(FeedbackDeleteRequest) returns (DeleteResponse);
+
+  // 密码库: 与 REST /vault 对齐,使用 Struct 承载独立 vault token 和业务字段。
+  rpc VaultStatus(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultDebugMasterPassword(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultSetup(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultUnlock(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultLock(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultListItems(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultGetItem(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultCreateItem(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultUpdateItem(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultMoveToTrash(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultRestoreItems(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultPurgeItems(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultExportItems(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultImportItems(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultListTags(google.protobuf.Struct) returns (google.protobuf.Struct);
 }
 
 // ---------------------------------------------------------------------------

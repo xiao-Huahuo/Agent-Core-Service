@@ -2,6 +2,10 @@
 
 ## 2026-08-11
 
+- [x] 新增完整密码库功能:后端新增独立 VaultProfile/VaultItem/VaultTag/VaultAsset 模型、VaultService、/vault REST 接口和 gRPC Struct 方法,使用主密码 PBKDF2 哈希、Fernet 加密条目、HS256 vault JWT(scope=vault,30 分钟)实现二次解锁;vault JWT 只携带 scope/user/jti/exp,解锁密钥仅保存在服务端会话内存中,锁定会失效当前密码库会话且不退出普通软件;列表/搜索响应隐藏密码、安全码、卡号和安全笔记明文,详情/导出才在已解锁态返回敏感字段。功能支持登录/支付卡/身份/安全笔记 CRUD、标签、全字段解密搜索、回收站、导入导出和受保护图片资产目录。前端新增知识库菜单第四项「密码库」及 VaultView 页面,包含解锁/设置主密码、筛选侧栏、图片缩略图表格、多选、右键菜单、导入导出、锁定和编辑弹窗;Vite 代理补充 /vault。新增 tests/test_vault_service.py 覆盖加密存储、列表脱敏、token 隔离、回收站、导出和导入转安全笔记。
+- [x] 修复密码库 gRPC 生成文件启动导入失败:将 `agent_service_pb2_grpc.py` 的 pb2 引用改为包内导入,避免从 `main.py` 加载 gRPC servicer 时报 `ModuleNotFoundError: agent_service_pb2`;新增 `tests/test_grpc_imports.py` 覆盖 main 使用的 gRPC 导入链。
+- [x] 将设置页「安全审核」改名为「密码与安全」,并在该页新增「密码库」调试块:新增 `/vault/debug/master-password` REST 与 `VaultDebugMasterPassword` gRPC 调试接口,密码库 setup 或成功 unlock 后会把当前主密码写入 VaultProfile 的 `debug_master_password` 字段,设置页按钮可读取并显示该用户调试主密码;旧密码库若没有该调试字段值,需成功解锁一次后才可显示。
+
 - 修复文献原文件下载误打开预览查看器的问题；下载改为抓取文件 Blob 后触发保存，并释放临时下载地址。
 - 修正桌面端原文件下载失败问题；后端原始文件接口新增 `download=1` 附件响应，前端改为直接触发带下载标记的地址。
 - 修复智能表格 Markdown 图片按钮只打开图片的问题；图片原始地址现在同样使用 `download=1` 附件响应。

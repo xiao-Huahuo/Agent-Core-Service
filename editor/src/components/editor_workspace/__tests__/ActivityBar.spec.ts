@@ -3,7 +3,7 @@
  *
  * Usage:
  * Verifies the knowledge-base group keeps the existing navigation events
- * while exposing its three child entries through the animated submenu.
+ * while exposing its child entries through the animated submenu.
  */
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -21,7 +21,7 @@ describe('ActivityBar', () => {
   })
 
   const props = {
-    displayMode: 'icon' as const,
+    displayMode: 'icons' as const,
     homeActive: false,
     fileOpen: false,
     gitActive: false,
@@ -29,6 +29,7 @@ describe('ActivityBar', () => {
     resourcesActive: false,
     favoritesActive: false,
     libraryActive: false,
+    vaultActive: false,
     formsActive: false,
     ingestionActive: false,
     visualizationActive: false,
@@ -49,7 +50,7 @@ describe('ActivityBar', () => {
     await wrapper.get('button[aria-label="知识库"]').trigger('click')
 
     expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(true)
-    expect(wrapper.findAll('[aria-label="知识库菜单"] button')).toHaveLength(3)
+    expect(wrapper.findAll('[aria-label="知识库菜单"] button')).toHaveLength(4)
 
     await wrapper.get('button[aria-label="智能表格"]').trigger('click')
     expect(wrapper.emitted('openForms')).toHaveLength(1)
