@@ -808,10 +808,47 @@ def write_knowledge_file(path: str, content: str) -> str:
     runtime = get_tool_runtime()
     service = _build_knowledge_service()
     try:
+        try:
+            before = service.read_file(user_id=runtime.user_id, path=path)["content"]
+        except ValueError:
+            before = None
         result = service.write_file(user_id=runtime.user_id, path=path, content=content)
+        if runtime.change_service is not None:
+            runtime.change_service.record_edit(
+                user_id=runtime.user_id,
+                run_id=runtime.run_id,
+                path=str(result["path"]),
+                before=before,
+                after=content,
+            )
     except Exception as exc:
         return f"写入文件失败: {exc}"
     return f"已保存文件: {result['path']} (大小: {result.get('size', 'N/A')} 字节)"
+
+
+def patch_knowledge_file(path: str, old_text: str, new_text: str) -> str:
+    """Replace one unique text fragment in an existing knowledge file."""
+
+    if _is_readonly_access():
+        return _deny_readonly_write("局部修改知识库文件")
+    if not old_text:
+        return "局部修改失败: old_text 不能为空。"
+    runtime = get_tool_runtime()
+    service = _build_knowledge_service()
+    try:
+        before = service.read_file(user_id=runtime.user_id, path=path)["content"]
+        occurrences = before.count(old_text)
+        if occurrences != 1:
+            return f"局部修改失败: 目标片段应唯一命中，当前命中 {occurrences} 次。"
+        after = before.replace(old_text, new_text, 1)
+        result = service.write_file(user_id=runtime.user_id, path=path, content=after)
+        if runtime.change_service is not None:
+            runtime.change_service.record_edit(
+                user_id=runtime.user_id, run_id=runtime.run_id, path=str(result["path"]), before=before, after=after,
+            )
+    except Exception as exc:
+        return f"局部修改失败: {exc}"
+    return f"已局部修改文件: {result['path']}"
 
 
 def show_markdown_html(title: str, html: str, source_path: str = "", filename: str = "") -> str:

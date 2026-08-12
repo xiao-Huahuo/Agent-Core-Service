@@ -9,9 +9,13 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import LoaderCube from '@/components/editor_workspace/agent_chat/LoaderCube.vue'
+import FinalTurnSummary from '@/components/editor_workspace/agent_chat/FinalTurnSummary.vue'
 import MessageBubble from '@/components/editor_workspace/agent_chat/MessageBubble.vue'
+import { undoSessionChange } from '@/api/agentChanges'
+import type { AgentChangeSnapshot } from '@/api/agentChanges'
 import { useAvatar } from '@/components/editor_workspace/agent_chat/useAvatar'
 import type { AgentChatMessage, SourceItem } from '@/stores/chat'
+import { useSettingsStore } from '@/stores/settings'
 
 const props = defineProps<{
   messages: AgentChatMessage[]
@@ -26,9 +30,11 @@ const emit = defineEmits<{
 }>()
 
 const { userAvatar, agentAvatar } = useAvatar()
+const settingsStore = useSettingsStore()
 const containerRef = ref<HTMLDivElement | null>(null)
 const isPinnedToBottom = ref(true)
 const isThinkingActive = computed(() => Boolean(props.isStreaming))
+const undoingSnapshotId = ref('')
 
 function mergeConsecutiveSameNode(messages: AgentChatMessage[]) {
   return messages.filter((message) => message.role !== 'system').reduce<AgentChatMessage[]>((acc, message) => {
@@ -136,6 +142,9 @@ function isFinalAssistantAnswer(message: AgentChatMessage, index: number) {
   // with visible content in that turn is the final answer shown to the user.
   for (let nextIndex = index + 1; nextIndex < visibleMessages.value.length; nextIndex += 1) {
     const nextMessage = visibleMessages.value[nextIndex]
+    if (!nextMessage) {
+      continue
+    }
     if (nextMessage.role === 'user') {
       break
     }
@@ -233,6 +242,30 @@ function knowledgeSourcesForMessage(message: AgentChatMessage): SourceItem[] {
   return sources
 }
 
+function changeSnapshotForMessage(message: AgentChatMessage): AgentChangeSnapshot | null {
+  const snapshot = message.metadata?.change_snapshot
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null
+  const record = snapshot as Partial<AgentChangeSnapshot>
+  return typeof record.snapshot_id === 'string' && typeof record.session_id === 'string'
+    ? record as AgentChangeSnapshot
+    : null
+}
+
+async function undoMessageChange(message: AgentChatMessage) {
+  const snapshot = changeSnapshotForMessage(message)
+  const sessionId = snapshot?.session_id
+  const snapshotId = snapshot?.snapshot_id
+  const userId = settingsStore.profile.userId
+  if (typeof sessionId !== 'string' || typeof snapshotId !== 'string' || !userId) return
+  undoingSnapshotId.value = snapshotId
+  try {
+    const result = await undoSessionChange(sessionId, snapshotId, userId)
+    message.metadata = { ...(message.metadata ?? {}), change_snapshot: result.change_snapshot ?? snapshot }
+  } finally {
+    undoingSnapshotId.value = ''
+  }
+}
+
 watch(() => props.messages.length, (newLen, oldLen) => {
   // 新提交 prompt（新增用户消息）时强制滚动到底部
   if (newLen > oldLen && oldLen > 0 && props.messages[newLen - 1]?.role === 'user') {
@@ -263,19 +296,26 @@ defineExpose({
     :class="{ 'with-suggestion-overlay': suggestionOverlay }"
     @scroll="handleScroll"
   >
-    <MessageBubble
-      v-for="(message, index) in visibleMessages"
-      :key="message.message_id ?? `${message.role}-${index}`"
-      :message="message"
-      :is-streaming="isStreaming && index === visibleMessages.length - 1"
-      :is-thinking-active="isThinkingActive"
-      :user-avatar="userAvatar"
-      :agent-avatar="agentAvatar"
-      :show-avatar="shouldShowAvatar(message, index)"
-      :show-actions="shouldShowActions(message, index)"
-      :knowledge-sources="message.role === 'assistant' ? knowledgeSourcesForMessage(message) : []"
-      :citation-map="message.role === 'assistant' ? citationMapForMessage(message) : {}"
-    />
+    <template v-for="(message, index) in visibleMessages" :key="message.message_id ?? `${message.role}-${index}`">
+      <MessageBubble
+        :message="message"
+        :is-streaming="isStreaming && index === visibleMessages.length - 1"
+        :is-thinking-active="isThinkingActive"
+        :user-avatar="userAvatar"
+        :agent-avatar="agentAvatar"
+        :show-avatar="shouldShowAvatar(message, index)"
+        :show-actions="shouldShowActions(message, index)"
+        :knowledge-sources="[]"
+        :citation-map="message.role === 'assistant' ? citationMapForMessage(message) : {}"
+      />
+      <FinalTurnSummary
+        v-if="message.role === 'assistant' && isFinalAssistantAnswer(message, index) && !isThinkingActive"
+        :sources="knowledgeSourcesForMessage(message)"
+        :change-snapshot="changeSnapshotForMessage(message)"
+        :undoing="undoingSnapshotId === changeSnapshotForMessage(message)?.snapshot_id"
+        @undo="undoMessageChange(message)"
+      />
+    </template>
     <div v-if="showThinkingBubble" class="thinking-row">
       <img :src="agentAvatar" class="thinking-avatar" alt="agent" />
       <div class="thinking-loader"><LoaderCube /></div>

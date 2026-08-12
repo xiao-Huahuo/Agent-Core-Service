@@ -53,6 +53,7 @@ from agent_service.tools.builtin import (
     list_todos,
     read_knowledge_file,
     read_multimodal_file_info,
+    patch_knowledge_file,
     rebuild_knowledge_base,
     remove_library_item,
     rename_knowledge_file,
@@ -554,8 +555,23 @@ FILE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         display_name="读取多模态文件信息",
     ),
     BuiltinToolDefinition(
+        name="patch_knowledge_file",
+        description="局部修改已有文本/Markdown/代码文件。old_text 必须是文件内唯一的原文片段；优先使用本工具，只有新建文件或明确整文件重写时才使用 write_knowledge_file。",
+        args_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "文件相对路径。"},
+                "old_text": {"type": "string", "description": "唯一命中的原文片段。"},
+                "new_text": {"type": "string", "description": "替换后的片段。"},
+            },
+            "required": ["path", "old_text", "new_text"],
+        },
+        function=patch_knowledge_file,
+        display_name="局部修改文件",
+    ),
+    BuiltinToolDefinition(
         name="write_knowledge_file",
-        description="在知识库中创建新文件或覆盖已有文件。用于生成文档、笔记、代码等文本文件。",
+        description="创建新文本文件，或在用户明确要求整文件重写时覆盖已有文件。修改已有文件请优先使用 patch_knowledge_file。",
         args_schema={
             "type": "object",
             "properties": {

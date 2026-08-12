@@ -136,6 +136,10 @@ service AgentService {
   rpc VaultExportItems(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc VaultImportItems(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc VaultListTags(google.protobuf.Struct) returns (google.protobuf.Struct);
+
+  // Agent 单轮局部变更与安全撤销
+  rpc GetSessionChanges(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc UndoSessionChange(google.protobuf.Struct) returns (google.protobuf.Struct);
 }
 
 // ---------------------------------------------------------------------------

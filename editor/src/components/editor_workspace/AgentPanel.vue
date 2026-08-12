@@ -21,6 +21,8 @@ import SessionDrawer from '@/components/editor_workspace/agent_chat/SessionDrawe
 import StreamingIndicator from '@/components/editor_workspace/agent_chat/StreamingIndicator.vue'
 import TaskListDrawer from '@/components/editor_workspace/agent_chat/TaskListDrawer.vue'
 import ChildAgentPanel from '@/components/editor_workspace/agent_chat/ChildAgentPanel.vue'
+import EnvironmentChangeCard from '@/components/editor_workspace/agent_chat/EnvironmentChangeCard.vue'
+import ChangeDetailDrawer from '@/components/editor_workspace/agent_chat/ChangeDetailDrawer.vue'
 import { useChatStore } from '@/stores/chat'
 import type { AgentUploadedAttachment } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
@@ -33,6 +35,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
 import { uploadAgentAttachment } from '@/api/agent'
 import { fetchLLMConfig, fetchSensitiveWords, saveSensitiveWords } from '@/api/settings'
+import type { AgentChangeSnapshot } from '@/api/agentChanges'
 
 type MessageListApi = {
   scrollToBottom: (options?: ScrollToOptions) => void
@@ -57,8 +60,11 @@ const sessionDrawerOpen = ref(false)
 // 融合侧边栏(任务列表 + 子 Agent)统一开关
 const agentSidebarOpen = ref(false)
 // 两张卡片独立可见:各自可叉掉,不影响另一张;仅剩一张时再叉掉则收起整个侧边栏
-const taskListCardOpen = ref(true)
-const childAgentCardOpen = ref(true)
+const taskListCardOpen = ref(false)
+const childAgentCardOpen = ref(false)
+const environmentCardOpen = ref(false)
+const changeDetailOpen = ref(false)
+const selectedChangeSnapshot = ref<AgentChangeSnapshot | null>(null)
 const isBootstrapping = ref(false)
 const referenceText = ref('')
 const messageListRef = ref<MessageListApi | null>(null)
@@ -101,6 +107,26 @@ const sessionTitle = computed(() => {
 })
 const chatModeLabel = computed(() => settingsStore.chatMode === 'chat' ? 'chat' : 'tool')
 const currentLargeModelName = ref('')
+const sessionSources = computed(() => {
+  const unique = new Map<string, import('@/stores/chat').SourceItem>()
+  for (const message of chatStore.messages) {
+    const citationMap = message.metadata?.citation_map
+    if (!citationMap || typeof citationMap !== 'object' || Array.isArray(citationMap)) continue
+    for (const source of Object.values(citationMap)) {
+      if (!source || typeof source !== 'object' || Array.isArray(source)) continue
+      const record = source as Record<string, unknown>
+      const uri = typeof record.source_uri === 'string' ? record.source_uri : ''
+      if (!uri || unique.has(uri)) continue
+      unique.set(uri, {
+        source_uri: uri,
+        content: typeof record.content === 'string' ? record.content : '',
+        source: typeof record.source === 'string' ? record.source : undefined,
+        title: typeof record.title === 'string' ? record.title : undefined,
+      })
+    }
+  }
+  return [...unique.values()]
+})
 const modelConfigLabel = computed(() => currentLargeModelName.value || '配置模型')
 const loopModeOptions: Array<{ value: AgentLoopMode; label: string; hint: string }> = [
   { value: 'auto', label: 'Auto', hint: '自动选择' },
@@ -460,8 +486,8 @@ watch(
 )
 
 function resetSidebarCards() {
-  taskListCardOpen.value = true
-  childAgentCardOpen.value = true
+  taskListCardOpen.value = false
+  childAgentCardOpen.value = false
 }
 
 // 顶栏按钮召唤任务列表卡片:可见时收起(与卡片 X 逻辑一致,仅剩它则收整个侧边栏),不可见时打开
@@ -482,6 +508,27 @@ function toggleChildAgentCard() {
     childAgentCardOpen.value = true
     agentSidebarOpen.value = true
   }
+}
+
+function toggleEnvironmentCard() {
+  environmentCardOpen.value = !environmentCardOpen.value
+  if (environmentCardOpen.value) {
+    agentSidebarOpen.value = true
+  } else {
+    changeDetailOpen.value = false
+    if (!taskListCardOpen.value && !childAgentCardOpen.value) agentSidebarOpen.value = false
+  }
+}
+
+function closeEnvironmentCard() {
+  environmentCardOpen.value = false
+  changeDetailOpen.value = false
+  if (!taskListCardOpen.value && !childAgentCardOpen.value) agentSidebarOpen.value = false
+}
+
+function showChangeDetails(snapshot: AgentChangeSnapshot) {
+  selectedChangeSnapshot.value = snapshot
+  changeDetailOpen.value = true
 }
 
 // 叉掉任务列表卡片:若另一张(子 Agent)卡片也不可见则一并收起整个侧边栏
@@ -629,6 +676,9 @@ onBeforeUnmount(() => {
           :target-id="sessionStore.currentSessionId || ''"
           :disabled="!sessionStore.currentSessionId"
         />
+        <button class="new-session-round-btn" type="button" title="环境与变更" aria-label="环境与变更" :aria-pressed="environmentCardOpen" @click="toggleEnvironmentCard">
+          <IcIcon name="dns" :size="16" />
+        </button>
         <button
           class="new-session-round-btn"
           type="button"
@@ -744,6 +794,7 @@ onBeforeUnmount(() => {
         <strong>{{ sessionTitle }}</strong>
       </div>
       <div class="title-actions">
+        <button class="icon-button" type="button" title="环境与变更" :aria-pressed="environmentCardOpen" @click="toggleEnvironmentCard"><IcIcon name="dns" :size="16" /></button>
         <button
           class="icon-button"
           type="button"
@@ -848,6 +899,15 @@ onBeforeUnmount(() => {
     </div>
     </main>
     <aside class="agent-sidebar" :class="{ open: agentSidebarOpen }" aria-label="任务与子 Agent 侧边栏">
+      <section v-show="environmentCardOpen" class="agent-sidebar-card environment-card-shell">
+        <EnvironmentChangeCard
+          :session-id="sessionStore.currentSessionId || ''"
+          :user-id="userId || ''"
+          :sources="sessionSources"
+          @close="closeEnvironmentCard"
+          @show-changes="showChangeDetails"
+        />
+      </section>
       <section v-show="taskListCardOpen" class="agent-sidebar-card task-list-card">
         <TaskListDrawer @close="closeTaskListCard" />
       </section>
@@ -858,6 +918,11 @@ onBeforeUnmount(() => {
         />
       </section>
     </aside>
+    <ChangeDetailDrawer
+      v-if="changeDetailOpen"
+      :snapshot="selectedChangeSnapshot"
+      @close="changeDetailOpen = false"
+    />
     </div>
     </div>
     </div>

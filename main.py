@@ -96,6 +96,7 @@ from agent_service.services.message_service import MessageService
 from agent_service.services.session_attachment_service import SessionAttachmentService
 from agent_service.services.skill_service import SkillService
 from agent_service.services.task_list_service import TaskListService
+from agent_service.services.agent_change_service import AgentChangeService
 from agent_service.services.logging_service import setup_logging
 from agent_service.services.favorite_service import FavoriteService
 from agent_service.services.feedback_service import FeedbackService
@@ -134,26 +135,12 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
 
     session_service = SessionService(config=config)
     task_list_service = TaskListService(session_service=session_service)
-    agent = AgentCore(
-        config=config,
-        message_service=message_service,
-        session_service=session_service,
-        task_list_service=task_list_service,
-    )
-    logger.info("AgentCore 初始化完成 | graph_diagram=%s", agent.graph_diagram_path)
-
     memory_service = LongTermMemoryService(config=config)
     settings_service = SettingsService(config=config, memory_service=memory_service)
-    skill_service = SkillService(config=config, settings_service=settings_service)
-    agent.skill_service = skill_service
 
     # 启动时迁移：将用户覆盖的旧路径内容移动到新路径
     from agent_service.services.storage_service import migrate_storage_paths
     config = migrate_storage_paths(config, settings_service)
-    attachment_service = SessionAttachmentService(config=config, settings_service=settings_service)
-    agent.attachment_service = attachment_service
-    if agent.context_builder is not None:
-        agent.context_builder.attachment_service = attachment_service
     knowledge_graph_service = KnowledgeGraphService(config=config)
     knowledge_library_service = KnowledgeLibraryService(
         config=config,
@@ -161,6 +148,24 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         settings_service=settings_service,
         knowledge_graph_service=knowledge_graph_service,
     )
+    agent_change_service = AgentChangeService(
+        config=config,
+        knowledge_library_service=knowledge_library_service,
+    )
+    agent = AgentCore(
+        config=config,
+        message_service=message_service,
+        session_service=session_service,
+        task_list_service=task_list_service,
+        change_service=agent_change_service,
+    )
+    logger.info("AgentCore 初始化完成 | graph_diagram=%s", agent.graph_diagram_path)
+    skill_service = SkillService(config=config, settings_service=settings_service)
+    agent.skill_service = skill_service
+    attachment_service = SessionAttachmentService(config=config, settings_service=settings_service)
+    agent.attachment_service = attachment_service
+    if agent.context_builder is not None:
+        agent.context_builder.attachment_service = attachment_service
     git_service = GitService(knowledge_library_service=knowledge_library_service)
     library_service = LibraryService(
         config=config,
@@ -187,6 +192,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     rest_deps._feedback_service = feedback_service
     rest_deps._smart_form_service = smart_form_service
     rest_deps._structured_generation_service = structured_generation_service
+    rest_deps._agent_change_service = agent_change_service
     rest_deps._task_list_service = task_list_service
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
     rest_deps._retrieval_service = retrieval_service
@@ -242,6 +248,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         favorite_service=favorite_service,
         feedback_service=feedback_service,
         vault_service=vault_service,
+        agent_change_service=agent_change_service,
     )
     rest_deps._agent = agent
     rest_deps._session_service = session_service

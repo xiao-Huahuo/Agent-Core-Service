@@ -9,6 +9,7 @@
 
 from agent_service.models.longterm_memory_spec import LongTermMemorySpec, LongTermMemorySpecBase
 from agent_service.models.attachment import SessionAttachmentRecord
+from agent_service.models.agent_change import AgentChangeSnapshotRecord
 from agent_service.models.automation import AutomationRunRecord, AutomationTaskRecord
 from agent_service.models.favorite import FavoriteRecord
 from agent_service.models.feedback import FeedbackRecord
@@ -22,6 +23,7 @@ __all__ = [
     "LongTermMemorySpec",
     "LongTermMemorySpecBase",
     "SessionAttachmentRecord",
+    "AgentChangeSnapshotRecord",
     "AutomationRunRecord",
     "AutomationTaskRecord",
     "FavoriteRecord",

@@ -609,6 +609,8 @@ export const useChatStore = defineStore('chat', () => {
         forceFlushContent()
         attachCitationMapToLastFinalAssistant()
         isStreaming.value = false
+        // EditorPane listens once per completed streamed turn to refresh its persisted patch markers.
+        window.dispatchEvent(new CustomEvent('agent-turn-finished'))
         currentNode.value = ''
         loadedSessionId.value = targetSessionId ?? ''
         if (targetSessionId) {

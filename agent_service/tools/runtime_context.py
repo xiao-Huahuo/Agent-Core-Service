@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from agent_service.services.memory.rag.embedding import EmbeddingService
     from agent_service.services.skill_service import SkillService
     from agent_service.services.task_list_service import TaskListService
+    from agent_service.services.agent_change_service import AgentChangeService
 
 AGENT_ACCESS_READONLY = "readonly"
 AGENT_ACCESS_SANDBOX = "sandbox"
@@ -50,6 +51,7 @@ class ToolRuntimeState:
     memory_service: LongTermMemoryService | None = None
     embedding_service: EmbeddingService | None = None
     task_list_service: TaskListService | None = None
+    change_service: AgentChangeService | None = None
     skill_service: SkillService | None = None
     agent_access_mode: str = AGENT_ACCESS_SANDBOX
     long_term_memory_enabled: bool = True
@@ -73,6 +75,7 @@ def set_tool_runtime(
     memory_service: LongTermMemoryService | None = None,
     embedding_service: EmbeddingService | None = None,
     task_list_service: TaskListService | None = None,
+    change_service: AgentChangeService | None = None,
     skill_service: Any = None,
     citation_map: dict[str, dict[str, Any]] | None = None,
     agent_access_mode: str = AGENT_ACCESS_SANDBOX,
@@ -103,6 +106,7 @@ def set_tool_runtime(
         memory_service=memory_service or LongTermMemoryService(config=config),
         embedding_service=embedding_service or EmbeddingService(config=config),
         task_list_service=task_list_service,
+        change_service=change_service,
         skill_service=skill_service,
         agent_access_mode=normalize_agent_access_mode(agent_access_mode),
         long_term_memory_enabled=bool(long_term_memory_enabled),

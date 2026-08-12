@@ -18,8 +18,11 @@ import MarkdownPreview from '@/components/editor_workspace/MarkdownPreview.vue'
 import MultimodalPreview from '@/components/editor_workspace/MultimodalPreview.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { EditorViewMode } from '@/types/knowledge'
+import { fetchSessionChanges } from '@/api/agentChanges'
+import { useSessionStore } from '@/stores/session'
 
 const workspaceStore = useWorkspaceStore()
+const sessionStore = useSessionStore()
 const { editorMode } = storeToRefs(workspaceStore)
 const visualizeMenuOpen = ref(false)
 const codeEditorRef = ref<InstanceType<typeof CodeEditor> | null>(null)
@@ -68,6 +71,41 @@ const activeLanguage = computed(() => {
   }
   return extension
 })
+const latestChangeSnapshot = ref<Awaited<ReturnType<typeof fetchSessionChanges>>['change_snapshot']>(null)
+const activeChangeRanges = computed(() => {
+  const snapshot = latestChangeSnapshot.value
+  if (!snapshot) return []
+  return snapshot.edits.flatMap((edit) => {
+    if (edit.path !== workspaceStore.selectedPath || activeContent.value !== edit.after) return []
+    const beforeLines = (edit.before ?? '').split('\n')
+    const afterLines = edit.after.split('\n')
+    let prefix = 0
+    while (prefix < beforeLines.length && prefix < afterLines.length && beforeLines[prefix] === afterLines[prefix]) prefix += 1
+    let suffix = 0
+    while (
+      suffix < beforeLines.length - prefix
+      && suffix < afterLines.length - prefix
+      && beforeLines[beforeLines.length - 1 - suffix] === afterLines[afterLines.length - 1 - suffix]
+    ) suffix += 1
+    const afterChanged = Math.max(0, afterLines.length - prefix - suffix)
+    const beforeChanged = Math.max(0, beforeLines.length - prefix - suffix)
+    const line = prefix + 1
+    return [
+      ...(afterChanged ? [{ startLine: line, endLine: line + afterChanged - 1, kind: 'added' as const }] : []),
+      ...(beforeChanged ? [{ startLine: line, endLine: line, kind: 'removed' as const }] : []),
+    ]
+  })
+})
+
+async function loadLatestChangeSnapshot() {
+  const sessionId = sessionStore.currentSessionId
+  if (!sessionId) { latestChangeSnapshot.value = null; return }
+  try {
+    latestChangeSnapshot.value = (await fetchSessionChanges(sessionId)).change_snapshot
+  } catch {
+    latestChangeSnapshot.value = null
+  }
+}
 
 const isMarkdownViewer = computed(() => workspaceStore.activeViewerKind === 'markdown')
 const isCodeViewer = computed(() => ['code', 'text'].includes(workspaceStore.activeViewerKind))
@@ -171,7 +209,10 @@ watch(effectiveEditorMode, async (mode, previousMode) => {
 
 watch(() => workspaceStore.selectedPath, () => {
   pdfEditViewMode.value = 'render'
+  void loadLatestChangeSnapshot()
 })
+
+watch(() => sessionStore.currentSessionId, () => void loadLatestChangeSnapshot(), { immediate: true })
 
 watch(pdfHasTextContent, (hasText) => {
   if (!hasText && pdfEditViewMode.value === 'text') {
@@ -210,12 +251,19 @@ function handleEditorShortcut(event: KeyboardEvent) {
   setEditorMode(nextMode)
 }
 
+/** Refreshes the persisted Agent patch after a streamed turn completes. */
+function handleAgentTurnFinished() {
+  void loadLatestChangeSnapshot()
+}
+
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
+  window.addEventListener('agent-turn-finished', handleAgentTurnFinished)
 })
 
 onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('agent-turn-finished', handleAgentTurnFinished)
 })
 
 onErrorCaptured((err, vm, info) => {
@@ -353,6 +401,7 @@ onErrorCaptured((err, vm, info) => {
           :language="isImageTextViewer ? 'ocr' : activeLanguage"
           :paste-image="workspaceStore.savePastedEditorImage"
           :readonly="workspaceStore.activeFileReadonly"
+          :change-ranges="activeChangeRanges"
           @save="workspaceStore.saveActiveFile"
           @scroll="handleEditorScroll"
         />

@@ -123,4 +123,8 @@ export const API_ROUTES = {
   SESSION_TASK_LIST: (sessionId: string) => `/sessions/${sessionId}/task-list`,
   SESSION_TASK_LIST_COMPLETE_ITEM: (sessionId: string) => `/sessions/${sessionId}/task-list/complete-item`,
   SESSION_TASK_LIST_FINISH: (sessionId: string) => `/sessions/${sessionId}/task-list/finish`,
+  SESSION_CHANGES: (sessionId: string) => `/sessions/${encodeURIComponent(sessionId)}/changes`,
+  SESSION_CHANGE_UNDO: (sessionId: string, snapshotId: string) => (
+    `/sessions/${encodeURIComponent(sessionId)}/changes/${encodeURIComponent(snapshotId)}/undo`
+  ),
 } as const

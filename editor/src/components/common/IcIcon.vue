@@ -57,6 +57,7 @@ const ICON_FILES: Record<string, string> = {
   feedback: 'ic--outline-feedback.svg',
   bug: 'ic--outline-bug-report.svg',
   settings: 'ic--outline-settings.svg',
+  dns: 'ic--outline-dns.svg',
   upload: 'ic--outline-upload.svg',
   'cloud-upload': 'ic--outline-cloud-upload.svg',
   'chevron-right': 'ic--outline-chevron-right.svg',
@@ -128,7 +129,7 @@ const svgInner = computed(() => {
   const file = ICON_FILES[props.name]
   if (!file) return ''
   const key = Object.keys(rawIcons).find((path) => path.endsWith(file))
-  const raw = key ? rawIcons[key] : ''
+  const raw = key ? rawIcons[key] ?? '' : ''
   // 只注入 <svg> 内部内容,根元素由本组件渲染为真实 svg 标签,
   // 使 class/其他 attrs 直接透传到 svg 根,与 lucide 组件 DOM 一致
   const m = raw.match(/<svg[^>]*>([\s\S]*)<\/svg>/)

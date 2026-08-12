@@ -190,6 +190,7 @@ class AgentCore:
         task_scheduler: LLMTaskScheduler | None = None,
         session_service: Any = None,
         task_list_service: Any = None,
+        change_service: Any = None,
         skill_service: Any = None,
     ) -> None:
         """保存配置、检查本地模型、构建或接收 LangGraph 图,并输出当前节点流程图。"""
@@ -201,6 +202,7 @@ class AgentCore:
         self.attachment_service = attachment_service
         self.session_service = session_service
         self.task_list_service = task_list_service
+        self.change_service = change_service
         self.skill_service = skill_service
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.child_agent_manager = ChildAgentManager(event_callback=self._on_child_agent_event)
@@ -1007,6 +1009,8 @@ class AgentCore:
         if initial_plan is not None:
             inputs["plan"] = initial_plan
         effective_run_id = run_id or f"agent_run_{uuid4().hex}"
+        if self.change_service is not None:
+            self.change_service.start_run(user_id=user_id, session_id=session_id, run_id=effective_run_id)
         runtime_config = {"configurable": {"thread_id": effective_run_id}}
         active_graph = graph or self.graphs.get(agent_mode) or self.graph
         effective_access_mode = normalize_agent_access_mode(agent_access_mode)
@@ -1103,6 +1107,7 @@ class AgentCore:
                 run_id=effective_run_id,
                 retrieval_service=retrieval_service,
                 task_list_service=self.task_list_service,
+                change_service=self.change_service,
                 skill_service=self.skill_service,
                 citation_map=_citation_map,
                 agent_access_mode=effective_access_mode,
@@ -1384,6 +1389,7 @@ class AgentCore:
                                 state_update=output_state_update,
                                 turn_traces=public_fresh_traces,
                                 citation_map=_citation_map,
+                                run_id=effective_run_id,
                             )
                         payload = self._build_stream_payload(
                             node_name=node_name,
@@ -2016,6 +2022,7 @@ class AgentCore:
         state_update: dict[str, Any] | None,
         turn_traces: list[dict[str, Any]] | None = None,
         citation_map: dict[str, Any] | None = None,
+        run_id: str | None = None,
     ) -> None:
         """
         将图节点返回的新增消息保存为 MessageRecord。
@@ -2056,6 +2063,16 @@ class AgentCore:
                 citation_map=citation_map,
             )
             if message_create is not None:
+                if (
+                    self.change_service is not None
+                    and node_name == "agent"
+                    and message_create.role == "assistant"
+                    and message_create.content.strip()
+                    and not message_create.tool_calls_json
+                ):
+                    change_snapshot = self.change_service.finalize_run(run_id=run_id or session_id)
+                    if change_snapshot is not None:
+                        message_create.metadata_json["change_snapshot"] = change_snapshot
                 message_service.create_message(message_create)
 
     @staticmethod

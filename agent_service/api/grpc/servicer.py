@@ -131,6 +131,7 @@ from agent_service.services.token_usage_service import SUPPORTED_INTERVALS, Toke
 from agent_service.services.favorite_service import FavoriteService
 from agent_service.services.feedback_service import FeedbackService
 from agent_service.services.vault_service import VaultService
+from agent_service.services.agent_change_service import AgentChangeService
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,7 @@ class AgentServiceServicer(BaseServicer):
         favorite_service: FavoriteService | None = None,
         feedback_service: FeedbackService | None = None,
         vault_service: VaultService | None = None,
+        agent_change_service: AgentChangeService | None = None,
     ) -> None:
         self._agent = agent
         self._session_service = session_service
@@ -160,6 +162,7 @@ class AgentServiceServicer(BaseServicer):
         self._favorite_service = favorite_service
         self._feedback_service = feedback_service
         self._vault_service = vault_service
+        self._agent_change_service = agent_change_service
 
     def shutdown(self) -> None:
         self._agent.close()
@@ -552,6 +555,28 @@ class AgentServiceServicer(BaseServicer):
             self._require_vault_service(context).list_tags,
             session=self._vault_session_from_payload(context, payload),
         )
+
+    def GetSessionChanges(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Read the latest durable Agent change snapshot for a session."""
+
+        payload = MessageToDict(request)
+        snapshot = self._require_agent_change_service(context).latest_for_session(
+            session_id=str(payload.get("session_id", "")),
+        )
+        return ParseDict({"change_snapshot": snapshot or {}}, Struct())
+
+    def UndoSessionChange(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Guardedly undo a single Agent change snapshot."""
+
+        payload = MessageToDict(request)
+        try:
+            snapshot = self._require_agent_change_service(context).undo_snapshot(
+                snapshot_id=str(payload.get("snapshot_id", "")),
+                user_id=str(payload.get("user_id", "")),
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict({"change_snapshot": snapshot}, Struct())
 
     # ------------------------------------------------------------------
     # 取消执行 RPC
@@ -1341,6 +1366,13 @@ class AgentServiceServicer(BaseServicer):
         if self._vault_service is None:
             context.abort(grpc.StatusCode.UNAVAILABLE, "VaultService not available")
         return self._vault_service  # type: ignore[return-value]
+
+    def _require_agent_change_service(self, context: grpc.ServicerContext) -> AgentChangeService:
+        """Return the injected durable Agent change service."""
+
+        if self._agent_change_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "AgentChangeService not available")
+        return self._agent_change_service  # type: ignore[return-value]
 
     def _vault_session_from_payload(self, context: grpc.ServicerContext, payload: dict[str, Any]) -> Any:
         """从 Struct payload 中校验 vault token。"""

@@ -23,6 +23,8 @@ const props = defineProps<{
   highlightQuery?: string
   /** Saves a pasted clipboard image and returns the Markdown image token. */
   pasteImage?: (file: File) => Promise<string>
+  /** Agent patch ranges rendered as non-interactive translucent gutter bars. */
+  changeRanges?: Array<{ startLine: number; endLine: number; kind: 'added' | 'removed' }>
 }>()
 
 /** Scroll and caret data used by EditorPane to synchronize Markdown Split mode. */
@@ -155,10 +157,17 @@ const TABLE_EDGE_BUTTON_SIZE = 9
 const TABLE_EDGE_HIT_ZONE = 14
 let tableDrag: { type: 'row' | 'column'; source: number } | null = null
 let programmaticScroll = false
+/** Keeps Agent patch bars aligned with the textarea's independently scrolling text. */
+const editorScrollTop = ref(0)
 const isMarkdown = computed(() => ['md', 'markdown'].includes((props.language || '').toLowerCase()))
 const isSyntaxHighlightedLanguage = computed(() => (
   isHighlightableLanguage(props.language || 'text')
 ))
+const changeBarStyle = computed(() => props.changeRanges?.map((range) => ({
+  top: `calc(var(--space-12) + ${(Math.max(1, range.startLine) - 1) * 1.6}em)`,
+  height: `${Math.max(1, range.endLine - range.startLine + 1) * 1.6}em`,
+  kind: range.kind,
+})) ?? [])
 /** Uses the find-bar query when open, otherwise the external preview query. */
 const activeHighlightQuery = computed(() => (
   findBarOpen.value ? findQuery.value : (props.highlightQuery?.trim() ?? '')
@@ -827,6 +836,7 @@ function getScrollSnapshot(): EditorScrollPayload {
 }
 
 function handleEditorScroll() {
+  editorScrollTop.value = textareaRef.value?.scrollTop ?? 0
   syncScroll()
   tableOverlay.value.visible = false
   if (programmaticScroll) {
@@ -853,6 +863,7 @@ function scrollToRatio(ratio: number) {
   const maxScrollTop = Math.max(0, textarea.scrollHeight - textarea.clientHeight)
   programmaticScroll = true
   textarea.scrollTop = Math.max(0, Math.min(1, ratio)) * maxScrollTop
+  editorScrollTop.value = textarea.scrollTop
   syncScroll()
   requestAnimationFrame(() => { programmaticScroll = false })
 }
@@ -1296,6 +1307,15 @@ onBeforeUnmount(() => {
       @mousemove="updateTableOverlay"
       @mouseleave="tableOverlay.visible = false"
     >
+      <div class="agent-change-gutter" :style="{ transform: `translateY(-${editorScrollTop}px)` }" aria-hidden="true">
+        <span
+          v-for="(bar, index) in changeBarStyle"
+          :key="`${bar.kind}-${index}`"
+          class="agent-change-bar"
+          :class="bar.kind"
+          :style="{ top: bar.top, height: bar.height }"
+        ></span>
+      </div>
       <div
         v-if="isSyntaxHighlightedLanguage || findBarOpen || Boolean(highlightQuery)"
         ref="highlightRef"
@@ -1552,6 +1572,24 @@ onBeforeUnmount(() => {
   position: relative;
   overflow: hidden;
 }
+
+.agent-change-gutter {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 2;
+  width: 4px;
+  pointer-events: none;
+}
+
+.agent-change-bar {
+  position: absolute;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  opacity: 0.78;
+}
+
+.agent-change-bar.added { left: 0; background: color-mix(in srgb, var(--color-primary) 76%, transparent); }
+.agent-change-bar.removed { left: 2px; background: color-mix(in srgb, var(--color-danger) 76%, transparent); }
 
 .highlight-layer {
   position: absolute;
