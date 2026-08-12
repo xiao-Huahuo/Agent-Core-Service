@@ -353,7 +353,7 @@ function handleDrop(event: DragEvent) {
   max-width: 120px;
   min-height: 20px;
   border-radius: 999px;
-  background: var(--color-primary-soft);
+  background: color-mix(in srgb, var(--color-primary) 30%, transparent);
   color: var(--color-primary);
   padding: 0 8px;
   font-size: 11px;
@@ -361,6 +361,19 @@ function handleDrop(event: DragEvent) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.tag-pill:nth-child(6n + 2) {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  color: var(--color-accent);
+}
+
+.tag-pill:nth-child(6n + 3) {
+  background: color-mix(in srgb, var(--color-success) 30%, transparent);
+  color: var(--color-success);
+}
+.tag-pill:nth-child(6n + 4) { background: color-mix(in srgb, var(--color-warning) 30%, transparent); color: var(--color-warning); }
+.tag-pill:nth-child(6n + 5) { background: rgba(113, 70, 214, 0.30); color: #8d6eea; }
+.tag-pill:nth-child(6n) { background: rgba(0, 155, 166, 0.30); color: #1ac0c8; }
 
 .bar-badge {
   flex: 0 0 auto;

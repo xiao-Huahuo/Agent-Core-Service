@@ -48,10 +48,6 @@ async function submitUserId() {
     <img :src="logoSrc" class="gate-cap-icon" alt="" />
     <img :src="welcomeTitleSrc" class="gate-logo" alt="MetaWeave" />
     <form class="gate-panel" @submit.prevent="submitUserId">
-      <div class="gate-copy">
-        <h2>选择本地身份</h2>
-        <p>输入一个 user_id 后，元织会加载对应的知识库、外观、模型与 Agent 设置。</p>
-      </div>
       <label for="editor-user-id">用户 ID</label>
       <div class="input-row">
         <input
@@ -121,25 +117,11 @@ async function submitUserId() {
   width: min(420px, calc(100vw - 32px));
   padding: var(--space-20);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: 28px;
   background: var(--color-surface);
   -webkit-app-region: no-drag;
 }
 
-.gate-copy {
-  display: grid;
-  gap: var(--space-6);
-}
-
-.gate-copy h2 {
-  margin: 0;
-  color: var(--color-text);
-  font-size: calc(18px * var(--font-scale));
-  font-weight: 700;
-  line-height: 1.25;
-}
-
-.gate-copy p,
 .gate-hint {
   margin: 0;
   color: var(--color-text-muted);
@@ -164,7 +146,7 @@ input {
   height: 34px;
   padding: 0 var(--space-10);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   outline: 0;
   background: var(--color-canvas-soft);
   color: var(--color-text);
@@ -180,7 +162,7 @@ button {
   height: 34px;
   padding: 0 var(--space-12);
   border: 1px solid var(--color-primary);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   background: var(--color-primary);
   color: white;
   font-size: calc(13px * var(--font-scale));

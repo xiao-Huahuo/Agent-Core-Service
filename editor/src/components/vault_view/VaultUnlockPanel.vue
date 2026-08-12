@@ -49,33 +49,48 @@ function setup() {
 
 <template>
   <section class="unlock-panel">
-    <div class="unlock-card">
-      <div>
-        <p class="eyebrow">你的密码库</p>
-        <h2>{{ configured ? '输入主密码' : '设置主密码' }}</h2>
+    <form class="unlock-card" @submit.prevent="configured ? submit() : setup()">
+      <label for="vault-master-password">主密码</label>
+      <div v-if="!configured" class="password-field">
+        <input
+          id="vault-master-password"
+          v-model="password"
+          class="vault-input"
+          type="password"
+          autocomplete="new-password"
+          placeholder="主密码"
+          @keydown.enter="setup"
+        />
       </div>
-      <input
-        v-model="password"
-        class="vault-input"
-        type="password"
-        autocomplete="current-password"
-        placeholder="主密码"
-        @keydown.enter="configured ? submit() : setup()"
-      />
-      <input
-        v-if="!configured"
-        v-model="confirmPassword"
-        class="vault-input"
-        type="password"
-        autocomplete="new-password"
-        placeholder="再次输入主密码"
-        @keydown.enter="setup"
-      />
+      <div v-else class="input-row">
+        <input
+          id="vault-master-password"
+          v-model="password"
+          class="vault-input"
+          type="password"
+          autocomplete="current-password"
+          placeholder="主密码"
+          @keydown.enter="submit"
+        />
+        <button class="primary-btn" type="submit" :disabled="loading">解锁</button>
+      </div>
+      <template v-if="!configured">
+        <label for="vault-confirm-password">确认主密码</label>
+        <div class="input-row">
+          <input
+            id="vault-confirm-password"
+            v-model="confirmPassword"
+            class="vault-input"
+            type="password"
+            autocomplete="new-password"
+            placeholder="再次输入主密码"
+            @keydown.enter="setup"
+          />
+          <button class="primary-btn" type="submit" :disabled="loading">创建并解锁</button>
+        </div>
+      </template>
       <p v-if="localError" class="error-text">{{ localError }}</p>
-      <button class="primary-btn" type="button" :disabled="loading" @click="configured ? submit() : setup()">
-        {{ configured ? '解锁' : '创建并解锁' }}
-      </button>
-    </div>
+    </form>
   </section>
 </template>
 
@@ -90,50 +105,75 @@ function setup() {
 
 .unlock-card {
   display: grid;
-  gap: 14px;
-  width: min(420px, calc(100% - 32px));
-  padding: 24px;
+  gap: var(--space-12);
+  width: min(420px, calc(100vw - 32px));
+  padding: var(--space-20);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 28px;
   background: var(--color-surface);
-  box-shadow: var(--shadow-window);
 }
 
-.eyebrow {
-  margin: 0 0 4px;
-  color: var(--color-text-muted);
-  font-size: calc(12px * var(--font-scale));
-}
-
-h2 {
-  margin: 0;
+label {
   color: var(--color-text);
-  font-size: calc(24px * var(--font-scale));
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 650;
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-8);
+}
+
+.password-field {
+  display: grid;
 }
 
 .vault-input {
-  height: 38px;
+  min-width: 0;
+  height: 34px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-soft);
   color: var(--color-text);
-  padding: 0 14px;
+  padding: 0 var(--space-10);
   outline: 0;
+  font-family: var(--font-ui);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.vault-input:focus {
+  border-color: var(--color-primary);
 }
 
 .primary-btn {
-  height: 36px;
-  border: 0;
+  height: 34px;
+  padding: 0 var(--space-12);
+  border: 1px solid var(--color-primary);
   border-radius: 999px;
   background: var(--color-primary);
-  color: #fff;
-  font-weight: 700;
-  cursor: pointer;
+  color: white;
+  font-size: calc(13px * var(--font-scale));
+}
+
+.primary-btn:disabled {
+  cursor: default;
+  opacity: 0.42;
 }
 
 .error-text {
   margin: 0;
   color: var(--color-danger);
   font-size: calc(12px * var(--font-scale));
+}
+
+@media (max-width: 520px) {
+  .unlock-card {
+    padding: var(--space-16);
+  }
+
+  .input-row {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

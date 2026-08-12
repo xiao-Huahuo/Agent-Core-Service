@@ -9,13 +9,15 @@
 import { computed, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
 import { uploadLibraryCover } from '@/api/library'
-import type { LibraryItem } from '@/types/knowledge'
+import type { LibraryItem, LibraryTag } from '@/types/knowledge'
 
 const props = defineProps<{
   open: boolean
   userId: string
   item: LibraryItem | null
+  availableTags: LibraryTag[]
 }>()
 
 const emit = defineEmits<{
@@ -28,7 +30,6 @@ const description = ref('')
 const coverMode = ref<LibraryItem['cover_mode']>('icon')
 const coverAssetId = ref('')
 const tags = ref<string[]>([])
-const tagDraft = ref('')
 const uploading = ref(false)
 const coverDragActive = ref(false)
 const coverPreviewUrl = ref('')
@@ -49,33 +50,12 @@ watch(
     coverAssetId.value = item?.cover_asset_id ?? ''
     coverPreviewUrl.value = item?.cover_asset?.url ?? ''
     tags.value = item?.tags ?? []
-    tagDraft.value = ''
     coverDragActive.value = false
   },
   { immediate: true },
 )
 
-function addTag(rawValue = tagDraft.value) {
-  const name = rawValue.trim()
-  if (!name) return
-  if (!tags.value.some((tag) => tag.toLowerCase() === name.toLowerCase())) {
-    tags.value = [...tags.value, name]
-  }
-  tagDraft.value = ''
-}
-
-function handleTagKeydown(event: KeyboardEvent) {
-  if (event.key !== 'Enter' && event.key !== ',') return
-  event.preventDefault()
-  addTag()
-}
-
-function removeTag(name: string) {
-  tags.value = tags.value.filter((tag) => tag !== name)
-}
-
 function submit() {
-  addTag()
   emit('save', {
     title: title.value.trim(),
     description: description.value.trim(),
@@ -118,10 +98,7 @@ async function uploadCoverFile(file: File) {
     <div v-if="open && item" class="dialog-backdrop" @click.self="emit('close')">
       <section class="dialog-panel" role="dialog" aria-modal="true">
         <header class="dialog-head">
-          <div>
-            <h2>{{ isCollection ? '编辑集锦' : '编辑图书' }}</h2>
-            <p>{{ isCollection ? '只修改虚拟集锦信息' : item.source_name || item.source_url }}</p>
-          </div>
+          <h2>{{ isCollection ? '编辑集锦' : '编辑图书' }}</h2>
           <button class="icon-btn" type="button" title="关闭" @click="emit('close')">
             <IcIcon name="close" :size="16" />
           </button>
@@ -139,29 +116,7 @@ async function uploadCoverFile(file: File) {
             </label>
             <div class="field">
               <span>标签</span>
-              <div class="tag-input-wrap">
-                <input
-                  v-model="tagDraft"
-                  type="text"
-                  spellcheck="false"
-                  placeholder="输入标签后回车"
-                  @blur="addTag()"
-                  @keydown="handleTagKeydown"
-                />
-              </div>
-              <div v-if="tags.length" class="tag-list">
-                <button
-                  v-for="tag in tags"
-                  :key="tag"
-                  class="tag-pill"
-                  type="button"
-                  :title="`移除 ${tag}`"
-                  @click="removeTag(tag)"
-                >
-                  <span>{{ tag }}</span>
-                  <IcIcon name="cancel" :size="13" />
-                </button>
-              </div>
+              <LibraryTagPicker v-model="tags" :available-tags="availableTags" />
             </div>
           </div>
 
@@ -223,7 +178,7 @@ async function uploadCoverFile(file: File) {
 .dialog-panel {
   width: min(760px, calc(100vw - 32px));
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 28px;
   background: var(--color-surface);
   color: var(--color-text);
   font-size: calc(13px * var(--font-scale));
@@ -234,19 +189,12 @@ async function uploadCoverFile(file: File) {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--color-border);
+  padding: 7px 16px;
 }
 
 .dialog-head h2 {
   margin: 0;
   font-size: calc(15px * var(--font-scale));
-}
-
-.dialog-head p {
-  margin: 4px 0 0;
-  color: var(--color-text-muted);
-  font-size: calc(12px * var(--font-scale));
 }
 
 .upper-grid {
@@ -288,7 +236,7 @@ async function uploadCoverFile(file: File) {
 .field textarea {
   width: 100%;
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: 28px;
   background: var(--color-canvas);
   color: var(--color-text);
   padding: 10px 14px;
@@ -299,56 +247,6 @@ async function uploadCoverFile(file: File) {
 
 .field textarea:focus {
   border-color: var(--color-primary);
-}
-
-.tag-input-wrap {
-  display: flex;
-  align-items: center;
-  min-height: 36px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-canvas);
-  padding: 0 14px;
-}
-
-.tag-input-wrap input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  border-radius: 0;
-  outline: 0;
-  background: transparent;
-  padding: 0;
-  color: var(--color-text);
-  font-size: calc(13px * var(--font-scale));
-}
-
-.tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 4px;
-}
-
-.tag-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 160px;
-  min-height: 24px;
-  border: 1px solid var(--color-primary);
-  border-radius: 999px;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-  padding: 0 8px;
-  font-size: calc(12px * var(--font-scale));
-}
-
-.tag-pill span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .cover-zone {
@@ -365,7 +263,7 @@ async function uploadCoverFile(file: File) {
   width: 100%;
   flex: 1;
   border: 1px dashed var(--color-border-strong);
-  border-radius: 16px;
+  border-radius: 28px;
   background: var(--color-surface-raised);
   color: var(--color-text-muted);
   padding: 12px;
@@ -392,7 +290,7 @@ async function uploadCoverFile(file: File) {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: 28px;
 }
 
 .cover-options {

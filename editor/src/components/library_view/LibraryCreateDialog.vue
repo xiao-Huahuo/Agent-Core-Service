@@ -10,8 +10,9 @@
 import { computed, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
 import { uploadLibraryCover } from '@/api/library'
-import type { LibraryItem } from '@/types/knowledge'
+import type { LibraryItem, LibraryTag } from '@/types/knowledge'
 
 type CreateMode = 'book' | 'collection'
 type BookSourceMode = 'file' | 'text' | 'url'
@@ -20,6 +21,7 @@ const props = defineProps<{
   open: boolean
   mode: CreateMode
   userId: string
+  availableTags: LibraryTag[]
 }>()
 
 const emit = defineEmits<{
@@ -40,7 +42,6 @@ const emit = defineEmits<{
 const title = ref('')
 const description = ref('')
 const tags = ref<string[]>([])
-const tagDraft = ref('')
 const coverAssetId = ref('')
 const coverPreviewUrl = ref('')
 const realFile = ref<File | null>(null)
@@ -54,7 +55,7 @@ const coverInput = ref<HTMLInputElement | null>(null)
 const realFileInput = ref<HTMLInputElement | null>(null)
 
 const isBook = computed(() => props.mode === 'book')
-const heading = computed(() => (isBook.value ? '新增文件' : '新增集锦'))
+const heading = computed(() => (isBook.value ? '新增图书' : '新增集锦'))
 const coverMode = computed<LibraryItem['cover_mode']>(() => (coverAssetId.value ? 'image' : 'title'))
 
 watch(
@@ -64,7 +65,6 @@ watch(
     title.value = ''
     description.value = ''
     tags.value = []
-    tagDraft.value = ''
     coverAssetId.value = ''
     coverPreviewUrl.value = ''
     realFile.value = null
@@ -79,25 +79,6 @@ watch(
 function setSourceMode(mode: BookSourceMode) {
   sourceMode.value = mode
   dragActive.value = false
-}
-
-function addTag(rawValue = tagDraft.value) {
-  const name = rawValue.trim()
-  if (!name) return
-  if (!tags.value.some((tag) => tag.toLowerCase() === name.toLowerCase())) {
-    tags.value = [...tags.value, name]
-  }
-  tagDraft.value = ''
-}
-
-function handleTagKeydown(event: KeyboardEvent) {
-  if (event.key !== 'Enter' && event.key !== ',') return
-  event.preventDefault()
-  addTag()
-}
-
-function removeTag(name: string) {
-  tags.value = tags.value.filter((tag) => tag !== name)
 }
 
 function selectRealFile(event: Event) {
@@ -140,7 +121,6 @@ async function uploadCoverFile(file: File) {
 }
 
 function submit() {
-  addTag()
   emit('create', {
     title: title.value.trim(),
     description: description.value.trim(),
@@ -178,29 +158,7 @@ function submit() {
             </label>
             <div class="field">
               <span>标签</span>
-              <div class="tag-input-wrap">
-                <input
-                  v-model="tagDraft"
-                  type="text"
-                  spellcheck="false"
-                  placeholder="输入标签后回车"
-                  @blur="addTag()"
-                  @keydown="handleTagKeydown"
-                />
-              </div>
-              <div v-if="tags.length" class="tag-list">
-                <button
-                  v-for="tag in tags"
-                  :key="tag"
-                  class="tag-pill"
-                  type="button"
-                  :title="`移除 ${tag}`"
-                  @click="removeTag(tag)"
-                >
-                  <span>{{ tag }}</span>
-                  <IcIcon name="cancel" :size="13" />
-                </button>
-              </div>
+              <LibraryTagPicker v-model="tags" :available-tags="availableTags" />
             </div>
           </div>
 
@@ -306,7 +264,7 @@ function submit() {
 .dialog-panel {
   width: min(760px, calc(100vw - 32px));
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 28px;
   background: var(--color-surface);
   color: var(--color-text);
   font-size: calc(13px * var(--font-scale));
@@ -317,8 +275,7 @@ function submit() {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--color-border);
+  padding: 7px 16px;
 }
 
 .dialog-head h2 {
@@ -365,7 +322,7 @@ function submit() {
 .field textarea {
   width: 100%;
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: 28px;
   background: var(--color-canvas);
   color: var(--color-text);
   padding: 10px 14px;
@@ -376,56 +333,6 @@ function submit() {
 
 .field textarea:focus {
   border-color: var(--color-primary);
-}
-
-.tag-input-wrap {
-  display: flex;
-  align-items: center;
-  min-height: 36px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-canvas);
-  padding: 0 14px;
-}
-
-.tag-input-wrap input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  border-radius: 0;
-  outline: 0;
-  background: transparent;
-  padding: 0;
-  color: var(--color-text);
-  font-size: calc(13px * var(--font-scale));
-}
-
-.tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 4px;
-}
-
-.tag-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 160px;
-  min-height: 24px;
-  border: 1px solid var(--color-primary);
-  border-radius: 999px;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-  padding: 0 8px;
-  font-size: calc(12px * var(--font-scale));
-}
-
-.tag-pill span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .cover-zone {
@@ -442,7 +349,7 @@ function submit() {
   width: 100%;
   flex: 1;
   border: 1px dashed var(--color-border-strong);
-  border-radius: 16px;
+  border-radius: 28px;
   background: var(--color-surface-raised);
   color: var(--color-text-muted);
   padding: 12px;
@@ -469,7 +376,7 @@ function submit() {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: 28px;
 }
 
 .file-zone {
@@ -542,7 +449,7 @@ function submit() {
   width: 100%;
   min-height: 168px;
   border: 1px dashed var(--color-border-strong);
-  border-radius: 16px;
+  border-radius: 28px;
   background: var(--color-canvas);
   color: var(--color-text-secondary);
   padding: 16px;
