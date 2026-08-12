@@ -328,7 +328,12 @@ class AgentCore:
         """返回指定会话内主 Agent 创建的全部子 Agent,供前端面板查询。"""
 
         records = self.child_agent_manager.list_children_for_session(session_id)
-        return [self._child_record_to_dict(record) for record in records]
+        active_children = [self._child_record_to_dict(record) for record in records]
+        saved_children = self._load_session_state_list(session_id, "child_agents")
+        # Live records win so the panel never renders a stale terminal status while a child is running.
+        children_by_run_id = {str(child.get("run_id") or ""): child for child in saved_children}
+        children_by_run_id.update({child["run_id"]: child for child in active_children})
+        return list(children_by_run_id.values())
 
     def stop_child_agent(self, run_id: str) -> bool:
         """向指定子 Agent 发送停止信号。"""
@@ -443,6 +448,7 @@ class AgentCore:
 
         try:
             payload = self._record_to_payload(event_name, record)
+            self._persist_child_agent_snapshot(record.contract.session_id, self._child_record_to_dict(record))
             self._save_child_agent_event_message(
                 message_service=self._get_message_service(),
                 user_id=record.contract.user_id,
@@ -1380,8 +1386,9 @@ class AgentCore:
                             if isinstance(state_update, dict)
                             else state_update
                         )
+                        change_snapshot: dict[str, Any] | None = None
                         if message_service is not None:
-                            self._save_state_update_messages(
+                            change_snapshot = self._save_state_update_messages(
                                 message_service=message_service,
                                 user_id=user_id,
                                 session_id=session_id,
@@ -1402,6 +1409,10 @@ class AgentCore:
                             payload["metadata"] = {**payload_metadata, **latency_metadata()}
                         else:
                             payload["metadata"] = latency_metadata()
+                        # The persisted final message receives this snapshot above, but the
+                        # active chat must receive it in the same SSE turn as well.
+                        if change_snapshot is not None:
+                            payload["metadata"]["change_snapshot"] = change_snapshot
                         yield payload
         except GeneratorExit:
             cancel_event.set()
@@ -2023,7 +2034,7 @@ class AgentCore:
         turn_traces: list[dict[str, Any]] | None = None,
         citation_map: dict[str, Any] | None = None,
         run_id: str | None = None,
-    ) -> None:
+    ) -> dict[str, Any] | None:
         """
         将图节点返回的新增消息保存为 MessageRecord。
 
@@ -2036,7 +2047,7 @@ class AgentCore:
         """
 
         if not state_update:
-            return
+            return None
         messages = state_update.get("messages", [])
         if (not messages or node_name in {"planner", "observation", "compress"}) and turn_traces:
             message_service.create_message(
@@ -2052,7 +2063,8 @@ class AgentCore:
                     },
                 )
             )
-            return
+            return None
+        change_snapshot: dict[str, Any] | None = None
         for message in messages:
             message_create = self._message_to_create(
                 message=message,
@@ -2073,7 +2085,9 @@ class AgentCore:
                     change_snapshot = self.change_service.finalize_run(run_id=run_id or session_id)
                     if change_snapshot is not None:
                         message_create.metadata_json["change_snapshot"] = change_snapshot
+                        self._persist_session_state_value(session_id, "change_snapshot", change_snapshot)
                 message_service.create_message(message_create)
+        return change_snapshot
 
     @staticmethod
     def _message_to_create(
@@ -2507,6 +2521,47 @@ class AgentCore:
             session_id,
             json.dumps(merged_state, ensure_ascii=False) if merged_state is not None else None,
         )
+
+    def _load_session_state_list(self, session_id: str, key: str) -> list[dict[str, Any]]:
+        """Read one serialized list from session state without breaking older plan-only sessions."""
+
+        if self.session_service is None:
+            return []
+        state_json = self.session_service.get_session_state(session_id)
+        if not state_json:
+            return []
+        try:
+            state = json.loads(state_json)
+        except (json.JSONDecodeError, TypeError):
+            return []
+        value = state.get(key) if isinstance(state, dict) else None
+        return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+    def _persist_child_agent_snapshot(self, session_id: str, child: dict[str, Any]) -> None:
+        """Keep the last child-agent state available after history reloads and imports."""
+
+        children = self._load_session_state_list(session_id, "child_agents")
+        run_id = str(child.get("run_id") or "")
+        children = [item for item in children if str(item.get("run_id") or "") != run_id]
+        children.append(child)
+        self._persist_session_state_value(session_id, "child_agents", children)
+
+    def _persist_session_state_value(self, session_id: str, key: str, value: Any) -> None:
+        """Merge an auxiliary UI snapshot while preserving planner and task-list state."""
+
+        if self.session_service is None:
+            return
+        state: dict[str, Any] = {}
+        state_json = self.session_service.get_session_state(session_id)
+        if state_json:
+            try:
+                parsed = json.loads(state_json)
+                if isinstance(parsed, dict):
+                    state = parsed
+            except (json.JSONDecodeError, TypeError):
+                pass
+        state[key] = value
+        self.session_service.update_session_state(session_id, json.dumps(state, ensure_ascii=False))
 
 
 def _rename_session_worker(agent: AgentCore, *, user_id: str, session_id: str) -> str | None:

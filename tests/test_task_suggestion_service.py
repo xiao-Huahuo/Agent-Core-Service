@@ -8,6 +8,7 @@ behavior without calling a real model.
 
 from __future__ import annotations
 
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
@@ -112,6 +113,22 @@ def test_generate_suggestions_falls_back_to_large_model_when_small_model_fails()
     assert agent.task_scheduler.calls[1]["api_key"] == "large-key"
     assert agent.task_scheduler.calls[1]["base_url"] == "https://large.example/v1"
     assert message_service.token_usage_service.records[0]["model_tier"] == LARGE_MODEL_TIER
+
+
+def test_generate_suggestions_uses_local_fallback_after_small_model_timeout() -> None:
+    """A non-critical timeout must not spend another request on the primary model."""
+
+    agent = _FakeAgent([FutureTimeoutError()])
+    service = TaskSuggestionService(agent=agent, message_service=_FakeMessageService())  # type: ignore[arg-type]
+
+    payload = service.generate_suggestions(user_id="u1", session_id="s1")
+
+    assert len(agent.task_scheduler.calls) == 1
+    assert payload["suggestions"] == [
+        "继续处理：帮我分析一下这个知识库",
+        "把上面的结论整理成待办",
+        "基于当前结果继续下一步",
+    ]
 
 
 def test_generate_suggestions_uses_local_fallback_when_both_models_fail() -> None:

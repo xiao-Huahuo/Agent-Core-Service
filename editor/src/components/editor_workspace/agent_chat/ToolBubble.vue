@@ -16,6 +16,7 @@ import MarkdownContent from '@/components/editor_workspace/agent_chat/MarkdownCo
 import ToolCallInline from '@/components/editor_workspace/agent_chat/ToolCallInline.vue'
 import { useChatStore } from '@/stores/chat'
 import { useWorkspaceStore } from '@/stores/workspace'
+import type { AgentChangeSnapshot } from '@/api/agentChanges'
 import type { AgentChatMessage, AgentUploadedAttachment, SourceItem } from '@/stores/chat'
 
 const props = defineProps<{
@@ -28,6 +29,7 @@ const props = defineProps<{
   showActions?: boolean
   knowledgeSources?: SourceItem[]
   citationMap?: Record<string, SourceItem>
+  changeSnapshot?: AgentChangeSnapshot | null
 }>()
 
 const workspaceStore = useWorkspaceStore()
@@ -157,6 +159,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
     v-if="message.role === 'assistant' && message.node === 'action' && hasToolTrace"
     :traces="message.trace ?? []"
     :is-streaming="isStreaming"
+    :change-snapshot="changeSnapshot"
   />
 
   <div v-else-if="shouldRenderAssistant" class="bubble-row assistant tool-assistant-row">

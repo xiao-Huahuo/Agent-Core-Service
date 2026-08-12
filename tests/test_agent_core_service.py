@@ -25,6 +25,7 @@ from sqlmodel import SQLModel, create_engine
 
 from agent_service.agent_core import AgentCore
 from agent_service.agent_core.agent_core import _extract_friendly_error
+from agent_service.api.rest.sessions import _restore_session_state
 from agent_service.agent_core.nodes.compress import CompressNode
 from agent_service.agent_core.nodes.model_decision import get_user_llm_overrides
 from agent_service.agent_core.nodes.summary import SummaryNode
@@ -196,6 +197,93 @@ def test_agent_core_stream_run_wraps_graph_updates() -> None:
     assert chunks[0].get("node") == "agent"
 
 
+def test_agent_core_attaches_finalized_change_snapshot_to_live_payload() -> None:
+    """最终 SSE 事件必须带上同轮文件变更，不能只写入历史消息。"""
+
+    class FakeChangeService:
+        """返回固定快照，验证流式事件可见性。"""
+
+        def start_run(self, **_kwargs: Any) -> None:
+            """测试图运行前记录基线时不做额外操作。"""
+
+        def finalize_run(self, **_kwargs: Any) -> dict[str, Any]:
+            """返回最小的前端快照结构。"""
+
+            return {"snapshot_id": "snap_1", "files": [], "additions": 2, "deletions": 1}
+
+    class FakeMessageService:
+        """记录持久化调用，模拟网页会话的消息服务。"""
+
+        def create_message(self, _message: MessageCreate) -> None:
+            """测试只需确保最终消息走持久化分支。"""
+
+    config = make_test_config()
+    fake_graph = FakeCompiledGraph(
+        updates=[{"agent": {"messages": [AIMessage(content="已完成")], "trace": []}}]
+    )
+    agent = AgentCore(
+        config=config,
+        graph=fake_graph,
+        change_service=FakeChangeService(),
+        message_service=FakeMessageService(),
+    )
+
+    chunks = list(agent._stream_events(
+        messages=[HumanMessage(content="修改文件")],
+        user_id="u1",
+        session_id="s1",
+        message_service=agent.message_service,
+        graph=fake_graph,
+        prompt="修改文件",
+    ))
+
+    assert chunks[-1]["metadata"]["change_snapshot"]["snapshot_id"] == "snap_1"
+
+
+def test_agent_core_persists_child_agent_snapshot_in_session_state() -> None:
+    """子 Agent 面板应能从会话状态恢复最后一次生命周期快照。"""
+
+    class FakeSessionService:
+        def __init__(self) -> None:
+            self.state_json: str | None = json.dumps({"task_list": {"task_list_id": "tasks-1"}})
+
+        def get_session_state(self, _session_id: str) -> str | None:
+            return self.state_json
+
+        def update_session_state(self, _session_id: str, value: str | None) -> bool:
+            self.state_json = value
+            return True
+
+    session_service = FakeSessionService()
+    agent = AgentCore(config=make_test_config(), graph=FakeCompiledGraph(), session_service=session_service)
+    agent._persist_child_agent_snapshot("sess-1", {"run_id": "child-1", "status": "completed"})
+
+    state = json.loads(session_service.state_json or "{}")
+    assert state["task_list"]["task_list_id"] == "tasks-1"
+    assert state["child_agents"] == [{"run_id": "child-1", "status": "completed"}]
+
+
+def test_restore_session_state_rebinds_portable_snapshots() -> None:
+    """导入会话必须保留任务、环境、变更和子 Agent，并改用新会话 ID。"""
+
+    state = _restore_session_state(
+        raw_state={
+            "environment": {"branch": "main", "commit": "abc", "commit_time": "2026-08-13T00:00:00Z"},
+            "change_snapshot": {"snapshot_id": "change-1", "session_id": "old-session"},
+            "child_agents": [{"run_id": "child-1", "status": "completed"}],
+        },
+        task_list={"task_list_id": "tasks-1", "session_id": "old-session", "items": []},
+        child_agents=[{"run_id": "child-2", "status": "failed"}],
+        session_id="new-session",
+    )
+
+    assert state["task_list"]["session_id"] == "new-session"
+    assert state["change_snapshot"]["session_id"] == "new-session"
+    assert state["change_snapshot"]["is_imported"] is True
+    assert state["environment"]["branch"] == "main"
+    assert state["child_agents"] == [{"run_id": "child-2", "status": "failed"}]
+
+
 def test_agent_core_run_once_returns_structured_result() -> None:
     """验证 AgentCore.run_once 会返回最终输出、事件列表和原始流式数据。"""
 
@@ -359,6 +447,28 @@ def test_message_record_links_to_session_and_converts_to_out() -> None:
     assert output.message_id == "msg_1"
     assert output.tool_calls_json[0]["name"] == "get_current_time"
     assert output.metadata_json["node"] == "agent"
+
+
+def test_message_service_loads_full_session_history_in_stable_order() -> None:
+    """未指定 limit 的会话加载必须保留首尾消息及相同时间的稳定顺序。"""
+
+    config = make_test_config()
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    service = MessageService(config=config, engine=engine, create_tables=False)
+    for index in range(3):
+        service.create_message(
+            MessageCreate(
+                session_id="sess_full",
+                user_id="user_1",
+                role="user" if index == 0 else "assistant",
+                content=f"消息-{index}",
+            )
+        )
+
+    messages = service.list_session_messages(user_id="user_1", session_id="sess_full", limit=None)
+
+    assert [message.content for message in messages] == ["消息-0", "消息-1", "消息-2"]
 
 
 def test_longterm_memory_spec_converts_to_out_with_source_metadata() -> None:
@@ -1809,6 +1919,41 @@ def test_tool_call_node_uses_project_executor() -> None:
     assert "T" in result["messages"][0].content
     assert result["trace"][0]["event"] == "tool_call_start"
     assert result["trace"][0]["tool_name"] == "get_current_time"
+
+
+def test_tool_call_node_uses_complete_patch_for_finished_trace(monkeypatch: Any) -> None:
+    """完成态局部修改预览必须使用实际完整文件版本，确保真实行号可计算。"""
+
+    config = make_test_config()
+
+    class PatchExecutor:
+        registry = ToolRegistry.with_builtin_tools()
+
+        def execute(self, _name: str, _arguments: dict[str, Any]) -> str:
+            from agent_service.tools.runtime_context import get_tool_runtime
+
+            get_tool_runtime().latest_file_patch = {"path": "notes/a.md", "before": "one\ntwo\nold", "after": "one\ntwo\nnew", "complete": True}
+            return "已局部修改文件 notes/a.md"
+
+    class ChangeService:
+        def current_for_run(self, *, run_id: str) -> dict[str, Any]:
+            return {"snapshot_id": "snap_1", "session_id": "s1", "run_id": run_id, "files": []}
+
+    from agent_service.tools.runtime_context import clear_tool_runtime, set_tool_runtime
+
+    set_tool_runtime(config=config, user_id="u1", session_id="s1", change_service=ChangeService())
+    try:
+        result = ToolCallNode(config=config, tool_executor=PatchExecutor())({
+            "messages": [AIMessage(content="", tool_calls=[{
+                "id": "call_patch", "name": "patch_knowledge_file", "args": {"path": "notes/a.md", "old_text": "old", "new_text": "new"},
+            }])],
+            "user_id": "u1", "session_id": "s1", "trace": [],
+        })
+    finally:
+        clear_tool_runtime()
+
+    assert result["trace"][1]["patch"] == {"path": "notes/a.md", "before": "one\ntwo\nold", "after": "one\ntwo\nnew", "complete": True}
+    assert result["trace"][1]["change_snapshot"]["snapshot_id"] == "snap_1"
 
 
 def test_tool_call_node_counts_knowledge_search_results() -> None:

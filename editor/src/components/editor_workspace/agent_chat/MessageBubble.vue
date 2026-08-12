@@ -12,6 +12,7 @@ import ChatBubble from '@/components/editor_workspace/agent_chat/ChatBubble.vue'
 import ChildAgentEventInline from '@/components/editor_workspace/agent_chat/ChildAgentEventInline.vue'
 import ToolBubble from '@/components/editor_workspace/agent_chat/ToolBubble.vue'
 import { useSettingsStore } from '@/stores/settings'
+import type { AgentChangeSnapshot } from '@/api/agentChanges'
 import type { AgentChatMessage } from '@/stores/chat'
 
 const props = defineProps<{
@@ -24,6 +25,7 @@ const props = defineProps<{
   showActions?: boolean
   knowledgeSources?: Array<{source_uri: string; content: string}>
   citationMap?: Record<string, {source_uri: string; content: string}>
+  changeSnapshot?: AgentChangeSnapshot | null
 }>()
 
 const settingsStore = useSettingsStore()

@@ -13,7 +13,9 @@ import IcIcon from '@/components/common/IcIcon.vue'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import KnowledgeSources from '@/components/editor_workspace/agent_chat/KnowledgeSources.vue'
 import MarkdownContent from '@/components/editor_workspace/agent_chat/MarkdownContent.vue'
+import ToolCallInline from '@/components/editor_workspace/agent_chat/ToolCallInline.vue'
 import ThinkingInline from '@/components/editor_workspace/agent_chat/ThinkingInline.vue'
+import type { AgentChangeSnapshot } from '@/api/agentChanges'
 import { useChatStore } from '@/stores/chat'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { AgentChatMessage, AgentUploadedAttachment, SourceItem } from '@/stores/chat'
@@ -28,6 +30,7 @@ const props = withDefaults(defineProps<{
   showActions?: boolean
   knowledgeSources?: SourceItem[]
   citationMap?: Record<string, SourceItem>
+  changeSnapshot?: AgentChangeSnapshot | null
 }>(), {
   showActions: true,
 })
@@ -94,6 +97,11 @@ const thinkingTraces = computed(() => {
 const hasAssistantContent = computed(() => {
   return Boolean(props.message.content && props.message.content !== '​')
 })
+
+/** Action messages use the shared lifecycle-aware tool rows in both chat modes. */
+const hasToolTrace = computed(() => (props.message.trace ?? []).some((trace) => (
+  Boolean(trace.tool_name) && (trace.event === 'tool_call_start' || trace.event === 'tool_call_end')
+)))
 
 const thinkingLabel = computed(() => {
   return typeof props.message.thinking_seconds === 'number'
@@ -188,7 +196,13 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 </script>
 
 <template>
-  <div v-if="shouldRenderAssistant" class="bubble-row assistant">
+  <ToolCallInline
+    v-if="message.role === 'assistant' && message.node === 'action' && hasToolTrace"
+    :traces="message.trace ?? []"
+    :is-streaming="isStreaming"
+    :change-snapshot="changeSnapshot"
+  />
+  <div v-else-if="shouldRenderAssistant" class="bubble-row assistant">
     <img :src="agentAvatar" class="avatar" alt="agent" />
     <div class="bubble-col">
       <span v-if="message.node && message.node !== 'assistant'" class="node-label">{{ message.node }}</span>

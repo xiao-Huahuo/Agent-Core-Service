@@ -93,6 +93,19 @@ describe('chat reference history', () => {
     expect(store.messages[0]?.metadata?.child_agent_event).toEqual(childAgentEvent)
   })
 
+  it('loads the complete session request without dropping the first user message', async () => {
+    apiMocks.fetchMessages.mockResolvedValue([
+      { message_id: 'first', role: 'user', content: '第一条', metadata: {}, created_at: '2026-08-01T00:00:00Z' },
+      { message_id: 'last', role: 'assistant', content: '最后一条', metadata: { node: 'agent' }, created_at: '2026-08-01T00:01:00Z' },
+    ])
+    const store = useChatStore()
+
+    await store.loadHistory('session-1', 'user-1')
+
+    expect(apiMocks.fetchMessages).toHaveBeenCalledWith('session-1', 'user-1', undefined, expect.anything())
+    expect(store.messages.map((message) => message.content)).toEqual(['第一条', '最后一条'])
+  })
+
   it('records thinking seconds from user bubble append to first final assistant content', async () => {
     const nowSpy = vi.spyOn(performance, 'now')
     nowSpy.mockReturnValueOnce(1000).mockReturnValueOnce(2234)
@@ -116,6 +129,26 @@ describe('chat reference history', () => {
     expect(assistant?.thinking_seconds).toBe(1.2)
     expect(assistant?.metadata?.backend_first_delta_seconds).toBe(1.2)
     nowSpy.mockRestore()
+  })
+
+  it('creates a running action trace from an empty model tool-calls update', async () => {
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield {
+        node: 'agent',
+        content: '',
+        tool_calls: [{ id: 'call_patch_1', name: 'patch_knowledge_file', args: { path: 'notes/a.md' } }],
+      }
+    })
+    const store = useChatStore()
+
+    await store.send('user-1', 'session-1', '修改文档')
+
+    const action = store.messages.find((message) => message.node === 'action')
+    expect(action?.trace).toMatchObject([{
+      event: 'tool_call_start',
+      tool_call_id: 'call_patch_1',
+      tool_name: 'patch_knowledge_file',
+    }])
   })
 
 })

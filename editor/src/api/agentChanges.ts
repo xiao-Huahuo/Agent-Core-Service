@@ -31,6 +31,7 @@ export interface AgentChangeSnapshot {
   additions: number
   deletions: number
   is_undone: boolean
+  is_imported?: boolean
   created_at: string
   files: AgentChangeFile[]
   edits: AgentChangeEdit[]

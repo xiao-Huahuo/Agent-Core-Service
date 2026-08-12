@@ -132,7 +132,7 @@ class MessageService:
         include_summarized: 是否包含已摘要消息,默认 False 仅返回未摘要。
         """
 
-        if limit <= 0:
+        if limit is not None and limit <= 0:
             return []
         statement = (
             select(MessageRecord)
@@ -153,7 +153,7 @@ class MessageService:
         *,
         user_id: str,
         session_id: str,
-        limit: int,
+        limit: int | None,
         exclude_roles: list[str] | None = None,
     ) -> list[MessageOut]:
         """
@@ -164,7 +164,7 @@ class MessageService:
                        避免浪费 limit 配额。
         """
 
-        if limit <= 0:
+        if limit is not None and limit <= 0:
             return []
         statement = (
             select(MessageRecord)
@@ -173,7 +173,9 @@ class MessageService:
         )
         if exclude_roles:
             statement = statement.where(~MessageRecord.role.in_(exclude_roles))
-        statement = statement.order_by(MessageRecord.created_at.desc()).limit(limit)
+        statement = statement.order_by(MessageRecord.created_at.desc(), MessageRecord.message_id.desc())
+        if limit is not None:
+            statement = statement.limit(limit)
         with Session(self.engine) as db_session:
             records = list(db_session.exec(statement).all())
             records.reverse()
@@ -197,7 +199,7 @@ class MessageService:
                 records = list(db_session.exec(statement).all())
                 return [MessageOut.from_record(record) for record in records]
 
-        if limit <= 0:
+        if limit is not None and limit <= 0:
             return []
         recent_statement = (
             select(MessageRecord)

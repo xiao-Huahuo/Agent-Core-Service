@@ -485,11 +485,6 @@ watch(
   },
 )
 
-function resetSidebarCards() {
-  taskListCardOpen.value = false
-  childAgentCardOpen.value = false
-}
-
 // 顶栏按钮召唤任务列表卡片:可见时收起(与卡片 X 逻辑一致,仅剩它则收整个侧边栏),不可见时打开
 function toggleTaskListCard() {
   if (taskListCardOpen.value) {
@@ -550,10 +545,21 @@ function closeChildAgentCard() {
 // 任务列表创建/更新自动打开时,联动展开融合侧边栏
 watch(() => taskListStore.sidebarOpen, (open) => {
   if (open) {
-    resetSidebarCards()
+    taskListCardOpen.value = true
     agentSidebarOpen.value = true
   }
 })
+
+// 子 Agent 事件由流消息写入 ChatStore；出现时展示对应卡片而非空侧栏。
+watch(
+  () => chatStore.messages.length,
+  () => {
+    if (chatStore.isStreaming && chatStore.messages.at(-1)?.node === 'child_agent') {
+      childAgentCardOpen.value = true
+      agentSidebarOpen.value = true
+    }
+  },
+)
 
 function syncChildAgentWatcher() {
   const sessionId = sessionStore.currentSessionId
@@ -569,7 +575,9 @@ watch([userId, () => sessionStore.currentSessionId], syncChildAgentWatcher)
 watch(
   () => sessionStore.currentSessionId,
   (sessionId) => {
-    if (sessionId) {
+    // The first send creates and selects its session after inserting the local
+    // user message. Reloading the still-empty history here would clear it.
+    if (sessionId && !chatStore.isStreaming) {
       void loadSelectedSessionHistory(sessionId)
     }
   },
@@ -577,6 +585,7 @@ watch(
 
 onMounted(() => {
   window.addEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
+  window.addEventListener('agent-change-updated', handleChangeUpdated as EventListener)
   void reloadSessions()
   if (userId.value) {
     void favoritesStore.load(userId.value, 'session', '')
@@ -590,9 +599,18 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
+  window.removeEventListener('agent-change-updated', handleChangeUpdated as EventListener)
   taskListStore.setAutoOpenOnUpdate(true)
   chatStore.stopChildAgentWatcher()
 })
+
+/** Keeps an open detail drawer in sync with a just-completed file patch. */
+function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
+  const snapshot = event.detail
+  if (changeDetailOpen.value && snapshot?.session_id === sessionStore.currentSessionId) {
+    selectedChangeSnapshot.value = snapshot
+  }
+}
 </script>
 
 <template>

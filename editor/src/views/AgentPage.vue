@@ -21,6 +21,8 @@ import AgentPanel from '@/components/editor_workspace/AgentPanel.vue'
 <style scoped>
 .agent-page {
   position: relative;
+  display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow: visible;
@@ -31,15 +33,16 @@ import AgentPanel from '@/components/editor_workspace/AgentPanel.vue'
   position: relative;
   z-index: 1;
   display: flex;
+  flex: 1 1 auto;
   width: 100%;
-  height: 100%;
   min-width: 0;
   min-height: 0;
   padding: 0;
 }
 
 .agent-page-panel {
+  flex: 1 1 auto;
   width: 100%;
-  height: 100%;
+  min-height: 0;
 }
 </style>

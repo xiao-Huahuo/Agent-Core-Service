@@ -1,0 +1,43 @@
+/*
+ * Final turn summary tests.
+ *
+ * Usage:
+ * Confirms a completed turn presents persisted file changes and can switch to
+ * sources without bringing back the removed summary header.
+ */
+import { describe, expect, it } from 'vitest'
+import { mount } from '@vue/test-utils'
+
+import FinalTurnSummary from '../FinalTurnSummary.vue'
+
+describe('FinalTurnSummary', () => {
+  it('switches between changes and sources with the panel toggle', async () => {
+    const wrapper = mount(FinalTurnSummary, {
+      props: {
+        sources: [{ source_uri: 'notes/a.md', content: 'A', citation_id: 'K1' }],
+        changeSnapshot: {
+          snapshot_id: 'snap_1', session_id: 's1', run_id: 'run_1', created_at: '',
+          additions: 3, deletions: 2, is_undone: false, edits: [], files: [{ path: 'notes/a.md', additions: 3, deletions: 2, edits: [] }],
+        },
+      },
+      global: {
+        stubs: { KnowledgeSources: { props: { defaultExpanded: Boolean }, template: '<div class="stub-sources">{{ defaultExpanded }}</div>' } },
+      },
+    })
+
+    expect(wrapper.classes()).toContain('final-turn-summary')
+    expect(wrapper.find('.summary-header').exists()).toBe(false)
+    expect(wrapper.find('.panel-switch').exists()).toBe(true)
+    expect(wrapper.text()).toContain('已编辑 1 个文件')
+    expect(wrapper.text()).toContain('+3')
+    expect(wrapper.text()).toContain('-2')
+    expect(wrapper.find('.undo-button .ic-icon').exists()).toBe(true)
+    expect(wrapper.find('.stub-sources').exists()).toBe(false)
+
+    await wrapper.findAll('.panel-switch-button')[1]?.trigger('click')
+
+    expect(wrapper.find('.change-summary').exists()).toBe(false)
+    expect(wrapper.find('.stub-sources').exists()).toBe(true)
+    expect(wrapper.find('.stub-sources').text()).toBe('true')
+  })
+})

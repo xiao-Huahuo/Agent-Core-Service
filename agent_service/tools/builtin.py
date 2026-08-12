@@ -842,6 +842,9 @@ def patch_knowledge_file(path: str, old_text: str, new_text: str) -> str:
             return f"局部修改失败: 目标片段应唯一命中，当前命中 {occurrences} 次。"
         after = before.replace(old_text, new_text, 1)
         result = service.write_file(user_id=runtime.user_id, path=path, content=after)
+        # Keep the complete file versions for the tool trace so its preview and
+        # the persisted turn snapshot calculate the same absolute line numbers.
+        runtime.latest_file_patch = {"path": str(result["path"]), "before": before, "after": after, "complete": True}
         if runtime.change_service is not None:
             runtime.change_service.record_edit(
                 user_id=runtime.user_id, run_id=runtime.run_id, path=str(result["path"]), before=before, after=after,

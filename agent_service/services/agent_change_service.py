@@ -115,6 +115,15 @@ class AgentChangeService:
             record = db_session.exec(statement).first()
             return self._public_record(record) if record is not None else None
 
+    def current_for_run(self, *, run_id: str) -> dict[str, Any] | None:
+        """Return the current unfinalized-or-finalized snapshot for live UI updates."""
+
+        with Session(self.engine) as db_session:
+            record = db_session.exec(
+                select(AgentChangeSnapshotRecord).where(AgentChangeSnapshotRecord.run_id == run_id)
+            ).first()
+            return self._public_record(record) if record is not None and (record.additions or record.deletions) else None
+
     def undo_snapshot(self, *, snapshot_id: str, user_id: str) -> dict[str, Any]:
         """Undo a snapshot only when every target still matches its saved result."""
 

@@ -124,15 +124,24 @@ class ToolCallNode:
                 "display_name": display_name,
                 "tool_args_summary": args_summary,
                 "human_readable": f"正在调用工具「{display_name}」，参数：{args_summary}",
-                "chat_visible": False,
+                # Stream the preview immediately so the UI can render the running tool row.
+                "chat_visible": True,
             }
             if terminal_command:
                 start_trace["terminal_command"] = terminal_command
+            if tool_name == "patch_knowledge_file":
+                start_trace["patch"] = {
+                    "path": str(arguments.get("path") or ""),
+                    "before": str(arguments.get("old_text") or ""),
+                    "after": str(arguments.get("new_text") or ""),
+                    "complete": False,
+                }
             traces.append(start_trace)
             if trace_callback is not None:
                 trace_callback(start_trace)
             before_citations = get_tool_citation_map()
             started_at = time.perf_counter()
+            runtime = None
             try:
                 from agent_service.tools.definitions import MEMORY_TOOL_NAMES
                 from agent_service.tools.runtime_context import get_tool_runtime
@@ -141,6 +150,8 @@ class ToolCallNode:
                     runtime = get_tool_runtime()
                 except RuntimeError:
                     runtime = None
+                if runtime is not None and tool_name == "patch_knowledge_file":
+                    runtime.latest_file_patch = None
                 if runtime is not None and tool_name in MEMORY_TOOL_NAMES and not runtime.long_term_memory_enabled:
                     content = "长期记忆功能已关闭,当前工具不可用。"
                 else:
@@ -174,6 +185,12 @@ class ToolCallNode:
             }
             if terminal_command:
                 end_trace["terminal_command"] = terminal_command
+            if tool_name == "patch_knowledge_file":
+                end_trace["patch"] = runtime.latest_file_patch if runtime and runtime.latest_file_patch else start_trace["patch"]
+                if runtime and runtime.change_service is not None:
+                    snapshot = runtime.change_service.current_for_run(run_id=runtime.run_id)
+                    if snapshot is not None:
+                        end_trace["change_snapshot"] = snapshot
             if new_citations:
                 end_trace["citation_map"] = new_citations
             traces.append(end_trace)

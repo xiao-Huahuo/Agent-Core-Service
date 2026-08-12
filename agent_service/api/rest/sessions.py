@@ -109,6 +109,12 @@ async def import_session_file(body: dict[str, Any]) -> dict[str, Any]:
     task_list = parsed.get("task_list")
     if task_list and isinstance(task_list, dict):
         import_body["task_list"] = task_list
+    session_state = parsed.get("session_state")
+    if isinstance(session_state, dict):
+        import_body["session_state"] = session_state
+    child_agents = parsed.get("child_agents")
+    if isinstance(child_agents, list):
+        import_body["child_agents"] = child_agents
 
     return _do_import(import_body)
 
@@ -159,7 +165,8 @@ def _do_import(body: dict[str, Any]) -> dict[str, Any]:
             created_at_str = raw.get("created_at")
             msg_created_at = _parse_iso_time(created_at_str) if created_at_str else now
 
-            metadata: dict[str, Any] = {}
+            metadata = dict(raw.get("metadata") or {}) if isinstance(raw.get("metadata"), dict) else {}
+            _rebind_imported_change_snapshots(metadata, session_id)
             node = raw.get("node")
             if node:
                 metadata["node"] = node
@@ -210,10 +217,14 @@ def _do_import(body: dict[str, Any]) -> dict[str, Any]:
                     db_session.add(sess)
             db_session.commit()
 
-    # 3. 恢复 task list (Agent 执行状态)
-    task_list = body.get("task_list")
-    if task_list and isinstance(task_list, dict):
-        state = {"task_list": task_list}
+    # 3. Restore execution/UI snapshots and bind imported records to the new session id.
+    state = _restore_session_state(
+        raw_state=body.get("session_state"),
+        task_list=body.get("task_list"),
+        child_agents=body.get("child_agents"),
+        session_id=session_id,
+    )
+    if state:
         session_service.update_session_state(session_id, json.dumps(state, ensure_ascii=False))
 
     return {
@@ -235,6 +246,77 @@ def _parse_iso_time(value: str) -> datetime:
         return dt
     except (ValueError, TypeError):
         return datetime.now(timezone.utc)
+
+
+def _restore_session_state(
+    *, raw_state: Any, task_list: Any, child_agents: Any, session_id: str,
+) -> dict[str, Any]:
+    """Restore portable session state without retaining IDs from the source workspace."""
+
+    state = dict(raw_state) if isinstance(raw_state, dict) else {}
+    restored_task_list = task_list if isinstance(task_list, dict) else state.get("task_list")
+    if isinstance(restored_task_list, dict):
+        state["task_list"] = {**restored_task_list, "session_id": session_id}
+    snapshot = state.get("change_snapshot")
+    if isinstance(snapshot, dict):
+        state["change_snapshot"] = {**snapshot, "session_id": session_id, "is_imported": True}
+    children = child_agents if isinstance(child_agents, list) else state.get("child_agents")
+    if isinstance(children, list):
+        state["child_agents"] = [child for child in children if isinstance(child, dict)]
+    return state
+
+
+def _rebind_imported_change_snapshots(metadata: dict[str, Any], session_id: str) -> None:
+    """Keep imported diffs viewable while preventing undo against the source workspace."""
+
+    snapshot = metadata.get("change_snapshot")
+    if isinstance(snapshot, dict):
+        metadata["change_snapshot"] = {**snapshot, "session_id": session_id, "is_imported": True}
+    trace = metadata.get("trace")
+    if isinstance(trace, list):
+        for item in trace:
+            if not isinstance(item, dict) or not isinstance(item.get("change_snapshot"), dict):
+                continue
+            item["change_snapshot"] = {
+                **item["change_snapshot"],
+                "session_id": session_id,
+                "is_imported": True,
+            }
+
+
+@router.get("/sessions/{session_id}/state")
+async def get_session_state(session_id: str) -> dict[str, Any]:
+    """Return portable session execution state for history and export consumers."""
+
+    raw_state = _require_session_service().get_session_state(session_id)
+    if not raw_state:
+        return {"session_state": None}
+    try:
+        state = json.loads(raw_state)
+    except (json.JSONDecodeError, TypeError):
+        state = None
+    return {"session_state": state if isinstance(state, dict) else None}
+
+
+@router.put("/sessions/{session_id}/state")
+async def update_session_environment(session_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Persist the Git environment snapshot shown with a session's changes."""
+
+    environment = body.get("environment")
+    if not isinstance(environment, dict):
+        raise HTTPException(status_code=422, detail="environment is required")
+    service = _require_session_service()
+    raw_state = service.get_session_state(session_id)
+    try:
+        state = json.loads(raw_state) if raw_state else {}
+    except (json.JSONDecodeError, TypeError):
+        state = {}
+    if not isinstance(state, dict):
+        state = {}
+    state["environment"] = environment
+    if not service.update_session_state(session_id, json.dumps(state, ensure_ascii=False)):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"session_state": state}
 
 
 @router.get("/sessions/messages/history")
@@ -338,7 +420,7 @@ async def update_session_name(session_id: str, body: dict[str, Any]) -> dict[str
 async def list_messages(
     session_id: str,
     user_id: str = Query(..., min_length=1, description="用户 ID"),
-    limit: int = Query(default=50, ge=1, le=200, description="返回消息数量上限"),
+    limit: int | None = Query(default=None, ge=1, description="可选消息数量上限，默认返回完整历史"),
 ) -> list[dict[str, Any]]:
     """获取指定会话的消息历史。"""
     ms = _require_message_service()
@@ -350,6 +432,7 @@ async def list_messages(
             "user_id": m.user_id,
             "role": m.role,
             "content": m.content,
+            "tool_call_id": m.tool_call_id,
             "tool_calls": m.tool_calls_json,
             "metadata": m.metadata_json,
             "created_at": m.created_at.isoformat(),

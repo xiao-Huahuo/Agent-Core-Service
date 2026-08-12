@@ -11,12 +11,15 @@ import IcIcon from '@/components/common/IcIcon.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { SourceItem } from '@/stores/chat'
 
-defineProps<{
+const props = withDefaults(defineProps<{
   sources: SourceItem[]
-}>()
+  defaultExpanded?: boolean
+}>(), {
+  defaultExpanded: false,
+})
 
 const workspaceStore = useWorkspaceStore()
-const expanded = ref(false)
+const expanded = ref(props.defaultExpanded)
 
 function baseName(uri: string): string {
   if (/^https?:\/\//i.test(uri)) {

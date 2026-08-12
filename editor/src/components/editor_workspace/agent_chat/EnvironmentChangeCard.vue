@@ -6,10 +6,11 @@
   durable change summary, Git environment and aggregated source references.
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import { fetchSessionChanges } from '@/api/agentChanges'
+import { fetchSessionState, saveSessionEnvironment } from '@/api/session'
 import { fetchGitHistory, fetchGitStatus } from '@/api/git'
 import type { SourceItem } from '@/stores/chat'
 
@@ -25,20 +26,50 @@ const sourceCount = computed(() => new Set(props.sources.map((source) => source.
 
 async function load() {
   if (!props.sessionId || !props.userId) return
-  const [changes, status, history] = await Promise.allSettled([
+  const [changes, status, history, sessionState] = await Promise.allSettled([
     fetchSessionChanges(props.sessionId), fetchGitStatus(props.userId), fetchGitHistory(props.userId, 1),
+    fetchSessionState(props.sessionId),
   ])
   if (changes.status === 'fulfilled') snapshot.value = changes.value.change_snapshot
-  if (status.status === 'fulfilled') branch.value = status.value.current_branch || '—'
+  if (!snapshot.value && sessionState.status === 'fulfilled') {
+    const saved = sessionState.value.session_state?.change_snapshot
+    if (saved && typeof saved === 'object') snapshot.value = saved as typeof snapshot.value
+  }
+  const savedEnvironment = sessionState.status === 'fulfilled'
+    ? sessionState.value.session_state?.environment as Record<string, string> | undefined
+    : undefined
+  if (savedEnvironment) {
+    branch.value = savedEnvironment.branch || '—'
+    commit.value = savedEnvironment.commit || '—'
+    commitTime.value = savedEnvironment.commit_time || '—'
+  }
+  if (status.status === 'fulfilled' && !savedEnvironment) branch.value = status.value.current_branch || '—'
   if (history.status === 'fulfilled') {
     const item = history.value.history?.[0]
-    commit.value = item?.summary || '—'
-    commitTime.value = item?.date || '—'
+    if (!savedEnvironment) {
+      commit.value = item?.summary || '—'
+      commitTime.value = item?.date || '—'
+    }
+  }
+  if (!savedEnvironment && status.status === 'fulfilled') {
+    void saveSessionEnvironment(props.sessionId, {
+      branch: branch.value,
+      commit: commit.value,
+      commit_time: commitTime.value,
+    })
   }
 }
 
 watch(() => props.sessionId, () => void load(), { immediate: true })
 onMounted(() => void load())
+onMounted(() => window.addEventListener('agent-change-updated', handleChangeUpdated as EventListener))
+onBeforeUnmount(() => window.removeEventListener('agent-change-updated', handleChangeUpdated as EventListener))
+
+/** Applies the current run snapshot immediately after a file patch succeeds. */
+function handleChangeUpdated(event: CustomEvent<typeof snapshot.value>) {
+  const incoming = event.detail
+  if (incoming?.session_id === props.sessionId) snapshot.value = incoming
+}
 </script>
 
 <template>

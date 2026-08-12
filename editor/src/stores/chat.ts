@@ -86,6 +86,7 @@ function traceIdentity(trace: Record<string, unknown>): string {
   return [
     asString(trace.node),
     asString(trace.event),
+    asString(trace.tool_call_id),
     asString(trace.tool_name),
     asString(trace.human_readable),
   ].join('|')
@@ -286,7 +287,7 @@ export const useChatStore = defineStore('chat', () => {
     pendingContent = ''
   }
 
-  async function loadHistory(sessionId: string, userId: string, limit = 50) {
+  async function loadHistory(sessionId: string, userId: string, limit?: number) {
     const requestId = ++historyRequestId
     historyAbortController?.abort()
     historyAbortController = new AbortController()
@@ -311,13 +312,18 @@ export const useChatStore = defineStore('chat', () => {
           message_id: message.message_id,
           node: asString(message.metadata?.node),
           tool_calls: message.tool_calls,
-          metadata: message.metadata ?? {},
+          metadata: {
+            ...(message.metadata ?? {}),
+            ...(message.tool_call_id ? { tool_call_id: message.tool_call_id } : {}),
+          },
           trace: asTrace(message.metadata?.trace),
           created_at: message.created_at,
           reference: asString(message.metadata?.reference) || undefined,
         }))
       loadedSessionId.value = sessionId
-      void useTaskListStore().load(sessionId)
+      // History restoration must never behave like a live task-list update:
+      // otherwise it opens the sidebar without enabling a matching card.
+      void useTaskListStore().load(sessionId, { open: false })
       void refreshTaskSuggestions(userId, sessionId)
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -472,6 +478,10 @@ export const useChatStore = defineStore('chat', () => {
         mergeCurrentCitationMap(metadata.citation_map)
         for (const traceItem of trace) {
           mergeCurrentCitationMap(traceItem.citation_map)
+          const changeSnapshot = asRecord(traceItem.change_snapshot)
+          if (changeSnapshot) {
+            window.dispatchEvent(new CustomEvent('agent-change-updated', { detail: changeSnapshot }))
+          }
         }
         resetStreamTimeout() // 每次收到新 chunk 重置超时计时器
 
@@ -552,6 +562,31 @@ export const useChatStore = defineStore('chat', () => {
             appendTraceToCurrentAssistant('action', trace)
           }
           continue
+        }
+
+        // The model's tool_calls update arrives before the action node and may
+        // have no text. Turn it into running traces immediately instead of
+        // waiting for the tool result callback.
+        const announcedToolCalls = asArray(chunk.tool_calls)
+        if (announcedToolCalls.length > 0) {
+          const previews = announcedToolCalls
+            .map(asRecord)
+            .filter((toolCall) => asString(toolCall.name))
+            .map((toolCall) => ({
+              node: 'action',
+              event: 'tool_call_start',
+              tool_call_id: asString(toolCall.id),
+              tool_name: asString(toolCall.name),
+              // Let the shared tool renderer use its localized display name.
+              display_name: '',
+              tool_args_summary: JSON.stringify(toolCall.args ?? {}),
+              human_readable: `正在调用工具「${asString(toolCall.name)}」`,
+              chat_visible: true,
+            }))
+          if (previews.length > 0) {
+            appendTraceToCurrentAssistant('action', previews)
+            continue
+          }
         }
 
         if (content) {

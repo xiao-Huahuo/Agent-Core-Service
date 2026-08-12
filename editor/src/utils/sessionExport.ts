@@ -7,7 +7,8 @@
  */
 
 import { toYaml } from '@/utils/yamlExport'
-import { fetchMessages } from '@/api/session'
+import { fetchMessages, fetchSessionState } from '@/api/session'
+import { fetchChildAgents } from '@/api/agent'
 import { fetchSessionTaskList } from '@/api/taskList'
 import type { AgentTaskList } from '@/api/taskList'
 import type { SessionRecord, SessionMessageRecord } from '@/api/session'
@@ -23,6 +24,8 @@ interface ExportMessage {
   trace_human_readable?: string[]
   trace_details?: unknown[]
   child_agent_event?: unknown
+  tool_call_id?: string
+  metadata?: Record<string, unknown>
 }
 
 interface ExportData {
@@ -36,11 +39,11 @@ interface ExportData {
   messages: ExportMessage[]
   task_list?: AgentTaskList | null
   session_state?: Record<string, unknown> | null
+  child_agents?: unknown[]
 }
 
 function formatMessages(records: SessionMessageRecord[]): ExportMessage[] {
   return records
-    .filter((msg) => msg.role !== 'system')
     .map((msg) => {
       const metadata = (msg.metadata ?? {}) as Record<string, unknown>
       const exportMsg: ExportMessage = {
@@ -48,6 +51,7 @@ function formatMessages(records: SessionMessageRecord[]): ExportMessage[] {
         content: msg.content || '',
         created_at: msg.created_at,
       }
+      exportMsg.metadata = metadata
 
       if (metadata.node) {
         exportMsg.node = String(metadata.node)
@@ -59,8 +63,9 @@ function formatMessages(records: SessionMessageRecord[]): ExportMessage[] {
         exportMsg.child_agent_event = metadata.child_agent_event
       }
       if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
-        exportMsg.tool_calls = msg.tool_calls.map(cleanToolCall)
+        exportMsg.tool_calls = msg.tool_calls
       }
+      if (typeof msg.tool_call_id === 'string') exportMsg.tool_call_id = msg.tool_call_id
 
       // Extract trace details
       const trace = metadata.trace
@@ -68,33 +73,11 @@ function formatMessages(records: SessionMessageRecord[]): ExportMessage[] {
         exportMsg.trace_human_readable = trace
           .map((t: Record<string, unknown>) => String(t.human_readable ?? ''))
           .filter(Boolean)
-        exportMsg.trace_details = trace.map(cleanTraceItem)
+        exportMsg.trace_details = trace
       }
 
       return exportMsg
     })
-}
-
-function cleanToolCall(call: unknown): unknown {
-  if (typeof call !== 'object' || call === null) return call
-  const c = call as Record<string, unknown>
-  return {
-    name: c.name ?? c.tool_name ?? '',
-    arguments: c.arguments ?? c.args ?? c.parameters ?? {},
-    result: c.result ?? c.output ?? '',
-  }
-}
-
-function cleanTraceItem(trace: Record<string, unknown>): Record<string, unknown> {
-  const cleaned: Record<string, unknown> = {}
-  if (trace.event) cleaned.event = trace.event
-  if (trace.node) cleaned.node = trace.node
-  if (trace.tool_name) cleaned.tool_name = trace.tool_name
-  if (trace.human_readable) cleaned.human_readable = trace.human_readable
-  if (trace.input) cleaned.input = trace.input
-  if (trace.output) cleaned.output = trace.output
-  if (trace.duration_ms) cleaned.duration_ms = trace.duration_ms
-  return cleaned
 }
 
 function triggerDownload(yaml: string, filename: string) {
@@ -123,11 +106,13 @@ function sanitizeFilename(name: string): string {
 export async function exportSession(
   session: SessionRecord,
   userId: string,
-  limit = 200,
+  limit?: number,
 ): Promise<void> {
-  const [messages, taskListResponse] = await Promise.all([
+  const [messages, taskListResponse, stateResponse, childResponse] = await Promise.all([
     fetchMessages(session.session_id, userId, limit),
     fetchSessionTaskList(session.session_id).catch(() => null),
+    fetchSessionState(session.session_id).catch(() => null),
+    fetchChildAgents(session.session_id).catch(() => null),
   ])
 
   const data: ExportData = {
@@ -140,6 +125,8 @@ export async function exportSession(
     },
     messages: formatMessages(messages),
     task_list: taskListResponse?.task_list ?? null,
+    session_state: stateResponse?.session_state ?? null,
+    child_agents: childResponse?.children ?? [],
   }
 
   const yamlContent = toYaml(data)

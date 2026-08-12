@@ -40,7 +40,9 @@ export const useTaskListStore = defineStore('taskList', () => {
       }
     }
     const shouldOpen = options?.open ?? autoOpenOnUpdate.value
-    if (taskList.value && shouldOpen) {
+    if (options?.open === false) {
+      sidebarOpen.value = false
+    } else if (taskList.value && shouldOpen) {
       sidebarOpen.value = true
     }
   }
@@ -54,7 +56,7 @@ export const useTaskListStore = defineStore('taskList', () => {
     error.value = ''
     try {
       const response = await fetchSessionTaskList(sessionId)
-      setTaskList(response.task_list, { ...options, emitEvent: false })
+      setTaskList(response.task_list, { open: options?.open ?? false, emitEvent: false })
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e)
       taskList.value = null

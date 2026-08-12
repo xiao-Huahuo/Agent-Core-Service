@@ -87,4 +87,52 @@ describe('ToolCallInline summaries', () => {
     expect(text).toContain('使用技能：pdf')
     expect(text).toContain('新增待办：整理测试报告')
   })
+
+  it('replaces a running patch preview in place and renders the shared diff', async () => {
+    const start = {
+      event: 'tool_call_start',
+      tool_call_id: 'call_patch_1',
+      tool_name: 'patch_knowledge_file',
+    }
+    const wrapper = mount(ToolCallInline, { props: { traces: [start] } })
+    expect(wrapper.text()).toContain('正在局部修改文件')
+    expect(wrapper.find('.tool-expand-btn').exists()).toBe(false)
+
+    await wrapper.setProps({
+      traces: [{
+        ...start,
+      }, {
+        event: 'tool_call_end',
+        tool_call_id: 'call_patch_1',
+        tool_name: 'patch_knowledge_file',
+        raw_content: '已局部修改文件 notes/a.md',
+        patch: { path: 'notes/a.md', before: '旧内容', after: '新内容', complete: true },
+      }],
+    })
+
+    await wrapper.find('.tool-expand-btn').trigger('click')
+    expect(wrapper.find('.removed .line-text').text()).toBe('旧内容')
+    expect(wrapper.find('.added .line-text').text()).toBe('新内容')
+  })
+
+  it('prefers the finalized snapshot over a transient patch preview', async () => {
+    const wrapper = mount(ToolCallInline, {
+      props: {
+        traces: [{
+          event: 'tool_call_end', tool_call_id: 'call_patch_2', tool_name: 'patch_knowledge_file', raw_content: 'done',
+          patch: { path: 'notes/a.md', before: 'old', after: 'new', complete: false },
+        }],
+        changeSnapshot: {
+          snapshot_id: 'snap_1', session_id: 's1', run_id: 'run_1', created_at: '', additions: 1, deletions: 1, is_undone: false,
+          files: [{ path: 'notes/a.md', additions: 1, deletions: 1, edits: [{ path: 'notes/a.md', before: 'one\ntwo\nold', after: 'one\ntwo\nnew', additions: 1, deletions: 1 }] }],
+          edits: [],
+        },
+      },
+    })
+
+    await wrapper.find('.tool-expand-btn').trigger('click')
+    expect(wrapper.find('.removed .line-number').text()).toBe('3')
+    expect(wrapper.find('.removed .line-text').text()).toBe('old')
+    expect(wrapper.find('.added .line-text').text()).toBe('new')
+  })
 })

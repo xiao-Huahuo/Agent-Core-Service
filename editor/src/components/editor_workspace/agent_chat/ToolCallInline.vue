@@ -9,10 +9,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
+import ChangeDiff from '@/components/editor_workspace/agent_chat/ChangeDiff.vue'
+import type { AgentChangeSnapshot } from '@/api/agentChanges'
 
 const props = defineProps<{
   traces?: Array<Record<string, unknown>>
   isStreaming?: boolean
+  changeSnapshot?: AgentChangeSnapshot | null
 }>()
 
 interface ToolDisplayEntry {
@@ -21,6 +24,7 @@ interface ToolDisplayEntry {
   pending: boolean
   rawContents: string[]
   toolName: string
+  patch?: { path: string; before: string; after: string; complete: boolean }
 }
 
 interface ToolEntry {
@@ -123,6 +127,7 @@ const FALLBACK_DISPLAY: Record<string, string> = {
   read_knowledge_file: '阅读文件',
   read_multimodal_file_info: '读取多模态文件信息',
   write_knowledge_file: '创作文件',
+  patch_knowledge_file: '局部修改文件',
   show_markdown_html: '展示Markdown-HTML',
   delete_knowledge_file: '删除文件',
   rename_knowledge_file: '重命名文件',
@@ -413,13 +418,6 @@ function toolSummary(entry: ToolEntry) {
   return displayName
 }
 
-function toolMergeKey(toolName: string, argsSummary: string, terminalCommand: string) {
-  if (toolName !== 'run_terminal_command') {
-    return toolName
-  }
-  return `${toolName}:${terminalCommand || argsSummary || 'terminal'}`
-}
-
 function parseSearchResults(content: string) {
   const lines = content.split('\n').filter((l) => l.trim())
   const items: { index: number; source: string; content: string }[] = []
@@ -500,94 +498,72 @@ function parseTerminalResult(content: string): TerminalResultDisplay | null {
 }
 
 const toolEntries = computed(() => {
-  const pendingStarts = new Map<string, { key: string; text: string; argsSummary: string; toolName: string }>()
-  const startArgsByToolName = new Map<string, string>()
-  const startCommandByToolName = new Map<string, string>()
-  ;(props.traces ?? [])
-    .filter((trace) => trace.event === 'tool_call_start' && trace.tool_name)
-    .forEach((trace) => {
-      const toolName = asString(trace.tool_name)
-      const argsSummary = asString(trace.tool_args_summary)
-      const terminalCommand = asString(trace.terminal_command)
-      const mergeKey = toolMergeKey(toolName, argsSummary, terminalCommand)
-      startArgsByToolName.set(mergeKey, argsSummary)
-      startCommandByToolName.set(mergeKey, terminalCommand)
-      pendingStarts.set(mergeKey, {
-        key: `${mergeKey}-pending`,
-        text: toolName === 'run_terminal_command'
-          ? terminalCommandSummary(argsSummary, terminalCommand)
-          : asString(trace.human_readable) || `正在调用工具「${asString(trace.display_name) || FALLBACK_DISPLAY[toolName] || toolName}」`,
-        argsSummary,
-        toolName,
-      })
-    })
-  const merged = new Map<string, ToolEntry>()
-  ;(props.traces ?? [])
-    .filter((trace) => trace.event === 'tool_call_end' && trace.tool_name)
-    .forEach((trace) => {
-      const toolName = asString(trace.tool_name)
-      const argsSummary = asString(trace.tool_args_summary)
-      const terminalCommand = asString(trace.terminal_command)
-      const mergeKey = toolMergeKey(toolName, argsSummary, terminalCommand)
-      if (!pendingStarts.delete(mergeKey)) {
-        const staleStart = Array.from(pendingStarts.entries()).find(([, start]) => start.toolName === toolName)
-        if (staleStart) {
-          pendingStarts.delete(staleStart[0])
-        }
-      }
-      const existing = merged.get(mergeKey)
-      const resultCount = asNumber(trace.result_count)
-      const fn = extractFilename(trace, toolName)
-      const label = extractToolLabel(trace, toolName)
-      const rawContent = asString(trace.raw_content)
-      if (existing) {
-        if (resultCount !== undefined) {
-          existing.result_count = (existing.result_count ?? 0) + resultCount
-        }
-        existing.call_count++
-        if (fn && !existing.filenames.includes(fn)) {
-          existing.filenames.push(fn)
-        }
-        uniquePush(existing.labels, label)
-        if (rawContent && !existing.raw_contents.includes(rawContent)) {
-          existing.raw_contents.push(rawContent)
-        }
-      } else {
-        merged.set(mergeKey, {
-          tool_name: toolName,
-          display_name: asString(trace.display_name) || FALLBACK_DISPLAY[toolName] || toolName,
-          args_summary: startArgsByToolName.get(mergeKey) || argsSummary,
-          terminal_command: terminalCommand || startCommandByToolName.get(mergeKey) || '',
-          result_count: resultCount,
-          call_count: 1,
-          filenames: fn ? [fn] : [],
-          labels: label ? [truncateLabel(label)] : [],
-          raw_contents: rawContent ? [rawContent] : [],
-        })
-      }
-    })
-  const pendingEntries = props.isStreaming
-    ? Array.from(pendingStarts.values()).map((entry) => ({
-        ...entry,
+  /** The call id is the lifecycle identity: a result updates its preview in place. */
+  const calls = new Map<string, ToolDisplayEntry>()
+  ;(props.traces ?? []).forEach((trace, index) => {
+    const event = asString(trace.event)
+    const toolName = asString(trace.tool_name)
+    if (!toolName || (event !== 'tool_call_start' && event !== 'tool_call_end')) return
+    const key = asString(trace.tool_call_id) || `${toolName}-${index}`
+    const displayName = asString(trace.display_name) || FALLBACK_DISPLAY[toolName] || toolName
+    if (event === 'tool_call_start') {
+      calls.set(key, {
+        key,
+        text: `正在${displayName}`,
         pending: true,
         rawContents: [],
-        toolName: '',
-      }))
-    : []
-
-  return [
-    ...pendingEntries,
-    ...Array.from(merged.values())
-    .map((entry) => ({
-      key: `${entry.tool_name}-${entry.terminal_command || entry.call_count}`,
-      text: toolSummary(entry),
+        toolName,
+        patch: asPatch(trace.patch),
+      })
+      return
+    }
+    const rawContent = asString(trace.raw_content)
+    const entry: ToolEntry = {
+      tool_name: toolName,
+      display_name: displayName,
+      args_summary: asString(trace.tool_args_summary),
+      terminal_command: asString(trace.terminal_command),
+      result_count: asNumber(trace.result_count),
+      call_count: 1,
+      filenames: [],
+      labels: [],
+      raw_contents: rawContent ? [rawContent] : [],
+    }
+    const filename = extractFilename(trace, toolName)
+    const label = extractToolLabel(trace, toolName)
+    if (filename) entry.filenames.push(filename)
+    uniquePush(entry.labels, label)
+    calls.set(key, {
+      key,
+      text: toolSummary(entry) || displayName,
       pending: false,
       rawContents: entry.raw_contents,
-      toolName: entry.tool_name,
-    }))
-    .filter((entry): entry is ToolDisplayEntry => Boolean(entry.text)),
-  ]
+      toolName,
+      patch: asPatch(trace.patch) ?? existingPatch(calls.get(key)),
+    })
+  })
+  return Array.from(calls.values())
 })
+
+function asPatch(value: unknown): { path: string; before: string; after: string; complete: boolean } | undefined {
+  const patch = asRecord(value)
+  if (!patch) return undefined
+  const before = asString(patch.before)
+  const after = asString(patch.after)
+  return before || after ? { path: asString(patch.path), before, after, complete: patch.complete === true } : undefined
+}
+
+function existingPatch(entry: ToolDisplayEntry | undefined) {
+  return entry?.patch
+}
+
+/** Uses the finalized snapshot rather than transient tool arguments when available. */
+function finalizedPatch(entry: ToolDisplayEntry) {
+  const path = entry.patch?.path
+  const file = props.changeSnapshot?.files.find((item) => item.path === path)
+  const edit = file?.edits[file.edits.length - 1]
+  return edit ? { path: edit.path, before: edit.before ?? '', after: edit.after, complete: true } : entry.patch
+}
 </script>
 
 <template>
@@ -616,6 +592,10 @@ const toolEntries = computed(() => {
       class="tool-result-collapse open"
     >
       <div class="tool-result-content is-expandable">
+        <div v-if="finalizedPatch(entry)" class="patch-preview" aria-label="局部代码修改">
+          <span v-if="finalizedPatch(entry)?.path" class="patch-path">{{ finalizedPatch(entry)?.path }}</span>
+          <ChangeDiff :before="finalizedPatch(entry)!.before" :after="finalizedPatch(entry)!.after" :show-line-numbers="finalizedPatch(entry)!.complete" />
+        </div>
         <button
           v-if="copiedKey === entry.key"
           class="tool-copy-btn copied"
@@ -844,6 +824,9 @@ const toolEntries = computed(() => {
 .tool-result-text + .tool-result-text {
   border-top: 1px dashed rgba(148, 163, 184, 0.08);
 }
+
+.patch-preview { padding: var(--space-8) var(--space-12); border-bottom: 1px solid rgba(148, 163, 184, 0.1); }
+.patch-path { display: block; margin-bottom: var(--space-6); color: var(--color-text-muted); font-family: var(--font-code); font-size: calc(10px * var(--font-scale)); }
 
 /* Code block for file content */
 .tool-result-code {

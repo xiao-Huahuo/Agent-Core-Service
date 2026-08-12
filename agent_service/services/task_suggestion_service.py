@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -53,6 +54,9 @@ class TaskSuggestionService:
             conversation=conversation,
             llm_config=llm_config,
         )
+        # A background-model timeout is not worth another user-visible wait.
+        if suggestions is None:
+            return {"suggestions": self._fallback_suggestions(messages)}
         if not suggestions:
             suggestions = self._generate_with_large_model(
                 user_id=user_id,
@@ -72,7 +76,7 @@ class TaskSuggestionService:
         session_id: str,
         conversation: str,
         llm_config: dict[str, Any],
-    ) -> list[str]:
+    ) -> list[str] | None:
         """Try the configured small model and return an empty list on failure."""
 
         try:
@@ -104,12 +108,19 @@ class TaskSuggestionService:
                 len(suggestions),
             )
             return suggestions
-        except Exception:
+        except FutureTimeoutError:
             logger.warning(
-                "Task suggestion small model failed, falling back to primary model | user=%s session=%s",
+                "Task suggestion small model timed out; using local fallback | user=%s session=%s",
                 user_id,
                 session_id,
-                exc_info=True,
+            )
+            return None
+        except Exception as exc:
+            logger.warning(
+                "Task suggestion small model failed, falling back to primary model | user=%s session=%s error=%s",
+                user_id,
+                session_id,
+                exc,
             )
             return []
 
@@ -149,12 +160,12 @@ class TaskSuggestionService:
                 len(suggestions),
             )
             return suggestions
-        except Exception:
+        except Exception as exc:
             logger.warning(
-                "Task suggestion primary model failed, using local fallback | user=%s session=%s",
+                "Task suggestion primary model failed, using local fallback | user=%s session=%s error=%s",
                 user_id,
                 session_id,
-                exc_info=True,
+                exc,
             )
             return []
 

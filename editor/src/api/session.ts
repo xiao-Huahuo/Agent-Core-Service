@@ -24,9 +24,14 @@ export interface SessionMessageRecord {
   session_id: string
   role: string
   content: string
+  tool_call_id?: string
   tool_calls?: unknown[]
   metadata?: Record<string, unknown>
   created_at: string
+}
+
+export interface SessionStateResponse {
+  session_state: Record<string, unknown> | null
 }
 
 export function listSessions(userId: string): Promise<SessionRecord[]> {
@@ -43,12 +48,23 @@ export function createSession(userId: string, sessionName?: string): Promise<Ses
 export function fetchMessages(
   sessionId: string,
   userId: string,
-  limit = 50,
+  limit?: number,
   options: { signal?: AbortSignal } = {},
 ): Promise<SessionMessageRecord[]> {
   return apiGet<SessionMessageRecord[]>(`/sessions/${sessionId}/messages`, { user_id: userId, limit }, {
     signal: options.signal,
   })
+}
+
+export function fetchSessionState(sessionId: string): Promise<SessionStateResponse> {
+  return apiGet<SessionStateResponse>(API_ROUTES.SESSION_STATE(sessionId))
+}
+
+export function saveSessionEnvironment(
+  sessionId: string,
+  environment: Record<string, string>,
+): Promise<SessionStateResponse> {
+  return apiPut<SessionStateResponse>(API_ROUTES.SESSION_STATE(sessionId), { environment })
 }
 
 /**
@@ -116,6 +132,7 @@ export interface ImportedMessage {
   trace_details?: unknown[]
   child_agent_event?: unknown
   tool_call_id?: string
+  metadata?: Record<string, unknown>
 }
 
 export function importSession(

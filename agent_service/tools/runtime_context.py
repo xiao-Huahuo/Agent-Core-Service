@@ -60,6 +60,7 @@ class ToolRuntimeState:
     network_citation_counter: int = 0
     child_agent_spawner: Callable[..., str] | None = None
     child_agent_waiter: Callable[..., str] | None = None
+    latest_file_patch: dict[str, str | bool] | None = None
 
 
 _TOOL_RUNTIME = local()

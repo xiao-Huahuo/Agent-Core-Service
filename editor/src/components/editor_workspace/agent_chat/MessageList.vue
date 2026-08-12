@@ -251,6 +251,19 @@ function changeSnapshotForMessage(message: AgentChatMessage): AgentChangeSnapsho
     : null
 }
 
+/** Finds the finalized snapshot for an action message before the next user turn. */
+function changeSnapshotForAction(index: number): AgentChangeSnapshot | null {
+  for (let cursor = index + 1; cursor < visibleMessages.value.length; cursor += 1) {
+    const candidate = visibleMessages.value[cursor]
+    if (candidate?.role === 'user') break
+    if (candidate) {
+      const snapshot = changeSnapshotForMessage(candidate)
+      if (snapshot) return snapshot
+    }
+  }
+  return null
+}
+
 async function undoMessageChange(message: AgentChatMessage) {
   const snapshot = changeSnapshotForMessage(message)
   const sessionId = snapshot?.session_id
@@ -307,6 +320,7 @@ defineExpose({
         :show-actions="shouldShowActions(message, index)"
         :knowledge-sources="[]"
         :citation-map="message.role === 'assistant' ? citationMapForMessage(message) : {}"
+        :change-snapshot="message.node === 'action' ? changeSnapshotForAction(index) : changeSnapshotForMessage(message)"
       />
       <FinalTurnSummary
         v-if="message.role === 'assistant' && isFinalAssistantAnswer(message, index) && !isThinkingActive"
