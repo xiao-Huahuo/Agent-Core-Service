@@ -1,7 +1,6 @@
 .agents
 .claude
 .codex
-.idea
 skills-lock.json
 runtime/
 **/dist/
