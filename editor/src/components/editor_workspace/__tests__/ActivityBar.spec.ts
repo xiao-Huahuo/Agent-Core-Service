@@ -47,7 +47,7 @@ describe('ActivityBar', () => {
     const wrapper = mount(ActivityBar, { props })
 
     expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(false)
-    await wrapper.get('button[aria-label="知识库"]').trigger('click')
+    await wrapper.get('button[aria-label="库"]').trigger('click')
 
     expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(true)
     expect(wrapper.findAll('[aria-label="知识库菜单"] button')).toHaveLength(4)
@@ -68,7 +68,7 @@ describe('ActivityBar', () => {
   it('marks the knowledge group active when a child view is active', () => {
     const wrapper = mount(ActivityBar, { props: { ...props, libraryActive: true } })
 
-    expect(wrapper.get('button[aria-label="知识库"]').classes()).toContain('active')
+    expect(wrapper.get('button[aria-label="库"]').classes()).toContain('active')
   })
 
   it('places ingestion, MD-HTML, and skills at the bottom of the main group', () => {

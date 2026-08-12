@@ -85,6 +85,10 @@ export function unlockVault(userId: string, masterPassword: string): Promise<Vau
   return apiPost<VaultTokenResponse>(API_ROUTES.VAULT_UNLOCK, { user_id: userId, master_password: masterPassword })
 }
 
+export function resetVaultPassword(userId: string, newPassword: string, oldPassword = ''): Promise<{ ok: boolean }> {
+  return apiPost<{ ok: boolean }>(API_ROUTES.VAULT_RESET_PASSWORD, { user_id: userId, new_password: newPassword, old_password: oldPassword })
+}
+
 export function lockVaultToken(token: string): Promise<{ ok: boolean }> {
   return apiPost<{ ok: boolean }>(API_ROUTES.VAULT_LOCK, {}, auth(token))
 }

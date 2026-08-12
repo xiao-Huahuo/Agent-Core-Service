@@ -54,6 +54,7 @@ async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const { timeoutMs: _timeoutMs, ...fetchInit } = init ?? {}
   try {
     const response = await fetch(path, {
+      ...fetchInit,
       headers: isFormData
         ? fetchInit.headers
         : {
@@ -61,7 +62,6 @@ async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
             ...fetchInit.headers,
           },
       signal: controller.signal,
-      ...fetchInit,
     })
     if (!response.ok) {
       const detail = await readErrorDetail(response)

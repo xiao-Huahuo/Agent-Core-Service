@@ -8,7 +8,8 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { getVaultDebugMasterPassword, getVaultStatus, type VaultStatusResponse } from '@/api/vault'
+import { getVaultDebugMasterPassword, getVaultStatus, resetVaultPassword, type VaultStatusResponse } from '@/api/vault'
+import VaultPasswordResetDialog from '@/components/vault_view/VaultPasswordResetDialog.vue'
 import { fetchSensitiveWords, saveSensitiveWords } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -47,6 +48,9 @@ const vaultDebugLoading = ref(false)
 const vaultDebug = ref<VaultStatusResponse | null>(null)
 const vaultPasswordDebug = ref('')
 const vaultDebugPasswordVisible = ref(false)
+const vaultResetOpen = ref(false)
+const vaultAdminResetOpen = ref(false)
+const vaultResetSaving = ref(false)
 
 const categoryEntries = computed(() => categoryKeys.value
   .map((key) => ({ key, category: data.categories[key] }))
@@ -187,6 +191,25 @@ async function handleFetchVaultPasswordDebug() {
   }
 }
 
+async function submitVaultPasswordReset(withOldPassword: boolean, oldPassword: string, nextPassword: string, confirmation: string) {
+  const userId = settingsStore.profile.userId
+  if (!userId) return showMessage('当前没有用户 ID')
+  if (nextPassword.length < 8) return showMessage('新密码至少需要 8 位')
+  if (nextPassword !== confirmation) return showMessage('两次新密码不一致')
+  vaultResetSaving.value = true
+  try {
+    await resetVaultPassword(userId, nextPassword, withOldPassword ? oldPassword : '')
+    vaultResetOpen.value = false
+    vaultAdminResetOpen.value = false
+    vaultPasswordDebug.value = ''
+    showMessage('密码库密码已重设，请使用新密码重新解锁')
+  } catch (error) {
+    showMessage(error instanceof Error ? error.message : '重设密码库密码失败')
+  } finally {
+    vaultResetSaving.value = false
+  }
+}
+
 onMounted(loadData)
 </script>
 
@@ -204,10 +227,14 @@ onMounted(loadData)
       <button class="save-model-btn" :disabled="vaultDebugLoading" type="button" @click="handleFetchVaultPasswordDebug">
         {{ vaultDebugLoading ? '获取中...' : '获取密码库主密码' }}
       </button>
+      <button class="secondary-model-btn" type="button" @click="vaultAdminResetOpen = !vaultAdminResetOpen">重设密码库密码</button>
       <p v-if="vaultPasswordDebug" class="vault-debug-result" :class="{ secret: vaultDebugPasswordVisible }">
         {{ vaultDebugPasswordVisible ? `主密码: ${vaultPasswordDebug}` : vaultPasswordDebug }}
       </p>
     </div>
+    <button class="secondary-model-btn vault-reset-toggle" type="button" @click="vaultResetOpen = true">重置密码</button>
+    <VaultPasswordResetDialog :open="vaultResetOpen" :saving="vaultResetSaving" :require-old-password="true" @close="vaultResetOpen = false" @submit="(oldPassword, nextPassword, confirmation) => submitVaultPasswordReset(true, oldPassword, nextPassword, confirmation)" />
+    <VaultPasswordResetDialog :open="vaultAdminResetOpen" :saving="vaultResetSaving" :require-old-password="false" @close="vaultAdminResetOpen = false" @submit="(_oldPassword, nextPassword, confirmation) => submitVaultPasswordReset(false, '', nextPassword, confirmation)" />
 
     <h3>安全审核词库</h3>
     <p class="safety-desc">{{ data._description }}</p>
@@ -363,7 +390,7 @@ onMounted(loadData)
 <style scoped>
 .vault-debug-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: var(--space-8);
   align-items: center;
   margin-bottom: var(--space-16);
@@ -372,6 +399,22 @@ onMounted(loadData)
   border-radius: var(--radius-md);
   background: var(--color-canvas);
 }
+
+.secondary-model-btn {
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-10);
+  font: inherit;
+  font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
+}
+
+.secondary-model-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.vault-reset-toggle { margin: 0 0 var(--space-8); }
+
 
 .vault-debug-main {
   display: grid;

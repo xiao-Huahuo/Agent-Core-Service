@@ -430,6 +430,18 @@ class AgentServiceServicer(BaseServicer):
             master_password=str(payload.get("master_password", "")),
         )
 
+    def VaultResetPassword(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """重设密码库主密码并重新加密条目。"""
+
+        payload = MessageToDict(request)
+        return self._vault_struct(
+            context,
+            self._require_vault_service(context).reset_master_password,
+            user_id=str(payload.get("user_id", "")),
+            new_password=str(payload.get("new_password", "")),
+            old_password=str(payload.get("old_password", "")),
+        )
+
     def VaultLock(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
         """主动锁定一个密码库 token。"""
 

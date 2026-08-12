@@ -111,6 +111,8 @@ function setup() {
   border: 1px solid var(--color-border);
   border-radius: 28px;
   background: var(--color-surface);
+  font-family: var(--font-ui);
+  font-size: calc(14px * var(--font-scale));
 }
 
 label {

@@ -137,14 +137,14 @@ function closeKnowledgeMenu() {
         class="activity-button knowledge-button"
         :class="{ active: knowledgeActive }"
         type="button"
-        title="知识库"
-        aria-label="知识库"
+      title="库"
+      aria-label="库"
         :aria-expanded="knowledgeMenuOpen"
         @mousedown="handleRipple"
         @click.stop="toggleKnowledgeMenu"
       >
-        <IcIcon name="graph" :size="18" />
-        <span class="activity-label">知识库</span>
+        <IcIcon name="book" :size="18" />
+        <span class="activity-label">库</span>
         <IcIcon class="knowledge-chevron" :class="{ 'is-open': knowledgeMenuOpen }" name="chevron-right" :size="14" />
       </button>
       <Transition name="knowledge-submenu">
@@ -393,6 +393,17 @@ function closeKnowledgeMenu() {
   z-index: 101;
 }
 
+.activity-bar:not(.management) .knowledge-group::after {
+  position: absolute;
+  top: 50%;
+  right: calc(-1 * (var(--space-8) + 16px));
+  width: calc(var(--space-8) + 16px);
+  height: 96px;
+  clip-path: polygon(0 0, var(--space-8) 0, 100% 50%, var(--space-8) 100%, 0 100%);
+  content: '';
+  transform: translateY(-50%);
+}
+
 .activity-bar.management .knowledge-group {
   display: flex;
   flex: 0 0 auto;
@@ -422,7 +433,7 @@ function closeKnowledgeMenu() {
 
 .knowledge-submenu {
   position: absolute;
-  top: 0;
+  top: 50%;
   left: calc(100% + var(--space-8));
   z-index: 1000;
   display: grid;
@@ -434,6 +445,7 @@ function closeKnowledgeMenu() {
   border-radius: 999px;
   background: var(--color-surface);
   box-shadow: var(--shadow-window);
+  transform: translateY(-50%);
 }
 
 .activity-bar.management .knowledge-submenu {
@@ -447,6 +459,7 @@ function closeKnowledgeMenu() {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  transform: none;
 }
 
 .knowledge-submenu .activity-button {
@@ -469,22 +482,30 @@ function closeKnowledgeMenu() {
 
 .knowledge-submenu-enter-active,
 .knowledge-submenu-leave-active {
-  transition: opacity 180ms ease, transform 180ms ease, max-height 180ms ease;
+  transition: opacity 180ms ease, transform 180ms ease;
   transform-origin: top left;
 }
 
 .knowledge-submenu-enter-from,
 .knowledge-submenu-leave-to {
-  max-height: 0;
   opacity: 0;
   transform: translateX(-6px) scale(0.98);
 }
 
 .knowledge-submenu-enter-to,
 .knowledge-submenu-leave-from {
-  max-height: 180px;
   opacity: 1;
   transform: translateX(0) scale(1);
+}
+
+.activity-bar:not(.management) .knowledge-submenu-enter-from,
+.activity-bar:not(.management) .knowledge-submenu-leave-to {
+  transform: translate(-6px, -50%) scale(0.98);
+}
+
+.activity-bar:not(.management) .knowledge-submenu-enter-to,
+.activity-bar:not(.management) .knowledge-submenu-leave-from {
+  transform: translateY(-50%) scale(1);
 }
 
 .ripple-effect {

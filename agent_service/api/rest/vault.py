@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse
 from starlette.concurrency import run_in_threadpool
 
 from agent_service.api.rest.deps import _require_vault_service
-from agent_service.schemas.vault import VaultImportRequest, VaultItemCreate, VaultItemUpdate, VaultUnlockRequest
+from agent_service.schemas.vault import VaultImportRequest, VaultItemCreate, VaultItemUpdate, VaultPasswordResetRequest, VaultUnlockRequest
 
 router = APIRouter()
 
@@ -79,6 +79,21 @@ async def vault_unlock(body: VaultUnlockRequest) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+@router.post("/vault/reset-password")
+async def vault_reset_password(body: VaultPasswordResetRequest) -> dict[str, Any]:
+    """重设主密码并重加密全部密码库条目。"""
+
+    try:
+        return await run_in_threadpool(
+            _require_vault_service().reset_master_password,
+            user_id=body.user_id,
+            new_password=body.new_password,
+            old_password=body.old_password,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/vault/lock")

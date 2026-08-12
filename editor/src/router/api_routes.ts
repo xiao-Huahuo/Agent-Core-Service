@@ -75,6 +75,7 @@ export const API_ROUTES = {
   VAULT_DEBUG_MASTER_PASSWORD: '/vault/debug/master-password',
   VAULT_SETUP: '/vault/setup',
   VAULT_UNLOCK: '/vault/unlock',
+  VAULT_RESET_PASSWORD: '/vault/reset-password',
   VAULT_LOCK: '/vault/lock',
   VAULT_ITEMS: '/vault/items',
   VAULT_ITEM_PURGE: '/vault/items/purge',

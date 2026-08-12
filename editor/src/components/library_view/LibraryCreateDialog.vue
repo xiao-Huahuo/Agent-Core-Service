@@ -158,7 +158,7 @@ function submit() {
             </label>
             <div class="field">
               <span>标签</span>
-              <LibraryTagPicker v-model="tags" :available-tags="availableTags" />
+              <LibraryTagPicker v-model="tags" :available-tags="availableTags.map((tag) => tag.name)" />
             </div>
           </div>
 

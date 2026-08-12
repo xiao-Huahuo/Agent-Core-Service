@@ -25,6 +25,14 @@ class VaultUnlockRequest(BaseModel):
     master_password: str = Field(min_length=8)
 
 
+class VaultPasswordResetRequest(BaseModel):
+    """重置主密码的请求，可选旧密码用于用户自行验证。"""
+
+    user_id: str = Field(min_length=1)
+    new_password: str = Field(min_length=8)
+    old_password: str = ""
+
+
 class VaultItemCreate(BaseModel):
     """创建密码库条目的请求。"""
 

@@ -6,12 +6,12 @@
   by VaultView list counts.
 -->
 <script setup lang="ts">
+import IcIcon from '@/components/common/IcIcon.vue'
 import type { VaultItemType, VaultTag } from '@/api/vault'
 
 defineOptions({ name: 'VaultFilterPanel' })
 
 const props = defineProps<{
-  query: string
   tag: string
   itemType: string
   tags: VaultTag[]
@@ -19,10 +19,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:query': [value: string]
   'update:tag': [value: string]
   'update:itemType': [value: string]
-  create: []
 }>()
 
 const typeLabels: Record<VaultItemType, string> = {
@@ -32,29 +30,14 @@ const typeLabels: Record<VaultItemType, string> = {
   secure_note: '安全笔记',
 }
 
-function pieStyle() {
-  const total = Object.values(props.counts).reduce((sum, value) => sum + Number(value || 0), 0) || 1
-  const login = Math.round(((props.counts.login || 0) / total) * 100)
-  const card = login + Math.round(((props.counts.card || 0) / total) * 100)
-  const identity = card + Math.round(((props.counts.identity || 0) / total) * 100)
-  return {
-    background: `conic-gradient(var(--color-primary) 0 ${login}%, var(--color-accent) ${login}% ${card}%, var(--color-success) ${card}% ${identity}%, var(--color-warning) ${identity}% 100%)`,
-  }
-}
+const typeIcons: Record<VaultItemType, string> = { login: 'shield', card: 'dashboard', identity: 'fact-check', secure_note: 'edit-note' }
 </script>
 
 <template>
   <aside class="filter-panel">
-    <h3>筛选</h3>
-    <input
-      class="search-pill"
-      type="search"
-      :value="query"
-      placeholder="搜索"
-      @input="emit('update:query', ($event.target as HTMLInputElement).value)"
-    />
-    <button class="new-password-btn" type="button" @click="emit('create')">+ New Password</button>
-    <hr />
+    <div class="panel-heading"><IcIcon name="filter" :size="16" /><span>筛选</span></div>
+    <p class="section-label">类型</p>
+    <button class="type-filter" :class="{ active: !itemType }" type="button" @click="emit('update:itemType', '')"><IcIcon name="layers" :size="16" /><span>全部项目</span><small>{{ Object.values(counts).reduce((sum, count) => sum + count, 0) }}</small></button>
     <div class="tag-list">
       <button
         v-for="tagItem in tags.slice(0, 10)"
@@ -76,15 +59,8 @@ function pieStyle() {
       type="button"
       @click="emit('update:itemType', itemType === key ? '' : key)"
     >
-      {{ label }}
+      <IcIcon :name="typeIcons[key]" :size="16" /><span>{{ label }}</span><small>{{ counts[key] || 0 }}</small>
     </button>
-    <hr />
-    <div class="pie-row">
-      <div class="pie" :style="pieStyle()"></div>
-      <div class="pie-legend">
-        <span v-for="(label, key) in typeLabels" :key="key">{{ label }} {{ counts[key] || 0 }}</span>
-      </div>
-    </div>
   </aside>
 </template>
 
@@ -92,74 +68,68 @@ function pieStyle() {
 .filter-panel {
   display: grid;
   align-content: start;
-  gap: 12px;
-  flex: 0 0 25%;
-  min-width: 240px;
-  max-width: 340px;
-  margin: 14px;
-  padding: 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-window);
-}
-
-h3 {
-  margin: 0;
-  color: var(--color-text);
-  font-size: calc(16px * var(--font-scale));
-}
-
-.search-pill,
-.new-password-btn,
-.type-filter {
-  height: 34px;
-  border-radius: 999px;
-}
-
-.search-pill {
-  border: 1px solid var(--color-border);
+  gap: var(--space-4);
+  flex: 0 0 216px;
+  min-width: 216px;
+  padding: var(--space-12);
+  border-right: 1px solid var(--color-border);
   background: var(--color-canvas);
-  color: var(--color-text);
-  padding: 0 12px;
-  outline: 0;
+  font-family: var(--font-ui);
+  font-size: calc(14px * var(--font-scale));
 }
 
-.new-password-btn,
+.panel-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  height: 28px;
+  color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 600;
+}
+
+.panel-heading svg { color: var(--color-primary); }
+.section-label { margin: var(--space-8) var(--space-6) var(--space-2); color: var(--color-text-muted); font-size: calc(11px * var(--font-scale)); font-weight: 600; }
+
 .type-filter {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-8);
+  height: 30px;
   border: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-secondary);
   text-align: left;
-  padding: 0 12px;
+  padding: 0 var(--space-6);
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
   cursor: pointer;
 }
 
-.new-password-btn:hover,
 .type-filter:hover,
 .type-filter.active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-selection-blue-soft);
+  color: var(--color-text);
 }
 
-hr {
-  width: 100%;
-  border: 0;
-  border-top: 1px solid var(--color-border);
-}
+.type-filter.active { color: var(--color-primary); }
+.type-filter small { color: var(--color-text-muted); font-size: calc(11px * var(--font-scale)); }
+hr { width: 100%; margin: var(--space-8) 0; border: 0; border-top: 1px solid var(--color-border); }
 
 .tag-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-6);
 }
 
 .tag-pill {
   max-width: 140px;
-  min-height: 26px;
+  min-height: 24px;
   border: 0;
   border-radius: 999px;
-  background: var(--color-primary-soft);
+  background: color-mix(in srgb, var(--color-primary) 20%, transparent);
   color: var(--color-primary);
   padding: 0 9px;
   overflow: hidden;
@@ -173,23 +143,4 @@ hr {
   color: #fff;
 }
 
-.pie-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.pie {
-  width: 74px;
-  height: 74px;
-  border-radius: 50%;
-  border: 6px solid var(--color-canvas);
-}
-
-.pie-legend {
-  display: grid;
-  gap: 4px;
-  color: var(--color-text-muted);
-  font-size: calc(11px * var(--font-scale));
-}
 </style>

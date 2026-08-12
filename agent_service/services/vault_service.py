@@ -129,6 +129,38 @@ class VaultService:
             db.commit()
         return self._token_payload(user_id=normalized_user_id, master_password=master_password, salt=salt)
 
+    def reset_master_password(self, *, user_id: str, new_password: str, old_password: str = "") -> dict[str, Any]:
+        """用新主密码重新加密用户全部条目，并失效该用户的已解锁会话。"""
+
+        normalized_user_id = self._normalize_user_id(user_id)
+        if len(new_password) < 8:
+            raise ValueError("master_password must be at least 8 characters")
+        with Session(self.engine) as db:
+            profile = db.get(VaultProfile, normalized_user_id)
+            if profile is None:
+                raise ValueError("vault master password is not configured")
+            old_salt = base64.urlsafe_b64decode(profile.password_salt.encode("ascii"))
+            if old_password and not hmac.compare_digest(profile.password_hash, self._password_hash(old_password, old_salt)):
+                raise ValueError("invalid master password")
+            source_password = old_password or str(profile.debug_master_password or "")
+            if not source_password:
+                raise ValueError("old master password is required")
+            source_session = VaultSession(user_id=normalized_user_id, fernet_key=self._fernet_key(source_password, old_salt))
+            target_salt = os.urandom(16)
+            target_session = VaultSession(user_id=normalized_user_id, fernet_key=self._fernet_key(new_password, target_salt))
+            for item in db.exec(select(VaultItem).where(VaultItem.user_id == normalized_user_id)).all():
+                item.encrypted_payload = self._encrypt(target_session, self._decrypt(source_session, item.encrypted_payload))
+                item.updated_at = self._now()
+                db.add(item)
+            profile.password_hash = self._password_hash(new_password, target_salt)
+            profile.password_salt = base64.urlsafe_b64encode(target_salt).decode("ascii")
+            profile.debug_master_password = new_password
+            profile.updated_at = self._now()
+            db.add(profile)
+            db.commit()
+        self._unlocked_keys = {key: value for key, value in self._unlocked_keys.items() if value[0] != normalized_user_id}
+        return {"ok": True}
+
     def debug_master_password(self, *, user_id: str) -> dict[str, Any]:
         """Return the stored debug plaintext master password for a user."""
 

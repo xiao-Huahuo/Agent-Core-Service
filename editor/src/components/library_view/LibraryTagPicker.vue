@@ -9,16 +9,14 @@
 import { computed, ref } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
-import type { LibraryTag } from '@/types/knowledge'
-
 defineOptions({ name: 'LibraryTagPicker' })
 
-const props = defineProps<{ availableTags: LibraryTag[] }>()
+const props = defineProps<{ availableTags: string[] }>()
 const tags = defineModel<string[]>({ required: true })
 const draft = ref('')
 const expanded = ref(false)
 const injectedTags = ref(new Set<string>())
-const candidates = computed(() => props.availableTags.map((tag) => tag.name).filter((name) => !tags.value.includes(name)))
+const candidates = computed(() => props.availableTags.filter((name) => !tags.value.includes(name)))
 const originalTags = computed(() => tags.value.filter((tag) => !injectedTags.value.has(tag)))
 const injectedTagList = computed(() => tags.value.filter((tag) => injectedTags.value.has(tag)))
 

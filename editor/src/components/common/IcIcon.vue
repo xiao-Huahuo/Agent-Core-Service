@@ -92,6 +92,7 @@ const ICON_FILES: Record<string, string> = {
   download: 'ic--outline-download.svg',
   edit: 'ic--outline-edit.svg',
   visibility: 'ic--outline-visibility.svg',
+  'visibility-off': 'ic--outline-visibility-off.svg',
   'view-column': 'ic--outline-view-column.svg',
   group: 'ic--outline-group.svg',
   'add-comment': 'ic--outline-add-comment.svg',

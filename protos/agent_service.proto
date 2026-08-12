@@ -124,6 +124,7 @@ service AgentService {
   rpc VaultDebugMasterPassword(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc VaultSetup(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc VaultUnlock(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc VaultResetPassword(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc VaultLock(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc VaultListItems(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc VaultGetItem(google.protobuf.Struct) returns (google.protobuf.Struct);

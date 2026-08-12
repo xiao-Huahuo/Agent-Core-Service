@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from agent_service.api.grpc import agent_service_pb2 as agent__service__pb2
+from . import agent_service_pb2 as agent__service__pb2
 from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
 
 GRPC_GENERATED_VERSION = '1.68.1'
@@ -366,6 +366,11 @@ class AgentServiceStub(object):
                 _registered_method=True)
         self.VaultUnlock = channel.unary_unary(
                 '/agent_service.AgentService/VaultUnlock',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.VaultResetPassword = channel.unary_unary(
+                '/agent_service.AgentService/VaultResetPassword',
                 request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
                 _registered_method=True)
@@ -851,6 +856,12 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def VaultResetPassword(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def VaultLock(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -1242,6 +1253,11 @@ def add_AgentServiceServicer_to_server(servicer, server):
             ),
             'VaultUnlock': grpc.unary_unary_rpc_method_handler(
                     servicer.VaultUnlock,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'VaultResetPassword': grpc.unary_unary_rpc_method_handler(
+                    servicer.VaultResetPassword,
                     request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
                     response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             ),
@@ -3063,6 +3079,33 @@ class AgentService(object):
             request,
             target,
             '/agent_service.AgentService/VaultUnlock',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def VaultResetPassword(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/VaultResetPassword',
             google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             google_dot_protobuf_dot_struct__pb2.Struct.FromString,
             options,

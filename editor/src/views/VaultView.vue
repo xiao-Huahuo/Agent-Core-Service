@@ -32,6 +32,7 @@ import VaultFilterPanel from '@/components/vault_view/VaultFilterPanel.vue'
 import VaultItemEditor from '@/components/vault_view/VaultItemEditor.vue'
 import VaultTable from '@/components/vault_view/VaultTable.vue'
 import VaultUnlockPanel from '@/components/vault_view/VaultUnlockPanel.vue'
+import IcIcon from '@/components/common/IcIcon.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -50,6 +51,7 @@ const query = ref('')
 const selectedTag = ref('')
 const selectedType = ref('')
 const inTrash = ref(false)
+const filtersOpen = ref(true)
 const multiSelect = ref(false)
 const selectedIds = ref<Set<string>>(new Set())
 const editorOpen = ref(false)
@@ -184,10 +186,15 @@ async function openEdit(item: VaultItem) {
 
 async function saveItem(payload: { item_type: VaultItemType; fields: Record<string, unknown>; tags: string[]; asset_ids: string[] }) {
   if (!token.value) return
-  if (editingItem.value) {
-    await updateVaultItem(token.value, editingItem.value.item_id, payload)
-  } else {
-    await createVaultItem(token.value, payload)
+  try {
+    if (editingItem.value) {
+      await updateVaultItem(token.value, editingItem.value.item_id, payload)
+    } else {
+      await createVaultItem(token.value, payload)
+    }
+  } catch (error) {
+    workspaceStore.showToast(error instanceof Error ? error.message : '保存密码库条目失败')
+    return
   }
   editorOpen.value = false
   editingItem.value = null
@@ -299,37 +306,40 @@ async function contextDelete() {
   />
   <section v-else class="vault-view">
     <header class="vault-topbar">
-      <div>
-        <h2>你的密码库</h2>
-        <p>{{ items.length }} 个密码</p>
+      <div class="vault-title">
+        <IcIcon name="shield" :size="18" />
+        <strong>{{ inTrash ? '回收站' : '密码库' }}</strong>
       </div>
+      <label class="vault-search"><IcIcon name="search" :size="16" /><input v-model="query" type="search" placeholder="搜索密码库" /></label>
       <div class="top-actions">
-        <button class="new-btn" type="button" @click="openNew">+ New</button>
-        <div class="toggle">
-          <button :class="{ active: !inTrash }" type="button" @click="inTrash = false">密码库</button>
-          <button :class="{ active: inTrash }" type="button" @click="inTrash = true">回收站</button>
+        <button class="tool-button" :class="{ active: filtersOpen }" type="button" title="筛选" @click="filtersOpen = !filtersOpen"><IcIcon name="filter" :size="17" /></button>
+        <div class="vault-switch" :class="{ trash: inTrash }">
+          <span class="switch-indicator"></span>
+          <button :class="{ active: !inTrash }" type="button" @click="inTrash = false"><IcIcon name="shield" :size="15" /><span>密码库</span></button>
+          <button :class="{ active: inTrash }" type="button" @click="inTrash = true"><IcIcon name="trash" :size="15" /><span>回收站</span></button>
         </div>
-        <button type="button" title="导出" @click="exportSelected([])">Export</button>
-        <button type="button" title="导入" @click="importJson">Import</button>
-        <button class="avatar" type="button" title="锁定" @click="lockVault">{{ settingsStore.profile.userId.slice(0, 1).toUpperCase() }}</button>
+        <i class="toolbar-separator"></i>
+        <button class="tool-button" type="button" title="导出" @click="exportSelected([])"><IcIcon name="upload" :size="17" /></button>
+        <button class="tool-button" type="button" title="导入" @click="importJson"><IcIcon name="download" :size="17" /></button>
+        <button class="tool-button" :class="{ active: multiSelect }" type="button" :title="multiSelect ? '退出多选' : '多选'" @click="multiSelect = !multiSelect"><IcIcon name="multi-select" :size="17" /></button>
+        <template v-if="multiSelect">
+          <button class="selection-action danger" type="button" :disabled="selectedIds.size === 0" @click="deleteSelected"><IcIcon name="trash" :size="16" /><span>{{ inTrash ? '永久删除' : '删除' }}</span></button>
+          <button v-if="inTrash" class="selection-action" type="button" :disabled="selectedIds.size === 0" @click="restoreSelected"><IcIcon name="replay" :size="16" /><span>恢复</span></button>
+          <button class="selection-action" type="button" :disabled="selectedIds.size === 0" @click="exportSelected()"><IcIcon name="upload" :size="16" /><span>导出 JSON</span></button>
+        </template>
+        <button class="new-btn" type="button" @click="openNew"><IcIcon name="add" :size="17" /><span>新建</span></button>
+        <button class="lock-btn" type="button" @click="lockVault"><IcIcon name="shield" :size="16" /><span>锁定</span></button>
       </div>
     </header>
     <div class="vault-main">
       <VaultFilterPanel
-        v-model:query="query"
+        v-if="filtersOpen"
         v-model:tag="selectedTag"
         v-model:item-type="selectedType"
         :tags="tags"
         :counts="typeCounts"
-        @create="openNew"
       />
       <main class="table-area">
-        <div class="table-tools">
-          <button type="button" :class="{ active: multiSelect }" @click="multiSelect = !multiSelect">多选</button>
-          <button type="button" :disabled="selectedIds.size === 0" @click="deleteSelected">{{ inTrash ? '永久删除' : '删除' }}</button>
-          <button v-if="inTrash" type="button" :disabled="selectedIds.size === 0" @click="restoreSelected">恢复</button>
-          <button type="button" :disabled="selectedIds.size === 0" @click="exportSelected()">导出 JSON</button>
-        </div>
         <VaultTable
           :token="token"
           :items="items"
@@ -348,7 +358,7 @@ async function contextDelete() {
       <li @click="exportSelected([contextItem.item_id]); closeContext()">导出</li>
       <li class="danger" @click="contextDelete">删除</li>
     </ul>
-    <VaultItemEditor :open="editorOpen" :item="editingItem" :token="token" @close="editorOpen = false" @save="saveItem" />
+    <VaultItemEditor :open="editorOpen" :item="editingItem" :token="token" :available-tags="tags" @close="editorOpen = false" @save="saveItem" />
   </section>
 </template>
 
@@ -362,80 +372,194 @@ async function contextDelete() {
   height: 100%;
   background: var(--color-canvas);
   font-family: var(--font-ui);
+  font-size: calc(14px * var(--font-scale));
 }
 
 .vault-topbar {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 58px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-raised);
+  gap: var(--space-10);
+  min-height: 44px;
+  padding: 0 var(--space-12);
+  border-bottom: 0;
+  background: var(--color-canvas);
 }
 
-h2,
-p {
-  margin: 0;
-}
-
-h2 {
-  color: var(--color-text);
-  font-size: calc(18px * var(--font-scale));
-}
-
-p {
-  color: var(--color-text-muted);
-  font-size: calc(12px * var(--font-scale));
-}
-
+.vault-title,
 .top-actions,
-.table-tools,
-.toggle {
-  display: flex;
+.vault-switch,
+.vault-search {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
 }
 
-button {
-  min-height: 32px;
+.vault-title {
+  flex: 0 0 auto;
+  gap: 12px;
+  color: var(--color-text);
+  font-size: calc(14px * var(--font-scale));
+}
+
+.vault-title svg { color: var(--color-primary); }
+
+.vault-search {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 38vw);
+  max-width: 420px;
+  height: 28px;
+  gap: var(--space-6);
+  padding: 0 var(--space-10);
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-canvas);
-  color: var(--color-text-secondary);
-  padding: 0 12px;
-  cursor: pointer;
+  color: var(--color-text-muted);
 }
 
-button:disabled {
+.vault-search:focus-within { border-color: var(--color-primary); color: var(--color-primary); }
+
+.vault-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
+}
+
+.top-actions {
+  margin-left: auto;
+  gap: var(--space-4);
+}
+
+.tool-button:disabled {
   opacity: 0.45;
   cursor: default;
 }
 
-.new-btn,
-.toggle button.active,
-button.active {
+.new-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: #fff;
+  padding: 0 var(--space-10);
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
+  cursor: pointer;
 }
 
-.toggle {
-  padding: 3px;
+.lock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 28px;
+  border: 1px solid var(--color-danger);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-danger);
+  padding: 0 var(--space-10);
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
+  cursor: pointer;
+}
+
+.lock-btn:hover {
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+}
+
+.vault-switch {
+  position: relative;
+  height: 30px;
+  gap: var(--space-2);
+  padding: 2px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-canvas);
 }
 
-.toggle button {
+.vault-switch button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
   border: 0;
   background: transparent;
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-8);
+  font: inherit;
+  font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
 }
 
-.avatar {
-  width: 34px;
+.switch-indicator {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc(50% - 2px);
+  border-radius: 999px;
+  background: var(--color-primary-softer);
+  transition: transform 250ms ease;
+}
+
+.vault-switch.trash .switch-indicator { transform: translateX(100%); }
+.vault-switch button.active { color: var(--color-primary); }
+
+.tool-button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
   padding: 0;
+  cursor: pointer;
+}
+
+.tool-button:hover,
+.tool-button.active {
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
+.selection-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+  padding: 0 var(--space-8);
+  font: inherit;
+  font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
+}
+
+.selection-action.danger { background: color-mix(in srgb, var(--color-danger) 12%, transparent); color: var(--color-danger); }
+.selection-action:disabled { cursor: default; opacity: 0.45; }
+
+.toolbar-separator {
+  width: 1px;
+  height: 22px;
+  margin: 0 var(--space-2);
+  background: var(--color-border);
 }
 
 .vault-main {
@@ -497,6 +621,12 @@ button.active {
   .top-actions {
     align-items: flex-start;
     flex-wrap: wrap;
+  }
+
+  .vault-search {
+    position: static;
+    width: auto;
+    transform: none;
   }
 }
 </style>
