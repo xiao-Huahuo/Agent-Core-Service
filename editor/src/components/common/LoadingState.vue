@@ -37,18 +37,21 @@ const props = withDefaults(defineProps<{
   label?: string
   /** Pixel animation style. */
   variant?: LoadingVariant
+  /** Shared turn start time, so remounting does not reset elapsed time. */
+  startedAtMs?: number
 }>(), {
   label: 'Thinking',
   variant: 'Drive',
 })
 
-/** Counts tenths of a second while the component is visible. */
-const elapsedDeciseconds = ref(0)
+/** Refreshes the clock while the component is visible. */
+const nowMs = ref(Date.now())
+const mountedAtMs = Date.now()
 let elapsedTimer: number | undefined
 
 onMounted(() => {
   elapsedTimer = window.setInterval(() => {
-    elapsedDeciseconds.value += 1
+    nowMs.value = Date.now()
   }, 100)
 })
 
@@ -58,7 +61,13 @@ onBeforeUnmount(() => {
 
 /** Formats the elapsed time for the compact monospaced display. */
 const elapsed = computed(() => {
-  const totalSeconds = elapsedDeciseconds.value / 10
+  const candidateStartMs = props.startedAtMs
+  const startMs = typeof candidateStartMs === 'number'
+    && candidateStartMs >= 1_000_000_000_000
+    && candidateStartMs <= nowMs.value
+    ? candidateStartMs
+    : mountedAtMs
+  const totalSeconds = Math.max(0, nowMs.value - startMs) / 1000
   return totalSeconds < 60
     ? `${totalSeconds.toFixed(1)}s`
     : `${Math.floor(totalSeconds / 60)}m ${(totalSeconds % 60).toFixed(1)}s`

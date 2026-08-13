@@ -11,6 +11,7 @@ import { computed, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import LoadingState from '@/components/common/LoadingState.vue'
+import ThinkingSummary from '@/components/editor_workspace/agent_chat/ThinkingSummary.vue'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import KnowledgeSources from '@/components/editor_workspace/agent_chat/KnowledgeSources.vue'
 import MarkdownContent from '@/components/editor_workspace/agent_chat/MarkdownContent.vue'
@@ -99,16 +100,16 @@ const hasAssistantContent = computed(() => {
   return Boolean(props.message.content && props.message.content !== '​')
 })
 
+/** Keeps a remounted loading indicator tied to its original user turn. */
+const turnStartedAtMs = computed(() => {
+  const value = props.message.metadata?.turn_started_at_ms
+  return typeof value === 'number' ? value : undefined
+})
+
 /** Action messages use the shared lifecycle-aware tool rows in both chat modes. */
 const hasToolTrace = computed(() => (props.message.trace ?? []).some((trace) => (
   Boolean(trace.tool_name) && (trace.event === 'tool_call_start' || trace.event === 'tool_call_end')
 )))
-
-const thinkingLabel = computed(() => {
-  return typeof props.message.thinking_seconds === 'number'
-    ? `思考了${props.message.thinking_seconds.toFixed(1)}s`
-    : ''
-})
 
 const shouldRenderAssistant = computed(() => {
   return props.message.role === 'assistant'
@@ -204,7 +205,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
     :change-snapshot="changeSnapshot"
   />
   <div v-else-if="shouldRenderAssistant" class="bubble-row assistant">
-    <img :src="agentAvatar" class="avatar" alt="agent" />
+    <span class="avatar-slot"><img v-if="showAvatar !== false" :src="agentAvatar" class="avatar" alt="agent" /></span>
     <div class="bubble-col">
       <span v-if="message.node && message.node !== 'assistant'" class="node-label">{{ message.node }}</span>
       <Transition name="think-slide">
@@ -235,7 +236,10 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           思考过程
         </button>
       </Transition>
-      <span v-if="thinkingLabel && hasAssistantContent && showActions === true" class="thinking-duration">{{ thinkingLabel }}</span>
+      <ThinkingSummary
+        v-if="typeof message.thinking_seconds === 'number' && hasAssistantContent && showActions === true"
+        :seconds="message.thinking_seconds"
+      />
       <div v-if="shouldRenderAssistantBubble" class="bubble assistant" :style="{ borderRadius: bubbleRadius }">
         <MarkdownContent
           v-if="hasAssistantContent"
@@ -245,7 +249,12 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           :on-navigate-source="handleNavigateSource"
         />
       </div>
-      <LoadingState v-if="isStreaming && !hasAssistantContent" label="Thinking" variant="Drive" />
+      <LoadingState
+        v-if="isStreaming && !hasAssistantContent"
+        label="Thinking"
+        variant="Drive"
+        :started-at-ms="turnStartedAtMs"
+      />
       <div v-if="showActions !== false && !isStreaming && copyableContent" class="message-actions">
         <button
           class="copy-action"
@@ -361,6 +370,12 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   object-fit: cover;
 }
 
+.avatar-slot {
+  display: block;
+  width: 36px;
+  flex: 0 0 36px;
+}
+
 .bubble-col {
   display: flex;
   flex-direction: column;
@@ -369,12 +384,6 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 
 .bubble-row.assistant .bubble-col {
   align-items: flex-start;
-}
-
-.thinking-duration {
-  color: var(--text-tertiary);
-  font-size: var(--font-size-xs);
-  line-height: 1.35;
 }
 
 .bubble-row.user .bubble-col {

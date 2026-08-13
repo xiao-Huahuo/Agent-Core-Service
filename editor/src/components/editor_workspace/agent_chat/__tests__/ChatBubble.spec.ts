@@ -55,7 +55,7 @@ describe('ChatBubble user references', () => {
       },
     })
 
-    expect(wrapper.get('.thinking-duration').text()).toBe('思考了3.6s')
+    expect(wrapper.get('.thinking-summary').text()).toContain('思考了 3.6s')
   })
 
   it('shows assistant metadata only on the final answer of each user turn', () => {
@@ -78,10 +78,58 @@ describe('ChatBubble user references', () => {
     })
 
     expect(wrapper.findAll('.message-actions')).toHaveLength(2)
-    expect(wrapper.findAll('.thinking-duration').map((item) => item.text())).toEqual([
-      '思考了2.2s',
-      '思考了3.3s',
+    expect(wrapper.findAll('.thinking-summary').map((item) => item.text().replace(/\s+/g, ' ').trim())).toEqual([
+      '思考了 2.2s',
+      '思考了 3.3s',
     ])
+  })
+
+  it('keeps one avatar on the latest assistant item in a user turn', () => {
+    HTMLElement.prototype.scrollTo = () => {}
+    const wrapper = mount(MessageList, {
+      global: { plugins: [createPinia()] },
+      props: {
+        messages: [
+          { role: 'user', content: '请开始' },
+          { role: 'assistant', content: '中间进度', node: 'agent' },
+          { role: 'assistant', content: '最终答案', node: 'agent' },
+        ],
+      },
+    })
+
+    expect(wrapper.findAll('img[alt="agent"]')).toHaveLength(1)
+  })
+
+  it('keeps the avatar on a completed final assistant reply', () => {
+    HTMLElement.prototype.scrollTo = () => {}
+    const wrapper = mount(MessageList, {
+      global: { plugins: [createPinia()] },
+      props: {
+        messages: [
+          { role: 'user', content: '请开始' },
+          { role: 'assistant', content: '中间进度', node: 'agent' },
+          { role: 'assistant', content: '最终答案', node: 'agent' },
+        ],
+        isStreaming: false,
+      },
+    })
+
+    expect(wrapper.findAll('img[alt="agent"]')).toHaveLength(1)
+  })
+
+  it('keeps an empty avatar column for consecutive assistant entries', () => {
+    const wrapper = mount(ToolBubble, {
+      global: { plugins: [createPinia()] },
+      props: {
+        message: { role: 'assistant', content: '中间输出' },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+        showAvatar: false,
+      },
+    })
+
+    expect(wrapper.find('.avatar-slot').exists()).toBe(true)
+    expect(wrapper.find('img[alt="agent"]').exists()).toBe(false)
   })
 
   it('shows the pixel loading state before the assistant placeholder arrives', () => {
@@ -109,6 +157,7 @@ describe('ChatBubble user references', () => {
         userAvatar: 'user.png',
         agentAvatar: 'agent.png',
         isStreaming: true,
+        showAvatar: true,
       },
     })
 
@@ -125,6 +174,7 @@ describe('ChatBubble user references', () => {
         userAvatar: 'user.png',
         agentAvatar: 'agent.png',
         isStreaming: true,
+        showAvatar: true,
       },
     })
 

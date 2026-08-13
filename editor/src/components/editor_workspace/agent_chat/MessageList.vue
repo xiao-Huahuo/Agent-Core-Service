@@ -16,6 +16,7 @@ import { undoSessionChange } from '@/api/agentChanges'
 import type { AgentChangeSnapshot } from '@/api/agentChanges'
 import { useAvatar } from '@/components/editor_workspace/agent_chat/useAvatar'
 import type { AgentChatMessage, SourceItem } from '@/stores/chat'
+import { useChatStore } from '@/stores/chat'
 import { useSettingsStore } from '@/stores/settings'
 
 const props = defineProps<{
@@ -31,6 +32,7 @@ const emit = defineEmits<{
 }>()
 
 const { userAvatar, agentAvatar } = useAvatar()
+const chatStore = useChatStore()
 const settingsStore = useSettingsStore()
 const containerRef = ref<HTMLDivElement | null>(null)
 const isPinnedToBottom = ref(true)
@@ -117,8 +119,19 @@ function getLastMessageContent() {
 }
 
 function shouldShowAvatar(message: AgentChatMessage, index: number) {
-  const previous = visibleMessages.value[index - 1]
-  return message.role !== 'assistant' || index === 0 || previous?.role !== 'assistant'
+  if (message.role !== 'assistant') return true
+
+  // A completed final reply keeps its avatar after streaming stops.
+  if (isFinalAssistantAnswer(message, index)) return true
+
+  // Keep one avatar on the currently active assistant item. Empty placeholders
+  // no longer consume the avatar before a later tool result becomes visible.
+  for (let nextIndex = index + 1; nextIndex < visibleMessages.value.length; nextIndex += 1) {
+    const next = visibleMessages.value[nextIndex]
+    if (next?.role === 'user') break
+    if (next?.role === 'assistant') return false
+  }
+  return true
 }
 
 function hasCopyableAssistantContent(message: AgentChatMessage) {
@@ -325,6 +338,7 @@ defineExpose({
       />
       <FinalTurnSummary
         v-if="message.role === 'assistant' && isFinalAssistantAnswer(message, index) && !isThinkingActive"
+        class="assistant-summary-offset"
         :sources="knowledgeSourcesForMessage(message)"
         :change-snapshot="changeSnapshotForMessage(message)"
         :undoing="undoingSnapshotId === changeSnapshotForMessage(message)?.snapshot_id"
@@ -333,7 +347,7 @@ defineExpose({
     </template>
     <div v-if="showThinkingBubble" class="thinking-row">
       <img :src="agentAvatar" class="thinking-avatar" alt="agent" />
-      <LoadingState label="Thinking" variant="Drive" />
+      <LoadingState label="Thinking" variant="Drive" :started-at-ms="chatStore.streamStartedAtMs" />
       <span class="thinking-spinner" aria-label="Preparing response"><LoaderCube /></span>
     </div>
   </div>
@@ -381,6 +395,11 @@ defineExpose({
 .thinking-spinner {
   display: inline-flex;
   font-size: 0.55em;
+}
+
+/* Final cards share the assistant text column rather than the avatar column. */
+.assistant-summary-offset {
+  margin-left: calc(36px + var(--space-8));
 }
 
 </style>

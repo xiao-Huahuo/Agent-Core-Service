@@ -10,6 +10,7 @@
 import { computed, ref } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import LoadingState from '@/components/common/LoadingState.vue'
+import ThinkingSummary from '@/components/editor_workspace/agent_chat/ThinkingSummary.vue'
 
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import KnowledgeSources from '@/components/editor_workspace/agent_chat/KnowledgeSources.vue'
@@ -44,10 +45,10 @@ const hasContent = computed(() => {
   return content && content !== '​'
 })
 
-const thinkingLabel = computed(() => {
-  return typeof props.message.thinking_seconds === 'number'
-    ? `思考了${props.message.thinking_seconds.toFixed(1)}s`
-    : ''
+/** Keeps a remounted loading indicator tied to its original user turn. */
+const turnStartedAtMs = computed(() => {
+  const value = props.message.metadata?.turn_started_at_ms
+  return typeof value === 'number' ? value : undefined
 })
 
 const statusTraces = computed(() => {
@@ -156,19 +157,24 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 </script>
 
 <template>
-  <ToolCallInline
+  <div
     v-if="message.role === 'assistant' && message.node === 'action' && hasToolTrace"
-    :traces="message.trace ?? []"
-    :is-streaming="isStreaming"
-    :change-snapshot="changeSnapshot"
-  />
+    class="tool-action-row"
+  >
+    <span class="avatar-slot"><img v-if="showAvatar !== false" :src="agentAvatar" class="avatar" alt="agent" /></span>
+    <ToolCallInline
+      :traces="message.trace ?? []"
+      :is-streaming="isStreaming"
+      :change-snapshot="changeSnapshot"
+    />
+  </div>
 
   <div
     v-else-if="shouldRenderAssistant"
     class="bubble-row assistant tool-assistant-row"
     :class="{ 'tool-assistant-row--pending': isStreaming && !hasContent && statusTraces.length === 0 }"
   >
-    <img :src="agentAvatar" class="avatar" alt="agent" />
+    <span class="avatar-slot"><img v-if="showAvatar !== false" :src="agentAvatar" class="avatar" alt="agent" /></span>
     <div class="bubble-col">
       <div v-if="statusTraces.length > 0 && !hasContent" class="status-lines">
         <p
@@ -179,7 +185,10 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           {{ trace.human_readable }}
         </p>
       </div>
-      <span v-if="thinkingLabel && hasContent && showActions === true" class="thinking-duration">{{ thinkingLabel }}</span>
+      <ThinkingSummary
+        v-if="typeof message.thinking_seconds === 'number' && hasContent && showActions === true"
+        :seconds="message.thinking_seconds"
+      />
       <div v-if="hasContent" class="assistant-article">
         <MarkdownContent
           v-if="hasContent"
@@ -189,7 +198,12 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           :on-navigate-source="handleNavigateSource"
         />
       </div>
-      <LoadingState v-if="isStreaming && !hasContent" label="Thinking" variant="Drive" />
+      <LoadingState
+        v-if="isStreaming && !hasContent"
+        label="Thinking"
+        variant="Drive"
+        :started-at-ms="turnStartedAtMs"
+      />
       <div v-if="showActions !== false && copyableContent" class="message-actions">
         <button
           class="copy-action"
@@ -281,6 +295,18 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   max-width: none;
 }
 
+.tool-action-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  width: 100%;
+  margin-bottom: var(--space-12);
+}
+
+.tool-action-row :deep(.action-row) {
+  min-width: 0;
+}
+
 .tool-assistant-row--pending {
   align-items: center;
 }
@@ -301,6 +327,12 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   object-fit: cover;
 }
 
+.avatar-slot {
+  display: block;
+  width: 36px;
+  flex: 0 0 36px;
+}
+
 .bubble-col {
   display: flex;
   flex-direction: column;
@@ -310,12 +342,6 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 .bubble-row.assistant .bubble-col {
   align-items: stretch;
   width: 100%;
-}
-
-.thinking-duration {
-  color: var(--text-tertiary);
-  font-size: var(--font-size-xs);
-  line-height: 1.35;
 }
 
 .bubble-row.user .bubble-col {

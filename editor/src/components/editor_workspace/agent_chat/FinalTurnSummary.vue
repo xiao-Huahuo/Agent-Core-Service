@@ -65,7 +65,12 @@ onMounted(updatePanelSlider)
 </script>
 
 <template>
-  <section v-if="sources.length || changeSnapshot" class="final-turn-summary" aria-label="本轮结果">
+  <section
+    v-if="sources.length || changeSnapshot"
+    class="final-turn-summary"
+    :class="{ 'has-panel-switch': panelTabs.length > 1 }"
+    aria-label="本轮结果"
+  >
     <div v-if="panelTabs.length > 1" ref="panelSwitchRef" class="panel-switch" aria-label="本轮结果内容">
       <div class="panel-slider" :style="panelSliderStyle"></div>
       <button
@@ -82,7 +87,7 @@ onMounted(updatePanelSlider)
     </div>
     <div class="summary-content">
       <div v-if="changeSnapshot && activePanel === 'changes'" class="change-summary">
-        <div class="change-heading">
+        <div class="change-heading" :class="{ 'has-panel-switch': panelTabs.length > 1 }">
           <span class="change-label">已编辑 {{ changeSnapshot.files.length }} 个文件</span>
           <button
             v-if="!changeSnapshot.is_undone && !changeSnapshot.is_imported"
@@ -192,9 +197,10 @@ onMounted(updatePanelSlider)
   align-items: flex-start;
   gap: var(--space-8);
   min-height: 34px;
-  padding-right: 128px;
   font-weight: 650;
 }
+
+.change-heading.has-panel-switch { padding-right: 128px; }
 .change-label {
   min-width: 0;
   flex: 1;

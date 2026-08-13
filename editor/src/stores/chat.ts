@@ -95,6 +95,8 @@ function traceIdentity(trace: Record<string, unknown>): string {
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<AgentChatMessage[]>([])
   const isStreaming = ref(false)
+  /** Timestamp shared by all loading indicators for the active user turn. */
+  const streamStartedAtMs = ref(0)
   const currentNode = ref('')
   const streamError = ref('')
   const loadedSessionId = ref('')
@@ -401,6 +403,7 @@ export const useChatStore = defineStore('chat', () => {
       created_at: new Date().toISOString(),
     })
     turnStartedAtMs = nowMs()
+    streamStartedAtMs.value = turnStartedAtMs
 
     streamAbortController = new AbortController()
     const signal = streamAbortController.signal
@@ -427,6 +430,7 @@ export const useChatStore = defineStore('chat', () => {
         node,
         tool_calls: [],
         trace: [...bufferedTraces],
+        metadata: { turn_started_at_ms: streamStartedAtMs.value },
         created_at: new Date().toISOString(),
       })
       assistantCreated = true
@@ -644,6 +648,7 @@ export const useChatStore = defineStore('chat', () => {
         forceFlushContent()
         attachCitationMapToLastFinalAssistant()
         isStreaming.value = false
+        streamStartedAtMs.value = 0
         // EditorPane listens once per completed streamed turn to refresh its persisted patch markers.
         window.dispatchEvent(new CustomEvent('agent-turn-finished'))
         currentNode.value = ''
@@ -669,6 +674,7 @@ export const useChatStore = defineStore('chat', () => {
     contextMirror.value = []
     activeAgentMode.value = 'auto'
     isStreaming.value = false
+    streamStartedAtMs.value = 0
     streamError.value = ''
     currentNode.value = ''
     loadedSessionId.value = ''
@@ -880,6 +886,7 @@ export const useChatStore = defineStore('chat', () => {
   return {
     messages,
     isStreaming,
+    streamStartedAtMs,
     currentNode,
     streamError,
     loadedSessionId,
