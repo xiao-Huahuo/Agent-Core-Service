@@ -8,6 +8,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
+import LoadingState from '@/components/common/LoadingState.vue'
 import LoaderCube from '@/components/editor_workspace/agent_chat/LoaderCube.vue'
 import FinalTurnSummary from '@/components/editor_workspace/agent_chat/FinalTurnSummary.vue'
 import MessageBubble from '@/components/editor_workspace/agent_chat/MessageBubble.vue'
@@ -332,7 +333,8 @@ defineExpose({
     </template>
     <div v-if="showThinkingBubble" class="thinking-row">
       <img :src="agentAvatar" class="thinking-avatar" alt="agent" />
-      <div class="thinking-loader"><LoaderCube /></div>
+      <LoadingState label="Thinking" variant="Drive" />
+      <span class="thinking-spinner" aria-label="Preparing response"><LoaderCube /></span>
     </div>
   </div>
 </template>
@@ -376,7 +378,8 @@ defineExpose({
   object-fit: cover;
 }
 
-.thinking-loader {
+.thinking-spinner {
+  display: inline-flex;
   font-size: 0.55em;
 }
 

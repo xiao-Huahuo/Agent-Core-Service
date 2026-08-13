@@ -10,6 +10,7 @@ import { createPinia } from 'pinia'
 
 import ChatBubble from '../ChatBubble.vue'
 import MessageList from '../MessageList.vue'
+import ToolBubble from '../ToolBubble.vue'
 
 describe('ChatBubble user references', () => {
   it('renders the reference above the user message', () => {
@@ -81,5 +82,55 @@ describe('ChatBubble user references', () => {
       '思考了2.2s',
       '思考了3.3s',
     ])
+  })
+
+  it('shows the pixel loading state before the assistant placeholder arrives', () => {
+    HTMLElement.prototype.scrollTo = () => {}
+    const wrapper = mount(MessageList, {
+      global: { plugins: [createPinia()] },
+      props: {
+        messages: [{ role: 'user', content: '请开始' }],
+        isStreaming: true,
+      },
+    })
+
+    expect(wrapper.find('.loading-state').exists()).toBe(true)
+    expect(wrapper.find('.loading-state__label').classes()).toContain('loading-state__label')
+    expect(wrapper.findAll('.pixel')).toHaveLength(9)
+    expect(wrapper.find('.thinking-spinner svg').exists()).toBe(true)
+    expect(wrapper.find('.thinking-loader').exists()).toBe(false)
+  })
+
+  it('shows the pixel loading state instead of a cursor for an empty assistant stream', () => {
+    const wrapper = mount(ChatBubble, {
+      global: { plugins: [createPinia()] },
+      props: {
+        message: { role: 'assistant', content: '' },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+        isStreaming: true,
+      },
+    })
+
+    expect(wrapper.find('.loading-state').exists()).toBe(true)
+    expect(wrapper.find('.cursor').exists()).toBe(false)
+    expect(wrapper.find('.bubble.assistant').exists()).toBe(false)
+  })
+
+  it('shows the pixel loading state instead of a cursor in tool mode', () => {
+    const wrapper = mount(ToolBubble, {
+      global: { plugins: [createPinia()] },
+      props: {
+        message: { role: 'assistant', content: '' },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+        isStreaming: true,
+      },
+    })
+
+    expect(wrapper.find('.loading-state').exists()).toBe(true)
+    expect(wrapper.find('.cursor').exists()).toBe(false)
+    expect(wrapper.find('.assistant-article').exists()).toBe(false)
+    expect(wrapper.get('.avatar').attributes('src')).toBe('agent.png')
   })
 })

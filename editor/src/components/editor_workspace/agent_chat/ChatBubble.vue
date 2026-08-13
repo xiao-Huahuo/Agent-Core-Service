@@ -10,6 +10,7 @@
 import { computed, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import LoadingState from '@/components/common/LoadingState.vue'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import KnowledgeSources from '@/components/editor_workspace/agent_chat/KnowledgeSources.vue'
 import MarkdownContent from '@/components/editor_workspace/agent_chat/MarkdownContent.vue'
@@ -115,7 +116,7 @@ const shouldRenderAssistant = computed(() => {
 })
 
 const shouldRenderAssistantBubble = computed(() => {
-  return hasAssistantContent.value || (props.isStreaming && thinkingTraces.value.length === 0)
+  return hasAssistantContent.value
 })
 
 const copyableContent = computed(() => {
@@ -243,8 +244,8 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           :citation-map="citationMap"
           :on-navigate-source="handleNavigateSource"
         />
-        <span v-if="isStreaming && !hasAssistantContent" class="cursor">|</span>
       </div>
+      <LoadingState v-if="isStreaming && !hasAssistantContent" label="Thinking" variant="Drive" />
       <div v-if="showActions !== false && !isStreaming && copyableContent" class="message-actions">
         <button
           class="copy-action"
@@ -669,13 +670,4 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   font-size: calc(11px * var(--font-scale));
 }
 
-.cursor {
-  color: var(--color-accent);
-  animation: blink 1s step-end infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
 </style>

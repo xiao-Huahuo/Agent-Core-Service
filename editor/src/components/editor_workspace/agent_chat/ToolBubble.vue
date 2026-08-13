@@ -9,6 +9,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
+import LoadingState from '@/components/common/LoadingState.vue'
 
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import KnowledgeSources from '@/components/editor_workspace/agent_chat/KnowledgeSources.vue'
@@ -162,7 +163,12 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
     :change-snapshot="changeSnapshot"
   />
 
-  <div v-else-if="shouldRenderAssistant" class="bubble-row assistant tool-assistant-row">
+  <div
+    v-else-if="shouldRenderAssistant"
+    class="bubble-row assistant tool-assistant-row"
+    :class="{ 'tool-assistant-row--pending': isStreaming && !hasContent && statusTraces.length === 0 }"
+  >
+    <img :src="agentAvatar" class="avatar" alt="agent" />
     <div class="bubble-col">
       <div v-if="statusTraces.length > 0 && !hasContent" class="status-lines">
         <p
@@ -174,7 +180,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
         </p>
       </div>
       <span v-if="thinkingLabel && hasContent && showActions === true" class="thinking-duration">{{ thinkingLabel }}</span>
-      <div v-if="hasContent || (isStreaming && statusTraces.length === 0)" class="assistant-article">
+      <div v-if="hasContent" class="assistant-article">
         <MarkdownContent
           v-if="hasContent"
           :content="message.content"
@@ -182,8 +188,8 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           :citation-map="citationMap"
           :on-navigate-source="handleNavigateSource"
         />
-        <span v-if="isStreaming && !hasContent" class="cursor">|</span>
       </div>
+      <LoadingState v-if="isStreaming && !hasContent" label="Thinking" variant="Drive" />
       <div v-if="showActions !== false && copyableContent" class="message-actions">
         <button
           class="copy-action"
@@ -275,6 +281,10 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   max-width: none;
 }
 
+.tool-assistant-row--pending {
+  align-items: center;
+}
+
 .tool-assistant-row {
   align-self: stretch;
   width: 100%;
@@ -286,7 +296,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   height: 36px;
   flex-shrink: 0;
   margin-top: 2px;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: 50%;
   object-fit: cover;
 }
@@ -514,13 +524,4 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   font-size: calc(11px * var(--font-scale));
 }
 
-.cursor {
-  color: var(--color-accent);
-  animation: blink 1s step-end infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
 </style>
