@@ -140,6 +140,16 @@ service AgentService {
   // Agent 单轮局部变更与安全撤销
   rpc GetSessionChanges(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc UndoSessionChange(google.protobuf.Struct) returns (google.protobuf.Struct);
+
+  // Persistent Agent task queue. Struct keeps the gRPC payload identical to
+  // the typed REST DTO fields while queue state remains in the shared service.
+  rpc ListAgentQueueTasks(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc CreateAgentQueueTask(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc UpdateAgentQueueTask(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc ContinueAgentQueueTask(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc TransitionAgentQueueTask(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc DeleteAgentQueueTask(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc UpdateAgentQueueSettings(google.protobuf.Struct) returns (google.protobuf.Struct);
 }
 
 // ---------------------------------------------------------------------------

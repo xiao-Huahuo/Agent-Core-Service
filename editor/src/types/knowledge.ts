@@ -69,6 +69,7 @@ export type WorkspaceMainView =
   | 'skills'
   | 'settings'
   | 'agent'
+  | 'agent-queue'
 
 /** One file or directory in the knowledge tree. */
 export interface KnowledgeFileNode {

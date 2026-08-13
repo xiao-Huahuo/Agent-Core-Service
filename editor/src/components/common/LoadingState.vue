@@ -39,9 +39,15 @@ const props = withDefaults(defineProps<{
   variant?: LoadingVariant
   /** Shared turn start time, so remounting does not reset elapsed time. */
   startedAtMs?: number
+  /** Whether to render the shimmering status label. */
+  showLabel?: boolean
+  /** Whether to render the elapsed-time display. */
+  showElapsed?: boolean
 }>(), {
   label: 'Thinking',
   variant: 'Drive',
+  showLabel: true,
+  showElapsed: true,
 })
 
 /** Refreshes the clock while the component is visible. */
@@ -92,8 +98,8 @@ const pattern = computed(() => patterns[props.variant])
         }"
       />
     </span>
-    <span class="loading-state__label">{{ label }}</span>
-    <span class="loading-state__elapsed">{{ elapsed }}</span>
+    <span v-if="showLabel" class="loading-state__label">{{ label }}</span>
+    <span v-if="showElapsed" class="loading-state__elapsed">{{ elapsed }}</span>
   </div>
 </template>
 

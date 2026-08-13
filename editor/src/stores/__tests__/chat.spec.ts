@@ -106,6 +106,26 @@ describe('chat reference history', () => {
     expect(store.messages.map((message) => message.content)).toEqual(['第一条', '最后一条'])
   })
 
+  it('silently syncs a mounted session while preserving existing message objects', async () => {
+    apiMocks.fetchMessages
+      .mockResolvedValueOnce([
+        { message_id: 'first', role: 'assistant', content: '处理中', metadata: { node: 'agent' }, created_at: '2026-08-01T00:00:00Z' },
+      ])
+      .mockResolvedValueOnce([
+        { message_id: 'first', role: 'assistant', content: '处理完成', metadata: { node: 'agent' }, created_at: '2026-08-01T00:00:00Z' },
+        { message_id: 'second', role: 'assistant', content: '最终回答', metadata: { node: 'agent' }, created_at: '2026-08-01T00:01:00Z' },
+      ])
+    const store = useChatStore()
+    await store.loadHistory('session-1', 'user-1')
+    const firstMessage = store.messages[0]
+
+    await store.syncHistory('session-1', 'user-1')
+
+    expect(store.messages).toHaveLength(2)
+    expect(store.messages[0]).toBe(firstMessage)
+    expect(store.messages.map((message) => message.content)).toEqual(['处理完成', '最终回答'])
+  })
+
   it('records thinking seconds from user bubble append to first final assistant content', async () => {
     const nowSpy = vi.spyOn(performance, 'now')
     nowSpy.mockReturnValueOnce(1000).mockReturnValueOnce(2234)

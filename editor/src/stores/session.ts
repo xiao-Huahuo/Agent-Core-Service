@@ -23,6 +23,8 @@ export const useSessionStore = defineStore('session', () => {
   const sessions = ref<SessionRecord[]>([])
   const currentSessionId = ref<string | null>(null)
   const isLoading = ref(false)
+  /** Persisted session IDs with a live browser Agent stream. */
+  const streamingSessionIds = ref<string[]>([])
 
   /** Cross-window signal: mirrors the session id for the floating Agent window. */
   const ACTIVE_SESSION_KEY = 'agent_editor_active_session_id'
@@ -69,6 +71,14 @@ export const useSessionStore = defineStore('session', () => {
     window.agentEditorDesktop?.windowSync?.('session', null)
   }
 
+  /** Registers stream activity without changing the user's selected session. */
+  function setSessionStreaming(sessionId: string, streaming: boolean) {
+    if (!sessionId) return
+    streamingSessionIds.value = streaming
+      ? [...new Set([...streamingSessionIds.value, sessionId])]
+      : streamingSessionIds.value.filter((id) => id !== sessionId)
+  }
+
   async function remove(sessionId: string) {
     await deleteSession(sessionId)
     sessions.value = sessions.value.filter((session) => session.session_id !== sessionId)
@@ -111,12 +121,14 @@ export const useSessionStore = defineStore('session', () => {
     sessions,
     currentSessionId,
     isLoading,
+    streamingSessionIds,
     currentSession,
     hasSessions,
     load,
     create,
     select,
     clearSelection,
+    setSessionStreaming,
     remove,
     clearAll,
     rename,

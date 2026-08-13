@@ -28,6 +28,7 @@ const props = defineProps<{
   ingestionActive: boolean
   visualizationActive: boolean
   agentActive: boolean
+  agentQueueActive: boolean
   graphActive: boolean
   dashboardActive: boolean
   debugActive: boolean
@@ -49,6 +50,7 @@ const emit = defineEmits<{
   openIngestion: []
   openVisualization: []
   toggleAgent: []
+  openAgentQueue: []
   toggleGraph: []
   openDashboard: []
   toggleFeedback: []
@@ -235,6 +237,18 @@ function closeKnowledgeMenu() {
     >
       <img :src="agentIconSrc" class="activity-agent-icon" alt="" />
       <span class="activity-label">Agent</span>
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: agentQueueActive }"
+      type="button"
+      title="任务队列"
+      aria-label="任务队列"
+      @mousedown.prevent="handleRipple"
+      @click="emit('openAgentQueue')"
+    >
+      <IcIcon name="checklist" :size="18" />
+      <span class="activity-label">任务队列</span>
     </button>
     <button
       class="activity-button"

@@ -132,6 +132,7 @@ from agent_service.services.favorite_service import FavoriteService
 from agent_service.services.feedback_service import FeedbackService
 from agent_service.services.vault_service import VaultService
 from agent_service.services.agent_change_service import AgentChangeService
+from agent_service.services.agent_queue_service import AgentQueueService
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +153,7 @@ class AgentServiceServicer(BaseServicer):
         feedback_service: FeedbackService | None = None,
         vault_service: VaultService | None = None,
         agent_change_service: AgentChangeService | None = None,
+        agent_queue_service: AgentQueueService | None = None,
     ) -> None:
         self._agent = agent
         self._session_service = session_service
@@ -163,6 +165,7 @@ class AgentServiceServicer(BaseServicer):
         self._feedback_service = feedback_service
         self._vault_service = vault_service
         self._agent_change_service = agent_change_service
+        self._agent_queue_service = agent_queue_service
 
     def shutdown(self) -> None:
         self._agent.close()
@@ -1321,6 +1324,55 @@ class AgentServiceServicer(BaseServicer):
         return DeleteResponse(ok=True, deleted_count=1)
 
     # ------------------------------------------------------------------
+    # 持久任务队列 RPC
+    # ------------------------------------------------------------------
+
+    def ListAgentQueueTasks(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Return the live board or terminal history through the shared queue service."""
+        payload = MessageToDict(request)
+        service = self._require_agent_queue_service(context)
+        user_id = str(payload.get("user_id", ""))
+        return ParseDict(
+            {"tasks": service.list_tasks(user_id=user_id, history=bool(payload.get("history", False))), "settings": service.get_settings(user_id)},
+            Struct(),
+        )
+
+    def CreateAgentQueueTask(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Create a durable pending task using the same fields as REST."""
+        return ParseDict(self._queue_call(context, self._require_agent_queue_service(context).create_task, MessageToDict(request)), Struct())
+
+    def UpdateAgentQueueTask(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Update a pending task using its task_id from the Struct payload."""
+        return ParseDict(self._queue_call(context, self._require_agent_queue_service(context).update_task, MessageToDict(request)), Struct())
+
+    def ContinueAgentQueueTask(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Return a reviewed task to the pending priority queue."""
+        return ParseDict(self._queue_call(context, self._require_agent_queue_service(context).restart_task, MessageToDict(request)), Struct())
+
+    def TransitionAgentQueueTask(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Confirm or terminate a task, cancelling its live Agent when required."""
+        payload = MessageToDict(request)
+        task = self._queue_call(context, self._require_agent_queue_service(context).transition, payload)
+        if payload.get("status") == "terminated" and task.get("session_id"):
+            self._agent.cancel_session(str(task["session_id"]))
+        return ParseDict(task, Struct())
+
+    def DeleteAgentQueueTask(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Delete one pending task and report whether it existed."""
+        payload = MessageToDict(request)
+        try:
+            deleted = self._require_agent_queue_service(context).delete_task(
+                user_id=str(payload.get("user_id", "")), task_id=str(payload.get("task_id", ""))
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict({"deleted": deleted}, Struct())
+
+    def UpdateAgentQueueSettings(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Persist a user's queue concurrency setting."""
+        return ParseDict(self._queue_call(context, self._require_agent_queue_service(context).update_settings, MessageToDict(request)), Struct())
+
+    # ------------------------------------------------------------------
     # 内部辅助
     # ------------------------------------------------------------------
 
@@ -1373,6 +1425,23 @@ class AgentServiceServicer(BaseServicer):
         if self._agent_change_service is None:
             context.abort(grpc.StatusCode.UNAVAILABLE, "AgentChangeService not available")
         return self._agent_change_service  # type: ignore[return-value]
+
+    def _require_agent_queue_service(self, context: grpc.ServicerContext) -> AgentQueueService:
+        """Return the durable queue service or report an unavailable application runtime."""
+        if self._agent_queue_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "AgentQueueService not available")
+        return self._agent_queue_service  # type: ignore[return-value]
+
+    @staticmethod
+    def _queue_call(context: grpc.ServicerContext, function: Any, payload: dict[str, Any]) -> dict[str, Any]:
+        """Call a queue operation and map domain validation to standard gRPC errors."""
+        try:
+            result = function(**payload)
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        if result is None:
+            context.abort(grpc.StatusCode.NOT_FOUND, "queue task not found")
+        return result
 
     def _vault_session_from_payload(self, context: grpc.ServicerContext, payload: dict[str, Any]) -> Any:
         """从 Struct payload 中校验 vault token。"""

@@ -199,6 +199,8 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     from agent_service.services.todo_service import TodoService
     from agent_service.services.automation_service import AutomationService
     from agent_service.services.automation_scheduler import AutomationScheduler
+    from agent_service.services.agent_queue_service import AgentQueueService
+    from agent_service.services.agent_queue_scheduler import AgentQueueScheduler
     rest_deps._todo_service = TodoService(
         engine=memory_service.engine,
         legacy_data_dir=str(config.storage.base_data_dir),
@@ -207,6 +209,15 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         engine=memory_service.engine,
         todo_service=rest_deps._todo_service,
     )
+    rest_deps._agent_queue_service = AgentQueueService(
+        engine=memory_service.engine,
+        session_service=session_service,
+    )
+    agent_queue_scheduler = AgentQueueScheduler(
+        queue_service=rest_deps._agent_queue_service,
+        agent=agent,
+    )
+    agent_queue_scheduler.start()
     automation_scheduler = AutomationScheduler(
         automation_service=rest_deps._automation_service,
         agent=agent,
@@ -249,6 +260,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         feedback_service=feedback_service,
         vault_service=vault_service,
         agent_change_service=agent_change_service,
+        agent_queue_service=rest_deps._agent_queue_service,
     )
     rest_deps._agent = agent
     rest_deps._session_service = session_service
@@ -282,6 +294,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         logger.info("AgentService 正在关闭...")
         if automation_scheduler is not None:
             automation_scheduler.shutdown()
+        agent_queue_scheduler.shutdown()
         if _grpc_server is not None:
             _grpc_server.stop(0)
             rest_deps._grpc_running = False
@@ -306,6 +319,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._structured_generation_service = None
         rest_deps._todo_service = None
         rest_deps._automation_service = None
+        rest_deps._agent_queue_service = None
         logger.info("AgentService 已关闭")
 
 

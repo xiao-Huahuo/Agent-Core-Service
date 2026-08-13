@@ -12,6 +12,7 @@ import { defineStore } from 'pinia'
 import { deleteAgentAttachment, fetchChildAgents, fetchTaskSuggestions, streamPrompt } from '@/api/agent'
 import type { AgentAccessMode, AgentAttachmentUploadResponse, AgentLoopMode, ChildAgentRecord } from '@/api/agent'
 import { fetchMessages } from '@/api/session'
+import type { SessionMessageRecord } from '@/api/session'
 import type { AgentTaskList } from '@/api/taskList'
 import { useSessionStore } from '@/stores/session'
 import { useTaskListStore } from '@/stores/taskList'
@@ -92,7 +93,12 @@ function traceIdentity(trace: Record<string, unknown>): string {
   ].join('|')
 }
 
-export const useChatStore = defineStore('chat', () => {
+/**
+ * Builds one isolated chat store.  A queue task and the normal Agent page may
+ * stream at the same time, so they must never share an AbortController or
+ * message buffer.
+ */
+const createChatStore = (storeId: string) => defineStore(storeId, () => {
   const messages = ref<AgentChatMessage[]>([])
   const isStreaming = ref(false)
   /** Timestamp shared by all loading indicators for the active user turn. */
@@ -108,6 +114,8 @@ export const useChatStore = defineStore('chat', () => {
   const taskSuggestions = ref<string[]>([])
   const suggestionsLoading = ref(false)
   const loadingHistory = ref(false)
+  /** Session currently owned by this isolated store's stream. */
+  const streamingSessionId = ref('')
 
   let streamAbortController: AbortController | null = null
   let historyAbortController: AbortController | null = null
@@ -116,6 +124,7 @@ export const useChatStore = defineStore('chat', () => {
   let suggestionRequestId = 0
   let suggestionAbortController: AbortController | null = null
   let historyRequestId = 0
+  let historySyncing = false
   let pendingContent = ''
   let flushTimer: number | null = null
   let turnStartedAtMs = 0
@@ -289,6 +298,34 @@ export const useChatStore = defineStore('chat', () => {
     pendingContent = ''
   }
 
+  /** Convert persisted session rows into the exact message shape used by the Agent page. */
+  function restoreHistoryMessages(history: SessionMessageRecord[]): AgentChatMessage[] {
+    return history
+      .filter((message) => message.role !== 'tool' || message.metadata?.node === 'action')
+      .filter((message) => message.metadata?.node !== 'planner' && message.metadata?.node !== 'observation')
+      .filter((message) => {
+        return message.role !== 'assistant'
+          || message.content
+          || (message.tool_calls && message.tool_calls.length > 0)
+          || message.metadata?.node === 'action'
+          || message.metadata?.node === 'child_agent'
+      })
+      .map((message) => ({
+        role: message.role === 'tool' ? 'assistant' : message.role as AgentChatMessage['role'],
+        content: message.content,
+        message_id: message.message_id,
+        node: asString(message.metadata?.node),
+        tool_calls: message.tool_calls,
+        metadata: {
+          ...(message.metadata ?? {}),
+          ...(message.tool_call_id ? { tool_call_id: message.tool_call_id } : {}),
+        },
+        trace: asTrace(message.metadata?.trace),
+        created_at: message.created_at,
+        reference: asString(message.metadata?.reference) || undefined,
+      }))
+  }
+
   async function loadHistory(sessionId: string, userId: string, limit?: number) {
     const requestId = ++historyRequestId
     historyAbortController?.abort()
@@ -298,30 +335,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const history = await fetchMessages(sessionId, userId, limit, { signal: historyAbortController.signal })
       if (requestId !== historyRequestId) return
-      messages.value = history
-        .filter((message) => message.role !== 'tool' || message.metadata?.node === 'action')
-        .filter((message) => message.metadata?.node !== 'planner' && message.metadata?.node !== 'observation')
-        .filter((message) => {
-          return message.role !== 'assistant'
-            || message.content
-            || (message.tool_calls && message.tool_calls.length > 0)
-            || message.metadata?.node === 'action'
-            || message.metadata?.node === 'child_agent'
-        })
-        .map((message) => ({
-          role: message.role === 'tool' ? 'assistant' : message.role as AgentChatMessage['role'],
-          content: message.content,
-          message_id: message.message_id,
-          node: asString(message.metadata?.node),
-          tool_calls: message.tool_calls,
-          metadata: {
-            ...(message.metadata ?? {}),
-            ...(message.tool_call_id ? { tool_call_id: message.tool_call_id } : {}),
-          },
-          trace: asTrace(message.metadata?.trace),
-          created_at: message.created_at,
-          reference: asString(message.metadata?.reference) || undefined,
-        }))
+      messages.value = restoreHistoryMessages(history)
       loadedSessionId.value = sessionId
       // History restoration must never behave like a live task-list update:
       // otherwise it opens the sidebar without enabling a matching card.
@@ -338,6 +352,30 @@ export const useChatStore = defineStore('chat', () => {
       if (requestId === historyRequestId) {
         loadingHistory.value = false
       }
+    }
+  }
+
+  /**
+   * Refresh a fixed external session without clearing the mounted Agent page.
+   * Existing message objects are updated in place so scrolling and expanded
+   * tool rows remain stable while queue workers persist new output.
+   */
+  async function syncHistory(sessionId: string, userId: string) {
+    if (historySyncing || loadedSessionId.value !== sessionId) return
+    historySyncing = true
+    try {
+      const restored = restoreHistoryMessages(await fetchMessages(sessionId, userId))
+      const existingById = new Map(messages.value.map((message) => [message.message_id, message]))
+      messages.value = restored.map((message) => {
+        const existing = message.message_id ? existingById.get(message.message_id) : undefined
+        if (!existing) return message
+        Object.assign(existing, message)
+        return existing
+      })
+    } catch (error) {
+      console.debug('静默同步会话历史失败:', error)
+    } finally {
+      historySyncing = false
     }
   }
 
@@ -408,6 +446,8 @@ export const useChatStore = defineStore('chat', () => {
     streamAbortController = new AbortController()
     const signal = streamAbortController.signal
     isStreaming.value = true
+    streamingSessionId.value = targetSessionId || ''
+    if (targetSessionId) sessionStore.setSessionStreaming(targetSessionId, true)
     streamError.value = ''
     activeAgentMode.value = agentMode
     currentKnowledgeSources.value = []
@@ -461,6 +501,8 @@ export const useChatStore = defineStore('chat', () => {
       if (!targetSessionId) {
         targetSessionId = await sessionStore.create(userId)
         sessionStore.select(targetSessionId)
+        streamingSessionId.value = targetSessionId
+        sessionStore.setSessionStreaming(targetSessionId, true)
       }
 
       for await (const rawChunk of streamPrompt(
@@ -648,6 +690,8 @@ export const useChatStore = defineStore('chat', () => {
         forceFlushContent()
         attachCitationMapToLastFinalAssistant()
         isStreaming.value = false
+        if (targetSessionId) sessionStore.setSessionStreaming(targetSessionId, false)
+        streamingSessionId.value = ''
         streamStartedAtMs.value = 0
         // EditorPane listens once per completed streamed turn to refresh its persisted patch markers.
         window.dispatchEvent(new CustomEvent('agent-turn-finished'))
@@ -674,6 +718,8 @@ export const useChatStore = defineStore('chat', () => {
     contextMirror.value = []
     activeAgentMode.value = 'auto'
     isStreaming.value = false
+    if (streamingSessionId.value) useSessionStore().setSessionStreaming(streamingSessionId.value, false)
+    streamingSessionId.value = ''
     streamStartedAtMs.value = 0
     streamError.value = ''
     currentNode.value = ''
@@ -895,9 +941,11 @@ export const useChatStore = defineStore('chat', () => {
     pendingAttachments,
     taskSuggestions,
     suggestionsLoading,
+    streamingSessionId,
     lastMessage,
     canSend,
     loadHistory,
+    syncHistory,
     refreshTaskSuggestions,
     send,
     cancelStream,
@@ -910,3 +958,14 @@ export const useChatStore = defineStore('chat', () => {
     stopChildAgentWatcher,
   }
 })
+
+/** The primary Agent page chat store. */
+export const useChatStore = createChatStore('chat')
+
+/**
+ * Returns the stable Pinia store for one persisted session.  Embedded queue
+ * views use this instead of the primary page's singleton store.
+ */
+export function useSessionChatStore(sessionId: string) {
+  return createChatStore(`chat-session:${sessionId}`)()
+}

@@ -29,6 +29,7 @@ from agent_service.services.feedback_service import FeedbackService
 from agent_service.services.smart_form_service import SmartFormService
 from agent_service.services.structured_generation_service import StructuredGenerationService
 from agent_service.services.agent_change_service import AgentChangeService
+from agent_service.services.agent_queue_service import AgentQueueService
 
 _agent: AgentCore | None = None
 _session_service: SessionService | None = None
@@ -51,6 +52,7 @@ _feedback_service: FeedbackService | None = None
 _smart_form_service: SmartFormService | None = None
 _structured_generation_service: StructuredGenerationService | None = None
 _agent_change_service: AgentChangeService | None = None
+_agent_queue_service: AgentQueueService | None = None
 
 
 def _require_agent() -> AgentCore:
@@ -187,3 +189,11 @@ def _require_agent_change_service() -> AgentChangeService:
     if _agent_change_service is None:
         raise HTTPException(status_code=503, detail="AgentChangeService not initialized yet")
     return _agent_change_service
+
+
+def _require_agent_queue_service() -> AgentQueueService:
+    """Return the persistent Agent task queue service injected at startup."""
+
+    if _agent_queue_service is None:
+        raise HTTPException(status_code=503, detail="AgentQueueService not initialized yet")
+    return _agent_queue_service

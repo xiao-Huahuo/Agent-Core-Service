@@ -6,7 +6,7 @@
   keeps observability and settings outside of the editor side panel.
 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import darkTitle from '@/assets/images/暗色标题.png'
@@ -23,7 +23,7 @@ import TaskListDrawer from '@/components/editor_workspace/agent_chat/TaskListDra
 import ChildAgentPanel from '@/components/editor_workspace/agent_chat/ChildAgentPanel.vue'
 import EnvironmentChangeCard from '@/components/editor_workspace/agent_chat/EnvironmentChangeCard.vue'
 import ChangeDetailDrawer from '@/components/editor_workspace/agent_chat/ChangeDetailDrawer.vue'
-import { useChatStore } from '@/stores/chat'
+import { useChatStore, useSessionChatStore } from '@/stores/chat'
 import type { AgentUploadedAttachment } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { exportSession } from '@/utils/sessionExport'
@@ -33,6 +33,7 @@ import { useFavoritesStore } from '@/stores/favorites'
 import { useTaskListStore } from '@/stores/taskList'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
+import type { SessionRecord } from '@/api/session'
 import { uploadAgentAttachment } from '@/api/agent'
 import { fetchLLMConfig, fetchSensitiveWords, saveSensitiveWords } from '@/api/settings'
 import type { AgentChangeSnapshot } from '@/api/agentChanges'
@@ -43,16 +44,24 @@ type MessageListApi = {
 
 const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
-const chatStore = useChatStore()
 const skillsStore = useSkillsStore()
 const favoritesStore = useFavoritesStore()
 const taskListStore = useTaskListStore()
 const workspaceStore = useWorkspaceStore()
 const props = withDefaults(defineProps<{
   mode?: 'panel' | 'page'
+  /** 在嵌入式场景中打开指定的持久化任务会话。 */
+  sessionId?: string
+  /** Silently follow messages persisted by an external queue worker. */
+  liveSync?: boolean
 }>(), {
   mode: 'panel',
+  sessionId: '',
+  liveSync: false,
 })
+// Queue dialogs mount a complete Agent panel for a fixed task session.  Give
+// it its own stream state so opening it cannot replace or cancel the page chat.
+const chatStore = shallowRef(props.sessionId ? useSessionChatStore(props.sessionId) : useChatStore())
 const emit = defineEmits<{
   expand: []
 }>()
@@ -70,6 +79,7 @@ const referenceText = ref('')
 const messageListRef = ref<MessageListApi | null>(null)
 const isMessageListAtBottom = ref(true)
 const sessionLoading = ref(false)
+let taskHistoryPollTimer: number | null = null
 const loadingSessionId = ref('')
 const contextWindowTokens = ref(128000)
 const safetyDisabled = ref(false)
@@ -88,28 +98,52 @@ const modeIndicatorStyle = computed(() => {
 })
 
 const userId = computed(() => settingsStore.profile.userId)
+const activeSessionId = computed(() => props.sessionId || sessionStore.currentSessionId)
+/** Switches only this panel's chat state; existing session streams keep running. */
+function useActiveSessionChat(sessionId: string) {
+  if (!props.sessionId && sessionId) chatStore.value = useSessionChatStore(sessionId)
+}
 const isDark = computed(() => settingsStore.isDark)
 const welcomeTitleSrc = computed(() => isDark.value ? darkTitle : lightTitle)
 const logoSrc = computed(() => isDark.value ? darkLogo : lightLogo)
-const hasMessages = computed(() => chatStore.messages.filter((m) => m.role !== 'system').length > 0)
-const hasStreamingContent = computed(() => !!chatStore.lastMessage?.content)
+const hasMessages = computed(() => chatStore.value.messages.filter((m) => m.role !== 'system').length > 0)
+const hasStreamingContent = computed(() => !!chatStore.value.lastMessage?.content)
 // 与 ChatInput 的 .task-suggestions 显示条件一致:非居中(有消息)、无附件、有建议
 const hasSuggestionOverlay = computed(() => {
-  if (chatStore.taskSuggestions.length === 0) return false
-  if (!hasMessages.value && !chatStore.isStreaming) return false
-  if (chatStore.pendingAttachments.length > 0) return false
+  if (chatStore.value.taskSuggestions.length === 0) return false
+  if (!hasMessages.value && !chatStore.value.isStreaming) return false
+  if (chatStore.value.pendingAttachments.length > 0) return false
   return true
 })
 const isAttachmentDropActive = computed(() => dragDepth.value > 0 || isUploadingAttachment.value)
+
+/** Start or stop silent history synchronization for an externally-run task. */
+function syncTaskHistoryPolling(enabled: boolean) {
+  if (taskHistoryPollTimer !== null) {
+    window.clearInterval(taskHistoryPollTimer)
+    taskHistoryPollTimer = null
+  }
+  if (!enabled || !props.sessionId) return
+  taskHistoryPollTimer = window.setInterval(() => {
+    if (userId.value) void chatStore.value.syncHistory(props.sessionId!, userId.value)
+  }, 1500)
+}
 const sessionTitle = computed(() => {
-  const name = sessionStore.currentSession?.session_name || 'new session'
+  const name = sessionStore.sessions.find((session) => session.session_id === activeSessionId.value)?.session_name || 'new session'
   return name.replace(/^标题:/, '').trim()
 })
+/** Visible even with the history drawer collapsed, so parallel runs are never hidden. */
+const runningSessions = computed(() => sessionStore.streamingSessionIds
+  .map((sessionId) => sessionStore.sessions.find((session) => session.session_id === sessionId))
+  .filter((session): session is SessionRecord => Boolean(session)))
+function runningSessionName(session: SessionRecord) {
+  return (session.session_name || session.session_id.slice(0, 8)).replace(/^标题:/, '').trim()
+}
 const chatModeLabel = computed(() => settingsStore.chatMode === 'chat' ? 'chat' : 'tool')
 const currentLargeModelName = ref('')
 const sessionSources = computed(() => {
   const unique = new Map<string, import('@/stores/chat').SourceItem>()
-  for (const message of chatStore.messages) {
+  for (const message of chatStore.value.messages) {
     const citationMap = message.metadata?.citation_map
     if (!citationMap || typeof citationMap !== 'object' || Array.isArray(citationMap)) continue
     for (const source of Object.values(citationMap)) {
@@ -150,14 +184,14 @@ const knowledgeTitle = computed(() => {
 async function reloadSessions() {
   if (!userId.value) {
     sessionStore.clearSelection()
-    chatStore.clear()
+    chatStore.value.clear()
     return
   }
   isBootstrapping.value = true
   try {
     await sessionStore.load(userId.value)
-    if (sessionStore.currentSessionId) {
-      await loadSelectedSessionHistory(sessionStore.currentSessionId)
+    if (activeSessionId.value) {
+      await loadSelectedSessionHistory(activeSessionId.value)
     }
   } finally {
     isBootstrapping.value = false
@@ -185,7 +219,7 @@ async function createSession() {
     return
   }
   // 当前对话没有任何消息时不创建新对话，只收起侧边栏
-  if (!chatStore.messages.some((m) => m.role !== 'system')) {
+  if (!chatStore.value.messages.some((m) => m.role !== 'system')) {
     if (props.mode !== 'page') {
       sessionDrawerOpen.value = false
     }
@@ -202,19 +236,22 @@ async function createSession() {
 }
 
 async function selectSession(sessionId: string) {
+  // A queue detail is pinned to its task thread.  Navigating its session list
+  // must not replace the task conversation currently being inspected.
+  if (props.sessionId) return
   sessionStore.select(sessionId)
+  useActiveSessionChat(sessionId)
   await loadSelectedSessionHistory(sessionId)
 }
 
-async function loadSelectedSessionHistory(sessionId: string) {
-  if (!userId.value || loadingSessionId.value === sessionId || chatStore.loadedSessionId === sessionId) {
+async function loadSelectedSessionHistory(sessionId: string, force = false) {
+  if (!userId.value || loadingSessionId.value === sessionId || (!force && chatStore.value.loadedSessionId === sessionId)) {
     return
   }
   loadingSessionId.value = sessionId
-  chatStore.clear()
   sessionLoading.value = true
   try {
-    await chatStore.loadHistory(sessionId, userId.value)
+    await chatStore.value.loadHistory(sessionId, userId.value)
   } finally {
     sessionLoading.value = false
     loadingSessionId.value = ''
@@ -225,9 +262,15 @@ async function sendMessage(text: string, reference = '') {
   if (!userId.value) {
     return
   }
-  await chatStore.send(
+  // Bind a durable thread before starting the stream.  The previous thread
+  // can then keep streaming in its own store while this one begins.
+  if (!activeSessionId.value) {
+    const sessionId = await sessionStore.create(userId.value)
+    useActiveSessionChat(sessionId)
+  }
+  await chatStore.value.send(
     userId.value,
-    sessionStore.currentSessionId,
+    activeSessionId.value,
     text,
     reference,
     settingsStore.agentLoopMode,
@@ -239,10 +282,10 @@ async function createTaskListFromInput(title: string, items: string[]) {
   if (!userId.value || items.length === 0) {
     return
   }
-  let targetSessionId = sessionStore.currentSessionId
+  let targetSessionId = activeSessionId.value
   if (!targetSessionId) {
     targetSessionId = await sessionStore.create(userId.value)
-    sessionStore.select(targetSessionId)
+    if (!props.sessionId) sessionStore.select(targetSessionId)
   }
   const taskList = await taskListStore.create(targetSessionId, title || 'Task list', items, { open: props.mode === 'page' })
   if (!taskList) {
@@ -360,7 +403,7 @@ function jumpToMessageBottom() {
 }
 
 function removeAttachment(attachment: AgentUploadedAttachment) {
-  void chatStore.deleteAttachment(attachment)
+  void chatStore.value.deleteAttachment(attachment)
 }
 
 function sendSuggestion(suggestion: string) {
@@ -399,20 +442,20 @@ async function handleDrop(event: DragEvent) {
   if (!files.length || !userId.value) {
     return
   }
-  let targetSessionId = sessionStore.currentSessionId
+  let targetSessionId = activeSessionId.value
   if (!targetSessionId) {
     targetSessionId = await sessionStore.create(userId.value)
-    sessionStore.select(targetSessionId)
+    if (!props.sessionId) sessionStore.select(targetSessionId)
   }
   await uploadFiles(files, targetSessionId)
 }
 
 async function handleFileSelect(file: File) {
   if (!userId.value) return
-  let targetSessionId = sessionStore.currentSessionId
+  let targetSessionId = activeSessionId.value
   if (!targetSessionId) {
     targetSessionId = await sessionStore.create(userId.value)
-    sessionStore.select(targetSessionId)
+    if (!props.sessionId) sessionStore.select(targetSessionId)
   }
   await uploadFiles([file], targetSessionId)
 }
@@ -423,7 +466,7 @@ async function uploadFiles(files: File[], sessionId: string) {
     for (const [index, file] of files.entries()) {
       uploadStatusText.value = `Uploading ${index + 1}/${files.length}: ${file.name}`
       const response = await uploadAgentAttachment(userId.value!, sessionId, file)
-      chatStore.addPendingAttachment(response.attachment)
+      chatStore.value.addPendingAttachment(response.attachment)
     }
     const firstUploadedFile = files[0]
     uploadStatusText.value = files.length === 1 && firstUploadedFile
@@ -440,7 +483,10 @@ async function uploadFiles(files: File[], sessionId: string) {
 }
 
 watch(userId, () => {
-  void reloadSessions()
+  void reloadSessions().then(() => {
+    if (!props.sessionId) return
+    void selectSession(props.sessionId)
+  })
   if (userId.value) {
     void favoritesStore.load(userId.value, 'session', '')
   }
@@ -471,16 +517,16 @@ watch(() => workspaceStore.pendingAgentReference, (refText) => {
 })
 
 watch(
-  () => chatStore.isStreaming,
+  () => chatStore.value.isStreaming,
   (streaming, wasStreaming) => {
-    if (streaming || !wasStreaming || !userId.value || !sessionStore.currentSessionId) {
+    if (streaming || !wasStreaming || !userId.value || !activeSessionId.value) {
       return
     }
     window.setTimeout(() => {
-      if (!userId.value || !sessionStore.currentSessionId || chatStore.isStreaming) {
+      if (!userId.value || !activeSessionId.value || chatStore.value.isStreaming) {
         return
       }
-      void chatStore.refreshTaskSuggestions(userId.value, sessionStore.currentSessionId)
+      void chatStore.value.refreshTaskSuggestions(userId.value, activeSessionId.value)
     }, 0)
   },
 )
@@ -552,9 +598,9 @@ watch(() => taskListStore.sidebarOpen, (open) => {
 
 // 子 Agent 事件由流消息写入 ChatStore；出现时展示对应卡片而非空侧栏。
 watch(
-  () => chatStore.messages.length,
+  () => chatStore.value.messages.length,
   () => {
-    if (chatStore.isStreaming && chatStore.messages.at(-1)?.node === 'child_agent') {
+    if (chatStore.value.isStreaming && chatStore.value.messages[chatStore.value.messages.length - 1]?.node === 'child_agent') {
       childAgentCardOpen.value = true
       agentSidebarOpen.value = true
     }
@@ -562,22 +608,22 @@ watch(
 )
 
 function syncChildAgentWatcher() {
-  const sessionId = sessionStore.currentSessionId
+  const sessionId = activeSessionId.value
   if (userId.value && sessionId) {
-    chatStore.startChildAgentWatcher(userId.value, sessionId)
+    chatStore.value.startChildAgentWatcher(userId.value, sessionId)
   } else {
-    chatStore.stopChildAgentWatcher()
+    chatStore.value.stopChildAgentWatcher()
   }
 }
 
-watch([userId, () => sessionStore.currentSessionId], syncChildAgentWatcher)
+watch([userId, activeSessionId], syncChildAgentWatcher)
 
 watch(
-  () => sessionStore.currentSessionId,
+  activeSessionId,
   (sessionId) => {
     // The first send creates and selects its session after inserting the local
     // user message. Reloading the still-empty history here would clear it.
-    if (sessionId && !chatStore.isStreaming) {
+    if (sessionId && !chatStore.value.isStreaming) {
       void loadSelectedSessionHistory(sessionId)
     }
   },
@@ -586,7 +632,9 @@ watch(
 onMounted(() => {
   window.addEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
   window.addEventListener('agent-change-updated', handleChangeUpdated as EventListener)
-  void reloadSessions()
+  void reloadSessions().then(() => {
+    if (props.sessionId) void loadSelectedSessionHistory(props.sessionId)
+  })
   if (userId.value) {
     void favoritesStore.load(userId.value, 'session', '')
   }
@@ -595,19 +643,31 @@ onMounted(() => {
   void loadSafetyState()
   void settingsStore.fetchWebSearchSettings()
   syncChildAgentWatcher()
+  syncTaskHistoryPolling(props.liveSync)
 })
+
+/** 嵌入式任务查看器切换到另一任务时，同步加载对应的完整 Agent 会话。 */
+watch(() => props.sessionId, (sessionId) => {
+  if (sessionId) void loadSelectedSessionHistory(sessionId)
+})
+
+watch(() => props.liveSync, syncTaskHistoryPolling)
 
 onBeforeUnmount(() => {
   window.removeEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
   window.removeEventListener('agent-change-updated', handleChangeUpdated as EventListener)
   taskListStore.setAutoOpenOnUpdate(true)
-  chatStore.stopChildAgentWatcher()
+  chatStore.value.stopChildAgentWatcher()
+  if (taskHistoryPollTimer !== null) {
+    window.clearInterval(taskHistoryPollTimer)
+    taskHistoryPollTimer = null
+  }
 })
 
 /** Keeps an open detail drawer in sync with a just-completed file patch. */
 function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   const snapshot = event.detail
-  if (changeDetailOpen.value && snapshot?.session_id === sessionStore.currentSessionId) {
+  if (changeDetailOpen.value && snapshot?.session_id === activeSessionId.value) {
     selectedChangeSnapshot.value = snapshot
   }
 }
@@ -639,6 +699,8 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
       :open="sessionDrawerOpen"
       :mode="props.mode"
       :user-id="userId"
+      :selected-session-id="activeSessionId"
+      :streaming-session-ids="sessionStore.streamingSessionIds"
       @close="closeSessionDrawer"
       @create="createSession"
       @select="selectSession"
@@ -691,8 +753,8 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
       <div class="topbar-right">
         <FavoriteButton
           target-type="session"
-          :target-id="sessionStore.currentSessionId || ''"
-          :disabled="!sessionStore.currentSessionId"
+          :target-id="activeSessionId || ''"
+          :disabled="!activeSessionId"
         />
         <button class="new-session-round-btn" type="button" title="环境与变更" aria-label="环境与变更" :aria-pressed="environmentCardOpen" @click="toggleEnvironmentCard">
           <IcIcon name="dns" :size="16" />
@@ -808,9 +870,9 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
       >
         <IcIcon name="forum" :size="16" />
       </button>
-      <div class="title-meta">
-        <strong>{{ sessionTitle }}</strong>
-      </div>
+       <div class="title-meta">
+         <strong>{{ sessionTitle }}</strong>
+       </div>
       <div class="title-actions">
         <button class="icon-button" type="button" title="环境与变更" :aria-pressed="environmentCardOpen" @click="toggleEnvironmentCard"><IcIcon name="dns" :size="16" /></button>
         <button
@@ -919,11 +981,14 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
     <aside class="agent-sidebar" :class="{ open: agentSidebarOpen }" aria-label="任务与子 Agent 侧边栏">
       <section v-show="environmentCardOpen" class="agent-sidebar-card environment-card-shell">
         <EnvironmentChangeCard
-          :session-id="sessionStore.currentSessionId || ''"
+          :session-id="activeSessionId || ''"
           :user-id="userId || ''"
           :sources="sessionSources"
+          :running-sessions="runningSessions"
+          :active-session-id="activeSessionId || ''"
           @close="closeEnvironmentCard"
           @show-changes="showChangeDetails"
+          @select-session="selectSession"
         />
       </section>
       <section v-show="taskListCardOpen" class="agent-sidebar-card task-list-card">
@@ -1189,6 +1254,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   justify-content: flex-end;
   gap: var(--space-4);
 }
+
 
 .mode-indicator {
   position: absolute;

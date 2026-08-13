@@ -25,6 +25,10 @@ const props = defineProps<{
   userId: string
   mode?: 'panel' | 'page'
   favoritesOnlyLocked?: boolean
+  /** The panel-local session highlighted by this drawer. */
+  selectedSessionId?: string
+  /** Sessions with an active Agent stream, rendered with a compact spinner. */
+  streamingSessionIds?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -44,6 +48,10 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const favoritesOnly = ref(false)
 const openMenuId = ref<string | null>(null)
 const effectiveFavoritesOnly = computed(() => props.favoritesOnlyLocked || favoritesOnly.value)
+const streamingSessionIdSet = computed(() => new Set([
+  ...(props.streamingSessionIds ?? []),
+  ...sessionStore.streamingSessionIds,
+]))
 const renderedSessions = computed(() => {
   if (!effectiveFavoritesOnly.value) return sessionStore.sessions
   const favoriteIds = favoritesStore.idsFor('session', '')
@@ -210,7 +218,7 @@ async function clearAllSessions() {
         v-for="session in renderedSessions"
         :key="session.session_id"
         class="session-item"
-        :class="{ active: session.session_id === sessionStore.currentSessionId }"
+        :class="{ active: session.session_id === (selectedSessionId || sessionStore.currentSessionId) }"
         role="button"
         tabindex="0"
         @click="selectSession(session.session_id)"
@@ -218,6 +226,7 @@ async function clearAllSessions() {
         @keydown.space.prevent="selectSession(session.session_id)"
       >
         <span class="session-name">{{ displayName(session) }}</span>
+        <span v-if="streamingSessionIdSet.has(session.session_id)" class="session-streaming" aria-label="Agent 正在输出"></span>
         <button
           class="session-menu-btn"
           :class="{ active: openMenuId === session.session_id }"
@@ -400,6 +409,19 @@ async function clearAllSessions() {
   width: auto;
   object-fit: contain;
 }
+
+.session-streaming {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  border: 1.5px solid var(--color-primary-soft);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: session-streaming-spin .7s linear infinite;
+}
+
+@keyframes session-streaming-spin { to { transform: rotate(360deg); } }
 
 
 .traffic-lights {

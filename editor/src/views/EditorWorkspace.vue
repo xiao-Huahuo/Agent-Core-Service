@@ -31,6 +31,7 @@ const workspaceStore = useWorkspaceStore()
 const gitStore = useGitStore()
 const HomeView = defineAsyncComponent(() => import('@/views/HomeView.vue'))
 const AgentPage = defineAsyncComponent(() => import('@/views/AgentPage.vue'))
+const AgentQueueView = defineAsyncComponent(() => import('@/views/AgentQueueView.vue'))
 const GraphPane = defineAsyncComponent(() => import('@/components/editor_workspace/GraphPane.vue'))
 const DashboardView = defineAsyncComponent(() => import('@/views/DashboardView.vue'))
 const DebugView = defineAsyncComponent(() => import('@/views/DebugView.vue'))
@@ -73,9 +74,10 @@ let resizeFrameId = 0
 let resizePointerTarget: HTMLElement | null = null
 let resizePointerId: number | null = null
 const isAgentPage = computed(() => workspaceStore.mainView === 'agent')
+const isAgentQueuePage = computed(() => workspaceStore.mainView === 'agent-queue')
 const isGraphPage = computed(() => workspaceStore.mainView === 'graph')
 const isHomePage = computed(() => workspaceStore.mainView === 'home')
-const sidebarHidden = computed(() => isAgentPage.value || isGraphPage.value || isHomePage.value)
+const sidebarHidden = computed(() => isAgentPage.value || isAgentQueuePage.value || isGraphPage.value || isHomePage.value)
 const visibleFileSidebarOpen = computed(() => fileSidebarOpen.value && !sidebarHidden.value)
 const visibleAgentSidebarOpen = computed(() => (
   (gitRightOpen.value || agentSidebarOpen.value || todoSidebarOpen.value) && !sidebarHidden.value
@@ -268,6 +270,13 @@ function openHome() {
 
 function openAgentPage() {
   workspaceStore.setMainView('agent')
+  fileSidebarOpen.value = false
+  agentSidebarOpen.value = false
+}
+
+/** Open the durable Agent task board from the activity bar. */
+function openAgentQueue() {
+  workspaceStore.setMainView('agent-queue')
   fileSidebarOpen.value = false
   agentSidebarOpen.value = false
 }
@@ -598,6 +607,7 @@ watch(
         :ingestion-active="workspaceStore.mainView === 'ingestion'"
         :visualization-active="workspaceStore.mainView === 'visualization'"
         :agent-active="workspaceStore.mainView === 'agent'"
+        :agent-queue-active="workspaceStore.mainView === 'agent-queue'"
         :graph-active="workspaceStore.mainView === 'graph'"
         :dashboard-active="workspaceStore.mainView === 'dashboard'"
         :debug-active="workspaceStore.mainView === 'debug'"
@@ -617,6 +627,7 @@ watch(
         @open-ingestion="openIngestion"
         @open-visualization="openVisualization"
         @toggle-agent="openAgentPage"
+        @open-agent-queue="openAgentQueue"
         @toggle-graph="toggleGraphView"
         @toggle-todo="toggleTodoSidebar"
         @open-dashboard="openDashboard"
@@ -652,6 +663,7 @@ watch(
         <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="main-shell-content" />
         <MarkdownHtmlVisualizationView v-else-if="workspaceStore.mainView === 'visualization'" class="main-shell-content" />
         <AgentPage v-else-if="workspaceStore.mainView === 'agent'" class="main-shell-content" />
+        <AgentQueueView v-else-if="workspaceStore.mainView === 'agent-queue'" class="main-shell-content" />
         <GraphPane v-else-if="workspaceStore.mainView === 'graph'" class="main-shell-content" @open-node="openGraphNode" />
         <DashboardView v-else-if="workspaceStore.mainView === 'dashboard'" class="main-shell-content" />
         <DebugView v-else-if="workspaceStore.mainView === 'debug'" class="main-shell-content" />
