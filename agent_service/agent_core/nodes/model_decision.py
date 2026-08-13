@@ -503,6 +503,9 @@ class ModelDecisionNode:
             return 12000
         if tool_seen_from_tail <= 4 and tool_name == "read_knowledge_file":
             return 6000
+        if tool_seen_from_tail <= 4 and tool_name == "run_terminal_command":
+            # Directory listings and statistics need enough context to avoid redundant follow-up commands.
+            return 6000
         return 900 if tool_seen_from_tail <= 8 else 240
 
     @staticmethod

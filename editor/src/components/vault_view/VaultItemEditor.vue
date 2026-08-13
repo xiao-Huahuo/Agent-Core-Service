@@ -118,8 +118,9 @@ function fieldIcon(key: string) {
 </script>
 
 <template>
-  <div v-if="open" class="editor-backdrop" @click.self="emit('close')">
-    <section class="editor-panel">
+  <Teleport to="body">
+    <div v-if="open" class="editor-backdrop" @click.self="emit('close')">
+      <section class="editor-panel">
       <header class="editor-head">
         <h3>{{ title }}</h3>
         <button class="icon-btn" type="button" title="关闭" @click="emit('close')"><IcIcon name="close" :size="16" /></button>
@@ -145,8 +146,9 @@ function fieldIcon(key: string) {
         <button type="button" @click="emit('close')">取消</button>
         <button class="save-btn" type="button" @click="save">保存</button>
       </footer>
-    </section>
-  </div>
+      </section>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>

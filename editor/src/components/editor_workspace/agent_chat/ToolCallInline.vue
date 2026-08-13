@@ -567,12 +567,13 @@ function finalizedPatch(entry: ToolDisplayEntry) {
 </script>
 
 <template>
-  <div
-    v-for="entry in toolEntries"
-    :key="entry.key"
-    class="action-row tool-call-box"
-    :class="{ expandable: !entry.pending && entry.rawContents.length > 0 }"
-  >
+  <div class="tool-call-list">
+    <div
+      v-for="entry in toolEntries"
+      :key="entry.key"
+      class="action-row tool-call-box"
+      :class="{ expandable: !entry.pending && entry.rawContents.length > 0 }"
+    >
     <div class="tool-call-header">
       <span v-if="entry.pending" class="tool-loader" aria-hidden="true"></span>
       <button
@@ -685,10 +686,18 @@ function finalizedPatch(entry: ToolDisplayEntry) {
         </template>
       </div>
     </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.tool-call-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .tool-call-box {
   display: flex;
   flex-direction: column;

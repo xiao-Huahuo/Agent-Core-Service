@@ -277,6 +277,20 @@ def test_model_decision_compacts_tool_messages_before_llm_call() -> None:
     assert "工具返回内容已压缩" in str(prepared[-1].content)
 
 
+def test_model_decision_keeps_recent_terminal_results_large_enough_for_directory_analysis() -> None:
+    system = SystemMessage(content="system")
+    messages = [
+        HumanMessage(content="调查知识库"),
+        ToolMessage(content="x" * 7000, tool_call_id="call_1", name="run_terminal_command"),
+    ]
+
+    prepared = ModelDecisionNode._prepare_messages_for_llm(system, messages)
+
+    assert isinstance(prepared[-1], ToolMessage)
+    assert len(str(prepared[-1].content)) > 6000
+    assert "6000" in str(prepared[-1].content)
+
+
 def test_list_available_tools_returns_full_tool_catalog() -> None:
     set_tool_runtime(config=AgentConfig(), user_id="u1", session_id="s1")
     try:

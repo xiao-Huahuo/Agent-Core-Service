@@ -43,10 +43,10 @@ const isWakeupMessage = computed(() => {
 </script>
 
 <template>
-  <ChildAgentEventInline
-    v-if="childAgentEvent"
-    :event="childAgentEvent"
-  />
+  <div v-if="childAgentEvent" class="child-agent-event-row">
+    <span class="child-agent-event-avatar-slot" aria-hidden="true"></span>
+    <ChildAgentEventInline :event="childAgentEvent" />
+  </div>
   <div v-else-if="isWakeupMessage" class="system-wakeup-strip" role="status" aria-label="子任务完成提醒">
     <svg class="system-wakeup-icon" xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 -960 960 960" width="14px" fill="currentColor">
       <path d="M200-120q-33 0-56.5-23.5T120-200v-440q0-33 23.5-56.5T200-720h160q-14-18-21-39t-7-41q0-66 47-113t113-47q57 0 98.5 34t56.5 82q11 28 14.5 52t3.5 32h95q33 0 56.5 23.5T840-640v440q0 33-23.5 56.5T760-120H200Zm0-80h560v-440H200v440Zm100-280h120v-40H300v40Zm120 120h120v-40H420v40Zm120-120h120v-40H540v40Zm60-160q0-23-4-45t-13-41q-9-19-25.5-30.5T531-728q-20-8-39-1.5T461-697q-2 4-2 8t2 9q5 14 8.5 24t8.5 16h123Z"/>
@@ -62,6 +62,24 @@ const isWakeupMessage = computed(() => {
 </template>
 
 <style scoped>
+.child-agent-event-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  width: 100%;
+}
+
+.child-agent-event-avatar-slot {
+  width: 36px;
+  flex: 0 0 36px;
+}
+
+.child-agent-event-row :deep(.child-agent-event) {
+  flex: 1;
+  min-width: 0;
+  margin-left: 0;
+}
+
 .system-wakeup-strip {
   display: inline-flex;
   align-items: center;

@@ -89,9 +89,9 @@ const shortRunId = computed(() => {
       @click="expanded = !expanded"
     >
       <span class="child-agent-event-dot" :data-status="child.status"></span>
+      <IcIcon name="chevron-down" class="child-agent-chevron" :class="{ expanded }" :size="15" />
       <span v-if="resolveCategoryLabel(child.category)" class="child-agent-event-category">{{ resolveCategoryLabel(child.category) }}</span>
       <span class="child-agent-event-title">{{ actionLabel }}</span>
-      <IcIcon name="chevron-down" class="child-agent-chevron" :class="{ expanded }" :size="15" />
     </button>
 
     <div class="child-agent-event-detail" :class="{ expanded }">
@@ -142,7 +142,7 @@ const shortRunId = computed(() => {
 <style scoped>
 .child-agent-event {
   align-self: stretch;
-  width: min(100%, 760px);
+  width: 100%;
   margin: var(--space-6) 0;
   border-radius: var(--radius-xl);
   background: var(--color-surface);
