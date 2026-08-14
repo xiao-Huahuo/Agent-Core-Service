@@ -32,10 +32,6 @@ from agent_service.tools import ToolExecutor
 from agent_service.tools.runtime_context import get_observation_content_callback, get_tool_trace_callback
 
 
-MAX_CONTINUE_OBSERVATIONS = 5
-MAX_TOOL_RESULTS_BEFORE_ANSWER = 18
-
-
 OBSERVATION_SYSTEM_PROMPT = (
     "你是一个执行结果审视器。只根据用户问题、最近工具调用和工具结果判断下一步。\n"
     "只输出 JSON，不要输出其他文字。格式:\n"
@@ -113,13 +109,6 @@ class ObservationNode:
         token_usage = extract_token_usage(response)
         parsed = self._parse_decision(response.content)
         llm_decision = parsed["decision"]
-        forced_decision = self._force_convergence_decision(state, llm_decision)
-        if forced_decision:
-            llm_decision = forced_decision
-            parsed["decision"] = forced_decision
-            parsed["reason"] = "已达到探索轮次上限"
-            parsed["next_action"] = "停止继续收集信息，基于已有材料生成最终结果。"
-            parsed["confidence"] = max(float(parsed.get("confidence") or 0), 0.75)
         decision = self._check_overflow_then_decide(state, llm_decision)
         if decision == "compress":
             parsed["decision"] = "compress"
@@ -191,27 +180,6 @@ class ObservationNode:
         if estimated_tokens > self.config.memory.summary_trigger_tokens:
             return "compress"
         return "continue"
-
-    @staticmethod
-    def _force_convergence_decision(state: AgentState, llm_decision: str) -> str:
-        """限制 plan 模式的探索轮次,避免复杂任务无限停留在继续收集信息阶段。"""
-
-        if llm_decision != "continue":
-            return ""
-        traces = state.get("trace", []) or []
-        continue_count = 0
-        tool_result_count = 0
-        for trace in traces:
-            if trace.get("node") == "observation" and trace.get("event") == "observation_complete":
-                if trace.get("decision") == "continue":
-                    continue_count += 1
-            if trace.get("node") == "action" and trace.get("event") == "tool_call_end":
-                tool_result_count += 1
-        if continue_count >= MAX_CONTINUE_OBSERVATIONS:
-            return "answer"
-        if tool_result_count >= MAX_TOOL_RESULTS_BEFORE_ANSWER:
-            return "answer"
-        return ""
 
     def _build_observation_context(self, state: AgentState) -> str:
         """

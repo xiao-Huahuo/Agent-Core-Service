@@ -86,7 +86,9 @@ def test_observation_uses_small_model_tier() -> None:
     assert scheduler.calls[0]["model_tier"] == SMALL_MODEL_TIER
 
 
-def test_observation_forces_answer_after_repeated_continue() -> None:
+def test_observation_respects_continue_after_long_exploration() -> None:
+    """观察节点不得因固定观察次数或工具结果数量强制结束探索。"""
+
     scheduler = _FakeScheduler(
         '{"decision":"continue","reason":"need more","next_action":"continue reading","confidence":0.4}'
     )
@@ -95,6 +97,10 @@ def test_observation_forces_answer_after_repeated_continue() -> None:
         {"node": "observation", "event": "observation_complete", "decision": "continue"}
         for _ in range(5)
     ]
+    traces.extend(
+        {"node": "action", "event": "tool_call_end"}
+        for _ in range(18)
+    )
 
     result = node(
         {
@@ -112,7 +118,7 @@ def test_observation_forces_answer_after_repeated_continue() -> None:
         }
     )
 
-    assert result["observation_decision"] == "answer"
+    assert result["observation_decision"] == "continue"
     assert result["messages"] == []
 
 
