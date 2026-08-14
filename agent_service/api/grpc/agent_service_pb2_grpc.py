@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from . import agent_service_pb2 as agent__service__pb2
+from agent_service.api.grpc import agent_service_pb2 as agent__service__pb2
 from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
 
 GRPC_GENERATED_VERSION = '1.68.1'
@@ -137,6 +137,11 @@ class AgentServiceStub(object):
         self.GetTokenUsage = channel.unary_unary(
                 '/agent_service.AgentService/GetTokenUsage',
                 request_serializer=agent__service__pb2.TokenUsageRequest.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.GetActivityHeatmap = channel.unary_unary(
+                '/agent_service.AgentService/GetActivityHeatmap',
+                request_serializer=agent__service__pb2.ActivityHeatmapRequest.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
                 _registered_method=True)
         self.GetRegisteredTools = channel.unary_unary(
@@ -611,6 +616,12 @@ class AgentServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def GetTokenUsage(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetActivityHeatmap(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -1126,6 +1137,11 @@ def add_AgentServiceServicer_to_server(servicer, server):
             'GetTokenUsage': grpc.unary_unary_rpc_method_handler(
                     servicer.GetTokenUsage,
                     request_deserializer=agent__service__pb2.TokenUsageRequest.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'GetActivityHeatmap': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetActivityHeatmap,
+                    request_deserializer=agent__service__pb2.ActivityHeatmapRequest.FromString,
                     response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             ),
             'GetRegisteredTools': grpc.unary_unary_rpc_method_handler(
@@ -1985,6 +2001,33 @@ class AgentService(object):
             target,
             '/agent_service.AgentService/GetTokenUsage',
             agent__service__pb2.TokenUsageRequest.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetActivityHeatmap(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetActivityHeatmap',
+            agent__service__pb2.ActivityHeatmapRequest.SerializeToString,
             google_dot_protobuf_dot_struct__pb2.Struct.FromString,
             options,
             channel_credentials,

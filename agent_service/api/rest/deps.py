@@ -30,6 +30,7 @@ from agent_service.services.smart_form_service import SmartFormService
 from agent_service.services.structured_generation_service import StructuredGenerationService
 from agent_service.services.agent_change_service import AgentChangeService
 from agent_service.services.agent_queue_service import AgentQueueService
+from agent_service.services.activity_service import ActivityService
 
 _agent: AgentCore | None = None
 _session_service: SessionService | None = None
@@ -53,6 +54,7 @@ _smart_form_service: SmartFormService | None = None
 _structured_generation_service: StructuredGenerationService | None = None
 _agent_change_service: AgentChangeService | None = None
 _agent_queue_service: AgentQueueService | None = None
+_activity_service: ActivityService | None = None
 
 
 def _require_agent() -> AgentCore:
@@ -197,3 +199,11 @@ def _require_agent_queue_service() -> AgentQueueService:
     if _agent_queue_service is None:
         raise HTTPException(status_code=503, detail="AgentQueueService not initialized yet")
     return _agent_queue_service
+
+
+def _require_activity_service() -> ActivityService:
+    """Return the persistent daily activity service injected at startup."""
+
+    if _activity_service is None:
+        raise HTTPException(status_code=503, detail="ActivityService not initialized yet")
+    return _activity_service

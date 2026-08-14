@@ -108,6 +108,7 @@ from agent_service.api.grpc.agent_service_pb2 import (
     TaskSuggestionsRequest,
     TaskSuggestionsResponse,
     TokenUsageRequest,
+    ActivityHeatmapRequest,
     ToolInfo,
     ToolListRequest,
     ToolListResponse,
@@ -133,6 +134,7 @@ from agent_service.services.feedback_service import FeedbackService
 from agent_service.services.vault_service import VaultService
 from agent_service.services.agent_change_service import AgentChangeService
 from agent_service.services.agent_queue_service import AgentQueueService
+from agent_service.services.activity_service import ActivityService
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +156,7 @@ class AgentServiceServicer(BaseServicer):
         vault_service: VaultService | None = None,
         agent_change_service: AgentChangeService | None = None,
         agent_queue_service: AgentQueueService | None = None,
+        activity_service: ActivityService | None = None,
     ) -> None:
         self._agent = agent
         self._session_service = session_service
@@ -166,6 +169,7 @@ class AgentServiceServicer(BaseServicer):
         self._vault_service = vault_service
         self._agent_change_service = agent_change_service
         self._agent_queue_service = agent_queue_service
+        self._activity_service = activity_service
 
     def shutdown(self) -> None:
         self._agent.close()
@@ -772,6 +776,22 @@ class AgentServiceServicer(BaseServicer):
             session_id=request.session_id or None,
             interval=interval,
             limit=request.limit or 120,
+        )
+        return ParseDict(payload, Struct())
+
+    def GetActivityHeatmap(  # noqa: N802
+        self, request: ActivityHeatmapRequest, context: grpc.ServicerContext
+    ) -> Struct:
+        """Return the same persisted daily activity heatmap exposed by REST."""
+
+        service = self._activity_service
+        if service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "ActivityService not initialized")
+        service.sync_existing_records(user_id=request.user_id)
+        payload = service.get_heatmap(
+            user_id=request.user_id,
+            days=request.days or 371,
+            timezone_name=request.timezone or "Asia/Shanghai",
         )
         return ParseDict(payload, Struct())
 

@@ -204,6 +204,7 @@ class AgentCore:
         self.task_list_service = task_list_service
         self.change_service = change_service
         self.skill_service = skill_service
+        self.activity_service: Any = None
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.child_agent_manager = ChildAgentManager(event_callback=self._on_child_agent_event)
         self.tool_registry = ToolRegistry.with_builtin_tools(config=config) if tools is None else None
@@ -1008,6 +1009,8 @@ class AgentCore:
                     task_scheduler=self.task_scheduler,
                     candidate_skills=skill_index,
                 )
+                if self.activity_service is not None and inputs["active_skills"]:
+                    self.activity_service.record_skills(user_id=user_id, skills=inputs["active_skills"])
             except Exception:
                 logger.exception("Skill routing failed | user=%s session=%s", user_id, session_id)
                 inputs["skill_index"] = []

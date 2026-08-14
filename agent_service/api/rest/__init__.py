@@ -22,6 +22,7 @@ from agent_service.api.rest.smart_forms import router as smart_forms_router
 from agent_service.api.rest.structured_generation import router as structured_generation_router
 from agent_service.api.rest.agent_changes import router as agent_changes_router
 from agent_service.api.rest.agent_queue import router as agent_queue_router
+from agent_service.api.rest.activity import router as activity_router
 
 router = APIRouter()
 router.include_router(health_router)
@@ -44,5 +45,6 @@ router.include_router(smart_forms_router)
 router.include_router(structured_generation_router)
 router.include_router(agent_changes_router)
 router.include_router(agent_queue_router)
+router.include_router(activity_router)
 
 __all__ = ["router"]

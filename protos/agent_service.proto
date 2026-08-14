@@ -61,6 +61,7 @@ service AgentService {
   rpc GetRecallDetails(RecallDetailsRequest) returns (RecallDetailsResponse);
   rpc GetTaskSuggestions(TaskSuggestionsRequest) returns (TaskSuggestionsResponse);
   rpc GetTokenUsage(TokenUsageRequest) returns (google.protobuf.Struct);
+  rpc GetActivityHeatmap(ActivityHeatmapRequest) returns (google.protobuf.Struct);
   rpc GetRegisteredTools(ToolListRequest) returns (ToolListResponse);
 
   // ---- 用户设置 ----
@@ -471,6 +472,12 @@ message TokenUsageRequest {
   string session_id = 2;
   string interval = 3;
   int32 limit = 4;
+}
+
+message ActivityHeatmapRequest {
+  string user_id = 1;
+  int32 days = 2;
+  string timezone = 3;
 }
 
 message ToolListRequest {

@@ -45,6 +45,7 @@ export const API_ROUTES = {
   AGENT_RECALL_DETAILS: '/agent/recall-details',
   AGENT_TASK_SUGGESTIONS: '/agent/task-suggestions',
   AGENT_TOKEN_USAGE: '/agent/token-usage',
+  ACTIVITY_HEATMAP: '/activity/heatmap',
   AGENT_CHILDREN: '/agent/children',
   SESSION_MESSAGE_HISTORY: '/sessions/observability/history',
   DEBUG_RUNTIME_APIS: '/debug/runtime-apis',

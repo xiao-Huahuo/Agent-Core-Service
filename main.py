@@ -26,6 +26,7 @@ from typing import Any
 import grpc
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 
 warnings.filterwarnings("ignore", message=".*allowed_objects.*")
 
@@ -100,6 +101,8 @@ from agent_service.services.agent_change_service import AgentChangeService
 from agent_service.services.logging_service import setup_logging
 from agent_service.services.favorite_service import FavoriteService
 from agent_service.services.feedback_service import FeedbackService
+from agent_service.services.activity_service import ActivityService
+from agent_service.services.activity_tracking import classify_activity, should_inspect_activity_request
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +140,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     task_list_service = TaskListService(session_service=session_service)
     memory_service = LongTermMemoryService(config=config)
     settings_service = SettingsService(config=config, memory_service=memory_service)
+    activity_service = ActivityService(engine=settings_service.engine)
 
     # 启动时迁移：将用户覆盖的旧路径内容移动到新路径
     from agent_service.services.storage_service import migrate_storage_paths
@@ -162,6 +166,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     logger.info("AgentCore 初始化完成 | graph_diagram=%s", agent.graph_diagram_path)
     skill_service = SkillService(config=config, settings_service=settings_service)
     agent.skill_service = skill_service
+    agent.activity_service = activity_service
     attachment_service = SessionAttachmentService(config=config, settings_service=settings_service)
     agent.attachment_service = attachment_service
     if agent.context_builder is not None:
@@ -190,6 +195,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     rest_deps._vault_service = vault_service
     rest_deps._favorite_service = favorite_service
     rest_deps._feedback_service = feedback_service
+    rest_deps._activity_service = activity_service
     rest_deps._smart_form_service = smart_form_service
     rest_deps._structured_generation_service = structured_generation_service
     rest_deps._agent_change_service = agent_change_service
@@ -261,6 +267,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         vault_service=vault_service,
         agent_change_service=agent_change_service,
         agent_queue_service=rest_deps._agent_queue_service,
+        activity_service=activity_service,
     )
     rest_deps._agent = agent
     rest_deps._session_service = session_service
@@ -320,6 +327,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._todo_service = None
         rest_deps._automation_service = None
         rest_deps._agent_queue_service = None
+        rest_deps._activity_service = None
         logger.info("AgentService 已关闭")
 
 
@@ -332,6 +340,36 @@ app.add_middleware(
     allow_headers=["*"],
     allow_private_network=True,
 )
+
+
+@app.middleware("http")
+async def _record_daily_activity(request: Any, call_next: Any) -> Any:
+    """Persist privacy-safe activity only after a meaningful mutation succeeds."""
+
+    body: dict[str, Any] = {}
+    if (
+        should_inspect_activity_request(request.method, request.url.path)
+        and "application/json" in request.headers.get("content-type", "")
+    ):
+        try:
+            payload = await request.json()
+            body = payload if isinstance(payload, dict) else {}
+        except ValueError:
+            body = {}
+    response = await call_next(request)
+    event = classify_activity(request.method, request.url.path, body) if response.status_code < 400 else None
+    service = rest_deps._activity_service
+    if event is None or service is None:
+        return response
+    user_id = str(body.get("user_id") or request.query_params.get("user_id") or "").strip()
+    if not user_id and request.url.path.startswith("/vault/") and rest_deps._vault_service is not None:
+        try:
+            user_id = str(rest_deps._vault_service.verify_token(request.headers.get("Authorization", "")).user_id)
+        except ValueError:
+            user_id = ""
+    if user_id:
+        await run_in_threadpool(service.record_event, user_id=user_id, **event)
+    return response
 
 
 @app.middleware("http")

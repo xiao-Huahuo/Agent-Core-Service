@@ -75,6 +75,7 @@ export default defineConfig({
       '/todo': 'http://127.0.0.1:8002',
       '/automation': 'http://127.0.0.1:8002',
       '/agent-queue': 'http://127.0.0.1:8002',
+      '/activity': 'http://127.0.0.1:8002',
       '/health': 'http://127.0.0.1:8002',
     },
   },

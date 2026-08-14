@@ -27,6 +27,7 @@ except ImportError:  # pragma: no cover - fallback only used when optional depen
 from agent_service.api.rest.deps import (
     _require_knowledge_graph_service,
     _require_knowledge_library_service,
+    _require_activity_service,
     _require_retrieval_service,
     _require_settings_service,
 )
@@ -434,6 +435,27 @@ async def upload_knowledge_file(
             )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    relative_path = uploaded_path.relative_to(svc.get_active_root_path(user_id=user_id)).as_posix()
+    await run_in_threadpool(
+        _require_activity_service().record_event,
+        user_id=user_id,
+        module="documents",
+        action="file_imported",
+        score=1,
+        object_id=relative_path,
+        title="上传文件",
+    )
+    if should_ingest:
+        await run_in_threadpool(
+            _require_activity_service().record_event,
+            user_id=user_id,
+            module="knowledge",
+            action="knowledge_ingested",
+            score=1,
+            object_id=relative_path,
+            title="完成知识入库",
+            dedupe_minutes=30,
+        )
     return result.to_dict()
 
 

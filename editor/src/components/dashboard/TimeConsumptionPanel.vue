@@ -11,6 +11,7 @@ import { listLibraryItems } from '@/api/library'
 import RagMetricsCard from '@/components/dashboard/RagMetricsCard.vue'
 import TokenUsageCard from '@/components/dashboard/TokenUsageCard.vue'
 import LatencyCard from '@/components/dashboard/LatencyCard.vue'
+import ActivityHeatmapCard from '@/components/dashboard/ActivityHeatmapCard.vue'
 import { useChatStore } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
@@ -240,8 +241,9 @@ function formatSessionTime(value: string): string {
           </div>
         </div>
         <div class="planning-right">
-          <div class="planning-right-main"></div>
-          <div class="planning-right-footer"></div>
+          <div class="planning-right-main">
+            <ActivityHeatmapCard />
+          </div>
         </div>
       </div>
       <div class="col-latency">
@@ -301,15 +303,30 @@ function formatSessionTime(value: string): string {
 
 .col-planning {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 2.4fr);
   gap: var(--space-10);
 }
 
-.planning-left,
-.planning-right-main {
+.planning-left {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
+}
+
+.planning-right-main {
+  display: flex;
+  width: 100%;
+  flex: 1 1 auto;
+  align-items: flex-end;
+  min-width: 0;
+  min-height: 0;
+}
+
+.planning-right-main > * {
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
 }
 
 .planning-left {
@@ -460,14 +477,7 @@ function formatSessionTime(value: string): string {
 }
 
 .planning-right {
-  display: grid;
-  grid-template-rows: 3fr 1fr;
-  gap: var(--space-10);
-  min-width: 0;
-  min-height: 0;
-}
-
-.planning-right-footer {
+  display: flex;
   min-width: 0;
   min-height: 0;
 }
@@ -486,6 +496,10 @@ function formatSessionTime(value: string): string {
 }
 
 @media (max-width: 1200px) {
+  .row-lower {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .row-upper {
     flex-direction: column;
     height: auto;
@@ -503,12 +517,8 @@ function formatSessionTime(value: string): string {
     height: 300px;
   }
 
-  .row-lower {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .col-planning {
-    display: none;
+    grid-template-columns: minmax(180px, 0.65fr) minmax(0, 1.35fr);
   }
 }
 
@@ -525,7 +535,20 @@ function formatSessionTime(value: string): string {
     flex-direction: column;
   }
 
-  .col-token,
+  .col-planning {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .planning-right {
+    min-height: 420px;
+  }
+
+  .col-token {
+    flex: none;
+    height: 320px;
+  }
+
   .col-latency {
     flex: none;
     height: 320px;
