@@ -81,7 +81,7 @@ async def api_edit_todo(body: dict[str, Any]) -> dict[str, Any]:
 
 @router.post("/todo/delete")
 async def api_delete_todo(body: dict[str, Any]) -> dict[str, Any]:
-    """删除待办。"""
+    """删除待办；自动化类别统一交给其所属服务做完整级联删除。"""
     user_id = body.get("user_id")
     todo_id = body.get("todo_id")
     if not user_id or not todo_id:

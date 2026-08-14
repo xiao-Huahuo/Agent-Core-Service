@@ -10,9 +10,20 @@ export interface AutomationTaskData {
   nextRunAt: string
   accessMode: 'readonly' | 'sandbox' | 'full_access'
   enabled: boolean
-  lastRunAt?: string
-  lastStatus?: string
-  lastError?: string
+  lastRunAt?: string | null
+  lastStatus?: 'success' | 'failed' | 'skipped' | null
+  lastError?: string | null
+}
+
+export interface AutomationRunData {
+  id: string
+  automationId: string
+  userId: string
+  status: 'running' | 'success' | 'failed' | 'skipped'
+  startedAt: string
+  finishedAt?: string | null
+  output?: string | null
+  error?: string | null
 }
 
 export function apiListAutomations(userId: string): Promise<AutomationTaskData[]> {
@@ -45,4 +56,16 @@ export function apiToggleAutomation(userId: string, automationId: string, enable
 
 export function apiDeleteAutomation(userId: string, automationId: string): Promise<{ deleted: boolean }> {
   return apiPost(API_ROUTES.AUTOMATION_DELETE, { user_id: userId, automation_id: automationId })
+}
+
+export function apiListAutomationRuns(
+  userId: string,
+  automationId: string,
+  limit = 20,
+): Promise<AutomationRunData[]> {
+  return apiGet(API_ROUTES.AUTOMATION_RUNS, {
+    user_id: userId,
+    automation_id: automationId,
+    limit,
+  })
 }

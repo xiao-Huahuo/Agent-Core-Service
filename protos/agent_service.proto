@@ -151,6 +151,14 @@ service AgentService {
   rpc TransitionAgentQueueTask(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc DeleteAgentQueueTask(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc UpdateAgentQueueSettings(google.protobuf.Struct) returns (google.protobuf.Struct);
+
+  // Scheduled Agent automation. Struct mirrors the existing REST request
+  // fields while serialized tasks and runs keep their current camelCase form.
+  rpc ListAutomations(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc CreateAutomation(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc ToggleAutomation(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc ListAutomationRuns(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc DeleteAutomation(google.protobuf.Struct) returns (google.protobuf.Struct);
 }
 
 // ---------------------------------------------------------------------------

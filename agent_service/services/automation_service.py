@@ -19,6 +19,7 @@ from sqlalchemy import and_, or_, update
 from sqlmodel import Session, SQLModel, select
 
 from agent_service.models.automation import AutomationRunRecord, AutomationTaskRecord
+from agent_service.models.todo import TodoRecord
 from agent_service.services.todo_service import TodoService
 
 
@@ -104,6 +105,22 @@ class AutomationService:
         return local.astimezone(timezone.utc)
 
     @classmethod
+    def _advance_datetime_after(
+        cls,
+        current: datetime,
+        frequency: str,
+        interval: int,
+        timezone_name: str,
+        after: datetime,
+    ) -> datetime:
+        """跳过停机期间错过的周期，直接返回严格晚于指定时间的下一次执行。"""
+
+        next_run = cls._advance_datetime(current, frequency, interval, timezone_name)
+        while next_run <= after:
+            next_run = cls._advance_datetime(next_run, frequency, interval, timezone_name)
+        return next_run
+
+    @classmethod
     def _serialize_task(cls, record: AutomationTaskRecord) -> dict[str, Any]:
         """将自动化记录转换为前端使用的 camelCase 数据。"""
 
@@ -154,6 +171,59 @@ class AutomationService:
             "error": record.error,
         }
 
+    @staticmethod
+    def _delete_task_record(db: Session, task: AutomationTaskRecord) -> None:
+        """在当前事务中删除自动化定义及其全部运行记录。"""
+
+        runs = db.exec(
+            select(AutomationRunRecord).where(
+                AutomationRunRecord.automation_id == task.automation_id,
+                AutomationRunRecord.user_id == task.user_id,
+            )
+        ).all()
+        for run in runs:
+            db.delete(run)
+        db.delete(task)
+
+    def _purge_orphaned_tasks(self, db: Session, *, user_id: str | None = None) -> int:
+        """清理关联 TODO 已消失或归属异常的旧自动化，阻止幽灵任务被扫描。"""
+
+        statement = select(AutomationTaskRecord)
+        if user_id is not None:
+            statement = statement.where(AutomationTaskRecord.user_id == user_id)
+        removed = 0
+        for task in db.exec(statement).all():
+            todo = db.get(TodoRecord, task.todo_id)
+            if todo is not None and todo.user_id == task.user_id and todo.category == "automation":
+                continue
+            self._delete_task_record(db, task)
+            removed += 1
+        if removed:
+            db.commit()
+        return removed
+
+    @staticmethod
+    def _reconcile_stale_runs(db: Session, *, current: datetime) -> int:
+        """收敛崩溃、停用或租约过期后遗留的 running 记录。"""
+
+        reconciled = 0
+        running = db.exec(
+            select(AutomationRunRecord).where(AutomationRunRecord.status == "running")
+        ).all()
+        for run in running:
+            task = db.get(AutomationTaskRecord, run.automation_id)
+            lease_until = task.lease_until if task is not None else None
+            if lease_until is not None and lease_until.tzinfo is None:
+                lease_until = lease_until.replace(tzinfo=timezone.utc)
+            if task is not None and task.enabled and lease_until is not None and lease_until > current:
+                continue
+            run.status = "skipped" if task is not None and not task.enabled else "failed"
+            run.finished_at = current
+            run.error = "任务已停用，运行记录已收敛" if run.status == "skipped" else "执行租约已过期，运行记录已安全回收"
+            db.add(run)
+            reconciled += 1
+        return reconciled
+
     def create_task(
         self,
         *,
@@ -167,6 +237,9 @@ class AutomationService:
     ) -> dict[str, Any]:
         """创建自动化任务,并在 TODO 列表中生成对应的 automation 项。"""
 
+        text = text.strip()
+        if not text:
+            raise ValueError("text is required")
         prompt = prompt.strip()
         if not prompt:
             raise ValueError("prompt is required")
@@ -175,11 +248,20 @@ class AutomationService:
         frequency, interval = self._normalize_recurrence(recurrence)
         zone = self._normalize_timezone(timezone_name)
         next_run = self._parse_datetime(next_run_at)
-        todo = self.todo_service.add_todo(user_id=user_id, text=text, category="automation")
+        self.todo_service._import_legacy_if_needed(user_id)
         now = self._utc_now()
+        todo_id = f"todo_{uuid4().hex[:12]}"
+        todo = TodoRecord(
+            todo_id=todo_id,
+            user_id=user_id,
+            text=text,
+            category="automation",
+            created_at=now,
+            updated_at=now,
+        )
         record = AutomationTaskRecord(
             automation_id=f"automation_{uuid4().hex[:12]}",
-            todo_id=todo["id"],
+            todo_id=todo_id,
             user_id=user_id,
             prompt=prompt,
             timezone_name=zone,
@@ -191,6 +273,7 @@ class AutomationService:
             updated_at=now,
         )
         with Session(self.engine) as db:
+            db.add(todo)
             db.add(record)
             db.commit()
             db.refresh(record)
@@ -200,12 +283,25 @@ class AutomationService:
         """列出用户的自动化任务,按下一次执行时间排序。"""
 
         with Session(self.engine) as db:
+            self._purge_orphaned_tasks(db, user_id=user_id)
             records = db.exec(
                 select(AutomationTaskRecord)
                 .where(AutomationTaskRecord.user_id == user_id)
                 .order_by(AutomationTaskRecord.next_run_at)
             ).all()
             return [self._serialize_task(record) for record in records]
+
+    def get_task_by_todo_id(self, *, user_id: str, todo_id: str) -> dict[str, Any] | None:
+        """按关联 TODO 查找自动化定义，供所有 TODO 删除入口统一路由。"""
+
+        with Session(self.engine) as db:
+            record = db.exec(
+                select(AutomationTaskRecord).where(
+                    AutomationTaskRecord.user_id == user_id,
+                    AutomationTaskRecord.todo_id == todo_id,
+                )
+            ).first()
+            return self._serialize_task(record) if record is not None else None
 
     def list_runs(self, *, user_id: str, automation_id: str, limit: int = 20) -> list[dict[str, Any]]:
         """列出一个自动化任务最近的运行记录。"""
@@ -237,6 +333,20 @@ class AutomationService:
             record.updated_at = self._utc_now()
             record.lease_id = None
             record.lease_until = None
+            if not enabled:
+                now = self._utc_now()
+                running = db.exec(
+                    select(AutomationRunRecord).where(
+                        AutomationRunRecord.automation_id == automation_id,
+                        AutomationRunRecord.user_id == user_id,
+                        AutomationRunRecord.status == "running",
+                    )
+                ).all()
+                for run in running:
+                    run.status = "skipped"
+                    run.finished_at = now
+                    run.error = "任务已停用，取消尚未开始的执行"
+                    db.add(run)
             db.add(record)
             db.commit()
             db.refresh(record)
@@ -249,29 +359,109 @@ class AutomationService:
             task = db.get(AutomationTaskRecord, automation_id)
             if task is None or task.user_id != user_id:
                 return False
-            runs = db.exec(
-                select(AutomationRunRecord).where(AutomationRunRecord.automation_id == automation_id)
-            ).all()
-            for run in runs:
-                db.delete(run)
-            db.delete(task)
+            todo_id = task.todo_id
+            self._delete_task_record(db, task)
+            todo = db.get(TodoRecord, todo_id)
+            if todo is not None and todo.user_id == user_id:
+                db.delete(todo)
             db.commit()
-        self.todo_service.delete_todo(user_id=user_id, todo_id=task.todo_id)
         return True
 
-    def claim_due_tasks(self, *, now: datetime | None = None, lease_seconds: int = 300) -> list[dict[str, Any]]:
+    def delete_task_by_todo_id(self, *, user_id: str, todo_id: str) -> bool:
+        """通过 TODO 标识删除完整自动化，兼容旧客户端的普通删除入口。"""
+
+        task = self.get_task_by_todo_id(user_id=user_id, todo_id=todo_id)
+        if task is None:
+            return False
+        return self.delete_task(user_id=user_id, automation_id=str(task["id"]))
+
+    def is_claim_executable(
+        self,
+        *,
+        automation_id: str,
+        run_id: str,
+        lease_id: str,
+        now: datetime | None = None,
+    ) -> bool:
+        """确认已抢占执行仍有效，拦截排队期间发生的删除或停用。"""
+
+        current = (now or self._utc_now()).astimezone(timezone.utc)
+        with Session(self.engine) as db:
+            task = db.get(AutomationTaskRecord, automation_id)
+            run = db.get(AutomationRunRecord, run_id)
+            if (
+                task is None
+                or run is None
+                or run.automation_id != automation_id
+                or run.user_id != task.user_id
+                or not task.enabled
+                or run.status != "running"
+            ):
+                return False
+            lease_until = task.lease_until
+            if lease_until is not None and lease_until.tzinfo is None:
+                lease_until = lease_until.replace(tzinfo=timezone.utc)
+            if task.lease_id != lease_id or lease_until is None or lease_until <= current:
+                return False
+            todo = db.get(TodoRecord, task.todo_id)
+            return bool(todo is not None and todo.user_id == task.user_id and todo.category == "automation")
+
+    def renew_claim(
+        self,
+        *,
+        automation_id: str,
+        run_id: str,
+        lease_id: str,
+        lease_seconds: int = 300,
+        now: datetime | None = None,
+    ) -> bool:
+        """为仍在运行且仍归当前 worker 所有的任务续租。"""
+
+        current = (now or self._utc_now()).astimezone(timezone.utc)
+        with Session(self.engine) as db:
+            run = db.get(AutomationRunRecord, run_id)
+            if run is None or run.automation_id != automation_id or run.status != "running":
+                return False
+            result = db.exec(
+                update(AutomationTaskRecord)
+                .execution_options(synchronize_session=False)
+                .where(
+                    AutomationTaskRecord.automation_id == automation_id,
+                    AutomationTaskRecord.enabled.is_(True),
+                    AutomationTaskRecord.lease_id == lease_id,
+                    AutomationTaskRecord.lease_until > current,
+                )
+                .values(lease_until=current + timedelta(seconds=lease_seconds))
+            )
+            db.commit()
+            return result.rowcount == 1
+
+    def claim_due_tasks(
+        self,
+        *,
+        now: datetime | None = None,
+        lease_seconds: int = 300,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
         """抢占到期任务并创建 running 运行记录。"""
 
         current = (now or self._utc_now()).astimezone(timezone.utc)
         lease_until = current + timedelta(seconds=lease_seconds)
+        safe_limit = max(0, min(limit, 100))
+        if safe_limit == 0:
+            return []
         claimed: list[dict[str, Any]] = []
         with Session(self.engine) as db:
+            self._purge_orphaned_tasks(db)
+            self._reconcile_stale_runs(db, current=current)
             candidates = db.exec(
                 select(AutomationTaskRecord).where(
                     AutomationTaskRecord.enabled.is_(True),
                     AutomationTaskRecord.next_run_at <= current,
                     or_(AutomationTaskRecord.lease_until.is_(None), AutomationTaskRecord.lease_until < current),
-                ).limit(20)
+                )
+                .order_by(AutomationTaskRecord.next_run_at, AutomationTaskRecord.created_at)
+                .limit(safe_limit)
             ).all()
             for candidate in candidates:
                 lease_id = f"lease_{uuid4().hex[:12]}"
@@ -290,6 +480,17 @@ class AutomationService:
                 )
                 if result.rowcount != 1:
                     continue
+                stale_runs = db.exec(
+                    select(AutomationRunRecord).where(
+                        AutomationRunRecord.automation_id == candidate.automation_id,
+                        AutomationRunRecord.status == "running",
+                    )
+                ).all()
+                for stale_run in stale_runs:
+                    stale_run.status = "failed"
+                    stale_run.finished_at = current
+                    stale_run.error = "执行租约已过期，已由调度器安全回收"
+                    db.add(stale_run)
                 run = AutomationRunRecord(
                     run_id=f"run_{uuid4().hex[:12]}",
                     automation_id=candidate.automation_id,
@@ -297,7 +498,11 @@ class AutomationService:
                     started_at=current,
                 )
                 db.add(run)
-                claimed.append({"task": self._serialize_task(candidate), "run": self._serialize_run(run)})
+                claimed.append({
+                    "task": self._serialize_task(candidate),
+                    "run": self._serialize_run(run),
+                    "leaseId": lease_id,
+                })
             db.commit()
         return claimed
 
@@ -307,38 +512,54 @@ class AutomationService:
         automation_id: str,
         run_id: str,
         status: str,
+        lease_id: str,
         output: str | None = None,
         error: str | None = None,
-    ) -> None:
+        now: datetime | None = None,
+    ) -> bool:
         """完成运行记录并安排下一次执行。"""
 
         if status not in {"success", "failed", "skipped"}:
             raise ValueError("status must be success, failed, or skipped")
-        now = self._utc_now()
+        finished_at = (now or self._utc_now()).astimezone(timezone.utc)
         with Session(self.engine) as db:
             task = db.get(AutomationTaskRecord, automation_id)
             run = db.get(AutomationRunRecord, run_id)
-            if task is None or run is None:
-                return
+            if (
+                task is None
+                or run is None
+                or run.automation_id != automation_id
+                or run.user_id != task.user_id
+                or run.status != "running"
+                or not task.enabled
+            ):
+                return False
+            lease_until = task.lease_until
+            if lease_until is not None and lease_until.tzinfo is None:
+                lease_until = lease_until.replace(tzinfo=timezone.utc)
+            if task.lease_id != lease_id or lease_until is None or lease_until <= finished_at:
+                return False
             run.status = status
-            run.finished_at = now
+            run.finished_at = finished_at
             run.output = output
             run.error = error
-            task.last_run_at = now
+            task.last_run_at = finished_at
             task.last_status = status
             task.last_error = error
-            task.updated_at = now
+            task.updated_at = finished_at
             task.lease_id = None
             task.lease_until = None
             if task.recurrence_frequency == "none":
                 task.enabled = False
             else:
-                task.next_run_at = self._advance_datetime(
+                task.next_run_at = self._advance_datetime_after(
                     task.next_run_at,
                     task.recurrence_frequency,
                     task.recurrence_interval,
                     task.timezone_name,
+                    finished_at,
                 )
             db.add(run)
             db.add(task)
             db.commit()
+            return True

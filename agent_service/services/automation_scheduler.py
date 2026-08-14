@@ -31,6 +31,7 @@ class AutomationScheduler:
         session_service: Any,
         poll_seconds: float = 15.0,
         max_workers: int = 2,
+        lease_seconds: int = 300,
     ) -> None:
         """初始化调度器,不在构造阶段启动线程。"""
 
@@ -38,9 +39,12 @@ class AutomationScheduler:
         self.agent = agent
         self.session_service = session_service
         self.poll_seconds = max(1.0, poll_seconds)
+        self.max_workers = max(1, max_workers)
+        self.lease_seconds = max(30, lease_seconds)
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
-        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="automation-run")
+        self._executor = ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix="automation-run")
+        self._futures: set[Any] = set()
 
     def start(self) -> None:
         """启动单一调度线程。"""
@@ -66,9 +70,14 @@ class AutomationScheduler:
 
         while not self._stop_event.is_set():
             try:
-                claims = self.automation_service.claim_due_tasks()
+                self._futures = {future for future in self._futures if not future.done()}
+                available_workers = self.max_workers - len(self._futures)
+                claims = self.automation_service.claim_due_tasks(
+                    lease_seconds=self.lease_seconds,
+                    limit=available_workers,
+                )
                 for claim in claims:
-                    self._executor.submit(self._execute_claim, claim)
+                    self._futures.add(self._executor.submit(self._execute_claim, claim))
             except Exception:
                 logger.exception("自动化任务扫描失败")
             self._stop_event.wait(self.poll_seconds)
@@ -80,30 +89,65 @@ class AutomationScheduler:
         run = claim["run"]
         automation_id = str(task["id"])
         run_id = str(run["id"])
+        lease_id = str(claim["leaseId"])
         try:
+            if not self.automation_service.is_claim_executable(
+                automation_id=automation_id,
+                run_id=run_id,
+                lease_id=lease_id,
+            ):
+                logger.info("自动化任务已在排队期间删除或停用 | automation=%s run=%s", automation_id, run_id)
+                return
             session = self.session_service.create_session(
                 SessionCreate(
                     user_id=str(task["userId"]),
                     session_name=f"自动化：{task['id']}",
                 )
             )
-            result = self.agent.run_session_prompt(
-                prompt=(
-                    "这是一个由定时自动化任务触发的独立执行。请完成以下任务，并在最后简要报告结果：\n"
-                    + str(task["prompt"])
-                ),
-                user_id=str(task["userId"]),
-                session_id=session.session_id,
-                agent_mode="auto",
-                agent_access_mode=str(task.get("accessMode") or "sandbox"),
+            if not self.automation_service.renew_claim(
+                automation_id=automation_id,
+                run_id=run_id,
+                lease_id=lease_id,
+                lease_seconds=self.lease_seconds,
+            ):
+                cancel_session = getattr(self.agent, "cancel_session", None)
+                if callable(cancel_session):
+                    cancel_session(session.session_id)
+                logger.info("自动化任务在会话创建后删除或停用 | automation=%s run=%s", automation_id, run_id)
+                return
+            heartbeat_stop = threading.Event()
+            heartbeat = threading.Thread(
+                target=self._renew_while_running,
+                args=(automation_id, run_id, lease_id, session.session_id, heartbeat_stop),
+                name=f"automation-heartbeat-{run_id}",
+                daemon=True,
             )
-            self.automation_service.finish_run(
+            heartbeat.start()
+            try:
+                result = self.agent.run_session_prompt(
+                    prompt=(
+                        "这是一个由定时自动化任务触发的独立执行。请完成以下任务，并在最后简要报告结果：\n"
+                        + str(task["prompt"])
+                    ),
+                    user_id=str(task["userId"]),
+                    session_id=session.session_id,
+                    agent_mode="auto",
+                    agent_access_mode=str(task.get("accessMode") or "sandbox"),
+                )
+            finally:
+                heartbeat_stop.set()
+                heartbeat.join(timeout=2.0)
+            persisted = self.automation_service.finish_run(
                 automation_id=automation_id,
                 run_id=run_id,
                 status="success",
                 output=str(result.get("final_output") or ""),
+                lease_id=lease_id,
             )
-            logger.info("自动化任务执行成功 | automation=%s run=%s", automation_id, run_id)
+            if persisted:
+                logger.info("自动化任务执行成功 | automation=%s run=%s", automation_id, run_id)
+            else:
+                logger.info("自动化任务结果已因删除、停用或租约失效而丢弃 | automation=%s run=%s", automation_id, run_id)
         except Exception as exc:
             logger.exception("自动化任务执行失败 | automation=%s run=%s", automation_id, run_id)
             self.automation_service.finish_run(
@@ -111,4 +155,31 @@ class AutomationScheduler:
                 run_id=run_id,
                 status="failed",
                 error=str(exc),
+                lease_id=lease_id,
             )
+
+    def _renew_while_running(
+        self,
+        automation_id: str,
+        run_id: str,
+        lease_id: str,
+        session_id: str,
+        stop_event: threading.Event,
+    ) -> None:
+        """执行期间周期续租；删除、停用或失去租约时协作取消 Agent。"""
+
+        # 同时承担删除/停用后的协作取消探测，最多 10 秒反馈一次。
+        interval = max(1.0, min(10.0, self.lease_seconds / 3))
+        while not stop_event.wait(interval):
+            if self.automation_service.renew_claim(
+                automation_id=automation_id,
+                run_id=run_id,
+                lease_id=lease_id,
+                lease_seconds=self.lease_seconds,
+            ):
+                continue
+            cancel_session = getattr(self.agent, "cancel_session", None)
+            if callable(cancel_session):
+                cancel_session(session_id)
+            logger.info("自动化任务失去执行租约，已请求中断 | automation=%s run=%s", automation_id, run_id)
+            return

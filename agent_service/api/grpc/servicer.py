@@ -21,9 +21,15 @@ from typing import Any
 import grpc
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.struct_pb2 import Struct
+from pydantic import ValidationError
 
 from agent_service.agent_core.agent_core import AgentCore
 from agent_service.api.recall_details import build_recall_details_payload
+from agent_service.schemas.automation import (
+    AutomationCreateRequest,
+    AutomationDeleteRequest,
+    AutomationToggleRequest,
+)
 from agent_service.api.grpc.agent_service_pb2 import (
     CancelRequest,
     CancelResponse,
@@ -134,6 +140,7 @@ from agent_service.services.feedback_service import FeedbackService
 from agent_service.services.vault_service import VaultService
 from agent_service.services.agent_change_service import AgentChangeService
 from agent_service.services.agent_queue_service import AgentQueueService
+from agent_service.services.automation_service import AutomationService
 from agent_service.services.activity_service import ActivityService
 
 logger = logging.getLogger(__name__)
@@ -156,6 +163,7 @@ class AgentServiceServicer(BaseServicer):
         vault_service: VaultService | None = None,
         agent_change_service: AgentChangeService | None = None,
         agent_queue_service: AgentQueueService | None = None,
+        automation_service: AutomationService | None = None,
         activity_service: ActivityService | None = None,
     ) -> None:
         self._agent = agent
@@ -169,6 +177,7 @@ class AgentServiceServicer(BaseServicer):
         self._vault_service = vault_service
         self._agent_change_service = agent_change_service
         self._agent_queue_service = agent_queue_service
+        self._automation_service = automation_service
         self._activity_service = activity_service
 
     def shutdown(self) -> None:
@@ -1393,6 +1402,101 @@ class AgentServiceServicer(BaseServicer):
         return ParseDict(self._queue_call(context, self._require_agent_queue_service(context).update_settings, MessageToDict(request)), Struct())
 
     # ------------------------------------------------------------------
+    # 定时自动化 RPC
+    # ------------------------------------------------------------------
+
+    def ListAutomations(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """列出一个用户的自动化任务，字段语义与 REST /automation/list 一致。"""
+
+        payload = MessageToDict(request)
+        user_id = str(payload.get("user_id") or "")
+        if not user_id:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "user_id is required")
+        tasks = self._require_automation_service(context).list_tasks(user_id=user_id)
+        return ParseDict({"automations": tasks}, Struct())
+
+    def CreateAutomation(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """使用与 REST /automation/add 相同的请求字段创建自动化任务。"""
+
+        payload = MessageToDict(request)
+        try:
+            body = AutomationCreateRequest.model_validate(payload)
+        except ValidationError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        try:
+            task = self._require_automation_service(context).create_task(
+                user_id=body.user_id,
+                text=body.text,
+                prompt=body.prompt,
+                next_run_at=body.next_run_at,
+                timezone_name=body.timezone,
+                recurrence=body.recurrence.model_dump(),
+                access_mode=body.access_mode,
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(task, Struct())
+
+    def ToggleAutomation(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """启用或停用自动化任务，与 REST /automation/toggle 保持一致。"""
+
+        payload = MessageToDict(request)
+        try:
+            body = AutomationToggleRequest.model_validate(payload)
+        except ValidationError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        task = self._require_automation_service(context).set_enabled(
+            user_id=body.user_id,
+            automation_id=body.automation_id,
+            enabled=body.enabled,
+        )
+        if task is None:
+            context.abort(grpc.StatusCode.NOT_FOUND, "Automation task not found")
+        return ParseDict(task, Struct())
+
+    def ListAutomationRuns(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """列出自动化最近运行记录，与 REST /automation/runs 保持一致。"""
+
+        payload = MessageToDict(request)
+        user_id = str(payload.get("user_id") or "")
+        automation_id = str(payload.get("automation_id") or "")
+        raw_limit = payload.get("limit", 20)
+        try:
+            if isinstance(raw_limit, bool):
+                raise ValueError
+            limit = int(raw_limit)
+            if isinstance(raw_limit, float) and not raw_limit.is_integer():
+                raise ValueError
+        except (TypeError, ValueError):
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "limit must be an integer between 1 and 100")
+        if not user_id or not automation_id:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "user_id and automation_id are required")
+        if not 1 <= limit <= 100:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "limit must be between 1 and 100")
+        runs = self._require_automation_service(context).list_runs(
+            user_id=user_id,
+            automation_id=automation_id,
+            limit=limit,
+        )
+        return ParseDict({"runs": runs}, Struct())
+
+    def DeleteAutomation(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """删除自动化及关联数据，与 REST /automation/delete 保持一致。"""
+
+        payload = MessageToDict(request)
+        try:
+            body = AutomationDeleteRequest.model_validate(payload)
+        except ValidationError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        deleted = self._require_automation_service(context).delete_task(
+            user_id=body.user_id,
+            automation_id=body.automation_id,
+        )
+        if not deleted:
+            context.abort(grpc.StatusCode.NOT_FOUND, "Automation task not found")
+        return ParseDict({"deleted": True}, Struct())
+
+    # ------------------------------------------------------------------
     # 内部辅助
     # ------------------------------------------------------------------
 
@@ -1451,6 +1555,13 @@ class AgentServiceServicer(BaseServicer):
         if self._agent_queue_service is None:
             context.abort(grpc.StatusCode.UNAVAILABLE, "AgentQueueService not available")
         return self._agent_queue_service  # type: ignore[return-value]
+
+    def _require_automation_service(self, context: grpc.ServicerContext) -> AutomationService:
+        """返回注入的自动化服务，未初始化时使用标准 gRPC 状态终止调用。"""
+
+        if self._automation_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "AutomationService not available")
+        return self._automation_service  # type: ignore[return-value]
 
     @staticmethod
     def _queue_call(context: grpc.ServicerContext, function: Any, payload: dict[str, Any]) -> dict[str, Any]:

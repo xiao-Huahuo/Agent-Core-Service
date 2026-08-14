@@ -237,13 +237,33 @@ class TodoService:
             return self._serialize(record)
 
     def delete_todo(self, user_id: str, todo_id: str) -> bool:
-        """删除指定 TODO。"""
+        """删除指定 TODO；若其属于自动化，则在同一事务内级联完整生命周期数据。"""
 
         self._import_legacy_if_needed(user_id)
         with Session(self.engine) as db:
             record = db.get(TodoRecord, todo_id)
             if record is None or record.user_id != user_id:
                 return False
+            if record.category == "automation":
+                # 局部导入避免 TodoService 与 AutomationService 形成模块循环。
+                from agent_service.models.automation import AutomationRunRecord, AutomationTaskRecord
+
+                automation = db.exec(
+                    select(AutomationTaskRecord).where(
+                        AutomationTaskRecord.todo_id == todo_id,
+                        AutomationTaskRecord.user_id == user_id,
+                    )
+                ).first()
+                if automation is not None:
+                    runs = db.exec(
+                        select(AutomationRunRecord).where(
+                            AutomationRunRecord.automation_id == automation.automation_id,
+                            AutomationRunRecord.user_id == user_id,
+                        )
+                    ).all()
+                    for run in runs:
+                        db.delete(run)
+                    db.delete(automation)
             db.delete(record)
             db.commit()
             return True

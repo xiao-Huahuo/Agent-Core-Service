@@ -2,8 +2,8 @@
   Todo sidebar panel.
 
   Usage:
-  Renders inside the agent-col alongside AgentPanel. Shows a todo list with
-  checkboxes, due dates, search, and hide-done toggle.
+  Renders inside the agent-col alongside AgentPanel. Shows ordinary TODO
+  controls plus scheduler-aware automation status, pause, and safe deletion.
 -->
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, nextTick, ref } from 'vue'
@@ -24,11 +24,14 @@ const automationFormOpen = ref(false)
 const newAutomationText = ref('')
 const newAutomationPrompt = ref('')
 const newAutomationRunAt = ref('')
-const newAutomationFrequency = ref<'none' | 'daily' | 'weekly' | 'monthly'>('daily')
+const newAutomationFrequency = ref<'none' | 'daily' | 'weekly' | 'monthly'>('none')
 const newAutomationAccessMode = ref<'readonly' | 'sandbox' | 'full_access'>('sandbox')
 const automationSubmitting = ref(false)
 const automationError = ref('')
 const expandedAutomationId = ref('')
+const confirmDeleteId = ref('')
+const automationTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+const automationRunAtMin = ref(formatDatetimeLocalInput(new Date(Date.now() + 60_000)))
 
 let tickTimer: ReturnType<typeof setInterval> | undefined
 
@@ -76,15 +79,17 @@ async function handleAddAutomation() {
   const prompt = newAutomationPrompt.value.trim()
   if (!text || !prompt || !newAutomationRunAt.value || automationSubmitting.value) return
   const runAt = new Date(newAutomationRunAt.value)
-  if (Number.isNaN(runAt.getTime())) return
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  if (Number.isNaN(runAt.getTime()) || runAt.getTime() <= Date.now()) {
+    automationError.value = '首次执行时间必须晚于当前时间。'
+    return
+  }
   automationSubmitting.value = true
   automationError.value = ''
   const created = await todoStore.addAutomation(
     text,
     prompt,
     runAt.toISOString(),
-    timezone,
+    automationTimezone,
     { frequency: newAutomationFrequency.value, interval: 1 },
     newAutomationAccessMode.value,
   )
@@ -96,8 +101,19 @@ async function handleAddAutomation() {
   newAutomationText.value = ''
   newAutomationPrompt.value = ''
   newAutomationRunAt.value = ''
+  newAutomationFrequency.value = 'none'
+  newAutomationAccessMode.value = 'sandbox'
   automationError.value = ''
   automationFormOpen.value = false
+}
+
+/** Opens or closes the automation form and refreshes its native minimum time. */
+function toggleAutomationForm(): void {
+  automationFormOpen.value = !automationFormOpen.value
+  if (automationFormOpen.value) {
+    automationRunAtMin.value = formatDatetimeLocalInput(new Date(Date.now() + 60_000))
+    automationError.value = ''
+  }
 }
 
 function startEdit(id: string, text: string, dueDate?: string) {
@@ -113,7 +129,8 @@ function startEdit(id: string, text: string, dueDate?: string) {
 
 function commitEdit(id: string) {
   todoStore.editTodo(id, editingText.value)
-  if (editingDate.value !== todoStore.todos.find((t) => t.id === id)?.dueDate) {
+  const item = todoStore.todos.find((todo) => todo.id === id)
+  if (item?.category !== 'automation' && editingDate.value !== item?.dueDate) {
     todoStore.setDueDate(id, editingDate.value || undefined)
   }
   editingId.value = ''
@@ -126,13 +143,33 @@ function cancelEdit() {
   editingText.value = ''
 }
 
-function removeWithAnimation(id: string) {
+/** Starts a two-step automation deletion or immediately deletes an ordinary TODO. */
+async function removeWithAnimation(id: string, confirmed = false): Promise<void> {
   if (deletingId.value) return
+  const item = todoStore.todos.find((todo) => todo.id === id)
+  if (item?.category === 'automation' && !confirmed) {
+    confirmDeleteId.value = id
+    expandedAutomationId.value = id
+    return
+  }
   deletingId.value = id
-  setTimeout(() => {
-    todoStore.removeTodo(id)
-    deletingId.value = ''
-  }, 350)
+  const deleted = await todoStore.removeTodo(id)
+  deletingId.value = ''
+  if (deleted) {
+    confirmDeleteId.value = ''
+    if (expandedAutomationId.value === id) expandedAutomationId.value = ''
+  }
+}
+
+/** Cancels the pending destructive confirmation without changing scheduler state. */
+function cancelAutomationDelete(id: string): void {
+  if (confirmDeleteId.value === id) confirmDeleteId.value = ''
+}
+
+/** Formats a local Date for the native datetime-local input value and min. */
+function formatDatetimeLocalInput(date: Date): string {
+  const offset = date.getTimezoneOffset() * 60_000
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16)
 }
 
 function formatDatetime(iso: string): string {
@@ -159,7 +196,54 @@ function isDatetimeExpired(iso: string): boolean {
 }
 
 function getAutomationNextRun(todoId: string): string | undefined {
-  return todoStore.automations.find((item) => item.todoId === todoId)?.nextRunAt
+  return getAutomation(todoId)?.nextRunAt
+}
+
+function getAutomation(todoId: string) {
+  return todoStore.automations.find((item) => item.todoId === todoId)
+}
+
+/** Returns whether one automation mutation is currently awaiting the server. */
+function isAutomationPending(todoId: string): boolean {
+  return todoStore.automationPendingIds.has(todoId)
+}
+
+function formatAutomationState(todoId: string): string {
+  const automation = getAutomation(todoId)
+  if (!automation) return '状态待同步'
+  if (automation.lastStatus === 'failed') return automation.enabled ? '上次失败' : '失败后暂停'
+  if (automation.enabled) return '已启用'
+  if (automation.recurrence.frequency === 'none' && automation.lastStatus === 'success') return '已完成'
+  return '已暂停'
+}
+
+/** Maps scheduler state to the component's semantic status color. */
+function automationStateKind(todoId: string): 'planned' | 'paused' | 'completed' | 'failed' | 'syncing' {
+  const automation = getAutomation(todoId)
+  if (!automation) return 'syncing'
+  if (automation.lastStatus === 'failed') return 'failed'
+  if (automation.recurrence.frequency === 'none' && automation.lastStatus === 'success' && !automation.enabled) {
+    return 'completed'
+  }
+  return automation.enabled ? 'planned' : 'paused'
+}
+
+function formatAutomationLastRun(todoId: string): string {
+  const automation = getAutomation(todoId)
+  if (!automation?.lastRunAt) return '尚未执行'
+  const labels: Record<string, string> = {
+    success: '成功',
+    failed: '失败',
+    skipped: '已取消',
+    running: '执行中',
+  }
+  return `${formatDatetime(automation.lastRunAt)} · ${labels[automation.lastStatus || ''] || '未知结果'}`
+}
+
+async function toggleAutomation(todoId: string): Promise<void> {
+  const automation = getAutomation(todoId)
+  if (!automation || isAutomationPending(todoId)) return
+  await todoStore.setAutomationEnabled(todoId, !automation.enabled)
 }
 
 function toggleAutomationDetails(todoId: string) {
@@ -208,9 +292,9 @@ function getAutomationPrompt(todoId: string): string {
         <button
           class="todo-clear-done"
           type="button"
-          :class="{ spinning: todoStore.pending.has('add') }"
+          :class="{ spinning: todoStore.pending.has('refresh') }"
           title="从服务器刷新"
-          :disabled="todoStore.pending.has('add')"
+          :disabled="todoStore.pending.has('refresh')"
           @click="todoStore.refreshFromServer()"
         >
           <IcIcon name="refresh" :size="12" />
@@ -219,7 +303,7 @@ function getAutomationPrompt(todoId: string): string {
           class="todo-clear-done"
           type="button"
           title="清除已完成"
-          :disabled="!todoStore.todos.some((t) => t.done)"
+          :disabled="!todoStore.todos.some((t) => t.category !== 'automation' && t.done)"
           @click="todoStore.clearDone()"
         >
           <IcIcon name="trash" :size="12" />
@@ -253,13 +337,19 @@ function getAutomationPrompt(todoId: string): string {
         v-for="item in todoStore.filteredTodos"
         :key="item.id"
         class="todo-item"
+        :data-todo-id="item.id"
+        :aria-busy="item.category === 'automation' && isAutomationPending(item.id) ? 'true' : 'false'"
         :class="{
-          'todo-done': item.done,
-          'todo-overdue': todoStore.overdueIds.has(item.id) && !item.done,
+          'todo-automation-item': item.category === 'automation',
+          'todo-done': item.category !== 'automation' && item.done,
+          'todo-overdue': item.category !== 'automation' && todoStore.overdueIds.has(item.id) && !item.done,
           'todo-deleting': deletingId === item.id,
         }"
       >
-        <label class="creative-checkbox" :title="item.done ? '标记未完成' : '标记完成'">
+        <span v-if="item.category === 'automation'" class="todo-automation-icon" title="自动化任务">
+          <IcIcon name="schedule" :size="16" />
+        </span>
+        <label v-else class="creative-checkbox" :title="item.done ? '标记未完成' : '标记完成'">
           <input
             type="checkbox"
             :checked="item.done"
@@ -294,9 +384,16 @@ function getAutomationPrompt(todoId: string): string {
               v-else
               class="todo-text"
               :title="item.text"
-              @dblclick="startEdit(item.id, item.text, item.dueDate)"
+              @dblclick="startEdit(item.id, item.text, item.category === 'automation' ? undefined : item.dueDate)"
             >
               {{ item.text }}
+            </span>
+            <span
+              v-if="item.category === 'automation'"
+              class="todo-automation-state"
+              :data-status="automationStateKind(item.id)"
+            >
+              {{ formatAutomationState(item.id) }}
             </span>
             <button
               v-if="item.category === 'automation'"
@@ -310,17 +407,24 @@ function getAutomationPrompt(todoId: string): string {
               <IcIcon name="chevron-right" :size="12" :class="{ expanded: expandedAutomationId === item.id }" />
             </button>
           </div>
-          <div v-if="item.dueDate || item.category === 'automation'" class="todo-date-col">
-            <IcIcon v-if="item.category === 'automation'" name="schedule" :size="10" />
-            <IcIcon v-else name="calendar" :size="10" />
+          <div v-if="item.category === 'automation'" class="todo-date-col todo-automation-next-run">
+            <IcIcon name="schedule" :size="10" />
             <span
               class="todo-date"
-              :class="{ expired: isDatetimeExpired(item.dueDate || getAutomationNextRun(item.id) || '') && !item.done }"
+              :class="{
+                expired: !!getAutomation(item.id)?.enabled
+                  && isDatetimeExpired(getAutomationNextRun(item.id) || ''),
+              }"
             >
-              {{ formatDatetime(item.dueDate || getAutomationNextRun(item.id) || '') }}
+              {{ getAutomation(item.id)?.enabled ? '下次 ' : '计划时间 ' }}{{ formatDatetime(getAutomationNextRun(item.id) || '') || '待同步' }}
+            </span>
+          </div>
+          <div v-else-if="item.dueDate" class="todo-date-col">
+            <IcIcon name="calendar" :size="10" />
+            <span class="todo-date" :class="{ expired: isDatetimeExpired(item.dueDate) && !item.done }">
+              {{ formatDatetime(item.dueDate) }}
             </span>
             <button
-              v-if="item.dueDate"
               class="todo-date-clear"
               type="button"
               title="清除日期"
@@ -334,8 +438,16 @@ function getAutomationPrompt(todoId: string): string {
             class="todo-automation-details"
           >
             <div class="todo-automation-detail-row">
+              <span>状态</span>
+              <strong>{{ formatAutomationState(item.id) }}</strong>
+            </div>
+            <div class="todo-automation-detail-row">
               <span>时间</span>
               <strong>{{ formatDatetime(getAutomationNextRun(item.id) || '') || '未设置' }}</strong>
+            </div>
+            <div class="todo-automation-detail-row">
+              <span>时区</span>
+              <strong>{{ getAutomation(item.id)?.timezone || '待同步' }}</strong>
             </div>
             <div class="todo-automation-detail-row">
               <span>权限</span>
@@ -345,9 +457,51 @@ function getAutomationPrompt(todoId: string): string {
               <span>周期</span>
               <strong>{{ formatAutomationRecurrence(item.id) }}</strong>
             </div>
+            <div class="todo-automation-detail-row">
+              <span>最近结果</span>
+              <strong>{{ formatAutomationLastRun(item.id) }}</strong>
+            </div>
+            <div v-if="getAutomation(item.id)?.lastError" class="todo-automation-detail-row todo-automation-last-error">
+              <span>错误</span>
+              <strong>{{ getAutomation(item.id)?.lastError }}</strong>
+            </div>
             <div class="todo-automation-detail-row todo-automation-detail-description">
               <span>描述</span>
               <p>{{ getAutomationPrompt(item.id) }}</p>
+            </div>
+          </div>
+          <p
+            v-if="todoStore.automationActionErrors[item.id]"
+            class="todo-automation-action-error"
+            role="alert"
+          >
+            {{ todoStore.automationActionErrors[item.id] }}
+          </p>
+          <div
+            v-if="item.category === 'automation' && confirmDeleteId === item.id"
+            class="todo-automation-delete-confirm"
+            role="group"
+            :aria-label="`确认删除自动化：${item.text}`"
+          >
+            <p>将取消未来执行并删除运行记录，此操作不可撤销。</p>
+            <div class="todo-automation-delete-actions">
+              <button
+                type="button"
+                :aria-label="`取消删除自动化：${item.text}`"
+                :disabled="isAutomationPending(item.id)"
+                @click="cancelAutomationDelete(item.id)"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                class="danger"
+                :aria-label="`确认删除自动化：${item.text}`"
+                :disabled="isAutomationPending(item.id)"
+                @click="removeWithAnimation(item.id, true)"
+              >
+                {{ isAutomationPending(item.id) ? '正在取消…' : '确认删除' }}
+              </button>
             </div>
           </div>
         </div>
@@ -357,19 +511,35 @@ function getAutomationPrompt(todoId: string): string {
             class="todo-action-btn"
             type="button"
             title="编辑"
-            @click="startEdit(item.id, item.text, item.dueDate)"
+            :aria-label="`编辑任务：${item.text}`"
+            :disabled="item.category === 'automation' && isAutomationPending(item.id)"
+            @click="startEdit(item.id, item.text, item.category === 'automation' ? undefined : item.dueDate)"
           >
             <IcIcon name="edit" :size="11" />
           </button>
           <button
+            v-if="item.category === 'automation'"
+            class="todo-action-btn todo-automation-toggle-action"
+            type="button"
+            :title="getAutomation(item.id)?.enabled ? '暂停自动化' : '恢复自动化'"
+            :aria-label="`${getAutomation(item.id)?.enabled ? '暂停' : '恢复'}自动化：${item.text}`"
+            :disabled="isAutomationPending(item.id) || !getAutomation(item.id)"
+            @click="toggleAutomation(item.id)"
+          >
+            <IcIcon :name="getAutomation(item.id)?.enabled ? 'pause' : 'play'" :size="11" />
+          </button>
+          <button
+            v-else
             class="todo-action-btn"
             type="button"
             :title="item.dueDate ? '修改日期' : '添加日期'"
+            :aria-label="`${item.dueDate ? '修改' : '添加'}任务日期：${item.text}`"
             @click="triggerPicker(item.id)"
           >
             <IcIcon name="calendar" :size="11" />
           </button>
           <input
+            v-if="item.category !== 'automation'"
             :id="'picker-' + item.id"
             class="todo-inline-picker"
             type="datetime-local"
@@ -379,10 +549,12 @@ function getAutomationPrompt(todoId: string): string {
           <button
             class="todo-action-btn todo-action-remove"
             type="button"
-            title="删除"
+            :title="item.category === 'automation' ? '删除自动化' : '删除'"
+            :aria-label="item.category === 'automation' ? `删除自动化：${item.text}` : `删除任务：${item.text}`"
+            :disabled="item.category === 'automation' && isAutomationPending(item.id)"
             @click="removeWithAnimation(item.id)"
           >
-            <IcIcon name="close" :size="11" />
+            <IcIcon name="trash" :size="11" />
           </button>
         </div>
       </div>
@@ -395,37 +567,97 @@ function getAutomationPrompt(todoId: string): string {
     <form v-if="automationFormOpen" class="todo-automation-form" @submit.prevent="handleAddAutomation">
       <div class="todo-automation-heading">
         <span>新建自动化任务</span>
-        <button class="todo-automation-close" type="button" title="关闭" @click="automationFormOpen = false">
+        <button
+          class="todo-automation-close"
+          type="button"
+          title="关闭"
+          aria-label="关闭自动化任务表单"
+          :disabled="automationSubmitting"
+          @click="automationFormOpen = false"
+        >
           <IcIcon name="close" :size="12" />
         </button>
       </div>
-      <input v-model="newAutomationText" class="todo-automation-input" type="text" placeholder="自动化任务名称" />
-      <textarea v-model="newAutomationPrompt" class="todo-automation-input todo-automation-prompt" rows="2" placeholder="到时间后让 Agent 做什么？" />
-      <p v-if="automationError" class="todo-automation-error">{{ automationError }}</p>
+      <label class="todo-automation-field">
+        <span>任务名称</span>
+        <input
+          v-model="newAutomationText"
+          class="todo-automation-input"
+          type="text"
+          aria-label="自动化任务名称"
+          placeholder="例如：生成每周总结"
+          :disabled="automationSubmitting"
+        />
+      </label>
+      <label class="todo-automation-field">
+        <span>执行指令</span>
+        <textarea
+          v-model="newAutomationPrompt"
+          class="todo-automation-input todo-automation-prompt"
+          rows="2"
+          aria-label="自动化执行指令"
+          placeholder="到时间后让 Agent 做什么？"
+          :disabled="automationSubmitting"
+        />
+      </label>
       <div class="todo-automation-row">
-        <input v-model="newAutomationRunAt" class="todo-automation-input" type="datetime-local" />
-        <select v-model="newAutomationFrequency" class="todo-automation-select">
-          <option value="none">执行一次</option>
-          <option value="daily">每天</option>
-          <option value="weekly">每周</option>
-          <option value="monthly">每月</option>
-        </select>
+        <label class="todo-automation-field">
+          <span>首次执行</span>
+          <input
+            v-model="newAutomationRunAt"
+            class="todo-automation-input"
+            type="datetime-local"
+            aria-label="首次执行时间"
+            :min="automationRunAtMin"
+            :disabled="automationSubmitting"
+            @input="automationError = ''"
+          />
+        </label>
+        <label class="todo-automation-field">
+          <span>重复</span>
+          <select
+            v-model="newAutomationFrequency"
+            class="todo-automation-select"
+            aria-label="重复周期"
+            :disabled="automationSubmitting"
+          >
+            <option value="none">执行一次</option>
+            <option value="daily">每天</option>
+            <option value="weekly">每周</option>
+            <option value="monthly">每月</option>
+          </select>
+        </label>
       </div>
+      <p class="todo-automation-timezone">任务时区：{{ automationTimezone }}</p>
       <div class="todo-automation-row">
-        <select v-model="newAutomationAccessMode" class="todo-automation-select">
-          <option value="sandbox">沙盒权限</option>
-          <option value="readonly">只读权限</option>
-          <option value="full_access">完全访问</option>
-        </select>
+        <label class="todo-automation-field">
+          <span>运行权限</span>
+          <select
+            v-model="newAutomationAccessMode"
+            class="todo-automation-select"
+            aria-label="运行权限"
+            :disabled="automationSubmitting"
+          >
+            <option value="sandbox">沙盒权限</option>
+            <option value="readonly">只读权限</option>
+            <option value="full_access">完全访问</option>
+          </select>
+        </label>
         <button
           class="todo-add-btn todo-automation-submit"
           type="submit"
+          aria-label="创建自动化任务"
+          title="创建自动化任务"
           :disabled="automationSubmitting || !newAutomationText.trim() || !newAutomationPrompt.trim() || !newAutomationRunAt"
         >
           <IcIcon v-if="automationSubmitting" name="refresh" :size="14" class="todo-automation-spinner" />
           <IcIcon v-else name="add" :size="14" />
         </button>
       </div>
+      <p v-if="newAutomationAccessMode === 'full_access'" class="todo-automation-warning" role="note">
+        完全访问权限允许任务修改工作区文件并执行受支持的操作，请确认指令可信。
+      </p>
+      <p v-if="automationError" class="todo-automation-error" role="alert">{{ automationError }}</p>
     </form>
 
     <div class="todo-add-bar">
@@ -435,7 +667,8 @@ function getAutomationPrompt(todoId: string): string {
           type="button"
           :class="{ active: automationFormOpen }"
           title="新建自动化任务"
-          @click="automationFormOpen = !automationFormOpen"
+          aria-label="新建自动化任务"
+          @click="toggleAutomationForm"
         >
           <IcIcon name="schedule" :size="14" />
         </button>
@@ -483,792 +716,4 @@ function getAutomationPrompt(todoId: string): string {
   </div>
 </template>
 
-<style scoped>
-.todo-sidebar {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--color-bg-surface);
-  border: 0;
-  font-size: calc(12px * var(--font-scale));
-  min-height: 0;
-}
-
-.todo-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-6) var(--space-8);
-}
-
-.todo-title {
-  font-weight: 650;
-  font-size: calc(13px * var(--font-scale));
-  color: var(--color-text);
-}
-
-.todo-header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.todo-clear-done {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: color var(--transition-fast), background var(--transition-fast);
-}
-
-.todo-clear-done:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
-  color: var(--color-accent);
-}
-
-.todo-clear-done.active {
-  color: var(--color-primary);
-}
-
-.todo-clear-done:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.todo-clear-done.spinning :deep(svg) {
-  animation: todo-refresh-spin 800ms linear infinite;
-}
-
-.todo-toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-6) var(--space-8);
-}
-
-.todo-automation-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  margin: 0 var(--space-8);
-  padding: var(--space-6) 0;
-  border-top: 1px solid var(--color-border-soft);
-}
-
-.todo-automation-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--color-text-secondary);
-  font-size: calc(11px * var(--font-scale));
-  font-weight: 650;
-}
-
-.todo-automation-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.todo-automation-close:hover {
-  color: var(--color-text);
-}
-
-.todo-automation-input,
-.todo-automation-select {
-  width: 100%;
-  min-width: 0;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  outline: 0;
-  background: var(--color-bg-input);
-  color: var(--color-text);
-  font: inherit;
-  font-size: calc(11px * var(--font-scale));
-}
-
-.todo-automation-input:focus,
-.todo-automation-select:focus {
-  border-color: var(--color-primary);
-}
-
-.todo-automation-prompt {
-  resize: vertical;
-}
-
-.todo-automation-error {
-  margin: 0;
-  color: var(--color-accent);
-  font-size: calc(10px * var(--font-scale));
-}
-
-.todo-automation-spinner {
-  animation: todo-refresh-spin 800ms linear infinite;
-}
-
-.todo-automation-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.todo-automation-submit {
-  flex: 0 0 auto;
-}
-
-.todo-search {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-6);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-bg-input);
-}
-
-.todo-search-icon {
-  flex: 0 0 auto;
-  color: var(--color-text-muted);
-}
-
-.todo-search-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--color-text);
-  font-size: calc(12px * var(--font-scale));
-}
-
-.todo-search-input::placeholder {
-  color: var(--color-text-muted);
-}
-
-.todo-search-clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: color var(--transition-fast);
-}
-
-.todo-search-clear:hover {
-  color: var(--color-text);
-}
-
-.todo-hide-done {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: calc(11px * var(--font-scale));
-  color: var(--color-text-muted);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.todo-hide-done input[type="checkbox"] {
-  display: none;
-}
-
-.todo-toggle-track {
-  position: relative;
-  display: inline-block;
-  width: 28px;
-  height: 16px;
-  border-radius: 999px;
-  background: var(--color-border);
-  transition: background 200ms ease;
-}
-
-.todo-hide-done input:checked + .todo-toggle-track {
-  background: var(--color-primary);
-}
-
-.todo-toggle-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
-  transition: transform 200ms ease;
-}
-
-.todo-hide-done input:checked + .todo-toggle-track .todo-toggle-thumb {
-  transform: translateX(12px);
-}
-
-.todo-list {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  overflow-x: hidden;
-  min-height: 0;
-  padding: var(--space-2) 0;
-}
-
-.todo-item {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--space-6);
-  padding: var(--space-6) var(--space-8);
-  border-bottom: 1px solid var(--color-border-soft);
-  transition: background var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.todo-item:hover {
-  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--color-primary) 20%, transparent);
-}
-
-.todo-item:active {
-  background: color-mix(in srgb, var(--color-primary) 9%, transparent);
-}
-
-.todo-done .todo-text {
-  text-decoration: line-through;
-  color: var(--color-text-muted);
-}
-
-.todo-done .todo-text::after {
-  display: none;
-}
-
-.todo-deleting .todo-text {
-  position: relative;
-  color: var(--color-text-muted);
-}
-
-.todo-deleting .todo-text::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 100%;
-  height: 2px;
-  background: var(--color-text-muted);
-  transform: scaleX(0);
-  transform-origin: left center;
-  animation: strike-through 320ms ease forwards;
-}
-
-@keyframes strike-through {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
-}
-
-@keyframes todo-refresh-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.todo-overdue .todo-text {
-  color: var(--color-accent);
-}
-
-.todo-overdue .todo-date {
-  color: var(--color-accent);
-  font-weight: 600;
-}
-
-.todo-checkbox {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
-  margin-top: 1px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
-  transition: color var(--transition-fast);
-}
-
-.todo-check-icon {
-  color: var(--color-text-muted);
-}
-
-.todo-check-icon.done {
-  color: var(--color-primary);
-}
-
-.todo-checkbox:hover .todo-check-icon {
-  color: var(--color-primary);
-}
-
-.creative-checkbox {
-  --color-idle: var(--color-text-muted);
-  --color-hover: var(--color-text-secondary);
-  --color-active: var(--color-primary);
-  --color-active-glow: color-mix(in srgb, var(--color-primary) 20%, transparent);
-  --size: 24px;
-  flex: 0 0 auto;
-  display: inline-block;
-  width: var(--size);
-  height: var(--size);
-  cursor: pointer;
-  position: relative;
-  -webkit-tap-highlight-color: transparent;
-  margin-top: 0;
-}
-
-.creative-checkbox input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.creative-checkbox .checkbox-box {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  background: transparent;
-  transition:
-    background 0.3s,
-    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.creative-checkbox .checkbox-box svg {
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.creative-checkbox .box-path {
-  fill: none;
-  stroke: var(--color-idle);
-  stroke-width: 3.5px;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 144;
-  stroke-dashoffset: 0;
-  transition:
-    stroke-dashoffset 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-    stroke 0.3s,
-    stroke-width 0.3s;
-}
-
-.creative-checkbox .check-path {
-  fill: none;
-  stroke: white;
-  stroke-width: 4px;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 25;
-  stroke-dashoffset: 25;
-  transition: stroke-dashoffset 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s;
-}
-
-.creative-checkbox:hover .box-path {
-  stroke: var(--color-hover);
-  stroke-width: 4px;
-}
-
-.creative-checkbox input:checked ~ .checkbox-box {
-  background: var(--color-active);
-  box-shadow: 0 0 0 6px var(--color-active-glow);
-  animation: dynamic-bounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.creative-checkbox input:checked ~ .checkbox-box .box-path {
-  stroke: var(--color-active);
-  stroke-dashoffset: 144;
-  stroke-width: 0px;
-}
-
-.creative-checkbox input:checked ~ .checkbox-box .check-path {
-  stroke-dashoffset: 0;
-}
-
-@keyframes dynamic-bounce {
-  0% { transform: scale(1); }
-  30% { transform: scale(0.85) rotate(-4deg); }
-  70% { transform: scale(1.12) rotate(4deg); }
-  100% { transform: scale(1) rotate(0deg); }
-}
-
-.todo-body {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.todo-title-row {
-  display: flex;
-  align-items: center;
-  min-height: 24px;
-}
-
-.todo-automation-expand {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 18px;
-  width: 18px;
-  height: 18px;
-  margin-right: var(--space-2);
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.todo-automation-expand:hover {
-  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-  color: var(--color-primary);
-}
-
-.todo-automation-expand svg {
-  transition: transform var(--transition-fast);
-}
-
-.todo-automation-expand svg.expanded {
-  transform: rotate(90deg);
-}
-
-.todo-text {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-text);
-  line-height: 1.4;
-  cursor: default;
-}
-
-/* ── Date as separate column ── */
-.todo-date-col {
-  display: flex;
-  align-items: center;
-  width: fit-content;
-  gap: var(--space-2);
-  position: relative;
-  margin-top: var(--space-2);
-  color: var(--color-text-muted);
-  font-size: calc(10px * var(--font-scale));
-  white-space: nowrap;
-}
-
-.todo-date.expired {
-  color: var(--color-accent);
-  font-weight: 600;
-}
-
-.todo-edit-wrap {
-  width: 100%;
-}
-
-.todo-edit-input {
-  display: block;
-  width: 100%;
-  height: 30px;
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-sm);
-  outline: 0;
-  background: var(--color-bg-input);
-  color: var(--color-text);
-  font-size: calc(12px * var(--font-scale));
-  transition: box-shadow var(--transition-fast);
-}
-
-.todo-edit-input:focus {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
-}
-
-.todo-inline-picker {
-  opacity: 0.01;
-  width: 1px;
-  height: 28px;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  overflow: hidden;
-  flex: 0 0 1px;
-  pointer-events: none;
-}
-
-.todo-date-clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
-}
-
-.todo-date-col:hover .todo-date-clear {
-  opacity: 1;
-}
-
-.todo-date-col .todo-date-clear {
-  position: absolute;
-  right: -10px;
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-.todo-date-clear:hover {
-  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
-  color: var(--color-text);
-}
-
-.todo-new-date-display {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin-top: var(--space-1);
-  color: var(--color-text-muted);
-  font-size: calc(10px * var(--font-scale));
-}
-
-.todo-new-date-display .todo-date-clear {
-  opacity: 1;
-}
-
-
-.todo-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex: 0 0 auto;
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.todo-item:hover .todo-actions {
-  opacity: 1;
-}
-
-.todo-deleting .todo-actions {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.todo-action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
-}
-
-.todo-action-btn:hover {
-  border-color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
-  color: var(--color-primary);
-}
-
-.todo-add-cal-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
-}
-
-.todo-add-cal-btn:hover {
-  border-color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
-  color: var(--color-primary);
-}
-
-.todo-add-cal-btn.hasDate {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.todo-action-remove:hover {
-  border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
-  color: var(--color-accent);
-}
-
-.todo-empty {
-  padding: var(--space-16) var(--space-8);
-  text-align: center;
-  color: var(--color-text-muted);
-  font-size: calc(11px * var(--font-scale));
-}
-
-.todo-add-bar {
-  flex: 0 0 auto;
-  margin-top: auto;
-  padding: var(--space-6) var(--space-8);
-  border-top: 1px solid var(--color-border);
-}
-
-.todo-add-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.todo-automation-details {
-  display: grid;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
-  padding: var(--space-4) var(--space-6);
-  border-left: 2px solid var(--color-primary-soft);
-  color: var(--color-text-secondary);
-  font-size: calc(10px * var(--font-scale));
-}
-
-.todo-automation-detail-row {
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  gap: var(--space-6);
-  align-items: start;
-}
-
-.todo-automation-detail-row > span {
-  color: var(--color-text-muted);
-}
-
-.todo-automation-detail-row strong {
-  min-width: 0;
-  color: var(--color-text-secondary);
-  font-weight: 500;
-}
-
-.todo-automation-detail-description p {
-  min-width: 0;
-  margin: 0;
-  color: var(--color-text-secondary);
-  line-height: 1.45;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.todo-add-automation-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
-}
-
-.todo-add-automation-btn:hover,
-.todo-add-automation-btn.active {
-  border-color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-  color: var(--color-primary);
-}
-
-.todo-add-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 28px;
-  padding: 0 var(--space-6);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  outline: 0;
-  background: var(--color-bg-input);
-  color: var(--color-text);
-  font-size: calc(12px * var(--font-scale));
-  transition: border-color var(--transition-fast);
-}
-
-.todo-add-input:focus {
-  border-color: var(--color-primary);
-}
-
-.todo-add-input::placeholder {
-  color: var(--color-text-muted);
-}
-
-.todo-add-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--color-primary);
-  border-radius: 999px;
-  background: var(--color-primary);
-  color: #fff;
-  cursor: pointer;
-  transition: opacity var(--transition-fast);
-}
-
-.todo-add-btn:hover:not(:disabled) {
-  opacity: 0.85;
-}
-
-.todo-add-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-
-</style>
+<style src="./TodoSidebar.css" scoped></style>

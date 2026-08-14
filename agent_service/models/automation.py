@@ -25,7 +25,7 @@ class AutomationTaskRecord(SQLModel, table=True):
     user_id: str = Field(index=True, max_length=128)
     prompt: str
     timezone_name: str = Field(default="UTC", max_length=64)
-    recurrence_frequency: str = Field(default="daily", max_length=16)
+    recurrence_frequency: str = Field(default="none", max_length=16)
     recurrence_interval: int = Field(default=1, ge=1, le=365)
     next_run_at: datetime = Field(index=True)
     access_mode: str = Field(default="sandbox", max_length=16)

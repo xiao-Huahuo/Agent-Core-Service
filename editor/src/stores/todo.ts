@@ -11,7 +11,12 @@ import { defineStore } from 'pinia'
 
 import { apiAddTodo, apiDeleteTodo, apiEditTodo, apiListTodos, apiToggleTodo } from '@/api/todo'
 import type { TodoItemData } from '@/api/todo'
-import { apiAddAutomation, apiListAutomations } from '@/api/automation'
+import {
+  apiAddAutomation,
+  apiDeleteAutomation,
+  apiListAutomations,
+  apiToggleAutomation,
+} from '@/api/automation'
 import type { AutomationTaskData } from '@/api/automation'
 
 export interface TodoItem {
@@ -45,7 +50,7 @@ function toItem(data: TodoItemData): TodoItem {
 }
 
 /** 等待中的后端操作队列（用于禁用 UI） */
-type PendingOp = 'add' | 'toggle' | 'edit' | 'delete' | 'clear'
+type PendingOp = 'refresh' | 'add' | 'toggle' | 'edit' | 'delete' | 'clear'
 
 export const useTodoStore = defineStore('todo', () => {
   const todos = ref<TodoItem[]>([])
@@ -54,6 +59,9 @@ export const useTodoStore = defineStore('todo', () => {
   const searchQuery = ref('')
   const todoSidebarSplitRatio = ref(0.5)
   const pending = ref<Set<PendingOp>>(new Set())
+  const automationPendingIds = ref<Set<string>>(new Set())
+  const automationActionErrors = ref<Record<string, string>>({})
+  let refreshSequence = 0
 
   const overdueIds = computed(() => {
     const now = Date.now()
@@ -69,7 +77,7 @@ export const useTodoStore = defineStore('todo', () => {
   const filteredTodos = computed(() => {
     let list = todos.value
     if (hideDone.value) {
-      list = list.filter((item) => !item.done)
+      list = list.filter((item) => item.category === 'automation' || !item.done)
     }
     if (searchQuery.value.trim()) {
       const q = searchQuery.value.trim().toLowerCase()
@@ -78,22 +86,49 @@ export const useTodoStore = defineStore('todo', () => {
     return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   })
 
-  const pendingCount = computed(() => todos.value.filter((item) => !item.done).length)
+  const pendingCount = computed(() => todos.value.filter((item) => item.category !== 'automation' && !item.done).length)
 
-  async function refreshFromServer() {
+  function automationForTodo(todoId: string): AutomationTask | undefined {
+    return automations.value.find((item) => item.todoId === todoId)
+  }
+
+  function setAutomationPending(todoId: string, value: boolean): void {
+    const next = new Set(automationPendingIds.value)
+    if (value) next.add(todoId)
+    else next.delete(todoId)
+    automationPendingIds.value = next
+  }
+
+  function setAutomationError(todoId: string, message = ''): void {
+    const next = { ...automationActionErrors.value }
+    if (message) next[todoId] = message
+    else delete next[todoId]
+    automationActionErrors.value = next
+  }
+
+  async function refreshFromServer(): Promise<boolean> {
     const { useSettingsStore } = await import('@/stores/settings')
     const userId = useSettingsStore().profile.userId
-    if (!userId) return
-    pending.value = new Set([...pending.value, 'add'] as PendingOp[])
+    if (!userId) return false
+    const sequence = ++refreshSequence
+    pending.value = new Set([...pending.value, 'refresh'] as PendingOp[])
     try {
-      const serverTodos = await apiListTodos(userId)
+      const [serverTodos, serverAutomations] = await Promise.all([
+        apiListTodos(userId),
+        apiListAutomations(userId),
+      ])
+      if (sequence !== refreshSequence) return false
       todos.value = serverTodos.map(toItem)
-      automations.value = await apiListAutomations(userId)
+      automations.value = serverAutomations
+      return true
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       console.warn('[TodoStore] 从服务器刷新待办失败:', msg)
+      return false
     } finally {
-      pending.value = new Set([...pending.value].filter((p) => p !== 'add'))
+      if (sequence === refreshSequence) {
+        pending.value = new Set([...pending.value].filter((p) => p !== 'refresh'))
+      }
     }
   }
 
@@ -111,6 +146,14 @@ export const useTodoStore = defineStore('todo', () => {
     try {
       const automation = await apiAddAutomation(userId, text, prompt, nextRunAt, timezone, recurrence, accessMode)
       automations.value = [...automations.value, automation]
+      todos.value = [{
+        id: automation.todoId,
+        text,
+        category: 'automation',
+        done: false,
+        createdAt: new Date().toISOString(),
+        recurrence: { frequency: 'none', interval: 1 },
+      }, ...todos.value]
       await refreshFromServer()
       return { success: true }
     } catch (e) {
@@ -163,6 +206,17 @@ export const useTodoStore = defineStore('todo', () => {
     const userId = useSettingsStore().profile.userId
     if (!userId) return
 
+    const automation = automationForTodo(id)
+    const todo = todos.value.find((item) => item.id === id)
+    if (todo?.category === 'automation' && !automation) {
+      setAutomationError(id, '自动化元数据尚未加载，请刷新后重试。')
+      return
+    }
+    if (automation) {
+      await setAutomationEnabled(id, !automation.enabled)
+      return
+    }
+
     // 乐观更新
     const idx = todos.value.findIndex((t) => t.id === id)
     if (idx === -1) return
@@ -173,10 +227,12 @@ export const useTodoStore = defineStore('todo', () => {
     pending.value = new Set([...pending.value, 'toggle'])
     try {
       const serverItem = await apiToggleTodo(userId, id)
-      todos.value[idx] = toItem(serverItem)
+      const currentIndex = todos.value.findIndex((item) => item.id === id)
+      if (currentIndex !== -1) todos.value[currentIndex] = toItem(serverItem)
     } catch (e) {
       // 回滚
-      todos.value[idx] = prev
+      const currentIndex = todos.value.findIndex((item) => item.id === id)
+      if (currentIndex !== -1) todos.value[currentIndex] = prev
       const msg = e instanceof Error ? e.message : String(e)
       console.warn('[TodoStore] 切换待办状态失败:', msg)
     } finally {
@@ -184,24 +240,79 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
 
-  async function removeTodo(id: string) {
+  async function setAutomationEnabled(todoId: string, enabled: boolean): Promise<boolean> {
     const { useSettingsStore } = await import('@/stores/settings')
     const userId = useSettingsStore().profile.userId
-    if (!userId) return
+    const automation = automationForTodo(todoId)
+    if (!userId || !automation || automationPendingIds.value.has(todoId)) return false
 
-    // 乐观删除
+    const previous = automation
+    setAutomationPending(todoId, true)
+    setAutomationError(todoId)
+    automations.value = automations.value.map((item) => (
+      item.id === automation.id ? { ...item, enabled } : item
+    ))
+    try {
+      const updated = await apiToggleAutomation(userId, automation.id, enabled)
+      automations.value = automations.value.map((item) => item.id === updated.id ? updated : item)
+      return true
+    } catch (e) {
+      automations.value = automations.value.map((item) => (
+        item.id === previous.id ? { ...item, enabled: previous.enabled } : item
+      ))
+      const message = e instanceof Error ? e.message : String(e)
+      setAutomationError(todoId, `更新自动化状态失败：${message}`)
+      console.warn('[TodoStore] 更新自动化状态失败:', message)
+      return false
+    } finally {
+      setAutomationPending(todoId, false)
+    }
+  }
+
+  async function removeTodo(id: string): Promise<boolean> {
+    const { useSettingsStore } = await import('@/stores/settings')
+    const userId = useSettingsStore().profile.userId
+    if (!userId) return false
+
     const idx = todos.value.findIndex((t) => t.id === id)
-    if (idx === -1) return
+    if (idx === -1) return false
+    const automation = automationForTodo(id)
+    if (todos.value[idx]?.category === 'automation' && !automation) {
+      setAutomationError(id, '自动化元数据尚未加载，已阻止不完整删除；请刷新后重试。')
+      return false
+    }
+    if (automation) {
+      if (automationPendingIds.value.has(id)) return false
+      setAutomationPending(id, true)
+      setAutomationError(id)
+      try {
+        await apiDeleteAutomation(userId, automation.id)
+        todos.value = todos.value.filter((item) => item.id !== id)
+        automations.value = automations.value.filter((item) => item.id !== automation.id)
+        return true
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e)
+        setAutomationError(id, `删除自动化任务失败：${message}`)
+        console.warn('[TodoStore] 删除自动化任务失败:', message)
+        return false
+      } finally {
+        setAutomationPending(id, false)
+      }
+    }
+
+    // 普通 TODO 保留原有乐观删除与失败回滚。
     const removed = todos.value.splice(idx, 1)[0]!
 
     pending.value = new Set([...pending.value, 'delete'])
     try {
       await apiDeleteTodo(userId, id)
+      return true
     } catch (e) {
       // 回滚 — 恢复到原位
       todos.value.splice(idx, 0, removed)
       const msg = e instanceof Error ? e.message : String(e)
       console.warn('[TodoStore] 删除待办失败:', msg)
+      return false
     } finally {
       pending.value = new Set([...pending.value].filter((p) => p !== 'delete'))
     }
@@ -223,9 +334,11 @@ export const useTodoStore = defineStore('todo', () => {
     pending.value = new Set([...pending.value, 'edit'])
     try {
       const serverItem = await apiEditTodo(userId, id, trimmed, dueDate, reminderAt, recurrence)
-      todos.value[idx] = toItem(serverItem)
+      const currentIndex = todos.value.findIndex((item) => item.id === id)
+      if (currentIndex !== -1) todos.value[currentIndex] = toItem(serverItem)
     } catch (e) {
-      todos.value[idx] = prev
+      const currentIndex = todos.value.findIndex((item) => item.id === id)
+      if (currentIndex !== -1) todos.value[currentIndex] = prev
       const msg = e instanceof Error ? e.message : String(e)
       console.warn('[TodoStore] 编辑待办失败:', msg)
     } finally {
@@ -237,6 +350,10 @@ export const useTodoStore = defineStore('todo', () => {
     const { useSettingsStore } = await import('@/stores/settings')
     const userId = useSettingsStore().profile.userId
     if (!userId) return
+    if (todos.value.find((item) => item.id === id)?.category === 'automation') {
+      setAutomationError(id, '自动化执行时间需要通过自动化详情修改。')
+      return
+    }
 
     const idx = todos.value.findIndex((t) => t.id === id)
     if (idx === -1) return
@@ -249,9 +366,11 @@ export const useTodoStore = defineStore('todo', () => {
     pending.value = new Set([...pending.value, 'edit'])
     try {
       const serverItem = await apiEditTodo(userId, id, prev.text, dueDate, prev.reminderAt, prev.recurrence)
-      todos.value[idx] = toItem(serverItem)
+      const currentIndex = todos.value.findIndex((item) => item.id === id)
+      if (currentIndex !== -1) todos.value[currentIndex] = toItem(serverItem)
     } catch (e) {
-      todos.value[idx] = prev
+      const currentIndex = todos.value.findIndex((item) => item.id === id)
+      if (currentIndex !== -1) todos.value[currentIndex] = prev
       const msg = e instanceof Error ? e.message : String(e)
       console.warn('[TodoStore] 设置截止日期失败:', msg)
     } finally {
@@ -268,13 +387,12 @@ export const useTodoStore = defineStore('todo', () => {
     const userId = useSettingsStore().profile.userId
     if (!userId) return
 
-    const doneItems = todos.value.filter((t) => t.done)
+    const doneItems = todos.value.filter((t) => t.category !== 'automation' && t.done)
     if (doneItems.length === 0) return
 
     pending.value = new Set([...pending.value, 'clear'])
     try {
-      await Promise.all(doneItems.map((item) => apiDeleteTodo(userId, item.id)))
-      todos.value = todos.value.filter((t) => !t.done)
+      await Promise.all(doneItems.map((item) => removeTodo(item.id)))
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       console.warn('[TodoStore] 清除已完成待办失败:', msg)
@@ -290,6 +408,8 @@ export const useTodoStore = defineStore('todo', () => {
   return {
     todos,
     automations,
+    automationPendingIds,
+    automationActionErrors,
     hideDone,
     searchQuery,
     todoSidebarSplitRatio,
@@ -299,6 +419,7 @@ export const useTodoStore = defineStore('todo', () => {
     pendingCount,
     addTodo,
     addAutomation,
+    setAutomationEnabled,
     toggleTodo,
     removeTodo,
     editTodo,

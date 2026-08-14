@@ -267,6 +267,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         vault_service=vault_service,
         agent_change_service=agent_change_service,
         agent_queue_service=rest_deps._agent_queue_service,
+        automation_service=rest_deps._automation_service,
         activity_service=activity_service,
     )
     rest_deps._agent = agent

@@ -1531,7 +1531,7 @@ def add_automation(
     prompt: str,
     next_run_at: str,
     timezone_name: str = "Asia/Shanghai",
-    recurrence_frequency: str = "daily",
+    recurrence_frequency: str = "none",
     recurrence_interval: int = 1,
     access_mode: str = "sandbox",
 ) -> str:
@@ -1562,6 +1562,16 @@ def toggle_todo(todo_id: str) -> str:
     """
 
     runtime = get_tool_runtime()
+    automation_service = _get_automation_service()
+    automation = automation_service.get_task_by_todo_id(user_id=runtime.user_id, todo_id=todo_id)
+    if automation is not None:
+        updated = automation_service.set_enabled(
+            user_id=runtime.user_id,
+            automation_id=str(automation["id"]),
+            enabled=not bool(automation["enabled"]),
+        )
+        status = "已启用" if updated and updated["enabled"] else "已暂停"
+        return f"自动化任务 [{automation['id']}] {status}"
     service = _get_todo_service()
     item = service.toggle_todo(user_id=runtime.user_id, todo_id=todo_id)
     if item is None:
@@ -1611,6 +1621,9 @@ def delete_todo(todo_id: str) -> str:
     """
 
     runtime = get_tool_runtime()
+    automation_service = _get_automation_service()
+    if automation_service.delete_task_by_todo_id(user_id=runtime.user_id, todo_id=todo_id):
+        return f"已取消并删除自动化任务: {todo_id}"
     service = _get_todo_service()
     if service.delete_todo(user_id=runtime.user_id, todo_id=todo_id):
         return f"已删除待办: {todo_id}"

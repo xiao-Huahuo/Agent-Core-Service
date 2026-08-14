@@ -932,7 +932,11 @@ TODO_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
                 "prompt": {"type": "string", "description": "到时间后交给 Agent 执行的任务说明。"},
                 "next_run_at": {"type": "string", "description": "下一次执行时间,必须是带时区偏移的 ISO 时间,例如 2026-08-03T21:00:00+08:00。"},
                 "timezone_name": {"type": "string", "description": "循环使用的 IANA 时区,默认 Asia/Shanghai。"},
-                "recurrence_frequency": {"type": "string", "enum": ["none", "daily", "weekly", "monthly"]},
+                "recurrence_frequency": {
+                    "type": "string",
+                    "enum": ["none", "daily", "weekly", "monthly"],
+                    "description": "循环频率，默认 none（仅执行一次）。",
+                },
                 "recurrence_interval": {"type": "integer", "minimum": 1, "maximum": 365},
                 "access_mode": {"type": "string", "enum": ["readonly", "sandbox", "full_access"]},
             },

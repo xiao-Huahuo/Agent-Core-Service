@@ -7,6 +7,11 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from agent_service.api.rest.deps import _require_automation_service
+from agent_service.schemas.automation import (
+    AutomationCreateRequest,
+    AutomationDeleteRequest,
+    AutomationToggleRequest,
+)
 
 router = APIRouter()
 
@@ -19,37 +24,31 @@ async def api_list_automations(user_id: str = Query(..., min_length=1)) -> list[
 
 
 @router.post("/automation/add")
-async def api_add_automation(body: dict[str, Any]) -> dict[str, Any]:
+async def api_add_automation(body: AutomationCreateRequest) -> dict[str, Any]:
     """创建一个定时唤醒 Agent 的自动化任务。"""
 
-    user_id = body.get("user_id")
-    text = body.get("text")
-    if not user_id or not text:
-        raise HTTPException(status_code=422, detail="user_id and text are required")
     try:
         return _require_automation_service().create_task(
-            user_id=str(user_id),
-            text=str(text),
-            prompt=str(body.get("prompt") or ""),
-            next_run_at=str(body.get("next_run_at") or ""),
-            timezone_name=str(body.get("timezone") or "UTC"),
-            recurrence=body.get("recurrence"),
-            access_mode=str(body.get("access_mode") or "sandbox"),
+            user_id=body.user_id,
+            text=body.text,
+            prompt=body.prompt,
+            next_run_at=body.next_run_at,
+            timezone_name=body.timezone,
+            recurrence=body.recurrence.model_dump(),
+            access_mode=body.access_mode,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/automation/toggle")
-async def api_toggle_automation(body: dict[str, Any]) -> dict[str, Any]:
+async def api_toggle_automation(body: AutomationToggleRequest) -> dict[str, Any]:
     """启用或停用自动化任务。"""
 
-    user_id = body.get("user_id")
-    automation_id = body.get("automation_id")
-    if not user_id or not automation_id or "enabled" not in body:
-        raise HTTPException(status_code=422, detail="user_id, automation_id and enabled are required")
     task = _require_automation_service().set_enabled(
-        user_id=str(user_id), automation_id=str(automation_id), enabled=bool(body["enabled"])
+        user_id=body.user_id,
+        automation_id=body.automation_id,
+        enabled=body.enabled,
     )
     if task is None:
         raise HTTPException(status_code=404, detail="Automation task not found")
@@ -70,15 +69,12 @@ async def api_list_automation_runs(
 
 
 @router.post("/automation/delete")
-async def api_delete_automation(body: dict[str, Any]) -> dict[str, Any]:
+async def api_delete_automation(body: AutomationDeleteRequest) -> dict[str, Any]:
     """删除自动化任务及其关联 TODO。"""
 
-    user_id = body.get("user_id")
-    automation_id = body.get("automation_id")
-    if not user_id or not automation_id:
-        raise HTTPException(status_code=422, detail="user_id and automation_id are required")
     deleted = _require_automation_service().delete_task(
-        user_id=str(user_id), automation_id=str(automation_id)
+        user_id=body.user_id,
+        automation_id=body.automation_id,
     )
     if not deleted:
         raise HTTPException(status_code=404, detail="Automation task not found")
