@@ -36,7 +36,7 @@ let floatingWindow = null
 let backendProcess = null
 let mainResizeSession = null
 
-const MAIN_MIN_WIDTH = 960
+const MAIN_MIN_WIDTH = 320
 const MAIN_MIN_HEIGHT = 620
 
 /** Resolve the window that owns a given IPC event, falling back to mainWindow. */
@@ -480,8 +480,8 @@ function createMainWindow() {
     // Windows 关键约束:可调整大小的 frameless 窗口必须保留 WS_THICKFRAME 样式
     // 才能从边缘拖拽改尺寸,该样式会强制窗口带一圈系统装饰(雾化/阴影"隔层",
     // 暗色下可见),并让 thickFrame:false 失效。与悬浮窗完全一致:resizable:false
-    // + thickFrame:false 改用 WS_POPUP,彻底去掉这层装饰。代价:主窗口不再支持
-    // 从边缘拖拽调整大小,改为最大化/还原按钮控制。
+    // + thickFrame:false 改用 WS_POPUP,彻底去掉这层装饰。最大化期间会临时
+    // 恢复 resizable,让 Windows 原生标题栏拖拽可以还原窗口。
     resizable: false,
     thickFrame: false,
     // 必须显式全透明:Electron 未设置 backgroundColor 时窗口默认绘制白色,
@@ -525,10 +525,12 @@ function createMainWindow() {
     }
   }
   mainWindow.on('maximize', () => {
+    mainWindow.setResizable(true)
     sendMaximizedState()
     applyMainWindowShape()
   })
   mainWindow.on('unmaximize', () => {
+    mainWindow.setResizable(false)
     sendMaximizedState()
     applyMainWindowShape()
   })

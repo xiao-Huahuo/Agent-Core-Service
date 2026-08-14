@@ -23,6 +23,17 @@ import LibraryBar from '@/components/library_view/LibraryBar.vue'
 import LibraryCard from '@/components/library_view/LibraryCard.vue'
 import LibraryCreateDialog from '@/components/library_view/LibraryCreateDialog.vue'
 import LibraryItemDialog from '@/components/library_view/LibraryItemDialog.vue'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useFavoritesStore } from '@/stores/favorites'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -267,16 +278,6 @@ function selectItem(item: LibraryItem) {
   // 单击仅做卡片高亮,不再呼出右侧边栏;边栏只能通过右键菜单"详细信息"打开
   selectedItem.value = item
   detailOpen.value = false
-}
-
-function selectTagFilter(tag: string) {
-  selectedTag.value = tag
-  filterMenuOpen.value = false
-}
-
-function selectContentTypeFilter(type: string) {
-  selectedContentType.value = type
-  filterMenuOpen.value = false
 }
 
 async function openItem(item: LibraryItem) {
@@ -589,81 +590,62 @@ function errorMessage(error: unknown): string {
           <IcIcon name="search" :size="14" />
           <input v-model="query" type="search" placeholder="查找" />
         </label>
-        <div class="filter-control">
-          <button class="filter-capsule-btn" type="button" title="筛选" @click="filterMenuOpen = !filterMenuOpen">
-            <IcIcon name="filter" :size="16" />
-            <span>筛选</span>
-          </button>
-          <div v-if="filterMenuOpen" class="filter-menu" @click.stop>
-            <button type="button" class="filter-label-btn" disabled>类型</button>
-            <button type="button" @click="selectContentTypeFilter('')">
-              <IcIcon v-if="!selectedContentType" name="check" :size="14" />
-              <span v-else class="filter-check-placeholder"></span>
-              <span>全部</span>
-            </button>
-            <button type="button" @click="selectContentTypeFilter('knowledge_file')">
-              <IcIcon v-if="selectedContentType === 'knowledge_file'" name="check" :size="14" />
-              <span v-else class="filter-check-placeholder"></span>
-              <span>知识库文件</span>
-            </button>
-            <button type="button" @click="selectContentTypeFilter('web_url')">
-              <IcIcon v-if="selectedContentType === 'web_url'" name="check" :size="14" />
-              <span v-else class="filter-check-placeholder"></span>
-              <span>网页</span>
-            </button>
-            <button type="button" @click="selectContentTypeFilter('collection')">
-              <IcIcon v-if="selectedContentType === 'collection'" name="check" :size="14" />
-              <span v-else class="filter-check-placeholder"></span>
-              <span>集锦</span>
-            </button>
-            <hr />
-            <button type="button" class="filter-label-btn" disabled>标签</button>
+        <DropdownMenu v-model:open="filterMenuOpen">
+          <DropdownMenuTrigger as-child>
             <button
+              class="filter-capsule-btn"
+              :class="{ active: selectedContentType || selectedTag }"
               type="button"
-              class="filter-tag-row"
-              :class="{ active: !selectedTag }"
-              @click="selectTagFilter('')"
+              title="筛选"
             >
-              <IcIcon v-if="!selectedTag" name="check" :size="14" />
-              <span v-else class="filter-check-placeholder"></span>
-              <span class="filter-tag-name">全部</span>
+              <IcIcon name="filter" :size="16" />
+              <span>筛选</span>
+              <IcIcon class="filter-chevron" name="chevron-down" :size="14" aria-hidden="true" />
             </button>
-            <div class="filter-tag-list">
-              <button
-                v-for="tag in pagedTags"
-                :key="tag.name"
-                class="filter-tag-row"
-                :class="{ active: selectedTag === tag.name }"
-                type="button"
-                :title="tag.name"
-                @click="selectTagFilter(tag.name)"
-              >
-                <IcIcon v-if="selectedTag === tag.name" name="check" :size="14" />
-                <span v-else class="filter-check-placeholder"></span>
-                <span class="filter-tag-name">{{ tag.name }}</span>
-              </button>
-            </div>
-            <div v-if="tagPageCount > 1" class="filter-pagination">
-              <button
-                class="filter-page-btn"
-                type="button"
-                :disabled="tagPage <= 0"
-                @click="tagPage -= 1"
-              >
-                上一页
-              </button>
-              <span class="filter-page-info">{{ tagPage + 1 }} / {{ tagPageCount }}</span>
-              <button
-                class="filter-page-btn"
-                type="button"
-                :disabled="tagPage >= tagPageCount - 1"
-                @click="tagPage += 1"
-              >
-                下一页
-              </button>
-            </div>
-          </div>
-        </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuContent class="library-filter-menu" align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>类型</DropdownMenuLabel>
+                <DropdownMenuRadioGroup v-model="selectedContentType">
+                  <DropdownMenuRadioItem value="">全部</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="knowledge_file">知识库文件</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="web_url">网页</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="collection">集锦</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>标签</DropdownMenuLabel>
+                <DropdownMenuRadioGroup v-model="selectedTag">
+                  <DropdownMenuRadioItem value="">全部</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem v-for="tag in pagedTags" :key="tag.name" :value="tag.name">
+                    {{ tag.name }}
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <div v-if="tagPageCount > 1" class="filter-pagination">
+                  <button
+                    class="filter-page-btn"
+                    type="button"
+                    :disabled="tagPage <= 0"
+                    @click.stop="tagPage -= 1"
+                  >
+                    上一页
+                  </button>
+                  <span class="filter-page-info">{{ tagPage + 1 }} / {{ tagPageCount }}</span>
+                  <button
+                    class="filter-page-btn"
+                    type="button"
+                    :disabled="tagPage >= tagPageCount - 1"
+                    @click.stop="tagPage += 1"
+                  >
+                    下一页
+                  </button>
+                </div>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenuPortal>
+        </DropdownMenu>
         <button class="icon-toolbar-btn" type="button" title="新增文件" @click="openCreateBookDialog">
           <IcIcon name="new-file" :size="16" />
         </button>
@@ -970,11 +952,6 @@ function errorMessage(error: unknown): string {
   color: var(--color-text);
 }
 
-.filter-control {
-  position: relative;
-  display: inline-flex;
-}
-
 .filter-capsule-btn {
   display: inline-flex;
   align-items: center;
@@ -993,85 +970,27 @@ function errorMessage(error: unknown): string {
   color: var(--color-primary);
 }
 
-.filter-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 30;
-  display: grid;
-  min-width: 240px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-canvas);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
-  padding: 6px;
+.filter-capsule-btn.active,
+.filter-capsule-btn[data-state='open'] {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
 }
 
-.filter-menu button {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  height: 30px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: calc(13px * var(--font-scale));
-  text-align: left;
-  padding: 0 8px;
-  cursor: pointer;
+.filter-chevron {
+  margin-right: -3px;
+  opacity: 0.62;
+  transition: transform var(--transition-fast);
 }
 
-.filter-menu button:not(.filter-label-btn):hover {
-  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
-  color: var(--color-text);
+.filter-capsule-btn[data-state='open'] .filter-chevron {
+  transform: rotate(180deg);
 }
 
-.filter-menu button > span:not(.filter-check-placeholder) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.filter-menu .filter-label-btn {
-  display: flex;
-  align-items: center;
-  height: 24px;
-  font-size: calc(11px * var(--font-scale));
-  font-weight: 700;
-  color: var(--color-text-muted);
-  cursor: default;
-  text-transform: uppercase;
-}
-
-.filter-menu hr {
-  width: 100%;
-  margin: 4px 0;
-  border: 0;
-  border-top: 1px solid var(--color-border);
-}
-
-.filter-check-placeholder {
-  width: 14px;
-}
-
-.filter-tag-list {
-  display: grid;
-}
-
-.filter-menu .filter-tag-row.active,
-.filter-menu .filter-tag-row.active:hover {
-  background: var(--color-primary);
-  color: #fff;
-}
-
-.filter-tag-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.library-filter-menu {
+  width: 260px;
+  max-height: min(520px, var(--reka-dropdown-menu-content-available-height));
+  overflow-y: auto;
 }
 
 .filter-pagination {
@@ -1099,7 +1018,7 @@ function errorMessage(error: unknown): string {
   padding: 0 8px;
 }
 
-.filter-menu .filter-page-btn:hover:not(:disabled) {
+.filter-page-btn:hover:not(:disabled) {
   border-color: var(--color-primary);
   color: var(--color-primary);
 }

@@ -310,7 +310,6 @@ async function contextDelete() {
         <IcIcon name="shield" :size="18" />
         <strong>{{ inTrash ? '回收站' : '密码库' }}</strong>
       </div>
-      <label class="vault-search"><IcIcon name="search" :size="16" /><input v-model="query" type="search" placeholder="搜索密码库" /></label>
       <div class="top-actions">
         <button class="tool-button" :class="{ active: filtersOpen }" type="button" title="筛选" @click="filtersOpen = !filtersOpen"><IcIcon name="filter" :size="17" /></button>
         <div class="vault-switch" :class="{ trash: inTrash }">
@@ -334,6 +333,7 @@ async function contextDelete() {
     <div class="vault-main">
       <VaultFilterPanel
         v-if="filtersOpen"
+        v-model:query="query"
         v-model:tag="selectedTag"
         v-model:item-type="selectedType"
         :tags="tags"
@@ -351,7 +351,7 @@ async function contextDelete() {
         />
       </main>
     </div>
-    <ul v-if="contextOpen && contextItem" class="context-menu" :style="contextStyle" @click.stop>
+    <ul v-if="contextOpen && contextItem" class="context-menu ui-floating-menu-surface" :style="contextStyle" @click.stop>
       <li @click="contextCopyName">复制项目名称</li>
       <li v-if="contextItem.item_type === 'login' || contextItem.item_type === 'card'" @click="contextCopySecret">复制密码</li>
       <li @click="openEdit(contextItem); closeContext()">编辑</li>
@@ -388,8 +388,7 @@ async function contextDelete() {
 
 .vault-title,
 .top-actions,
-.vault-switch,
-.vault-search {
+.vault-switch {
   display: inline-flex;
   align-items: center;
 }
@@ -402,34 +401,6 @@ async function contextDelete() {
 }
 
 .vault-title svg { color: var(--color-primary); }
-
-.vault-search {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(420px, 38vw);
-  max-width: 420px;
-  height: 28px;
-  gap: var(--space-6);
-  padding: 0 var(--space-10);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-canvas);
-  color: var(--color-text-muted);
-}
-
-.vault-search:focus-within { border-color: var(--color-primary); color: var(--color-primary); }
-
-.vault-search input {
-  min-width: 0;
-  flex: 1;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--color-text);
-  font: inherit;
-  font-size: calc(13px * var(--font-scale));
-}
 
 .top-actions {
   margin-left: auto;
@@ -586,10 +557,6 @@ async function contextDelete() {
   display: grid;
   min-width: 190px;
   padding: 6px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-canvas);
-  box-shadow: var(--shadow-window);
   list-style: none;
   margin: 0;
 }
@@ -623,10 +590,5 @@ async function contextDelete() {
     flex-wrap: wrap;
   }
 
-  .vault-search {
-    position: static;
-    width: auto;
-    transform: none;
-  }
 }
 </style>

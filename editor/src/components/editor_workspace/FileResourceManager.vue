@@ -14,6 +14,17 @@ import IcIcon from '@/components/common/IcIcon.vue'
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   displayIngestedAt,
   displayMtime,
   fileKind,
@@ -463,15 +474,6 @@ function toggleMultiSelectMode() {
   if (!multiSelectMode.value) {
     workspaceStore.clearTreeSelection()
   }
-}
-
-function selectSortKey(value: SortKey) {
-  sortKey.value = value
-}
-
-function selectSortDirection(value: SortDirection) {
-  sortDirection.value = value
-  sortMenuOpen.value = false
 }
 
 async function openContextMenu(node: KnowledgeFileNode | null, event: MouseEvent) {
@@ -959,44 +961,52 @@ onUnmounted(() => {
       >
         <IcIcon name="multi-select" :size="17" />
       </button>
-      <div v-if="resourcePage === 'files'" class="sort-control">
-        <button
-          class="tool-button"
-          :class="{ active: sortMenuOpen }"
-          type="button"
-          title="排序"
-          aria-label="排序"
-          @click="sortMenuOpen = !sortMenuOpen"
-        >
-          <IcIcon name="sort" :size="17" />
-        </button>
-        <div v-if="sortMenuOpen" class="sort-menu" @click.stop>
+      <DropdownMenu v-if="resourcePage === 'files'" v-model:open="sortMenuOpen">
+        <DropdownMenuTrigger as-child>
           <button
-            v-for="option in sortKeyOptions"
-            :key="option.value"
+            class="tool-button"
+            :class="{ active: sortMenuOpen }"
             type="button"
-            @click="selectSortKey(option.value)"
+            title="排序"
+            aria-label="排序"
           >
-            <IcIcon v-if="sortKey === option.value" name="check" :size="16" />
-            <span v-else class="sort-check-placeholder"></span>
-            <span class="sort-icon-placeholder"></span>
-            <span>{{ option.label }}</span>
+            <IcIcon name="sort" :size="17" />
           </button>
-          <hr />
-          <button
-            v-for="option in sortDirectionOptions"
-            :key="option.value"
-            type="button"
-            @click="selectSortDirection(option.value)"
-          >
-            <IcIcon v-if="sortDirection === option.value" name="check" :size="16" />
-            <span v-else class="sort-check-placeholder"></span>
-            <IcIcon v-if="option.value === 'asc'" name="arrow-up" :size="16" />
-            <IcIcon v-else name="arrow-down" :size="16" />
-            <span>{{ option.label }}</span>
-          </button>
-        </div>
-      </div>
+        </DropdownMenuTrigger>
+        <DropdownMenuPortal>
+          <DropdownMenuContent align="end">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>排序依据</DropdownMenuLabel>
+              <DropdownMenuRadioGroup v-model="sortKey">
+                <DropdownMenuRadioItem
+                  v-for="option in sortKeyOptions"
+                  :key="option.value"
+                  :value="option.value"
+                  @select.prevent
+                >
+                  {{ option.label }}
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>排列方式</DropdownMenuLabel>
+              <DropdownMenuRadioGroup v-model="sortDirection">
+                <DropdownMenuRadioItem
+                  v-for="option in sortDirectionOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  <span class="sort-direction-copy">
+                    <IcIcon :name="option.value === 'asc' ? 'arrow-up' : 'arrow-down'" :size="16" />
+                    <span>{{ option.label }}</span>
+                  </span>
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenuPortal>
+      </DropdownMenu>
       <div v-if="resourcePage === 'files'" class="view-switch" aria-label="View mode">
         <button
           v-for="mode in viewModes"

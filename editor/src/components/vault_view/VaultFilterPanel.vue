@@ -12,6 +12,7 @@ import type { VaultItemType, VaultTag } from '@/api/vault'
 defineOptions({ name: 'VaultFilterPanel' })
 
 const props = defineProps<{
+  query: string
   tag: string
   itemType: string
   tags: VaultTag[]
@@ -19,6 +20,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  'update:query': [value: string]
   'update:tag': [value: string]
   'update:itemType': [value: string]
 }>()
@@ -36,6 +38,15 @@ const typeIcons: Record<VaultItemType, string> = { login: 'shield', card: 'dashb
 <template>
   <aside class="filter-panel">
     <div class="panel-heading"><IcIcon name="filter" :size="16" /><span>筛选</span></div>
+    <label class="filter-search">
+      <IcIcon name="search" :size="15" />
+      <input
+        :value="query"
+        type="search"
+        placeholder="搜索密码库"
+        @input="emit('update:query', ($event.target as HTMLInputElement).value)"
+      />
+    </label>
     <p class="section-label">类型</p>
     <button class="type-filter" :class="{ active: !itemType }" type="button" @click="emit('update:itemType', '')"><IcIcon name="layers" :size="16" /><span>全部项目</span><small>{{ Object.values(counts).reduce((sum, count) => sum + count, 0) }}</small></button>
     <div class="tag-list">
@@ -67,10 +78,14 @@ const typeIcons: Record<VaultItemType, string> = { login: 'shield', card: 'dashb
 <style scoped>
 .filter-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: var(--space-4);
   flex: 0 0 216px;
+  width: 216px;
   min-width: 216px;
+  max-width: 216px;
+  overflow: hidden;
   padding: var(--space-12);
   border-right: 1px solid var(--color-border);
   background: var(--color-canvas);
@@ -90,6 +105,38 @@ const typeIcons: Record<VaultItemType, string> = { login: 'shield', card: 'dashb
 
 .panel-heading svg { color: var(--color-primary); }
 .section-label { margin: var(--space-8) var(--space-6) var(--space-2); color: var(--color-text-muted); font-size: calc(11px * var(--font-scale)); font-weight: 600; }
+
+.filter-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 30px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.filter-search:focus-within {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.filter-search input {
+  min-width: 0;
+  width: 100%;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
+}
 
 .type-filter {
   display: grid;

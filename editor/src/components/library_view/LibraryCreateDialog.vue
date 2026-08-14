@@ -285,19 +285,21 @@ function submit() {
 
 .upper-grid {
   display: grid;
-  grid-template-columns: 5fr 3fr;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 3fr);
   gap: 14px;
   padding: 16px 16px 0;
 }
 
 .metadata-zone {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   min-width: 0;
 }
 
 .field {
   display: grid;
+  min-width: 0;
   gap: 7px;
   font-size: calc(12px * var(--font-scale));
   color: var(--color-text-secondary);

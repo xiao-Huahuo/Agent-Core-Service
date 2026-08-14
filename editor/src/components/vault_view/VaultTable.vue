@@ -7,6 +7,7 @@
 -->
 <script setup lang="ts">
 import type { VaultItem } from '@/api/vault'
+import IcIcon from '@/components/common/IcIcon.vue'
 import VaultAssetThumb from '@/components/vault_view/VaultAssetThumb.vue'
 
 defineOptions({ name: 'VaultTable' })
@@ -31,11 +32,16 @@ const labels = {
   secure_note: '安全笔记',
 }
 
-function iconFor(type: string): string {
-  if (type === 'card') return '💳'
-  if (type === 'identity') return 'ID'
-  if (type === 'secure_note') return 'N'
-  return '🔑'
+// 与项目其他区域共用已下载的 SVG 图标，避免密码库单独使用 emoji。
+const typeIcons: Record<VaultItem['item_type'], string> = {
+  login: 'shield',
+  card: 'dashboard',
+  identity: 'fact-check',
+  secure_note: 'edit-note',
+}
+
+function iconFor(type: VaultItem['item_type']): string {
+  return typeIcons[type]
 }
 
 function firstAssetId(item: VaultItem): string {
@@ -57,7 +63,7 @@ function formatDate(raw: string): string {
     <thead>
       <tr>
         <th v-if="multiSelect"></th>
-        <th>图标</th>
+        <th aria-label="项目图标"></th>
         <th>项目名称</th>
         <th>密码类型</th>
         <th>创建时间</th>
@@ -80,9 +86,11 @@ function formatDate(raw: string): string {
             v-if="firstAssetId(item)"
             :token="token"
             :asset-id="firstAssetId(item)"
-            :fallback="iconFor(item.item_type)"
+            :fallback-icon="iconFor(item.item_type)"
           />
-          <span v-else class="type-icon">{{ iconFor(item.item_type) }}</span>
+          <span v-else class="type-icon" aria-hidden="true">
+            <IcIcon :name="iconFor(item.item_type)" :size="18" />
+          </span>
         </td>
         <td>{{ item.name }}</td>
         <td>{{ labels[item.item_type] }}</td>
@@ -131,7 +139,5 @@ tbody tr.selected {
   border-radius: 8px;
   background: var(--color-primary-soft);
   color: var(--color-primary);
-  font-size: calc(12px * var(--font-scale));
-  font-weight: 800;
 }
 </style>

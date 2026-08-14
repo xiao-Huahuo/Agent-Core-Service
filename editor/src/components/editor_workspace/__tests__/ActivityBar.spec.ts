@@ -34,6 +34,7 @@ describe('ActivityBar', () => {
     ingestionActive: false,
     visualizationActive: false,
     agentActive: false,
+    agentQueueActive: false,
     graphActive: false,
     dashboardActive: false,
     debugActive: false,
@@ -65,10 +66,58 @@ describe('ActivityBar', () => {
     expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(true)
   })
 
+  it('keeps the submenu open after child navigation but lets the parent toggle it', async () => {
+    const wrapper = mount(ActivityBar, { props: { ...props, displayMode: 'management' } })
+    const knowledgeButton = wrapper.get('button[aria-label="库"]')
+
+    await knowledgeButton.trigger('click')
+    expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(true)
+
+    await wrapper.get('button[aria-label="图书馆"]').trigger('click')
+    expect(wrapper.emitted('openLibrary')).toHaveLength(1)
+    expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(true)
+
+    await knowledgeButton.trigger('click')
+    expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(false)
+  })
+
   it('marks the knowledge group active when a child view is active', () => {
     const wrapper = mount(ActivityBar, { props: { ...props, libraryActive: true } })
 
     expect(wrapper.get('button[aria-label="库"]').classes()).toContain('active')
+  })
+
+  it('moves one shared hover indicator to the pointed navigation button', async () => {
+    const wrapper = mount(ActivityBar, { props })
+    const activityBar = wrapper.get('.activity-bar')
+    const filesButton = wrapper.get('button[aria-label="Files"]')
+    vi.spyOn(activityBar.element, 'getBoundingClientRect').mockReturnValue({ top: 10 } as DOMRect)
+    vi.spyOn(filesButton.element, 'getBoundingClientRect').mockReturnValue({ top: 58 } as DOMRect)
+
+    await filesButton.trigger('mouseover')
+
+    const indicator = wrapper.get('.activity-hover-indicator')
+    expect(indicator.attributes('style')).toContain('translate3d(0, 48px, 0)')
+    expect(indicator.attributes('style')).toContain('opacity: 1')
+
+    await activityBar.trigger('mouseleave')
+    expect(indicator.attributes('style')).toContain('opacity: 0')
+  })
+
+  it('moves a shared hover indicator between knowledge submenu items', async () => {
+    const wrapper = mount(ActivityBar, { props: { ...props, displayMode: 'management' } })
+    await wrapper.get('button[aria-label="库"]').trigger('click')
+
+    const submenu = wrapper.get('[aria-label="知识库菜单"]')
+    const libraryButton = wrapper.get('button[aria-label="图书馆"]')
+    vi.spyOn(submenu.element, 'getBoundingClientRect').mockReturnValue({ top: 100 } as DOMRect)
+    vi.spyOn(libraryButton.element, 'getBoundingClientRect').mockReturnValue({ top: 144 } as DOMRect)
+
+    await libraryButton.trigger('mouseover')
+
+    const indicator = wrapper.get('.knowledge-hover-indicator')
+    expect(indicator.attributes('style')).toContain('translate3d(0, 44px, 0)')
+    expect(indicator.attributes('style')).toContain('opacity: 1')
   })
 
   it('places ingestion, MD-HTML, and skills at the bottom of the main group', () => {

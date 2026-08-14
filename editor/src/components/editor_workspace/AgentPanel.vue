@@ -14,6 +14,16 @@ import lightTitle from '@/assets/images/亮色标题.png'
 import lightLogo from '@/assets/images/亮色无底图标.png'
 import darkLogo from '@/assets/images/暗色无底图标.png'
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import ChatInput from '@/components/editor_workspace/agent_chat/ChatInput.vue'
 import LoaderCube from '@/components/editor_workspace/agent_chat/LoaderCube.vue'
 import MessageList from '@/components/editor_workspace/agent_chat/MessageList.vue'
@@ -88,8 +98,8 @@ const dragDepth = ref(0)
 const isUploadingAttachment = ref(false)
 const uploadStatusText = ref('')
 const modeSwitchRef = ref<HTMLElement | null>(null)
-const loopModeMenu = ref<HTMLDetailsElement | null>(null)
-const skillMenu = ref<HTMLDetailsElement | null>(null)
+const loopModeMenuOpen = ref(false)
+const skillMenuOpen = ref(false)
 const modeIndicatorStyle = computed(() => {
   if (settingsStore.chatMode === 'tool') {
     return { width: 'calc(50% - 2px)', transform: 'translateX(0)' }
@@ -310,10 +320,13 @@ function handleToggleWebSearch() {
 
 function setAgentLoopMode(mode: AgentLoopMode) {
   settingsStore.setAgentLoopMode(mode)
-  if (loopModeMenu.value) {
-    loopModeMenu.value.open = false
-  }
 }
+
+/** Exposes the persisted Agent loop mode to the shared radio menu. */
+const agentLoopModeModel = computed<AgentLoopMode>({
+  get: () => settingsStore.agentLoopMode,
+  set: setAgentLoopMode,
+})
 
 async function refreshSkills() {
   await skillsStore.loadSkills()
@@ -321,9 +334,7 @@ async function refreshSkills() {
 
 function selectSkillReference(skillName: string) {
   referenceText.value = `用户要求使用Skill： ${skillName}`
-  if (skillMenu.value) {
-    skillMenu.value.open = false
-  }
+  skillMenuOpen.value = false
 }
 
 function setAgentAccessMode(mode: AgentAccessMode) {
@@ -333,12 +344,6 @@ function setAgentAccessMode(mode: AgentAccessMode) {
 function setChatRenderMode(mode: 'chat' | 'tool') {
   if (settingsStore.chatMode !== mode) {
     settingsStore.toggleChatMode()
-  }
-}
-
-function handleLoopModeSummaryClick(event: MouseEvent) {
-  if (!userId.value) {
-    event.preventDefault()
   }
 }
 
@@ -777,74 +782,65 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
         >
           <IcIcon name="group" :size="16" />
         </button>
-        <details ref="skillMenu" class="topbar-skill-dropdown" :class="{ disabled: !userId }">
-          <summary
-            class="topbar-skill-trigger"
-            title="Skill"
-            aria-label="Skill"
-          >
-            <span>Skill</span>
-            <IcIcon name="chevron-down" :size="12" />
-          </summary>
-          <div class="topbar-skill-menu" role="listbox" aria-label="Skill">
-            <div class="topbar-skill-menu-head">
-              <span>Skills</span>
-              <button
-                class="topbar-skill-refresh"
-                type="button"
-                title="刷新 Skill"
-                :disabled="skillsStore.loading"
-                @click.prevent.stop="refreshSkills"
-              >
-                <IcIcon name="refresh" :size="13" :class="{ spinning: skillsStore.loading }" />
-              </button>
-            </div>
-            <button
-              v-for="skill in extractedSkills"
-              :key="skill.skill_id"
-              class="topbar-skill-option"
-              type="button"
-              role="option"
-              @click="selectSkillReference(skill.name)"
-            >
-              <span class="topbar-skill-name">{{ skill.name }}</span>
-              <span class="topbar-skill-desc">{{ skill.description }}</span>
+        <DropdownMenu v-model:open="skillMenuOpen">
+          <DropdownMenuTrigger as-child>
+            <button class="topbar-skill-trigger" type="button" title="Skill" aria-label="Skill" :disabled="!userId">
+              <span>Skill</span>
+              <IcIcon name="chevron-down" :size="12" />
             </button>
-            <div v-if="!skillsStore.loading && extractedSkills.length === 0" class="topbar-skill-empty">
-              暂无 Skill
-            </div>
-            <div v-if="skillsStore.loading && extractedSkills.length === 0" class="topbar-skill-empty">
-              正在读取
-            </div>
-          </div>
-        </details>
-        <details ref="loopModeMenu" class="topbar-loop-mode-dropdown" :class="{ disabled: !userId }">
-          <summary
-            class="topbar-loop-mode-trigger"
-            title="Agent Loop 模式"
-            aria-label="Agent Loop 模式"
-            @click="handleLoopModeSummaryClick"
-          >
-            <span>{{ selectedLoopModeLabel }}</span>
-            <IcIcon name="chevron-down" :size="12" />
-          </summary>
-          <div class="topbar-loop-mode-menu" role="listbox" aria-label="Agent Loop 模式">
-            <button
-              v-for="option in loopModeOptions"
-              :key="option.value"
-              class="topbar-loop-mode-option"
-              :class="{ active: settingsStore.agentLoopMode === option.value }"
-              type="button"
-              role="option"
-              :aria-selected="settingsStore.agentLoopMode === option.value"
-              @click="setAgentLoopMode(option.value)"
-            >
-              <span class="topbar-loop-mode-label">{{ option.label }}</span>
-              <span class="topbar-loop-mode-hint">{{ option.hint }}</span>
-              <IcIcon v-if="settingsStore.agentLoopMode === option.value" name="check" :size="13" />
+          </DropdownMenuTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuContent align="end">
+              <div class="topbar-skill-menu-head">
+                <DropdownMenuLabel>Skills</DropdownMenuLabel>
+                <button
+                  class="topbar-skill-refresh"
+                  type="button"
+                  title="刷新 Skill"
+                  :disabled="skillsStore.loading"
+                  @click.stop="refreshSkills"
+                >
+                  <IcIcon name="refresh" :size="13" :class="{ spinning: skillsStore.loading }" />
+                </button>
+              </div>
+              <div class="topbar-skill-list">
+                <DropdownMenuItem
+                  v-for="skill in extractedSkills"
+                  :key="skill.skill_id"
+                  class="topbar-skill-option"
+                  @select="selectSkillReference(skill.name)"
+                >
+                  <span class="topbar-skill-name">{{ skill.name }}</span>
+                  <span class="topbar-skill-desc">{{ skill.description }}</span>
+                </DropdownMenuItem>
+                <div v-if="extractedSkills.length === 0" class="topbar-skill-empty">
+                  {{ skillsStore.loading ? '正在读取' : '暂无 Skill' }}
+                </div>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenuPortal>
+        </DropdownMenu>
+        <DropdownMenu v-model:open="loopModeMenuOpen">
+          <DropdownMenuTrigger as-child>
+            <button class="topbar-loop-mode-trigger" type="button" title="Agent Loop 模式" aria-label="Agent Loop 模式" :disabled="!userId">
+              <span>{{ selectedLoopModeLabel }}</span>
+              <IcIcon name="chevron-down" :size="12" />
             </button>
-          </div>
-        </details>
+          </DropdownMenuTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>思考模式</DropdownMenuLabel>
+              <DropdownMenuRadioGroup v-model="agentLoopModeModel">
+                <DropdownMenuRadioItem v-for="option in loopModeOptions" :key="option.value" :value="option.value">
+                  <span class="topbar-loop-mode-copy">
+                    <strong>{{ option.label }}</strong>
+                    <small>{{ option.hint }}</small>
+                  </span>
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenuPortal>
+        </DropdownMenu>
         <button
           class="new-session-round-btn"
           type="button"
@@ -1335,17 +1331,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   to { transform: rotate(360deg); }
 }
 
-.topbar-loop-mode-dropdown,
-.topbar-skill-dropdown {
-  position: relative;
-}
-
-.topbar-loop-mode-dropdown.disabled,
-.topbar-skill-dropdown.disabled {
-  pointer-events: none;
-  opacity: 0.55;
-}
-
 .topbar-loop-mode-trigger,
 .topbar-skill-trigger {
   display: inline-flex;
@@ -1362,7 +1347,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   font-family: var(--font-ui);
   font-size: calc(10px * var(--font-scale));
   line-height: 1;
-  list-style: none;
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -1375,43 +1359,17 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   min-width: 76px;
 }
 
-.topbar-loop-mode-trigger::-webkit-details-marker,
-.topbar-skill-trigger::-webkit-details-marker {
-  display: none;
-}
-
-.topbar-loop-mode-trigger::marker,
-.topbar-skill-trigger::marker {
-  content: '';
-}
-
 .topbar-loop-mode-trigger:hover,
-.topbar-loop-mode-dropdown[open] .topbar-loop-mode-trigger,
+.topbar-loop-mode-trigger[data-state='open'],
 .topbar-skill-trigger:hover,
-.topbar-skill-dropdown[open] .topbar-skill-trigger {
+.topbar-skill-trigger[data-state='open'] {
   border-color: var(--color-accent);
   background: var(--color-accent-muted);
   color: var(--color-text-primary);
 }
 
-.topbar-loop-mode-menu,
-.topbar-skill-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  width: 198px;
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
-  box-shadow: var(--shadow-lg);
-}
-
-.topbar-skill-menu {
-  width: 260px;
+.topbar-skill-list {
+  width: 248px;
   max-height: 340px;
   overflow: auto;
 }
@@ -1459,7 +1417,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   animation: safety-spin 0.8s linear infinite;
 }
 
-.topbar-loop-mode-option,
 .topbar-skill-option {
   display: flex;
   align-items: center;
@@ -1473,15 +1430,9 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   color: var(--color-text-secondary);
   font-family: var(--font-ui);
   text-align: left;
-  cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
 }
 
-.topbar-loop-mode-option:hover,
-.topbar-loop-mode-option.active,
-.topbar-skill-option:hover {
+.topbar-skill-option[data-highlighted] {
   background: var(--color-primary-softer);
   color: var(--color-text-primary);
 }
@@ -1492,14 +1443,12 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   gap: 2px;
 }
 
-.topbar-loop-mode-label,
 .topbar-skill-name {
   color: inherit;
   font-size: calc(12px * var(--font-scale));
   font-weight: 650;
 }
 
-.topbar-loop-mode-hint,
 .topbar-skill-desc {
   flex: 1;
   overflow: hidden;
@@ -1518,8 +1467,21 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   text-align: center;
 }
 
-.topbar-loop-mode-option svg {
-  color: var(--color-primary);
+.topbar-loop-mode-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.topbar-loop-mode-copy strong {
+  font-size: calc(12px * var(--font-scale));
+}
+
+.topbar-loop-mode-copy small {
+  overflow: hidden;
+  color: var(--color-text-tertiary);
+  font-size: calc(10px * var(--font-scale));
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .new-session-round-btn {

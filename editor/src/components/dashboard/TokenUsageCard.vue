@@ -12,6 +12,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import VChart from 'vue-echarts'
 import 'echarts'
 import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
+import DropdownSelect from '@/components/ui/dropdown-menu/DropdownSelect.vue'
 import { fetchTokenUsageStats } from '@/api/agent'
 import type { TokenUsageInterval, TokenUsageStatsResponse } from '@/api/agent'
 import { fetchLLMConfig } from '@/api/settings'
@@ -418,25 +419,13 @@ watch(
 
         <!-- 时间刻度: 桶粒度 + 时间范围 -->
         <template v-if="chartKind === 'buckets'">
-          <select v-model="interval" class="filter-select">
-            <option v-for="option in intervalOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-          <select v-model="lookback" class="filter-select">
-            <option v-for="option in lookbackOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
+          <DropdownSelect v-model="interval" class="filter-select" aria-label="Token 时间粒度" :options="intervalOptions" />
+          <DropdownSelect v-model="lookback" class="filter-select" aria-label="Token 时间范围" :options="lookbackOptions" />
         </template>
 
         <!-- 每次调用: 调用次数筛选 -->
         <template v-if="chartKind === 'calls'">
-          <select v-model="callLimit" class="filter-select">
-            <option v-for="option in callLimitOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
+          <DropdownSelect v-model="callLimit" class="filter-select" aria-label="Token 调用次数" :options="callLimitOptions" />
         </template>
 
         <!-- Session 总量: 排序方式 -->

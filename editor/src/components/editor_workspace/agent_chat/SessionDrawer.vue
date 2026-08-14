@@ -6,9 +6,18 @@
   sessions for the current editor user_id.
 -->
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useFavoritesStore } from '@/stores/favorites'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
@@ -46,7 +55,6 @@ const exportingId = ref<string | null>(null)
 const importing = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const favoritesOnly = ref(false)
-const openMenuId = ref<string | null>(null)
 const effectiveFavoritesOnly = computed(() => props.favoritesOnlyLocked || favoritesOnly.value)
 const streamingSessionIdSet = computed(() => new Set([
   ...(props.streamingSessionIds ?? []),
@@ -70,11 +78,6 @@ onMounted(() => {
   if (props.userId) {
     void favoritesStore.load(props.userId, 'session', '')
   }
-  document.addEventListener('click', closeSessionMenu)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', closeSessionMenu)
 })
 
 function toggleFavoritesOnly() {
@@ -112,35 +115,22 @@ function displayName(session: SessionRecord) {
 }
 
 function selectSession(sessionId: string) {
-  closeSessionMenu()
   emit('select', sessionId)
 }
 
-function toggleSessionMenu(sessionId: string, event: MouseEvent) {
-  event.stopPropagation()
-  openMenuId.value = openMenuId.value === sessionId ? null : sessionId
-}
-
-function closeSessionMenu() {
-  openMenuId.value = null
-}
-
-function toggleSessionFavorite(sessionId: string, event: MouseEvent) {
+function toggleSessionFavorite(sessionId: string, event: Event) {
   event.stopPropagation()
   void favoritesStore.toggle('session', sessionId, '')
-  closeSessionMenu()
 }
 
 async function deleteSession(sessionId: string, event: Event) {
   event.stopPropagation()
-  closeSessionMenu()
   await sessionStore.remove(sessionId)
 }
 
 async function exportSessionHandler(session: SessionRecord, event: Event) {
   event.stopPropagation()
   if (exportingId.value) return
-  closeSessionMenu()
   exportingId.value = session.session_id
   try {
     await exportSession(session, props.userId)
@@ -227,44 +217,38 @@ async function clearAllSessions() {
       >
         <span class="session-name">{{ displayName(session) }}</span>
         <span v-if="streamingSessionIdSet.has(session.session_id)" class="session-streaming" aria-label="Agent 正在输出"></span>
-        <button
-          class="session-menu-btn"
-          :class="{ active: openMenuId === session.session_id }"
-          type="button"
-          title="更多"
-          aria-label="更多"
-          :aria-expanded="openMenuId === session.session_id"
-          @click="toggleSessionMenu(session.session_id, $event)"
-        >
-          <IcIcon name="more-horiz" :size="15" />
-        </button>
-        <div v-if="openMenuId === session.session_id" class="session-action-menu" @click.stop>
-          <button
-            type="button"
-            :class="{ favorited: favoritesStore.isFavorite('session', session.session_id, '') }"
-            @click="toggleSessionFavorite(session.session_id, $event)"
-          >
-            <IcIcon name="star" :size="14" />
-            <span>收藏</span>
-          </button>
-          <div class="session-menu-date">
-            <IcIcon name="calendar" :size="14" />
-            <span>日期</span>
-            <time>{{ session.updated_at?.slice(0, 10) }}</time>
-          </div>
-          <button
-            type="button"
-            :class="{ loading: exportingId === session.session_id }"
-            @click="exportSessionHandler(session, $event)"
-          >
-            <IcIcon name="upload" :size="14" />
-            <span>导出会话</span>
-          </button>
-          <button class="danger" type="button" @click="deleteSession(session.session_id, $event)">
-            <IcIcon name="close" :size="14" />
-            <span>删除</span>
-          </button>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <button class="session-menu-btn" type="button" title="更多" aria-label="更多" @click.stop>
+              <IcIcon name="more-horiz" :size="15" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                :class="{ favorited: favoritesStore.isFavorite('session', session.session_id, '') }"
+                @select="toggleSessionFavorite(session.session_id, $event)"
+              >
+                <IcIcon name="star" :size="14" />
+                <span>收藏</span>
+              </DropdownMenuItem>
+              <DropdownMenuLabel class="session-menu-date">
+                <IcIcon name="calendar" :size="14" />
+                <span>日期</span>
+                <time>{{ session.updated_at?.slice(0, 10) }}</time>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem :disabled="Boolean(exportingId)" @select="exportSessionHandler(session, $event)">
+                <IcIcon name="upload" :size="14" />
+                <span>{{ exportingId === session.session_id ? '导出中' : '导出会话' }}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" @select="deleteSession(session.session_id, $event)">
+                <IcIcon name="close" :size="14" />
+                <span>删除</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenuPortal>
+        </DropdownMenu>
       </div>
       <p v-if="!renderedSessions.length" class="empty-hint">No sessions found</p>
     </div>
@@ -627,26 +611,11 @@ async function clearAllSessions() {
 }
 
 .session-menu-btn:hover,
-.session-menu-btn.active {
+.session-menu-btn[data-state='open'] {
   background: var(--color-primary-softer);
   color: var(--color-primary);
 }
 
-.session-action-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: var(--space-8);
-  z-index: 20;
-  display: grid;
-  min-width: 154px;
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-canvas);
-  color: var(--color-text-secondary);
-}
-
-.session-action-menu button,
 .session-menu-date {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) auto;
@@ -654,31 +623,11 @@ async function clearAllSessions() {
   gap: var(--space-8);
   min-height: 30px;
   padding: 0 var(--space-8);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: inherit;
-  font: inherit;
   font-size: calc(12px * var(--font-scale));
-  text-align: left;
 }
 
-.session-action-menu button {
-  cursor: pointer;
-}
-
-.session-action-menu button:hover {
-  background: var(--drawer-page-hover);
-  color: var(--color-primary);
-}
-
-.session-action-menu button.favorited {
+.ui-dropdown-item.favorited {
   color: #f2b705;
-}
-
-.session-action-menu button.danger:hover {
-  background: rgba(197, 101, 101, 0.08);
-  color: #c56565;
 }
 
 .session-menu-date {
@@ -687,15 +636,6 @@ async function clearAllSessions() {
 
 .session-menu-date time {
   font-size: calc(10px * var(--font-scale));
-}
-
-.session-action-menu .loading {
-  animation: export-pulse 0.8s ease-in-out infinite;
-}
-
-@keyframes export-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
 }
 
 .empty-hint {

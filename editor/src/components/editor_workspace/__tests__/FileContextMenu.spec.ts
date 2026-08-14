@@ -10,6 +10,7 @@ import { mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 
 import FileContextMenu from '../FileContextMenu.vue'
+import contextMenuSource from '../FileContextMenu.vue?raw'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 
 const menuStyle = { left: '0px', top: '0px' }
@@ -93,5 +94,11 @@ describe('FileContextMenu HTML visualization', () => {
     for (const label of disabledLabels) {
       expect(buttonByText(wrapper, label).attributes('disabled')).toBeDefined()
     }
+  })
+
+  it('uses dropdown entrance motion for the menu and submenus', () => {
+    expect(contextMenuSource).toContain('animation: context-menu-in 160ms')
+    expect(contextMenuSource).toContain('animation: context-submenu-in 150ms')
+    expect(contextMenuSource).toContain('@media (prefers-reduced-motion: reduce)')
   })
 })

@@ -16,6 +16,7 @@ import {
   type ObsHistoryRange,
 } from '@/composable/useObsHistory'
 import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
+import DropdownSelect from '@/components/ui/dropdown-menu/DropdownSelect.vue'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -213,16 +214,13 @@ const lineOption = computed(() => {
           <button class="rag-btn" :class="{ active: chartMode === 'donut' }" type="button" @click="chartMode = 'donut'">饼图</button>
           <button class="rag-btn" :class="{ active: chartMode === 'line' }" type="button" @click="chartMode = 'line'">曲线图</button>
         </div>
-        <select
+        <DropdownSelect
           v-if="chartMode === 'line'"
           v-model="selectedRange"
           class="range-select"
           aria-label="RAG 曲线范围"
-        >
-          <option v-for="range in OBS_HISTORY_RANGE_OPTIONS" :key="range" :value="range">
-            {{ formatObsHistoryRange(range, '次', 'RAG') }}
-          </option>
-        </select>
+          :options="OBS_HISTORY_RANGE_OPTIONS.map((range) => ({ value: range, label: formatObsHistoryRange(range, '次', 'RAG') }))"
+        />
       </div>
 
       <!-- 三个 donut -->

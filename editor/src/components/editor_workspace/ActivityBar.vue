@@ -74,6 +74,66 @@ const settingsStore = useSettingsStore()
 const agentIconSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
 const knowledgeMenuOpen = ref(false)
 const knowledgeActive = computed(() => props.resourcesActive || props.libraryActive || props.vaultActive || props.formsActive)
+const activityBarRef = ref<HTMLElement | null>(null)
+const hoverIndicatorTop = ref(0)
+const hoverIndicatorVisible = ref(false)
+const knowledgeSubmenuRef = ref<HTMLElement | null>(null)
+const knowledgeHoverIndicatorTop = ref(0)
+const knowledgeHoverIndicatorVisible = ref(false)
+
+/** Resolves a rail button from delegated hover/focus events. */
+function resolveActivityButton(target: EventTarget | null): HTMLElement | null {
+  const activityBar = activityBarRef.value
+  if (!activityBar || !(target instanceof Element)) return null
+  const button = target.closest<HTMLElement>('.activity-button')
+  if (!button || !activityBar.contains(button)) return null
+  return button.closest('.knowledge-submenu')
+    ? activityBar.querySelector<HTMLElement>('.knowledge-button')
+    : button
+}
+
+/** Places the shared hover indicator behind a navigation button. */
+function positionHoverIndicator(button: HTMLElement): void {
+  const activityBar = activityBarRef.value
+  if (!activityBar) return
+  hoverIndicatorTop.value = button.getBoundingClientRect().top - activityBar.getBoundingClientRect().top
+  hoverIndicatorVisible.value = true
+}
+
+/** Moves the shared indicator through delegated pointer and focus events. */
+function moveHoverIndicator(event: MouseEvent | FocusEvent): void {
+  const button = resolveActivityButton(event.target)
+  if (button) positionHoverIndicator(button)
+}
+
+/** Hides the indicator unless keyboard focus remains within the activity bar. */
+function hideHoverIndicator(event: MouseEvent | FocusEvent): void {
+  const nextTarget = event instanceof FocusEvent ? event.relatedTarget : document.activeElement
+  const focusedButton = resolveActivityButton(nextTarget)
+  if (focusedButton) {
+    positionHoverIndicator(focusedButton)
+    return
+  }
+  hoverIndicatorVisible.value = false
+}
+
+/** Moves the submenu indicator behind the currently pointed knowledge entry. */
+function moveKnowledgeHoverIndicator(event: MouseEvent | FocusEvent): void {
+  const submenu = knowledgeSubmenuRef.value
+  if (!submenu || !(event.target instanceof Element)) return
+  const button = event.target.closest<HTMLElement>('.activity-button')
+  if (!button || !submenu.contains(button)) return
+  knowledgeHoverIndicatorTop.value = button.getBoundingClientRect().top - submenu.getBoundingClientRect().top
+  knowledgeHoverIndicatorVisible.value = true
+}
+
+/** Hides the submenu indicator after pointer and keyboard focus leave the submenu. */
+function hideKnowledgeHoverIndicator(event: MouseEvent | FocusEvent): void {
+  const submenu = knowledgeSubmenuRef.value
+  const nextTarget = event instanceof FocusEvent ? event.relatedTarget : document.activeElement
+  if (submenu && nextTarget instanceof Node && submenu.contains(nextTarget)) return
+  knowledgeHoverIndicatorVisible.value = false
+}
 
 function toggleKnowledgeMenu() {
   knowledgeMenuOpen.value = !knowledgeMenuOpen.value
@@ -88,12 +148,30 @@ function closeKnowledgeMenuOnLeave() {
 }
 
 function closeKnowledgeMenu() {
+  if (props.displayMode === 'management') return
   knowledgeMenuOpen.value = false
 }
 </script>
 
 <template>
-  <nav class="activity-bar" :class="{ management: displayMode === 'management' }" aria-label="Editor activity bar">
+  <nav
+    ref="activityBarRef"
+    class="activity-bar"
+    :class="{ management: displayMode === 'management' }"
+    aria-label="Editor activity bar"
+    @mouseover="moveHoverIndicator"
+    @mouseleave="hideHoverIndicator"
+    @focusin="moveHoverIndicator"
+    @focusout="hideHoverIndicator"
+  >
+    <span
+      class="activity-hover-indicator"
+      aria-hidden="true"
+      :style="{
+        transform: `translate3d(0, ${hoverIndicatorTop}px, 0)`,
+        opacity: hoverIndicatorVisible ? 1 : 0,
+      }"
+    ></span>
     <button
       class="activity-button"
       :class="{ active: homeActive }"
@@ -150,7 +228,24 @@ function closeKnowledgeMenu() {
         <IcIcon class="knowledge-chevron" :class="{ 'is-open': knowledgeMenuOpen }" name="chevron-right" :size="14" />
       </button>
       <Transition name="knowledge-submenu">
-        <div v-if="knowledgeMenuOpen" class="knowledge-submenu" aria-label="知识库菜单">
+        <div
+          v-if="knowledgeMenuOpen"
+          ref="knowledgeSubmenuRef"
+          class="knowledge-submenu"
+          aria-label="知识库菜单"
+          @mouseover="moveKnowledgeHoverIndicator"
+          @mouseleave="hideKnowledgeHoverIndicator"
+          @focusin="moveKnowledgeHoverIndicator"
+          @focusout="hideKnowledgeHoverIndicator"
+        >
+          <span
+            class="knowledge-hover-indicator"
+            aria-hidden="true"
+            :style="{
+              transform: `translate3d(0, ${knowledgeHoverIndicatorTop}px, 0)`,
+              opacity: knowledgeHoverIndicatorVisible ? 1 : 0,
+            }"
+          ></span>
           <button
             class="activity-button"
             :class="{ active: resourcesActive }"
@@ -372,6 +467,41 @@ function closeKnowledgeMenu() {
   padding: var(--space-8) var(--space-6);
 }
 
+.activity-hover-indicator {
+  position: absolute;
+  top: 0;
+  right: var(--space-4);
+  left: var(--space-4);
+  z-index: 0;
+  display: none;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-bg-hover);
+  pointer-events: none;
+  transition:
+    transform 220ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 150ms ease;
+  will-change: transform;
+}
+
+.activity-bar.management .activity-hover-indicator {
+  right: var(--space-6);
+  left: var(--space-6);
+  border-radius: var(--radius-sm);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .activity-hover-indicator {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-hover-indicator {
+    transition: opacity 150ms ease;
+  }
+}
+
 .activity-button {
   display: inline-flex;
   align-items: center;
@@ -476,7 +606,46 @@ function closeKnowledgeMenu() {
   transform: none;
 }
 
+.knowledge-hover-indicator {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 0;
+  display: none;
+  width: 32px;
+  height: 32px;
+  margin-left: -16px;
+  border-radius: 50%;
+  background: var(--color-bg-hover);
+  pointer-events: none;
+  transition:
+    transform 220ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 150ms ease;
+  will-change: transform;
+}
+
+.activity-bar.management .knowledge-hover-indicator {
+  right: 0;
+  left: var(--space-12);
+  width: auto;
+  margin-left: 0;
+  border-radius: var(--radius-sm);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .knowledge-hover-indicator {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .knowledge-hover-indicator {
+    transition: opacity 150ms ease;
+  }
+}
+
 .knowledge-submenu .activity-button {
+  z-index: 1;
   width: 32px;
 }
 
@@ -543,11 +712,6 @@ function closeKnowledgeMenu() {
     transform: scale(2.5);
     opacity: 0;
   }
-}
-
-.activity-button:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
 }
 
 .activity-button.active {

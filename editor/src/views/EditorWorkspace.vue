@@ -138,6 +138,7 @@ function openFileSidebar() {
     workspaceStore.setMainView('editor')
   }
   fileSidebarOpen.value = true
+  agentSidebarOpen.value = false
   gitLeftOpen.value = false
   fileWidth.value = Math.max(fileWidth.value, DEFAULT_FILE_WIDTH)
 }
@@ -964,52 +965,9 @@ watch(
 }
 
 @media (max-width: 760px) {
-  .workspace-page {
-    overflow: auto;
-  }
-
-  .workspace-grid {
-    grid-template-columns: var(--activity-col-width) minmax(0, 1fr);
-    grid-template-rows: var(--file-mobile-row) minmax(520px, 70vh) var(--agent-mobile-row);
-    min-height: auto;
-    gap: 0;
-    padding: 0;
-  }
-
-  .activity-col {
-    grid-column: 1;
-    grid-row: 1 / -1;
-  }
-
-  .file-col {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .editor-col {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
   .main-shell.ide-panel {
     margin: 0 var(--space-8) var(--space-8) 0;
     border-radius: 24px;
-  }
-
-  .agent-col {
-    grid-column: 2;
-    grid-row: 3;
-    margin: var(--space-12);
-  }
-
-  .resize-handle {
-    display: none;
-  }
-
-  .file-col,
-  .editor-col {
-    border-right: 0;
-    border-bottom: 1px solid var(--color-border);
   }
 }
 </style>

@@ -1399,7 +1399,7 @@ onBeforeUnmount(() => {
     </div>
     <div
       v-if="contextMenuOpen"
-      class="markdown-context-menu"
+      class="markdown-context-menu ui-floating-menu-surface"
       :style="contextMenuStyle"
       @click.stop
       @contextmenu.prevent
@@ -1425,7 +1425,7 @@ onBeforeUnmount(() => {
           <div
             v-if="activeMenuGroup === group.title"
             :ref="(element) => setMarkdownSubmenuRef(group.title, element)"
-            class="markdown-context-submenu"
+            class="markdown-context-submenu ui-floating-submenu-surface"
             @mouseenter="keepMarkdownSubmenuOpen"
             @mouseleave="handleMarkdownSubmenuLeave(group.title, $event)"
           >
@@ -1772,10 +1772,6 @@ onBeforeUnmount(() => {
   z-index: 1200;
   width: 178px;
   padding: var(--space-6);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-canvas);
-  box-shadow: var(--shadow-lg);
   font-family: var(--font-ui);
 }
 
@@ -1804,10 +1800,6 @@ onBeforeUnmount(() => {
   max-height: min(360px, calc(100vh - 24px));
   overflow: auto;
   padding: var(--space-6);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-canvas);
-  box-shadow: var(--shadow-lg);
 }
 
 .markdown-context-group button,

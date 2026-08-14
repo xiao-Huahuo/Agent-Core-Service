@@ -16,6 +16,7 @@ import {
 } from '@/composable/useObsHistory'
 import { useObsData, type LatencyTurn } from '@/composable/useObsData'
 import DashboardCardFrame from '@/components/dashboard/DashboardCardFrame.vue'
+import DropdownSelect from '@/components/ui/dropdown-menu/DropdownSelect.vue'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -266,15 +267,13 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
     <div class="card-body">
       <div class="chart-toolbar">
         <label class="range-label" for="latency-history-range">显示范围</label>
-        <select
+        <DropdownSelect
           id="latency-history-range"
           v-model="selectedRange"
           class="range-select"
-        >
-          <option v-for="range in OBS_HISTORY_RANGE_OPTIONS" :key="range" :value="range">
-            {{ formatObsHistoryRange(range, '条', 'message') }}
-          </option>
-        </select>
+          aria-label="思考耗时显示范围"
+          :options="OBS_HISTORY_RANGE_OPTIONS.map((range) => ({ value: range, label: formatObsHistoryRange(range, '条', 'message') }))"
+        />
       </div>
 
       <div class="line-chart-wrap">

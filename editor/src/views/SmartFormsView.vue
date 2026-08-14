@@ -13,6 +13,14 @@ import { buildApiUrl } from '@/api/client'
 import { createKnowledgeFolder, listKnowledgeFiles, previewKnowledgeFile, readKnowledgeFile, uploadKnowledgeFile } from '@/api/knowledge'
 import { generateStructuredFields, getSmartFormDb, listSmartFormsDb, saveSmartFormDb, type StructuredGenerationFieldResult } from '@/api/smartForms'
 import IcIcon from '@/components/common/IcIcon.vue'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import { useSubmenuIntent } from '@/components/editor_workspace/submenuIntent'
 import SmartMarkdownCell from '@/components/smart_forms/SmartMarkdownCell.vue'
@@ -78,6 +86,8 @@ const imagePreviewByPath = ref<Record<string, string>>({})
 const tagEditorKey = ref('')
 const tagDraft = ref('')
 const dropdownOpen = ref('')
+const tagFilterMenuOpen = ref(false)
+const ratingFilterMenuOpen = ref(false)
 const swappedColumnId = ref('')
 const swappedRowId = ref('')
 const generationTokens = ref<Record<string, string>>({})
@@ -269,16 +279,6 @@ function closeDropdownMenus(): void {
 
 function selectFormById(formId: string): void {
   openFormById(formId)
-  closeDropdownMenus()
-}
-
-function selectTagFilter(value: string): void {
-  tagFilter.value = value
-  closeDropdownMenus()
-}
-
-function selectMinRating(value: number): void {
-  minRating.value = value
   closeDropdownMenus()
 }
 
@@ -1692,46 +1692,50 @@ function errorMessage(error: unknown): string {
         <IcIcon name="search" :size="15" />
         <input v-model="query" type="search" placeholder="搜索全表" />
       </label>
-      <div class="smart-dropdown" @click.stop>
-        <button class="smart-dropdown-trigger" type="button" title="标签筛选" @click="toggleDropdown('tag-filter')">
-          <IcIcon name="label" :size="15" />
-          <span>{{ tagFilterLabel }}</span>
-          <IcIcon name="chevron-down" :size="14" />
-        </button>
-        <div v-if="dropdownOpen === 'tag-filter'" class="smart-dropdown-menu" @click.stop>
-          <button
-            v-for="(option, index) in tagFilterOptions"
-            :key="option.value || 'all-tags'"
-            type="button"
-            :style="{ '--item-index': index }"
-            @click="selectTagFilter(option.value)"
-          >
-            <IcIcon v-if="tagFilter === option.value" name="check" :size="16" />
-            <span v-else class="sort-check-placeholder"></span>
-            <span>{{ option.label }}</span>
+      <DropdownMenu v-model:open="tagFilterMenuOpen">
+        <DropdownMenuTrigger as-child>
+          <button class="smart-dropdown-trigger" type="button" title="标签筛选">
+            <IcIcon name="label" :size="15" />
+            <span>{{ tagFilterLabel }}</span>
+            <IcIcon name="chevron-down" :size="14" />
           </button>
-        </div>
-      </div>
-      <div class="smart-dropdown" @click.stop>
-        <button class="smart-dropdown-trigger" type="button" title="星级筛选" @click="toggleDropdown('rating-filter')">
-          <IcIcon name="star" :size="15" />
-          <span>{{ ratingFilterLabel }}</span>
-          <IcIcon name="chevron-down" :size="14" />
-        </button>
-        <div v-if="dropdownOpen === 'rating-filter'" class="smart-dropdown-menu" @click.stop>
-          <button
-            v-for="(option, index) in ratingFilterOptions"
-            :key="option.value"
-            type="button"
-            :style="{ '--item-index': index }"
-            @click="selectMinRating(option.value)"
-          >
-            <IcIcon v-if="minRating === option.value" name="check" :size="16" />
-            <span v-else class="sort-check-placeholder"></span>
-            <span>{{ option.label }}</span>
+        </DropdownMenuTrigger>
+        <DropdownMenuPortal>
+          <DropdownMenuContent align="end">
+            <DropdownMenuRadioGroup v-model="tagFilter">
+              <DropdownMenuRadioItem
+                v-for="option in tagFilterOptions"
+                :key="option.value || 'all-tags'"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenuPortal>
+      </DropdownMenu>
+      <DropdownMenu v-model:open="ratingFilterMenuOpen">
+        <DropdownMenuTrigger as-child>
+          <button class="smart-dropdown-trigger" type="button" title="星级筛选">
+            <IcIcon name="star" :size="15" />
+            <span>{{ ratingFilterLabel }}</span>
+            <IcIcon name="chevron-down" :size="14" />
           </button>
-        </div>
-      </div>
+        </DropdownMenuTrigger>
+        <DropdownMenuPortal>
+          <DropdownMenuContent align="end">
+            <DropdownMenuRadioGroup v-model="minRating">
+              <DropdownMenuRadioItem
+                v-for="option in ratingFilterOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenuPortal>
+      </DropdownMenu>
       <button class="toolbar-btn" type="button" title="清除失败或空字段" @click="clearInvalidFields">
         <IcIcon name="trash" :size="16" />
         <span>清空无效字段</span>
@@ -2032,7 +2036,7 @@ function errorMessage(error: unknown): string {
     <Teleport to="body">
       <div
         v-if="tableContextTarget"
-        class="table-context-menu"
+        class="table-context-menu ui-floating-menu-surface"
         :class="{ dark: settingsStore.isDark, 'submenu-left': tableContextSubmenuSide === 'left' }"
         :style="tableContextMenuStyle"
         @click.stop
@@ -2047,7 +2051,7 @@ function errorMessage(error: unknown): string {
         <div
           v-show="tableContextSubmenu.startsWith('add-column')"
           :ref="(element) => setTableContextSubmenuRef('add-column', element)"
-          class="table-context-submenu"
+          class="table-context-submenu ui-floating-submenu-surface"
           :class="{ 'submenu-left': tableContextSubmenuSide === 'left' }"
           @mouseenter="keepTableSubmenuOpen"
           @mouseleave="handleTableSubmenuLeave('add-column', $event)"
@@ -2064,7 +2068,7 @@ function errorMessage(error: unknown): string {
             <div
               v-show="tableContextSubmenu === `add-column-${direction.key}`"
               :ref="(element) => setTableContextSubmenuRef(`add-column-${direction.key}`, element)"
-              class="table-context-submenu table-context-submenu-level-three"
+              class="table-context-submenu table-context-submenu-level-three ui-floating-submenu-surface"
               :class="{ 'submenu-left': tableContextSubmenuSide === 'left' }"
               @mouseenter="keepTableSubmenuOpen"
               @mouseleave="handleTableSubmenuLeave(`add-column-${direction.key}`, $event)"
@@ -2109,7 +2113,7 @@ function errorMessage(error: unknown): string {
         <div
           v-show="tableContextSubmenu === 'add-row'"
           :ref="(element) => setTableContextSubmenuRef('add-row', element)"
-          class="table-context-submenu"
+          class="table-context-submenu ui-floating-submenu-surface"
           :class="{ 'submenu-left': tableContextSubmenuSide === 'left' }"
           @mouseenter="keepTableSubmenuOpen"
           @mouseleave="handleTableSubmenuLeave('add-row', $event)"
@@ -2129,7 +2133,7 @@ function errorMessage(error: unknown): string {
         <div
           v-show="tableContextSubmenu === 'delete'"
           :ref="(element) => setTableContextSubmenuRef('delete', element)"
-          class="table-context-submenu"
+          class="table-context-submenu ui-floating-submenu-surface"
           :class="{ 'submenu-left': tableContextSubmenuSide === 'left' }"
           @mouseenter="keepTableSubmenuOpen"
           @mouseleave="handleTableSubmenuLeave('delete', $event)"
@@ -2521,15 +2525,6 @@ button:disabled {
   display: grid;
   min-width: 252px;
   padding: var(--space-6);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: #ffffff;
-  box-shadow: var(--shadow-lg);
-  animation: smart-menu-pop 140ms ease-out both;
-}
-
-.table-context-menu.dark {
-  background: #151820;
 }
 
 .table-context-menu,
@@ -2552,15 +2547,6 @@ button:disabled {
   box-sizing: border-box;
   overflow: visible;
   padding: var(--space-6);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: #ffffff;
-  box-shadow: var(--shadow-lg);
-  animation: smart-menu-pop 140ms ease-out both;
-}
-
-.table-context-menu.dark .table-context-submenu {
-  background: #151820;
 }
 
 .table-context-menu button {

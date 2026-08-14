@@ -10,13 +10,14 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 
 import { fetchVaultAssetUrl } from '@/api/vault'
+import IcIcon from '@/components/common/IcIcon.vue'
 
 defineOptions({ name: 'VaultAssetThumb' })
 
 const props = defineProps<{
   token: string
   assetId: string
-  fallback: string
+  fallbackIcon: string
 }>()
 
 const objectUrl = ref('')
@@ -48,7 +49,9 @@ function revokeObjectUrl() {
 
 <template>
   <img v-if="objectUrl" class="asset-thumb" :src="objectUrl" alt="" />
-  <span v-else class="type-icon">{{ fallback }}</span>
+  <span v-else class="type-icon" aria-hidden="true">
+    <IcIcon :name="fallbackIcon" :size="18" />
+  </span>
 </template>
 
 <style scoped>
@@ -69,7 +72,5 @@ function revokeObjectUrl() {
 .type-icon {
   background: var(--color-primary-soft);
   color: var(--color-primary);
-  font-size: calc(12px * var(--font-scale));
-  font-weight: 800;
 }
 </style>

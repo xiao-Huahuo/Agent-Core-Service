@@ -8,6 +8,7 @@ import App from './App.vue'
 import { isFloatingWindow } from './floating/isFloating'
 import router from './router'
 import './assets/main.css'
+import './assets/menu-system.css'
 
 const app = createApp(App)
 

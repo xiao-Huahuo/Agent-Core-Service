@@ -182,14 +182,12 @@ defineExpose({
   min-width: 280px;
   padding: var(--space-6);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: #ffffff;
+  border-radius: 8px;
+  background: var(--color-surface);
   backdrop-filter: none;
-  box-shadow: var(--shadow-lg);
-}
-
-.context-menu.dark {
-  background: #151820;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+  transform-origin: top left;
+  animation: context-menu-in 160ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
 .context-menu button {
@@ -247,13 +245,11 @@ defineExpose({
   min-width: 260px;
   padding: var(--space-6);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: #ffffff;
-  box-shadow: var(--shadow-lg);
-}
-
-.context-menu.dark .context-submenu {
-  background: #151820;
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+  transform-origin: top left;
+  animation: context-submenu-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
 .context-submenu-item.active > button {
@@ -270,5 +266,28 @@ defineExpose({
 
 .context-menu .danger {
   color: var(--color-danger);
+}
+
+@keyframes context-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes context-submenu-in {
+  from { opacity: 0; transform: translateX(-6px) scale(0.96); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .context-menu,
+  .context-submenu {
+    animation-name: context-menu-fade;
+    animation-duration: 120ms;
+  }
+}
+
+@keyframes context-menu-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 </style>
