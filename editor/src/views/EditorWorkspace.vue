@@ -51,7 +51,7 @@ function handleAskAgent(text: string) {
 }
 
 const ACTIVITY_BAR_ICON_WIDTH = 40
-const ACTIVITY_BAR_MANAGEMENT_WIDTH = 136
+const ACTIVITY_BAR_MANAGEMENT_WIDTH = 204
 const DEFAULT_FILE_WIDTH = 280
 const DEFAULT_AGENT_WIDTH = 340
 const MIN_PANEL_WIDTH = 180
@@ -714,19 +714,13 @@ watch(
 
 <style scoped>
 .workspace-page {
-  --workspace-card-shadow-dark: rgba(0, 0, 0, 0.48);
-  --workspace-card-shadow-light: rgba(255, 255, 255, 0.055);
+  --workspace-card-radius: 28px;
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
   background: var(--color-chrome-rail-bg);
-}
-
-:global(:root[data-theme='light']) .workspace-page {
-  --workspace-card-shadow-dark: rgba(150, 153, 164, 0.34);
-  --workspace-card-shadow-light: rgba(255, 255, 255, 0.96);
 }
 
 .workspace-grid {
@@ -783,11 +777,8 @@ watch(
   overflow: hidden;
   border: 0;
   outline: none;
-  border-radius: 28px;
+  border-radius: var(--workspace-card-radius);
   background: var(--color-bg-app);
-  box-shadow:
-    15px 15px 30px var(--workspace-card-shadow-dark),
-    -15px -15px 30px var(--workspace-card-shadow-light);
 }
 
 .main-shell.ide-panel.agent-page-main-shell {
@@ -972,9 +963,12 @@ watch(
 }
 
 @media (max-width: 760px) {
+  .workspace-page {
+    --workspace-card-radius: 24px;
+  }
+
   .main-shell.ide-panel {
     margin: 0 var(--space-8) var(--space-8) 0;
-    border-radius: 24px;
   }
 }
 </style>

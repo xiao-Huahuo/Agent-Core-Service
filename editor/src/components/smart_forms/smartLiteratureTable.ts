@@ -157,6 +157,24 @@ export function createDefaultLiteratureForm(title = '未命名表格'): SmartLit
   }
 }
 
+/** Creates an editable table without literature uploads or AI-backed columns. */
+export function createDefaultPlainForm(title = '未命名表格'): SmartLiteratureForm {
+  const columns = REQUIRED_COLUMNS
+    .filter((column) => column.id !== 'literature_file' && column.id !== 'literature_content')
+    .map((column) => column.type === 'smart_text'
+      ? { ...column, type: 'text' as const, tone: undefined }
+      : column.type === 'smart_tag'
+        ? { ...column, type: 'tag' as const, tone: undefined }
+        : column)
+  return {
+    version: 1,
+    title,
+    updatedAt: new Date().toISOString(),
+    columns,
+    rows: [createEmptyRow(columns)],
+  }
+}
+
 export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefined): SmartLiteratureForm {
   const fallback = createDefaultLiteratureForm()
   const sourceColumns = (Array.isArray(raw?.columns) && raw.columns.length ? raw.columns : fallback.columns)

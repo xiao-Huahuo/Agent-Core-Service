@@ -17,6 +17,8 @@ import { previewKnowledgeFile, readKnowledgeFile, uploadKnowledgeFile } from '@/
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import SmartFormsView from '@/views/SmartFormsView.vue'
+import smartFormsSource from '@/views/SmartFormsView.vue?raw'
+import editorWorkspaceSource from '@/views/EditorWorkspace.vue?raw'
 
 vi.mock('@/api/agent', () => ({
   updateCurrentDocumentContext: vi.fn().mockResolvedValue(undefined),
@@ -317,6 +319,7 @@ describe('SmartFormsView', () => {
     await flushPromises()
 
     await wrapper.find('button[title="新建表格"]').trigger('click')
+    expect(wrapper.find('form[role="dialog"] .forms-eyebrow').exists()).toBe(false)
     await wrapper.find('input[placeholder="例如：项目文献库"]').setValue('项目阅读表')
     await wrapper.find('form[role="dialog"]').trigger('submit')
     await flushPromises()
@@ -326,6 +329,37 @@ describe('SmartFormsView', () => {
       asset_dir: 'forms/项目阅读表',
       form: expect.objectContaining({ title: '项目阅读表' }),
     }))
+  })
+
+  it('creates a plain table without upload or smart columns', async () => {
+    vi.mocked(listSmartFormsDb).mockResolvedValueOnce([])
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    await wrapper.find('button[title="新建表格"]').trigger('click')
+    const smartType = wrapper.get('button[data-form-kind="smart"]')
+    const plainType = wrapper.get('button[data-form-kind="plain"]')
+    expect(smartType.classes()).toContain('active')
+    expect(plainType.classes()).not.toContain('active')
+
+    await plainType.trigger('click')
+    expect(smartType.classes()).not.toContain('active')
+    expect(plainType.classes()).toContain('active')
+    await wrapper.find('input[placeholder="例如：项目文献库"]').setValue('普通项目表')
+    await wrapper.find('form[role="dialog"]').trigger('submit')
+    await flushPromises()
+
+    const savedForm = vi.mocked(saveSmartFormDb).mock.calls.at(-1)?.[0].form
+    expect(savedForm?.columns.map((column) => column.id)).toEqual(['row_index', 'title'])
+    expect(savedForm?.columns.some((column) => column.type === 'smart_text' || column.type === 'smart_tag')).toBe(false)
+  })
+
+  it('shares the workspace card radius and uses a capsule title input', () => {
+    expect(editorWorkspaceSource).toContain('--workspace-card-radius: 28px;')
+    expect(editorWorkspaceSource).toContain('border-radius: var(--workspace-card-radius);')
+    expect(smartFormsSource).toContain('border-radius: var(--workspace-card-radius);')
+    expect(smartFormsSource).toMatch(/\.dialog-field input \{[^}]*border-radius: 999px;/)
+    expect(smartFormsSource).toMatch(/\.dialog-field input \{[^}]*width: 100%;[^}]*max-width: 100%;/)
   })
 
   it('adds rows and generates selected smart cells from literature content', async () => {

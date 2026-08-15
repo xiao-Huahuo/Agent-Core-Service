@@ -30,6 +30,7 @@ import {
   addColumn,
   createCustomColumn,
   createDefaultLiteratureForm,
+  createDefaultPlainForm,
   createEmptyRow,
   exportCsv,
   exportMarkdown,
@@ -78,6 +79,7 @@ const query = ref('')
 const tagFilter = ref('')
 const minRating = ref(0)
 const newFormTitle = ref('')
+const newFormKind = ref<'smart' | 'plain'>('smart')
 const createFormOpen = ref(false)
 const selectedCell = ref<{ rowId: string; columnId: string } | null>(null)
 const customColumnTitle = ref('')
@@ -294,8 +296,12 @@ async function createSmartForm(): Promise<void> {
   try {
     await createFolderIfMissing(FORMS_ROOT_DIR)
     await createFolderIfMissing(dir)
-    await createFolderIfMissing(`${dir}/assets`)
-    form.value = createDefaultLiteratureForm(title)
+    if (newFormKind.value === 'smart') {
+      await createFolderIfMissing(`${dir}/assets`)
+    }
+    form.value = newFormKind.value === 'smart'
+      ? createDefaultLiteratureForm(title)
+      : createDefaultPlainForm(title)
     activeFormId.value = ''
     activeFormDir.value = dir
     selectedCell.value = null
@@ -303,6 +309,7 @@ async function createSmartForm(): Promise<void> {
     await persistForm(false)
     formEntries.value = await listSmartForms()
     newFormTitle.value = ''
+    newFormKind.value = 'smart'
     createFormOpen.value = false
     workspaceStore.showToast('表格已创建')
   } catch (error) {
@@ -1634,7 +1641,7 @@ function errorMessage(error: unknown): string {
             </button>
           </div>
         </div>
-        <button class="ghost-btn" type="button" title="新建表格" @click="createFormOpen = true">
+        <button class="ghost-btn" type="button" title="新建表格" @click="newFormKind = 'smart'; createFormOpen = true">
           <IcIcon name="add" :size="16" />
           <span>新建表格</span>
         </button>
@@ -1655,10 +1662,7 @@ function errorMessage(error: unknown): string {
     <div v-if="createFormOpen" class="form-dialog-backdrop" @click.self="createFormOpen = false">
       <form class="form-dialog" role="dialog" aria-modal="true" aria-labelledby="create-form-title" @submit.prevent="createSmartForm">
         <div class="form-dialog-header">
-          <div>
-            <p class="forms-eyebrow">新建</p>
-            <h2 id="create-form-title">创建表格</h2>
-          </div>
+          <h2 id="create-form-title">创建表格</h2>
           <button class="dialog-close" type="button" title="关闭" aria-label="关闭" @click="createFormOpen = false">
             <IcIcon name="close" :size="18" />
           </button>
@@ -1667,6 +1671,26 @@ function errorMessage(error: unknown): string {
           <span>表格名称</span>
           <input v-model="newFormTitle" autofocus type="text" placeholder="例如：项目文献库" />
         </label>
+        <div class="form-kind-picker" role="radiogroup" aria-label="表格类型">
+          <button
+            class="form-kind-pill"
+            :class="{ active: newFormKind === 'smart' }"
+            data-form-kind="smart"
+            type="button"
+            role="radio"
+            :aria-checked="newFormKind === 'smart'"
+            @click="newFormKind = 'smart'"
+          >智能表格(默认)</button>
+          <button
+            class="form-kind-pill"
+            :class="{ active: newFormKind === 'plain' }"
+            data-form-kind="plain"
+            type="button"
+            role="radio"
+            :aria-checked="newFormKind === 'plain'"
+            @click="newFormKind = 'plain'"
+          >普通表格</button>
+        </div>
         <div class="form-dialog-actions">
           <button class="ghost-btn" type="button" @click="createFormOpen = false">取消</button>
           <button class="primary-btn" type="submit">创建表格</button>
@@ -2213,10 +2237,6 @@ function errorMessage(error: unknown): string {
   content: ">";
 }
 
-.form-dialog .forms-eyebrow {
-  margin-bottom: 4px;
-}
-
 .forms-header h1 {
   margin: 0;
   min-width: 0;
@@ -2444,7 +2464,7 @@ button:disabled {
   width: min(420px, 100%);
   padding: 20px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--workspace-card-radius);
   background: var(--color-surface);
   box-shadow: var(--shadow-lg);
 }
@@ -2480,18 +2500,49 @@ button:disabled {
 .dialog-field {
   display: grid;
   gap: 7px;
+  min-width: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
 
 .dialog-field input {
+  width: 100%;
+  max-width: 100%;
   height: 36px;
-  padding: 0 10px;
+  box-sizing: border-box;
+  padding: 0 14px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   background: var(--color-canvas);
   color: var(--color-text);
   font: inherit;
+}
+
+.form-kind-picker {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.form-kind-pill {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--color-primary);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.form-kind-pill.active {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.form-kind-pill:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .form-dialog-actions {

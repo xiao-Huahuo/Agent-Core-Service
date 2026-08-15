@@ -10,12 +10,23 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ActivityBar from '@/components/editor_workspace/ActivityBar.vue'
+import activityBarSource from '@/components/editor_workspace/ActivityBar.vue?raw'
+import editorWorkspaceSource from '@/views/EditorWorkspace.vue?raw'
 
 vi.mock('@/components/common/IcIcon.vue', () => ({
   default: { template: '<span />' },
 }))
 
 describe('ActivityBar', () => {
+  it('allocates a 50 percent wider column in management mode', () => {
+    expect(editorWorkspaceSource).toContain('const ACTIVITY_BAR_MANAGEMENT_WIDTH = 204')
+  })
+
+  it('keeps management icons left aligned and labels centered', () => {
+    expect(activityBarSource).toContain('.activity-bar.management .activity-button > :deep(.ic-icon:not(.knowledge-chevron))')
+    expect(activityBarSource).toMatch(/\.activity-bar\.management \.activity-label \{[^}]*width: 100%;[^}]*text-align: center;/)
+  })
+
   beforeEach(() => {
     setActivePinia(createPinia())
   })

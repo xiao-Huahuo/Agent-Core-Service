@@ -525,11 +525,19 @@ function closeKnowledgeMenu() {
 }
 
 .activity-bar.management .activity-button {
-  justify-content: flex-start;
+  justify-content: center;
   width: 100%;
-  padding: 0 var(--space-8);
-  gap: var(--space-8);
+  padding: 0 32px;
+  gap: 0;
   border-radius: var(--radius-sm);
+}
+
+.activity-bar.management .activity-button > :deep(.ic-icon:not(.knowledge-chevron)),
+.activity-bar.management .activity-button > .activity-agent-icon {
+  position: absolute;
+  top: 50%;
+  left: var(--space-8);
+  transform: translateY(-50%);
 }
 
 .knowledge-group {
@@ -755,8 +763,10 @@ function closeKnowledgeMenu() {
 }
 
 .activity-bar.management .activity-label {
-  max-width: 72px;
+  width: 100%;
+  max-width: none;
   opacity: 1;
+  text-align: center;
   transform: translateX(0);
   transition-delay: 40ms;
 }
