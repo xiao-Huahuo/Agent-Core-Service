@@ -1024,7 +1024,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   --color-bg-muted: var(--color-canvas);
   --color-bg-hover: var(--color-primary-soft);
   --color-text-primary: var(--color-text);
-  --color-text-secondary: var(--color-text-secondary);
   --color-text-tertiary: var(--color-text-muted);
   --color-border-light: rgba(255, 255, 255, 0.08);
   --color-accent: var(--color-primary);

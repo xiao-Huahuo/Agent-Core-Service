@@ -12,34 +12,17 @@ import RagMetricsCard from '@/components/dashboard/RagMetricsCard.vue'
 import TokenUsageCard from '@/components/dashboard/TokenUsageCard.vue'
 import LatencyCard from '@/components/dashboard/LatencyCard.vue'
 import ActivityHeatmapCard from '@/components/dashboard/ActivityHeatmapCard.vue'
-import { useChatStore } from '@/stores/chat'
-import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
-const sessionStore = useSessionStore()
-const chatStore = useChatStore()
 const libraryBookCount = ref(0)
 
 const userId = computed(() => settingsStore.profile.userId)
 const knowledgeFiles = computed(() => workspaceStore.flatNodes.filter((node) => !node.isDir))
 const knowledgeFileCount = computed(() => knowledgeFiles.value.length)
-const latestAgentSession = computed(() => {
-  return [...sessionStore.sessions]
-    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-    [0] ?? null
-})
-const activeSessionLastMessage = computed(() => {
-  if (latestAgentSession.value?.session_id !== sessionStore.currentSessionId) return ''
-  for (let index = chatStore.messages.length - 1; index >= 0; index -= 1) {
-    const message = chatStore.messages[index]
-    if (message?.role === 'assistant' && message.content.trim()) return message.content.trim()
-  }
-  return ''
-})
 
 const fileTypeSlices = computed(() => {
   const counts = new Map<string, number>()
@@ -159,27 +142,11 @@ async function loadLibraryBookCount() {
   }
 }
 
-function openAgentSession(sessionId: string) {
-  if (!userId.value) return
-  sessionStore.select(sessionId)
-  workspaceStore.setMainView('agent')
-}
-
 function fileTypeOf(node: KnowledgeFileNode): string {
   const name = node.name || node.path
   const dotIndex = name.lastIndexOf('.')
   if (dotIndex <= 0 || dotIndex === name.length - 1) return '无后缀'
   return name.slice(dotIndex + 1).toLowerCase()
-}
-
-function sessionTitle(session: { session_name: string; session_id: string }): string {
-  return session.session_name || session.session_id
-}
-
-function formatSessionTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
 }
 </script>
 
@@ -206,34 +173,6 @@ function formatSessionTime(value: string): string {
               <span class="metric-label">图书馆图书</span>
               <span class="metric-value">{{ libraryBookCount }}</span>
             </div>
-          </div>
-
-          <div class="agent-session-list">
-            <div
-              v-if="latestAgentSession"
-              class="agent-session-detail"
-              role="button"
-              tabindex="0"
-              title="打开 Agent 会话"
-              @click="openAgentSession(latestAgentSession.session_id)"
-              @keydown.enter.prevent="openAgentSession(latestAgentSession.session_id)"
-              @keydown.space.prevent="openAgentSession(latestAgentSession.session_id)"
-            >
-              <div class="session-detail-head">
-                <span class="session-title">{{ sessionTitle(latestAgentSession) }}</span>
-                <span class="session-time">{{ formatSessionTime(latestAgentSession.updated_at) }}</span>
-              </div>
-              <div class="session-detail-grid">
-                <span>Session</span>
-                <strong>{{ latestAgentSession.session_id }}</strong>
-                <span>创建</span>
-                <strong>{{ formatSessionTime(latestAgentSession.created_at) }}</strong>
-                <span>更新</span>
-                <strong>{{ formatSessionTime(latestAgentSession.updated_at) }}</strong>
-              </div>
-              <div v-if="activeSessionLastMessage" class="agent-preview">{{ activeSessionLastMessage }}</div>
-            </div>
-            <div v-else class="agent-empty">暂无 Agent 对话</div>
           </div>
 
           <div class="type-share-panel">
@@ -374,90 +313,6 @@ function formatSessionTime(value: string): string {
   font-family: var(--font-ui);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
-}
-
-.agent-session-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
-  min-height: 0;
-}
-
-.agent-session-detail {
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: var(--space-8);
-  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  font-family: var(--font-ui);
-  outline: none;
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast),
-    opacity var(--transition-fast);
-}
-
-.agent-session-detail:hover,
-.agent-session-detail:focus-visible {
-  border-color: var(--color-primary);
-  background: var(--color-primary-softer);
-}
-
-.session-detail-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  gap: 3px;
-  margin-bottom: var(--space-8);
-}
-
-.session-title,
-.agent-preview {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-
-.session-title {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
-.session-time {
-  color: var(--color-text-tertiary);
-  font-size: calc(10px * var(--font-scale));
-  white-space: nowrap;
-}
-
-.session-detail-grid {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 5px var(--space-8);
-  margin-bottom: var(--space-8);
-  color: var(--color-text-tertiary);
-  font-size: calc(10px * var(--font-scale));
-}
-
-.session-detail-grid strong {
-  min-width: 0;
-  color: var(--color-text-secondary);
-  font-weight: var(--font-weight-medium);
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-
-.agent-preview,
-.agent-empty {
-  min-height: 32px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 7px var(--space-8);
-  color: var(--color-text-tertiary);
-  font-family: var(--font-ui);
-  font-size: calc(11px * var(--font-scale));
-  background: transparent;
 }
 
 .type-share-panel {

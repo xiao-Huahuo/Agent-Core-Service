@@ -754,7 +754,7 @@ function finalizedPatch(entry: ToolDisplayEntry) {
     90deg,
     var(--color-text-secondary) 0%,
     var(--color-text-secondary) 40%,
-    var(--color-accent) 50%,
+    var(--color-text) 50%,
     var(--color-text-secondary) 60%,
     var(--color-text-secondary) 100%
   );
@@ -762,7 +762,7 @@ function finalizedPatch(entry: ToolDisplayEntry) {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: tool-shimmer 2.4s ease-in-out infinite;
+  animation: tool-shimmer 1.2s ease-in-out infinite;
 }
 
 .tool-expand-btn {

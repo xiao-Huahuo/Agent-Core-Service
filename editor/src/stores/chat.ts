@@ -7,7 +7,7 @@
  */
 
 import { computed, ref } from 'vue'
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 
 import { deleteAgentAttachment, fetchChildAgents, fetchTaskSuggestions, streamPrompt } from '@/api/agent'
 import type { AgentAccessMode, AgentAttachmentUploadResponse, AgentLoopMode, ChildAgentRecord } from '@/api/agent'
@@ -31,6 +31,24 @@ export interface AgentChatMessage {
   reference?: string
   attachments?: AgentUploadedAttachment[]
   thinking_seconds?: number
+}
+
+/** Runtime state for one tool call while its preview and result are streamed. */
+interface ToolCallLifecycle {
+  /** Stable backend call identity, also used as the rendered toolbar key. */
+  key: string
+  /** Action message that owns this call for the whole lifecycle. */
+  message: AgentChatMessage
+  /** Browser time when the preview first entered reactive state. */
+  startedAtMs: number
+  /** Prevents duplicate aggregate traces from scheduling the same result twice. */
+  phase: 'pending' | 'ending' | 'completed'
+  /** Most complete result received while the perceptible preview window is open. */
+  endTrace?: Record<string, unknown>
+  /** Pending completion timer, cleared when a stream is cancelled. */
+  completionTimer?: number
+  /** Resolves the per-call completion wait exactly once. */
+  resolveCompletion?: () => void
 }
 
 export type AgentUploadedAttachment = AgentAttachmentUploadResponse['attachment']
@@ -125,10 +143,13 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   let suggestionAbortController: AbortController | null = null
   let historyRequestId = 0
   let historySyncing = false
-  let pendingContent = ''
+  /** Buffered text is keyed by its owner so a later action cannot steal it. */
+  const pendingContent = new Map<AgentChatMessage, string>()
   let flushTimer: number | null = null
   let turnStartedAtMs = 0
   const contentFlushMs = 50
+  /** Fast tools keep one perceptible shimmer window before the result replaces it. */
+  const toolPreviewMinMs = 800
 
   const lastMessage = computed(() => messages.value.length > 0 ? messages.value[messages.value.length - 1] : null)
   const canSend = computed(() => !isStreaming.value)
@@ -161,31 +182,6 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     return null
   }
 
-  function updateLastMessage(
-    content?: string,
-    node?: string,
-    toolCalls?: unknown[],
-    trace?: Array<Record<string, unknown>>,
-  ) {
-    const last = findLastAssistant()
-    if (!last) {
-      return
-    }
-    if (content !== undefined) {
-      last.content = content
-    }
-    if (node !== undefined) {
-      last.node = node
-    }
-    if (toolCalls !== undefined) {
-      last.tool_calls = toolCalls
-    }
-    if (trace && trace.length > 0) {
-      last.trace ??= []
-      last.trace.push(...trace)
-    }
-  }
-
   function mergeCurrentCitationMap(value: unknown) {
     const citationMap = asSourceMap(value)
     if (Object.keys(citationMap).length === 0) {
@@ -197,25 +193,30 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     }
   }
 
-  function attachMetadataToLastAssistant(metadata: Record<string, unknown>) {
+  /** Merges stream metadata into the message that received the same event. */
+  function attachMetadataToMessage(message: AgentChatMessage, metadata: Record<string, unknown>) {
     if (Object.keys(metadata).length === 0) {
       return
     }
-    const last = findLastAssistant()
-    if (!last) {
-      return
-    }
-    const existing = last.metadata ?? {}
+    const existing = message.metadata ?? {}
     const existingCitationMap = existing.citation_map as Record<string, unknown> | undefined
     const newCitationMap = metadata.citation_map as Record<string, unknown> | undefined
     const mergedCitationMap =
       existingCitationMap && newCitationMap
         ? { ...existingCitationMap, ...newCitationMap }
         : undefined
-    last.metadata = {
+    message.metadata = {
       ...existing,
       ...metadata,
       ...(mergedCitationMap ? { citation_map: mergedCitationMap } : {}),
+    }
+  }
+
+  /** Compatibility helper for stream-final metadata outside a node-local path. */
+  function attachMetadataToLastAssistant(metadata: Record<string, unknown>) {
+    const last = findLastAssistant()
+    if (last) {
+      attachMetadataToMessage(last, metadata)
     }
   }
 
@@ -238,18 +239,23 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     }
   }
 
-  function flushStreamContent() {
-    flushTimer = null
-    if (!pendingContent) {
-      return
+  /** Flushes text only into the message captured when each delta arrived. */
+  function flushStreamContent(target?: AgentChatMessage) {
+    if (!target) {
+      flushTimer = null
     }
-    const last = findLastAssistant()
-    if (last) {
-      last.content += pendingContent
+    const entries = target
+      ? [[target, pendingContent.get(target) ?? ''] as const]
+      : Array.from(pendingContent.entries())
+    for (const [message, content] of entries) {
+      if (content) {
+        message.content += content
+      }
+      pendingContent.delete(message)
     }
-    pendingContent = ''
   }
 
+  /** Schedules one shared render-friendly flush for all currently active owners. */
   function scheduleContentFlush() {
     if (flushTimer !== null) {
       return
@@ -257,8 +263,9 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     flushTimer = window.setTimeout(flushStreamContent, contentFlushMs)
   }
 
-  function appendStreamContent(content: string) {
-    pendingContent += content
+  /** Buffers a delta against its immutable owner rather than the latest message. */
+  function appendStreamContent(message: AgentChatMessage, content: string) {
+    pendingContent.set(message, (pendingContent.get(message) ?? '') + content)
     scheduleContentFlush()
   }
 
@@ -281,21 +288,29 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     message.thinking_seconds = Math.round(elapsedSeconds * 10) / 10
   }
 
-  function cancelPendingFlush() {
-    if (flushTimer !== null) {
+  /** Discards superseded buffered deltas for one authoritative full response. */
+  function cancelPendingFlush(target?: AgentChatMessage) {
+    if (target) {
+      pendingContent.delete(target)
+    } else {
+      pendingContent.clear()
+    }
+    if (flushTimer !== null && pendingContent.size === 0) {
       window.clearTimeout(flushTimer)
       flushTimer = null
     }
-    pendingContent = ''
   }
 
-  function forceFlushContent() {
+  /** Immediately commits buffered text, preserving other owners if one is selected. */
+  function forceFlushContent(target?: AgentChatMessage) {
     if (flushTimer !== null) {
       window.clearTimeout(flushTimer)
       flushTimer = null
     }
-    flushStreamContent()
-    pendingContent = ''
+    flushStreamContent(target)
+    if (pendingContent.size > 0) {
+      scheduleContentFlush()
+    }
   }
 
   /** Convert persisted session rows into the exact message shape used by the Agent page. */
@@ -457,14 +472,21 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     resetStreamTimeout()
 
     const bufferedTraces: Array<Record<string, unknown>> = []
-    let assistantCreated = false
     let activeNode = ''
+    let activeAssistant: AgentChatMessage | null = null
+    let anonymousToolSequence = 0
+    const toolLifecycles = new Map<string, ToolCallLifecycle>()
+    const pendingToolCompletions = new Set<Promise<void>>()
 
-    function ensureAssistant(node: string) {
-      if (assistantCreated && activeNode === node) {
-        return
+    /** Returns the node-owned message and flushes the previous node before switching. */
+    function ensureAssistant(node: string): AgentChatMessage {
+      if (activeAssistant && activeNode === node) {
+        return activeAssistant
       }
-      appendMessage({
+      if (activeAssistant) {
+        forceFlushContent(activeAssistant)
+      }
+      const message: AgentChatMessage = {
         role: 'assistant',
         content: '',
         node,
@@ -472,30 +494,171 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
         trace: [...bufferedTraces],
         metadata: { turn_started_at_ms: streamStartedAtMs.value },
         created_at: new Date().toISOString(),
-      })
-      assistantCreated = true
+      }
+      appendMessage(message)
       activeNode = node
+      activeAssistant = messages.value[messages.value.length - 1] ?? message
       bufferedTraces.length = 0
+      return activeAssistant
     }
 
+    /** Appends traces idempotently to their captured owner. */
+    function appendTraceToMessage(message: AgentChatMessage, trace: Array<Record<string, unknown>>) {
+      message.trace ??= []
+      const seen = new Set(message.trace.map(traceIdentity))
+      const fresh = trace.filter((item) => {
+        const key = traceIdentity(item)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      message.trace.push(...fresh)
+    }
+
+    /** Appends non-tool traces to the currently active node message. */
     function appendTraceToCurrentAssistant(node: string, trace: Array<Record<string, unknown>>) {
-      ensureAssistant(node)
-      const lastAssistant = findLastAssistant()
-      if (lastAssistant) {
-        lastAssistant.trace ??= []
-        const seen = new Set(lastAssistant.trace.map(traceIdentity))
-        const fresh = trace.filter((item) => {
-          const key = traceIdentity(item)
-          if (seen.has(key)) return false
-          seen.add(key)
-          return true
-        })
-        lastAssistant.trace.push(...fresh)
-        if (node === 'action') {
-          lastAssistant.node = 'action'
+      appendTraceToMessage(ensureAssistant(node), trace)
+    }
+
+    /** Finds a known call by id, or an id-less result's oldest compatible call. */
+    function findToolLifecycle(trace: Record<string, unknown>): ToolCallLifecycle | undefined {
+      const callId = asString(trace.tool_call_id)
+      if (callId) {
+        return toolLifecycles.get(callId)
+      }
+      if (trace.event !== 'tool_call_end') {
+        return undefined
+      }
+      const toolName = asString(trace.tool_name)
+      return Array.from(toolLifecycles.values()).find((lifecycle) => {
+        if (lifecycle.phase === 'completed') return false
+        const start = lifecycle.message.trace?.find((item) => asString(item.tool_call_id) === lifecycle.key)
+        return asString(start?.tool_name) === toolName
+      })
+    }
+
+    /** Finds the oldest pending preview created before a provider supplied its id. */
+    function findAnonymousToolLifecycle(toolName: string): ToolCallLifecycle | undefined {
+      return Array.from(toolLifecycles.values()).find((lifecycle) => {
+        if (lifecycle.phase === 'completed' || !lifecycle.key.startsWith('anonymous:')) return false
+        const start = lifecycle.message.trace?.find((item) => asString(item.tool_call_id) === lifecycle.key)
+        return asString(start?.tool_name) === toolName
+      })
+    }
+
+    /** Upserts a running trace without moving an existing call to a later message. */
+    function upsertToolStart(trace: Record<string, unknown>): ToolCallLifecycle | null {
+      const toolName = asString(trace.tool_name)
+      if (!toolName) return null
+      const callId = asString(trace.tool_call_id)
+      const existing = findToolLifecycle(trace) || (callId ? findAnonymousToolLifecycle(toolName) : undefined)
+      if (existing) {
+        if (callId && !toolLifecycles.has(callId)) {
+          toolLifecycles.delete(existing.key)
+          toolLifecycles.set(callId, existing)
+        }
+        if (existing.phase !== 'completed') {
+          appendTraceToMessage(existing.message, [{ ...trace, tool_call_id: existing.key }])
+        }
+        return existing
+      }
+      const key = callId || `anonymous:${toolName}:${++anonymousToolSequence}`
+      const message = ensureAssistant('action')
+      appendTraceToMessage(message, [{ ...trace, tool_call_id: key }])
+      const lifecycle: ToolCallLifecycle = {
+        key,
+        message,
+        startedAtMs: nowMs(),
+        phase: 'pending',
+      }
+      toolLifecycles.set(key, lifecycle)
+      return lifecycle
+    }
+
+    /** Commits a received result to its original toolbar and resolves its waiter. */
+    function finishToolLifecycle(lifecycle: ToolCallLifecycle) {
+      if (lifecycle.phase === 'completed') return
+      if (lifecycle.completionTimer !== undefined) {
+        window.clearTimeout(lifecycle.completionTimer)
+        lifecycle.completionTimer = undefined
+      }
+      const resolve = lifecycle.resolveCompletion
+      lifecycle.resolveCompletion = undefined
+      try {
+        if (lifecycle.endTrace) {
+          appendTraceToMessage(lifecycle.message, [lifecycle.endTrace])
+        }
+      } finally {
+        // A render/update exception must never leave send() awaiting forever.
+        lifecycle.phase = 'completed'
+        resolve?.()
+      }
+    }
+
+    /**
+     * Defers only sub-frame results. This lets Vue paint the locked running row
+     * while independent tool calls and later Agent messages keep streaming.
+     */
+    function scheduleToolEnd(trace: Record<string, unknown>) {
+      let lifecycle = findToolLifecycle(trace)
+      if (!lifecycle) {
+        lifecycle = upsertToolStart({
+          node: 'action',
+          event: 'tool_call_start',
+          tool_call_id: asString(trace.tool_call_id),
+          tool_name: asString(trace.tool_name),
+          display_name: asString(trace.display_name),
+          tool_args_summary: asString(trace.tool_args_summary),
+          terminal_command: asString(trace.terminal_command),
+          chat_visible: true,
+        }) ?? undefined
+      }
+      if (!lifecycle || lifecycle.phase === 'completed') return
+      const knownStart = lifecycle.message.trace?.find((item) => (
+        item.event === 'tool_call_start' && asString(item.tool_call_id) === lifecycle.key
+      ))
+      lifecycle.endTrace = {
+        ...trace,
+        tool_call_id: lifecycle.key,
+        tool_name: asString(trace.tool_name) || asString(knownStart?.tool_name),
+        display_name: asString(trace.display_name) || asString(knownStart?.display_name),
+        tool_args_summary: asString(trace.tool_args_summary) || asString(knownStart?.tool_args_summary),
+      }
+      if (lifecycle.phase === 'ending') return
+      lifecycle.phase = 'ending'
+      const delayMs = Math.max(0, toolPreviewMinMs - (nowMs() - lifecycle.startedAtMs))
+      if (delayMs === 0) {
+        finishToolLifecycle(lifecycle)
+        return
+      }
+      const completion = new Promise<void>((resolve) => {
+        lifecycle.resolveCompletion = resolve
+        lifecycle.completionTimer = window.setTimeout(() => finishToolLifecycle(lifecycle), delayMs)
+      })
+      pendingToolCompletions.add(completion)
+      void completion.then(() => pendingToolCompletions.delete(completion))
+    }
+
+    /** Reduces individual and aggregate action traces through one lifecycle path. */
+    function handleActionTraces(trace: Array<Record<string, unknown>>) {
+      for (const item of trace) {
+        if (item.event === 'tool_call_start') {
+          upsertToolStart(item)
+        } else if (item.event === 'tool_call_end') {
+          scheduleToolEnd(item)
+        } else {
+          appendTraceToCurrentAssistant('action', [item])
         }
       }
     }
+
+    signal.addEventListener('abort', () => {
+      // A result already received must not disappear merely because the user
+      // cancels during its short preview window.
+      for (const lifecycle of toolLifecycles.values()) {
+        if (lifecycle.phase === 'ending') finishToolLifecycle(lifecycle)
+      }
+    }, { once: true })
 
     try {
       if (!targetSessionId) {
@@ -605,72 +768,62 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
 
         if (node === 'action') {
           if (trace.length > 0) {
-            appendTraceToCurrentAssistant('action', trace)
+            handleActionTraces(trace)
           }
           continue
         }
 
-        // The model's tool_calls update arrives before the action node and may
-        // have no text. Turn it into running traces immediately instead of
-        // waiting for the tool result callback.
         const announcedToolCalls = asArray(chunk.tool_calls)
-        if (announcedToolCalls.length > 0) {
-          const previews = announcedToolCalls
-            .map(asRecord)
-            .filter((toolCall) => asString(toolCall.name))
-            .map((toolCall) => ({
-              node: 'action',
-              event: 'tool_call_start',
-              tool_call_id: asString(toolCall.id),
-              tool_name: asString(toolCall.name),
-              // Let the shared tool renderer use its localized display name.
-              display_name: '',
-              tool_args_summary: JSON.stringify(toolCall.args ?? {}),
-              human_readable: `正在调用工具「${asString(toolCall.name)}」`,
-              chat_visible: true,
-            }))
-          if (previews.length > 0) {
-            appendTraceToCurrentAssistant('action', previews)
-            continue
-          }
-        }
 
         if (content) {
-          ensureAssistant(node)
+          const message = ensureAssistant(node)
           if (chunk.type === 'delta') {
-            appendStreamContent(content)
-            const last = findLastAssistant()
-            if (last) {
-              markThinkingDurationIfNeeded(last, true)
-            }
+            appendStreamContent(message, content)
+            markThinkingDurationIfNeeded(message, true)
           } else {
-            cancelPendingFlush()
-            const last = findLastAssistant()
-            if (last) {
-              // 完整 content 分支:仅当没有已累积正文、或新内容以累积正文为前缀
-              // (流被拦截时后端会补发完整正文)时才整体替换,避免文本跳变/缩短。
-              if (!last.content) {
-                last.content = content
-              } else if (
-                content.startsWith(last.content)
-                || content.length > last.content.length
-              ) {
-                last.content = content
-              }
-              markThinkingDurationIfNeeded(last)
+            cancelPendingFlush(message)
+            // A complete response is authoritative when it extends or repairs
+            // the streamed prefix; shorter unrelated text never erases it.
+            if (!message.content) {
+              message.content = content
+            } else if (
+              content.startsWith(message.content)
+              || content.length > message.content.length
+            ) {
+              message.content = content
             }
+            markThinkingDurationIfNeeded(message)
           }
-          attachMetadataToLastAssistant(metadata)
-          const last = findLastAssistant()
-          const backendFirstDeltaMs = asFiniteNumber(asRecord(last?.metadata?.latency).first_agent_delta_ms)
-          if (last && backendFirstDeltaMs !== null) {
-            last.metadata = {
-              ...(last.metadata ?? {}),
+          attachMetadataToMessage(message, metadata)
+          const backendFirstDeltaMs = asFiniteNumber(asRecord(message.metadata?.latency).first_agent_delta_ms)
+          if (backendFirstDeltaMs !== null) {
+            message.metadata = {
+              ...(message.metadata ?? {}),
               backend_first_delta_seconds: Math.round((backendFirstDeltaMs / 1000) * 10) / 10,
             }
           }
-          updateLastMessage(undefined, node, asArray(chunk.tool_calls), trace)
-        } else if (trace.length > 0) {
+          message.tool_calls = announcedToolCalls
+          appendTraceToMessage(message, trace)
+        }
+
+        // Tool announcements are handled after content from the same envelope,
+        // so creating the action row can never hide or steal Agent prose.
+        for (const toolCall of announcedToolCalls.map(asRecord)) {
+          const toolName = asString(toolCall.name)
+          if (!toolName) continue
+          upsertToolStart({
+            node: 'action',
+            event: 'tool_call_start',
+            tool_call_id: asString(toolCall.id),
+            tool_name: toolName,
+            display_name: '',
+            tool_args_summary: JSON.stringify(toolCall.args ?? {}),
+            human_readable: `正在调用工具「${toolName}」`,
+            chat_visible: true,
+          })
+        }
+
+        if (!content && announcedToolCalls.length === 0 && trace.length > 0) {
           appendTraceToCurrentAssistant(node || asString(trace[0]?.node) || 'agent', trace)
           attachMetadataToLastAssistant(metadata)
         }
@@ -681,12 +834,12 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
       }
       forceFlushContent()
       streamError.value = error instanceof Error ? error.message : 'Stream connection failed'
-      if (assistantCreated) {
-        updateLastMessage(streamError.value)
-      }
+      const errorMessage = ensureAssistant('error')
+      errorMessage.content = streamError.value
     } finally {
       clearStreamTimeout()
       if (!signal.aborted) {
+        await Promise.all(Array.from(pendingToolCompletions))
         forceFlushContent()
         attachCitationMapToLastFinalAssistant()
         isStreaming.value = false
@@ -711,6 +864,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   function clear() {
     streamAbortController?.abort()
     historyAbortController?.abort()
+    cancelPendingFlush()
     streamAbortController = null
     historyAbortController = null
     clearStreamTimeout()
@@ -876,8 +1030,8 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
 
   /**
    * Cancel the current streaming response.
-   * Aborts the fetch, flushes buffered content, and marks the last assistant
-   * message as 'interrupted' so it's preserved in context.
+   * Aborts the fetch and flushes buffered content. Agent prose is marked as
+   * interrupted, while action/child rows keep their renderer-specific node.
    */
   function cancelStream() {
     if (!isStreaming.value) return
@@ -886,7 +1040,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     forceFlushContent()
     isStreaming.value = false
     const lastAssistant = findLastAssistant()
-    if (lastAssistant) {
+    if (lastAssistant && lastAssistant.node !== 'action' && lastAssistant.node !== 'child_agent') {
       lastAssistant.node = 'interrupted'
     }
     attachCitationMapToLastFinalAssistant()
@@ -961,6 +1115,12 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
 
 /** The primary Agent page chat store. */
 export const useChatStore = createChatStore('chat')
+
+// Pinia setup stores keep their action closures after a component-only Vite
+// update unless the store explicitly accepts the replacement definition.
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useChatStore, import.meta.hot))
+}
 
 /**
  * Returns the stable Pinia store for one persisted session.  Embedded queue

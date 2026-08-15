@@ -17,6 +17,7 @@ const net = require('node:net')
 const path = require('node:path')
 const { handleEditShortcut } = require('./edit-shortcuts.cjs')
 const { boundsForMainDragRestore, finishMainWindowRestore } = require('./main-window-state.cjs')
+const { isAbortedNavigation, loadWindowContent } = require('./window-content-loader.cjs')
 
 const DEV_SERVER_URL = process.env.ELECTRON_RENDERER_URL || 'http://127.0.0.1:5173'
 const BACKEND_SERVER_URL = process.env.METAWEAVE_BACKEND_URL || 'http://127.0.0.1:8002'
@@ -304,10 +305,6 @@ async function loadStartupPage(window) {
   await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(startupPage('MetaWeave', '正在启动本地 Agent 服务，请稍候…'))}`)
 }
 
-function isAbortedNavigation(error) {
-  return String(error).includes('ERR_ABORTED')
-}
-
 async function showStartupError(window, error) {
   if (!window || window.isDestroyed()) {
     return
@@ -316,6 +313,20 @@ async function showStartupError(window, error) {
   await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(startupPage('MetaWeave 启动失败', message, true))}`)
   window.show()
   window.focus()
+}
+
+function loadRenderer(window, query, displayError = false) {
+  return loadWindowContent(
+    window,
+    () => isDevelopment() ? loadDevServer(window, query) : loadPackagedBackend(window, query),
+    (error) => {
+      if (displayError) {
+        return showStartupError(window, error)
+      }
+      console.error('Failed to load floating renderer:', error)
+      return Promise.resolve()
+    },
+  )
 }
 
 function userProjectRoot() {
@@ -559,7 +570,7 @@ function createMainWindow() {
   })
 
   if (isDevelopment()) {
-    void loadDevServer(mainWindow)
+    void loadRenderer(mainWindow, undefined, true)
     if (shouldOpenDevTools()) {
       mainWindow.webContents.openDevTools({ mode: 'detach' })
     }
@@ -655,12 +666,12 @@ function createFloatingWindow() {
   })
 
   if (isDevelopment()) {
-    void loadDevServer(floatingWindow, { floating: '1' })
+    void loadRenderer(floatingWindow, { floating: '1' })
     if (shouldOpenDevTools()) {
       floatingWindow.webContents.openDevTools({ mode: 'detach' })
     }
   } else {
-    void loadPackagedBackend(floatingWindow, { floating: '1' })
+    void loadRenderer(floatingWindow, { floating: '1' })
   }
   return floatingWindow
 }
@@ -722,6 +733,17 @@ app.whenReady().then(async () => {
       createMainWindow()
     }
   })
+}).catch((error) => {
+  console.error('Failed to initialize Electron:', error)
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    void loadWindowContent(
+      mainWindow,
+      () => Promise.reject(error),
+      (startupError) => showStartupError(mainWindow, startupError),
+    )
+  } else {
+    dialog.showErrorBox('MetaWeave 启动失败', error instanceof Error ? error.message : String(error))
+  }
 })
 
 app.on('window-all-closed', () => {

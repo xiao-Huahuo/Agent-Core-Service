@@ -3,7 +3,7 @@
  *
  * Verifies that references saved in message metadata survive history reloads.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -42,6 +42,10 @@ describe('chat reference history', () => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     apiMocks.listSessions.mockResolvedValue([])
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('restores a persisted user reference from message metadata', async () => {
@@ -169,6 +173,257 @@ describe('chat reference history', () => {
       tool_call_id: 'call_patch_1',
       tool_name: 'patch_knowledge_file',
     }])
+  })
+
+  it('keeps full agent content when the same event also announces tools', async () => {
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield {
+        node: 'agent',
+        content: '我先读取目标文档。',
+        tool_calls: [{ id: 'call_read_1', name: 'read_knowledge_file', args: { path: 'notes/a.md' } }],
+      }
+    })
+    const store = useChatStore()
+
+    await store.send('user-1', 'session-1', '读取文档')
+
+    expect(store.messages.find((message) => message.node === 'agent')?.content).toBe('我先读取目标文档。')
+    expect(store.messages.find((message) => message.node === 'action')?.content).toBe('')
+  })
+
+  it('flushes streamed agent text to its owner before an action message is created', async () => {
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield { type: 'delta', node: 'agent', content: '中间输出不会消失。' }
+      yield {
+        node: 'action',
+        content: '',
+        trace: [{
+          event: 'tool_call_start',
+          tool_call_id: 'call_fast_1',
+          tool_name: 'get_current_time',
+          display_name: '获取当前时间',
+        }],
+      }
+    })
+    const store = useChatStore()
+
+    await store.send('user-1', 'session-1', '现在几点')
+
+    expect(store.messages.find((message) => message.node === 'agent')?.content).toBe('中间输出不会消失。')
+    expect(store.messages.find((message) => message.node === 'action')?.content).toBe('')
+  })
+
+  it('keeps a fast tool pending long enough to render before completing in place', async () => {
+    vi.useFakeTimers()
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield {
+        node: 'agent',
+        content: '',
+        tool_calls: [{ id: 'call_fast_2', name: 'get_current_time', args: {} }],
+      }
+      yield {
+        node: 'action',
+        content: '',
+        trace: [{
+          event: 'tool_call_start',
+          tool_call_id: 'call_fast_2',
+          tool_name: 'get_current_time',
+          display_name: '获取当前时间',
+        }],
+      }
+      yield {
+        node: 'action',
+        content: '',
+        trace: [{
+          event: 'tool_call_end',
+          tool_call_id: 'call_fast_2',
+          raw_content: '2026-08-15T12:00:00+08:00',
+        }],
+      }
+    })
+    const store = useChatStore()
+
+    const sendPromise = store.send('user-1', 'session-1', '现在几点')
+    // Drain the immediately available SSE records without advancing the
+    // perceptible-preview timer used by the fixed implementation.
+    for (let index = 0; index < 12; index += 1) {
+      await Promise.resolve()
+    }
+
+    const action = store.messages.find((message) => message.node === 'action')
+    expect(action?.trace?.some((trace) => trace.event === 'tool_call_start')).toBe(true)
+    expect(action?.trace?.some((trace) => trace.event === 'tool_call_end')).toBe(false)
+    expect(store.isStreaming).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(500)
+    expect(action?.trace?.some((trace) => trace.event === 'tool_call_end')).toBe(false)
+    expect(store.isStreaming).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(350)
+    await sendPromise
+
+    expect(store.messages.find((message) => message.node === 'action')).toBe(action)
+    expect(action?.trace?.some((trace) => trace.event === 'tool_call_end')).toBe(true)
+    expect(action?.trace?.find((trace) => trace.event === 'tool_call_end')?.tool_name).toBe('get_current_time')
+    expect(store.isStreaming).toBe(false)
+  })
+
+  it('deduplicates repeated aggregate action traces without bypassing the preview window', async () => {
+    vi.useFakeTimers()
+    const start = {
+      event: 'tool_call_start',
+      tool_call_id: 'call_aggregate',
+      tool_name: 'list_knowledge_files',
+      display_name: '列出文件',
+    }
+    const end = {
+      event: 'tool_call_end',
+      tool_call_id: 'call_aggregate',
+      tool_name: 'list_knowledge_files',
+      display_name: '列出文件',
+      raw_content: '[FILE] a.md',
+      result_count: 1,
+    }
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield {
+        node: 'agent',
+        tool_calls: [{ id: 'call_aggregate', name: 'list_knowledge_files', args: {} }],
+      }
+      yield { node: 'action', trace: [start] }
+      yield { node: 'action', trace: [end] }
+      yield { node: 'action', trace: [start, end] }
+    })
+    const store = useChatStore()
+
+    const sendPromise = store.send('user-1', 'session-1', '列出文件')
+    for (let index = 0; index < 16; index += 1) {
+      await Promise.resolve()
+    }
+    const action = store.messages.find((message) => message.node === 'action')
+    expect(action?.trace?.filter((trace) => trace.event === 'tool_call_end')).toHaveLength(0)
+
+    await vi.advanceTimersByTimeAsync(850)
+    await sendPromise
+
+    expect(action?.trace?.filter((trace) => trace.event === 'tool_call_end')).toHaveLength(1)
+    expect(store.messages.filter((message) => message.node === 'action')).toHaveLength(1)
+  })
+
+  it('adopts an anonymous announcement when the provider supplies its id on start', async () => {
+    vi.useFakeTimers()
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield {
+        node: 'agent',
+        tool_calls: [{ name: 'get_current_time', args: {} }],
+      }
+      yield {
+        node: 'action',
+        trace: [{
+          event: 'tool_call_start',
+          tool_call_id: 'call_late_id',
+          tool_name: 'get_current_time',
+          display_name: '获取当前时间',
+        }],
+      }
+      yield {
+        node: 'action',
+        trace: [{
+          event: 'tool_call_end',
+          tool_call_id: 'call_late_id',
+          tool_name: 'get_current_time',
+          raw_content: '2026-08-15T12:00:00+08:00',
+        }],
+      }
+    })
+    const store = useChatStore()
+
+    const sendPromise = store.send('user-1', 'session-1', '现在几点')
+    for (let index = 0; index < 12; index += 1) {
+      await Promise.resolve()
+    }
+    await vi.advanceTimersByTimeAsync(850)
+    await sendPromise
+
+    const actions = store.messages.filter((message) => message.node === 'action')
+    const toolTraces = actions.flatMap((message) => message.trace ?? [])
+      .filter((trace) => trace.event === 'tool_call_start' || trace.event === 'tool_call_end')
+    expect(actions).toHaveLength(1)
+    expect(new Set(toolTraces.map((trace) => trace.tool_call_id))).toEqual(new Set(['anonymous:get_current_time:1']))
+    expect(toolTraces.filter((trace) => trace.event === 'tool_call_end')).toHaveLength(1)
+  })
+
+  it('routes out-of-order tool results back to the original action message', async () => {
+    vi.useFakeTimers()
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield {
+        node: 'agent',
+        content: '',
+        tool_calls: [
+          { id: 'call_a', name: 'read_knowledge_file', args: { path: 'a.md' } },
+          { id: 'call_b', name: 'read_knowledge_file', args: { path: 'b.md' } },
+        ],
+      }
+      yield {
+        node: 'action',
+        trace: [{ event: 'tool_call_end', tool_call_id: 'call_b', tool_name: 'read_knowledge_file', raw_content: 'B' }],
+      }
+      yield { node: 'agent', content: '两个结果并发返回。' }
+      yield {
+        node: 'action',
+        trace: [{ event: 'tool_call_end', tool_call_id: 'call_a', tool_name: 'read_knowledge_file', raw_content: 'A' }],
+      }
+    })
+    const store = useChatStore()
+
+    const sendPromise = store.send('user-1', 'session-1', '并发读取')
+    await Promise.resolve()
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(850)
+    await sendPromise
+
+    const actions = store.messages.filter((message) => message.node === 'action')
+    expect(actions).toHaveLength(1)
+    expect(actions[0]?.trace?.filter((trace) => trace.event === 'tool_call_end')).toMatchObject([
+      { tool_call_id: 'call_b', raw_content: 'B' },
+      { tool_call_id: 'call_a', raw_content: 'A' },
+    ])
+    expect(store.messages.find((message) => message.node === 'agent')?.content).toBe('两个结果并发返回。')
+  })
+
+  it('preserves the action toolbar and an already received result when cancelled', async () => {
+    let releaseStream: (() => void) | undefined
+    const streamGate = new Promise<void>((resolve) => { releaseStream = resolve })
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield {
+        node: 'agent',
+        tool_calls: [{ id: 'call_cancel', name: 'get_current_time', args: {} }],
+      }
+      yield {
+        node: 'action',
+        trace: [{
+          event: 'tool_call_end',
+          tool_call_id: 'call_cancel',
+          tool_name: 'get_current_time',
+          raw_content: '2026-08-15T12:00:00+08:00',
+        }],
+      }
+      await streamGate
+    })
+    const store = useChatStore()
+
+    const sendPromise = store.send('user-1', 'session-1', '现在几点')
+    for (let index = 0; index < 12; index += 1) {
+      await Promise.resolve()
+    }
+    const action = store.messages.find((message) => message.node === 'action')
+    expect(action).toBeDefined()
+
+    store.cancelStream()
+    releaseStream?.()
+    await sendPromise
+
+    expect(action?.node).toBe('action')
+    expect(action?.trace?.some((trace) => trace.event === 'tool_call_end')).toBe(true)
   })
 
 })

@@ -115,6 +115,7 @@ test('renders the GitHub-style activity graph and preserves filter interaction',
 
   const card = page.locator('.activity-card')
   await expect(card).toBeVisible()
+  await expect(page.locator('.agent-session-list')).toHaveCount(0)
   const cellCount = await card.locator('[data-slot="contribution-graph-block"]').count()
   expect(cellCount).toBeGreaterThanOrEqual(28)
   expect(cellCount).toBeLessThanOrEqual(364)
@@ -131,4 +132,5 @@ test('renders the GitHub-style activity graph and preserves filter interaction',
   await expect(card.locator('[data-filter="agent"]')).toHaveClass(/active/)
   await expect(card).toHaveAttribute('style', /--heat-color: #c98516/)
   await card.screenshot({ path: testInfo.outputPath('activity-heatmap.png') })
+  await page.locator('.time-panel').screenshot({ path: testInfo.outputPath('dashboard.png') })
 })

@@ -97,6 +97,8 @@ describe('ToolCallInline summaries', () => {
     const wrapper = mount(ToolCallInline, { props: { traces: [start] } })
     expect(wrapper.text()).toContain('正在局部修改文件')
     expect(wrapper.find('.tool-expand-btn').exists()).toBe(false)
+    expect(wrapper.get('.tool-text').classes()).toContain('pending')
+    const originalRow = wrapper.get('.tool-call-box').element
 
     await wrapper.setProps({
       traces: [{
@@ -110,6 +112,7 @@ describe('ToolCallInline summaries', () => {
       }],
     })
 
+    expect(wrapper.get('.tool-call-box').element).toBe(originalRow)
     await wrapper.find('.tool-expand-btn').trigger('click')
     expect(wrapper.find('.removed .line-text').text()).toBe('旧内容')
     expect(wrapper.find('.added .line-text').text()).toBe('新内容')
