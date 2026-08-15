@@ -14,6 +14,33 @@ const app = createApp(App)
 
 type WindowResizeEdge = 'n' | 'e' | 's' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 
+/** Install deterministic titlebar drag-to-restore handling for maximized windows. */
+function installWindowDragRestore(desktopApi: AgentEditorDesktopApi): void {
+  document.addEventListener('pointerdown', async (event) => {
+    if (event.button !== 0 || !document.documentElement.classList.contains('maximized')) return
+    const target = event.target instanceof Element ? event.target : null
+    const dragRegion = target?.closest<HTMLElement>('.topbar, .user-gate')
+    if (!dragRegion || target?.closest('button, input, textarea, select, a, [contenteditable="true"]')) return
+
+    event.preventDefault()
+    const started = await desktopApi.beginWindowMove(event.screenX, event.screenY)
+    if (!started) return
+    dragRegion.setPointerCapture(event.pointerId)
+    const move = (moveEvent: PointerEvent) => {
+      desktopApi.updateWindowMove(moveEvent.screenX, moveEvent.screenY)
+    }
+    const end = () => {
+      desktopApi.endWindowMove()
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', end)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', end)
+  })
+}
+
 function installWindowResizeHandles(desktopApi: AgentEditorDesktopApi): void {
   const edges: WindowResizeEdge[] = ['n', 'e', 's', 'w', 'ne', 'nw', 'se', 'sw']
   const layer = document.createElement('div')
@@ -61,6 +88,7 @@ if (desktopApi?.isDesktop) {
       document.documentElement.classList.toggle('maximized', maximized)
     }
     desktopApi.onMaximizedChange(syncMaximized)
+    installWindowDragRestore(desktopApi)
     installWindowResizeHandles(desktopApi)
   }
 }

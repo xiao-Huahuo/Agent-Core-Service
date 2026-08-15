@@ -7,6 +7,9 @@ interface AgentEditorDesktopApi {
   platform: NodeJS.Platform
   minimize: () => void
   toggleMaximize: () => Promise<boolean>
+  beginWindowMove: (screenX: number, screenY: number) => Promise<boolean>
+  updateWindowMove: (screenX: number, screenY: number) => void
+  endWindowMove: () => void
   beginWindowResize: (edge: 'n' | 'e' | 's' | 'w' | 'ne' | 'nw' | 'se' | 'sw', screenX: number, screenY: number) => Promise<boolean>
   updateWindowResize: (screenX: number, screenY: number) => void
   endWindowResize: () => void

@@ -16,6 +16,7 @@ const fs = require('node:fs')
 const net = require('node:net')
 const path = require('node:path')
 const { handleEditShortcut } = require('./edit-shortcuts.cjs')
+const { boundsForMainDragRestore, finishMainWindowRestore } = require('./main-window-state.cjs')
 
 const DEV_SERVER_URL = process.env.ELECTRON_RENDERER_URL || 'http://127.0.0.1:5173'
 const BACKEND_SERVER_URL = process.env.METAWEAVE_BACKEND_URL || 'http://127.0.0.1:8002'
@@ -34,6 +35,7 @@ let mainWindow = null
 let tray = null
 let floatingWindow = null
 let backendProcess = null
+let mainMoveSession = null
 let mainResizeSession = null
 
 const MAIN_MIN_WIDTH = 320
@@ -530,9 +532,11 @@ function createMainWindow() {
     applyMainWindowShape()
   })
   mainWindow.on('unmaximize', () => {
-    mainWindow.setResizable(false)
     sendMaximizedState()
-    applyMainWindowShape()
+    // Windows is still running the native move loop when drag-to-restore emits
+    // `unmaximize`. Removing WS_THICKFRAME synchronously aborts restoration and
+    // leaves the window at maximized bounds, so restore the popup style next turn.
+    finishMainWindowRestore(mainWindow, applyMainWindowShape)
   })
   // setShape 区域是绝对像素,窗口 resize(拖动)后必须重新套用
   mainWindow.on('resize', applyMainWindowShape)
@@ -745,8 +749,53 @@ ipcMain.handle('window:toggle-maximize', (event) => {
     win.unmaximize()
     return false
   }
+  // The normal window uses a popup style to avoid Windows' square DWM frame.
+  // Re-enable the native resize frame before asking Windows to maximize it.
+  win.setResizable(true)
   win.maximize()
   return true
+})
+
+ipcMain.handle('window:begin-move', (event, payload) => {
+  const win = windowFromEvent(event)
+  const screenX = Number(payload?.screenX)
+  const screenY = Number(payload?.screenY)
+  if (!win || win !== mainWindow || !win.isMaximized() || !Number.isFinite(screenX) || !Number.isFinite(screenY)) {
+    return false
+  }
+  const restore = boundsForMainDragRestore(win.getBounds(), win.getNormalBounds(), screenX, screenY)
+  win.unmaximize()
+  win.setBounds(restore.bounds)
+  mainMoveSession = {
+    webContentsId: event.sender.id,
+    offsetX: restore.offsetX,
+    offsetY: restore.offsetY,
+  }
+  applyTransparentShape(win)
+  return true
+})
+
+ipcMain.on('window:move-to', (event, payload) => {
+  if (!mainMoveSession || mainMoveSession.webContentsId !== event.sender.id) {
+    return
+  }
+  const win = windowFromEvent(event)
+  const screenX = Number(payload?.screenX)
+  const screenY = Number(payload?.screenY)
+  if (!win || win !== mainWindow || !Number.isFinite(screenX) || !Number.isFinite(screenY)) {
+    return
+  }
+  win.setPosition(
+    Math.round(screenX - mainMoveSession.offsetX),
+    Math.round(screenY - mainMoveSession.offsetY),
+  )
+})
+
+ipcMain.on('window:end-move', (event) => {
+  if (mainMoveSession?.webContentsId === event.sender.id) {
+    mainMoveSession = null
+    applyTransparentShape(mainWindow)
+  }
 })
 
 ipcMain.handle('window:begin-resize', (event, payload) => {

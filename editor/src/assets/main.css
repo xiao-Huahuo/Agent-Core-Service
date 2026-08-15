@@ -117,6 +117,13 @@ html.electron-window.maximized #app {
   border-radius: 0;
 }
 
+/* Maximized titlebars use the renderer-driven restore path so the native move
+   loop cannot be interrupted when the square Windows resize frame is removed. */
+html.electron-window.maximized .topbar,
+html.electron-window.maximized .user-gate {
+  -webkit-app-region: no-drag;
+}
+
 .window-resize-handles {
   position: fixed;
   inset: 0;
