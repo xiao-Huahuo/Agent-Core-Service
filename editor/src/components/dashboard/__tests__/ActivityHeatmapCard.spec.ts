@@ -2,7 +2,7 @@
  * Daily activity heatmap card behavior tests.
  *
  * Usage:
- * Verifies the Origin UI 52-week grid, filter-specific palette, and compact
+ * Verifies the GitHub-style 52-week grid, filter-specific palette, and compact
  * summary metrics without launching the desktop interface.
  */
 
@@ -64,6 +64,10 @@ describe('ActivityHeatmapCard', () => {
     expect(wrapper.findAll('[data-slot="contribution-graph-block"][data-level="3"]')).toHaveLength(1)
     expect(wrapper.findAll('.filter-button')).toHaveLength(7)
     expect(wrapper.findAll('.metric-item')).toHaveLength(4)
+    expect(wrapper.find('.weekday-labels').text()).toBe('一三五')
+    expect(wrapper.findAll('.legend-cell')).toHaveLength(7)
+    expect(wrapper.find('.contribution-legend').text()).toContain('少')
+    expect(wrapper.find('.contribution-legend').text()).toContain('多')
     expect(wrapper.find('.day-detail').exists()).toBe(false)
     expect(wrapper.text()).toContain('每日活跃热力图')
     expect(wrapper.text()).toContain('活跃值')

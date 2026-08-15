@@ -65,6 +65,8 @@ const errorMessage = ref('')
 const calendarPanelRef = ref<HTMLElement | null>(null)
 const visibleWeekCount = ref(52)
 let calendarResizeObserver: ResizeObserver | null = null
+const calendarWeekPitch = 13
+const calendarLabelWidth = 31
 const filterRailRef = ref<HTMLElement | null>(null)
 const filterSliderStyle = ref({ width: '0px', left: '0px' })
 let filterResizeObserver: ResizeObserver | null = null
@@ -128,7 +130,7 @@ function observeCalendarPanel(): void {
   const panel = calendarPanelRef.value
   if (!panel || typeof ResizeObserver === 'undefined') return
   const updateVisibleWeeks = () => {
-    const weeks = Math.floor((panel.clientWidth + 4) / 16)
+    const weeks = Math.floor((panel.clientWidth - calendarLabelWidth + 3) / calendarWeekPitch)
     visibleWeekCount.value = Math.max(4, Math.min(52, weeks))
   }
   updateVisibleWeeks()
@@ -288,19 +290,35 @@ function todayIso(): string {
                 v-for="tick in monthTicks"
                 :key="`${tick.label}-${tick.weekIndex}`"
                 class="month-tick"
-                :style="{ left: `${tick.weekIndex * 16}px` }"
+                :style="{ left: `${calendarLabelWidth + tick.weekIndex * calendarWeekPitch}px` }"
               >{{ tick.label }}</span>
             </div>
-            <ContributionGraph class="activity-contribution-graph" :aria-label="`最近${visibleWeekCount}周每日活跃情况`">
-              <ContributionGraphGroup v-for="(week, weekIndex) in visibleCalendarWeeks" :key="weekIndex">
-                <ContributionGraphBlock
-                  v-for="day in week"
-                  :key="day.date"
-                  :level="day.future ? 0 : levelForScore(scoreForDay(day.activity))"
-                  :title="cellLabel(day)"
-                />
-              </ContributionGraphGroup>
-            </ContributionGraph>
+            <div class="calendar-grid">
+              <div class="weekday-labels" aria-hidden="true">
+                <span></span>
+                <span>一</span>
+                <span></span>
+                <span>三</span>
+                <span></span>
+                <span>五</span>
+                <span></span>
+              </div>
+              <ContributionGraph class="activity-contribution-graph" :aria-label="`最近${visibleWeekCount}周每日活跃情况`">
+                <ContributionGraphGroup v-for="(week, weekIndex) in visibleCalendarWeeks" :key="weekIndex">
+                  <ContributionGraphBlock
+                    v-for="day in week"
+                    :key="day.date"
+                    :level="day.future ? 0 : levelForScore(scoreForDay(day.activity))"
+                    :title="cellLabel(day)"
+                  />
+                </ContributionGraphGroup>
+              </ContributionGraph>
+            </div>
+            <div class="contribution-legend" aria-label="活跃程度图例：从少到多">
+              <span>少</span>
+              <i v-for="level in 7" :key="level" class="legend-cell" :data-level="level - 1"></i>
+              <span>多</span>
+            </div>
           </div>
         </div>
       </div>
@@ -471,11 +489,11 @@ function todayIso(): string {
 
 .month-ticks {
   position: relative;
-  height: 16px;
-  margin-bottom: 3px;
+  height: 13px;
+  margin-bottom: 4px;
   color: var(--color-text-tertiary);
   font-size: calc(9px * var(--font-scale));
-  line-height: 16px;
+  line-height: 13px;
   white-space: nowrap;
 }
 
@@ -483,6 +501,61 @@ function todayIso(): string {
   position: absolute;
   top: 0;
 }
+
+.calendar-grid {
+  display: flex;
+  align-items: flex-start;
+}
+
+.weekday-labels {
+  display: grid;
+  grid-template-rows: repeat(7, 10px);
+  gap: 3px;
+  width: 31px;
+  flex: 0 0 31px;
+  color: var(--color-text-tertiary);
+  font-size: calc(8px * var(--font-scale));
+  line-height: 10px;
+}
+
+.contribution-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  min-height: 18px;
+  margin-top: 7px;
+  color: var(--color-text-tertiary);
+  font-size: calc(8px * var(--font-scale));
+  line-height: 10px;
+}
+
+.legend-cell,
+.activity-contribution-graph :deep(.contribution-graph-block) {
+  width: 10px;
+  height: 10px;
+  flex-basis: 10px;
+  border-radius: 2px;
+}
+
+.legend-cell {
+  box-sizing: border-box;
+  display: inline-block;
+  border: 0.5px solid color-mix(in srgb, var(--color-border) 30%, transparent);
+  background: color-mix(in srgb, var(--color-text-tertiary) 10%, transparent);
+}
+
+.activity-contribution-graph,
+.activity-contribution-graph :deep(.contribution-graph-group) {
+  gap: 3px;
+}
+
+.legend-cell[data-level='1'] { background: color-mix(in srgb, var(--contribution-color) 23%, transparent); }
+.legend-cell[data-level='2'] { background: color-mix(in srgb, var(--contribution-color) 38%, transparent); }
+.legend-cell[data-level='3'] { background: color-mix(in srgb, var(--contribution-color) 54%, transparent); }
+.legend-cell[data-level='4'] { background: color-mix(in srgb, var(--contribution-color) 69%, transparent); }
+.legend-cell[data-level='5'] { background: color-mix(in srgb, var(--contribution-color) 84%, transparent); }
+.legend-cell[data-level='6'] { background: var(--contribution-color); }
 
 /* Match the contribution graph's green overview scale: gray zero, then six
    increasingly saturated greens instead of translucent theme mixing. */
@@ -493,6 +566,13 @@ function todayIso(): string {
 .activity-card.is-overview :deep(.contribution-graph-block[data-level='4']) { background: #40c463; }
 .activity-card.is-overview :deep(.contribution-graph-block[data-level='5']) { background: #30a14e; }
 .activity-card.is-overview :deep(.contribution-graph-block[data-level='6']) { background: #216e39; }
+.activity-card.is-overview .legend-cell[data-level='0'] { background: #ebedf0; }
+.activity-card.is-overview .legend-cell[data-level='1'] { background: #d4f8dd; }
+.activity-card.is-overview .legend-cell[data-level='2'] { background: #a6edb5; }
+.activity-card.is-overview .legend-cell[data-level='3'] { background: #69db86; }
+.activity-card.is-overview .legend-cell[data-level='4'] { background: #40c463; }
+.activity-card.is-overview .legend-cell[data-level='5'] { background: #30a14e; }
+.activity-card.is-overview .legend-cell[data-level='6'] { background: #216e39; }
 
 .activity-contribution-graph {
   flex: 0 0 auto;
