@@ -1,5 +1,9 @@
 # CHANGE HISTORY
 
+## 2026-08-16
+
+- [x] 统一 Agent 运行中文字动效：像素 Loader 的 `Thinking`、所有“正在…”工具条和输入框左上角“正在思考”共用同一套文字流光渐变、1.4 秒线性周期及 reduced-motion 降级；工具条渐变画布按实际字宽而非整行宽度移动，形成逐字扫光；新增组件类名、画布宽度与真实浏览器计算样式一致性回归测试。
+
 ## 2026-08-15 
 
 - [x] 修复无边框主窗口从最大化状态拖拽标题栏时仍保留最大化尺寸、圆角状态失配的问题：最大化标题栏改为按 `normalBounds` 确定性恢复并持续跟随鼠标，避开 Windows 原生移动循环与临时 resize frame 的竞态；新增恢复尺寸、鼠标锚点与事件顺序回归测试。
@@ -1621,3 +1625,7 @@
 
 - [x] 修复 Agent 工具条预告与中间正文流式生命周期：工具声明、开始和结束事件按 `tool_call_id` 幂等归并到原 action 消息，极快结果保留 800ms 可感知 pending 窗口后在同一工具条原地完成；正文缓冲绑定原 Agent 消息并在节点切换前提交，`content + tool_calls` 同帧不再丢正文，乱序/重复结果和取消流不会把内容或工具条冲到后续消息。复用现有“正在{中文工具名}”、pending 禁止展开、旋转指示与文字流光、完成态数量/文件名摘要；补上 Pinia setup store 的 Vite HMR 接管，避免长驻开发窗口继续执行旧 `send()` 闭包；移除 AgentPanel 对 `--color-text-secondary` 的自引用，修复 pending 文本 DOM 存在但像素完全透明。新增 store/HMR/组件回归及真实同批 SSE 浏览器测试，两种聊天模式均做 Chromium/Firefox/WebKit 可见性截图冒烟与原地切换验收。
 - [x] 修复 Electron 在 Vite 开发服务器未就绪时产生两次未处理 Promise 拒绝：主窗口与悬浮窗统一通过可测试的安全加载边界接住加载失败、窗口销毁、`ERR_ABORTED` 和错误页二次失败；主窗口原位展示启动错误，隐藏悬浮窗不再弹出抢焦点错误页，`app.whenReady()` 增加最终兜底。断服与正常连接两种真实 Electron 启动冒烟均未再出现 `UnhandledPromiseRejection`。
+
+## 2026-08-16
+
+- [x] 将参考交互的流式文字动效接入 Agent 对话区：真实 SSE 每批新增正文按词以 45ms 错峰、420ms 模糊消散显现并跟随细光标，既有正文不会重复动画；代码块、KaTeX、引用与来源链接保持结构安全，流结束后清理临时包装并淡入复制/赞踩与来源区，同时支持 `prefers-reduced-motion`。Agent 聊天组件相关 47 项测试及 Tool/Chat 两种模式 Chromium SSE 冒烟通过。

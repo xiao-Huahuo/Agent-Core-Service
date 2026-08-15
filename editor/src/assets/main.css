@@ -242,6 +242,29 @@ a {
   text-decoration: none;
 }
 
+/* Shared status shimmer extracted from the pixel LoadingState's Thinking
+   label, and reused by Agent thinking labels and pending tool announcements. */
+.thinking-shimmer-text {
+  color: transparent !important;
+  background: linear-gradient(
+    90deg,
+    var(--color-text-tertiary) 35%,
+    var(--color-text-primary) 50%,
+    var(--color-text-tertiary) 65%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: thinking-text-shimmer 1.4s linear infinite;
+}
+
+@keyframes thinking-text-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -429,6 +452,10 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .thinking-shimmer-text {
+    animation: none !important;
+  }
+
   *,
   *::before,
   *::after {

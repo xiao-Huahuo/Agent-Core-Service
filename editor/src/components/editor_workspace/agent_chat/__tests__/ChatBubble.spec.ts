@@ -143,7 +143,7 @@ describe('ChatBubble user references', () => {
     })
 
     expect(wrapper.find('.loading-state').exists()).toBe(true)
-    expect(wrapper.find('.loading-state__label').classes()).toContain('loading-state__label')
+    expect(wrapper.find('.loading-state__label').classes()).toContain('thinking-shimmer-text')
     expect(wrapper.findAll('.pixel')).toHaveLength(9)
     expect(wrapper.find('.thinking-spinner svg').exists()).toBe(true)
     expect(wrapper.find('.thinking-loader').exists()).toBe(false)
@@ -182,5 +182,26 @@ describe('ChatBubble user references', () => {
     expect(wrapper.find('.cursor').exists()).toBe(false)
     expect(wrapper.find('.assistant-article').exists()).toBe(false)
     expect(wrapper.get('.avatar').attributes('src')).toBe('agent.png')
+  })
+
+  it('reveals sources and message actions only after streaming completes', async () => {
+    const wrapper = mount(ChatBubble, {
+      global: { plugins: [createPinia()] },
+      props: {
+        message: { role: 'assistant', content: '带来源的回答' },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+        isStreaming: true,
+        knowledgeSources: [{ source_uri: 'notes/source.md', title: '来源文档', content: '' }],
+      },
+    })
+
+    expect(wrapper.find('.message-actions').exists()).toBe(false)
+    expect(wrapper.find('.knowledge-sources').exists()).toBe(false)
+
+    await wrapper.setProps({ isStreaming: false })
+
+    expect(wrapper.find('.message-actions').exists()).toBe(true)
+    expect(wrapper.find('.knowledge-sources').exists()).toBe(true)
   })
 })

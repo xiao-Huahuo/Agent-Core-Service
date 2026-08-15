@@ -287,10 +287,14 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           <IcIcon name="thumb-down" :size="14" />
         </button>
       </div>
-      <KnowledgeSources
-        v-if="knowledgeSources && knowledgeSources.length > 0"
-        :sources="knowledgeSources"
-      />
+      <div
+        v-if="!isStreaming && knowledgeSources && knowledgeSources.length > 0"
+        class="sources-reveal"
+      >
+        <KnowledgeSources
+          :sources="knowledgeSources"
+        />
+      </div>
     </div>
   </div>
 
@@ -519,6 +523,11 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-4);
+  animation: response-controls-in 360ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.sources-reveal {
+  animation: response-controls-in 360ms cubic-bezier(0.23, 1, 0.32, 1) 60ms both;
 }
 
 .message-actions .copy-action {
@@ -567,6 +576,11 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   42% { transform: scale(1.34) rotate(-8deg); }
   68% { transform: scale(0.88) rotate(4deg); }
   100% { transform: scale(1) rotate(0); }
+}
+
+@keyframes response-controls-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .reference-block {
@@ -677,6 +691,13 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   overflow-y: auto;
   color: var(--color-text-tertiary);
   font-size: calc(11px * var(--font-scale));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-actions,
+  .sources-reveal {
+    animation: none;
+  }
 }
 
 </style>

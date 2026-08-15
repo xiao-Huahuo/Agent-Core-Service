@@ -10,6 +10,7 @@
 import { computed, ref } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import ChangeDiff from '@/components/editor_workspace/agent_chat/ChangeDiff.vue'
+import { toolIconName } from '@/components/editor_workspace/agent_chat/toolIcons'
 import type { AgentChangeSnapshot } from '@/api/agentChanges'
 
 const props = defineProps<{
@@ -575,18 +576,25 @@ function finalizedPatch(entry: ToolDisplayEntry) {
       :class="{ expandable: !entry.pending && entry.rawContents.length > 0 }"
     >
     <div class="tool-call-header">
-      <span v-if="entry.pending" class="tool-loader" aria-hidden="true"></span>
       <button
         v-if="!entry.pending && entry.rawContents.length > 0"
-        class="tool-expand-btn"
+        class="tool-leading-icon tool-expand-btn"
         type="button"
         :class="{ expanded: expanded.has(entry.key) }"
         :aria-label="expanded.has(entry.key) ? '收起结果' : '展开结果'"
+        :aria-expanded="expanded.has(entry.key)"
         @click="toggleExpand(entry.key)"
       >
-        <IcIcon name="chevron-down" :size="16" />
+        <IcIcon class="tool-category-icon" :name="toolIconName(entry.toolName)" :size="15" />
+        <IcIcon class="tool-expand-chevron" name="chevron-down" :size="15" />
       </button>
-      <span class="tool-text" :class="{ pending: entry.pending }">{{ entry.text }}</span>
+      <span v-else class="tool-leading-icon tool-static-icon" aria-hidden="true">
+        <IcIcon class="tool-category-icon" :name="toolIconName(entry.toolName)" :size="15" />
+      </span>
+      <span
+        class="tool-text"
+        :class="{ pending: entry.pending, 'thinking-shimmer-text': entry.pending }"
+      >{{ entry.text }}</span>
     </div>
     <div
       v-if="!entry.pending && entry.rawContents.length > 0 && expanded.has(entry.key)"
@@ -727,18 +735,17 @@ function finalizedPatch(entry: ToolDisplayEntry) {
   min-height: 32px;
 }
 
-.tool-loader {
-  width: 14px;
-  height: 14px;
+.tool-leading-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
-  border: 2px solid rgba(148, 163, 184, 0.35);
-  border-top-color: var(--color-accent);
-  border-radius: 50%;
-  animation: tool-loader-spin 720ms linear infinite;
+  color: var(--color-text-tertiary);
 }
 
 .tool-text {
-  flex: 1;
   min-width: 0;
   color: var(--color-text-secondary);
   font-family: var(--font-ui);
@@ -749,29 +756,8 @@ function finalizedPatch(entry: ToolDisplayEntry) {
   white-space: nowrap;
 }
 
-.tool-text.pending {
-  background: linear-gradient(
-    90deg,
-    var(--color-text-secondary) 0%,
-    var(--color-text-secondary) 40%,
-    var(--color-text) 50%,
-    var(--color-text-secondary) 60%,
-    var(--color-text-secondary) 100%
-  );
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: tool-shimmer 1.2s ease-in-out infinite;
-}
-
 .tool-expand-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
+  position: relative;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
@@ -787,12 +773,33 @@ function finalizedPatch(entry: ToolDisplayEntry) {
   background: rgba(148, 163, 184, 0.12);
 }
 
-.tool-expand-btn svg {
-  transition: transform 220ms ease;
+.tool-category-icon,
+.tool-expand-chevron {
+  transition:
+    opacity 150ms ease,
+    transform 180ms ease;
 }
 
-.tool-expand-btn.expanded svg {
-  transform: rotate(180deg);
+.tool-expand-chevron {
+  position: absolute;
+  opacity: 0;
+  transform: rotate(-90deg);
+}
+
+.tool-expand-btn:hover .tool-category-icon,
+.tool-expand-btn:focus-visible .tool-category-icon,
+.tool-expand-btn.expanded .tool-category-icon {
+  opacity: 0;
+}
+
+.tool-expand-btn:hover .tool-expand-chevron,
+.tool-expand-btn:focus-visible .tool-expand-chevron,
+.tool-expand-btn.expanded .tool-expand-chevron {
+  opacity: 1;
+}
+
+.tool-expand-btn.expanded .tool-expand-chevron {
+  transform: rotate(0deg);
 }
 
 .tool-result-collapse {
@@ -1106,18 +1113,4 @@ function finalizedPatch(entry: ToolDisplayEntry) {
   }
 }
 
-@keyframes tool-loader-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes tool-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -100% 0;
-  }
-}
 </style>

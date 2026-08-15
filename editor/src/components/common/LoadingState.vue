@@ -98,7 +98,7 @@ const pattern = computed(() => patterns[props.variant])
         }"
       />
     </span>
-    <span v-if="showLabel" class="loading-state__label">{{ label }}</span>
+    <span v-if="showLabel" class="loading-state__label thinking-shimmer-text">{{ label }}</span>
     <span v-if="showElapsed" class="loading-state__elapsed">{{ elapsed }}</span>
   </div>
 </template>
@@ -123,15 +123,9 @@ const pattern = computed(() => patterns[props.variant])
 .pixel--inactive { animation: none; }
 
 .loading-state__label {
-  color: transparent;
-  background: linear-gradient(90deg, var(--color-text-tertiary) 35%, var(--color-text-primary) 50%, var(--color-text-tertiary) 65%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  background-size: 200% 100%;
   font-family: var(--font-ui);
   font-size: calc(13px * var(--font-scale));
   font-weight: 500;
-  animation: shimmer-text 1.4s linear infinite;
 }
 
 .loading-state__elapsed {
@@ -146,9 +140,7 @@ const pattern = computed(() => patterns[props.variant])
   45% { opacity: 1; transform: scale(1); }
 }
 
-@keyframes shimmer-text { to { background-position: -200% 0; } }
-
 @media (prefers-reduced-motion: reduce) {
-  .pixel, .loading-state__label { animation: none !important; }
+  .pixel { animation: none !important; }
 }
 </style>

@@ -12,6 +12,47 @@ import { mount } from '@vue/test-utils'
 import ToolCallInline from '../ToolCallInline.vue'
 
 describe('ToolCallInline summaries', () => {
+  it('keeps the category icon visible from a tool preview through its result', async () => {
+    const start = {
+      event: 'tool_call_start',
+      tool_call_id: 'call_web_1',
+      tool_name: 'web_search',
+      display_name: '联网搜索',
+    }
+    const wrapper = mount(ToolCallInline, {
+      global: {
+        stubs: {
+          IcIcon: {
+            props: ['name'],
+            template: '<i class="stub-icon" :data-icon="name"></i>',
+          },
+        },
+      },
+      props: { traces: [start] },
+    })
+    const originalRow = wrapper.get('.tool-call-box').element
+
+    expect(wrapper.get('.tool-leading-icon .stub-icon').attributes('data-icon')).toBe('language')
+    expect(wrapper.find('.tool-expand-btn').exists()).toBe(false)
+
+    await wrapper.setProps({
+      traces: [start, {
+        event: 'tool_call_end',
+        tool_call_id: 'call_web_1',
+        tool_name: 'web_search',
+        display_name: '联网搜索',
+        result_count: 1,
+        raw_content: '搜索结果',
+      }],
+    })
+
+    expect(wrapper.get('.tool-call-box').element).toBe(originalRow)
+    expect(wrapper.findAll('.tool-expand-btn .stub-icon').map((icon) => icon.attributes('data-icon'))).toEqual([
+      'language',
+      'chevron-down',
+    ])
+  })
+
   it('shows count-based knowledge and file summaries', () => {
     const wrapper = mount(ToolCallInline, {
       props: {
@@ -98,6 +139,7 @@ describe('ToolCallInline summaries', () => {
     expect(wrapper.text()).toContain('正在局部修改文件')
     expect(wrapper.find('.tool-expand-btn').exists()).toBe(false)
     expect(wrapper.get('.tool-text').classes()).toContain('pending')
+    expect(wrapper.get('.tool-text').classes()).toContain('thinking-shimmer-text')
     const originalRow = wrapper.get('.tool-call-box').element
 
     await wrapper.setProps({

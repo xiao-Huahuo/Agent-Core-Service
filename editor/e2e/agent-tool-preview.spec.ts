@@ -65,6 +65,12 @@ test(`paints a locked tool preview in ${chatMode} mode before completing in plac
             chat_visible: true,
           }],
         },
+        {
+          node: 'agent',
+          content: '这是工具返回后的流式回答。',
+          tool_calls: [],
+          trace: [],
+        },
       ]
       const body = `${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')}data: [DONE]\n\n`
       await route.fulfill({ status: 200, contentType: 'text/event-stream', body })
@@ -218,21 +224,70 @@ test(`paints a locked tool preview in ${chatMode} mode before completing in plac
   await page.getByRole('button', { name: '发送' }).click()
   await expect.poll(() => streamServed).toBe(true)
   await expect(page.getByText('我先保留这段中间输出。')).toBeVisible()
+  await expect(page.getByText('这是工具返回后的流式回答。')).toBeVisible()
+  await expect(page.locator('.stream-cursor')).toBeVisible()
+  await expect(page.locator('.stream-reveal-word')).not.toHaveCount(0)
+  const streamAnimationName = await page.locator('.stream-reveal-word').first().evaluate((element) => (
+    getComputedStyle(element).animationName
+  ))
+  expect(streamAnimationName).toContain('stream-word-in')
   await expect(page.locator('.tool-text.pending')).toHaveText('正在获取当前时间')
   await expect(page.locator('.tool-call-box .tool-expand-btn')).toHaveCount(0)
+  const categoryIcon = page.locator('.tool-static-icon .tool-category-icon')
+  await expect(categoryIcon).toBeVisible()
+  const categoryIconMarkup = await categoryIcon.evaluate((element) => ({
+    hasGraphic: element.querySelector('path, circle, rect, polygon, polyline, line') !== null,
+    hasRemoteReference: element.querySelector('image, use') !== null || /https?:/i.test(element.innerHTML),
+  }))
+  expect(categoryIconMarkup.hasGraphic).toBe(true)
+  expect(categoryIconMarkup.hasRemoteReference).toBe(false)
+  await expect(page.locator('.tool-text.pending')).toHaveClass(/thinking-shimmer-text/)
+  await expect(page.locator('.thinking-flow span')).toHaveClass(/thinking-shimmer-text/)
+  const shimmerStyles = await page.locator('.thinking-shimmer-text').evaluateAll((elements) => (
+    elements.map((element) => {
+      const style = getComputedStyle(element)
+      return {
+        backgroundImage: style.backgroundImage,
+        backgroundSize: style.backgroundSize,
+        backgroundClip: style.backgroundClip,
+        textFillColor: style.webkitTextFillColor,
+        animationDuration: style.animationDuration,
+        animationTimingFunction: style.animationTimingFunction,
+        animationDirection: style.animationDirection,
+      }
+    })
+  ))
+  expect(shimmerStyles).toHaveLength(2)
+  for (const shimmerStyle of shimmerStyles) {
+    expect(shimmerStyle.backgroundImage).toContain('linear-gradient')
+    expect(shimmerStyle.backgroundSize).toBe('200% 100%')
+    expect(shimmerStyle.backgroundClip).toBe('text')
+    expect(shimmerStyle.textFillColor).toBe('rgba(0, 0, 0, 0)')
+    expect(shimmerStyle.animationDuration).toBe('1.4s')
+    expect(shimmerStyle.animationTimingFunction).toBe('linear')
+    expect(shimmerStyle.animationDirection).toBe('normal')
+  }
+  expect(shimmerStyles[1]).toEqual(shimmerStyles[0])
   const pendingStyle = await page.locator('.tool-text.pending').evaluate((element) => {
     const style = getComputedStyle(element)
+    const header = element.closest('.tool-call-header')
     return {
       backgroundImage: style.backgroundImage,
       backgroundClip: style.backgroundClip,
       textFillColor: style.webkitTextFillColor,
+      flexGrow: style.flexGrow,
+      textWidth: element.getBoundingClientRect().width,
+      headerWidth: header?.getBoundingClientRect().width ?? 0,
     }
   })
   expect(pendingStyle.backgroundImage).toContain('linear-gradient')
   expect(pendingStyle.backgroundClip).toBe('text')
   expect(pendingStyle.textFillColor).toBe('rgba(0, 0, 0, 0)')
+  expect(pendingStyle.flexGrow).toBe('0')
+  expect(pendingStyle.textWidth).toBeLessThan(pendingStyle.headerWidth / 2)
   await page.screenshot({ path: testInfo.outputPath(`${chatMode}-pending.png`), fullPage: true })
   await expect(page.locator('.tool-text')).toHaveText('获取当前时间：2026-08-15 12:00')
+  await expect(page.locator('.stream-cursor')).toHaveCount(0)
   expect(pageErrors, apiRequests.join('\n')).toEqual([])
 
   const transitions = await page.evaluate(() => (

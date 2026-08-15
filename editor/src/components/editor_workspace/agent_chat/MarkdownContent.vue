@@ -58,6 +58,13 @@ const imagePreviewer = useImagePreviewer()
 const contentRef = ref<HTMLDivElement | null>(null)
 const workspaceStore = useWorkspaceStore()
 
+// Real SSE chunks can contain several words. Stagger just the newly appended
+// prose so the response resolves progressively without delaying backend data.
+const STREAM_WORD_STAGGER_MS = 45
+const STREAM_MAX_STAGGER_WORDS = 8
+let previousStreamingText = ''
+let previousStreamingCitationCount = 0
+
 // 字符串级代码高亮缓存:key 为 `${lang}\0${code}`,value 为已转义的 hljs 高亮 HTML。
 // 流式刷新时已完成代码块直接命中缓存,只对正在输出的最后一个代码块做真正的高亮,
 // 实现"边输出边高亮"而不必等 agent 终止,同时避免整段重复词法分析拖慢渲染。
@@ -294,6 +301,131 @@ function linkSourceNames() {
   }
 }
 
+/** Returns prose nodes that can be safely wrapped without damaging rich output. */
+function streamingTextNodes(root: HTMLElement): Text[] {
+  const nodes: Text[] = []
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let node = walker.nextNode()
+  while (node) {
+    const textNode = node as Text
+    const parent = textNode.parentElement
+    if (
+      textNode.data
+      && parent
+      && !(parent === root && !textNode.data.trim())
+      && !parent.closest('pre, code, .katex, .citation-anchor, .source-file-link, .stream-cursor')
+    ) {
+      nodes.push(textNode)
+    }
+    node = walker.nextNode()
+  }
+  return nodes
+}
+
+/** Wraps only the appended visible suffix; established Markdown never reanimates. */
+function revealStreamingSuffix(nodes: Text[], suffixLength: number) {
+  let remaining = suffixLength
+  const affected: Array<{ node: Text; start: number }> = []
+  const revealedWords = new Set<HTMLElement>()
+  for (let index = nodes.length - 1; index >= 0 && remaining > 0; index -= 1) {
+    const node = nodes[index]
+    if (!node) continue
+    const take = Math.min(node.data.length, remaining)
+    affected.unshift({ node, start: node.data.length - take })
+    remaining -= take
+  }
+
+  let wordIndex = 0
+  for (const { node, start } of affected) {
+    const fragment = document.createDocumentFragment()
+    if (start > 0) fragment.append(document.createTextNode(node.data.slice(0, start)))
+    for (const token of node.data.slice(start).split(/(\s+)/u).filter(Boolean)) {
+      if (/^\s+$/u.test(token)) {
+        fragment.append(document.createTextNode(token))
+        continue
+      }
+      const word = document.createElement('span')
+      word.className = 'stream-reveal-word'
+      word.style.setProperty(
+        '--stream-word-delay',
+        `${Math.min(wordIndex, STREAM_MAX_STAGGER_WORDS) * STREAM_WORD_STAGGER_MS}ms`,
+      )
+      word.textContent = token
+      fragment.append(word)
+      revealedWords.add(word)
+      wordIndex += 1
+    }
+    node.replaceWith(fragment)
+  }
+  return revealedWords
+}
+
+/** Places one non-semantic caret after the last streamable text fragment. */
+function placeStreamCursor(root: HTMLElement) {
+  root.querySelector('.stream-cursor')?.remove()
+  const cursor = document.createElement('span')
+  cursor.className = 'stream-cursor'
+  cursor.setAttribute('aria-hidden', 'true')
+  const nodes = streamingTextNodes(root)
+  const lastText = nodes[nodes.length - 1]
+  const word = lastText?.parentElement?.closest('.stream-reveal-word')
+  const anchor = word ?? lastText
+  if (anchor?.parentNode) {
+    anchor.parentNode.insertBefore(cursor, anchor.nextSibling)
+  } else {
+    root.append(cursor)
+  }
+}
+
+/** Settles the prior chunk before marking the next append as newly arrived. */
+function unwrapStreamingWords(root: HTMLElement) {
+  root.querySelectorAll('.stream-reveal-word').forEach((word) => {
+    word.replaceWith(document.createTextNode(word.textContent ?? ''))
+  })
+  root.normalize()
+}
+
+/** Applies stream motion after v-html has committed the newest Markdown DOM. */
+async function renderStreamingMotion() {
+  await nextTick()
+  if (!props.isStreaming) return
+  const root = contentRef.value
+  if (!root) return
+
+  unwrapStreamingWords(root)
+  const nodes = streamingTextNodes(root)
+  const visibleText = nodes.map((node) => node.data).join('')
+  const appendedLength = visibleText.startsWith(previousStreamingText)
+    ? visibleText.length - previousStreamingText.length
+    : visibleText.length
+  previousStreamingText = visibleText
+  const revealedWords = appendedLength > 0
+    ? revealStreamingSuffix(nodes, appendedLength)
+    : new Set<HTMLElement>()
+  root.querySelectorAll<HTMLElement>('.stream-reveal-word').forEach((word) => {
+    if (!revealedWords.has(word)) word.replaceWith(document.createTextNode(word.textContent ?? ''))
+  })
+  root.normalize()
+
+  const citations = [...root.querySelectorAll('.citation-anchor')]
+  if (citations.length < previousStreamingCitationCount) previousStreamingCitationCount = 0
+  citations.slice(previousStreamingCitationCount).forEach((citation) => citation.classList.add('stream-reveal-citation'))
+  previousStreamingCitationCount = citations.length
+  placeStreamCursor(root)
+}
+
+/** Removes transient stream wrappers before final DOM enhancement runs. */
+function clearStreamingMotion() {
+  const root = contentRef.value
+  root?.querySelector('.stream-cursor')?.remove()
+  if (root) unwrapStreamingWords(root)
+  root?.querySelectorAll('.stream-reveal-citation').forEach((citation) => {
+    citation.classList.remove('stream-reveal-citation')
+  })
+  previousStreamingText = ''
+  previousStreamingCitationCount = 0
+}
+
 async function highlightCodeBlocks() {
   await nextTick()
   linkSourceNames()
@@ -327,6 +459,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   contentRef.value?.removeEventListener('click', handleClick)
+  clearStreamingMotion()
   highlightCache.clear()
 })
 
@@ -335,8 +468,13 @@ watch([sanitizedHtml, sourceLinkSignature], () => {
   void highlightCodeBlocks()
 }, { immediate: true })
 
+watch([sanitizedHtml, () => props.isStreaming], () => {
+  if (props.isStreaming) void renderStreamingMotion()
+}, { immediate: true })
+
 watch(() => props.isStreaming, (streaming, wasStreaming) => {
   if (wasStreaming && !streaming) {
+    clearStreamingMotion()
     void highlightCodeBlocks()
   }
 })
@@ -495,6 +633,43 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
   color: var(--color-accent);
 }
 
+.markdown-body :deep(.stream-reveal-word) {
+  display: inline;
+  animation: stream-word-in 420ms cubic-bezier(0.22, 0.61, 0.25, 1) var(--stream-word-delay, 0ms) both;
+  will-change: filter, opacity;
+}
+
+.markdown-body :deep(.stream-reveal-citation) {
+  animation: stream-citation-in 250ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.markdown-body :deep(.stream-cursor) {
+  display: inline-block;
+  width: 2px;
+  height: 0.95em;
+  margin-left: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.82;
+  transform: translateY(0.12em);
+  animation: stream-cursor-pulse 900ms steps(1, end) infinite;
+}
+
+@keyframes stream-word-in {
+  from { filter: blur(7px); opacity: 0; transform: translateY(2px); }
+  to { filter: blur(0); opacity: 1; transform: translateY(0); }
+}
+
+@keyframes stream-citation-in {
+  from { opacity: 0; transform: translateY(2px) scale(0.82); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes stream-cursor-pulse {
+  0%, 48% { opacity: 0.82; }
+  49%, 100% { opacity: 0.18; }
+}
+
 .markdown-body :deep(img) {
   max-width: 100%;
   max-height: min(72vh, 960px);
@@ -531,6 +706,17 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
 .markdown-body :deep(.code-copy-btn:hover) {
   color: var(--color-primary);
   border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .markdown-body :deep(.stream-reveal-word),
+  .markdown-body :deep(.stream-reveal-citation),
+  .markdown-body :deep(.stream-cursor) {
+    animation: none;
+    filter: none;
+    opacity: 1;
+    transform: none;
+  }
 }
 </style>
 

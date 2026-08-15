@@ -31,7 +31,7 @@ describe('MarkdownContent source links', () => {
         isDir: false,
       },
     ]
-    const onNavigateSource = vi.fn()
+    const onNavigateSource = vi.fn<(uri: string) => void>()
 
     const wrapper = mount(MarkdownContent, {
       props: {
@@ -80,7 +80,7 @@ describe('MarkdownContent source links', () => {
   it('links filenames after the workspace tree loads later', async () => {
     const workspaceStore = useWorkspaceStore()
     workspaceStore.tree = []
-    const onNavigateSource = vi.fn()
+    const onNavigateSource = vi.fn<(uri: string) => void>()
 
     const wrapper = mount(MarkdownContent, {
       props: {
@@ -145,5 +145,43 @@ describe('MarkdownContent streaming code highlight', () => {
     expect(code.exists()).toBe(true)
     expect(code.element.textContent).toContain('<b>x</b>')
     expect(code.element.innerHTML).not.toContain('<span')
+  })
+
+  it('reveals only newly appended prose words and keeps a trailing stream cursor', async () => {
+    const wrapper = mount(MarkdownContent, {
+      props: {
+        content: '第一段文字',
+        isStreaming: true,
+        citationMap: {},
+      },
+    })
+    await nextTick()
+
+    expect(wrapper.find('.stream-cursor').exists()).toBe(true)
+    expect(wrapper.findAll('.stream-reveal-word').map((word) => word.text()).join('')).toBe('第一段文字')
+
+    await wrapper.setProps({ content: '第一段文字 新到 内容' })
+    await nextTick()
+
+    const words = wrapper.findAll('.stream-reveal-word')
+    expect(words.map((word) => word.text())).toEqual(['新到', '内容'])
+    expect(wrapper.text()).toContain('第一段文字 新到 内容')
+  })
+
+  it('removes the stream cursor without altering the final markdown content', async () => {
+    const wrapper = mount(MarkdownContent, {
+      props: {
+        content: '**完成内容**',
+        isStreaming: true,
+        citationMap: {},
+      },
+    })
+    await nextTick()
+
+    await wrapper.setProps({ isStreaming: false })
+    await nextTick()
+
+    expect(wrapper.find('.stream-cursor').exists()).toBe(false)
+    expect(wrapper.get('strong').text()).toBe('完成内容')
   })
 })

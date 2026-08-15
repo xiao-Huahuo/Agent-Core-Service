@@ -945,7 +945,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
         </svg>
       </button>
       <div v-if="chatStore.isStreaming" class="thinking-flow" aria-live="polite">
-        <span>正在思考</span>
+        <span class="thinking-shimmer-text">正在思考</span>
       </div>
       <ChatInput
         :disabled="!userId"
@@ -1809,22 +1809,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   letter-spacing: 0;
 }
 
-.thinking-flow span {
-  background: linear-gradient(
-    90deg,
-    var(--color-text-tertiary) 0%,
-    var(--color-text-primary) 34%,
-    var(--color-accent) 50%,
-    var(--color-text-primary) 66%,
-    var(--color-text-tertiary) 100%
-  );
-  background-size: 220% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: thinking-shimmer 1.35s ease-in-out infinite alternate;
-}
-
 .agent-page-mode .thinking-flow {
   left: max(var(--space-16), calc((100% - var(--agent-input-max-width)) / 2));
 }
@@ -1906,15 +1890,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
 .welcome-fade-leave-to {
   opacity: 0;
   transform: translateY(-16px);
-}
-
-@keyframes thinking-shimmer {
-  0% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
 }
 
 @media (max-width: 820px) {
