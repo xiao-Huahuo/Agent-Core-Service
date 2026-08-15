@@ -79,6 +79,14 @@ describe('TopCommandBar knowledge-library switcher', () => {
     expect(wrapper.get('input.library-name-input').element).toHaveProperty('value', '主知识库')
   })
 
+  it('keeps the toolbar search inside the right-side action group', () => {
+    prepareStores()
+    const wrapper = mountTopCommandBar()
+
+    expect(wrapper.find('.topbar > .search-center').exists()).toBe(false)
+    expect(wrapper.findAll('.actions > .search-center')).toHaveLength(1)
+  })
+
   it('reuses the existing directory picker flow when the folder button is clicked', async () => {
     const { settingsStore, workspaceStore } = prepareStores()
     const wrapper = mountTopCommandBar()

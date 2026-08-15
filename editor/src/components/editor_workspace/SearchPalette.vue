@@ -29,6 +29,7 @@ const inputEl = ref<HTMLInputElement | null>(null)
 const wrapperEl = ref<HTMLElement | null>(null)
 const focused = ref(false)
 const dropdownPos = ref({ top: 0, left: 0, width: 0 })
+let wrapperResizeObserver: ResizeObserver | null = null
 
 function updateDropdownPos() {
   if (!wrapperEl.value) return
@@ -52,11 +53,17 @@ onMounted(() => {
   document.addEventListener('mousedown', handleClickOutside)
   updateDropdownPos()
   window.addEventListener('resize', updateDropdownPos)
+  if (wrapperEl.value && typeof ResizeObserver !== 'undefined') {
+    wrapperResizeObserver = new ResizeObserver(updateDropdownPos)
+    wrapperResizeObserver.observe(wrapperEl.value)
+  }
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', handleClickOutside)
   window.removeEventListener('resize', updateDropdownPos)
+  wrapperResizeObserver?.disconnect()
+  wrapperResizeObserver = null
 })
 
 function selectHistory(query: string) {
@@ -74,6 +81,13 @@ watch(() => workspaceStore.searchOpen, (open) => {
 function onFocus() {
   focused.value = true
   nextTick(updateDropdownPos)
+}
+
+/** Collapse only when keyboard focus leaves the complete search control. */
+function onBlur(event: FocusEvent) {
+  if (!wrapperEl.value?.contains(event.relatedTarget as Node | null)) {
+    focused.value = false
+  }
 }
 
 function handleOpenFile(path: string) {
@@ -133,7 +147,8 @@ function handleSubmit() {
 
 /** Focuses the shared input when its owning view becomes active. */
 function focus() {
-  inputEl.value?.focus()
+  focused.value = true
+  nextTick(() => inputEl.value?.focus())
 }
 
 defineExpose({ focus })
@@ -146,16 +161,28 @@ defineExpose({ focus })
     :class="{ focused: focused, 'page-variant': variant === 'page' }"
   >
     <div class="search-bar">
-      <IcIcon name="search" :size="16" class="search-icon" />
+      <button
+        v-if="variant === 'toolbar'"
+        class="toolbar-search-btn"
+        type="button"
+        aria-label="搜索"
+        @click="focus"
+      >
+        <IcIcon name="search" :size="16" class="search-icon" />
+      </button>
+      <IcIcon v-else name="search" :size="16" class="search-icon" />
       <input
         ref="inputEl"
         v-model="workspaceStore.searchQuery"
         type="text"
-        placeholder="搜索文件..."
+        :placeholder="variant === 'page' ? '搜索文件...' : ''"
         class="search-input"
+        aria-label="搜索文件"
         :aria-expanded="showDropdown"
         aria-haspopup="listbox"
         @focus="onFocus"
+        @blur="onBlur"
+        @keydown.enter.prevent="handleSubmit"
       />
       <IcIcon v-if="workspaceStore.searching" name="spinner" :size="14" class="spinner" />
       <button
@@ -167,6 +194,7 @@ defineExpose({ focus })
         <IcIcon name="close" :size="12" />
       </button>
       <button
+        v-if="variant === 'page'"
         class="search-submit-btn"
         :class="{ 'search-box-submit': variant === 'page' }"
         type="button"
@@ -342,6 +370,21 @@ defineExpose({ focus })
   z-index: 100;
 }
 
+.search-wrapper:not(.page-variant) {
+  width: 26px;
+  max-width: 100%;
+  margin-left: auto;
+  opacity: 1;
+  transition:
+    width 200ms ease-in-out,
+    opacity 200ms ease-in-out;
+}
+
+.search-wrapper.focused:not(.page-variant) {
+  width: 250px;
+  opacity: 1;
+}
+
 .search-wrapper.page-variant {
   max-width: none;
   margin: 0;
@@ -357,6 +400,18 @@ defineExpose({ focus })
   border-radius: 999px;
   background: var(--color-surface);
   transition: border-color var(--transition-fast);
+}
+
+.search-wrapper:not(.page-variant):not(.focused) .search-bar {
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+.search-wrapper:not(.page-variant):not(.focused) .search-input,
+.search-wrapper:not(.page-variant):not(.focused) .spinner,
+.search-wrapper:not(.page-variant):not(.focused) .clear-btn {
+  display: none;
 }
 
 .page-variant .search-bar {
@@ -407,6 +462,27 @@ defineExpose({ focus })
 .search-icon {
   flex-shrink: 0;
   color: var(--color-text-muted);
+}
+
+.toolbar-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.toolbar-search-btn:focus-visible {
+  border-radius: 999px;
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }
 
 .search-input {

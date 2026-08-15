@@ -12,6 +12,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
+import AnimatedFolderIcon from './AnimatedFolderIcon.vue'
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import {
   DropdownMenu,
@@ -1209,11 +1210,16 @@ onUnmounted(() => {
             class="tile-favorite"
             target-type="knowledge_path"
             :target-id="node.path"
-          />
-          <span class="tile-art">
-            <img
-              v-if="viewMode === 'large' && isImageNode(node) && imagePreviewUrls[node.path]"
-              class="tile-image"
+           />
+           <span class="tile-art">
+             <AnimatedFolderIcon
+               v-if="node.isDir && (viewMode === 'medium' || viewMode === 'large')"
+               :size="viewMode"
+               :open="workspaceStore.selectedTreePath === node.path || selectedPaths.has(node.path)"
+             />
+             <img
+               v-else-if="viewMode === 'large' && isImageNode(node) && imagePreviewUrls[node.path]"
+               class="tile-image"
               :src="imagePreviewUrls[node.path]"
               :alt="node.name"
             />

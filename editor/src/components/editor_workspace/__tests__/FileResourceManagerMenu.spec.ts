@@ -20,4 +20,10 @@ describe('FileResourceManager menu integration', () => {
   it('keeps the shared context menu wired to the resource manager', () => {
     expect(resourceManagerSource).toContain('<FileContextMenu')
   })
+
+  it('uses the animated folder artwork only for medium and large directory tiles', () => {
+    expect(resourceManagerSource).toContain("import AnimatedFolderIcon from './AnimatedFolderIcon.vue'")
+    expect(resourceManagerSource).toContain("node.isDir && (viewMode === 'medium' || viewMode === 'large')")
+    expect(resourceManagerSource).toContain('<AnimatedFolderIcon')
+  })
 })

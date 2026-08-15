@@ -714,12 +714,19 @@ watch(
 
 <style scoped>
 .workspace-page {
+  --workspace-card-shadow-dark: rgba(0, 0, 0, 0.48);
+  --workspace-card-shadow-light: rgba(255, 255, 255, 0.055);
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
   background: var(--color-chrome-rail-bg);
+}
+
+:global(:root[data-theme='light']) .workspace-page {
+  --workspace-card-shadow-dark: rgba(150, 153, 164, 0.34);
+  --workspace-card-shadow-light: rgba(255, 255, 255, 0.96);
 }
 
 .workspace-grid {
@@ -779,8 +786,8 @@ watch(
   border-radius: 28px;
   background: var(--color-bg-app);
   box-shadow:
-    0 10px 15px -3px rgba(0, 0, 0, 0.1),
-    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    15px 15px 30px var(--workspace-card-shadow-dark),
+    -15px -15px 30px var(--workspace-card-shadow-light);
 }
 
 .main-shell.ide-panel.agent-page-main-shell {
