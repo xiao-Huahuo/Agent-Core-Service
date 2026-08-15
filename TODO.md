@@ -23,4 +23,3 @@
 - [ ] 双链笔记和双链图谱
 
 ### BUGs
-- [x] MAX_CONTINUE_OBSERVATIONS = 5 MAX_TOOL_RESULTS_BEFORE_ANSWER = 18 这种东西毫无必要,赶紧去除
