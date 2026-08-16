@@ -142,6 +142,7 @@ from agent_service.services.agent_change_service import AgentChangeService
 from agent_service.services.agent_queue_service import AgentQueueService
 from agent_service.services.automation_service import AutomationService
 from agent_service.services.activity_service import ActivityService
+from agent_service.services.component_library_service import ComponentLibraryService
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,7 @@ class AgentServiceServicer(BaseServicer):
         agent_queue_service: AgentQueueService | None = None,
         automation_service: AutomationService | None = None,
         activity_service: ActivityService | None = None,
+        component_library_service: ComponentLibraryService | None = None,
     ) -> None:
         self._agent = agent
         self._session_service = session_service
@@ -179,6 +181,7 @@ class AgentServiceServicer(BaseServicer):
         self._agent_queue_service = agent_queue_service
         self._automation_service = automation_service
         self._activity_service = activity_service
+        self._component_library_service = component_library_service
 
     def shutdown(self) -> None:
         self._agent.close()
@@ -1496,6 +1499,42 @@ class AgentServiceServicer(BaseServicer):
             context.abort(grpc.StatusCode.NOT_FOUND, "Automation task not found")
         return ParseDict({"deleted": True}, Struct())
 
+    def ListComponentLibraryComponents(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """List component cards with the same fields as the REST endpoint."""
+
+        payload = MessageToDict(request)
+        return self._component_library_struct(
+            context,
+            self._require_component_library_service(context).list_components,
+            user_id=str(payload.get("user_id", "")),
+            tag=str(payload.get("tag") or "any"),
+        )
+
+    def CreateComponentLibraryComponent(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Persist one component upload with the same fields as the REST endpoint."""
+
+        payload = MessageToDict(request)
+        return self._component_library_struct(
+            context,
+            self._require_component_library_service(context).create_component,
+            user_id=str(payload.get("user_id", "")),
+            source=str(payload.get("source", "")),
+            tag=str(payload.get("tag", "")),
+            filename=str(payload.get("filename", "")),
+        )
+
+    def RenameComponentLibraryComponent(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Persist one inline component title edit through the shared file service."""
+
+        payload = MessageToDict(request)
+        return self._component_library_struct(
+            context,
+            self._require_component_library_service(context).rename_component,
+            user_id=str(payload.get("user_id", "")),
+            component_id=str(payload.get("component_id", "")),
+            title=str(payload.get("title", "")),
+        )
+
     # ------------------------------------------------------------------
     # 内部辅助
     # ------------------------------------------------------------------
@@ -1562,6 +1601,29 @@ class AgentServiceServicer(BaseServicer):
         if self._automation_service is None:
             context.abort(grpc.StatusCode.UNAVAILABLE, "AutomationService not available")
         return self._automation_service  # type: ignore[return-value]
+
+    def _require_component_library_service(self, context: grpc.ServicerContext) -> ComponentLibraryService:
+        """Return the injected component library service or abort the RPC."""
+
+        if self._component_library_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "ComponentLibraryService not available")
+        return self._component_library_service  # type: ignore[return-value]
+
+    @staticmethod
+    def _component_library_struct(
+        context: grpc.ServicerContext,
+        function: Any,
+        **kwargs: Any,
+    ) -> Struct:
+        """Run a component library operation and map validation to gRPC errors."""
+
+        try:
+            payload = function(**kwargs)
+        except FileNotFoundError as exc:
+            context.abort(grpc.StatusCode.NOT_FOUND, str(exc))
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(payload, Struct())
 
     @staticmethod
     def _queue_call(context: grpc.ServicerContext, function: Any, payload: dict[str, Any]) -> dict[str, Any]:

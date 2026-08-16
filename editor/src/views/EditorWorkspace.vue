@@ -37,6 +37,7 @@ const DashboardView = defineAsyncComponent(() => import('@/views/DashboardView.v
 const DebugView = defineAsyncComponent(() => import('@/views/DebugView.vue'))
 const IngestionProgressView = defineAsyncComponent(() => import('@/views/IngestionProgressView.vue'))
 const LibraryView = defineAsyncComponent(() => import('@/views/LibraryView.vue'))
+const ComponentLibraryView = defineAsyncComponent(() => import('@/views/ComponentLibraryView.vue'))
 const VaultView = defineAsyncComponent(() => import('@/views/VaultView.vue'))
 const SmartFormsView = defineAsyncComponent(() => import('@/views/SmartFormsView.vue'))
 const FavoritesView = defineAsyncComponent(() => import('@/views/FavoritesView.vue'))
@@ -342,6 +343,16 @@ function openLibrary() {
   }
 }
 
+/** Toggle the fifth library surface and collapse editor side panels. */
+function openComponentLibrary() {
+  const next = workspaceStore.mainView === 'component-library' ? 'editor' : 'component-library'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
+}
+
 function openVault() {
   const next = workspaceStore.mainView === 'vault' ? 'editor' : 'vault'
   workspaceStore.setMainView(next)
@@ -603,6 +614,7 @@ watch(
         :resources-active="workspaceStore.mainView === 'resources'"
         :favorites-active="workspaceStore.mainView === 'favorites'"
         :library-active="workspaceStore.mainView === 'library'"
+        :component-library-active="workspaceStore.mainView === 'component-library'"
         :vault-active="workspaceStore.mainView === 'vault'"
         :forms-active="workspaceStore.mainView === 'forms'"
         :ingestion-active="workspaceStore.mainView === 'ingestion'"
@@ -623,6 +635,7 @@ watch(
         @open-resources="openResources"
         @open-favorites="openFavorites"
         @open-library="openLibrary"
+        @open-component-library="openComponentLibrary"
         @open-vault="openVault"
         @open-forms="openForms"
         @open-ingestion="openIngestion"
@@ -659,6 +672,7 @@ watch(
         <FileResourceManager v-else-if="workspaceStore.mainView === 'resources'" class="main-shell-content" />
         <FavoritesView v-else-if="workspaceStore.mainView === 'favorites'" class="main-shell-content" />
         <LibraryView v-else-if="workspaceStore.mainView === 'library'" class="main-shell-content" />
+        <ComponentLibraryView v-else-if="workspaceStore.mainView === 'component-library'" class="main-shell-content" />
         <VaultView v-else-if="workspaceStore.mainView === 'vault'" class="main-shell-content" />
         <SmartFormsView v-else-if="workspaceStore.mainView === 'forms'" class="main-shell-content" />
         <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="main-shell-content" />

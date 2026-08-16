@@ -17,6 +17,7 @@ from agent_service.services.knowledge_library_service import KnowledgeLibrarySer
 from agent_service.services.knowledge_graph_service import KnowledgeGraphService
 from agent_service.services.git_service import GitService
 from agent_service.services.library_service import LibraryService
+from agent_service.services.component_library_service import ComponentLibraryService
 from agent_service.services.vault_service import VaultService
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 from agent_service.services.session_attachment_service import SessionAttachmentService
@@ -40,6 +41,7 @@ _knowledge_library_service: KnowledgeLibraryService | None = None
 _knowledge_graph_service: KnowledgeGraphService | None = None
 _git_service: GitService | None = None
 _library_service: LibraryService | None = None
+_component_library_service: ComponentLibraryService | None = None
 _vault_service: VaultService | None = None
 _retrieval_service: MemoryRetrievalService | None = None
 _attachment_service: SessionAttachmentService | None = None
@@ -105,6 +107,14 @@ def _require_library_service() -> LibraryService:
     if _library_service is None:
         raise HTTPException(status_code=503, detail="LibraryService not initialized yet")
     return _library_service
+
+
+def _require_component_library_service() -> ComponentLibraryService:
+    """Return the component library service injected during application startup."""
+
+    if _component_library_service is None:
+        raise HTTPException(status_code=503, detail="ComponentLibraryService not initialized yet")
+    return _component_library_service
 
 
 def _require_vault_service() -> VaultService:

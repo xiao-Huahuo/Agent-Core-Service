@@ -86,9 +86,12 @@ const typeIcons: Record<VaultItemType, string> = { login: 'shield', card: 'dashb
   min-width: 216px;
   max-width: 216px;
   overflow: hidden;
+  margin: var(--space-12);
   padding: var(--space-12);
-  border-right: 1px solid var(--color-border);
-  background: var(--color-canvas);
+  border: 0;
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.14);
   font-family: var(--font-ui);
   font-size: calc(14px * var(--font-scale));
 }

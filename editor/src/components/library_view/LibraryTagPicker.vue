@@ -19,7 +19,18 @@ import {
 } from '@/components/ui/dropdown-menu'
 defineOptions({ name: 'LibraryTagPicker' })
 
-const props = defineProps<{ availableTags: string[] }>()
+const props = withDefaults(defineProps<{
+  availableTags: string[]
+  single?: boolean
+  allowCustom?: boolean
+  placeholder?: string
+  dropdownAlignOffset?: number
+}>(), {
+  single: false,
+  allowCustom: true,
+  placeholder: '输入标签后回车',
+  dropdownAlignOffset: 0,
+})
 const tags = defineModel<string[]>({ required: true })
 const draft = ref('')
 const expanded = ref(false)
@@ -31,7 +42,7 @@ const injectedTagList = computed(() => tags.value.filter((tag) => injectedTags.v
 function addTag(raw = draft.value, injected = false) {
   const name = raw.trim()
   if (name && !tags.value.some((tag) => tag.toLowerCase() === name.toLowerCase())) {
-    tags.value = [...tags.value, name]
+    tags.value = props.single ? [name] : [...tags.value, name]
     if (injected) injectedTags.value = new Set([...injectedTags.value, name])
   }
   draft.value = ''
@@ -45,6 +56,7 @@ function removeTag(name: string) {
 }
 
 function handleKeydown(event: KeyboardEvent) {
+  if (!props.allowCustom) return
   if (event.key !== 'Enter' && event.key !== ',') return
   event.preventDefault()
   addTag()
@@ -55,7 +67,15 @@ function handleKeydown(event: KeyboardEvent) {
   <DropdownMenu v-model:open="expanded">
     <div class="library-tag-picker">
       <div class="tag-input-wrap">
-        <input v-model="draft" type="text" spellcheck="false" placeholder="输入标签后回车" @keydown="handleKeydown" />
+        <input
+          v-model="draft"
+          type="text"
+          spellcheck="false"
+          :readonly="!allowCustom"
+          :placeholder="placeholder"
+          @click="!allowCustom && (expanded = true)"
+          @keydown="handleKeydown"
+        />
         <DropdownMenuTrigger as-child>
           <button type="button" :aria-expanded="expanded" title="选择已有标签">
             <IcIcon name="chevron-down" :size="15" />
@@ -63,7 +83,7 @@ function handleKeydown(event: KeyboardEvent) {
         </DropdownMenuTrigger>
       </div>
       <DropdownMenuPortal>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" :align-offset="dropdownAlignOffset">
           <DropdownMenuItem v-for="tag in candidates" :key="tag" @select.prevent="addTag(tag, true)">
             <IcIcon name="label" :size="14" />
             <span>{{ tag }}</span>

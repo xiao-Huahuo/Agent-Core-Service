@@ -17,6 +17,7 @@ const EDITOR_CSP = [
   "object-src 'none'",
   "base-uri 'self'",
 ].join('; ')
+const DEV_PROXY_TARGET = process.env.VITE_DEV_PROXY_TARGET || 'http://127.0.0.1:8002'
 
 function productionCspPlugin(): PluginOption {
   return {
@@ -40,7 +41,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/agent': {
-        target: 'http://127.0.0.1:8002',
+        target: DEV_PROXY_TARGET,
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq) => {
@@ -59,24 +60,25 @@ export default defineConfig({
           })
         },
       },
-      '/git': 'http://127.0.0.1:8002',
-      '/knowledge': 'http://127.0.0.1:8002',
-      '/library': 'http://127.0.0.1:8002',
-      '/vault': 'http://127.0.0.1:8002',
-      '/favorites': 'http://127.0.0.1:8002',
-      '/feedback': 'http://127.0.0.1:8002',
-      '/smart-forms': 'http://127.0.0.1:8002',
-      '/structured-generation': 'http://127.0.0.1:8002',
-      '/sessions': 'http://127.0.0.1:8002',
-      '/settings': 'http://127.0.0.1:8002',
-      '/skills': 'http://127.0.0.1:8002',
-      '/downloads': 'http://127.0.0.1:8002',
-      '/visualizations': 'http://127.0.0.1:8002',
-      '/todo': 'http://127.0.0.1:8002',
-      '/automation': 'http://127.0.0.1:8002',
-      '/agent-queue': 'http://127.0.0.1:8002',
-      '/activity': 'http://127.0.0.1:8002',
-      '/health': 'http://127.0.0.1:8002',
+      '/git': DEV_PROXY_TARGET,
+      '/knowledge': DEV_PROXY_TARGET,
+      '/library': DEV_PROXY_TARGET,
+      '/component-library': DEV_PROXY_TARGET,
+      '/vault': DEV_PROXY_TARGET,
+      '/favorites': DEV_PROXY_TARGET,
+      '/feedback': DEV_PROXY_TARGET,
+      '/smart-forms': DEV_PROXY_TARGET,
+      '/structured-generation': DEV_PROXY_TARGET,
+      '/sessions': DEV_PROXY_TARGET,
+      '/settings': DEV_PROXY_TARGET,
+      '/skills': DEV_PROXY_TARGET,
+      '/downloads': DEV_PROXY_TARGET,
+      '/visualizations': DEV_PROXY_TARGET,
+      '/todo': DEV_PROXY_TARGET,
+      '/automation': DEV_PROXY_TARGET,
+      '/agent-queue': DEV_PROXY_TARGET,
+      '/activity': DEV_PROXY_TARGET,
+      '/health': DEV_PROXY_TARGET,
     },
   },
   resolve: {

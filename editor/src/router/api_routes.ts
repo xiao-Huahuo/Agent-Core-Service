@@ -72,6 +72,7 @@ export const API_ROUTES = {
   LIBRARY_ITEM_COLLECTION: '/library/items/collection',
   LIBRARY_TAGS: '/library/tags',
   LIBRARY_COVER_UPLOAD: '/library/assets/cover',
+  COMPONENT_LIBRARY_ITEMS: '/component-library/components',
   VAULT_STATUS: '/vault/status',
   VAULT_DEBUG_MASTER_PASSWORD: '/vault/debug/master-password',
   VAULT_SETUP: '/vault/setup',

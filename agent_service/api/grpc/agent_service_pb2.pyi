@@ -478,6 +478,16 @@ class TokenUsageRequest(_message.Message):
     limit: int
     def __init__(self, user_id: _Optional[str] = ..., session_id: _Optional[str] = ..., interval: _Optional[str] = ..., limit: _Optional[int] = ...) -> None: ...
 
+class ActivityHeatmapRequest(_message.Message):
+    __slots__ = ("user_id", "days", "timezone")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    DAYS_FIELD_NUMBER: _ClassVar[int]
+    TIMEZONE_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    days: int
+    timezone: str
+    def __init__(self, user_id: _Optional[str] = ..., days: _Optional[int] = ..., timezone: _Optional[str] = ...) -> None: ...
+
 class ToolListRequest(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...

@@ -40,6 +40,7 @@ describe('ActivityBar', () => {
     resourcesActive: false,
     favoritesActive: false,
     libraryActive: false,
+    componentLibraryActive: false,
     vaultActive: false,
     formsActive: false,
     ingestionActive: false,
@@ -62,7 +63,12 @@ describe('ActivityBar', () => {
     await wrapper.get('button[aria-label="库"]').trigger('click')
 
     expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(true)
-    expect(wrapper.findAll('[aria-label="知识库菜单"] button')).toHaveLength(4)
+    expect(wrapper.findAll('[aria-label="知识库菜单"] button')).toHaveLength(5)
+
+    await wrapper.get('button[aria-label="组件库"]').trigger('click')
+    expect(wrapper.emitted('openComponentLibrary')).toHaveLength(1)
+
+    await wrapper.get('button[aria-label="库"]').trigger('click')
 
     await wrapper.get('button[aria-label="智能表格"]').trigger('click')
     expect(wrapper.emitted('openForms')).toHaveLength(1)

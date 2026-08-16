@@ -6,6 +6,8 @@
  * without being rendered as left-side toolbar text.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -85,6 +87,13 @@ describe('TopCommandBar knowledge-library switcher', () => {
 
     expect(wrapper.find('.topbar > .search-center').exists()).toBe(false)
     expect(wrapper.findAll('.actions > .search-center')).toHaveLength(1)
+  })
+
+  it('releases the collapsed search expansion area for window dragging', () => {
+    const source = readFileSync(resolve(__dirname, '..', 'TopCommandBar.vue'), 'utf-8')
+
+    expect(source).toMatch(/\.search-center\s*\{[^}]*flex:\s*0 0 26px;[^}]*width:\s*26px;/su)
+    expect(source).toMatch(/\.search-center:has\(\.search-wrapper\.focused\)\s*\{[^}]*flex-basis:\s*250px;[^}]*width:\s*250px;/su)
   })
 
   it('reuses the existing directory picker flow when the folder button is clicked', async () => {

@@ -37,4 +37,10 @@ describe('VaultFilterPanel', () => {
     expect(filterPanelSource).toContain('.filter-search')
     expect(filterPanelSource).toContain('max-width: 100%')
   })
+
+  it('uses the component-library rounded shadow card as its sidebar shell', () => {
+    expect(filterPanelSource).toMatch(
+      /\.filter-panel\s*\{[^}]*margin:\s*var\(--space-12\);[^}]*border:\s*0;[^}]*border-radius:\s*18px;[^}]*background:\s*var\(--color-surface\);[^}]*box-shadow:\s*0 14px 36px rgba\(0, 0, 0, 0\.14\);/su,
+    )
+  })
 })

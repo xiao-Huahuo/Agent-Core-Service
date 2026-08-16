@@ -138,6 +138,11 @@ service AgentService {
   rpc VaultImportItems(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc VaultListTags(google.protobuf.Struct) returns (google.protobuf.Struct);
 
+  // 第五种库：组件库列表与源码上传，与 REST /component-library 对齐。
+  rpc ListComponentLibraryComponents(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc CreateComponentLibraryComponent(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc RenameComponentLibraryComponent(google.protobuf.Struct) returns (google.protobuf.Struct);
+
   // Agent 单轮局部变更与安全撤销
   rpc GetSessionChanges(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc UndoSessionChange(google.protobuf.Struct) returns (google.protobuf.Struct);

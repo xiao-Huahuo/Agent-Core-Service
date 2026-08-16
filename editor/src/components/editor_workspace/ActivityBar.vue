@@ -23,6 +23,7 @@ const props = defineProps<{
   resourcesActive: boolean
   favoritesActive: boolean
   libraryActive: boolean
+  componentLibraryActive: boolean
   vaultActive: boolean
   formsActive: boolean
   ingestionActive: boolean
@@ -45,6 +46,7 @@ const emit = defineEmits<{
   openResources: []
   openFavorites: []
   openLibrary: []
+  openComponentLibrary: []
   openVault: []
   openForms: []
   openIngestion: []
@@ -73,7 +75,13 @@ function handleRipple(e: MouseEvent) {
 const settingsStore = useSettingsStore()
 const agentIconSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
 const knowledgeMenuOpen = ref(false)
-const knowledgeActive = computed(() => props.resourcesActive || props.libraryActive || props.vaultActive || props.formsActive)
+const knowledgeActive = computed(() => (
+  props.resourcesActive
+  || props.libraryActive
+  || props.componentLibraryActive
+  || props.vaultActive
+  || props.formsActive
+))
 const activityBarRef = ref<HTMLElement | null>(null)
 const hoverIndicatorTop = ref(0)
 const hoverIndicatorVisible = ref(false)
@@ -269,6 +277,18 @@ function closeKnowledgeMenu() {
           >
             <IcIcon name="book" :size="18" />
             <span class="activity-label">图书馆</span>
+          </button>
+          <button
+            class="activity-button"
+            :class="{ active: componentLibraryActive }"
+            type="button"
+            title="组件库"
+            aria-label="组件库"
+            @mousedown.prevent="handleRipple"
+            @click="emit('openComponentLibrary'); closeKnowledgeMenu()"
+          >
+            <IcIcon name="grid-view" :size="18" />
+            <span class="activity-label">组件库</span>
           </button>
           <button
             class="activity-button"

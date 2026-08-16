@@ -440,11 +440,19 @@ onMounted(() => nextTick(autoResizeInput))
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex: 0 1 250px;
-  width: 250px;
-  min-width: 150px;
+  flex: 0 0 26px;
+  width: 26px;
+  min-width: 26px;
   max-width: 250px;
   -webkit-app-region: no-drag;
+  transition:
+    flex-basis 200ms ease-in-out,
+    width 200ms ease-in-out;
+}
+
+.search-center:has(.search-wrapper.focused) {
+  flex-basis: 250px;
+  width: 250px;
 }
 
 .brand strong {
@@ -1055,10 +1063,6 @@ kbd {
     max-width: 180px;
   }
 
-  .search-center {
-    min-width: 150px;
-  }
-
   .topbar-optional {
     display: none;
   }
@@ -1079,7 +1083,7 @@ kbd {
     max-width: 132px;
   }
 
-  .search-center {
+  .search-center:has(.search-wrapper.focused) {
     flex: 0 1 250px;
     min-width: 160px;
   }

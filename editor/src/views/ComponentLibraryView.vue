@@ -1,0 +1,575 @@
+<!--
+  Component library page.
+
+  Usage:
+  Keeps the Uiverse-style component masonry and fixed-tag sidebar, provides an
+  internal toolbar, and overlays upload while switching details in-place.
+-->
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+
+import IcIcon from '@/components/common/IcIcon.vue'
+import ComponentLibraryCard from '@/components/component_library/ComponentLibraryCard.vue'
+import ComponentLibraryDetail from '@/components/component_library/ComponentLibraryDetail.vue'
+import ComponentNameEditor from '@/components/component_library/ComponentNameEditor.vue'
+import ComponentUploadForm from '@/components/component_library/ComponentUploadForm.vue'
+import { listComponentLibraryItems, renameComponentLibraryItem } from '@/api/componentLibrary'
+import { deleteKnowledgePath } from '@/api/knowledge'
+import { useSettingsStore } from '@/stores/settings'
+import { useWorkspaceStore } from '@/stores/workspace'
+import {
+  COMPONENT_TAGS,
+  type ComponentLibraryItem,
+  type ComponentTag,
+} from '@/types/componentLibrary'
+
+defineOptions({ name: 'ComponentLibraryView' })
+
+const settingsStore = useSettingsStore()
+const workspaceStore = useWorkspaceStore()
+const activeTag = ref<ComponentTag>('any')
+const components = ref<ComponentLibraryItem[]>([])
+const componentQuery = ref('')
+const loading = ref(false)
+const error = ref('')
+const uploadOpen = ref(false)
+const selectedComponent = ref<ComponentLibraryItem | null>(null)
+const renamingComponentId = ref('')
+const deletingComponentId = ref('')
+
+/** Filter the loaded tag locally by component name for instant sidebar search. */
+const visibleComponents = computed(() => {
+  const query = componentQuery.value.trim().toLocaleLowerCase()
+  if (!query) return components.value
+  return components.value.filter((component) => component.title.toLocaleLowerCase().includes(query))
+})
+
+/** Sidebar order presents the all-filter first while preserving its API value. */
+const sidebarTags: ComponentTag[] = [
+  'any',
+  ...COMPONENT_TAGS.filter((tag) => tag !== 'any'),
+]
+
+const tagIcons: Record<ComponentTag, string> = {
+  buttons: 'play',
+  checkboxes: 'todo',
+  'toggle switches': 'unfold',
+  cards: 'view-stream',
+  loaders: 'spinner',
+  inputs: 'text-fields',
+  'radio buttons': 'radio-unchecked',
+  forms: 'fact-check',
+  patterns: 'layers',
+  tooltips: 'info',
+  any: 'book',
+}
+
+/** Request actual server data for the current user and selected tag. */
+async function loadComponents(): Promise<void> {
+  const userId = settingsStore.profile.userId
+  if (!userId) return
+  loading.value = true
+  error.value = ''
+  try {
+    const result = await listComponentLibraryItems(userId, activeTag.value)
+    components.value = result.components
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : '组件库读取失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+/** Select one sidebar tag and return from the upload form to its component grid. */
+function selectTag(tag: ComponentTag): void {
+  activeTag.value = tag
+  uploadOpen.value = false
+  selectedComponent.value = null
+}
+
+/** Show the persisted upload in the matching grid after submission. */
+function handleCreated(component: ComponentLibraryItem): void {
+  activeTag.value = component.tag
+  uploadOpen.value = false
+  selectedComponent.value = null
+  void loadComponents()
+}
+
+/** Open the dedicated large-preview and source-code workbench. */
+function openDetails(component: ComponentLibraryItem): void {
+  selectedComponent.value = component
+  uploadOpen.value = false
+}
+
+/** Enter the upload surface from the internal toolbar. */
+function openUpload(): void {
+  selectedComponent.value = null
+  uploadOpen.value = true
+}
+
+/** Persist one inline title edit and keep cards and details on the returned path. */
+async function renameComponent(item: ComponentLibraryItem, title: string): Promise<void> {
+  const previousId = item.component_id
+  const previousItem = item
+  const optimisticItem = { ...item, title }
+  renamingComponentId.value = previousId
+  components.value = components.value.map((component) => (
+    component.component_id === previousId ? optimisticItem : component
+  ))
+  if (selectedComponent.value?.component_id === previousId) selectedComponent.value = optimisticItem
+  try {
+    const result = await renameComponentLibraryItem(settingsStore.profile.userId, previousId, title)
+    components.value = components.value.map((component) => (
+      component.component_id === previousId ? result.component : component
+    ))
+    if (selectedComponent.value?.component_id === previousId) selectedComponent.value = result.component
+  } catch (caught) {
+    components.value = components.value.map((component) => (
+      component.component_id === previousId ? previousItem : component
+    ))
+    if (selectedComponent.value?.component_id === previousId) selectedComponent.value = previousItem
+    error.value = caught instanceof Error ? caught.message : '组件重命名失败'
+  } finally {
+    renamingComponentId.value = ''
+  }
+}
+
+/** Move one canonical component file to the existing knowledge recycle bin. */
+async function deleteComponent(item: ComponentLibraryItem): Promise<void> {
+  if (!window.confirm(`确认删除“${item.title}”？它会被移到知识库回收站。`)) return
+  deletingComponentId.value = item.component_id
+  error.value = ''
+  try {
+    const componentPath = `components/${item.component_id.replace(/^components\//u, '')}`
+    await deleteKnowledgePath(settingsStore.profile.userId, componentPath)
+    components.value = components.value.filter((component) => component.component_id !== item.component_id)
+    if (selectedComponent.value?.component_id === item.component_id) selectedComponent.value = null
+    workspaceStore.showToast(`已将 ${item.title} 移到回收站`)
+  } catch (caught) {
+    const message = caught instanceof Error ? caught.message : '组件删除失败'
+    error.value = message
+    workspaceStore.showToast(message)
+  } finally {
+    deletingComponentId.value = ''
+  }
+}
+
+/** Render the all-filter with the user-facing label requested for the sidebar. */
+function tagLabel(tag: ComponentTag): string {
+  return tag === 'any' ? 'all' : tag
+}
+
+watch(activeTag, () => {
+  if (!uploadOpen.value) void loadComponents()
+})
+
+watch(() => settingsStore.profile.userId, () => {
+  void loadComponents()
+})
+
+onMounted(() => {
+  void loadComponents()
+})
+</script>
+
+<template>
+  <section class="component-library-view">
+    <aside class="tag-sidebar" aria-label="组件标签">
+      <div class="sidebar-title">
+        <IcIcon name="grid-view" :size="17" />
+        <span>组件库</span>
+      </div>
+      <label class="component-search">
+        <IcIcon name="search" :size="15" />
+        <input v-model="componentQuery" type="search" placeholder="搜索组件" aria-label="搜索组件" />
+      </label>
+      <nav class="tag-list">
+        <button
+          v-for="tag in sidebarTags"
+          :key="tag"
+          class="tag-option"
+          :class="{ active: activeTag === tag && !uploadOpen }"
+          type="button"
+          :aria-pressed="activeTag === tag && !uploadOpen"
+          @click="selectTag(tag)"
+        >
+          <IcIcon :name="tagIcons[tag]" :size="16" />
+          <span>{{ tagLabel(tag) }}</span>
+        </button>
+      </nav>
+    </aside>
+
+    <main class="component-main">
+      <header class="component-toolbar">
+        <div class="toolbar-context">
+          <button
+            v-if="selectedComponent"
+            class="detail-back"
+            type="button"
+            title="返回组件列表"
+            aria-label="返回组件列表"
+            @click="selectedComponent = null"
+          >
+            <IcIcon name="arrow-left" :size="17" />
+          </button>
+          <div class="toolbar-copy">
+            <ComponentNameEditor
+              v-if="selectedComponent"
+              :name="selectedComponent.title"
+              :saving="renamingComponentId === selectedComponent.component_id"
+              @rename="renameComponent(selectedComponent, $event)"
+            />
+            <strong v-else>浏览组件</strong>
+          </div>
+        </div>
+        <button
+          v-if="!selectedComponent"
+          class="upload-trigger"
+          :class="{ active: uploadOpen }"
+          type="button"
+          @click="openUpload"
+        >
+          <IcIcon name="add" :size="16" />
+          <span>上传组件</span>
+        </button>
+      </header>
+
+      <ComponentUploadForm
+        v-if="uploadOpen"
+        :user-id="settingsStore.profile.userId"
+        @cancel="uploadOpen = false"
+        @created="handleCreated"
+      />
+
+      <div class="component-content" :class="{ 'detail-content': selectedComponent }">
+        <ComponentLibraryDetail
+          v-if="selectedComponent"
+          :item="selectedComponent"
+          :deleting="deletingComponentId === selectedComponent.component_id"
+          @delete="deleteComponent"
+        />
+        <template v-else>
+          <div v-if="loading" class="page-state">正在读取组件</div>
+          <div v-else-if="error" class="page-state error" role="alert">{{ error }}</div>
+          <div v-else-if="!visibleComponents.length" class="page-state">
+            {{ componentQuery.trim() ? '没有匹配的组件' : '这个标签下还没有组件' }}
+          </div>
+          <section v-else class="component-grid" aria-label="组件块">
+            <ComponentLibraryCard
+              v-for="item in visibleComponents"
+              :key="item.component_id"
+              :item="item"
+              :renaming="renamingComponentId === item.component_id"
+              :deleting="deletingComponentId === item.component_id"
+              @open="openDetails"
+              @rename="renameComponent"
+              @delete="deleteComponent"
+            />
+          </section>
+        </template>
+      </div>
+    </main>
+  </section>
+</template>
+
+<style scoped>
+.component-library-view {
+  display: grid;
+  grid-template-columns: 222px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+}
+
+.tag-sidebar {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--space-10);
+  margin: var(--space-12);
+  padding: var(--space-16) var(--space-12);
+  border: 0;
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.14);
+  animation: component-sidebar-enter 220ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.sidebar-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 32px;
+  padding: 0 var(--space-10);
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 700;
+}
+
+.component-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 30px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.component-search:focus-within {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.component-search input {
+  min-width: 0;
+  width: 100%;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
+}
+
+.tag-list {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.tag-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  min-height: 36px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-10);
+  cursor: pointer;
+  font-size: calc(12px * var(--font-scale));
+  text-align: left;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.tag-option::before {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  content: '';
+  transform: scaleY(0);
+  transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tag-option:hover {
+  background: var(--color-canvas-soft);
+  color: var(--color-text);
+}
+
+.tag-option.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.tag-option.active::before {
+  transform: scaleY(1);
+}
+
+.component-main {
+  display: grid;
+  grid-template-rows: 58px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.component-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  min-width: 0;
+  padding: 0 var(--space-16);
+  border: 0;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+}
+
+.toolbar-context,
+.toolbar-copy,
+.upload-trigger,
+.detail-back {
+  display: flex;
+  align-items: center;
+}
+
+.toolbar-context {
+  min-width: 0;
+  gap: var(--space-8);
+}
+
+.toolbar-copy {
+  min-width: 0;
+}
+
+.toolbar-copy strong {
+  max-width: min(52vw, 520px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar-copy strong {
+  font-size: calc(13px * var(--font-scale));
+}
+
+.detail-back {
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.detail-back:hover {
+  color: var(--color-primary);
+}
+
+.upload-trigger {
+  justify-content: center;
+  gap: var(--space-6);
+  flex: 0 0 auto;
+  min-width: 116px;
+  min-height: 34px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: white;
+  padding: 0 var(--space-14);
+  cursor: pointer;
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.upload-trigger:hover,
+.upload-trigger.active {
+  background: color-mix(in srgb, var(--color-primary) 84%, white);
+}
+
+.component-content {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-16);
+}
+
+.component-content.detail-content {
+  overflow: hidden;
+  padding: 0;
+}
+
+.component-grid {
+  columns: 280px auto;
+  column-gap: var(--space-16);
+}
+
+.page-state {
+  display: grid;
+  place-items: center;
+  min-height: 280px;
+  color: var(--color-text-muted);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.page-state.error {
+  color: var(--color-danger);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .detail-back:hover {
+    transform: translateX(-2px);
+  }
+}
+
+@keyframes component-sidebar-enter {
+  from { opacity: 0; transform: translateX(-8px) scale(0.985); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@media (max-width: 760px) {
+  .component-library-view {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .tag-sidebar {
+    flex-direction: row;
+    overflow-x: auto;
+    margin: var(--space-8);
+    border: 0;
+  }
+
+  .sidebar-title {
+    display: none;
+  }
+
+  .component-search {
+    flex: 0 0 164px;
+  }
+
+  .tag-list {
+    display: flex;
+  }
+
+  .tag-option {
+    width: auto;
+    min-width: max-content;
+  }
+
+  .component-toolbar {
+    padding: 0 var(--space-12);
+  }
+
+  .component-content {
+    padding: var(--space-12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tag-sidebar {
+    animation: none;
+    transform: none;
+  }
+
+  .tag-option::before,
+  .detail-back {
+    transform: none;
+  }
+}
+</style>
