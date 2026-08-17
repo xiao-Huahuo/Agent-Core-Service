@@ -775,7 +775,6 @@ class KnowledgeLibraryService:
             )
             for path in sorted(root.iterdir(), key=self._sort_path)
             if not self._is_vcs_metadata_path(path=path, root=root)
-            and not self._is_mw_managed_path(path=path, root=root)
         ]
 
     def get_active_root_path(self, *, user_id: str) -> Path:

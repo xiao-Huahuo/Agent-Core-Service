@@ -45,17 +45,27 @@ class _SettingsServiceStub:
 
         return {"knowledge_dir": self.knowledge_dir}
 
+    def build_knowledge_owner_id(self, *, user_id: str, library_id: str) -> str:
+        """返回文件树读取索引状态所需的稳定知识库所有者 ID。"""
+
+        return f"{user_id}:{library_id}"
+
     def is_ocr_enabled_for_user(self, *, user_id: str) -> bool:
         """返回测试指定的用户级 OCR 开关。"""
 
         return self.ocr_enabled
+
+    def get_knowledge_ingestion_config(self, *, user_id: str) -> dict[str, str]:
+        """返回空忽略规则，使测试只覆盖 `.mw` 的文件树可见性。"""
+
+        return {"knowledge_ignore_patterns": ""}
 
 
 def _service(tmp_path: Path, knowledge_dir: Path, *, ocr_enabled: bool = True) -> KnowledgeLibraryService:
     """构造只覆盖预览路径所需依赖的 KnowledgeLibraryService。"""
 
     config = SimpleNamespace(
-        constants=SimpleNamespace(knowledge_supported_suffixes=[".md", ".txt", ".png", ".pdf", ".docx"]),
+        constants=SimpleNamespace(knowledge_supported_suffixes=[".md", ".txt", ".png", ".pdf", ".docx"], knowledge_tag="knowledge"),
         storage=SimpleNamespace(
             assets_dir=tmp_path / "assets",
             frontmatter_dir=tmp_path / "frontmatter",
@@ -110,6 +120,24 @@ def test_preview_image_does_not_run_ocr_before_ingestion(tmp_path: Path, monkeyp
     assert preview["content"] == ""
     assert preview["raw_url"].endswith("/knowledge/files/raw?user_id=user-1&path=note.png")
     assert preview["ocr_status"] == "not_ingested"
+
+
+def test_file_tree_shows_managed_mw_directory_without_indexing_it(tmp_path: Path) -> None:
+    """`.mw` 应在树中可见；入库管线仍由独立路径过滤管理。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    (knowledge_dir / ".mw" / "library").mkdir(parents=True)
+    (knowledge_dir / ".mw" / "library" / "book.md").write_text("# book", encoding="utf-8")
+    service = _service(tmp_path, knowledge_dir)
+    service.memory_service = SimpleNamespace(
+        list_source_ids=lambda **kwargs: set(),
+        list_source_updated_at=lambda **kwargs: {},
+    )
+
+    nodes = service.list_files(user_id="user-1")
+
+    assert [node["name"] for node in nodes] == [".mw"]
+    assert nodes[0]["children"][0]["name"] == "library"
 
 
 def test_preview_image_uses_existing_ocr_frontmatter_text(tmp_path: Path) -> None:
