@@ -9,13 +9,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
+import CompactCodeInput from '@/components/common/CompactCodeInput.vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
 import { uploadLibraryCover } from '@/api/library'
 import type { LibraryItem, LibraryTag } from '@/types/knowledge'
 
 type CreateMode = 'book' | 'collection'
-type BookSourceMode = 'file' | 'text' | 'url'
+type BookSourceMode = 'file' | 'text' | 'script' | 'url'
 
 const props = defineProps<{
   open: boolean
@@ -35,6 +36,7 @@ const emit = defineEmits<{
     file: File | null
     source_mode: BookSourceMode
     text_content: string
+    script_extension: string
     source_url: string
   }]
 }>()
@@ -47,6 +49,7 @@ const coverPreviewUrl = ref('')
 const realFile = ref<File | null>(null)
 const sourceMode = ref<BookSourceMode>('file')
 const textContent = ref('')
+const scriptExtension = ref('.py')
 const sourceUrl = ref('')
 const coverUploading = ref(false)
 const coverDragActive = ref(false)
@@ -70,12 +73,14 @@ watch(
     realFile.value = null
     sourceMode.value = 'file'
     textContent.value = ''
+    scriptExtension.value = '.py'
     sourceUrl.value = ''
     coverDragActive.value = false
     dragActive.value = false
   },
 )
 
+/** Select one visible input mode without changing the persisted text contract. */
 function setSourceMode(mode: BookSourceMode) {
   sourceMode.value = mode
   dragActive.value = false
@@ -130,6 +135,7 @@ function submit() {
     file: realFile.value,
     source_mode: sourceMode.value,
     text_content: textContent.value,
+    script_extension: scriptExtension.value.trim(),
     source_url: sourceUrl.value.trim(),
   })
 }
@@ -147,21 +153,6 @@ function submit() {
         </header>
 
         <section class="upper-grid">
-          <div class="metadata-zone">
-            <label class="field">
-              <span>标题</span>
-              <input v-model="title" type="text" spellcheck="false" placeholder="留空使用默认名称" />
-            </label>
-            <label class="field">
-              <span>描述</span>
-              <textarea v-model="description" rows="5" placeholder="用于搜索和归纳说明" />
-            </label>
-            <div class="field">
-              <span>标签</span>
-              <LibraryTagPicker v-model="tags" :available-tags="availableTags.map((tag) => tag.name)" />
-            </div>
-          </div>
-
           <div class="cover-zone">
             <input ref="coverInput" class="hidden-input" type="file" accept="image/*" @change="uploadCover" />
             <button
@@ -181,6 +172,21 @@ function submit() {
                 <span>{{ coverUploading ? '上传中' : '点击或拖拽上传封面' }}</span>
               </template>
             </button>
+          </div>
+
+          <div class="metadata-zone">
+            <label class="field">
+              <span>标题</span>
+              <input v-model="title" type="text" spellcheck="false" placeholder="留空使用默认名称" />
+            </label>
+            <label class="field">
+              <span>描述</span>
+              <textarea v-model="description" rows="5" placeholder="用于搜索和归纳说明" />
+            </label>
+            <div class="field">
+              <span>标签</span>
+              <LibraryTagPicker v-model="tags" :available-tags="availableTags.map((tag) => tag.name)" />
+            </div>
           </div>
         </section>
 
@@ -208,6 +214,19 @@ function submit() {
           </label>
         </section>
 
+        <section v-else-if="isBook && sourceMode === 'script'" class="script-zone">
+          <CompactCodeInput
+            v-model="textContent"
+            class="library-script-input"
+            label="脚本内容"
+            placeholder="输入脚本代码"
+          />
+          <label class="script-extension-field">
+            <span>代码文件后缀</span>
+            <input v-model="scriptExtension" type="text" spellcheck="false" placeholder=".py" aria-label="代码文件后缀" />
+          </label>
+        </section>
+
         <section v-else-if="isBook && sourceMode === 'url'" class="url-zone">
           <label class="url-input-wrap">
             <IcIcon name="language" :size="15" />
@@ -215,7 +234,7 @@ function submit() {
           </label>
         </section>
 
-        <footer class="dialog-actions">
+        <footer class="dialog-actions" :class="{ 'collection-actions': !isBook }">
           <div v-if="isBook" class="source-mode-actions" aria-label="文件来源">
             <button
               class="source-mode-btn"
@@ -226,6 +245,16 @@ function submit() {
               @click="setSourceMode(sourceMode === 'text' ? 'file' : 'text')"
             >
               <IcIcon name="document" :size="16" />
+            </button>
+            <button
+              class="source-mode-btn"
+              :class="{ active: sourceMode === 'script' }"
+              type="button"
+              title="脚本"
+              aria-label="脚本"
+              @click="setSourceMode(sourceMode === 'script' ? 'file' : 'script')"
+            >
+              <IcIcon name="code" :size="16" />
             </button>
             <button
               class="source-mode-btn"
@@ -285,7 +314,7 @@ function submit() {
 
 .upper-grid {
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 3fr);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 5fr);
   gap: 14px;
   padding: 16px 16px 0;
 }
@@ -386,8 +415,46 @@ function submit() {
 }
 
 .text-zone,
+.script-zone,
 .url-zone {
   padding: 14px 16px 0;
+}
+
+.library-script-input {
+  min-height: 198px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+}
+
+.library-script-input:focus-within {
+  border-color: var(--color-primary);
+}
+
+.script-extension-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--color-text-secondary);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.script-extension-field input {
+  width: 96px;
+  height: 30px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  outline: 0;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  padding: 0 10px;
+  font-family: var(--font-text);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.script-extension-field input:focus {
+  border-color: var(--color-primary);
 }
 
 .text-content-field {
@@ -483,6 +550,10 @@ function submit() {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.dialog-actions.collection-actions {
+  justify-content: flex-end;
 }
 
 .source-mode-btn {

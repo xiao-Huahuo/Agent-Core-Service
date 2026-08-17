@@ -17,7 +17,7 @@ class ComponentLibraryItemBase(SQLModel):
     """Describe the user-provided fields shared by component DTOs."""
 
     user_id: str = Field(min_length=1, max_length=128)
-    source: str = Field(min_length=1, max_length=250_000)
+    source: str = Field(min_length=1, max_length=2_000_000)
     tag: str = Field(min_length=1, max_length=32)
 
 

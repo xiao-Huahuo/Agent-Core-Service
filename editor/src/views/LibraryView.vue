@@ -18,6 +18,7 @@ import {
   listLibraryTags,
   updateLibraryItem,
 } from '@/api/library'
+import { buildApiUrl } from '@/api/client'
 import { uploadKnowledgeFile } from '@/api/knowledge'
 import LibraryBar from '@/components/library_view/LibraryBar.vue'
 import LibraryCard from '@/components/library_view/LibraryCard.vue'
@@ -156,12 +157,24 @@ onMounted(async () => {
       ? favoritesStore.load(settingsStore.profile.userId, 'library_item', favoritesStore.activeLibraryId())
       : Promise.resolve(),
   ])
-  document.addEventListener('click', closeContextMenu)
+  document.addEventListener('click', handleDocumentClick)
 })
 
 onUnmounted(() => {
-  document.removeEventListener('click', closeContextMenu)
+  document.removeEventListener('click', handleDocumentClick)
 })
+
+/** Clear the active book and its detail popup when clicking outside library items. */
+function handleDocumentClick(event: MouseEvent) {
+  const target = event.target
+  if (!(target instanceof Element) || target.closest('.library-card, .library-bar, .context-menu')) {
+    closeContextMenu()
+    return
+  }
+  selectedItem.value = null
+  detailOpen.value = false
+  closeContextMenu()
+}
 
 async function loadItems() {
   if (!settingsStore.profile.userId) return
@@ -424,8 +437,9 @@ async function createFromDialog(payload: {
   cover_mode: LibraryItem['cover_mode']
   cover_asset_id: string
   file: File | null
-  source_mode: 'file' | 'text' | 'url'
+  source_mode: 'file' | 'text' | 'script' | 'url'
   text_content: string
+  script_extension: string
   source_url: string
 }) {
   const mode = createDialogMode.value
@@ -460,14 +474,14 @@ async function createFromDialog(payload: {
       })
       workspaceStore.showToast('已新增网页并加入图书馆')
     } else {
-      const sourceFile = payload.source_mode === 'text'
-        ? createTextSourceFile(payload.title, payload.text_content)
+      const sourceFile = payload.source_mode === 'text' || payload.source_mode === 'script'
+        ? createTextSourceFile(payload.title, payload.text_content, payload.source_mode === 'script' ? payload.script_extension : '.md')
         : payload.file
       if (!sourceFile) {
         workspaceStore.showToast('请选择真实文件')
         return
       }
-      if (payload.source_mode === 'text' && !payload.text_content.trim()) {
+      if ((payload.source_mode === 'text' || payload.source_mode === 'script') && !payload.text_content.trim()) {
         workspaceStore.showToast('请输入文本内容')
         return
       }
@@ -490,7 +504,7 @@ async function createFromDialog(payload: {
         tags: payload.tags,
       })
       await workspaceStore.loadKnowledgeTree()
-      workspaceStore.showToast(payload.source_mode === 'text' ? '已保存文本并加入图书馆' : '已新增文件并加入图书馆')
+      workspaceStore.showToast(payload.source_mode === 'script' ? '已保存脚本并加入图书馆' : payload.source_mode === 'text' ? '已保存文本并加入图书馆' : '已新增文件并加入图书馆')
     }
     createDialogMode.value = null
     await Promise.all([loadItems(), loadTags()])
@@ -513,6 +527,20 @@ async function saveEdit(payload: { title: string; description: string; cover_mod
   await Promise.all([loadItems(), loadTags()])
 }
 
+/** Persist one double-click inline title or description edit without opening the dialog. */
+async function saveInlineEdit(item: LibraryItem, payload: { title?: string; description?: string }) {
+  try {
+    const response = await updateLibraryItem(item.item_id, {
+      user_id: settingsStore.profile.userId,
+      ...payload,
+    })
+    items.value = items.value.map((entry) => entry.item_id === item.item_id ? response.item : entry)
+    if (selectedItem.value?.item_id === item.item_id) selectedItem.value = response.item
+  } catch (error) {
+    workspaceStore.showToast(`保存失败 — ${errorMessage(error)}`)
+  }
+}
+
 async function removeSelected() {
   if (!hasSelection.value) return
   if (!window.confirm(`移出选中的 ${selectedIds.value.size} 项? 真实文件不会被删除。`)) return
@@ -523,10 +551,61 @@ async function removeSelected() {
   await loadItems()
 }
 
-function createTextSourceFile(title: string, content: string): File {
+function createTextSourceFile(title: string, content: string, extension: string): File {
   const baseName = sanitizeTextFileName(title) || `图书馆文本-${Date.now()}`
-  const fileName = baseName.toLowerCase().endsWith('.md') ? baseName : `${baseName}.md`
-  return new File([content], fileName, { type: 'text/markdown;charset=utf-8' })
+  const suffix = normalizeFileExtension(extension)
+  const fileName = baseName.toLowerCase().endsWith(suffix) ? baseName : `${baseName}${suffix}`
+  return new File([content], fileName, { type: suffix === '.md' ? 'text/markdown;charset=utf-8' : 'text/plain;charset=utf-8' })
+}
+
+/** Limit user-entered script suffixes to one safe filename extension. */
+function normalizeFileExtension(value: string): string {
+  const normalized = value.trim().replace(/^\.+/, '')
+  return /^[a-z0-9][a-z0-9_-]{0,15}$/iu.test(normalized) ? `.${normalized}` : '.txt'
+}
+
+/** Download a book's real knowledge file, or its original URL resource. */
+function downloadItem(item: LibraryItem): void {
+  if (item.item_type === 'collection') return
+  const url = item.source_path
+    ? buildApiUrl('/knowledge/files/raw', { user_id: item.user_id, path: item.source_path, download: 'true' })
+    : item.source_url
+  if (!url) return
+  triggerBrowserDownload(url, item.source_name || item.display_title)
+}
+
+/** Export an uploaded cover or the source file when it is the active cover. */
+function downloadCover(item: LibraryItem): void {
+  const url = item.cover_asset?.url || (item.cover_mode === 'source_image' && item.source_path
+    ? buildApiUrl('/knowledge/files/raw', { user_id: item.user_id, path: item.source_path, download: 'true' })
+    : '')
+  if (!url) return
+  triggerBrowserDownload(url, item.cover_asset?.file_name || `${item.display_title}-cover`)
+}
+
+function hasExportableCover(item: LibraryItem | null): boolean {
+  return Boolean(item?.cover_asset?.url || (item?.cover_mode === 'source_image' && item.source_path))
+}
+
+function triggerBrowserDownload(url: string, filename: string): void {
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+}
+
+function contextDownloadItem() {
+  const item = contextMenuTarget.value
+  closeContextMenu()
+  if (item) downloadItem(item)
+}
+
+function contextDownloadCover() {
+  const item = contextMenuTarget.value
+  closeContextMenu()
+  if (item) downloadCover(item)
 }
 
 function sanitizeTextFileName(rawTitle: string): string {
@@ -714,6 +793,8 @@ function errorMessage(error: unknown): string {
             :multi-select="multiSelect"
             @open="openItem"
             @contextmenu="openContextMenu"
+            @download="downloadItem"
+            @save="saveInlineEdit"
             @toggle="toggleItem"
             @select="selectItem"
             @drag-start="startDrag"
@@ -797,6 +878,20 @@ function errorMessage(error: unknown): string {
       <li class="context-item" @click="contextEdit()">
         <IcIcon name="edit" :size="14" />
         <span>编辑</span>
+      </li>
+      <li v-if="contextMenuTarget?.item_type === 'book'" class="context-item" @click="contextDownloadItem()">
+        <IcIcon name="download" :size="14" />
+        <span>导出真实文件</span>
+      </li>
+      <li
+        v-if="contextMenuTarget?.item_type === 'book'"
+        class="context-item"
+        :class="{ disabled: !hasExportableCover(contextMenuTarget) }"
+        :aria-disabled="!hasExportableCover(contextMenuTarget)"
+        @click="contextDownloadCover()"
+      >
+        <IcIcon name="image" :size="14" />
+        <span>导出封面</span>
       </li>
       <li class="context-item" @click="contextMoveToParent()">
         <IcIcon name="arrow-up" :size="14" />
@@ -1448,6 +1543,17 @@ function errorMessage(error: unknown): string {
 .context-item.danger:hover {
   background: color-mix(in srgb, var(--color-danger) 10%, transparent);
   color: var(--color-danger);
+}
+
+.context-item.disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.context-item.disabled:hover {
+  background: transparent;
+  color: var(--color-text-muted);
 }
 
 .context-sep {

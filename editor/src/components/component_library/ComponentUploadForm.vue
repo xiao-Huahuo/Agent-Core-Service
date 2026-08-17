@@ -9,6 +9,7 @@
 import { computed, ref } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import CompactCodeInput from '@/components/common/CompactCodeInput.vue'
 import ComponentPreview from '@/components/component_library/ComponentPreview.vue'
 import { buildComponentPreviewDocument } from '@/components/component_library/componentPreview'
 import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
@@ -142,14 +143,12 @@ async function submit(): Promise<void> {
     </header>
 
     <div class="compiler-grid">
-      <label class="code-panel">
-        <span class="panel-label">组件代码</span>
-        <textarea
-          v-model="source"
-          spellcheck="false"
-          placeholder="粘贴 Vue / HTML 代码"
-        ></textarea>
-      </label>
+      <CompactCodeInput
+        v-model="source"
+        class="code-panel"
+        label="组件代码"
+        placeholder="粘贴 Vue / HTML 代码"
+      />
       <section class="preview-panel" aria-label="实时编译预览">
         <span class="panel-label">实时预览 · {{ sourceFormat.toUpperCase() }}</span>
         <ComponentPreview
@@ -311,22 +310,6 @@ async function submit(): Promise<void> {
   padding: var(--space-8) var(--space-12);
   color: var(--color-text-muted);
   font-size: calc(11px * var(--font-scale));
-}
-
-.code-panel textarea {
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-  resize: none;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--color-text);
-  padding: var(--space-12);
-  font-family: var(--font-text);
-  font-size: calc(13px * var(--font-scale));
-  line-height: 1.6;
-  tab-size: 2;
 }
 
 .preview-placeholder {

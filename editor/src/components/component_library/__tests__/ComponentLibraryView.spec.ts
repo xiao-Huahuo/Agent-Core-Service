@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import CompactCodeInput from '@/components/common/CompactCodeInput.vue'
 import ComponentUploadForm from '@/components/component_library/ComponentUploadForm.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { COMPONENT_TAGS } from '@/types/componentLibrary'
@@ -220,6 +221,7 @@ describe('ComponentLibraryView', () => {
     expect(wrapper.find('.form-header p').exists()).toBe(false)
     expect(wrapper.get('.preview-placeholder').text()).toBe('')
     expect(wrapper.get('.file-picker-button').text()).toBe('')
+    expect(wrapper.findComponent(CompactCodeInput).exists()).toBe(true)
   })
 
   it('confirms and moves a card component to the knowledge trash', async () => {

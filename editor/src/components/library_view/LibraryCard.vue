@@ -6,7 +6,7 @@
   double-click opening, and drag-moving items into collection cards.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import { buildApiUrl } from '@/api/client'
@@ -26,12 +26,27 @@ const emit = defineEmits<{
   toggle: [item: LibraryItem]
   select: [item: LibraryItem]
   contextmenu: [event: MouseEvent, item: LibraryItem]
+  download: [item: LibraryItem]
+  save: [item: LibraryItem, payload: { title?: string; description?: string }]
   dragStart: [item: LibraryItem]
   dropOn: [item: LibraryItem]
 }>()
 
 const dragOver = ref(false)
 const detailsOpen = ref(false)
+const titleEditing = ref(false)
+const descriptionEditing = ref(false)
+const editTitle = ref(props.item.display_title)
+const editDescription = ref(props.item.description)
+const titleInput = ref<HTMLInputElement | null>(null)
+const descriptionInput = ref<HTMLTextAreaElement | null>(null)
+watch(() => props.selected, (selected) => {
+  if (!selected) detailsOpen.value = false
+})
+watch(() => props.item, (item) => {
+  if (!titleEditing.value) editTitle.value = item.display_title
+  if (!descriptionEditing.value) editDescription.value = item.description
+}, { deep: true })
 const isCollection = computed(() => props.item.item_type === 'collection')
 const fileIcon = computed(() => materialFileIconForNode({
   name: props.item.source_name || props.item.display_title,
@@ -78,6 +93,47 @@ function handleClick() {
     return
   }
   emit('select', props.item)
+}
+
+async function startTitleEdit() {
+  if (isCollection.value) return
+  emit('select', props.item)
+  editTitle.value = props.item.display_title
+  titleEditing.value = true
+  await nextTick()
+  titleInput.value?.focus()
+  titleInput.value?.select()
+}
+
+async function startDescriptionEdit() {
+  if (isCollection.value) return
+  emit('select', props.item)
+  detailsOpen.value = true
+  editDescription.value = props.item.description
+  descriptionEditing.value = true
+  await nextTick()
+  descriptionInput.value?.focus()
+  descriptionInput.value?.select()
+}
+
+function saveTitle() {
+  if (!titleEditing.value) return
+  titleEditing.value = false
+  const title = editTitle.value.trim()
+  if (title && title !== props.item.title) emit('save', props.item, { title })
+  else editTitle.value = props.item.display_title
+}
+
+function saveDescription() {
+  if (!descriptionEditing.value) return
+  descriptionEditing.value = false
+  const description = editDescription.value.trim()
+  if (description !== props.item.description) emit('save', props.item, { description })
+}
+
+function toggleDetails() {
+  emit('select', props.item)
+  detailsOpen.value = !detailsOpen.value
 }
 
 function handleDragStart(event: DragEvent) {
@@ -151,11 +207,32 @@ function handleDrop(event: DragEvent) {
           :class="{ open: detailsOpen }"
           type="button"
           :title="detailsOpen ? '收起文件名和描述' : '展开文件名和描述'"
-          @click.stop="detailsOpen = !detailsOpen"
+          @click.stop="toggleDetails"
         >
           <IcIcon :name="detailsOpen ? 'chevron-down' : 'chevron-right'" :size="14" />
         </button>
-        <div class="title" :title="item.display_title">{{ item.display_title }}</div>
+        <input
+          v-if="titleEditing"
+          ref="titleInput"
+          v-model="editTitle"
+          class="title-edit-input"
+          type="text"
+          aria-label="编辑图书名"
+          @blur="saveTitle"
+          @keydown.enter.prevent="saveTitle"
+          @keydown.escape.prevent="titleEditing = false; editTitle = item.display_title"
+        />
+        <div v-else class="title" :title="item.display_title" @dblclick.stop="startTitleEdit">{{ item.display_title }}</div>
+        <button
+          v-if="!isCollection"
+          class="download-button"
+          type="button"
+          title="下载真实文件"
+          aria-label="下载真实文件"
+          @click.stop="emit('download', item)"
+        >
+          <IcIcon name="download" :size="15" />
+        </button>
       </div>
       <div v-if="item.tags.length" class="tag-row">
         <span v-for="tag in item.tags" :key="tag" class="tag-pill" :title="tag">{{ tag }}</span>
@@ -167,7 +244,18 @@ function handleDrop(event: DragEvent) {
             <IcIcon v-else-if="item.content_type === 'web_url'" name="link" :size="13" />
             <span>{{ sourceLabel }}</span>
           </div>
-          <div class="description expandable-block" :title="item.description">
+          <textarea
+            v-if="descriptionEditing"
+            ref="descriptionInput"
+            v-model="editDescription"
+            class="description-edit-input expandable-block"
+            aria-label="编辑描述"
+            rows="2"
+            @blur="saveDescription"
+            @keydown.ctrl.enter.prevent="saveDescription"
+            @keydown.escape.prevent="descriptionEditing = false; editDescription = item.description"
+          ></textarea>
+          <div v-else class="description expandable-block" :title="item.description" @dblclick.stop="startDescriptionEdit">
             {{ item.description || '无描述' }}
           </div>
         </div>
@@ -352,7 +440,7 @@ function handleDrop(event: DragEvent) {
 
 .title-row {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr) 24px;
   align-items: center;
   gap: 4px;
   min-width: 0;
@@ -373,6 +461,23 @@ function handleDrop(event: DragEvent) {
 
 .expand-button:hover,
 .expand-button.open {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+}
+
+.download-button {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.download-button:hover {
   background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   color: var(--color-primary);
 }
@@ -425,6 +530,20 @@ function handleDrop(event: DragEvent) {
   color: var(--color-text);
 }
 
+.title-edit-input {
+  min-width: 0;
+  width: 100%;
+  height: 24px;
+  border: 1px solid var(--color-primary);
+  border-radius: 5px;
+  outline: 0;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  padding: 0 6px;
+  font: inherit;
+  font-weight: 700;
+}
+
 .source {
   display: flex;
   align-items: center;
@@ -433,10 +552,17 @@ function handleDrop(event: DragEvent) {
 }
 
 .expandable-block {
-  border-radius: 6px;
   background: transparent;
   border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
   padding: 6px 8px;
+}
+
+.source.expandable-block {
+  border-radius: 999px;
+}
+
+.description.expandable-block {
+  border-radius: 999px;
 }
 
 .details-popover {
@@ -466,6 +592,16 @@ function handleDrop(event: DragEvent) {
   color: var(--color-text-muted);
   line-height: 1.4;
   white-space: pre-wrap;
+}
+
+.description-edit-input {
+  width: 100%;
+  min-height: 48px;
+  resize: vertical;
+  outline: 0;
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.4;
 }
 
 .detail-block-enter-active,

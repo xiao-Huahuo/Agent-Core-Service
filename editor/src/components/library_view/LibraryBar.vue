@@ -27,6 +27,7 @@ const emit = defineEmits<{
   toggle: [item: LibraryItem]
   select: [item: LibraryItem]
   contextmenu: [event: MouseEvent, item: LibraryItem]
+  download: [item: LibraryItem]
   dragStart: [item: LibraryItem]
   dropOn: [item: LibraryItem]
 }>()
@@ -159,7 +160,19 @@ function handleDrop(event: DragEvent) {
       <div class="bar-description" :title="item.description">{{ item.description || '无描述' }}</div>
       <div class="bar-foot">
         <span>{{ dateLabel }}</span>
-        <span v-if="isCollection" class="bar-count">{{ item.child_count }} 项</span>
+        <div class="bar-foot-actions">
+          <span v-if="isCollection" class="bar-count">{{ item.child_count }} 项</span>
+          <button
+            v-else
+            class="bar-download-button"
+            type="button"
+            title="下载真实文件"
+            aria-label="下载真实文件"
+            @click.stop="emit('download', item)"
+          >
+            <IcIcon name="download" :size="14" />
+          </button>
+        </div>
       </div>
     </section>
   </article>
@@ -413,5 +426,29 @@ function handleDrop(event: DragEvent) {
   flex: 0 0 auto;
   color: var(--color-primary);
   font-weight: 600;
+}
+
+.bar-foot-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bar-download-button {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: -3px -3px -3px 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.bar-download-button:hover {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
 }
 </style>
