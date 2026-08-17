@@ -144,7 +144,7 @@ function submit() {
 <template>
   <Teleport to="body">
     <div v-if="open" class="dialog-backdrop" @click.self="emit('close')">
-      <section class="dialog-panel" role="dialog" aria-modal="true">
+    <section class="dialog-panel library-form-surface" role="dialog" aria-modal="true">
         <header class="dialog-head">
           <h2>{{ heading }}</h2>
           <button class="icon-btn" type="button" title="关闭" @click="emit('close')">

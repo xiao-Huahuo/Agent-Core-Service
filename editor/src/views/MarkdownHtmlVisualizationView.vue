@@ -207,9 +207,8 @@ function startVisualization() {
         </button>
       </div>
       <div class="toolbar-actions">
-        <button type="button" class="secondary-action" @click="pickerOpen = true">
+        <button type="button" class="tool-button" title="选择文件" aria-label="选择文件" @click="pickerOpen = true">
           <IcIcon name="folder-open" :size="15" />
-          <span>选择文件</span>
         </button>
         <div class="advanced-menu-wrap">
           <button
@@ -514,6 +513,22 @@ function startVisualization() {
 .toolbar-actions > button.secondary-action.active,
 .toolbar-actions > button.secondary-action:hover {
   border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.toolbar-actions > button.tool-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.toolbar-actions > button.tool-button:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
   color: var(--color-primary);
 }
 

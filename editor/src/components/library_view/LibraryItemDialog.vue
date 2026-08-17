@@ -96,7 +96,7 @@ async function uploadCoverFile(file: File) {
 <template>
   <Teleport to="body">
     <div v-if="open && item" class="dialog-backdrop" @click.self="emit('close')">
-      <section class="dialog-panel" role="dialog" aria-modal="true">
+    <section class="dialog-panel library-form-surface" role="dialog" aria-modal="true">
         <header class="dialog-head">
           <h2>{{ isCollection ? '编辑集锦' : '编辑图书' }}</h2>
           <button class="icon-btn" type="button" title="关闭" @click="emit('close')">

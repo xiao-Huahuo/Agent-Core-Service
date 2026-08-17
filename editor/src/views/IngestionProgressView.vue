@@ -176,7 +176,7 @@ function historySummary(row: IngestionHistoryItem): string {
       <div class="heading-actions">
         <button
           v-if="activeTab === 'queue'"
-          class="topbar-action-clone"
+          class="view-button topbar-action-clone"
           :class="{ refreshing: workspaceStore.refreshing }"
           type="button"
           :disabled="workspaceStore.refreshing"
@@ -188,7 +188,7 @@ function historySummary(row: IngestionHistoryItem): string {
         </button>
         <button
           v-else-if="activeTab === 'graph-queue'"
-          class="topbar-action-clone"
+          class="view-button topbar-action-clone"
           :class="{ refreshing: graphQueueRows.length > 0 }"
           type="button"
           :disabled="graphQueueRows.length > 0"
@@ -198,12 +198,12 @@ function historySummary(row: IngestionHistoryItem): string {
         >
           <IcIcon name="hub" :size="14" />
         </button>
-        <button class="refresh-btn" type="button" title="刷新" aria-label="刷新" @click="refresh">
+        <button class="view-button refresh-btn" type="button" title="刷新" aria-label="刷新" @click="refresh">
           <IcIcon name="refresh" :size="16" class="refresh-svg" />
         </button>
         <button
           v-if="activeTab === 'history' && historyRows.length > 0"
-          class="icon-button"
+          class="view-button icon-button"
           type="button"
           title="清空历史"
           aria-label="清空历史"
@@ -452,6 +452,29 @@ function historySummary(row: IngestionHistoryItem): string {
   background: var(--color-surface);
 }
 
+.view-button {
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: transparent;
+  transition:
+    width 180ms ease,
+    border-radius 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.view-button:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
 .refresh-btn {
   display: flex;
   align-items: center;
@@ -521,6 +544,25 @@ function historySummary(row: IngestionHistoryItem): string {
 .topbar-action-clone:disabled {
   cursor: wait;
   opacity: 0.62;
+}
+
+.topbar-action-clone.view-button,
+.refresh-btn.view-button {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.topbar-action-clone.view-button:hover:not(:disabled),
+.refresh-btn.view-button:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
 }
 
 .file-table {

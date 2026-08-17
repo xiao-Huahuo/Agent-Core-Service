@@ -72,6 +72,7 @@ async function toggleHistoryDropdown(): Promise<void> {
       </div>
       <div class="git-actions">
         <button
+          class="tool-button"
           type="button"
           title="刷新"
           aria-label="刷新 Git 状态"
@@ -81,6 +82,7 @@ async function toggleHistoryDropdown(): Promise<void> {
           <IcIcon name="refresh" :size="14" :class="{ spinning: gitStore.loading }" />
         </button>
         <button
+          class="tool-button"
           type="button"
           title="回滚选中"
           aria-label="回滚选中文件"
@@ -89,10 +91,10 @@ async function toggleHistoryDropdown(): Promise<void> {
         >
           <IcIcon name="replay" :size="14" />
         </button>
-        <button type="button" title="全部展开" aria-label="全部展开" @click="gitStore.expandAll">
+        <button class="tool-button" type="button" title="全部展开" aria-label="全部展开" @click="gitStore.expandAll">
           <IcIcon name="unfold" :size="14" />
         </button>
-        <button type="button" title="全部收缩" aria-label="全部收缩" @click="gitStore.collapseAll">
+        <button class="tool-button" type="button" title="全部收缩" aria-label="全部收缩" @click="gitStore.collapseAll">
           <IcIcon name="unfold-less" :size="14" />
         </button>
       </div>
@@ -226,7 +228,6 @@ async function toggleHistoryDropdown(): Promise<void> {
   gap: var(--space-8);
   min-height: 42px;
   padding: 0 var(--space-8);
-  border-bottom: 1px solid var(--color-border);
 }
 
 .git-title,
@@ -261,21 +262,21 @@ async function toggleHistoryDropdown(): Promise<void> {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   cursor: pointer;
   transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
 }
 
 .git-actions button:hover:not(:disabled) {
-  border-color: var(--color-border);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
 }
 
 .git-actions button:disabled {
@@ -358,7 +359,7 @@ async function toggleHistoryDropdown(): Promise<void> {
   z-index: 4;
   min-height: 0;
   padding: var(--space-8);
-  border-top: 1px solid var(--color-border);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   background: var(--color-surface);
 }
 
@@ -427,7 +428,7 @@ textarea {
   resize: vertical;
   padding: var(--space-8);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xl);
   outline: 0;
   background: var(--color-canvas);
   color: var(--color-text);

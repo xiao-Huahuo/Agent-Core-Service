@@ -725,11 +725,11 @@ function errorMessage(error: unknown): string {
             </DropdownMenuContent>
           </DropdownMenuPortal>
         </DropdownMenu>
-        <button class="icon-toolbar-btn" type="button" title="新增文件" @click="openCreateBookDialog">
+        <button class="tool-button" type="button" title="新增文件" @click="openCreateBookDialog">
           <IcIcon name="new-file" :size="16" />
         </button>
         <button
-          class="icon-toolbar-btn"
+          class="tool-button"
           :class="{ active: effectiveFavoritesOnly }"
           type="button"
           title="我的收藏"
@@ -739,15 +739,15 @@ function errorMessage(error: unknown): string {
         >
           <IcIcon name="star" :size="16" />
         </button>
-        <button class="icon-toolbar-btn" type="button" title="新增集锦" @click="openCreateCollectionDialog">
+        <button class="tool-button" type="button" title="新增集锦" @click="openCreateCollectionDialog">
           <IcIcon name="new-folder" :size="16" />
         </button>
-        <button class="icon-toolbar-btn" :class="{ active: multiSelect }" type="button" title="多选" @click="multiSelect = !multiSelect">
+        <button class="tool-button" :class="{ active: multiSelect }" type="button" title="多选" @click="multiSelect = !multiSelect">
           <IcIcon name="label" :size="16" />
           <span v-if="multiSelect" class="multi-indicator">{{ selectedIds.size }}</span>
         </button>
         <button
-          class="icon-toolbar-btn"
+          class="view-button"
           :class="{ active: viewMode === 'bar' }"
           type="button"
           :title="viewMode === 'card' ? '切换为条形' : '切换为卡片'"
@@ -977,6 +977,55 @@ function errorMessage(error: unknown): string {
   justify-content: center;
   width: 32px;
   padding: 0;
+}
+
+.tool-button,
+.view-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  padding: 0;
+}
+
+.tool-button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.view-button {
+  overflow: hidden;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  transition:
+    width 180ms ease,
+    border-radius 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.tool-button.active,
+.tool-button:hover,
+.view-button.active,
+.view-button:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
+.view-button.active {
+  width: auto;
+  min-width: 28px;
+  gap: 4px;
+  padding: 0 8px;
+  border-radius: 999px;
 }
 
 .icon-toolbar-btn:hover,

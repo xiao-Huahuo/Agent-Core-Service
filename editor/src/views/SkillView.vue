@@ -87,10 +87,10 @@ watch(
         <p>{{ skillsStore.enabledCount }} / {{ skillsStore.skills.length }} enabled</p>
       </div>
       <div class="header-actions">
-        <button type="button" class="icon-button" title="刷新" aria-label="刷新" @click="skillsStore.loadSkills">
+        <button type="button" class="view-button" title="刷新" aria-label="刷新" @click="skillsStore.loadSkills">
           <IcIcon name="refresh" :size="16" />
         </button>
-        <button type="button" class="icon-button" title="规范" aria-label="规范" @click="openSpec">
+        <button type="button" class="view-button" title="规范" aria-label="规范" @click="openSpec">
           <IcIcon name="book" :size="16" />
         </button>
       </div>
@@ -360,6 +360,24 @@ tools: (可选) 需要启用的工具列表
   width: 32px;
   height: 32px;
   border-radius: var(--radius-md);
+}
+
+.view-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.view-button:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
 }
 
 .primary-button {
