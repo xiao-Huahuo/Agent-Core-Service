@@ -1551,6 +1551,17 @@ class AgentServiceServicer(BaseServicer):
             title=str(payload.get("title", "")),
         )
 
+    def DeleteComponentLibraryComponent(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Delete one component through the same file service as REST."""
+
+        payload = MessageToDict(request)
+        return self._component_library_struct(
+            context,
+            self._require_component_library_service(context).delete_component,
+            user_id=str(payload.get("user_id", "")),
+            component_id=str(payload.get("component_id", "")),
+        )
+
     # ------------------------------------------------------------------
     # 内部辅助
     # ------------------------------------------------------------------

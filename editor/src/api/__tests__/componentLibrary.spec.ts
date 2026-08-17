@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createComponentLibraryItem,
+  deleteComponentLibraryItem,
   listComponentLibraryItems,
   renameComponentLibraryItem,
 } from '@/api/componentLibrary'
@@ -72,5 +73,22 @@ describe('Component library API client', () => {
       component_id: 'cards/old.vue',
       title: '新卡片',
     })
+  })
+
+  it('deletes one component through its canonical component-library endpoint', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ component_id: 'cards/old.vue', deleted: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await deleteComponentLibraryItem('user/1', 'cards/old.vue')
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      '/component-library/components?user_id=user%2F1&component_id=cards%2Fold.vue',
+    )
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('DELETE')
   })
 })

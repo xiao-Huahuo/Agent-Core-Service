@@ -61,3 +61,22 @@ async def rename_component_library_item(body: ComponentLibraryItemUpdate) -> dic
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.delete("/component-library/components")
+async def delete_component_library_item(
+    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    component_id: str = Query(..., min_length=1, description="组件 ID"),
+) -> dict[str, object]:
+    """Delete one canonical component file from the active component library."""
+
+    try:
+        return await run_in_threadpool(
+            _require_component_library_service().delete_component,
+            user_id=user_id,
+            component_id=component_id,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

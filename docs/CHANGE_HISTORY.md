@@ -1672,3 +1672,5 @@
 - 修复 PyInstaller 后端启动崩溃:移除 `AgentService.spec` 对 `setuptools` 的排除,保留 `pkg_resources` 运行时钩子所需的 `jaraco` 依赖,解决 `ModuleNotFoundError: No module named 'jaraco'`。
 - 调整 PyInstaller 排除项:同步移除对 `wheel` 的排除,避免 setuptools 运行时钩子与 `ExcludedModule('wheel')` 冲突导致后端构建失败。
 - 组件库接入通用后端收藏体系:新增 `component` 收藏目标、卡片收藏按钮与顶栏收藏筛选;收藏页新增“组件”分类并复用锁定收藏筛选的 `ComponentLibraryView`。同时修复预览交互重渲染、恢复可靠预览高度与上下留白、加入标签侧栏动态悬停滑块,并加宽上传表单组件名输入内边距。
+- 修复组件库删除误用知识库文件路径接口导致 `422 path not found`:新增组件库专用 REST/gRPC 删除能力,前端与端到端清理统一按组件 ID 调用,并补充 API、视图及 gRPC 回归测试。
+- 修复 Agent 用户状态短暂不可用时输入框被原生 `disabled` 锁死:草稿区保持可编辑,发送与工具操作仍按禁用状态拦截,并补充组件及 Chromium 回归测试。

@@ -131,4 +131,20 @@ describe('ChatInput references', () => {
 
     expect(wrapper.findAll('.prompt-waterfall-item')).toHaveLength(0)
   })
+
+  it('keeps the draft field editable while sending actions are unavailable', async () => {
+    const wrapper = mount(ChatInput, {
+      props: {
+        disabled: true,
+      },
+    })
+
+    const textarea = wrapper.get('textarea')
+    expect(textarea.attributes('disabled')).toBeUndefined()
+    await textarea.setValue('先写下这条消息')
+    await textarea.trigger('keydown', { key: 'Enter' })
+
+    expect((textarea.element as HTMLTextAreaElement).value).toBe('先写下这条消息')
+    expect(wrapper.emitted('send')).toBeFalsy()
+  })
 })

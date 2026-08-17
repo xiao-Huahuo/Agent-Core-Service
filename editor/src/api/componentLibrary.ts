@@ -6,7 +6,7 @@
  * submitted by the live-preview upload form.
  */
 
-import { apiGet, apiPatch, apiPost } from '@/api/client'
+import { apiDelete, apiGet, apiPatch, apiPost } from '@/api/client'
 import { API_ROUTES } from '@/router/api_routes'
 import type {
   ComponentLibraryCreatePayload,
@@ -46,4 +46,15 @@ export function renameComponentLibraryItem(
     title,
   }
   return apiPatch<{ component: ComponentLibraryItem }>(API_ROUTES.COMPONENT_LIBRARY_ITEMS, payload)
+}
+
+/** Delete one canonical component file from the active component library. */
+export function deleteComponentLibraryItem(
+  userId: string,
+  componentId: string,
+): Promise<{ component_id: string; deleted: boolean }> {
+  return apiDelete<{ component_id: string; deleted: boolean }>(API_ROUTES.COMPONENT_LIBRARY_ITEMS, {
+    user_id: userId,
+    component_id: componentId,
+  })
 }

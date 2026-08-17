@@ -142,6 +142,7 @@ service AgentService {
   rpc ListComponentLibraryComponents(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc CreateComponentLibraryComponent(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc RenameComponentLibraryComponent(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc DeleteComponentLibraryComponent(google.protobuf.Struct) returns (google.protobuf.Struct);
 
   // Agent 单轮局部变更与安全撤销
   rpc GetSessionChanges(google.protobuf.Struct) returns (google.protobuf.Struct);

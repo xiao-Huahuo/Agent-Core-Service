@@ -14,14 +14,43 @@ const seededComponentPaths: string[] = []
 test.afterEach(async ({ request }) => {
   for (const relativePath of seededComponentPaths.splice(0)) {
     const deletion = await request.delete(
-      `/knowledge/files?user_id=component-ui-smoke&path=${encodeURIComponent(relativePath)}`,
+      `/component-library/components?user_id=component-ui-smoke&component_id=${encodeURIComponent(relativePath.replace(/^components\//u, ''))}`,
     )
-    if (!deletion.ok()) continue
-    const payload = await deletion.json() as { trash_id?: string }
-    if (payload.trash_id) {
-      await request.delete(`/knowledge/files/trash/${encodeURIComponent(payload.trash_id)}?user_id=component-ui-smoke`)
-    }
+    if (!deletion.ok() && deletion.status() !== 404) throw new Error(`component cleanup failed: ${deletion.status()}`)
   }
+})
+
+test('deleting a component removes it without a path-not-found error', async ({ page, request }) => {
+  const title = `component-delete-smoke-${Date.now()}`
+  const createdResponse = await request.post('/component-library/components', {
+    data: {
+      user_id: 'component-ui-smoke',
+      filename: `${title}.vue`,
+      tag: 'buttons',
+      source: '<template><button>Delete smoke</button></template>',
+    },
+  })
+  expect(createdResponse.ok()).toBe(true)
+  const created = (await createdResponse.json() as { component: { component_id: string } }).component
+  seededComponentPaths.push(`components/${created.component_id}`)
+
+  await page.goto('/')
+  await page.getByRole('textbox', { name: '用户 ID' }).fill('component-ui-smoke')
+  await page.getByRole('button', { name: '进入', exact: true }).click()
+  const knowledgeButton = page.getByRole('button', { name: '库', exact: true })
+  await expect(knowledgeButton).toBeVisible({ timeout: 20_000 })
+  await knowledgeButton.hover()
+  await page.getByRole('button', { name: '组件库', exact: true }).click()
+
+  const card = page.getByRole('button', { name: `重命名 ${title}` }).locator('xpath=ancestor::article')
+  await expect(card).toBeVisible()
+  page.once('dialog', (dialog) => dialog.accept())
+  await card.getByRole('button', { name: '删除组件', exact: true }).click()
+  await expect(card).toHaveCount(0)
+
+  const listedResponse = await request.get('/component-library/components?user_id=component-ui-smoke&tag=buttons')
+  const listed = await listedResponse.json() as { components: Array<{ component_id: string }> }
+  expect(listed.components.some((component) => component.component_id === created.component_id)).toBe(false)
 })
 
 test('component library masonry, details, and live Vue upload preview work together', async ({ context, page }) => {

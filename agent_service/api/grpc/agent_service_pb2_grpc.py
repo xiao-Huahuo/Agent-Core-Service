@@ -449,6 +449,11 @@ class AgentServiceStub(object):
                 request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
                 _registered_method=True)
+        self.DeleteComponentLibraryComponent = channel.unary_unary(
+                '/agent_service.AgentService/DeleteComponentLibraryComponent',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
         self.GetSessionChanges = channel.unary_unary(
                 '/agent_service.AgentService/GetSessionChanges',
                 request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
@@ -1048,6 +1053,12 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def DeleteComponentLibraryComponent(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def GetSessionChanges(self, request, context):
         """Agent 单轮局部变更与安全撤销
         """
@@ -1549,6 +1560,11 @@ def add_AgentServiceServicer_to_server(servicer, server):
             ),
             'RenameComponentLibraryComponent': grpc.unary_unary_rpc_method_handler(
                     servicer.RenameComponentLibraryComponent,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'DeleteComponentLibraryComponent': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteComponentLibraryComponent,
                     request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
                     response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             ),
@@ -3822,6 +3838,33 @@ class AgentService(object):
             request,
             target,
             '/agent_service.AgentService/RenameComponentLibraryComponent',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteComponentLibraryComponent(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/DeleteComponentLibraryComponent',
             google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             google_dot_protobuf_dot_struct__pb2.Struct.FromString,
             options,

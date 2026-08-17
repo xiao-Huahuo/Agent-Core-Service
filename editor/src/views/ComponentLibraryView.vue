@@ -13,8 +13,11 @@ import ComponentLibraryCard from '@/components/component_library/ComponentLibrar
 import ComponentLibraryDetail from '@/components/component_library/ComponentLibraryDetail.vue'
 import ComponentNameEditor from '@/components/component_library/ComponentNameEditor.vue'
 import ComponentUploadForm from '@/components/component_library/ComponentUploadForm.vue'
-import { listComponentLibraryItems, renameComponentLibraryItem } from '@/api/componentLibrary'
-import { deleteKnowledgePath } from '@/api/knowledge'
+import {
+  deleteComponentLibraryItem,
+  listComponentLibraryItems,
+  renameComponentLibraryItem,
+} from '@/api/componentLibrary'
 import { useFavoritesStore } from '@/stores/favorites'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -189,17 +192,16 @@ async function renameComponent(item: ComponentLibraryItem, title: string): Promi
   }
 }
 
-/** Move one canonical component file to the existing knowledge recycle bin. */
+/** Delete one canonical component through the component-library service. */
 async function deleteComponent(item: ComponentLibraryItem): Promise<void> {
-  if (!window.confirm(`确认删除“${item.title}”？它会被移到知识库回收站。`)) return
+  if (!window.confirm(`确认删除“${item.title}”？`)) return
   deletingComponentId.value = item.component_id
   error.value = ''
   try {
-    const componentPath = `components/${item.component_id.replace(/^components\//u, '')}`
-    await deleteKnowledgePath(settingsStore.profile.userId, componentPath)
+    await deleteComponentLibraryItem(settingsStore.profile.userId, item.component_id)
     components.value = components.value.filter((component) => component.component_id !== item.component_id)
     if (selectedComponent.value?.component_id === item.component_id) selectedComponent.value = null
-    workspaceStore.showToast(`已将 ${item.title} 移到回收站`)
+    workspaceStore.showToast(`已删除 ${item.title}`)
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : '组件删除失败'
     error.value = message

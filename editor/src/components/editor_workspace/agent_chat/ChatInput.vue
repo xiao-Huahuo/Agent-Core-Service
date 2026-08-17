@@ -202,7 +202,7 @@ const taskTitle = ref('')
 const taskItemsText = ref('')
 
 function handleSend() {
-  if (props.isStreaming) return
+  if (props.disabled || props.isStreaming) return
   const trimmed = text.value.trim()
   if (!trimmed) return
 
@@ -423,7 +423,6 @@ function handleFileChange(event: Event) {
         v-model="text"
         class="input-area"
         :class="{ 'has-reference': !!reference }"
-        :disabled="disabled"
         ref="textareaRef"
         placeholder="输入消息..."
         rows="1"

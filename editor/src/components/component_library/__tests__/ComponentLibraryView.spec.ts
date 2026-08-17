@@ -15,17 +15,14 @@ import FavoritesView from '@/views/FavoritesView.vue'
 const listComponentLibraryItems = vi.fn()
 const createComponentLibraryItem = vi.fn()
 const renameComponentLibraryItem = vi.fn()
-const deleteKnowledgePath = vi.fn()
+const deleteComponentLibraryItem = vi.fn()
 const listFavorites = vi.fn()
 
 vi.mock('@/api/componentLibrary', () => ({
   listComponentLibraryItems: (...args: unknown[]) => listComponentLibraryItems(...args),
   createComponentLibraryItem: (...args: unknown[]) => createComponentLibraryItem(...args),
   renameComponentLibraryItem: (...args: unknown[]) => renameComponentLibraryItem(...args),
-}))
-
-vi.mock('@/api/knowledge', () => ({
-  deleteKnowledgePath: (...args: unknown[]) => deleteKnowledgePath(...args),
+  deleteComponentLibraryItem: (...args: unknown[]) => deleteComponentLibraryItem(...args),
 }))
 
 vi.mock('@/api/favorites', async (importOriginal) => {
@@ -47,9 +44,9 @@ describe('ComponentLibraryView', () => {
     listComponentLibraryItems.mockReset()
     createComponentLibraryItem.mockReset()
     renameComponentLibraryItem.mockReset()
-    deleteKnowledgePath.mockReset()
+    deleteComponentLibraryItem.mockReset()
     listFavorites.mockReset()
-    deleteKnowledgePath.mockResolvedValue({ ok: true, trash_id: 'trash-1' })
+    deleteComponentLibraryItem.mockResolvedValue({ component_id: 'buttons/button.vue', deleted: true })
     listFavorites.mockResolvedValue({ favorites: [] })
     listComponentLibraryItems.mockResolvedValue({
       tags: [...COMPONENT_TAGS],
@@ -328,7 +325,7 @@ describe('ComponentLibraryView', () => {
     expect(componentUploadFormSource).toMatch(/\.name-field input\s*\{[^}]*padding:\s*0 var\(--space-20\)/su)
   })
 
-  it('confirms and moves a card component to the knowledge trash', async () => {
+  it('confirms and deletes a card through the component-library endpoint', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const wrapper = mount(ComponentLibraryView, {
       global: {
@@ -346,7 +343,7 @@ describe('ComponentLibraryView', () => {
     await flushPromises()
 
     expect(confirm).toHaveBeenCalledOnce()
-    expect(deleteKnowledgePath).toHaveBeenCalledWith('u1', 'components/buttons/button.vue')
+    expect(deleteComponentLibraryItem).toHaveBeenCalledWith('u1', 'buttons/button.vue')
     expect(wrapper.find('.delete-card').exists()).toBe(false)
   })
 
