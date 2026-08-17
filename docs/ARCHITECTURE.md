@@ -1,26 +1,5 @@
 # MetaWeave(元织) 项目总体架构设计
 
-### 技术栈
-
-* 版本：Python 3.12
-* 微服务框架：FastAPI
-* 通信与工具协议: gRPC + REST/HTTP + MCP
-* 观测面板：Vue 3 + Pinia + TypeScript/JavaScript
-* 知识图谱：D3.js + Canvas
-* 文档编辑器：CodeEditor + MarkdownPreview + 多模态原件预览器，按文件类型切换编辑、预览、表格或 Markdown 中间层
-* 反向代理：Vite
-* 智能体编排：LangGraph + LangChain
-* 模型接入：支持用户配置的 OpenAI 兼容大小模型接口
-* 关联数据库：SQLite
-* 向量数据库：ChromaDB
-* 长期记忆方案：RAG（向量检索 + 关键词检索 + ReRank）
-* 配置管理：Pydantic / dataclass 风格 AgentConfig
-* 异步任务：asyncio
-* 知识库文件监听: watchdog
-* 联网搜索引擎: DuckDuckGo + ddgs
-* OCR引擎: PaddleOCR
-* 日志与监控：logging / structlog + Prometheus + Grafana
-* 测试与质量：Pytest + Ruff + mypy
 
 ### 项目结构
 
@@ -95,3 +74,19 @@ MetaWeave/
 ```
 
 运行时路径和发布路径需要区分：开发模式默认读取项目根目录的 `resources/`；Electron 安装包首次启动时把默认模板复制到用户数据目录，并通过 `AGENT_PROJECT_ROOT` 和 `AGENT_BASE_DATA_DIR` 指向该目录。`resources/knowledge/`、`runtime/` 和模型文件属于用户数据，不随 `AgentService.exe` 打包。
+
+
+
+### 数据库设计
+
+#### 关系数据库
+
+关系数据库采用 SQLite，存储 Agent 会话、消息及其他结构化业务数据。每次对话从关系数据库加载会话上下文，实现多轮对话管理。
+
+#### 向量数据库
+
+向量数据库采用 ChromaDB。多模态文件经格式解析与元数据提取后统一转换为结构化 JSON，再按语义切片写入向量库。检索时通过向量相似度、关键词覆盖与 ReRank 重排序实现精准召回，每个切片携带源文件路径与偏移信息，可追溯至原始文档。
+
+### 服务接口
+
+后端服务遵循独立服务设计，配备 REST 与 gRPC 两套对外接口，并通过 MCP 接入外部工具服务。

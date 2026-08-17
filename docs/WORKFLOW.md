@@ -411,6 +411,23 @@ flowchart TD
 
 ##### 多模态文件入库流程
 
+系统扫描知识库中的多模态文件，先按原目录结构生成 `.mw/md/` Markdown 中间层，再将结构化 JSON 写入 `.mw/frontmatter/`，随后切片写入 ChromaDB 向量数据库供 Agent 使用。
+
+###### 多模态扫描与格式解析
+
+- `.md` / `.txt`：Markdown 按标题结构化，TXT 整体或按段落切分。
+- `.json` / `.jsonl`：使用 `json.loads` 解析后格式化为可检索文本。
+- `.csv` / `.tsv`：使用 Python `csv` 模块读取为表格行。
+- `.html` / `.htm`：使用 `html.parser.HTMLParser` 提取正文，跳过 `script` 和 `style` 标签。
+- `.xml`：使用 `xml.etree.ElementTree` 解析节点路径和值。
+- `.docx`：将文件作为 ZIP 包读取，解析 `word/document.xml` 及图片关系引用。段落按标题样式或段落结构生成文本块；表格保留结构并生成检索摘要；图片优先使用替代文本，否则执行 OCR。提取出的图片保存到 `.mw/assets/`，并在 Markdown 中登记资源位置。
+- `.pptx`：将文件作为 ZIP 包读取并解析 `ppt/slides/slide*.xml`。旧版 `.ppt` 不属于支持格式。
+- `.xlsx`：将文件作为 ZIP 包读取，解析 `xl/sharedStrings.xml` 和 `xl/worksheets/sheet*.xml`。小表完整提取行列；大表提取结构、表头、样例、统计信息和工作表摘要；超大或不适合语义检索的表格只索引工作表名、列名、数据范围等元信息。
+- 图片（`.jpg`、`.jpeg`、`.png`、`.webp`）：使用 PaddleOCR 识别中英文文字和表格截图。OCR 默认关闭，在设置页开启后对后续灌库立即生效，无需重启；模型缓存位于 `runtime/models/paddleocr/`。当前已落地文字 OCR，图表描述、照片描述等重度视觉处理根据内容类型决定是否执行。
+- `.pdf`：文档型 PDF 优先提取文本层、表格和图片；扫描型 PDF 按页渲染并执行 OCR；混合型 PDF 逐页判断是否存在文本层；表格无法稳定识别时至少输出文本块和页码范围。
+- 文档内嵌图片：图片本体不作为独立语义文档写入向量库，结构化 JSON 记录图片引用、OCR 状态和识别结果。PDF 与 Office 文档提取的图片统一保存在 `.mw/assets/`，并结合相邻标题、段落、表格编号和图注形成检索上下文。
+- 其他格式：系统先检查支持的后缀白名单；白名单外文件读取前 8192 字节，通过空字节、UTF-8/GBK 等编码解码结果和控制字符占比判断是文本还是二进制。可解码文本按普通文本处理；无法识别的二进制文件登记为资源占位并禁止入库。
+
 ```mermaid
 flowchart TD
     A["用户知识库目录<br/>resources/knowledge 或用户选择的 active library"] --> B["KnowledgeLibraryService.rebuild_user_knowledge()"]
@@ -445,6 +462,12 @@ flowchart TD
     R --> T["Agent RAG / knowledge search 可召回"]
     S --> T
 ```
+
+###### 语义切块与重叠切片
+
+入库服务遍历每个文档的节（section），对正文按默认 512 字符窗口、128 字符重叠进行切片。窗口结束位置优先回退到距离游标至少 80 个字符或窗口大小三分之一处的段落分隔符，避免从段落中间截断；没有合适分隔符时才在字符边界切断。每个切片记录节内及原文中的起止偏移，用于定位原始内容。
+
+切片在送入 Embedding 前会附加文档标题和章节标题路径，使同源内容在向量空间中保留文档上下文。包装后的文本以 `knowledge_chunk` 类型写入长期记忆元数据，并记录 `source_hash` 供增量入库判断使用。
 
 ##### 三路并行搜索
 
