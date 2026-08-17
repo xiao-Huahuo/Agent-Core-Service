@@ -2,6 +2,8 @@
 
 ## 2026-08-17
 
+- [x] 收紧用户存储设置：知识库根目录仍可切换，`.mw/md`、`.mw/frontmatter`、`.mw/library`、`.mw/forms` 与 `.mw/components` 固定只读；移除图书馆和运行时根路径编辑入口及失效的用户级路径迁移，路径统计统一展示服务真实配置。运行中仅允许清空“最近删除”，禁止直接删除 SQLite、Chroma、受管资源、日志和已加载模型；同步修正图书馆前端默认路径、Markdown 粘贴图片目录名称，并补充后端及前端契约回归测试。
+
 - [x] 按文件模态统一编辑区管线：Markdown 使用 Edit/Preview/Split，纯文本与代码分别固定为 Text/Code，CSV 使用可编辑原文 Text 与只读表格 Forms，XLS/XLSX 固定 Forms，DOCX/PDF/PPTX/图片使用原件 Preview 与 `.mw/md` 完整源码 Markdown；PPTX 原件预览保留空白占位，旧 DOC 及未知二进制显示 Binary，未知 UTF-8 文件自动转为 Text。移除 PDF 二级“文本/渲染”切换，模式选择、加载、可编辑性和渲染统一由同一格式解析器决定；补充后端预览、组件、格式映射及 Chromium 全格式真实界面验收。
 
 - [x] 根治空会话状态下持续请求 `/sessions`：共享 Session store 现在区分“尚未加载”与“已加载但为空”，同一用户的并发/重复加载统一复用一次请求；导入会话、流结束和清理空会话等数据变更路径保留显式强制刷新。Debug 页面同时使用稳定标量监听并移除 mounted 重复入口；补充 store 并发空列表回归、Debug 组件回归，以及完整工作区启动至打开 Debug 全程仅一次请求的 Chromium 验收。

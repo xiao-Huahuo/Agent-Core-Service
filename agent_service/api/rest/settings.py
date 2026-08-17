@@ -674,7 +674,7 @@ async def get_storage_config(user_id: str = Query(..., min_length=1, description
 
 @router.put("/settings/storage/config")
 async def save_storage_config(body: dict[str, Any]) -> dict[str, Any]:
-    """保存用户存储路径覆盖（knowledge_dir 除外）。"""
+    """兼容旧客户端的写入请求；所有存储路径均为只读并返回 422。"""
 
     user_id = str(body.get("user_id") or "").strip()
     if not user_id:

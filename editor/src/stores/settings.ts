@@ -166,7 +166,7 @@ function mapKnowledgeLibrary(library: SettingsKnowledgeLibraryResponse): Knowled
     libraryId: library.library_id,
     name: library.name,
     knowledgeDir: library.knowledge_dir,
-    libraryStorageDir: library.library_storage_dir ?? 'library',
+    libraryStorageDir: library.library_storage_dir ?? '.mw/library',
     isActive: library.is_active,
   }
 }

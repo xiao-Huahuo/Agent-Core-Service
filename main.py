@@ -143,9 +143,6 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     settings_service = SettingsService(config=config, memory_service=memory_service)
     activity_service = ActivityService(engine=settings_service.engine)
 
-    # 启动时迁移：将用户覆盖的旧路径内容移动到新路径
-    from agent_service.services.storage_service import migrate_storage_paths
-    config = migrate_storage_paths(config, settings_service)
     knowledge_graph_service = KnowledgeGraphService(config=config)
     knowledge_library_service = KnowledgeLibraryService(
         config=config,

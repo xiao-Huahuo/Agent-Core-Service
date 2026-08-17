@@ -13,9 +13,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqlmodel import create_engine
+import pytest
+from sqlmodel import Session, create_engine
 
 from agent_service.core.agent_config import AgentConfig
+from agent_service.models.user_settings import UserKnowledgeLibrary
 from agent_service.services.library_service import LibraryService
 from agent_service.services.settings_service import SettingsService
 
@@ -144,8 +146,8 @@ def test_delete_library_item_does_not_delete_real_file(tmp_path: Path) -> None:
     assert (tmp_path / book["source_path"]).read_text(encoding="utf-8") == "hello"
 
 
-def test_library_storage_dir_migration_updates_virtual_source_paths(tmp_path: Path) -> None:
-    """修改图书馆存储路径时移动旧目录内容并更新虚拟条目的 source_path。"""
+def test_library_storage_dir_cannot_leave_managed_root(tmp_path: Path) -> None:
+    """图书馆存储目录固定为 `.mw/library`，不接受用户自定义位置。"""
 
     source = tmp_path / "library" / "paper.md"
     source.parent.mkdir(parents=True)
@@ -160,17 +162,37 @@ def test_library_storage_dir_migration_updates_virtual_source_paths(tmp_path: Pa
         title="原论文",
     )["item"]
 
-    result = service.settings_service.update_library_storage_dir(
-        user_id="u1",
-        library_storage_dir="bookshelf",
-    )
-    updated = service.get_item(user_id="u1", item_id=book["item_id"])["item"]
+    with pytest.raises(ValueError, match="固定"):
+        service.settings_service.update_library_storage_dir(
+            user_id="u1",
+            library_storage_dir="bookshelf",
+        )
 
-    assert result["moved"] is True
-    assert result["active_knowledge_library"]["library_storage_dir"] == "bookshelf"
-    assert not source.exists()
-    assert (tmp_path / "bookshelf" / "原论文.md").read_text(encoding="utf-8") == "hello"
-    assert updated["source_path"] == "bookshelf/原论文.md"
+    updated = service.get_item(user_id="u1", item_id=book["item_id"])["item"]
+    assert updated["source_path"] == ".mw/library/原论文.md"
+
+
+def test_legacy_custom_library_storage_is_migrated_to_managed_root(tmp_path: Path) -> None:
+    """历史自定义图书馆目录会在读取设置时迁回固定的 `.mw/library`。"""
+
+    service = make_service(tmp_path)
+    profile = service.settings_service.ensure_user_profile(user_id="u1")
+    library_id = profile["active_knowledge_library"]["library_id"]
+    legacy_file = tmp_path / "bookshelf" / "paper.md"
+    legacy_file.parent.mkdir(parents=True)
+    legacy_file.write_text("hello", encoding="utf-8")
+    with Session(service.settings_service.engine) as db:
+        library = db.get(UserKnowledgeLibrary, library_id)
+        assert library is not None
+        library.library_storage_dir = "bookshelf"
+        db.add(library)
+        db.commit()
+
+    migrated = service.settings_service.ensure_user_profile(user_id="u1")
+
+    assert migrated["active_knowledge_library"]["library_storage_dir"] == ".mw/library"
+    assert not legacy_file.exists()
+    assert (tmp_path / ".mw" / "library" / "paper.md").read_text(encoding="utf-8") == "hello"
 
 
 def test_move_collection_moves_real_folder_and_descendant_paths(tmp_path: Path) -> None:

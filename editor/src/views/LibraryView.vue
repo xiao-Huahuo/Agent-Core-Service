@@ -471,7 +471,7 @@ async function createFromDialog(payload: {
         workspaceStore.showToast('请输入文本内容')
         return
       }
-      const libraryStorageDir = settingsStore.activeKnowledgeLibrary?.libraryStorageDir || 'library'
+      const libraryStorageDir = settingsStore.activeKnowledgeLibrary?.libraryStorageDir || '.mw/library'
       const result = await uploadKnowledgeFile(settingsStore.profile.userId, sourceFile, libraryStorageDir, false, 'rename') as { uploaded_path?: string; knowledge_dir?: string }
       const relativePath = relativeUploadedPath(result.uploaded_path ?? '', result.knowledge_dir ?? settingsStore.profile.knowledgeDir)
       if (!relativePath) {

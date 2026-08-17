@@ -74,7 +74,7 @@ function goToStorageSettings() {
       <input v-model="knowledgeDirDraft" spellcheck="false" @blur="$emit('save')" />
     </div>
     <div class="setting-row">
-      <label>图片目录</label>
+      <label>Markdown 粘贴图片目录</label>
       <input v-model="editorImageAssetsDirDraft" spellcheck="false" placeholder="./assets/" @blur="$emit('save')" />
     </div>
 

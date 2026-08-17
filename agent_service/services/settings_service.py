@@ -196,6 +196,7 @@ class SettingsService:
             db.commit()
             db.refresh(record)
             db.refresh(active_library)
+            self._migrate_library_storage(db=db, record=record, library=active_library)
             return self._serialize_user_profile(record)
 
     def get_active_knowledge_library(self, *, user_id: str) -> dict:
@@ -210,61 +211,13 @@ class SettingsService:
 
     def update_library_storage_dir(self, *, user_id: str, library_storage_dir: str) -> dict:
         """
-        更新当前 active 知识库的图书馆文件存储目录并迁移旧内容。
+        拒绝修改固定的图书馆托管目录。
 
-        user_id: 用户 ID。
-        library_storage_dir: 用户输入目录,可为知识库内相对路径或绝对路径。
+        user_id: 旧调用签名中的用户 ID，仅用于兼容。
+        library_storage_dir: 旧调用签名中的目标目录，仅用于兼容。
         """
 
-        normalized_user_id = user_id.strip()
-        if not normalized_user_id:
-            raise ValueError("user_id is required")
-        with Session(self.engine) as db:
-            record = db.get(UserSettingsRecord, normalized_user_id)
-            if record is None:
-                record = UserSettingsRecord(
-                    user_id=normalized_user_id,
-                    knowledge_dir=str(self.config.storage.knowledge_dir),
-                    created_at=self._utc_now(),
-                    updated_at=self._utc_now(),
-                )
-                db.add(record)
-                db.commit()
-                db.refresh(record)
-            active_library = self._ensure_active_library(db=db, record=record)
-            knowledge_root = Path(active_library.knowledge_dir).expanduser().resolve()
-            old_relative = self._library_storage_relative_path(active_library)
-            new_absolute = self._resolve_library_storage_dir(
-                knowledge_root=knowledge_root,
-                library_storage_dir=library_storage_dir,
-            )
-            new_relative = new_absolute.relative_to(knowledge_root).as_posix()
-            if old_relative == new_relative:
-                active_library.library_storage_dir = new_relative
-                active_library.updated_at = self._utc_now()
-                db.add(active_library)
-                db.commit()
-                db.refresh(active_library)
-                return {"active_knowledge_library": self._serialize_knowledge_library(active_library), "moved": False}
-
-            old_absolute = (knowledge_root / old_relative).resolve()
-            self._move_library_storage_dir(old_path=old_absolute, new_path=new_absolute)
-            self._rewrite_library_item_source_paths(
-                db=db,
-                user_id=normalized_user_id,
-                library_id=active_library.library_id,
-                old_relative=old_relative,
-                new_relative=new_relative,
-            )
-            now = self._utc_now()
-            active_library.library_storage_dir = new_relative
-            active_library.updated_at = now
-            record.updated_at = now
-            db.add(active_library)
-            db.add(record)
-            db.commit()
-            db.refresh(active_library)
-            return {"active_knowledge_library": self._serialize_knowledge_library(active_library), "moved": True}
+        raise ValueError("图书馆存储目录固定为 .mw/library，不允许修改")
 
     def resolve_active_knowledge_owner_id(self, *, user_id: str) -> str:
         """
@@ -310,7 +263,7 @@ class SettingsService:
         )
         active_library = db.exec(statement).first()
         if active_library is not None:
-            self._migrate_default_library_storage(db=db, record=record, library=active_library)
+            self._migrate_library_storage(db=db, record=record, library=active_library)
             return active_library
         libraries = list(
             db.exec(
@@ -332,7 +285,7 @@ class SettingsService:
             db.commit()
             db.refresh(active_library)
             db.refresh(record)
-            self._migrate_default_library_storage(db=db, record=record, library=active_library)
+            self._migrate_library_storage(db=db, record=record, library=active_library)
             return active_library
         now = self._utc_now()
         library = self._upsert_active_library(
@@ -429,17 +382,17 @@ class SettingsService:
         resolved = self._resolve_library_storage_dir(knowledge_root=knowledge_root, library_storage_dir=raw_value)
         return resolved.relative_to(knowledge_root).as_posix()
 
-    def _migrate_default_library_storage(
+    def _migrate_library_storage(
         self,
         *,
         db: Session,
         record: UserSettingsRecord,
         library: UserKnowledgeLibrary,
     ) -> None:
-        """Move the former top-level `library` default into `.mw/library` once."""
+        """将任意旧图书馆目录一次性迁移到固定的 `.mw/library`。"""
 
         old_relative = self._library_storage_relative_path(library)
-        if old_relative != "library":
+        if old_relative == ".mw/library":
             return
         knowledge_root = Path(library.knowledge_dir).expanduser().resolve()
         new_relative = ".mw/library"
@@ -1631,42 +1584,3 @@ class SettingsService:
             self.config.ocr.enabled = True
         except Exception as exc:
             logger.warning("PaddleOCR 模型检查失败: %s", exc)
-
-    # ---- 存储路径覆盖 ----
-
-    def get_storage_path_overrides(self, *, user_id: str) -> dict:
-        """读取用户存储路径覆盖配置；无记录时返回空字典。"""
-
-        normalized_user_id = user_id.strip()
-        import json as _json
-        with Session(self.engine) as db:
-            record = db.get(UserSettingsRecord, normalized_user_id)
-            if record is None or not record.storage_path_overrides:
-                return {}
-            try:
-                return _json.loads(record.storage_path_overrides)
-            except Exception:
-                return {}
-
-    def save_storage_path_overrides(self, *, user_id: str, overrides: dict) -> dict:
-        """保存用户存储路径覆盖配置到 JSON 列。返回已保存的覆盖。"""
-
-        normalized_user_id = user_id.strip()
-        import json as _json
-        now = self._utc_now()
-        with Session(self.engine) as db:
-            record = db.get(UserSettingsRecord, normalized_user_id)
-            if record is None:
-                record = UserSettingsRecord(
-                    user_id=normalized_user_id,
-                    knowledge_dir=str(self.config.storage.knowledge_dir),
-                    storage_path_overrides=_json.dumps(overrides, ensure_ascii=False),
-                    created_at=now,
-                    updated_at=now,
-                )
-            else:
-                record.storage_path_overrides = _json.dumps(overrides, ensure_ascii=False)
-                record.updated_at = now
-            db.add(record)
-            db.commit()
-            return overrides

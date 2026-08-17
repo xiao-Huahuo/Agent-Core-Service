@@ -1,25 +1,31 @@
-# MetaWeave 元织 - 个人多模态知识库Agent
+# MetaWeave 元织 - 个人多模态知识库 Agent
 
 ## 产品定位
 
-##### 项目目标
+### 项目目标
 
-本项目是一个可观测、可溯源、建立在个人知识库上的多模态智能知识库`MetaWeave`(元织)。
-#### 现实痛点
-现有个人知识库只能管理文件，不能让 Agent 统一操作不同结构的知识资产。
-本项目提出一种异构知识库联合架构，将文件、文献、表格、组件和脚本统一为可检索、可引用、可操作的知识对象,交由 Agent 进行联合检索和管理。
-##### 项目简介
+MetaWeave（元织）是一个建立在个人文件系统上的多模态知识库与 Agent 工作台。它强调可观测和可溯源：用户不仅能让 Agent 使用知识，还能看到知识来自哪里、如何被处理，以及任务执行到了哪一步。
 
-MetaWeave 是一个面向复杂任务处理的智能 Agent 服务与可视化工作台，集成多轮对话、工具调用、长期记忆、知识库召回、RAG 指标观测、任务队列与多模式推理流程，支持在 simple、react、plan 等不同思考模式下完成问答、检索、文档理解和自动化执行，并通过前端观测面板实时展示模型用量、节点耗时、召回质量与执行轨迹，帮助用户更清晰地理解 Agent 的决策过程与运行状态。
+### 现实痛点
+
+个人资料往往散落在 Markdown、PDF、Office 文档、图片、表格和代码中。传统知识库擅长保存文件，却很难让 Agent 统一检索和操作这些不同结构的知识资产。
+
+MetaWeave 将文件、文献、表格、组件和密码条目放在同一个桌面工作台中，并根据内容类型提供合适的浏览、编辑、检索与 Agent 操作方式。
+
+### 项目简介
+
+MetaWeave 集成多轮对话、工具调用、长期记忆、知识库召回、任务队列和多模式推理，可以完成问答、检索、文档理解与自动化任务。前端同时展示模型用量、节点耗时、召回质量和执行轨迹，便于用户理解 Agent 的行为，而不是只看到最终答案。
 ![主页](docs/assets/主页.png)
-##### 主要服务人群
 
-- 希望在个人文件系统上建立Agent中枢的智能知识库的人.
-- 追求高度自定义智能体、希望自己搭建智能体能力的开发者。
-- 希望快速使用Agent接口,而不希望手动搭建复杂智能体思考链的人.
+### 主要服务人群
 
-##### 项目小心得
-做了agent之后发现,用agent骨架是无法弥补LLM自己的幻觉能力的,LLM往往会基于自己的认知就认为这个东西怎么怎么样,懒得去搜,即使在提示词中说100遍.幻觉和迷之自信是LLM与生俱来的,外部Agent框架只会提供给LLM知识的能力,而不能本质上改变LLM的底层认知.
+- 希望在个人文件系统上建立 Agent 中枢的知识管理用户。
+- 需要统一管理文档、文献、表格和代码等异构资料的用户。
+- 希望自行配置模型、工具和工作流的开发者。
+
+### 设计原则
+
+Agent 框架不能消除模型幻觉。MetaWeave 因此优先提供检索、引用、执行轨迹和调试观测，让用户能够核对依据并发现问题，而不是把模型输出包装成不可解释的结论。
 
 
 ## 技术与结构
@@ -31,10 +37,10 @@ MetaWeave 是一个面向复杂任务处理的智能 Agent 服务与可视化工
 * 通信与工具协议: gRPC + REST/HTTP + MCP
 * 观测面板：Vue 3 + Pinia + TypeScript/JavaScript
 * 知识图谱：D3.js + Canvas
-* 文档编辑器: Vditor(Markdown格式) + CodeEditor(代码格式)
+* 文档编辑器：CodeEditor + MarkdownPreview + 多模态原件预览器，按文件类型切换编辑、预览、表格或 Markdown 中间层
 * 反向代理：Vite
 * 智能体编排：LangGraph + LangChain
-* 模型接入：DeepSeek-v4-flash(大模型) + Moonshot-v1-8k(小模型)
+* 模型接入：支持用户配置的 OpenAI 兼容大小模型接口
 * 关联数据库：SQLite
 * 向量数据库：ChromaDB
 * 长期记忆方案：RAG（向量检索 + 关键词检索 + ReRank）
@@ -52,169 +58,70 @@ MetaWeave 是一个面向复杂任务处理的智能 Agent 服务与可视化工
 
 ```text
 MetaWeave/
-├── main.py                         # 后端入口: 创建 FastAPI 应用、注册 REST/gRPC、启动服务
-├── AgentService.spec               # PyInstaller 配置: 将后端和 editor/dist 打包为 AgentService.exe
-├── protos/                         # gRPC 协议源文件
-│   └── agent_service.proto         # REST/gRPC 对等服务、请求和响应消息定义
-├── agent_service/                  # 后端核心源码
-│   ├── core/                       # 进程级配置和模型状态
-│   │   ├── agent_config.py         # AgentConfig: 环境变量、默认值和运行参数
-│   │   └── model_status.py         # 模型可用性和状态检查
-│   ├── api/                        # 对外接口层
+├── main.py                         # 后端入口
+├── AgentService.spec               # PyInstaller 后端构建配置
+├── 启动.bat                        # Windows 开发环境一键启动
+├── protos/
+│   └── agent_service.proto         # gRPC 协议登记
+├── agent_service/
+│   ├── core/
+│   │   └── agent_config.py         # 服务配置与环境变量入口
+│   ├── api/
 │   │   ├── rest/                   # FastAPI REST 路由
-│   │   │   ├── agent.py            # Agent 流式/非流式运行、取消和事件
-│   │   │   ├── knowledge.py        # 知识库搜索、入库、图谱和多模态处理
-│   │   │   ├── library.py          # 知识库目录和库切换
-│   │   │   ├── sessions.py         # 会话和消息历史
-│   │   │   ├── settings.py         # 用户设置、提示词和自定义记忆
-│   │   │   ├── skills.py           # Skill 扫描、索引和调用
-│   │   │   ├── automation.py       # 自动化任务和调度
-│   │   │   ├── debug.py            # 调试、运行时和摄取观测接口
-│   │   │   ├── favorites.py        # 收藏管理
-│   │   │   ├── feedback.py         # 用户反馈
-│   │   │   ├── git.py              # Git 操作接口
-│   │   │   ├── health.py           # 健康检查
-│   │   │   ├── task_lists.py       # 任务列表
-│   │   │   ├── todo.py             # Todo 管理
-│   │   │   └── token_usage.py      # Token 用量统计
-│   │   ├── grpc/                   # gRPC 服务实现和生成代码
-│   │   │   ├── servicer.py         # gRPC 方法实现, 与 REST 共享服务层
-│   │   │   ├── agent_service_pb2.py
-│   │   │   └── agent_service_pb2_grpc.py # protobuf 生成的消息和客户端/服务端桩
-│   │   └── recall_details.py       # RAG 召回详情的统一序列化
-│   ├── agent_core/                 # Agent 状态图和主循环
-│   │   ├── agent_core.py           # AgentCore: 上下文、模型、工具和执行生命周期
-│   │   ├── graph.py                # LangGraph 图构建和模式路由
-│   │   └── nodes/                  # 图节点实现
-│   │       ├── base.py             # 节点基类和公共上下文
-│   │       ├── model_decision.py   # simple/react/plan 模式决策
-│   │       ├── planner.py          # Plan-and-Execute 规划
-│   │       ├── tool_call.py        # 工具选择和调用节点
-│   │       ├── observation.py      # 工具观察、方向判断和循环控制
-│   │       ├── safety.py           # 输入/输出安全审核节点
-│   │       ├── compress.py         # 上下文压缩
-│   │       └── summary.py          # 会话和执行摘要
-│   ├── tools/                      # 内置工具、MCP 工具和执行器
-│   │   ├── builtin.py              # 文件、知识库、记忆、搜索等内置工具
-│   │   ├── definitions.py          # 工具元数据和 JSON Schema
-│   │   ├── executor.py             # 工具运行时调度和结果封装
-│   │   ├── tool_registry.py        # 工具注册、启停和查询
-│   │   ├── runtime_context.py      # 用户、会话、权限和项目目录上下文
-│   │   ├── tool_math.py            # 工具参数和数学辅助逻辑
-│   │   └── mcp/                    # MCP 外部工具接入
-│   │       ├── client.py           # MCP stdio 客户端
-│   │       └── registry.py         # MCP 服务发现、工具注册和生命周期
-│   ├── services/                   # 业务服务层
-│   │   ├── memory/                 # 记忆、上下文和 RAG
-│   │   │   ├── context_builder.py  # 拼装系统提示词、历史、附件和召回上下文
-│   │   │   ├── retrieval_service.py# 记忆/知识库混合召回和 ReRank
-│   │   │   ├── longterm_memory_service.py # 长期记忆写入和查询
-│   │   │   ├── memory_resolver.py  # 记忆来源和引用解析
-│   │   │   ├── summary_service.py  # 会话摘要
-│   │   │   ├── important_fact_summary_service.py # 重要事实提取和持久化
-│   │   │   ├── valid_filter.py     # 召回结果过滤
-│   │   │   └── rag/                # 文档清洗、切块、向量化、检索和重排
-│   │   │       ├── frontmatter_bootstrap.py # 文件扫描和结构化 frontmatter
-│   │   │       ├── frontmatter_document.py  # 结构化文档模型
-│   │   │       ├── multimodal_cleaner.py    # 多模态文档统一清洗
-│   │   │       ├── knowledge_ingestion.py   # 知识库切块和入库
-│   │   │       ├── hybrid_retrieval.py      # 关键词/向量混合检索
-│   │   │       ├── rerank.py                # ReRank 精排
-│   │   │       ├── embedding.py              # Embedding 模型调用
-│   │   │       ├── chunk.py / slice.py       # 文档切块
-│   │   │       ├── pdf_cleaner.py            # PDF 文本和图片清洗
-│   │   │       └── image_ocr.py              # 图片 OCR
-│   │   ├── safety/                 # 安全审核链
-│   │   │   ├── safety_service.py   # 输入审核和输出审核总协调
-│   │   │   ├── sensitive_word_checker.py # 敏感词快速匹配
-│   │   │   ├── intent_auditor.py   # 小模型意图审核
-│   │   │   └── output_auditor.py   # 输出清洗、脱敏和拦截
-│   │   ├── knowledge_library_service.py # 知识库文件树和库管理
-│   │   ├── knowledge_graph_service.py   # 图谱实体、关系和去重
-│   │   ├── library_service.py      # 用户知识库配置
-│   │   ├── session_service.py      # 会话生命周期
-│   │   ├── message_service.py      # 消息持久化和历史读取
-│   │   ├── session_attachment_service.py # 会话附件保存和解析
-│   │   ├── settings_service.py     # 用户级设置覆盖
-│   │   ├── skill_service.py        # Skill 元信息扫描和路由
-│   │   ├── child_agent/             # 子 Agent 生命周期、权限和结果
-│   │   ├── scheduler/               # 任务调度、运行时和熔断
-│   │   ├── terminal/                # 终端命令沙箱
-│   │   ├── automation_service.py   # 自动化任务业务逻辑
-│   │   ├── automation_scheduler.py # 自动化触发调度
-│   │   ├── git_service.py           # Git 工作区操作
-│   │   ├── storage_service.py       # 数据库和存储初始化
-│   │   ├── logging_service.py       # 日志和运行轨迹
-│   │   └── ...                      # favorites、feedback、todo、token usage 等业务服务
-│   ├── models/                      # SQLModel 数据库模型
-│   ├── schemas/                     # REST/gRPC DTO 和校验模型
-│   ├── scripts/                     # 数据库初始化、模型下载、知识库引导和演示脚本
-│   └── requirements.txt             # 后端 Python 依赖
-├── resources/                      # 用户可编辑的默认资源源码
-│   ├── mcp/example.json             # MCP 配置模板
-│   ├── safety/                      # 安全词表和安全规则
-│   ├── skills/                      # 内置 Skill 正文、脚本、引用和资源
-│   └── knowledge/                   # 本地开发知识库, 不进入安装包
-├── editor/                          # Electron + Vite + Vue 3 前端
-│   ├── electron/                    # Electron 主进程
-│   │   ├── main.cjs                 # 创建窗口、启动内置后端、初始化用户资源、退出清理
-│   │   ├── preload.cjs              # 主进程与渲染进程之间的受控桥接
-│   │   └── edit-shortcuts.cjs       # Electron 编辑快捷键
-│   ├── src/                         # Vue 渲染进程源码
-│   │   ├── main.ts                  # Vue 应用、Pinia 和路由启动
-│   │   ├── App.vue                  # 根组件
-│   │   ├── views/                   # 页面级组件
-│   │   │   ├── HomeView.vue         # 首页和入口导航
-│   │   │   ├── EditorWorkspace.vue  # 文件编辑、预览、Agent 和图谱工作区
-│   │   │   ├── AgentPage.vue        # Agent 对话和流式执行
-│   │   │   ├── DashboardView.vue    # 执行轨迹、Token、RAG 和耗时观测
-│   │   │   ├── LibraryView.vue      # 知识库管理
-│   │   │   ├── SearchPage.vue       # 文件、全文和语义搜索
-│   │   │   ├── SkillView.vue        # Skill 管理
-│   │   │   ├── SettingsView.vue     # 用户设置
-│   │   │   ├── DebugView.vue        # 调试和运行时观测
-│   │   │   ├── FavoritesView.vue / IngestionProgressView.vue
-│   │   │   └── MarkdownHtmlVisualizationView.vue # Markdown/HTML 可视化
-│   │   ├── components/              # 页面子组件, 按业务域分组
-│   │   │   ├── editor_workspace/    # 编辑器、文件树、预览、Agent 面板、搜索和图谱面板
-│   │   │   ├── dashboard/           # 各类观测卡片和轨迹面板
-│   │   │   ├── knowledge_graph/     # 图谱 Canvas、布局和数据适配器
-│   │   │   ├── settings_view/       # 设置页各配置分区
-│   │   │   ├── library_view/         # 知识库卡片和创建/编辑对话框
-│   │   │   ├── git_sidebar/          # Git 侧栏和提交/推送对话框
-│   │   │   ├── home/                 # 首页导航块和轮播
-│   │   │   ├── floating/              # 悬浮 Agent 窗口
-│   │   │   ├── debug/                 # 调试面板
-│   │   │   ├── chat/                  # 对话过程组件
-│   │   │   └── common/                # 可复用按钮、图标、预览和状态组件
-│   │   ├── api/                    # 前端 API 客户端, 与后端 REST 路由对应
-│   │   │   ├── client.ts            # HTTP 客户端、错误处理和基础请求
-│   │   │   ├── agent.ts / session.ts# Agent 流式请求和会话
-│   │   │   ├── knowledge.ts / library.ts # 知识库和库管理
-│   │   │   ├── settings.ts / skills.ts # 设置和 Skill
-│   │   │   └── automation.ts / debug.ts / git.ts / tools.ts / taskList.ts / todo.ts
-│   │   ├── router/                  # 路由和 API 路由登记
-│   │   │   ├── index.ts             # 页面路由
-│   │   │   └── api_routes.ts        # API 前缀和请求路由约定
-│   │   ├── stores/                  # Pinia 状态: session、chat、workspace、settings 等
-│   │   ├── composable/              # 可复用组合式逻辑、首页图片和观测数据
-│   │   ├── types/                   # 前端领域类型
-│   │   ├── utils/                   # 导入导出、格式化和辅助工具
-│   │   └── assets/                  # 字体、图标、图片和全局 CSS
-│   ├── scripts/                     # 构建辅助脚本
-│   │   ├── prepare-default-resources.cjs # 生成安装包默认资源模板
-│   │   ├── build-win-installer.cjs       # 生成时间戳隔离的 Windows NSIS 安装包
-│   │   └── clean-electron-release.cjs    # 清理被锁定的旧构建目录
-│   ├── vite.config.ts               # Vite 开发服务器、代理和构建配置
-│   ├── package.json                 # 前端依赖、Electron 和 electron-builder 脚本
-│   ├── playwright.config.ts         # E2E 测试配置
-│   └── vitest.config.ts             # 单元测试配置
-├── runtime/                        # 运行时数据: 数据库、模型缓存、日志、上传和 frontmatter
+│   │   └── grpc/
+│   │       └── servicer.py         # gRPC 服务登记
+│   ├── agent_core/
+│   │   └── nodes/                  # Agent 状态图、节点与执行循环
+│   ├── tools/
+│   │   └── mcp/                    # 内置工具和 MCP 接入
+│   ├── services/
+│   │   ├── memory/
+│   │   │   └── rag/                # 上下文、长期记忆与知识检索
+│   │   ├── safety/                 # 输入与输出安全审核
+│   │   ├── child_agent/            # 子 Agent 生命周期
+│   │   ├── scheduler/              # 调度、并发与熔断
+│   │   └── terminal/               # 终端沙箱
+│   ├── models/                     # SQLModel 数据模型
+│   ├── schemas/                    # API DTO 和校验模型
+│   ├── scripts/                    # 初始化与维护脚本
+│   └── requirements.txt            # Python 依赖
+├── resources/
+│   ├── mcp/
+│   │   └── example.json            # MCP 配置模板
+│   ├── safety/                     # 安全规则
+│   ├── skills/                     # 内置 Skill
+│   └── knowledge/                  # 本地开发默认知识库
+├── editor/
+│   ├── electron/
+│   │   └── main.cjs                # 桌面主进程与内置后端生命周期
+│   ├── src/
+│   │   ├── main.ts                 # Vue 启动入口
+│   │   ├── App.vue                 # 根组件
+│   │   ├── views/                  # 页面
+│   │   ├── components/             # 业务与通用组件
+│   │   ├── floating/               # 悬浮窗口
+│   │   ├── supercomponents/        # 复合功能组件
+│   │   ├── api/                    # 前端 API 客户端
+│   │   ├── router/
+│   │   │   ├── index.ts            # 页面路由登记
+│   │   │   └── api_routes.ts       # API 路由登记
+│   │   ├── stores/
+│   │   │   ├── settings.ts         # 用户配置状态
+│   │   │   └── workspace.ts        # 工作区状态
+│   │   ├── composable/             # 组合式逻辑
+│   │   ├── types/                  # 领域类型
+│   │   ├── utils/                  # 通用工具
+│   │   ├── assets/                 # 图标、字体、图片与样式
+│   │   └── __tests__/              # 前端测试
+│   ├── scripts/                    # 构建与安装包脚本
+│   ├── vite.config.ts              # Vite 与代理配置
+│   └── package.json                # 前端依赖和命令
+├── runtime/                        # 数据库、缓存、日志和会话上传
 ├── tests/                          # 后端测试
-├── docs/                           # 设计、接口和开发文档
-├── agent_graph*.mmd                 # Agent 状态图 Mermaid 源文件
-├── CHANGE_HISTORY.md                # 代码修改历史
-└── README.md                        # 项目说明、启动、构建和架构文档
+├── docs/                           # 设计、接口与开发文档
+├── agent_graph*.mmd                # Agent 状态图
+├── CHANGE_HISTORY.md               # 修改历史
+└── README.md                       # 项目说明
 ```
 
 运行时路径和发布路径需要区分：开发模式默认读取项目根目录的 `resources/`；Electron 安装包首次启动时把默认模板复制到用户数据目录，并通过 `AGENT_PROJECT_ROOT` 和 `AGENT_BASE_DATA_DIR` 指向该目录。`resources/knowledge/`、`runtime/` 和模型文件属于用户数据，不随 `AgentService.exe` 打包。
@@ -245,7 +152,7 @@ MetaWeave/
 ![联合搜索](docs/assets/搜索.png)
 #### 文件入库全流程
 ##### 第一步: 多模态扫描
-系统会扫描知识库中的多模态文件,并将不同模态文件以不同方式转化为JSON(不同知识库隔离存入`runtime/frontmatter/{user_id}/{library_id}/`),切片入ChromaDB向量数据库,供Agent使用.
+系统会扫描知识库中的多模态文件，先按原目录结构生成 `.mw/md/` Markdown 中间层，再将结构化 JSON 写入 `.mw/frontmatter/`，随后切片写入 ChromaDB 向量数据库供 Agent 使用。
 - `.md` / `.txt`：
 Markdown 按 heading 结构化，TXT 整体或按段落切。它们是最稳定的文本源。
 - `.json` / `.jsonl`：
@@ -261,9 +168,9 @@ Python `html.parser.HTMLParser` 提取正文文本，跳过 `script/style`标签
 把 docx 当 zip 包读，然后解析 `word/document.xml`，再抽取段落、表格和图片关系引用,从而实现排版的保留.
 **段落**：按标题样式或段落结构生成 text block。
 **表格**：保留结构化表格，同时生成一段可检索摘要。
-**图片**：如果图片有 alt text，先用 alt text；否则走 OCR/视觉描述。当前已落地的是 PaddleOCR 识别,并按图片所在位置回填到 DOCX 文档流。
-- `.ppt` / `.pptx`  ：
-PPT和DOCX类似,把 PPT 当 zip 包读，解析 `ppt/slides/slide*.xml`.
+**图片**：如果图片有 alt text，先用 alt text；否则走 OCR。提取后的图片保存到 `.mw/assets/`，并在 Markdown 中登记资源位置。
+- `.pptx`：
+PPTX 和 DOCX 类似，将文件作为 zip 包读取并解析 `ppt/slides/slide*.xml`。旧版 `.ppt` 不属于支持格式。
 - `.xlsx`：
 把 xlsx 当 zip 包读，解析 `xl/sharedStrings.xml` 和 `xl/worksheets/sheet*.xml`.
 不可简单转纯文本，否则会丢掉表格语义。
@@ -287,7 +194,7 @@ PDF 必须先分类，因为“文档型 PDF”和“扫描型 PDF”完全不�
 **表格 PDF**：能识别表格时输出 table block，不能稳定识别时至少输出 text block + page range。
 - 文档内嵌图片（`.docx` / `.pdf` 等内部）：
 内嵌图片本体不作为独立语义文档写入向量库；结构化 JSON 记录图片引用、OCR 状态和识别结果。
-当前 PDF 预览图片 asset 落在`runtime/assets/knowledge/pdf_preview/`下,并通过`/knowledge/assets/...`路由渲染;后续可继续统一为用户/知识库隔离的长期 asset 路径。
+PDF 与 Office 文档提取的图片统一保存在当前知识库的 `.mw/assets/` 中，Markdown 中间层与结构化 JSON 均保留对应资源引用。
 对于图片 block,应把图片前后的标题、段落、表格编号、图注一起作为上下文.这样召回时既能搜到图片内容，也能知道它属于哪个文档、哪个章节、哪个原始位置。
   - 其他不支持格式
   首先判定文件是否为二进制:
@@ -319,19 +226,19 @@ PDF 必须先分类，因为“文档型 PDF”和“扫描型 PDF”完全不�
 ##### 编辑器预览
 编辑器根据文件类型自动选择合适的预览方式:
 
-- **Markdown** → 隐藏编辑功能的渲染视图, 保持与编辑模式一致的渲染效果, 图片可点击放大
-- **代码文件** → 语法高亮展示
-- **图片** → 默认内嵌预览,支持缩放和拖拽;已灌库产生 OCR 文本后可手动切到 Edit/Split 查看文本
-- **PDF** → 默认内嵌 iframe 展示;Edit/Split 中提供「文本/渲染」切换,「文本」只在灌库后可用
-- **表格(Excel/CSV)** → 后端解析为表格数据, 前端渲染为 HTML 表格
-- **文档(Word/HTML)** → 后端转为 HTML 后安全渲染, 文档内图片可点击放大;Word 灌库后可手动切到 Edit/Split 查看合并文本
-- **纯文本** → 原格式展示
-- **不支持格式** → 提示文案
+- **Markdown** → `Edit / Preview / Split`，支持源码编辑、渲染预览与分栏查看
+- **纯文本** → `Text`，直接编辑原始文本
+- **代码与标记语言** → `Code`，提供语法高亮和编辑能力
+- **CSV** → `Text / Forms`，可在原始 CSV 文本与表格之间切换
+- **XLS / XLSX** → `Forms`，只显示表格
+- **DOCX / PDF / 图片** → `Preview / Markdown`，分别查看原件和 `.mw/md/` 中间层全文
+- **PPTX** → `Preview / Markdown`，当前原件预览留空，Markdown 显示中间层全文
+- **其他格式** → 可解码文本显示 `Text`；二进制显示 `Binary` 且不可查看。旧版 DOC 按不支持格式处理
 
 全局图片放大功能: 毛玻璃浮层, 支持左右切换、滚轮缩放、拖拽平移。在 Markdown 预览、Word 文档预览、AI 对话中点击图片均可触发。
 ![编辑区](docs/assets/多模态编辑区.png)
 ##### Markdown-to-HTML功能
-Markdown可视化功能: 让Agent针对某个文档(不只是md,多模态文档则直接看JSON提取结果)写HTML,然后在前端展示出来.
+Markdown可视化功能：让 Agent 针对某个文档生成 HTML 并在前端展示；多模态文档统一读取其 Markdown 中间层，而不是直接依赖原始格式或 JSON 展示结构。
   - 对文件树或者文件资源管理器的任何文件右键,点击右键菜单的"HTML可视化",则自动先将文档灌库,然后跳转到`HTML可视化`页面,并自动收缩文件树并展开Agent侧边栏给Agent下任务.
   - 可切换"原结构模式"和"AI提炼模式",原结构模式让Agent根据文档原本的结构进行HTML化,AI提炼模式则是Agent将自己理解的相关知识进行总结并写进HTML.HTML放在`runtime/`文件夹.配备一个"展示Markdown-HTML"工具,这个工具会自动触发前端的HTML渲染和挂载.
   - 高级生成配置:可勾选"强动效""阴影""圆角""emoji"...这些HTML的概念配置.
@@ -380,7 +287,7 @@ Markdown可视化功能: 让Agent针对某个文档(不只是md,多模态文档�
 
 图书馆会维护真实文件位置。新增集锦会创建同名文件夹,新增图书会保存到当前集锦文件夹中。移动或重命名图书、集锦时,真实文件也会跟着移动。
 
-- 真实文件默认放在知识库下的“library”文件夹。这个位置可以在存储管理里改成其他文件夹,系统会迁移已有内容并更新图书馆引用。
+- 真实文件固定保存在当前知识库的 `.mw/library/` 中；该目录由 MetaWeave 管理，在存储设置中只读展示。
 
 - 标题会自动转换成可用文件名。系统会清理非法字符,遇到重名会自动追加序号,避免覆盖已有资料。
 
@@ -427,7 +334,7 @@ Markdown可视化功能: 让Agent针对某个文档(不只是md,多模态文档�
 - 详情页支持一键复制源码，并允许直接在原位置重命名组件。组件卡片上的名称同样可以直接修改，不需要打开额外表单。
 - 上传组件时可以填写组件名、粘贴源码并立即查看编译结果，再为组件选择一个分类标签。也可以从文件资源管理器一次选择一个或多个 Vue、HTML 文件批量加入组件库。
 - 删除的组件会先移入知识库回收站，避免误操作后无法找回。
-- 组件统一保存在当前用户知识库的“components”文件夹中，与图书馆和智能表格一样由应用管理，并默认从普通文件浏览和知识入库流程中忽略。
+- 组件统一保存在当前知识库的 `.mw/components/` 中，与图书馆和智能表格一样由应用管理；文件浏览和知识入库统一忽略整个 `.mw/`。
 
 #### 密码库（模仿 Bitwarden）
 
@@ -1139,7 +1046,7 @@ flowchart TD
     J --> L
     K --> L
 
-    L --> M["写入 runtime/frontmatter/{user_id}/{library_id}/<document>.json"]
+    L --> M["写入知识库 .mw/md 与 .mw/frontmatter"]
     M --> N["KnowledgeIngestionService.ingest_frontmatter_dir()"]
     N --> O["按 section 语义切块<br/>保留 source_uri / source_range / metadata"]
     O --> P["EmbeddingService 向量化"]
@@ -1212,13 +1119,13 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["多模态入库"] --> B["Frontmatter JSON<br/>(runtime/frontmatter/*.json)"]
+    A["多模态入库"] --> B["Frontmatter JSON<br/>(知识库 .mw/frontmatter/*.json)"]
     B --> C["POST /knowledge/graph/rebuild"]
     C --> D["后台线程异步执行<br/>独立并发池(最大2并发)"]
     D --> E{"遍历每篇 JSON 文档"}
     E --> F{"按 source_hash<br/>是否已抽取?"}
     F -->|"是"| G["跳过 skip"]
-    F -->|"否"| H["逐 section 调用小模型<br/>(moonshot-v1-8k)"]
+    F -->|"否"| H["逐 section 调用用户配置的小模型"]
     H --> I["输入: 文档标题 + section 文本(至多6000字)"]
     I --> J["输出: entities + relations"]
     J --> K["限流 sleep(0.5s/section)"]
@@ -1341,18 +1248,12 @@ flowchart TD
 ### 环境要求
 
 * Python 3.12+
-* Node.js 18+
+* Node.js 22.18，或 Node.js 24.12 及以上版本
 * 已配置 LLM API（OpenAI 兼容接口）
 
-### 1. 配置环境变量
+### 1. 配置模型
 
-在根目录创建.env文件,配置如下环境变量：
-
-```bash
-# 必填：大小模型API-KEY,主模型默认为deepseek-v4-flash,小模型默认为moonshot-v1-8k
-AGENT_MODEL_API_KEY=sk-xxxxxxxx
-AGENT_SMALL_MODEL_API_KEY=sk-yyyyyyyy
-```
+推荐直接在 Editor 客户端的设置页填写主模型与小模型的名称、API Key 和 OpenAI 兼容 API 地址。根目录 `.env` 只用于提供服务级默认值，例如 `AGENT_MODEL_API_KEY` 和 `AGENT_SMALL_MODEL_API_KEY`。
 
 ### 2. 启动后端（FastAPI）
 
@@ -1363,7 +1264,7 @@ pip install -r agent_service/requirements.txt
 # 启动服务（HTTP: 8002, gRPC: 50051）
 uvicorn main:app --host 0.0.0.0 --port 8002
 ```
-后端默认将项目目录下的`resources/knowledge/`作为知识库根目录,用户可在前端自行重新选择知识库目录,更换知识库时库内将进行多模态文档扫描,进入向量数据库供Agent使用. 服务启动不执行任何自动灌库,知识库由前端 `/knowledge/rebuild`、单文件灌库与上传灌库按需触发,启动阶段不占用 embedding/rerank 与磁盘资源.
+开发模式默认将项目目录下的 `resources/knowledge/` 作为知识库根目录，用户可在前端重新选择知识库。服务启动和切换知识库都不会自动重建全部索引；灌库由前端的全库、目录或单文件操作按需触发，启动阶段不占用 embedding、rerank 与额外磁盘资源。
 
 ### 3. 启动前端（Electron + Vite + Vue 3）
 
@@ -1382,8 +1283,7 @@ npm run dev:electron # 开发模式 → http://localhost:5173
 
 ### 5. 必要设置
 
-1. **务必在editor客户端的设置中配置大小模型的api-key,api-name,api-url**,大模型默认为`deepseek-v4-flash`(`https://api.deepseek.com`),小模型默认为`Moonshot-v1-8k`(`https://api.moonshot.cn/v1`).
-    **未配置模型字段时无法使用Agent功能**.
+1. **务必在 Editor 客户端的设置中配置模型名称、API Key 和 OpenAI 兼容 API 地址**。主模型与小模型均由用户选择；未配置可用模型时无法使用 Agent 功能。
 2. 如果需要启用联网搜索引擎,则需要在设置中配置好代理地址(如:`http://127.0.0.1:11719`),因为DuckDuckGo需要连接外网才能正常使用,否则即使启用了联网引擎也无法使用联网.
 
 ## 构建
@@ -1397,7 +1297,7 @@ npm run dev:electron # 开发模式 → http://localhost:5173
 - 默认资源模板放入安装包的 `resources/default-resources/`。
 - 运行时由 Electron 拉起后端,窗口加载 `http://127.0.0.1:8002`。
 - 安装器允许用户选择安装目录。
-- `runtime/` 不进入安装包。数据库、模型缓存、日志、上传文件和 frontmatter 都在用户数据目录首次运行时自动生成。
+- `runtime/` 不进入安装包。数据库、模型缓存、日志和上传文件在用户数据目录首次运行时自动生成；知识库 Markdown 与 frontmatter 则保存在各知识库自己的 `.mw/` 中。
 
 ```bash
 cd editor
@@ -1473,7 +1373,7 @@ MetaWeave/
 │   ├── knowledge/       # 默认知识库,启动不自动灌库,按需触发
 │   ├── mcp/             # 首次复制 example.json 模板,可放 .json MCP 服务器配置
 │   └── safety/          # 放 sensitive_words.json,覆盖内置安全词库
-└── runtime/             # 自动生成: db/ models/ frontmatter/ logs/
+└── runtime/             # 自动生成: db/ models/ logs/ uploads/
 ```
 
 > **读取规则**: 正式安装包运行时以后端收到的 `AGENT_PROJECT_ROOT=%APPDATA%/MetaWeave` 为准。`resources/` 是用户可编辑目录,`runtime/` 是运行期数据目录,二者都不写入安装目录和后端 exe。
