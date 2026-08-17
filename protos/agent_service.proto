@@ -73,6 +73,8 @@ service AgentService {
   rpc ListLLMConfigPresets(LLMConfigRequest) returns (LLMConfigPresetListResponse);
   rpc SaveLLMConfigPreset(LLMConfigPresetSaveRequest) returns (LLMConfigPresetResponse);
   rpc DeleteLLMConfigPreset(LLMConfigPresetDeleteRequest) returns (DeleteResponse);
+  rpc GetWebSearchConfig(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc SaveWebSearchConfig(google.protobuf.Struct) returns (google.protobuf.Struct);
 
   // 知识库重建与上传
   rpc RebuildKnowledge(KnowledgeRebuildRequest) returns (KnowledgeRebuildResponse);

@@ -18,6 +18,7 @@ const path = require('node:path')
 const { handleEditShortcut } = require('./edit-shortcuts.cjs')
 const { boundsForMainDragRestore, finishMainWindowRestore } = require('./main-window-state.cjs')
 const { isAbortedNavigation, loadWindowContent } = require('./window-content-loader.cjs')
+const { registerBrowserViewIpc } = require('./browser-view.cjs')
 
 const DEV_SERVER_URL = process.env.ELECTRON_RENDERER_URL || 'http://127.0.0.1:5173'
 const BACKEND_SERVER_URL = process.env.METAWEAVE_BACKEND_URL || 'http://127.0.0.1:8002'
@@ -38,6 +39,7 @@ let floatingWindow = null
 let backendProcess = null
 let mainMoveSession = null
 let mainResizeSession = null
+const disposeBrowserView = registerBrowserViewIpc(ipcMain, () => mainWindow)
 
 const MAIN_MIN_WIDTH = 320
 const MAIN_MIN_HEIGHT = 620
@@ -751,6 +753,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
+  disposeBrowserView()
   if (tray) {
     tray.destroy()
     tray = null

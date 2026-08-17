@@ -52,6 +52,7 @@ describe('ActivityBar', () => {
     debugActive: false,
     feedbackOpen: false,
     searchActive: false,
+    browserActive: false,
     skillsActive: false,
     settingsActive: false,
   }
@@ -81,6 +82,10 @@ describe('ActivityBar', () => {
     await wrapper.get('.knowledge-group').trigger('mouseenter')
 
     expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(true)
+    expect(wrapper.emitted('knowledgeMenuVisibilityChange')).toEqual([[true]])
+
+    await wrapper.get('.knowledge-group').trigger('mouseleave')
+    expect(wrapper.emitted('knowledgeMenuVisibilityChange')).toEqual([[true], [false]])
   })
 
   it('keeps the submenu open after child navigation but lets the parent toggle it', async () => {
@@ -102,6 +107,14 @@ describe('ActivityBar', () => {
     const wrapper = mount(ActivityBar, { props: { ...props, libraryActive: true } })
 
     expect(wrapper.get('button[aria-label="库"]').classes()).toContain('active')
+  })
+
+  it('opens the embedded browser from its left-rail entry', async () => {
+    const wrapper = mount(ActivityBar, { props })
+
+    await wrapper.get('button[aria-label="浏览器"]').trigger('click')
+
+    expect(wrapper.emitted('openBrowser')).toHaveLength(1)
   })
 
   it('moves one shared hover indicator to the pointed navigation button', async () => {

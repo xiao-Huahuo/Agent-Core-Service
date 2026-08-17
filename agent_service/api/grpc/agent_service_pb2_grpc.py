@@ -184,6 +184,16 @@ class AgentServiceStub(object):
                 request_serializer=agent__service__pb2.LLMConfigPresetDeleteRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.DeleteResponse.FromString,
                 _registered_method=True)
+        self.GetWebSearchConfig = channel.unary_unary(
+                '/agent_service.AgentService/GetWebSearchConfig',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.SaveWebSearchConfig = channel.unary_unary(
+                '/agent_service.AgentService/SaveWebSearchConfig',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
         self.RebuildKnowledge = channel.unary_unary(
                 '/agent_service.AgentService/RebuildKnowledge',
                 request_serializer=agent__service__pb2.KnowledgeRebuildRequest.SerializeToString,
@@ -722,6 +732,18 @@ class AgentServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def DeleteLLMConfigPreset(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetWebSearchConfig(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SaveWebSearchConfig(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -1297,6 +1319,16 @@ def add_AgentServiceServicer_to_server(servicer, server):
                     servicer.DeleteLLMConfigPreset,
                     request_deserializer=agent__service__pb2.LLMConfigPresetDeleteRequest.FromString,
                     response_serializer=agent__service__pb2.DeleteResponse.SerializeToString,
+            ),
+            'GetWebSearchConfig': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetWebSearchConfig,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'SaveWebSearchConfig': grpc.unary_unary_rpc_method_handler(
+                    servicer.SaveWebSearchConfig,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             ),
             'RebuildKnowledge': grpc.unary_unary_rpc_method_handler(
                     servicer.RebuildKnowledge,
@@ -2409,6 +2441,60 @@ class AgentService(object):
             '/agent_service.AgentService/DeleteLLMConfigPreset',
             agent__service__pb2.LLMConfigPresetDeleteRequest.SerializeToString,
             agent__service__pb2.DeleteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetWebSearchConfig(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetWebSearchConfig',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SaveWebSearchConfig(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/SaveWebSearchConfig',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
             options,
             channel_credentials,
             insecure,

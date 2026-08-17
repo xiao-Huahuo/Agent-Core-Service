@@ -29,6 +29,13 @@ interface AgentEditorDesktopApi {
   listFontFamilies: () => Promise<string[]>
   getPathForFile: (file: File) => string
   writeClipboardText: (text: string) => Promise<boolean>
+  browserShow: (payload: { bounds: BrowserViewBounds; proxyUrl: string; homeUrl: string }) => Promise<boolean>
+  browserHide: () => Promise<boolean>
+  browserSetBounds: (bounds: BrowserViewBounds) => Promise<boolean>
+  browserConfigure: (config: { proxyUrl: string; homeUrl: string }) => Promise<boolean>
+  browserNavigate: (value: string) => Promise<boolean>
+  browserCommand: (command: 'back' | 'forward' | 'home' | 'reload' | 'stop' | 'external') => Promise<boolean>
+  onBrowserState: (callback: (state: BrowserViewState) => void) => () => void
   openPath: (path: string) => Promise<string>
   showItemInFolder: (path: string) => Promise<void>
   floatingSetBounds: (size: { width: number; height: number }) => Promise<boolean>
@@ -41,6 +48,24 @@ interface AgentEditorDesktopApi {
   onWindowSync: (callback: (payload: { type: string; value: string | null }) => void) => () => void
   openAgentPage: () => void
   onOpenAgentPage: (callback: () => void) => () => void
+}
+
+/** Viewport-relative rectangle occupied by the native Chromium surface. */
+interface BrowserViewBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** Navigation state mirrored from the isolated browser WebContents. */
+interface BrowserViewState {
+  url: string
+  title: string
+  canGoBack: boolean
+  canGoForward: boolean
+  loading: boolean
+  error?: string
 }
 
 interface Window {

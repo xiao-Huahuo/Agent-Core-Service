@@ -43,6 +43,7 @@ const SmartFormsView = defineAsyncComponent(() => import('@/views/SmartFormsView
 const FavoritesView = defineAsyncComponent(() => import('@/views/FavoritesView.vue'))
 const MarkdownHtmlVisualizationView = defineAsyncComponent(() => import('@/views/MarkdownHtmlVisualizationView.vue'))
 const SearchPage = defineAsyncComponent(() => import('@/views/SearchPage.vue'))
+const BrowserPage = defineAsyncComponent(() => import('@/views/BrowserPage.vue'))
 const SkillView = defineAsyncComponent(() => import('@/views/SkillView.vue'))
 import SettingsView from '@/views/SettingsView.vue'
 
@@ -67,6 +68,7 @@ const agentSidebarOpen = ref(true)
 const gitLeftOpen = ref(false)
 const gitRightOpen = ref(false)
 const feedbackOpen = ref(false)
+const activityOverlayOpen = ref(false)
 const fileWidth = ref(DEFAULT_FILE_WIDTH)
 const agentWidth = ref(DEFAULT_AGENT_WIDTH)
 const activeResizeTarget = ref<ResizeTarget | null>(null)
@@ -78,7 +80,14 @@ const isAgentPage = computed(() => workspaceStore.mainView === 'agent')
 const isAgentQueuePage = computed(() => workspaceStore.mainView === 'agent-queue')
 const isGraphPage = computed(() => workspaceStore.mainView === 'graph')
 const isHomePage = computed(() => workspaceStore.mainView === 'home')
-const sidebarHidden = computed(() => isAgentPage.value || isAgentQueuePage.value || isGraphPage.value || isHomePage.value)
+const isBrowserPage = computed(() => workspaceStore.mainView === 'browser')
+const sidebarHidden = computed(() => (
+  isAgentPage.value
+  || isAgentQueuePage.value
+  || isGraphPage.value
+  || isHomePage.value
+  || isBrowserPage.value
+))
 const visibleFileSidebarOpen = computed(() => fileSidebarOpen.value && !sidebarHidden.value)
 const visibleAgentSidebarOpen = computed(() => (
   (gitRightOpen.value || agentSidebarOpen.value || todoSidebarOpen.value) && !sidebarHidden.value
@@ -398,6 +407,15 @@ function openSearch() {
   }
 }
 
+function openBrowser() {
+  const next = workspaceStore.mainView === 'browser' ? 'editor' : 'browser'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
+}
+
 function openSkills() {
   const next = workspaceStore.mainView === 'skills' ? 'editor' : 'skills'
   workspaceStore.setMainView(next)
@@ -626,6 +644,7 @@ watch(
         :debug-active="workspaceStore.mainView === 'debug'"
         :feedback-open="feedbackOpen"
         :search-active="workspaceStore.mainView === 'search'"
+        :browser-active="workspaceStore.mainView === 'browser'"
         :skills-active="workspaceStore.mainView === 'skills'"
         :settings-active="workspaceStore.mainView === 'settings'"
         :display-mode="settingsStore.sidebarDisplayMode"
@@ -648,6 +667,8 @@ watch(
         @toggle-feedback="toggleFeedback"
         @open-debug="openDebug"
         @open-search="openSearch"
+        @open-browser="openBrowser"
+        @knowledge-menu-visibility-change="activityOverlayOpen = $event"
         @open-skills="openSkills"
         @open-settings="openSettings"
       />
@@ -683,6 +704,11 @@ watch(
         <DashboardView v-else-if="workspaceStore.mainView === 'dashboard'" class="main-shell-content" />
         <DebugView v-else-if="workspaceStore.mainView === 'debug'" class="main-shell-content" />
         <SearchPage v-else-if="workspaceStore.mainView === 'search'" class="main-shell-content" />
+        <BrowserPage
+          v-else-if="workspaceStore.mainView === 'browser'"
+          class="main-shell-content"
+          :activity-overlay-open="activityOverlayOpen"
+        />
         <SkillView v-else-if="workspaceStore.mainView === 'skills'" class="main-shell-content" />
         <SettingsView v-else-if="workspaceStore.mainView === 'settings'" class="main-shell-content" />
       </main>

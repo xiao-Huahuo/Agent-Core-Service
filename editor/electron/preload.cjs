@@ -40,6 +40,18 @@ contextBridge.exposeInMainWorld('agentEditorDesktop', {
   listFontFamilies: () => ipcRenderer.invoke('system:list-font-families'),
   getPathForFile: (file) => webUtils?.getPathForFile ? webUtils.getPathForFile(file) : (file?.path || ''),
   writeClipboardText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
+  // Sandboxed Chromium browser bridge. External pages never receive this preload.
+  browserShow: (payload) => ipcRenderer.invoke('browser:show', payload),
+  browserHide: () => ipcRenderer.invoke('browser:hide'),
+  browserSetBounds: (bounds) => ipcRenderer.invoke('browser:set-bounds', bounds),
+  browserConfigure: (config) => ipcRenderer.invoke('browser:configure', config),
+  browserNavigate: (value) => ipcRenderer.invoke('browser:navigate', value),
+  browserCommand: (command) => ipcRenderer.invoke('browser:command', command),
+  onBrowserState: (callback) => {
+    const handler = (_event, state) => callback(state)
+    ipcRenderer.on('browser:state', handler)
+    return () => ipcRenderer.removeListener('browser:state', handler)
+  },
   // Floating window bridge.
   floatingSetBounds: (size) => ipcRenderer.invoke('floating:set-bounds', size),
   floatingSetAlwaysOnTop: (mode) => ipcRenderer.invoke('floating:set-always-on-top', mode),

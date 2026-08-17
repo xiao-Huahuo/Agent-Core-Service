@@ -35,6 +35,8 @@ class UserSettingsRecord(SQLModel, table=True):
     user_id: str = Field(primary_key=True, max_length=128)
     knowledge_dir: str = Field(max_length=1024)
     proxy_url: str = Field(default="", max_length=1024)
+    browser_proxy_url: str = Field(default="", max_length=1024)
+    browser_home_url: str = Field(default="https://www.google.com", max_length=2048)
     web_search_enabled: bool = Field(default=False)
     web_search_max_results: int = Field(default=10)
     auto_ingest_on_upload: bool = Field(default=False)

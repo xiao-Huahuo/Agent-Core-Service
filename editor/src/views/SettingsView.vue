@@ -5,6 +5,7 @@ import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetc
 import type { SystemPromptEntry, MemoryEntry, SavedLLMConfig, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
 import AppearanceSettingsSection from '@/components/settings_view/AppearanceSettingsSection.vue'
 import BasicSettingsSection from '@/components/settings_view/BasicSettingsSection.vue'
+import BrowserSettingsSection from '@/components/settings_view/BrowserSettingsSection.vue'
 import LlmSettingsSection from '@/components/settings_view/LlmSettingsSection.vue'
 import MemorySettingsSection from '@/components/settings_view/MemorySettingsSection.vue'
 import SettingsSidebar from '@/components/settings_view/SettingsSidebar.vue'
@@ -32,6 +33,7 @@ const tabs = [
   { key: 'llm' as const, label: 'LLM 配置' },
   { key: 'terminal' as const, label: '终端沙盒' },
   { key: 'web' as const, label: '联网配置' },
+  { key: 'browser' as const, label: '浏览器' },
   { key: 'memory' as const, label: '记忆与指令' },
   { key: 'graph' as const, label: '图谱' },
   { key: 'safety' as const, label: '密码与安全' },
@@ -400,6 +402,10 @@ const webSearchEnabledDraft = ref(false)
 const webSearchMaxResultsDraft = ref(10)
 const webSearchSaving = ref(false)
 const webSearchMsg = ref('')
+const browserProxyUrlDraft = ref('')
+const browserHomeUrlDraft = ref('https://www.google.com')
+const browserSaving = ref(false)
+const browserMsg = ref('')
 
 async function loadWebSearchConfig() {
   if (!settingsStore.profile.userId) return
@@ -408,7 +414,31 @@ async function loadWebSearchConfig() {
     proxyUrlDraft.value = cfg.proxy_url || ''
     webSearchEnabledDraft.value = cfg.web_search_enabled
     webSearchMaxResultsDraft.value = cfg.web_search_max_results ?? 10
+    browserProxyUrlDraft.value = cfg.browser_proxy_url || ''
+    browserHomeUrlDraft.value = cfg.browser_home_url || 'https://www.google.com'
   } catch { /* ignore */ }
+}
+
+/** Persist browser-only networking settings and update a live browser view. */
+async function handleSaveBrowser() {
+  if (!settingsStore.profile.userId || browserSaving.value) return
+  browserSaving.value = true
+  browserMsg.value = ''
+  try {
+    const cfg = await saveWebSearchConfig(settingsStore.profile.userId, {
+      browserProxyUrl: browserProxyUrlDraft.value,
+      browserHomeUrl: browserHomeUrlDraft.value || 'https://www.google.com',
+    })
+    await window.agentEditorDesktop?.browserConfigure({
+      proxyUrl: cfg.browser_proxy_url || cfg.proxy_url || '',
+      homeUrl: cfg.browser_home_url || 'https://www.google.com',
+    })
+    showMessage(browserMsg, '已保存')
+  } catch {
+    showMessage(browserMsg, '保存失败')
+  } finally {
+    browserSaving.value = false
+  }
 }
 
 async function handleSaveWebSearch() {
@@ -686,6 +716,16 @@ onBeforeUnmount(() => {
         :web-search-msg="webSearchMsg"
         :web-search-saving="webSearchSaving"
         @save="handleSaveWebSearch"
+      />
+
+      <BrowserSettingsSection
+        v-if="activeTab === 'browser'"
+        v-model:browser-home-url-draft="browserHomeUrlDraft"
+        v-model:browser-proxy-url-draft="browserProxyUrlDraft"
+        :inherited-proxy-url="proxyUrlDraft"
+        :saving="browserSaving"
+        :status-message="browserMsg"
+        @save="handleSaveBrowser"
       />
 
       <MemorySettingsSection

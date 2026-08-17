@@ -110,6 +110,36 @@ def test_memory_config_defaults_on_and_persists_user_override() -> None:
     assert service.get_memory_config(user_id="u1")["long_term_memory_enabled"] is False
 
 
+def test_browser_config_persists_separate_proxy_and_home_page() -> None:
+    service = make_settings_service()
+
+    initial = service.get_web_search_config(user_id="u1")
+    saved = service.save_web_search_config(
+        user_id="u1",
+        proxy_url="http://127.0.0.1:7890",
+        browser_proxy_url="socks5://127.0.0.1:1080",
+        browser_home_url="https://example.com/start",
+    )
+
+    assert initial["browser_proxy_url"] == ""
+    assert initial["browser_home_url"] == "https://www.google.com"
+    assert saved["browser_proxy_url"] == "socks5://127.0.0.1:1080"
+    assert saved["browser_home_url"] == "https://example.com/start"
+    assert service.get_web_search_config(user_id="u1")["proxy_url"] == "http://127.0.0.1:7890"
+
+
+def test_browser_proxy_override_can_be_cleared_to_restore_inheritance() -> None:
+    service = make_settings_service()
+    service.save_web_search_config(
+        user_id="u1",
+        browser_proxy_url="http://127.0.0.1:7891",
+    )
+
+    saved = service.save_web_search_config(user_id="u1", browser_proxy_url="")
+
+    assert saved["browser_proxy_url"] == ""
+
+
 def test_memory_tools_are_disabled_in_available_tool_catalog_when_memory_is_off() -> None:
     service = make_settings_service()
     service.save_memory_config(user_id="u1", long_term_memory_enabled=False)

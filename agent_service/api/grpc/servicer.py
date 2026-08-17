@@ -918,6 +918,51 @@ class AgentServiceServicer(BaseServicer):
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
         return _llm_config_to_response(payload)
 
+    def GetWebSearchConfig(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Return web-search and embedded-browser networking settings."""
+
+        payload = MessageToDict(request)
+        try:
+            result = self._require_settings_service(context).get_web_search_config(
+                user_id=str(payload.get("user_id") or ""),
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(result, Struct())
+
+    def SaveWebSearchConfig(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Persist the REST-equivalent web-search and browser settings payload."""
+
+        payload = MessageToDict(request)
+        try:
+            result = self._require_settings_service(context).save_web_search_config(
+                user_id=str(payload.get("user_id") or ""),
+                proxy_url=str(payload["proxy_url"]).strip() if "proxy_url" in payload else None,
+                browser_proxy_url=(
+                    str(payload["browser_proxy_url"]).strip()
+                    if "browser_proxy_url" in payload
+                    else None
+                ),
+                browser_home_url=(
+                    str(payload["browser_home_url"]).strip()
+                    if "browser_home_url" in payload
+                    else None
+                ),
+                web_search_enabled=(
+                    bool(payload["web_search_enabled"])
+                    if "web_search_enabled" in payload
+                    else None
+                ),
+                web_search_max_results=(
+                    int(payload["web_search_max_results"])
+                    if "web_search_max_results" in payload
+                    else None
+                ),
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(result, Struct())
+
     def ListLLMConfigPresets(  # noqa: N802
         self, request: LLMConfigRequest, context: grpc.ServicerContext,
     ) -> LLMConfigPresetListResponse:

@@ -6,7 +6,7 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import lightLogo from '@/assets/images/亮色无底图标.png'
@@ -35,6 +35,7 @@ const props = defineProps<{
   debugActive: boolean
   feedbackOpen: boolean
   searchActive: boolean
+  browserActive: boolean
   skillsActive: boolean
   settingsActive: boolean
 }>()
@@ -58,6 +59,8 @@ const emit = defineEmits<{
   toggleFeedback: []
   openDebug: []
   openSearch: []
+  openBrowser: []
+  knowledgeMenuVisibilityChange: [open: boolean]
   openSkills: []
   openSettings: []
 }>()
@@ -88,6 +91,9 @@ const hoverIndicatorVisible = ref(false)
 const knowledgeSubmenuRef = ref<HTMLElement | null>(null)
 const knowledgeHoverIndicatorTop = ref(0)
 const knowledgeHoverIndicatorVisible = ref(false)
+
+/** Let native workspace surfaces yield while the DOM submenu is visible. */
+watch(knowledgeMenuOpen, (open) => emit('knowledgeMenuVisibilityChange', open))
 
 /** Resolves a rail button from delegated hover/focus events. */
 function resolveActivityButton(target: EventTarget | null): HTMLElement | null {
@@ -340,6 +346,18 @@ function closeKnowledgeMenu() {
     >
       <IcIcon name="search" :size="18" />
       <span class="activity-label">搜索</span>
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: browserActive }"
+      type="button"
+      title="浏览器"
+      aria-label="浏览器"
+      @mousedown.prevent="handleRipple"
+      @click="emit('openBrowser')"
+    >
+      <IcIcon name="language" :size="18" />
+      <span class="activity-label">浏览器</span>
     </button>
     <button
       class="activity-button"

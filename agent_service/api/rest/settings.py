@@ -514,6 +514,16 @@ async def save_web_search_config(body: dict[str, Any]) -> dict[str, Any]:
     return svc.save_web_search_config(
         user_id=user_id,
         proxy_url=_unwrap(body.get("proxy_url")),
+        browser_proxy_url=(
+            str(body.get("browser_proxy_url") or "").strip()
+            if "browser_proxy_url" in body
+            else None
+        ),
+        browser_home_url=(
+            str(body.get("browser_home_url") or "").strip()
+            if "browser_home_url" in body
+            else None
+        ),
         web_search_enabled=body.get("web_search_enabled"),
         web_search_max_results=web_search_max_results,
     )

@@ -81,6 +81,8 @@ class SettingsService:
             columns = [c["name"] for c in inspector.get_columns("user_settings")]
             migrations = {
                 "proxy_url": "VARCHAR(1024) NOT NULL DEFAULT ''",
+                "browser_proxy_url": "VARCHAR(1024) NOT NULL DEFAULT ''",
+                "browser_home_url": "VARCHAR(2048) NOT NULL DEFAULT 'https://www.google.com'",
                 "web_search_enabled": "BOOLEAN NOT NULL DEFAULT 0",
                 "auto_ingest_on_upload": "BOOLEAN NOT NULL DEFAULT 0",
                 "ocr_enabled": "BOOLEAN NOT NULL DEFAULT 0",
@@ -1127,10 +1129,19 @@ class SettingsService:
         with Session(self.engine) as db:
             record = db.get(UserSettingsRecord, normalized_user_id)
             if record is None:
-                return {"user_id": normalized_user_id, "proxy_url": "", "web_search_enabled": False, "web_search_max_results": 10}
+                return {
+                    "user_id": normalized_user_id,
+                    "proxy_url": "",
+                    "browser_proxy_url": "",
+                    "browser_home_url": "https://www.google.com",
+                    "web_search_enabled": False,
+                    "web_search_max_results": 10,
+                }
             return {
                 "user_id": normalized_user_id,
                 "proxy_url": record.proxy_url,
+                "browser_proxy_url": getattr(record, "browser_proxy_url", ""),
+                "browser_home_url": getattr(record, "browser_home_url", "https://www.google.com") or "https://www.google.com",
                 "web_search_enabled": record.web_search_enabled,
                 "web_search_max_results": getattr(record, "web_search_max_results", 10) or 10,
             }
@@ -1140,6 +1151,8 @@ class SettingsService:
         *,
         user_id: str,
         proxy_url: str | None = None,
+        browser_proxy_url: str | None = None,
+        browser_home_url: str | None = None,
         web_search_enabled: bool | None = None,
         web_search_max_results: int | None = None,
     ) -> dict:
@@ -1153,6 +1166,8 @@ class SettingsService:
                     user_id=normalized_user_id,
                     knowledge_dir=str(self.config.storage.knowledge_dir),
                     proxy_url=proxy_url or "",
+                    browser_proxy_url=browser_proxy_url or "",
+                    browser_home_url=browser_home_url or "https://www.google.com",
                     web_search_enabled=web_search_enabled or False,
                     web_search_max_results=web_search_max_results or 10,
                     created_at=now,
@@ -1161,6 +1176,10 @@ class SettingsService:
             else:
                 if proxy_url is not None:
                     record.proxy_url = proxy_url
+                if browser_proxy_url is not None:
+                    record.browser_proxy_url = browser_proxy_url
+                if browser_home_url is not None:
+                    record.browser_home_url = browser_home_url or "https://www.google.com"
                 if web_search_enabled is not None:
                     record.web_search_enabled = web_search_enabled
                 if web_search_max_results is not None:
@@ -1171,6 +1190,8 @@ class SettingsService:
             db.refresh(record)
             return {
                 "proxy_url": record.proxy_url,
+                "browser_proxy_url": record.browser_proxy_url,
+                "browser_home_url": record.browser_home_url,
                 "web_search_enabled": record.web_search_enabled,
                 "web_search_max_results": getattr(record, "web_search_max_results", 10) or 10,
             }
