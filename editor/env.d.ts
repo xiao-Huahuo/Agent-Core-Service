@@ -29,10 +29,10 @@ interface AgentEditorDesktopApi {
   listFontFamilies: () => Promise<string[]>
   getPathForFile: (file: File) => string
   writeClipboardText: (text: string) => Promise<boolean>
-  browserShow: (payload: { bounds: BrowserViewBounds; proxyUrl: string; homeUrl: string }) => Promise<boolean>
+  browserShow: (payload: { bounds: BrowserViewBounds; proxyUrl: string; homeUrl: string; themeMode: 'dark' | 'light' | 'system' }) => Promise<boolean>
   browserHide: () => Promise<boolean>
   browserSetBounds: (bounds: BrowserViewBounds) => Promise<boolean>
-  browserConfigure: (config: { proxyUrl: string; homeUrl: string }) => Promise<boolean>
+  browserConfigure: (config: { proxyUrl: string; homeUrl: string; themeMode?: 'dark' | 'light' | 'system' }) => Promise<boolean>
   browserNavigate: (value: string) => Promise<boolean>
   browserCommand: (command: 'back' | 'forward' | 'home' | 'reload' | 'stop' | 'external') => Promise<boolean>
   onBrowserState: (callback: (state: BrowserViewState) => void) => () => void

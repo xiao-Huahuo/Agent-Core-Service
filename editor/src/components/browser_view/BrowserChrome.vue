@@ -83,7 +83,7 @@ onBeforeUnmount(() => {
         :disabled="!state.canGoBack"
         @click="$emit('command', 'back')"
       >
-        <IcIcon name="arrow-back" :size="17" />
+        <IcIcon name="arrow-left" :size="17" />
       </button>
       <button
         type="button"
@@ -92,7 +92,7 @@ onBeforeUnmount(() => {
         :disabled="!state.canGoForward"
         @click="$emit('command', 'forward')"
       >
-        <IcIcon name="arrow-forward" :size="17" />
+        <IcIcon name="arrow-right" :size="17" />
       </button>
       <button
         type="button"

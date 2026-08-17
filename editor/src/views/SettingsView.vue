@@ -432,6 +432,7 @@ async function handleSaveBrowser() {
     await window.agentEditorDesktop?.browserConfigure({
       proxyUrl: cfg.browser_proxy_url || cfg.proxy_url || '',
       homeUrl: cfg.browser_home_url || 'https://www.google.com',
+      themeMode: settingsStore.themeMode,
     })
     showMessage(browserMsg, '已保存')
   } catch {

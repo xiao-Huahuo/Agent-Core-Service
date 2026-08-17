@@ -52,6 +52,7 @@ async function syncNativeView() {
       bounds: { ...latestBounds.value },
       proxyUrl: proxyUrl.value,
       homeUrl: homeUrl.value,
+      themeMode: settingsStore.themeMode,
     })
     if (props.activityOverlayOpen) {
       browserShown = false
@@ -112,6 +113,16 @@ watch(() => props.navigationRequestId, async () => {
   await navigatePendingUrl()
 })
 
+/** Propagate application/system theme changes to Chromium web content. */
+watch(() => settingsStore.themeMode, (themeMode) => {
+  if (!browserShown || !configReady.value) return
+  void desktop?.browserConfigure({
+    proxyUrl: proxyUrl.value,
+    homeUrl: homeUrl.value,
+    themeMode,
+  })
+})
+
 onMounted(async () => {
   removeStateListener = desktop?.onBrowserState((state) => {
     browserState.value = state
@@ -133,7 +144,11 @@ onMounted(async () => {
     if (disposed) return
     configReady.value = true
     if (browserShown) {
-      void desktop?.browserConfigure({ proxyUrl: proxyUrl.value, homeUrl: homeUrl.value })
+      void desktop?.browserConfigure({
+        proxyUrl: proxyUrl.value,
+        homeUrl: homeUrl.value,
+        themeMode: settingsStore.themeMode,
+      })
     } else {
       void syncNativeView()
     }

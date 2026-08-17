@@ -7,10 +7,17 @@
  */
 /* eslint-disable @typescript-eslint/no-require-imports */
 
-const { session, shell, WebContentsView } = require('electron')
+const { nativeTheme, session, shell, WebContentsView } = require('electron')
 
 const BROWSER_PARTITION = 'persist:metaweave-browser'
 const DEFAULT_HOME_URL = 'https://www.google.com'
+
+/** Keep Chromium color preferences within Electron's supported theme values. */
+function applyBrowserTheme(themeMode) {
+  if (themeMode === 'dark' || themeMode === 'light' || themeMode === 'system') {
+    nativeTheme.themeSource = themeMode
+  }
+}
 
 /** Accept only browser-safe HTTP(S) destinations. */
 function normalizeBrowserUrl(value, homeUrl = DEFAULT_HOME_URL) {
@@ -111,6 +118,7 @@ function registerBrowserViewIpc(ipcMain, getMainWindow) {
     if (!view) return false
     const bounds = payload?.bounds || {}
     homeUrl = normalizeBrowserUrl(payload?.homeUrl, DEFAULT_HOME_URL)
+    applyBrowserTheme(payload?.themeMode)
     await applyProxy(payload?.proxyUrl)
     view.setBounds({
       x: Math.max(0, Math.round(Number(bounds.x) || 0)),
@@ -142,6 +150,7 @@ function registerBrowserViewIpc(ipcMain, getMainWindow) {
 
   ipcMain.handle('browser:configure', async (_event, config) => {
     homeUrl = normalizeBrowserUrl(config?.homeUrl, DEFAULT_HOME_URL)
+    applyBrowserTheme(config?.themeMode)
     await applyProxy(config?.proxyUrl)
     return true
   })
