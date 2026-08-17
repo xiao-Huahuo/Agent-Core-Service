@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { streamPrompt } from '../agent'
+import { streamPrompt, updateCurrentDocumentContext } from '../agent'
 
 describe('streamPrompt reference transport', () => {
   afterEach(() => {
@@ -38,5 +38,28 @@ describe('streamPrompt reference transport', () => {
       agent_mode: 'auto',
       agent_access_mode: 'sandbox',
     })
+  })
+
+  it('reports the current multi-file selection to Agent context', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await updateCurrentDocumentContext({
+      user_id: 'user-1',
+      path: 'docs/a.pdf',
+      name: 'a.pdf',
+      knowledge_dir: 'D:/knowledge',
+      library_id: 'library-1',
+      library_name: 'Knowledge',
+      dirty: false,
+      open_tab_count: 1,
+      selected_paths: ['docs/a.pdf', 'docs/b.docx'],
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(String(init.body)).selected_paths).toEqual(['docs/a.pdf', 'docs/b.docx'])
   })
 })

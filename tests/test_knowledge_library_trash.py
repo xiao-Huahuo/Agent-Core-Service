@@ -262,3 +262,72 @@ def test_tree_signature_tracks_files_without_parent_directories(tmp_path: Path) 
     signature = service.build_tree_signature(user_id="user-1")
 
     assert set(signature) == {"notes/a.md"}
+
+
+def test_read_markdown_projection_returns_managed_markdown(tmp_path: Path) -> None:
+    """阅读源文件时必须返回 `.mw/md` 投影，而不是直接解码原文件。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    source = knowledge_dir / "report.pdf"
+    source.write_bytes(b"binary-pdf-placeholder")
+    service, memory_service, _settings_service, _graph_service = _service(tmp_path, knowledge_dir)
+    document_id = FrontmatterBootstrapService._build_document_id(Path("report.pdf"))
+    memory_service.source_ids.add(document_id)
+    markdown_path = service._resolve_user_markdown_dir("user-1", "library-1") / "report.md"
+    markdown_path.parent.mkdir(parents=True, exist_ok=True)
+    markdown_path.write_text("# Report\n\nProjected body", encoding="utf-8")
+    frontmatter_path = service._resolve_user_frontmatter_dir("user-1", "library-1") / "report.json"
+    frontmatter_path.parent.mkdir(parents=True, exist_ok=True)
+    frontmatter_path.write_text(
+        '{"source_hash":"' + FrontmatterBootstrapService._hash_file(source) + '",'
+        '"metadata":{"relative_path":"report.pdf"}}',
+        encoding="utf-8",
+    )
+
+    result = service.read_markdown_projection(user_id="user-1", path="report.pdf")
+
+    assert result["path"] == "report.pdf"
+    assert result["projection_path"] == ".mw/md/report.md"
+    assert result["content"] == "# Report\n\nProjected body"
+
+
+def test_read_markdown_projection_auto_ingests_missing_projection(tmp_path: Path, monkeypatch) -> None:
+    """源文件尚无投影或索引时，阅读操作必须先复用单文件灌库链路。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    source = knowledge_dir / "notes.txt"
+    source.write_text("source body", encoding="utf-8")
+    service, _memory_service, _settings_service, _graph_service = _service(tmp_path, knowledge_dir)
+    ingestion_calls: list[Path] = []
+
+    def fake_ingest_frontmatter_file(
+        self: object,
+        *,
+        frontmatter_path: Path,
+        user_id: str,
+        progress_callback: object | None = None,
+    ) -> SimpleNamespace:
+        """保留真实投影转换，只隔离本测试不关心的向量模型写入。"""
+
+        ingestion_calls.append(frontmatter_path)
+        return SimpleNamespace(
+            files_seen=1,
+            files_ingested=1,
+            files_skipped=0,
+            chunks_created=1,
+            chunks_deleted=0,
+        )
+
+    monkeypatch.setattr(
+        "agent_service.services.memory.rag.knowledge_ingestion.KnowledgeIngestionService.ingest_frontmatter_file",
+        fake_ingest_frontmatter_file,
+    )
+
+    result = service.read_markdown_projection(user_id="user-1", path="notes.txt")
+
+    assert [path.name for path in ingestion_calls] == ["notes.json"]
+    assert result["content"] == "# notes\n\nsource body\n"
+    assert (knowledge_dir / ".mw" / "frontmatter" / "notes.json").is_file()
+    assert (knowledge_dir / ".mw" / "md" / "notes.md").is_file()

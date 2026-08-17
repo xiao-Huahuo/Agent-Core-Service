@@ -126,7 +126,6 @@ const FALLBACK_DISPLAY: Record<string, string> = {
   get_current_viewing_document: '获取当前文档',
   list_knowledge_files: '列出文件',
   read_knowledge_file: '阅读文件',
-  read_multimodal_file_info: '读取多模态文件信息',
   write_knowledge_file: '创作文件',
   patch_knowledge_file: '局部修改文件',
   show_markdown_html: '展示Markdown-HTML',
@@ -365,7 +364,6 @@ function toolSummary(entry: ToolEntry) {
     delete_knowledge_file: ['删除文件', '删除 ', ' 个文件'],
     rename_knowledge_file: ['重命名文件', '重命名 ', ' 个文件'],
     create_knowledge_folder: ['创建文件夹', '创建 ', ' 个文件夹'],
-    read_multimodal_file_info: ['读取多模态文件信息', '读取 ', ' 份多模态文件信息'],
     save_uploaded_attachment_to_knowledge: ['附件存入知识库', '保存 ', ' 个附件到知识库'],
     download_file: ['下载文件', '下载 ', ' 个文件'],
   }

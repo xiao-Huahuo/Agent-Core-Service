@@ -11,7 +11,8 @@ const KNOWLEDGE_RECALL_TOOLS = new Set([
   'get_knowledge_context',
   'search_knowledge',
   'read_knowledge_file',
-  'read_multimodal_file_info',
+  'search_knowledge_graph_nodes',
+  'find_knowledge_graph_paths',
 ])
 
 interface RagMetricTotals {

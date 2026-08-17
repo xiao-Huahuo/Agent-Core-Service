@@ -789,53 +789,80 @@ class KnowledgeLibraryService:
         root.mkdir(parents=True, exist_ok=True)
         return root
 
-    def read_multimodal_file_info(self, *, user_id: str, path: str) -> dict:
-        """
-        Read the already-ingested frontmatter JSON for a multimodal source file.
-        user_id: Current user id.
-        path: Source file path relative to the active knowledge library root.
+    def read_markdown_projection(self, *, user_id: str, path: str) -> dict:
+        """读取源文件的受管 Markdown 投影，缺失或过期时先执行单文件灌库。
+
+        user_id: 当前用户 ID。
+        path: 当前 active 知识库内的源文件相对路径，而不是 `.mw/md` 内部路径。
         """
 
         profile = self.settings_service.ensure_user_profile(user_id=user_id)
         active_library = dict(profile["active_knowledge_library"])
         normalized_user_id = str(profile["user_id"])
         library_id = str(active_library["library_id"])
+        knowledge_owner_id = self.settings_service.build_knowledge_owner_id(
+            user_id=normalized_user_id,
+            library_id=library_id,
+        )
         root = Path(str(active_library["knowledge_dir"])).expanduser().resolve()
         source_path = self._resolve_child_path(root=root, relative_path=path)
         if not source_path.is_file():
-            raise ValueError("source file not found in active knowledge library")
+            raise ValueError("file not found")
 
         relative_path = self._relative_path(path=source_path, root=root)
         frontmatter_root = self._resolve_user_frontmatter_dir(normalized_user_id, library_id).resolve()
+        markdown_root = self._resolve_user_markdown_dir(normalized_user_id, library_id).resolve()
         frontmatter_path = (frontmatter_root / relative_path).with_suffix(".json").resolve()
-        if not self._is_relative_to(frontmatter_path, frontmatter_root):
-            raise ValueError("frontmatter path escapes user library")
-        if not frontmatter_path.is_file():
-            raise ValueError("frontmatter json not found; refresh or ingest this file first")
+        markdown_path = (markdown_root / relative_path).with_suffix(".md").resolve()
+        if (
+            not self._is_relative_to(frontmatter_path, frontmatter_root)
+            or not self._is_relative_to(markdown_path, markdown_root)
+        ):
+            raise ValueError("projection path escapes user library")
 
-        payload = json.loads(frontmatter_path.read_text(encoding="utf-8"))
-        sections = payload.get("sections", [])
+        source_id = FrontmatterBootstrapService._build_document_id(Path(relative_path))
+        indexed_source_ids = self.memory_service.list_source_ids(
+            user_id=knowledge_owner_id,
+            tag=self.config.constants.knowledge_tag,
+            memory_type="knowledge_chunk",
+        )
+        projection_is_current = (
+            markdown_path.is_file()
+            and frontmatter_path.is_file()
+            and source_id in indexed_source_ids
+        )
+        if projection_is_current:
+            try:
+                payload = json.loads(frontmatter_path.read_text(encoding="utf-8"))
+                metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+                projection_is_current = (
+                    str(metadata.get("relative_path") or "") == relative_path
+                    and str(payload.get("source_hash") or "") == FrontmatterBootstrapService._hash_file(source_path)
+                )
+            except (OSError, json.JSONDecodeError):
+                projection_is_current = False
+        if (
+            projection_is_current
+            and self.settings_service.is_ocr_enabled_for_user(user_id=normalized_user_id)
+            and self._source_needs_ocr_reindex(
+                source_path=source_path,
+                relative_path=relative_path,
+                frontmatter_root=frontmatter_root,
+            )
+        ):
+            projection_is_current = False
+
+        if not projection_is_current:
+            self.ingest_single_file(user_id=normalized_user_id, path=relative_path)
+        if not markdown_path.is_file():
+            raise ValueError("markdown projection not found after ingestion")
+
         return {
             "path": relative_path,
-            "frontmatter_path": str(frontmatter_path),
-            "title": payload.get("title", ""),
-            "source_type": payload.get("source_type", ""),
-            "source_uri": payload.get("source_uri", ""),
-            "source_hash": payload.get("source_hash", ""),
-            "summary": payload.get("summary", ""),
-            "tags": payload.get("tags", []),
-            "metadata": payload.get("metadata", {}),
-            "section_count": len(sections) if isinstance(sections, list) else 0,
-            "sections": [
-                {
-                    "section_id": section.get("section_id", ""),
-                    "heading": section.get("heading", ""),
-                    "title_path": section.get("title_path", []),
-                    "content_preview": str(section.get("content", ""))[:800],
-                }
-                for section in sections[:20]
-                if isinstance(section, dict)
-            ],
+            "projection_path": self._relative_path(path=markdown_path, root=root),
+            "content": markdown_path.read_text(encoding="utf-8"),
+            "mtime": self._format_mtime(markdown_path),
+            "size": markdown_path.stat().st_size,
         }
 
     def read_file(self, *, user_id: str, path: str) -> dict:

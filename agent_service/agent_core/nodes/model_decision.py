@@ -499,10 +499,17 @@ class ModelDecisionNode:
         if tool_name == "list_available_tools":
             # 工具清单本身就是供模型读取的内容,不随位置衰减。
             return 6000
-        if tool_seen_from_tail <= 4 and tool_name == "read_multimodal_file_info":
-            return 12000
         if tool_seen_from_tail <= 4 and tool_name == "read_knowledge_file":
-            return 6000
+            return 12000
+        if tool_seen_from_tail <= 4 and tool_name in {
+            "search_knowledge_graph_nodes",
+            "find_knowledge_graph_paths",
+            "get_smart_form",
+            "export_smart_form",
+            "get_component",
+            "get_custom_skill",
+        }:
+            return 12000
         if tool_seen_from_tail <= 4 and tool_name == "run_terminal_command":
             # Directory listings and statistics need enough context to avoid redundant follow-up commands.
             return 6000

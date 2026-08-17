@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -208,6 +209,86 @@ class SkillService:
         if record is None:
             raise ValueError("Created skill could not be read")
         return record.to_dict(include_body=True)
+
+    def update_user_skill(
+        self,
+        *,
+        user_id: str,
+        skill_id: str,
+        name: str | None = None,
+        description: str | None = None,
+        body: str | None = None,
+    ) -> dict[str, Any]:
+        """更新用户 Skill 的 SKILL.md；内置 Skill 不允许修改。"""
+
+        skill_path = self._require_user_skill_path(user_id=user_id, skill_id=skill_id)
+        current = skill_path.read_text(encoding="utf-8")
+        metadata = self._parse_frontmatter(current)
+        current_body = self._body_without_frontmatter(current)
+        next_name = str(name if name is not None else metadata.get("name") or skill_path.parent.name).strip()
+        next_description = str(description if description is not None else metadata.get("description") or "").strip()
+        next_body = str(body if body is not None else current_body).strip()
+        if not next_name:
+            raise ValueError("Skill name is required")
+        skill_path.write_text(
+            f"---\nname: {next_name}\ndescription: {next_description}\n---\n\n{next_body}\n",
+            encoding="utf-8",
+        )
+        record = self._read_skill(skill_path=skill_path, source="user", disabled=self._read_disabled_skill_ids(user_id=user_id))
+        if record is None:
+            raise ValueError("Updated skill could not be read")
+        return record.to_dict(include_body=True)
+
+    def delete_user_skill(self, *, user_id: str, skill_id: str) -> dict[str, Any]:
+        """删除用户 Skill 目录，并清理其禁用配置项。"""
+
+        skill_path = self._require_user_skill_path(user_id=user_id, skill_id=skill_id)
+        skill_dir = skill_path.parent.resolve()
+        root = self._user_skill_root(user_id=user_id).resolve()
+        if skill_dir.parent != root:
+            raise ValueError("skill path escapes user skill root")
+        shutil.rmtree(skill_dir)
+        config_path = self._user_config_path(user_id=user_id)
+        payload = self._read_user_config(config_path)
+        disabled = {str(item) for item in payload.get("disabled_skill_ids", [])}
+        if skill_id in disabled:
+            disabled.discard(skill_id)
+            payload["disabled_skill_ids"] = sorted(disabled)
+            config_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"skill_id": skill_id, "deleted": True}
+
+    def validate_user_skill(self, *, user_id: str, skill_id: str) -> dict[str, Any]:
+        """校验用户 Skill 的目录、frontmatter 和正文是否可被路由器读取。"""
+
+        skill_path = self._require_user_skill_path(user_id=user_id, skill_id=skill_id)
+        text = skill_path.read_text(encoding="utf-8")
+        metadata = self._parse_frontmatter(text)
+        errors: list[str] = []
+        if not text.startswith("---"):
+            errors.append("SKILL.md 缺少 YAML frontmatter")
+        if not str(metadata.get("name") or "").strip():
+            errors.append("frontmatter 缺少 name")
+        if not str(metadata.get("description") or "").strip():
+            errors.append("frontmatter 缺少 description")
+        if not self._body_without_frontmatter(text).strip():
+            errors.append("Skill 正文为空")
+        record = self._read_skill(skill_path=skill_path, source="user", disabled=set())
+        if record is None:
+            errors.append("Skill 无法被索引器读取")
+        return {"skill_id": skill_id, "valid": not errors, "errors": errors}
+
+    def test_user_skill(self, *, user_id: str, skill_id: str, prompt: str) -> dict[str, Any]:
+        """以真实关键词路由器测试指定 Skill 是否能响应给定用户提示。"""
+
+        validation = self.validate_user_skill(user_id=user_id, skill_id=skill_id)
+        skills = [skill for skill in self.list_skills(user_id=user_id) if str(skill.get("skill_id")) == skill_id]
+        ranked = self._rank_skills_by_prompt(prompt=prompt, skills=skills)
+        return {
+            **validation,
+            "prompt": prompt,
+            "matched": bool(ranked),
+            "score": ranked[0][0] if ranked else 0,
+        }
 
     def spec_text(self) -> str:
         """Return a concise Skill authoring specification for the UI."""
@@ -428,6 +509,28 @@ class SkillService:
     def _user_skill_root(self, *, user_id: str) -> Path:
         return self._active_knowledge_dir(user_id=user_id) / ".agents" / "skills"
 
+    def _require_user_skill_path(self, *, user_id: str, skill_id: str) -> Path:
+        """解析并验证 user:* Skill 的受管 SKILL.md 路径。"""
+
+        normalized = str(skill_id or "").strip()
+        if not normalized.startswith("user:"):
+            raise ValueError("only user skills can be modified")
+        folder = normalized.split(":", 1)[1]
+        root = self._user_skill_root(user_id=user_id).resolve()
+        skill_path = (root / folder / "SKILL.md").resolve()
+        if skill_path.parent.parent != root or not skill_path.is_file():
+            raise ValueError("user skill not found")
+        return skill_path
+
+    @staticmethod
+    def _body_without_frontmatter(text: str) -> str:
+        """移除首段 YAML frontmatter 并返回 Skill 正文。"""
+
+        if not text.startswith("---"):
+            return text
+        parts = text.split("---", 2)
+        return parts[2].lstrip() if len(parts) == 3 else ""
+
     def _user_config_path(self, *, user_id: str) -> Path:
         return self._active_knowledge_dir(user_id=user_id) / ".agents" / "skills_config.json"
 
@@ -447,7 +550,14 @@ class SkillService:
 
     @staticmethod
     def _tokens(text: str) -> list[str]:
-        return [token for token in re.split(r"[^0-9a-zA-Z_\u4e00-\u9fff]+", text.lower()) if token]
+        """拆分英文词，并为连续中文补充二元词以支持自然句子匹配。"""
+
+        raw_tokens = [token for token in re.split(r"[^0-9a-zA-Z_\u4e00-\u9fff]+", text.lower()) if token]
+        tokens = list(raw_tokens)
+        for token in raw_tokens:
+            if len(token) > 2 and re.fullmatch(r"[\u4e00-\u9fff]+", token):
+                tokens.extend(token[index:index + 2] for index in range(len(token) - 1))
+        return tokens
 
     @staticmethod
     def _normalize(value: Any) -> str | None:

@@ -36,6 +36,7 @@ export interface CurrentDocumentContextPayload {
   mtime?: string
   dirty: boolean
   open_tab_count: number
+  selected_paths: string[]
 }
 
 export function streamPrompt(

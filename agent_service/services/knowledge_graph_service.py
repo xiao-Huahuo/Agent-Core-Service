@@ -1741,8 +1741,9 @@ def _run_graph_extraction(
     user_llm_config: dict[str, Any] | None = None,
     target_source_path: Path | None = None,
     target_is_dir: bool = False,
+    cancel_event: threading.Event | None = None,
 ) -> None:
-    """在后台线程中执行图谱抽取并更新进度。"""
+    """在后台线程中执行图谱抽取，并在文档/章节安全检查点响应取消。"""
     try:
         llm_config = _build_llm_config(config, user_llm_config=user_llm_config)
         if not llm_config.get("small_api_key") or not llm_config.get("small_model_name"):
@@ -1779,6 +1780,9 @@ def _run_graph_extraction(
         need_extract = 0
         skipped_count = 0
         for path in paths:
+            if cancel_event is not None and cancel_event.is_set():
+                _update_graph_progress(user_id, library_id, status="cancelled", message="图谱抽取已取消")
+                return
             doc_data = KnowledgeGraphService._load_document(path)
             document_ids_seen.add(doc_data.document_id)
             total_sections = len(doc_data.sections) if doc_data.sections else 0
@@ -1833,6 +1837,9 @@ def _run_graph_extraction(
         doc_index = 0
 
         for di, doc_entry in enumerate(docs):
+            if cancel_event is not None and cancel_event.is_set():
+                _update_graph_progress(user_id, library_id, status="cancelled", message="图谱抽取已取消", docs=docs)
+                return
             if circuit_breaker_hit:
                 print(f"\n  [BREAKER] circuit breaker hit, stopping")
                 break
@@ -1859,6 +1866,9 @@ def _run_graph_extraction(
                 entities_by_key: dict[tuple[str, str], EntityCandidate] = {}
                 relations: list[tuple[RelationCandidate, StructuredKnowledgeSection]] = []
                 for si, section in enumerate(document.sections):
+                    if cancel_event is not None and cancel_event.is_set():
+                        _update_graph_progress(user_id, library_id, status="cancelled", message="图谱抽取已取消", docs=docs)
+                        return
                     docs[di]["progress"] = int((si + 1) / len(document.sections) * 100)
                     _update_graph_progress(
                         user_id, library_id,
@@ -1871,7 +1881,12 @@ def _run_graph_extraction(
                     section_title = section.title_path[-1] if section.title_path else f"section_{si}"
                     print(f"    |-- section {si+1}/{len(document.sections)}: {section_title[:50]} -> LLM...", end="")
                     payload = extractor.extract(document=document, section=section)
-                    time.sleep(0.5)  # 限流: 每段间等待 500ms 避免 429
+                    if cancel_event is not None:
+                        if cancel_event.wait(0.5):
+                            _update_graph_progress(user_id, library_id, status="cancelled", message="图谱抽取已取消", docs=docs)
+                            return
+                    else:
+                        time.sleep(0.5)  # 限流: 每段间等待 500ms 避免 429
                     section_entities = svc._sanitize_entities(payload.get("entities"))
                     for entity in section_entities:
                         entities_by_key[(svc._normalize_label(entity.name), entity.entity_type)] = entity
@@ -2000,7 +2015,12 @@ def _run_graph_extraction(
                 docs=docs,
             )
             # 限流: 每文档间等待 1s,让 API 有喘息时间
-            time.sleep(1.0)
+            if cancel_event is not None:
+                if cancel_event.wait(1.0):
+                    _update_graph_progress(user_id, library_id, status="cancelled", message="图谱抽取已取消", docs=docs)
+                    return
+            else:
+                time.sleep(1.0)
 
         if target_source_path is None:
             svc.delete_graph_except_documents(

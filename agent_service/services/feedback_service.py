@@ -82,6 +82,18 @@ class FeedbackService:
             db.refresh(record)
             return self._to_out(record)
 
+    def get_feedback(self, *, feedback_id: str, user_id: str | None = None) -> FeedbackOut | None:
+        """按 ID 读取反馈；提供 user_id 时同时校验反馈所有权。"""
+
+        normalized_feedback_id = self._required(feedback_id, "feedback_id")
+        normalized_user_id = str(user_id or "").strip()
+        with Session(self.engine) as db:
+            statement = select(FeedbackRecord).where(FeedbackRecord.feedback_id == normalized_feedback_id)
+            if normalized_user_id:
+                statement = statement.where(FeedbackRecord.user_id == normalized_user_id)
+            record = db.exec(statement).first()
+            return self._to_out(record) if record is not None else None
+
     def delete_feedback(self, *, feedback_id: str) -> bool:
         """删除指定反馈,返回是否实际删除。"""
 

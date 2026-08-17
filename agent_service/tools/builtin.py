@@ -742,15 +742,15 @@ def list_knowledge_files() -> str:
 
 def read_knowledge_file(path: str) -> str:
     """
-    读取知识库中指定文件的内容。
+    读取知识库中指定源文件的 Markdown 中间层内容，未灌库时自动灌库。
 
-    path: 文件相对于知识库根目录的路径,例如 `notes/readme.md`。
+    path: 源文件相对于知识库根目录的路径,例如 `docs/report.pdf`。
     """
 
     runtime = get_tool_runtime()
     service = _build_knowledge_service()
     try:
-        result = service.read_file(user_id=runtime.user_id, path=path)
+        result = service.read_markdown_projection(user_id=runtime.user_id, path=path)
     except Exception as exc:
         return f"读取文件失败: {exc}"
     content = str(result.get("content", ""))
@@ -767,32 +767,9 @@ def read_knowledge_file(path: str) -> str:
     return (
         prefix
         + content[:max_chars]
-        + f"\n\n[文件内容已截断: 已返回前 {max_chars} 字符, 原文共 {len(content)} 字符。"
+        + f"\n\n[Markdown 投影内容已截断: 已返回前 {max_chars} 字符, 原文共 {len(content)} 字符。"
         "如需后续部分,请更精确地说明要查看的章节或关键词。]"
     )
-
-
-def read_multimodal_file_info(path: str) -> str:
-    """
-    Read structured metadata and section previews from an ingested multimodal file.
-
-    path: File path relative to the active knowledge library root, for example `docs/report.pdf`.
-    """
-
-    runtime = get_tool_runtime()
-    service = _build_knowledge_service()
-    try:
-        result = service.read_multimodal_file_info(user_id=runtime.user_id, path=path)
-    except Exception as exc:
-        return f"读取多模态文件信息失败: {exc}"
-    content = json.dumps(result, ensure_ascii=False, indent=2)
-    source_uri = str(result.get("path") or path) if isinstance(result, dict) else path
-    citation_id = register_tool_citation(
-        source_uri=source_uri,
-        content=content,
-        adopted_by_default=True,
-    )
-    return f"Citation ID: [{citation_id}]\nSource: {source_uri}\n\n{content}"
 
 
 def write_knowledge_file(path: str, content: str) -> str:

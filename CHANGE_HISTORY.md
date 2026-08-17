@@ -2,6 +2,12 @@
 
 ## 2026-08-17
 
+- [x] 补全 README“工具明细”：按真实内置工具注册表逐项简述全部 104 个默认工具，并新增文档与注册表一一对应、无重复的回归检查；运行时动态追加的 MCP 工具不写入固定清单。
+
+- [x] 扩展并按职责拆分 Agent 内置工具：新增选定/全量灌库及任务控制、文件管线与回收站、选定/全量图谱抽取及节点邻接/路径/删除/重试，补齐用户 Skill、反馈、图书馆、组件、收藏和智能表格完整生命周期；编辑器同步上报多选文件，旧 `rebuild_knowledge_base` 更名为 `ingest_all_knowledge_files`。新增服务、工具执行、注册协议和前端交互回归。
+
+- [x] 统一 Agent 文件阅读入口：`read_knowledge_file` 按源文件路径读取 `.mw/md` Markdown 投影，投影、frontmatter 或索引缺失以及源哈希、OCR 状态过期时复用单文件灌库链路后再读；移除 `read_multimodal_file_info` 的后端注册、运行时预算和前端展示引用，并更新相关提示与 README。补充真实投影读取、自动灌库、引用及工具注册回归，并通过真实 PDF ToolCallNode 与 Chromium 工作区界面冒烟。
+
 - [x] 收紧用户存储设置：知识库根目录仍可切换，`.mw/md`、`.mw/frontmatter`、`.mw/library`、`.mw/forms` 与 `.mw/components` 固定只读；移除图书馆和运行时根路径编辑入口及失效的用户级路径迁移，路径统计统一展示服务真实配置。运行中仅允许清空“最近删除”，禁止直接删除 SQLite、Chroma、受管资源、日志和已加载模型；同步修正图书馆前端默认路径、Markdown 粘贴图片目录名称，并补充后端及前端契约回归测试。
 
 - [x] 按文件模态统一编辑区管线：Markdown 使用 Edit/Preview/Split，纯文本与代码分别固定为 Text/Code，CSV 使用可编辑原文 Text 与只读表格 Forms，XLS/XLSX 固定 Forms，DOCX/PDF/PPTX/图片使用原件 Preview 与 `.mw/md` 完整源码 Markdown；PPTX 原件预览保留空白占位，旧 DOC 及未知二进制显示 Binary，未知 UTF-8 文件自动转为 Text。移除 PDF 二级“文本/渲染”切换，模式选择、加载、可编辑性和渲染统一由同一格式解析器决定；补充后端预览、组件、格式映射及 Chromium 全格式真实界面验收。

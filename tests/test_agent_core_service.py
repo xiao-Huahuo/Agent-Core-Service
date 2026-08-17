@@ -1512,12 +1512,13 @@ def test_agent_core_drops_unmapped_citation_anchors() -> None:
 
 def test_read_knowledge_file_registers_tool_citation(monkeypatch: Any) -> None:
     class FakeKnowledgeService:
-        def read_file(self, *, user_id: str, path: str) -> dict[str, Any]:
+        def read_markdown_projection(self, *, user_id: str, path: str) -> dict[str, Any]:
             assert user_id == "user_1"
-            assert path == "notes/a.md"
+            assert path == "docs/a.pdf"
             return {
-                "path": "notes/a.md",
-                "content": "Alpha content from a knowledge file.",
+                "path": "docs/a.pdf",
+                "projection_path": ".mw/md/docs/a.md",
+                "content": "# A\n\nAlpha content from a projected PDF.",
             }
 
     config = AgentConfig.load_config(load_env=False, ensure_directories=False, ensure_models=False)
@@ -1535,15 +1536,98 @@ def test_read_knowledge_file_registers_tool_citation(monkeypatch: Any) -> None:
     )
     executor = ToolExecutor(registry=ToolRegistry.with_builtin_tools())
 
-    result = executor.execute("read_knowledge_file", {"path": "notes/a.md"})
+    result = executor.execute("read_knowledge_file", {"path": "docs/a.pdf"})
     citation_map = get_tool_citation_map()
     clear_tool_runtime()
 
     assert "Citation ID: [K1]" in result
-    assert "Alpha content from a knowledge file." in result
-    assert citation_map["K1"]["source_uri"] == "notes/a.md"
-    assert citation_map["K1"]["content"] == "Alpha content from a knowledge file."
+    assert "Alpha content from a projected PDF." in result
+    assert citation_map["K1"]["source_uri"] == "docs/a.pdf"
+    assert citation_map["K1"]["content"] == "# A\n\nAlpha content from a projected PDF."
     assert citation_map["K1"]["adopted_by_default"] is True
+
+
+def test_multimodal_read_tool_is_not_registered() -> None:
+    """统一 Markdown 阅读入口启用后，旧多模态 JSON 阅读工具不得继续暴露给模型。"""
+
+    registry = ToolRegistry.with_builtin_tools()
+
+    assert registry.get("read_knowledge_file") is not None
+    assert registry.get("read_multimodal_file_info") is None
+
+
+def test_extended_business_tools_are_registered() -> None:
+    """用户确认的知识处理与业务管理工具必须全部进入最终 Agent 注册表。"""
+
+    registry = ToolRegistry.with_builtin_tools()
+    expected_names = {
+        "get_selected_knowledge_files",
+        "ingest_selected_knowledge_files",
+        "ingest_all_knowledge_files",
+        "get_knowledge_job_status",
+        "cancel_knowledge_job",
+        "retry_failed_knowledge_files",
+        "get_knowledge_file_status",
+        "list_knowledge_trash",
+        "restore_knowledge_file",
+        "permanently_delete_knowledge_trash",
+        "extract_selected_file_graphs",
+        "extract_all_file_graphs",
+        "search_knowledge_graph_nodes",
+        "find_knowledge_graph_paths",
+        "delete_file_graph",
+        "retry_failed_graph_extraction",
+        "get_custom_skill",
+        "create_custom_skill",
+        "update_custom_skill",
+        "delete_custom_skill",
+        "validate_custom_skill",
+        "test_custom_skill",
+        "set_skill_enabled",
+        "list_user_feedback",
+        "get_user_feedback",
+        "create_user_feedback",
+        "update_user_feedback",
+        "delete_user_feedback",
+        "get_library_item",
+        "list_components",
+        "get_component",
+        "create_component",
+        "update_component",
+        "delete_component",
+        "validate_component",
+        "list_favorites",
+        "add_favorite",
+        "remove_favorite",
+        "list_smart_forms",
+        "create_smart_form",
+        "get_smart_form",
+        "get_smart_form_schema",
+        "update_smart_form",
+        "patch_smart_form_rows",
+        "get_smart_form_literature",
+        "export_smart_form",
+        "import_smart_form",
+        "preview_smart_form_fill",
+        "fill_smart_form_cells",
+    }
+
+    assert expected_names <= set(registry.definitions)
+    assert registry.get("rebuild_knowledge_base") is None
+
+
+def test_readme_tool_details_cover_every_builtin_tool_once() -> None:
+    """README 工具明细必须与真实内置注册表逐项对应，且不重复记录。"""
+
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+    marker = "##### 工具明细"
+    assert marker in readme
+    section = readme.split(marker, 1)[1].split("\n## ", 1)[0]
+    registry = ToolRegistry.with_builtin_tools()
+
+    for name in registry.definitions:
+        assert section.count(f"| `{name}` |") == 1, name
+    assert section.count("\n| `") == len(registry.definitions)
 
 
 def test_web_search_registers_network_citations(monkeypatch: Any) -> None:

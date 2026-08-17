@@ -154,6 +154,105 @@ class ComponentLibraryService:
             )
         }
 
+    def get_component(self, *, user_id: str, component_id: str) -> dict[str, object]:
+        """读取一个组件的完整源码与元数据。"""
+
+        normalized_user_id = self._require_user_id(user_id)
+        root = self._components_root(user_id=normalized_user_id)
+        path = self._component_path(components_root=root, component_id=component_id)
+        relative_path = path.relative_to(root)
+        return {
+            "component": self._file_to_dict(
+                path=path,
+                relative_path=relative_path,
+                user_id=normalized_user_id,
+                tag=self._tag_from_relative_path(relative_path),
+                source=path.read_text(encoding="utf-8"),
+            )
+        }
+
+    def update_component(
+        self,
+        *,
+        user_id: str,
+        component_id: str,
+        source: str | None = None,
+        tag: str | None = None,
+        title: str | None = None,
+    ) -> dict[str, object]:
+        """增量更新组件源码、分类或标题，并保持单文件规范存储。"""
+
+        normalized_user_id = self._require_user_id(user_id)
+        root = self._components_root(user_id=normalized_user_id)
+        path = self._component_path(components_root=root, component_id=component_id)
+        next_source = path.read_text(encoding="utf-8") if source is None else str(source).strip()
+        if not next_source:
+            raise ValueError("component source is required")
+        if len(next_source) > MAX_COMPONENT_SOURCE_LENGTH:
+            raise ValueError("component source is too large")
+        next_tag = self._tag_from_relative_path(path.relative_to(root)) if tag is None else self._require_tag(tag)
+        next_title = path.stem if title is None else str(title).strip()
+        if not next_title:
+            raise ValueError("component title is required")
+        suffix = path.suffix.casefold()
+        filename = self._safe_filename(
+            filename=f"{Path(next_title).stem}{suffix}",
+            source_format="vue" if suffix == ".vue" else "html",
+        )
+        target_dir = root / next_tag
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / filename
+        if target.resolve() != path.resolve() and target.exists():
+            target = self._unique_path(directory=target_dir, filename=filename)
+        temp_path = target.with_name(f".{target.name}.{uuid4().hex}.tmp")
+        try:
+            temp_path.write_text(next_source, encoding="utf-8", newline="\n")
+            temp_path.replace(target)
+            if target.resolve() != path.resolve():
+                path.unlink()
+        finally:
+            temp_path.unlink(missing_ok=True)
+        relative_path = target.relative_to(root)
+        return {
+            "component": self._file_to_dict(
+                path=target,
+                relative_path=relative_path,
+                user_id=normalized_user_id,
+                tag=next_tag,
+                source=next_source,
+            )
+        }
+
+    def delete_component(self, *, user_id: str, component_id: str) -> dict[str, object]:
+        """删除一个用户组件文件并返回稳定标识。"""
+
+        normalized_user_id = self._require_user_id(user_id)
+        root = self._components_root(user_id=normalized_user_id)
+        path = self._component_path(components_root=root, component_id=component_id)
+        path.unlink()
+        return {"component_id": component_id, "deleted": True}
+
+    def validate_component(self, *, user_id: str, component_id: str) -> dict[str, object]:
+        """校验持久化组件的格式、大小及 Vue/HTML 基本结构。"""
+
+        payload = self.get_component(user_id=user_id, component_id=component_id)
+        component = dict(payload["component"])
+        source = str(component.get("source") or "")
+        source_format = str(component.get("source_format") or "")
+        errors: list[str] = []
+        if not source.strip():
+            errors.append("组件源码为空")
+        if len(source) > MAX_COMPONENT_SOURCE_LENGTH:
+            errors.append("组件源码超过大小限制")
+        if source_format == "vue":
+            if not re.search(r"<template(?:\s[^>]*)?>", source, flags=re.IGNORECASE):
+                errors.append("Vue SFC 缺少 <template>")
+            if not re.search(r"</template\s*>", source, flags=re.IGNORECASE):
+                errors.append("Vue SFC 缺少 </template>")
+        elif not re.search(r"<[^>]+>", source):
+            errors.append("HTML 组件不包含有效标签")
+        return {"component_id": component_id, "valid": not errors, "errors": errors}
+
     def _migrate_legacy_components(self, *, user_id: str) -> None:
         """Move obsolete SQLite source rows to files, deleting rows only after success."""
 

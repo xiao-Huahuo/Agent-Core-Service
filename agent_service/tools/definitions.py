@@ -52,9 +52,7 @@ from agent_service.tools.builtin import (
     list_knowledge_files,
     list_todos,
     read_knowledge_file,
-    read_multimodal_file_info,
     patch_knowledge_file,
-    rebuild_knowledge_base,
     remove_library_item,
     rename_knowledge_file,
     run_terminal_command,
@@ -127,7 +125,7 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
             "- full_access: 所有内部指令和外部程序放开限制,额外支持 kill/taskkill 杀进程,"
             "rm -rf/mkdir -p/批量 cat/mv 等都允许。\n\n"
             "注意事项:\n"
-            "- 读取或解析知识库中的文档正文时, 不要使用本工具; 文本/Markdown/代码用 read_knowledge_file, PDF/图片/Office/表格/扫描件用 read_multimodal_file_info。\n"
+            "- 读取或解析知识库中的文档正文时, 不要使用本工具; 统一用 read_knowledge_file 读取源文件的 Markdown 投影。\n"
             "- 文件搜索优先用 ls/dir *.docx /s /b 或 find . -name '*.docx'。\n"
             "- 需要标志的 wc(如 wc -l)用 external_program 类型;仅统计用 internal_command。\n"
             "- 所有 internal_command 都无需 shell 程序支持,在任何环境下可用。"
@@ -443,17 +441,6 @@ KNOWLEDGE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         display_name="检索知识",
     ),
     BuiltinToolDefinition(
-        name="rebuild_knowledge_base",
-        description="主动重新扫描当前用户的本地知识库并灌入向量库。用户要求刷新、重建、重新灌库或切换知识库目录后使用。",
-        args_schema={
-            "type": "object",
-            "properties": {"knowledge_dir": {"type": "string", "description": "可选的新知识库目录。为空时使用当前用户设置里的知识库目录。"}},
-            "required": [],
-        },
-        function=rebuild_knowledge_base,
-        display_name="重建知识库",
-    ),
-    BuiltinToolDefinition(
         name="search_knowledge",
         description=(
             "全库联合搜索: 在当前用户知识库中同时做文件名/路径关键词匹配、全文内容匹配,并可选语义搜索。"
@@ -525,34 +512,17 @@ FILE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="read_knowledge_file",
         description=(
-            "读取知识库中指定纯文本、Markdown、代码等文本文件的正文内容。"
-            "这是知识库文本文件正文读取的专用入口；如果用户已经给出准确 path, 直接用该 path 读取, 不需要先列目录。"
-            "PDF、图片、Office 文档、表格、扫描件等已灌库的多模态/二进制文档不要用本工具, 必须改用 read_multimodal_file_info。"
-            "不要为了读取知识库文档正文而调用 run_terminal_command、get_knowledge_file_url、download_file 或 Python 库自行解析源文件。"
+            "读取知识库中任意支持源文件的 Markdown 中间层正文，包括文本、Markdown、代码、PDF、图片、扫描件、Office 和表格。"
+            "传入源文件相对于当前知识库根目录的准确 path；工具会读取 `.mw/md` 投影，尚未灌库或投影过期时自动执行单文件灌库。"
+            "不要传 `.mw/md` 内部路径，也不要调用 run_terminal_command、get_knowledge_file_url、download_file 或 Python 库自行解析源文件。"
         ),
         args_schema={
             "type": "object",
-            "properties": {"path": {"type": "string", "description": "文件相对于知识库根目录的路径。"}},
+            "properties": {"path": {"type": "string", "description": "源文件相对于当前知识库根目录的路径。"}},
             "required": ["path"],
         },
         function=read_knowledge_file,
         display_name="阅读文件",
-    ),
-    BuiltinToolDefinition(
-        name="read_multimodal_file_info",
-        description=(
-            "读取已灌库多模态/二进制文档的结构化 JSON 提取结果。"
-            "PDF、图片、扫描件、Word、PPT、Excel、表格等文件要用本工具获取内容、章节、OCR、元数据和抽取文本。"
-            "这是多模态知识库文档内容读取的专用入口；不要调用 run_terminal_command、get_knowledge_file_url、download_file 或 Python 库自行解析源文件。"
-            "生成文档可视化、摘要或问答时, 应基于本工具返回的 JSON 结构化结果。"
-        ),
-        args_schema={
-            "type": "object",
-            "properties": {"path": {"type": "string", "description": "文件相对于当前知识库根目录的路径。"}},
-            "required": ["path"],
-        },
-        function=read_multimodal_file_info,
-        display_name="读取多模态文件信息",
     ),
     BuiltinToolDefinition(
         name="patch_knowledge_file",
@@ -589,8 +559,8 @@ FILE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
             "Display a generated Markdown/document HTML visualization in the editor front-end. "
             "Use this only after you have produced the final complete HTML for the current document visualization. "
             "The tool saves the HTML under runtime/visualizations, returns the local path and URL, "
-            "and automatically triggers the front-end iframe mount. For multimodal documents, first read the JSON "
-            "extraction result with read_multimodal_file_info and build the HTML from that structured result."
+            "and automatically triggers the front-end iframe mount. For any knowledge document, first read its "
+            "canonical Markdown projection with read_knowledge_file and build the HTML from that content."
         ),
         args_schema={
             "type": "object",
@@ -1022,6 +992,8 @@ WEB_SEARCH_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     ),
 ]
 
+from agent_service.tools.extended_definitions import EXTENDED_TOOL_DEFINITIONS  # noqa: E402
+
 BUILTIN_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = (
     UTILITY_TOOL_DEFINITIONS
     + GIT_TOOL_DEFINITIONS
@@ -1034,4 +1006,5 @@ BUILTIN_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = (
     + CHILD_AGENT_TOOL_DEFINITIONS
     + TODO_TOOL_DEFINITIONS
     + WEB_SEARCH_TOOL_DEFINITIONS
+    + EXTENDED_TOOL_DEFINITIONS
 )

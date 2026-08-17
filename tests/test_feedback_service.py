@@ -18,6 +18,7 @@ from sqlmodel import create_engine
 import agent_service.api.rest.deps as rest_deps
 from agent_service.api.rest.feedback import router as feedback_router
 from agent_service.services.feedback_service import FeedbackService
+from agent_service.schemas.feedback import FeedbackCreate
 from main import app as main_app
 
 
@@ -87,3 +88,14 @@ def test_feedback_allows_file_origin_private_network_preflight() -> None:
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "null"
     assert response.headers["access-control-allow-private-network"] == "true"
+
+
+def test_feedback_get_enforces_optional_user_ownership() -> None:
+    """Agent 单条反馈读取不得跨用户返回同一 feedback_id。"""
+
+    engine = create_engine("sqlite:///:memory:")
+    service = FeedbackService(engine=engine)
+    created = service.add_feedback(FeedbackCreate(user_id="u1", content="only mine"))
+
+    assert service.get_feedback(feedback_id=created.feedback_id, user_id="u1") == created
+    assert service.get_feedback(feedback_id=created.feedback_id, user_id="u2") is None

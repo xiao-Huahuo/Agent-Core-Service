@@ -120,6 +120,37 @@ def test_create_component_rejects_unknown_tags_and_oversized_source(tmp_path: Pa
         service.create_component(user_id="u1", source="x" * 250_001, tag="any")
 
 
+def test_component_crud_and_validation_share_the_canonical_source_file(tmp_path: Path) -> None:
+    """Agent 组件工具依赖的读取、修改、验证和删除必须作用于同一个受管文件。"""
+
+    service = _service(tmp_path)
+    created = service.create_component(
+        user_id="u1",
+        source="<template><button>旧</button></template>",
+        tag="buttons",
+        filename="action.vue",
+    )
+    component_id = str(created["component"]["component_id"])
+
+    loaded = service.get_component(user_id="u1", component_id=component_id)
+    updated = service.update_component(
+        user_id="u1",
+        component_id=component_id,
+        source="<template><button>新</button></template>",
+        tag="cards",
+        title="updated-action",
+    )
+    updated_id = str(updated["component"]["component_id"])
+    validation = service.validate_component(user_id="u1", component_id=updated_id)
+    deleted = service.delete_component(user_id="u1", component_id=updated_id)
+
+    assert loaded["component"]["source"] == "<template><button>旧</button></template>"
+    assert updated_id == "cards/updated-action.vue"
+    assert validation == {"component_id": updated_id, "valid": True, "errors": []}
+    assert deleted["deleted"] is True
+    assert service.list_components(user_id="u1", tag="any")["components"] == []
+
+
 def test_mw_directory_is_ignored_by_application_default() -> None:
     """Component sources must not enter file-tree ingestion even without user rules."""
 

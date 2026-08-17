@@ -74,7 +74,6 @@ const FALLBACK_DISPLAY: Record<string, string> = {
   get_current_viewing_document: '获取当前文档',
   list_knowledge_files: '列出文件',
   read_knowledge_file: '阅读文件',
-  read_multimodal_file_info: '读取多模态文件信息',
   write_knowledge_file: '创作文件',
   show_markdown_html: '展示Markdown-HTML',
   delete_knowledge_file: '删除文件',

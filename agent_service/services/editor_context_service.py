@@ -35,6 +35,7 @@ class CurrentDocumentInfo:
     mtime: 文件修改时间展示值,由前端或后端文件树提供。
     dirty: 前端编辑器内容是否未保存。
     open_tab_count: 当前前端打开的 tab 数量。
+    selected_paths: 文件资源管理器当前多选的知识库相对路径。
     updated_at: 后端接收该状态的 UTC 时间。
     """
 
@@ -48,6 +49,7 @@ class CurrentDocumentInfo:
     mtime: str = ""
     dirty: bool = False
     open_tab_count: int = 0
+    selected_paths: tuple[str, ...] = ()
     updated_at: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -95,6 +97,13 @@ class EditorContextService:
             mtime=str(payload.get("mtime") or "").strip(),
             dirty=bool(payload.get("dirty") or False),
             open_tab_count=max(0, int(payload.get("open_tab_count") or 0)),
+            selected_paths=tuple(
+                dict.fromkeys(
+                    str(path or "").replace("\\", "/").strip("/")
+                    for path in (payload.get("selected_paths") or [])
+                    if str(path or "").strip()
+                )
+            ),
             updated_at=datetime.now(timezone.utc).isoformat(),
         )
         with self._lock:
