@@ -81,6 +81,9 @@ const isAgentQueuePage = computed(() => workspaceStore.mainView === 'agent-queue
 const isGraphPage = computed(() => workspaceStore.mainView === 'graph')
 const isHomePage = computed(() => workspaceStore.mainView === 'home')
 const isBrowserPage = computed(() => workspaceStore.mainView === 'browser')
+const browserSidebarVisible = computed(() => (
+  workspaceStore.browserSidebarOpen && workspaceStore.mainView !== 'browser'
+))
 const sidebarHidden = computed(() => (
   isAgentPage.value
   || isAgentQueuePage.value
@@ -409,11 +412,22 @@ function openSearch() {
 
 function openBrowser() {
   const next = workspaceStore.mainView === 'browser' ? 'editor' : 'browser'
+  if (next === 'browser') workspaceStore.closeBrowserSidebar()
   workspaceStore.setMainView(next)
   if (next !== 'editor') {
     fileSidebarOpen.value = false
     agentSidebarOpen.value = false
   }
+}
+
+/** Toggle half-width browser mode; convert the full-page browser when needed. */
+function toggleBrowserSidebar() {
+  if (workspaceStore.mainView === 'browser') {
+    workspaceStore.setMainView('editor')
+    workspaceStore.openBrowserSidebar()
+    return
+  }
+  workspaceStore.toggleBrowserSidebar()
 }
 
 function openSkills() {
@@ -606,11 +620,13 @@ watch(
   >
     <TopCommandBar
       :git-open="gitRightOpen"
+      :browser-open="browserSidebarVisible"
       @toggle-agent="toggleAgentSidebar"
       @open-home="openHome"
       @open-settings="openSettings"
       @toggle-todo="toggleTodoSidebar"
       @toggle-git="toggleRightGitSidebar"
+      @toggle-browser="toggleBrowserSidebar"
     />
     <div
       ref="workspaceGrid"
@@ -686,6 +702,7 @@ watch(
         class="main-shell editor-col ide-panel"
         :class="{
           'agent-page-main-shell': isAgentPage,
+          'browser-sidebar-open': browserSidebarVisible,
         }"
       >
         <HomeView v-if="workspaceStore.mainView === 'home'" class="main-shell-content" />
@@ -711,6 +728,14 @@ watch(
         />
         <SkillView v-else-if="workspaceStore.mainView === 'skills'" class="main-shell-content" />
         <SettingsView v-else-if="workspaceStore.mainView === 'settings'" class="main-shell-content" />
+        <BrowserPage
+          v-if="browserSidebarVisible"
+          class="main-shell-content browser-sidebar-content"
+          :activity-overlay-open="activityOverlayOpen"
+          :initial-url="workspaceStore.browserSidebarUrl"
+          :navigation-request-id="workspaceStore.browserSidebarNavigationId"
+          sidebar
+        />
       </main>
       <div
         class="resize-handle agent-resizer"
@@ -831,6 +856,15 @@ watch(
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
+}
+
+.main-shell.ide-panel.browser-sidebar-open {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+}
+
+.browser-sidebar-content {
+  border-left: 1px solid var(--color-border-subtle);
 }
 
 .agent-resizer {

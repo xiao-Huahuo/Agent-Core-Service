@@ -304,7 +304,7 @@ async function openItem(item: LibraryItem) {
     return
   }
   if (item.content_type === 'web_url' && item.source_url) {
-    window.open(item.source_url, '_blank')
+    workspaceStore.openBrowserSidebar(item.source_url)
     return
   }
   if (item.source_path) {

@@ -239,9 +239,18 @@ function handleDrop(event: DragEvent) {
       </div>
       <Transition name="detail-block">
         <div v-if="detailsOpen" class="details-popover" @click.stop>
-          <div v-if="!isCollection" class="source expandable-block" :title="sourceLabel">
+          <button
+            v-if="!isCollection && item.content_type === 'web_url'"
+            class="source source-url expandable-block"
+            type="button"
+            :title="sourceLabel"
+            @click="emit('open', item)"
+          >
+            <IcIcon name="link" :size="13" />
+            <span>{{ sourceLabel }}</span>
+          </button>
+          <div v-else-if="!isCollection" class="source expandable-block" :title="sourceLabel">
             <img v-if="fileIcon.src" class="source-icon" :src="fileIcon.src" alt="" />
-            <IcIcon v-else-if="item.content_type === 'web_url'" name="link" :size="13" />
             <span>{{ sourceLabel }}</span>
           </div>
           <textarea
@@ -549,6 +558,17 @@ function handleDrop(event: DragEvent) {
   align-items: center;
   gap: 5px;
   color: var(--color-text-secondary);
+}
+
+.source-url {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.source-url:hover {
+  color: var(--color-primary);
 }
 
 .expandable-block {

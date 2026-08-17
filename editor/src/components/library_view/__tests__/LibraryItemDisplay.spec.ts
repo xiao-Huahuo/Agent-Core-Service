@@ -20,6 +20,15 @@ const options = {
   global: { stubs: { IcIcon: { template: '<span />' }, FavoriteButton: { template: '<span />' } } },
 }
 
+const webBook = {
+  ...book,
+  item_id: 'web-1',
+  content_type: 'web_url',
+  source_path: '',
+  source_url: 'https://example.com/article',
+  source_name: '',
+} as LibraryItem
+
 describe('Library item download affordances', () => {
   it('places the card download control next to the title and emits the real book', async () => {
     const wrapper = mount(LibraryCard, options)
@@ -54,5 +63,17 @@ describe('Library item download affordances', () => {
     await wrapper.get('textarea[aria-label="编辑描述"]').setValue('新描述')
     await wrapper.get('textarea[aria-label="编辑描述"]').trigger('blur')
     expect(wrapper.emitted('save')?.[1]).toEqual([book, { description: '新描述' }])
+  })
+
+  it('opens a visible URL from both library display modes with one click', async () => {
+    const card = mount(LibraryCard, { ...options, props: { ...options.props, item: webBook } })
+    await card.get('.expand-button').trigger('click')
+    await card.get('button.source-url').trigger('click')
+
+    const bar = mount(LibraryBar, { ...options, props: { ...options.props, item: webBook } })
+    await bar.get('button.bar-url').trigger('click')
+
+    expect(card.emitted('open')?.[0]).toEqual([webBook])
+    expect(bar.emitted('open')?.[0]).toEqual([webBook])
   })
 })

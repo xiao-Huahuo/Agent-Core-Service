@@ -119,7 +119,7 @@ function registerBrowserViewIpc(ipcMain, getMainWindow) {
       height: Math.max(1, Math.round(Number(bounds.height) || 1)),
     })
     view.setVisible(true)
-    if (!view.webContents.getURL()) await loadBrowserUrl(view, homeUrl)
+    if (!view.webContents.getURL()) void loadBrowserUrl(view, homeUrl)
     emitState()
     return true
   })

@@ -17,6 +17,9 @@ defineOptions({ name: 'BrowserPage' })
 
 const props = defineProps<{
   activityOverlayOpen: boolean
+  initialUrl?: string
+  navigationRequestId?: number
+  sidebar?: boolean
 }>()
 
 const settingsStore = useSettingsStore()
@@ -28,6 +31,7 @@ const proxyUrl = ref('')
 const homeUrl = ref('https://www.google.com')
 const configReady = ref(false)
 const latestBounds = ref<BrowserViewBounds | null>(null)
+const pendingUrl = ref(props.initialUrl?.trim() || '')
 const browserState = ref<BrowserViewState>({
   url: '',
   title: '新标签页',
@@ -52,10 +56,21 @@ async function syncNativeView() {
     if (props.activityOverlayOpen) {
       browserShown = false
       await desktop.browserHide()
+    } else {
+      await navigatePendingUrl()
     }
     return
   }
   await desktop.browserSetBounds({ ...latestBounds.value })
+}
+
+/** Consume one externally requested URL after the shared native view is visible. */
+async function navigatePendingUrl() {
+  const url = pendingUrl.value.trim()
+  if (!desktop || !browserShown || !url) return
+  pendingUrl.value = ''
+  address.value = url
+  await desktop.browserNavigate(url)
 }
 
 /** Keep the native view clipped to the BrowserChrome content surface. */
@@ -91,6 +106,12 @@ watch(() => props.activityOverlayOpen, async (open) => {
   await syncNativeView()
 })
 
+/** Consume every library or citation click, including repeated identical URLs. */
+watch(() => props.navigationRequestId, async () => {
+  pendingUrl.value = props.initialUrl?.trim() || ''
+  await navigatePendingUrl()
+})
+
 onMounted(async () => {
   removeStateListener = desktop?.onBrowserState((state) => {
     browserState.value = state
@@ -104,7 +125,7 @@ onMounted(async () => {
     const config = await fetchWebSearchConfig(settingsStore.profile.userId)
     proxyUrl.value = config.browser_proxy_url || config.proxy_url || ''
     homeUrl.value = config.browser_home_url || 'https://www.google.com'
-    address.value = homeUrl.value
+    if (!props.initialUrl) address.value = homeUrl.value
   } catch {
     // The browser remains usable with direct networking and the default home.
   } finally {
@@ -128,7 +149,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="browser-page">
+  <div class="browser-page" :class="{ 'browser-sidebar-page': sidebar }">
     <BrowserChrome
       v-model:address="address"
       :desktop-available="desktopAvailable"
@@ -153,5 +174,11 @@ onBeforeUnmount(() => {
   background:
     radial-gradient(circle at 50% -20%, var(--color-primary-softer), transparent 44%),
     var(--color-chrome-bg-solid);
+}
+
+.browser-sidebar-page {
+  padding: var(--space-8);
+  padding-left: var(--space-10);
+  background: var(--color-bg-app);
 }
 </style>

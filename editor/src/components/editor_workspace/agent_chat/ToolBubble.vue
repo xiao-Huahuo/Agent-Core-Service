@@ -124,11 +124,7 @@ function setFeedback(kind: 'up' | 'down') {
 
 function handleNavigateSource(uri: string) {
   if (/^https?:\/\//i.test(uri)) {
-    if (window.agentEditorDesktop?.openExternal) {
-      void window.agentEditorDesktop.openExternal(uri)
-    } else {
-      window.open(uri, '_blank', 'noopener,noreferrer')
-    }
+    workspaceStore.openBrowserSidebar(uri)
     return
   }
   const flatNodes = workspaceStore.flatNodes ?? []

@@ -17,7 +17,7 @@ import lightLogo from '@/assets/images/亮色无底图标.png'
 import darkLogo from '@/assets/images/暗色无底图标.png'
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
-defineProps<{ gitOpen: boolean }>()
+defineProps<{ gitOpen: boolean; browserOpen: boolean }>()
 
 /* ---- 模型阻断模态框 ---- */
 const modelModalVisible = ref(false)
@@ -53,6 +53,7 @@ const emit = defineEmits<{
   openSettings: []
   toggleTodo: []
   toggleGit: []
+  toggleBrowser: []
 }>()
 const graphRebuilding = computed(() => workspaceStore.graphQueue.length > 0)
 const agentActive = computed(() => workspaceStore.agentSidebarOpen)
@@ -191,6 +192,16 @@ onMounted(() => nextTick(autoResizeInput))
         <img :src="logoSrc" class="agent-play-img" alt="MetaWeave" />
         <span class="agent-now">NOW!</span>
         <span class="agent-play">AGENT</span>
+      </button>
+      <button
+        class="todo-link topbar-browser-btn"
+        :class="{ active: browserOpen }"
+        type="button"
+        title="右侧浏览器"
+        aria-label="打开或收起右侧浏览器"
+        @click="emit('toggleBrowser')"
+      >
+        <IcIcon name="language" :size="14" />
       </button>
       <button
         class="todo-link"

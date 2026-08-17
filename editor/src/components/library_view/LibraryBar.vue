@@ -150,8 +150,15 @@ function handleDrop(event: DragEvent) {
         <div class="bar-tag-row">
           <span v-for="tag in item.tags" :key="tag" class="tag-pill" :title="tag">{{ tag }}</span>
         </div>
+        <button
+          v-if="!multiSelect && item.content_type === 'web_url'"
+          class="bar-badge bar-url"
+          type="button"
+          :title="badgeText"
+          @click.stop="emit('open', item)"
+        >{{ badgeText }}</button>
         <span
-          v-if="!multiSelect"
+          v-else-if="!multiSelect"
           class="bar-badge"
           :class="{ collection: isCollection }"
           :title="badgeText"
@@ -397,6 +404,18 @@ function handleDrop(event: DragEvent) {
   white-space: nowrap;
   font-size: calc(11px * var(--font-scale));
   color: var(--color-text-tertiary);
+}
+
+.bar-url {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.bar-url:hover {
+  color: var(--color-primary);
 }
 
 .bar-badge.collection {

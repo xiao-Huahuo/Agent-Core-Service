@@ -46,6 +46,7 @@ function prepareStores() {
 
 function mountTopCommandBar() {
   return mount(TopCommandBar, {
+    props: { gitOpen: false, browserOpen: false },
     global: {
       stubs: {
         SearchPalette: true,
@@ -87,6 +88,15 @@ describe('TopCommandBar knowledge-library switcher', () => {
 
     expect(wrapper.find('.topbar > .search-center').exists()).toBe(false)
     expect(wrapper.findAll('.actions > .search-center')).toHaveLength(1)
+  })
+
+  it('exposes the compact browser-sidebar toggle in the application top bar', async () => {
+    prepareStores()
+    const wrapper = mountTopCommandBar()
+
+    await wrapper.get('button[aria-label="打开或收起右侧浏览器"]').trigger('click')
+
+    expect(wrapper.emitted('toggleBrowser')).toHaveLength(1)
   })
 
   it('releases the collapsed search expansion area for window dragging', () => {

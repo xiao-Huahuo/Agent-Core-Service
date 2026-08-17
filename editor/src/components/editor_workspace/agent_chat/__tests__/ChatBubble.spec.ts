@@ -6,11 +6,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { mount } from '@vue/test-utils'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 
 import ChatBubble from '../ChatBubble.vue'
 import MessageList from '../MessageList.vue'
 import ToolBubble from '../ToolBubble.vue'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 describe('ChatBubble user references', () => {
   it('renders the reference above the user message', () => {
@@ -203,5 +204,25 @@ describe('ChatBubble user references', () => {
 
     expect(wrapper.find('.message-actions').exists()).toBe(true)
     expect(wrapper.find('.knowledge-sources').exists()).toBe(true)
+  })
+
+  it('opens HTTP [N] citations in the shared right-side browser', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(ChatBubble, {
+      global: { plugins: [pinia] },
+      props: {
+        message: { role: 'assistant', content: '网页来源 [1]', node: 'agent' },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+        citationMap: { 1: { source_uri: 'https://example.com/source', content: '' } },
+      },
+    })
+
+    await wrapper.get('.citation-anchor').trigger('click')
+
+    const workspaceStore = useWorkspaceStore()
+    expect(workspaceStore.browserSidebarOpen).toBe(true)
+    expect(workspaceStore.browserSidebarUrl).toBe('https://example.com/source')
   })
 })

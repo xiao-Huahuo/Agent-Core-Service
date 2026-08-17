@@ -311,6 +311,15 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** Active center workspace view. 默认进入主页。 */
   const mainView = ref<WorkspaceMainView>('home')
 
+  /** Temporary right-side browser visibility; it is intentionally not persisted. */
+  const browserSidebarOpen = ref(false)
+
+  /** Latest external URL requested by library or Agent citation navigation. */
+  const browserSidebarUrl = ref('')
+
+  /** Monotonic navigation request used to reload an identical clicked URL. */
+  const browserSidebarNavigationId = ref(0)
+
   /** Pending virtual-library collection to open when LibraryView is mounted. */
   const pendingLibraryParentId = ref('')
 
@@ -1395,6 +1404,26 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   function setMainView(view: WorkspaceMainView) {
     mainView.value = view
+  }
+
+  /** Open the half-width browser panel and optionally navigate its shared session. */
+  function openBrowserSidebar(url = '') {
+    const nextUrl = url.trim()
+    if (nextUrl) {
+      browserSidebarUrl.value = nextUrl
+      browserSidebarNavigationId.value += 1
+    }
+    browserSidebarOpen.value = true
+  }
+
+  /** Close the temporary browser panel without discarding its Chromium session. */
+  function closeBrowserSidebar() {
+    browserSidebarOpen.value = false
+  }
+
+  /** Toggle the top-bar browser panel while retaining the last visited page. */
+  function toggleBrowserSidebar() {
+    browserSidebarOpen.value = !browserSidebarOpen.value
   }
 
   function openLibraryParent(parentId: string) {
@@ -2637,6 +2666,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     selectionAnchorPath,
     selectedNode,
     mainView,
+    browserSidebarOpen,
+    browserSidebarUrl,
+    browserSidebarNavigationId,
     pendingLibraryParentId,
     ingestionViewTab,
     editorMode,
@@ -2699,6 +2731,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     closeTab,
     setEditorMode,
     setMainView,
+    openBrowserSidebar,
+    closeBrowserSidebar,
+    toggleBrowserSidebar,
     openLibraryParent,
     updateActiveContent,
     saveActiveFile,
