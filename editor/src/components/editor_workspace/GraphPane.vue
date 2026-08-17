@@ -11,12 +11,14 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import IcIcon from '@/components/common/IcIcon.vue'
-import { deduplicateKnowledgeGraph, fetchKnowledgeGraph, getDedupStatus } from '@/api/knowledge'
+import { deduplicateKnowledgeGraph, fetchKnowledgeGraph, getDedupStatus, readKnowledgeFile } from '@/api/knowledge'
 import { listLibraryItems, listLibraryTags } from '@/api/library'
 import KnowledgeGraphCanvas from '@/components/knowledge_graph/KnowledgeGraphCanvas.vue'
 import { buildFileTreeGraph } from '@/components/knowledge_graph/fileTreeGraphAdapter'
 import { buildLibraryGraph } from '@/components/knowledge_graph/libraryGraphAdapter'
 import { buildSemanticKnowledgeGraph } from '@/components/knowledge_graph/semanticGraphAdapter'
+import { buildWikiLinkGraph } from '@/components/knowledge_graph/wikiLinkGraphAdapter'
+import { flattenWikiFiles } from '@/components/editor_workspace/wikiLinks'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeSemanticGraphResponse, LibraryItem, LibraryTag } from '@/types/knowledge'
@@ -32,7 +34,7 @@ const { tree, treeLoading } = storeToRefs(workspaceStore)
 const graphCanvasRef = ref<InstanceType<typeof KnowledgeGraphCanvas> | null>(null)
 const selectedNode = ref<KnowledgeGraphNodeEvent | null>(null)
 const showGraphLabels = ref(true)
-const graphMode = ref<'tree' | 'semantic' | 'library'>('semantic')
+const graphMode = ref<'tree' | 'semantic' | 'library' | 'wiki'>('semantic')
 const graphModeRef = ref<HTMLElement | null>(null)
 const graphModeSliderStyle = ref({ width: '0px', left: '0px' })
 
@@ -55,6 +57,10 @@ const libraryItems = ref<LibraryItem[]>([])
 const libraryTags = ref<LibraryTag[]>([])
 const selectedLibraryTag = ref('')
 const libraryLoading = ref(false)
+/** Successfully loaded Markdown sources used by the wiki-link adapter. */
+const wikiLinkDocuments = ref<Record<string, string>>({})
+/** Disables refresh while the complete Markdown corpus is being read. */
+const wikiLinkLoading = ref(false)
 const dedupLoading = ref(false)
 const dedupProgress = ref(0) // 0~100
 const dedupMessage = ref('')
@@ -113,13 +119,21 @@ const graphModel = computed(() => {
   if (graphMode.value === 'library') {
     return buildLibraryGraph(filteredLibraryItems.value, { rootLabel: knowledgeTitle.value })
   }
+  if (graphMode.value === 'wiki') {
+    return buildWikiLinkGraph(tree.value, wikiLinkDocuments.value)
+  }
   return buildFileTreeGraph(tree.value, { rootLabel: knowledgeTitle.value })
 })
 
-const graphStats = computed(() => ({
-  nodes: graphModel.value.nodes.length,
-  links: graphModel.value.links.length,
-}))
+const graphStats = computed(() => {
+  const links = graphModel.value.links
+  return {
+    nodes: graphModel.value.nodes.length,
+    links: links.length,
+    references: links.filter((link) => link.kind === 'reference').reduce((sum, link) => sum + (link.weight ?? 1), 0),
+    embeds: links.filter((link) => link.kind === 'embed').reduce((sum, link) => sum + (link.weight ?? 1), 0),
+  }
+})
 
 // Search: partial-match node labels (exclude root node, case-insensitive)
 const searchResults = computed(() => {
@@ -160,6 +174,10 @@ function selectNodeById(id: string) {
 }
 
 function handleNodeSelect(node: KnowledgeGraphNodeEvent) {
+  if (graphMode.value === 'wiki' && node.path) {
+    emit('open-node', node)
+    return
+  }
   // Toggle: clicking same node deselects
   if (selectedNode.value?.id === node.id) {
     selectedNode.value = null
@@ -184,6 +202,10 @@ function refreshGraph() {
   }
   if (graphMode.value === 'library') {
     void loadLibraryGraph()
+    return
+  }
+  if (graphMode.value === 'wiki') {
+    void loadWikiLinkGraph()
     return
   }
   void workspaceStore.loadKnowledgeTree()
@@ -229,6 +251,29 @@ async function loadLibraryGraph() {
     }
   } finally {
     libraryLoading.value = false
+  }
+}
+
+/** Reads every Markdown source and rebuilds the complete wiki-link graph input. */
+async function loadWikiLinkGraph() {
+  if (!settingsStore.profile.userId) return
+  wikiLinkLoading.value = true
+  try {
+    if (tree.value.length === 0) await workspaceStore.loadKnowledgeTree()
+    const markdownFiles = flattenWikiFiles(tree.value).filter((node) => /\.(?:md|markdown)$/iu.test(node.path))
+    const results = await Promise.allSettled(
+      markdownFiles.map(async (node) => [
+        node.path,
+        (await readKnowledgeFile(settingsStore.profile.userId, node.path)).content,
+      ] as const),
+    )
+    wikiLinkDocuments.value = Object.fromEntries(
+      results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []),
+    )
+    const failedCount = results.filter((result) => result.status === 'rejected').length
+    if (failedCount > 0) workspaceStore.showToast(`${failedCount} 个 Markdown 文件读取失败，双向链接图谱可能不完整`)
+  } finally {
+    wikiLinkLoading.value = false
   }
 }
 
@@ -350,6 +395,8 @@ watch(
       void loadSemanticGraph()
     } else if (mode === 'library') {
       void loadLibraryGraph()
+    } else if (mode === 'wiki') {
+      void loadWikiLinkGraph()
     } else {
       void workspaceStore.loadKnowledgeTree()
     }
@@ -389,9 +436,21 @@ watch(
           <IcIcon name="book" :size="17" />
           <span>图书馆</span>
         </button>
+        <button
+          class="graph-mode-button"
+          :class="{ active: graphMode === 'wiki' }"
+          type="button"
+          @click="graphMode = 'wiki'"
+        >
+          <IcIcon name="link" :size="17" />
+          <span>双向链接</span>
+        </button>
       </div>
       <div class="graph-actions">
-        <span class="graph-stat mono">{{ graphStats.nodes }} nodes / {{ graphStats.links }} links</span>
+        <span v-if="graphMode === 'wiki'" class="graph-stat mono">
+          {{ graphStats.nodes }} 文档 / {{ graphStats.references }} 反向 / {{ graphStats.embeds }} 嵌入
+        </span>
+        <span v-else class="graph-stat mono">{{ graphStats.nodes }} nodes / {{ graphStats.links }} links</span>
         <button
           v-if="graphMode === 'library'"
           class="graph-action"
@@ -419,10 +478,10 @@ watch(
         </button>
         <button
           class="graph-action"
-          :class="{ loading: treeLoading || semanticLoading || libraryLoading, 'refresh-btn': true }"
+          :class="{ loading: treeLoading || semanticLoading || libraryLoading || wikiLinkLoading, 'refresh-btn': true }"
           type="button"
           title="Reload graph data"
-          :disabled="treeLoading || semanticLoading || libraryLoading"
+          :disabled="treeLoading || semanticLoading || libraryLoading || wikiLinkLoading"
           @click="refreshGraph"
         >
           <IcIcon name="refresh" :size="15" />
@@ -434,7 +493,7 @@ watch(
           :class="{ loading: dedupLoading }"
           type="button"
           title="全量去重"
-          :disabled="dedupLoading || treeLoading || semanticLoading || libraryLoading"
+          :disabled="dedupLoading || treeLoading || semanticLoading || libraryLoading || wikiLinkLoading"
           @click="handleDedup"
         >
           <IcIcon name="refresh" :size="15" />
