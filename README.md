@@ -226,7 +226,7 @@ PDF 与 Office 文档提取的图片统一保存在当前知识库的 `.mw/asset
 ##### 编辑器预览
 编辑器根据文件类型自动选择合适的预览方式:
 
-- **Markdown** → `Edit / Preview / Split`，支持源码编辑、渲染预览与分栏查看
+- **Markdown** → `Edit / Preview / Split`，支持源码编辑、渲染预览与分栏查看. 支持Obsidian的全部功能,包括反向链接和嵌入式链接等.
 - **纯文本** → `Text`，直接编辑原始文本
 - **代码与标记语言** → `Code`，提供语法高亮和编辑能力
 - **CSV** → `Text / Forms`，可在原始 CSV 文本与表格之间切换
