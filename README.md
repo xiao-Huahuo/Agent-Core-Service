@@ -40,7 +40,7 @@ Agent 框架不能消除模型幻觉。MetaWeave 因此优先提供检索、引�
 - TODO: [TODO.md](TODO.md)
 - 变更历史: [CHANGE_HISTORY.md](docs/CHANGE_HISTORY.md)
 ### 接口与扩展
-- OPENAPI文档: [metaweave.openapi.json)](docs/api/metaweave.openapi.json)
+- OPENAPI文档: [metaweave.openapi.json](docs/api/metaweave.openapi.json)
 - MCP 接入: [MCP.md](docs/MCP.md)
 - gRPC: [agent_service.proto](protos/agent_service.proto)
 
@@ -223,7 +223,7 @@ runtime/
 - **PPTX**：`Preview / Markdown`，当前原件预览留空，Markdown 显示中间层全文。
 - **其他格式**：可解码文本显示 `Text`；二进制文件显示 `Binary` 状态且不可查看。旧版 DOC 按不支持格式处理。
 
-![编辑区](assets/多模态编辑区.png)
+![编辑区](docs/assets/多模态编辑区.png)
 
 除常用 Markdown 语法外，还支持 Obsidian 风格的反向链接和嵌入链接等功能。
 编辑 Markdown 时可以使用 `[[文件]]` 建立反向链接，也可以写成 `[[文件|别名]]` 或 `[[文件#标题]]`。输入 `[[` 后会出现文件候选，继续输入文件名可以筛选；预览中的链接可以打开目标文件，带标题的链接会跳转到相应位置。
@@ -308,7 +308,7 @@ runtime/
 
 ### Agent能力
 
-![Agent](assets/Agent对话.png)
+![Agent](docs/assets/Agent对话.png)
 #### 智能体状态转移设计
 在LangGraph状态转移图入口处有一个入口节点,调用一次小模型,按照用户提问内容区分三种模式的入口,用户在同一session前后提出简单和困难的问题时,会以小模型决策以下三种图的模式:
       1. 简答模式: 对于明显不需要思考的短输入,不经过循环,只保留 RAG 上下文构建,用小模型直接输出.
@@ -358,7 +358,7 @@ Debug 页面用于直接检查 Agent 和后端运行时的真实数据。页面�
 ##### 可定制性
 * 用户自定义长期记忆:用户可以管理长期记忆,可以增加新的自定义长期记忆注入到向量库,或者删除长期记忆.
 * 用户自定义系统提示词:用户可编辑"用户设置系统提示词",追加到原本的系统提示词中.
-![观测](assets/观测.png)
+![观测](docs/assets/观测.png)
 
 
 #### 多Agent能力
@@ -572,7 +572,7 @@ Skill能力是Agent从通用Agent走向专用Agent的关键。其设计如下：
   - **文档级去重**: 每篇文档的所有 section 抽取完成后,自动将该文档的所有实体候选汇总喂给小模型做语义去重。小模型识别出文字不同但语义一致的实体(如"AI"="Artificial Intelligence"、"星铁"="星穹铁道"),合并为规范名称并重映射关系边。自动触发,无需用户干预。
   - **库级全量去重**: 图谱面板工具栏有"去重"按钮,点击后触发全库所有实体的聚类去重。先对所有实体做 Embedding 向量化,再用 DBSCAN 按余弦距离聚类找出"语义密集团"(如多个称呼同一作品的相近实体),只对每个非单点簇喂给小模型做同义判断和合并,噪声点自动跳过。此外文档抽取完成后还有一个**增量去重**步骤:对每篇文档的新实体,通过 Embedding 从库中检索最相似的已有实体,一并喂给小模型裁决是否合并。
 
-![语义知识图谱](assets/语义知识图谱.png)
+![语义知识图谱](docs/assets/语义知识图谱.png)
 > **注**: 首次打开图谱页面时,语义图谱默认模式需要显式加载。
 ##### 图书馆图谱
 
@@ -710,9 +710,9 @@ $$
 
 页面提供“原结构”和“AI 提炼”两种模式。原结构模式沿用文档原有层级，AI 提炼模式由 Agent 整理内容后生成页面；用户还可以选择强动效、阴影、圆角和 emoji 等生成选项。任务执行期间会显示进度，生成结果通过“展示 Markdown-HTML”工具挂载到前端。
 
-生成中的 HTML 保存在 `runtime/`。完成后可以保存到知识库的 `{user_id}_html/`，也可以打开系统资源管理器选择其他位置。
+生成中的 HTML 保存在 `runtime/visualizations/`。完成后可以保存到知识库的 `{user_id}_html/`，也可以打开系统资源管理器选择其他位置。
 
-![Markdown-to-HTML](assets/MD-HTML.png)
+![Markdown-to-HTML](docs/assets/MD-HTML.png)
 
 #### 联合搜索
 
@@ -728,7 +728,7 @@ $$
 
 [TODO]: 未来展望: 六库联合搜索,将结果一起放在同一个页面,形成震撼的不同组件同一页面.
 
-![联合搜索](assets/搜索.png)
+![联合搜索](docs/assets/搜索.png)
 
 #### 收藏
 
