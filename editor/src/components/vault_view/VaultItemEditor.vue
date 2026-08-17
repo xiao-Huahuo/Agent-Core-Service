@@ -120,7 +120,7 @@ function fieldIcon(key: string) {
 <template>
   <Teleport to="body">
     <div v-if="open" class="editor-backdrop" @click.self="emit('close')">
-      <section class="editor-panel">
+      <section class="editor-panel library-form-surface">
       <header class="editor-head">
         <h3>{{ title }}</h3>
         <button class="icon-btn" type="button" title="关闭" @click="emit('close')"><IcIcon name="close" :size="16" /></button>

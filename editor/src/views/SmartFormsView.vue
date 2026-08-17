@@ -1701,8 +1701,9 @@ function errorMessage(error: unknown): string {
       </div>
     </header>
 
-    <div v-if="createFormOpen" class="form-dialog-backdrop" @click.self="createFormOpen = false">
-      <form class="form-dialog" role="dialog" aria-modal="true" aria-labelledby="create-form-title" @submit.prevent="createSmartForm">
+    <Teleport to="body">
+      <div v-if="createFormOpen" class="form-dialog-backdrop" @click.self="createFormOpen = false">
+        <form class="form-dialog library-form-surface" role="dialog" aria-modal="true" aria-labelledby="create-form-title" @submit.prevent="createSmartForm">
         <div class="form-dialog-header">
           <h2 id="create-form-title">创建表格</h2>
           <button class="dialog-close" type="button" title="关闭" aria-label="关闭" @click="createFormOpen = false">
@@ -1737,8 +1738,9 @@ function errorMessage(error: unknown): string {
           <button class="ghost-btn" type="button" @click="createFormOpen = false">取消</button>
           <button class="primary-btn" type="submit">创建表格</button>
         </div>
-      </form>
-    </div>
+        </form>
+      </div>
+    </Teleport>
 
     <div v-if="!form" class="form-empty-state">
       <IcIcon name="table-chart" :size="32" />
@@ -2510,12 +2512,12 @@ button:disabled {
 
 .form-dialog-backdrop {
   position: fixed;
-  z-index: 40;
+  z-index: 1100;
   inset: 0;
   display: grid;
   place-items: center;
   padding: 20px;
-  background: color-mix(in srgb, var(--color-canvas) 68%, transparent);
+  background: rgba(0, 0, 0, 0.42);
 }
 
 .form-dialog {
@@ -2525,6 +2527,13 @@ button:disabled {
   border-radius: var(--workspace-card-radius);
   background: var(--color-surface);
   box-shadow: var(--shadow-lg);
+}
+
+.form-dialog.library-form-surface {
+  border-radius: 28px;
+  box-shadow:
+    0 0 0 4px var(--library-form-ring),
+    0 24px 70px rgba(0, 0, 0, 0.28);
 }
 
 .form-dialog-header,

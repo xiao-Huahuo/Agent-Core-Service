@@ -130,7 +130,7 @@ async function submit(): Promise<void> {
   <Teleport to="body">
     <div class="upload-backdrop" @click.self="emit('cancel')">
       <section
-        class="upload-form"
+        class="upload-form library-form-surface"
         role="dialog"
         aria-modal="true"
         aria-labelledby="component-upload-title"
@@ -240,6 +240,12 @@ async function submit(): Promise<void> {
   border-radius: 28px;
   background: var(--color-surface);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+.upload-form.library-form-surface {
+  box-shadow:
+    0 0 0 4px var(--library-form-ring),
+    0 24px 70px rgba(0, 0, 0, 0.28);
 }
 
 .form-header,

@@ -79,7 +79,7 @@ async function toggleHistoryDropdown(): Promise<void> {
           :disabled="gitStore.loading"
           @click="gitStore.refresh"
         >
-          <IcIcon name="refresh" :size="14" :class="{ spinning: gitStore.loading }" />
+          <IcIcon name="refresh" :size="17" :class="{ spinning: gitStore.loading }" />
         </button>
         <button
           class="tool-button"
@@ -89,13 +89,13 @@ async function toggleHistoryDropdown(): Promise<void> {
           :disabled="gitStore.selectedCount === 0 || gitStore.mutating"
           @click="restoreSelected"
         >
-          <IcIcon name="replay" :size="14" />
+          <IcIcon name="replay" :size="17" />
         </button>
         <button class="tool-button" type="button" title="全部展开" aria-label="全部展开" @click="gitStore.expandAll">
-          <IcIcon name="unfold" :size="14" />
+          <IcIcon name="unfold" :size="17" />
         </button>
         <button class="tool-button" type="button" title="全部收缩" aria-label="全部收缩" @click="gitStore.collapseAll">
-          <IcIcon name="unfold-less" :size="14" />
+          <IcIcon name="unfold-less" :size="17" />
         </button>
       </div>
     </header>
@@ -255,7 +255,7 @@ async function toggleHistoryDropdown(): Promise<void> {
 }
 
 .git-actions {
-  gap: 2px;
+  gap: var(--space-4);
 }
 
 .git-actions button {
