@@ -129,3 +129,12 @@ def test_floating_launch_setting_persists_in_user_profile() -> None:
 
     assert saved["floating_launch_enabled"] is True
     assert profile["floating_launch_enabled"] is True
+
+
+def test_user_profile_reports_the_effective_supported_knowledge_suffixes() -> None:
+    service = make_settings_service()
+    service.config.constants.knowledge_supported_suffixes = [".md", ".custom"]
+
+    profile = service.ensure_user_profile(user_id="u1")
+
+    assert profile["knowledge_supported_suffixes"] == [".md", ".custom"]

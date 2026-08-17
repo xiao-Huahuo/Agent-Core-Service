@@ -11,7 +11,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { buildApiUrl } from '@/api/client'
 import { createKnowledgeFolder, listKnowledgeFiles, previewKnowledgeFile, readKnowledgeFile, uploadKnowledgeFile } from '@/api/knowledge'
-import { generateStructuredFields, getSmartFormDb, listSmartFormsDb, saveSmartFormDb, type StructuredGenerationFieldResult } from '@/api/smartForms'
+import { deleteSmartFormDb, generateStructuredFields, getSmartFormDb, listSmartFormsDb, saveSmartFormDb, type StructuredGenerationFieldResult } from '@/api/smartForms'
 import IcIcon from '@/components/common/IcIcon.vue'
 import {
   DropdownMenu,
@@ -27,6 +27,8 @@ import SmartMarkdownCell from '@/components/smart_forms/SmartMarkdownCell.vue'
 import {
   BUILTIN_COLUMNS,
   DEFAULT_ROW_HEIGHT,
+  MIN_ROW_HEIGHT,
+  PLAIN_ROW_HEIGHT,
   addColumn,
   createCustomColumn,
   createDefaultLiteratureForm,
@@ -284,6 +286,34 @@ function selectFormById(formId: string): void {
   closeDropdownMenus()
 }
 
+/** Deletes the active database table after explicit confirmation and opens the next table. */
+async function deleteCurrentSmartForm(): Promise<void> {
+  if (!settingsStore.profile.userId || !activeFormId.value || !form.value || saving.value) return
+  if (!window.confirm(`确定删除表格“${form.value.title}”吗？此操作不可撤销。`)) return
+  const deletedFormId = activeFormId.value
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+    autoSaveTimer = undefined
+  }
+  try {
+    await deleteSmartFormDb(settingsStore.profile.userId, deletedFormId)
+    formEntries.value = formEntries.value.filter((entry) => entry.formId !== deletedFormId)
+    const nextForm = formEntries.value[0]
+    if (nextForm) {
+      await openForm(nextForm)
+    } else {
+      form.value = null
+      activeFormId.value = ''
+      activeFormDir.value = ''
+      selectedCell.value = null
+      selectedCellKeys.value = []
+    }
+    workspaceStore.showToast('表格已删除')
+  } catch (error) {
+    workspaceStore.showToast(`删除表格失败 - ${errorMessage(error)}`)
+  }
+}
+
 /** Creates a user-named table and persists its initial state in the database. */
 async function createSmartForm(): Promise<void> {
   if (!settingsStore.profile.userId) return
@@ -401,7 +431,9 @@ function addRowAt(rowId: string | undefined, direction: -1 | 1): void {
   const index = rowId ? form.value.rows.findIndex((row) => row.id === rowId) : form.value.rows.length - 1
   const insertionIndex = Math.max(0, index + (direction > 0 ? 1 : 0))
   const rows = [...form.value.rows]
-  rows.splice(insertionIndex, 0, createEmptyRow(form.value.columns))
+  const row = createEmptyRow(form.value.columns)
+  if (!isLiteratureTable.value) row.height = PLAIN_ROW_HEIGHT
+  rows.splice(insertionIndex, 0, row)
   setForm({
     ...form.value,
     updatedAt: new Date().toISOString(),
@@ -457,7 +489,13 @@ function continueTableResize(event: PointerEvent): void {
   const delta = tableResize.kind === 'column' ? event.clientX - tableResize.start : event.clientY - tableResize.start
   setForm(tableResize.kind === 'column'
     ? resizeColumn(form.value, tableResize.id, tableResize.size + delta)
-    : resizeRow(form.value, tableResize.id, tableResize.size + delta))
+    : resizeRow(
+      form.value,
+      tableResize.id,
+      tableResize.size + delta,
+      isLiteratureTable.value ? MIN_ROW_HEIGHT : PLAIN_ROW_HEIGHT,
+      isLiteratureTable.value ? Infinity : DEFAULT_ROW_HEIGHT,
+    ))
 }
 
 /** Ends table resizing and removes global pointer listeners. */
@@ -1641,7 +1679,7 @@ function errorMessage(error: unknown): string {
             </button>
           </div>
         </div>
-        <button class="ghost-btn" type="button" title="新建表格" @click="newFormKind = 'smart'; createFormOpen = true">
+        <button class="primary-btn new-form-btn" type="button" title="新建表格" @click="newFormKind = 'smart'; createFormOpen = true">
           <IcIcon name="add" :size="16" />
           <span>新建表格</span>
         </button>
@@ -1656,6 +1694,10 @@ function errorMessage(error: unknown): string {
             <button type="button" :style="{ '--item-index': 2 }" @click="downloadZip">ZIP</button>
           </div>
         </div>
+        <button v-if="form" class="ghost-btn delete-form-btn" type="button" title="删除表格" :disabled="!activeFormId || saving" @click="deleteCurrentSmartForm">
+          <IcIcon name="delete" :size="16" />
+          <span>删除表格</span>
+        </button>
       </div>
     </header>
 
@@ -1767,7 +1809,7 @@ function errorMessage(error: unknown): string {
       <span class="row-count">{{ rowCountLabel }}</span>
     </div>
 
-    <div v-if="form" class="table-frame" :class="{ loading }" @mouseup="stopCellSelection" @contextmenu.prevent.stop="openTableContextMenu({ kind: 'table' }, $event)">
+    <div v-if="form" class="table-frame" :class="{ loading, 'plain-table': !isLiteratureTable }" @mouseup="stopCellSelection" @contextmenu.prevent.stop="openTableContextMenu({ kind: 'table' }, $event)">
       <div class="smart-table-shell">
       <table class="smart-table" @selectstart="preventTableTextSelection">
         <thead>
@@ -2295,6 +2337,17 @@ function errorMessage(error: unknown): string {
   color: #ffffff;
 }
 
+.new-form-btn {
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.delete-form-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  color: var(--color-danger);
+}
+
 .toolbar-btn.strong {
   background: var(--color-primary-softer);
   color: var(--color-primary);
@@ -2317,6 +2370,11 @@ button:disabled {
 }
 
 .new-row-btn:hover {
+  background: var(--color-primary-hover, var(--color-primary));
+  color: #ffffff;
+}
+
+.new-form-btn:hover {
   background: var(--color-primary-hover, var(--color-primary));
   color: #ffffff;
 }
@@ -2660,8 +2718,9 @@ button:disabled {
 }
 
 .table-context-menu button:disabled {
-  cursor: default;
-  opacity: 0.45;
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .table-context-submenu-item {
@@ -2729,6 +2788,56 @@ button:disabled {
   min-height: 0;
   overflow: auto;
   background: var(--color-canvas);
+}
+
+.table-frame.plain-table {
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  background: var(--color-canvas);
+}
+
+.plain-table .smart-table-shell,
+.plain-table .smart-table {
+  width: 100%;
+  min-width: 100%;
+  padding: 0;
+}
+
+.plain-table .smart-table thead tr:first-child,
+.plain-table .table-edge-column-drag,
+.plain-table .table-edge-row-drag {
+  display: none;
+}
+
+.plain-table .smart-table thead tr:nth-child(2) th {
+  top: 0;
+  height: 30px;
+  background: var(--color-surface-raised);
+}
+
+.plain-table th,
+.plain-table td {
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.plain-table .column-head {
+  min-height: 30px;
+  padding: 0 28px 0 var(--space-8);
+}
+
+.plain-table .cell textarea,
+.plain-table .cell select,
+.plain-table .cell input {
+  padding: 6px 8px;
+}
+
+.plain-table .table-edge-add-row,
+.plain-table .table-edge-add-column {
+  border-color: transparent;
+  background: transparent;
 }
 
 .smart-table-shell {

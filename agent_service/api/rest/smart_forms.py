@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from starlette.concurrency import run_in_threadpool
 
 from agent_service.api.rest.deps import _require_smart_form_service
@@ -49,3 +49,20 @@ async def save_smart_form(payload: SmartFormSaveRequest) -> SmartFormOut:
         return SmartFormOut(**result)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.delete("/smart-forms/{form_id}", status_code=204)
+async def delete_smart_form(form_id: str, user_id: str = Query(..., min_length=1)) -> Response:
+    """删除当前用户拥有的智能表格。"""
+
+    try:
+        deleted = await run_in_threadpool(
+            _require_smart_form_service().delete_form,
+            user_id=user_id,
+            form_id=form_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Smart form not found")
+    return Response(status_code=204)

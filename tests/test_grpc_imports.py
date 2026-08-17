@@ -24,6 +24,14 @@ def test_generated_grpc_module_uses_package_import_path() -> None:
     assert callable(add_AgentServiceServicer_to_server)
 
 
+def test_generated_grpc_stub_exposes_smart_form_deletion() -> None:
+    """智能表格 REST 删除能力必须同步暴露为 gRPC 方法。"""
+
+    from agent_service.api.grpc.agent_service_pb2_grpc import AgentServiceStub  # noqa: PLC0415
+
+    assert "DeleteSmartForm" in AgentServiceStub.__init__.__code__.co_names
+
+
 def test_main_grpc_import_chain_loads_without_top_level_pb2_alias() -> None:
     """main.py 依赖的 gRPC 包导入链不能要求顶层 agent_service_pb2 模块。"""
 

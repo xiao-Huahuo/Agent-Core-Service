@@ -14,6 +14,7 @@ import {
   addColumn,
   createCustomColumn,
   createDefaultLiteratureForm,
+  createDefaultPlainForm,
   createEmptyRow,
   exportCsv,
   exportMarkdown,
@@ -56,6 +57,43 @@ describe('smartLiteratureTable', () => {
     expect(form.rows[0]?.height).toBe(DEFAULT_ROW_HEIGHT)
     expect(form.rows[0]?.cells.title?.value).toBe('')
     expect(form.rows[0]?.cells.literature_content?.value).toBe('')
+  })
+
+  it('creates a plain table with ten empty text columns and ten one-line rows', () => {
+    const form = normalizeForm(createDefaultPlainForm('普通表格'))
+
+    expect(form.columns).toHaveLength(10)
+    expect(form.columns.every((column) => column.type === 'text')).toBe(true)
+    expect(form.columns.some((column) => column.type === 'index' || column.id === 'row_index')).toBe(false)
+    expect(form.rows).toHaveLength(10)
+    expect(form.rows.every((row) => row.height === 34)).toBe(true)
+    expect(form.rows.every((row) => (
+      form.columns.every((column) => row.cells[column.id]?.value === '')
+    ))).toBe(true)
+  })
+
+  it('removes the generated row index when loading a legacy plain table', () => {
+    const form = normalizeForm({
+      title: '旧普通表格',
+      columns: [
+        { id: 'row_index', title: '序号', type: 'index', removable: false, editable: false, width: 64 },
+        { id: 'title', title: '标题', type: 'text', removable: false, editable: true, width: 220 },
+      ],
+      rows: [{ id: 'row-1', height: 34, cells: { row_index: { value: '' }, title: { value: '保留内容' } } }],
+    })
+
+    expect(form.columns.map((column) => column.id)).toEqual(['title'])
+    expect(form.rows[0]?.cells).toEqual({ title: { value: '保留内容', status: undefined, assetPath: undefined, fileName: undefined } })
+  })
+
+  it('normalizes ordinary-table legacy rows to one line while retaining the literature height', () => {
+    const plain = normalizeForm({
+      title: '普通表格',
+      columns: [{ id: 'col_text', title: '内容', type: 'text', removable: true, editable: true, width: 180 }],
+      rows: [{ id: 'row-1', height: DEFAULT_ROW_HEIGHT, cells: { col_text: { value: '一行内容' } } }],
+    })
+
+    expect(plain.rows[0]?.height).toBe(34)
   })
 
   it('updates smart cells as ready and keeps non-smart status untouched', () => {

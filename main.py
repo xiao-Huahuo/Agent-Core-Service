@@ -273,6 +273,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         automation_service=rest_deps._automation_service,
         activity_service=activity_service,
         component_library_service=component_library_service,
+        smart_form_service=smart_form_service,
     )
     rest_deps._agent = agent
     rest_deps._session_service = session_service

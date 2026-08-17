@@ -46,6 +46,7 @@ const DEFAULT_PROFILE: UserSettingsProfile = {
   autoIngestOnUpload: false,
   ocrEnabled: false,
   knowledgeIgnorePatterns: '',
+  knowledgeSupportedSuffixes: [],
   uiFontFamilies: [],
   textFontFamilies: [],
   fontSizePercent: 100,
@@ -154,6 +155,7 @@ function normalizeProfile(profile: UserSettingsProfile): UserSettingsProfile {
     themePrimaryColor: normalizeThemeColor(profile.themePrimaryColor),
     themeSoftColor: normalizeThemeColor(profile.themeSoftColor),
     editorImageAssetsDir: normalizeEditorImageAssetsDir(profile.editorImageAssetsDir),
+    knowledgeSupportedSuffixes: [...new Set(profile.knowledgeSupportedSuffixes ?? [])],
   }
   if (nextProfile.userId === 'local-user') {
     nextProfile.userId = ''
@@ -180,6 +182,7 @@ function mapBackendProfile(profileResponse: SettingsProfileResponse): Partial<Us
     autoIngestOnUpload: Boolean(profileResponse.auto_ingest_on_upload),
     ocrEnabled: Boolean(profileResponse.ocr_enabled),
     knowledgeIgnorePatterns: profileResponse.knowledge_ignore_patterns ?? '',
+    knowledgeSupportedSuffixes: profileResponse.knowledge_supported_suffixes ?? [],
     uiFontFamilies: profileResponse.ui_font_families ?? [],
     textFontFamilies: profileResponse.text_font_families ?? [],
     fontSizePercent: normalizeFontSizePercent(profileResponse.font_size_percent),

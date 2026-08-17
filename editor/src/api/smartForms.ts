@@ -6,7 +6,7 @@
  * endpoints. Uploaded document assets still use the knowledge-file API.
  */
 
-import { apiGet, apiPost } from '@/api/client'
+import { apiDelete, apiGet, apiPost } from '@/api/client'
 import { API_ROUTES } from '@/router/api_routes'
 import type { SmartLiteratureForm } from '@/components/smart_forms/smartLiteratureTable'
 
@@ -62,6 +62,11 @@ export function saveSmartFormDb(payload: {
   form: SmartLiteratureForm
 }): Promise<SmartFormResponse> {
   return apiPost<SmartFormResponse>(API_ROUTES.SMART_FORMS_SAVE, payload)
+}
+
+/** Permanently deletes one database-backed table owned by the current user. */
+export function deleteSmartFormDb(userId: string, formId: string): Promise<void> {
+  return apiDelete<void>(API_ROUTES.SMART_FORM_DETAIL(formId), { user_id: userId })
 }
 
 export function generateStructuredFields(payload: {

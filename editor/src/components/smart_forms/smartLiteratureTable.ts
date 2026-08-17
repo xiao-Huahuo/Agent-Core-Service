@@ -64,6 +64,9 @@ export const MIN_COLUMN_WIDTH = 64
 export const MIN_ROW_HEIGHT = 56
 /** Default compact Markdown cell height: approximately 15 lines at 13px/1.35 with 9px vertical padding. */
 export const DEFAULT_ROW_HEIGHT = 282
+/** One-line row baseline and legacy literature-row height cap for ordinary tables. */
+export const PLAIN_ROW_HEIGHT = 34
+export const PLAIN_MAX_ROW_HEIGHT = DEFAULT_ROW_HEIGHT
 const LEGACY_DEFAULT_ROW_HEIGHT = 112
 
 export interface SmartLiteratureForm {
@@ -159,25 +162,23 @@ export function createDefaultLiteratureForm(title = '未命名表格'): SmartLit
 
 /** Creates an editable table without literature uploads or AI-backed columns. */
 export function createDefaultPlainForm(title = '未命名表格'): SmartLiteratureForm {
-  const columns = REQUIRED_COLUMNS
-    .filter((column) => column.id !== 'literature_file' && column.id !== 'literature_content')
-    .map((column) => column.type === 'smart_text'
-      ? { ...column, type: 'text' as const, tone: undefined }
-      : column.type === 'smart_tag'
-        ? { ...column, type: 'tag' as const, tone: undefined }
-        : column)
+  const columns = Array.from({ length: 10 }, (_, index) => createCustomColumn(`列 ${index + 1}`, 'text'))
+  const rows = Array.from({ length: 10 }, () => ({
+    ...createEmptyRow(columns),
+    height: PLAIN_ROW_HEIGHT,
+  }))
   return {
     version: 1,
     title,
     updatedAt: new Date().toISOString(),
     columns,
-    rows: [createEmptyRow(columns)],
+    rows,
   }
 }
 
 export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefined): SmartLiteratureForm {
   const fallback = createDefaultLiteratureForm()
-  const sourceColumns = (Array.isArray(raw?.columns) && raw.columns.length ? raw.columns : fallback.columns)
+  const sourceColumns = (Array.isArray(raw?.columns) ? raw.columns : fallback.columns)
     .map((column) => {
       if (column.id === 'literature_file') return { ...column, title: '文献上传', removable: true, editable: false }
       if (column.id === 'literature_content') return { ...column, removable: true, editable: false }
@@ -187,15 +188,17 @@ export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefin
       return column
     })
   const hasLiteratureSource = sourceColumns.some((column) => column.id === 'literature_file' || column.id === 'literature_content')
-  const requiredColumnIds = hasLiteratureSource
-    ? ['row_index', 'literature_file', 'literature_content', 'title']
-    : ['row_index', 'title']
+  // Ordinary tables have no generated sequence column; legacy copies are removed here on every load path.
+  const visibleSourceColumns = hasLiteratureSource
+    ? sourceColumns
+    : sourceColumns.filter((column) => column.id !== 'row_index')
+  const requiredColumnIds = hasLiteratureSource ? ['row_index', 'literature_file', 'literature_content', 'title'] : []
   const requiredColumns = requiredColumnIds
-    .map((columnId) => sourceColumns.find((column) => column.id === columnId) ?? fallback.columns.find((column) => column.id === columnId))
+    .map((columnId) => visibleSourceColumns.find((column) => column.id === columnId) ?? fallback.columns.find((column) => column.id === columnId))
     .filter(Boolean) as SmartColumn[]
   const columns = [
-    ...sourceColumns,
-    ...requiredColumns.filter((column) => !sourceColumns.some((sourceColumn) => sourceColumn.id === column.id)),
+    ...visibleSourceColumns,
+    ...requiredColumns.filter((column) => !visibleSourceColumns.some((sourceColumn) => sourceColumn.id === column.id)),
   ]
   const normalizedColumns = hasLiteratureSource
     ? columns
@@ -205,18 +208,23 @@ export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefin
         ? { ...column, type: 'tag' as const }
         : column)
   const rows = Array.isArray(raw?.rows) ? raw.rows : fallback.rows
+  const minRowHeight = hasLiteratureSource ? MIN_ROW_HEIGHT : PLAIN_ROW_HEIGHT
+  const maxRowHeight = hasLiteratureSource ? Infinity : PLAIN_MAX_ROW_HEIGHT
   return {
     version: 1,
     title: raw?.title || fallback.title,
     updatedAt: raw?.updatedAt || fallback.updatedAt,
-    columns,
+    columns: normalizedColumns,
     rows: rows.map((row) => ({
       id: row.id || createRowId(),
-      height: Math.max(
-        MIN_ROW_HEIGHT,
-        !Number(row.height) || Number(row.height) === LEGACY_DEFAULT_ROW_HEIGHT
-          ? DEFAULT_ROW_HEIGHT
-          : Number(row.height),
+      height: Math.min(
+        maxRowHeight,
+        Math.max(
+          minRowHeight,
+          !Number(row.height) || Number(row.height) === LEGACY_DEFAULT_ROW_HEIGHT || (!hasLiteratureSource && Number(row.height) === DEFAULT_ROW_HEIGHT)
+            ? (hasLiteratureSource ? DEFAULT_ROW_HEIGHT : PLAIN_ROW_HEIGHT)
+            : Number(row.height),
+        ),
       ),
       cells: Object.fromEntries(normalizedColumns.map((column) => {
         const existing = row.cells?.[column.id]
@@ -239,12 +247,12 @@ export function resizeColumn(form: SmartLiteratureForm, columnId: string, width:
 }
 
 /** Returns a form with one row resized to a usable height. */
-export function resizeRow(form: SmartLiteratureForm, rowId: string, height: number): SmartLiteratureForm {
+export function resizeRow(form: SmartLiteratureForm, rowId: string, height: number, minHeight = MIN_ROW_HEIGHT, maxHeight = Infinity): SmartLiteratureForm {
   return {
     ...form,
     updatedAt: new Date().toISOString(),
     rows: form.rows.map((row) => row.id === rowId
-      ? { ...row, height: Math.max(MIN_ROW_HEIGHT, Math.round(height)) }
+      ? { ...row, height: Math.min(maxHeight, Math.max(minHeight, Math.round(height))) }
       : row),
   }
 }

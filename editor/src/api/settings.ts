@@ -18,6 +18,7 @@ export interface SettingsProfileResponse {
   auto_ingest_on_upload?: boolean
   ocr_enabled?: boolean
   knowledge_ignore_patterns?: string
+  knowledge_supported_suffixes?: string[]
   terminal_sandbox?: TerminalSandboxConfig
   ui_font_families?: string[]
   text_font_families?: string[]

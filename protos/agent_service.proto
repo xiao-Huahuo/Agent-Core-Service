@@ -164,6 +164,8 @@ service AgentService {
   rpc ToggleAutomation(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc ListAutomationRuns(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc DeleteAutomation(google.protobuf.Struct) returns (google.protobuf.Struct);
+  // 智能表格删除，与 REST DELETE /smart-forms/{form_id} 对齐。
+  rpc DeleteSmartForm(google.protobuf.Struct) returns (google.protobuf.Struct);
 }
 
 // ---------------------------------------------------------------------------

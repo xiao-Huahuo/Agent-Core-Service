@@ -6,7 +6,7 @@
   persistence and side effects.
 -->
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { checkModelDisk } from '@/api/settings'
 import { API_ROUTES } from '@/router/api_routes'
 
@@ -18,7 +18,8 @@ const autoIngestOnUploadDraft = defineModel<boolean>('autoIngestOnUploadDraft', 
 const ocrEnabledDraft = defineModel<boolean>('ocrEnabledDraft', { required: true })
 const knowledgeIgnorePatternsDraft = defineModel<string>('knowledgeIgnorePatternsDraft', { required: true })
 
-defineProps<{
+const props = defineProps<{
+  supportedFileTypes: string[]
   hasChanges: boolean
   saving: boolean
   saveMessage: string
@@ -60,6 +61,31 @@ function goToStorageSettings() {
     window.dispatchEvent(new CustomEvent('agent-settings-tab', { detail: 'storage' }))
   }, 100)
 }
+
+/** Converts one backend-supported suffix into the existing gitignore-style rule. */
+function fileTypeRule(suffix: string): string {
+  const normalizedSuffix = suffix.trim().toLowerCase()
+  return `*${normalizedSuffix.startsWith('.') ? normalizedSuffix : `.${normalizedSuffix}`}`
+}
+
+/** Reports whether the exact file-type rule already exists, ignoring case and surrounding spaces. */
+function isFileTypeBlocked(suffix: string): boolean {
+  const rule = fileTypeRule(suffix)
+  return knowledgeIgnorePatternsDraft.value
+    .split(/\r?\n/u)
+    .some((pattern) => pattern.trim().toLowerCase() === rule)
+}
+
+/** Appends one unique rule and persists it through the section's existing save flow. */
+async function appendBlockedFileType(suffix: string): Promise<void> {
+  if (isFileTypeBlocked(suffix)) return
+  const currentPatterns = knowledgeIgnorePatternsDraft.value.trimEnd()
+  knowledgeIgnorePatternsDraft.value = currentPatterns
+    ? `${currentPatterns}\n${fileTypeRule(suffix)}`
+    : fileTypeRule(suffix)
+  await nextTick()
+  emit('save')
+}
 </script>
 
 <template>
@@ -100,6 +126,22 @@ function goToStorageSettings() {
         placeholder="# gitignore-like&#10;private/&#10;*.tmp&#10;!private/keep.md"
         @blur="$emit('save')"
       ></textarea>
+    </div>
+    <div class="blocked-file-types-row">
+      <label>屏蔽的文件类型</label>
+      <div class="file-type-chip-list" aria-label="屏蔽的文件类型">
+        <button
+          v-for="suffix in props.supportedFileTypes"
+          :key="suffix"
+          class="file-type-chip"
+          :class="{ active: isFileTypeBlocked(suffix) }"
+          type="button"
+          :disabled="isFileTypeBlocked(suffix)"
+          :aria-pressed="isFileTypeBlocked(suffix)"
+          @mousedown.prevent
+          @click="appendBlockedFileType(suffix)"
+        >{{ suffix }}</button>
+      </div>
     </div>
     <p class="setting-hint">被屏蔽的文件不会入库;已入库文件会在下次 Ingest 或单文件灌库时出库。</p>
     <div class="model-actions">
@@ -160,6 +202,53 @@ function goToStorageSettings() {
 </template>
 
 <style scoped>
+.blocked-file-types-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-10);
+  margin-bottom: var(--space-10);
+}
+
+.blocked-file-types-row > label {
+  flex: 0 0 72px;
+  padding-top: 5px;
+  color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.file-type-chip-list {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.file-type-chip {
+  min-height: 26px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-canvas);
+  color: var(--color-text-secondary);
+  font-family: var(--font-code);
+  font-size: calc(11px * var(--font-scale));
+  cursor: pointer;
+}
+
+.file-type-chip:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
+.file-type-chip.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+  cursor: default;
+}
+
 .logout-section {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

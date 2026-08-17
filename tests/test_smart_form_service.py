@@ -81,3 +81,24 @@ def test_smart_form_service_adds_row_height_to_existing_database() -> None:
 
     columns = {column["name"] for column in inspect(engine).get_columns("smart_form_rows")}
     assert "height" in columns
+
+
+def test_smart_form_service_deletes_only_the_owners_form() -> None:
+    """删除表格应清除完整关系数据,且不能删除其他用户的表格。"""
+
+    engine = create_engine("sqlite:///:memory:")
+    service = SmartFormService(engine=engine)
+    saved = service.save_form(
+        user_id="owner",
+        asset_dir=".mw/forms/delete-me",
+        form={
+            "title": "待删除表格",
+            "columns": [{"id": "text", "title": "文本", "type": "text"}],
+            "rows": [{"id": "row-1", "cells": {"text": {"value": "内容"}}}],
+        },
+    )
+
+    assert service.delete_form(user_id="other", form_id=saved["form_id"]) is False
+    assert service.get_form(user_id="owner", form_id=saved["form_id"]) is not None
+    assert service.delete_form(user_id="owner", form_id=saved["form_id"]) is True
+    assert service.get_form(user_id="owner", form_id=saved["form_id"]) is None

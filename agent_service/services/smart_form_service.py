@@ -111,6 +111,22 @@ class SmartFormService:
             db.refresh(record)
             return self._serialize(db=db, record=record)
 
+    def delete_form(self, *, user_id: str, form_id: str) -> bool:
+        """删除当前用户拥有的表格及其列、行和单元格记录。"""
+
+        normalized_user_id = self._required(user_id, "user_id")
+        normalized_form_id = self._required(form_id, "form_id")
+        with Session(self.engine) as db:
+            record = db.get(SmartFormRecord, normalized_form_id)
+            if record is None or record.user_id != normalized_user_id:
+                return False
+            db.exec(delete(SmartFormCellRecord).where(SmartFormCellRecord.form_id == normalized_form_id))
+            db.exec(delete(SmartFormColumnRecord).where(SmartFormColumnRecord.form_id == normalized_form_id))
+            db.exec(delete(SmartFormRowRecord).where(SmartFormRowRecord.form_id == normalized_form_id))
+            db.delete(record)
+            db.commit()
+            return True
+
     @staticmethod
     def _utc_now() -> datetime:
         """返回当前 UTC 时间。"""

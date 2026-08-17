@@ -143,6 +143,7 @@ from agent_service.services.agent_queue_service import AgentQueueService
 from agent_service.services.automation_service import AutomationService
 from agent_service.services.activity_service import ActivityService
 from agent_service.services.component_library_service import ComponentLibraryService
+from agent_service.services.smart_form_service import SmartFormService
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +168,7 @@ class AgentServiceServicer(BaseServicer):
         automation_service: AutomationService | None = None,
         activity_service: ActivityService | None = None,
         component_library_service: ComponentLibraryService | None = None,
+        smart_form_service: SmartFormService | None = None,
     ) -> None:
         self._agent = agent
         self._session_service = session_service
@@ -182,6 +184,7 @@ class AgentServiceServicer(BaseServicer):
         self._automation_service = automation_service
         self._activity_service = activity_service
         self._component_library_service = component_library_service
+        self._smart_form_service = smart_form_service
 
     def shutdown(self) -> None:
         self._agent.close()
@@ -1499,6 +1502,19 @@ class AgentServiceServicer(BaseServicer):
             context.abort(grpc.StatusCode.NOT_FOUND, "Automation task not found")
         return ParseDict({"deleted": True}, Struct())
 
+    def DeleteSmartForm(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """删除当前用户的智能表格，与 REST 删除接口保持一致。"""
+
+        payload = MessageToDict(request)
+        user_id = str(payload.get("user_id") or "")
+        form_id = str(payload.get("form_id") or "")
+        if not user_id or not form_id:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "user_id and form_id are required")
+        deleted = self._require_smart_form_service(context).delete_form(user_id=user_id, form_id=form_id)
+        if not deleted:
+            context.abort(grpc.StatusCode.NOT_FOUND, "Smart form not found")
+        return ParseDict({"deleted": True}, Struct())
+
     def ListComponentLibraryComponents(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
         """List component cards with the same fields as the REST endpoint."""
 
@@ -1608,6 +1624,13 @@ class AgentServiceServicer(BaseServicer):
         if self._component_library_service is None:
             context.abort(grpc.StatusCode.UNAVAILABLE, "ComponentLibraryService not available")
         return self._component_library_service  # type: ignore[return-value]
+
+    def _require_smart_form_service(self, context: grpc.ServicerContext) -> SmartFormService:
+        """返回注入的智能表格服务,未初始化时终止 RPC。"""
+
+        if self._smart_form_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "SmartFormService not available")
+        return self._smart_form_service  # type: ignore[return-value]
 
     @staticmethod
     def _component_library_struct(

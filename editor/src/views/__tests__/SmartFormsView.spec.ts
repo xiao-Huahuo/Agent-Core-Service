@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
-import { generateStructuredFields, getSmartFormDb, listSmartFormsDb, saveSmartFormDb } from '@/api/smartForms'
+import { deleteSmartFormDb, generateStructuredFields, getSmartFormDb, listSmartFormsDb, saveSmartFormDb } from '@/api/smartForms'
 import { BUILTIN_COLUMNS, addColumn, createCustomColumn, createDefaultLiteratureForm, createEmptyRow, type SmartLiteratureForm } from '@/components/smart_forms/smartLiteratureTable'
 import { previewKnowledgeFile, readKnowledgeFile, uploadKnowledgeFile } from '@/api/knowledge'
 import { useSettingsStore } from '@/stores/settings'
@@ -30,6 +30,7 @@ vi.mock('@/api/settings', () => ({
 
 vi.mock('@/api/smartForms', () => ({
   generateStructuredFields: vi.fn(),
+  deleteSmartFormDb: vi.fn(),
   getSmartFormDb: vi.fn(),
   listSmartFormsDb: vi.fn(),
   saveSmartFormDb: vi.fn(),
@@ -115,6 +116,7 @@ describe('SmartFormsView', () => {
         { field_id: 'journal', status: 'ready', value: 'Plant Cell' },
       ],
     })
+    vi.mocked(deleteSmartFormDb).mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -331,7 +333,7 @@ describe('SmartFormsView', () => {
     }))
   })
 
-  it('creates a plain table without upload or smart columns', async () => {
+  it('creates a plain 10 by 10 text table without upload, smart, or sequence columns', async () => {
     vi.mocked(listSmartFormsDb).mockResolvedValueOnce([])
     const wrapper = mount(SmartFormsView)
     await flushPromises()
@@ -349,9 +351,38 @@ describe('SmartFormsView', () => {
     await wrapper.find('form[role="dialog"]').trigger('submit')
     await flushPromises()
 
-    const savedForm = vi.mocked(saveSmartFormDb).mock.calls.at(-1)?.[0].form
-    expect(savedForm?.columns.map((column) => column.id)).toEqual(['row_index', 'title'])
+    const savedForm = vi.mocked(saveSmartFormDb).mock.calls
+      .find(([payload]) => payload.form.title === '普通项目表')?.[0].form
+    expect(savedForm?.columns).toHaveLength(10)
+    expect(savedForm?.columns.every((column) => column.type === 'text')).toBe(true)
+    expect(savedForm?.rows).toHaveLength(10)
     expect(savedForm?.columns.some((column) => column.type === 'smart_text' || column.type === 'smart_tag')).toBe(false)
+    expect(savedForm?.columns.some((column) => column.type === 'index' || column.id === 'row_index')).toBe(false)
+    expect(wrapper.find('.table-frame.plain-table').exists()).toBe(true)
+    expect(wrapper.findAll('thead th[data-column-id]')).toHaveLength(10)
+    expect(wrapper.findAll('tbody tr')).toHaveLength(10)
+    expect(wrapper.text()).not.toContain('序号')
+    expect(wrapper.text()).not.toContain('全表智能填充')
+  })
+
+  it('renders every disabled context-menu action with the shared gray state', () => {
+    expect(smartFormsSource).toMatch(/\.table-context-menu button:disabled\s*\{[^}]*color:\s*var\(--color-text-tertiary\);/)
+    expect(smartFormsSource).toMatch(/\.table-context-menu button:disabled\s*\{[^}]*cursor:\s*not-allowed;/)
+  })
+
+  it('deletes the active table after confirmation and clears the workspace', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    await wrapper.get('button[title="删除表格"]').trigger('click')
+    await flushPromises()
+
+    expect(confirm).toHaveBeenCalledWith('确定删除表格“我的文献表”吗？此操作不可撤销。')
+    expect(deleteSmartFormDb).toHaveBeenCalledWith('local-test', 'sf_demo')
+    expect(wrapper.find('.form-empty-state').exists()).toBe(true)
+    expect(wrapper.find('button[title="删除表格"]').exists()).toBe(false)
+    confirm.mockRestore()
   })
 
   it('shares the workspace card radius and uses a capsule title input', () => {
@@ -360,6 +391,7 @@ describe('SmartFormsView', () => {
     expect(smartFormsSource).toContain('border-radius: var(--workspace-card-radius);')
     expect(smartFormsSource).toMatch(/\.dialog-field input \{[^}]*border-radius: 999px;/)
     expect(smartFormsSource).toMatch(/\.dialog-field input \{[^}]*width: 100%;[^}]*max-width: 100%;/)
+    expect(smartFormsSource).toMatch(/\.new-form-btn \{[^}]*border-radius: 999px;[^}]*background: var\(--color-primary\);/)
   })
 
   it('adds rows and generates selected smart cells from literature content', async () => {

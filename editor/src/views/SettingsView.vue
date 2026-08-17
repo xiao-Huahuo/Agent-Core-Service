@@ -617,6 +617,7 @@ onBeforeUnmount(() => {
         v-model:library-name-draft="libraryNameDraft"
         v-model:ocr-enabled-draft="ocrEnabledDraft"
         v-model:watch-enabled-draft="watchEnabledDraft"
+        :supported-file-types="settingsStore.profile.knowledgeSupportedSuffixes ?? []"
         :has-changes="hasChanges"
         :save-error="saveError"
         :save-message="saveMessage"

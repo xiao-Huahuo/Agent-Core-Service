@@ -552,6 +552,7 @@ class SettingsService:
             "ocr_enabled": bool(record.ocr_enabled),
             "long_term_memory_enabled": bool(record.long_term_memory_enabled),
             "knowledge_ignore_patterns": record.knowledge_ignore_patterns,
+            "knowledge_supported_suffixes": list(self.config.constants.knowledge_supported_suffixes),
             "terminal_sandbox": self._load_terminal_sandbox_payload(record.terminal_sandbox_config),
             "ui_font_families": self._load_font_families(record.ui_font_families),
             "text_font_families": self._load_font_families(record.text_font_families),
