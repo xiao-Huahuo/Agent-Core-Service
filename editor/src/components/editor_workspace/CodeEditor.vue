@@ -11,8 +11,16 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import { useSubmenuIntent } from '@/components/editor_workspace/submenuIntent'
+import WikiLinkSuggest from '@/components/editor_workspace/WikiLinkSuggest.vue'
+import type { KnowledgeFileNode } from '@/types/knowledge'
 
 import { hljs, isHighlightableLanguage } from './codeHighlight'
+import {
+  findWikiLinkTrigger,
+  wikiLinkSuggestions,
+  type WikiLinkSuggestion,
+  type WikiLinkTrigger,
+} from './wikiLinks'
 
 const model = defineModel<string>({ required: true })
 
@@ -25,6 +33,8 @@ const props = defineProps<{
   pasteImage?: (file: File) => Promise<string>
   /** Agent patch ranges rendered as non-interactive translucent gutter bars. */
   changeRanges?: Array<{ startLine: number; endLine: number; kind: 'added' | 'removed' }>
+  /** Knowledge files offered after typing [[ or ![[ in Markdown. */
+  wikiFiles?: KnowledgeFileNode[]
 }>()
 
 /** Scroll and caret data used by EditorPane to synchronize Markdown Split mode. */
@@ -69,6 +79,8 @@ type MarkdownCommand =
   | 'hr'
   | 'insert-code-block'
   | 'math-block'
+  | 'wiki-link'
+  | 'wiki-embed'
   | 'cut'
   | 'copy'
   | 'paste'
@@ -119,6 +131,12 @@ const findBarOpen = ref(false)
 const findQuery = ref('')
 const replaceQuery = ref('')
 const currentMatchIndex = ref(0)
+const wikiTrigger = ref<WikiLinkTrigger | null>(null)
+const wikiActiveIndex = ref(0)
+const wikiSuggestPosition = ref({ left: '12px', top: '42px' })
+const wikiSuggestions = computed(() => (
+  wikiTrigger.value ? wikiLinkSuggestions(props.wikiFiles ?? [], wikiTrigger.value.query) : []
+))
 const tableOverlay = ref<{
   visible: boolean
   showLeftEdge: boolean
@@ -266,6 +284,8 @@ const menuGroups: Array<{
       { command: 'hr', label: '分割线' },
       { command: 'insert-code-block', label: '代码块' },
       { command: 'math-block', label: '数学块' },
+      { command: 'wiki-link', label: '插入反向链接' },
+      { command: 'wiki-embed', label: '插入嵌入链接' },
     ],
   },
   {
@@ -349,6 +369,8 @@ function markdownCommandIcon(command: MarkdownCommand): string {
     hr: 'remove',
     'insert-code-block': 'code',
     'math-block': 'table-chart',
+    'wiki-link': 'link',
+    'wiki-embed': 'insert-drive-file',
     cut: 'cut',
     copy: 'copy',
     paste: 'paste',
@@ -373,6 +395,94 @@ function flushTypingSnapshot() {
   if (undoStack.value.length > 100) undoStack.value.shift()
   redoStack.value = []
   pendingInputSnapshot = null
+}
+
+/** Returns the textarea caret location relative to the editor wrapper. */
+function textareaCaretPosition(textarea: HTMLTextAreaElement) {
+  const mirror = document.createElement('div')
+  const style = window.getComputedStyle(textarea)
+  const copiedProperties = [
+    'boxSizing', 'width', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+    'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+    'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing', 'lineHeight',
+    'textTransform', 'textIndent', 'tabSize', 'wordSpacing',
+  ] as const
+  for (const property of copiedProperties) {
+    mirror.style[property] = style[property]
+  }
+  mirror.style.position = 'fixed'
+  mirror.style.left = '-10000px'
+  mirror.style.top = '0'
+  mirror.style.visibility = 'hidden'
+  mirror.style.whiteSpace = 'pre-wrap'
+  mirror.style.overflowWrap = 'break-word'
+  mirror.textContent = textarea.value.slice(0, textarea.selectionStart)
+  const marker = document.createElement('span')
+  marker.textContent = textarea.value.slice(textarea.selectionStart) || '.'
+  mirror.appendChild(marker)
+  document.body.appendChild(mirror)
+  const lineHeight = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.6 || 22
+  const position = {
+    left: marker.offsetLeft - textarea.scrollLeft,
+    top: marker.offsetTop - textarea.scrollTop + lineHeight,
+  }
+  mirror.remove()
+  return position
+}
+
+/** Repositions and refreshes the wiki menu from the current Markdown caret. */
+function updateWikiSuggestions() {
+  const textarea = textareaRef.value
+  if (!textarea || !isMarkdown.value || props.readonly || textarea.selectionStart !== textarea.selectionEnd) {
+    wikiTrigger.value = null
+    return
+  }
+  const trigger = findWikiLinkTrigger(textarea.value, textarea.selectionStart)
+  wikiTrigger.value = trigger
+  if (!trigger) return
+  wikiActiveIndex.value = 0
+  const wrapper = textarea.closest('.editor-wrapper') as HTMLElement | null
+  const caret = textareaCaretPosition(textarea)
+  const menuWidth = Math.min(420, Math.max(240, (wrapper?.clientWidth ?? 440) - 24))
+  const left = Math.max(8, Math.min(textarea.offsetLeft + caret.left, (wrapper?.clientWidth ?? 440) - menuWidth - 8))
+  const preferredTop = textarea.offsetTop + caret.top
+  const top = preferredTop + 340 < (wrapper?.clientHeight ?? 700)
+    ? preferredTop
+    : Math.max(8, preferredTop - 340)
+  wikiSuggestPosition.value = { left: `${left}px`, top: `${top}px` }
+}
+
+/** Flushes native typing history and updates the wiki-link completion state. */
+function handleEditorInput() {
+  flushTypingSnapshot()
+  updateWikiSuggestions()
+}
+
+/** Replaces the incomplete token with the selected knowledge-file target. */
+function selectWikiSuggestion(item: WikiLinkSuggestion) {
+  const trigger = wikiTrigger.value
+  const textarea = textareaRef.value
+  if (!trigger || !textarea) return
+  const token = `${trigger.embed ? '!' : ''}[[${item.target}]]`
+  wikiTrigger.value = null
+  replaceRange(trigger.start, textarea.selectionStart, token, trigger.start + token.length)
+}
+
+/** Inserts a wiki-link prefix from the context menu and opens file completion. */
+function insertWikiLink(embed: boolean) {
+  const selection = selectedRange()
+  const prefix = embed ? '![[' : '[['
+  if (selection.selected) {
+    replaceRange(
+      selection.start,
+      selection.end,
+      `${prefix}${selection.selected}]]`,
+      selection.start + prefix.length + selection.selected.length + 2,
+    )
+    return
+  }
+  replaceRange(selection.start, selection.end, prefix, selection.start + prefix.length)
+  void nextTick(updateWikiSuggestions)
 }
 
 function pushSnapshot() {
@@ -1136,6 +1246,8 @@ async function runCommand(command: MarkdownCommand) {
     case 'hr': insertBlock('---'); break
     case 'insert-code-block': insertBlock('```\n\n```', 4); break
     case 'math-block': insertBlock('$$\n\n$$', 3); break
+    case 'wiki-link': insertWikiLink(false); break
+    case 'wiki-embed': insertWikiLink(true); break
     case 'cut': await copySelection(true); break
     case 'copy': await copySelection(false); break
     case 'paste':
@@ -1158,6 +1270,33 @@ function handleEditorKeydown(event: KeyboardEvent) {
   }
   const isModifier = event.ctrlKey || event.metaKey
   const key = event.key.toLowerCase()
+  if (isModifier && !event.altKey && key === 's') {
+    event.preventDefault()
+    handleSaveShortcut()
+    return
+  }
+  if (wikiTrigger.value) {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      const direction = event.key === 'ArrowDown' ? 1 : -1
+      const count = wikiSuggestions.value.length
+      if (count > 0) wikiActiveIndex.value = (wikiActiveIndex.value + direction + count) % count
+      return
+    }
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      const item = wikiSuggestions.value[wikiActiveIndex.value]
+      if (item) {
+        event.preventDefault()
+        selectWikiSuggestion(item)
+        return
+      }
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      wikiTrigger.value = null
+      return
+    }
+  }
   if (props.readonly) {
     if (isModifier && !event.altKey && key === 'f') {
       event.preventDefault()
@@ -1280,7 +1419,7 @@ onBeforeUnmount(() => {
             v-model="findQuery"
             placeholder="查找"
             class="find-input"
-            @keydown.enter.prevent="findNext"
+            @keydown.enter.exact.prevent="findNext"
             @keydown.shift.enter.prevent="findPrevious"
             @keydown.esc.prevent="closeFindBar"
           />
@@ -1338,14 +1477,21 @@ onBeforeUnmount(() => {
         :class="{ readonly, 'syntax-highlighted': isSyntaxHighlightedLanguage }"
         spellcheck="false"
         :readonly="readonly"
-        @keydown.ctrl.s.prevent="handleSaveShortcut"
-        @keydown.meta.s.prevent="handleSaveShortcut"
         @keydown="handleEditorKeydown"
-        @input="flushTypingSnapshot"
+        @click="updateWikiSuggestions"
+        @input="handleEditorInput"
         @paste="handleNativePaste"
         @scroll="handleEditorScroll"
         @contextmenu="openContextMenu"
       ></textarea>
+      <WikiLinkSuggest
+        v-if="wikiTrigger"
+        :items="wikiSuggestions"
+        :active-index="wikiActiveIndex"
+        :position="wikiSuggestPosition"
+        @activate="wikiActiveIndex = $event"
+        @select="selectWikiSuggestion"
+      />
       <div
         v-if="tableOverlay.visible"
         ref="tableOverlayElement"

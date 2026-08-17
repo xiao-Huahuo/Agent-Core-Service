@@ -19,6 +19,8 @@ import { hljs } from './codeHighlight'
 import { extractPreviewMath, renderMathInPreviewDom } from './mathRender'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { normalizeWikiAnchor } from './wikiLinks'
+import { decorateWikiPreview } from './wikiPreview'
 
 import { useImagePreviewer } from '@/components/common/useImagePreviewer'
 import type { ImagePreviewItem } from '@/components/common/useImagePreviewer'
@@ -30,6 +32,8 @@ const props = defineProps<{
   compact?: boolean
   /** Adds a download action to each rendered image. */
   imageDownload?: boolean
+  /** Requests a one-shot scroll and highlight after navigating through a wiki link. */
+  focusAnchor?: { path: string; heading: string; blockId: string; nonce: number } | null
 }>()
 
 const emit = defineEmits<{
@@ -37,6 +41,7 @@ const emit = defineEmits<{
   ready: []
   updateContent: [content: string]
   downloadImage: [src: string, name: string]
+  navigateWiki: [destination: string]
 }>()
 
 interface SourceMarkdownTable {
@@ -61,6 +66,9 @@ type VditorPreviewInternals = Vditor & {
 const imagePreviewer = useImagePreviewer()
 const previewHost = ref<HTMLDivElement | null>(null)
 const tableOverlayElement = ref<HTMLDivElement | null>(null)
+const wikiEmbedCache = new Map<string, string>()
+let lastWikiFocusNonce = -1
+let wikiHighlightTimer: ReturnType<typeof setTimeout> | null = null
 const TABLE_EDGE_BUTTON_SIZE = 9
 const TABLE_EDGE_HIT_ZONE = 14
 const tableOverlay = ref<{
@@ -687,6 +695,51 @@ function handlePreviewParse(element: HTMLElement) {
   highlightVueCodeBlocks(element)
   injectCodeCopyButtons()
   tableOverlay.value.visible = false
+  void decorateWikiPreview(resetEl, {
+    tree: workspaceStore.tree,
+    currentPath: props.path ?? workspaceStore.selectedPath,
+    userId: settingsStore.profile.userId,
+    cache: wikiEmbedCache,
+  }).then(() => focusWikiAnchor())
+}
+
+function scrollToPreviewElement(target: HTMLElement) {
+  const previewEl = getPreviewScrollContainer(target)
+  if (previewEl) {
+    const previewRect = previewEl.getBoundingClientRect()
+    const targetRect = target.getBoundingClientRect()
+    const top = previewEl.scrollTop + targetRect.top - previewRect.top - 12
+    previewEl.scrollTo({ top, behavior: 'smooth' })
+    return
+  }
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function focusWikiAnchor() {
+  const request = props.focusAnchor
+  if (!request || request.nonce === lastWikiFocusNonce || request.path !== props.path) return
+  const root = getPreviewElement()
+  if (!root) return
+  let target: HTMLElement | null = null
+  if (request.heading) {
+    const normalizedHeading = normalizeWikiAnchor(request.heading)
+    target = [...root.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')]
+      .find((heading) => normalizeWikiAnchor(heading.textContent ?? '') === normalizedHeading) ?? null
+  } else if (request.blockId) {
+    const marker = `^${request.blockId}`
+    target = [...root.querySelectorAll<HTMLElement>('p, li, blockquote, pre, table')]
+      .find((element) => (element.textContent ?? '').includes(marker)) ?? null
+  }
+  if (!target) return
+  lastWikiFocusNonce = request.nonce
+  if (wikiHighlightTimer !== null) clearTimeout(wikiHighlightTimer)
+  root.querySelector('.wiki-anchor-highlight')?.classList.remove('wiki-anchor-highlight')
+  target.classList.add('wiki-anchor-highlight')
+  scrollToPreviewElement(target)
+  wikiHighlightTimer = setTimeout(() => {
+    target?.classList.remove('wiki-anchor-highlight')
+    wikiHighlightTimer = null
+  }, 2200)
 }
 
 function syncPreviewContent() {
@@ -735,6 +788,14 @@ function syncPreviewContentImmediately() {
 function handleClick(event: MouseEvent) {
   const eventTarget = event.target instanceof Element ? event.target : null
 
+  const wikiLink = eventTarget?.closest<HTMLAnchorElement>('a[data-wiki-destination]')
+  if (wikiLink) {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('navigateWiki', wikiLink.dataset.wikiDestination ?? '')
+    return
+  }
+
   // image preview — stopPropagation prevents Vditor's native lightbox
   const img = eventTarget?.closest<HTMLImageElement>('img[src]')
   if (img && img.src) {
@@ -774,15 +835,11 @@ function handleClick(event: MouseEvent) {
   if (!target) {
     return
   }
-  const previewEl = getPreviewScrollContainer(target)
-  if (previewEl) {
-    const previewRect = previewEl.getBoundingClientRect()
-    const targetRect = target.getBoundingClientRect()
-    const top = previewEl.scrollTop + targetRect.top - previewRect.top - 12
-    previewEl.scrollTo({ top, behavior: 'smooth' })
-    return
-  }
-  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  scrollToPreviewElement(target)
+}
+
+function handleKnowledgeFileChange() {
+  wikiEmbedCache.clear()
 }
 
 onMounted(() => {
@@ -790,6 +847,7 @@ onMounted(() => {
     return
   }
   previewHost.value.addEventListener('click', handleClick, { capture: true })
+  window.addEventListener('metaweave-knowledge-file-change', handleKnowledgeFileChange)
   try {
     instance = new Vditor(previewHost.value, {
       value: preparePreviewMarkdown(props.content),
@@ -821,6 +879,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   previewHost.value?.removeEventListener('click', handleClick, { capture: true })
+  window.removeEventListener('metaweave-knowledge-file-change', handleKnowledgeFileChange)
 })
 
 watch(
@@ -832,12 +891,18 @@ watch(
   },
 )
 
+watch(() => props.focusAnchor?.nonce, () => void nextTick(focusWikiAnchor))
+
 onBeforeUnmount(() => {
   mounted = false
   document.removeEventListener('pointerup', finishPreviewTableDrag)
   if (programmaticScrollTimer !== null) {
     clearTimeout(programmaticScrollTimer)
     programmaticScrollTimer = null
+  }
+  if (wikiHighlightTimer !== null) {
+    clearTimeout(wikiHighlightTimer)
+    wikiHighlightTimer = null
   }
   getPreviewElement()?.removeEventListener('scroll', handlePreviewScroll)
   try {
@@ -1042,6 +1107,64 @@ onBeforeUnmount(() => {
 
 .markdown-preview :deep(.vditor-reset li)::marker {
   color: var(--color-primary);
+}
+
+.markdown-preview :deep(.wiki-link) {
+  color: var(--color-primary) !important;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.markdown-preview :deep(.wiki-link-unresolved) {
+  color: var(--color-text-muted) !important;
+  text-decoration-style: dashed;
+}
+
+.markdown-preview :deep(.wiki-embed) {
+  position: relative;
+  display: block;
+  min-width: 0;
+  margin: var(--space-12) 0;
+  padding: var(--space-4) var(--space-24) var(--space-4) var(--space-16);
+  border-left: 2px solid var(--color-primary);
+}
+
+.markdown-preview :deep(.wiki-embed-open) {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  color: var(--color-text-muted) !important;
+  font-size: 15px;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.markdown-preview :deep(.wiki-embed-open:hover) {
+  color: var(--color-primary) !important;
+}
+
+.markdown-preview :deep(.wiki-embed-content > :first-child) { margin-top: 0; }
+.markdown-preview :deep(.wiki-embed-content > :last-child) { margin-bottom: 0; }
+
+.markdown-preview :deep(.wiki-embed-image) {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.markdown-preview :deep(.wiki-embed-unresolved),
+.markdown-preview :deep(.wiki-embed-unsupported),
+.markdown-preview :deep(.wiki-embed-limit) {
+  color: var(--color-text-muted);
+}
+
+.markdown-preview :deep(.wiki-anchor-highlight) {
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-primary) 20%, transparent) !important;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-primary) 10%, transparent);
+  transition: background 180ms ease, box-shadow 180ms ease;
 }
 
 .markdown-preview :deep(h1) { color: var(--color-primary) !important; font-size: calc(2rem * var(--font-scale)) !important; }

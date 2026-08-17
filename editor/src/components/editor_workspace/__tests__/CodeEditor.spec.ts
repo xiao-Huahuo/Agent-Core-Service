@@ -9,13 +9,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import CodeEditor from '../CodeEditor.vue'
+import type { KnowledgeFileNode } from '@/types/knowledge'
 
-function mountMarkdownEditor(value: string) {
-  let wrapper!: ReturnType<typeof mount>
-  wrapper = mount(CodeEditor, {
+function mountMarkdownEditor(value: string, wikiFiles: KnowledgeFileNode[] = []) {
+  const wrapper = mount(CodeEditor, {
     props: {
       modelValue: value,
       language: 'md',
+      wikiFiles,
       'onUpdate:modelValue': (nextValue: string) => wrapper.setProps({ modelValue: nextValue }),
     },
   })
@@ -23,6 +24,47 @@ function mountMarkdownEditor(value: string) {
 }
 
 describe('CodeEditor Markdown context menu', () => {
+  it('opens and filters file suggestions after typing [[', async () => {
+    const wrapper = mountMarkdownEditor('', [
+      { name: '深度学习.md', path: '机器学习/深度学习.md', isDir: false },
+      { name: 'tmp.md', path: '杂项/tmp.md', isDir: false },
+    ])
+    const textarea = wrapper.get('textarea')
+    const element = textarea.element as HTMLTextAreaElement
+    element.value = '[[深度'
+    element.setSelectionRange(4, 4)
+    await textarea.trigger('input')
+
+    expect(wrapper.find('.wiki-link-suggest').exists()).toBe(true)
+    expect(wrapper.findAll('.wiki-link-suggest-item')).toHaveLength(1)
+    expect(wrapper.get('.wiki-link-suggest-item').text()).toContain('深度学习')
+    expect(wrapper.get('.wiki-link-suggest-item').text()).toContain('机器学习/')
+  })
+
+  it('selects a wiki target with Enter and supports embedded prefixes', async () => {
+    const files = [{ name: '深度学习.md', path: '机器学习/深度学习.md', isDir: false }]
+    const wrapper = mountMarkdownEditor('', files)
+    const textarea = wrapper.get('textarea')
+    const element = textarea.element as HTMLTextAreaElement
+    element.value = '![[深'
+    element.setSelectionRange(4, 4)
+    await textarea.trigger('input')
+    await textarea.trigger('keydown', { key: 'Enter' })
+
+    expect((wrapper.props() as { modelValue: string }).modelValue).toBe('![[机器学习/深度学习]]')
+  })
+
+  it('offers wiki and embed insertion in the Markdown context menu', async () => {
+    const wrapper = mountMarkdownEditor('')
+
+    await wrapper.get('textarea').trigger('contextmenu', { clientX: 12, clientY: 12 })
+    await wrapper.findAll('.markdown-context-parent').find((button) => button.text().includes('插入'))?.trigger('click')
+
+    const labels = wrapper.findAll('.markdown-context-submenu button').map((button) => button.text())
+    expect(labels).toContain('插入反向链接')
+    expect(labels).toContain('插入嵌入链接')
+  })
+
   it('emits scroll ratio and caret offset for Split synchronization', async () => {
     const wrapper = mountMarkdownEditor('alpha\nbeta\ngamma')
     const textarea = wrapper.get('textarea').element as HTMLTextAreaElement

@@ -52,11 +52,11 @@
   --transition-normal: 200ms ease-out;
   --transition-slow: 300ms ease-out;
 
-  --color-primary: #4224eb;
-  --color-primary-hover: #5a3cff;
+  --color-primary: #339cff;
+  --color-primary-hover: #4ba8ff;
   --color-accent: #eb2463;
-  --color-primary-soft: rgba(66, 36, 235, 0.16);
-  --color-primary-softer: rgba(66, 36, 235, 0.1);
+  --color-primary-soft: rgba(51, 156, 255, 0.16);
+  --color-primary-softer: rgba(51, 156, 255, 0.1);
   --color-selection-blue: var(--color-primary);
   --color-selection-blue-soft: var(--color-primary-soft);
   --color-success: #26a269;

@@ -50,6 +50,9 @@ vi.mock('@/stores/settings', () => ({
 vi.mock('@/stores/workspace', () => ({
   useWorkspaceStore: () => ({
     selectedPath: 'notes/test.md',
+    tree: [
+      { name: 'target.md', path: 'notes/target.md', isDir: false },
+    ],
   }),
 }))
 
@@ -138,5 +141,29 @@ describe('MarkdownPreview Split synchronization', () => {
     await wrapper.get('.preview-table-add-row-button').trigger('click')
 
     expect(wrapper.emitted('updateContent')?.[0]?.[0]).toBe('| A | B |\n| --- | --- |\n| 1 | 2 |\n|   |   |')
+  })
+
+  it('decorates a wiki link after parsing and emits its navigation destination', async () => {
+    const wrapper = mount(MarkdownPreview, {
+      props: {
+        content: '[[target#章节|阅读章节]]',
+        path: 'notes/test.md',
+      },
+    })
+    const host = wrapper.get('.markdown-preview-renderer').element as HTMLElement
+    const reset = document.createElement('div')
+    reset.className = 'vditor-reset'
+    reset.textContent = '[[target#章节|阅读章节]]'
+    vditorMocks.previewElement.appendChild(reset)
+    host.appendChild(vditorMocks.previewElement)
+
+    const parse = (vditorMocks.constructor.options?.preview as { parse?: (element: HTMLElement) => void })?.parse
+    parse?.(vditorMocks.previewElement)
+    await Promise.resolve()
+
+    const link = reset.querySelector<HTMLAnchorElement>('.wiki-link')
+    expect(link?.textContent).toBe('阅读章节')
+    link?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(wrapper.emitted('navigateWiki')?.[0]).toEqual(['target#章节|阅读章节'])
   })
 })

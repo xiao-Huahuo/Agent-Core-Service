@@ -21,6 +21,7 @@ import type { EditorWorkspaceMode } from '@/types/knowledge'
 import { resolveEditorFilePipeline } from '@/utils/editorFilePipeline'
 import { fetchSessionChanges } from '@/api/agentChanges'
 import { useSessionStore } from '@/stores/session'
+import { parseWikiLink, resolveWikiTargetPath } from './wikiLinks'
 
 const workspaceStore = useWorkspaceStore()
 const sessionStore = useSessionStore()
@@ -29,6 +30,8 @@ const visualizeMenuOpen = ref(false)
 const codeEditorRef = ref<InstanceType<typeof CodeEditor> | null>(null)
 const markdownPreviewRef = ref<InstanceType<typeof MarkdownPreview> | null>(null)
 const lastEditorScroll = ref({ ratio: 0, cursorOffset: 0, contentLength: 0 })
+const wikiFocusAnchor = ref<{ path: string; heading: string; blockId: string; nonce: number } | null>(null)
+let wikiFocusNonce = 0
 
 const splitRatio = ref(0.5)
 const splitBodyRef = ref<HTMLElement | null>(null)
@@ -173,6 +176,32 @@ function handleMarkdownPreviewReady() {
   }
   const snapshot = codeEditorRef.value?.getScrollSnapshot() ?? lastEditorScroll.value
   markdownPreviewRef.value?.scrollToSourceOffset(snapshot.cursorOffset, snapshot.contentLength)
+}
+
+async function handleWikiNavigate(rawDestination: string) {
+  const destination = parseWikiLink(rawDestination)
+  if (!destination) return
+  const targetPath = resolveWikiTargetPath(
+    destination.file,
+    workspaceStore.tree,
+    workspaceStore.selectedPath,
+  )
+  const targetNode = workspaceStore.flatNodes.find((node) => !node.isDir && node.path === targetPath)
+  if (!targetNode) {
+    workspaceStore.showToast(`找不到链接文件：${destination.file}`)
+    return
+  }
+  workspaceStore.setMainView('editor')
+  await workspaceStore.selectFile(targetNode)
+  if (/\.(?:md|markdown)$/iu.test(targetPath)) {
+    workspaceStore.setEditorMode('preview')
+    wikiFocusAnchor.value = {
+      path: targetPath,
+      heading: destination.heading,
+      blockId: destination.blockId,
+      nonce: ++wikiFocusNonce,
+    }
+  }
 }
 
 watch(effectiveEditorMode, async (mode, previousMode) => {
@@ -338,6 +367,7 @@ onErrorCaptured((err, vm, info) => {
           :paste-image="workspaceStore.savePastedEditorImage"
           :readonly="workspaceStore.activeFileReadonly"
           :change-ranges="activeChangeRanges"
+          :wiki-files="workspaceStore.tree"
           @save="workspaceStore.saveActiveFile"
           @scroll="handleEditorScroll"
         />
@@ -353,9 +383,11 @@ onErrorCaptured((err, vm, info) => {
           :key="workspaceStore.selectedPath"
           :content="activeContent"
           :path="workspaceStore.selectedPath"
+          :focus-anchor="wikiFocusAnchor"
           @scroll="handlePreviewScroll"
           @update-content="activeContent = $event"
           @ready="handleMarkdownPreviewReady"
+          @navigate-wiki="handleWikiNavigate"
         />
       </section>
       <section v-else-if="isProjectionMode" class="preview-surface projection-source-surface">
