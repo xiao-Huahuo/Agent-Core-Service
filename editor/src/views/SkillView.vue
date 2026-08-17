@@ -82,9 +82,16 @@ watch(
 <template>
   <section class="skill-page">
     <header class="skill-header">
-      <div>
-        <h1>Skill</h1>
-        <p>{{ skillsStore.enabledCount }} / {{ skillsStore.skills.length }} enabled</p>
+      <div ref="tabSwitchRef" class="resource-page-switch" role="tablist" aria-label="Skill views">
+        <div class="page-slider" :style="tabSliderStyle"></div>
+        <button type="button" class="page-switch-button" :class="{ active: activeTab === 'overview' }" @click="switchTab('overview')">
+          <IcIcon name="document" :size="15" />
+          <span>概览</span>
+        </button>
+        <button type="button" class="page-switch-button" :class="{ active: activeTab === 'custom' }" @click="switchTab('custom')">
+          <IcIcon name="tune" :size="15" />
+          <span>定制</span>
+        </button>
       </div>
       <div class="header-actions">
         <button type="button" class="view-button" title="刷新" aria-label="刷新" @click="skillsStore.loadSkills">
@@ -95,18 +102,6 @@ watch(
         </button>
       </div>
     </header>
-
-    <div ref="tabSwitchRef" class="resource-page-switch" role="tablist" aria-label="Skill views">
-      <div class="page-slider" :style="tabSliderStyle"></div>
-      <button type="button" class="page-switch-button" :class="{ active: activeTab === 'overview' }" @click="switchTab('overview')">
-        <IcIcon name="document" :size="15" />
-        <span>概览</span>
-      </button>
-      <button type="button" class="page-switch-button" :class="{ active: activeTab === 'custom' }" @click="switchTab('custom')">
-        <IcIcon name="tune" :size="15" />
-        <span>定制</span>
-      </button>
-    </div>
 
     <p v-if="skillsStore.error" class="error-line">{{ skillsStore.error }}</p>
 
@@ -312,18 +307,12 @@ tools: (可选) 需要启用的工具列表
   margin-bottom: var(--space-16);
 }
 
-.skill-header h1,
 .group-title h2,
 .skill-card h3,
 .spec-modal h2 {
   margin: 0;
 }
 
-.skill-header h1 {
-  font-size: 24px;
-}
-
-.skill-header p,
 .card-head p,
 .path,
 .description,
@@ -395,7 +384,6 @@ tools: (可选) 需要启用的工具列表
   align-items: center;
   gap: var(--space-4);
   padding: 2px;
-  margin-bottom: var(--space-16);
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-canvas);
@@ -417,15 +405,15 @@ tools: (可选) 需要启用的工具列表
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-4);
   height: 26px;
-  padding: 0 var(--space-10);
+  padding: 0 var(--space-8);
   border: none;
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(11px * var(--font-scale));
   cursor: pointer;
   outline: none;
 }

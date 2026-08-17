@@ -181,7 +181,7 @@ function getFeedbackErrorMessage(error: unknown, fallback: string) {
 
 <template>
   <div v-if="open" class="feedback-backdrop" @click.self="emit('close')">
-    <section class="feedback-popover" aria-label="用户反馈">
+    <section class="feedback-popover library-form-surface" aria-label="用户反馈">
       <header class="feedback-header">
         <strong>用户反馈</strong>
         <button class="feedback-close" type="button" title="关闭" aria-label="关闭" @click="emit('close')">
@@ -267,7 +267,7 @@ function getFeedbackErrorMessage(error: unknown, fallback: string) {
   display: grid;
   place-items: center;
   padding: var(--space-24);
-  background: rgba(15, 23, 42, 0.28);
+  background: rgba(0, 0, 0, 0.42);
 }
 
 .feedback-popover {
@@ -293,7 +293,6 @@ function getFeedbackErrorMessage(error: unknown, fallback: string) {
   color: var(--feedback-card-text);
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
   font-family: var(--font-ui);
-  animation: feedback-pop-in 180ms ease;
 }
 
 :global(:root[data-theme="dark"] .feedback-backdrop) {
@@ -311,6 +310,14 @@ function getFeedbackErrorMessage(error: unknown, fallback: string) {
   --feedback-soft-border: rgba(230, 230, 230, 0.12);
 
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.46);
+}
+
+.feedback-popover.library-form-surface {
+  border-radius: 28px;
+  box-shadow:
+    0 0 0 4px var(--library-form-ring),
+    0 24px 70px rgba(0, 0, 0, 0.28);
+  animation: library-form-scan-in 420ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
 .feedback-header {
@@ -575,18 +582,6 @@ function getFeedbackErrorMessage(error: unknown, fallback: string) {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-}
-
-@keyframes feedback-pop-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.98);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
 }
 
 @keyframes feedback-expand-in {

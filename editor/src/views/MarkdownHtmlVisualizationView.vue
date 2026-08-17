@@ -178,13 +178,6 @@ function startVisualization() {
 <template>
   <section class="visualization-page">
     <header class="visualization-toolbar">
-      <div class="toolbar-title">
-        <IcIcon name="code" :size="18" />
-        <div>
-          <h1>MD-HTML</h1>
-          <p>{{ selectedDocumentLabel }}</p>
-        </div>
-      </div>
       <div ref="modeSwitchRef" class="mode-pill">
         <div class="mode-slider" :style="modeSliderStyle"></div>
         <button
@@ -207,6 +200,7 @@ function startVisualization() {
         </button>
       </div>
       <div class="toolbar-actions">
+        <span class="selected-file-path" :title="selectedDocumentLabel">{{ selectedDocumentLabel }}</span>
         <button type="button" class="tool-button" title="选择文件" aria-label="选择文件" @click="pickerOpen = true">
           <IcIcon name="folder-open" :size="15" />
         </button>
@@ -389,33 +383,11 @@ function startVisualization() {
   padding: 0 var(--space-16);
 }
 
-.toolbar-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-10);
-  min-width: 0;
-}
-
-.toolbar-title h1,
-.toolbar-title p,
 .result-title strong,
 .result-title span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.toolbar-title h1 {
-  margin: 0;
-  color: var(--color-text);
-  font-size: calc(15px * var(--font-scale));
-  font-weight: 650;
-}
-
-.toolbar-title p {
-  margin: 2px 0 0;
-  color: var(--color-text-muted);
-  font-size: calc(11px * var(--font-scale));
 }
 
 .mode-pill {
@@ -424,7 +396,6 @@ function startVisualization() {
   align-items: center;
   gap: var(--space-4);
   padding: 2px;
-  margin-left: auto;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-canvas);
@@ -502,6 +473,17 @@ function startVisualization() {
   align-items: center;
   gap: var(--space-8);
   flex: 0 0 auto;
+}
+
+.selected-file-path {
+  display: inline-block;
+  width: min(32vw, 380px);
+  min-width: 100px;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .toolbar-actions > button.secondary-action {

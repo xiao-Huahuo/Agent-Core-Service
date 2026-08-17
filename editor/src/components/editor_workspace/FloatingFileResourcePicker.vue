@@ -38,14 +38,13 @@ async function confirmSelection() {
   <Teleport to="body">
     <div class="floating-picker-backdrop" role="presentation" @click.self="emit('close')">
       <section
-        class="floating-picker-card"
+        class="floating-picker-card library-form-surface"
         role="dialog"
         aria-modal="true"
         aria-labelledby="md-html-file-picker-title"
       >
         <header class="floating-picker-header">
           <h2 id="md-html-file-picker-title">选择文件</h2>
-          <button type="button" aria-label="关闭文件选择器" @click="emit('close')">×</button>
         </header>
         <FileResourceManager class="floating-picker-manager" embedded-picker />
         <footer class="floating-picker-footer">
@@ -79,7 +78,7 @@ async function confirmSelection() {
   display: grid;
   place-items: center;
   padding: var(--space-24);
-  background: rgba(0, 0, 0, 0.34);
+  background: rgba(0, 0, 0, 0.42);
   animation: picker-fade-in 160ms ease;
 }
 
@@ -95,8 +94,14 @@ async function confirmSelection() {
   border-radius: var(--radius-md);
   background: var(--color-canvas);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
-  transform: translateY(0);
-  animation: picker-rise-in 180ms ease;
+}
+
+.floating-picker-card.library-form-surface {
+  border-radius: 28px;
+  box-shadow:
+    0 0 0 4px var(--library-form-ring),
+    0 24px 60px rgba(0, 0, 0, 0.34);
+  animation: library-form-scan-in 420ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
 .floating-picker-header,
@@ -123,7 +128,6 @@ async function confirmSelection() {
   font-weight: 650;
 }
 
-.floating-picker-header button,
 .footer-actions button {
   display: inline-flex;
   align-items: center;
@@ -138,14 +142,6 @@ async function confirmSelection() {
     background var(--transition-fast),
     border-color var(--transition-fast),
     color var(--transition-fast);
-}
-
-.floating-picker-header button {
-  width: 30px;
-  margin-right: var(--space-4);
-  padding: 0;
-  font-size: calc(18px * var(--font-scale));
-  line-height: 1;
 }
 
 .floating-picker-manager {
@@ -214,7 +210,6 @@ async function confirmSelection() {
   opacity: 0.48;
 }
 
-.floating-picker-header button:hover,
 .footer-actions button:hover:not(:disabled) {
   border-color: var(--color-primary);
 }
@@ -225,17 +220,6 @@ async function confirmSelection() {
   }
   to {
     opacity: 1;
-  }
-}
-
-@keyframes picker-rise-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 
