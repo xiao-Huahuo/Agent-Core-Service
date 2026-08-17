@@ -1,6 +1,8 @@
-# CHANGE HISTORY
+# 项目变更历史 CHANGE HISTORY
+> 每天的变更历史用 YYYY-MM-DD 的形式给出.
 
 ## 2026-08-17
+- [x] 完成智能表格扩展:文献文件单元格支持打开编辑区、下载原文件和重新上传;文本/智能文本单元格支持 Markdown、LaTeX、代码块、表格与阅读/编辑切换;Ctrl+V 图片固定上传到当前 `forms/**/assets/` 并提供图片下载;列宽与行高可拖动并持久化;智能表格本体及单元格 Markdown 表格均提供边缘拖动和边缘插入控件。旧 SQLite 智能表格自动补充行高字段。验证:前端相关 48 项、后端 2 项测试通过,`vite build` 通过。
 
 - [x] 在语义、文件树、图书馆三种图谱之外新增“双向链接”图谱：读取知识库全部 Markdown，复用编辑器 wiki 语法与路径解析统计 `[[...]]` 反向链接和 `![[...]]` 嵌入链接，按类型聚合重复边并显示独立计数；保留孤立 Markdown 与被引用资源节点，单击 Canvas 节点直接打开对应文件。新增适配器、图谱模式及 Chromium 真实节点点击回归。
 
@@ -27,6 +29,9 @@
 
 ## 2026-08-16
 
+
+- [x] 将参考交互的流式文字动效接入 Agent 对话区：真实 SSE 每批新增正文按词以 45ms 错峰、420ms 模糊消散显现并跟随细光标，既有正文不会重复动画；代码块、KaTeX、引用与来源链接保持结构安全，流结束后清理临时包装并淡入复制/赞踩与来源区，同时支持 `prefers-reduced-motion`。Agent 聊天组件相关 47 项测试及 Tool/Chat 两种模式 Chromium SSE 冒烟通过。
+
 - [x] 修复组件库视口装饰导致卡片无限增高：预览尺寸测量排除与 iframe 视口绑定的绝对/固定定位背景，父级同时拒绝视口高度回传，保留正常流内组件的真实自适应高度。上传表单移除组件名输入框内提示文字，详情代码区改为与页面一致的背景；卡片右下角与详情右上角新增纯图标删除按钮，确认后复用知识库回收站流程。补充尺寸反馈、删除位置与 Chromium 真实代理删除回归。
 - [x] 组件库详情与列表交互精修：详情页返回、面板及代码复制操作移除边框，复制收紧为透明纯图标按钮；源码区复用编辑器 `CodePreview` 的 highlight.js 高亮与系统代码字体/缩放配置。顶部组件名和列表卡片名支持原地重命名，通过 REST/gRPC 同步安全移动用户知识库内的组件文件并处理重名；列表卡片悬停不再上浮，顶栏去底边，标签边栏改为无边框阴影卡片。增加入场、编辑切换、指示条、图标反馈与 reduced-motion 降级，并补充服务、REST/gRPC、前端组件及 Chromium 真实代理界面验收。
 - [x] 组件上传表单在标签上方新增组件名输入：手工代码按名称生成 `.vue/.html` 文件，单文件选择自动回填名称，多文件上传保留其余文件名；同步补充必填校验、请求映射与 Chromium 布局验收，并修正新增字段后底部按钮被表单高度裁切的问题。
@@ -39,6 +44,9 @@
 - [x] 统一 Agent 运行中文字动效：像素 Loader 的 `Thinking`、所有“正在…”工具条和输入框左上角“正在思考”共用同一套文字流光渐变、1.4 秒线性周期及 reduced-motion 降级；工具条渐变画布按实际字宽而非整行宽度移动，形成逐字扫光；新增组件类名、画布宽度与真实浏览器计算样式一致性回归测试。
 
 ## 2026-08-15 
+
+- [x] 修复 Agent 工具条预告与中间正文流式生命周期：工具声明、开始和结束事件按 `tool_call_id` 幂等归并到原 action 消息，极快结果保留 800ms 可感知 pending 窗口后在同一工具条原地完成；正文缓冲绑定原 Agent 消息并在节点切换前提交，`content + tool_calls` 同帧不再丢正文，乱序/重复结果和取消流不会把内容或工具条冲到后续消息。复用现有“正在{中文工具名}”、pending 禁止展开、旋转指示与文字流光、完成态数量/文件名摘要；补上 Pinia setup store 的 Vite HMR 接管，避免长驻开发窗口继续执行旧 `send()` 闭包；移除 AgentPanel 对 `--color-text-secondary` 的自引用，修复 pending 文本 DOM 存在但像素完全透明。新增 store/HMR/组件回归及真实同批 SSE 浏览器测试，两种聊天模式均做 Chromium/Firefox/WebKit 可见性截图冒烟与原地切换验收。
+- [x] 修复 Electron 在 Vite 开发服务器未就绪时产生两次未处理 Promise 拒绝：主窗口与悬浮窗统一通过可测试的安全加载边界接住加载失败、窗口销毁、`ERR_ABORTED` 和错误页二次失败；主窗口原位展示启动错误，隐藏悬浮窗不再弹出抢焦点错误页，`app.whenReady()` 增加最终兜底。断服与正常连接两种真实 Electron 启动冒烟均未再出现 `UnhandledPromiseRejection`。
 
 - [x] 修复无边框主窗口从最大化状态拖拽标题栏时仍保留最大化尺寸、圆角状态失配的问题：最大化标题栏改为按 `normalBounds` 确定性恢复并持续跟随鼠标，避开 Windows 原生移动循环与临时 resize frame 的竞态；新增恢复尺寸、鼠标锚点与事件顺序回归测试。
 - [x] 工具条"预告驱动":接收预告后显示"正在[原工具条中文名]",并且不可展开,并且带有像"正在思考"那样的动态流光;接收工具结果后刷新此工具条,显示成"[原工具条中文名]"(以及不同工具条对应的部分结果数量和名展示),要求是锁定在同一个工具条,原地切换,并且中间阶段的agent输出不能被蒙蔽,并且后消息不能冲掉前消息
@@ -62,6 +70,11 @@
 - [x] 修复首次加载历史活动超过通用 30 秒请求时限后热力图显示“活跃数据加载失败”的问题；活动汇总接口使用独立的 120 秒首次回填窗口，其他 API 超时策略保持不变。
 - [x] 新增 Dashboard「每日活跃热力图」：使用 SQLite 活跃事件表持久化有效操作，按图书馆、文档、知识、Agent、任务与其他模块执行动作计分、日上限和连续编辑去重；REST/gRPC 统一提供年度聚合数据，并从现有 Agent、图书馆、收藏、智能表格、任务队列、TODO 与密码库记录安全回填。前端在 Dashboard 中间区域加入 Origin UI 364 日热力网格、七类独立色阶筛选和四项密集统计，并支持 reduced-motion。
 - [x] 统一工作区菜单系统：智能表格标签/星级筛选、密码库与 Markdown 右键菜单、Agent Skill/思考模式/历史操作、任务队列并行数及看板图表筛选统一复用 Reka 下拉组件或同款指针菜单表面，并补充一致的主题背景、开合动效、键盘语义与 reduced-motion 处理。
+
+- 图书馆筛选菜单接入共享 Reka UI DropdownMenu：按类型与标签分组展示单选项，保留标签分页，并统一弹层、选中态、键盘导航与焦点管理；修复 Portal/Primitive 最终节点无法命中 scoped 样式而丢失背景、间距和动效的问题。
+- 修复任务队列内嵌 Agent 页面反复进入历史加载态的问题：继续复用完整 `AgentPanel`，首次打开正常加载固定会话；处理中任务通过 ChatStore 静默同步持久化消息并保留现有消息对象，等待确认后停止同步；关闭弹窗时清理定时器。
+- 移除观察节点按固定 5 次继续观察或 18 个工具结果强制回答的硬编码收敛逻辑；观察模型返回 `continue` 时继续探索，仅保留既有上下文溢出压缩机制。
+- 修复 Windows Electron 最大化窗口从顶栏拖动时无法恢复原窗口尺寸和圆角的问题：仅在最大化期间临时启用原生 resize，并在 `unmaximize` 后立即恢复无系统描边的不可调整状态。
 
 ## 2026-08-13
 
@@ -156,6 +169,7 @@
   - [x] 表项可以插入图片,图片自动上传到`forms/**/assets/`里面对应.(和在Markdown编辑区里面插入时一样的,都可以Ctrl+V直接插入图片,区别是表格的图片只能固定放在`assets/`里面而不可配置).图片同样具备右上角下载按钮.
   - [x] 智能表格也要有Markdown表格的边缘拖动和边缘插入的这些边缘按钮的逻辑.
 ## 2026-08-10
+- [x] 将智能表格主数据从知识库 `form.json/data.csv` 文件迁移为 SQLite 关系表存储:新增 smart_forms/smart_form_columns/smart_form_rows/smart_form_cells 模型、服务和 REST API,前端改走数据库读写,附件仍保存在知识库 assets 并可灌库抽取。
 
 - 修复管理栏模式知识库子菜单与相邻入口重叠；分组改为明确的纵向流布局并固定子菜单占位高度。
 - 调整左侧活动栏顺序,将入库、MD-HTML 和 Skills 入口连续放到上方主标签区最下方。
@@ -227,6 +241,11 @@
 - [x] 修正智能文献表格的假数据与上传回填问题:默认表格不再预置示例文献;上传文献后先提交真实灌库队列,灌库结束后通过知识库预览/文本读取回填 `文献内容`;智能列改为调用现有 Agent 单次 LLM 流程解析 JSON 后写入,上传完成后自动生成当前行智能列,手动「AI 生成」和「全表智能填充」也执行真实生成;补充测试覆盖默认空表、上传后正文回填和智能列生成。
 - [x] 优化右键菜单二级菜单防误消失:新增 submenu intent 三角区域判断工具,文件树与资源管理器共用的 `FileContextMenu` 改为状态驱动子菜单,Markdown 编辑器右键菜单接入同一套鼠标轨迹延迟关闭逻辑;补充几何回归测试。
 - [x] 修复文件树 Ctrl/Meta + 鼠标点击离散多选: additive 选择首次启动时保留当前单选项,避免 Ctrl 点击第二个文件时把原选中项丢掉;再次 Ctrl 点击已选中项会从复选集合中移除,最后一项移除时显式清空树高亮且不关闭已打开编辑文件;新增 store 回归测试覆盖保留、移除和清空三种状态。
+- [x] 修复自动化任务调度扫描在 SQLite 读取过期 `lease_until` 后触发 naive/aware datetime 比较异常:批量抢占更新关闭 SQLAlchemy 的 Python 条件同步评估,改由 SQLite 执行条件,并补充过期租约回归测试。
+- [x] 优化资源管理器中等/大图标模式为响应式弹性网格，并为 Electron 透明无边框主窗口增加自定义边缘拖拽缩放，避免恢复系统 thickFrame 直角边框。
+- [x] 修复 Electron 自定义缩放层干扰顶栏拖动的问题，并微调资源管理器中/大图标块圆角与大图标尺寸。
+- [x] 为文件树、资源管理器、图书馆与 Markdown 编辑区右键菜单补齐本地 Material 图标，并调整菜单列宽以适配图标与快捷键。
+- [x] 重组文件树与资源管理器右键菜单：新建与复制信息改为二级菜单，收藏入口按当前状态显示收藏/取消收藏，并移除询问 Agent 入口。
 
 ## 2026-08-05
 - [x] 悬浮窗外圆角与主窗口一致:`.floating-agent` 卡片 `border-radius` 由 16px 改为 28px(主窗口 `#app` 的 28px)。小窗不可调整大小,无需处理最大化归零。
@@ -1637,30 +1656,3 @@
 - 修复 Electron 生产启动体验:加入单实例锁和重复启动聚焦已有窗口;主窗口先显示本地启动页再等待 PyInstaller 后端;后端超时或失败时在窗口内显示错误,避免长时间透明空窗。
 - 修复 PyInstaller 后端启动崩溃:移除 `AgentService.spec` 对 `setuptools` 的排除,保留 `pkg_resources` 运行时钩子所需的 `jaraco` 依赖,解决 `ModuleNotFoundError: No module named 'jaraco'`。
 - 调整 PyInstaller 排除项:同步移除对 `wheel` 的排除,避免 setuptools 运行时钩子与 `ExcludedModule('wheel')` 冲突导致后端构建失败。
-# Packaging: added an assisted NSIS installer page with a default-enabled desktop shortcut checkbox; disabled fixed desktop shortcut creation while keeping the Start Menu shortcut.
-# Fixed packaged startup navigation race and Windows backend cleanup: ignore the expected startup-page `ERR_ABORTED` when the real page loads, and terminate the packaged backend process tree on quit; NSIS desktop shortcuts now use an installed `.ico` file explicitly.
-# Adjusted desktop shortcut icon resolution to read icon index 0 directly from `MetaWeave.exe` and notify Windows Explorer after shortcut creation, avoiding stale or unresolved external `.ico` shortcut icons.
-- [x] 完成智能表格扩展:文献文件单元格支持打开编辑区、下载原文件和重新上传;文本/智能文本单元格支持 Markdown、LaTeX、代码块、表格与阅读/编辑切换;Ctrl+V 图片固定上传到当前 `forms/**/assets/` 并提供图片下载;列宽与行高可拖动并持久化;智能表格本体及单元格 Markdown 表格均提供边缘拖动和边缘插入控件。旧 SQLite 智能表格自动补充行高字段。验证:前端相关 48 项、后端 2 项测试通过,`vite build` 通过。
-## 2026-08-09
-- [x] 修复自动化任务调度扫描在 SQLite 读取过期 `lease_until` 后触发 naive/aware datetime 比较异常:批量抢占更新关闭 SQLAlchemy 的 Python 条件同步评估,改由 SQLite 执行条件,并补充过期租约回归测试。
-- [x] 优化资源管理器中等/大图标模式为响应式弹性网格，并为 Electron 透明无边框主窗口增加自定义边缘拖拽缩放，避免恢复系统 thickFrame 直角边框。
-- [x] 修复 Electron 自定义缩放层干扰顶栏拖动的问题，并微调资源管理器中/大图标块圆角与大图标尺寸。
-- [x] 为文件树、资源管理器、图书馆与 Markdown 编辑区右键菜单补齐本地 Material 图标，并调整菜单列宽以适配图标与快捷键。
-- [x] 重组文件树与资源管理器右键菜单：新建与复制信息改为二级菜单，收藏入口按当前状态显示收藏/取消收藏，并移除询问 Agent 入口。
-## 2026-08-10
-- [x] 将智能表格主数据从知识库 `form.json/data.csv` 文件迁移为 SQLite 关系表存储:新增 smart_forms/smart_form_columns/smart_form_rows/smart_form_cells 模型、服务和 REST API,前端改走数据库读写,附件仍保存在知识库 assets 并可灌库抽取。
-## 2026-08-14
-
-- 图书馆筛选菜单接入共享 Reka UI DropdownMenu：按类型与标签分组展示单选项，保留标签分页，并统一弹层、选中态、键盘导航与焦点管理；修复 Portal/Primitive 最终节点无法命中 scoped 样式而丢失背景、间距和动效的问题。
-- 修复任务队列内嵌 Agent 页面反复进入历史加载态的问题：继续复用完整 `AgentPanel`，首次打开正常加载固定会话；处理中任务通过 ChatStore 静默同步持久化消息并保留现有消息对象，等待确认后停止同步；关闭弹窗时清理定时器。
-- 移除观察节点按固定 5 次继续观察或 18 个工具结果强制回答的硬编码收敛逻辑；观察模型返回 `continue` 时继续探索，仅保留既有上下文溢出压缩机制。
-- 修复 Windows Electron 最大化窗口从顶栏拖动时无法恢复原窗口尺寸和圆角的问题：仅在最大化期间临时启用原生 resize，并在 `unmaximize` 后立即恢复无系统描边的不可调整状态。
-
-## 2026-08-15
-
-- [x] 修复 Agent 工具条预告与中间正文流式生命周期：工具声明、开始和结束事件按 `tool_call_id` 幂等归并到原 action 消息，极快结果保留 800ms 可感知 pending 窗口后在同一工具条原地完成；正文缓冲绑定原 Agent 消息并在节点切换前提交，`content + tool_calls` 同帧不再丢正文，乱序/重复结果和取消流不会把内容或工具条冲到后续消息。复用现有“正在{中文工具名}”、pending 禁止展开、旋转指示与文字流光、完成态数量/文件名摘要；补上 Pinia setup store 的 Vite HMR 接管，避免长驻开发窗口继续执行旧 `send()` 闭包；移除 AgentPanel 对 `--color-text-secondary` 的自引用，修复 pending 文本 DOM 存在但像素完全透明。新增 store/HMR/组件回归及真实同批 SSE 浏览器测试，两种聊天模式均做 Chromium/Firefox/WebKit 可见性截图冒烟与原地切换验收。
-- [x] 修复 Electron 在 Vite 开发服务器未就绪时产生两次未处理 Promise 拒绝：主窗口与悬浮窗统一通过可测试的安全加载边界接住加载失败、窗口销毁、`ERR_ABORTED` 和错误页二次失败；主窗口原位展示启动错误，隐藏悬浮窗不再弹出抢焦点错误页，`app.whenReady()` 增加最终兜底。断服与正常连接两种真实 Electron 启动冒烟均未再出现 `UnhandledPromiseRejection`。
-
-## 2026-08-16
-
-- [x] 将参考交互的流式文字动效接入 Agent 对话区：真实 SSE 每批新增正文按词以 45ms 错峰、420ms 模糊消散显现并跟随细光标，既有正文不会重复动画；代码块、KaTeX、引用与来源链接保持结构安全，流结束后清理临时包装并淡入复制/赞踩与来源区，同时支持 `prefers-reduced-motion`。Agent 聊天组件相关 47 项测试及 Tool/Chat 两种模式 Chromium SSE 冒烟通过。
