@@ -3,7 +3,7 @@ Knowledge-library component file service.
 
 Usage:
 Lists and creates Vue SFC or standalone HTML files below the active user's
-<knowledge_dir>/components directory. Tags are represented by direct child
+<knowledge_dir>/.mw/components directory. Tags are represented by direct child
 directories, so component business data has no database or manifest copy.
 """
 
@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import re
+import shutil
 from typing import Any
 from uuid import uuid4
 
@@ -33,7 +34,7 @@ COMPONENT_TAGS = (
     "tooltips",
     "any",
 )
-COMPONENTS_DIRECTORY_NAME = "components"
+COMPONENTS_DIRECTORY_NAME = ".mw/components"
 MAX_COMPONENT_SOURCE_LENGTH = 250_000
 SUPPORTED_COMPONENT_SUFFIXES = {".vue", ".html", ".htm"}
 
@@ -198,7 +199,17 @@ class ComponentLibraryService:
         profile = self.settings_service.ensure_user_profile(user_id=user_id)
         active_library = dict(profile["active_knowledge_library"])
         knowledge_root = Path(str(active_library["knowledge_dir"])).expanduser().resolve()
-        return (knowledge_root / COMPONENTS_DIRECTORY_NAME).resolve()
+        components_root = (knowledge_root / COMPONENTS_DIRECTORY_NAME).resolve()
+        legacy_root = (knowledge_root / "components").resolve()
+        if legacy_root.is_dir() and legacy_root != components_root:
+            components_root.mkdir(parents=True, exist_ok=True)
+            for child in legacy_root.iterdir():
+                destination = components_root / child.name
+                if destination.exists():
+                    raise ValueError(f"managed components already contain: {child.name}")
+            for child in legacy_root.iterdir():
+                shutil.move(str(child), str(components_root / child.name))
+        return components_root
 
     @staticmethod
     def _component_path(*, components_root: Path, component_id: str) -> Path:

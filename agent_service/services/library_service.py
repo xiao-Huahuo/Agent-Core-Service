@@ -274,6 +274,11 @@ class LibraryService:
         context = self._context(user_id=user_id)
         normalized_content_type = self._normalize_content_type(content_type)
         normalized_source_path = source_path.strip().replace("\\", "/").strip("/")
+        if normalized_source_path == "library" or normalized_source_path.startswith("library/"):
+            managed_path = f".mw/{normalized_source_path}"
+            root = Path(context["knowledge_dir"])
+            if not (root / normalized_source_path).exists() and (root / managed_path).exists():
+                normalized_source_path = managed_path
         normalized_source_url = source_url.strip()
         if normalized_content_type == CONTENT_KNOWLEDGE_FILE and not normalized_source_path:
             raise ValueError("source_path is required for knowledge_file item")
@@ -440,7 +445,7 @@ class LibraryService:
             "user_id": str(profile["user_id"]),
             "library_id": str(active_library["library_id"]),
             "knowledge_dir": Path(str(active_library["knowledge_dir"])).expanduser().resolve(),
-            "library_storage_dir": str(active_library.get("library_storage_dir") or "library"),
+            "library_storage_dir": str(active_library.get("library_storage_dir") or ".mw/library"),
         }
 
     def _source_metadata(self, *, context: dict[str, Any], content_type: str, source_path: str, source_url: str) -> dict[str, Any]:
@@ -763,8 +768,8 @@ class LibraryService:
     def _library_root_relative(self, *, context: dict[str, Any]) -> str:
         """返回图书馆真实存储根目录相对路径。"""
 
-        value = str(context.get("library_storage_dir") or "library").strip().replace("\\", "/").strip("/")
-        return value or "library"
+        value = str(context.get("library_storage_dir") or ".mw/library").strip().replace("\\", "/").strip("/")
+        return value or ".mw/library"
 
     def _library_root_path(self, *, context: dict[str, Any]) -> Path:
         """返回图书馆真实存储根目录绝对路径。"""

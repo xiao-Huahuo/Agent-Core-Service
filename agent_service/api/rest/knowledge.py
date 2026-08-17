@@ -698,9 +698,8 @@ async def rebuild_knowledge_graph(body: dict[str, Any]) -> dict[str, Any]:
         target_source_path = candidate_path
         target_is_dir = candidate_path.is_dir()
 
-    safe_user_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", normalized_user_id).strip("_") or "default"
-    safe_library_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", library_id).strip("_") or "default"
-    frontmatter_dir = config.storage.frontmatter_dir / "users" / safe_user_id / safe_library_id
+    knowledge_root = Path(str(active_library["knowledge_dir"])).expanduser().resolve()
+    frontmatter_dir = knowledge_root / ".mw" / "frontmatter"
 
     user_llm_config = settings_svc.get_llm_config(user_id=normalized_user_id)
 

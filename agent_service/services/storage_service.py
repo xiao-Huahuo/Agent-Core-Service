@@ -20,7 +20,12 @@ logger = logging.getLogger(__name__)
 # 路径定义：key → (label, parent_key, can_clear, requires_restart)
 STORAGE_PATH_DEFINITIONS: dict[str, dict[str, Any]] = {
     "knowledge_dir": {"label": "知识库路径", "parent": None, "can_clear": False, "requires_restart": False},
-    "library_storage_dir": {"label": "图书馆存储路径", "parent": "knowledge_dir", "can_clear": False, "requires_restart": False},
+    "managed_root": {"label": "MetaWeave 托管目录 (.mw)", "parent": "knowledge_dir", "can_clear": False, "requires_restart": False},
+    "markdown_dir": {"label": "Markdown 中间层", "parent": "managed_root", "can_clear": False, "requires_restart": False},
+    "frontmatter_dir": {"label": "JSON Frontmatter", "parent": "managed_root", "can_clear": False, "requires_restart": False},
+    "library_storage_dir": {"label": "图书馆存储路径", "parent": "managed_root", "can_clear": False, "requires_restart": False},
+    "forms_dir": {"label": "智能表单资产", "parent": "managed_root", "can_clear": False, "requires_restart": False},
+    "components_dir": {"label": "组件库", "parent": "managed_root", "can_clear": False, "requires_restart": False},
     "base_data_dir": {"label": "运行时文件根路径(R)", "parent": None, "can_clear": False, "requires_restart": True},
     "assets_dir": {"label": "资源文件路径", "parent": "base_data_dir", "can_clear": True, "requires_restart": True},
     "db_dir": {"label": "数据库根路径(D)", "parent": "base_data_dir", "can_clear": False, "requires_restart": True},
@@ -28,7 +33,6 @@ STORAGE_PATH_DEFINITIONS: dict[str, dict[str, Any]] = {
     "sqlite_path": {"label": "关联库路径", "parent": "relation_db_dir", "can_clear": True, "requires_restart": True},
     "vector_db_dir": {"label": "向量数据库根路径", "parent": "db_dir", "can_clear": False, "requires_restart": True},
     "chroma_persist_dir": {"label": "向量库路径", "parent": "vector_db_dir", "can_clear": True, "requires_restart": True},
-    "frontmatter_dir": {"label": "预处理中间文件", "parent": "base_data_dir", "can_clear": True, "requires_restart": True},
     "log_dir": {"label": "日志文件", "parent": "base_data_dir", "can_clear": True, "requires_restart": True},
     "models_dir": {"label": "模型路径", "parent": "base_data_dir", "can_clear": False, "requires_restart": True},
     "embedding_model_dir": {"label": "Embedding模型路径", "parent": "models_dir", "can_clear": True, "requires_restart": True},
@@ -41,7 +45,15 @@ STORAGE_PATH_DEFINITIONS: dict[str, dict[str, Any]] = {
 UNCLEARABLE_KEYS = {"knowledge_dir", "library_storage_dir", "base_data_dir", "relation_db_dir", "vector_db_dir", "models_dir", "db_dir"}
 
 # 虚拟节点 key（不对应实际 config.storage 属性）
-VIRTUAL_KEYS = {"models_dir", "db_dir"}
+VIRTUAL_KEYS = {"models_dir", "db_dir", "managed_root", "markdown_dir", "frontmatter_dir", "forms_dir", "components_dir"}
+
+MANAGED_KNOWLEDGE_PATHS = {
+    "managed_root": ".mw",
+    "markdown_dir": ".mw/md",
+    "frontmatter_dir": ".mw/frontmatter",
+    "forms_dir": ".mw/forms",
+    "components_dir": ".mw/components",
+}
 
 # 明确可清空的路径 key 列表
 CLEARABLE_KEYS = {k for k, v in STORAGE_PATH_DEFINITIONS.items() if v["can_clear"]}
@@ -102,7 +114,7 @@ class StorageService:
                 })
                 continue
             if key == "library_storage_dir":
-                relative_dir = str(active_library.get("library_storage_dir") or "library").strip() or "library"
+                relative_dir = str(active_library.get("library_storage_dir") or ".mw/library").strip() or ".mw/library"
                 current_path = (active_knowledge_dir / relative_dir).resolve()
                 size_bytes = _dir_size(current_path)
                 paths.append({
@@ -112,6 +124,18 @@ class StorageService:
                     "size_bytes": size_bytes,
                     "requires_restart": definition["requires_restart"],
                     "can_clear": definition["can_clear"],
+                    "parent": definition["parent"],
+                })
+                continue
+            if key in MANAGED_KNOWLEDGE_PATHS:
+                current_path = (active_knowledge_dir / MANAGED_KNOWLEDGE_PATHS[key]).resolve()
+                paths.append({
+                    "key": key,
+                    "label": definition["label"],
+                    "value": str(current_path),
+                    "size_bytes": _dir_size(current_path),
+                    "requires_restart": False,
+                    "can_clear": False,
                     "parent": definition["parent"],
                 })
                 continue

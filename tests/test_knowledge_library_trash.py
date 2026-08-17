@@ -196,6 +196,9 @@ def test_write_file_invalidates_existing_index_artifacts(tmp_path: Path) -> None
         '{"metadata":{"relative_path":"notes.md"},"sections":[]}',
         encoding="utf-8",
     )
+    markdown_path = service._resolve_user_markdown_dir("user-1", "library-1") / "notes.md"
+    markdown_path.parent.mkdir(parents=True, exist_ok=True)
+    markdown_path.write_text("old projection", encoding="utf-8")
 
     service.write_file(user_id="user-1", path="notes.md", content="new content")
 
@@ -204,6 +207,7 @@ def test_write_file_invalidates_existing_index_artifacts(tmp_path: Path) -> None
     assert memory_service.deleted_sources == [("user-1:library-1", expected_document_id)]
     assert graph_service.deleted_document_ids == [expected_document_id]
     assert not frontmatter_path.exists()
+    assert not markdown_path.exists()
 
 
 def test_list_files_hides_git_metadata_directory(tmp_path: Path) -> None:
@@ -222,7 +226,7 @@ def test_list_files_hides_git_metadata_directory(tmp_path: Path) -> None:
     assert [node["name"] for node in nodes] == ["notes.md"]
 
 
-def test_forms_metadata_is_ignored_but_assets_can_ingest(tmp_path: Path) -> None:
+def test_legacy_forms_are_not_hard_ignored(tmp_path: Path) -> None:
     """智能表格元数据默认忽略,但上传到 assets/ 的文献仍可灌库。"""
 
     knowledge_dir = tmp_path / "knowledge"
@@ -241,8 +245,8 @@ def test_forms_metadata_is_ignored_but_assets_can_ingest(tmp_path: Path) -> None
     asset_node = table_children_by_name["assets"]["children"][0]
 
     assert form_node["name"] == "forms"
-    assert form_node["indexStatus"] == "ignored"
-    assert children_by_name["data.csv"]["indexStatus"] == "ignored"
+    assert form_node["indexStatus"] == "dirty"
+    assert children_by_name["data.csv"]["indexStatus"] == "dirty"
     assert asset_node["indexStatus"] == "dirty"
 
 

@@ -67,11 +67,22 @@ class StructuredKnowledgeDocument:
     valid_until: str | None
     metadata: dict[str, Any] = field(default_factory=dict)
     sections: list[StructuredKnowledgeSection] = field(default_factory=list)
+    schema_version: int = 2
+    markdown: str = ""
+    projection_hash: str = ""
+    assets: list[dict[str, Any]] = field(default_factory=list)
+    source_map: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """将结构化知识文档转换为可序列化字典。"""
 
         return asdict(self)
+
+    @property
+    def ingestion_hash(self) -> str:
+        """Return the Markdown projection fingerprint, with legacy JSON fallback."""
+
+        return self.projection_hash or self.source_hash
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "StructuredKnowledgeDocument":
@@ -105,4 +116,9 @@ class StructuredKnowledgeDocument:
             valid_until=str(payload["valid_until"]) if payload.get("valid_until") else None,
             metadata=dict(payload.get("metadata", {})),
             sections=sections,
+            schema_version=int(payload.get("schema_version", 1)),
+            markdown=str(payload.get("markdown", "")),
+            projection_hash=str(payload.get("projection_hash", "")),
+            assets=[dict(item) for item in payload.get("assets", []) if isinstance(item, dict)],
+            source_map=[dict(item) for item in payload.get("source_map", []) if isinstance(item, dict)],
         )

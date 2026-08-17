@@ -119,7 +119,10 @@ const isDocumentViewer = computed(() => workspaceStore.activeViewerKind === 'doc
 const isDocumentTextViewer = computed(() => isDocumentViewer.value && Boolean(workspaceStore.activePreview?.content))
 const isImageViewer = computed(() => workspaceStore.activeViewerKind === 'image')
 const isImageTextViewer = computed(() => isImageViewer.value && Boolean(workspaceStore.activePreview?.content))
-const isTextEditViewer = computed(() => isCodeViewer.value || isPdfTextViewer.value || isDocumentTextViewer.value || isImageTextViewer.value)
+const isSemanticProjectionViewer = computed(() => (
+  !isMarkdownViewer.value && Boolean(workspaceStore.activePreview?.semantic_markdown)
+))
+const isTextEditViewer = computed(() => isCodeViewer.value || isPdfTextViewer.value || isDocumentTextViewer.value || isImageTextViewer.value || isSemanticProjectionViewer.value)
 const isPreviewOnlyViewer = computed(() => !isMarkdownViewer.value && !isTextEditViewer.value)
 const effectiveEditorMode = computed<EditorViewMode>(() => {
   if (isPreviewOnlyViewer.value) return 'preview'
@@ -389,7 +392,13 @@ onErrorCaptured((err, vm, info) => {
            this contract instead of Vditor's internal side-by-side preview. -->
       <section v-if="!isPreviewOnlyViewer && effectiveEditorMode !== 'preview'" class="editor-surface">
         <MarkdownPreview
-          v-if="isPdfTextViewer"
+          v-if="isSemanticProjectionViewer"
+          :key="workspaceStore.selectedPath"
+          :content="workspaceStore.activePreview?.semantic_markdown ?? ''"
+          :path="workspaceStore.selectedPath"
+        />
+        <MarkdownPreview
+          v-else-if="isPdfTextViewer"
           :key="workspaceStore.selectedPath"
           :content="pdfEditContent"
           :path="workspaceStore.selectedPath"

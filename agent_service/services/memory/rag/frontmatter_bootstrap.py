@@ -1,8 +1,8 @@
 """
 知识源结构化预处理服务。
 功能说明:
-本文件负责把 `resources/knowledge` 下的原始 Markdown、TXT 文档转换为统一的结构化知识 JSON,
-输出到 `runtime/frontmatter`。它只做文档理解、元数据拆分和章节结构化,不负责切块、Embedding
+本文件负责把知识库原始文件先转换为统一 Markdown,再派生结构化知识 JSON,
+分别输出到知识库 `.mw/md` 和 `.mw/frontmatter`。它只做文档理解、元数据拆分和章节结构化,不负责切块、Embedding
 或入库。后续 `knowledge_bootstrap` 只消费这里生成的 JSON。
 使用说明:
 service = FrontmatterBootstrapService(config=config)
@@ -15,6 +15,7 @@ import hashlib
 import json
 import logging
 import re
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -67,6 +68,7 @@ class FrontmatterBootstrapService:
         *,
         knowledge_dir: Path | None = None,
         frontmatter_dir: Path | None = None,
+        markdown_dir: Path | None = None,
         supported_suffixes: set[str] | None = None,
         exclude_path: Callable[[Path], bool] | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
@@ -80,7 +82,8 @@ class FrontmatterBootstrapService:
         """
 
         source_root = knowledge_dir or self.config.storage.knowledge_dir
-        output_root = frontmatter_dir or self.config.storage.frontmatter_dir
+        output_root = frontmatter_dir or source_root / ".mw" / "frontmatter"
+        markdown_root = markdown_dir or source_root / ".mw" / "md"
         suffixes = supported_suffixes or set(self.config.constants.knowledge_supported_suffixes)
         result = FrontmatterBootstrapResult()
         source_files = [
@@ -113,6 +116,13 @@ class FrontmatterBootstrapService:
                     knowledge_dir=source_root,
                     frontmatter_dir=output_root,
                 )
+                markdown_path = self._resolve_markdown_path(
+                    source_path=source_path,
+                    knowledge_dir=source_root,
+                    markdown_dir=markdown_root,
+                )
+                markdown_path.parent.mkdir(parents=True, exist_ok=True)
+                markdown_path.write_text(document.markdown, encoding="utf-8")
                 output_payload = json.dumps(document.to_dict(), ensure_ascii=False, indent=2)
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 if output_path.exists() and output_path.read_text(encoding="utf-8") == output_payload:
@@ -169,6 +179,7 @@ class FrontmatterBootstrapService:
         source_path: Path,
         knowledge_dir: Path | None = None,
         frontmatter_dir: Path | None = None,
+        markdown_dir: Path | None = None,
         supported_suffixes: set[str] | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> tuple[FrontmatterBootstrapResult, Path]:
@@ -182,7 +193,8 @@ class FrontmatterBootstrapService:
         """
 
         source_root = (knowledge_dir or self.config.storage.knowledge_dir).resolve()
-        output_root = frontmatter_dir or self.config.storage.frontmatter_dir
+        output_root = frontmatter_dir or source_root / ".mw" / "frontmatter"
+        markdown_root = markdown_dir or source_root / ".mw" / "md"
         suffixes = supported_suffixes or set(self.config.constants.knowledge_supported_suffixes)
         resolved_source = source_path.expanduser().resolve()
         result = FrontmatterBootstrapResult(files_seen=1)
@@ -215,6 +227,13 @@ class FrontmatterBootstrapService:
             knowledge_dir=source_root,
             frontmatter_dir=output_root,
         )
+        markdown_path = self._resolve_markdown_path(
+            source_path=resolved_source,
+            knowledge_dir=source_root,
+            markdown_dir=markdown_root,
+        )
+        markdown_path.parent.mkdir(parents=True, exist_ok=True)
+        markdown_path.write_text(document.markdown, encoding="utf-8")
         output_payload = json.dumps(document.to_dict(), ensure_ascii=False, indent=2)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         if output_path.exists() and output_path.read_text(encoding="utf-8") == output_payload:
@@ -290,6 +309,7 @@ class FrontmatterBootstrapService:
         """
 
         metadata: dict[str, Any] = {}
+        relative_path = source_path.relative_to(knowledge_dir)
         title = self._resolve_title(source_path=source_path, metadata=metadata)
         if source_path.suffix.lower() == ".md":
             raw_text = self._read_text_with_fallback(source_path)
@@ -306,15 +326,41 @@ class FrontmatterBootstrapService:
             extra_metadata = {"modality": "text"}
             summary = ""
         else:
+            asset_relative_dir = Path(".mw") / "assets" / relative_path
+            asset_output_dir = knowledge_dir / asset_relative_dir
+            asset_public_prefix = "/" + asset_relative_dir.as_posix()
             cleaned = self.multimodal_cleaner.clean(
                 source_path=source_path,
                 title=self._resolve_title(source_path=source_path, metadata=metadata),
+                asset_output_dir=asset_output_dir,
+                asset_public_prefix=asset_public_prefix,
             )
             sections = cleaned.sections
             source_type = cleaned.source_type
             extra_metadata = cleaned.metadata
+            embedded_assets = self._extract_embedded_assets(
+                source_path=source_path,
+                output_dir=asset_output_dir,
+                public_prefix=asset_public_prefix,
+            )
+            if embedded_assets:
+                extra_metadata["embedded_assets"] = embedded_assets
+                links = "\n".join(
+                    f"![{asset['name']}]({asset['public_url']})" for asset in embedded_assets
+                )
+                sections.append(
+                    StructuredKnowledgeSection(
+                        section_id=f"sec_{len(sections):04d}",
+                        heading="内置图片",
+                        title_path=[title, "内置图片"],
+                        content=links,
+                        start_char=0,
+                        end_char=len(links),
+                    )
+                )
             summary = cleaned.summary
-        relative_path = source_path.relative_to(knowledge_dir)
+        markdown = self._build_canonical_markdown(title=title, source_type=source_type, sections=sections)
+        sections = self._build_markdown_sections(title=title, body_text=markdown)
         document_metadata = {
             "file_suffix": source_path.suffix.lower(),
             "relative_path": relative_path.as_posix(),
@@ -322,6 +368,22 @@ class FrontmatterBootstrapService:
             **extra_metadata,
             "ocr_enabled": self.ocr_enabled,
         }
+        assets = [
+            dict(item)
+            for key in ("image_refs", "embedded_assets")
+            for item in document_metadata.get(key, [])
+            if isinstance(item, dict)
+        ]
+        projection_payload = {
+            "schema_version": 2,
+            "source_type": source_type,
+            "markdown": markdown,
+            "metadata": document_metadata,
+            "assets": assets,
+        }
+        projection_hash = hashlib.sha256(
+            json.dumps(projection_payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
         return StructuredKnowledgeDocument(
             document_id=self._build_document_id(relative_path),
             source_type=source_type,
@@ -336,7 +398,90 @@ class FrontmatterBootstrapService:
             valid_until=self._normalize_optional_string(metadata.get("valid_until")),
             metadata=document_metadata,
             sections=sections,
+            schema_version=2,
+            markdown=markdown,
+            projection_hash=projection_hash,
+            assets=assets,
+            source_map=[
+                {
+                    "section_id": section.section_id,
+                    "source_path": relative_path.as_posix(),
+                    "start_char": section.start_char,
+                    "end_char": section.end_char,
+                }
+                for section in sections
+            ],
         )
+
+    @staticmethod
+    def _build_canonical_markdown(
+        *,
+        title: str,
+        source_type: str,
+        sections: list[StructuredKnowledgeSection],
+    ) -> str:
+        """Serialize every cleaned modality into the canonical Markdown projection."""
+
+        parts = [f"# {title}"]
+        for section in sections:
+            content = section.content.strip()
+            if source_type == "table" or " 表格 " in section.heading:
+                rows = [line.split(" | ") for line in content.splitlines() if line.strip()]
+                if rows:
+                    width = max(len(row) for row in rows)
+                    padded = [row + [""] * (width - len(row)) for row in rows]
+                    table_lines = ["| " + " | ".join(row) + " |" for row in padded]
+                    table_lines.insert(1, "| " + " | ".join("---" for _ in range(width)) + " |")
+                    content = "\n".join(table_lines)
+            if not content:
+                continue
+            heading = section.heading.strip()
+            if heading and heading != title:
+                depth = max(2, min(6, len(section.title_path) + 1))
+                parts.append(f"{'#' * depth} {heading}")
+            parts.append(content)
+        return "\n\n".join(parts).strip() + "\n"
+
+    @staticmethod
+    def _extract_embedded_assets(
+        *,
+        source_path: Path,
+        output_dir: Path,
+        public_prefix: str,
+    ) -> list[dict[str, Any]]:
+        """Persist OOXML embedded images beside the Markdown/JSON projections."""
+
+        media_prefix = {
+            ".docx": "word/media/",
+            ".pptx": "ppt/media/",
+            ".xlsx": "xl/media/",
+        }.get(source_path.suffix.lower())
+        if not media_prefix:
+            return []
+        assets: list[dict[str, Any]] = []
+        try:
+            with zipfile.ZipFile(source_path) as archive:
+                names = sorted(
+                    name for name in archive.namelist()
+                    if name.startswith(media_prefix) and not name.endswith("/")
+                )
+                for index, archive_name in enumerate(names, start=1):
+                    filename = Path(archive_name).name
+                    target = output_dir / filename
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(archive.read(archive_name))
+                    assets.append(
+                        {
+                            "index": index,
+                            "name": filename,
+                            "archive_path": archive_name,
+                            "asset_path": str(target),
+                            "public_url": f"{public_prefix}/{filename}",
+                        }
+                    )
+        except (OSError, zipfile.BadZipFile):
+            return []
+        return assets
 
     def _build_sections(
         self,
@@ -586,6 +731,13 @@ class FrontmatterBootstrapService:
 
         relative_path = source_path.relative_to(knowledge_dir)
         return (frontmatter_dir / relative_path).with_suffix(".json")
+
+    @staticmethod
+    def _resolve_markdown_path(*, source_path: Path, knowledge_dir: Path, markdown_dir: Path) -> Path:
+        """Resolve the mirrored Markdown projection path for a source file."""
+
+        relative_path = source_path.relative_to(knowledge_dir)
+        return (markdown_dir / relative_path).with_suffix(".md")
 
     @staticmethod
     def _build_document_id(relative_path: Path) -> str:

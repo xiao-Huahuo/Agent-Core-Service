@@ -587,7 +587,7 @@ class KnowledgeGraphService:
             user_id=user_id,
             library_id=library_id,
             document_id=document.document_id,
-            source_hash=document.source_hash,
+            source_hash=document.ingestion_hash,
         ):
             result.files_skipped = 1
             return result
@@ -1262,7 +1262,7 @@ class KnowledgeGraphService:
                     user_id=user_id,
                     library_id=library_id,
                     document_id=document.document_id,
-                    source_hash=document.source_hash,
+                    source_hash=document.ingestion_hash,
                     status=status,
                     message=message,
                     entity_count=entity_count,

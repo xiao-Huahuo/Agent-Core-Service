@@ -104,7 +104,7 @@ class KnowledgeIngestionService:
                 result=result,
             )
             if self.config.memory.knowledge_hash_lock_enabled and self.memory_service.has_source_hash(
-                source_hash=document.source_hash,
+                source_hash=document.ingestion_hash,
                 memory_type="knowledge_chunk",
                 user_id=user_id,
                 source_id=document.document_id,
@@ -199,7 +199,7 @@ class KnowledgeIngestionService:
             result=result,
         )
         if self.config.memory.knowledge_hash_lock_enabled and self.memory_service.has_source_hash(
-            source_hash=document.source_hash,
+            source_hash=document.ingestion_hash,
             memory_type="knowledge_chunk",
             user_id=user_id,
             source_id=document.document_id,
@@ -327,7 +327,7 @@ class KnowledgeIngestionService:
                         source_type=document.source_type,
                         source_id=document.document_id,
                         source_uri=document.source_uri,
-                        source_hash=document.source_hash,
+                        source_hash=document.ingestion_hash,
                         source_range_json={
                             "section_id": section.section_id,
                             "chunk_index": chunk_input.index,
@@ -337,6 +337,8 @@ class KnowledgeIngestionService:
                             "chunk_end_char": chunk_input.end_char,
                         },
                         metadata_json={
+                            "source_hash": document.source_hash,
+                            "projection_hash": document.projection_hash,
                             "title": document.title,
                             "summary": document.summary,
                             "tags": document.tags,

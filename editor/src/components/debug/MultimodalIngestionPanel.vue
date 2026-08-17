@@ -9,6 +9,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import MarkdownPreview from '@/components/editor_workspace/MarkdownPreview.vue'
 import { fetchMultimodalIngestionObservation } from '@/api/debug'
 import type {
   MultimodalIngestionObservation,
@@ -29,7 +30,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 
-type ObservationTab = 'json' | 'semantic' | 'overlap'
+type ObservationTab = 'markdown' | 'json' | 'semantic' | 'overlap'
 type SortKey = 'name' | 'mtime' | 'type' | 'size'
 type SortDirection = 'asc' | 'desc'
 
@@ -38,7 +39,7 @@ const workspaceStore = useWorkspaceStore()
 
 const currentDir = ref('')
 const selectedPath = ref('')
-const activeObservationTab = ref<ObservationTab>('json')
+const activeObservationTab = ref<ObservationTab>('markdown')
 const observation = ref<MultimodalIngestionObservation | null>(null)
 const loading = ref(false)
 const error = ref('')
@@ -230,7 +231,7 @@ async function openNode(node: KnowledgeFileNode) {
   loading.value = true
   error.value = ''
   observation.value = null
-  activeObservationTab.value = 'json'
+  activeObservationTab.value = 'markdown'
   collapsedSemanticChunkKeys.value = new Set()
   collapsedOverlapChunkKeys.value = new Set()
   sortMenuOpen.value = false
@@ -387,6 +388,14 @@ onBeforeUnmount(() => {
         <div class="observation-tabs">
           <button
             class="observation-tab"
+            :class="{ active: activeObservationTab === 'markdown' }"
+            type="button"
+            @click="activeObservationTab = 'markdown'"
+          >
+            Markdown 中间层
+          </button>
+          <button
+            class="observation-tab"
             :class="{ active: activeObservationTab === 'json' }"
             type="button"
             @click="activeObservationTab = 'json'"
@@ -411,7 +420,13 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <pre v-if="activeObservationTab === 'json'" class="json-view">{{ jsonText }}</pre>
+        <MarkdownPreview
+          v-if="activeObservationTab === 'markdown'"
+          class="markdown-result-view"
+          :content="observation.markdown_result"
+          :path="observation.path"
+        />
+        <pre v-else-if="activeObservationTab === 'json'" class="json-view">{{ jsonText }}</pre>
         <div v-else-if="activeObservationTab === 'semantic'" class="chunk-list">
           <article
             v-for="chunk in observation.semantic_chunks"
@@ -775,6 +790,7 @@ onBeforeUnmount(() => {
 }
 
 .json-view,
+.markdown-result-view,
 .chunk-list {
   flex: 1 1 auto;
   min-height: 0;

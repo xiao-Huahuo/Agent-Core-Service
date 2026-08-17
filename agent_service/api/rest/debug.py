@@ -85,13 +85,18 @@ def _build_multimodal_ingestion_observation(*, user_id: str, relative_path: str)
             user_id=user_id,
             path=normalized_relative_path,
         )
+        current_hash = FrontmatterBootstrapService._hash_file(source_path)
+        if int(structured_payload.get("schema_version") or 1) < 2 or structured_payload.get("source_hash") != current_hash:
+            raise ValueError("stale projection")
     except ValueError:
         with tempfile.TemporaryDirectory(prefix="metaweave_multimodal_observe_") as temp_dir:
-            frontmatter_root = Path(temp_dir)
+            frontmatter_root = Path(temp_dir) / "frontmatter"
+            markdown_root = Path(temp_dir) / "md"
             _, output_path = FrontmatterBootstrapService(config=config, ocr_enabled=ocr_enabled).build_frontmatter_file(
                 source_path=source_path,
                 knowledge_dir=source_root,
                 frontmatter_dir=frontmatter_root,
+                markdown_dir=markdown_root,
                 supported_suffixes=set(config.constants.knowledge_supported_suffixes),
             )
             structured_payload = json.loads(output_path.read_text(encoding="utf-8"))
@@ -161,6 +166,11 @@ def _build_multimodal_ingestion_observation(*, user_id: str, relative_path: str)
         "chunk_size": config.memory.chunk_size,
         "chunk_overlap": config.memory.chunk_overlap,
         "json_result": structured_payload,
+        "markdown_result": document.markdown,
+        "schema_version": document.schema_version,
+        "projection_hash": document.projection_hash,
+        "assets": document.assets,
+        "source_map": document.source_map,
         "semantic_chunks": semantic_chunks,
         "overlap_chunks": overlap_chunks,
         "stats": {

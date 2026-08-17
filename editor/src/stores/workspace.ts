@@ -2467,7 +2467,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       // Stale guard: if user switched away while this request was in-flight, skip.
       if (selectedPath.value !== path) return
       previewByPath.value = { ...previewByPath.value, [path]: response }
-      if (response.content !== undefined) {
+      if (response.content !== undefined && !response.readonly) {
         contentByPath.value = { ...contentByPath.value, [path]: response.content }
       }
       const tab = openTabs.value.find((t) => t.path === path)

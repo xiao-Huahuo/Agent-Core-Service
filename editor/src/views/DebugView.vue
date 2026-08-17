@@ -59,7 +59,7 @@ async function ensureDebugHistoryLoaded() {
 }
 
 watch(
-  () => [userId, sessionStore.currentSessionId, sessionStore.sessions.length],
+  [() => sessionStore.currentSessionId, () => sessionStore.sessions.length],
   () => {
     ensureDebugHistoryLoaded()
   },
@@ -67,7 +67,6 @@ watch(
 )
 
 onMounted(() => {
-  ensureDebugHistoryLoaded()
   updateDebugSlider()
 })
 </script>

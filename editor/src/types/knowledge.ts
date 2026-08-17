@@ -239,6 +239,11 @@ export interface FilePreviewPayload {
   content?: string
   /** Optional Markdown used by PDF render mode, separate from ingested text. */
   render_content?: string
+  /** Canonical read-only Markdown projection shared by every ingested modality. */
+  semantic_markdown?: string
+  /** Projection schema and fingerprint used to explain index freshness. */
+  schema_version?: number
+  projection_hash?: string
   /** Whether frontmatter-backed text content is ready for edit/split. */
   text_status?: 'ready' | 'empty' | 'not_ingested' | string
   /** Optional sanitized-at-render HTML for DOCX previews. */

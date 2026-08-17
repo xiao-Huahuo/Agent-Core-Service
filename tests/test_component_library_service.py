@@ -63,7 +63,7 @@ def test_uploaded_component_is_a_utf8_file_and_survives_service_instances(tmp_pa
     source = "<template><input placeholder=\"邮箱\" /></template>"
     created = service.create_component(user_id="u1", source=source, tag="inputs", filename="email.vue")
 
-    stored_path = tmp_path / "components" / "inputs" / "email.vue"
+    stored_path = tmp_path / ".mw" / "components" / "inputs" / "email.vue"
     assert stored_path.read_text(encoding="utf-8") == source
     assert created["component"]["component_id"] == "inputs/email.vue"
     assert created["component"]["builtin"] is False
@@ -81,8 +81,8 @@ def test_upload_uses_safe_unique_names_and_supported_extensions(tmp_path: Path) 
 
     assert first["component"]["title"] == "button"
     assert second["component"]["title"] == "button-2"
-    assert (tmp_path / "components" / "buttons" / "button.html").read_text(encoding="utf-8") == "<button>One</button>"
-    assert (tmp_path / "components" / "buttons" / "button-2.html").read_text(encoding="utf-8") == "<button>Two</button>"
+    assert (tmp_path / ".mw" / "components" / "buttons" / "button.html").read_text(encoding="utf-8") == "<button>One</button>"
+    assert (tmp_path / ".mw" / "components" / "buttons" / "button-2.html").read_text(encoding="utf-8") == "<button>Two</button>"
 
     with pytest.raises(ValueError, match="supported component file"):
         service.create_component(user_id="u1", source="x", tag="buttons", filename="component.js")
@@ -105,8 +105,8 @@ def test_component_rename_moves_the_source_file_and_updates_the_visible_title(tm
 
     assert renamed["component"]["title"] == "保存按钮"
     assert renamed["component"]["component_id"] == "buttons/保存按钮.vue"
-    assert not (tmp_path / "components" / "buttons" / "old-name.vue").exists()
-    assert (tmp_path / "components" / "buttons" / "保存按钮.vue").read_text(encoding="utf-8") == source
+    assert not (tmp_path / ".mw" / "components" / "buttons" / "old-name.vue").exists()
+    assert (tmp_path / ".mw" / "components" / "buttons" / "保存按钮.vue").read_text(encoding="utf-8") == source
     assert service.list_components(user_id="u1", tag="buttons")["components"] == [renamed["component"]]
 
 
@@ -120,13 +120,14 @@ def test_create_component_rejects_unknown_tags_and_oversized_source(tmp_path: Pa
         service.create_component(user_id="u1", source="x" * 250_001, tag="any")
 
 
-def test_components_directory_is_ignored_by_application_default() -> None:
+def test_mw_directory_is_ignored_by_application_default() -> None:
     """Component sources must not enter file-tree ingestion even without user rules."""
 
     matcher = KnowledgeIgnoreMatcher("")
 
-    assert matcher.is_ignored("components", is_dir=True)
-    assert matcher.is_ignored("components/buttons/example.vue")
+    assert matcher.is_ignored(".mw", is_dir=True)
+    assert matcher.is_ignored(".mw/components/buttons/example.vue")
+    assert not matcher.is_ignored("components", is_dir=True)
     assert not matcher.is_ignored("notes/example.md")
 
 
@@ -156,6 +157,6 @@ def test_legacy_database_rows_migrate_to_files_before_their_rows_are_deleted(tmp
     listed = service.list_components(user_id="u1", tag="buttons")
 
     assert listed["components"][0]["title"] == "旧按钮"
-    assert (tmp_path / "components" / "buttons" / "旧按钮.vue").is_file()
+    assert (tmp_path / ".mw" / "components" / "buttons" / "旧按钮.vue").is_file()
     with engine.begin() as connection:
         assert connection.execute(text("SELECT COUNT(*) FROM component_library_items")).scalar_one() == 0

@@ -852,7 +852,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
         loadedSessionId.value = targetSessionId ?? ''
         if (targetSessionId) {
           try {
-            await sessionStore.load(userId)
+            await sessionStore.load(userId, true)
           } catch {
             // Session reload is non-critical for the active stream result.
           }

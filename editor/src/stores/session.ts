@@ -25,6 +25,11 @@ export const useSessionStore = defineStore('session', () => {
   const isLoading = ref(false)
   /** Persisted session IDs with a live browser Agent stream. */
   const streamingSessionIds = ref<string[]>([])
+  /** User whose session list is already represented by `sessions`, including an empty list. */
+  let loadedUserId = ''
+  /** Shared request used when several mounted components load the same user concurrently. */
+  let pendingLoad: Promise<void> | null = null
+  let pendingLoadUserId = ''
 
   /** Cross-window signal: mirrors the session id for the floating Agent window. */
   const ACTIVE_SESSION_KEY = 'agent_editor_active_session_id'
@@ -35,18 +40,45 @@ export const useSessionStore = defineStore('session', () => {
 
   const hasSessions = computed(() => sessions.value.length > 0)
 
-  async function load(userId: string) {
+  /** Load once per user unless a data-changing workflow explicitly requests a refresh. */
+  async function load(userId: string, force = false): Promise<void> {
     if (!userId) {
       return
     }
-    isLoading.value = true
-    try {
-      sessions.value = await listSessions(userId)
-      if (currentSessionId.value && !sessions.value.some((session) => session.session_id === currentSessionId.value)) {
-        currentSessionId.value = null
+
+    if (!force && loadedUserId === userId) {
+      return
+    }
+    if (pendingLoad) {
+      if (pendingLoadUserId === userId) {
+        return pendingLoad
       }
+      await pendingLoad
+      return load(userId, force)
+    }
+
+    const request = (async () => {
+      isLoading.value = true
+      try {
+        const nextSessions = await listSessions(userId)
+        loadedUserId = userId
+        sessions.value = nextSessions
+        if (currentSessionId.value && !sessions.value.some((session) => session.session_id === currentSessionId.value)) {
+          currentSessionId.value = null
+        }
+      } finally {
+        isLoading.value = false
+      }
+    })()
+    pendingLoad = request
+    pendingLoadUserId = userId
+    try {
+      await request
     } finally {
-      isLoading.value = false
+      if (pendingLoad === request) {
+        pendingLoad = null
+        pendingLoadUserId = ''
+      }
     }
   }
 
@@ -111,7 +143,7 @@ export const useSessionStore = defineStore('session', () => {
   async function pruneEmpty(userId: string) {
     try {
       await pruneEmptySessions(userId)
-      await load(userId)
+      await load(userId, true)
     } catch {
       // non-critical
     }

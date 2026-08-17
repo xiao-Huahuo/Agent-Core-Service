@@ -156,6 +156,7 @@ class SettingsService:
                 db.commit()
                 db.refresh(record)
             active_library = self._ensure_active_library(db=db, record=record)
+            self._migrate_managed_directories(db=db, user_id=normalized_user_id, library=active_library)
             return self._serialize_user_profile(record)
 
     def update_knowledge_dir(self, *, user_id: str, knowledge_dir: str, name: str | None = None) -> dict:
@@ -309,6 +310,7 @@ class SettingsService:
         )
         active_library = db.exec(statement).first()
         if active_library is not None:
+            self._migrate_default_library_storage(db=db, record=record, library=active_library)
             return active_library
         libraries = list(
             db.exec(
@@ -330,6 +332,7 @@ class SettingsService:
             db.commit()
             db.refresh(active_library)
             db.refresh(record)
+            self._migrate_default_library_storage(db=db, record=record, library=active_library)
             return active_library
         now = self._utc_now()
         library = self._upsert_active_library(
@@ -344,6 +347,10 @@ class SettingsService:
         db.commit()
         db.refresh(library)
         db.refresh(record)
+        legacy_root = Path(library.knowledge_dir).expanduser().resolve() / "library"
+        managed_root = Path(library.knowledge_dir).expanduser().resolve() / ".mw" / "library"
+        if legacy_root.is_dir() and not managed_root.exists():
+            self._move_library_storage_dir(old_path=legacy_root, new_path=managed_root)
         return library
 
     def _upsert_active_library(
@@ -377,7 +384,7 @@ class SettingsService:
                 user_id=user_id,
                 name=normalized_name or fallback_name,
                 knowledge_dir=normalized_dir,
-                library_storage_dir="library",
+                library_storage_dir=".mw/library",
                 is_active=True,
                 created_at=now,
                 updated_at=now,
@@ -404,7 +411,7 @@ class SettingsService:
         """
 
         raw_value = library_storage_dir.strip().replace("\\", "/").strip("/")
-        candidate = Path(raw_value).expanduser() if raw_value else knowledge_root / "library"
+        candidate = Path(raw_value).expanduser() if raw_value else knowledge_root / ".mw" / "library"
         if not candidate.is_absolute():
             candidate = knowledge_root / candidate
         resolved = candidate.resolve()
@@ -421,6 +428,79 @@ class SettingsService:
         raw_value = str(getattr(library, "library_storage_dir", "") or "").strip()
         resolved = self._resolve_library_storage_dir(knowledge_root=knowledge_root, library_storage_dir=raw_value)
         return resolved.relative_to(knowledge_root).as_posix()
+
+    def _migrate_default_library_storage(
+        self,
+        *,
+        db: Session,
+        record: UserSettingsRecord,
+        library: UserKnowledgeLibrary,
+    ) -> None:
+        """Move the former top-level `library` default into `.mw/library` once."""
+
+        old_relative = self._library_storage_relative_path(library)
+        if old_relative != "library":
+            return
+        knowledge_root = Path(library.knowledge_dir).expanduser().resolve()
+        new_relative = ".mw/library"
+        self._move_library_storage_dir(
+            old_path=(knowledge_root / old_relative).resolve(),
+            new_path=(knowledge_root / new_relative).resolve(),
+        )
+        self._rewrite_library_item_source_paths(
+            db=db,
+            user_id=record.user_id,
+            library_id=library.library_id,
+            old_relative=old_relative,
+            new_relative=new_relative,
+        )
+        now = self._utc_now()
+        library.library_storage_dir = new_relative
+        library.updated_at = now
+        record.updated_at = now
+        db.add(library)
+        db.add(record)
+        db.commit()
+        db.refresh(library)
+
+    def _migrate_managed_directories(
+        self,
+        *,
+        db: Session,
+        user_id: str,
+        library: UserKnowledgeLibrary,
+    ) -> None:
+        """Move legacy app-owned roots under `.mw` and rewrite smart-form paths."""
+
+        knowledge_root = Path(library.knowledge_dir).expanduser().resolve()
+        managed_root = knowledge_root / ".mw"
+        for name in ("forms", "components"):
+            legacy_path = knowledge_root / name
+            managed_path = managed_root / name
+            if not legacy_path.is_dir():
+                continue
+            if managed_path.exists():
+                if any(legacy_path.iterdir()):
+                    raise ValueError(f"managed {name} migration target already exists")
+                continue
+            managed_root.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(legacy_path), str(managed_path))
+        try:
+            db.execute(
+                text("UPDATE smart_forms SET asset_dir = '.mw/' || asset_dir WHERE user_id = :user_id AND asset_dir LIKE 'forms/%'"),
+                {"user_id": user_id},
+            )
+            db.execute(
+                text(
+                    "UPDATE smart_form_cells SET asset_path = '.mw/' || asset_path "
+                    "WHERE asset_path LIKE 'forms/%' AND form_id IN "
+                    "(SELECT form_id FROM smart_forms WHERE user_id = :user_id)"
+                ),
+                {"user_id": user_id},
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
 
     def _move_library_storage_dir(self, *, old_path: Path, new_path: Path) -> None:
         """将旧图书馆存储目录内容移动到新目录,不覆盖目标同名内容。"""
@@ -756,14 +836,14 @@ class SettingsService:
         """序列化时返回稳定的图书馆存储相对路径。"""
 
         knowledge_root = Path(record.knowledge_dir).expanduser().resolve()
-        raw_value = str(getattr(record, "library_storage_dir", "") or "library").strip()
+        raw_value = str(getattr(record, "library_storage_dir", "") or ".mw/library").strip()
         candidate = Path(raw_value).expanduser()
         if not candidate.is_absolute():
             candidate = knowledge_root / raw_value
         try:
             return candidate.resolve().relative_to(knowledge_root).as_posix()
         except ValueError:
-            return "library"
+            return ".mw/library"
 
     @staticmethod
     def build_library_id(*, user_id: str, knowledge_dir: str) -> str:

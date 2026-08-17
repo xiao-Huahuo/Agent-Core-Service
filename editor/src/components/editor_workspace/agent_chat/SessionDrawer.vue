@@ -98,7 +98,7 @@ async function handleImportFile(event: Event) {
     const text = await file.text()
     const result = await importSessionFile(props.userId, text)
     // 刷新会话列表并选中导入的会话
-    await sessionStore.load(props.userId)
+    await sessionStore.load(props.userId, true)
     sessionStore.select(result.session_id)
     emit('select', result.session_id)
   } catch (error) {

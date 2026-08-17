@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from agent_service.api.rest import debug as debug_api
 import agent_service.services.knowledge_library_service as knowledge_library_module
 from agent_service.services.knowledge_library_service import KnowledgeLibraryService
+from agent_service.services.memory.rag.frontmatter_bootstrap import FrontmatterBootstrapService
 from agent_service.services.memory.rag.image_ocr import ImageOcrService
 from agent_service.services.memory.rag.pdf_cleaner import PdfExtractionResult
 
@@ -77,6 +78,9 @@ def _write_frontmatter(service: KnowledgeLibraryService, *, relative_path: str, 
     frontmatter_path.write_text(
         json.dumps(
             {
+                "schema_version": 2,
+                "markdown": f"# test\n\n{content}\n",
+                "projection_hash": "projection-1",
                 "metadata": {"ocr_status": "completed"},
                 "sections": [{"section_id": "sec_0000", "heading": "test", "content": content}],
             },
@@ -154,6 +158,7 @@ def test_preview_docx_exposes_text_only_after_ingestion(tmp_path: Path, monkeypa
     assert before["content"] == ""
     assert before["text_status"] == "not_ingested"
     assert after["content"] == "段落文字\n\n图片 OCR 文字"
+    assert after["semantic_markdown"] == "# test\n\n段落文字\n\n图片 OCR 文字"
     assert after["text_status"] == "ready"
 
 
@@ -247,7 +252,10 @@ def test_debug_multimodal_observation_uses_existing_frontmatter(tmp_path: Path, 
         "source_type": "image",
         "source_path": str(source_path),
         "source_uri": str(source_path),
-        "source_hash": "hash-1",
+        "source_hash": FrontmatterBootstrapService._hash_file(source_path),
+        "schema_version": 2,
+        "markdown": "# note\n\nOCR text for debug\n",
+        "projection_hash": "projection-1",
         "title": "note",
         "summary": "",
         "tags": [],

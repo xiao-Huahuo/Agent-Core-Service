@@ -39,7 +39,7 @@ from xml.etree import ElementTree
 logger = logging.getLogger(__name__)
 
 TRASH_RETENTION_DAYS = 90
-HARD_IGNORED_KNOWLEDGE_DIR_NAMES = {".agents"}
+HARD_IGNORED_KNOWLEDGE_DIR_NAMES = {".agents", ".mw"}
 
 
 def _utcnow_naive() -> datetime:
@@ -70,10 +70,6 @@ class KnowledgeIgnoreMatcher:
         if not path:
             return False
         parts = path.split("/")
-        if parts[0] == "components":
-            return True
-        if parts[0] == "forms" and "assets" not in parts[1:]:
-            return True
         if any(part in HARD_IGNORED_KNOWLEDGE_DIR_NAMES for part in parts):
             return True
         ignored = False
@@ -256,13 +252,16 @@ class KnowledgeLibraryService:
         source_root = Path(str(active_library["knowledge_dir"])).expanduser().resolve()
         source_root.mkdir(parents=True, exist_ok=True)
         frontmatter_root = self._resolve_user_frontmatter_dir(normalized_user_id, library_id)
+        markdown_root = self._resolve_user_markdown_dir(normalized_user_id, library_id)
         frontmatter_root.mkdir(parents=True, exist_ok=True)
+        markdown_root.mkdir(parents=True, exist_ok=True)
         ignore_matcher = self._build_ignore_matcher(user_id=normalized_user_id)
 
         ocr_enabled = self.settings_service.is_ocr_enabled_for_user(user_id=normalized_user_id)
         frontmatter_result = FrontmatterBootstrapService(config=self.config, ocr_enabled=ocr_enabled).build_frontmatter_dir(
             knowledge_dir=source_root,
             frontmatter_dir=frontmatter_root,
+            markdown_dir=markdown_root,
             supported_suffixes=self.supported_suffixes,
             exclude_path=lambda path: ignore_matcher.is_ignored(
                 self._relative_path(path=path, root=source_root),
@@ -288,7 +287,7 @@ class KnowledgeLibraryService:
             user_id=knowledge_owner_id,
             tag=self.config.constants.knowledge_tag,
             memory_type="knowledge_chunk",
-            keep_source_ids=ingestion_result.source_ids_seen or set(),
+            keep_source_ids=(ingestion_result.source_ids_seen or set()) | self._managed_ingest_source_ids(frontmatter_root),
         )
         return KnowledgeLibraryRebuildResult(
             user_id=normalized_user_id,
@@ -350,7 +349,9 @@ class KnowledgeLibraryService:
         ignored_paths = [
             self._relative_path(path=path, root=source_root)
             for path in source_root.rglob("*")
-            if path.is_file() and ignore_matcher.is_ignored(self._relative_path(path=path, root=source_root), is_dir=False)
+            if path.is_file()
+            and not self._relative_path(path=path, root=source_root).startswith(".mw/")
+            and ignore_matcher.is_ignored(self._relative_path(path=path, root=source_root), is_dir=False)
         ] if source_root.exists() else []
         chunks_deleted = self._delete_index_artifacts(user_id=normalized_user_id, relative_paths=ignored_paths)
         self._delete_ignored_frontmatter_files(
@@ -385,11 +386,13 @@ class KnowledgeLibraryService:
         if not source_path.is_file():
             raise ValueError("file not found")
         frontmatter_root = self._resolve_user_frontmatter_dir(normalized_user_id, library_id)
+        markdown_root = self._resolve_user_markdown_dir(normalized_user_id, library_id)
         frontmatter_root.mkdir(parents=True, exist_ok=True)
+        markdown_root.mkdir(parents=True, exist_ok=True)
         relative_path = self._relative_path(path=source_path, root=source_root)
         source_id = FrontmatterBootstrapService._build_document_id(Path(relative_path))
         ignore_matcher = self._build_ignore_matcher(user_id=normalized_user_id)
-        if ignore_matcher.is_ignored(relative_path, is_dir=False):
+        if ignore_matcher.is_ignored(relative_path, is_dir=False) and not self._is_managed_ingest_source(relative_path):
             self._emit_manual_ingestion_progress(
                 progress_callback,
                 status="started",
@@ -473,6 +476,7 @@ class KnowledgeLibraryService:
             source_path=source_path,
             knowledge_dir=source_root,
             frontmatter_dir=frontmatter_root,
+            markdown_dir=markdown_root,
             supported_suffixes=self.supported_suffixes,
             progress_callback=progress_callback,
         )
@@ -771,6 +775,7 @@ class KnowledgeLibraryService:
             )
             for path in sorted(root.iterdir(), key=self._sort_path)
             if not self._is_vcs_metadata_path(path=path, root=root)
+            and not self._is_mw_managed_path(path=path, root=root)
         ]
 
     def get_active_root_path(self, *, user_id: str) -> Path:
@@ -905,6 +910,7 @@ class KnowledgeLibraryService:
                 **base_payload,
                 "kind": "table",
                 "sheets": [self._preview_delimited_table(path=target, delimiter="\t" if suffix == ".tsv" else ",")],
+                **self._preview_text_from_frontmatter(user_id=user_id, relative_path=str(base_payload["path"])),
                 "readonly": True,
             }
         if suffix == ".xlsx":
@@ -912,6 +918,7 @@ class KnowledgeLibraryService:
                 **base_payload,
                 "kind": "table",
                 "sheets": self._preview_xlsx(path=target),
+                **self._preview_text_from_frontmatter(user_id=user_id, relative_path=str(base_payload["path"])),
                 "readonly": True,
             }
         if suffix in {".ppt", ".pptx"}:
@@ -946,6 +953,7 @@ class KnowledgeLibraryService:
             return {
                 **base_payload,
                 **self._preview_pptx(path=target),
+                **self._preview_text_from_frontmatter(user_id=user_id, relative_path=str(base_payload["path"])),
                 "kind": "document",
                 "readonly": True,
             }
@@ -992,6 +1000,8 @@ class KnowledgeLibraryService:
         for path in sorted(root.rglob("*"), key=self._sort_path):
             if len(results) >= limit:
                 break
+            if self._is_mw_managed_path(path=path, root=root):
+                continue
             if not path.is_file() or path.suffix.lower() not in self.supported_suffixes:
                 continue
             try:
@@ -1480,7 +1490,14 @@ class KnowledgeLibraryService:
 
         payload = self._read_frontmatter_payload_for_relative_path(user_id=user_id, relative_path=relative_path)
         if not payload:
-            return {"content": "", "text_status": "not_ingested"}
+            return {
+                "content": "",
+                "semantic_markdown": "",
+                "text_status": "not_ingested",
+                "schema_version": 0,
+                "projection_hash": "",
+            }
+        markdown = str(payload.get("markdown") or "").strip()
         sections = payload.get("sections", [])
         section_texts = [
             str(section.get("content") or "").strip()
@@ -1488,7 +1505,14 @@ class KnowledgeLibraryService:
             if isinstance(section, dict) and str(section.get("content") or "").strip()
         ] if isinstance(sections, list) else []
         content = "\n\n".join(section_texts).strip()
-        return {"content": content, "text_status": "ready" if content else "empty"}
+        semantic_markdown = markdown or content
+        return {
+            "content": content,
+            "semantic_markdown": semantic_markdown,
+            "text_status": "ready" if semantic_markdown else "empty",
+            "schema_version": int(payload.get("schema_version") or 1),
+            "projection_hash": str(payload.get("projection_hash") or ""),
+        }
 
     def read_frontmatter_payload_for_file(self, *, user_id: str, path: str) -> dict[str, Any]:
         """
@@ -1807,7 +1831,7 @@ class KnowledgeLibraryService:
             return {}
         signature: dict[str, tuple[int, int, str]] = {}
         for path in root.rglob("*"):
-            if self._is_vcs_metadata_path(path=path, root=root):
+            if self._is_vcs_metadata_path(path=path, root=root) or self._is_mw_managed_path(path=path, root=root):
                 continue
             # 目录 mtime 会因任一子项变化而改变。只跟踪文件可避免把整个目录
             # 误判为失效目标；目录删除仍会表现为其中所有旧文件路径消失。
@@ -1839,9 +1863,35 @@ class KnowledgeLibraryService:
         library_id: 知识库配置 ID。
         """
 
+        managed_dir = self._resolve_user_managed_dir(user_id=user_id, library_id=library_id, name="frontmatter")
         safe_user_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", user_id).strip("_") or "default"
         safe_library_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", library_id).strip("_") or "default"
-        return self.config.storage.frontmatter_dir / "users" / safe_user_id / safe_library_id
+        legacy_dir = self.config.storage.frontmatter_dir / "users" / safe_user_id / safe_library_id
+        if legacy_dir.is_dir() and legacy_dir.resolve() != managed_dir.resolve():
+            for source in sorted(legacy_dir.rglob("*.json")):
+                destination = managed_dir / source.relative_to(legacy_dir)
+                if destination.exists():
+                    continue
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(source), str(destination))
+        return managed_dir
+
+    def _resolve_user_markdown_dir(self, user_id: str, library_id: str) -> Path:
+        """Return the active knowledge library's mirrored Markdown directory."""
+
+        return self._resolve_user_managed_dir(user_id=user_id, library_id=library_id, name="md")
+
+    def _resolve_user_managed_dir(self, *, user_id: str, library_id: str, name: str) -> Path:
+        """Resolve one `.mw` managed directory inside the requested knowledge library."""
+
+        profile = self.settings_service.ensure_user_profile(user_id=user_id)
+        libraries = [dict(item) for item in profile.get("knowledge_libraries", [])]
+        active_library = dict(profile["active_knowledge_library"])
+        library = next((item for item in libraries if str(item.get("library_id")) == library_id), active_library)
+        if str(library.get("library_id")) != library_id:
+            raise ValueError("knowledge library not found")
+        knowledge_root = Path(str(library["knowledge_dir"])).expanduser().resolve()
+        return knowledge_root / ".mw" / name
 
     @classmethod
     def _resolve_child_dir(cls, *, root: Path, relative_dir: str) -> Path:
@@ -1996,7 +2046,7 @@ class KnowledgeLibraryService:
             payload = json.loads(frontmatter_path.read_text(encoding="utf-8"))
         except Exception:
             return "dirty"
-        source_hash = str(payload.get("source_hash") or "")
+        source_hash = str(payload.get("projection_hash") or payload.get("source_hash") or "")
         status = (graph_status_by_document or {}).get(source_id)
         if (
             status
@@ -2027,6 +2077,16 @@ class KnowledgeLibraryService:
             return True
         return any(part in {".git", ".hg", ".svn"} for part in relative_parts)
 
+    @staticmethod
+    def _is_mw_managed_path(*, path: Path, root: Path) -> bool:
+        """Return whether a path belongs to the knowledge library's `.mw` subtree."""
+
+        try:
+            relative_parts = path.resolve().relative_to(root.resolve()).parts
+        except ValueError:
+            return True
+        return bool(relative_parts and relative_parts[0] == ".mw")
+
     def _can_ingest_source_file(self, path: Path) -> bool:
         """Return whether a file can enter the knowledge ingestion pipeline."""
 
@@ -2051,8 +2111,35 @@ class KnowledgeLibraryService:
                 continue
             metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
             relative_path = str(metadata.get("relative_path") or "")
-            if relative_path and ignore_matcher.is_ignored(relative_path, is_dir=False):
+            if (
+                relative_path
+                and ignore_matcher.is_ignored(relative_path, is_dir=False)
+                and not self._is_managed_ingest_source(relative_path)
+            ):
                 frontmatter_path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _is_managed_ingest_source(relative_path: str) -> bool:
+        """Allow smart-form literature assets through their explicit ingestion entry only."""
+
+        parts = relative_path.replace("\\", "/").strip("/").split("/")
+        return len(parts) >= 5 and parts[:2] == [".mw", "forms"] and "assets" in parts[2:-1]
+
+    def _managed_ingest_source_ids(self, frontmatter_root: Path) -> set[str]:
+        """Collect explicitly ingested managed assets so a normal full rebuild preserves them."""
+
+        source_ids: set[str] = set()
+        if not frontmatter_root.is_dir():
+            return source_ids
+        for path in frontmatter_root.rglob("*.json"):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            relative_path = str(payload.get("metadata", {}).get("relative_path") or "")
+            if self._is_managed_ingest_source(relative_path):
+                source_ids.add(str(payload.get("document_id") or ""))
+        return {source_id for source_id in source_ids if source_id}
 
     @staticmethod
     def _safe_storage_name(value: str) -> str:
@@ -2210,6 +2297,7 @@ class KnowledgeLibraryService:
             library_id=library_id,
         )
         frontmatter_root = self._resolve_user_frontmatter_dir(normalized_user_id, library_id).resolve()
+        markdown_root = self._resolve_user_markdown_dir(normalized_user_id, library_id).resolve()
         chunks_deleted = 0
         for relative_path in relative_paths:
             normalized_path = relative_path.replace("\\", "/").strip("/")
@@ -2225,6 +2313,9 @@ class KnowledgeLibraryService:
             frontmatter_path = (frontmatter_root / normalized_path).with_suffix(".json").resolve()
             if self._is_relative_to(frontmatter_path, frontmatter_root) and frontmatter_path.exists():
                 frontmatter_path.unlink()
+            markdown_path = (markdown_root / normalized_path).with_suffix(".md").resolve()
+            if self._is_relative_to(markdown_path, markdown_root) and markdown_path.exists():
+                markdown_path.unlink()
             # 同时删除该文档产生的图谱点边和状态记录
             delete_document_graph = getattr(self.knowledge_graph_service, "delete_document_graph", None)
             if callable(delete_document_graph):

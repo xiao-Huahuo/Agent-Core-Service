@@ -253,9 +253,9 @@ const PIE_COLORS = [
 
 /* ---- 排序 ---- */
 const ROOT_ORDER = [
-  'knowledge_dir', 'library_storage_dir', 'base_data_dir',
+  'knowledge_dir', 'managed_root', 'markdown_dir', 'frontmatter_dir', 'library_storage_dir', 'forms_dir', 'components_dir', 'base_data_dir',
   'assets_dir', 'db_dir', 'relation_db_dir', 'vector_db_dir', 'sqlite_path', 'chroma_persist_dir',
-  'frontmatter_dir', 'log_dir', 'models_dir',
+  'log_dir', 'models_dir',
   'embedding_model_dir', 'paddleocr_model_dir', 'rerank_model_dir',
   'trash_dir',
 ]

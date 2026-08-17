@@ -3,7 +3,7 @@
 
   Usage:
   Provides a spreadsheet-like research literature table stored under the
-  knowledge library forms/ directory. Users can edit typed columns, bind PDF
+  knowledge library .mw/forms/ directory. Users can edit typed columns, bind PDF
   assets, filter rows, and export CSV/Markdown without leaving the workspace.
 -->
 <script setup lang="ts">
@@ -68,7 +68,7 @@ interface SmartFormEntry {
   assetDir: string
 }
 
-const FORMS_ROOT_DIR = 'forms'
+const FORMS_ROOT_DIR = '.mw/forms'
 const form = ref<SmartLiteratureForm | null>(null)
 const formEntries = ref<SmartFormEntry[]>([])
 const activeFormId = ref('')
@@ -1451,7 +1451,7 @@ async function extractUploadedLiteratureContent(assetPath: string): Promise<stri
   if (!settingsStore.profile.userId) return ''
   try {
     const preview = await previewKnowledgeFile(settingsStore.profile.userId, assetPath)
-    const content = [preview.content, preview.render_content]
+    const content = [preview.semantic_markdown, preview.content, preview.render_content]
       .find((value) => typeof value === 'string' && value.trim())
     if (content) return normalizeLiteratureContent(content)
     const tableContent = preview.sheets

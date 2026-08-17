@@ -129,6 +129,11 @@ export interface MultimodalIngestionObservation {
   chunk_size: number
   chunk_overlap: number
   json_result: Record<string, unknown>
+  markdown_result: string
+  schema_version: number
+  projection_hash: string
+  assets: Record<string, unknown>[]
+  source_map: Record<string, unknown>[]
   semantic_chunks: MultimodalSemanticChunk[]
   overlap_chunks: MultimodalOverlapChunk[]
   stats: {

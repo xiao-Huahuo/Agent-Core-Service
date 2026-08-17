@@ -84,7 +84,7 @@ describe('SmartFormsView', () => {
     return {
       form_id: formId,
       user_id: 'local-test',
-      asset_dir: `forms/${form.title}`,
+      asset_dir: `.mw/forms/${form.title}`,
       form,
       updated_at: '2026-08-09T10:00:00',
     }
@@ -99,7 +99,7 @@ describe('SmartFormsView', () => {
     vi.mocked(listSmartFormsDb).mockResolvedValue([{
       form_id: 'sf_demo',
       title: '我的文献表',
-      asset_dir: 'forms/我的文献表',
+      asset_dir: '.mw/forms/我的文献表',
       updated_at: '2026-08-09T10:00:00',
     }])
     vi.mocked(getSmartFormDb).mockResolvedValue(dbResponse(defaultForm))
@@ -138,7 +138,7 @@ describe('SmartFormsView', () => {
     storedForm.rows[0]!.cells.literature_file = {
       value: 'paper.pdf',
       fileName: 'paper.pdf',
-      assetPath: 'forms/我的文献表/assets/paper.pdf',
+      assetPath: '.mw/forms/我的文献表/assets/paper.pdf',
     }
     vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(storedForm))
     const workspaceStore = useWorkspaceStore()
@@ -146,7 +146,7 @@ describe('SmartFormsView', () => {
     const selectFile = vi.spyOn(workspaceStore, 'selectFile').mockResolvedValue(undefined)
     const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
     vi.mocked(previewKnowledgeFile).mockResolvedValueOnce({
-      path: 'forms/我的文献表/assets/paper.pdf',
+      path: '.mw/forms/我的文献表/assets/paper.pdf',
       kind: 'pdf',
       raw_url: '/knowledge/raw/paper.pdf',
       mtime: '2026-08-09T10:00:00',
@@ -162,14 +162,14 @@ describe('SmartFormsView', () => {
     expect(setMainView).toHaveBeenCalledWith('editor')
     expect(selectFile).toHaveBeenCalledWith({
       name: 'paper.pdf',
-      path: 'forms/我的文献表/assets/paper.pdf',
+      path: '.mw/forms/我的文献表/assets/paper.pdf',
       isDir: false,
     })
     expect(wrapper.find('button[title="下载原文件"]').exists()).toBe(true)
     expect(wrapper.find('button[title="重新上传"]').exists()).toBe(true)
     await wrapper.get('button[title="下载原文件"]').trigger('click')
     await flushPromises()
-    expect(previewKnowledgeFile).toHaveBeenCalledWith('local-test', 'forms/我的文献表/assets/paper.pdf')
+    expect(previewKnowledgeFile).toHaveBeenCalledWith('local-test', '.mw/forms/我的文献表/assets/paper.pdf')
     expect(anchorClick).toHaveBeenCalled()
     anchorClick.mockRestore()
   })
@@ -326,7 +326,7 @@ describe('SmartFormsView', () => {
 
     expect(saveSmartFormDb).toHaveBeenCalledWith(expect.objectContaining({
       user_id: 'local-test',
-      asset_dir: 'forms/项目阅读表',
+      asset_dir: '.mw/forms/项目阅读表',
       form: expect.objectContaining({ title: '项目阅读表' }),
     }))
   })
@@ -372,11 +372,11 @@ describe('SmartFormsView', () => {
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
 
     vi.mocked(uploadKnowledgeFile).mockResolvedValueOnce({
-      uploaded_path: 'D:/Knowledge/forms/我的文献表/assets/ros.md',
+      uploaded_path: 'D:/Knowledge/.mw/forms/我的文献表/assets/ros.md',
       knowledge_dir: 'D:/Knowledge',
     })
     vi.mocked(previewKnowledgeFile).mockResolvedValueOnce({
-      path: 'forms/我的文献表/assets/ros.md',
+      path: '.mw/forms/我的文献表/assets/ros.md',
       kind: 'markdown',
       content: 'A paper about ROS receptor HPCA1 in systemic signaling.',
       mtime: '2026-08-09T10:00:00',
@@ -714,11 +714,11 @@ describe('SmartFormsView', () => {
     await flushPromises()
 
     vi.mocked(uploadKnowledgeFile).mockResolvedValueOnce({
-      uploaded_path: 'D:/Knowledge/forms/我的文献表/assets/table.md',
+      uploaded_path: 'D:/Knowledge/.mw/forms/我的文献表/assets/table.md',
       knowledge_dir: 'D:/Knowledge',
     })
     vi.mocked(previewKnowledgeFile).mockResolvedValueOnce({
-      path: 'forms/我的文献表/assets/table.md',
+      path: '.mw/forms/我的文献表/assets/table.md',
       kind: 'markdown',
       content: [
         '## 表格PDF',
@@ -852,11 +852,11 @@ describe('SmartFormsView', () => {
 
   it('uploads literature assets without hidden auto ingest and submits stream ingestion', async () => {
     vi.mocked(uploadKnowledgeFile).mockResolvedValueOnce({
-      uploaded_path: 'D:/Knowledge/forms/我的文献表/assets/paper.md',
+      uploaded_path: 'D:/Knowledge/.mw/forms/我的文献表/assets/paper.md',
       knowledge_dir: 'D:/Knowledge',
     })
     vi.mocked(previewKnowledgeFile).mockResolvedValueOnce({
-      path: 'forms/我的文献表/assets/paper.md',
+      path: '.mw/forms/我的文献表/assets/paper.md',
       kind: 'markdown',
       content: '这是灌库后从文献中抽取出的真实正文。',
       mtime: '2026-08-09T10:00:00',
@@ -880,17 +880,17 @@ describe('SmartFormsView', () => {
     expect(uploadKnowledgeFile).toHaveBeenCalledWith(
       'local-test',
       expect.any(File),
-      'forms/我的文献表/assets',
+      '.mw/forms/我的文献表/assets',
       false,
       'rename',
     )
     expect(ingestFile).toHaveBeenCalledWith({
       name: 'paper.md',
-      path: 'forms/我的文献表/assets/paper.md',
+      path: '.mw/forms/我的文献表/assets/paper.md',
       isDir: false,
       indexStatus: 'dirty',
     })
-    expect(previewKnowledgeFile).toHaveBeenCalledWith('local-test', 'forms/我的文献表/assets/paper.md')
+    expect(previewKnowledgeFile).toHaveBeenCalledWith('local-test', '.mw/forms/我的文献表/assets/paper.md')
     const textareaValues = wrapper.findAll('textarea').map((textarea) => {
       return (textarea.element as HTMLTextAreaElement).value
     })
@@ -913,7 +913,7 @@ describe('SmartFormsView', () => {
 
   it('uses structured table and document previews as literature text', async () => {
     vi.mocked(uploadKnowledgeFile).mockImplementation(async (_userId, file) => ({
-      uploaded_path: `D:/Knowledge/forms/我的文献表/assets/${file.name}`,
+      uploaded_path: `D:/Knowledge/.mw/forms/我的文献表/assets/${file.name}`,
       knowledge_dir: 'D:/Knowledge',
     }))
     vi.mocked(previewKnowledgeFile).mockImplementation(async (_userId, path) => {

@@ -419,8 +419,8 @@ def test_frontmatter_bootstrap_writes_pdf_image_markdown(tmp_path: Path) -> None
     image_ref = payload["metadata"]["image_refs"][0]
     assert result.files_written == 1
     assert payload["metadata"]["pdf_scanned"] is True
-    assert payload["sections"][0]["content"].startswith("## Page 1")
-    assert "[PDF 图片引用: image 1" in payload["sections"][0]["content"]
+    assert "## Page 1" in payload["markdown"]
+    assert "![PDF page 1 image 1]" in payload["sections"][0]["content"]
     assert image_ref["index"] == 1
     assert image_ref["page"] == 1
     assert image_ref["xref"] == 5
@@ -492,6 +492,40 @@ def test_frontmatter_bootstrap_writes_multimodal_json(tmp_path: Path) -> None:
     assert payload["source_type"] == "table"
     assert payload["metadata"]["modality"] == "table"
     assert "alpha | beta" in payload["sections"][0]["content"]
+
+
+def test_frontmatter_bootstrap_persists_markdown_before_json_under_mw(tmp_path: Path) -> None:
+    """Every modality must persist a mirrored Markdown projection before JSON is derived."""
+
+    knowledge_dir = tmp_path / "knowledge"
+    source_dir = knowledge_dir / "papers" / "2026"
+    source_dir.mkdir(parents=True)
+    (source_dir / "table.csv").write_text("name,value\nalpha,beta\n", encoding="utf-8")
+    config = AgentConfig.load_config(load_env=False, ensure_directories=False, ensure_models=False)
+
+    result = FrontmatterBootstrapService(config=config).build_frontmatter_dir(
+        knowledge_dir=knowledge_dir,
+        frontmatter_dir=knowledge_dir / ".mw" / "frontmatter",
+        markdown_dir=knowledge_dir / ".mw" / "md",
+        supported_suffixes={".csv"},
+    )
+
+    markdown_path = knowledge_dir / ".mw" / "md" / "papers" / "2026" / "table.md"
+    json_path = knowledge_dir / ".mw" / "frontmatter" / "papers" / "2026" / "table.json"
+    markdown = markdown_path.read_text(encoding="utf-8")
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    reparsed = FrontmatterBootstrapService._build_markdown_sections(
+        title=payload["title"],
+        body_text=markdown,
+    )
+
+    assert result.files_written == 1
+    assert "| name | value |" in markdown
+    assert "| --- | --- |" in markdown
+    assert payload["schema_version"] == 2
+    assert payload["markdown"] == markdown
+    assert payload["projection_hash"]
+    assert [section.content for section in reparsed] == [section["content"] for section in payload["sections"]]
 
 
 def test_frontmatter_bootstrap_ingests_unknown_text_suffix(tmp_path: Path) -> None:

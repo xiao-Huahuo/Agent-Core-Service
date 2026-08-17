@@ -113,13 +113,13 @@ def test_collection_and_book_are_virtual_metadata(tmp_path: Path) -> None:
     response = service.list_items(user_id="u1", parent_id=collection["item_id"], tag="ai")
 
     assert book["source_name"] == "原论文.md"
-    assert book["source_path"] == "library/论文集/原论文.md"
-    assert collection["storage_path"] == "library/论文集"
+    assert book["source_path"] == ".mw/library/论文集/原论文.md"
+    assert collection["storage_path"] == ".mw/library/论文集"
     assert book["index_status"] == "dirty"
     assert response["items"][0]["display_title"] == "原论文"
     assert response["breadcrumbs"][0]["title"] == "论文集"
     assert not (tmp_path / "library" / "paper.md").exists()
-    assert (tmp_path / "library" / "论文集" / "原论文.md").read_text(encoding="utf-8") == "hello"
+    assert (tmp_path / ".mw" / "library" / "论文集" / "原论文.md").read_text(encoding="utf-8") == "hello"
 
 
 def test_delete_library_item_does_not_delete_real_file(tmp_path: Path) -> None:
@@ -152,7 +152,7 @@ def test_library_storage_dir_migration_updates_virtual_source_paths(tmp_path: Pa
     source.write_text("hello", encoding="utf-8")
     service = make_service(tmp_path)
     profile = service.settings_service.ensure_user_profile(user_id="u1")
-    assert profile["active_knowledge_library"]["library_storage_dir"] == "library"
+    assert profile["active_knowledge_library"]["library_storage_dir"] == ".mw/library"
     book = service.create_item(
         user_id="u1",
         content_type="knowledge_file",
@@ -197,9 +197,9 @@ def test_move_collection_moves_real_folder_and_descendant_paths(tmp_path: Path) 
     )["item"]
     updated_book = service.get_item(user_id="u1", item_id=book["item_id"])["item"]
 
-    assert moved["storage_path"] == "library/新子集锦"
-    assert updated_book["source_path"] == "library/新子集锦/资料.md"
-    assert (tmp_path / "library" / "新子集锦" / "资料.md").read_text(encoding="utf-8") == "hello"
+    assert moved["storage_path"] == ".mw/library/新子集锦"
+    assert updated_book["source_path"] == ".mw/library/新子集锦/资料.md"
+    assert (tmp_path / ".mw" / "library" / "新子集锦" / "资料.md").read_text(encoding="utf-8") == "hello"
     assert not (tmp_path / "library" / "父集锦" / "子集锦").exists()
 
 
