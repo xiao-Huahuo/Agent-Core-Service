@@ -17,7 +17,7 @@ import EditorModeSwitch from '@/components/editor_workspace/EditorModeSwitch.vue
 import MarkdownPreview from '@/components/editor_workspace/MarkdownPreview.vue'
 import MultimodalPreview from '@/components/editor_workspace/MultimodalPreview.vue'
 import { useSettingsStore } from '@/stores/settings'
-import type { EditorViewMode, FilePreviewPayload } from '@/types/knowledge'
+import type { EditorViewMode, EditorWorkspaceMode, FilePreviewPayload } from '@/types/knowledge'
 
 defineOptions({ name: 'SearchResultPreview' })
 
@@ -109,6 +109,10 @@ watch(() => props.path, () => {
   void loadSelectedFile()
 }, { immediate: true })
 
+function setEditorMode(mode: EditorWorkspaceMode) {
+  if (mode === 'edit' || mode === 'preview' || mode === 'split') editorMode.value = mode
+}
+
 onUnmounted(() => requestController?.abort())
 </script>
 
@@ -123,7 +127,7 @@ onUnmounted(() => requestController?.abort())
       <EditorModeSwitch
         :model-value="effectiveEditorMode"
         :preview-only="isPreviewOnly"
-        @update:model-value="editorMode = $event"
+        @update:model-value="setEditorMode"
       />
       <button type="button" title="关闭预览" aria-label="关闭预览" @click="emit('close')">
         <IcIcon name="close" :size="16" />

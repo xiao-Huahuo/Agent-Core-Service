@@ -193,6 +193,68 @@ def test_preview_pdf_separates_render_content_from_ingested_text(tmp_path: Path,
     assert after["render_content"].startswith("## Page 1")
 
 
+def test_preview_csv_keeps_raw_text_and_table_rows(tmp_path: Path) -> None:
+    """CSV 的 Text 与 Forms 必须来自同一原文件,且原文保持可编辑。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    (knowledge_dir / "data.csv").write_text("name,value\nalpha,1\n", encoding="utf-8")
+    service = _service(tmp_path, knowledge_dir)
+
+    preview = service.preview_file(user_id="user-1", path="data.csv")
+
+    assert preview["kind"] == "table"
+    assert preview["content"] == "name,value\nalpha,1\n"
+    assert preview["sheets"][0]["rows"] == [["name", "value"], ["alpha", "1"]]
+    assert preview["readonly"] is False
+
+
+def test_preview_xls_uses_forms_table(tmp_path: Path, monkeypatch) -> None:
+    """旧版 XLS 仍属于 Forms 管线,不应降级成 Binary。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    (knowledge_dir / "legacy.xls").write_bytes(b"xls")
+    service = _service(tmp_path, knowledge_dir)
+    monkeypatch.setattr(service, "_preview_xls", lambda path: [{"name": "Sheet1", "rows": [["A", "B"]]}])
+
+    preview = service.preview_file(user_id="user-1", path="legacy.xls")
+
+    assert preview["kind"] == "table"
+    assert preview["sheets"] == [{"name": "Sheet1", "rows": [["A", "B"]]}]
+    assert preview["readonly"] is True
+
+
+def test_preview_pptx_keeps_native_preview_blank_and_markdown_projection(tmp_path: Path) -> None:
+    """PPTX Preview 目前为空,Markdown 模式只读取灌库投影。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    (knowledge_dir / "slides.pptx").write_bytes(b"pptx")
+    service = _service(tmp_path, knowledge_dir)
+    _write_frontmatter(service, relative_path="slides.pptx", content="幻灯片全文")
+
+    preview = service.preview_file(user_id="user-1", path="slides.pptx")
+
+    assert preview["kind"] == "presentation"
+    assert preview["semantic_markdown"] == "# test\n\n幻灯片全文"
+    assert preview["readonly"] is True
+
+
+def test_preview_doc_is_classified_as_unsupported_binary(tmp_path: Path) -> None:
+    """旧版 DOC 明确不进入 DOCX 预览管线。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    (knowledge_dir / "legacy.doc").write_bytes(b"\xd0\xcf\x11\xe0\x00\xff")
+    service = _service(tmp_path, knowledge_dir)
+
+    preview = service.preview_file(user_id="user-1", path="legacy.doc")
+
+    assert preview["kind"] == "unsupported"
+    assert preview["readonly"] is True
+
+
 def test_resolve_knowledge_asset_serves_pdf_preview_image(tmp_path: Path) -> None:
     """PDF 预览导出的 /knowledge/assets 图片应能被后端解析为真实文件。"""
 

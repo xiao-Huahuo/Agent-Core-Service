@@ -906,22 +906,38 @@ class KnowledgeLibraryService:
                 "readonly": True,
             }
         if suffix in {".csv", ".tsv"}:
+            with _open_text_with_fallback(target) as handle:
+                content = handle.read()
             return {
                 **base_payload,
                 "kind": "table",
                 "sheets": [self._preview_delimited_table(path=target, delimiter="\t" if suffix == ".tsv" else ",")],
-                **self._preview_text_from_frontmatter(user_id=user_id, relative_path=str(base_payload["path"])),
-                "readonly": True,
+                "content": content,
+                "readonly": suffix != ".csv",
             }
-        if suffix == ".xlsx":
+        if suffix in {".xls", ".xlsx"}:
             return {
                 **base_payload,
                 "kind": "table",
-                "sheets": self._preview_xlsx(path=target),
+                "sheets": self._preview_xls(path=target) if suffix == ".xls" else self._preview_xlsx(path=target),
                 **self._preview_text_from_frontmatter(user_id=user_id, relative_path=str(base_payload["path"])),
                 "readonly": True,
             }
-        if suffix in {".ppt", ".pptx"}:
+        if suffix == ".pptx":
+            return {
+                **base_payload,
+                **self._preview_text_from_frontmatter(user_id=user_id, relative_path=str(base_payload["path"])),
+                "kind": "presentation",
+                "readonly": True,
+            }
+        if suffix == ".ppt":
+            return {
+                **base_payload,
+                "kind": "unsupported",
+                "message": "当前文件类型暂不支持预览。",
+                "readonly": True,
+            }
+        if suffix == ".ppt":
             # Try to convert PPTX → PDF for native iframe preview
             if suffix == ".pptx":
                 pdf_output = target.with_name(target.name + ".pdf")
@@ -1102,6 +1118,22 @@ class KnowledgeLibraryService:
             for index, sheet_path in enumerate(sheet_paths, start=1):
                 rows = cls._extract_xlsx_rows(archive=archive, sheet_path=sheet_path, shared_strings=shared_strings)
                 sheets.append({"name": f"Sheet {index}", "rows": rows})
+        return sheets
+
+    @staticmethod
+    def _preview_xls(*, path: Path) -> list[dict]:
+        """Read legacy XLS workbooks for the Forms-only editor pipeline."""
+
+        import xlrd  # type: ignore[import-untyped]
+
+        workbook = xlrd.open_workbook(path)
+        sheets: list[dict] = []
+        for sheet in workbook.sheets():
+            rows = [
+                [str(sheet.cell_value(row_index, column_index)) for column_index in range(sheet.ncols)]
+                for row_index in range(min(sheet.nrows, 200))
+            ]
+            sheets.append({"name": sheet.name, "rows": rows})
         return sheets
 
     @staticmethod

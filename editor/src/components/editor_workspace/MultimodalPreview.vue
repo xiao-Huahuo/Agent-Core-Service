@@ -102,6 +102,8 @@ function handleDocumentClick(event: MouseEvent) {
 
     <div v-else-if="preview.kind === 'document'" class="document-preview" v-html="safeHtml" @click="handleDocumentClick"></div>
 
+    <div v-else-if="preview.kind === 'presentation'" class="presentation-preview" aria-label="PPTX preview placeholder"></div>
+
     <pre v-else-if="preview.kind === 'text'" class="text-preview">{{ preview.content }}</pre>
 
     <div v-else class="preview-message">
@@ -142,6 +144,7 @@ function handleDocumentClick(event: MouseEvent) {
 
 .table-preview,
 .document-preview,
+.presentation-preview,
 .text-preview,
 .preview-message {
   flex: 1;

@@ -2,6 +2,8 @@
 
 ## 2026-08-17
 
+- [x] 按文件模态统一编辑区管线：Markdown 使用 Edit/Preview/Split，纯文本与代码分别固定为 Text/Code，CSV 使用可编辑原文 Text 与只读表格 Forms，XLS/XLSX 固定 Forms，DOCX/PDF/PPTX/图片使用原件 Preview 与 `.mw/md` 完整源码 Markdown；PPTX 原件预览保留空白占位，旧 DOC 及未知二进制显示 Binary，未知 UTF-8 文件自动转为 Text。移除 PDF 二级“文本/渲染”切换，模式选择、加载、可编辑性和渲染统一由同一格式解析器决定；补充后端预览、组件、格式映射及 Chromium 全格式真实界面验收。
+
 - [x] 根治空会话状态下持续请求 `/sessions`：共享 Session store 现在区分“尚未加载”与“已加载但为空”，同一用户的并发/重复加载统一复用一次请求；导入会话、流结束和清理空会话等数据变更路径保留显式强制刷新。Debug 页面同时使用稳定标量监听并移除 mounted 重复入口；补充 store 并发空列表回归、Debug 组件回归，以及完整工作区启动至打开 Debug 全程仅一次请求的 Chromium 验收。
 - [x] 统一文件库多模态灌库为“原文件 → `.mw/md` Markdown 投影 → `.mw/frontmatter` JSON → 切片/向量/图谱”链路：Markdown 与 JSON 按源目录镜像落盘，JSON 记录 schema、投影哈希、资产和 source map，哈希锁改用投影指纹；PDF 与 OOXML 内置图片进入 `.mw/assets`。编辑器对只读多模态文件展示统一 Markdown 投影并保留原格式预览，Debug 多模态页新增 Markdown 中间层标签，存储设置显示完整 `.mw` 树。图书馆、智能表单和组件库迁至 `.mw/library`、`.mw/forms`、`.mw/components`，旧目录及旧数据库路径自动迁移；文件库仅硬忽略 `.mw`，原 `library/forms/components` 不再特殊忽略，智能表单文献仍可通过显式入口灌库。补充投影、清理、迁移、预览、组件、书库与智能表单回归测试。
 

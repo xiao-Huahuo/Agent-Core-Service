@@ -15,6 +15,9 @@ export type GraphStatus = 'graphed' | 'dirty' | 'ignored'
 /** Editor display mode controlled by the central toolbar. */
 export type EditorViewMode = 'edit' | 'preview' | 'split'
 
+/** File-modality-aware modes used by the main editor workspace. */
+export type EditorWorkspaceMode = EditorViewMode | 'text' | 'forms' | 'markdown' | 'code' | 'binary'
+
 /** Agent document visualization mode selected from the editor toolbar. */
 export type MarkdownHtmlVisualizationMode = 'structure' | 'insight'
 
@@ -49,7 +52,7 @@ export interface MarkdownHtmlVisualizationPayload {
 }
 
 /** File viewer selected by extension and backend preview metadata. */
-export type FileViewerKind = 'markdown' | 'code' | 'image' | 'pdf' | 'table' | 'document' | 'text' | 'unsupported'
+export type FileViewerKind = 'markdown' | 'code' | 'image' | 'pdf' | 'table' | 'document' | 'presentation' | 'text' | 'unsupported'
 
 /** Main center workspace surface controlled by activity bar and commands. */
 export type WorkspaceMainView =

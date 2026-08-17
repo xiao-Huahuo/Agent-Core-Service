@@ -40,7 +40,7 @@ import type {
   ChatMessage,
   CommandAction,
   EditorTab,
-  EditorViewMode,
+  EditorWorkspaceMode,
   FilePreviewPayload,
   FileViewerKind,
   IngestionHistoryItem,
@@ -61,6 +61,7 @@ import {
   updateRecentFileVisits,
   type RecentFileVisit,
 } from '@/utils/recentFileHistory'
+import { resolveEditorFilePipeline } from '@/utils/editorFilePipeline'
 
 function createId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
@@ -177,18 +178,6 @@ const CODE_EXTENSIONS = new Set([
   'yaml',
   'yml',
 ])
-const PREVIEW_ONLY_EXTENSIONS = new Set([
-  'csv',
-  'docx',
-  'ppt',
-  'pptx',
-  'svg',
-  'tsv',
-  'xlsx',
-])
-const IMAGE_EXTENSIONS = new Set(['gif', 'jpeg', 'jpg', 'png', 'webp'])
-const DEFAULT_PREVIEW_MODE_EXTENSIONS = new Set(['docx', 'pdf'])
-
 function extensionOf(path: string): string {
   const name = getBaseName(path).toLowerCase()
   const dotIndex = name.lastIndexOf('.')
@@ -199,19 +188,18 @@ function viewerKindForPath(path: string): FileViewerKind {
   const extension = extensionOf(path)
   if (MARKDOWN_EXTENSIONS.has(extension)) return 'markdown'
   if (CODE_EXTENSIONS.has(extension)) return 'code'
-  if (PREVIEW_ONLY_EXTENSIONS.has(extension)) return 'unsupported'
-  return 'text'
+  if (extension === 'txt') return 'text'
+  return 'unsupported'
 }
 
 function shouldUsePreviewEndpoint(path: string): boolean {
-  return PREVIEW_ONLY_EXTENSIONS.has(extensionOf(path))
+  return resolveEditorFilePipeline(path).usesPreviewEndpoint
 }
 
-function shouldDefaultToPreviewMode(path: string): boolean {
+function defaultEditorMode(path: string, kind?: FileViewerKind): EditorWorkspaceMode {
   /** 多模态文件每次打开默认展示原始预览,即使已有灌库文本也不抢占编辑视图。 */
 
-  const extension = extensionOf(path)
-  return IMAGE_EXTENSIONS.has(extension) || DEFAULT_PREVIEW_MODE_EXTENSIONS.has(extension)
+  return resolveEditorFilePipeline(path, kind).defaultMode
 }
 
 function childDirectoryFor(node?: KnowledgeFileNode | null): string {
@@ -318,7 +306,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const treeSelectionCleared = ref(false)
 
   /** Active editor mode. */
-  const editorMode = ref<EditorViewMode>('edit')
+  const editorMode = ref<EditorWorkspaceMode>('edit')
 
   /** Active center workspace view. 默认进入主页。 */
   const mainView = ref<WorkspaceMainView>('home')
@@ -1160,7 +1148,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   const activeViewerKind = computed<FileViewerKind>(() => activePreview.value?.kind ?? viewerKindForPath(selectedPath.value))
 
-  const activeFileReadonly = computed(() => Boolean(activePreview.value?.readonly) || shouldUsePreviewEndpoint(selectedPath.value))
+  const activeFileReadonly = computed(() => (
+    Boolean(activePreview.value?.readonly)
+    || !resolveEditorFilePipeline(selectedPath.value, activePreview.value?.kind).editable
+  ))
 
   const activeTab = computed(() => openTabs.value.find((tab) => tab.path === selectedPath.value))
 
@@ -1314,16 +1305,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return
     }
     selectedPath.value = node.path
-    if (shouldDefaultToPreviewMode(node.path)) {
-      editorMode.value = 'preview'
-    }
+    editorMode.value = defaultEditorMode(node.path, previewByPath.value[node.path]?.kind)
     recordRecentFileVisit(node.path)
     if (!openTabs.value.some((tab) => tab.path === node.path)) {
       openTabs.value.push({ path: node.path, title: node.name, dirty: false, mtime: node.mtime })
     }
     // Fire-and-forget: loads run in background so rapid file switching
     // never blocks the UI or exhausts the browser connection pool.
-    if (shouldUsePreviewEndpoint(node.path) || extensionOf(node.path) === 'pdf' || IMAGE_EXTENSIONS.has(extensionOf(node.path))) {
+    if (shouldUsePreviewEndpoint(node.path)) {
       if (previewByPath.value[node.path] === undefined) {
         loadFilePreview(node.path)
       }
@@ -1337,9 +1326,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     selectedPath.value = path
     selectedTreePath.value = path
     treeSelectionCleared.value = false
-    if (shouldDefaultToPreviewMode(path)) {
-      editorMode.value = 'preview'
-    }
+    editorMode.value = defaultEditorMode(path, previewByPath.value[path]?.kind)
     recordRecentFileVisit(path)
     syncCurrentDocumentContext()
   }
@@ -1396,7 +1383,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     syncCurrentDocumentContext()
   }
 
-  function setEditorMode(mode: EditorViewMode) {
+  function setEditorMode(mode: EditorWorkspaceMode) {
     editorMode.value = mode
   }
 
@@ -1431,13 +1418,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   async function saveFileByPath(path: string) {
     const tab = openTabs.value.find((item) => item.path === path)
-    if (!tab || shouldUsePreviewEndpoint(path)) {
+    if (!tab || !resolveEditorFilePipeline(path, previewByPath.value[path]?.kind).editable) {
       return
     }
     const settingsStore = useSettingsStore()
     ignoreNextTreeEvent.value += 3
     await writeKnowledgeFile(settingsStore.profile.userId, path, contentByPath.value[path] ?? '')
     tab.dirty = false
+    if (shouldUsePreviewEndpoint(path)) await loadFilePreview(path)
     await loadKnowledgeTree()
     // 文件内容已变更，重置索引状态和图谱状态为未入库
     updateTreeNodeIndexStatus(path, 'dirty', { force: true })
@@ -2467,6 +2455,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       // Stale guard: if user switched away while this request was in-flight, skip.
       if (selectedPath.value !== path) return
       previewByPath.value = { ...previewByPath.value, [path]: response }
+      const resolvedPipeline = resolveEditorFilePipeline(path, response.kind)
+      if (!resolvedPipeline.modes.some((item) => item.mode === editorMode.value)) {
+        editorMode.value = resolvedPipeline.defaultMode
+      }
       if (response.content !== undefined && !response.readonly) {
         contentByPath.value = { ...contentByPath.value, [path]: response.content }
       }

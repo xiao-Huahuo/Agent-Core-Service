@@ -36,7 +36,7 @@ a = Analysis(
     datas=[
         _required_data_dir('editor/dist'),
     ],
-    hiddenimports=collect_submodules('agent_service'),
+    hiddenimports=collect_submodules('agent_service') + ['xlrd'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

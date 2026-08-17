@@ -7,13 +7,16 @@
   in the editable surface.
 -->
 <script setup lang="ts">
+import { computed } from 'vue'
+
 import IcIcon from '@/components/common/IcIcon.vue'
-import type { EditorViewMode } from '@/types/knowledge'
+import type { EditorWorkspaceMode } from '@/types/knowledge'
 
 defineOptions({ name: 'EditorModeSwitch' })
 
 const props = withDefaults(defineProps<{
-  modelValue: EditorViewMode
+  modelValue: EditorWorkspaceMode
+  options?: Array<{ mode: EditorWorkspaceMode; label: string; icon: string }>
   previewOnly?: boolean
   editOnly?: boolean
 }>(), {
@@ -22,18 +25,23 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  'update:modelValue': [mode: EditorViewMode]
+  'update:modelValue': [mode: EditorWorkspaceMode]
 }>()
 
 /** Stable mode definitions shared by the formal editor and readonly preview. */
-const modeButtons: Array<{ mode: EditorViewMode; label: string; icon: string }> = [
+const defaultModeButtons: Array<{ mode: EditorWorkspaceMode; label: string; icon: string }> = [
   { mode: 'edit', label: 'Edit', icon: 'edit' },
   { mode: 'preview', label: 'Preview', icon: 'visibility' },
   { mode: 'split', label: 'Split', icon: 'view-column' },
 ]
+const modeButtons = computed(() => props.options ?? defaultModeButtons)
+const switchStyle = computed(() => ({
+  '--mode-count': modeButtons.value.length,
+  '--mode-index': Math.max(0, modeButtons.value.findIndex((button) => button.mode === props.modelValue)),
+}))
 
 /** Selects an available view mode without changing the editor's write policy. */
-function selectMode(mode: EditorViewMode) {
+function selectMode(mode: EditorWorkspaceMode) {
   if (props.previewOnly && mode !== 'preview') return
   if (props.editOnly && mode !== 'edit') return
   emit('update:modelValue', mode)
@@ -44,6 +52,7 @@ function selectMode(mode: EditorViewMode) {
   <div
     class="editor-mode-switch"
     :data-mode="modelValue"
+    :style="switchStyle"
     role="group"
     aria-label="Editor view mode"
   >
@@ -67,7 +76,7 @@ function selectMode(mode: EditorViewMode) {
 .editor-mode-switch {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--mode-count), minmax(0, 1fr));
   padding: 2px;
   border: 0;
   border-radius: var(--radius-md);
@@ -79,19 +88,12 @@ function selectMode(mode: EditorViewMode) {
   top: 2px;
   bottom: 2px;
   left: 2px;
-  width: calc((100% - 4px) / 3);
+  width: calc((100% - 4px) / var(--mode-count));
   pointer-events: none;
   border-radius: var(--radius-sm);
   background: var(--color-primary);
+  transform: translateX(calc(var(--mode-index) * 100%));
   transition: transform 180ms ease;
-}
-
-.editor-mode-switch[data-mode='preview'] .editor-mode-indicator {
-  transform: translateX(100%);
-}
-
-.editor-mode-switch[data-mode='split'] .editor-mode-indicator {
-  transform: translateX(200%);
 }
 
 .editor-mode-switch button {
