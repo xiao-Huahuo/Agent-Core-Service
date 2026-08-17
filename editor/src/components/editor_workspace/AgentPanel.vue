@@ -757,30 +757,31 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
       <span class="topbar-title">{{ sessionTitle }}</span>
       <div class="topbar-right">
         <FavoriteButton
+          class="topbar-tool-button"
           target-type="session"
           :target-id="activeSessionId || ''"
           :disabled="!activeSessionId"
         />
-        <button class="new-session-round-btn" type="button" title="环境与变更" aria-label="环境与变更" :aria-pressed="environmentCardOpen" @click="toggleEnvironmentCard">
-          <IcIcon name="dns" :size="16" />
+        <button class="topbar-tool-button" type="button" title="环境与变更" aria-label="环境与变更" :aria-pressed="environmentCardOpen" @click="toggleEnvironmentCard">
+          <IcIcon name="dns" :size="17" />
         </button>
         <button
-          class="new-session-round-btn"
+          class="topbar-tool-button"
           type="button"
           title="任务列表"
           :aria-pressed="taskListCardOpen"
           @click="toggleTaskListCard"
         >
-          <IcIcon name="checklist" :size="16" />
+          <IcIcon name="checklist" :size="17" />
         </button>
         <button
-          class="new-session-round-btn"
+          class="topbar-tool-button"
           type="button"
           title="子 Agent"
           :aria-pressed="childAgentCardOpen"
           @click="toggleChildAgentCard"
         >
-          <IcIcon name="group" :size="16" />
+          <IcIcon name="group" :size="17" />
         </button>
         <DropdownMenu v-model:open="skillMenuOpen">
           <DropdownMenuTrigger as-child>
@@ -850,8 +851,9 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
         >
           <IcIcon name="upload" :size="16" />
         </button>
-        <button class="new-session-round-btn" type="button" title="New session" @click="createSession">
+        <button class="new-session-round-btn new-session-labeled" type="button" title="新对话" @click="createSession">
           <IcIcon name="edit" :size="16" />
+          <span>新对话</span>
         </button>
       </div>
     </header>
@@ -1250,6 +1252,28 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   gap: var(--space-4);
 }
 
+.topbar-right :deep(.topbar-tool-button),
+.topbar-right .topbar-tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.topbar-right :deep(.topbar-tool-button:hover:not(:disabled)),
+.topbar-right .topbar-tool-button:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
 
 .mode-indicator {
   position: absolute;
@@ -1506,6 +1530,18 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   background: var(--color-accent-muted);
 }
 
+.new-session-labeled {
+  width: auto;
+  min-width: 76px;
+  gap: var(--space-4);
+  padding: 0 var(--space-10);
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: calc(10px * var(--font-scale));
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .agent-body {
   position: relative;
   flex: 1;
@@ -1669,6 +1705,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   border-radius: var(--radius-xl);
   background: var(--color-bg-card);
   box-shadow:
+    0 0 0 4px var(--library-form-ring),
     0 1px 3px rgba(0, 0, 0, 0.1),
     0 4px 12px rgba(0, 0, 0, 0.12);
 }
