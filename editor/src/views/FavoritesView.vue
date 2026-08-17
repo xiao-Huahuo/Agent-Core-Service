@@ -12,13 +12,14 @@ import { nextTick, onMounted, ref } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import FileResourceManager from '@/components/editor_workspace/FileResourceManager.vue'
 import FavoriteSessionList from '@/components/editor_workspace/agent_chat/FavoriteSessionList.vue'
+import ComponentLibraryView from '@/views/ComponentLibraryView.vue'
 import LibraryView from '@/views/LibraryView.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 defineOptions({ name: 'FavoritesView' })
 
-type FavoriteTab = 'files' | 'library' | 'sessions'
+type FavoriteTab = 'files' | 'library' | 'components' | 'sessions'
 
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
@@ -28,6 +29,7 @@ const sliderStyle = ref({ width: '0px', left: '0px' })
 const tabs: Array<{ value: FavoriteTab; label: string; icon: string }> = [
   { value: 'files', label: '文件', icon: 'document' },
   { value: 'library', label: '图书馆', icon: 'book' },
+  { value: 'components', label: '组件', icon: 'grid-view' },
   { value: 'sessions', label: '会话', icon: 'forum' },
 ]
 
@@ -78,6 +80,7 @@ onMounted(updateSlider)
     <main class="favorites-body">
       <FileResourceManager v-if="activeTab === 'files'" favorites-only-locked />
       <LibraryView v-else-if="activeTab === 'library'" favorites-only-locked />
+      <ComponentLibraryView v-else-if="activeTab === 'components'" favorites-only-locked />
       <FavoriteSessionList v-else :user-id="settingsStore.profile.userId" @select="openAgentSession" />
     </main>
   </section>

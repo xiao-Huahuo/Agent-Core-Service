@@ -2,7 +2,7 @@
   Favorite toggle button.
 
   Usage:
-  Render next to files, library items, and sessions. The button emits toggle
+  Render next to files, library items, components, and sessions. The button emits toggle
   requests to the backend-backed favorites store and stops parent row clicks.
 -->
 <script setup lang="ts">

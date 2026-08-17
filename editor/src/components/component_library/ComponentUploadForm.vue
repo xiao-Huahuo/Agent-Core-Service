@@ -353,7 +353,7 @@ async function submit(): Promise<void> {
   outline: 0;
   background: var(--color-canvas);
   color: var(--color-text);
-  padding: 0 var(--space-14);
+  padding: 0 var(--space-20);
   font-size: calc(13px * var(--font-scale));
 }
 

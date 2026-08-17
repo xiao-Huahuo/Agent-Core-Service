@@ -7,7 +7,8 @@
  */
 
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import ComponentLibraryCard from '@/components/component_library/ComponentLibraryCard.vue'
 import componentNameEditorSource from '@/components/component_library/ComponentNameEditor.vue?raw'
@@ -26,6 +27,10 @@ const item: ComponentLibraryItem = {
 }
 
 describe('ComponentLibraryCard', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
   it('keeps preview clicks separate from the top-right detail action', async () => {
     const wrapper = mount(ComponentLibraryCard, {
       props: { item },
@@ -65,7 +70,32 @@ describe('ComponentLibraryCard', () => {
     wrapper.getComponent({ name: 'ComponentPreview' }).vm.$emit('resize', { width: 160, height: 120 })
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.get('.preview-surface').attributes('style')).toContain('--component-preview-height: 168px')
+    expect(wrapper.get('.preview-surface').attributes('style')).toContain('--component-preview-height: 184px')
+  })
+
+  it('does not resize or reset the preview when interaction changes width only', async () => {
+    const wrapper = mount(ComponentLibraryCard, {
+      props: { item },
+      global: {
+        stubs: {
+          ComponentPreview: {
+            name: 'ComponentPreview',
+            emits: ['resize'],
+            template: '<button class="preview-stub">component action</button>',
+          },
+          IcIcon: { template: '<span />' },
+        },
+      },
+    })
+    const preview = wrapper.getComponent({ name: 'ComponentPreview' })
+    preview.vm.$emit('resize', { width: 160, height: 40 })
+    await wrapper.vm.$nextTick()
+    const stableStyle = wrapper.get('.preview-surface').attributes('style')
+
+    preview.vm.$emit('resize', { width: 220, height: 40 })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.get('.preview-surface').attributes('style')).toBe(stableStyle)
   })
 
   it('places borderless icon-only detail and copy actions together at top right', () => {
@@ -74,12 +104,21 @@ describe('ComponentLibraryCard', () => {
       global: {
         stubs: {
           ComponentPreview: { template: '<div />' },
+          FavoriteButton: {
+            name: 'FavoriteButton',
+            props: ['targetType', 'targetId'],
+            template: '<button class="favorite-stub" />',
+          },
           IcIcon: { template: '<span />' },
         },
       },
     })
 
-    expect(wrapper.get('.card-actions').findAll('button')).toHaveLength(2)
+    expect(wrapper.get('.card-actions').findAll('button')).toHaveLength(3)
+    expect(wrapper.getComponent({ name: 'FavoriteButton' }).props()).toMatchObject({
+      targetType: 'component',
+      targetId: item.component_id,
+    })
     expect(wrapper.get('.copy-button').text()).toBe('')
     expect(wrapper.get('.component-meta').find('.copy-button').exists()).toBe(false)
   })

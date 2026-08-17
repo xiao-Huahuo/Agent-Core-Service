@@ -10,7 +10,7 @@
 import { apiDelete, apiGet, apiPost } from '@/api/client'
 import { API_ROUTES } from '@/router/api_routes'
 
-export type FavoriteTargetType = 'knowledge_path' | 'library_item' | 'session'
+export type FavoriteTargetType = 'knowledge_path' | 'library_item' | 'component' | 'session'
 
 export interface FavoriteRecord {
   favorite_id: string

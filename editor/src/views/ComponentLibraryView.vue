@@ -15,6 +15,7 @@ import ComponentNameEditor from '@/components/component_library/ComponentNameEdi
 import ComponentUploadForm from '@/components/component_library/ComponentUploadForm.vue'
 import { listComponentLibraryItems, renameComponentLibraryItem } from '@/api/componentLibrary'
 import { deleteKnowledgePath } from '@/api/knowledge'
+import { useFavoritesStore } from '@/stores/favorites'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import {
@@ -25,8 +26,15 @@ import {
 
 defineOptions({ name: 'ComponentLibraryView' })
 
+const props = withDefaults(defineProps<{
+  favoritesOnlyLocked?: boolean
+}>(), {
+  favoritesOnlyLocked: false,
+})
+
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
+const favoritesStore = useFavoritesStore()
 const activeTag = ref<ComponentTag>('any')
 const components = ref<ComponentLibraryItem[]>([])
 const componentQuery = ref('')
@@ -36,12 +44,22 @@ const uploadOpen = ref(false)
 const selectedComponent = ref<ComponentLibraryItem | null>(null)
 const renamingComponentId = ref('')
 const deletingComponentId = ref('')
+const favoritesOnly = ref(false)
+const tagListRef = ref<HTMLElement | null>(null)
+const tagHoverTop = ref(0)
+const tagHoverVisible = ref(false)
+
+const effectiveFavoritesOnly = computed(() => props.favoritesOnlyLocked || favoritesOnly.value)
 
 /** Filter the loaded tag locally by component name for instant sidebar search. */
 const visibleComponents = computed(() => {
+  const favoriteIds = favoritesStore.idsFor('component')
+  const filtered = effectiveFavoritesOnly.value
+    ? components.value.filter((component) => favoriteIds.has(component.component_id))
+    : components.value
   const query = componentQuery.value.trim().toLocaleLowerCase()
-  if (!query) return components.value
-  return components.value.filter((component) => component.title.toLocaleLowerCase().includes(query))
+  if (!query) return filtered
+  return filtered.filter((component) => component.title.toLocaleLowerCase().includes(query))
 })
 
 /** Sidebar order presents the all-filter first while preserving its API value. */
@@ -78,6 +96,43 @@ async function loadComponents(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+/** Refresh the backend-persisted component favorites for the active library. */
+async function loadComponentFavorites(): Promise<void> {
+  const userId = settingsStore.profile.userId
+  if (!userId) return
+  await favoritesStore.load(userId, 'component', favoritesStore.activeLibraryId())
+}
+
+/** Toggle the local favorite-only filter unless a parent page locks it on. */
+function toggleFavoritesOnly(): void {
+  if (props.favoritesOnlyLocked) return
+  favoritesOnly.value = !favoritesOnly.value
+}
+
+/** Resolve one tag button for the sidebar's delegated hover indicator. */
+function resolveTagButton(target: EventTarget | null): HTMLElement | null {
+  const tagList = tagListRef.value
+  if (!tagList || !(target instanceof Element)) return null
+  const button = target.closest<HTMLElement>('.tag-option')
+  return button && tagList.contains(button) ? button : null
+}
+
+/** Move the shared sidebar hover surface behind the pointed or focused tag. */
+function moveTagHover(event: MouseEvent | FocusEvent): void {
+  const tagList = tagListRef.value
+  const button = resolveTagButton(event.target)
+  if (!tagList || !button) return
+  tagHoverTop.value = button.getBoundingClientRect().top - tagList.getBoundingClientRect().top
+  tagHoverVisible.value = true
+}
+
+/** Hide the sidebar hover surface after pointer and keyboard focus leave. */
+function hideTagHover(event: MouseEvent | FocusEvent): void {
+  const focusedButton = resolveTagButton(event instanceof FocusEvent ? event.relatedTarget : document.activeElement)
+  if (focusedButton) return
+  tagHoverVisible.value = false
 }
 
 /** Select one sidebar tag and return from the upload form to its component grid. */
@@ -163,12 +218,15 @@ watch(activeTag, () => {
   if (!uploadOpen.value) void loadComponents()
 })
 
-watch(() => settingsStore.profile.userId, () => {
-  void loadComponents()
-})
+watch(
+  [() => settingsStore.profile.userId, () => settingsStore.activeKnowledgeLibrary?.libraryId],
+  () => {
+    void Promise.all([loadComponents(), loadComponentFavorites()])
+  },
+)
 
 onMounted(() => {
-  void loadComponents()
+  void Promise.all([loadComponents(), loadComponentFavorites()])
 })
 </script>
 
@@ -183,7 +241,22 @@ onMounted(() => {
         <IcIcon name="search" :size="15" />
         <input v-model="componentQuery" type="search" placeholder="搜索组件" aria-label="搜索组件" />
       </label>
-      <nav class="tag-list">
+      <nav
+        ref="tagListRef"
+        class="tag-list"
+        @mouseover="moveTagHover"
+        @mouseleave="hideTagHover"
+        @focusin="moveTagHover"
+        @focusout="hideTagHover"
+      >
+        <span
+          class="tag-hover-indicator"
+          aria-hidden="true"
+          :style="{
+            transform: `translate3d(0, ${tagHoverTop}px, 0)`,
+            opacity: tagHoverVisible ? 1 : 0,
+          }"
+        ></span>
         <button
           v-for="tag in sidebarTags"
           :key="tag"
@@ -222,16 +295,29 @@ onMounted(() => {
             <strong v-else>浏览组件</strong>
           </div>
         </div>
-        <button
-          v-if="!selectedComponent"
-          class="upload-trigger"
-          :class="{ active: uploadOpen }"
-          type="button"
-          @click="openUpload"
-        >
-          <IcIcon name="add" :size="16" />
-          <span>上传组件</span>
-        </button>
+        <div v-if="!selectedComponent" class="toolbar-actions">
+          <button
+            class="favorite-filter"
+            :class="{ active: effectiveFavoritesOnly }"
+            type="button"
+            title="我的收藏"
+            aria-label="我的收藏"
+            :aria-pressed="effectiveFavoritesOnly"
+            :disabled="favoritesOnlyLocked"
+            @click="toggleFavoritesOnly"
+          >
+            <IcIcon name="star" :size="16" />
+          </button>
+          <button
+            class="upload-trigger"
+            :class="{ active: uploadOpen }"
+            type="button"
+            @click="openUpload"
+          >
+            <IcIcon name="add" :size="16" />
+            <span>上传组件</span>
+          </button>
+        </div>
       </header>
 
       <ComponentUploadForm
@@ -341,12 +427,31 @@ onMounted(() => {
 }
 
 .tag-list {
+  position: relative;
   display: grid;
   gap: var(--space-4);
 }
 
+.tag-hover-indicator {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 0;
+  display: none;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--color-canvas-soft);
+  pointer-events: none;
+  transition:
+    transform 220ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 150ms ease;
+  will-change: transform;
+}
+
 .tag-option {
   position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
   align-items: center;
@@ -415,8 +520,10 @@ onMounted(() => {
 
 .toolbar-context,
 .toolbar-copy,
+.toolbar-actions,
 .upload-trigger,
-.detail-back {
+.detail-back,
+.favorite-filter {
   display: flex;
   align-items: center;
 }
@@ -428,6 +535,10 @@ onMounted(() => {
 
 .toolbar-copy {
   min-width: 0;
+}
+
+.toolbar-actions {
+  gap: var(--space-6);
 }
 
 .toolbar-copy strong {
@@ -457,6 +568,28 @@ onMounted(() => {
 
 .detail-back:hover {
   color: var(--color-primary);
+}
+
+.favorite-filter {
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.favorite-filter:hover:not(:disabled),
+.favorite-filter.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.favorite-filter:disabled {
+  cursor: default;
 }
 
 .upload-trigger {
@@ -512,6 +645,14 @@ onMounted(() => {
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .tag-hover-indicator {
+    display: block;
+  }
+
+  .tag-option:hover:not(.active) {
+    background: transparent;
+  }
+
   .detail-back:hover {
     transform: translateX(-2px);
   }
@@ -562,6 +703,10 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .tag-hover-indicator {
+    transition: opacity 150ms ease;
+  }
+
   .tag-sidebar {
     animation: none;
     transform: none;

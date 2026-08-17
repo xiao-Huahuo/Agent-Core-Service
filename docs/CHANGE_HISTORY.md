@@ -1671,3 +1671,4 @@
 - 修复 Electron 生产启动体验:加入单实例锁和重复启动聚焦已有窗口;主窗口先显示本地启动页再等待 PyInstaller 后端;后端超时或失败时在窗口内显示错误,避免长时间透明空窗。
 - 修复 PyInstaller 后端启动崩溃:移除 `AgentService.spec` 对 `setuptools` 的排除,保留 `pkg_resources` 运行时钩子所需的 `jaraco` 依赖,解决 `ModuleNotFoundError: No module named 'jaraco'`。
 - 调整 PyInstaller 排除项:同步移除对 `wheel` 的排除,避免 setuptools 运行时钩子与 `ExcludedModule('wheel')` 冲突导致后端构建失败。
+- 组件库接入通用后端收藏体系:新增 `component` 收藏目标、卡片收藏按钮与顶栏收藏筛选;收藏页新增“组件”分类并复用锁定收藏筛选的 `ComponentLibraryView`。同时修复预览交互重渲染、恢复可靠预览高度与上下留白、加入标签侧栏动态悬停滑块,并加宽上传表单组件名输入内边距。

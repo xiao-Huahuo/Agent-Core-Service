@@ -8,6 +8,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
+import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import ComponentNameEditor from '@/components/component_library/ComponentNameEditor.vue'
 import ComponentPreview from '@/components/component_library/ComponentPreview.vue'
@@ -29,16 +30,17 @@ const emit = defineEmits<{
   delete: [item: ComponentLibraryItem]
 }>()
 const copied = ref(false)
-const previewSize = ref({ width: 0, height: 0 })
+const previewHeight = ref(216)
 
-/** Add only the sandbox canvas padding; no artificial minimum or maximum. */
+/** Add only the sandbox canvas vertical padding; no artificial minimum or maximum. */
 const previewStyle = computed(() => ({
-  '--component-preview-height': `${previewSize.value.height + 48}px`,
+  '--component-preview-height': `${previewHeight.value + 64}px`,
 }))
 
-/** Retain both intrinsic dimensions so the card is driven by rendered content. */
+/** Resize only for a real height change so preview interaction never resets the iframe. */
 function handlePreviewResize(size: { width: number; height: number }): void {
-  previewSize.value = size
+  if (previewHeight.value === size.height) return
+  previewHeight.value = size.height
 }
 
 /** Copy the exact uploaded or bundled source and briefly acknowledge success. */
@@ -55,6 +57,12 @@ async function copySource(): Promise<void> {
   <article class="component-card">
     <div class="preview-surface" :style="previewStyle">
       <div class="card-actions">
+        <FavoriteButton
+          class="component-favorite"
+          target-type="component"
+          :target-id="item.component_id"
+          :size="15"
+        />
         <button class="copy-button" type="button" :title="copied ? '已复制' : '复制代码'" :aria-label="copied ? '已复制' : '复制代码'" @click="copySource">
           <IcIcon :name="copied ? 'check' : 'copy'" :size="15" />
         </button>

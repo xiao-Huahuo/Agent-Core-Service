@@ -275,7 +275,7 @@ def list_favorites(target_type: str | None = None, library_id: str | None = None
 
 
 def add_favorite(target_type: str, target_id: str, library_id: str = "") -> str:
-    """收藏知识库路径、图书馆条目或会话。"""
+    """收藏知识库路径、图书馆条目、组件或会话。"""
 
     runtime = _write_runtime("新增收藏")
     favorite = _service("favorite").add_favorite(
@@ -290,7 +290,7 @@ def add_favorite(target_type: str, target_id: str, library_id: str = "") -> str:
 
 
 def remove_favorite(target_type: str, target_id: str, library_id: str = "") -> str:
-    """取消指定知识库路径、图书馆条目或会话的收藏。"""
+    """取消指定知识库路径、图书馆条目、组件或会话的收藏。"""
 
     runtime = _write_runtime("取消收藏")
     deleted = _service("favorite").delete_favorite(

@@ -16,7 +16,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-FavoriteTargetType = Literal["knowledge_path", "library_item", "session"]
+FavoriteTargetType = Literal["knowledge_path", "library_item", "component", "session"]
 
 
 class FavoriteCreate(BaseModel):

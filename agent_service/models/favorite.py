@@ -32,7 +32,7 @@ class FavoriteRecord(SQLModel, table=True):
     favorite_id: 收藏主键,由服务层生成。
     user_id: 收藏所属用户。
     library_id: 知识库作用域;会话收藏可为空字符串。
-    target_type: 收藏目标类型,如 knowledge_path/library_item/session。
+    target_type: 收藏目标类型,如 knowledge_path/library_item/component/session。
     target_id: 目标业务 ID,如文件相对路径、图书馆 item_id、session_id。
     created_at: 收藏创建时间。
     """

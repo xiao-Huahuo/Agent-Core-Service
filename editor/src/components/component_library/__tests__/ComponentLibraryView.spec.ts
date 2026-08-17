@@ -6,14 +6,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import CompactCodeInput from '@/components/common/CompactCodeInput.vue'
 import ComponentUploadForm from '@/components/component_library/ComponentUploadForm.vue'
+import componentUploadFormSource from '@/components/component_library/ComponentUploadForm.vue?raw'
 import { useSettingsStore } from '@/stores/settings'
 import { COMPONENT_TAGS } from '@/types/componentLibrary'
 import ComponentLibraryView from '@/views/ComponentLibraryView.vue'
+import FavoritesView from '@/views/FavoritesView.vue'
 
 const listComponentLibraryItems = vi.fn()
 const createComponentLibraryItem = vi.fn()
 const renameComponentLibraryItem = vi.fn()
 const deleteKnowledgePath = vi.fn()
+const listFavorites = vi.fn()
 
 vi.mock('@/api/componentLibrary', () => ({
   listComponentLibraryItems: (...args: unknown[]) => listComponentLibraryItems(...args),
@@ -24,6 +27,14 @@ vi.mock('@/api/componentLibrary', () => ({
 vi.mock('@/api/knowledge', () => ({
   deleteKnowledgePath: (...args: unknown[]) => deleteKnowledgePath(...args),
 }))
+
+vi.mock('@/api/favorites', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/api/favorites')>()
+  return {
+    ...original,
+    listFavorites: (...args: unknown[]) => listFavorites(...args),
+  }
+})
 
 vi.mock('@/components/common/IcIcon.vue', () => ({
   default: { template: '<span class="icon" />' },
@@ -37,7 +48,9 @@ describe('ComponentLibraryView', () => {
     createComponentLibraryItem.mockReset()
     renameComponentLibraryItem.mockReset()
     deleteKnowledgePath.mockReset()
+    listFavorites.mockReset()
     deleteKnowledgePath.mockResolvedValue({ ok: true, trash_id: 'trash-1' })
+    listFavorites.mockResolvedValue({ favorites: [] })
     listComponentLibraryItems.mockResolvedValue({
       tags: [...COMPONENT_TAGS],
       components: [{
@@ -86,6 +99,19 @@ describe('ComponentLibraryView', () => {
     expect(wrapper.find('.tag-sidebar .upload-trigger').exists()).toBe(false)
     expect(wrapper.get('.component-toolbar .upload-trigger').text()).toContain('上传组件')
     expect(wrapper.find('.toolbar-copy span').exists()).toBe(false)
+    expect(wrapper.find('.tag-hover-indicator').exists()).toBe(true)
+
+    const favoriteFilter = wrapper.get('.favorite-filter')
+    expect(favoriteFilter.classes()).not.toContain('active')
+    await favoriteFilter.trigger('click')
+    expect(favoriteFilter.classes()).toContain('active')
+    expect(wrapper.find('.card-stub').exists()).toBe(false)
+    await favoriteFilter.trigger('click')
+    expect(wrapper.find('.card-stub').exists()).toBe(true)
+
+    wrapper.findAll('.tag-option')[1]?.element.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('.tag-hover-indicator').attributes('style')).toContain('opacity: 1')
 
     await wrapper.findAll('.tag-option')[2]?.trigger('click')
     await flushPromises()
@@ -134,6 +160,83 @@ describe('ComponentLibraryView', () => {
     await search.setValue('profile')
 
     expect(wrapper.findAll('.card-stub').map((card) => card.text())).toEqual(['Profile Card'])
+  })
+
+  it('filters component cards by persisted favorites and supports locked reuse', async () => {
+    listComponentLibraryItems.mockResolvedValueOnce({
+      tags: [...COMPONENT_TAGS],
+      components: [
+        {
+          component_id: 'buttons/favorite.vue',
+          user_id: 'u1',
+          title: 'Favorite Button',
+          tag: 'buttons',
+          source_format: 'vue',
+          source: '<template><button>Favorite</button></template>',
+          builtin: false,
+          created_at: null,
+          updated_at: null,
+        },
+        {
+          component_id: 'buttons/other.vue',
+          user_id: 'u1',
+          title: 'Other Button',
+          tag: 'buttons',
+          source_format: 'vue',
+          source: '<template><button>Other</button></template>',
+          builtin: false,
+          created_at: null,
+          updated_at: null,
+        },
+      ],
+    })
+    listFavorites.mockResolvedValueOnce({
+      favorites: [{
+        favorite_id: 'fav-1',
+        user_id: 'u1',
+        library_id: '',
+        target_type: 'component',
+        target_id: 'buttons/favorite.vue',
+        created_at: '2026-08-18T00:00:00Z',
+      }],
+    })
+    const wrapper = mount(ComponentLibraryView, {
+      props: { favoritesOnlyLocked: true },
+      global: {
+        stubs: {
+          ComponentLibraryCard: { props: ['item'], template: '<article class="card-stub">{{ item.title }}</article>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(listFavorites).toHaveBeenCalledWith({ userId: 'u1', targetType: 'component', libraryId: '' })
+    expect(wrapper.findAll('.card-stub').map((card) => card.text())).toEqual(['Favorite Button'])
+    expect(wrapper.get('.favorite-filter').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.favorite-filter').classes()).toContain('active')
+  })
+
+  it('adds a component tab to favorites and reuses the locked component library', async () => {
+    const wrapper = mount(FavoritesView, {
+      global: {
+        stubs: {
+          FileResourceManager: true,
+          LibraryView: true,
+          FavoriteSessionList: true,
+          ComponentLibraryView: {
+            name: 'ComponentLibraryView',
+            props: { favoritesOnlyLocked: Boolean },
+            template: '<section class="favorite-components-stub" />',
+          },
+        },
+      },
+    })
+
+    const componentTab = wrapper.findAll('.favorites-switch-button').find((button) => button.text().includes('组件'))
+    expect(componentTab).toBeDefined()
+    await componentTab!.trigger('click')
+
+    expect(wrapper.getComponent({ name: 'ComponentLibraryView' }).props('favoritesOnlyLocked')).toBe(true)
   })
 
   it('opens a dedicated preview-and-source detail page from a card event', async () => {
@@ -222,6 +325,7 @@ describe('ComponentLibraryView', () => {
     expect(wrapper.get('.preview-placeholder').text()).toBe('')
     expect(wrapper.get('.file-picker-button').text()).toBe('')
     expect(wrapper.findComponent(CompactCodeInput).exists()).toBe(true)
+    expect(componentUploadFormSource).toMatch(/\.name-field input\s*\{[^}]*padding:\s*0 var\(--space-20\)/su)
   })
 
   it('confirms and moves a card component to the knowledge trash', async () => {

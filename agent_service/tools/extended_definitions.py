@@ -236,15 +236,15 @@ EXTENDED_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     _tool("validate_component", "验证组件", "验证组件源码格式及 Vue/HTML 基本结构。", validate_component, {"component_id": _string("组件 ID。")}, ("component_id",)),
     _tool(
         "list_favorites", "列出收藏", "按目标类型和知识库作用域列出收藏。", list_favorites,
-        {"target_type": _string("knowledge_path、library_item 或 session。"), "library_id": _string("可选知识库 ID。")},
+        {"target_type": _string("knowledge_path、library_item、component 或 session。"), "library_id": _string("可选知识库 ID。")},
     ),
     _tool(
-        "add_favorite", "新增收藏", "收藏知识库路径、图书馆条目或会话。", add_favorite,
+        "add_favorite", "新增收藏", "收藏知识库路径、图书馆条目、组件或会话。", add_favorite,
         {"target_type": _string("收藏目标类型。"), "target_id": _string("目标 ID。"), "library_id": _string("可选知识库 ID。")},
         ("target_type", "target_id"),
     ),
     _tool(
-        "remove_favorite", "取消收藏", "取消知识库路径、图书馆条目或会话收藏。", remove_favorite,
+        "remove_favorite", "取消收藏", "取消知识库路径、图书馆条目、组件或会话收藏。", remove_favorite,
         {"target_type": _string("收藏目标类型。"), "target_id": _string("目标 ID。"), "library_id": _string("可选知识库 ID。")},
         ("target_type", "target_id"),
     ),

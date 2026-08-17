@@ -27,6 +27,10 @@ describe('component preview compiler', () => {
     expect(document).toContain('const { ref } = Vue')
     expect(document).toContain('metaweave-component-preview-size')
     expect(document).toContain('ResizeObserver')
+    expect(document).toContain('setTimeout(schedule, 100)')
+    expect(document).toContain('place-items:center')
+    expect(document).toContain('padding:32px 24px')
+    expect(document).not.toContain('script type="module"')
     expect(document).not.toMatch(/import\s+\{\s*ref/)
   })
 

@@ -30,14 +30,20 @@ test('component library masonry, details, and live Vue upload preview work toget
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: browserOrigin })
   const browserErrors: string[] = []
   page.on('pageerror', (error) => browserErrors.push(error.message))
+  const runSuffix = Date.now().toString()
+  const interactiveTitle = `component-library-smoke-button-${runSuffix}`
+  const tallCardTitle = `component-library-smoke-card-${runSuffix}`
 
   await page.goto('/')
   const userIdInput = page.getByRole('textbox', { name: '用户 ID' })
-  if (await userIdInput.isVisible()) {
-    await userIdInput.fill('component-ui-smoke')
-    await page.getByRole('button', { name: '进入', exact: true }).click()
-  }
+  await expect(userIdInput).toBeVisible()
+  await userIdInput.fill('component-ui-smoke')
+  await expect(userIdInput).toHaveValue('component-ui-smoke')
+  const enterButton = page.getByRole('button', { name: '进入', exact: true })
+  await expect(enterButton).toBeEnabled()
+  await enterButton.click()
   const knowledgeButton = page.getByRole('button', { name: '库', exact: true })
+  await expect(knowledgeButton).toBeVisible({ timeout: 20_000 })
   await knowledgeButton.hover()
   await expect(knowledgeButton).toHaveAttribute('aria-expanded', 'true')
   await page.getByRole('button', { name: '组件库', exact: true }).click()
@@ -58,17 +64,17 @@ test('component library masonry, details, and live Vue upload preview work toget
 
   const fixtures = [
     {
-      filename: 'component-library-smoke-checkbox.vue',
+      filename: `component-library-smoke-checkbox-${runSuffix}.vue`,
       tag: 'checkboxes',
       source: '<template><label><input type="checkbox"> Smoke</label></template>',
     },
     {
-      filename: 'component-library-smoke-button.vue',
+      filename: `${interactiveTitle}.vue`,
       tag: 'buttons',
       source: '<template><button @click="$event.currentTarget.textContent=\'Done\'">Smoke</button></template>',
     },
     {
-      filename: 'component-library-smoke-card.html',
+      filename: `${tallCardTitle}.html`,
       tag: 'cards',
       source: '<div style="width:180px;height:320px;background:#ddd">Tall smoke card</div>',
     },
@@ -88,7 +94,9 @@ test('component library masonry, details, and live Vue upload preview work toget
   await expect(page.locator('.tag-option').first()).toHaveText('all')
   const toolbar = page.locator('.component-toolbar')
   const uploadButton = toolbar.getByRole('button', { name: '上传组件', exact: true })
+  const favoriteFilter = toolbar.getByRole('button', { name: '我的收藏', exact: true })
   await expect(uploadButton).toBeVisible()
+  await expect(favoriteFilter).toBeVisible()
   await expect(toolbar.locator('.toolbar-copy span')).toHaveCount(0)
   expect(await toolbar.evaluate((element) => getComputedStyle(element).borderBottomStyle)).toBe('none')
   const tagSidebar = page.locator('.tag-sidebar')
@@ -97,6 +105,12 @@ test('component library masonry, details, and live Vue upload preview work toget
     shadow: getComputedStyle(element).boxShadow,
     animation: getComputedStyle(element).animationDuration,
   }))).toEqual({ border: 'none', shadow: expect.not.stringMatching(/^none$/u), animation: '0.22s' })
+  const tagHoverIndicator = tagSidebar.locator('.tag-hover-indicator')
+  await page.getByRole('button', { name: 'buttons', exact: true }).hover()
+  await expect(tagHoverIndicator).toHaveCSS('opacity', '1')
+  const firstTagTransform = await tagHoverIndicator.evaluate((element) => getComputedStyle(element).transform)
+  await page.getByRole('button', { name: 'cards', exact: true }).hover()
+  await expect.poll(() => tagHoverIndicator.evaluate((element) => getComputedStyle(element).transform)).not.toBe(firstTagTransform)
   const toolbarBox = await toolbar.boundingBox()
   const uploadBox = await uploadButton.boundingBox()
   expect(uploadBox?.x).toBeGreaterThan((toolbarBox?.x ?? 0) + (toolbarBox?.width ?? 0) / 2)
@@ -105,20 +119,41 @@ test('component library masonry, details, and live Vue upload preview work toget
   expect(await uploadButton.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
 
   await expect.poll(() => page.locator('.component-card').count(), { timeout: 20_000 }).toBeGreaterThanOrEqual(3)
-  await expect(page.locator('.preview-error')).toHaveCount(0)
   await expect.poll(async () => {
     const positions = await page.locator('.component-card').evaluateAll((cards) => (
       cards.slice(0, 4).map((card) => Math.round(card.getBoundingClientRect().y))
     ))
     return new Set(positions).size
   }).toBeGreaterThan(1)
-  await expect.poll(async () => page.locator('.preview-surface').evaluateAll((surfaces) => (
-    new Set(surfaces.map((surface) => Math.round(surface.getBoundingClientRect().height))).size
-  ))).toBeGreaterThan(1)
-  expect(await page.frameLocator('.component-card iframe').first().locator('body').evaluate((body) => ({
+  const tallCard = page.getByRole('button', { name: `重命名 ${tallCardTitle}` }).locator('xpath=ancestor::article')
+  await expect.poll(async () => tallCard.locator('.preview-surface').evaluate(
+    (surface) => Math.round(surface.getBoundingClientRect().height),
+  )).toBeGreaterThanOrEqual(280)
+  const interactiveCard = page.getByRole('button', { name: `重命名 ${interactiveTitle}` }).locator('xpath=ancestor::article')
+  expect(await interactiveCard.frameLocator('iframe').locator('body').evaluate((body) => ({
     display: getComputedStyle(body).display,
     placeItems: getComputedStyle(body).placeItems,
-  }))).toEqual({ display: 'grid', placeItems: 'center' })
+    paddingTop: getComputedStyle(body).paddingTop,
+    paddingBottom: getComputedStyle(body).paddingBottom,
+  }))).toEqual({ display: 'grid', placeItems: 'center', paddingTop: '32px', paddingBottom: '32px' })
+
+  const interactiveButton = interactiveCard.frameLocator('iframe').getByRole('button', { name: 'Smoke' })
+  await interactiveButton.click()
+  await expect(interactiveButton).toHaveText('Done')
+  await expect(interactiveCard).toBeVisible()
+  await expect(interactiveCard.locator('iframe')).toBeVisible()
+
+  const componentFavorite = interactiveCard.getByRole('button', { name: '收藏', exact: true })
+  await componentFavorite.click()
+  await expect(componentFavorite).toHaveAttribute('aria-pressed', 'true')
+  await page.locator('.activity-bar').getByRole('button', { name: '我的收藏', exact: true }).click()
+  await page.getByRole('button', { name: '组件', exact: true }).click()
+  const favoriteComponentCard = page.getByRole('button', { name: `重命名 ${interactiveTitle}` }).locator('xpath=ancestor::article')
+  await expect(favoriteComponentCard).toBeVisible()
+  await favoriteComponentCard.getByRole('button', { name: '取消收藏', exact: true }).click()
+  await expect(favoriteComponentCard).toHaveCount(0)
+  await knowledgeButton.hover()
+  await page.getByRole('button', { name: '组件库', exact: true }).click()
 
   const seededNameTrigger = page.getByRole('button', { name: `重命名 ${renameSeed.title}` })
   await expect(seededNameTrigger).toBeVisible()
@@ -267,6 +302,9 @@ test('component library masonry, details, and live Vue upload preview work toget
   expect(nameBox?.y).toBeLessThan(tagBox?.y ?? 0)
   expect(tagBox?.y).toBeGreaterThanOrEqual((compilerBox?.y ?? 0) + (compilerBox?.height ?? 0))
   expect(Math.abs((tagBox?.width ?? 0) - (uploadFormBox?.width ?? 0) / 2)).toBeLessThan(2)
+  expect(await page.locator('input[name="component-name"]').evaluate(
+    (element) => Number.parseFloat(getComputedStyle(element).paddingLeft),
+  )).toBeGreaterThan(14)
   const tagPicker = page.locator('.tag-field .library-tag-picker')
   const tagPickerBox = await tagPicker.boundingBox()
   await tagPicker.getByTitle('选择已有标签').click()

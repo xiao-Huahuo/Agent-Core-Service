@@ -221,6 +221,10 @@ def test_business_agent_tools_complete_feedback_component_favorite_and_library_f
     assert favorite["target_id"] == "docs/a.pdf"
     assert len(json.loads(builtin_business_ops.list_favorites("knowledge_path", "l1"))) == 1
     assert json.loads(builtin_business_ops.remove_favorite("knowledge_path", "docs/a.pdf", "l1"))["deleted"] is True
+    component_favorite = json.loads(builtin_business_ops.add_favorite("component", "buttons/confirm.vue", "l1"))
+    assert component_favorite["target_id"] == "buttons/confirm.vue"
+    assert len(json.loads(builtin_business_ops.list_favorites("component", "l1"))) == 1
+    assert json.loads(builtin_business_ops.remove_favorite("component", "buttons/confirm.vue", "l1"))["deleted"] is True
     assert json.loads(builtin_business_ops.get_library_item("book_1"))["item"]["title"] == "Book"
 
 

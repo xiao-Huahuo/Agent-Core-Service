@@ -88,7 +88,7 @@ function buildVueDocument(source: string): string {
     "Vue.createApp(__sfc__).mount('#app')",
   ].filter(Boolean).join('\n'))
 
-  return `<!doctype html><html><head>${securityMeta()}${baseStyle()}<style>${escapeClosingTag(style, 'style')}</style></head><body><div id="app"></div><script>${escapeClosingTag(vueRuntimeSource, 'script')}</script><script type="module">${escapeClosingTag(componentScript, 'script')}</script>${sizeReporterScript()}</body></html>`
+  return `<!doctype html><html><head>${securityMeta()}${baseStyle()}<style>${escapeClosingTag(style, 'style')}</style></head><body><div id="app"></div><script>${escapeClosingTag(vueRuntimeSource, 'script')}</script><script>${escapeClosingTag(componentScript, 'script')}</script>${sizeReporterScript()}</body></html>`
 }
 
 /** Compile every SFC style block and surface its first compiler error. */
@@ -166,10 +166,48 @@ function securityMeta(): string {
 
 /** Center components on a transparent, theme-neutral preview canvas. */
 function baseStyle(): string {
-  return '<style>html,body{width:100%;height:100%;margin:0;overflow:hidden}body{display:grid;place-items:center;box-sizing:border-box;padding:24px;background:transparent;font-family:system-ui,sans-serif}*,*::before,*::after{box-sizing:border-box}</style>'
+  return '<style>html,body{width:100%;height:100%;margin:0;overflow:hidden}body{display:grid;place-items:center;box-sizing:border-box;padding:32px 24px;background:transparent;font-family:system-ui,sans-serif}*,*::before,*::after{box-sizing:border-box}</style>'
 }
 
 /** Report the intrinsic component bounds without granting the iframe same-origin access. */
 function sizeReporterScript(): string {
-  return `<script>(()=>{const type='${COMPONENT_PREVIEW_SIZE_MESSAGE}';let frame=0;const report=()=>{const app=document.getElementById('app');const children=app&&app.children.length?[...app.children]:[...document.body.children].filter((node)=>!['SCRIPT','STYLE'].includes(node.tagName));const viewport=document.documentElement;const rects=children.map((node)=>{const rect=node.getBoundingClientRect();const position=getComputedStyle(node).position;const viewportCoupled=(position==='absolute'||position==='fixed')&&(Math.abs(rect.width-viewport.clientWidth)<=1||Math.abs(rect.height-viewport.clientHeight)<=1);return viewportCoupled?null:rect}).filter((rect)=>rect&&(rect.width||rect.height));if(!rects.length)return;const left=Math.min(...rects.map((rect)=>rect.left));const right=Math.max(...rects.map((rect)=>rect.right));const top=Math.min(...rects.map((rect)=>rect.top));const bottom=Math.max(...rects.map((rect)=>rect.bottom));parent.postMessage({type,width:Math.ceil(right-left),height:Math.ceil(bottom-top)},'*')};const schedule=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>requestAnimationFrame(report))};new ResizeObserver(schedule).observe(document.body);new MutationObserver(schedule).observe(document.body,{attributes:true,childList:true,subtree:true});addEventListener('load',schedule);schedule()})()</script>`
+  return `<script>
+    (() => {
+      const type = '${COMPONENT_PREVIEW_SIZE_MESSAGE}';
+      let frame = 0;
+      const report = () => {
+        const app = document.getElementById('app');
+        const children = app && app.children.length
+          ? [...app.children]
+          : [...document.body.children].filter((node) => !['SCRIPT', 'STYLE'].includes(node.tagName));
+        const viewport = document.documentElement;
+        const rects = children.map((node) => {
+          const rect = node.getBoundingClientRect();
+          const position = getComputedStyle(node).position;
+          const viewportCoupled = (position === 'absolute' || position === 'fixed')
+            && (Math.abs(rect.width - viewport.clientWidth) <= 1 || Math.abs(rect.height - viewport.clientHeight) <= 1);
+          return viewportCoupled ? null : rect;
+        }).filter((rect) => rect && (rect.width || rect.height));
+        if (!rects.length) return;
+        const left = Math.min(...rects.map((rect) => rect.left));
+        const right = Math.max(...rects.map((rect) => rect.right));
+        const top = Math.min(...rects.map((rect) => rect.top));
+        const bottom = Math.max(...rects.map((rect) => rect.bottom));
+        parent.postMessage({
+          type,
+          width: Math.ceil(right - left),
+          height: Math.ceil(bottom - top),
+        }, '*');
+      };
+      const schedule = () => {
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => requestAnimationFrame(report));
+      };
+      new ResizeObserver(schedule).observe(document.body);
+      new MutationObserver(schedule).observe(document.body, { attributes: true, childList: true, subtree: true });
+      addEventListener('load', schedule);
+      schedule();
+      setTimeout(schedule, 100);
+    })();
+  </script>`
 }
