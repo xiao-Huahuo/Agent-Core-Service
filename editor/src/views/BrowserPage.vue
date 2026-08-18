@@ -20,6 +20,7 @@ const props = defineProps<{
   initialUrl?: string
   navigationRequestId?: number
   sidebar?: boolean
+  visible?: boolean
 }>()
 
 const settingsStore = useSettingsStore()
@@ -46,7 +47,8 @@ let disposed = false
 
 /** Show or reposition the native web surface after both config and bounds exist. */
 async function syncNativeView() {
-  if (!desktop || props.activityOverlayOpen || !configReady.value || !latestBounds.value) return
+  if (!desktop || props.visible === false || props.activityOverlayOpen || !configReady.value || !latestBounds.value) return
+  if (latestBounds.value.width < 1 || latestBounds.value.height < 1) return
   if (!browserShown) {
     browserShown = await desktop.browserShow({
       bounds: { ...latestBounds.value },
@@ -101,6 +103,17 @@ watch(() => props.activityOverlayOpen, async (open) => {
   if (!desktop) return
   if (open) {
     browserShown = false
+    await desktop.browserHide()
+    return
+  }
+  await syncNativeView()
+})
+
+watch(() => props.visible, async (visible) => {
+  if (!desktop) return
+  if (visible === false) {
+    browserShown = false
+    latestBounds.value = null
     await desktop.browserHide()
     return
   }
@@ -170,10 +183,12 @@ onBeforeUnmount(() => {
       :desktop-available="desktopAvailable"
       :proxy-active="Boolean(proxyUrl)"
       :state="browserState"
+      :sidebar="sidebar"
       @bounds="handleBounds"
       @command="handleCommand"
       @navigate="handleNavigate"
       @open-settings="openBrowserSettings"
+      @close-sidebar="workspaceStore.closeBrowserSidebar"
     />
   </div>
 </template>

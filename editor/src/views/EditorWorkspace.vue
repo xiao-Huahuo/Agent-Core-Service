@@ -134,6 +134,7 @@ const workspaceGridStyle = computed<Record<string, string>>(() => ({
   '--file-resizer-width': visibleFileSidebarOpen.value ? '4px' : '0px',
   '--agent-col-width': visibleAgentSidebarOpen.value ? `${agentWidth.value}px` : '0px',
   '--agent-resizer-width': visibleAgentSidebarOpen.value ? '4px' : '0px',
+  '--browser-col-ratio': browserSidebarVisible.value ? '1fr' : '0fr',
   '--file-mobile-row': visibleFileSidebarOpen.value ? '300px' : '0px',
   '--agent-mobile-row': visibleAgentSidebarOpen.value ? '360px' : '0px',
 }))
@@ -634,6 +635,7 @@ watch(
       :class="{
         'file-sidebar-collapsed': !visibleFileSidebarOpen,
         'agent-sidebar-collapsed': !visibleAgentSidebarOpen,
+        'browser-sidebar-collapsed': !browserSidebarVisible,
         'agent-main-view': isAgentPage,
         'graph-main-view': isGraphPage,
       }"
@@ -702,7 +704,6 @@ watch(
         class="main-shell editor-col ide-panel"
         :class="{
           'agent-page-main-shell': isAgentPage,
-          'browser-sidebar-open': browserSidebarVisible,
         }"
       >
         <HomeView v-if="workspaceStore.mainView === 'home'" class="main-shell-content" />
@@ -728,15 +729,16 @@ watch(
         />
         <SkillView v-else-if="workspaceStore.mainView === 'skills'" class="main-shell-content" />
         <SettingsView v-else-if="workspaceStore.mainView === 'settings'" class="main-shell-content" />
-        <BrowserPage
-          v-if="browserSidebarVisible"
-          class="main-shell-content browser-sidebar-content"
-          :activity-overlay-open="activityOverlayOpen"
-          :initial-url="workspaceStore.browserSidebarUrl"
-          :navigation-request-id="workspaceStore.browserSidebarNavigationId"
-          sidebar
-        />
       </main>
+      <BrowserPage
+        v-if="!isBrowserPage"
+        class="browser-sidebar-content"
+        :visible="browserSidebarVisible"
+        :activity-overlay-open="activityOverlayOpen"
+        :initial-url="workspaceStore.browserSidebarUrl"
+        :navigation-request-id="workspaceStore.browserSidebarNavigationId"
+        sidebar
+      />
       <div
         class="resize-handle agent-resizer"
         role="separator"
@@ -792,7 +794,7 @@ watch(
   display: grid;
   grid-template-columns:
     var(--activity-col-width) var(--file-col-width) var(--file-resizer-width) minmax(0, 1fr)
-    var(--agent-resizer-width) var(--agent-col-width);
+    minmax(0, var(--browser-col-ratio)) var(--agent-resizer-width) var(--agent-col-width);
   column-gap: 0;
   min-width: 0;
   min-height: 0;
@@ -858,21 +860,40 @@ watch(
   min-height: 0;
 }
 
-.main-shell.ide-panel.browser-sidebar-open {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+.browser-sidebar-content {
+  grid-column: 5;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 0 var(--space-12) 0;
+  border-left: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 160ms ease, transform 180ms ease;
 }
 
-.browser-sidebar-content {
-  border-left: 1px solid var(--color-border-subtle);
+.workspace-grid.browser-sidebar-collapsed .browser-sidebar-content {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(18px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-grid {
+    transition: none;
+  }
+
+  .browser-sidebar-content {
+    transition: opacity 100ms ease;
+  }
 }
 
 .agent-resizer {
-  grid-column: 5;
+  grid-column: 6;
 }
 
 .agent-col {
-  grid-column: 6;
+  grid-column: 7;
   overflow: hidden;
   display: flex;
   flex-direction: column;

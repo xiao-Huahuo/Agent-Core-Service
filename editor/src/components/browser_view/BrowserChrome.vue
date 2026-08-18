@@ -17,12 +17,14 @@ const props = defineProps<{
   state: BrowserViewState
   desktopAvailable: boolean
   proxyActive: boolean
+  sidebar?: boolean
 }>()
 const emit = defineEmits<{
   bounds: [bounds: BrowserViewBounds]
   command: [command: 'back' | 'forward' | 'home' | 'reload' | 'stop' | 'external']
   navigate: [value: string]
   openSettings: []
+  closeSidebar: []
 }>()
 
 const surface = ref<HTMLElement | null>(null)
@@ -63,6 +65,16 @@ onBeforeUnmount(() => {
         <span class="tab-round tab-round-left"><i></i></span>
         <IcIcon name="language" :size="14" />
         <span class="tab-title">{{ shortTitle }}</span>
+        <button
+          v-if="sidebar"
+          class="browser-tab-close"
+          type="button"
+          title="关闭右侧浏览器"
+          aria-label="关闭右侧浏览器"
+          @click="$emit('closeSidebar')"
+        >
+          <IcIcon name="close" :size="13" />
+        </button>
         <span class="tab-round tab-round-right"><i></i></span>
       </div>
       <div class="browser-status">
@@ -182,6 +194,26 @@ onBeforeUnmount(() => {
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.browser-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.browser-tab-close:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
 }
 
 .tab-round {
