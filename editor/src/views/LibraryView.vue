@@ -19,7 +19,7 @@ import {
   updateLibraryItem,
 } from '@/api/library'
 import { buildApiUrl } from '@/api/client'
-import { uploadKnowledgeFile } from '@/api/knowledge'
+import { uploadKnowledgeFile, writeKnowledgeFile } from '@/api/knowledge'
 import LibraryBar from '@/components/library_view/LibraryBar.vue'
 import LibraryCard from '@/components/library_view/LibraryCard.vue'
 import LibraryCreateDialog from '@/components/library_view/LibraryCreateDialog.vue'
@@ -320,6 +320,34 @@ async function openItem(item: LibraryItem) {
   }
 }
 
+async function openSource(item: LibraryItem) {
+  if (item.content_type === 'web_url' && item.source_url) {
+    workspaceStore.openBrowserSidebar(item.source_url)
+    return
+  }
+  if (item.source_path) {
+    workspaceStore.setMainView('editor')
+    await workspaceStore.selectFile({
+      name: item.source_name || item.source_path.split('/').pop() || item.source_path,
+      path: item.source_path,
+      isDir: false,
+      mtime: item.source_mtime,
+      indexStatus: item.index_status === 'missing' ? undefined : item.index_status || undefined,
+      graphStatus: item.graph_status || undefined,
+    })
+  }
+}
+
+async function openSourceFromEdit(item: LibraryItem) {
+  editItem.value = null
+  await openSource(item)
+}
+
+function openUrlFromEdit(url: string) {
+  editItem.value = null
+  workspaceStore.openBrowserSidebar(url)
+}
+
 function toggleItem(item: LibraryItem) {
   const next = new Set(selectedIds.value)
   if (next.has(item.item_id)) {
@@ -513,9 +541,21 @@ async function createFromDialog(payload: {
   }
 }
 
-async function saveEdit(payload: { title: string; description: string; cover_mode: LibraryItem['cover_mode']; cover_asset_id: string; tags: string[] }) {
+async function saveEdit(payload: {
+  title: string
+  description: string
+  cover_mode: LibraryItem['cover_mode']
+  cover_asset_id: string
+  tags: string[]
+  source_content?: string
+}) {
   if (!editItem.value) return
-  await updateLibraryItem(editItem.value.item_id, {
+  const item = editItem.value
+  if (payload.source_content !== undefined && item.source_path) {
+    await writeKnowledgeFile(settingsStore.profile.userId, item.source_path, payload.source_content)
+    await workspaceStore.loadKnowledgeTree()
+  }
+  await updateLibraryItem(item.item_id, {
     user_id: settingsStore.profile.userId,
     title: payload.title,
     description: payload.description,
@@ -792,6 +832,7 @@ function errorMessage(error: unknown): string {
             :selected="multiSelect ? selectedIds.has(item.item_id) : selectedItem?.item_id === item.item_id"
             :multi-select="multiSelect"
             @open="openItem"
+            @edit="editItem = $event"
             @contextmenu="openContextMenu"
             @download="downloadItem"
             @save="saveInlineEdit"
@@ -910,6 +951,8 @@ function errorMessage(error: unknown): string {
       :available-tags="tags"
       @close="editItem = null"
       @save="saveEdit"
+      @open-file="openSourceFromEdit"
+      @open-url="openUrlFromEdit"
     />
     <LibraryCreateDialog
       :open="Boolean(createDialogMode)"
@@ -1004,8 +1047,6 @@ function errorMessage(error: unknown): string {
   border: 1px solid var(--color-border);
   border-radius: 50%;
   transition:
-    width 180ms ease,
-    border-radius 180ms ease,
     background 180ms ease,
     border-color 180ms ease,
     color 180ms ease;
@@ -1018,14 +1059,6 @@ function errorMessage(error: unknown): string {
   border-color: var(--color-primary);
   background: var(--color-primary-softer);
   color: var(--color-primary);
-}
-
-.view-button.active {
-  width: auto;
-  min-width: 28px;
-  gap: 4px;
-  padding: 0 8px;
-  border-radius: 999px;
 }
 
 .icon-toolbar-btn:hover,

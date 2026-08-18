@@ -24,6 +24,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   open: [item: LibraryItem]
+  edit: [item: LibraryItem]
   toggle: [item: LibraryItem]
   select: [item: LibraryItem]
   contextmenu: [event: MouseEvent, item: LibraryItem]
@@ -104,7 +105,7 @@ function handleDrop(event: DragEvent) {
     :class="{ selected, missing: !item.source_exists, 'drag-over': dragOver, collection: isCollection }"
     draggable="true"
     @click="handleClick"
-    @dblclick.stop="emit('open', item)"
+    @dblclick.stop="isCollection ? emit('open', item) : emit('edit', item)"
     @contextmenu.prevent="emit('contextmenu', $event, item)"
     @dragstart="handleDragStart"
     @dragover="handleDragOver"
@@ -147,9 +148,8 @@ function handleDrop(event: DragEvent) {
           <IcIcon v-else name="image" :size="16" />
         </span>
         <span class="bar-title" :title="item.display_title">{{ item.display_title }}</span>
-        <div class="bar-tag-row">
-          <span v-for="tag in item.tags" :key="tag" class="tag-pill" :title="tag">{{ tag }}</span>
-        </div>
+      </div>
+      <div class="bar-source-row">
         <button
           v-if="!multiSelect && item.content_type === 'web_url'"
           class="bar-badge bar-url"
@@ -163,6 +163,9 @@ function handleDrop(event: DragEvent) {
           :class="{ collection: isCollection }"
           :title="badgeText"
         >{{ badgeText }}</span>
+      </div>
+      <div class="bar-tag-row">
+        <span v-for="tag in item.tags" :key="tag" class="tag-pill" :title="tag">{{ tag }}</span>
       </div>
       <div class="bar-description" :title="item.description">{{ item.description || '无描述' }}</div>
       <div class="bar-foot">
@@ -191,7 +194,7 @@ function handleDrop(event: DragEvent) {
   display: flex;
   align-items: stretch;
   min-width: 0;
-  min-height: 88px;
+  min-height: 117.333px;
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 18px;
@@ -256,7 +259,9 @@ function handleDrop(event: DragEvent) {
   position: relative;
   flex: 0 0 104px;
   min-width: 0;
+  margin: 6px 0 6px 6px;
   overflow: hidden;
+  border-radius: 18px;
   background: var(--color-surface-raised);
 }
 
@@ -345,6 +350,12 @@ function handleDrop(event: DragEvent) {
   color: var(--color-text);
 }
 
+.bar-source-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
 .bar-type-icon {
   display: inline-flex;
   align-items: center;
@@ -397,8 +408,7 @@ function handleDrop(event: DragEvent) {
 
 .bar-badge {
   flex: 0 0 auto;
-  margin-left: auto;
-  max-width: 40%;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

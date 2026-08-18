@@ -15,8 +15,11 @@ withDefaults(defineProps<{
   placeholder?: string
   /** Editable source text owned by the parent form. */
   modelValue: string
+  /** Prevents edits when the same code surface is used for read-only previews. */
+  readonly?: boolean
 }>(), {
   placeholder: '',
+  readonly: false,
 })
 
 const emit = defineEmits<{
@@ -37,6 +40,7 @@ function updateValue(event: Event): void {
       class="compact-code-input__field"
       :value="modelValue"
       :placeholder="placeholder"
+      :readonly="readonly"
       spellcheck="false"
       @input="updateValue"
     ></textarea>

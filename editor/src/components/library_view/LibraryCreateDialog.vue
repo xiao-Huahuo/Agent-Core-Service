@@ -423,8 +423,9 @@ function submit() {
 .library-script-input {
   min-height: 198px;
   overflow: hidden;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 28px;
+  background: var(--color-canvas);
 }
 
 .library-script-input:focus-within {
@@ -467,11 +468,11 @@ function submit() {
 .text-content-field textarea {
   width: 100%;
   min-height: 168px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 28px;
   background: var(--color-canvas);
   color: var(--color-text);
-  padding: 12px 14px;
+  padding: 10px 14px;
   resize: vertical;
   outline: none;
   font-size: calc(13px * var(--font-scale));

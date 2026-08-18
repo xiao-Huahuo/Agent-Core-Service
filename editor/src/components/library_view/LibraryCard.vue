@@ -167,7 +167,7 @@ function handleDrop(event: DragEvent) {
     :class="{ selected, missing: !item.source_exists, 'drag-over': dragOver, collection: isCollection, 'details-open': detailsOpen }"
     draggable="true"
     @click="handleClick"
-    @dblclick.stop="emit('open', item)"
+    @dblclick.stop="isCollection ? emit('open', item) : emit('edit', item)"
     @contextmenu.prevent="emit('contextmenu', $event, item)"
     @dragstart="handleDragStart"
     @dragover="handleDragOver"
@@ -293,15 +293,9 @@ function handleDrop(event: DragEvent) {
   color: var(--color-text);
   font-family: var(--font-ui);
   font-size: calc(13px * var(--font-scale));
-  transition:
-    transform 160ms ease;
   break-inside: avoid;
   page-break-inside: avoid;
   vertical-align: top;
-}
-
-.library-card:hover {
-  transform: translateY(-1px);
 }
 
 .library-card.details-open {
@@ -363,12 +357,11 @@ function handleDrop(event: DragEvent) {
   aspect-ratio: 2 / 3;
   min-height: 0;
   overflow: hidden;
+  border: 1px solid var(--color-border);
   border-radius: 18px;
   background: var(--color-surface-raised);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.10);
-  transition:
-    box-shadow 160ms ease,
-    background 160ms ease;
+  box-shadow: none;
+  transition: background 160ms ease;
 }
 
 .cover.image-cover {
@@ -380,7 +373,7 @@ function handleDrop(event: DragEvent) {
 .library-card:hover .cover,
 .library-card.selected .cover {
   background: var(--color-surface-raised);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
+  box-shadow: none;
 }
 
 .cover-image {
@@ -582,7 +575,7 @@ function handleDrop(event: DragEvent) {
 }
 
 .description.expandable-block {
-  border-radius: 999px;
+  border-radius: 18px;
 }
 
 .details-popover {
@@ -594,8 +587,9 @@ function handleDrop(event: DragEvent) {
   display: grid;
   gap: 6px;
   max-height: 240px;
-  overflow: hidden;
-  border-radius: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-radius: 18px;
   background: color-mix(in srgb, var(--color-canvas) 92%, transparent);
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
   padding: 6px;
