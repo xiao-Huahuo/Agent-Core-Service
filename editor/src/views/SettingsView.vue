@@ -1862,6 +1862,14 @@ onBeforeUnmount(() => {
   flex: 0 0 var(--settings-label-width) !important;
 }
 
+.settings-body .terminal-page-card,
+.settings-body .vault-debug-card,
+.settings-body .safety-global-toggles,
+.settings-body .safety-category-card,
+.settings-body .stat-card {
+  margin-inline: var(--space-8);
+}
+
 .settings-body input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='hidden']):focus,
 .settings-body select:focus,
 .settings-body textarea:focus {

@@ -190,6 +190,11 @@ function save() {
         <textarea v-model="allowedText[activeShell]" spellcheck="false" @blur="save"></textarea>
       </div>
       <div class="segment-list">
+        <div class="segment-table-header" aria-hidden="true">
+          <span>类型</span>
+          <span>程序</span>
+          <span>用途</span>
+        </div>
         <div v-for="segment in activeCatalog" :key="`${segment.type}:${segment.program}`" class="segment-row">
           <code>{{ segment.type }}</code>
           <strong>{{ segment.program }}</strong>
@@ -219,7 +224,64 @@ function save() {
 }
 
 .segment-row span {
-  display: none;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: calc(12px * var(--font-scale));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.segment-list {
+  display: grid;
+  gap: 0;
+  margin: var(--space-8) 0 var(--space-12);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+}
+
+.segment-table-header,
+.segment-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.8fr) minmax(180px, 1fr) minmax(0, 2fr);
+  align-items: center;
+  column-gap: var(--space-10);
+  min-width: 0;
+  padding: 0 var(--space-12);
+}
+
+.segment-table-header {
+  min-height: 44px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 600;
+}
+
+.segment-row {
+  min-height: 38px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  background: transparent;
+}
+
+.segment-row:last-child {
+  border-bottom: 0;
+}
+
+.segment-row:hover {
+  background: var(--color-primary-softer);
+}
+
+.segment-row code {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-family: var(--font-code);
+  font-size: calc(12px * var(--font-scale));
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .terminal-shell-switch {
