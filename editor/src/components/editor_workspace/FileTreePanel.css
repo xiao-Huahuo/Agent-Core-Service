@@ -43,6 +43,18 @@
   gap: var(--space-4);
 }
 
+.header-row-main {
+  justify-content: space-evenly;
+}
+
+.header-main-actions {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: var(--space-4);
+}
+
 .header-row-secondary {
   justify-content: space-evenly;
   gap: var(--space-8);
@@ -393,27 +405,6 @@
 
 .header-action.pill.active {
   border-color: var(--color-selection-blue);
-}
-
-.header-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  flex: 0 0 auto;
-  height: 18px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--color-text-muted);
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.header-toggle:hover {
-  background: var(--color-selection-blue-soft);
-  color: var(--color-selection-blue);
 }
 
 .header-row-secondary-wrap {

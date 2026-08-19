@@ -1,9 +1,7 @@
 <!--
-  Recursive file tree node.
-
-  Usage:
-  Used by FileTreePanel to render directories and files without noisy status
-  badges, keeping the tree focused on navigation.
+  文件树递归节点组件。
+  使用 checkbox、label 与嵌套列表组成用户指定的文件树结构，同时把项目的选择、拖放、
+  右键菜单和行内重命名事件原样转交给 FileTreePanel。
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
@@ -11,24 +9,15 @@ import { computed, nextTick, ref, watch } from 'vue'
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
-import type { KnowledgeFileNode } from '@/types/knowledge'
 import { useSettingsStore } from '@/stores/settings'
-import { useGitStore } from '@/stores/git'
+import type { KnowledgeFileNode } from '@/types/knowledge'
 
 defineOptions({ name: 'TreeNode' })
 
+/** 文件树状态列的全局显示设置，由顶部状态按钮统一切换。 */
 const settingsStore = useSettingsStore()
-const gitStore = useGitStore()
 
-const statusWidth = computed(() => {
-  const showIndex = settingsStore.showIndexColumn
-  const showGraph = settingsStore.showGraphColumn
-  if (showIndex && showGraph) return '58px'
-  if (showIndex || showGraph) return '34px'
-  return '8px'
-})
-const favoriteWidth = computed(() => settingsStore.showFavoriteColumn ? '24px' : '0px')
-
+/** 文件树节点及父级面板维护的交互状态。 */
 const props = defineProps<{
   node: KnowledgeFileNode
   depth: number
@@ -38,11 +27,11 @@ const props = defineProps<{
   dirtyPaths: Set<string>
   editingPath: string
   editingValue: string
-  staggerIndex?: number
 }>()
 
+/** 向文件树面板转交节点交互，不在递归节点内复制业务状态。 */
 const emit = defineEmits<{
-  select: [node: KnowledgeFileNode, event: MouseEvent | KeyboardEvent]
+  select: [node: KnowledgeFileNode, event?: MouseEvent | KeyboardEvent]
   dropFiles: [node: KnowledgeFileNode, files: File[]]
   dropNodes: [node: KnowledgeFileNode, paths: string[]]
   nodeDragStart: [node: KnowledgeFileNode, event: DragEvent]
@@ -53,58 +42,64 @@ const emit = defineEmits<{
   editCancel: []
 }>()
 
+/** 当前节点的行内重命名输入框。 */
 const inlineInput = ref<HTMLInputElement | null>(null)
+/** 当前节点是否正在接收拖放。 */
 const dragOver = ref(false)
-
-const materialIcon = computed(() => materialFileIconForNode(props.node, props.node.isDir && props.expandedPaths.has(props.node.path)))
-const gitStatusClass = computed(() => {
-  return gitStore.statusClassForPath(props.node.path, props.node.isDir)
-})
-
+/** 文件夹是否由父级状态标记为展开。 */
+const isExpanded = computed(() => props.expandedPaths.has(props.node.path))
+/** 当前节点是否属于单选或多选集合。 */
+const isSelected = computed(
+  () => props.selectedPath === props.node.path || props.selectedPaths.has(props.node.path),
+)
+/** 为 label 与 checkbox 生成稳定且合法的关联标识。 */
+const folderToggleId = computed(
+  () => `tree-node-${(props.node.path || props.node.name).replace(/[^a-zA-Z0-9_-]/g, '-')}-toggle`,
+)
+/** 索引状态的语义样式。 */
 const indexStatusClass = computed(() => {
   if (props.node.indexStatus === 'indexed' || props.node.indexStatus === 'clean') return 'indexed'
   if (props.node.indexStatus === 'ignored') return 'ignored'
   if (props.node.indexStatus === 'failed') return 'failed'
   return 'dirty'
 })
-
+/** 索引状态的悬停说明。 */
 const indexStatusTitle = computed(() => {
   if (props.node.indexStatus === 'indexed' || props.node.indexStatus === 'clean') return '已进入向量库'
   if (props.node.indexStatus === 'ignored') return '已屏蔽, 不进入向量库'
   if (props.node.indexStatus === 'failed') return '入库失败'
   return '未进入向量库'
 })
-
+/** 索引状态对应的项目图标。 */
 const indexStatusIcon = computed(() => {
   if (props.node.indexStatus === 'indexed' || props.node.indexStatus === 'clean') return 'check-circle'
   if (props.node.indexStatus === 'ignored') return 'block'
   return 'error-outline'
 })
-
+/** 图谱状态的语义样式。 */
 const graphStatusClass = computed(() => {
   if (props.node.graphStatus === 'graphed') return 'graphed'
   if (props.node.graphStatus === 'ignored') return 'ignored'
   return 'dirty'
 })
-
+/** 图谱状态的悬停说明。 */
 const graphStatusTitle = computed(() => {
   if (props.node.graphStatus === 'graphed') return '已入图谱'
   if (props.node.graphStatus === 'ignored') return '已屏蔽, 不进入图谱'
   return '未入图谱'
 })
-
+/** 图谱状态对应的项目图标。 */
 const graphStatusIcon = computed(() => {
   if (props.node.graphStatus === 'graphed') return 'hub'
   if (props.node.graphStatus === 'ignored') return 'block'
   return 'git'
 })
 
+/** 节点进入重命名状态时自动聚焦并选中原名称。 */
 watch(
   () => props.editingPath,
   () => {
-    if (props.editingPath !== props.node.path) {
-      return
-    }
+    if (props.editingPath !== props.node.path) return
     void nextTick(() => {
       inlineInput.value?.focus()
       inlineInput.value?.select()
@@ -113,80 +108,157 @@ watch(
   { immediate: true },
 )
 
+/** 把文件行或键盘选择交给父级面板。 */
+function handleRowSelect(event?: MouseEvent | KeyboardEvent) {
+  emit('select', props.node, event)
+}
+
+/** checkbox 改变时由父级统一更新文件夹展开集合。 */
+function handleFolderToggle() {
+  emit('select', props.node)
+}
+
+/** 允许当前节点成为文件或树节点的拖放目标。 */
 function handleRowDragover(event: DragEvent) {
   event.preventDefault()
   dragOver.value = true
 }
 
-function collapseEnter(el: Element) {
-  if (!(el instanceof HTMLElement)) return
-  el.style.height = '0px'
-  el.style.overflow = 'hidden'
-  requestAnimationFrame(() => {
-    const height = el.scrollHeight
-    el.style.height = height + 'px'
-  })
-}
-
-function collapseAfterEnter(el: Element) {
-  if (!(el instanceof HTMLElement)) return
-  el.style.height = ''
-  el.style.overflow = ''
-}
-
-function collapseLeave(el: Element) {
-  if (!(el instanceof HTMLElement)) return
-  el.style.height = el.scrollHeight + 'px'
-  el.style.overflow = 'hidden'
-  requestAnimationFrame(() => {
-    el.style.height = '0px'
-  })
-}
-
-function collapseAfterLeave(el: Element) {
-  if (!(el instanceof HTMLElement)) return
-  el.style.height = ''
-  el.style.overflow = ''
-}
-
+/** 指针真正离开整行时清除拖放提示。 */
 function handleRowDragLeave(event: DragEvent) {
-  const el = event.currentTarget as HTMLElement | null
-  const related = event.relatedTarget as HTMLElement | null
-  if (el && related && el.contains(related)) return
+  const row = event.currentTarget as HTMLElement | null
+  const destination = event.relatedTarget as HTMLElement | null
+  if (row && destination && row.contains(destination)) return
   dragOver.value = false
 }
 
+/** 区分系统文件与文件树节点，并转交对应的拖放事件。 */
 function handleRowDrop(event: DragEvent) {
   event.preventDefault()
   event.stopPropagation()
   dragOver.value = false
+
   const files = Array.from(event.dataTransfer?.files ?? [])
   if (files.length > 0) {
     emit('dropFiles', props.node, files)
     return
   }
-  const rawPaths = event.dataTransfer?.getData('application/x-metaweave-tree-paths') ?? ''
-  if (!rawPaths) {
-    return
-  }
+
+  const payload = event.dataTransfer?.getData('application/x-metaweave-tree-paths') ?? ''
+  if (!payload) return
+
   try {
-    const paths = JSON.parse(rawPaths) as string[]
-    emit('dropNodes', props.node, paths)
+    emit('dropNodes', props.node, JSON.parse(payload) as string[])
   } catch {
-    // Ignore malformed drag payloads from outside the file tree.
+    // 忽略文件树之外来源不明且格式无效的拖放数据。
   }
 }
 </script>
 
 <template>
-  <li :style="{ '--stagger': staggerIndex ?? 0 }">
+  <li class="tree-item" :class="{ 'drag-over': dragOver }">
+    <template v-if="node.isDir">
+      <input
+        :id="folderToggleId"
+        type="checkbox"
+        class="tree-toggle"
+        :checked="isExpanded"
+        @change="handleFolderToggle"
+      />
+      <label
+        :for="folderToggleId"
+        class="tree-label"
+        :class="{ 'is-selected': isSelected }"
+        role="button"
+        tabindex="0"
+        draggable="true"
+        @dragstart="emit('nodeDragStart', node, $event)"
+        @dragover="handleRowDragover"
+        @dragleave="handleRowDragLeave"
+        @drop="handleRowDrop"
+        @keydown.enter="handleRowSelect($event)"
+        @contextmenu.prevent.stop="emit('contextMenu', node, $event)"
+      >
+        <img
+          class="icon material-file-icon"
+          :src="materialFileIconForNode(node, isExpanded).src"
+          alt=""
+          aria-hidden="true"
+        />
+        <input
+          v-if="editingPath === node.path"
+          ref="inlineInput"
+          class="node-editor"
+          :value="editingValue"
+          @click.stop
+          @input="emit('editInput', ($event.target as HTMLInputElement).value)"
+          @blur="emit('editCommit', editingValue)"
+          @keydown.enter.prevent.stop="emit('editCommit', editingValue)"
+          @keydown.esc.prevent.stop="emit('editCancel')"
+        />
+        <span v-else class="tree-name">{{ node.name }}</span>
+        <span
+          v-if="settingsStore.showIndexColumn || settingsStore.showGraphColumn"
+          class="node-status-cluster"
+        >
+          <IcIcon
+            v-if="!node.isDir && settingsStore.showIndexColumn"
+            :name="indexStatusIcon"
+            class="node-index-dot"
+            :class="indexStatusClass"
+            :size="13"
+            :title="indexStatusTitle"
+          />
+          <span v-else-if="settingsStore.showIndexColumn" class="node-status-placeholder" />
+          <IcIcon
+            v-if="!node.isDir && settingsStore.showGraphColumn"
+            :name="graphStatusIcon"
+            class="node-graph-dot"
+            :class="graphStatusClass"
+            :size="13"
+            :title="graphStatusTitle"
+          />
+          <span v-else-if="settingsStore.showGraphColumn" class="node-status-placeholder" />
+        </span>
+        <FavoriteButton
+          v-if="settingsStore.showFavoriteColumn"
+          target-type="knowledge_path"
+          :target-id="node.path"
+          :size="13"
+        />
+      </label>
+
+      <div class="tree-children-wrapper">
+        <ul class="tree-children">
+          <TreeNode
+            v-for="child in node.children"
+            :key="child.path"
+            :node="child"
+            :depth="depth + 1"
+            :expanded-paths="expandedPaths"
+            :selected-path="selectedPath"
+            :selected-paths="selectedPaths"
+            :dirty-paths="dirtyPaths"
+            :editing-path="editingPath"
+            :editing-value="editingValue"
+            @select="(targetNode, event) => emit('select', targetNode, event)"
+            @drop-files="(targetNode, files) => emit('dropFiles', targetNode, files)"
+            @drop-nodes="(targetNode, paths) => emit('dropNodes', targetNode, paths)"
+            @node-drag-start="(targetNode, event) => emit('nodeDragStart', targetNode, event)"
+            @context-menu="(targetNode, event) => emit('contextMenu', targetNode, event)"
+            @ingest="(targetNode) => emit('ingest', targetNode)"
+            @edit-input="emit('editInput', $event)"
+            @edit-commit="emit('editCommit', $event)"
+            @edit-cancel="emit('editCancel')"
+          />
+        </ul>
+      </div>
+    </template>
+
     <div
-      class="tree-row"
-      :class="[
-        gitStatusClass,
-        { selected: selectedPath === node.path || selectedPaths.has(node.path), 'drag-over': dragOver },
-      ]"
-      :style="{ paddingLeft: `${depth * 14 + 8}px`, '--status-width': statusWidth, '--favorite-width': favoriteWidth }"
+      v-else
+      class="file-item"
+      :class="{ 'is-selected': isSelected }"
       role="button"
       tabindex="0"
       draggable="true"
@@ -194,13 +266,16 @@ function handleRowDrop(event: DragEvent) {
       @dragover="handleRowDragover"
       @dragleave="handleRowDragLeave"
       @drop="handleRowDrop"
-      @click="emit('select', node, $event)"
-      @keydown.enter="emit('select', node, $event)"
+      @click="handleRowSelect($event)"
+      @keydown.enter="handleRowSelect($event)"
       @contextmenu.prevent.stop="emit('contextMenu', node, $event)"
     >
-      <IcIcon v-if="node.isDir" name="chevron-right" :size="14" class="chevron" :class="{ expanded: expandedPaths.has(node.path) }" />
-      <span v-else class="spacer"></span>
-      <img class="material-file-icon" :src="materialIcon.src" :alt="materialIcon.alt" aria-hidden="true" />
+      <img
+        class="icon material-file-icon"
+        :src="materialFileIconForNode(node).src"
+        alt=""
+        aria-hidden="true"
+      />
       <input
         v-if="editingPath === node.path"
         ref="inlineInput"
@@ -212,27 +287,27 @@ function handleRowDrop(event: DragEvent) {
         @keydown.enter.prevent.stop="emit('editCommit', editingValue)"
         @keydown.esc.prevent.stop="emit('editCancel')"
       />
-      <span v-else class="node-name" :class="gitStatusClass">{{ node.name }}</span>
-      <span class="node-status-cluster">
-        <i class="node-dirty-dot" :class="{ show: dirtyPaths.has(node.path) }"></i>
+      <span v-else class="tree-name">{{ node.name }}</span>
+      <span
+        v-if="settingsStore.showIndexColumn || settingsStore.showGraphColumn"
+        class="node-status-cluster"
+      >
         <IcIcon
-          v-if="!node.isDir && settingsStore.showIndexColumn"
+          v-if="settingsStore.showIndexColumn"
           :name="indexStatusIcon"
           class="node-index-dot"
           :class="indexStatusClass"
           :size="13"
           :title="indexStatusTitle"
         />
-        <span v-if="node.isDir && settingsStore.showIndexColumn" class="node-index-placeholder"></span>
         <IcIcon
-          v-if="!node.isDir && settingsStore.showGraphColumn"
+          v-if="settingsStore.showGraphColumn"
           :name="graphStatusIcon"
           class="node-graph-dot"
           :class="graphStatusClass"
           :size="13"
           :title="graphStatusTitle"
         />
-        <span v-if="node.isDir && settingsStore.showGraphColumn" class="node-index-placeholder"></span>
       </span>
       <FavoriteButton
         v-if="settingsStore.showFavoriteColumn"
@@ -241,298 +316,153 @@ function handleRowDrop(event: DragEvent) {
         :size="13"
       />
     </div>
-    <Transition
-      name="tree-collapse"
-      @enter="collapseEnter"
-      @after-enter="collapseAfterEnter"
-      @leave="collapseLeave"
-      @after-leave="collapseAfterLeave"
-    >
-      <ul v-if="node.isDir && expandedPaths.has(node.path) && node.children" class="tree-children">
-        <TreeNode
-        v-for="(child, childIndex) in node.children"
-        :key="child.path"
-        :node="child"
-        :depth="depth + 1"
-        :stagger-index="(staggerIndex ?? 0) + childIndex + 1"
-        :expanded-paths="expandedPaths"
-        :selected-path="selectedPath"
-        :selected-paths="selectedPaths"
-        :dirty-paths="dirtyPaths"
-        :editing-path="editingPath"
-        :editing-value="editingValue"
-        @select="(targetNode, event) => emit('select', targetNode, event)"
-        @drop-files="(targetNode, files) => emit('dropFiles', targetNode, files)"
-        @drop-nodes="(targetNode, paths) => emit('dropNodes', targetNode, paths)"
-        @node-drag-start="(targetNode, event) => emit('nodeDragStart', targetNode, event)"
-        @context-menu="(targetNode, event) => emit('contextMenu', targetNode, event)"
-        @ingest="(targetNode) => emit('ingest', targetNode)"
-        @edit-input="emit('editInput', $event)"
-        @edit-commit="emit('editCommit', $event)"
-        @edit-cancel="emit('editCancel')"
-      />
-      </ul>
-    </Transition>
   </li>
 </template>
 
 <style scoped>
-.tree-row {
-  position: relative;
-  display: grid;
-  grid-template-columns: 14px 16px minmax(0, 1fr) var(--status-width, 58px) var(--favorite-width, 24px);
-  animation: tree-node-enter 0.25s ease-out both;
-  animation-delay: calc(var(--stagger, 0) * 40ms);
-  align-items: center;
-  isolation: isolate;
-  gap: var(--space-6);
-  width: 100%;
-  min-height: 30px;
-  padding-right: var(--space-6);
-  border: 1px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  color: var(--color-text-secondary);
-  text-align: left;
-  overflow: hidden;
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.tree-row > * {
-  position: relative;
-  z-index: 1;
-}
-
-.tree-row:hover {
-  background: var(--color-selection-blue-soft);
-  color: var(--color-text);
-}
-
-.tree-row.selected {
-  background: var(--color-primary-soft);
-  color: var(--color-text);
-}
-
-.tree-row.selected::before {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: linear-gradient(90deg, var(--color-primary-soft), transparent 68%);
-  content: "";
-  animation: tree-selection-slide 150ms ease-out;
-}
-
-.chevron {
-  transition: transform 200ms ease;
-}
-
-.chevron.expanded {
-  transform: rotate(90deg);
-}
-
-.spacer {
-  width: 14px;
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
 .tree-children {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  overflow: hidden;
+  margin-left: 11px;
+  padding-left: 11px;
+  border-left: 1px solid var(--color-border-subtle, var(--color-border));
 }
 
-.tree-collapse-enter-active,
-.tree-collapse-leave-active {
-  overflow: hidden;
-  transition: height 200ms ease;
+.tree-item {
+  position: relative;
+  margin-top: 4px;
 }
 
-.node-name {
-  overflow: hidden;
-  font-size: calc(13px * var(--font-scale));
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.node-name.git-modified {
-  color: var(--color-git-modified);
-}
-
-.node-name.git-added {
-  color: var(--color-git-added);
-}
-
-.node-name.git-untracked {
-  color: var(--color-git-untracked);
-}
-
-.node-name.git-conflicted {
-  color: var(--color-danger);
-}
-
-.node-name.git-deleted {
-  color: var(--color-git-deleted);
-}
-
-.node-name.git-renamed {
-  color: var(--color-git-renamed);
-}
-
-.node-name.git-ignored {
-  color: var(--color-git-ignored);
-}
-
-.tree-row.git-modified .node-name,
-.tree-row .node-name.git-modified {
-  color: var(--color-git-modified);
-}
-
-.tree-row.git-added .node-name,
-.tree-row .node-name.git-added {
-  color: var(--color-git-added);
-}
-
-.tree-row.git-untracked .node-name,
-.tree-row .node-name.git-untracked {
-  color: var(--color-git-untracked);
-}
-
-.tree-row.git-conflicted .node-name,
-.tree-row .node-name.git-conflicted {
-  color: var(--color-danger);
-}
-
-.tree-row.git-deleted .node-name,
-.tree-row .node-name.git-deleted {
-  color: var(--color-git-deleted);
-}
-
-.tree-row.git-renamed .node-name,
-.tree-row .node-name.git-renamed {
-  color: var(--color-git-renamed);
-}
-
-.tree-row.git-ignored .node-name,
-.tree-row .node-name.git-ignored {
-  color: var(--color-git-ignored);
-}
-
-.node-editor {
-  width: 100%;
-  min-width: 0;
-  height: 22px;
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-sm);
-  background: var(--color-canvas);
-  color: var(--color-text);
-  font: inherit;
-  font-size: calc(13px * var(--font-scale));
-  outline: none;
-}
-
-.node-status-cluster {
-  display: inline-grid;
-  grid-template-columns: 8px 16px 16px;
-  align-items: center;
-  justify-content: end;
-  gap: 8px;
-  min-width: var(--status-width, 58px);
-  padding-left: 8px;
-}
-
-.node-dirty-dot {
-  justify-self: center;
-  align-self: center;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-accent);
-  visibility: hidden;
-}
-
-.node-dirty-dot.show {
-  visibility: visible;
-}
-
-.node-index-dot {
-  justify-self: center;
-  color: var(--color-text-muted);
-}
-
-.node-index-placeholder {
-  display: block;
-  width: 16px;
+.tree-children > .tree-item::before {
+  content: "";
+  position: absolute;
+  left: -11px;
+  top: 14px;
+  width: 11px;
   height: 1px;
+  background-color: var(--color-border-subtle, var(--color-border));
 }
 
-.node-index-dot.indexed {
-  color: var(--color-primary);
+.tree-label,
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  box-sizing: border-box;
+  cursor: pointer;
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  text-decoration: none;
+  user-select: none;
+  transition: background-color 0.2s;
 }
 
-.node-index-dot.ignored {
-  color: var(--color-text-muted);
+.tree-label:hover,
+.file-item:hover,
+.drag-over > .tree-label,
+.file-item.drag-over {
+  background-color: var(--color-surface-raised);
 }
 
-.node-index-dot.failed {
-  color: var(--color-danger);
+.is-selected {
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+  font-weight: 500;
 }
 
-.node-graph-dot {
-  justify-self: center;
-  color: var(--color-text-muted);
-}
-
-.node-graph-dot.graphed {
-  color: var(--color-primary);
-}
-
-.node-graph-dot.dirty {
-  color: var(--color-danger);
-}
-
-.node-graph-dot.ignored {
-  color: var(--color-text-muted);
+.icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .material-file-icon {
   display: block;
-  width: 16px;
-  height: 16px;
   object-fit: contain;
-  pointer-events: none;
 }
 
-.tree-row.drag-over {
-  border-color: var(--color-primary);
-  background: var(--color-primary-softer);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 50%, transparent);
+.tree-toggle {
+  display: none;
 }
 
-@keyframes tree-selection-slide {
-  from {
-    transform: translateX(-18px);
-    opacity: 0.35;
-  }
-
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+.tree-children-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease-in-out;
 }
 
-@keyframes tree-node-enter {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.tree-children {
+  overflow: hidden;
 }
 
+.tree-toggle:checked ~ .tree-children-wrapper {
+  grid-template-rows: 1fr;
+}
+
+.tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.node-status-cluster {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.node-index-dot,
+.node-graph-dot,
+.node-status-placeholder {
+  flex: 0 0 16px;
+  width: 16px;
+  color: var(--color-text-muted);
+}
+
+.node-index-dot.indexed,
+.node-graph-dot.graphed {
+  color: var(--color-primary);
+}
+
+.node-index-dot.failed,
+.node-index-dot.dirty,
+.node-graph-dot.dirty {
+  color: var(--color-danger);
+}
+
+.node-index-dot.ignored,
+.node-graph-dot.ignored {
+  color: var(--color-text-muted);
+}
+
+.node-status-placeholder {
+  display: block;
+  height: 1px;
+}
+
+.node-editor {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--color-primary);
+  border-radius: 4px;
+  outline: none;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font: inherit;
+}
 </style>

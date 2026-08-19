@@ -40,7 +40,6 @@ const contextMenuStyle = ref<Record<string, string>>({ left: '0px', top: '0px' }
 const contextMenuRef = ref<{ getBoundingClientRect: () => DOMRect } | null>(null)
 const treeVersion = ref(0)
 const sortMenuOpen = ref(false)
-const secondaryExpanded = ref(false)
 const sortKey = ref<'name' | 'mtime' | 'ingested' | 'size'>('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
 /** Whether the panel is displaying the recent-files layout. */
@@ -930,84 +929,86 @@ onUnmounted(() => {
   <aside class="file-panel surface-panel" :class="{ dragging, 'recent-mode': recentMode, 'theme-dark': isDark, 'theme-light': !isDark }">
     <div class="panel-header" :class="{ 'recent-header': recentMode }">
       <template v-if="!recentMode">
-        <div class="header-row">
-          <button
-            class="header-action"
-            :class="{ active: treeSearchOpen }"
-            type="button"
-            title="搜索文件"
-            aria-label="搜索文件"
-            :aria-pressed="treeSearchOpen"
-            @click="toggleTreeSearch"
-          >
-            <IcIcon name="search" :size="18" />
-          </button>
-          <button
-            class="header-action"
-            :class="{ loading: workspaceStore.treeLoading, 'refresh-btn': true }"
-            type="button"
-            title="刷新文件树"
-            :disabled="workspaceStore.treeLoading"
-            @click="refreshFileTree"
-          >
-            <IcIcon name="refresh" :size="18" />
-          </button>
-          <button
-            class="header-action"
-            type="button"
-            title="展开/关闭所有文件夹"
-            @click="toggleExpandAll"
-          >
-            <IcIcon name="unfold" :size="18" />
-          </button>
-          <button class="header-action" type="button" title="新建文件夹" @click="beginCreate('folder', '')">
-            <IcIcon name="new-folder" :size="18" />
-          </button>
-          <button class="header-action" type="button" title="新建文件" @click="beginCreate('file', '')">
-            <IcIcon name="new-file" :size="18" />
-          </button>
-          <div class="sort-control" @click.stop>
+        <div class="header-row header-row-main">
+          <div class="header-main-actions">
             <button
-              class="header-action pill"
-              :class="{ active: sortMenuOpen }"
+              class="header-action"
+              :class="{ active: treeSearchOpen }"
               type="button"
-              title="排序"
-              aria-label="排序"
-              :aria-expanded="sortMenuOpen"
-              @click="sortMenuOpen = !sortMenuOpen"
+              title="搜索文件"
+              aria-label="搜索文件"
+              :aria-pressed="treeSearchOpen"
+              @click="toggleTreeSearch"
             >
-              <IcIcon name="sort" :size="14" />
-              <span>排序</span>
+              <IcIcon name="search" :size="18" />
             </button>
-            <div v-if="sortMenuOpen" class="sort-menu" @click.stop>
+            <button
+              class="header-action"
+              :class="{ loading: workspaceStore.treeLoading, 'refresh-btn': true }"
+              type="button"
+              title="刷新文件树"
+              :disabled="workspaceStore.treeLoading"
+              @click="refreshFileTree"
+            >
+              <IcIcon name="refresh" :size="18" />
+            </button>
+            <button
+              class="header-action"
+              type="button"
+              title="展开/关闭所有文件夹"
+              @click="toggleExpandAll"
+            >
+              <IcIcon name="unfold" :size="18" />
+            </button>
+            <button class="header-action" type="button" title="新建文件夹" @click="beginCreate('folder', '')">
+              <IcIcon name="new-folder" :size="18" />
+            </button>
+            <button class="header-action" type="button" title="新建文件" @click="beginCreate('file', '')">
+              <IcIcon name="new-file" :size="18" />
+            </button>
+            <div class="sort-control" @click.stop>
               <button
-                v-for="option in sortKeyOptions"
-                :key="option.value"
+                class="header-action pill"
+                :class="{ active: sortMenuOpen }"
                 type="button"
-                @click="selectSortKey(option.value)"
+                title="排序"
+                aria-label="排序"
+                :aria-expanded="sortMenuOpen"
+                @click="sortMenuOpen = !sortMenuOpen"
               >
-                <IcIcon name="check" v-if="sortKey === option.value" :size="14" />
-                <span v-else class="sort-check-placeholder"></span>
-                <span class="sort-icon-placeholder"></span>
-                <span>{{ option.label }}</span>
+                <IcIcon name="sort" :size="14" />
+                <span>排序</span>
               </button>
-              <hr />
-              <button
-                v-for="option in sortDirectionOptions"
-                :key="option.value"
-                type="button"
-                @click="selectSortDirection(option.value)"
-              >
-                <IcIcon name="check" v-if="sortDirection === option.value" :size="14" />
-                <span v-else class="sort-check-placeholder"></span>
-                <IcIcon name="arrow-up" v-if="option.value === 'asc'" :size="14" />
-                <IcIcon name="arrow-down" v-else :size="14" />
-                <span>{{ option.label }}</span>
-              </button>
+              <div v-if="sortMenuOpen" class="sort-menu" @click.stop>
+                <button
+                  v-for="option in sortKeyOptions"
+                  :key="option.value"
+                  type="button"
+                  @click="selectSortKey(option.value)"
+                >
+                  <IcIcon name="check" v-if="sortKey === option.value" :size="14" />
+                  <span v-else class="sort-check-placeholder"></span>
+                  <span class="sort-icon-placeholder"></span>
+                  <span>{{ option.label }}</span>
+                </button>
+                <hr />
+                <button
+                  v-for="option in sortDirectionOptions"
+                  :key="option.value"
+                  type="button"
+                  @click="selectSortDirection(option.value)"
+                >
+                  <IcIcon name="check" v-if="sortDirection === option.value" :size="14" />
+                  <span v-else class="sort-check-placeholder"></span>
+                  <IcIcon name="arrow-up" v-if="option.value === 'asc'" :size="14" />
+                  <IcIcon name="arrow-down" v-else :size="14" />
+                  <span>{{ option.label }}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
-        <div class="header-row-secondary-wrap" :class="{ expanded: secondaryExpanded }">
+        <div class="header-row-secondary-wrap expanded">
           <div class="header-row header-row-secondary">
             <button
               class="header-action"
@@ -1042,17 +1043,6 @@ onUnmounted(() => {
             </button>
           </div>
         </div>
-        <button
-          class="header-toggle"
-          :class="{ expanded: secondaryExpanded }"
-          type="button"
-          :title="secondaryExpanded ? '收起更多工具' : '展开更多工具'"
-          :aria-label="secondaryExpanded ? '收起更多工具' : '展开更多工具'"
-          :aria-expanded="secondaryExpanded"
-          @click="secondaryExpanded = !secondaryExpanded"
-        >
-          <IcIcon :name="secondaryExpanded ? 'arrow-up' : 'arrow-down'" :size="13" />
-        </button>
       </template>
       <template v-else>
         <div class="header-row">
@@ -1136,11 +1126,10 @@ onUnmounted(() => {
       @contextmenu.prevent="openContextMenu(null, $event)"
     >
       <TreeNode
-        v-for="(node, nodeIndex) in displayTree"
+        v-for="node in displayTree"
         :key="`${treeVersion}-${node.path}`"
         :node="node"
         :depth="0"
-        :stagger-index="nodeIndex"
         :expanded-paths="effectiveExpandedPaths"
         :selected-path="selectedTreePath"
         :selected-paths="workspaceStore.selectedTreePaths"

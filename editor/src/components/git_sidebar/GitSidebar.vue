@@ -67,8 +67,9 @@ async function toggleHistoryDropdown(): Promise<void> {
     <header class="git-header">
       <div class="git-title">
         <IcIcon name="git" :size="15" />
-        <strong>Git</strong>
-        <span v-if="gitStore.status.initialized">{{ gitStore.status.current_branch || 'DETACHED' }}</span>
+        <strong>
+          {{ gitStore.status.initialized ? `Git - ${gitStore.status.current_branch || 'DETACHED'}` : 'Git' }}
+        </strong>
       </div>
       <div class="git-actions">
         <button

@@ -80,15 +80,6 @@ function flattenIngestibleNodes(nodes: KnowledgeFileNode[]): KnowledgeFileNode[]
   })
 }
 
-function collectDirectoryPaths(nodes: KnowledgeFileNode[]): string[] {
-  return nodes.flatMap((node) => {
-    if (!node.isDir) {
-      return []
-    }
-    return [node.path, ...collectDirectoryPaths(node.children ?? [])]
-  })
-}
-
 function formatMtime(date = new Date()): string {
   const pad = (value: number) => value.toString().padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
@@ -2368,7 +2359,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     try {
       const response = await listKnowledgeFiles(settingsStore.profile.userId)
       tree.value = response.tree
-      expandedPaths.value = new Set(collectDirectoryPaths(response.tree))
+      // 新加载的文件树默认保持全部文件夹折叠，由用户操作决定后续展开状态。
+      expandedPaths.value = new Set()
       if (selectedPath.value && !flatNodes.value.some((node) => node.path === selectedPath.value)) {
         selectedPath.value = ''
         selectedTreePath.value = ''

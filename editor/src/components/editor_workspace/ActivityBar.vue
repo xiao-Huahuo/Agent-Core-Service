@@ -592,6 +592,7 @@ function closeKnowledgeMenu() {
   clip-path: polygon(0 0, var(--space-8) 0, 100% 50%, var(--space-8) 100%, 0 100%);
   content: '';
   transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .activity-bar.management .knowledge-group {
