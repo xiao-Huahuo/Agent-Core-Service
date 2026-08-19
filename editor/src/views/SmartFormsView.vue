@@ -28,6 +28,7 @@ import {
   BUILTIN_COLUMNS,
   DEFAULT_ROW_HEIGHT,
   MIN_ROW_HEIGHT,
+  PLAIN_MAX_ROW_HEIGHT,
   PLAIN_ROW_HEIGHT,
   addColumn,
   createCustomColumn,
@@ -150,7 +151,6 @@ const tagFilters = computed(() => form.value ? uniqueTagValues(form.value) : [])
 const isLiteratureTable = computed(() => Boolean(form.value?.columns.some((column) => column.id === 'literature_file' || column.id === 'literature_content')))
 const availableBuiltinColumns = computed(() => BUILTIN_COLUMNS)
 const availableCustomColumnTypes = computed(() => customColumnTypes)
-const rowCountLabel = computed(() => form.value ? `${visibleRows.value.length} / ${form.value.rows.length} 条记录` : '0 / 0 条记录')
 const activeFormStorageLabel = computed(() => activeFormId.value ? `SQLite: smart_forms/${activeFormId.value}` : '')
 const activeFormCsvFile = computed(() => form.value ? `${form.value.title}.csv` : '')
 const activeFormAssetDir = computed(() => activeFormDir.value ? `${activeFormDir.value}/assets` : '')
@@ -465,6 +465,23 @@ function editCell(row: SmartRow, column: SmartColumn, value: string): void {
   })
 }
 
+/** Grows an ordinary-table row to fit all content while its editor is active. */
+function resizeEditingCell(row: SmartRow, height: number): void {
+  if (!form.value || isLiteratureTable.value) return
+  setForm(resizeRow(form.value, row.id, Math.max(PLAIN_ROW_HEIGHT, height), PLAIN_ROW_HEIGHT, PLAIN_MAX_ROW_HEIGHT))
+}
+
+/** Persists generic textarea edits and keeps their ordinary-table row fully visible. */
+function handleCellTextareaInput(row: SmartRow, column: SmartColumn, event: Event): void {
+  const target = event.target as HTMLTextAreaElement
+  editCell(row, column, target.value)
+  if (isLiteratureTable.value) return
+  target.style.height = 'auto'
+  const height = target.scrollHeight
+  target.style.height = '100%'
+  resizeEditingCell(row, height)
+}
+
 /** Starts resizing a column from its right table boundary. */
 function startColumnResize(column: SmartColumn, event: PointerEvent): void {
   event.preventDefault()
@@ -753,6 +770,11 @@ function selectedCells(): CellCoord[] {
 function selectSingleCell(rowId: string, columnId: string): void {
   selectedCell.value = { rowId, columnId }
   selectedCellKeys.value = [cellKey(rowId, columnId)]
+}
+
+/** Keeps a clicked cell selected while allowing a double-click to enter editing. */
+function handleCellClick(rowId: string, columnId: string): void {
+  selectSingleCell(rowId, columnId)
 }
 
 function startCellSelection(rowId: string, columnId: string, event: MouseEvent): void {
@@ -1650,18 +1672,26 @@ function errorMessage(error: unknown): string {
 <template>
   <section class="smart-forms-view" @click="closeFloatingMenus">
     <header class="forms-header">
+      <button v-if="form" class="new-row-btn" type="button" title="新建行" @click.stop="addNewRow">
+        <IcIcon name="add" :size="17" />
+        <span>新建行</span>
+      </button>
       <div class="header-copy">
         <p class="forms-eyebrow">智能表格</p>
         <h1>{{ form?.title || '创建你的第一张表' }}</h1>
       </div>
       <div class="header-actions">
+        <label v-if="form" class="search-box">
+          <IcIcon name="search" :size="15" />
+          <input v-model="query" type="search" placeholder="搜索全表" />
+        </label>
         <div
           v-if="formEntries.length > 1"
           class="smart-dropdown"
           @click.stop
         >
           <button class="smart-dropdown-trigger" type="button" title="切换表格" @click="toggleDropdown('forms')">
-            <IcIcon name="table-chart" :size="15" />
+            <IcIcon name="table-chart" :size="17" />
             <span>{{ activeFormName }}</span>
             <IcIcon name="chevron-down" :size="14" />
           </button>
@@ -1679,14 +1709,9 @@ function errorMessage(error: unknown): string {
             </button>
           </div>
         </div>
-        <button class="primary-btn new-form-btn" type="button" title="新建表格" @click="newFormKind = 'smart'; createFormOpen = true">
-          <IcIcon name="add" :size="16" />
-          <span>新建表格</span>
-        </button>
         <div v-if="form" class="smart-dropdown export-menu" @click.stop>
-          <button class="ghost-btn" type="button" title="导出表格" @click="toggleDropdown('export')">
-            <IcIcon name="download" :size="16" />
-            <span>导出</span>
+          <button class="icon-btn" type="button" title="导出表格" aria-label="导出表格" @click="toggleDropdown('export')">
+            <IcIcon name="download" :size="17" />
           </button>
           <div v-if="dropdownOpen === 'export'" class="smart-dropdown-menu export-menu-panel">
             <button type="button" :style="{ '--item-index': 0 }" @click="downloadMarkdown">Markdown</button>
@@ -1694,9 +1719,9 @@ function errorMessage(error: unknown): string {
             <button type="button" :style="{ '--item-index': 2 }" @click="downloadZip">ZIP</button>
           </div>
         </div>
-        <button v-if="form" class="ghost-btn delete-form-btn" type="button" title="删除表格" :disabled="!activeFormId || saving" @click="deleteCurrentSmartForm">
-          <IcIcon name="delete" :size="16" />
-          <span>删除表格</span>
+        <button class="primary-btn new-form-btn" type="button" title="新建表格" @click="newFormKind = 'smart'; createFormOpen = true">
+          <IcIcon name="add" :size="17" />
+          <span>新建表格</span>
         </button>
       </div>
     </header>
@@ -1748,22 +1773,14 @@ function errorMessage(error: unknown): string {
     </div>
 
     <div v-if="form" class="forms-toolbar">
-      <button class="new-row-btn" type="button" @click.stop="addNewRow">
-        <IcIcon name="add" :size="16" />
-        <span>新建行</span>
-      </button>
       <button v-if="isLiteratureTable" class="toolbar-btn" type="button" @click="generateSmartCells('all')">
-        <IcIcon name="psychology" :size="16" />
+        <IcIcon name="psychology" :size="17" />
         <span>全表智能填充</span>
       </button>
-      <label class="search-box">
-        <IcIcon name="search" :size="15" />
-        <input v-model="query" type="search" placeholder="搜索全表" />
-      </label>
       <DropdownMenu v-model:open="tagFilterMenuOpen">
         <DropdownMenuTrigger as-child>
-          <button class="smart-dropdown-trigger" type="button" title="标签筛选">
-            <IcIcon name="label" :size="15" />
+          <button class="smart-dropdown-trigger tag-filter-trigger" type="button" title="标签筛选">
+            <IcIcon name="label" :size="17" />
             <span>{{ tagFilterLabel }}</span>
             <IcIcon name="chevron-down" :size="14" />
           </button>
@@ -1784,8 +1801,8 @@ function errorMessage(error: unknown): string {
       </DropdownMenu>
       <DropdownMenu v-model:open="ratingFilterMenuOpen">
         <DropdownMenuTrigger as-child>
-          <button class="smart-dropdown-trigger" type="button" title="星级筛选">
-            <IcIcon name="star" :size="15" />
+          <button class="smart-dropdown-trigger rating-filter-trigger" type="button" title="星级筛选">
+            <IcIcon name="star" :size="17" />
             <span>{{ ratingFilterLabel }}</span>
             <IcIcon name="chevron-down" :size="14" />
           </button>
@@ -1804,11 +1821,16 @@ function errorMessage(error: unknown): string {
           </DropdownMenuContent>
         </DropdownMenuPortal>
       </DropdownMenu>
-      <button class="toolbar-btn" type="button" title="清除失败或空字段" @click="clearInvalidFields">
-        <IcIcon name="trash" :size="16" />
-        <span>清空无效字段</span>
-      </button>
-      <span class="row-count">{{ rowCountLabel }}</span>
+      <div class="forms-toolbar-actions">
+        <button class="toolbar-btn clear-invalid-btn" type="button" title="清除失败或空字段" @click="clearInvalidFields">
+          <IcIcon name="trash" :size="17" />
+          <span>清空无效字段</span>
+        </button>
+        <button v-if="form" class="delete-form-toolbar-btn" type="button" title="删除表格" :disabled="!activeFormId || saving" @click="deleteCurrentSmartForm">
+          <IcIcon name="trash" :size="17" />
+          <span>删除表格</span>
+        </button>
+      </div>
     </div>
 
     <div v-if="form" class="table-frame" :class="{ loading, 'plain-table': !isLiteratureTable }" @mouseup="stopCellSelection" @contextmenu.prevent.stop="openTableContextMenu({ kind: 'table' }, $event)">
@@ -1894,7 +1916,7 @@ function errorMessage(error: unknown): string {
               @dragend="endRowDrag"
               @mousedown.left="column.type !== 'index' && startCellSelection(row.id, column.id, $event)"
               @mouseenter="extendCellSelection(row.id, column.id)"
-              @click="selectSingleCell(row.id, column.id)"
+              @click="handleCellClick(row.id, column.id)"
               @contextmenu.prevent.stop="column.type === 'index' ? openTableContextMenu({ kind: 'row', rowId: row.id }, $event) : openCellContextMenu(row, column, $event)"
             >
               <span v-if="column.type === 'index'" class="row-index">
@@ -2068,6 +2090,7 @@ function errorMessage(error: unknown): string {
                 :upload-image="uploadCellImage"
                 @update="editCell(row, column, $event)"
                 @resize="(expanded, height) => resizeExpandedTextCell(row, expanded, height)"
+                @edit-resize="(height) => resizeEditingCell(row, height)"
                 @upload-error="workspaceStore.showToast(`图片上传失败 - ${errorMessage($event)}`)"
               />
               <textarea
@@ -2075,7 +2098,7 @@ function errorMessage(error: unknown): string {
                 :readonly="!column.editable"
                 :value="row.cells[column.id]?.value || ''"
                 :placeholder="row.cells[column.id]?.status === 'pending' ? '等待结构化 LLM 服务生成' : ''"
-                @input="column.editable && editCell(row, column, ($event.target as HTMLTextAreaElement).value)"
+                @input="handleCellTextareaInput(row, column, $event)"
               ></textarea>
               <span
                 v-if="row.cells[column.id]?.status === 'pending' || row.cells[column.id]?.status === 'failed'"
@@ -2230,7 +2253,7 @@ function errorMessage(error: unknown): string {
 <style scoped>
 .smart-forms-view {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: 44px 44px minmax(0, 1fr) auto;
   min-height: 0;
   height: 100%;
   background: var(--color-canvas);
@@ -2296,7 +2319,7 @@ function errorMessage(error: unknown): string {
 .column-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-4);
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -2335,19 +2358,23 @@ function errorMessage(error: unknown): string {
 }
 
 .new-row-btn {
+  width: auto;
+  border: 1px solid var(--color-primary);
+  border-radius: 999px;
   background: var(--color-primary);
   color: #ffffff;
+  padding: 0 var(--space-10);
+}
+
+.icon-btn {
+  width: 28px;
+  padding: 0;
 }
 
 .new-form-btn {
   border-radius: 999px;
   background: var(--color-primary);
   color: #ffffff;
-}
-
-.delete-form-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
-  color: var(--color-danger);
 }
 
 .toolbar-btn.strong {
@@ -2392,7 +2419,10 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: var(--space-6);
+  flex: 0 1 220px;
+  width: 220px;
   min-width: 180px;
+  max-width: 220px;
   height: 28px;
   padding: 0 var(--space-10);
   border: 1px solid var(--color-border);
@@ -2456,6 +2486,74 @@ button:disabled {
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
+}
+
+.forms-header .smart-dropdown-trigger,
+.forms-toolbar .smart-dropdown-trigger {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-canvas);
+}
+
+.forms-header .smart-dropdown-trigger:hover,
+.forms-toolbar .smart-dropdown-trigger:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
+.forms-toolbar .tag-filter-trigger,
+.forms-toolbar .rating-filter-trigger {
+  border-color: transparent;
+  background: transparent;
+}
+
+.forms-toolbar .tag-filter-trigger:hover,
+.forms-toolbar .rating-filter-trigger:hover {
+  border-color: transparent;
+}
+
+.forms-toolbar .toolbar-btn {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  padding: 0 var(--space-10);
+}
+
+.forms-toolbar .toolbar-btn:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
+.forms-toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-left: auto;
+}
+
+.delete-form-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  height: 28px;
+  border: 1px solid var(--color-danger);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-danger);
+  padding: 0 var(--space-10);
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+
+.delete-form-toolbar-btn:hover:not(:disabled) {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: #fff;
 }
 
 .smart-dropdown-trigger span,
@@ -2623,20 +2721,6 @@ button:disabled {
   margin: 0;
 }
 
-.row-count {
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 var(--space-8);
-  border-radius: 999px;
-  color: var(--color-text-muted);
-  font-size: calc(12px * var(--font-scale));
-}
-
-.row-count {
-  margin-left: auto;
-}
-
 .table-context-menu {
   position: fixed;
   z-index: 100000;
@@ -2795,7 +2879,9 @@ button:disabled {
 .table-frame {
   position: relative;
   min-height: 0;
+  margin: 0 var(--space-12);
   overflow: auto;
+  border-radius: 18px;
   background: var(--color-canvas);
 }
 
@@ -2803,7 +2889,7 @@ button:disabled {
   width: 100%;
   max-width: 100%;
   border: 1px solid var(--color-border);
-  border-radius: 0;
+  border-radius: 18px;
   background: var(--color-canvas);
 }
 
@@ -2840,7 +2926,18 @@ button:disabled {
 .plain-table .cell textarea,
 .plain-table .cell select,
 .plain-table .cell input {
+  overflow: hidden;
   padding: 6px 8px;
+}
+
+.plain-table .cell select,
+.plain-table .cell input {
+  min-height: 0;
+  height: 100%;
+}
+
+.plain-table :deep(.smart-markdown-source) {
+  overflow: hidden;
 }
 
 .plain-table .table-edge-add-row,
@@ -3592,6 +3689,10 @@ th.sticky {
 }
 
 @media (max-width: 760px) {
+  .smart-forms-view {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
+
   .forms-header {
     align-items: flex-start;
     flex-direction: column;

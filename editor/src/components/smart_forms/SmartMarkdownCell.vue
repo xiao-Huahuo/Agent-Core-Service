@@ -34,6 +34,7 @@ const emit = defineEmits<{
   update: [value: string]
   uploadError: [error: unknown]
   resize: [expanded: boolean, height: number]
+  'edit-resize': [height: number]
 }>()
 
 const editing = ref(false)
@@ -70,6 +71,24 @@ async function startEditing(): Promise<void> {
   await nextTick()
   textarea.value?.focus()
   textarea.value?.setSelectionRange(draft.value.length, draft.value.length)
+  emitEditResize()
+}
+
+/** Reports the live source height so ordinary-table rows can grow with content. */
+async function emitEditResize(): Promise<void> {
+  await nextTick()
+  const source = textarea.value
+  if (!source) return
+  source.style.height = 'auto'
+  const height = source.scrollHeight
+  source.style.height = '100%'
+  emit('edit-resize', height)
+}
+
+/** Updates the draft and recalculates the editing row height without inner scrolling. */
+function handleSourceInput(): void {
+  emit('update', draft.value)
+  emitEditResize()
 }
 
 /** Commits source edits and returns to the shared Markdown reading view. */
@@ -77,6 +96,11 @@ function finishEditing(): void {
   if (!editing.value) return
   editing.value = false
   if (draft.value !== props.value) emit('update', draft.value)
+}
+
+/** Keeps the cell focusable for keyboard interaction. */
+function handleCellClick(): void {
+  if (!editing.value) cellRoot.value?.focus()
 }
 
 /** Uploads clipboard images and inserts form-relative Markdown at the caret. */
@@ -121,7 +145,7 @@ function downloadImage(src: string, name: string): void {
     class="smart-markdown-cell"
     tabindex="0"
     @dblclick.stop="startEditing"
-    @click="cellRoot?.focus()"
+    @click="handleCellClick"
     @paste="handlePaste"
   >
     <button
@@ -139,7 +163,7 @@ function downloadImage(src: string, name: string): void {
       v-model="draft"
       class="smart-markdown-source"
       :readonly="!editable"
-      @input="emit('update', draft)"
+      @input="handleSourceInput"
       @blur="finishEditing"
       @keydown.esc.prevent="finishEditing"
     ></textarea>

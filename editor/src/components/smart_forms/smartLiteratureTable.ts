@@ -64,9 +64,9 @@ export const MIN_COLUMN_WIDTH = 64
 export const MIN_ROW_HEIGHT = 56
 /** Default compact Markdown cell height: approximately 15 lines at 13px/1.35 with 9px vertical padding. */
 export const DEFAULT_ROW_HEIGHT = 282
-/** One-line row baseline and legacy literature-row height cap for ordinary tables. */
-export const PLAIN_ROW_HEIGHT = 34
-export const PLAIN_MAX_ROW_HEIGHT = DEFAULT_ROW_HEIGHT
+/** One-line row baseline for ordinary tables; rows may grow with edited content. */
+export const PLAIN_ROW_HEIGHT = 23
+export const PLAIN_MAX_ROW_HEIGHT = Infinity
 const LEGACY_DEFAULT_ROW_HEIGHT = 112
 
 export interface SmartLiteratureForm {
