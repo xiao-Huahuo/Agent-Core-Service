@@ -9,7 +9,9 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import LoadingState from '@/components/common/LoadingState.vue'
 import FloatingFileResourcePicker from '@/components/editor_workspace/FloatingFileResourcePicker.vue'
+import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import { useSettingsStore } from '@/stores/settings'
 import { useTaskListStore } from '@/stores/taskList'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -25,6 +27,7 @@ const advancedOptionsOpen = ref(false)
 const advancedOptionsPage = ref<'layout' | 'visual' | 'motion'>('layout')
 const taskProgressCardVisible = ref(false)
 const taskProgressExpanded = ref(false)
+const visualizationStarting = ref(false)
 
 const visualizationPresets: Array<{ value: MarkdownHtmlVisualizationPreset; label: string }> = [
   { value: 'balanced', label: '均衡展示' },
@@ -72,12 +75,20 @@ const taskStatusLabels: Record<string, string> = {
   failed: '失败',
 }
 
-const selectedDocumentLabel = computed(() => {
+const selectedDocumentName = computed(() => {
   const node = workspaceStore.selectedNode
   if (!node || node.isDir) {
-    return '未选择文档'
+    return ''
   }
-  return node.path
+  return node.name
+})
+
+const selectedDocumentIcon = computed(() => {
+  const node = workspaceStore.selectedNode
+  if (!node || node.isDir) {
+    return ''
+  }
+  return materialFileIconForNode(node).src
 })
 
 const knowledgeSaveDirectory = computed(() => {
@@ -90,6 +101,8 @@ const knowledgeSaveDirectory = computed(() => {
 const hasMountedVisualization = computed(() => {
   return Boolean(workspaceStore.markdownHtmlVisualizationOpen && workspaceStore.markdownHtmlVisualization)
 })
+
+const showVisualizationResult = computed(() => hasMountedVisualization.value && !visualizationStarting.value)
 
 const visualizationActionLabel = computed(() => {
   return hasMountedVisualization.value ? '重新可视化' : '一键可视化'
@@ -170,9 +183,30 @@ function setCustomRequirement(event: Event) {
   workspaceStore.setMarkdownHtmlVisualizationCustomRequirement((event.target as HTMLTextAreaElement).value)
 }
 
-function startVisualization() {
-  void workspaceStore.startMarkdownHtmlVisualization()
+async function startVisualization() {
+  if (!workspaceStore.selectedNode || workspaceStore.selectedNode.isDir || workspaceStore.refreshing) {
+    return
+  }
+  visualizationStarting.value = true
+  try {
+    await workspaceStore.startMarkdownHtmlVisualization()
+  } catch {
+    visualizationStarting.value = false
+  }
 }
+
+async function openSelectedFileInEditor(): Promise<void> {
+  const node = workspaceStore.selectedNode
+  if (!node || node.isDir) return
+  workspaceStore.setMainView('editor')
+  await workspaceStore.selectFile(node)
+}
+
+watch(() => workspaceStore.markdownHtmlVisualization, (visualization) => {
+  if (visualization) {
+    visualizationStarting.value = false
+  }
+})
 </script>
 
 <template>
@@ -200,7 +234,6 @@ function startVisualization() {
         </button>
       </div>
       <div class="toolbar-actions">
-        <span class="selected-file-path" :title="selectedDocumentLabel">{{ selectedDocumentLabel }}</span>
         <button type="button" class="tool-button" title="选择文件" aria-label="选择文件" @click="pickerOpen = true">
           <IcIcon name="folder-open" :size="15" />
         </button>
@@ -270,6 +303,7 @@ function startVisualization() {
         </div>
         <button
           type="button"
+          class="visualize-button"
           :disabled="!workspaceStore.selectedNode || workspaceStore.selectedNode.isDir || workspaceStore.refreshing"
           @click="startVisualization"
         >
@@ -315,7 +349,7 @@ function startVisualization() {
     </Transition>
 
     <section
-      v-if="hasMountedVisualization"
+      v-if="showVisualizationResult"
       class="visualization-result"
     >
       <header class="result-header">
@@ -347,9 +381,27 @@ function startVisualization() {
     </section>
 
     <section v-else class="visualization-empty">
-      <IcIcon name="code" :size="28" />
-      <strong>还没有生成 HTML 可视化</strong>
-      <span>右键文件选择“HTML可视化”，或在本页选择文件后再一键可视化。</span>
+      <template v-if="visualizationStarting">
+        <LoadingState class="visualization-pixel-loader" variant="Drive" :show-label="false" :show-elapsed="false" />
+        <strong>正在进行可视化...</strong>
+      </template>
+      <template v-else-if="selectedDocumentName">
+        <button
+          class="selected-file-card"
+          type="button"
+          :aria-label="`双击在编辑区打开 ${selectedDocumentName}`"
+          @dblclick="openSelectedFileInEditor"
+        >
+          <img class="selected-file-icon" :src="selectedDocumentIcon" alt="" aria-hidden="true" />
+          <span class="selected-file-card-name" :title="selectedDocumentName">{{ selectedDocumentName }}</span>
+          <span class="selected-file-card-hint">点击在编辑区打开</span>
+        </button>
+      </template>
+      <template v-else>
+        <IcIcon name="code" :size="28" />
+        <strong>还没有生成 HTML 可视化</strong>
+        <span>右键文件选择“HTML可视化”，或在本页选择文件后再一键可视化。</span>
+      </template>
     </section>
 
     <FloatingFileResourcePicker v-if="pickerOpen" @close="pickerOpen = false" />
@@ -455,11 +507,26 @@ function startVisualization() {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text);
+  font: inherit;
   font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
   transition:
     background var(--transition-fast),
     border-color var(--transition-fast),
     color var(--transition-fast);
+}
+
+.preset-grid button,
+.advanced-page-tabs button {
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-sm);
+}
+
+.preset-grid button:hover,
+.advanced-page-tabs button:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
 }
 
 .toolbar-actions > button {
@@ -476,27 +543,33 @@ function startVisualization() {
   flex: 0 0 auto;
 }
 
-.selected-file-path {
-  display: inline-block;
-  width: min(32vw, 380px);
-  min-width: 100px;
-  overflow: hidden;
-  color: var(--color-text-muted);
-  font-size: calc(12px * var(--font-scale));
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .toolbar-actions > button.secondary-action {
-  border-color: var(--color-border);
+  border: 0;
   background: transparent;
-  color: var(--color-text);
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-8);
+  font: inherit;
 }
 
 .toolbar-actions > button.secondary-action.active,
 .toolbar-actions > button.secondary-action:hover {
-  border-color: var(--color-primary);
+  border-color: transparent;
+  background: var(--color-primary-softer);
   color: var(--color-primary);
+}
+
+.toolbar-actions > button.visualize-button {
+  border-color: var(--color-primary);
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font: inherit;
+}
+
+.toolbar-actions > button.visualize-button:hover:not(:disabled) {
+  border-color: var(--color-primary-hover, var(--color-primary));
+  background: var(--color-primary-hover, var(--color-primary));
+  color: #fff;
 }
 
 .toolbar-actions > button.tool-button {
@@ -584,8 +657,29 @@ function startVisualization() {
   display: inline-flex;
   align-items: center;
   gap: var(--space-6);
+  min-height: 28px;
+  padding: 0 var(--space-8);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
   color: var(--color-text);
   font-size: calc(12px * var(--font-scale));
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.option-row label:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 32%, transparent);
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
+.option-row input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-primary);
 }
 
 .custom-requirement-field {
@@ -601,9 +695,9 @@ function startVisualization() {
   min-height: 68px;
   resize: vertical;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: 28px;
   padding: var(--space-8);
-  background: var(--color-canvas-soft);
+  background: var(--color-canvas);
   color: var(--color-text);
   font: inherit;
   line-height: 1.45;
@@ -841,6 +935,68 @@ function startVisualization() {
   min-width: 0;
   min-height: 0;
   color: var(--color-text-muted);
+}
+
+.selected-file-card {
+  display: grid;
+  grid-template-rows: minmax(112px, 1fr) auto auto;
+  align-items: center;
+  justify-items: center;
+  gap: var(--space-8);
+  width: min(220px, calc(100vw - 48px));
+  min-height: 210px;
+  padding: var(--space-12);
+  border: 1px solid transparent;
+  border-radius: 28px;
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.selected-file-card:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 32%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+  transform: translateY(-2px);
+}
+
+.selected-file-card:focus-visible {
+  border-color: var(--color-primary);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 32%, transparent);
+  outline-offset: 2px;
+}
+
+.selected-file-icon {
+  width: 112px;
+  height: 112px;
+  object-fit: contain;
+}
+
+.selected-file-card-name {
+  width: 100%;
+  overflow: hidden;
+  color: var(--color-primary);
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.selected-file-card-hint {
+  color: var(--color-text-muted);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.visualization-pixel-loader {
+  min-height: 16px;
 }
 
 .visualization-empty strong {

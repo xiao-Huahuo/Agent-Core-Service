@@ -568,13 +568,19 @@ function historySummary(row: IngestionHistoryItem): string {
 }
 
 .file-table {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  border: 0;
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
   background: var(--color-surface);
   box-shadow: none;
+}
+
+.file-table-body {
+  min-height: 0;
 }
 
 .file-table-head,
@@ -588,11 +594,12 @@ function historySummary(row: IngestionHistoryItem): string {
   position: sticky;
   top: 0;
   z-index: 2;
-  min-height: 34px;
+  min-height: 44px;
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-raised);
+  background: var(--color-surface);
   color: var(--color-text-muted);
   font-size: calc(12px * var(--font-scale));
+  font-weight: 700;
 }
 
 .file-table-head span,
@@ -601,19 +608,32 @@ function historySummary(row: IngestionHistoryItem): string {
   padding: 0 var(--space-12);
 }
 
+.file-table-head span:first-child,
+.file-row > span:first-child {
+  padding-left: var(--space-16);
+}
+
+.file-table-head span:last-child,
+.file-row > span:last-child {
+  padding-right: var(--space-16);
+}
+
 .file-row {
   min-height: 38px;
   border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
   color: var(--color-text);
   font-size: calc(12px * var(--font-scale));
+  transition: background-color 150ms ease;
 }
 
 .file-row:last-child {
   border-bottom: 0;
 }
 
+.file-row:hover,
 .file-row.running {
-  background: linear-gradient(90deg, var(--color-primary-softer), transparent 72%);
+  background: var(--color-primary-softer);
 }
 
 .name-cell,

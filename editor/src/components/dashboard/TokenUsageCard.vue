@@ -547,6 +547,12 @@ watch(
 }
 
 .filter-select {
+  padding: 0 6px;
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+
+:deep(.filter-select.ui-dropdown-select-trigger) {
   height: 22px;
   padding: 0 6px;
   border: 1px solid var(--color-border);
@@ -555,12 +561,6 @@ watch(
   color: var(--color-text-tertiary);
   font-family: var(--font-ui);
   font-size: calc(9px * var(--font-scale));
-}
-
-.filter-select {
-  padding: 0 6px;
-  border-color: var(--color-border);
-  background: var(--color-surface);
 }
 
 .chart-area {

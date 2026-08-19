@@ -163,20 +163,23 @@ function fileTypeOf(node: KnowledgeFileNode): string {
 
     <div class="row-lower">
       <div class="col-planning">
-        <div class="planning-left">
-          <div class="planning-metrics">
-            <div class="metric-row">
-              <span class="metric-label">知识库文件</span>
-              <span class="metric-value">{{ knowledgeFileCount }}</span>
+        <div class="planning-left-column">
+          <div class="planning-title"><span>全库数字总览</span></div>
+          <div class="planning-left">
+            <div class="planning-metrics">
+              <div class="metric-row">
+                <span class="metric-label">知识库文件</span>
+                <span class="metric-value">{{ knowledgeFileCount }}</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">图书馆图书</span>
+                <span class="metric-value">{{ libraryBookCount }}</span>
+              </div>
             </div>
-            <div class="metric-row">
-              <span class="metric-label">图书馆图书</span>
-              <span class="metric-value">{{ libraryBookCount }}</span>
-            </div>
-          </div>
 
-          <div class="type-share-panel">
-            <VChart class="type-pie-chart" :option="typePieOption" autoresize />
+            <div class="type-share-panel">
+              <VChart class="type-pie-chart" :option="typePieOption" autoresize />
+            </div>
           </div>
         </div>
         <div class="planning-right">
@@ -246,10 +249,32 @@ function fileTypeOf(node: KnowledgeFileNode): string {
   gap: var(--space-10);
 }
 
+.planning-left-column {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.planning-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 18px;
+  padding: 0 2px;
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 600;
+}
+
 .planning-left {
+  flex: 1 1 auto;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
+  border-radius: 28px;
+  background: var(--color-surface);
+  box-shadow: 0 0 0 4px var(--library-form-ring);
 }
 
 .planning-right-main {
@@ -292,7 +317,7 @@ function fileTypeOf(node: KnowledgeFileNode): string {
   min-height: 58px;
   min-width: 0;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 28px;
   padding: var(--space-10) var(--space-12);
   background: rgba(255, 255, 255, 0.02);
 }
@@ -344,10 +369,6 @@ function fileTypeOf(node: KnowledgeFileNode): string {
   width: 100%;
   min-width: 0;
   min-height: 0;
-}
-
-.time-panel :deep(.card-block) {
-  box-shadow: none;
 }
 
 @media (max-width: 1200px) {

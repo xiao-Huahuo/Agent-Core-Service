@@ -362,7 +362,7 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
   font-size: calc(9px * var(--font-scale));
 }
 
-.range-select {
+:deep(.range-select.ui-dropdown-select-trigger) {
   min-width: 96px;
   height: 26px;
   border: 1px solid var(--color-border);
