@@ -653,6 +653,20 @@ function closeKnowledgeMenu() {
   transform: none;
 }
 
+/* File-tree style hierarchy guide for the expanded library branch. */
+.activity-bar.management .knowledge-submenu::before {
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: 5px;
+  width: 1px;
+  border-radius: 999px;
+  background: var(--color-border-subtle, var(--color-border));
+  content: '';
+  opacity: 0.9;
+  transition: opacity 180ms ease;
+}
+
 .knowledge-hover-indicator {
   position: absolute;
   top: 0;
@@ -702,6 +716,23 @@ function closeKnowledgeMenu() {
 
 .activity-bar.management .knowledge-submenu .activity-button {
   width: 100%;
+  overflow: visible;
+}
+
+.activity-bar.management .knowledge-submenu .activity-button::before {
+  position: absolute;
+  top: 50%;
+  left: -7px;
+  width: 7px;
+  height: 1px;
+  border-radius: 999px;
+  background: var(--color-border-subtle, var(--color-border));
+  content: '';
+  transform: translateY(-50%);
+}
+
+.activity-bar.management .knowledge-submenu .activity-button.active::before {
+  background: var(--color-primary);
 }
 
 .activity-bar.management .knowledge-submenu .activity-label {
@@ -714,6 +745,27 @@ function closeKnowledgeMenu() {
 .knowledge-submenu-leave-active {
   transition: opacity 180ms ease, transform 180ms ease;
   transform-origin: top left;
+}
+
+.activity-bar.management .knowledge-submenu-enter-active,
+.activity-bar.management .knowledge-submenu-leave-active {
+  max-height: 240px;
+  overflow: hidden;
+  transition: max-height 220ms ease, opacity 180ms ease, transform 180ms ease;
+}
+
+.activity-bar.management .knowledge-submenu-enter-from,
+.activity-bar.management .knowledge-submenu-leave-to {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.activity-bar.management .knowledge-submenu-enter-to,
+.activity-bar.management .knowledge-submenu-leave-from {
+  max-height: 240px;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .knowledge-submenu-enter-from,
@@ -765,6 +817,12 @@ function closeKnowledgeMenu() {
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: #ffffff;
+}
+
+.activity-bar.management .activity-button.active {
+  border-color: transparent;
+  background: var(--color-surface-raised);
+  color: var(--color-text);
 }
 
 .activity-agent-icon {
