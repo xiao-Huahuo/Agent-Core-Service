@@ -112,3 +112,8 @@ defineEmits<{
   </div>
 </template>
 
+<style scoped>
+.hint-text {
+  display: none;
+}
+</style>

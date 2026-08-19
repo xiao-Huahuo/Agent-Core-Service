@@ -5,7 +5,7 @@
   Edits theme mode and global font stacks. The parent owns persistence.
 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { SidebarDisplayMode, ThemeMode } from '@/types/settings'
 
@@ -36,6 +36,8 @@ const emit = defineEmits<{
 const activeFontPicker = ref<'ui' | 'text' | null>(null)
 const uiFontQuery = ref('')
 const textFontQuery = ref('')
+const sidebarSwitchRef = ref<HTMLElement | null>(null)
+const sidebarSliderStyle = ref({ width: '0px', left: '0px' })
 
 function normalizeFontFamily(value: string): string {
   return value.replace(/[;{}]/g, '').trim()
@@ -147,9 +149,24 @@ function handleDocumentPointerDown(event: PointerEvent) {
   }
 }
 
+function updateSidebarSlider() {
+  void nextTick(() => {
+    const container = sidebarSwitchRef.value
+    const active = container?.querySelector<HTMLElement>('.settings-resource-page-button.active')
+    if (!active) return
+    sidebarSliderStyle.value = {
+      width: `${active.offsetWidth}px`,
+      left: `${active.offsetLeft}px`,
+    }
+  })
+}
+
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
+  updateSidebarSlider()
 })
+
+watch(() => props.sidebarDisplayMode, updateSidebarSlider)
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
@@ -222,10 +239,11 @@ onBeforeUnmount(() => {
     <div class="page-display-control">
       <div class="page-display-header">
         <label>侧边栏展示</label>
-        <span>{{ sidebarDisplayMode === 'icons' ? '图标栏' : '管理栏' }}</span>
       </div>
-      <div class="page-display-row" role="group" aria-label="侧边栏展示">
+      <div ref="sidebarSwitchRef" class="settings-resource-page-switch" role="group" aria-label="侧边栏展示">
+        <span class="settings-resource-page-slider" :style="sidebarSliderStyle" aria-hidden="true"></span>
         <button
+          class="settings-resource-page-button"
           type="button"
           :class="{ active: sidebarDisplayMode === 'icons' }"
           @click="$emit('setSidebarDisplayMode', 'icons')"
@@ -233,6 +251,7 @@ onBeforeUnmount(() => {
           图标栏
         </button>
         <button
+          class="settings-resource-page-button"
           type="button"
           :class="{ active: sidebarDisplayMode === 'management' }"
           @click="$emit('setSidebarDisplayMode', 'management')"
@@ -364,4 +383,68 @@ onBeforeUnmount(() => {
     <p class="setting-hint">字体按从左到右的顺序组成 font-family;留空时使用原默认 fallback。</p>
   </div>
 </template>
+
+<style scoped>
+.color-control-header span,
+.page-display-header span,
+.font-family-header span,
+.font-empty,
+.setting-hint {
+  display: none;
+}
+
+.save-model-btn {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.cancel-model-btn {
+  width: max-content;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.settings-resource-page-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-canvas);
+}
+
+.settings-resource-page-slider {
+  position: absolute;
+  top: 2px;
+  height: calc(100% - 4px);
+  border-radius: 999px;
+  background: var(--color-primary-softer);
+  pointer-events: none;
+  transition: left 250ms ease, width 250ms ease;
+}
+
+.settings-resource-page-button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 var(--space-8);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
+}
+
+.settings-resource-page-button:hover,
+.settings-resource-page-button.active {
+  color: var(--color-primary);
+}
+</style>
 

@@ -60,3 +60,11 @@ footer button { height: 32px; border: 1px solid var(--color-border); border-radi
 .save-btn { border-color: var(--color-primary) !important; background: var(--color-primary) !important; color: #fff !important; }
 .save-btn:disabled { cursor: default; opacity: 0.55; }
 </style>
+
+<style scoped>
+.reset-panel .field input.form-input-surface {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+</style>

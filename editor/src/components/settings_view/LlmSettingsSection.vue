@@ -45,7 +45,7 @@ defineEmits<{
         <button class="toggle-key" @click="showLargeKey = !showLargeKey">{{ showLargeKey ? '隐藏' : '显示' }}</button>
       </div>
     </div>
-    <h3>小模型</h3>
+    <h3 class="small-model-heading">小模型</h3>
     <p class="setting-hint">小模型留空时会自动使用大模型的模型名、Base URL 和 API Key。</p>
     <div class="model-block">
       <input v-model="smallModelName" placeholder="模型名称（留空继承大模型）" spellcheck="false" :readonly="!modelEditing" :class="{ readonly: !modelEditing }" />
@@ -85,3 +85,17 @@ defineEmits<{
     </section>
   </div>
 </template>
+
+<style scoped>
+.small-model-heading {
+  display: inline-block;
+  margin-right: var(--space-8);
+  margin-bottom: 0;
+}
+
+.small-model-heading + .setting-hint {
+  display: inline;
+  margin: 0;
+  vertical-align: baseline;
+}
+</style>

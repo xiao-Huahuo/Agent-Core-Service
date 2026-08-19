@@ -228,6 +228,7 @@ onMounted(loadData)
         {{ vaultDebugLoading ? '获取中...' : '获取密码库主密码' }}
       </button>
       <button class="secondary-model-btn" type="button" @click="vaultAdminResetOpen = !vaultAdminResetOpen">重设密码库密码</button>
+      <button class="secondary-model-btn vault-reset-toggle vault-reset-inside" type="button" @click="vaultResetOpen = true">重置密码</button>
       <p v-if="vaultPasswordDebug" class="vault-debug-result" :class="{ secret: vaultDebugPasswordVisible }">
         {{ vaultDebugPasswordVisible ? `主密码: ${vaultPasswordDebug}` : vaultPasswordDebug }}
       </p>
@@ -236,7 +237,13 @@ onMounted(loadData)
     <VaultPasswordResetDialog :open="vaultResetOpen" :saving="vaultResetSaving" :require-old-password="true" @close="vaultResetOpen = false" @submit="(oldPassword, nextPassword, confirmation) => submitVaultPasswordReset(true, oldPassword, nextPassword, confirmation)" />
     <VaultPasswordResetDialog :open="vaultAdminResetOpen" :saving="vaultResetSaving" :require-old-password="false" @close="vaultAdminResetOpen = false" @submit="(_oldPassword, nextPassword, confirmation) => submitVaultPasswordReset(false, '', nextPassword, confirmation)" />
 
-    <h3>安全审核词库</h3>
+    <div class="safety-heading-row">
+      <h3>安全审核词库</h3>
+      <button class="save-model-btn" :disabled="saving" @click="handleSave">
+        {{ saving ? '保存中...' : '保存全部' }}
+      </button>
+      <span v-if="saveMsg" class="feedback">{{ saveMsg }}</span>
+    </div>
     <p class="safety-desc">{{ data._description }}</p>
 
     <!-- 全局开关 -->
@@ -326,7 +333,7 @@ onMounted(loadData)
         <div class="safety-chip-input-row">
           <input
             v-model="newExactText[entry.key]"
-            class="safety-chip-input"
+            class="safety-chip-input safety-chip-input-exact"
             placeholder="添加精确匹配词"
             spellcheck="false"
             @keydown="handleKeydownInput($event, entry.key, 'exact')"
@@ -750,5 +757,67 @@ onMounted(loadData)
   gap: var(--space-6);
   align-items: center;
   flex-wrap: wrap;
+}
+</style>
+
+<style scoped>
+.vault-debug-card,
+.safety-global-toggles,
+.safety-category-card {
+  border: 0;
+  border-radius: 28px;
+  box-shadow: 0 0 0 4px var(--library-form-ring);
+}
+
+.vault-debug-card {
+  position: relative;
+  padding-bottom: var(--space-16);
+}
+
+.vault-reset-inside {
+  grid-column: 1 / -1;
+  justify-self: end;
+  margin-top: var(--space-4);
+}
+
+.setting-section > .vault-reset-toggle {
+  display: none;
+}
+
+.safety-heading-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.safety-heading-row h3 {
+  margin-bottom: 0;
+}
+
+.safety-heading-row .save-model-btn {
+  margin-left: auto;
+}
+
+.safety-actions {
+  display: none;
+}
+
+.safety-global-row + .safety-global-row {
+  border-top: 0;
+}
+
+.secondary-model-btn {
+  border: 0;
+  box-shadow: 0 0 0 3px var(--library-form-ring);
+}
+
+.safety-chip {
+  border: 0;
+  box-shadow: 0 0 0 2px var(--library-form-ring);
+}
+
+.safety-chip-input-exact {
+  flex: 0 0 66.666%;
+  width: 66.666%;
 }
 </style>

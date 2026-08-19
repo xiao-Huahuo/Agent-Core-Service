@@ -6,7 +6,7 @@
   and bash supported structured instruction segments.
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import type { TerminalSandboxConfig, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
 
@@ -28,6 +28,8 @@ const shellPages: Array<{ key: TerminalShellKey; label: string }> = [
 ]
 
 const activeShell = ref<TerminalShellKey>('cmd')
+const shellSwitchRef = ref<HTMLElement | null>(null)
+const shellSliderStyle = ref({ width: '0px', left: '0px' })
 const draft = ref<TerminalSandboxConfig>(cloneConfig(props.config))
 const allowedText = ref<Record<TerminalShellKey, string>>({
   cmd: '',
@@ -46,6 +48,21 @@ watch(
 )
 
 const activeCatalog = computed(() => props.segmentCatalog[activeShell.value] ?? [])
+
+function updateShellSlider() {
+  void nextTick(() => {
+    const container = shellSwitchRef.value
+    const active = container?.querySelector<HTMLElement>('.settings-resource-page-button.active')
+    if (!active) return
+    shellSliderStyle.value = {
+      width: `${active.offsetWidth}px`,
+      left: `${active.offsetLeft}px`,
+    }
+  })
+}
+
+onMounted(updateShellSlider)
+watch(activeShell, updateShellSlider)
 
 function cloneConfig(config: TerminalSandboxConfig): TerminalSandboxConfig {
   return {
@@ -143,20 +160,23 @@ function save() {
       <textarea v-model="blockedText" spellcheck="false" @blur="save"></textarea>
     </div>
 
-    <div class="terminal-pages">
+    <div ref="shellSwitchRef" class="settings-resource-page-switch terminal-shell-switch" role="tablist" aria-label="终端类型">
+      <span class="settings-resource-page-slider" :style="shellSliderStyle" aria-hidden="true"></span>
       <button
         v-for="page in shellPages"
         :key="page.key"
-        class="terminal-page-tab"
+        class="settings-resource-page-button"
         :class="{ active: activeShell === page.key }"
         type="button"
+        role="tab"
+        :aria-selected="activeShell === page.key"
         @click="activeShell = page.key"
       >
         {{ page.label }}
       </button>
     </div>
 
-    <div class="terminal-page-body">
+    <div class="terminal-page-body library-form-surface terminal-page-card">
       <div class="setting-row toggle-row">
         <label>启用终端</label>
         <input
@@ -185,3 +205,29 @@ function save() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.hint-text,
+.setting-hint,
+.empty-hint {
+  display: none;
+}
+
+.segment-row code {
+  color: var(--color-text);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.segment-row span {
+  display: none;
+}
+
+.terminal-shell-switch {
+  margin: var(--space-12) 0 var(--space-8);
+}
+
+.terminal-page-card {
+  padding: var(--space-12);
+  border-radius: 28px;
+}
+</style>

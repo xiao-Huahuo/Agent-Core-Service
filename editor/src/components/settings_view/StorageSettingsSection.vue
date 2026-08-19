@@ -987,3 +987,13 @@ onMounted(() => {
   text-align: right;
 }
 </style>
+
+<style scoped>
+.stat-card {
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-text) 6%);
+  box-shadow: 0 0 0 3px var(--library-form-ring);
+}
+</style>

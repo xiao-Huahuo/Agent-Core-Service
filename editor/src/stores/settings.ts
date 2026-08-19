@@ -299,7 +299,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function applyFonts() {
     document.documentElement.style.setProperty(
       '--font-scale',
-      String(normalizeFontSizePercent(profile.value.fontSizePercent) / 100),
+      String((normalizeFontSizePercent(profile.value.fontSizePercent) / 100) * 1.2),
     )
     document.documentElement.style.setProperty(
       '--font-ui',

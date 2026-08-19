@@ -1825,6 +1825,43 @@ onBeforeUnmount(() => {
   transition: box-shadow var(--transition-fast);
 }
 
+.settings-body .ignore-row textarea {
+  min-height: 172px;
+  border-radius: 18px !important;
+  background: var(--color-code-bg) !important;
+  font-family: var(--font-code);
+  line-height: 1.6;
+}
+
+.settings-body {
+  --settings-label-width: 112px;
+  --settings-label-indent: 122px;
+}
+
+.settings-body .setting-row > label,
+.settings-body .terminal-grid .compact-row label,
+.settings-body .font-family-header label,
+.settings-body .color-control-header label,
+.settings-body .page-display-header label {
+  width: var(--settings-label-width) !important;
+}
+
+.settings-body .font-family-control,
+.settings-body .color-control,
+.settings-body .page-display-control {
+  padding-left: var(--settings-label-indent);
+}
+
+.settings-body .font-family-header label,
+.settings-body .color-control-header label,
+.settings-body .page-display-header label {
+  margin-left: calc(-1 * var(--settings-label-indent));
+}
+
+.settings-body .blocked-file-types-row > label {
+  flex: 0 0 var(--settings-label-width) !important;
+}
+
 .settings-body input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='hidden']):focus,
 .settings-body select:focus,
 .settings-body textarea:focus {

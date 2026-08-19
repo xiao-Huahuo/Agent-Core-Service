@@ -504,3 +504,42 @@ async function appendBlockedFileType(suffix: string): Promise<void> {
   opacity: 0.8;
 }
 </style>
+
+<style scoped>
+.hint-text,
+.setting-hint {
+  display: none;
+}
+
+.ignore-row textarea {
+  min-height: 172px;
+  border-radius: 18px;
+  background: var(--color-code-bg) !important;
+  font-family: var(--font-code);
+  line-height: 1.6;
+}
+
+.logout-section {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.logout-section > div {
+  display: none;
+}
+
+.file-type-chip {
+  border: 0;
+  background: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  color: var(--color-primary);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.file-type-chip:hover:not(:disabled),
+.file-type-chip.active {
+  border: 0;
+  background: color-mix(in srgb, var(--color-primary) 42%, transparent);
+  color: var(--color-primary);
+}
+</style>
