@@ -194,57 +194,57 @@ onMounted(() => nextTick(autoResizeInput))
         <span class="agent-play">AGENT</span>
       </button>
       <button
-        class="todo-link topbar-browser-btn"
+        class="topbar-icon-button topbar-browser-btn"
         :class="{ active: browserOpen }"
         type="button"
         title="右侧浏览器"
         aria-label="打开或收起右侧浏览器"
         @click="emit('toggleBrowser')"
       >
-        <IcIcon name="language" :size="14" />
+        <IcIcon name="language" :size="17" />
       </button>
       <button
-        class="todo-link"
+        class="topbar-icon-button"
         :class="{ active: gitOpen }"
         type="button"
         title="Git 版本控制"
         aria-label="切换右侧 Git 面板"
         @click="emit('toggleGit')"
       >
-        <IcIcon name="git" :size="14" />
+        <IcIcon name="git" :size="17" />
       </button>
       <button
-        class="todo-link topbar-optional"
+        class="topbar-icon-button topbar-optional"
         :class="{ active: todoActive }"
         type="button"
         title="待办"
         @click="emit('toggleTodo')"
       >
-        <IcIcon name="todo" :size="14" />
+        <IcIcon name="todo" :size="17" />
       </button>
       <button
-        class="todo-link topbar-optional"
+        class="topbar-icon-button topbar-optional"
         :class="{ refreshing: graphRebuilding }"
         type="button"
         :disabled="graphRebuilding"
         title="图谱抽取"
         @click="checkEmbeddingBefore(() => { workspaceStore.ingestionViewTab = 'graph-queue'; workspaceStore.mainView = 'ingestion'; workspaceStore.startGraphRebuild(); })"
       >
-        <IcIcon name="hub" :size="14" />
+        <IcIcon name="hub" :size="17" />
       </button>
       <button
-        class="todo-link topbar-optional"
+        class="topbar-icon-button topbar-optional"
         :class="{ refreshing: workspaceStore.refreshing }"
         type="button"
         :disabled="workspaceStore.refreshing"
         title="重新灌库"
         @click="checkEmbeddingBefore(() => { workspaceStore.ingestionViewTab = 'queue'; workspaceStore.mainView = 'ingestion'; workspaceStore.markIndexing(); })"
       >
-        <IcIcon name="ingest" :size="14" />
+        <IcIcon name="ingest" :size="17" />
       </button>
       <button
         v-if="desktopApi?.isDesktop"
-        class="todo-link floating-window-btn"
+        class="topbar-icon-button floating-window-btn"
         type="button"
         title="Agent 悬浮窗"
         aria-label="打开或收起 Agent 悬浮窗"
@@ -451,10 +451,11 @@ onMounted(() => nextTick(autoResizeInput))
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex: 0 0 26px;
-  width: 26px;
-  min-width: 26px;
+  flex: 0 0 28px;
+  width: 28px;
+  min-width: 28px;
   max-width: 250px;
+  order: 90;
   -webkit-app-region: no-drag;
   transition:
     flex-basis 200ms ease-in-out,
@@ -488,6 +489,44 @@ onMounted(() => nextTick(autoResizeInput))
   z-index: 1;
 }
 
+.topbar-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.topbar-icon-button:hover,
+.topbar-icon-button.active {
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
+.topbar-icon-button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.topbar-icon-button.refreshing :deep(svg) {
+  animation: refresh-spin 900ms linear infinite;
+}
+
+.floating-window-btn {
+  display: none;
+}
+
 /* ── Theme switch (sun/moon animation) ── */
 .switch {
   position: relative;
@@ -500,6 +539,7 @@ onMounted(() => nextTick(autoResizeInput))
   margin: -3.5px -7.25px;
   transform: scale(0.75);
   transform-origin: center;
+  order: 100;
 }
 
 .switch input {
@@ -736,7 +776,7 @@ input:checked + .slider .clouds {
 }
 
 .github-btn-topbar {
-  border: 1px solid #000;
+  border: 1px solid var(--color-border);
   border-radius: 50%;
   width: 24px;
   height: 24px;
@@ -753,7 +793,7 @@ input:checked + .slider .clouds {
 
 .github-btn-topbar.dark {
   background-color: rgb(31, 31, 31);
-  border-color: #fff;
+  border-color: var(--color-border);
 }
 
 .github-btn-topbar.dark .github-svg-icon path {
@@ -787,6 +827,7 @@ input:checked + .slider .clouds {
   width: 90px;
   transition-duration: .4s;
   border-radius: 30px;
+  box-shadow: 0 0 0 2px var(--color-border), 0 0 0 4px var(--color-border);
 }
 
 .github-btn-topbar:hover .github-text-topbar {
@@ -867,37 +908,6 @@ input:checked + .slider .clouds {
   background-color: color-mix(in srgb, var(--color-primary) 80%, #000);
 }
 
-.todo-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  -webkit-app-region: no-drag;
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.todo-link:hover {
-  border-color: var(--color-primary);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-}
-
-.todo-link.active {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: white;
-}
-
 .ingestion-progress {
   display: inline-flex;
   align-items: center;
@@ -950,10 +960,6 @@ input:checked + .slider .clouds {
 
 .graph-progress .ingestion-progress-fill {
   background: #14b8a6;
-}
-
-.todo-link.refreshing :deep(svg) {
-  animation: refresh-spin 900ms linear infinite;
 }
 
 @keyframes refresh-spin {
@@ -1011,6 +1017,7 @@ kbd {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
+  order: 110;
 }
 
 .window-controls button {

@@ -371,7 +371,7 @@ defineExpose({ focus })
 }
 
 .search-wrapper:not(.page-variant) {
-  width: 26px;
+  width: 28px;
   max-width: 100%;
   margin-left: auto;
   opacity: 1;
@@ -406,6 +406,20 @@ defineExpose({ focus })
   justify-content: center;
   gap: 0;
   padding: 0;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+}
+
+.search-wrapper:not(.page-variant):not(.focused):hover .search-bar {
+  background: var(--color-primary-softer);
+}
+
+.search-wrapper:not(.page-variant):not(.focused):hover .search-icon,
+.search-wrapper:not(.page-variant):not(.focused):hover .toolbar-search-btn {
+  color: var(--color-primary);
 }
 
 .search-wrapper:not(.page-variant):not(.focused) .search-input,
