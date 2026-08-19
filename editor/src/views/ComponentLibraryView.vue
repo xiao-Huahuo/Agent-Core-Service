@@ -308,7 +308,7 @@ onMounted(() => {
             :disabled="favoritesOnlyLocked"
             @click="toggleFavoritesOnly"
           >
-            <IcIcon name="star" :size="16" />
+            <IcIcon name="star" :size="17" />
           </button>
           <button
             class="upload-trigger"
@@ -316,7 +316,7 @@ onMounted(() => {
             type="button"
             @click="openUpload"
           >
-            <IcIcon name="add" :size="16" />
+            <IcIcon name="add" :size="17" />
             <span>上传组件</span>
           </button>
         </div>
@@ -379,10 +379,10 @@ onMounted(() => {
   gap: var(--space-10);
   margin: var(--space-12);
   padding: var(--space-16) var(--space-12);
-  border: 0;
-  border-radius: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 28px;
   background: var(--color-surface);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 0 0 4px var(--library-form-ring);
   animation: component-sidebar-enter 220ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
@@ -503,7 +503,7 @@ onMounted(() => {
 
 .component-main {
   display: grid;
-  grid-template-rows: 58px minmax(0, 1fr);
+  grid-template-rows: 44px minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -515,7 +515,8 @@ onMounted(() => {
   justify-content: space-between;
   gap: var(--space-12);
   min-width: 0;
-  padding: 0 var(--space-16);
+  min-height: 44px;
+  padding: var(--space-8) var(--space-12);
   border: 0;
   background: color-mix(in srgb, var(--color-surface) 92%, transparent);
 }
@@ -540,7 +541,7 @@ onMounted(() => {
 }
 
 .toolbar-actions {
-  gap: var(--space-6);
+  gap: var(--space-4);
 }
 
 .toolbar-copy strong {
@@ -556,8 +557,8 @@ onMounted(() => {
 
 .detail-back {
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -574,11 +575,11 @@ onMounted(() => {
 
 .favorite-filter {
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -599,17 +600,18 @@ onMounted(() => {
   gap: var(--space-6);
   flex: 0 0 auto;
   min-width: 116px;
-  min-height: 34px;
-  border: 0;
+  height: 28px;
+  min-height: 28px;
+  border: 1px solid var(--color-primary);
   border-radius: 999px;
   background: var(--color-primary);
   color: white;
-  padding: 0 var(--space-14);
+  padding: 0 var(--space-10);
   cursor: pointer;
   font-size: calc(12px * var(--font-scale));
   font-weight: 700;
   white-space: nowrap;
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--color-primary) 25%, transparent);
+  box-shadow: none;
 }
 
 .upload-trigger:hover,

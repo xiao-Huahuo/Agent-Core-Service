@@ -22,9 +22,9 @@ describe('ActivityBar', () => {
     expect(editorWorkspaceSource).toContain('const ACTIVITY_BAR_MANAGEMENT_WIDTH = 204')
   })
 
-  it('keeps management icons left aligned and labels centered', () => {
+  it('keeps management icons and labels left aligned', () => {
     expect(activityBarSource).toContain('.activity-bar.management .activity-button > :deep(.ic-icon:not(.knowledge-chevron))')
-    expect(activityBarSource).toMatch(/\.activity-bar\.management \.activity-label \{[^}]*width: 100%;[^}]*text-align: center;/)
+    expect(activityBarSource).toMatch(/\.activity-bar\.management \.activity-label \{[^}]*width: 100%;[^}]*text-align: left;/)
   })
 
   beforeEach(() => {

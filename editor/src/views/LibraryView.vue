@@ -684,16 +684,16 @@ function errorMessage(error: unknown): string {
       <div class="nav-row">
         <div class="nav-buttons">
           <button class="icon-toolbar-btn" type="button" title="回退" :disabled="!canGoBack" @click="goBack">
-            <IcIcon name="arrow-left" :size="16" />
+            <IcIcon name="arrow-left" :size="17" />
           </button>
           <button class="icon-toolbar-btn" type="button" title="反回退" :disabled="!canGoForward" @click="goForward">
-            <IcIcon name="arrow-right" :size="16" />
+            <IcIcon name="arrow-right" :size="17" />
           </button>
           <button class="icon-toolbar-btn" type="button" title="回到上级目录" :disabled="!canGoUp" @click="goUp">
-            <IcIcon name="arrow-up" :size="16" />
+            <IcIcon name="arrow-up" :size="17" />
           </button>
           <button class="icon-toolbar-btn" type="button" title="刷新" @click="refreshLibrary">
-            <IcIcon name="refresh" :size="16" />
+            <IcIcon name="refresh" :size="17" />
           </button>
         </div>
         <nav class="path-box" :title="virtualPath">
@@ -717,7 +717,7 @@ function errorMessage(error: unknown): string {
               type="button"
               title="筛选"
             >
-              <IcIcon name="filter" :size="16" />
+              <IcIcon name="filter" :size="17" />
               <span>筛选</span>
               <IcIcon class="filter-chevron" name="chevron-down" :size="14" aria-hidden="true" />
             </button>
@@ -766,7 +766,7 @@ function errorMessage(error: unknown): string {
           </DropdownMenuPortal>
         </DropdownMenu>
         <button class="tool-button" type="button" title="新增文件" @click="openCreateBookDialog">
-          <IcIcon name="new-file" :size="16" />
+          <IcIcon name="new-file" :size="17" />
         </button>
         <button
           class="tool-button"
@@ -777,13 +777,13 @@ function errorMessage(error: unknown): string {
           :disabled="favoritesOnlyLocked"
           @click="toggleFavoritesOnly"
         >
-          <IcIcon name="star" :size="16" />
+          <IcIcon name="star" :size="17" />
         </button>
         <button class="tool-button" type="button" title="新增集锦" @click="openCreateCollectionDialog">
-          <IcIcon name="new-folder" :size="16" />
+          <IcIcon name="new-folder" :size="17" />
         </button>
         <button class="tool-button" :class="{ active: multiSelect }" type="button" title="多选" @click="multiSelect = !multiSelect">
-          <IcIcon name="label" :size="16" />
+          <IcIcon name="label" :size="17" />
           <span v-if="multiSelect" class="multi-indicator">{{ selectedIds.size }}</span>
         </button>
         <button
@@ -793,8 +793,8 @@ function errorMessage(error: unknown): string {
           :title="viewMode === 'card' ? '切换为条形' : '切换为卡片'"
           @click="viewMode = viewMode === 'card' ? 'bar' : 'card'"
         >
-          <IcIcon v-if="viewMode === 'card'" name="view-stream" :size="16" />
-          <IcIcon v-else name="grid-view" :size="16" />
+          <IcIcon v-if="viewMode === 'card'" name="view-stream" :size="17" />
+          <IcIcon v-else name="grid-view" :size="17" />
         </button>
       </div>
     </header>
@@ -981,8 +981,8 @@ function errorMessage(error: unknown): string {
   display: flex;
   align-items: center;
   min-width: 0;
-  min-height: 40px;
-  padding: 5px 8px;
+  min-height: 44px;
+  padding: var(--space-8) var(--space-12);
   border-bottom: 0;
   background: var(--color-surface-raised);
 }
@@ -990,7 +990,7 @@ function errorMessage(error: unknown): string {
 .nav-row {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-8);
   flex: 1 1 auto;
   min-width: 0;
   flex-wrap: nowrap;
@@ -1018,7 +1018,7 @@ function errorMessage(error: unknown): string {
 .icon-toolbar-btn {
   position: relative;
   justify-content: center;
-  width: 32px;
+  width: 28px;
   padding: 0;
 }
 

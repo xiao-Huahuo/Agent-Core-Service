@@ -11,13 +11,18 @@ import type { VaultItemType, VaultTag } from '@/api/vault'
 
 defineOptions({ name: 'VaultFilterPanel' })
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   query: string
   tag: string
   itemType: string
   tags: VaultTag[]
   counts: Record<string, number>
-}>()
+  title?: string
+  titleIcon?: string
+}>(), {
+  title: '密码库',
+  titleIcon: 'shield',
+})
 
 const emit = defineEmits<{
   'update:query': [value: string]
@@ -37,7 +42,7 @@ const typeIcons: Record<VaultItemType, string> = { login: 'shield', card: 'dashb
 
 <template>
   <aside class="filter-panel">
-    <div class="panel-heading"><IcIcon name="filter" :size="16" /><span>筛选</span></div>
+    <div class="sidebar-title"><IcIcon :name="titleIcon" :size="17" /><span>{{ title }}</span></div>
     <label class="filter-search">
       <IcIcon name="search" :size="15" />
       <input
@@ -77,36 +82,35 @@ const typeIcons: Record<VaultItemType, string> = { login: 'shield', card: 'dashb
 
 <style scoped>
 .filter-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   align-content: start;
-  gap: var(--space-4);
-  flex: 0 0 216px;
-  width: 216px;
-  min-width: 216px;
-  max-width: 216px;
+  gap: var(--space-10);
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
   margin: var(--space-12);
-  padding: var(--space-12);
-  border: 0;
-  border-radius: 18px;
+  padding: var(--space-16) var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: 28px;
   background: var(--color-surface);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 0 0 4px var(--library-form-ring);
   font-family: var(--font-ui);
   font-size: calc(14px * var(--font-scale));
 }
 
-.panel-heading {
-  display: inline-flex;
+.sidebar-title {
+  display: flex;
   align-items: center;
-  gap: var(--space-6);
-  height: 28px;
+  gap: var(--space-8);
+  min-height: 32px;
+  padding: 0 var(--space-10);
   color: var(--color-text);
   font-size: calc(13px * var(--font-scale));
-  font-weight: 600;
+  font-weight: 700;
 }
 
-.panel-heading svg { color: var(--color-primary); }
+.sidebar-title svg { color: var(--color-primary); }
 .section-label { margin: var(--space-8) var(--space-6) var(--space-2); color: var(--color-text-muted); font-size: calc(11px * var(--font-scale)); font-weight: 600; }
 
 .filter-search {
@@ -142,55 +146,127 @@ const typeIcons: Record<VaultItemType, string> = { login: 'shield', card: 'dashb
 }
 
 .type-filter {
+  position: relative;
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-8);
-  height: 30px;
+  width: 100%;
+  min-height: 36px;
+  overflow: hidden;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 9px;
   background: transparent;
   color: var(--color-text-secondary);
   text-align: left;
-  padding: 0 var(--space-6);
+  padding: 0 var(--space-10);
   font: inherit;
   font-size: calc(13px * var(--font-scale));
   cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.type-filter::before {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  content: '';
+  transform: scaleY(0);
+  transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .type-filter:hover,
 .type-filter.active {
-  background: var(--color-selection-blue-soft);
+  background: var(--color-primary-soft);
   color: var(--color-text);
 }
 
 .type-filter.active { color: var(--color-primary); }
+.type-filter.active::before { transform: scaleY(1); }
 .type-filter small { color: var(--color-text-muted); font-size: calc(11px * var(--font-scale)); }
 hr { width: 100%; margin: var(--space-8) 0; border: 0; border-top: 1px solid var(--color-border); }
 
 .tag-list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: var(--space-6);
 }
 
 .tag-pill {
-  max-width: 140px;
-  min-height: 24px;
-  border: 0;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 20%, transparent);
-  color: var(--color-primary);
-  padding: 0 9px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 36px;
   overflow: hidden;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-10);
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
 }
 
-.tag-pill.active {
+.tag-pill::before {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
   background: var(--color-primary);
-  color: #fff;
+  content: '';
+  transform: scaleY(0);
+  transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tag-pill:hover,
+.tag-pill.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.tag-pill.active::before { transform: scaleY(1); }
+
+@media (max-width: 860px) {
+  .filter-panel {
+    flex-direction: row;
+    overflow-x: auto;
+    margin: var(--space-8);
+    padding: var(--space-8);
+    gap: var(--space-8);
+  }
+
+  .sidebar-title,
+  .section-label,
+  .filter-panel hr {
+    display: none;
+  }
+
+  .filter-search {
+    flex: 0 0 164px;
+  }
+
+  .tag-list {
+    display: flex;
+  }
+
+  .tag-pill,
+  .type-filter {
+    width: auto;
+    min-width: max-content;
+  }
 }
 
 </style>

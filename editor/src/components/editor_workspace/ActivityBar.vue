@@ -805,7 +805,7 @@ function closeKnowledgeMenu() {
   width: 100%;
   max-width: none;
   opacity: 1;
-  text-align: center;
+  text-align: left;
   transform: translateX(0);
   transition-delay: 40ms;
 }

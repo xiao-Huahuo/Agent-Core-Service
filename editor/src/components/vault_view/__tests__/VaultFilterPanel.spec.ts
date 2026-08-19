@@ -32,15 +32,14 @@ describe('VaultFilterPanel', () => {
   })
 
   it('constrains the search field to the sidebar track', () => {
-    expect(filterPanelSource).toContain('grid-template-columns: minmax(0, 1fr)')
-    expect(filterPanelSource).toContain('max-width: 216px')
+    expect(filterPanelSource).toContain('flex-direction: column')
     expect(filterPanelSource).toContain('.filter-search')
     expect(filterPanelSource).toContain('max-width: 100%')
   })
 
-  it('uses the component-library rounded shadow card as its sidebar shell', () => {
+  it('uses the component-library translucent bordered card as its sidebar shell', () => {
     expect(filterPanelSource).toMatch(
-      /\.filter-panel\s*\{[^}]*margin:\s*var\(--space-12\);[^}]*border:\s*0;[^}]*border-radius:\s*18px;[^}]*background:\s*var\(--color-surface\);[^}]*box-shadow:\s*0 14px 36px rgba\(0, 0, 0, 0\.14\);/su,
+      /\.filter-panel\s*\{[^}]*margin:\s*var\(--space-12\);[^}]*border:\s*1px solid var\(--color-border\);[^}]*border-radius:\s*28px;[^}]*background:\s*var\(--color-surface\);[^}]*box-shadow:\s*0 0 0 4px var\(--library-form-ring\);/su,
     )
   })
 })

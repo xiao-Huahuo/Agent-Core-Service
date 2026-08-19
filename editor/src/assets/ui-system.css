@@ -71,14 +71,16 @@
   --color-git-ignored: #a1842b;
 }
 
-.library-form-surface {
+.library-form-surface,
+.queue-dialog {
   position: relative;
   overflow: hidden;
   box-shadow: 0 0 0 4px var(--library-form-ring);
   animation: library-form-scan-in 420ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
-.library-form-surface::after {
+.library-form-surface::after,
+.queue-dialog::after {
   position: absolute;
   inset: 0 0 auto;
   height: 42%;
@@ -111,11 +113,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .library-form-surface {
+  .library-form-surface,
+  .queue-dialog {
     animation: library-form-fade-in 160ms ease-out both;
   }
 
-  .library-form-surface::after {
+  .library-form-surface::after,
+  .queue-dialog::after {
     display: none;
   }
 }

@@ -51,7 +51,6 @@ const query = ref('')
 const selectedTag = ref('')
 const selectedType = ref('')
 const inTrash = ref(false)
-const filtersOpen = ref(true)
 const multiSelect = ref(false)
 const selectedIds = ref<Set<string>>(new Set())
 const editorOpen = ref(false)
@@ -305,40 +304,36 @@ async function contextDelete() {
     @setup="setup"
   />
   <section v-else class="vault-view">
+    <VaultFilterPanel
+      :title="inTrash ? '回收站' : '密码库'"
+      :title-icon="inTrash ? 'trash' : 'shield'"
+      v-model:query="query"
+      v-model:tag="selectedTag"
+      v-model:item-type="selectedType"
+      :tags="tags"
+      :counts="typeCounts"
+    />
+    <div class="vault-workspace">
     <header class="vault-topbar">
-      <div class="vault-title">
-        <IcIcon name="shield" :size="18" />
-        <strong>{{ inTrash ? '回收站' : '密码库' }}</strong>
+      <div class="vault-switch" :class="{ trash: inTrash }">
+        <span class="switch-indicator"></span>
+        <button :class="{ active: !inTrash }" type="button" @click="inTrash = false"><IcIcon name="shield" :size="17" /><span>密码库</span></button>
+        <button :class="{ active: inTrash }" type="button" @click="inTrash = true"><IcIcon name="trash" :size="17" /><span>回收站</span></button>
       </div>
       <div class="top-actions">
-        <button class="tool-button" :class="{ active: filtersOpen }" type="button" title="筛选" @click="filtersOpen = !filtersOpen"><IcIcon name="filter" :size="17" /></button>
-        <div class="vault-switch" :class="{ trash: inTrash }">
-          <span class="switch-indicator"></span>
-          <button :class="{ active: !inTrash }" type="button" @click="inTrash = false"><IcIcon name="shield" :size="15" /><span>密码库</span></button>
-          <button :class="{ active: inTrash }" type="button" @click="inTrash = true"><IcIcon name="trash" :size="15" /><span>回收站</span></button>
-        </div>
-        <i class="toolbar-separator"></i>
-        <button class="tool-button style1-button" type="button" title="导出" @click="exportSelected([])"><IcIcon name="upload" :size="17" /></button>
-        <button class="tool-button style1-button" type="button" title="导入" @click="importJson"><IcIcon name="download" :size="17" /></button>
-        <button class="tool-button style1-button" :class="{ active: multiSelect }" type="button" :title="multiSelect ? '退出多选' : '多选'" @click="multiSelect = !multiSelect"><IcIcon name="multi-select" :size="17" /></button>
+        <button class="tool-button" type="button" title="导出" @click="exportSelected([])"><IcIcon name="upload" :size="17" /></button>
+        <button class="tool-button" type="button" title="导入" @click="importJson"><IcIcon name="download" :size="17" /></button>
+        <button class="tool-button" :class="{ active: multiSelect }" type="button" :title="multiSelect ? '退出多选' : '多选'" @click="multiSelect = !multiSelect"><IcIcon name="multi-select" :size="17" /></button>
         <template v-if="multiSelect">
-          <button class="selection-action danger" type="button" :disabled="selectedIds.size === 0" @click="deleteSelected"><IcIcon name="trash" :size="16" /><span>{{ inTrash ? '永久删除' : '删除' }}</span></button>
-          <button v-if="inTrash" class="selection-action" type="button" :disabled="selectedIds.size === 0" @click="restoreSelected"><IcIcon name="replay" :size="16" /><span>恢复</span></button>
-          <button class="selection-action" type="button" :disabled="selectedIds.size === 0" @click="exportSelected()"><IcIcon name="upload" :size="16" /><span>导出 JSON</span></button>
+          <button class="selection-action danger" type="button" :disabled="selectedIds.size === 0" @click="deleteSelected"><IcIcon name="trash" :size="17" /><span>{{ inTrash ? '永久删除' : '删除' }}</span></button>
+          <button v-if="inTrash" class="selection-action" type="button" :disabled="selectedIds.size === 0" @click="restoreSelected"><IcIcon name="replay" :size="17" /><span>恢复</span></button>
+          <button class="selection-action" type="button" :disabled="selectedIds.size === 0" @click="exportSelected()"><IcIcon name="upload" :size="17" /><span>导出 JSON</span></button>
         </template>
         <button class="new-btn" type="button" @click="openNew"><IcIcon name="add" :size="17" /><span>新建</span></button>
-        <button class="lock-btn" type="button" @click="lockVault"><IcIcon name="shield" :size="16" /><span>锁定</span></button>
+        <button class="lock-btn" type="button" @click="lockVault"><IcIcon name="shield" :size="17" /><span>锁定</span></button>
       </div>
     </header>
     <div class="vault-main">
-      <VaultFilterPanel
-        v-if="filtersOpen"
-        v-model:query="query"
-        v-model:tag="selectedTag"
-        v-model:item-type="selectedType"
-        :tags="tags"
-        :counts="typeCounts"
-      />
       <main class="table-area">
         <VaultTable
           :token="token"
@@ -350,6 +345,7 @@ async function contextDelete() {
           @context="openContext"
         />
       </main>
+    </div>
     </div>
     <ul v-if="contextOpen && contextItem" class="context-menu ui-floating-menu-surface" :style="contextStyle" @click.stop>
       <li @click="contextCopyName">复制项目名称</li>
@@ -364,8 +360,8 @@ async function contextDelete() {
 
 <style scoped>
 .vault-view {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 222px minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   width: 100%;
@@ -375,36 +371,35 @@ async function contextDelete() {
   font-size: calc(14px * var(--font-scale));
 }
 
+.vault-workspace {
+  display: grid;
+  grid-template-rows: 44px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .vault-topbar {
   position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-10);
+  gap: var(--space-8);
   min-height: 44px;
-  padding: 0 var(--space-12);
+  padding: var(--space-8) var(--space-12);
   border-bottom: 0;
-  background: var(--color-canvas);
+  background: var(--color-panel-bg);
 }
 
-.vault-title,
 .top-actions,
 .vault-switch {
   display: inline-flex;
   align-items: center;
 }
 
-.vault-title {
-  flex: 0 0 auto;
-  gap: 12px;
-  color: var(--color-text);
-  font-size: calc(14px * var(--font-scale));
-}
-
-.vault-title svg { color: var(--color-primary); }
-
 .top-actions {
   margin-left: auto;
   gap: var(--space-4);
+  justify-content: flex-end;
 }
 
 .tool-button:disabled {
@@ -417,15 +412,19 @@ async function contextDelete() {
   align-items: center;
   gap: var(--space-4);
   height: 28px;
-  border: 0;
+  border: 1px solid var(--color-primary);
   border-radius: 999px;
-  border-color: var(--color-primary);
   background: var(--color-primary);
   color: #fff;
   padding: 0 var(--space-10);
   font: inherit;
   font-size: calc(13px * var(--font-scale));
   cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+
+.new-btn:hover {
+  background: color-mix(in srgb, var(--color-primary) 84%, white);
 }
 
 .lock-btn {
@@ -441,15 +440,18 @@ async function contextDelete() {
   font: inherit;
   font-size: calc(13px * var(--font-scale));
   cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
 }
 
 .lock-btn:hover {
-  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: #fff;
 }
 
 .vault-switch {
   position: relative;
-  height: 30px;
+  height: 32px;
   gap: var(--space-2);
   padding: 2px;
   border: 1px solid var(--color-border);
@@ -463,10 +465,9 @@ async function contextDelete() {
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
-  height: 24px;
+  height: 28px;
   border: 0;
   border-radius: 999px;
-  border: 0;
   background: transparent;
   color: var(--color-text-secondary);
   padding: 0 var(--space-8);
@@ -495,7 +496,7 @@ async function contextDelete() {
   width: 28px;
   height: 28px;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-secondary);
   padding: 0;
@@ -506,10 +507,6 @@ async function contextDelete() {
 .tool-button.active {
   background: var(--color-primary-softer);
   color: var(--color-primary);
-}
-
-.style1-button {
-  border-radius: var(--radius-sm);
 }
 
 .selection-action {
@@ -530,17 +527,10 @@ async function contextDelete() {
 .selection-action.danger { background: color-mix(in srgb, var(--color-danger) 12%, transparent); color: var(--color-danger); }
 .selection-action:disabled { cursor: default; opacity: 0.45; }
 
-.toolbar-separator {
-  width: 1px;
-  height: 22px;
-  margin: 0 var(--space-2);
-  background: var(--color-border);
-}
-
 .vault-main {
   display: flex;
-  flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 
 .table-area {
@@ -584,8 +574,13 @@ async function contextDelete() {
 }
 
 @media (max-width: 860px) {
+  .vault-view {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
   .vault-main {
-    flex-direction: column;
+    min-height: 0;
   }
 
   .vault-topbar,

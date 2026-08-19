@@ -34,3 +34,46 @@ Add a bottom-left 元信息/元文件 toggle to the edit dialog and render each 
 
 ## Status
 **Complete** - implementation, build, targeted type filtering, and interface smoke verification are finished.
+
+## Current Task: Password vault layout normalization
+
+### Goal
+Rebuild the unlocked vault page into a component-library-style left sidebar plus right-side toolbar/content layout, while adding the requested static form borders and preserving vault behavior.
+
+### Phases
+- [x] Inspect vault layout, sidebar, unlock form, item editor, and reference toolbar dimensions.
+- [x] Move the vault title into the sidebar, remove the sidebar filter heading, and place the toolbar only on the right.
+- [x] Apply the static translucent borders and normalize right-toolbar controls to the existing 44px/28px standard.
+- [x] Review the diff and run the requested proportionate verification.
+
+### Acceptance mapping
+- [x] Unlock/create-master-password form has the translucent form border.
+- [x] Vault item form keeps the translucent form border.
+- [x] Vault sidebar has no drop shadow and has the translucent border.
+- [x] Sidebar buttons retain the component-library sidebar interaction style.
+- [x] Sidebar no longer displays the “筛选” heading.
+- [x] “密码库” title moves into the sidebar and the toolbar stays on the right.
+- [x] Right toolbar follows the existing 44px topbar and 28px control standard.
+
+### Status
+**Complete** - vault layout, sidebar, forms, toolbar normalization, targeted tests, build, and Chromium smoke verification are finished.
+
+## Current Task: Vault toggle and table visual parity
+
+### Goal
+Move the vault mode toggle to the left side of the right-hand toolbar and restyle the vault table to match the pasted reference table surface without adding React/TanStack dependencies or fake data.
+
+### Phases
+- [x] Inspect the pasted reference and current VaultTable structure.
+- [x] Split the vault toggle from right-side actions and keep those actions right-aligned.
+- [x] Rebuild VaultTable’s visual shell, header, rows, selection state, and footer styling around existing vault data/events.
+- [x] Run focused checks, build, and UI smoke verification.
+
+### Acceptance mapping
+- [x] Vault mode toggle is left-aligned in the right toolbar.
+- [x] Existing vault actions remain right-aligned with no separator.
+- [x] Vault table visually follows the pasted reference’s bordered rounded surface, header, rows, selection, and footer rhythm.
+- [x] Existing open, toggle, context, filter, and vault data behavior remains connected.
+
+### Status
+**Complete** - toggle placement and table visual parity are implemented and verified.
