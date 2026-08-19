@@ -37,3 +37,30 @@
 - Current `VaultView.vue` keeps the mode toggle inside `.top-actions`; the toggle must become the left sibling while actions stay right-aligned.
 - `VaultTable.vue` now keeps the existing row events and data while adding a client-side page-size/footer surface; no external table dependency or fake data was introduced.
 - Focused VaultFilterPanel test: 3 passed; `npm run build-only`: passed; Chromium smoke: 2 passed.
+
+# Notes: Cross-form input and height-motion normalization
+
+## User scope
+
+- Apply the established gray, borderless input surface and translucent focus ring.
+- Apply smooth form-height adaptation for state-switching forms.
+- Targets: the other three library forms, component-library upload form, vault new-password form, smart-table create form, task-queue create form, five task-queue task forms, user feedback form, and all settings-page inputs.
+- User explicitly requested that this round not run tests.
+
+## Reference implementation
+
+- `editor/src/components/library_view/LibraryCreateDialog.vue` now owns the measured source-mode height transition in `sourceModeZone` and the normalized input surface styles.
+
+## Inventory findings
+
+- Library forms are `LibraryCreateDialog.vue`, `LibraryItemDialog.vue`, and `LibraryRealContentPanel.vue`; `LibraryTagPicker.vue` is shared by the library and component-library forms.
+- Component upload is `ComponentUploadForm.vue`; its code panel and component-name input use the shared surface.
+- Vault forms are `VaultUnlockPanel.vue` and `VaultPasswordResetDialog.vue`.
+- Smart-table creation lives in `SmartFormsView.vue`; task queue forms are all rendered by `AgentQueueTaskDialog.vue` for pending, running, review, confirmed, and terminated tasks.
+- Feedback is `FeedbackPopover.vue`; settings inputs are covered at the `SettingsView.vue` page boundary while excluding toggle/range/color/file controls.
+
+## Implementation findings
+
+- Added `FormHeightTransition.vue` and reused it for library source/edit modes, vault setup mode, feedback state/list changes, and settings tabs.
+- Task queue uses direct height measurement on the existing dialog because its template is intentionally compressed and already exposes one dialog root.
+- No business/API behavior was changed. Tests and servers were intentionally skipped per user request.

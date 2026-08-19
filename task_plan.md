@@ -93,3 +93,45 @@ Normalize all visible text controls in the five pages under the 库 menu to the 
 ### Status
 
 **In progress** - target surfaces and current typography differences are identified; implementation is next.
+
+## Current Task: Cross-form input and height-motion normalization
+
+### Goal
+
+Apply the established gray input surface, borderless focus ring, and smooth form-height transition behavior to the requested library, component-library, vault, smart-table, task-queue, feedback, and settings forms.
+
+### Acceptance mapping
+
+- [x] Normalize the three other library forms.
+- [x] Normalize the component-library upload form.
+- [x] Normalize the vault new-password form.
+- [x] Normalize the smart-table create form.
+- [x] Normalize the task-queue create form.
+- [x] Normalize the five task-queue task forms.
+- [x] Normalize the user feedback form.
+- [x] Normalize all settings-page input controls.
+- [x] Add smooth height adaptation wherever a form switches between internal states.
+- [x] Do not change business/API behavior.
+
+### Phases
+
+- [x] Phase 1: Inventory target pages, forms, and existing reusable input/transition styles.
+- [x] Phase 2: Add the shared input surface and focus-ring primitives.
+- [x] Phase 3: Apply primitives to all requested forms and state-switching containers.
+- [x] Phase 4: Review the diff and record that verification was skipped per user request.
+
+### Key questions
+
+1. Which “other three library forms” are concrete components in the current codebase?
+2. Which task-queue controls render the five task-specific forms?
+3. Which forms already have a height transition that can be reused instead of duplicated?
+
+### Decisions made
+
+- Keep the current library source-mode measured-height implementation as the reference motion pattern.
+- Prefer one shared CSS primitive plus narrow component selectors over broad global selectors that could alter unrelated controls.
+- Preserve existing input-specific dimensions and only normalize background, border, focus ring, and state-container height motion.
+
+### Status
+
+**Complete** - all requested form surfaces and applicable state-height transitions are wired; no tests or servers were run per the user’s standing instruction.

@@ -71,6 +71,18 @@
   --color-git-ignored: #a1842b;
 }
 
+/* Shared gray, borderless form surface with a translucent focus ring. */
+.form-input-surface {
+  border: 0 !important;
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-text) 6%) !important;
+  transition: box-shadow var(--transition-fast);
+}
+
+.form-input-surface:focus,
+.form-input-surface:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-border-strong) 50%, transparent) !important;
+}
+
 .library-form-surface,
 .queue-dialog {
   position: relative;

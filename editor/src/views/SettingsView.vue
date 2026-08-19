@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import FormHeightTransition from '@/components/common/FormHeightTransition.vue'
 import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchMemoryConfig, saveMemoryConfig, fetchLLMConfig, saveLLMConfig, fetchSavedLLMConfigs, saveLLMConfigPreset, deleteLLMConfigPreset, fetchWebSearchConfig, saveWebSearchConfig, fetchTerminalSandboxConfig, saveTerminalSandboxConfig } from '@/api/settings'
 import type { SystemPromptEntry, MemoryEntry, SavedLLMConfig, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
 import AppearanceSettingsSection from '@/components/settings_view/AppearanceSettingsSection.vue'
@@ -639,7 +640,9 @@ onBeforeUnmount(() => {
     />
 
     <div class="settings-body">
-      <BasicSettingsSection
+      <FormHeightTransition :watch-key="activeTab">
+        <div class="settings-body-content">
+          <BasicSettingsSection
         v-if="activeTab === 'basic'"
         v-model:auto-ingest-on-upload-draft="autoIngestOnUploadDraft"
         v-model:editor-image-assets-dir-draft="editorImageAssetsDirDraft"
@@ -764,9 +767,11 @@ onBeforeUnmount(() => {
       <StorageSettingsSection
         v-if="activeTab === 'storage'"
       />
-      <FloatingSettingsSection
-        v-if="activeTab === 'floating'"
-      />
+          <FloatingSettingsSection
+            v-if="activeTab === 'floating'"
+          />
+        </div>
+      </FormHeightTransition>
     </div>
   </div>
 </template>
@@ -1800,5 +1805,29 @@ onBeforeUnmount(() => {
   font-size: calc(12px * var(--font-scale));
   color: var(--color-text-muted);
   margin: var(--space-4) 0;
+}
+</style>
+
+<style>
+/* Normalize every editable settings field while preserving toggle controls. */
+.settings-body input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='hidden']),
+.settings-body select {
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-text) 6%) !important;
+  transition: box-shadow var(--transition-fast);
+}
+
+.settings-body textarea {
+  border: 0 !important;
+  border-radius: 28px !important;
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-text) 6%) !important;
+  transition: box-shadow var(--transition-fast);
+}
+
+.settings-body input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='hidden']):focus,
+.settings-body select:focus,
+.settings-body textarea:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-border-strong) 50%, transparent) !important;
 }
 </style>

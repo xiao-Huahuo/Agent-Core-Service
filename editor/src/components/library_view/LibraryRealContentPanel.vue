@@ -126,69 +126,70 @@ watch(
       <small>{{ sourceKindLabel }}</small>
     </header>
 
-    <div v-if="sourceKind === 'file'" class="real-content-body file-content">
-      <button
-        class="source-file-tile"
-        type="button"
-        :disabled="!item.source_exists || !item.source_path"
-        :title="item.source_exists ? '在编辑区打开真实文件' : '真实文件已缺失'"
-        @click="emit('openFile', item)"
-      >
-        <img class="source-file-icon" :src="fileIcon.src" :alt="fileIcon.alt" />
-        <strong>{{ sourceName }}</strong>
-        <small>{{ item.source_exists ? '点击在编辑区打开' : '真实文件已缺失' }}</small>
-      </button>
-    </div>
-
-    <div v-else-if="sourceKind === 'image'" class="real-content-body image-content">
-      <img
-        v-if="imageUrl"
-        class="source-image"
-        :src="imageUrl"
-        :alt="sourceName"
-      />
-      <span v-else class="real-content-empty">暂无可展示的图片</span>
-    </div>
-
-    <div v-else-if="sourceKind === 'web_url'" class="real-content-body url-content">
-      <div class="source-url-row">
-        <div class="source-url-field" :title="item.source_url">
-          <IcIcon name="link" :size="15" />
-          <span>{{ item.source_url || '未设置 URL' }}</span>
-        </div>
+      <div v-if="sourceKind === 'file'" class="real-content-body file-content">
         <button
-          class="source-url-open"
+          class="source-file-tile"
           type="button"
-          :disabled="!item.source_url"
-          title="在右侧浏览器打开"
-          aria-label="在右侧浏览器打开"
-          @click="emit('openUrl', item.source_url)"
+          :disabled="!item.source_exists || !item.source_path"
+          :title="item.source_exists ? '在编辑区打开真实文件' : '真实文件已缺失'"
+          @click="emit('openFile', item)"
         >
-          <IcIcon name="open-in-new" :size="15" />
+          <img class="source-file-icon" :src="fileIcon.src" :alt="fileIcon.alt" />
+          <strong>{{ sourceName }}</strong>
+          <small>{{ item.source_exists ? '点击在编辑区打开' : '真实文件已缺失' }}</small>
         </button>
       </div>
-    </div>
 
-    <div v-else-if="sourceKind === 'code'" class="real-content-body code-content">
-      <div v-if="loading" class="real-content-empty">正在读取代码</div>
-      <div v-else-if="loadError" class="real-content-empty">{{ loadError }}</div>
-      <div v-else class="real-code-box">
-        <CompactCodeInput
-          v-model="content"
-          label="代码"
-          placeholder="暂无代码内容"
+      <div v-else-if="sourceKind === 'image'" class="real-content-body image-content">
+        <img
+          v-if="imageUrl"
+          class="source-image"
+          :src="imageUrl"
+          :alt="sourceName"
         />
+        <span v-else class="real-content-empty">暂无可展示的图片</span>
       </div>
-    </div>
 
-    <div v-else class="real-content-body text-content">
-      <div v-if="loading" class="real-content-empty">正在读取文本</div>
-      <div v-else-if="loadError" class="real-content-empty">{{ loadError }}</div>
-      <label v-else class="real-text-field">
-        <span>纯文本</span>
-        <textarea v-model="content" spellcheck="false" aria-label="纯文本内容"></textarea>
-      </label>
-    </div>
+      <div v-else-if="sourceKind === 'web_url'" class="real-content-body url-content">
+        <div class="source-url-row">
+          <div class="source-url-field form-input-surface" :title="item.source_url">
+            <IcIcon name="link" :size="15" />
+            <span>{{ item.source_url || '未设置 URL' }}</span>
+          </div>
+          <button
+            class="source-url-open"
+            type="button"
+            :disabled="!item.source_url"
+            title="在右侧浏览器打开"
+            aria-label="在右侧浏览器打开"
+            @click="emit('openUrl', item.source_url)"
+          >
+            <IcIcon name="open-in-new" :size="15" />
+          </button>
+        </div>
+      </div>
+
+      <div v-else-if="sourceKind === 'code'" class="real-content-body code-content">
+        <div v-if="loading" class="real-content-empty">正在读取代码</div>
+        <div v-else-if="loadError" class="real-content-empty">{{ loadError }}</div>
+        <div v-else class="real-code-box form-input-surface">
+          <CompactCodeInput
+            v-model="content"
+            class="form-input-surface"
+            label="代码"
+            placeholder="暂无代码内容"
+          />
+        </div>
+      </div>
+
+      <div v-else class="real-content-body text-content">
+        <div v-if="loading" class="real-content-empty">正在读取文本</div>
+        <div v-else-if="loadError" class="real-content-empty">{{ loadError }}</div>
+        <label v-else class="real-text-field">
+          <span>纯文本</span>
+          <textarea class="form-input-surface" v-model="content" spellcheck="false" aria-label="纯文本内容"></textarea>
+        </label>
+      </div>
   </section>
 </template>
 

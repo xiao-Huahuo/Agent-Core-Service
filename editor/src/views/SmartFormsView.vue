@@ -1737,7 +1737,7 @@ function errorMessage(error: unknown): string {
         </div>
         <label class="dialog-field">
           <span>表格名称</span>
-          <input v-model="newFormTitle" autofocus type="text" placeholder="例如：项目文献库" />
+          <input class="form-input-surface" v-model="newFormTitle" autofocus type="text" placeholder="例如：项目文献库" />
         </label>
         <div class="form-kind-picker" role="radiogroup" aria-label="表格类型">
           <button

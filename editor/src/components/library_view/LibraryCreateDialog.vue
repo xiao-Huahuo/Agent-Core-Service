@@ -10,6 +10,7 @@
 import { computed, ref, watch } from 'vue'
 
 import CompactCodeInput from '@/components/common/CompactCodeInput.vue'
+import FormHeightTransition from '@/components/common/FormHeightTransition.vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
 import { uploadLibraryCover } from '@/api/library'
@@ -177,11 +178,11 @@ function submit() {
           <div class="metadata-zone">
             <label class="field">
               <span>标题</span>
-              <input v-model="title" type="text" spellcheck="false" placeholder="留空使用默认名称" />
+              <input class="library-input form-input-surface" v-model="title" type="text" spellcheck="false" placeholder="留空使用默认名称" />
             </label>
             <label class="field">
               <span>描述</span>
-              <textarea v-model="description" rows="5" placeholder="用于搜索和归纳说明" />
+              <textarea class="library-input form-input-surface" v-model="description" rows="5" placeholder="用于搜索和归纳说明" />
             </label>
             <div class="field">
               <span>标签</span>
@@ -190,49 +191,51 @@ function submit() {
           </div>
         </section>
 
-        <section v-if="isBook && sourceMode === 'file'" class="file-zone">
-          <input ref="realFileInput" class="hidden-input" type="file" @change="selectRealFile" />
-          <button
-            class="file-drop"
-            :class="{ active: dragActive }"
-            type="button"
-            @click="realFileInput?.click()"
-            @dragenter.prevent="dragActive = true"
-            @dragover.prevent="dragActive = true"
-            @dragleave.prevent="dragActive = false"
-            @drop.prevent="dropRealFile"
-          >
-            <IcIcon name="cloud-upload" :size="24" />
-            <span>{{ realFile?.name || '拖拽真实文件到这里' }}</span>
-          </button>
-        </section>
+        <FormHeightTransition :watch-key="sourceMode">
+          <section v-if="isBook && sourceMode === 'file'" class="file-zone">
+            <input ref="realFileInput" class="hidden-input" type="file" @change="selectRealFile" />
+            <button
+              class="file-drop"
+              :class="{ active: dragActive }"
+              type="button"
+              @click="realFileInput?.click()"
+              @dragenter.prevent="dragActive = true"
+              @dragover.prevent="dragActive = true"
+              @dragleave.prevent="dragActive = false"
+              @drop.prevent="dropRealFile"
+            >
+              <IcIcon name="cloud-upload" :size="24" />
+              <span>{{ realFile?.name || '拖拽真实文件到这里' }}</span>
+            </button>
+          </section>
 
-        <section v-else-if="isBook && sourceMode === 'text'" class="text-zone">
-          <label class="text-content-field">
-            <span>文本内容</span>
-            <textarea v-model="textContent" rows="8" spellcheck="false" placeholder="输入后会保存为 Markdown 文件" />
-          </label>
-        </section>
+          <section v-else-if="isBook && sourceMode === 'text'" class="text-zone">
+            <label class="text-content-field">
+              <span>文本内容</span>
+            <textarea class="library-input-surface form-input-surface" v-model="textContent" rows="8" spellcheck="false" placeholder="输入后会保存为 Markdown 文件" />
+            </label>
+          </section>
 
-        <section v-else-if="isBook && sourceMode === 'script'" class="script-zone">
-          <CompactCodeInput
-            v-model="textContent"
-            class="library-script-input"
-            label="脚本内容"
-            placeholder="输入脚本代码"
-          />
-          <label class="script-extension-field">
-            <span>代码文件后缀</span>
-            <input v-model="scriptExtension" type="text" spellcheck="false" placeholder=".py" aria-label="代码文件后缀" />
-          </label>
-        </section>
+          <section v-else-if="isBook && sourceMode === 'script'" class="script-zone">
+            <CompactCodeInput
+              v-model="textContent"
+              class="library-script-input form-input-surface"
+              label="脚本内容"
+              placeholder="输入脚本代码"
+            />
+            <label class="script-extension-field">
+              <span>代码文件后缀</span>
+              <input class="library-input-surface form-input-surface" v-model="scriptExtension" type="text" spellcheck="false" placeholder=".py" aria-label="代码文件后缀" />
+            </label>
+          </section>
 
-        <section v-else-if="isBook && sourceMode === 'url'" class="url-zone">
-          <label class="url-input-wrap">
-            <IcIcon name="language" :size="15" />
-            <input v-model="sourceUrl" type="url" spellcheck="false" placeholder="URL" />
-          </label>
-        </section>
+          <section v-else-if="isBook && sourceMode === 'url'" class="url-zone">
+            <label class="url-input-wrap library-input-surface form-input-surface">
+              <IcIcon name="language" :size="15" />
+              <input v-model="sourceUrl" type="url" spellcheck="false" placeholder="URL" />
+            </label>
+          </section>
+        </FormHeightTransition>
 
         <footer class="dialog-actions" :class="{ 'collection-actions': !isBook }">
           <div v-if="isBook" class="source-mode-actions" aria-label="文件来源">
@@ -334,36 +337,49 @@ function submit() {
   color: var(--color-text-secondary);
 }
 
-.field input[type="text"] {
+.library-input,
+.metadata-zone .field :deep(.tag-input-wrap) {
   width: 100%;
-  height: 36px;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: 999px;
-  background: var(--color-canvas);
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-text) 6%);
   color: var(--color-text);
-  padding: 0 14px;
-  font-size: calc(13px * var(--font-scale));
+  transition: box-shadow var(--transition-fast);
+}
+
+.library-input {
   outline: none;
+  font-size: calc(13px * var(--font-scale));
 }
 
-.field input[type="text"]:focus {
-  border-color: var(--color-primary);
+.library-input[type="text"] {
+  height: 36px;
+  padding: 0 14px;
 }
 
-.field textarea {
+.library-input:focus,
+.metadata-zone .field :deep(.tag-input-wrap:focus-within) {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-border-strong) 50%, transparent);
+}
+
+.library-input-surface,
+.library-script-input {
+  border: 0;
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-text) 6%);
+  transition: box-shadow var(--transition-fast);
+}
+
+.library-input-surface:focus,
+.library-input-surface:focus-within,
+.library-script-input:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-border-strong) 50%, transparent);
+}
+
+.library-input:is(textarea) {
   width: 100%;
-  border: 1px solid var(--color-border);
   border-radius: 28px;
-  background: var(--color-canvas);
-  color: var(--color-text);
   padding: 10px 14px;
   resize: vertical;
-  font-size: calc(13px * var(--font-scale));
-  outline: none;
-}
-
-.field textarea:focus {
-  border-color: var(--color-primary);
 }
 
 .cover-zone {
@@ -423,13 +439,7 @@ function submit() {
 .library-script-input {
   min-height: 198px;
   overflow: hidden;
-  border: 1px solid var(--color-border);
   border-radius: 28px;
-  background: var(--color-canvas);
-}
-
-.library-script-input:focus-within {
-  border-color: var(--color-primary);
 }
 
 .script-extension-field {
@@ -444,18 +454,12 @@ function submit() {
 .script-extension-field input {
   width: 96px;
   height: 30px;
-  border: 1px solid var(--color-border);
   border-radius: 999px;
   outline: 0;
-  background: var(--color-canvas);
   color: var(--color-text);
   padding: 0 10px;
   font-family: var(--font-text);
   font-size: calc(12px * var(--font-scale));
-}
-
-.script-extension-field input:focus {
-  border-color: var(--color-primary);
 }
 
 .text-content-field {
@@ -468,9 +472,7 @@ function submit() {
 .text-content-field textarea {
   width: 100%;
   min-height: 168px;
-  border: 1px solid var(--color-border);
   border-radius: 28px;
-  background: var(--color-canvas);
   color: var(--color-text);
   padding: 10px 14px;
   resize: vertical;
@@ -479,24 +481,17 @@ function submit() {
   line-height: 1.6;
 }
 
-.text-content-field textarea:focus {
-  border-color: var(--color-primary);
-}
-
 .url-input-wrap {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 42px;
-  border: 1px solid var(--color-border-strong);
   border-radius: 999px;
-  background: var(--color-canvas);
   color: var(--color-text-secondary);
   padding: 0 14px;
 }
 
 .url-input-wrap:focus-within {
-  border-color: var(--color-primary);
   color: var(--color-primary);
 }
 

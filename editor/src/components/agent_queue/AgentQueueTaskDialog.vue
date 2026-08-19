@@ -1,6 +1,7 @@
 <!-- Create, inspect, and action one Agent queue task. -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import FormHeightTransition from '@/components/common/FormHeightTransition.vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import AgentPanel from '@/components/editor_workspace/AgentPanel.vue'
@@ -25,6 +26,39 @@ const taskProgress = computed(() => {
   const items = props.task?.task_list?.items ?? []
   return { total: items.length, done: items.filter((item) => item.status === 'completed').length }
 })
+let queueDialogElement: HTMLElement | null = null
+let queueDialogTransitionEnd: ((event: TransitionEvent) => void) | null = null
+
+/** Smoothly adapts the queue dialog to each task-status form height. */
+async function animateQueueDialogHeight() {
+  const dialog = document.querySelector<HTMLElement>('.queue-dialog')
+  if (!dialog) return
+
+  if (queueDialogElement && queueDialogTransitionEnd) {
+    queueDialogElement.removeEventListener('transitionend', queueDialogTransitionEnd)
+  }
+  queueDialogElement = dialog
+  const currentHeight = dialog.getBoundingClientRect().height
+  dialog.style.height = `${currentHeight}px`
+  await nextTick()
+  dialog.style.height = 'auto'
+  const nextHeight = dialog.scrollHeight
+  queueDialogTransitionEnd = (event: TransitionEvent) => {
+    if (event.propertyName !== 'height' || event.target !== dialog) return
+    dialog.style.height = 'auto'
+    if (queueDialogTransitionEnd) {
+      dialog.removeEventListener('transitionend', queueDialogTransitionEnd)
+      queueDialogTransitionEnd = null
+    }
+  }
+  dialog.addEventListener('transitionend', queueDialogTransitionEnd)
+  requestAnimationFrame(() => { dialog.style.height = `${nextHeight}px` })
+}
+
+watch(
+  () => [props.open, props.task?.task_id, props.task?.status, props.attachments.length],
+  () => { if (props.open) void animateQueueDialogHeight() },
+)
 watch(() => props.open, open => { if (open && props.task) { prompt.value = props.task.status === 'review' ? '' : props.task.prompt; priority.value = props.task.priority } else if (open) { prompt.value = ''; priority.value = 'medium' } })
 function submit() { if (!prompt.value.trim()) return; if (isNew.value) emit('create', prompt.value.trim(), priority.value); else if (props.task?.status === 'pending') emit('update', props.task, prompt.value.trim(), priority.value); else if (props.task?.status === 'review') emit('continue', props.task, prompt.value.trim()) }
 /** 从 Prompt 输入框接收拖入的全部文件。 */
@@ -49,4 +83,20 @@ function uploadSelectedFiles(event: Event) { const input = event.target as HTMLI
 .continuation-field { padding-top:var(--space-4); }
 .task-progress i { background:color-mix(in srgb, var(--color-success) 26%, transparent); }
 .task-progress i.done { background:var(--color-success); }
+</style>
+
+<style scoped>
+.queue-dialog {
+  transition: height 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.queue-dialog .field textarea {
+  border: 0 !important;
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-text) 6%) !important;
+  transition: box-shadow var(--transition-fast);
+}
+
+.queue-dialog .field textarea:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-border-strong) 50%, transparent) !important;
+}
 </style>

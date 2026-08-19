@@ -8,6 +8,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
+import FormHeightTransition from '@/components/common/FormHeightTransition.vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
 import LibraryRealContentPanel from '@/components/library_view/LibraryRealContentPanel.vue'
@@ -134,54 +135,56 @@ async function uploadCoverFile(file: File) {
           </button>
         </header>
 
-        <section class="upper-grid">
-          <div v-if="editMode === 'metadata'" class="metadata-zone">
-            <label class="field">
-              <span>标题</span>
-              <input v-model="title" type="text" spellcheck="false" placeholder="留空使用默认名称" />
-            </label>
-            <label class="field">
-              <span>描述</span>
-              <textarea v-model="description" rows="5" placeholder="用于封面文字、搜索和归纳说明" />
-            </label>
-            <div class="field">
-              <span>标签</span>
-              <LibraryTagPicker v-model="tags" :available-tags="availableTags.map((tag) => tag.name)" />
+        <FormHeightTransition :watch-key="editMode">
+          <section class="upper-grid">
+            <div v-if="editMode === 'metadata'" class="metadata-zone">
+              <label class="field">
+                <span>标题</span>
+                <input class="form-input-surface" v-model="title" type="text" spellcheck="false" placeholder="留空使用默认名称" />
+              </label>
+              <label class="field">
+                <span>描述</span>
+                <textarea class="form-input-surface" v-model="description" rows="5" placeholder="用于封面文字、搜索和归纳说明" />
+              </label>
+              <div class="field">
+                <span>标签</span>
+                <LibraryTagPicker v-model="tags" :available-tags="availableTags.map((tag) => tag.name)" />
+              </div>
             </div>
-          </div>
 
-          <div class="cover-zone">
-            <input ref="uploadInput" class="hidden-input" type="file" accept="image/*" @change="uploadCover" />
-            <button
-              class="cover-drop"
-              :class="{ active: coverDragActive }"
-              type="button"
-              :disabled="uploading"
-              @click="uploadInput?.click()"
-              @dragenter.prevent="coverDragActive = true"
-              @dragover.prevent="coverDragActive = true"
-              @dragleave.prevent="coverDragActive = false"
-              @drop.prevent="dropCover"
-            >
-              <img v-if="coverPreviewUrl" class="cover-preview" :src="coverPreviewUrl" alt="" />
-              <template v-else>
-                <IcIcon name="add-photo" :size="30" />
-                <span>{{ uploading ? '上传中' : '点击或拖拽上传封面' }}</span>
-              </template>
-            </button>
-          </div>
+            <div class="cover-zone">
+              <input ref="uploadInput" class="hidden-input" type="file" accept="image/*" @change="uploadCover" />
+              <button
+                class="cover-drop"
+                :class="{ active: coverDragActive }"
+                type="button"
+                :disabled="uploading"
+                @click="uploadInput?.click()"
+                @dragenter.prevent="coverDragActive = true"
+                @dragover.prevent="coverDragActive = true"
+                @dragleave.prevent="coverDragActive = false"
+                @drop.prevent="dropCover"
+              >
+                <img v-if="coverPreviewUrl" class="cover-preview" :src="coverPreviewUrl" alt="" />
+                <template v-else>
+                  <IcIcon name="add-photo" :size="30" />
+                  <span>{{ uploading ? '上传中' : '点击或拖拽上传封面' }}</span>
+                </template>
+              </button>
+            </div>
 
-          <LibraryRealContentPanel
-            v-if="editMode === 'content'"
-            class="real-content-zone"
-            :item="item"
-            :user-id="userId"
-            @open-file="emit('openFile', $event)"
-            @open-url="emit('openUrl', $event)"
-            @content-loaded="handleRealContentLoaded"
-            @content-change="handleRealContentChange"
-          />
-        </section>
+            <LibraryRealContentPanel
+              v-if="editMode === 'content'"
+              class="real-content-zone"
+              :item="item"
+              :user-id="userId"
+              @open-file="emit('openFile', $event)"
+              @open-url="emit('openUrl', $event)"
+              @content-loaded="handleRealContentLoaded"
+              @content-change="handleRealContentChange"
+            />
+          </section>
+        </FormHeightTransition>
 
         <div class="field" style="padding: 10px 16px 0;">
           <span>封面模式</span>

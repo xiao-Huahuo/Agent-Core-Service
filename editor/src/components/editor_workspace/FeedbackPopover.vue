@@ -9,6 +9,7 @@
 import { computed, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import FormHeightTransition from '@/components/common/FormHeightTransition.vue'
 import { deleteFeedback, listFeedback, submitFeedback, updateFeedback, type FeedbackRecord } from '@/api/feedback'
 
 defineOptions({ name: 'FeedbackPopover' })
@@ -33,6 +34,7 @@ const statusText = ref('')
 const errorText = ref('')
 const feedbackNotice = computed(() => errorText.value || statusText.value)
 const canSubmit = computed(() => props.userId.trim().length > 0 && content.value.trim().length > 0 && !submitting.value)
+const feedbackBodyWatchKey = computed(() => `${feedbackItems.value.length}:${editingId.value ? 'editing' : 'new'}:${loading.value ? 'loading' : 'ready'}:${expandedFeedbackIds.value.size}`)
 const submitLabel = computed(() => {
   if (submitting.value) return '保存中'
   return editingId.value ? '保存修改' : '提交'
@@ -189,72 +191,75 @@ function getFeedbackErrorMessage(error: unknown, fallback: string) {
         </button>
       </header>
 
-      <div class="feedback-body">
-        <form class="feedback-form" @submit.prevent="submit">
-          <textarea
-            v-model="content"
-            rows="6"
-            maxlength="4000"
-            placeholder="写下问题、建议或体验反馈"
-            aria-label="反馈内容"
-            @keydown.enter.exact.prevent="submit"
-          ></textarea>
-          <footer class="feedback-footer">
-            <span class="feedback-status" :title="feedbackNotice">{{ feedbackNotice }}</span>
-            <div class="feedback-actions">
-              <button
-                v-if="editingId"
-                class="feedback-secondary"
-                type="button"
-                :disabled="submitting"
-                @click="resetEditing"
-              >
-                取消
-              </button>
-              <button class="feedback-submit" type="submit" :disabled="!canSubmit">
-                <IcIcon name="send" :size="14" />
-                <span>{{ submitLabel }}</span>
-              </button>
-            </div>
-          </footer>
-        </form>
-
-        <aside class="feedback-stack" :class="{ empty: !loading && feedbackItems.length === 0 }" aria-label="已提交反馈">
-          <div v-if="loading" class="feedback-empty">读取中</div>
-          <div v-else-if="feedbackItems.length === 0" class="feedback-empty">
-            {{ errorText || '暂无反馈' }}
-          </div>
-          <template v-else>
-            <article
-              v-for="item in feedbackItems"
-              :key="item.feedback_id"
-              class="feedback-chip"
-              :class="{ expanded: isFeedbackExpanded(item) }"
-            >
-              <button
-                class="feedback-chip-main"
-                type="button"
-                :aria-expanded="isFeedbackExpanded(item)"
-                @click="toggleFeedbackExpanded(item)"
-              >
-                <span class="feedback-chip-line">
-                  <span class="feedback-chip-content">{{ item.content }}</span>
-                  <time>{{ formatFeedbackTime(item.created_at) }}</time>
-                </span>
-                <span v-if="isFeedbackExpanded(item)" class="feedback-chip-full">{{ item.content }}</span>
-              </button>
-              <div class="feedback-chip-actions">
-                <button type="button" title="修改" aria-label="修改" @click="startEdit(item)">
-                  <IcIcon name="edit" :size="13" />
+      <FormHeightTransition :watch-key="feedbackBodyWatchKey">
+        <div class="feedback-body">
+          <form class="feedback-form" @submit.prevent="submit">
+            <textarea
+              class="form-input-surface"
+              v-model="content"
+              rows="6"
+              maxlength="4000"
+              placeholder="写下问题、建议或体验反馈"
+              aria-label="反馈内容"
+              @keydown.enter.exact.prevent="submit"
+            ></textarea>
+            <footer class="feedback-footer">
+              <span class="feedback-status" :title="feedbackNotice">{{ feedbackNotice }}</span>
+              <div class="feedback-actions">
+                <button
+                  v-if="editingId"
+                  class="feedback-secondary"
+                  type="button"
+                  :disabled="submitting"
+                  @click="resetEditing"
+                >
+                  取消
                 </button>
-                <button type="button" title="删除" aria-label="删除" @click="removeFeedback(item)">
-                  <IcIcon name="trash" :size="13" />
+                <button class="feedback-submit" type="submit" :disabled="!canSubmit">
+                  <IcIcon name="send" :size="14" />
+                  <span>{{ submitLabel }}</span>
                 </button>
               </div>
-            </article>
-          </template>
-        </aside>
-      </div>
+            </footer>
+          </form>
+
+          <aside class="feedback-stack" :class="{ empty: !loading && feedbackItems.length === 0 }" aria-label="已提交反馈">
+            <div v-if="loading" class="feedback-empty">读取中</div>
+            <div v-else-if="feedbackItems.length === 0" class="feedback-empty">
+              {{ errorText || '暂无反馈' }}
+            </div>
+            <template v-else>
+              <article
+                v-for="item in feedbackItems"
+                :key="item.feedback_id"
+                class="feedback-chip"
+                :class="{ expanded: isFeedbackExpanded(item) }"
+              >
+                <button
+                  class="feedback-chip-main"
+                  type="button"
+                  :aria-expanded="isFeedbackExpanded(item)"
+                  @click="toggleFeedbackExpanded(item)"
+                >
+                  <span class="feedback-chip-line">
+                    <span class="feedback-chip-content">{{ item.content }}</span>
+                    <time>{{ formatFeedbackTime(item.created_at) }}</time>
+                  </span>
+                  <span v-if="isFeedbackExpanded(item)" class="feedback-chip-full">{{ item.content }}</span>
+                </button>
+                <div class="feedback-chip-actions">
+                  <button type="button" title="修改" aria-label="修改" @click="startEdit(item)">
+                    <IcIcon name="edit" :size="13" />
+                  </button>
+                  <button type="button" title="删除" aria-label="删除" @click="removeFeedback(item)">
+                    <IcIcon name="trash" :size="13" />
+                  </button>
+                </div>
+              </article>
+            </template>
+          </aside>
+        </div>
+      </FormHeightTransition>
     </section>
   </div>
 </template>

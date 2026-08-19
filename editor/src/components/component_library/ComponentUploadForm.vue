@@ -145,7 +145,7 @@ async function submit(): Promise<void> {
     <div class="compiler-grid">
       <CompactCodeInput
         v-model="source"
-        class="code-panel"
+        class="code-panel form-input-surface"
         label="组件代码"
         placeholder="粘贴 Vue / HTML 代码"
       />
@@ -167,6 +167,7 @@ async function submit(): Promise<void> {
       <label class="name-field">
         <span>组件名</span>
         <input
+          class="form-input-surface"
           v-model="componentName"
           name="component-name"
           type="text"

@@ -8,6 +8,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
+import FormHeightTransition from '@/components/common/FormHeightTransition.vue'
+
 defineOptions({ name: 'VaultUnlockPanel' })
 
 defineProps<{
@@ -50,45 +52,49 @@ function setup() {
 <template>
   <section class="unlock-panel">
     <form class="unlock-card" @submit.prevent="configured ? submit() : setup()">
-      <label for="vault-master-password">主密码</label>
-      <div v-if="!configured" class="password-field">
-        <input
-          id="vault-master-password"
-          v-model="password"
-          class="vault-input"
-          type="password"
-          autocomplete="new-password"
-          placeholder="主密码"
-          @keydown.enter="setup"
-        />
-      </div>
-      <div v-else class="input-row">
-        <input
-          id="vault-master-password"
-          v-model="password"
-          class="vault-input"
-          type="password"
-          autocomplete="current-password"
-          placeholder="主密码"
-          @keydown.enter="submit"
-        />
-        <button class="primary-btn" type="submit" :disabled="loading">解锁</button>
-      </div>
-      <template v-if="!configured">
-        <label for="vault-confirm-password">确认主密码</label>
-        <div class="input-row">
-          <input
-            id="vault-confirm-password"
-            v-model="confirmPassword"
-            class="vault-input"
-            type="password"
-            autocomplete="new-password"
-            placeholder="再次输入主密码"
-            @keydown.enter="setup"
-          />
-          <button class="primary-btn" type="submit" :disabled="loading">创建并解锁</button>
+      <FormHeightTransition :watch-key="configured ? 'configured' : 'setup'">
+        <div class="unlock-fields">
+          <label for="vault-master-password">主密码</label>
+          <div v-if="!configured" class="password-field">
+            <input
+              id="vault-master-password"
+              v-model="password"
+              class="vault-input form-input-surface"
+              type="password"
+              autocomplete="new-password"
+              placeholder="主密码"
+              @keydown.enter="setup"
+            />
+          </div>
+          <div v-else class="input-row">
+            <input
+              id="vault-master-password"
+              v-model="password"
+              class="vault-input form-input-surface"
+              type="password"
+              autocomplete="current-password"
+              placeholder="主密码"
+              @keydown.enter="submit"
+            />
+            <button class="primary-btn" type="submit" :disabled="loading">解锁</button>
+          </div>
+          <template v-if="!configured">
+            <label for="vault-confirm-password">确认主密码</label>
+            <div class="input-row">
+              <input
+                id="vault-confirm-password"
+                v-model="confirmPassword"
+                class="vault-input form-input-surface"
+                type="password"
+                autocomplete="new-password"
+                placeholder="再次输入主密码"
+                @keydown.enter="setup"
+              />
+              <button class="primary-btn" type="submit" :disabled="loading">创建并解锁</button>
+            </div>
+          </template>
         </div>
-      </template>
+      </FormHeightTransition>
       <p v-if="localError" class="error-text">{{ localError }}</p>
     </form>
   </section>
@@ -126,6 +132,11 @@ label {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-8);
+}
+
+.unlock-fields {
+  display: grid;
+  gap: var(--space-12);
 }
 
 .password-field {

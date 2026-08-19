@@ -66,7 +66,7 @@ function handleKeydown(event: KeyboardEvent) {
 <template>
   <DropdownMenu v-model:open="expanded">
     <div class="library-tag-picker">
-      <div class="tag-input-wrap">
+      <div class="tag-input-wrap form-input-surface">
         <input
           v-model="draft"
           type="text"
