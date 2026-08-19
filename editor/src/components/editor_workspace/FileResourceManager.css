@@ -271,10 +271,14 @@
 
 .list-view {
   display: grid;
-  grid-auto-rows: 34px;
+  grid-auto-rows: 38px;
   min-width: 900px;
-  height: 100%;
+  height: calc(100% - var(--space-24));
+  margin: var(--space-12);
   overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
 }
 
 .trash-view {
@@ -314,6 +318,14 @@
   font-weight: 500;
 }
 
+.list-header {
+  min-height: 44px;
+  height: 44px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-weight: 700;
+}
+
 .resource-row,
 .trash-row {
   width: 100%;
@@ -328,6 +340,12 @@
   opacity: 0;
   transform-origin: top;
   animation: list-row-drop 170ms ease-out both;
+}
+
+.resource-row {
+  height: 38px;
+  min-height: 38px;
+  border-bottom-color: var(--color-border);
 }
 
 .list-header > span,

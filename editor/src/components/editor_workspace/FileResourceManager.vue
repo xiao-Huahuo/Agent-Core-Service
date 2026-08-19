@@ -1088,7 +1088,7 @@ onUnmounted(() => {
           <span>入库日期</span>
           <span>类型</span>
           <span>大小</span>
-          <span>收藏</span>
+          <span v-if="settingsStore.showFavoriteColumn">收藏</span>
           <span v-if="settingsStore.showIndexColumn">入库状态</span>
           <span v-if="settingsStore.showGraphColumn">图谱状态</span>
         </div>
