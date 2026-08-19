@@ -2275,6 +2275,7 @@ function errorMessage(error: unknown): string {
   min-height: 44px;
   justify-content: space-between;
   padding: var(--space-8) var(--space-12);
+  font-size: calc(12px * var(--font-scale));
 }
 
 .header-copy {
@@ -2309,10 +2310,20 @@ function errorMessage(error: unknown): string {
   min-width: 0;
   overflow: hidden;
   color: var(--color-text-secondary);
-  font-size: calc(13px * var(--font-scale));
+  font-size: inherit;
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.forms-header .primary-btn,
+.forms-header .new-row-btn,
+.forms-header .icon-btn {
+  font-size: inherit;
+}
+
+.forms-header .smart-dropdown-trigger {
+  font: inherit;
 }
 
 .header-actions,
@@ -2413,6 +2424,16 @@ button:disabled {
   min-height: 44px;
   padding: var(--space-8) var(--space-12);
   flex-wrap: wrap;
+  font-size: calc(12px * var(--font-scale));
+}
+
+.forms-toolbar .toolbar-btn,
+.forms-toolbar .delete-form-toolbar-btn {
+  font-size: inherit;
+}
+
+.forms-toolbar .smart-dropdown-trigger {
+  font: inherit;
 }
 
 .search-box {

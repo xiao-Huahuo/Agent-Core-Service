@@ -519,6 +519,7 @@ onMounted(() => {
   padding: var(--space-8) var(--space-12);
   border: 0;
   background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  font-size: calc(12px * var(--font-scale));
 }
 
 .toolbar-context,
@@ -552,7 +553,12 @@ onMounted(() => {
 }
 
 .toolbar-copy strong {
-  font-size: calc(13px * var(--font-scale));
+  font-size: inherit;
+}
+
+.component-toolbar .upload-trigger {
+  font: inherit;
+  font-weight: 700;
 }
 
 .detail-back {

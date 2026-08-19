@@ -77,3 +77,19 @@ Move the vault mode toggle to the left side of the right-hand toolbar and restyl
 
 ### Status
 **Complete** - toggle placement and table visual parity are implemented and verified.
+
+## Current Task: Library topbar typography normalization
+
+### Goal
+
+Normalize all visible text controls in the five pages under the 库 menu to the 12px scaled size used by the FileResourceManager top-left page toggle.
+
+### Acceptance mapping
+
+- [x] Identify the five target pages and the exact 12px scaled reference size.
+- [ ] Normalize the FileResourceManager, LibraryView, ComponentLibraryView, VaultView, and SmartFormsView topbar text.
+- [ ] Run build/type checks and actual Chromium smoke verification for all five pages.
+
+### Status
+
+**In progress** - target surfaces and current typography differences are identified; implementation is next.

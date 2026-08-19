@@ -145,9 +145,9 @@ onMounted(() => {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px;
-  margin: var(--space-8) var(--space-10) 0;
+  gap: var(--space-2);
+  padding: 2px;
+  margin: var(--space-8) var(--space-12) 0;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-surface);
@@ -157,8 +157,8 @@ onMounted(() => {
 
 .debug-slider {
   position: absolute;
-  top: 3px;
-  height: calc(100% - 6px);
+  top: 2px;
+  height: calc(100% - 4px);
   border-radius: 999px;
   background: var(--color-primary-soft);
   transition: left 250ms ease, width 250ms ease;
@@ -173,13 +173,14 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: var(--space-6);
-  font-family: var(--font-ui);
-  font-size: var(--font-size-xs);
+  height: 28px;
+  font: inherit;
+  font-size: calc(12px * var(--font-scale));
   color: var(--color-text-muted);
   background: transparent;
   border: none;
   border-radius: 999px;
-  padding: 4px 12px;
+  padding: 0 var(--space-8);
   cursor: pointer;
   outline: none;
 }

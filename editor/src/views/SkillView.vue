@@ -85,11 +85,11 @@ watch(
       <div ref="tabSwitchRef" class="resource-page-switch" role="tablist" aria-label="Skill views">
         <div class="page-slider" :style="tabSliderStyle"></div>
         <button type="button" class="page-switch-button" :class="{ active: activeTab === 'overview' }" @click="switchTab('overview')">
-          <IcIcon name="document" :size="15" />
+          <IcIcon name="document" :size="17" />
           <span>概览</span>
         </button>
         <button type="button" class="page-switch-button" :class="{ active: activeTab === 'custom' }" @click="switchTab('custom')">
-          <IcIcon name="tune" :size="15" />
+          <IcIcon name="tune" :size="17" />
           <span>定制</span>
         </button>
       </div>
@@ -294,17 +294,19 @@ tools: (可选) 需要启用的工具列表
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-20);
+  padding: var(--space-8) var(--space-12) var(--space-20);
   background: var(--color-bg-app);
   color: var(--color-text-primary);
 }
 
 .skill-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-12);
+  min-height: 44px;
   margin-bottom: var(--space-16);
+  font-size: calc(12px * var(--font-scale));
 }
 
 .group-title h2,
@@ -382,7 +384,7 @@ tools: (可选) 需要启用的工具列表
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-2);
   padding: 2px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
@@ -405,15 +407,15 @@ tools: (可选) 需要启用的工具列表
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
-  height: 26px;
+  gap: var(--space-6);
+  height: 28px;
   padding: 0 var(--space-8);
   border: none;
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: calc(11px * var(--font-scale));
+  font-size: calc(12px * var(--font-scale));
   cursor: pointer;
   outline: none;
 }

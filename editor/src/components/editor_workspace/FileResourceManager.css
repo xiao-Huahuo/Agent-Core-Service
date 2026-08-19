@@ -18,6 +18,7 @@
   padding: var(--space-8) var(--space-12);
   border-bottom: 0;
   background: var(--color-panel-bg);
+  font-size: calc(12px * var(--font-scale));
 }
 
 .nav-controls {
@@ -103,7 +104,7 @@
   border: 0;
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(12px * var(--font-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow: hidden;
@@ -118,7 +119,7 @@
 .trash-path-capsule {
   gap: var(--space-8);
   color: var(--color-text-secondary);
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(12px * var(--font-scale));
 }
 
 .root-button,
@@ -179,7 +180,7 @@
   gap: 0;
   padding: 0;
   border-radius: 50%;
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(12px * var(--font-scale));
   transition:
     width 180ms ease,
     border-radius 180ms ease,

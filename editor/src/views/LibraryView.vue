@@ -985,6 +985,7 @@ function errorMessage(error: unknown): string {
   padding: var(--space-8) var(--space-12);
   border-bottom: 0;
   background: var(--color-surface-raised);
+  font-size: calc(12px * var(--font-scale));
 }
 
 .nav-row {
@@ -1013,6 +1014,7 @@ function errorMessage(error: unknown): string {
   border-radius: 4px;
   background: transparent;
   color: var(--color-text-secondary);
+  font: inherit;
 }
 
 .icon-toolbar-btn {
@@ -1127,6 +1129,7 @@ function errorMessage(error: unknown): string {
   outline: 0;
   background: transparent;
   color: var(--color-text);
+  font: inherit;
 }
 
 .filter-capsule-btn {
@@ -1139,6 +1142,7 @@ function errorMessage(error: unknown): string {
   background: var(--color-canvas);
   color: var(--color-text-secondary);
   padding: 0 12px;
+  font: inherit;
   cursor: pointer;
 }
 

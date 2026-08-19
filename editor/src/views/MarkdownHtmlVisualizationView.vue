@@ -379,8 +379,9 @@ function startVisualization() {
 }
 
 .visualization-toolbar {
-  min-height: 52px;
-  padding: 0 var(--space-16);
+  min-height: 44px;
+  padding: var(--space-8) var(--space-12);
+  font-size: calc(12px * var(--font-scale));
 }
 
 .result-title strong,
@@ -394,7 +395,7 @@ function startVisualization() {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-2);
   padding: 2px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
@@ -420,14 +421,14 @@ function startVisualization() {
   align-items: center;
   justify-content: center;
   gap: var(--space-6);
-  height: 26px;
-  padding: 0 var(--space-10);
+  height: 28px;
+  padding: 0 var(--space-8);
   border: none;
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(12px * var(--font-scale));
   cursor: pointer;
   outline: none;
   white-space: nowrap;
@@ -462,7 +463,7 @@ function startVisualization() {
 }
 
 .toolbar-actions > button {
-  padding: 0 var(--space-10);
+  padding: 0 var(--space-8);
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: white;
@@ -481,7 +482,7 @@ function startVisualization() {
   min-width: 100px;
   overflow: hidden;
   color: var(--color-text-muted);
-  font-size: calc(11px * var(--font-scale));
+  font-size: calc(12px * var(--font-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
 }

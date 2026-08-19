@@ -622,10 +622,11 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: var(--space-12);
-  min-height: 38px;
-  padding: 0 var(--space-10);
+  min-height: 44px;
+  padding: var(--space-8) var(--space-12);
   border-bottom: 0;
   background: var(--color-canvas);
+  font-size: calc(12px * var(--font-scale));
 }
 
 .graph-actions {
@@ -637,7 +638,7 @@ watch(
 
 .graph-stat {
   color: var(--color-text-muted);
-  font-size: calc(10px * var(--font-scale));
+  font-size: calc(12px * var(--font-scale));
 }
 
 .graph-action {
@@ -645,13 +646,14 @@ watch(
   align-items: center;
   justify-content: center;
   gap: var(--space-4);
-  height: 24px;
+  height: 28px;
   padding: 0 var(--space-8);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text-secondary);
-  font-size: calc(11px * var(--font-scale));
+  font: inherit;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .graph-action:hover {
@@ -680,8 +682,8 @@ watch(
 .graph-mode {
   position: relative;
   display: inline-flex;
-  gap: 4px;
-  padding: 3px;
+  gap: var(--space-2);
+  padding: 2px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-surface);
@@ -689,8 +691,8 @@ watch(
 
 .graph-mode-slider {
   position: absolute;
-  top: 3px;
-  height: calc(100% - 6px);
+  top: 2px;
+  height: calc(100% - 4px);
   border-radius: 999px;
   background: var(--color-primary-soft);
   transition: left 250ms ease, width 250ms ease;
@@ -705,12 +707,13 @@ watch(
   align-items: center;
   justify-content: center;
   gap: var(--space-6);
-  min-height: 24px;
-  padding: 0 12px;
+  height: 28px;
+  padding: 0 var(--space-8);
   border: none;
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-muted);
+  font: inherit;
   font-size: calc(12px * var(--font-scale));
   white-space: nowrap;
   cursor: pointer;

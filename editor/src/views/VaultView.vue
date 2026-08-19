@@ -388,6 +388,7 @@ async function contextDelete() {
   padding: var(--space-8) var(--space-12);
   border-bottom: 0;
   background: var(--color-panel-bg);
+  font-size: calc(12px * var(--font-scale));
 }
 
 .top-actions,
@@ -418,7 +419,7 @@ async function contextDelete() {
   color: #fff;
   padding: 0 var(--space-10);
   font: inherit;
-  font-size: calc(13px * var(--font-scale));
+  font-size: inherit;
   cursor: pointer;
   transition: background 180ms ease, border-color 180ms ease;
 }
@@ -438,7 +439,7 @@ async function contextDelete() {
   color: var(--color-danger);
   padding: 0 var(--space-10);
   font: inherit;
-  font-size: calc(13px * var(--font-scale));
+  font-size: inherit;
   cursor: pointer;
   transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
 }

@@ -367,7 +367,7 @@ function historySummary(row: IngestionHistoryItem): string {
   gap: var(--space-12);
   min-width: 0;
   min-height: 0;
-  padding: var(--space-16);
+  padding: var(--space-8) var(--space-12) var(--space-16);
   overflow: hidden;
   color: var(--color-text);
   font-family: var(--font-ui);
@@ -375,9 +375,11 @@ function historySummary(row: IngestionHistoryItem): string {
 
 .page-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-12);
+  min-height: 44px;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .heading-actions {
@@ -390,7 +392,7 @@ function historySummary(row: IngestionHistoryItem): string {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-2);
   padding: 2px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
@@ -422,15 +424,15 @@ function historySummary(row: IngestionHistoryItem): string {
 .tab-button {
   position: relative;
   z-index: 1;
-  height: 26px;
-  padding: 0 var(--space-10);
+  height: 28px;
+  padding: 0 var(--space-8);
   gap: var(--space-6);
   border: none;
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(12px * var(--font-scale));
   cursor: pointer;
   outline: none;
 }

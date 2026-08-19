@@ -100,16 +100,17 @@ onMounted(updateSlider)
 .favorites-toolbar {
   display: flex;
   align-items: center;
-  min-height: 48px;
+  min-height: 44px;
   padding: var(--space-8) var(--space-12);
   border-bottom: 0;
+  font-size: calc(12px * var(--font-scale));
 }
 
 .favorites-switch {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-2);
   padding: 2px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
@@ -134,14 +135,14 @@ onMounted(updateSlider)
   align-items: center;
   justify-content: center;
   gap: var(--space-6);
-  height: 26px;
-  padding: 0 var(--space-10);
+  height: 28px;
+  padding: 0 var(--space-8);
   border: none;
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(12px * var(--font-scale));
   cursor: pointer;
   outline: none;
 }

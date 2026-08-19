@@ -105,7 +105,7 @@ function cancelRename(): void {
   padding: 3px 0;
   cursor: text;
   font: inherit;
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(12px * var(--font-scale));
   font-weight: 700;
 }
 
@@ -138,7 +138,7 @@ function cancelRename(): void {
   box-shadow: none;
   padding: 0 var(--space-8);
   font: inherit;
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(12px * var(--font-scale));
   font-weight: 700;
   animation: component-name-input-in 160ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
