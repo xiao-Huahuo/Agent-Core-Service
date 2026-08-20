@@ -174,7 +174,7 @@ function handleDocumentClick(event: MouseEvent) {
   border-collapse: collapse;
   color: var(--color-text);
   font-family: var(--font-text);
-  font-size: calc(12px * var(--font-scale));
+  font-size: calc(12px * var(--text-font-scale));
 }
 
 .table-scroll td {
@@ -189,6 +189,7 @@ function handleDocumentClick(event: MouseEvent) {
   margin: 0 auto;
   color: var(--color-text);
   font-family: var(--font-text);
+  font-size: calc(14px * var(--text-font-scale));
   line-height: 1.7;
 }
 
@@ -208,7 +209,7 @@ function handleDocumentClick(event: MouseEvent) {
   margin: 0;
   color: var(--color-text);
   font-family: var(--font-text);
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(13px * var(--text-font-scale));
   line-height: 1.6;
   white-space: pre-wrap;
 }

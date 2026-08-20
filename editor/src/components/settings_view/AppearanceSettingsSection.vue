@@ -11,7 +11,8 @@ import type { SidebarDisplayMode, ThemeMode } from '@/types/settings'
 
 const uiFontFamiliesDraft = defineModel<string[]>('uiFontFamiliesDraft', { required: true })
 const textFontFamiliesDraft = defineModel<string[]>('textFontFamiliesDraft', { required: true })
-const fontSizePercentDraft = defineModel<number>('fontSizePercentDraft', { required: true })
+const uiFontSizePercentDraft = defineModel<number>('uiFontSizePercentDraft', { required: true })
+const textFontSizePercentDraft = defineModel<number>('textFontSizePercentDraft', { required: true })
 const themePrimaryColorDraft = defineModel<string>('themePrimaryColorDraft', { required: true })
 const themeSoftColorDraft = defineModel<string>('themeSoftColorDraft', { required: true })
 
@@ -26,7 +27,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   setThemeMode: [mode: ThemeMode]
   saveFontFamilies: [payload: { target: 'ui' | 'text'; families: string[] }]
-  saveFontSize: [percent: number]
+  saveFontSize: [payload: { target: 'ui' | 'text'; percent: number }]
   previewThemeColors: []
   saveThemeColors: []
   resetThemeColors: []
@@ -107,16 +108,21 @@ function saveFamilies(target: 'ui' | 'text', families: string[]) {
   emit('saveFontFamilies', { target, families })
 }
 
-function updateFontSize(value: number | string) {
+function updateFontSize(target: 'ui' | 'text', value: number | string) {
   const normalized = normalizeFontSizePercent(value)
-  fontSizePercentDraft.value = normalized
-  emit('saveFontSize', normalized)
+  if (target === 'ui') {
+    uiFontSizePercentDraft.value = normalized
+  } else {
+    textFontSizePercentDraft.value = normalized
+  }
+  emit('saveFontSize', { target, percent: normalized })
 }
 
-function saveFontSize() {
-  const normalized = normalizeFontSizePercent(fontSizePercentDraft.value)
-  fontSizePercentDraft.value = normalized
-  emit('saveFontSize', normalized)
+function saveFontSize(target: 'ui' | 'text') {
+  const draft = target === 'ui' ? uiFontSizePercentDraft : textFontSizePercentDraft
+  const normalized = normalizeFontSizePercent(draft.value)
+  draft.value = normalized
+  emit('saveFontSize', { target, percent: normalized })
 }
 
 function addFontFamily(target: 'ui' | 'text', family: string) {
@@ -262,31 +268,64 @@ onBeforeUnmount(() => {
     </div>
 
     <h3 style="margin-top: 20px">字体</h3>
-    <div class="font-family-control font-size-control">
+    <div class="font-family-control font-size-control" data-font-size="ui">
       <div class="font-family-header">
-        <label>字体大小</label>
-        <span>{{ fontSizePercentDraft }}%</span>
+        <label>UI 字体大小</label>
+        <span>{{ uiFontSizePercentDraft }}%</span>
       </div>
       <div class="font-size-row">
         <input
-          :value="fontSizePercentDraft"
+          :value="uiFontSizePercentDraft"
+          aria-label="UI 字体大小"
           max="150"
           min="50"
           step="1"
           type="range"
-          @change="saveFontSize"
-          @input="updateFontSize(($event.target as HTMLInputElement).value)"
+          @change="saveFontSize('ui')"
+          @input="updateFontSize('ui', ($event.target as HTMLInputElement).value)"
         />
         <input
-          :value="fontSizePercentDraft"
+          :value="uiFontSizePercentDraft"
+          aria-label="UI 字体大小百分比"
           class="font-size-number"
           max="150"
           min="50"
           step="1"
           type="number"
-          @blur="saveFontSize"
-          @change="saveFontSize"
-          @input="updateFontSize(($event.target as HTMLInputElement).value)"
+          @blur="saveFontSize('ui')"
+          @change="saveFontSize('ui')"
+          @input="updateFontSize('ui', ($event.target as HTMLInputElement).value)"
+        />
+      </div>
+    </div>
+
+    <div class="font-family-control font-size-control" data-font-size="text">
+      <div class="font-family-header">
+        <label>正文字体大小</label>
+        <span>{{ textFontSizePercentDraft }}%</span>
+      </div>
+      <div class="font-size-row">
+        <input
+          :value="textFontSizePercentDraft"
+          aria-label="正文字体大小"
+          max="150"
+          min="50"
+          step="1"
+          type="range"
+          @change="saveFontSize('text')"
+          @input="updateFontSize('text', ($event.target as HTMLInputElement).value)"
+        />
+        <input
+          :value="textFontSizePercentDraft"
+          aria-label="正文字体大小百分比"
+          class="font-size-number"
+          max="150"
+          min="50"
+          step="1"
+          type="number"
+          @blur="saveFontSize('text')"
+          @change="saveFontSize('text')"
+          @input="updateFontSize('text', ($event.target as HTMLInputElement).value)"
         />
       </div>
     </div>

@@ -22,6 +22,9 @@ export interface SettingsProfileResponse {
   terminal_sandbox?: TerminalSandboxConfig
   ui_font_families?: string[]
   text_font_families?: string[]
+  ui_font_size_percent?: number
+  text_font_size_percent?: number
+  /** Legacy shared size returned by older backends. */
   font_size_percent?: number
   theme_primary_color?: string
   theme_soft_color?: string
@@ -110,25 +113,35 @@ export interface FontConfigResponse {
   user_id: string
   ui_font_families: string[]
   text_font_families: string[]
+  ui_font_size_percent: number
+  text_font_size_percent: number
+  /** Legacy shared size retained for older clients. */
   font_size_percent: number
   updated_at: string
 }
 
 export function saveFontConfig(
   userId: string,
-  params: { uiFontFamilies?: string[]; textFontFamilies?: string[]; fontSizePercent?: number },
+  params: {
+    uiFontFamilies?: string[]
+    textFontFamilies?: string[]
+    uiFontSizePercent?: number
+    textFontSizePercent?: number
+  },
 ): Promise<FontConfigResponse> {
   const body: {
     user_id: string
     ui_font_families?: string[]
     text_font_families?: string[]
-    font_size_percent?: number
+    ui_font_size_percent?: number
+    text_font_size_percent?: number
   } = {
     user_id: userId,
   }
   if (params.uiFontFamilies !== undefined) body.ui_font_families = params.uiFontFamilies
   if (params.textFontFamilies !== undefined) body.text_font_families = params.textFontFamilies
-  if (params.fontSizePercent !== undefined) body.font_size_percent = params.fontSizePercent
+  if (params.uiFontSizePercent !== undefined) body.ui_font_size_percent = params.uiFontSizePercent
+  if (params.textFontSizePercent !== undefined) body.text_font_size_percent = params.textFontSizePercent
   return apiPut<FontConfigResponse>(API_ROUTES.SETTINGS_FONT_CONFIG, body)
 }
 

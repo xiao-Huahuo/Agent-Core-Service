@@ -251,19 +251,29 @@ async def save_font_config(body: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail="user_id is required")
     ui_font_families = body.get("ui_font_families")
     text_font_families = body.get("text_font_families")
+    ui_font_size_percent = body.get("ui_font_size_percent")
+    text_font_size_percent = body.get("text_font_size_percent")
     font_size_percent = body.get("font_size_percent")
     if ui_font_families is not None and not isinstance(ui_font_families, list):
         raise HTTPException(status_code=422, detail="ui_font_families must be a list")
     if text_font_families is not None and not isinstance(text_font_families, list):
         raise HTTPException(status_code=422, detail="text_font_families must be a list")
-    if font_size_percent is not None and not isinstance(font_size_percent, int):
-        raise HTTPException(status_code=422, detail="font_size_percent must be an integer")
+    font_sizes = {
+        "ui_font_size_percent": ui_font_size_percent,
+        "text_font_size_percent": text_font_size_percent,
+        "font_size_percent": font_size_percent,
+    }
+    for field_name, value in font_sizes.items():
+        if value is not None and not isinstance(value, int):
+            raise HTTPException(status_code=422, detail=f"{field_name} must be an integer")
     svc = _require_settings_service()
     try:
         return svc.save_font_config(
             user_id=user_id,
             ui_font_families=ui_font_families,
             text_font_families=text_font_families,
+            ui_font_size_percent=ui_font_size_percent,
+            text_font_size_percent=text_font_size_percent,
             font_size_percent=font_size_percent,
         )
     except ValueError as exc:

@@ -1754,7 +1754,7 @@ onBeforeUnmount(() => {
   min-height: 100%;
   padding: var(--space-12);
   font-family: var(--font-text);
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(13px * var(--text-font-scale));
   line-height: 1.6;
   tab-size: 2;
   white-space: pre;
@@ -1819,7 +1819,7 @@ onBeforeUnmount(() => {
   background: transparent;
   color: var(--color-text);
   font-family: var(--font-text);
-  font-size: calc(13px * var(--font-scale));
+  font-size: calc(13px * var(--text-font-scale));
   line-height: 1.6;
   tab-size: 2;
   white-space: pre;

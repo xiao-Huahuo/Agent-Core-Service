@@ -930,6 +930,47 @@ class AgentServiceServicer(BaseServicer):
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
         return ParseDict(result, Struct())
 
+    def GetFontConfig(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Return the REST-equivalent independent UI and editor text font settings."""
+
+        payload = MessageToDict(request)
+        try:
+            result = self._require_settings_service(context).get_font_config(
+                user_id=str(payload.get("user_id") or ""),
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(result, Struct())
+
+    def SaveFontConfig(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Persist the REST-equivalent independent UI and editor text font settings."""
+
+        payload = MessageToDict(request)
+        try:
+            result = self._require_settings_service(context).save_font_config(
+                user_id=str(payload.get("user_id") or ""),
+                ui_font_families=payload.get("ui_font_families"),
+                text_font_families=payload.get("text_font_families"),
+                ui_font_size_percent=(
+                    int(payload["ui_font_size_percent"])
+                    if "ui_font_size_percent" in payload
+                    else None
+                ),
+                text_font_size_percent=(
+                    int(payload["text_font_size_percent"])
+                    if "text_font_size_percent" in payload
+                    else None
+                ),
+                font_size_percent=(
+                    int(payload["font_size_percent"])
+                    if "font_size_percent" in payload
+                    else None
+                ),
+            )
+        except (TypeError, ValueError) as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(result, Struct())
+
     def SaveWebSearchConfig(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
         """Persist the REST-equivalent web-search and browser settings payload."""
 

@@ -49,7 +49,8 @@ const DEFAULT_PROFILE: UserSettingsProfile = {
   knowledgeSupportedSuffixes: [],
   uiFontFamilies: [],
   textFontFamilies: [],
-  fontSizePercent: 100,
+  uiFontSizePercent: 100,
+  textFontSizePercent: 100,
   themePrimaryColor: '',
   themeSoftColor: '',
   graphNodeLimit: 2000,
@@ -151,7 +152,8 @@ function normalizeProfile(profile: UserSettingsProfile): UserSettingsProfile {
     knowledgeLibraries: profile.knowledgeLibraries ?? [],
     uiFontFamilies: normalizeFontFamilies(profile.uiFontFamilies ?? profile.uiFontFamily),
     textFontFamilies: normalizeFontFamilies(profile.textFontFamilies ?? profile.textFontFamily),
-    fontSizePercent: normalizeFontSizePercent(profile.fontSizePercent),
+    uiFontSizePercent: normalizeFontSizePercent(profile.uiFontSizePercent ?? profile.fontSizePercent),
+    textFontSizePercent: normalizeFontSizePercent(profile.textFontSizePercent ?? profile.fontSizePercent),
     themePrimaryColor: normalizeThemeColor(profile.themePrimaryColor),
     themeSoftColor: normalizeThemeColor(profile.themeSoftColor),
     editorImageAssetsDir: normalizeEditorImageAssetsDir(profile.editorImageAssetsDir),
@@ -185,7 +187,12 @@ function mapBackendProfile(profileResponse: SettingsProfileResponse): Partial<Us
     knowledgeSupportedSuffixes: profileResponse.knowledge_supported_suffixes ?? [],
     uiFontFamilies: profileResponse.ui_font_families ?? [],
     textFontFamilies: profileResponse.text_font_families ?? [],
-    fontSizePercent: normalizeFontSizePercent(profileResponse.font_size_percent),
+    uiFontSizePercent: normalizeFontSizePercent(
+      profileResponse.ui_font_size_percent ?? profileResponse.font_size_percent,
+    ),
+    textFontSizePercent: normalizeFontSizePercent(
+      profileResponse.text_font_size_percent ?? profileResponse.font_size_percent,
+    ),
     themePrimaryColor: profileResponse.theme_primary_color ?? '',
     themeSoftColor: profileResponse.theme_soft_color ?? '',
     graphNodeLimit: profileResponse.graph_node_limit ?? 2000,
@@ -299,7 +306,11 @@ export const useSettingsStore = defineStore('settings', () => {
   function applyFonts() {
     document.documentElement.style.setProperty(
       '--font-scale',
-      String((normalizeFontSizePercent(profile.value.fontSizePercent) / 100) * 1.2),
+      String((normalizeFontSizePercent(profile.value.uiFontSizePercent) / 100) * 1.2),
+    )
+    document.documentElement.style.setProperty(
+      '--text-font-scale',
+      String((normalizeFontSizePercent(profile.value.textFontSizePercent) / 100) * 1.56),
     )
     document.documentElement.style.setProperty(
       '--font-ui',
@@ -442,20 +453,35 @@ export const useSettingsStore = defineStore('settings', () => {
     updateProfile({ textFontFamilies: fontFamilies })
   }
 
-  function setFontSizePercent(value: number) {
-    updateProfile({ fontSizePercent: normalizeFontSizePercent(value) })
+  function setUiFontSizePercent(value: number) {
+    updateProfile({ uiFontSizePercent: normalizeFontSizePercent(value) })
+  }
+
+  function setTextFontSizePercent(value: number) {
+    updateProfile({ textFontSizePercent: normalizeFontSizePercent(value) })
   }
 
   async function saveFontSettings(
-    params: { uiFontFamilies?: string[]; textFontFamilies?: string[]; fontSizePercent?: number },
+    params: {
+      uiFontFamilies?: string[]
+      textFontFamilies?: string[]
+      uiFontSizePercent?: number
+      textFontSizePercent?: number
+    },
   ) {
     const nextUiFontFamilies = params.uiFontFamilies ?? profile.value.uiFontFamilies
     const nextTextFontFamilies = params.textFontFamilies ?? profile.value.textFontFamilies
-    const nextFontSizePercent = normalizeFontSizePercent(params.fontSizePercent ?? profile.value.fontSizePercent)
+    const nextUiFontSizePercent = normalizeFontSizePercent(
+      params.uiFontSizePercent ?? profile.value.uiFontSizePercent,
+    )
+    const nextTextFontSizePercent = normalizeFontSizePercent(
+      params.textFontSizePercent ?? profile.value.textFontSizePercent,
+    )
     updateProfile({
       uiFontFamilies: nextUiFontFamilies,
       textFontFamilies: nextTextFontFamilies,
-      fontSizePercent: nextFontSizePercent,
+      uiFontSizePercent: nextUiFontSizePercent,
+      textFontSizePercent: nextTextFontSizePercent,
     })
     if (!hasUserId.value) {
       return null
@@ -464,12 +490,14 @@ export const useSettingsStore = defineStore('settings', () => {
       const result = await saveFontConfig(profile.value.userId, {
         uiFontFamilies: nextUiFontFamilies,
         textFontFamilies: nextTextFontFamilies,
-        fontSizePercent: nextFontSizePercent,
+        uiFontSizePercent: nextUiFontSizePercent,
+        textFontSizePercent: nextTextFontSizePercent,
       })
       updateProfile({
         uiFontFamilies: result.ui_font_families,
         textFontFamilies: result.text_font_families,
-        fontSizePercent: result.font_size_percent,
+        uiFontSizePercent: result.ui_font_size_percent,
+        textFontSizePercent: result.text_font_size_percent,
       })
       return result
     } catch (error) {
@@ -706,7 +734,8 @@ export const useSettingsStore = defineStore('settings', () => {
     updateProfile,
     setUiFontFamilies,
     setTextFontFamilies,
-    setFontSizePercent,
+    setUiFontSizePercent,
+    setTextFontSizePercent,
     saveFontSettings,
     previewAppearanceColors,
     saveAppearanceSettings,

@@ -47,6 +47,9 @@ class UserSettingsRecord(SQLModel, table=True):
     terminal_sandbox_config: str = Field(default="", sa_column=Column(Text))
     ui_font_families: str = Field(default="", sa_column=Column(Text))
     text_font_families: str = Field(default="", sa_column=Column(Text))
+    ui_font_size_percent: int = Field(default=100)
+    text_font_size_percent: int = Field(default=100)
+    # Legacy clients still read/write this field; the service mirrors the UI size into it.
     font_size_percent: int = Field(default=100)
     theme_primary_color: str = Field(default="", max_length=16)
     theme_soft_color: str = Field(default="", max_length=16)

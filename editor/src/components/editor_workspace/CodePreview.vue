@@ -21,7 +21,7 @@ const highlightedHtml = computed(() => {
 </script>
 
 <template>
-  <article class="code-preview">
+  <article class="code-preview" :class="{ 'code-preview--markdown': language === 'markdown' }">
     <pre><code v-html="highlightedHtml"></code></pre>
   </article>
 </template>
@@ -48,5 +48,10 @@ const highlightedHtml = computed(() => {
   font-family: var(--font-code);
   font-size: calc(13px * var(--font-scale));
   line-height: 1.6;
+}
+
+.code-preview--markdown code {
+  font-family: var(--font-text);
+  font-size: calc(13px * var(--text-font-scale));
 }
 </style>

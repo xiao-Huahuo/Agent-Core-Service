@@ -63,7 +63,8 @@ const knowledgeIgnorePatternsDraft = ref(settingsStore.profile.knowledgeIgnorePa
 const editorImageAssetsDirDraft = ref(settingsStore.profile.editorImageAssetsDir ?? './assets/')
 const uiFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.uiFontFamilies ?? [])])
 const textFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.textFontFamilies ?? [])])
-const fontSizePercentDraft = ref(settingsStore.profile.fontSizePercent ?? 100)
+const uiFontSizePercentDraft = ref(settingsStore.profile.uiFontSizePercent ?? 100)
+const textFontSizePercentDraft = ref(settingsStore.profile.textFontSizePercent ?? 100)
 const themePrimaryColorDraft = ref(settingsStore.profile.themePrimaryColor || '#339cff')
 const themeSoftColorDraft = ref(settingsStore.profile.themeSoftColor || '#339cff')
 const graphNodeLimitDraft = ref(settingsStore.profile.graphNodeLimit ?? 2000)
@@ -72,7 +73,7 @@ const fontsLoading = ref(false)
 const saving = ref(false)
 const saveError = ref('')
 const saveMessage = ref('')
-let fontSizeSaveTimer: number | null = null
+const fontSizeSaveTimers: Record<'ui' | 'text', number | null> = { ui: null, text: null }
 
 const hasChanges = computed(() => {
   return (
@@ -127,8 +128,13 @@ watch(
 )
 
 watch(
-  () => settingsStore.profile.fontSizePercent,
-  (value) => { fontSizePercentDraft.value = value ?? 100 },
+  () => settingsStore.profile.uiFontSizePercent,
+  (value) => { uiFontSizePercentDraft.value = value ?? 100 },
+)
+
+watch(
+  () => settingsStore.profile.textFontSizePercent,
+  (value) => { textFontSizePercentDraft.value = value ?? 100 },
 )
 
 watch(
@@ -177,32 +183,39 @@ async function handleSaveFontFamilies(payload: { target: 'ui' | 'text'; families
     await settingsStore.saveFontSettings({
       uiFontFamilies: nextUiFontFamilies,
       textFontFamilies: nextTextFontFamilies,
-      fontSizePercent: fontSizePercentDraft.value,
+      uiFontSizePercent: uiFontSizePercentDraft.value,
+      textFontSizePercent: textFontSizePercentDraft.value,
     })
   } catch (error) {
     saveError.value = error instanceof Error ? error.message : '保存字体设置失败'
   }
 }
 
-async function persistFontSize(percent: number) {
+async function persistFontSize(target: 'ui' | 'text', percent: number) {
   try {
     await settingsStore.saveFontSettings({
-      fontSizePercent: percent,
+      [target === 'ui' ? 'uiFontSizePercent' : 'textFontSizePercent']: percent,
     })
   } catch (error) {
     saveError.value = error instanceof Error ? error.message : '保存字体大小失败'
   }
 }
 
-function handleSaveFontSize(percent: number) {
-  fontSizePercentDraft.value = percent
-  settingsStore.setFontSizePercent(percent)
-  if (fontSizeSaveTimer) {
-    window.clearTimeout(fontSizeSaveTimer)
+function handleSaveFontSize(payload: { target: 'ui' | 'text'; percent: number }) {
+  const { target, percent } = payload
+  if (target === 'ui') {
+    uiFontSizePercentDraft.value = percent
+    settingsStore.setUiFontSizePercent(percent)
+  } else {
+    textFontSizePercentDraft.value = percent
+    settingsStore.setTextFontSizePercent(percent)
   }
-  fontSizeSaveTimer = window.setTimeout(() => {
-    fontSizeSaveTimer = null
-    void persistFontSize(percent)
+  if (fontSizeSaveTimers[target]) {
+    window.clearTimeout(fontSizeSaveTimers[target])
+  }
+  fontSizeSaveTimers[target] = window.setTimeout(() => {
+    fontSizeSaveTimers[target] = null
+    void persistFontSize(target, percent)
   }, 350)
 }
 
@@ -623,10 +636,12 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('agent-settings-tab', handleExternalSettingsTab as EventListener)
-  if (fontSizeSaveTimer) {
-    window.clearTimeout(fontSizeSaveTimer)
-    fontSizeSaveTimer = null
-    void persistFontSize(fontSizePercentDraft.value)
+  for (const target of ['ui', 'text'] as const) {
+    if (!fontSizeSaveTimers[target]) continue
+    window.clearTimeout(fontSizeSaveTimers[target])
+    fontSizeSaveTimers[target] = null
+    const percent = target === 'ui' ? uiFontSizePercentDraft.value : textFontSizePercentDraft.value
+    void persistFontSize(target, percent)
   }
 })
 </script>
@@ -662,11 +677,12 @@ onBeforeUnmount(() => {
 
       <AppearanceSettingsSection
         v-if="activeTab === 'appearance'"
-        v-model:font-size-percent-draft="fontSizePercentDraft"
+        v-model:text-font-size-percent-draft="textFontSizePercentDraft"
         v-model:text-font-families-draft="textFontFamiliesDraft"
         v-model:theme-primary-color-draft="themePrimaryColorDraft"
         v-model:theme-soft-color-draft="themeSoftColorDraft"
         v-model:ui-font-families-draft="uiFontFamiliesDraft"
+        v-model:ui-font-size-percent-draft="uiFontSizePercentDraft"
         :available-font-families="availableFontFamilies"
         :fonts-loading="fontsLoading"
         :sidebar-display-mode="settingsStore.sidebarDisplayMode"

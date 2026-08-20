@@ -92,6 +92,8 @@ class SettingsService:
                 "terminal_sandbox_config": "TEXT NOT NULL DEFAULT ''",
                 "ui_font_families": "TEXT NOT NULL DEFAULT ''",
                 "text_font_families": "TEXT NOT NULL DEFAULT ''",
+                "ui_font_size_percent": "INTEGER NOT NULL DEFAULT 100",
+                "text_font_size_percent": "INTEGER NOT NULL DEFAULT 100",
                 "font_size_percent": "INTEGER NOT NULL DEFAULT 100",
                 "theme_primary_color": "VARCHAR(16) NOT NULL DEFAULT ''",
                 "theme_soft_color": "VARCHAR(16) NOT NULL DEFAULT ''",
@@ -102,10 +104,18 @@ class SettingsService:
                 "storage_path_overrides": "TEXT NOT NULL DEFAULT ''",
             }
             with Session(self.engine) as db:
+                missing_font_size_columns = {
+                    "ui_font_size_percent",
+                    "text_font_size_percent",
+                }.difference(columns)
                 for col_name, col_type in migrations.items():
                     if col_name not in columns:
                         db.execute(text(f"ALTER TABLE user_settings ADD COLUMN {col_name} {col_type}"))
                         logger.info("Schema migration: added column %s to user_settings", col_name)
+                for col_name in missing_font_size_columns:
+                    db.execute(text(
+                        f"UPDATE user_settings SET {col_name} = font_size_percent"
+                    ))
                 db.commit()
         except Exception:
             pass
@@ -558,7 +568,9 @@ class SettingsService:
             "terminal_sandbox": self._load_terminal_sandbox_payload(record.terminal_sandbox_config),
             "ui_font_families": self._load_font_families(record.ui_font_families),
             "text_font_families": self._load_font_families(record.text_font_families),
-            "font_size_percent": self._normalize_font_size_percent(record.font_size_percent),
+            "ui_font_size_percent": self._normalize_font_size_percent(record.ui_font_size_percent),
+            "text_font_size_percent": self._normalize_font_size_percent(record.text_font_size_percent),
+            "font_size_percent": self._normalize_font_size_percent(record.ui_font_size_percent),
             "theme_primary_color": record.theme_primary_color,
             "theme_soft_color": record.theme_soft_color,
             "graph_node_limit": record.graph_node_limit,
@@ -617,9 +629,11 @@ class SettingsService:
         user_id: str,
         ui_font_families: list[str] | None = None,
         text_font_families: list[str] | None = None,
+        ui_font_size_percent: int | None = None,
+        text_font_size_percent: int | None = None,
         font_size_percent: int | None = None,
     ) -> dict:
-        """Persist the user's editor font family stacks."""
+        """Persist independent UI and editor-text font settings."""
 
         normalized_user_id = user_id.strip()
         if not normalized_user_id:
@@ -639,7 +653,16 @@ class SettingsService:
             if text_font_families is not None:
                 record.text_font_families = self._dump_font_families(text_font_families)
             if font_size_percent is not None:
-                record.font_size_percent = self._normalize_font_size_percent(font_size_percent)
+                legacy_size = self._normalize_font_size_percent(font_size_percent)
+                if ui_font_size_percent is None:
+                    record.ui_font_size_percent = legacy_size
+                if text_font_size_percent is None:
+                    record.text_font_size_percent = legacy_size
+            if ui_font_size_percent is not None:
+                record.ui_font_size_percent = self._normalize_font_size_percent(ui_font_size_percent)
+            if text_font_size_percent is not None:
+                record.text_font_size_percent = self._normalize_font_size_percent(text_font_size_percent)
+            record.font_size_percent = record.ui_font_size_percent
             record.updated_at = now
             db.add(record)
             db.commit()
@@ -648,9 +671,25 @@ class SettingsService:
                 "user_id": record.user_id,
                 "ui_font_families": self._load_font_families(record.ui_font_families),
                 "text_font_families": self._load_font_families(record.text_font_families),
-                "font_size_percent": self._normalize_font_size_percent(record.font_size_percent),
+                "ui_font_size_percent": self._normalize_font_size_percent(record.ui_font_size_percent),
+                "text_font_size_percent": self._normalize_font_size_percent(record.text_font_size_percent),
+                "font_size_percent": self._normalize_font_size_percent(record.ui_font_size_percent),
                 "updated_at": record.updated_at.isoformat(),
             }
+
+    def get_font_config(self, *, user_id: str) -> dict:
+        """Return the persisted font settings without mutating their timestamp."""
+
+        profile = self.ensure_user_profile(user_id=user_id)
+        return {
+            "user_id": profile["user_id"],
+            "ui_font_families": profile["ui_font_families"],
+            "text_font_families": profile["text_font_families"],
+            "ui_font_size_percent": profile["ui_font_size_percent"],
+            "text_font_size_percent": profile["text_font_size_percent"],
+            "font_size_percent": profile["font_size_percent"],
+            "updated_at": profile["updated_at"],
+        }
 
     @staticmethod
     def _normalize_theme_color(value: str | None) -> str:

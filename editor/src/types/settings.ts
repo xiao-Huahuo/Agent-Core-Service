@@ -44,7 +44,11 @@ export interface UserSettingsProfile {
   uiFontFamilies?: string[]
   /** Optional font families prepended to markdown/text document surfaces. */
   textFontFamilies?: string[]
-  /** Global font size percentage shared by UI and text surfaces. */
+  /** Font size percentage for controls, navigation, and other UI surfaces. */
+  uiFontSizePercent?: number
+  /** Font size percentage for the editor input and document preview surfaces. */
+  textFontSizePercent?: number
+  /** Legacy shared font size normalized into both independent size fields. */
   fontSizePercent?: number
   /** Optional primary UI color applied to action and selection surfaces. */
   themePrimaryColor?: string

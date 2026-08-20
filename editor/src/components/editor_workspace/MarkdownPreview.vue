@@ -1103,6 +1103,7 @@ onBeforeUnmount(() => {
   padding: var(--space-20) !important;
   color: var(--color-text-secondary) !important;
   font-family: var(--font-text) !important;
+  font-size: calc(14px * var(--text-font-scale)) !important;
 }
 
 .markdown-preview :deep(.vditor-reset li)::marker {
@@ -1167,12 +1168,12 @@ onBeforeUnmount(() => {
   transition: background 180ms ease, box-shadow 180ms ease;
 }
 
-.markdown-preview :deep(h1) { color: var(--color-primary) !important; font-size: calc(2rem * var(--font-scale)) !important; }
-.markdown-preview :deep(h2) { color: color-mix(in srgb, var(--color-primary) 86.7%, white) !important; font-size: calc(1.35rem * var(--font-scale)) !important; }
-.markdown-preview :deep(h3) { color: color-mix(in srgb, var(--color-primary) 73.3%, white) !important; font-size: calc(1.05rem * var(--font-scale)) !important; }
-.markdown-preview :deep(h4) { color: color-mix(in srgb, var(--color-primary) 60%, white) !important; font-size: calc(0.9rem * var(--font-scale)) !important; }
-.markdown-preview :deep(h5) { color: color-mix(in srgb, var(--color-primary) 46.7%, white) !important; font-size: calc(0.825rem * var(--font-scale)) !important; }
-.markdown-preview :deep(h6) { color: color-mix(in srgb, var(--color-primary) 33.3%, white) !important; font-size: calc(0.75rem * var(--font-scale)) !important; }
+.markdown-preview :deep(h1) { color: var(--color-primary) !important; font-size: calc(2rem * var(--text-font-scale)) !important; }
+.markdown-preview :deep(h2) { color: color-mix(in srgb, var(--color-primary) 86.7%, white) !important; font-size: calc(1.35rem * var(--text-font-scale)) !important; }
+.markdown-preview :deep(h3) { color: color-mix(in srgb, var(--color-primary) 73.3%, white) !important; font-size: calc(1.05rem * var(--text-font-scale)) !important; }
+.markdown-preview :deep(h4) { color: color-mix(in srgb, var(--color-primary) 60%, white) !important; font-size: calc(0.9rem * var(--text-font-scale)) !important; }
+.markdown-preview :deep(h5) { color: color-mix(in srgb, var(--color-primary) 46.7%, white) !important; font-size: calc(0.825rem * var(--text-font-scale)) !important; }
+.markdown-preview :deep(h6) { color: color-mix(in srgb, var(--color-primary) 33.3%, white) !important; font-size: calc(0.75rem * var(--text-font-scale)) !important; }
 
 .markdown-preview :deep(pre),
 .markdown-preview :deep(code) {
@@ -1202,7 +1203,7 @@ onBeforeUnmount(() => {
   border-radius: 0 !important;
   background: transparent !important;
   font-family: var(--font-text) !important;
-  font-size: var(--font-size-base) !important;
+  font-size: calc(0.9rem * var(--text-font-scale)) !important;
   line-height: 1.3 !important;
 }
 
