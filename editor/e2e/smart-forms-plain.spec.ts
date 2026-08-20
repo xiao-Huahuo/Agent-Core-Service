@@ -2,8 +2,8 @@
  * Ordinary-table browser regression.
  *
  * Usage:
- * Opens the real smart-forms page, creates an ordinary table through the dialog,
- * and verifies its 10 × 10 defaults plus disabled states in every context-menu level.
+ * Opens the real smart-forms page, verifies uninterrupted keyboard entry in the
+ * creation dialog, then checks ordinary-table defaults and disabled menu states.
  */
 import { expect, test } from '@playwright/test'
 
@@ -73,8 +73,12 @@ test('ordinary table starts 10 by 10 without a sequence column and grays disable
   await page.getByRole('button', { name: '库', exact: true }).hover()
   await page.getByRole('button', { name: '智能表格' }).click()
   await page.getByRole('button', { name: '新建表格' }).click()
+  const tableNameInput = page.getByPlaceholder('例如：项目文献库')
+  await expect(tableNameInput).toBeFocused()
   await page.locator('button[data-form-kind="plain"]').click()
-  await page.getByPlaceholder('例如：项目文献库').fill('普通表格冒烟')
+  await expect(tableNameInput).toBeFocused()
+  await page.keyboard.type('普通表格冒烟')
+  await expect(tableNameInput).toHaveValue('普通表格冒烟')
   await page.getByRole('button', { name: '创建表格', exact: true }).click()
 
   await expect(page.locator('.table-frame.plain-table')).toBeVisible()

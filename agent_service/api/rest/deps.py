@@ -26,12 +26,14 @@ from agent_service.services.task_list_service import TaskListService
 from agent_service.services.todo_service import TodoService
 from agent_service.services.automation_service import AutomationService
 from agent_service.services.favorite_service import FavoriteService
+from agent_service.services.privacy_service import PrivacyService
 from agent_service.services.feedback_service import FeedbackService
 from agent_service.services.smart_form_service import SmartFormService
 from agent_service.services.structured_generation_service import StructuredGenerationService
 from agent_service.services.agent_change_service import AgentChangeService
 from agent_service.services.agent_queue_service import AgentQueueService
 from agent_service.services.activity_service import ActivityService
+from agent_service.services.knowledge_ingestion_job_service import KnowledgeIngestionJobService
 
 _agent: AgentCore | None = None
 _session_service: SessionService | None = None
@@ -51,12 +53,14 @@ _grpc_running = False
 _todo_service: TodoService | None = None
 _automation_service: AutomationService | None = None
 _favorite_service: FavoriteService | None = None
+_privacy_service: PrivacyService | None = None
 _feedback_service: FeedbackService | None = None
 _smart_form_service: SmartFormService | None = None
 _structured_generation_service: StructuredGenerationService | None = None
 _agent_change_service: AgentChangeService | None = None
 _agent_queue_service: AgentQueueService | None = None
 _activity_service: ActivityService | None = None
+_knowledge_ingestion_job_service: KnowledgeIngestionJobService | None = None
 
 
 def _require_agent() -> AgentCore:
@@ -171,6 +175,14 @@ def _require_favorite_service() -> FavoriteService:
     return _favorite_service
 
 
+def _require_privacy_service() -> PrivacyService:
+    """返回启动阶段注入的用户隐私服务。"""
+
+    if _privacy_service is None:
+        raise HTTPException(status_code=503, detail="PrivacyService not initialized yet")
+    return _privacy_service
+
+
 def _require_feedback_service() -> FeedbackService:
     """返回启动阶段注入的用户反馈服务。"""
 
@@ -217,3 +229,11 @@ def _require_activity_service() -> ActivityService:
     if _activity_service is None:
         raise HTTPException(status_code=503, detail="ActivityService not initialized yet")
     return _activity_service
+
+
+def _require_knowledge_ingestion_job_service() -> KnowledgeIngestionJobService:
+    """返回启动阶段注入的单文件入库任务服务。"""
+
+    if _knowledge_ingestion_job_service is None:
+        raise HTTPException(status_code=503, detail="KnowledgeIngestionJobService not initialized yet")
+    return _knowledge_ingestion_job_service

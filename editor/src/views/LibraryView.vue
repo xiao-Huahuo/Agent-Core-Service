@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useFavoritesStore } from '@/stores/favorites'
+import { usePrivacyStore } from '@/stores/privacy'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { LibraryBreadcrumb, LibraryItem, LibraryTag } from '@/types/knowledge'
@@ -44,13 +45,16 @@ defineOptions({ name: 'LibraryView' })
 
 const props = withDefaults(defineProps<{
   favoritesOnlyLocked?: boolean
+  privacyOnlyLocked?: boolean
 }>(), {
   favoritesOnlyLocked: false,
+  privacyOnlyLocked: false,
 })
 
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 const favoritesStore = useFavoritesStore()
+const privacyStore = usePrivacyStore()
 
 const items = ref<LibraryItem[]>([])
 const tags = ref<LibraryTag[]>([])
@@ -61,6 +65,7 @@ const query = ref('')
 const selectedTag = ref('')
 const selectedContentType = ref('')
 const favoritesOnly = ref(false)
+const privacyOnly = ref(false)
 const filterMenuOpen = ref(false)
 const TAGS_PER_PAGE = 10
 const tagPage = ref(0)
@@ -94,10 +99,19 @@ function sortItems(list: LibraryItem[]): LibraryItem[] {
 
 const selectedItems = computed(() => items.value.filter((item) => selectedIds.value.has(item.item_id)))
 const effectiveFavoritesOnly = computed(() => props.favoritesOnlyLocked || favoritesOnly.value)
+const effectivePrivacyOnly = computed(() => props.privacyOnlyLocked || privacyOnly.value)
 const renderedItems = computed(() => {
-  if (!effectiveFavoritesOnly.value) return items.value
-  const favoriteIds = favoritesStore.idsFor('library_item')
-  return items.value.filter((item) => favoriteIds.has(item.item_id))
+  if (!privacyStore.hasLoaded('library_item')) return []
+  const privateIds = privacyStore.idsFor('library_item')
+  if (effectivePrivacyOnly.value) {
+    return items.value.filter((item) => privateIds.has(item.item_id))
+  }
+  const visibleItems = items.value.filter((item) => !privateIds.has(item.item_id))
+  if (effectiveFavoritesOnly.value) {
+    const favoriteIds = favoritesStore.idsFor('library_item')
+    return visibleItems.filter((item) => favoriteIds.has(item.item_id))
+  }
+  return visibleItems
 })
 const hasSelection = computed(() => selectedIds.value.size > 0)
 const canGoUp = computed(() => Boolean(currentParentId.value))
@@ -155,6 +169,9 @@ onMounted(async () => {
     workspaceStore.loadKnowledgeTree(),
     settingsStore.profile.userId
       ? favoritesStore.load(settingsStore.profile.userId, 'library_item', favoritesStore.activeLibraryId())
+      : Promise.resolve(),
+    settingsStore.profile.userId
+      ? privacyStore.load(settingsStore.profile.userId, 'library_item', privacyStore.activeLibraryId())
       : Promise.resolve(),
   ])
   document.addEventListener('click', handleDocumentClick)
@@ -271,6 +288,9 @@ function refreshLibrary() {
     settingsStore.profile.userId
       ? favoritesStore.load(settingsStore.profile.userId, 'library_item', favoritesStore.activeLibraryId())
       : Promise.resolve(),
+    settingsStore.profile.userId
+      ? privacyStore.load(settingsStore.profile.userId, 'library_item', privacyStore.activeLibraryId())
+      : Promise.resolve(),
   ])
 }
 
@@ -281,6 +301,13 @@ function goBreadcrumb(itemId: string) {
 function toggleFavoritesOnly() {
   if (props.favoritesOnlyLocked) return
   favoritesOnly.value = !favoritesOnly.value
+  if (favoritesOnly.value) privacyOnly.value = false
+}
+
+function togglePrivacyOnly() {
+  if (props.privacyOnlyLocked) return
+  privacyOnly.value = !privacyOnly.value
+  if (privacyOnly.value) favoritesOnly.value = false
 }
 
 function selectItem(item: LibraryItem) {
@@ -326,8 +353,7 @@ async function openSource(item: LibraryItem) {
     return
   }
   if (item.source_path) {
-    workspaceStore.setMainView('editor')
-    await workspaceStore.selectFile({
+    await workspaceStore.openEditorSidebar({
       name: item.source_name || item.source_path.split('/').pop() || item.source_path,
       path: item.source_path,
       isDir: false,
@@ -778,6 +804,18 @@ function errorMessage(error: unknown): string {
           @click="toggleFavoritesOnly"
         >
           <IcIcon name="star" :size="17" />
+        </button>
+        <button
+          class="tool-button"
+          :class="{ active: effectivePrivacyOnly }"
+          type="button"
+          title="我的隐私"
+          aria-label="我的隐私"
+          :aria-pressed="effectivePrivacyOnly"
+          :disabled="privacyOnlyLocked"
+          @click="togglePrivacyOnly"
+        >
+          <IcIcon name="visibility-off" :size="17" />
         </button>
         <button class="tool-button" type="button" title="新增集锦" @click="openCreateCollectionDialog">
           <IcIcon name="new-folder" :size="17" />
@@ -1564,7 +1602,7 @@ function errorMessage(error: unknown): string {
   min-height: 23px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-primary) 30%, transparent);
-  color: var(--color-primary);
+  color: var(--color-tag-pill-text);
   padding: 0 8px;
   font-size: 11px;
   overflow: hidden;
@@ -1574,16 +1612,16 @@ function errorMessage(error: unknown): string {
 
 .tag-pill:nth-child(6n + 2) {
   background: color-mix(in srgb, var(--color-accent) 30%, transparent);
-  color: var(--color-accent);
+  color: var(--color-tag-pill-text);
 }
 
 .tag-pill:nth-child(6n + 3) {
   background: color-mix(in srgb, var(--color-success) 30%, transparent);
-  color: var(--color-success);
+  color: var(--color-tag-pill-text);
 }
-.tag-pill:nth-child(6n + 4) { background: color-mix(in srgb, var(--color-warning) 30%, transparent); color: var(--color-warning); }
-.tag-pill:nth-child(6n + 5) { background: rgba(113, 70, 214, 0.30); color: #8d6eea; }
-.tag-pill:nth-child(6n) { background: rgba(0, 155, 166, 0.30); color: #1ac0c8; }
+.tag-pill:nth-child(6n + 4) { background: color-mix(in srgb, var(--color-warning) 30%, transparent); color: var(--color-tag-pill-text); }
+.tag-pill:nth-child(6n + 5) { background: rgba(113, 70, 214, 0.30); color: var(--color-tag-pill-text); }
+.tag-pill:nth-child(6n) { background: rgba(0, 155, 166, 0.30); color: var(--color-tag-pill-text); }
 
 .context-menu {
   position: fixed;

@@ -6,7 +6,7 @@
   ingestion/graph history with source-type filtering.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -35,7 +35,18 @@ function updateTabSlider() {
   })
 }
 
-onMounted(updateTabSlider)
+let ingestionPollTimer: number | null = null
+
+onMounted(() => {
+  updateTabSlider()
+  void workspaceStore.loadIngestionJobs().catch(() => undefined)
+  ingestionPollTimer = window.setInterval(() => {
+    if (activeTab.value === 'queue') void workspaceStore.loadIngestionJobs().catch(() => undefined)
+  }, 500)
+})
+onBeforeUnmount(() => {
+  if (ingestionPollTimer !== null) window.clearInterval(ingestionPollTimer)
+})
 watch(activeTab, updateTabSlider)
 const historyFilter = ref<HistorySourceType | 'all'>('all')
 
@@ -65,8 +76,8 @@ const historyRows = computed(() => {
   return allHistoryRows.value.filter((row) => row.sourceType === historyFilter.value)
 })
 
-const queueColumns = 'minmax(220px, 2fr) 150px 150px 120px 132px'
-const graphQueueColumns = 'minmax(220px, 2fr) 150px 150px 120px 120px 132px'
+const queueColumns = 'minmax(220px, 2fr) 145px 90px 90px minmax(210px, 1.4fr) 120px 96px'
+const graphQueueColumns = 'minmax(220px, 2fr) 145px 90px minmax(240px, 1.5fr) 132px'
 const historyColumns = 'minmax(220px, 2fr) 80px 140px 132px 160px 1fr'
 
 async function refresh() {
@@ -113,12 +124,15 @@ function formatDate(value?: string): string {
 }
 
 function queueStatusLabel(status: IngestionQueueItem['status']): string {
-  return status === 'running' ? '正在灌库' : '等待灌库'
+  if (status === 'running') return '正在灌库'
+  if (status === 'cancelling') return '正在中止'
+  return '等待灌库'
 }
 
 function historyStatusLabel(status: IngestionHistoryItem['status']): string {
   if (status === 'finished') return '已完成'
   if (status === 'skipped') return '已跳过'
+  if (status === 'cancelled') return '已中止'
   return '失败'
 }
 
@@ -221,7 +235,9 @@ function historySummary(row: IngestionHistoryItem): string {
         <span>最后修改日期</span>
         <span>类型</span>
         <span>大小</span>
+        <span>灌库进度</span>
         <span>状态</span>
+        <span>操作</span>
       </div>
       <TransitionGroup name="ingestion-row" tag="div" class="file-table-body">
         <div
@@ -239,10 +255,29 @@ function historySummary(row: IngestionHistoryItem): string {
           <span>{{ row.mtime ?? '-' }}</span>
           <span>{{ fileKind(row) }}</span>
           <span>{{ formatSize(row.size) }}</span>
+          <span class="progress-cell ingestion-progress-cell">
+            <div class="progress-bar-wrap" :title="row.message || row.stageLabel">
+              <div class="progress-bar-fill" :style="{ width: `${row.progress ?? 0}%` }" />
+              <span class="progress-pct">{{ row.progress ?? 0 }}%</span>
+            </div>
+            <span class="progress-detail" :title="row.message || row.stageLabel">
+              {{ row.stageLabel || '等待灌库' }}
+              <template v-if="row.stageTotal"> · {{ row.stageCurrent }} / {{ row.stageTotal }}</template>
+            </span>
+          </span>
           <span class="status-cell">
-            <IcIcon v-if="row.status === 'running'" name="spinner" :size="14" class="spin" />
+            <IcIcon v-if="row.status === 'running' || row.status === 'cancelling'" name="spinner" :size="14" class="spin" />
             <IcIcon v-else name="radio-unchecked" :size="14" />
             <span class="status-pill" :class="row.status">{{ queueStatusLabel(row.status) }}</span>
+          </span>
+          <span>
+            <button
+              class="cancel-ingestion-button"
+              type="button"
+              :disabled="row.status === 'cancelling'"
+              :aria-label="`中止 ${row.name} 灌库`"
+              @click="workspaceStore.cancelIngestionJob(row)"
+            >中止灌库</button>
           </span>
         </div>
       </TransitionGroup>
@@ -257,8 +292,7 @@ function historySummary(row: IngestionHistoryItem): string {
         <span>名称</span>
         <span>最后修改日期</span>
         <span>类型</span>
-        <span>大小</span>
-        <span>进度</span>
+        <span>图谱抽取进度</span>
         <span>状态</span>
       </div>
       <TransitionGroup name="ingestion-row" tag="div" class="file-table-body">
@@ -275,13 +309,15 @@ function historySummary(row: IngestionHistoryItem): string {
           </span>
           <span>{{ row.mtime ?? '-' }}</span>
           <span>{{ fileKind(row) }}</span>
-          <span>{{ formatSize(row.size) }}</span>
-          <span class="progress-cell">
-            <div v-if="row.status === 'running' && row.progress !== undefined" class="progress-bar-wrap">
-              <div class="progress-bar-fill" :style="{ width: `${row.progress}%` }" />
-              <span class="progress-pct">{{ row.progress }}%</span>
+          <span class="progress-cell graph-progress-cell">
+            <div class="progress-bar-wrap" :title="row.message || row.stageLabel">
+              <div class="progress-bar-fill" :style="{ width: `${row.progress ?? 0}%` }" />
+              <span class="progress-pct">{{ row.progress ?? 0 }}%</span>
             </div>
-            <span v-else class="progress-na">-</span>
+            <span class="progress-detail" :title="row.message || row.stageLabel">
+              {{ row.stageLabel || '等待图谱抽取' }}
+              <template v-if="row.stageTotal"> · {{ row.stageCurrent }} / {{ row.stageTotal }}</template>
+            </span>
           </span>
           <span class="status-cell">
             <IcIcon v-if="row.status === 'running'" name="spinner" :size="14" class="spin" />
@@ -761,6 +797,37 @@ function historySummary(row: IngestionHistoryItem): string {
   display: inline-flex;
   align-items: center;
   min-width: 0;
+}
+
+.ingestion-progress-cell {
+  display: grid;
+  gap: 3px;
+}
+
+.graph-progress-cell {
+  display: grid;
+  gap: 3px;
+}
+
+.progress-detail {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: calc(10px * var(--font-scale));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cancel-ingestion-button {
+  border: 0;
+  background: transparent;
+  color: var(--color-danger, #dc2626);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cancel-ingestion-button:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
 }
 
 .progress-bar-wrap {

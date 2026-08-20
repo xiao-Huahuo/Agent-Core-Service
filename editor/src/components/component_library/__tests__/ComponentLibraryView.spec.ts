@@ -236,6 +236,25 @@ describe('ComponentLibraryView', () => {
     expect(wrapper.getComponent({ name: 'ComponentLibraryView' }).props('favoritesOnlyLocked')).toBe(true)
   })
 
+  it('limits privacy mode to files and library with privacy filters locked', async () => {
+    const wrapper = mount(FavoritesView, {
+      props: { privacyMode: true },
+      global: {
+        stubs: {
+          FileResourceManager: { name: 'FileResourceManager', props: ['privacyOnlyLocked'], template: '<section />' },
+          LibraryView: { name: 'LibraryView', props: ['privacyOnlyLocked'], template: '<section />' },
+          ComponentLibraryView: true,
+          FavoriteSessionList: true,
+        },
+      },
+    })
+
+    expect(wrapper.findAll('.favorites-switch-button').map((button) => button.text())).toEqual(['文件', '图书馆'])
+    expect(wrapper.getComponent({ name: 'FileResourceManager' }).props('privacyOnlyLocked')).toBe(true)
+    await wrapper.findAll('.favorites-switch-button')[1]!.trigger('click')
+    expect(wrapper.getComponent({ name: 'LibraryView' }).props('privacyOnlyLocked')).toBe(true)
+  })
+
   it('opens a dedicated preview-and-source detail page from a card event', async () => {
     const wrapper = mount(ComponentLibraryView, {
       global: {

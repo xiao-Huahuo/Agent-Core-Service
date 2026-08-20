@@ -11,6 +11,10 @@ import { describe, expect, it } from 'vitest'
 import {
   BUILTIN_COLUMNS,
   DEFAULT_ROW_HEIGHT,
+  INDEX_COLUMN_WIDTH,
+  MIN_COLUMN_WIDTH,
+  MIN_ROW_HEIGHT,
+  PLAIN_ROW_HEIGHT,
   addColumn,
   createCustomColumn,
   createDefaultLiteratureForm,
@@ -52,6 +56,9 @@ describe('smartLiteratureTable', () => {
       'title',
     ])
     expect(form.columns.find((column) => column.id === 'literature_file')?.title).toBe('文献上传')
+    expect(form.columns.find((column) => column.id === 'row_index')?.width).toBe(INDEX_COLUMN_WIDTH)
+    expect(INDEX_COLUMN_WIDTH).toBe(32)
+    expect(MIN_COLUMN_WIDTH).toBe(21)
     expect(form.columns.find((column) => column.id === 'literature_content')?.editable).toBe(false)
     expect(form.rows).toHaveLength(1)
     expect(form.rows[0]?.height).toBe(DEFAULT_ROW_HEIGHT)
@@ -66,7 +73,7 @@ describe('smartLiteratureTable', () => {
     expect(form.columns.every((column) => column.type === 'text')).toBe(true)
     expect(form.columns.some((column) => column.type === 'index' || column.id === 'row_index')).toBe(false)
     expect(form.rows).toHaveLength(10)
-    expect(form.rows.every((row) => row.height === 34)).toBe(true)
+    expect(form.rows.every((row) => row.height === PLAIN_ROW_HEIGHT)).toBe(true)
     expect(form.rows.every((row) => (
       form.columns.every((column) => row.cells[column.id]?.value === '')
     ))).toBe(true)
@@ -93,7 +100,7 @@ describe('smartLiteratureTable', () => {
       rows: [{ id: 'row-1', height: DEFAULT_ROW_HEIGHT, cells: { col_text: { value: '一行内容' } } }],
     })
 
-    expect(plain.rows[0]?.height).toBe(34)
+    expect(plain.rows[0]?.height).toBe(PLAIN_ROW_HEIGHT)
   })
 
   it('updates smart cells as ready and keeps non-smart status untouched', () => {
@@ -151,9 +158,9 @@ describe('smartLiteratureTable', () => {
 
     expect(resized.columns.find((column) => column.id === 'title')?.width).toBe(320)
     expect(resized.rows[0]?.height).toBe(180)
-    expect(bounded.columns.find((column) => column.id === 'title')?.width).toBe(64)
-    expect(bounded.rows[0]?.height).toBe(56)
-    expect(normalizeForm(bounded).rows[0]?.height).toBe(56)
+    expect(bounded.columns.find((column) => column.id === 'title')?.width).toBe(MIN_COLUMN_WIDTH)
+    expect(bounded.rows[0]?.height).toBe(MIN_ROW_HEIGHT)
+    expect(normalizeForm(bounded).rows[0]?.height).toBe(MIN_ROW_HEIGHT)
   })
 
   it('uses the 15-line default for missing and legacy row heights', () => {

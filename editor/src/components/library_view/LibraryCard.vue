@@ -11,8 +11,10 @@ import { computed, nextTick, ref, watch } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import { buildApiUrl } from '@/api/client'
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
+import PrivacyButton from '@/components/common/PrivacyButton.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import type { LibraryItem } from '@/types/knowledge'
+import { usePrivacyStore } from '@/stores/privacy'
 
 const props = defineProps<{
   item: LibraryItem
@@ -33,6 +35,7 @@ const emit = defineEmits<{
 }>()
 
 const dragOver = ref(false)
+const privacyStore = usePrivacyStore()
 const detailsOpen = ref(false)
 const titleEditing = ref(false)
 const descriptionEditing = ref(false)
@@ -48,12 +51,14 @@ watch(() => props.item, (item) => {
   if (!descriptionEditing.value) editDescription.value = item.description
 }, { deep: true })
 const isCollection = computed(() => props.item.item_type === 'collection')
+const isPrivate = computed(() => privacyStore.loading || privacyStore.isPrivate('library_item', props.item.item_id))
 const fileIcon = computed(() => materialFileIconForNode({
   name: props.item.source_name || props.item.display_title,
   path: props.item.source_path || props.item.source_name,
   isDir: isCollection.value,
 }))
 const coverUrl = computed(() => {
+  if (isPrivate.value) return ''
   if (props.item.cover_mode === 'image' && props.item.cover_asset?.url) {
     return props.item.cover_asset.url
   }
@@ -175,6 +180,7 @@ function handleDrop(event: DragEvent) {
     @drop="handleDrop"
   >
     <section class="cover" :class="{ 'image-cover': coverUrl }">
+      <PrivacyButton class="library-privacy" target-type="library_item" :target-id="item.item_id" />
       <FavoriteButton class="library-favorite" target-type="library_item" :target-id="item.item_id" />
       <button
         v-if="multiSelect"
@@ -186,7 +192,10 @@ function handleDrop(event: DragEvent) {
       >
         <IcIcon v-if="selected" name="check" :size="14" />
       </button>
-      <img v-if="coverUrl" class="cover-image" :src="coverUrl" alt="" />
+      <div v-if="isPrivate" class="icon-cover privacy-cover" aria-label="隐私内容不显示封面">
+        <IcIcon name="visibility-off" :size="52" />
+      </div>
+      <img v-else-if="coverUrl" class="cover-image" :src="coverUrl" alt="" />
       <div v-else-if="item.cover_mode === 'description' && item.description" class="text-cover">
         {{ item.description }}
       </div>
@@ -319,7 +328,7 @@ function handleDrop(event: DragEvent) {
 .select-button {
   position: absolute;
   top: 10px;
-  right: 40px;
+  right: 70px;
   z-index: 2;
   display: flex;
   align-items: center;
@@ -340,6 +349,18 @@ function handleDrop(event: DragEvent) {
   right: 10px;
   z-index: 4;
   background: transparent;
+}
+
+.library-privacy {
+  position: absolute;
+  top: 10px;
+  right: 40px;
+  z-index: 4;
+  background: transparent;
+}
+
+.privacy-cover {
+  color: var(--color-text-muted);
 }
 
 .select-button :deep(svg) {
@@ -491,7 +512,7 @@ function handleDrop(event: DragEvent) {
   min-height: 22px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-primary) 30%, transparent);
-  color: var(--color-primary);
+  color: var(--color-tag-pill-text);
   padding: 0 8px;
   font-size: 11px;
   overflow: hidden;
@@ -501,16 +522,16 @@ function handleDrop(event: DragEvent) {
 
 .tag-pill:nth-child(6n + 2) {
   background: color-mix(in srgb, var(--color-accent) 30%, transparent);
-  color: var(--color-accent);
+  color: var(--color-tag-pill-text);
 }
 
 .tag-pill:nth-child(6n + 3) {
   background: color-mix(in srgb, var(--color-success) 30%, transparent);
-  color: var(--color-success);
+  color: var(--color-tag-pill-text);
 }
-.tag-pill:nth-child(6n + 4) { background: color-mix(in srgb, var(--color-warning) 30%, transparent); color: var(--color-warning); }
-.tag-pill:nth-child(6n + 5) { background: rgba(113, 70, 214, 0.30); color: #8d6eea; }
-.tag-pill:nth-child(6n) { background: rgba(0, 155, 166, 0.30); color: #1ac0c8; }
+.tag-pill:nth-child(6n + 4) { background: color-mix(in srgb, var(--color-warning) 30%, transparent); color: var(--color-tag-pill-text); }
+.tag-pill:nth-child(6n + 5) { background: rgba(113, 70, 214, 0.30); color: var(--color-tag-pill-text); }
+.tag-pill:nth-child(6n) { background: rgba(0, 155, 166, 0.30); color: var(--color-tag-pill-text); }
 
 .title,
 .source,

@@ -27,6 +27,7 @@ except ImportError:  # pragma: no cover - fallback only used when optional depen
 from agent_service.api.rest.deps import (
     _require_knowledge_graph_service,
     _require_knowledge_library_service,
+    _require_knowledge_ingestion_job_service,
     _require_activity_service,
     _require_retrieval_service,
     _require_settings_service,
@@ -35,6 +36,57 @@ from agent_service.api.rest.deps import (
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+
+@router.post("/knowledge/ingestion/jobs")
+async def create_knowledge_ingestion_jobs(body: dict[str, Any]) -> dict[str, Any]:
+    """为一组知识库文件创建可持久化、可独立中止的入库任务。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    paths = body.get("paths")
+    if not user_id or not isinstance(paths, list) or not paths:
+        raise HTTPException(status_code=422, detail="user_id and non-empty paths are required")
+    try:
+        jobs = await run_in_threadpool(
+            _require_knowledge_ingestion_job_service().submit,
+            user_id=user_id,
+            paths=[str(path) for path in paths],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"jobs": jobs}
+
+
+@router.get("/knowledge/ingestion/jobs")
+async def list_knowledge_ingestion_jobs(
+    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    active_only: bool = Query(False, description="是否只返回等待、运行和中止中的任务"),
+) -> dict[str, Any]:
+    """列出用户持久化入库任务，供队列页面轮询恢复。"""
+
+    jobs = await run_in_threadpool(
+        _require_knowledge_ingestion_job_service().list_jobs,
+        user_id=user_id,
+        active_only=active_only,
+    )
+    return {"jobs": jobs}
+
+
+@router.post("/knowledge/ingestion/jobs/{job_id}/cancel")
+async def cancel_knowledge_ingestion_job(job_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    """立即中止一个等待中或运行中的单文件入库任务。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    job = await run_in_threadpool(
+        _require_knowledge_ingestion_job_service().cancel,
+        job_id=job_id,
+        user_id=user_id,
+    )
+    if job is None:
+        raise HTTPException(status_code=404, detail="ingestion job not found")
+    return job
 
 
 class _KnowledgeFileEventHandler(FileSystemEventHandler):
@@ -685,6 +737,10 @@ async def rebuild_knowledge_graph(body: dict[str, Any]) -> dict[str, Any]:
     library_id = str(active_library["library_id"])
     target_source_path: Path | None = None
     target_is_dir = False
+    force_value = body.get("force", False)
+    if not isinstance(force_value, bool):
+        raise HTTPException(status_code=422, detail="force must be a boolean")
+    force = force_value
     target_path = str(body.get("path") or "").replace("\\", "/").strip().strip("/")
     if target_path:
         knowledge_root = Path(str(active_library["knowledge_dir"])).resolve(strict=False)
@@ -728,6 +784,7 @@ async def rebuild_knowledge_graph(body: dict[str, Any]) -> dict[str, Any]:
             "user_llm_config": user_llm_config,
             "target_source_path": target_source_path,
             "target_is_dir": target_is_dir,
+            "force": force,
         },
         daemon=True,
     )

@@ -10,6 +10,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import fitz
+
 from agent_service.api.rest import debug as debug_api
 import agent_service.services.knowledge_library_service as knowledge_library_module
 from agent_service.services.knowledge_library_service import KnowledgeLibraryService
@@ -221,6 +223,26 @@ def test_preview_pdf_separates_render_content_from_ingested_text(tmp_path: Path,
     assert after["render_content"].startswith("## Page 1")
 
 
+def test_preview_pdf_exposes_a_rasterized_first_page_thumbnail(tmp_path: Path) -> None:
+    """PDF 卡片预览应返回真实首页 PNG,而不是通用 PDF 图标。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    pdf_path = knowledge_dir / "paper.pdf"
+    with fitz.open() as document:
+        page = document.new_page(width=320, height=480)
+        page.insert_text((36, 52), "MetaWeave PDF cover")
+        document.save(pdf_path)
+    service = _service(tmp_path, knowledge_dir)
+
+    preview = service.preview_file(user_id="user-1", path="paper.pdf")
+
+    assert preview["thumbnail_url"].startswith("/knowledge/assets/pdf_preview/")
+    asset_name = preview["thumbnail_url"].removeprefix("/knowledge/assets/")
+    thumbnail_path = service.config.storage.assets_dir / "knowledge" / asset_name
+    assert thumbnail_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
 def test_preview_csv_keeps_raw_text_and_table_rows(tmp_path: Path) -> None:
     """CSV 的 Text 与 Forms 必须来自同一原文件,且原文保持可编辑。"""
 
@@ -294,10 +316,26 @@ def test_preview_video_exposes_inline_player_source_without_ingestion(tmp_path: 
     preview = service.preview_file(user_id="user-1", path="clip.mp4")
 
     assert preview["kind"] == "video"
+    assert preview["video_container"] == "native"
     assert preview["mime_type"] == "video/mp4"
     assert preview["raw_url"].endswith("/knowledge/files/raw?user_id=user-1&path=clip.mp4")
     assert preview["readonly"] is True
     assert service._can_ingest_source_file(knowledge_dir / "clip.mp4") is False
+
+
+def test_preview_video_detects_mpegts_hidden_behind_mp4_extension(tmp_path: Path) -> None:
+    """扩展名为 MP4 的 MPEG-TS 文件应交给流式转封装播放器。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    transport_packet = b"\x47" + (b"\x00" * 187)
+    (knowledge_dir / "recording.mp4").write_bytes(transport_packet * 3)
+    service = _service(tmp_path, knowledge_dir)
+
+    preview = service.preview_file(user_id="user-1", path="recording.mp4")
+
+    assert preview["kind"] == "video"
+    assert preview["video_container"] == "mpegts"
 
 
 def test_resolve_knowledge_asset_serves_pdf_preview_image(tmp_path: Path) -> None:

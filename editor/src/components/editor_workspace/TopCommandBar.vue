@@ -56,6 +56,15 @@ const emit = defineEmits<{
   toggleBrowser: []
 }>()
 const graphRebuilding = computed(() => workspaceStore.graphQueue.length > 0)
+/** Compact live graph stage shown beside the aggregate header progress bar. */
+const graphProgressLabel = computed(() => {
+  const active = workspaceStore.graphQueue.find((item) => item.status === 'running')
+  const stats = workspaceStore.graphProgressStats
+  const stageCount = active?.stageTotal
+    ? ` ${active.stageCurrent ?? 0}/${active.stageTotal}`
+    : ''
+  return `图谱 ${stats.current}/${stats.total} · ${active?.stageLabel ?? '准备中'}${stageCount}`
+})
 const agentActive = computed(() => workspaceStore.agentSidebarOpen)
 const todoActive = computed(() => workspaceStore.todoSidebarOpen)
 const logoSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
@@ -169,7 +178,13 @@ onMounted(() => nextTick(autoResizeInput))
         </span>
         <span class="ingestion-progress-percent">{{ workspaceStore.ingestionProgress }}%</span>
       </div>
-      <div v-if="workspaceStore.graphProgressVisible" class="ingestion-progress graph-progress" aria-live="polite">
+      <div
+        v-if="workspaceStore.graphProgressVisible"
+        class="ingestion-progress graph-progress"
+        :title="workspaceStore.graphProgressDetail"
+        aria-live="polite"
+      >
+        <span class="graph-progress-label">{{ graphProgressLabel }}</span>
         <span class="ingestion-progress-track" aria-hidden="true">
           <span
             class="ingestion-progress-fill"
@@ -358,7 +373,7 @@ onMounted(() => nextTick(autoResizeInput))
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
   -webkit-app-region: no-drag;
 }
@@ -949,9 +964,22 @@ input:checked + .slider .clouds {
 }
 
 .graph-progress {
+  width: min(300px, 36vw);
   border-color: color-mix(in srgb, var(--color-primary) 50%, #14b8a6 50%);
   background: color-mix(in srgb, var(--color-canvas) 92%, #14b8a6 8%);
   color: #14b8a6;
+}
+
+.graph-progress-label {
+  max-width: 164px;
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand:has(.graph-progress) {
+  max-width: min(520px, 52vw);
 }
 
 .graph-progress .ingestion-progress-track {

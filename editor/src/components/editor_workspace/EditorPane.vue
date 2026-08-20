@@ -27,6 +27,18 @@ import { useSessionStore } from '@/stores/session'
 import { buildBacklinks } from './backlinks'
 import { flattenWikiFiles, parseWikiLink, resolveWikiTargetPath } from './wikiLinks'
 
+const props = withDefaults(defineProps<{
+  /** Whether this pane is embedded as the independent editor sidebar. */
+  sidebar?: boolean
+}>(), {
+  sidebar: false,
+})
+
+const emit = defineEmits<{
+  /** Requests that the parent hide the independent editor sidebar. */
+  close: []
+}>()
+
 const workspaceStore = useWorkspaceStore()
 const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
@@ -350,7 +362,7 @@ onErrorCaptured((err, vm, info) => {
 </script>
 
 <template>
-  <main class="editor-panel surface-panel" @keydown.capture="handleEditorShortcut">
+  <main class="editor-panel surface-panel" :class="{ 'sidebar-editor-panel': props.sidebar }" @keydown.capture="handleEditorShortcut">
     <div class="tab-strip">
       <div class="tab-list">
         <button
@@ -421,6 +433,9 @@ onErrorCaptured((err, vm, info) => {
         >
           <IcIcon name="save" :size="15" />
           <span>Save</span>
+        </button>
+        <button v-if="props.sidebar" class="sidebar-close-button" type="button" title="关闭编辑区侧边栏" aria-label="关闭编辑区侧边栏" @click="emit('close')">
+          <IcIcon name="close" :size="15" />
         </button>
       </div>
     </div>
@@ -499,6 +514,27 @@ onErrorCaptured((err, vm, info) => {
   border: 0;
   background: var(--color-canvas-soft);
   font-family: var(--font-ui);
+}
+
+.sidebar-editor-panel {
+  width: 100%;
+  min-width: 0;
+}
+
+.sidebar-close-button {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.sidebar-close-button:hover {
+  color: var(--color-text);
 }
 
 .tab-strip {

@@ -25,6 +25,7 @@ const AGENT_ACCESS_MODE_KEY = 'agent_editor_access_mode'
 const SHOW_INDEX_COLUMN_KEY = 'agent_editor_show_index_column'
 const SHOW_GRAPH_COLUMN_KEY = 'agent_editor_show_graph_column'
 const SHOW_FAVORITE_COLUMN_KEY = 'agent_editor_show_favorite_column'
+const SHOW_PRIVACY_COLUMN_KEY = 'agent_editor_show_privacy_column'
 const SIDEBAR_DISPLAY_MODE_KEY = 'agent_editor_sidebar_display_mode'
 const FLOATING_PIN_MODE_KEY = 'agent_editor_floating_pin_mode'
 
@@ -276,6 +277,9 @@ export const useSettingsStore = defineStore('settings', () => {
   /** Whether to show favorite status buttons in the file tree. */
   const showFavoriteColumn = ref(localStorage.getItem(SHOW_FAVORITE_COLUMN_KEY) !== 'false')
 
+  /** Whether to show privacy controls in file-tree and resource-manager status columns. */
+  const showPrivacyColumn = ref(localStorage.getItem(SHOW_PRIVACY_COLUMN_KEY) !== 'false')
+
   /** Left workspace sidebar mode: icon-only rail or wider management rail. */
   const sidebarDisplayMode = ref<SidebarDisplayMode>(normalizeSidebarDisplayMode(localStorage.getItem(SIDEBAR_DISPLAY_MODE_KEY)))
 
@@ -417,6 +421,11 @@ export const useSettingsStore = defineStore('settings', () => {
   function setShowFavoriteColumn(value: boolean) {
     showFavoriteColumn.value = value
     localStorage.setItem(SHOW_FAVORITE_COLUMN_KEY, String(value))
+  }
+
+  function setShowPrivacyColumn(value: boolean) {
+    showPrivacyColumn.value = value
+    localStorage.setItem(SHOW_PRIVACY_COLUMN_KEY, String(value))
   }
 
   function setSidebarDisplayMode(mode: SidebarDisplayMode) {
@@ -776,5 +785,7 @@ export const useSettingsStore = defineStore('settings', () => {
     setShowGraphColumn,
     showFavoriteColumn,
     setShowFavoriteColumn,
+    showPrivacyColumn,
+    setShowPrivacyColumn,
   }
 })

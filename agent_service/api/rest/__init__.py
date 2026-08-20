@@ -18,6 +18,7 @@ from agent_service.api.rest.token_usage import router as token_usage_router
 from agent_service.api.rest.todo import router as todo_router
 from agent_service.api.rest.automation import router as automation_router
 from agent_service.api.rest.favorites import router as favorites_router
+from agent_service.api.rest.privacy import router as privacy_router
 from agent_service.api.rest.feedback import router as feedback_router
 from agent_service.api.rest.smart_forms import router as smart_forms_router
 from agent_service.api.rest.structured_generation import router as structured_generation_router
@@ -42,6 +43,7 @@ router.include_router(token_usage_router)
 router.include_router(todo_router)
 router.include_router(automation_router)
 router.include_router(favorites_router)
+router.include_router(privacy_router)
 router.include_router(feedback_router)
 router.include_router(smart_forms_router)
 router.include_router(structured_generation_router)

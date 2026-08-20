@@ -907,6 +907,7 @@ class KnowledgeLibraryService:
             return {
                 **base_payload,
                 "kind": "video",
+                "video_container": self._detect_video_container(path=target),
                 "mime_type": mimetypes.guess_type(target.name)[0] or "application/octet-stream",
                 "raw_url": self._raw_file_url(user_id=user_id, relative_path=str(base_payload["path"])),
                 "readonly": True,
@@ -1081,6 +1082,20 @@ class KnowledgeLibraryService:
         if suffix in OFFICE_MIME_TYPES:
             return OFFICE_MIME_TYPES[suffix]
         return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
+    @staticmethod
+    def _detect_video_container(*, path: Path) -> str:
+        """识别扩展名伪装的 MPEG-TS，避免把它交给浏览器原生 MP4 解复用器。"""
+
+        with path.open("rb") as handle:
+            header = handle.read(204 * 4)
+        for packet_size in (188, 192, 204):
+            max_offset = min(packet_size, len(header))
+            for offset in range(max_offset):
+                sync_positions = (offset, offset + packet_size, offset + (packet_size * 2))
+                if sync_positions[-1] < len(header) and all(header[position] == 0x47 for position in sync_positions):
+                    return "mpegts"
+        return "native"
 
     def resolve_file_for_raw_response(self, *, user_id: str, path: str) -> tuple[Path, str]:
         """
@@ -1497,13 +1512,38 @@ class KnowledgeLibraryService:
                 "slide_count": 0,
             }
 
+    def _render_pdf_first_page(
+        self,
+        *,
+        path: Path,
+        image_output_dir: Path,
+        image_public_prefix: str,
+    ) -> str:
+        """将 PDF 首页栅格化为紧凑预览图。
+
+        path: PDF 原文件路径。
+        image_output_dir: 预览资产输出目录。
+        image_public_prefix: 与输出目录对应的静态资产 URL 前缀。
+        """
+
+        import fitz
+
+        image_output_dir.mkdir(parents=True, exist_ok=True)
+        thumbnail_path = image_output_dir / "page-1.png"
+        with fitz.open(path) as document:
+            if document.page_count < 1:
+                return ""
+            page = document.load_page(0)
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
+            pixmap.save(thumbnail_path)
+        return f"{image_public_prefix}/{thumbnail_path.name}"
+
     def _preview_pdf(self, *, user_id: str, relative_path: str, path: Path) -> dict:
         """提取 PDF 渲染 Markdown,并从已灌库 frontmatter 读取文本模式正文。"""
 
         asset_key = hashlib.sha256(f"{user_id}:{relative_path}".encode("utf-8")).hexdigest()[:24]
         image_output_dir = self.config.storage.assets_dir / "knowledge" / "pdf_preview" / asset_key
         image_public_prefix = f"/knowledge/assets/pdf_preview/{asset_key}"
-
         try:
             extracted = extract_pdf_text(
                 path,
@@ -1511,6 +1551,15 @@ class KnowledgeLibraryService:
                 image_public_prefix=image_public_prefix,
             )
         except Exception:
+            try:
+                thumbnail_url = self._render_pdf_first_page(
+                    path=path,
+                    image_output_dir=image_output_dir,
+                    image_public_prefix=image_public_prefix,
+                )
+            except Exception as exc:
+                logger.warning("PDF first-page preview failed for %s: %s", path, exc)
+                thumbnail_url = ""
             return {
                 "content": "",
                 "render_content": "",
@@ -1519,7 +1568,18 @@ class KnowledgeLibraryService:
                 "page_count": 0,
                 "image_count": 0,
                 "table_count": 0,
+                "thumbnail_url": thumbnail_url,
             }
+        try:
+            # PDF extraction refreshes this asset directory, so render the card image afterwards.
+            thumbnail_url = self._render_pdf_first_page(
+                path=path,
+                image_output_dir=image_output_dir,
+                image_public_prefix=image_public_prefix,
+            )
+        except Exception as exc:
+            logger.warning("PDF first-page preview failed for %s: %s", path, exc)
+            thumbnail_url = ""
         text_preview = self._preview_text_from_frontmatter(user_id=user_id, relative_path=relative_path)
         return {
             **text_preview,
@@ -1528,6 +1588,7 @@ class KnowledgeLibraryService:
             "page_count": extracted.page_count,
             "image_count": extracted.image_count,
             "table_count": extracted.table_count,
+            "thumbnail_url": thumbnail_url,
         }
 
     def _preview_image_text_from_frontmatter(self, *, user_id: str, relative_path: str) -> dict:

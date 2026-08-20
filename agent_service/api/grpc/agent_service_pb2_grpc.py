@@ -264,6 +264,21 @@ class AgentServiceStub(object):
                 request_serializer=agent__service__pb2.KnowledgePathRenameRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.KnowledgeFileNode.FromString,
                 _registered_method=True)
+        self.CreateKnowledgeIngestionJobs = channel.unary_unary(
+                '/agent_service.AgentService/CreateKnowledgeIngestionJobs',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.ListKnowledgeIngestionJobs = channel.unary_unary(
+                '/agent_service.AgentService/ListKnowledgeIngestionJobs',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.CancelKnowledgeIngestionJob = channel.unary_unary(
+                '/agent_service.AgentService/CancelKnowledgeIngestionJob',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
         self.GetGitStatus = channel.unary_unary(
                 '/agent_service.AgentService/GetGitStatus',
                 request_serializer=agent__service__pb2.GitUserRequest.SerializeToString,
@@ -362,6 +377,21 @@ class AgentServiceStub(object):
         self.DeleteFavorite = channel.unary_unary(
                 '/agent_service.AgentService/DeleteFavorite',
                 request_serializer=agent__service__pb2.FavoriteDeleteRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.DeleteResponse.FromString,
+                _registered_method=True)
+        self.ListPrivacy = channel.unary_unary(
+                '/agent_service.AgentService/ListPrivacy',
+                request_serializer=agent__service__pb2.PrivacyListRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.PrivacyListResponse.FromString,
+                _registered_method=True)
+        self.AddPrivacy = channel.unary_unary(
+                '/agent_service.AgentService/AddPrivacy',
+                request_serializer=agent__service__pb2.PrivacyCreateRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.PrivacyEntryResponse.FromString,
+                _registered_method=True)
+        self.DeletePrivacy = channel.unary_unary(
+                '/agent_service.AgentService/DeletePrivacy',
+                request_serializer=agent__service__pb2.PrivacyDeleteRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.DeleteResponse.FromString,
                 _registered_method=True)
         self.ListFeedback = channel.unary_unary(
@@ -854,6 +884,24 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def CreateKnowledgeIngestionJobs(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListKnowledgeIngestionJobs(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CancelKnowledgeIngestionJob(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def GetGitStatus(self, request, context):
         """当前 active 知识库的 Git 管理
         """
@@ -973,6 +1021,25 @@ class AgentServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def DeleteFavorite(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListPrivacy(self, request, context):
+        """用户隐私
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddPrivacy(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeletePrivacy(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -1444,6 +1511,21 @@ def add_AgentServiceServicer_to_server(servicer, server):
                     request_deserializer=agent__service__pb2.KnowledgePathRenameRequest.FromString,
                     response_serializer=agent__service__pb2.KnowledgeFileNode.SerializeToString,
             ),
+            'CreateKnowledgeIngestionJobs': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateKnowledgeIngestionJobs,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'ListKnowledgeIngestionJobs': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListKnowledgeIngestionJobs,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'CancelKnowledgeIngestionJob': grpc.unary_unary_rpc_method_handler(
+                    servicer.CancelKnowledgeIngestionJob,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
             'GetGitStatus': grpc.unary_unary_rpc_method_handler(
                     servicer.GetGitStatus,
                     request_deserializer=agent__service__pb2.GitUserRequest.FromString,
@@ -1542,6 +1624,21 @@ def add_AgentServiceServicer_to_server(servicer, server):
             'DeleteFavorite': grpc.unary_unary_rpc_method_handler(
                     servicer.DeleteFavorite,
                     request_deserializer=agent__service__pb2.FavoriteDeleteRequest.FromString,
+                    response_serializer=agent__service__pb2.DeleteResponse.SerializeToString,
+            ),
+            'ListPrivacy': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListPrivacy,
+                    request_deserializer=agent__service__pb2.PrivacyListRequest.FromString,
+                    response_serializer=agent__service__pb2.PrivacyListResponse.SerializeToString,
+            ),
+            'AddPrivacy': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddPrivacy,
+                    request_deserializer=agent__service__pb2.PrivacyCreateRequest.FromString,
+                    response_serializer=agent__service__pb2.PrivacyEntryResponse.SerializeToString,
+            ),
+            'DeletePrivacy': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeletePrivacy,
+                    request_deserializer=agent__service__pb2.PrivacyDeleteRequest.FromString,
                     response_serializer=agent__service__pb2.DeleteResponse.SerializeToString,
             ),
             'ListFeedback': grpc.unary_unary_rpc_method_handler(
@@ -2948,6 +3045,87 @@ class AgentService(object):
             _registered_method=True)
 
     @staticmethod
+    def CreateKnowledgeIngestionJobs(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/CreateKnowledgeIngestionJobs',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListKnowledgeIngestionJobs(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/ListKnowledgeIngestionJobs',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CancelKnowledgeIngestionJob(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/CancelKnowledgeIngestionJob',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def GetGitStatus(request,
             target,
             options=(),
@@ -3476,6 +3654,87 @@ class AgentService(object):
             target,
             '/agent_service.AgentService/DeleteFavorite',
             agent__service__pb2.FavoriteDeleteRequest.SerializeToString,
+            agent__service__pb2.DeleteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListPrivacy(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/ListPrivacy',
+            agent__service__pb2.PrivacyListRequest.SerializeToString,
+            agent__service__pb2.PrivacyListResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddPrivacy(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/AddPrivacy',
+            agent__service__pb2.PrivacyCreateRequest.SerializeToString,
+            agent__service__pb2.PrivacyEntryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeletePrivacy(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/DeletePrivacy',
+            agent__service__pb2.PrivacyDeleteRequest.SerializeToString,
             agent__service__pb2.DeleteResponse.FromString,
             options,
             channel_credentials,

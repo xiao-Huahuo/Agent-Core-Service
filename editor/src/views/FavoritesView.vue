@@ -7,7 +7,7 @@
   favorites filters locked on.
 -->
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import FileResourceManager from '@/components/editor_workspace/FileResourceManager.vue'
@@ -19,6 +19,12 @@ import { useWorkspaceStore } from '@/stores/workspace'
 
 defineOptions({ name: 'FavoritesView' })
 
+const props = withDefaults(defineProps<{
+  privacyMode?: boolean
+}>(), {
+  privacyMode: false,
+})
+
 type FavoriteTab = 'files' | 'library' | 'components' | 'sessions'
 
 const settingsStore = useSettingsStore()
@@ -26,12 +32,13 @@ const workspaceStore = useWorkspaceStore()
 const activeTab = ref<FavoriteTab>('files')
 const switchRef = ref<HTMLElement | null>(null)
 const sliderStyle = ref({ width: '0px', left: '0px' })
-const tabs: Array<{ value: FavoriteTab; label: string; icon: string }> = [
+const favoriteTabs: Array<{ value: FavoriteTab; label: string; icon: string }> = [
   { value: 'files', label: '文件', icon: 'document' },
   { value: 'library', label: '图书馆', icon: 'book' },
   { value: 'components', label: '组件', icon: 'grid-view' },
   { value: 'sessions', label: '会话', icon: 'forum' },
 ]
+const tabs = computed(() => props.privacyMode ? favoriteTabs.slice(0, 2) : favoriteTabs)
 
 function updateSlider() {
   nextTick(() => {
@@ -61,7 +68,7 @@ onMounted(updateSlider)
 <template>
   <section class="favorites-view">
     <header class="favorites-toolbar">
-      <div ref="switchRef" class="favorites-switch" aria-label="收藏分类">
+      <div ref="switchRef" class="favorites-switch" :aria-label="privacyMode ? '隐私分类' : '收藏分类'">
         <div class="favorites-slider" :style="sliderStyle"></div>
         <button
           v-for="tab in tabs"
@@ -78,8 +85,8 @@ onMounted(updateSlider)
     </header>
 
     <main class="favorites-body">
-      <FileResourceManager v-if="activeTab === 'files'" favorites-only-locked />
-      <LibraryView v-else-if="activeTab === 'library'" favorites-only-locked />
+      <FileResourceManager v-if="activeTab === 'files'" :favorites-only-locked="!privacyMode" :privacy-only-locked="privacyMode" />
+      <LibraryView v-else-if="activeTab === 'library'" :favorites-only-locked="!privacyMode" :privacy-only-locked="privacyMode" />
       <ComponentLibraryView v-else-if="activeTab === 'components'" favorites-only-locked />
       <FavoriteSessionList v-else :user-id="settingsStore.profile.userId" @select="openAgentSession" />
     </main>

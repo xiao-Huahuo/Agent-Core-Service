@@ -7,6 +7,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
+import PrivacyButton from '@/components/common/PrivacyButton.vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import { useSettingsStore } from '@/stores/settings'
@@ -220,6 +221,12 @@ function handleRowDrop(event: DragEvent) {
           />
           <span v-else-if="settingsStore.showGraphColumn" class="node-status-placeholder" />
         </span>
+        <PrivacyButton
+          v-if="settingsStore.showPrivacyColumn"
+          target-type="knowledge_path"
+          :target-id="node.path"
+          :size="13"
+        />
         <FavoriteButton
           v-if="settingsStore.showFavoriteColumn"
           target-type="knowledge_path"
@@ -309,6 +316,12 @@ function handleRowDrop(event: DragEvent) {
           :title="graphStatusTitle"
         />
       </span>
+      <PrivacyButton
+        v-if="settingsStore.showPrivacyColumn"
+        target-type="knowledge_path"
+        :target-id="node.path"
+        :size="13"
+      />
       <FavoriteButton
         v-if="settingsStore.showFavoriteColumn"
         target-type="knowledge_path"

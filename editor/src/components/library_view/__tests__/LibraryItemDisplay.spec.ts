@@ -2,10 +2,15 @@
 
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
 
 import LibraryBar from '@/components/library_view/LibraryBar.vue'
 import LibraryCard from '@/components/library_view/LibraryCard.vue'
 import type { LibraryItem } from '@/types/knowledge'
+import { usePrivacyStore } from '@/stores/privacy'
+
+const pinia = createPinia()
+setActivePinia(pinia)
 
 const book = {
   item_id: 'book-1', user_id: 'u1', library_id: 'l1', parent_id: '', item_type: 'book', content_type: 'knowledge_file',
@@ -17,7 +22,10 @@ const book = {
 
 const options = {
   props: { item: book, selected: false, multiSelect: false },
-  global: { stubs: { IcIcon: { template: '<span />' }, FavoriteButton: { template: '<span />' } } },
+  global: {
+    plugins: [pinia],
+    stubs: { IcIcon: { template: '<span />' }, FavoriteButton: { template: '<span />' }, PrivacyButton: { template: '<span />' } },
+  },
 }
 
 const webBook = {
@@ -75,5 +83,20 @@ describe('Library item download affordances', () => {
 
     expect(card.emitted('open')?.[0]).toEqual([webBook])
     expect(bar.emitted('open')?.[0]).toEqual([webBook])
+  })
+
+  it('replaces private card and bar covers with the privacy placeholder', () => {
+    usePrivacyStore().records = [{
+      privacy_id: 'privacy-1', user_id: 'u1', library_id: '', target_type: 'library_item', target_id: book.item_id, created_at: '',
+    }]
+    const privateBook = { ...book, cover_mode: 'image', cover_asset: { url: '/cover.png' } } as LibraryItem
+
+    const card = mount(LibraryCard, { ...options, props: { ...options.props, item: privateBook } })
+    const bar = mount(LibraryBar, { ...options, props: { ...options.props, item: privateBook } })
+
+    expect(card.find('.cover-image').exists()).toBe(false)
+    expect(card.find('[aria-label="隐私内容不显示封面"]').exists()).toBe(true)
+    expect(bar.find('.thumb-image').exists()).toBe(false)
+    expect(bar.find('[aria-label="隐私内容不显示封面"]').exists()).toBe(true)
   })
 })

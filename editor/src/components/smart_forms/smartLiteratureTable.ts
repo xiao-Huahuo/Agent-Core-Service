@@ -59,9 +59,11 @@ export interface SmartRow {
   cells: Record<string, SmartCell>
 }
 
-/** Minimum dimensions keep controls usable while resizing table boundaries. */
-export const MIN_COLUMN_WIDTH = 64
-export const MIN_ROW_HEIGHT = 56
+/** Minimum resized column width; compact tables may intentionally use icon-only headers. */
+export const MIN_COLUMN_WIDTH = 21
+/** The sequence column stays narrow because row movement remains available from its cell handle. */
+export const INDEX_COLUMN_WIDTH = 32
+export const MIN_ROW_HEIGHT = 37
 /** Default compact Markdown cell height: approximately 15 lines at 13px/1.35 with 9px vertical padding. */
 export const DEFAULT_ROW_HEIGHT = 282
 /** One-line row baseline for ordinary tables; rows may grow with edited content. */
@@ -103,7 +105,7 @@ export const BUILTIN_COLUMNS: SmartColumn[] = [
 ]
 
 const REQUIRED_COLUMNS: SmartColumn[] = [
-  { id: 'row_index', title: '序号', type: 'index', removable: false, editable: false, width: 64 },
+  { id: 'row_index', title: '序号', type: 'index', removable: false, editable: false, width: INDEX_COLUMN_WIDTH },
   { id: 'literature_file', title: '文献上传', type: 'file', removable: true, editable: false, width: 168 },
   { id: 'literature_content', title: '文献内容', type: 'readonly_text', removable: true, editable: false, width: 240 },
   { id: 'title', title: '标题', type: 'smart_text', removable: false, editable: true, width: 230, tone: 'blue' },
@@ -180,6 +182,7 @@ export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefin
   const fallback = createDefaultLiteratureForm()
   const sourceColumns = (Array.isArray(raw?.columns) ? raw.columns : fallback.columns)
     .map((column) => {
+      if (column.id === 'row_index') return { ...column, width: INDEX_COLUMN_WIDTH }
       if (column.id === 'literature_file') return { ...column, title: '文献上传', removable: true, editable: false }
       if (column.id === 'literature_content') return { ...column, removable: true, editable: false }
       if (column.id === 'title') return { ...column, removable: false }

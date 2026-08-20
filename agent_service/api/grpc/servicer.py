@@ -50,6 +50,11 @@ from agent_service.api.grpc.agent_service_pb2 import (
     FavoriteEntryResponse,
     FavoriteListRequest,
     FavoriteListResponse,
+    PrivacyCreateRequest,
+    PrivacyDeleteRequest,
+    PrivacyEntryResponse,
+    PrivacyListRequest,
+    PrivacyListResponse,
     FeedbackCreateRequest,
     FeedbackDeleteRequest,
     FeedbackEntryResponse,
@@ -127,15 +132,18 @@ from agent_service.api.grpc.agent_service_pb2 import (
 from agent_service.api.grpc.agent_service_pb2_grpc import AgentServiceServicer as BaseServicer
 from agent_service.schemas.session import SessionCreate, SessionUpdate
 from agent_service.schemas.favorite import FavoriteCreate
+from agent_service.schemas.privacy import PrivacyCreate
 from agent_service.schemas.feedback import FeedbackCreate, FeedbackUpdate
 from agent_service.services.message_service import MessageService
 from agent_service.services.session_service import SessionService
 from agent_service.services.settings_service import SettingsService
 from agent_service.services.knowledge_library_service import KnowledgeLibraryService, KnowledgeLibraryRebuildResult
+from agent_service.services.knowledge_ingestion_job_service import KnowledgeIngestionJobService
 from agent_service.services.git_service import GitService, GitServiceError
 from agent_service.services.task_suggestion_service import TaskSuggestionService
 from agent_service.services.token_usage_service import SUPPORTED_INTERVALS, TokenUsageService
 from agent_service.services.favorite_service import FavoriteService
+from agent_service.services.privacy_service import PrivacyService
 from agent_service.services.feedback_service import FeedbackService
 from agent_service.services.vault_service import VaultService
 from agent_service.services.agent_change_service import AgentChangeService
@@ -159,8 +167,10 @@ class AgentServiceServicer(BaseServicer):
         message_service: MessageService | None = None,
         settings_service: SettingsService | None = None,
         knowledge_library_service: KnowledgeLibraryService | None = None,
+        knowledge_ingestion_job_service: KnowledgeIngestionJobService | None = None,
         git_service: GitService | None = None,
         favorite_service: FavoriteService | None = None,
+        privacy_service: PrivacyService | None = None,
         feedback_service: FeedbackService | None = None,
         vault_service: VaultService | None = None,
         agent_change_service: AgentChangeService | None = None,
@@ -175,8 +185,10 @@ class AgentServiceServicer(BaseServicer):
         self._message_service = message_service
         self._settings_service = settings_service
         self._knowledge_library_service = knowledge_library_service
+        self._knowledge_ingestion_job_service = knowledge_ingestion_job_service
         self._git_service = git_service
         self._favorite_service = favorite_service
+        self._privacy_service = privacy_service
         self._feedback_service = feedback_service
         self._vault_service = vault_service
         self._agent_change_service = agent_change_service
@@ -348,6 +360,55 @@ class AgentServiceServicer(BaseServicer):
 
         try:
             deleted = self._require_favorite_service(context).delete_favorite(
+                user_id=request.user_id,
+                library_id=request.library_id,
+                target_type=request.target_type,
+                target_id=request.target_id,
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return DeleteResponse(ok=True, deleted_count=1 if deleted else 0)
+
+    def ListPrivacy(  # noqa: N802
+        self, request: PrivacyListRequest, context: grpc.ServicerContext,
+    ) -> PrivacyListResponse:
+        """列出用户隐私标记,与 REST /privacy 共用 PrivacyService。"""
+
+        try:
+            records = self._require_privacy_service(context).list_privacy(
+                user_id=request.user_id,
+                target_type=request.target_type or None,
+                library_id=request.library_id if request.filter_library else None,
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return PrivacyListResponse(privacy=[_privacy_to_response(item) for item in records])
+
+    def AddPrivacy(  # noqa: N802
+        self, request: PrivacyCreateRequest, context: grpc.ServicerContext,
+    ) -> PrivacyEntryResponse:
+        """创建隐私标记;重复请求返回已有记录。"""
+
+        try:
+            record = self._require_privacy_service(context).add_privacy(
+                PrivacyCreate(
+                    user_id=request.user_id,
+                    library_id=request.library_id,
+                    target_type=request.target_type,  # type: ignore[arg-type]
+                    target_id=request.target_id,
+                )
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return _privacy_to_response(record)
+
+    def DeletePrivacy(  # noqa: N802
+        self, request: PrivacyDeleteRequest, context: grpc.ServicerContext,
+    ) -> DeleteResponse:
+        """删除用户隐私标记。"""
+
+        try:
+            deleted = self._require_privacy_service(context).delete_privacy(
                 user_id=request.user_id,
                 library_id=request.library_id,
                 target_type=request.target_type,
@@ -1099,6 +1160,53 @@ class AgentServiceServicer(BaseServicer):
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
         return _knowledge_rebuild_to_response(result)
 
+    def CreateKnowledgeIngestionJobs(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """创建与 REST 相同的持久化单文件入库任务。"""
+
+        payload = MessageToDict(request)
+        user_id = str(payload.get("user_id", "")).strip()
+        paths = [str(path) for path in payload.get("paths", [])]
+        if not user_id or not paths:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "user_id and non-empty paths are required")
+        service = self._require_knowledge_ingestion_job_service(context)
+        try:
+            jobs = service.submit(
+                user_id=user_id,
+                paths=paths,
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict({"jobs": jobs}, Struct())
+
+    def ListKnowledgeIngestionJobs(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """列出持久化单文件入库任务。"""
+
+        payload = MessageToDict(request)
+        user_id = str(payload.get("user_id", "")).strip()
+        if not user_id:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "user_id is required")
+        jobs = self._require_knowledge_ingestion_job_service(context).list_jobs(
+            user_id=user_id,
+            active_only=bool(payload.get("active_only", False)),
+        )
+        return ParseDict({"jobs": jobs}, Struct())
+
+    def CancelKnowledgeIngestionJob(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """中止单文件入库任务并返回最终任务状态。"""
+
+        payload = MessageToDict(request)
+        user_id = str(payload.get("user_id", "")).strip()
+        job_id = str(payload.get("job_id", "")).strip()
+        if not user_id or not job_id:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "user_id and job_id are required")
+        job = self._require_knowledge_ingestion_job_service(context).cancel(
+            job_id=job_id,
+            user_id=user_id,
+        )
+        if job is None:
+            context.abort(grpc.StatusCode.NOT_FOUND, "ingestion job not found")
+        return ParseDict(job, Struct())
+
     def UploadKnowledgeFile(  # noqa: N802
         self, request: KnowledgeFileUploadRequest, context: grpc.ServicerContext,
     ) -> KnowledgeRebuildResponse:
@@ -1706,6 +1814,16 @@ class AgentServiceServicer(BaseServicer):
             context.abort(grpc.StatusCode.UNAVAILABLE, "KnowledgeLibraryService not available")
         return self._knowledge_library_service  # type: ignore[return-value]
 
+    def _require_knowledge_ingestion_job_service(
+        self,
+        context: grpc.ServicerContext,
+    ) -> KnowledgeIngestionJobService:
+        """返回单文件入库任务服务，未初始化时终止 RPC。"""
+
+        if self._knowledge_ingestion_job_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "KnowledgeIngestionJobService not available")
+        return self._knowledge_ingestion_job_service  # type: ignore[return-value]
+
     def _require_git_service(self, context: grpc.ServicerContext) -> GitService:
         """返回注入的 GitService,未就绪时终止 RPC。"""
 
@@ -1719,6 +1837,13 @@ class AgentServiceServicer(BaseServicer):
         if self._favorite_service is None:
             context.abort(grpc.StatusCode.UNAVAILABLE, "FavoriteService not available")
         return self._favorite_service  # type: ignore[return-value]
+
+    def _require_privacy_service(self, context: grpc.ServicerContext) -> PrivacyService:
+        """返回注入的 PrivacyService,未就绪时终止 RPC。"""
+
+        if self._privacy_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "PrivacyService not available")
+        return self._privacy_service  # type: ignore[return-value]
 
     def _require_feedback_service(self, context: grpc.ServicerContext) -> FeedbackService:
         """返回注入的 FeedbackService,未就绪时终止 RPC。"""
@@ -1943,6 +2068,19 @@ def _favorite_to_response(favorite: Any) -> FavoriteEntryResponse:
         target_type=str(favorite.target_type),
         target_id=str(favorite.target_id),
         created_at=_to_iso(favorite.created_at),
+    )
+
+
+def _privacy_to_response(record: Any) -> PrivacyEntryResponse:
+    """将隐私 DTO 转换为 gRPC 响应。"""
+
+    return PrivacyEntryResponse(
+        privacy_id=str(record.privacy_id),
+        user_id=str(record.user_id),
+        library_id=str(record.library_id),
+        target_type=str(record.target_type),
+        target_id=str(record.target_id),
+        created_at=_to_iso(record.created_at),
     )
 
 

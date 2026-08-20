@@ -11,6 +11,7 @@ import { computed, ref } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import { useSubmenuIntent } from '@/components/editor_workspace/submenuIntent'
 import { useFavoritesStore } from '@/stores/favorites'
+import { usePrivacyStore } from '@/stores/privacy'
 import { useSettingsStore } from '@/stores/settings'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 
@@ -18,6 +19,7 @@ defineOptions({ name: 'FileContextMenu' })
 
 const settingsStore = useSettingsStore()
 const favoritesStore = useFavoritesStore()
+const privacyStore = usePrivacyStore()
 
 const props = withDefaults(defineProps<{
   node: KnowledgeFileNode | null
@@ -40,12 +42,12 @@ const emit = defineEmits<{
   rename: []
   showInFolder: []
   openDefault: []
-  showInGraph: []
   extractGraph: []
   askAgent: []
   htmlVisualize: []
   ingest: []
   toggleFavorite: []
+  togglePrivacy: []
   toggleIgnore: []
   delete: []
 }>()
@@ -64,6 +66,19 @@ const canUseSingleOnlyAction = computed(() => !isBatchSelection.value && hasTarg
 const isTargetFavorite = computed(() => (
   props.node ? favoritesStore.isFavorite('knowledge_path', props.node.path, favoritesStore.activeLibraryId()) : false
 ))
+const isTargetPrivate = computed(() => (
+  props.node ? privacyStore.isPrivate('knowledge_path', props.node.path, privacyStore.activeLibraryId()) : false
+))
+const ingestionActionLabel = computed(() => {
+  if (props.node?.isDir) return '灌库文件夹'
+  const prefix = props.node?.indexStatus === 'indexed' ? '重新灌库' : '灌库'
+  return `${prefix}文件`
+})
+const graphActionLabel = computed(() => {
+  if (props.node?.isDir) return '文件夹抽取图谱'
+  const prefix = props.node?.graphStatus === 'graphed' ? '重新抽取' : '抽取'
+  return `${prefix}图谱`
+})
 
 function setSubmenuRef(key: string, element: unknown) {
   submenuRefs[key] = element instanceof HTMLElement ? element : null
@@ -133,10 +148,13 @@ defineExpose({
     </button>
     <button type="button" :disabled="!canUseSingleOnlyAction" @click="emit('openDefault')"><IcIcon name="open-in-new" :size="15" /><span>用默认程序打开</span></button>
     <hr class="context-separator" />
-    <button type="button" :disabled="!canUseSingleOnlyAction" @click="emit('showInGraph')"><IcIcon name="graph" :size="15" /><span>在图谱中显示</span><kbd>Ctrl+G</kbd></button>
+    <button type="button" :disabled="!node" @click="emit('ingest')">
+      <IcIcon name="ingest" :size="15" />
+      <span>{{ ingestionActionLabel }}</span>
+    </button>
     <button type="button" :disabled="!node" @click="emit('extractGraph')">
       <IcIcon name="hub" :size="15" />
-      <span>{{ node?.isDir ? '文件夹抽取图谱' : '文件抽取图谱' }}</span>
+      <span>{{ graphActionLabel }}</span>
     </button>
     <hr class="context-separator" />
     <button
@@ -148,14 +166,13 @@ defineExpose({
       <IcIcon name="code" :size="15" />
       <span>HTML可视化</span>
     </button>
-    <hr class="context-separator" />
-    <button type="button" :disabled="!node" @click="emit('ingest')">
-      <IcIcon name="ingest" :size="15" />
-      <span>{{ node?.isDir ? '灌库文件夹' : '灌库文件' }}</span>
-    </button>
     <button type="button" :disabled="!node" @click="emit('toggleFavorite')">
       <IcIcon name="star" :size="15" />
       <span>{{ isTargetFavorite ? '取消收藏' : '收藏' }}</span>
+    </button>
+    <button type="button" :disabled="!node" @click="emit('togglePrivacy')">
+      <IcIcon name="visibility-off" :size="15" />
+      <span>{{ isTargetPrivate ? '取消隐私化' : '隐私化' }}</span>
     </button>
     <button type="button" :disabled="!node" @click="emit('toggleIgnore')">
       <IcIcon name="block" :size="15" />

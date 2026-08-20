@@ -14,7 +14,9 @@ from agent_service.models.agent_queue import AgentQueueSettingsRecord, AgentQueu
 from agent_service.models.activity import ActivityEventRecord
 from agent_service.models.automation import AutomationRunRecord, AutomationTaskRecord
 from agent_service.models.favorite import FavoriteRecord
+from agent_service.models.privacy import PrivacyRecord
 from agent_service.models.feedback import FeedbackRecord
+from agent_service.models.knowledge_ingestion_job import KnowledgeIngestionJobRecord
 from agent_service.models.message import MessageBase, MessageRecord
 from agent_service.models.session import SessionBase, SessionRecord
 from agent_service.models.smart_form import SmartFormCellRecord, SmartFormColumnRecord, SmartFormRecord, SmartFormRowRecord
@@ -32,7 +34,9 @@ __all__ = [
     "AutomationRunRecord",
     "AutomationTaskRecord",
     "FavoriteRecord",
+    "PrivacyRecord",
     "FeedbackRecord",
+    "KnowledgeIngestionJobRecord",
     "MessageBase",
     "MessageRecord",
     "SessionBase",

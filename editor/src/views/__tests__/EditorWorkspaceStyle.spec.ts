@@ -14,4 +14,10 @@ describe('EditorWorkspace shell styling', () => {
     expect(editorWorkspaceSource).not.toContain('--workspace-card-shadow-dark')
     expect(editorWorkspaceSource).not.toContain('15px 15px 30px')
   })
+
+  it('keeps the editor sidebar structurally independent from the Agent sidebar', () => {
+    expect(editorWorkspaceSource).toContain('<aside class="editor-sidebar-content"')
+    expect(editorWorkspaceSource).toContain('<EditorPane v-if="editorSidebarVisible" sidebar')
+    expect(editorWorkspaceSource).toContain('class="agent-col"')
+  })
 })

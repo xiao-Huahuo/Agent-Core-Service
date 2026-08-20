@@ -6,8 +6,9 @@
   DOCX-derived HTML, and unsupported binary files in the editor center pane.
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import DOMPurify from 'dompurify'
+import mpegts from 'mpegts.js'
 
 import ImagePreviewer from '@/components/common/ImagePreviewer.vue'
 import { useImagePreviewer } from '@/components/common/useImagePreviewer'
@@ -20,6 +21,8 @@ const props = defineProps<{
 }>()
 
 const imagePreviewer = useImagePreviewer()
+const videoElement = ref<HTMLVideoElement | null>(null)
+let transportStreamPlayer: ReturnType<typeof mpegts.createPlayer> | null = null
 
 const safeHtml = computed(() => DOMPurify.sanitize(props.preview?.html ?? '', {
   ALLOWED_ATTR: ['src', 'alt', 'class', 'href', 'target', 'rel', 'width', 'height'],
@@ -41,6 +44,41 @@ const previewSource = computed(() => {
   }
   return props.preview.data_url ?? ''
 })
+
+function destroyTransportStreamPlayer() {
+  if (!transportStreamPlayer) return
+  transportStreamPlayer.unload()
+  transportStreamPlayer.detachMediaElement()
+  transportStreamPlayer.destroy()
+  transportStreamPlayer = null
+}
+
+async function syncVideoPlayer() {
+  destroyTransportStreamPlayer()
+  if (props.preview?.kind !== 'video' || props.preview.video_container !== 'mpegts') return
+  await nextTick()
+  if (!videoElement.value || !previewSource.value || !mpegts.isSupported()) return
+  transportStreamPlayer = mpegts.createPlayer({
+    type: 'mpegts',
+    isLive: false,
+    url: previewSource.value,
+    filesize: props.preview.size,
+  }, {
+    lazyLoad: true,
+    autoCleanupSourceBuffer: true,
+    rangeLoadZeroStart: true,
+  })
+  transportStreamPlayer.attachMediaElement(videoElement.value)
+  transportStreamPlayer.load()
+}
+
+watch(
+  () => [props.preview?.path, props.preview?.video_container, props.preview?.size],
+  syncVideoPlayer,
+  { immediate: true, flush: 'post' },
+)
+
+onBeforeUnmount(destroyTransportStreamPlayer)
 
 function maxColumns(rows: string[][]): number {
   return rows.reduce((max, row) => Math.max(max, row.length), 0)
@@ -85,12 +123,17 @@ function handleDocumentClick(event: MouseEvent) {
 
     <video
       v-else-if="preview.kind === 'video'"
+      ref="videoElement"
       class="video-preview"
       controls
       preload="metadata"
       playsinline
     >
-      <source :src="previewSource" :type="preview.mime_type" />
+      <source
+        v-if="preview.video_container !== 'mpegts'"
+        :src="previewSource"
+        :type="preview.mime_type"
+      />
       当前浏览器无法播放此视频。
     </video>
 

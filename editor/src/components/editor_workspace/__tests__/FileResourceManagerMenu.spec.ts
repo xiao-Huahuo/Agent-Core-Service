@@ -19,11 +19,16 @@ describe('FileResourceManager menu integration', () => {
 
   it('keeps the shared context menu wired to the resource manager', () => {
     expect(resourceManagerSource).toContain('<FileContextMenu')
+    expect(resourceManagerSource).toContain('@toggle-privacy="togglePrivacyFromMenu"')
   })
 
   it('uses the animated folder artwork only for medium and large directory tiles', () => {
     expect(resourceManagerSource).toContain("import AnimatedFolderIcon from './AnimatedFolderIcon.vue'")
     expect(resourceManagerSource).toContain("node.isDir && (viewMode === 'medium' || viewMode === 'large')")
     expect(resourceManagerSource).toContain('<AnimatedFolderIcon')
+  })
+
+  it('opens a double-clicked file in the independent editor sidebar', () => {
+    expect(resourceManagerSource).toContain('void workspaceStore.openEditorSidebar(node)')
   })
 })

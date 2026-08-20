@@ -142,13 +142,15 @@ def test_cleaner_extracts_docx_and_xlsx_sections(tmp_path: Path) -> None:
             """,
         )
     cleaner = MultimodalDocumentCleaner()
+    docx_progress: list[dict[str, object]] = []
 
-    docx_doc = cleaner.clean(source_path=docx_path, title="demo")
+    docx_doc = cleaner.clean(source_path=docx_path, title="demo", progress_callback=docx_progress.append)
     xlsx_doc = cleaner.clean(source_path=xlsx_path, title="book")
 
     assert docx_doc.source_type == "docx"
     assert any("项目说明段落" in section.content for section in docx_doc.sections)
     assert any("值1 | 值2" in section.content for section in docx_doc.sections)
+    assert any(event.get("stage") == "document_blocks" and event.get("stage_total") == 2 for event in docx_progress)
     assert xlsx_doc.source_type == "spreadsheet"
     assert "璃月 | 95" in xlsx_doc.sections[0].content
 

@@ -131,12 +131,12 @@ watch(
           class="source-file-tile"
           type="button"
           :disabled="!item.source_exists || !item.source_path"
-          :title="item.source_exists ? '在编辑区打开真实文件' : '真实文件已缺失'"
+          :title="item.source_exists ? '在编辑区侧边栏打开真实文件' : '真实文件已缺失'"
           @click="emit('openFile', item)"
         >
           <img class="source-file-icon" :src="fileIcon.src" :alt="fileIcon.alt" />
           <strong>{{ sourceName }}</strong>
-          <small>{{ item.source_exists ? '点击在编辑区打开' : '真实文件已缺失' }}</small>
+          <small>{{ item.source_exists ? '点击打开编辑区侧边栏' : '真实文件已缺失' }}</small>
         </button>
       </div>
 

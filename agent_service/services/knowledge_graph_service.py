@@ -17,10 +17,10 @@ import json
 import logging
 import re
 import threading
-import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from langchain_core.messages import HumanMessage, SystemMessage
 import numpy as np
@@ -80,6 +80,8 @@ RELATION_TYPES = {
     "modifies",
 }
 WEAK_RELATION_TYPES = {"mentions", "related_to"}
+GRAPH_BATCH_MAX_CHARS = 12_000
+GRAPH_BATCH_MAX_SECTIONS = 4
 
 
 class KnowledgeGraphExtractor(Protocol):
@@ -168,6 +170,55 @@ class LLMKnowledgeGraphExtractor:
         self._record_token_usage(response=response, document=document, section=section)
         return self._parse_json_object(str(response.content or ""))
 
+    def extract_batch(
+        self,
+        *,
+        document: StructuredKnowledgeDocument,
+        sections: list[StructuredKnowledgeSection],
+    ) -> dict[str, dict[str, Any]]:
+        """一次请求抽取多个短章节，并按 section_id 返回各自结果。"""
+
+        results = {
+            section.section_id: {"entities": [], "relations": []}
+            for section in sections
+        }
+        non_empty_sections = [section for section in sections if section.content.strip()]
+        if not non_empty_sections:
+            return results
+        if len(non_empty_sections) == 1:
+            section = non_empty_sections[0]
+            results[section.section_id] = self.extract(document=document, section=section)
+            return results
+
+        response = self.task_scheduler.invoke_chat(
+            task_type=BACKGROUND_FACT_RESOLUTION_TASK,
+            model_tier=SMALL_MODEL_TIER,
+            messages=[
+                SystemMessage(content=self._batch_system_prompt()),
+                HumanMessage(content=self._batch_human_prompt(document=document, sections=non_empty_sections)),
+            ],
+            model_name=self._value("model_name"),
+            api_key=self._value("api_key"),
+            base_url=self._value("base_url"),
+            small_model_name=self._value("small_model_name"),
+            small_api_key=self._value("small_api_key"),
+            small_base_url=self._value("small_base_url"),
+        )
+        self._record_token_usage(response=response, document=document, section=non_empty_sections[0])
+        payload = self._parse_json_object(str(response.content or ""))
+        valid_ids = set(results)
+        for item in payload.get("sections", []):
+            if not isinstance(item, dict):
+                continue
+            section_id = str(item.get("section_id", ""))
+            if section_id not in valid_ids:
+                continue
+            results[section_id] = {
+                "entities": item.get("entities", []),
+                "relations": item.get("relations", []),
+            }
+        return results
+
     def _record_token_usage(
         self,
         *,
@@ -203,6 +254,33 @@ class LLMKnowledgeGraphExtractor:
             "关系两端必须来自 entities.name。每条关系必须有 evidence, evidence 必须是原文中的短句或短语。"
             "不确定就不要抽。输出结构固定为 {\"entities\":[],\"relations\":[]}。"
         )
+
+    @classmethod
+    def _batch_system_prompt(cls) -> str:
+        """返回保留章节归属的批量实体关系抽取提示词。"""
+
+        return cls._system_prompt().replace(
+            '输出结构固定为 {"entities":[],"relations":[]}。',
+            "输入包含多个章节。必须逐章抽取并保持 section_id 不变，"
+            '输出结构固定为 {"sections":[{"section_id":"...","entities":[],"relations":[]}]}。',
+        )
+
+    @staticmethod
+    def _batch_human_prompt(
+        *,
+        document: StructuredKnowledgeDocument,
+        sections: list[StructuredKnowledgeSection],
+    ) -> str:
+        """构造多个短章节共用的一次模型输入。"""
+
+        blocks = []
+        for section in sections:
+            blocks.append(
+                f"section_id: {section.section_id}\n"
+                f"标题路径: {' / '.join(section.title_path)}\n"
+                f"正文:\n{section.content.strip()}"
+            )
+        return f"文档标题: {document.title}\n\n" + "\n\n--- 章节分隔 ---\n\n".join(blocks)
 
     @staticmethod
     def _human_prompt(
@@ -1608,6 +1686,72 @@ _graph_extraction_progress: dict[tuple[str, str], dict[str, Any]] = {}
 _graph_progress_lock = threading.Lock()
 
 
+class GraphExtractionCancelled(RuntimeError):
+    """表示用户在章节批次安全检查点取消了图谱抽取。"""
+
+
+def _batch_graph_sections(
+    sections: list[StructuredKnowledgeSection],
+    *,
+    max_chars: int = GRAPH_BATCH_MAX_CHARS,
+    max_sections: int = GRAPH_BATCH_MAX_SECTIONS,
+) -> list[list[StructuredKnowledgeSection]]:
+    """按字符数和章节数合并相邻短章节，长章节保持独立。"""
+
+    batches: list[list[StructuredKnowledgeSection]] = []
+    current: list[StructuredKnowledgeSection] = []
+    current_chars = 0
+    for section in sections:
+        section_chars = len(section.content.strip())
+        exceeds_limit = current and (
+            len(current) >= max_sections or current_chars + section_chars > max_chars
+        )
+        if exceeds_limit:
+            batches.append(current)
+            current = []
+            current_chars = 0
+        current.append(section)
+        current_chars += section_chars
+    if current:
+        batches.append(current)
+    return batches
+
+
+def _extract_graph_section_payloads(
+    *,
+    extractor: LLMKnowledgeGraphExtractor,
+    document: StructuredKnowledgeDocument,
+    max_workers: int,
+    cancel_event: threading.Event | None,
+    on_progress: Callable[[int, int, int, int], None],
+) -> dict[str, dict[str, Any]]:
+    """并发抽取章节批次，并以单调完成计数报告前端进度。"""
+
+    batches = _batch_graph_sections(document.sections)
+    if not batches:
+        return {}
+    payloads: dict[str, dict[str, Any]] = {}
+    completed_sections = 0
+    completed_batches = 0
+    worker_count = max(1, min(max_workers, len(batches)))
+    with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="graph-extract") as executor:
+        futures = {
+            executor.submit(extractor.extract_batch, document=document, sections=batch): batch
+            for batch in batches
+        }
+        for future in as_completed(futures):
+            if cancel_event is not None and cancel_event.is_set():
+                for pending in futures:
+                    pending.cancel()
+                raise GraphExtractionCancelled("图谱抽取已取消")
+            batch = futures[future]
+            payloads.update(future.result())
+            completed_sections += len(batch)
+            completed_batches += 1
+            on_progress(completed_sections, len(document.sections), completed_batches, len(batches))
+    return payloads
+
+
 def get_graph_extraction_progress(user_id: str, library_id: str) -> dict[str, Any]:
     """返回给定用户/知识库的图谱抽取进度。"""
     with _graph_progress_lock:
@@ -1741,9 +1885,10 @@ def _run_graph_extraction(
     user_llm_config: dict[str, Any] | None = None,
     target_source_path: Path | None = None,
     target_is_dir: bool = False,
+    force: bool = False,
     cancel_event: threading.Event | None = None,
 ) -> None:
-    """在后台线程中执行图谱抽取，并在文档/章节安全检查点响应取消。"""
+    """在后台线程中执行图谱抽取；force 用于显式重抽已是最新状态的目标。"""
     try:
         llm_config = _build_llm_config(config, user_llm_config=user_llm_config)
         if not llm_config.get("small_api_key") or not llm_config.get("small_model_name"):
@@ -1792,7 +1937,7 @@ def _run_graph_extraction(
                 document_id=doc_data.document_id,
                 source_hash=doc_data.source_hash,
             )
-            if is_current:
+            if is_current and not force:
                 skipped_count += 1
                 print(f"  SKIP {doc_data.title or path.name} [hash not changed]")
             else:
@@ -1846,12 +1991,18 @@ def _run_graph_extraction(
             path = pending_paths[di]
             document = KnowledgeGraphService._load_document(path)
 
-            docs[di]["status"] = "processing"
+            _set_graph_doc_progress(
+                docs[di],
+                status="processing",
+                progress=2,
+                stage="preparing",
+                stage_label="正在准备文档",
+            )
             _update_graph_progress(
                 user_id, library_id,
                 status="running",
                 total=need_extract,
-                current=doc_index + 1,
+                current=doc_index,
                 message=f"处理文档 {doc_index + 1}/{need_extract}: {document.title}",
                 docs=docs,
             )
@@ -1865,28 +2016,78 @@ def _run_graph_extraction(
                 svc._write_document_node(user_id=user_id, library_id=library_id, document=document)
                 entities_by_key: dict[tuple[str, str], EntityCandidate] = {}
                 relations: list[tuple[RelationCandidate, StructuredKnowledgeSection]] = []
-                for si, section in enumerate(document.sections):
-                    if cancel_event is not None and cancel_event.is_set():
-                        _update_graph_progress(user_id, library_id, status="cancelled", message="图谱抽取已取消", docs=docs)
-                        return
-                    docs[di]["progress"] = int((si + 1) / len(document.sections) * 100)
+                section_total = len(document.sections)
+                if section_total:
+                    _set_graph_doc_progress(
+                        docs[di],
+                        status="processing",
+                        progress=5,
+                        stage="extract_sections",
+                        stage_label="LLM 并发语义抽取",
+                        stage_current=0,
+                        stage_total=section_total,
+                    )
                     _update_graph_progress(
                         user_id, library_id,
                         status="running",
                         total=need_extract,
                         current=doc_index,
-                        message=f"处理文档 {doc_index + 1}/{need_extract} 第 {si + 1}/{len(document.sections)} 段",
+                        message=f"准备并发抽取文档 {doc_index + 1}/{need_extract} 的 {section_total} 个章节",
                         docs=docs,
                     )
+
+                def report_section_progress(
+                    completed_sections: int,
+                    total_sections: int,
+                    completed_batches: int,
+                    total_batches: int,
+                ) -> None:
+                    """把乱序完成的并发批次汇总为单调章节进度。"""
+
+                    _set_graph_doc_progress(
+                        docs[di],
+                        status="processing",
+                        progress=5 + int(completed_sections / total_sections * 70),
+                        stage="extract_sections",
+                        stage_label="LLM 并发语义抽取",
+                        stage_current=completed_sections,
+                        stage_total=total_sections,
+                        message=f"已完成 {completed_batches}/{total_batches} 批请求",
+                    )
+                    _update_graph_progress(
+                        user_id, library_id,
+                        status="running",
+                        total=need_extract,
+                        current=doc_index,
+                        message=(
+                            f"文档 {doc_index + 1}/{need_extract} 已抽取 "
+                            f"{completed_sections}/{total_sections} 个章节，"
+                            f"完成 {completed_batches}/{total_batches} 批请求"
+                        ),
+                        docs=docs,
+                    )
+
+                try:
+                    section_payloads = _extract_graph_section_payloads(
+                        extractor=extractor,
+                        document=document,
+                        max_workers=config.task_schedule.background_fact_worker_count,
+                        cancel_event=cancel_event,
+                        on_progress=report_section_progress,
+                    )
+                except GraphExtractionCancelled:
+                    _update_graph_progress(
+                        user_id, library_id,
+                        status="cancelled",
+                        message="图谱抽取已取消",
+                        docs=docs,
+                    )
+                    return
+
+                for si, section in enumerate(document.sections):
                     section_title = section.title_path[-1] if section.title_path else f"section_{si}"
-                    print(f"    |-- section {si+1}/{len(document.sections)}: {section_title[:50]} -> LLM...", end="")
-                    payload = extractor.extract(document=document, section=section)
-                    if cancel_event is not None:
-                        if cancel_event.wait(0.5):
-                            _update_graph_progress(user_id, library_id, status="cancelled", message="图谱抽取已取消", docs=docs)
-                            return
-                    else:
-                        time.sleep(0.5)  # 限流: 每段间等待 500ms 避免 429
+                    print(f"    |-- section {si+1}/{section_total}: {section_title[:50]}", end="")
+                    payload = section_payloads.get(section.section_id, {"entities": [], "relations": []})
                     section_entities = svc._sanitize_entities(payload.get("entities"))
                     for entity in section_entities:
                         entities_by_key[(svc._normalize_label(entity.name), entity.entity_type)] = entity
@@ -1909,6 +2110,21 @@ def _run_graph_extraction(
 
                 # 语义去重: 合并不同 section 中同名但不同表述的实体
                 if isinstance(extractor, LLMKnowledgeGraphExtractor) and entities_by_key:
+                    _set_graph_doc_progress(
+                        docs[di],
+                        status="processing",
+                        progress=80,
+                        stage="deduplicate_document",
+                        stage_label="文档内实体去重",
+                    )
+                    _update_graph_progress(
+                        user_id, library_id,
+                        status="running",
+                        total=need_extract,
+                        current=doc_index,
+                        message=f"正在进行文档内实体去重: {document.title}",
+                        docs=docs,
+                    )
                     entity_list = list(entities_by_key.values())
                     dedup_result = extractor.deduplicate_entities(entity_list, document=document)
                     merged_entities = dedup_result.get("entities", entity_list)
@@ -1931,6 +2147,21 @@ def _run_graph_extraction(
 
                 # 库级增量去重: embedding 检索 + 小模型裁决
                 if isinstance(extractor, LLMKnowledgeGraphExtractor) and entities_by_key:
+                    _set_graph_doc_progress(
+                        docs[di],
+                        status="processing",
+                        progress=88,
+                        stage="deduplicate_library",
+                        stage_label="知识库实体去重",
+                    )
+                    _update_graph_progress(
+                        user_id, library_id,
+                        status="running",
+                        total=need_extract,
+                        current=doc_index,
+                        message=f"正在进行知识库实体去重: {document.title}",
+                        docs=docs,
+                    )
                     entity_list = list(entities_by_key.values())
                     cross_mapping = svc._deduplicate_entities_incremental(
                         user_id=user_id, library_id=library_id,
@@ -1957,6 +2188,21 @@ def _run_graph_extraction(
                             remapped2.append((relation, section))
                         relations = remapped2
 
+                _set_graph_doc_progress(
+                    docs[di],
+                    status="processing",
+                    progress=96,
+                    stage="write_graph",
+                    stage_label="正在写入知识图谱",
+                )
+                _update_graph_progress(
+                    user_id, library_id,
+                    status="running",
+                    total=need_extract,
+                    current=doc_index,
+                    message=f"正在写入知识图谱: {document.title}",
+                    docs=docs,
+                )
                 written_entities, written_relations = svc._write_graph(
                     user_id=user_id,
                     library_id=library_id,
@@ -1977,20 +2223,27 @@ def _run_graph_extraction(
                     completed_count += 1
                     total_entities += written_entities
                     total_relations += written_relations
-                    docs[di]["status"] = "done"
-                    docs[di]["progress"] = 100
+                    _set_graph_doc_progress(
+                        docs[di], status="done", progress=100,
+                        stage="completed", stage_label="抽取完成",
+                    )
                     print(f"    ++ DONE: {written_entities} entities, {written_relations} relations")
                 else:
                     skipped_count += 1
-                    docs[di]["status"] = "skipped"
-                    docs[di]["progress"] = 100
+                    _set_graph_doc_progress(
+                        docs[di], status="skipped", progress=100,
+                        stage="skipped", stage_label="没有可写入的图谱内容",
+                    )
                     print(f"    -- SKIP: no valid entities/relations")
 
             except Exception as exc:
                 exc_msg = str(exc)
                 failed_count += 1
-                docs[di]["status"] = "failed"
-                docs[di]["progress"] = 100
+                _set_graph_doc_progress(
+                    docs[di], status="failed", progress=100,
+                    stage="failed", stage_label="图谱抽取失败",
+                    message=exc_msg[:1000],
+                )
                 logger.warning("知识图谱抽取失败 | document=%s error=%s", document.document_id, exc_msg)
                 svc._write_status(
                     user_id=user_id,
@@ -2014,13 +2267,6 @@ def _run_graph_extraction(
                 message=f"处理完成 {doc_index}/{need_extract}: {document.title}",
                 docs=docs,
             )
-            # 限流: 每文档间等待 1s,让 API 有喘息时间
-            if cancel_event is not None:
-                if cancel_event.wait(1.0):
-                    _update_graph_progress(user_id, library_id, status="cancelled", message="图谱抽取已取消", docs=docs)
-                    return
-            else:
-                time.sleep(1.0)
 
         if target_source_path is None:
             svc.delete_graph_except_documents(
@@ -2121,7 +2367,36 @@ def _graph_progress_doc_entry(
         "status": status,
         "progress": progress,
         "total_sections": total_sections,
+        "stage": "waiting",
+        "stage_label": "等待图谱抽取",
+        "stage_current": 0,
+        "stage_total": total_sections,
+        "message": "",
     }
+
+
+def _set_graph_doc_progress(
+    entry: dict[str, Any],
+    *,
+    status: str,
+    progress: int,
+    stage: str,
+    stage_label: str,
+    stage_current: int = 0,
+    stage_total: int = 0,
+    message: str = "",
+) -> None:
+    """Update one graph document row with its real pipeline stage and counters."""
+
+    entry.update({
+        "status": status,
+        "progress": max(0, min(100, progress)),
+        "stage": stage,
+        "stage_label": stage_label,
+        "stage_current": stage_current,
+        "stage_total": stage_total,
+        "message": message,
+    })
 
 
 def _graph_progress_relative_path(

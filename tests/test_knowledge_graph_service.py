@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -11,9 +13,14 @@ from sqlmodel import Session, create_engine, select
 from agent_service.core.agent_config import AgentConfig
 from agent_service.models.knowledge_graph import KnowledgeGraphDocumentStatus
 from agent_service.services.knowledge_graph_service import (
+    LLMKnowledgeGraphExtractor,
     KnowledgeGraphService,
     _build_llm_config,
+    _batch_graph_sections,
+    _extract_graph_section_payloads,
     _graph_progress_doc_entry,
+    _run_graph_extraction,
+    get_graph_extraction_progress,
 )
 from agent_service.services.memory.rag.frontmatter_document import (
     StructuredKnowledgeDocument,
@@ -94,6 +101,111 @@ class SimilarityTextExtractor:
             ],
             "relations": [],
         }
+
+
+def _section(section_id: str, content: str) -> StructuredKnowledgeSection:
+    """构造批量抽取测试使用的最小章节。"""
+
+    return StructuredKnowledgeSection(
+        section_id=section_id,
+        heading=section_id,
+        title_path=[section_id],
+        content=content,
+        start_char=0,
+        end_char=len(content),
+    )
+
+
+def test_graph_section_batches_combine_short_sections_without_reordering() -> None:
+    """短章节应在字符与章节上限内合批，且保持原文顺序。"""
+
+    sections = [_section(f"sec_{index}", "x" * 10) for index in range(5)]
+
+    batches = _batch_graph_sections(sections, max_chars=25, max_sections=2)
+
+    assert [[section.section_id for section in batch] for batch in batches] == [
+        ["sec_0", "sec_1"],
+        ["sec_2", "sec_3"],
+        ["sec_4"],
+    ]
+
+
+def test_graph_batch_extraction_keeps_results_attached_to_sections(tmp_path: Path) -> None:
+    """一次批量 LLM 响应必须按 section_id 还原，避免并发完成顺序污染证据归属。"""
+
+    from unittest.mock import MagicMock
+
+    response = MagicMock()
+    response.content = json.dumps({
+        "sections": [
+            {"section_id": "sec_b", "entities": [{"name": "B"}], "relations": []},
+            {"section_id": "sec_a", "entities": [{"name": "A"}], "relations": []},
+        ]
+    })
+    scheduler = MagicMock()
+    scheduler.invoke_chat.return_value = response
+    config = AgentConfig.load_config(
+        {
+            "model": {"model_name": "mock-model", "api_key": "mock-key"},
+            "storage": {"project_root": str(tmp_path), "base_data_dir": str(tmp_path / "runtime")},
+        },
+        load_env=False,
+        load_dotenv=False,
+        ensure_models=False,
+    )
+    extractor = LLMKnowledgeGraphExtractor(config=config, task_scheduler=scheduler)
+    sections = [_section("sec_a", "A text"), _section("sec_b", "B text")]
+    document = StructuredKnowledgeDocument(
+        document_id="doc_batch", source_type="text", source_path=str(tmp_path / "batch.txt"),
+        source_uri=str(tmp_path / "batch.txt"), source_hash="batch-hash", title="batch",
+        summary="", tags=[], authority=0.7, valid_from=None, valid_until=None,
+        metadata={}, sections=sections,
+    )
+
+    result = extractor.extract_batch(document=document, sections=sections)
+
+    assert result["sec_a"]["entities"][0]["name"] == "A"
+    assert result["sec_b"]["entities"][0]["name"] == "B"
+    assert scheduler.invoke_chat.call_count == 1
+
+
+def test_concurrent_graph_progress_is_monotonic_when_batches_finish_out_of_order(tmp_path: Path) -> None:
+    """并发批次乱序结束时，前端使用的已完成章节计数仍必须单调递增。"""
+
+    class OutOfOrderBatchExtractor:
+        """让后提交的批次先完成，以复现真实 API 延迟差异。"""
+
+        def extract_batch(
+            self,
+            *,
+            document: StructuredKnowledgeDocument,
+            sections: list[StructuredKnowledgeSection],
+        ) -> dict[str, dict[str, Any]]:
+            del document
+            time.sleep(0.05 if sections[0].section_id == "sec_0" else 0.01)
+            return {section.section_id: {"entities": [], "relations": []} for section in sections}
+
+    sections = [_section(f"sec_{index}", "x" * 4_000) for index in range(5)]
+    document = StructuredKnowledgeDocument(
+        document_id="doc_concurrent", source_type="text", source_path=str(tmp_path / "concurrent.txt"),
+        source_uri=str(tmp_path / "concurrent.txt"), source_hash="concurrent-hash", title="concurrent",
+        summary="", tags=[], authority=0.7, valid_from=None, valid_until=None,
+        metadata={}, sections=sections,
+    )
+    progress_events: list[tuple[int, int, int, int]] = []
+
+    payloads = _extract_graph_section_payloads(
+        extractor=OutOfOrderBatchExtractor(),  # type: ignore[arg-type]
+        document=document,
+        max_workers=2,
+        cancel_event=None,
+        on_progress=lambda *event: progress_events.append(event),
+    )
+
+    completed_counts = [event[0] for event in progress_events]
+    assert completed_counts == sorted(completed_counts)
+    assert completed_counts[-1] == len(sections)
+    assert set(payloads) == {section.section_id for section in sections}
 
 
 def test_graph_llm_config_inherits_large_model_when_small_model_empty(tmp_path: Path) -> None:
@@ -335,6 +447,45 @@ def test_graph_progress_doc_entry_uses_source_relative_path(tmp_path: Path) -> N
 
     assert entry["path"] == "notes/demo.md"
     assert entry["name"] == "demo"
+    assert entry["stage"] == "waiting"
+    assert entry["stage_label"] == "等待图谱抽取"
+    assert entry["stage_current"] == 0
+    assert entry["stage_total"] == 0
+
+
+def test_forced_graph_extraction_bypasses_current_hash_skip(tmp_path: Path, monkeypatch: Any) -> None:
+    """显式重新抽取必须处理当前哈希已完成的目标文档。"""
+
+    source_path = tmp_path / "knowledge" / "notes.md"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text("# notes", encoding="utf-8")
+    frontmatter_dir = tmp_path / "runtime" / "frontmatter"
+    frontmatter_dir.mkdir(parents=True)
+    document = StructuredKnowledgeDocument(
+        document_id="doc_force", source_type="markdown", source_path=str(source_path),
+        source_uri=str(source_path), source_hash="hash-current", title="notes", summary="",
+        tags=[], authority=0.7, valid_from=None, valid_until=None,
+        metadata={"relative_path": "notes.md"}, sections=[],
+    )
+    (frontmatter_dir / "notes.json").write_text(json.dumps(document.to_dict()), encoding="utf-8")
+    config = AgentConfig.load_config(
+        {
+            "model": {"model_name": "mock-model", "api_key": "mock-key"},
+            "storage": {"project_root": str(tmp_path), "base_data_dir": str(tmp_path / "runtime")},
+        },
+        load_env=False,
+        load_dotenv=False,
+        ensure_models=False,
+    )
+    monkeypatch.setattr(KnowledgeGraphService, "_is_document_current", lambda *args, **kwargs: True)
+    _run_graph_extraction(
+        config=config, user_id="force-user", library_id="force-library",
+        frontmatter_dir=frontmatter_dir, target_source_path=source_path, force=True,
+    )
+
+    progress = get_graph_extraction_progress("force-user", "force-library")
+    assert progress["total"] == 1
+    assert progress["current"] == 1
 
 
 def test_knowledge_graph_service_extracts_validated_edges(tmp_path: Path) -> None:

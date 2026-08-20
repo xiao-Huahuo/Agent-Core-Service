@@ -19,6 +19,7 @@ import {
 import { useSettingsStore } from '@/stores/settings'
 import { useGitStore } from '@/stores/git'
 import { useFavoritesStore } from '@/stores/favorites'
+import { usePrivacyStore } from '@/stores/privacy'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 import { buildRecentFileGroups, type RecentFileVisit } from '@/utils/recentFileHistory'
@@ -28,6 +29,7 @@ const isDark = computed(() => settingsStore.isDark)
 const workspaceStore = useWorkspaceStore()
 const gitStore = useGitStore()
 const favoritesStore = useFavoritesStore()
+const privacyStore = usePrivacyStore()
 const dragging = ref(false)
 const uploadPicker = ref<HTMLInputElement | null>(null)
 const contextMenu = ref<{
@@ -55,6 +57,8 @@ const treeSearchQuery = ref('')
 const treeSearchInput = ref<HTMLInputElement | null>(null)
 /** Whether normal tree mode only shows backend-persisted favorites. */
 const favoritesOnly = ref(false)
+/** Whether normal tree mode only shows backend-persisted private targets. */
+const privacyOnly = ref(false)
 const recentFileGroups = computed(() => buildRecentFileGroups(
   recentVisitSnapshot.value,
   workspaceStore.flatNodes,
@@ -120,9 +124,15 @@ const effectiveExpandedPaths = computed(() => (
 ))
 const visibleTreeNodes = computed(() => flattenVisibleNodes(displayTree.value, effectiveExpandedPaths.value))
 const displayTree = computed(() => {
+  if (!privacyStore.hasLoaded('knowledge_path')) return []
   let source = searchActive.value ? filterTreeByQuery(sortedTree.value, treeSearchQuery.value) : sortedTree.value
-  if (favoritesOnly.value) {
-    source = filterTreeByFavorites(source)
+  if (privacyOnly.value) {
+    source = filterTreeByIds(source, privacyStore.idsFor('knowledge_path'))
+  } else {
+    source = excludeTreeByIds(source, privacyStore.idsFor('knowledge_path'))
+    if (favoritesOnly.value) {
+      source = filterTreeByIds(source, favoritesStore.idsFor('knowledge_path'))
+    }
   }
   const edit = inlineEdit.value
   if (edit?.mode === 'create') {
@@ -137,14 +147,21 @@ const displayTree = computed(() => {
   return source
 })
 
-function filterTreeByFavorites(nodes: KnowledgeFileNode[]): KnowledgeFileNode[] {
-  const favoritePaths = favoritesStore.idsFor('knowledge_path')
+function filterTreeByIds(nodes: KnowledgeFileNode[], targetIds: Set<string>): KnowledgeFileNode[] {
   return nodes.flatMap((node) => {
-    const children = node.children ? filterTreeByFavorites(node.children) : []
-    if (favoritePaths.has(node.path) || children.length > 0) {
+    const children = node.children ? filterTreeByIds(node.children, targetIds) : []
+    if (targetIds.has(node.path) || children.length > 0) {
       return [{ ...node, children }]
     }
     return []
+  })
+}
+
+function excludeTreeByIds(nodes: KnowledgeFileNode[], targetIds: Set<string>): KnowledgeFileNode[] {
+  return nodes.flatMap((node) => {
+    if (targetIds.has(node.path)) return []
+    const children = node.children ? excludeTreeByIds(node.children, targetIds) : undefined
+    return [{ ...node, children }]
   })
 }
 
@@ -260,7 +277,10 @@ async function refreshFileTree() {
   treeVersion.value++
   await workspaceStore.loadKnowledgeTree()
   if (settingsStore.profile.userId) {
-    await favoritesStore.load(settingsStore.profile.userId, 'knowledge_path', favoritesStore.activeLibraryId())
+    await Promise.all([
+      favoritesStore.load(settingsStore.profile.userId, 'knowledge_path', favoritesStore.activeLibraryId()),
+      privacyStore.load(settingsStore.profile.userId, 'knowledge_path', privacyStore.activeLibraryId()),
+    ])
   }
   if (recentMode.value) {
     recentVisitSnapshot.value = workspaceStore.recentFileVisits.map((visit) => ({ ...visit }))
@@ -318,10 +338,12 @@ function toggleStatusColumns() {
     settingsStore.showIndexColumn
     && settingsStore.showGraphColumn
     && settingsStore.showFavoriteColumn
+    && settingsStore.showPrivacyColumn
   )
   settingsStore.setShowIndexColumn(nextVisible)
   settingsStore.setShowGraphColumn(nextVisible)
   settingsStore.setShowFavoriteColumn(nextVisible)
+  settingsStore.setShowPrivacyColumn(nextVisible)
 }
 
 function filesFromEvent(event: DragEvent): File[] {
@@ -541,15 +563,6 @@ function handleGlobalKeydown(event: KeyboardEvent) {
     deleteTargets.value = workspaceStore.getSelectedTreeNodes(selectedTreeNode.value)
     return
   }
-  if (hasCommandModifier && key === 'g') {
-    event.preventDefault()
-    if (selectedTreeNode.value) {
-      void showInGraphFromMenu()
-    } else {
-      workspaceStore.setMainView('graph')
-    }
-    return
-  }
   if (key === 'escape') {
     closeContextMenu()
     closeTreeSearch()
@@ -679,11 +692,6 @@ async function openWithDefaultFromMenu() {
   await window.agentEditorDesktop?.openPath?.(absolutePath)
 }
 
-function showInGraphFromMenu() {
-  closeContextMenu()
-  workspaceStore.setMainView('graph')
-}
-
 async function extractGraphFromMenu() {
   const nodes = contextTargetNodes()
   closeContextMenu()
@@ -727,6 +735,15 @@ function toggleFavoritesOnly() {
   favoritesOnly.value = !favoritesOnly.value
   if (favoritesOnly.value) {
     recentMode.value = false
+    privacyOnly.value = false
+  }
+}
+
+function togglePrivacyOnly() {
+  privacyOnly.value = !privacyOnly.value
+  if (privacyOnly.value) {
+    recentMode.value = false
+    favoritesOnly.value = false
   }
 }
 
@@ -769,6 +786,13 @@ function toggleFavoriteFromMenu() {
   closeContextMenu()
   if (!node) return
   void favoritesStore.toggle('knowledge_path', node.path)
+}
+
+function togglePrivacyFromMenu() {
+  const node = contextMenu.value.node
+  closeContextMenu()
+  if (!node) return
+  void privacyStore.toggle('knowledge_path', node.path)
 }
 
 function ignorePatternForNode(node: KnowledgeFileNode): string {
@@ -912,7 +936,10 @@ onMounted(async () => {
   window.addEventListener('keydown', handleGlobalKeydown)
   await workspaceStore.loadKnowledgeTree()
   if (settingsStore.profile.userId) {
-    await favoritesStore.load(settingsStore.profile.userId, 'knowledge_path', favoritesStore.activeLibraryId())
+    await Promise.all([
+      favoritesStore.load(settingsStore.profile.userId, 'knowledge_path', favoritesStore.activeLibraryId()),
+      privacyStore.load(settingsStore.profile.userId, 'knowledge_path', privacyStore.activeLibraryId()),
+    ])
   }
   void gitStore.refresh()
   workspaceStore.startFileWatcher()
@@ -1012,9 +1039,9 @@ onUnmounted(() => {
           <div class="header-row header-row-secondary">
             <button
               class="header-action"
-              :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn }"
+              :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn || settingsStore.showPrivacyColumn }"
               type="button"
-              :title="(settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn) ? '隐藏索引、图谱与收藏状态' : '显示索引、图谱与收藏状态'"
+              :title="(settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn || settingsStore.showPrivacyColumn) ? '隐藏索引、图谱、收藏与隐私状态' : '显示索引、图谱、收藏与隐私状态'"
               @click="toggleStatusColumns"
             >
               <IcIcon name="filter" :size="18" />
@@ -1028,6 +1055,17 @@ onUnmounted(() => {
               @click="toggleFavoritesOnly"
             >
               <IcIcon name="star" :size="18" />
+            </button>
+            <button
+              class="header-action"
+              :class="{ active: privacyOnly }"
+              type="button"
+              title="我的隐私"
+              aria-label="我的隐私"
+              :aria-pressed="privacyOnly"
+              @click="togglePrivacyOnly"
+            >
+              <IcIcon name="visibility-off" :size="18" />
             </button>
             <button
               class="header-action pill"
@@ -1168,12 +1206,12 @@ onUnmounted(() => {
       @rename="renameFromMenu"
       @show-in-folder="showInFolderFromMenu"
       @open-default="openWithDefaultFromMenu"
-      @show-in-graph="showInGraphFromMenu"
       @extract-graph="extractGraphFromMenu"
       @ask-agent="askAgentFromMenu"
       @html-visualize="htmlVisualizeFromMenu"
       @ingest="ingestFromMenu"
       @toggle-favorite="toggleFavoriteFromMenu"
+      @toggle-privacy="togglePrivacyFromMenu"
       @toggle-ignore="toggleIgnoreFromMenu"
       @delete="deleteFromMenu"
     />

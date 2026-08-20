@@ -195,11 +195,10 @@ async function startVisualization() {
   }
 }
 
-async function openSelectedFileInEditor(): Promise<void> {
+async function openSelectedFileInEditorSidebar(): Promise<void> {
   const node = workspaceStore.selectedNode
   if (!node || node.isDir) return
-  workspaceStore.setMainView('editor')
-  await workspaceStore.selectFile(node)
+  await workspaceStore.openEditorSidebar(node)
 }
 
 watch(() => workspaceStore.markdownHtmlVisualization, (visualization) => {
@@ -389,12 +388,12 @@ watch(() => workspaceStore.markdownHtmlVisualization, (visualization) => {
         <button
           class="selected-file-card"
           type="button"
-          :aria-label="`双击在编辑区打开 ${selectedDocumentName}`"
-          @dblclick="openSelectedFileInEditor"
+          :aria-label="`双击在编辑区侧边栏打开 ${selectedDocumentName}`"
+          @dblclick="openSelectedFileInEditorSidebar"
         >
           <img class="selected-file-icon" :src="selectedDocumentIcon" alt="" aria-hidden="true" />
           <span class="selected-file-card-name" :title="selectedDocumentName">{{ selectedDocumentName }}</span>
-          <span class="selected-file-card-hint">点击在编辑区打开</span>
+          <span class="selected-file-card-hint">双击打开编辑区侧边栏</span>
         </button>
       </template>
       <template v-else>

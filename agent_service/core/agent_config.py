@@ -473,7 +473,7 @@ class AgentConfig:
         global_max_concurrency: int = 6
         foreground_agent_worker_count: int = 4
         background_summary_worker_count: int = 1
-        background_fact_worker_count: int = 1
+        background_fact_worker_count: int = 3
         foreground_queue_max_size: int = 256
         background_queue_max_size: int = 256
         default_timeout_seconds: int = 120

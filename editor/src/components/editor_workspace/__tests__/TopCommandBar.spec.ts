@@ -90,6 +90,12 @@ describe('TopCommandBar knowledge-library switcher', () => {
     expect(wrapper.findAll('.actions > .search-center')).toHaveLength(1)
   })
 
+  it('does not shrink the library name when an ingestion progress bar is visible', () => {
+    const source = readFileSync(resolve(__dirname, '..', 'TopCommandBar.vue'), 'utf-8')
+
+    expect(source).toMatch(/\.brand-copy\s*\{[^}]*flex:\s*0 0 auto;/su)
+  })
+
   it('exposes the compact browser-sidebar toggle in the application top bar', async () => {
     prepareStores()
     const wrapper = mountTopCommandBar()

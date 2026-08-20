@@ -12,6 +12,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
+import PrivacyButton from '@/components/common/PrivacyButton.vue'
 import AnimatedFolderIcon from './AnimatedFolderIcon.vue'
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import {
@@ -42,6 +43,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useGitStore } from '@/stores/git'
 import { useFavoritesStore } from '@/stores/favorites'
+import { usePrivacyStore } from '@/stores/privacy'
 import type { FilePreviewPayload, KnowledgeFileNode, KnowledgeTrashEntry } from '@/types/knowledge'
 
 defineOptions({ name: 'FileResourceManager' })
@@ -49,9 +51,11 @@ defineOptions({ name: 'FileResourceManager' })
 const props = withDefaults(defineProps<{
   embeddedPicker?: boolean
   favoritesOnlyLocked?: boolean
+  privacyOnlyLocked?: boolean
 }>(), {
   embeddedPicker: false,
   favoritesOnlyLocked: false,
+  privacyOnlyLocked: false,
 })
 
 type ResourcePage = 'files' | 'trash'
@@ -63,6 +67,7 @@ const workspaceStore = useWorkspaceStore()
 const settingsStore = useSettingsStore()
 const gitStore = useGitStore()
 const favoritesStore = useFavoritesStore()
+const privacyStore = usePrivacyStore()
 const currentDir = ref('')
 const resourcePage = ref<ResourcePage>('files')
 const pageSwitchRef = ref<HTMLElement | null>(null)
@@ -75,6 +80,7 @@ const sortMenuOpen = ref(false)
 const sortKey = ref<SortKey>('name')
 const sortDirection = ref<SortDirection>('asc')
 const favoritesOnly = ref(false)
+const privacyOnly = ref(false)
 const switchingRoot = ref(false)
 const rootError = ref('')
 const dragging = ref(false)
@@ -165,20 +171,29 @@ const pathCapsuleParts = computed(() => {
 })
 
 const visibleItems = computed(() => {
+  if (!privacyStore.hasLoaded('knowledge_path')) return []
   const targetParent = currentDir.value
   const favoritePaths = favoritesStore.idsFor('knowledge_path')
+  const privatePaths = privacyStore.idsFor('knowledge_path')
   return flatNodes.value
-    .filter((node) => effectiveFavoritesOnly.value ? favoritePaths.has(node.path) : parentPath(node.path) === targetParent)
+    .filter((node) => {
+      if (effectivePrivacyOnly.value) return privatePaths.has(node.path)
+      if (privatePaths.has(node.path)) return false
+      if (effectiveFavoritesOnly.value) return favoritePaths.has(node.path)
+      return parentPath(node.path) === targetParent
+    })
     .sort(compareNodes)
 })
 const effectiveFavoritesOnly = computed(() => props.favoritesOnlyLocked || favoritesOnly.value)
+const effectivePrivacyOnly = computed(() => props.privacyOnlyLocked || privacyOnly.value)
 
 const listGridColumns = computed(() => {
   const selectionColumn = isMultiSelecting.value ? '28px ' : ''
   const indexColumn = settingsStore.showIndexColumn ? '118px' : ''
   const graphColumn = settingsStore.showGraphColumn ? '118px' : ''
   const favoriteColumn = settingsStore.showFavoriteColumn ? '64px' : ''
-  const trailingColumns = [favoriteColumn, indexColumn, graphColumn].filter(Boolean).join(' ')
+  const privacyColumn = settingsStore.showPrivacyColumn ? '78px' : ''
+  const trailingColumns = [privacyColumn, favoriteColumn, indexColumn, graphColumn].filter(Boolean).join(' ')
   return `${selectionColumn}minmax(240px, 1fr) 168px 168px 112px 96px${trailingColumns ? ` ${trailingColumns}` : ''}`
 })
 const trashGridColumns = 'minmax(220px, 1fr) minmax(260px, 1.2fr) 156px 156px 96px 96px 132px'
@@ -315,7 +330,10 @@ async function refreshResources() {
   }
   await workspaceStore.loadKnowledgeTree()
   if (settingsStore.profile.userId) {
-    await favoritesStore.load(settingsStore.profile.userId, 'knowledge_path', favoritesStore.activeLibraryId())
+    await Promise.all([
+      favoritesStore.load(settingsStore.profile.userId, 'knowledge_path', favoritesStore.activeLibraryId()),
+      privacyStore.load(settingsStore.profile.userId, 'knowledge_path', privacyStore.activeLibraryId()),
+    ])
   }
   if (!flatNodes.value.some((node) => node.path === currentDir.value) && currentDir.value) {
     navigateToDirectory('', false)
@@ -400,15 +418,24 @@ function toggleStatusColumns() {
     settingsStore.showIndexColumn
     && settingsStore.showGraphColumn
     && settingsStore.showFavoriteColumn
+    && settingsStore.showPrivacyColumn
   )
   settingsStore.setShowIndexColumn(nextVisible)
   settingsStore.setShowGraphColumn(nextVisible)
   settingsStore.setShowFavoriteColumn(nextVisible)
+  settingsStore.setShowPrivacyColumn(nextVisible)
 }
 
 function toggleFavoritesOnly() {
   if (props.favoritesOnlyLocked) return
   favoritesOnly.value = !favoritesOnly.value
+  if (favoritesOnly.value) privacyOnly.value = false
+}
+
+function togglePrivacyOnly() {
+  if (props.privacyOnlyLocked) return
+  privacyOnly.value = !privacyOnly.value
+  if (privacyOnly.value) favoritesOnly.value = false
 }
 
 function visibleRangePaths(anchorPath: string, targetPath: string): string[] {
@@ -457,8 +484,7 @@ function handleItemDblClick(node: KnowledgeFileNode) {
     void workspaceStore.selectFile(node)
     return
   }
-  workspaceStore.setMainView('editor')
-  void workspaceStore.selectFile(node)
+  void workspaceStore.openEditorSidebar(node)
 }
 
 function selectBreadcrumb(path: string) {
@@ -605,11 +631,6 @@ async function openWithDefaultFromMenu() {
   await window.agentEditorDesktop?.openPath?.(absolutePath)
 }
 
-function showInGraphFromMenu() {
-  closeContextMenu()
-  workspaceStore.setMainView('graph')
-}
-
 async function extractGraphFromMenu() {
   const nodes = contextTargetNodes()
   closeContextMenu()
@@ -653,6 +674,13 @@ function toggleFavoriteFromMenu() {
   closeContextMenu()
   if (!node) return
   void favoritesStore.toggle('knowledge_path', node.path)
+}
+
+function togglePrivacyFromMenu() {
+  const node = contextMenu.value.node
+  closeContextMenu()
+  if (!node) return
+  void privacyStore.toggle('knowledge_path', node.path)
 }
 
 function ignorePatternForNode(node: KnowledgeFileNode): string {
@@ -727,7 +755,12 @@ async function ensureSelectedPreview() {
 }
 
 async function ensureLargeImagePreviews() {
-  const images = visibleItems.value.filter((node) => isImageNode(node) && !imagePreviewUrls.value[node.path])
+  const images = visibleItems.value.filter((node) => (
+    isImageNode(node)
+    && !privacyStore.loading
+    && !privacyStore.isPrivate('knowledge_path', node.path)
+    && !imagePreviewUrls.value[node.path]
+  ))
   if (images.length === 0) {
     return
   }
@@ -836,7 +869,10 @@ async function deleteTrash(entry: KnowledgeTrashEntry) {
 onMounted(() => {
   document.addEventListener('click', closeContextMenu)
   if (settingsStore.profile.userId) {
-    void favoritesStore.load(settingsStore.profile.userId, 'knowledge_path', favoritesStore.activeLibraryId())
+    void Promise.all([
+      favoritesStore.load(settingsStore.profile.userId, 'knowledge_path', favoritesStore.activeLibraryId()),
+      privacyStore.load(settingsStore.profile.userId, 'knowledge_path', privacyStore.activeLibraryId()),
+    ])
   }
   void workspaceStore.loadKnowledgeTrash()
   void gitStore.refresh()
@@ -930,10 +966,10 @@ onUnmounted(() => {
       <button
         v-if="resourcePage === 'files'"
         class="tool-button"
-        :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn }"
+        :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn || settingsStore.showPrivacyColumn }"
         type="button"
-        :title="(settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn) ? '隐藏索引、图谱与收藏状态' : '显示索引、图谱与收藏状态'"
-        :aria-label="(settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn) ? '隐藏索引、图谱与收藏状态' : '显示索引、图谱与收藏状态'"
+        :title="(settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn || settingsStore.showPrivacyColumn) ? '隐藏索引、图谱、收藏与隐私状态' : '显示索引、图谱、收藏与隐私状态'"
+        :aria-label="(settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn || settingsStore.showPrivacyColumn) ? '隐藏索引、图谱、收藏与隐私状态' : '显示索引、图谱、收藏与隐私状态'"
         @click="toggleStatusColumns"
       >
         <IcIcon name="filter" :size="17" />
@@ -950,6 +986,19 @@ onUnmounted(() => {
         @click="toggleFavoritesOnly"
       >
         <IcIcon name="star" :size="17" />
+      </button>
+      <button
+        v-if="resourcePage === 'files'"
+        class="tool-button"
+        :class="{ active: effectivePrivacyOnly }"
+        type="button"
+        title="我的隐私"
+        aria-label="我的隐私"
+        :aria-pressed="effectivePrivacyOnly"
+        :disabled="privacyOnlyLocked"
+        @click="togglePrivacyOnly"
+      >
+        <IcIcon name="visibility-off" :size="17" />
       </button>
       <button
         v-if="resourcePage === 'files'"
@@ -1088,6 +1137,7 @@ onUnmounted(() => {
           <span>入库日期</span>
           <span>类型</span>
           <span>大小</span>
+          <span v-if="settingsStore.showPrivacyColumn">隐私状态</span>
           <span v-if="settingsStore.showFavoriteColumn">收藏</span>
           <span v-if="settingsStore.showIndexColumn">入库状态</span>
           <span v-if="settingsStore.showGraphColumn">图谱状态</span>
@@ -1124,6 +1174,9 @@ onUnmounted(() => {
           <span>{{ displayIngestedAt(node) }}</span>
           <span>{{ fileKind(node) }}</span>
           <span>{{ formatSize(nodeSize(node)) }}</span>
+          <span v-if="settingsStore.showPrivacyColumn" class="favorite-cell">
+            <PrivacyButton target-type="knowledge_path" :target-id="node.path" />
+          </span>
           <span v-if="settingsStore.showFavoriteColumn" class="favorite-cell">
             <FavoriteButton target-type="knowledge_path" :target-id="node.path" />
           </span>
@@ -1211,6 +1264,12 @@ onUnmounted(() => {
             target-type="knowledge_path"
             :target-id="node.path"
            />
+          <PrivacyButton
+            v-if="settingsStore.showPrivacyColumn"
+            class="tile-privacy"
+            target-type="knowledge_path"
+            :target-id="node.path"
+          />
            <span class="tile-art">
              <AnimatedFolderIcon
                v-if="node.isDir && (viewMode === 'medium' || viewMode === 'large')"
@@ -1218,7 +1277,7 @@ onUnmounted(() => {
                :open="workspaceStore.selectedTreePath === node.path || selectedPaths.has(node.path)"
              />
              <img
-               v-else-if="viewMode === 'large' && isImageNode(node) && imagePreviewUrls[node.path]"
+               v-else-if="viewMode === 'large' && isImageNode(node) && !privacyStore.loading && !privacyStore.isPrivate('knowledge_path', node.path) && imagePreviewUrls[node.path]"
                class="tile-image"
               :src="imagePreviewUrls[node.path]"
               :alt="node.name"
@@ -1266,12 +1325,12 @@ onUnmounted(() => {
       @rename="renameFromMenu"
       @show-in-folder="showInFolderFromMenu"
       @open-default="openWithDefaultFromMenu"
-      @show-in-graph="showInGraphFromMenu"
       @extract-graph="extractGraphFromMenu"
       @ask-agent="askAgentFromMenu"
       @html-visualize="htmlVisualizeFromMenu"
       @ingest="ingestFromMenu"
       @toggle-favorite="toggleFavoriteFromMenu"
+      @toggle-privacy="togglePrivacyFromMenu"
       @toggle-ignore="toggleIgnoreFromMenu"
       @delete="deleteFromMenu"
     />

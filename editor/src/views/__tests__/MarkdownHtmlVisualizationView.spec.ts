@@ -59,10 +59,10 @@ describe('MarkdownHtmlVisualizationView', () => {
       },
     })
 
-    expect(wrapper.get('h1').text()).toBe('MD-HTML')
-    expect(wrapper.text()).toContain('选择文件')
+    expect(wrapper.find('.visualization-page').exists()).toBe(true)
+    expect(wrapper.find('button[title="选择文件"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('高级选项')
-    expect(wrapper.text()).not.toContain('原结构模式')
+    expect(wrapper.find('.advanced-popover').exists()).toBe(false)
 
     await wrapper.get('button[aria-haspopup="menu"]').trigger('click')
 
@@ -70,9 +70,23 @@ describe('MarkdownHtmlVisualizationView', () => {
     expect(wrapper.text()).toContain('AI提炼模式')
     expect(wrapper.text()).toContain('均衡展示')
     expect(wrapper.text()).toContain('视觉层级')
-    expect(wrapper.findAll('.mode-switch button.active')).toHaveLength(1)
+    expect(wrapper.findAll('.mode-pill .mode-button.active')).toHaveLength(1)
     expect(wrapper.findAll('.preset-grid button.active')).toHaveLength(1)
     expect(wrapper.findAll('.advanced-page-tabs button.active')).toHaveLength(1)
+  })
+
+  it('opens the centered file in the editor sidebar on double click', async () => {
+    const workspaceStore = useWorkspaceStore()
+    workspaceStore.tree = [{ name: 'notes.md', path: 'notes.md', isDir: false }]
+    workspaceStore.selectedPath = 'notes.md'
+    const openEditorSidebar = vi.spyOn(workspaceStore, 'openEditorSidebar').mockResolvedValue(undefined)
+    const wrapper = mount(MarkdownHtmlVisualizationView, {
+      global: { stubs: { Teleport: true } },
+    })
+
+    await wrapper.get('.selected-file-card').trigger('dblclick')
+
+    expect(openEditorSidebar).toHaveBeenCalledWith({ name: 'notes.md', path: 'notes.md', isDir: false })
   })
 
   it('updates mode selection and custom requirement from advanced options', async () => {
@@ -87,7 +101,7 @@ describe('MarkdownHtmlVisualizationView', () => {
 
     await wrapper.get('button[aria-haspopup="menu"]').trigger('click')
 
-    const modeButtons = wrapper.findAll('.mode-switch button')
+    const modeButtons = wrapper.findAll('.mode-pill .mode-button')
     await modeButtons[1].trigger('click')
     expect(workspaceStore.markdownHtmlVisualizationMode).toBe('insight')
 

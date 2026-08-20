@@ -216,11 +216,20 @@ class FrontmatterBootstrapService:
             result=result,
         )
 
+        self._emit_stage_progress(
+            progress_callback,
+            relative_path=relative_path,
+            stage="hash",
+            stage_label="正在计算文件指纹",
+            overall_progress=2,
+        )
+
         source_hash = self._hash_file(resolved_source)
         document = self._build_document(
             source_path=resolved_source,
             source_hash=source_hash,
             knowledge_dir=source_root,
+            progress_callback=progress_callback,
         )
         output_path = self._resolve_output_path(
             source_path=resolved_source,
@@ -236,6 +245,15 @@ class FrontmatterBootstrapService:
         markdown_path.write_text(document.markdown, encoding="utf-8")
         output_payload = json.dumps(document.to_dict(), ensure_ascii=False, indent=2)
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        self._emit_stage_progress(
+            progress_callback,
+            relative_path=relative_path,
+            stage="frontmatter",
+            stage_label=f"正在写入结构化正文，共 {len(document.sections)} 个章节",
+            overall_progress=50,
+            current=len(document.sections),
+            total=len(document.sections),
+        )
         if output_path.exists() and output_path.read_text(encoding="utf-8") == output_payload:
             result.files_skipped = 1
             self._emit_progress(
@@ -294,12 +312,40 @@ class FrontmatterBootstrapService:
             payload["sections"] = sections
         progress_callback(payload)
 
+    @staticmethod
+    def _emit_stage_progress(
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        *,
+        relative_path: Path,
+        stage: str,
+        stage_label: str,
+        overall_progress: int,
+        current: int = 0,
+        total: int = 0,
+    ) -> None:
+        """发送单文件结构化阶段的可读细节与总进度。"""
+
+        if not progress_callback:
+            return
+        progress_callback({
+            "phase": "frontmatter",
+            "status": "processing",
+            "path": relative_path.as_posix(),
+            "name": relative_path.name,
+            "stage": stage,
+            "stage_label": stage_label,
+            "stage_current": current,
+            "stage_total": total,
+            "overall_progress": overall_progress,
+        })
+
     def _build_document(
         self,
         *,
         source_path: Path,
         source_hash: str,
         knowledge_dir: Path,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> StructuredKnowledgeDocument:
         """
         将单个原始知识文件转换为统一结构化文档。
@@ -313,14 +359,41 @@ class FrontmatterBootstrapService:
         title = self._resolve_title(source_path=source_path, metadata=metadata)
         if source_path.suffix.lower() == ".md":
             raw_text = self._read_text_with_fallback(source_path)
+            self._emit_stage_progress(
+                progress_callback,
+                relative_path=relative_path,
+                stage="read_text",
+                stage_label="Markdown 正文读取完成",
+                overall_progress=18,
+                current=source_path.stat().st_size,
+                total=source_path.stat().st_size,
+            )
             metadata, body_text = self._extract_frontmatter(raw_text)
             title = self._resolve_title(source_path=source_path, metadata=metadata)
             sections = self._build_sections(source_path=source_path, title=title, body_text=body_text)
+            self._emit_stage_progress(
+                progress_callback,
+                relative_path=relative_path,
+                stage="parse_sections",
+                stage_label=f"Markdown 标题解析完成，共 {len(sections)} 个章节",
+                overall_progress=42,
+                current=len(sections),
+                total=len(sections),
+            )
             source_type = self._resolve_source_type(source_path)
             extra_metadata: dict[str, Any] = {"modality": "document"}
             summary = str(metadata.get("summary") or "")
         elif source_path.suffix.lower() == ".txt" or source_path.suffix.lower() not in self.config.constants.knowledge_supported_suffixes:
             body_text = self._read_text_with_fallback(source_path)
+            self._emit_stage_progress(
+                progress_callback,
+                relative_path=relative_path,
+                stage="read_text",
+                stage_label="文本正文读取完成",
+                overall_progress=30,
+                current=source_path.stat().st_size,
+                total=source_path.stat().st_size,
+            )
             sections = self._build_sections(source_path=source_path, title=title, body_text=body_text)
             source_type = self._resolve_source_type(source_path)
             extra_metadata = {"modality": "text"}
@@ -334,6 +407,11 @@ class FrontmatterBootstrapService:
                 title=self._resolve_title(source_path=source_path, metadata=metadata),
                 asset_output_dir=asset_output_dir,
                 asset_public_prefix=asset_public_prefix,
+                progress_callback=lambda payload: progress_callback({
+                    **payload,
+                    "path": relative_path.as_posix(),
+                    "name": source_path.name,
+                }) if progress_callback else None,
             )
             sections = cleaned.sections
             source_type = cleaned.source_type

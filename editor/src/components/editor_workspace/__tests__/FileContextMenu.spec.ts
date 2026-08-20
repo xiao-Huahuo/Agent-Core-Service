@@ -59,6 +59,46 @@ describe('FileContextMenu HTML visualization', () => {
     expect(wrapper.emitted('htmlVisualize')).toBeUndefined()
   })
 
+  it('keeps ingestion and graph extraction adjacent with status-aware labels', () => {
+    const wrapper = mountMenu({
+      name: 'notes.md',
+      path: 'notes.md',
+      isDir: false,
+      indexStatus: 'indexed',
+      graphStatus: 'graphed',
+    })
+    const labels = wrapper.findAll('.context-menu > button').map((button) => button.text().replace(/\s/g, ''))
+
+    expect(labels).not.toContain('在图谱中显示Ctrl+G')
+    expect(labels).toContain('重新灌库文件')
+    expect(labels).toContain('重新抽取图谱')
+    expect(labels.indexOf('重新抽取图谱')).toBe(labels.indexOf('重新灌库文件') + 1)
+  })
+
+  it('uses first-run labels for dirty files', () => {
+    const wrapper = mountMenu({
+      name: 'draft.md',
+      path: 'draft.md',
+      isDir: false,
+      indexStatus: 'dirty',
+      graphStatus: 'dirty',
+    })
+
+    expect(wrapper.text()).toContain('灌库文件')
+    expect(wrapper.text()).toContain('抽取图谱')
+    expect(wrapper.text()).not.toContain('重新灌库文件')
+    expect(wrapper.text()).not.toContain('重新抽取图谱')
+  })
+
+  it('places privacy directly below favorite and emits its dedicated action', async () => {
+    const wrapper = mountMenu({ name: 'private.md', path: 'private.md', isDir: false })
+    const labels = wrapper.findAll('.context-menu > button').map((button) => button.text().replace(/\s/g, ''))
+
+    expect(labels.indexOf('隐私化')).toBe(labels.indexOf('收藏') + 1)
+    await buttonByText(wrapper, '隐私化').trigger('click')
+    expect(wrapper.emitted('togglePrivacy')).toHaveLength(1)
+  })
+
   it('keeps only batch-safe actions enabled for multi-selection', () => {
     const wrapper = mountMenu(
       { name: 'notes.md', path: 'notes.md', isDir: false },
@@ -69,8 +109,8 @@ describe('FileContextMenu HTML visualization', () => {
       '剪切Ctrl+X',
       '粘贴Ctrl+V',
       '在文件夹中显示',
-      '文件抽取图谱',
       '灌库文件',
+      '抽取图谱',
       '屏蔽文件',
       '删除Ctrl+D',
     ]
@@ -84,7 +124,6 @@ describe('FileContextMenu HTML visualization', () => {
       '复制相对路径',
       '重命名Ctrl+M',
       '用默认程序打开',
-      '在图谱中显示Ctrl+G',
       'HTML可视化',
     ]
 

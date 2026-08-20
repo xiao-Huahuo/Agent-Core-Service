@@ -11,7 +11,7 @@ from __future__ import annotations
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 @dataclass(slots=True)
@@ -32,6 +32,7 @@ def extract_pdf_text(
     scanned_text_threshold: int = 20,
     image_output_dir: Path | None = None,
     image_public_prefix: str = "",
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> PdfExtractionResult:
     """Extract text, simple tables, and image references from a PDF."""
 
@@ -75,6 +76,8 @@ def extract_pdf_text(
                 lines.append(_format_image_refs(page_image_refs))
             if lines:
                 page_chunks.append(f"## Page {page_index}\n\n" + "\n\n".join(lines))
+            if progress_callback:
+                progress_callback(page_index, page_count)
     content = "\n\n".join(page_chunks).strip()
     text_size = len("".join("\n".join(semantic_text_parts).split()))
     return PdfExtractionResult(

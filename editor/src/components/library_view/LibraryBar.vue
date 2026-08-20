@@ -13,8 +13,10 @@ import { computed, ref } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import { buildApiUrl } from '@/api/client'
 import FavoriteButton from '@/components/common/FavoriteButton.vue'
+import PrivacyButton from '@/components/common/PrivacyButton.vue'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import type { LibraryItem } from '@/types/knowledge'
+import { usePrivacyStore } from '@/stores/privacy'
 
 const props = defineProps<{
   item: LibraryItem
@@ -34,13 +36,16 @@ const emit = defineEmits<{
 }>()
 
 const dragOver = ref(false)
+const privacyStore = usePrivacyStore()
 const isCollection = computed(() => props.item.item_type === 'collection')
+const isPrivate = computed(() => privacyStore.loading || privacyStore.isPrivate('library_item', props.item.item_id))
 const fileIcon = computed(() => materialFileIconForNode({
   name: props.item.source_name || props.item.display_title,
   path: props.item.source_path || props.item.source_name,
   isDir: isCollection.value,
 }))
 const coverUrl = computed(() => {
+  if (isPrivate.value) return ''
   if (props.item.cover_mode === 'image' && props.item.cover_asset?.url) {
     return props.item.cover_asset.url
   }
@@ -123,7 +128,10 @@ function handleDrop(event: DragEvent) {
       <IcIcon v-if="selected" name="check" :size="14" />
     </button>
     <section class="thumb">
-      <img v-if="coverUrl" class="thumb-image" :src="coverUrl" alt="" />
+      <div v-if="isPrivate" class="thumb-icon" aria-label="隐私内容不显示封面">
+        <IcIcon name="visibility-off" :size="26" />
+      </div>
+      <img v-else-if="coverUrl" class="thumb-image" :src="coverUrl" alt="" />
       <div v-else-if="item.cover_mode === 'description' && item.description" class="thumb-text">
         {{ item.description }}
       </div>
@@ -140,6 +148,7 @@ function handleDrop(event: DragEvent) {
     </section>
     <section class="bar-meta">
       <div class="bar-title-row">
+        <PrivacyButton class="bar-privacy" target-type="library_item" :target-id="item.item_id" />
         <FavoriteButton class="bar-favorite" target-type="library_item" :target-id="item.item_id" />
         <span class="bar-type-icon">
           <IcIcon v-if="isCollection" name="folder-open" :size="16" />
@@ -339,6 +348,10 @@ function handleDrop(event: DragEvent) {
   margin-left: -4px;
 }
 
+.bar-privacy {
+  margin-left: -4px;
+}
+
 .bar-title {
   flex: 0 1 auto;
   min-width: 0;
@@ -385,7 +398,7 @@ function handleDrop(event: DragEvent) {
   min-height: 20px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-primary) 30%, transparent);
-  color: var(--color-primary);
+  color: var(--color-tag-pill-text);
   padding: 0 8px;
   font-size: 11px;
   overflow: hidden;
@@ -395,16 +408,16 @@ function handleDrop(event: DragEvent) {
 
 .tag-pill:nth-child(6n + 2) {
   background: color-mix(in srgb, var(--color-accent) 30%, transparent);
-  color: var(--color-accent);
+  color: var(--color-tag-pill-text);
 }
 
 .tag-pill:nth-child(6n + 3) {
   background: color-mix(in srgb, var(--color-success) 30%, transparent);
-  color: var(--color-success);
+  color: var(--color-tag-pill-text);
 }
-.tag-pill:nth-child(6n + 4) { background: color-mix(in srgb, var(--color-warning) 30%, transparent); color: var(--color-warning); }
-.tag-pill:nth-child(6n + 5) { background: rgba(113, 70, 214, 0.30); color: #8d6eea; }
-.tag-pill:nth-child(6n) { background: rgba(0, 155, 166, 0.30); color: #1ac0c8; }
+.tag-pill:nth-child(6n + 4) { background: color-mix(in srgb, var(--color-warning) 30%, transparent); color: var(--color-tag-pill-text); }
+.tag-pill:nth-child(6n + 5) { background: rgba(113, 70, 214, 0.30); color: var(--color-tag-pill-text); }
+.tag-pill:nth-child(6n) { background: rgba(0, 155, 166, 0.30); color: var(--color-tag-pill-text); }
 
 .bar-badge {
   flex: 0 0 auto;

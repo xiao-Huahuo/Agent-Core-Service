@@ -858,6 +858,10 @@ onBeforeUnmount(() => {
   font-size: calc(13px * var(--font-scale));
 }
 
+.settings-body > .form-height-transition {
+  overflow: visible;
+}
+
 .setting-section h3 {
   margin: 0 0 var(--space-10);
   font-size: calc(12px * var(--font-scale));

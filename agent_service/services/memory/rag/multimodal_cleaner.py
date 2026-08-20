@@ -23,7 +23,7 @@ import zipfile
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from xml.etree import ElementTree
 
 from agent_service.services.memory.rag.frontmatter_document import StructuredKnowledgeSection
@@ -110,6 +110,7 @@ class MultimodalDocumentCleaner:
         self.max_table_rows = max_table_rows
         self.ocr_enabled = ocr_enabled
         self.image_ocr_service = image_ocr_service
+        self._progress_callback: Callable[[dict[str, Any]], None] | None = None
 
     def clean(
         self,
@@ -118,6 +119,7 @@ class MultimodalDocumentCleaner:
         title: str,
         asset_output_dir: Path | None = None,
         asset_public_prefix: str = "",
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> CleanedDocument:
         """
         按文件后缀清洗知识源。
@@ -127,32 +129,68 @@ class MultimodalDocumentCleaner:
         """
 
         suffix = source_path.suffix.lower()
-        if suffix == ".json":
-            return self._clean_json(source_path=source_path, title=title)
-        if suffix == ".jsonl":
-            return self._clean_jsonl(source_path=source_path, title=title)
-        if suffix in {".csv", ".tsv"}:
-            return self._clean_delimited_table(source_path=source_path, title=title, delimiter="\t" if suffix == ".tsv" else ",")
-        if suffix in {".html", ".htm"}:
-            return self._clean_html(source_path=source_path, title=title)
-        if suffix == ".xml":
-            return self._clean_xml(source_path=source_path, title=title)
-        if suffix == ".docx":
-            return self._clean_docx(source_path=source_path, title=title)
-        if suffix == ".xlsx":
-            return self._clean_xlsx(source_path=source_path, title=title)
-        if suffix == ".pptx":
-            return self._clean_pptx(source_path=source_path, title=title)
-        if suffix == ".pdf":
-            return self._clean_pdf(
-                source_path=source_path,
-                title=title,
-                asset_output_dir=asset_output_dir,
-                asset_public_prefix=asset_public_prefix,
-            )
-        if suffix in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
-            return self._clean_image(source_path=source_path, title=title)
-        return self._clean_binary_placeholder(source_path=source_path, title=title, source_type="asset")
+        self._progress_callback = progress_callback
+        self._emit_progress(stage="extract", label="开始解析文件内容", current=0, total=1, start=6, end=44)
+        try:
+            if suffix == ".json":
+                result = self._clean_json(source_path=source_path, title=title)
+            elif suffix == ".jsonl":
+                result = self._clean_jsonl(source_path=source_path, title=title)
+            elif suffix in {".csv", ".tsv"}:
+                result = self._clean_delimited_table(source_path=source_path, title=title, delimiter="\t" if suffix == ".tsv" else ",")
+            elif suffix in {".html", ".htm"}:
+                result = self._clean_html(source_path=source_path, title=title)
+            elif suffix == ".xml":
+                result = self._clean_xml(source_path=source_path, title=title)
+            elif suffix == ".docx":
+                result = self._clean_docx(source_path=source_path, title=title)
+            elif suffix == ".xlsx":
+                result = self._clean_xlsx(source_path=source_path, title=title)
+            elif suffix == ".pptx":
+                result = self._clean_pptx(source_path=source_path, title=title)
+            elif suffix == ".pdf":
+                result = self._clean_pdf(
+                    source_path=source_path,
+                    title=title,
+                    asset_output_dir=asset_output_dir,
+                    asset_public_prefix=asset_public_prefix,
+                )
+            elif suffix in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+                result = self._clean_image(source_path=source_path, title=title)
+            else:
+                result = self._clean_binary_placeholder(source_path=source_path, title=title, source_type="asset")
+            self._emit_progress(stage="normalize", label="正在生成统一正文", current=1, total=1, start=44, end=50)
+            return result
+        finally:
+            self._progress_callback = None
+
+    def _emit_progress(
+        self,
+        *,
+        stage: str,
+        label: str,
+        current: int,
+        total: int,
+        start: int,
+        end: int,
+        message: str = "",
+    ) -> None:
+        """把类型专属工作单位映射为统一且单调的文件总进度。"""
+
+        if not self._progress_callback:
+            return
+        safe_total = max(1, total)
+        ratio = max(0, min(safe_total, current)) / safe_total
+        self._progress_callback({
+            "phase": "frontmatter",
+            "status": "processing",
+            "stage": stage,
+            "stage_label": label,
+            "stage_current": max(0, current),
+            "stage_total": max(0, total),
+            "overall_progress": round(start + ((end - start) * ratio)),
+            "message": message,
+        })
 
     def _clean_json(self, *, source_path: Path, title: str) -> CleanedDocument:
         """将 JSON 清洗为格式化文本章节。"""
@@ -174,6 +212,7 @@ class MultimodalDocumentCleaner:
                 rows.append(f"row {index}: {line.strip()}")
             if len(rows) >= self.max_table_rows:
                 break
+            self._emit_progress(stage="rows", label=f"正在读取第 {index} 行", current=index, total=self.max_table_rows, start=8, end=40)
         return _single_section_document(
             source_type="jsonl",
             title=title,
@@ -189,6 +228,7 @@ class MultimodalDocumentCleaner:
             reader = csv.reader(handle, delimiter=delimiter)
             for row in reader:
                 rows.append([cell.strip() for cell in row])
+                self._emit_progress(stage="rows", label=f"正在读取第 {len(rows)} 行", current=len(rows), total=self.max_table_rows + 1, start=8, end=40)
                 if len(rows) >= self.max_table_rows + 1:
                     break
         content = _format_table_rows(rows)
@@ -243,7 +283,19 @@ class MultimodalDocumentCleaner:
             if body is None:
                 return _single_section_document(source_type="docx", title=title, content="", metadata={"modality": "document"})
             rels_map = _read_docx_relationship_map(archive)
-            blocks, image_refs = _extract_docx_blocks(body=body, title=title, rels_map=rels_map)
+            blocks, image_refs = _extract_docx_blocks(
+                body=body,
+                title=title,
+                rels_map=rels_map,
+                progress_callback=lambda current, total: self._emit_progress(
+                    stage="document_blocks",
+                    label=f"正在解析文档块 {current} / {total}",
+                    current=current,
+                    total=total,
+                    start=8,
+                    end=30,
+                ),
+            )
             embedded_ocr = self._ocr_zip_images_by_ref(archive=archive, image_refs=image_refs)
             if embedded_ocr:
                 blocks = _merge_docx_image_ocr_blocks(blocks=blocks, ocr_by_ref=embedded_ocr)
@@ -270,6 +322,7 @@ class MultimodalDocumentCleaner:
                     continue
                 heading = f"{title} Sheet {sheet_index}"
                 sections.append(_make_section(index=len(sections), heading=heading, content=_format_table_rows(rows)))
+                self._emit_progress(stage="sheets", label=f"正在解析工作表 {sheet_index} / {len(sheet_paths)}", current=sheet_index, total=len(sheet_paths), start=8, end=42)
         return CleanedDocument(source_type="spreadsheet", sections=sections, metadata={"modality": "table", "sheet_count": len(sections)})
 
     def _clean_pptx(self, *, source_path: Path, title: str) -> CleanedDocument:
@@ -285,6 +338,7 @@ class MultimodalDocumentCleaner:
                 text = _normalize_text("\n".join(ElementTree.fromstring(xml_text).itertext()))
                 if text:
                     sections.append(_make_section(index=len(sections), heading=f"{title} Slide {slide_index}", content=text))
+                self._emit_progress(stage="slides", label=f"正在解析幻灯片 {slide_index} / {len(slide_paths)}", current=slide_index, total=len(slide_paths), start=8, end=30)
             image_refs = [{"path": name} for name in archive.namelist() if name.startswith("ppt/media/")]
             embedded_ocr = self._ocr_zip_images(archive=archive, image_refs=image_refs)
         if embedded_ocr:
@@ -316,7 +370,7 @@ class MultimodalDocumentCleaner:
             return
         with tempfile.TemporaryDirectory(prefix="metaweave-ocr-") as temp_dir:
             root = Path(temp_dir)
-            for image_ref in image_refs:
+            for image_index, image_ref in enumerate(image_refs, start=1):
                 original_ref = image_ref
                 if isinstance(image_ref, dict):
                     archive_name = str(image_ref.get("path") or image_ref.get("target") or "")
@@ -333,6 +387,7 @@ class MultimodalDocumentCleaner:
                 image_path = root / Path(archive_name).name
                 image_path.write_bytes(archive.read(archive_name))
                 result = self.image_ocr_service.extract_image_text(image_path)
+                self._emit_progress(stage="ocr", label=f"正在识别内嵌图片 {image_index} / {len(image_refs)}", current=image_index, total=len(image_refs), start=30, end=44)
                 if isinstance(image_ref, dict):
                     image_ref["ocr_status"] = "completed" if result.has_text else ("no_text" if result.engine_available else "engine_unavailable")
                     image_ref["ocr_word_count"] = result.word_count
@@ -358,18 +413,31 @@ class MultimodalDocumentCleaner:
             if self.ocr_enabled and self.image_ocr_service and image_output_dir is None:
                 temp_dir = tempfile.TemporaryDirectory(prefix="metaweave-pdf-ocr-")
                 image_output_dir = Path(temp_dir.name)
-            extracted = extract_pdf_text(source_path, image_output_dir=image_output_dir, image_public_prefix=asset_public_prefix)
+            extracted = extract_pdf_text(
+                source_path,
+                image_output_dir=image_output_dir,
+                image_public_prefix=asset_public_prefix,
+                progress_callback=lambda current, total: self._emit_progress(
+                    stage="pages",
+                    label=f"正在解析 PDF 页面 {current} / {total}",
+                    current=current,
+                    total=total,
+                    start=8,
+                    end=28,
+                ),
+            )
         except Exception:
             if temp_dir:
                 temp_dir.cleanup()
             return self._clean_binary_placeholder(source_path=source_path, title=title, source_type="pdf")
         ocr_text: list[str] = []
         if self.ocr_enabled and self.image_ocr_service:
-            for image_ref in extracted.image_refs:
+            for image_index, image_ref in enumerate(extracted.image_refs, start=1):
                 image_path = image_ref.get("asset_path")
                 if not image_path:
                     continue
                 result = self.image_ocr_service.extract_image_text(Path(str(image_path)))
+                self._emit_progress(stage="ocr", label=f"正在识别 PDF 图片 {image_index} / {len(extracted.image_refs)}", current=image_index, total=len(extracted.image_refs), start=28, end=44)
                 image_ref["ocr_status"] = "completed" if result.has_text else ("no_text" if result.engine_available else "engine_unavailable")
                 image_ref["ocr_word_count"] = result.word_count
                 image_ref["ocr_average_confidence"] = result.average_confidence
@@ -386,6 +454,7 @@ class MultimodalDocumentCleaner:
                             page_path = Path(page_dir) / f"page-{page_index + 1}.png"
                             page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False).save(page_path)
                             result = self.image_ocr_service.extract_image_text(page_path)
+                            self._emit_progress(stage="ocr", label=f"正在识别扫描页 {page_index + 1} / {document.page_count}", current=page_index + 1, total=document.page_count, start=28, end=44)
                             if result.has_text:
                                 ocr_text.append(f"PDF 第 {page_index + 1} 页 OCR: {result.content}")
                         document.close()
@@ -430,7 +499,9 @@ class MultimodalDocumentCleaner:
 
         if not self.image_ocr_service:
             return self._clean_binary_placeholder(source_path=source_path, title=title, source_type="image")
+        self._emit_progress(stage="ocr", label="正在识别图片文字", current=0, total=1, start=10, end=44)
         result = self.image_ocr_service.extract_image_text(source_path)
+        self._emit_progress(stage="ocr", label="图片文字识别完成", current=1, total=1, start=10, end=44)
         metadata = {
             "modality": "image",
             "ocr_enabled": self.ocr_enabled,
@@ -589,6 +660,7 @@ def _extract_docx_blocks(
     body: ElementTree.Element,
     title: str,
     rels_map: dict[str, str],
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> tuple[list[tuple[Any, ...]], list[str]]:
     """把 w:body 直接子元素拆成带类型标签的块列表。
 
@@ -605,7 +677,10 @@ def _extract_docx_blocks(
     blocks: list[tuple[Any, ...]] = []
     image_refs: list[str] = []
     table_index = 0
-    for element in body:
+    elements = list(body)
+    for element_index, element in enumerate(elements, start=1):
+        if progress_callback:
+            progress_callback(element_index, len(elements))
         name = _local_name(element.tag)
         if name == "tbl":
             rows = _extract_docx_table(element)

@@ -81,7 +81,7 @@
 
 .form-input-surface:focus,
 .form-input-surface:focus-within {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-border-strong) 50%, transparent) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-border-strong) 50%, transparent) !important;
 }
 
 /* Shared resource-manager-style segmented toggle for settings sections. */
@@ -200,6 +200,7 @@
   --color-border: #33323a;
   --color-border-strong: #484653;
   --color-text: #f4f4f6;
+  --color-tag-pill-text: #000000;
   --color-text-secondary: #c7c7d1;
   --color-text-muted: #8f93a3;
   --color-overlay: rgba(5, 5, 8, 0.78);
@@ -244,6 +245,7 @@
   --color-border: #d7d7e4;
   --color-border-strong: #b9b8cd;
   --color-text: #171721;
+  --color-tag-pill-text: #ffffff;
   --color-text-secondary: #3f4252;
   --color-text-muted: #707486;
   --color-overlay: rgba(15, 15, 24, 0.26);

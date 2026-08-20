@@ -24,6 +24,8 @@ const props = defineProps<{
   path: string
   /** Whether the cell may enter source editing mode. */
   editable: boolean
+  /** Whether the collapsed reading view should show escaped plain text. */
+  plainWhenCollapsed?: boolean
   /** Uploads an image into the active form assets directory. */
   uploadImage: (file: File) => Promise<{ name: string; relativePath: string }>
 }>()
@@ -47,7 +49,8 @@ const displayValue = computed(() => expanded.value || props.value.length <= COLL
   : `${props.value.slice(0, COLLAPSED_CHARACTER_LIMIT)}...`)
 const usesInteractivePreview = computed(() => /!\[[^\]]*\]\([^)]*\)/.test(displayValue.value)
   || /(?:^|\n)\s*\|[^\n]+\|\s*\n\s*\|?\s*:?-{3,}/.test(displayValue.value))
-const canExpand = computed(() => props.value.length > COLLAPSED_CHARACTER_LIMIT)
+const canExpand = computed(() => props.value.length > COLLAPSED_CHARACTER_LIMIT
+  || Boolean(props.plainWhenCollapsed && props.value))
 
 watch(() => props.value, (value) => {
   if (!editing.value) draft.value = value
@@ -167,8 +170,12 @@ function downloadImage(src: string, name: string): void {
       @blur="finishEditing"
       @keydown.esc.prevent="finishEditing"
     ></textarea>
+    <div
+      v-if="!editing && plainWhenCollapsed && !expanded"
+      class="smart-plain-text"
+    >{{ displayValue }}</div>
     <MarkdownPreview
-      v-if="!editing && usesInteractivePreview"
+      v-else-if="!editing && usesInteractivePreview"
       :content="displayValue"
       :path="path"
       compact
@@ -228,6 +235,18 @@ function downloadImage(src: string, name: string): void {
 
 .smart-markdown-cell :deep(.markdown-body > :first-child) { margin-top: 0; }
 .smart-markdown-cell :deep(.markdown-body > :last-child) { margin-bottom: 0; }
+
+.smart-plain-text {
+  box-sizing: border-box;
+  height: 100%;
+  overflow: hidden;
+  padding: 9px 34px 9px 11px;
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 .smart-markdown-source {
   box-sizing: border-box;

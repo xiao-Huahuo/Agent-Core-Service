@@ -7,7 +7,7 @@
   assets, filter rows, and export CSV/Markdown without leaving the workspace.
 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { buildApiUrl } from '@/api/client'
 import { createKnowledgeFolder, listKnowledgeFiles, previewKnowledgeFile, readKnowledgeFile, uploadKnowledgeFile } from '@/api/knowledge'
@@ -24,6 +24,11 @@ import {
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import { useSubmenuIntent } from '@/components/editor_workspace/submenuIntent'
 import SmartMarkdownCell from '@/components/smart_forms/SmartMarkdownCell.vue'
+import {
+  SMART_COLUMN_TYPE_ICONS,
+  smartColumnIcon,
+  smartColumnTypeLabel,
+} from '@/components/smart_forms/smartColumnPresentation'
 import {
   BUILTIN_COLUMNS,
   DEFAULT_ROW_HEIGHT,
@@ -84,6 +89,8 @@ const minRating = ref(0)
 const newFormTitle = ref('')
 const newFormKind = ref<'smart' | 'plain'>('smart')
 const createFormOpen = ref(false)
+/** Table-name field used to restore deterministic typing focus inside the creation dialog. */
+const newFormTitleInput = ref<HTMLInputElement | null>(null)
 const selectedCell = ref<{ rowId: string; columnId: string } | null>(null)
 const customColumnTitle = ref('')
 const uploadInputByRow = ref<Record<string, HTMLInputElement | null>>({})
@@ -97,6 +104,8 @@ const swappedColumnId = ref('')
 const swappedRowId = ref('')
 const generationTokens = ref<Record<string, string>>({})
 const tableContextSubmenuSide = ref<'right' | 'left'>('right')
+const edgeColumnMenuOpen = ref(false)
+const edgeColumnMenuStyle = ref<Record<string, string>>({ left: '0px', top: '0px' })
 const editingColumnId = ref('')
 const columnTitleDraft = ref('')
 const structuredGenerationQueue: Array<() => Promise<void>> = []
@@ -134,6 +143,7 @@ const tableContextSubmenu = ref('')
 const tableContextSubmenuRefs: Record<string, HTMLElement | null> = {}
 const tableClipboard = ref<TableClipboard | null>(null)
 const selectedCellKeys = ref<string[]>([])
+const selectedCellKeySet = computed(() => new Set(selectedCellKeys.value))
 const dragAnchorCell = ref<CellCoord | null>(null)
 const draggedColumnId = ref('')
 const draggedRowId = ref('')
@@ -167,6 +177,20 @@ const ratingFilterOptions = [
 ]
 const ratingFilterLabel = computed(() => ratingFilterOptions.find((option) => option.value === minRating.value)?.label || '全部星级')
 
+/** Opens the creation dialog and focuses its dynamically teleported name field after mounting. */
+async function openCreateForm(): Promise<void> {
+  newFormKind.value = 'smart'
+  createFormOpen.value = true
+  await nextTick()
+  newFormTitleInput.value?.focus()
+}
+
+/** Changes the table type without leaving subsequent keyboard input trapped on the type button. */
+function selectNewFormKind(kind: 'smart' | 'plain'): void {
+  newFormKind.value = kind
+  newFormTitleInput.value?.focus()
+}
+
 const customColumnTypes: { value: SmartColumnType; label: string }[] = [
   { value: 'text', label: '文本' },
   { value: 'smart_text', label: '智能文本' },
@@ -176,14 +200,17 @@ const customColumnTypes: { value: SmartColumnType; label: string }[] = [
   { value: 'star', label: '星级' },
   { value: 'date', label: '日期' },
 ]
+const refreshingLiteraturePaths = new Set<string>()
 
 onMounted(() => {
   window.addEventListener('mouseup', stopCellSelection)
+  window.addEventListener('metaweave-knowledge-file-change', handleKnowledgeFileChange)
   void loadForm()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('mouseup', stopCellSelection)
+  window.removeEventListener('metaweave-knowledge-file-change', handleKnowledgeFileChange)
   if (autoSaveTimer) clearTimeout(autoSaveTimer)
   if (swapAnimationTimer) clearTimeout(swapAnimationTimer)
   stopTableResize()
@@ -441,10 +468,19 @@ function addRowAt(rowId: string | undefined, direction: -1 | 1): void {
   })
 }
 
-/** Appends a plain text column from the smart table's right edge button. */
-function appendTableColumn(): void {
-  if (!form.value) return
-  setForm(addColumn(form.value, createCustomColumn('新列', 'text')))
+/** Opens the same field-type chooser used by the third-level context menu. */
+function openEdgeColumnMenu(event: MouseEvent): void {
+  closeFloatingMenus()
+  const menuWidth = 280
+  const edge = 8
+  const viewportWidth = window.innerWidth || 1024
+  const viewportHeight = window.innerHeight || 768
+  edgeColumnMenuStyle.value = {
+    left: `${Math.min(Math.max(event.clientX - menuWidth, edge), viewportWidth - menuWidth - edge)}px`,
+    top: `${Math.min(Math.max(event.clientY, edge), Math.max(edge, viewportHeight - 520))}px`,
+  }
+  customColumnTitle.value = ''
+  edgeColumnMenuOpen.value = true
 }
 
 function deleteRecord(rowId: string): void {
@@ -750,6 +786,7 @@ function closeFloatingMenus(): void {
   closeDropdownMenus()
   closeTableContextMenu()
   closeTagEditor()
+  edgeColumnMenuOpen.value = false
 }
 
 function cellKey(rowId: string, columnId: string): string {
@@ -757,7 +794,23 @@ function cellKey(rowId: string, columnId: string): string {
 }
 
 function isCellSelected(rowId: string, columnId: string): boolean {
-  return selectedCellKeys.value.includes(cellKey(rowId, columnId))
+  return selectedCellKeySet.value.has(cellKey(rowId, columnId))
+}
+
+/** Draws only the outside edges of a rectangular drag selection. */
+function cellSelectionStyle(rowId: string, columnId: string): Record<string, string> {
+  if (!form.value || !isCellSelected(rowId, columnId)) return {}
+  const rowIds = visibleRows.value.map((row) => row.id)
+  const columnIds = form.value.columns.map((column) => column.id)
+  const rowIndex = rowIds.indexOf(rowId)
+  const columnIndex = columnIds.indexOf(columnId)
+  const shadows: string[] = []
+  const color = 'var(--color-primary)'
+  if (!selectedCellKeySet.value.has(cellKey(rowIds[rowIndex - 1] || '', columnId))) shadows.push(`inset 0 2px 0 ${color}`)
+  if (!selectedCellKeySet.value.has(cellKey(rowIds[rowIndex + 1] || '', columnId))) shadows.push(`inset 0 -2px 0 ${color}`)
+  if (!selectedCellKeySet.value.has(cellKey(rowId, columnIds[columnIndex - 1] || ''))) shadows.push(`inset 2px 0 0 ${color}`)
+  if (!selectedCellKeySet.value.has(cellKey(rowId, columnIds[columnIndex + 1] || ''))) shadows.push(`inset -2px 0 0 ${color}`)
+  return { '--cell-selection-shadow': shadows.join(', ') || 'none' }
 }
 
 function selectedCells(): CellCoord[] {
@@ -836,7 +889,7 @@ function tagPillStyle(value: string): Record<string, string> {
   const color = tagColor(value)
   return {
     background: `color-mix(in srgb, ${color} 16%, var(--color-surface-raised))`,
-    color,
+    color: 'var(--color-tag-pill-text)',
   }
 }
 
@@ -1174,6 +1227,20 @@ function addContextCustomColumn(type: SmartColumnType, direction: -1 | 1): void 
   closeTableContextMenu()
 }
 
+/** Appends a built-in field selected from the table's right-edge chooser. */
+function addEdgeColumn(column: SmartColumn): void {
+  if (!isLiteratureTable.value && (column.type === 'smart_text' || column.type === 'smart_tag')) return
+  addColumnAt(column, 1)
+  edgeColumnMenuOpen.value = false
+}
+
+/** Appends a typed custom field selected from the table's right-edge chooser. */
+function addEdgeCustomColumn(type: SmartColumnType): void {
+  if (!isLiteratureTable.value && (type === 'smart_text' || type === 'smart_tag')) return
+  addCustomColumnAt(type, 1)
+  edgeColumnMenuOpen.value = false
+}
+
 function generateSmartCells(scope: 'selected' | 'all'): void {
   if (!form.value) return
   const target = selectedCell.value
@@ -1317,22 +1384,25 @@ function patchStructuredGenerationResults(rowId: string, columns: SmartColumn[],
   const currentRow = form.value.rows.find((row) => row.id === rowId)
   const nextTokens = { ...generationTokens.value }
   const resultByColumn = new Map(results.map((item) => [item.field_id, item]))
-  const cells = Object.fromEntries(columns.flatMap((column) => {
+  const generatedCells: Array<[string, SmartCell]> = []
+  columns.forEach((column) => {
     const key = cellKey(rowId, column.id)
-    if (generationTokens.value[key] !== tokensByCell[key]) return []
+    if (generationTokens.value[key] !== tokensByCell[key]) return
     delete nextTokens[key]
     const result = resultByColumn.get(column.id)
     if (result?.status === 'ready' && result.value.trim()) {
       ready += 1
-      return [[column.id, { ...currentRow?.cells[column.id], value: result.value.trim(), status: 'ready' as const }]]
+      generatedCells.push([column.id, { ...currentRow?.cells[column.id], value: result.value.trim(), status: 'ready' }])
+      return
     }
     failed += 1
-    return [[column.id, {
+    generatedCells.push([column.id, {
       ...currentRow?.cells[column.id],
-      value: result?.error ? `生成失败: ${result.error}` : '未生成有效内容',
-      status: 'failed' as const,
-    }]]
-  }))
+      value: currentRow?.cells[column.id]?.value || '',
+      status: 'failed',
+    }])
+  })
+  const cells = Object.fromEntries(generatedCells)
   generationTokens.value = nextTokens
   if (Object.keys(cells).length) patchRowCells(rowId, cells)
   return { ready, failed }
@@ -1373,15 +1443,14 @@ async function uploadFormAsset(file: File): Promise<string> {
   return relativeUploadedPath(result.uploaded_path ?? '', result.knowledge_dir ?? settingsStore.profile.knowledgeDir)
 }
 
-/** Opens an uploaded literature source in the main editor workspace. */
+/** Opens an uploaded literature source in the independent editor sidebar. */
 async function openLiteratureFile(row: SmartRow): Promise<void> {
   const cell = row.cells.literature_file
   if (!cell?.assetPath) {
     openUpload(row.id)
     return
   }
-  workspaceStore.setMainView('editor')
-  await workspaceStore.selectFile({
+  await workspaceStore.openEditorSidebar({
     name: cell.fileName || cell.value,
     path: cell.assetPath,
     isDir: false,
@@ -1426,33 +1495,10 @@ async function uploadLiterature(row: SmartRow, event: Event): Promise<void> {
   if (!file || !settingsStore.profile.userId || !form.value) return
   try {
     const assetPath = await uploadFormAsset(file)
-    if (assetPath && isImageFile(file.name)) {
+    if (assetPath && isPreviewImageFile(file.name)) {
       await loadImagePreview(assetPath)
     }
-    patchRowCells(row.id, {
-      literature_file: { value: file.name, fileName: file.name, assetPath },
-      literature_content: {
-        value: '正在灌库并提取文献内容...',
-        status: 'pending',
-      },
-    })
-    if (assetPath) {
-      await workspaceStore.ingestFile({
-        name: file.name,
-        path: assetPath,
-        isDir: false,
-        indexStatus: 'dirty',
-      })
-    }
-    const content = assetPath ? await extractUploadedLiteratureContent(assetPath) : ''
-    patchRowCells(row.id, {
-      literature_content: content
-        ? { value: content, status: 'ready' }
-        : { value: '文献已入库，但暂未取得可显示文本。请检查文件是否为扫描件或 OCR 设置。', status: 'failed' },
-    })
-    if (content) void generateSmartCellsForRows([row.id])
-    await persistForm(false)
-    await workspaceStore.loadKnowledgeTree()
+    await refillLiteratureRow(row.id, assetPath, file.name)
     workspaceStore.showToast('文献已上传并完成内容回填')
   } catch (error) {
     patchRowCells(row.id, {
@@ -1462,10 +1508,50 @@ async function uploadLiterature(row: SmartRow, event: Event): Promise<void> {
   }
 }
 
+/** Re-ingests one row source, refreshes extracted content, and regenerates every smart field. */
+async function refillLiteratureRow(rowId: string, assetPath: string, fileName?: string): Promise<void> {
+  if (!assetPath) throw new Error('文献文件路径为空')
+  const currentRow = form.value?.rows.find((row) => row.id === rowId)
+  const resolvedName = fileName || currentRow?.cells.literature_file?.fileName || assetPath.split('/').pop() || assetPath
+  patchRowCells(rowId, {
+    ...(fileName ? { literature_file: { value: fileName, fileName, assetPath } } : {}),
+    literature_content: { value: '正在灌库并提取文献内容...', status: 'pending' },
+  })
+  await workspaceStore.ingestFile({ name: resolvedName, path: assetPath, isDir: false, indexStatus: 'dirty' })
+  const content = await extractUploadedLiteratureContent(assetPath)
+  patchRowCells(rowId, {
+    literature_content: content
+      ? { value: content, status: 'ready' }
+      : { value: '文献已入库，但暂未取得可显示文本。请检查文件是否为扫描件或 OCR 设置。', status: 'failed' },
+  })
+  if (content) await generateSmartCellsForRows([rowId])
+  await persistForm(false)
+  await workspaceStore.loadKnowledgeTree()
+}
+
+/** Treats a sidebar editor save as a fresh upload for every matching literature row. */
+async function handleKnowledgeFileChange(event: Event): Promise<void> {
+  const assetPath = (event as CustomEvent<{ path?: string }>).detail?.path?.trim() || ''
+  if (!assetPath || refreshingLiteraturePaths.has(assetPath)) return
+  const rowIds = form.value?.rows
+    .filter((row) => row.cells.literature_file?.assetPath === assetPath)
+    .map((row) => row.id) ?? []
+  if (!rowIds.length) return
+  refreshingLiteraturePaths.add(assetPath)
+  try {
+    for (const rowId of rowIds) await refillLiteratureRow(rowId, assetPath)
+    workspaceStore.showToast('文献修改已重新灌库并刷新智能列')
+  } catch (error) {
+    workspaceStore.showToast(`文献修改回填失败 - ${errorMessage(error)}`)
+  } finally {
+    refreshingLiteraturePaths.delete(assetPath)
+  }
+}
+
 async function loadImagePreviews(): Promise<void> {
   const imagePaths = form.value?.rows
     .map((row) => row.cells.literature_file?.assetPath || '')
-    .filter((path) => path && isImageFile(path) && imagePreviewByPath.value[path] === undefined) ?? []
+    .filter((path) => path && isPreviewImageFile(path) && imagePreviewByPath.value[path] === undefined) ?? []
   for (const path of imagePaths) {
     await loadImagePreview(path)
   }
@@ -1475,7 +1561,8 @@ async function loadImagePreview(path: string): Promise<void> {
   if (!settingsStore.profile.userId || imagePreviewByPath.value[path] !== undefined) return
   try {
     const preview = await previewKnowledgeFile(settingsStore.profile.userId, path)
-    imagePreviewByPath.value = { ...imagePreviewByPath.value, [path]: preview.data_url || preview.raw_url || '' }
+    const previewUrl = preview.thumbnail_url || preview.data_url || preview.raw_url || ''
+    imagePreviewByPath.value = { ...imagePreviewByPath.value, [path]: previewUrl ? buildApiUrl(previewUrl) : '' }
   } catch {
     imagePreviewByPath.value = { ...imagePreviewByPath.value, [path]: '' }
   }
@@ -1483,6 +1570,10 @@ async function loadImagePreview(path: string): Promise<void> {
 
 function isImageFile(fileName: string): boolean {
   return /\.(avif|gif|jpe?g|png|webp)$/i.test(fileName)
+}
+
+function isPreviewImageFile(fileName: string): boolean {
+  return isImageFile(fileName) || /\.pdf$/i.test(fileName)
 }
 
 function fileIconForCell(fileName: string) {
@@ -1719,7 +1810,7 @@ function errorMessage(error: unknown): string {
             <button type="button" :style="{ '--item-index': 2 }" @click="downloadZip">ZIP</button>
           </div>
         </div>
-        <button class="primary-btn new-form-btn" type="button" title="新建表格" @click="newFormKind = 'smart'; createFormOpen = true">
+        <button class="primary-btn new-form-btn" type="button" title="新建表格" @click="openCreateForm">
           <IcIcon name="add" :size="17" />
           <span>新建表格</span>
         </button>
@@ -1737,7 +1828,7 @@ function errorMessage(error: unknown): string {
         </div>
         <label class="dialog-field">
           <span>表格名称</span>
-          <input class="form-input-surface" v-model="newFormTitle" autofocus type="text" placeholder="例如：项目文献库" />
+          <input ref="newFormTitleInput" class="form-input-surface" v-model="newFormTitle" type="text" placeholder="例如：项目文献库" />
         </label>
         <div class="form-kind-picker" role="radiogroup" aria-label="表格类型">
           <button
@@ -1747,7 +1838,7 @@ function errorMessage(error: unknown): string {
             type="button"
             role="radio"
             :aria-checked="newFormKind === 'smart'"
-            @click="newFormKind = 'smart'"
+            @click="selectNewFormKind('smart')"
           >智能表格(默认)</button>
           <button
             class="form-kind-pill"
@@ -1756,7 +1847,7 @@ function errorMessage(error: unknown): string {
             type="button"
             role="radio"
             :aria-checked="newFormKind === 'plain'"
-            @click="newFormKind = 'plain'"
+            @click="selectNewFormKind('plain')"
           >普通表格</button>
         </div>
         <div class="form-dialog-actions">
@@ -1838,7 +1929,12 @@ function errorMessage(error: unknown): string {
       <table class="smart-table" @selectstart="preventTableTextSelection">
         <thead>
           <tr class="table-column-drag-row">
-            <th v-for="column in form.columns" :key="column.id" :style="{ width: `${column.width}px`, minWidth: `${column.width}px` }">
+            <th
+              v-for="column in form.columns"
+              :key="column.id"
+              :class="{ 'sticky-literature-column': column.id === 'literature_file' }"
+              :style="{ width: `${column.width}px`, minWidth: `${column.width}px` }"
+            >
               <button
                 class="table-edge-column-drag"
                 type="button"
@@ -1851,11 +1947,11 @@ function errorMessage(error: unknown): string {
           </tr>
           <tr>
             <th
-              v-for="(column, columnIndex) in form.columns"
+              v-for="column in form.columns"
               :key="column.id"
               draggable="true"
               :data-column-id="column.id"
-              :class="['tone-' + (column.tone || 'none'), { dragging: draggedColumnId === column.id, swapped: swappedColumnId === column.id }]"
+              :class="['tone-' + (column.tone || 'none'), { dragging: draggedColumnId === column.id, swapped: swappedColumnId === column.id, 'sticky-literature-column': column.id === 'literature_file' }]"
               :style="{ width: `${column.width}px`, minWidth: `${column.width}px` }"
               @dragstart="startColumnDrag(column.id, $event)"
               @dragover.prevent
@@ -1864,8 +1960,10 @@ function errorMessage(error: unknown): string {
               @contextmenu.prevent.stop="openTableContextMenu({ kind: 'column', columnId: column.id }, $event)"
             >
               <div class="column-head">
+                <IcIcon class="column-field-icon" :name="smartColumnIcon(column)" :size="15" />
                 <span
                   v-if="editingColumnId !== column.id"
+                  class="column-title-label"
                   :class="{ 'editable-column-title': column.id.startsWith('col_') }"
                   @click.stop="startColumnTitleEdit(column)"
                 >{{ column.title }}</span>
@@ -1880,17 +1978,8 @@ function errorMessage(error: unknown): string {
                   @keydown.esc.prevent="cancelColumnTitleEdit"
                   @blur="commitColumnTitleEdit(column)"
                 />
-                <div class="column-actions">
-                  <button type="button" title="左移" :disabled="columnIndex === 0" @click="moveColumnById(column.id, -1)">
-                    <IcIcon name="arrow-left" :size="13" />
-                  </button>
-                  <button type="button" title="右移" :disabled="columnIndex === form.columns.length - 1" @click="moveColumnById(column.id, 1)">
-                    <IcIcon name="arrow-right" :size="13" />
-                  </button>
-                  <button type="button" title="删除列" :disabled="!column.removable" @click="removeColumnById(column.id)">
-                    <IcIcon name="remove" :size="13" />
-                  </button>
-                </div>
+                <span class="column-type-pill">{{ smartColumnTypeLabel(column.type) }}</span>
+                <span v-if="column.type === 'smart_text' || column.type === 'smart_tag'" class="column-ai-pill">AI生成</span>
                 <button
                   class="column-resize-handle"
                   type="button"
@@ -1906,10 +1995,11 @@ function errorMessage(error: unknown): string {
             <td
               v-for="column in form.columns"
               :key="column.id"
-              :style="{ height: `${row.height || DEFAULT_ROW_HEIGHT}px` }"
+              :style="{ height: `${row.height || DEFAULT_ROW_HEIGHT}px`, ...cellSelectionStyle(row.id, column.id) }"
+              :data-row-id="row.id"
               :data-column-id="column.id"
               :draggable="column.type === 'index'"
-              :class="['cell', 'tone-' + (column.tone || 'none'), { selected: isCellSelected(row.id, column.id), dragging: draggedRowId === row.id && column.type === 'index', 'row-swapped': swappedRowId === row.id }]"
+              :class="['cell', 'tone-' + (column.tone || 'none'), { selected: isCellSelected(row.id, column.id), dragging: draggedRowId === row.id && column.type === 'index', 'row-swapped': swappedRowId === row.id, 'sticky-literature-column': column.id === 'literature_file' }]"
               @dragstart="column.type === 'index' && startRowDrag(row.id, $event)"
               @dragover.prevent="column.type === 'index'"
               @drop.prevent="column.type === 'index' && dropRow(row.id)"
@@ -1929,20 +2019,14 @@ function errorMessage(error: unknown): string {
                   @dragstart.stop="startRowDrag(row.id, $event)"
                   @dragend.stop="endRowDrag"
                 ><IcIcon name="unfold" :size="10" /></button>
-                <button
-                  class="row-resize-handle"
-                  type="button"
-                  title="拖动调整行高"
-                  @pointerdown="startRowResize(row, $event)"
-                ></button>
               </span>
               <div v-else-if="column.type === 'file'" class="file-cell">
                 <button class="file-picker" type="button" @click.stop="openLiteratureFile(row)">
                   <img
-                    v-if="row.cells[column.id]?.assetPath && isImageFile(row.cells[column.id]?.fileName || row.cells[column.id]?.assetPath || '') && imagePreviewByPath[row.cells[column.id]?.assetPath || '']"
+                    v-if="row.cells[column.id]?.assetPath && imagePreviewByPath[row.cells[column.id]?.assetPath || '']"
                     class="file-preview-image"
                     :src="imagePreviewByPath[row.cells[column.id]?.assetPath || '']"
-                    :alt="row.cells[column.id]?.fileName || '图片文档'"
+                    :alt="row.cells[column.id]?.fileName || '文献首页预览'"
                   />
                   <img
                     v-else-if="row.cells[column.id]?.fileName || row.cells[column.id]?.value"
@@ -2087,6 +2171,7 @@ function errorMessage(error: unknown): string {
                 :value="row.cells[column.id]?.value || ''"
                 :path="`${activeFormDir}/table.md`"
                 :editable="column.editable"
+                :plain-when-collapsed="column.id === 'literature_content'"
                 :upload-image="uploadCellImage"
                 @update="editCell(row, column, $event)"
                 @resize="(expanded, height) => resizeExpandedTextCell(row, expanded, height)"
@@ -2100,13 +2185,37 @@ function errorMessage(error: unknown): string {
                 :placeholder="row.cells[column.id]?.status === 'pending' ? '等待结构化 LLM 服务生成' : ''"
                 @input="handleCellTextareaInput(row, column, $event)"
               ></textarea>
+              <div
+                v-if="(column.type === 'smart_text' || column.type === 'smart_tag') && row.cells[column.id]?.status === 'pending'"
+                class="smart-cell-loading-mask"
+                role="status"
+                aria-label="正在生成智能字段"
+              >
+                <span class="pixel-loader" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+              </div>
               <span
-                v-if="row.cells[column.id]?.status === 'pending' || row.cells[column.id]?.status === 'failed'"
+                v-if="row.cells[column.id]?.status === 'failed'"
                 class="status-dot"
                 :class="row.cells[column.id]?.status"
               >
-                {{ row.cells[column.id]?.status === 'pending' ? '生成中' : '失败/空' }}
+                失败/空
               </span>
+              <button
+                class="column-resize-handle cell-column-resize-handle"
+                type="button"
+                tabindex="-1"
+                title="拖动调整列宽"
+                aria-label="拖动调整列宽"
+                @pointerdown="startColumnResize(column, $event)"
+              ></button>
+              <button
+                class="row-resize-handle cell-row-resize-handle"
+                type="button"
+                tabindex="-1"
+                title="拖动调整行高"
+                aria-label="拖动调整行高"
+                @pointerdown="startRowResize(row, $event)"
+              ></button>
             </td>
           </tr>
         </tbody>
@@ -2114,7 +2223,7 @@ function errorMessage(error: unknown): string {
       <button class="table-edge-add-row" type="button" title="添加空行" @click.stop="addRowAt(undefined, 1)">
         <IcIcon name="add" :size="10" />
       </button>
-      <button class="table-edge-add-column" type="button" title="添加空列" @click.stop="appendTableColumn">
+      <button class="table-edge-add-column" type="button" title="选择字段类型后添加列" @click.stop="openEdgeColumnMenu">
         <IcIcon name="add" :size="10" />
       </button>
       </div>
@@ -2123,6 +2232,44 @@ function errorMessage(error: unknown): string {
         <p>没有符合条件的记录</p>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="edgeColumnMenuOpen"
+        class="edge-column-menu table-context-submenu-level-three ui-floating-submenu-surface"
+        :class="{ dark: settingsStore.isDark }"
+        :style="edgeColumnMenuStyle"
+        @click.stop
+      >
+        <span class="table-context-section-title">内置字段</span>
+        <button
+          v-for="column in availableBuiltinColumns"
+          :key="column.id"
+          type="button"
+          :disabled="Boolean(form?.columns.some((item) => item.id === column.id)) || (!isLiteratureTable && (column.type === 'smart_text' || column.type === 'smart_tag'))"
+          @click="addEdgeColumn(column)"
+        >
+          <IcIcon :name="smartColumnIcon(column)" :size="15" />
+          <span>{{ column.title }}</span>
+          <span class="menu-column-type-pill">{{ smartColumnTypeLabel(column.type) }}</span>
+        </button>
+        <hr class="table-context-separator" />
+        <label class="table-context-input">
+          <span>自定义字段名</span>
+          <input v-model="customColumnTitle" class="form-input-surface" type="text" placeholder="例如：备注" @click.stop />
+        </label>
+        <span class="table-context-section-title">字段类型</span>
+        <button
+          v-for="type in availableCustomColumnTypes"
+          :key="type.value"
+          type="button"
+          :disabled="!isLiteratureTable && (type.value === 'smart_text' || type.value === 'smart_tag')"
+          @click="addEdgeCustomColumn(type.value)"
+        >
+          <IcIcon :name="SMART_COLUMN_TYPE_ICONS[type.value]" :size="15" /><span>{{ type.label }}</span>
+        </button>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div
@@ -2172,12 +2319,14 @@ function errorMessage(error: unknown): string {
                 :disabled="Boolean(form?.columns.some((item) => item.id === column.id)) || (!isLiteratureTable && (column.type === 'smart_text' || column.type === 'smart_tag'))"
                 @click="addContextColumn(column, direction.value as -1 | 1)"
               >
-                <IcIcon name="view-column" :size="15" /><span>{{ column.title }}</span>
+                <IcIcon :name="smartColumnIcon(column)" :size="15" />
+                <span>{{ column.title }}</span>
+                <span class="menu-column-type-pill">{{ smartColumnTypeLabel(column.type) }}</span>
               </button>
               <hr class="table-context-separator" />
               <label class="table-context-input">
                 <span>自定义字段名</span>
-                <input v-model="customColumnTitle" type="text" placeholder="例如：备注" @click.stop />
+                <input v-model="customColumnTitle" class="form-input-surface" type="text" placeholder="例如：备注" @click.stop />
               </label>
               <span class="table-context-section-title">字段类型</span>
               <button
@@ -2187,7 +2336,7 @@ function errorMessage(error: unknown): string {
                 :disabled="!isLiteratureTable && (type.value === 'smart_text' || type.value === 'smart_tag')"
                 @click="addContextCustomColumn(type.value, direction.value as -1 | 1)"
               >
-                <IcIcon name="add" :size="15" /><span>{{ type.label }}</span>
+                <IcIcon :name="SMART_COLUMN_TYPE_ICONS[type.value]" :size="15" /><span>{{ type.label }}</span>
               </button>
             </div>
           </div>
@@ -2751,8 +2900,18 @@ button:disabled {
 }
 
 .table-context-menu,
-.table-context-submenu {
+.table-context-submenu,
+.edge-column-menu {
   color: var(--color-text-secondary);
+}
+
+.edge-column-menu {
+  position: fixed;
+  z-index: 100001;
+  display: grid;
+  width: 280px;
+  box-sizing: border-box;
+  padding: var(--space-6);
 }
 
 .table-context-submenu.submenu-left {
@@ -2772,7 +2931,8 @@ button:disabled {
   padding: var(--space-6);
 }
 
-.table-context-menu button {
+.table-context-menu button,
+.edge-column-menu button {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
@@ -2788,6 +2948,21 @@ button:disabled {
   font: inherit;
   font-size: calc(13px * var(--font-scale));
   text-align: left;
+}
+
+.edge-column-menu button {
+  cursor: pointer;
+}
+
+.edge-column-menu button:hover:not(:disabled) {
+  background: var(--color-selection-blue-soft);
+  color: var(--color-text);
+}
+
+.edge-column-menu button:disabled {
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .table-context-menu > button,
@@ -2856,6 +3031,35 @@ button:disabled {
   overflow-y: auto;
 }
 
+.menu-column-type-pill,
+.column-type-pill,
+.column-ai-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 0;
+  height: 17px;
+  box-sizing: border-box;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  color: var(--color-tag-pill-text);
+  font-size: calc(9px * var(--font-scale));
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.menu-column-type-pill {
+  justify-self: end;
+}
+
+.column-ai-pill {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
 .table-context-menu kbd {
   color: var(--color-text-muted);
   font-family: var(--font-ui);
@@ -2883,7 +3087,7 @@ button:disabled {
   box-sizing: border-box;
   padding: 0 var(--space-8);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-xs);
+  border-radius: 999px;
   outline: 0;
   background: var(--color-canvas);
   color: var(--color-text);
@@ -2916,8 +3120,8 @@ button:disabled {
 
 .plain-table .smart-table-shell,
 .plain-table .smart-table {
-  width: 100%;
-  min-width: 100%;
+  width: max-content;
+  min-width: 0;
   padding: 0;
 }
 
@@ -2941,7 +3145,7 @@ button:disabled {
 
 .plain-table .column-head {
   min-height: 30px;
-  padding: 0 28px 0 var(--space-8);
+  padding: 0 var(--space-6);
 }
 
 .plain-table .cell textarea,
@@ -2970,7 +3174,7 @@ button:disabled {
 .smart-table-shell {
   position: relative;
   width: max-content;
-  min-width: 100%;
+  min-width: 0;
   padding: 0 9px 9px 0;
 }
 
@@ -2978,7 +3182,7 @@ button:disabled {
   border-collapse: separate;
   border-spacing: 0;
   width: max-content;
-  min-width: 100%;
+  min-width: 0;
   table-layout: fixed;
   user-select: none;
 }
@@ -3043,7 +3247,22 @@ th.swapped,
   justify-content: flex-start;
   gap: 6px;
   min-width: 0;
-  padding: 0 32px 0 var(--space-12);
+  padding: 0 var(--space-6);
+}
+
+th[data-column-id="row_index"] .column-head {
+  justify-content: center;
+  padding: 0;
+}
+
+th[data-column-id="row_index"] .column-title-label,
+th[data-column-id="row_index"] .column-type-pill {
+  display: none;
+}
+
+.column-field-icon {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
 }
 
 .table-edge-column-drag,
@@ -3088,6 +3307,8 @@ th.swapped,
   bottom: 0;
   left: 0;
   height: 9px;
+  border: 0;
+  transition: background-color 140ms ease, color 140ms ease;
 }
 
 .table-edge-add-column {
@@ -3096,28 +3317,50 @@ th.swapped,
   right: 0;
   bottom: 9px;
   width: 9px;
+  border: 0;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.table-edge-add-row:hover,
+.table-edge-add-column:hover {
+  background: color-mix(in srgb, var(--color-primary) 16%, var(--color-surface-raised));
+  color: var(--color-primary);
 }
 
 .column-resize-handle {
   position: absolute;
   top: 0;
-  right: -5px;
-  z-index: 8;
-  width: 10px;
+  right: -6px;
+  z-index: 20;
+  width: 12px;
   height: 100%;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: col-resize;
+  touch-action: none;
 }
 
-.column-resize-handle:hover {
+.column-resize-handle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 2px;
+  content: '';
+}
+
+.column-resize-handle:hover::after {
   background: color-mix(in srgb, var(--color-primary) 45%, transparent);
 }
 
-.column-head > span {
+.cell-column-resize-handle {
+  right: 0;
+}
+
+.column-title-label {
+  flex: 0 1 auto;
   min-width: 0;
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3139,36 +3382,6 @@ th.swapped,
   background: transparent;
   color: inherit;
   font: inherit;
-}
-
-.column-actions {
-  position: absolute;
-  top: 50%;
-  right: 6px;
-  display: flex;
-  transform: translateY(-50%);
-  opacity: 0;
-}
-
-th:hover .column-actions {
-  opacity: 1;
-}
-
-.column-actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-text-muted);
-}
-
-.column-actions button:hover {
-  background: var(--color-primary-softer);
-  color: var(--color-primary);
 }
 
 .cell {
@@ -3206,17 +3419,19 @@ th:hover .column-actions {
 }
 
 .cell.selected {
-  box-shadow: inset 0 0 0 1px var(--color-primary);
+  box-shadow: var(--cell-selection-shadow, inset 0 0 0 2px var(--color-primary));
 }
 
-.sticky {
+.sticky-literature-column {
   position: sticky;
   left: 0;
-  z-index: 3;
+  z-index: 5;
+  background: var(--color-canvas);
+  box-shadow: 1px 0 0 var(--color-border);
 }
 
-th.sticky {
-  z-index: 6;
+th.sticky-literature-column {
+  z-index: 8;
 }
 
 .row-index {
@@ -3224,7 +3439,7 @@ th.sticky {
   display: block;
   height: 100%;
   box-sizing: border-box;
-  padding: 12px;
+  padding: 12px 0;
   color: var(--color-text-muted);
   text-align: center;
 }
@@ -3248,19 +3463,33 @@ th.sticky {
 .row-resize-handle {
   position: absolute;
   right: 0;
-  bottom: -5px;
+  bottom: -6px;
   left: 0;
-  z-index: 7;
+  z-index: 19;
   width: 100%;
-  height: 10px;
+  height: 12px;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: row-resize;
+  touch-action: none;
 }
 
-.row-resize-handle:hover {
+.row-resize-handle::after {
+  position: absolute;
+  right: 0;
+  bottom: 5px;
+  left: 0;
+  height: 2px;
+  content: '';
+}
+
+.row-resize-handle:hover::after {
   background: color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+
+.cell-row-resize-handle {
+  bottom: 0;
 }
 
 .cell textarea,
@@ -3311,7 +3540,7 @@ th.sticky {
   padding: 0 4px 0 10px;
   border: 0;
   background: var(--color-surface-active);
-  color: var(--color-text-secondary);
+  color: var(--color-tag-pill-text);
 }
 
 .tag-pill-label {
@@ -3493,7 +3722,7 @@ th.sticky {
   border: 0;
   border-radius: 999px;
   background: var(--color-surface-active);
-  color: var(--color-text-secondary);
+  color: var(--color-tag-pill-text);
   font: inherit;
   font-size: calc(12px * var(--font-scale));
   text-align: center;
@@ -3592,8 +3821,11 @@ th.sticky {
 }
 
 .file-preview-image {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   border-radius: var(--radius-sm);
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .hidden-input {
@@ -3634,6 +3866,43 @@ th.sticky {
 .status-dot.failed {
   background: color-mix(in srgb, var(--color-danger) 12%, var(--color-canvas));
   color: var(--color-danger);
+}
+
+.smart-cell-loading-mask {
+  position: absolute;
+  z-index: 12;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--color-canvas) 90%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.pixel-loader {
+  display: grid;
+  grid-template-columns: repeat(5, 5px);
+  gap: 3px;
+  height: 13px;
+  align-items: end;
+}
+
+.pixel-loader i {
+  display: block;
+  width: 5px;
+  height: 5px;
+  background: var(--color-primary);
+  image-rendering: pixelated;
+  animation: smart-pixel-loader 800ms steps(2, end) infinite;
+}
+
+.pixel-loader i:nth-child(2),
+.pixel-loader i:nth-child(4) { animation-delay: 120ms; }
+
+.pixel-loader i:nth-child(3) { animation-delay: 240ms; }
+
+@keyframes smart-pixel-loader {
+  0%, 100% { height: 5px; opacity: 0.38; }
+  50% { height: 13px; opacity: 1; }
 }
 
 .tone-blue {

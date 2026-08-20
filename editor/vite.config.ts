@@ -66,6 +66,7 @@ export default defineConfig({
       '/component-library': DEV_PROXY_TARGET,
       '/vault': DEV_PROXY_TARGET,
       '/favorites': DEV_PROXY_TARGET,
+      '/privacy': DEV_PROXY_TARGET,
       '/feedback': DEV_PROXY_TARGET,
       '/smart-forms': DEV_PROXY_TARGET,
       '/structured-generation': DEV_PROXY_TARGET,

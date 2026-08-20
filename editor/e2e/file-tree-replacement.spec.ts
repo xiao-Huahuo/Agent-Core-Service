@@ -43,6 +43,7 @@ test.beforeEach(async ({ page }) => {
         ],
       },
       '/favorites': { favorites: [] },
+      '/privacy': { privacy: [] },
       '/knowledge/trash': { entries: [] },
       '/sessions': [],
       '/sessions/observability/history': [],
@@ -88,6 +89,7 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem('agent_editor_show_index_column', 'true')
     localStorage.setItem('agent_editor_show_graph_column', 'true')
     localStorage.setItem('agent_editor_show_favorite_column', 'true')
+    localStorage.setItem('agent_editor_show_privacy_column', 'true')
   })
 })
 
@@ -126,13 +128,15 @@ test('uses the provided checkbox tree component throughout the file tree', async
   await expect(fileRow.locator('.node-index-dot.indexed')).toBeVisible()
   await expect(fileRow.locator('.node-graph-dot.graphed')).toBeVisible()
   await expect(fileRow.locator('.favorite-button')).toBeVisible()
+  await expect(fileRow.locator('.privacy-button')).toBeVisible()
   const visibleStatusNameWidth = await fileRow.locator('.tree-name').evaluate(
     (element) => element.getBoundingClientRect().width,
   )
 
-  await page.locator('.header-action[title="隐藏索引、图谱与收藏状态"]').click()
+  await page.locator('.header-action[title="隐藏索引、图谱、收藏与隐私状态"]').click()
   await expect(fileRow.locator('.node-status-cluster')).toHaveCount(0)
   await expect(fileRow.locator('.favorite-button')).toHaveCount(0)
+  await expect(fileRow.locator('.privacy-button')).toHaveCount(0)
   const hiddenStatusNameWidth = await fileRow.locator('.tree-name').evaluate(
     (element) => element.getBoundingClientRect().width,
   )

@@ -298,6 +298,64 @@ class FavoriteListResponse(_message.Message):
     favorites: _containers.RepeatedCompositeFieldContainer[FavoriteEntryResponse]
     def __init__(self, favorites: _Optional[_Iterable[_Union[FavoriteEntryResponse, _Mapping]]] = ...) -> None: ...
 
+class PrivacyListRequest(_message.Message):
+    __slots__ = ("user_id", "target_type", "library_id", "filter_library")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_TYPE_FIELD_NUMBER: _ClassVar[int]
+    LIBRARY_ID_FIELD_NUMBER: _ClassVar[int]
+    FILTER_LIBRARY_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    target_type: str
+    library_id: str
+    filter_library: bool
+    def __init__(self, user_id: _Optional[str] = ..., target_type: _Optional[str] = ..., library_id: _Optional[str] = ..., filter_library: bool = ...) -> None: ...
+
+class PrivacyCreateRequest(_message.Message):
+    __slots__ = ("user_id", "library_id", "target_type", "target_id")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    LIBRARY_ID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_TYPE_FIELD_NUMBER: _ClassVar[int]
+    TARGET_ID_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    library_id: str
+    target_type: str
+    target_id: str
+    def __init__(self, user_id: _Optional[str] = ..., library_id: _Optional[str] = ..., target_type: _Optional[str] = ..., target_id: _Optional[str] = ...) -> None: ...
+
+class PrivacyDeleteRequest(_message.Message):
+    __slots__ = ("user_id", "library_id", "target_type", "target_id")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    LIBRARY_ID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_TYPE_FIELD_NUMBER: _ClassVar[int]
+    TARGET_ID_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    library_id: str
+    target_type: str
+    target_id: str
+    def __init__(self, user_id: _Optional[str] = ..., library_id: _Optional[str] = ..., target_type: _Optional[str] = ..., target_id: _Optional[str] = ...) -> None: ...
+
+class PrivacyEntryResponse(_message.Message):
+    __slots__ = ("privacy_id", "user_id", "library_id", "target_type", "target_id", "created_at")
+    PRIVACY_ID_FIELD_NUMBER: _ClassVar[int]
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    LIBRARY_ID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_TYPE_FIELD_NUMBER: _ClassVar[int]
+    TARGET_ID_FIELD_NUMBER: _ClassVar[int]
+    CREATED_AT_FIELD_NUMBER: _ClassVar[int]
+    privacy_id: str
+    user_id: str
+    library_id: str
+    target_type: str
+    target_id: str
+    created_at: str
+    def __init__(self, privacy_id: _Optional[str] = ..., user_id: _Optional[str] = ..., library_id: _Optional[str] = ..., target_type: _Optional[str] = ..., target_id: _Optional[str] = ..., created_at: _Optional[str] = ...) -> None: ...
+
+class PrivacyListResponse(_message.Message):
+    __slots__ = ("privacy",)
+    PRIVACY_FIELD_NUMBER: _ClassVar[int]
+    privacy: _containers.RepeatedCompositeFieldContainer[PrivacyEntryResponse]
+    def __init__(self, privacy: _Optional[_Iterable[_Union[PrivacyEntryResponse, _Mapping]]] = ...) -> None: ...
+
 class FeedbackCreateRequest(_message.Message):
     __slots__ = ("user_id", "content", "source", "page")
     USER_ID_FIELD_NUMBER: _ClassVar[int]

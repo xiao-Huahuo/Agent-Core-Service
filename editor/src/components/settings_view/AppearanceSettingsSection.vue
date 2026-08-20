@@ -410,7 +410,7 @@ onBeforeUnmount(() => {
           添加字体
         </button>
       </div>
-      <div v-if="activeFontPicker === 'text'" class="font-picker-popover" @pointerdown.stop>
+      <div v-if="activeFontPicker === 'text'" class="font-picker-popover font-picker-popover--above" @pointerdown.stop>
         <input
           v-model="textFontQuery"
           autocomplete="off"
@@ -498,6 +498,11 @@ onBeforeUnmount(() => {
 .font-size-row input[type='range'] {
   width: 100%;
   min-width: 0;
+}
+
+.font-picker-popover--above {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .settings-resource-page-switch {

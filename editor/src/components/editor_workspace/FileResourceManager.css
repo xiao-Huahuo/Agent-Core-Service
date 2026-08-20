@@ -675,7 +675,7 @@
 }
 
 .icon-small .icon-tile {
-  grid-template-columns: 18px 22px minmax(0, 1fr) 24px;
+  grid-template-columns: 18px 22px minmax(0, 1fr) 24px 24px;
   align-content: center;
   align-items: center;
   justify-items: start;
@@ -686,11 +686,18 @@
 }
 
 .icon-small .icon-tile:not(:has(.selection-check)) {
-  grid-template-columns: 22px minmax(0, 1fr) 24px;
+  grid-template-columns: 22px minmax(0, 1fr) 24px 24px;
 }
 
 .icon-small .tile-favorite {
   grid-column: -2 / -1;
+  grid-row: 1;
+  position: static;
+  justify-self: end;
+}
+
+.icon-small .tile-privacy {
+  grid-column: -3 / -2;
   grid-row: 1;
   position: static;
   justify-self: end;
@@ -701,6 +708,14 @@
   position: absolute;
   top: 6px;
   right: 6px;
+  z-index: 2;
+}
+
+.icon-medium .tile-privacy,
+.icon-large .tile-privacy {
+  position: absolute;
+  top: 6px;
+  right: 34px;
   z-index: 2;
 }
 

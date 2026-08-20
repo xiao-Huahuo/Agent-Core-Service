@@ -84,4 +84,15 @@ test('adjusts UI and editor text font sizes independently', async ({ page }) => 
     ui: document.documentElement.style.getPropertyValue('--font-scale'),
     text: document.documentElement.style.getPropertyValue('--text-font-scale'),
   }))).toEqual({ ui: '0.96', text: '2.028' })
+
+  await page.getByRole('button', { name: '添加字体' }).last().click()
+  const fontPicker = page.locator('.font-picker-popover')
+  await expect(fontPicker).toBeVisible()
+  await expect(page.locator('.form-height-transition')).toHaveCSS('overflow', 'visible')
+  await expect.poll(() => fontPicker.evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    return box.top >= 0 && box.bottom <= window.innerHeight
+  })).toBe(true)
+  await fontPicker.getByRole('button').last().scrollIntoViewIfNeeded()
+  await expect(fontPicker.getByRole('button').last()).toBeVisible()
 })

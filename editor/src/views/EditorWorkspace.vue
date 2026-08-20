@@ -41,6 +41,7 @@ const ComponentLibraryView = defineAsyncComponent(() => import('@/views/Componen
 const VaultView = defineAsyncComponent(() => import('@/views/VaultView.vue'))
 const SmartFormsView = defineAsyncComponent(() => import('@/views/SmartFormsView.vue'))
 const FavoritesView = defineAsyncComponent(() => import('@/views/FavoritesView.vue'))
+const PrivacyView = defineAsyncComponent(() => import('@/views/PrivacyView.vue'))
 const MarkdownHtmlVisualizationView = defineAsyncComponent(() => import('@/views/MarkdownHtmlVisualizationView.vue'))
 const SearchPage = defineAsyncComponent(() => import('@/views/SearchPage.vue'))
 const BrowserPage = defineAsyncComponent(() => import('@/views/BrowserPage.vue'))
@@ -83,6 +84,9 @@ const isHomePage = computed(() => workspaceStore.mainView === 'home')
 const isBrowserPage = computed(() => workspaceStore.mainView === 'browser')
 const browserSidebarVisible = computed(() => (
   workspaceStore.browserSidebarOpen && workspaceStore.mainView !== 'browser'
+))
+const editorSidebarVisible = computed(() => (
+  workspaceStore.editorSidebarOpen && workspaceStore.mainView !== 'editor'
 ))
 const sidebarHidden = computed(() => (
   isAgentPage.value
@@ -134,6 +138,7 @@ const workspaceGridStyle = computed<Record<string, string>>(() => ({
   '--file-resizer-width': visibleFileSidebarOpen.value ? '4px' : '0px',
   '--agent-col-width': visibleAgentSidebarOpen.value ? `${agentWidth.value}px` : '0px',
   '--agent-resizer-width': visibleAgentSidebarOpen.value ? '4px' : '0px',
+  '--editor-sidebar-width': editorSidebarVisible.value ? 'clamp(360px, 42vw, 620px)' : '0px',
   '--browser-col-ratio': browserSidebarVisible.value ? '1fr' : '0fr',
   '--file-mobile-row': visibleFileSidebarOpen.value ? '300px' : '0px',
   '--agent-mobile-row': visibleAgentSidebarOpen.value ? '360px' : '0px',
@@ -340,6 +345,15 @@ function openResources() {
 
 function openFavorites() {
   const next = workspaceStore.mainView === 'favorites' ? 'editor' : 'favorites'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
+}
+
+function openPrivacy() {
+  const next = workspaceStore.mainView === 'privacy' ? 'editor' : 'privacy'
   workspaceStore.setMainView(next)
   if (next !== 'editor') {
     fileSidebarOpen.value = false
@@ -635,6 +649,7 @@ watch(
       :class="{
         'file-sidebar-collapsed': !visibleFileSidebarOpen,
         'agent-sidebar-collapsed': !visibleAgentSidebarOpen,
+        'editor-sidebar-collapsed': !editorSidebarVisible,
         'browser-sidebar-collapsed': !browserSidebarVisible,
         'agent-main-view': isAgentPage,
         'graph-main-view': isGraphPage,
@@ -649,6 +664,7 @@ watch(
         :agent-open="visibleAgentSidebarOpen"
         :resources-active="workspaceStore.mainView === 'resources'"
         :favorites-active="workspaceStore.mainView === 'favorites'"
+        :privacy-active="workspaceStore.mainView === 'privacy'"
         :library-active="workspaceStore.mainView === 'library'"
         :component-library-active="workspaceStore.mainView === 'component-library'"
         :vault-active="workspaceStore.mainView === 'vault'"
@@ -671,6 +687,7 @@ watch(
         @toggle-git="toggleLeftGitSidebar"
         @open-resources="openResources"
         @open-favorites="openFavorites"
+        @open-privacy="openPrivacy"
         @open-library="openLibrary"
         @open-component-library="openComponentLibrary"
         @open-vault="openVault"
@@ -710,6 +727,7 @@ watch(
         <EditorPane v-else-if="workspaceStore.mainView === 'editor'" class="main-shell-content" />
         <FileResourceManager v-else-if="workspaceStore.mainView === 'resources'" class="main-shell-content" />
         <FavoritesView v-else-if="workspaceStore.mainView === 'favorites'" class="main-shell-content" />
+        <PrivacyView v-else-if="workspaceStore.mainView === 'privacy'" class="main-shell-content" />
         <LibraryView v-else-if="workspaceStore.mainView === 'library'" class="main-shell-content" />
         <ComponentLibraryView v-else-if="workspaceStore.mainView === 'component-library'" class="main-shell-content" />
         <VaultView v-else-if="workspaceStore.mainView === 'vault'" class="main-shell-content" />
@@ -730,6 +748,9 @@ watch(
         <SkillView v-else-if="workspaceStore.mainView === 'skills'" class="main-shell-content" />
         <SettingsView v-else-if="workspaceStore.mainView === 'settings'" class="main-shell-content" />
       </main>
+      <aside class="editor-sidebar-content" :aria-hidden="!editorSidebarVisible">
+        <EditorPane v-if="editorSidebarVisible" sidebar @close="workspaceStore.closeEditorSidebar" />
+      </aside>
       <BrowserPage
         v-if="!isBrowserPage"
         class="browser-sidebar-content"
@@ -794,7 +815,7 @@ watch(
   display: grid;
   grid-template-columns:
     var(--activity-col-width) var(--file-col-width) var(--file-resizer-width) minmax(0, 1fr)
-    minmax(0, var(--browser-col-ratio)) var(--agent-resizer-width) var(--agent-col-width);
+    var(--editor-sidebar-width) minmax(0, var(--browser-col-ratio)) var(--agent-resizer-width) var(--agent-col-width);
   column-gap: 0;
   min-width: 0;
   min-height: 0;
@@ -827,6 +848,7 @@ watch(
 }
 
 .main-shell.ide-panel,
+.editor-sidebar-content,
 .agent-col {
   box-shadow: 0 0 0 4px var(--library-form-ring);
 }
@@ -866,7 +888,7 @@ watch(
 }
 
 .browser-sidebar-content {
-  grid-column: 5;
+  grid-column: 6;
   min-width: 0;
   min-height: 0;
   margin: 0 0 var(--space-12) 0;
@@ -875,6 +897,25 @@ watch(
   opacity: 1;
   transform: translateX(0);
   transition: opacity 160ms ease, transform 180ms ease;
+}
+
+.editor-sidebar-content {
+  grid-column: 5;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  margin: var(--space-12);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--workspace-card-radius);
+  background: var(--color-bg-app);
+  transition: opacity 160ms ease, transform 180ms ease;
+}
+
+.workspace-grid.editor-sidebar-collapsed .editor-sidebar-content {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(18px);
 }
 
 .workspace-grid.browser-sidebar-collapsed .browser-sidebar-content {
@@ -894,11 +935,11 @@ watch(
 }
 
 .agent-resizer {
-  grid-column: 6;
+  grid-column: 7;
 }
 
 .agent-col {
-  grid-column: 7;
+  grid-column: 8;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -909,6 +950,10 @@ watch(
   transition:
     opacity 160ms ease,
     transform 180ms ease;
+}
+
+.agent-col :deep(.agent-panel) {
+  border-radius: var(--workspace-card-radius);
 }
 
 .todo-section {
@@ -1070,6 +1115,7 @@ watch(
   }
 
   .main-shell.ide-panel,
+  .editor-sidebar-content,
   .agent-col {
     margin: var(--space-8);
   }

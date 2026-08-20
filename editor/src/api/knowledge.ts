@@ -141,6 +141,49 @@ export function ingestKnowledgePathStream(
   return streamIngestion(API_ROUTES.KNOWLEDGE_FILE_INGEST_PATH_STREAM, userId, path, onProgress)
 }
 
+export interface KnowledgeIngestionJob {
+  job_id: string
+  user_id: string
+  library_id: string
+  path: string
+  name: string
+  pipeline: string
+  status: 'queued' | 'running' | 'cancelling' | 'cancelled' | 'finished' | 'skipped' | 'failed'
+  stage: string
+  stage_label: string
+  progress: number
+  stage_current: number
+  stage_total: number
+  size?: number
+  mtime?: string
+  message: string
+  error: string
+  created_at: string
+  started_at?: string
+  finished_at?: string
+  updated_at: string
+}
+
+export function createKnowledgeIngestionJobs(userId: string, paths: string[]): Promise<{ jobs: KnowledgeIngestionJob[] }> {
+  return apiPost(API_ROUTES.KNOWLEDGE_INGESTION_JOBS, { user_id: userId, paths })
+}
+
+export function listKnowledgeIngestionJobs(
+  userId: string,
+  activeOnly = false,
+): Promise<{ jobs: KnowledgeIngestionJob[] }> {
+  return apiGet(API_ROUTES.KNOWLEDGE_INGESTION_JOBS, {
+    user_id: userId,
+    active_only: activeOnly ? 'true' : 'false',
+  })
+}
+
+export function cancelKnowledgeIngestionJob(userId: string, jobId: string): Promise<KnowledgeIngestionJob> {
+  return apiPost(`${API_ROUTES.KNOWLEDGE_INGESTION_JOBS}/${encodeURIComponent(jobId)}/cancel`, {
+    user_id: userId,
+  })
+}
+
 export function createKnowledgeFile(
   userId: string,
   path: string,
@@ -235,6 +278,11 @@ export interface GraphDocStatus {
   status: 'pending' | 'processing' | 'done' | 'skipped' | 'failed'
   progress?: number
   total_sections?: number
+  stage?: string
+  stage_label?: string
+  stage_current?: number
+  stage_total?: number
+  message?: string
 }
 
 export interface GraphRebuildStatus {
@@ -246,8 +294,8 @@ export interface GraphRebuildStatus {
   docs?: GraphDocStatus[]
 }
 
-export function rebuildKnowledgeGraph(userId: string, path?: string): Promise<{ status: string; message: string }> {
-  return apiPost(API_ROUTES.KNOWLEDGE_GRAPH_REBUILD, { user_id: userId, path })
+export function rebuildKnowledgeGraph(userId: string, path?: string, force = false): Promise<{ status: string; message: string }> {
+  return apiPost(API_ROUTES.KNOWLEDGE_GRAPH_REBUILD, { user_id: userId, path, force })
 }
 
 export interface DedupStatus {

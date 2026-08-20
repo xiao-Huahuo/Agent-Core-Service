@@ -201,7 +201,7 @@ async function copySource(): Promise<void> {
   min-height: 23px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-primary) 30%, transparent);
-  color: var(--color-primary);
+  color: var(--color-tag-pill-text);
   padding: 0 8px;
   font-size: calc(11px * var(--font-scale));
 }

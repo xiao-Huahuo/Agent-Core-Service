@@ -207,7 +207,7 @@ hr { width: 100%; margin: var(--space-8) 0; border: 0; border-top: 1px solid var
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--color-tag-pill-text);
   padding: 0 var(--space-10);
   text-align: left;
   text-overflow: ellipsis;
@@ -234,7 +234,7 @@ hr { width: 100%; margin: var(--space-8) 0; border: 0; border-top: 1px solid var
 .tag-pill:hover,
 .tag-pill.active {
   background: var(--color-primary-soft);
-  color: var(--color-primary);
+  color: var(--color-tag-pill-text);
 }
 
 .tag-pill.active::before { transform: scaleY(1); }

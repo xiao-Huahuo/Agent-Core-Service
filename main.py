@@ -101,9 +101,11 @@ from agent_service.services.task_list_service import TaskListService
 from agent_service.services.agent_change_service import AgentChangeService
 from agent_service.services.logging_service import setup_logging
 from agent_service.services.favorite_service import FavoriteService
+from agent_service.services.privacy_service import PrivacyService
 from agent_service.services.feedback_service import FeedbackService
 from agent_service.services.activity_service import ActivityService
 from agent_service.services.activity_tracking import classify_activity, should_inspect_activity_request
+from agent_service.services.knowledge_ingestion_job_service import KnowledgeIngestionJobService
 
 logger = logging.getLogger(__name__)
 
@@ -176,12 +178,18 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         knowledge_library_service=knowledge_library_service,
         knowledge_graph_service=knowledge_graph_service,
     )
+    knowledge_ingestion_job_service = KnowledgeIngestionJobService(
+        engine=memory_service.engine,
+        config=config,
+        knowledge_library_service=knowledge_library_service,
+    )
     component_library_service = ComponentLibraryService(
         settings_service=settings_service,
         legacy_engine=settings_service.engine,
     )
     vault_service = VaultService(config=config, engine=settings_service.engine)
     favorite_service = FavoriteService(engine=settings_service.engine)
+    privacy_service = PrivacyService(engine=settings_service.engine)
     feedback_service = FeedbackService(engine=settings_service.engine)
     from agent_service.services.smart_form_service import SmartFormService
     from agent_service.services.structured_generation_service import StructuredGenerationService
@@ -191,12 +199,14 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     rest_deps._attachment_service = attachment_service
     rest_deps._skill_service = skill_service
     rest_deps._knowledge_library_service = knowledge_library_service
+    rest_deps._knowledge_ingestion_job_service = knowledge_ingestion_job_service
     rest_deps._knowledge_graph_service = knowledge_graph_service
     rest_deps._git_service = git_service
     rest_deps._library_service = library_service
     rest_deps._component_library_service = component_library_service
     rest_deps._vault_service = vault_service
     rest_deps._favorite_service = favorite_service
+    rest_deps._privacy_service = privacy_service
     rest_deps._feedback_service = feedback_service
     rest_deps._activity_service = activity_service
     rest_deps._smart_form_service = smart_form_service
@@ -264,8 +274,10 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         message_service=message_service,
         settings_service=settings_service,
         knowledge_library_service=knowledge_library_service,
+        knowledge_ingestion_job_service=knowledge_ingestion_job_service,
         git_service=git_service,
         favorite_service=favorite_service,
+        privacy_service=privacy_service,
         feedback_service=feedback_service,
         vault_service=vault_service,
         agent_change_service=agent_change_service,
@@ -307,6 +319,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         logger.info("AgentService 正在关闭...")
         if automation_scheduler is not None:
             automation_scheduler.shutdown()
+        knowledge_ingestion_job_service.stop()
         agent_queue_scheduler.shutdown()
         if _grpc_server is not None:
             _grpc_server.stop(0)
@@ -322,12 +335,14 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._attachment_service = None
         rest_deps._skill_service = None
         rest_deps._knowledge_library_service = None
+        rest_deps._knowledge_ingestion_job_service = None
         rest_deps._knowledge_graph_service = None
         rest_deps._git_service = None
         rest_deps._library_service = None
         rest_deps._component_library_service = None
         rest_deps._vault_service = None
         rest_deps._favorite_service = None
+        rest_deps._privacy_service = None
         rest_deps._feedback_service = None
         rest_deps._smart_form_service = None
         rest_deps._structured_generation_service = None
@@ -473,7 +488,9 @@ if _static_dir is not None:
         return FileResponse(_static_dir / "index.html")
 
 if __name__ == "__main__":
+    import multiprocessing
     import uvicorn
 
+    multiprocessing.freeze_support()
     temp_config = AgentConfig.load_config(ensure_models=False)
     uvicorn.run(app, host=temp_config.server.http_host, port=temp_config.server.http_port, timeout_keep_alive=temp_config.server.uvicorn_timeout_keep_alive)

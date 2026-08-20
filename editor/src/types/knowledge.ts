@@ -60,6 +60,7 @@ export type WorkspaceMainView =
   | 'editor'
   | 'resources'
   | 'favorites'
+  | 'privacy'
   | 'library'
   | 'component-library'
   | 'vault'
@@ -169,12 +170,13 @@ export interface LibraryItemsResponse {
   breadcrumbs: LibraryBreadcrumb[]
 }
 
-export type IngestionQueueStatus = 'running' | 'waiting'
+export type IngestionQueueStatus = 'waiting' | 'queued' | 'running' | 'cancelling'
 
-export type IngestionHistoryStatus = 'finished' | 'failed' | 'skipped'
+export type IngestionHistoryStatus = 'finished' | 'failed' | 'skipped' | 'cancelled'
 
 export interface IngestionQueueItem {
   id: string
+  jobId?: string
   name: string
   path: string
   isDir: boolean
@@ -182,6 +184,11 @@ export interface IngestionQueueItem {
   mtime?: string
   status: IngestionQueueStatus
   progress: number
+  pipeline?: string
+  stage?: string
+  stageLabel?: string
+  stageCurrent?: number
+  stageTotal?: number
   queuedAt: string
   chunksCreated?: number
   message?: string
@@ -256,8 +263,12 @@ export interface FilePreviewPayload {
   data_url?: string
   /** Optional backend raw file URL for image, video, iframe, or object previews. */
   raw_url?: string
+  /** Optional rasterized first-page image for PDF cards and compact previews. */
+  thumbnail_url?: string
   /** Optional MIME type for binary embeds. */
   mime_type?: string
+  /** Actual video container selected by backend header detection. */
+  video_container?: 'native' | 'mpegts'
   /** Optional table sheets for CSV/XLSX previews. */
   sheets?: TablePreviewSheet[]
   /** Optional unsupported-file message. */

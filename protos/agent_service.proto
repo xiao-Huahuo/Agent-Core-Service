@@ -91,6 +91,9 @@ service AgentService {
   rpc CopyKnowledgePath(KnowledgePathCopyRequest) returns (KnowledgeFileNode);
   rpc DeleteKnowledgePath(KnowledgePathDeleteRequest) returns (DeleteResponse);
   rpc RenameKnowledgePath(KnowledgePathRenameRequest) returns (KnowledgeFileNode);
+  rpc CreateKnowledgeIngestionJobs(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc ListKnowledgeIngestionJobs(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc CancelKnowledgeIngestionJob(google.protobuf.Struct) returns (google.protobuf.Struct);
 
   // 当前 active 知识库的 Git 管理
   rpc GetGitStatus(GitUserRequest) returns (google.protobuf.Struct);
@@ -119,6 +122,11 @@ service AgentService {
   rpc ListFavorites(FavoriteListRequest) returns (FavoriteListResponse);
   rpc AddFavorite(FavoriteCreateRequest) returns (FavoriteEntryResponse);
   rpc DeleteFavorite(FavoriteDeleteRequest) returns (DeleteResponse);
+
+  // 用户隐私
+  rpc ListPrivacy(PrivacyListRequest) returns (PrivacyListResponse);
+  rpc AddPrivacy(PrivacyCreateRequest) returns (PrivacyEntryResponse);
+  rpc DeletePrivacy(PrivacyDeleteRequest) returns (DeleteResponse);
 
   // 用户反馈
   rpc ListFeedback(FeedbackListRequest) returns (FeedbackListResponse);
@@ -373,6 +381,40 @@ message FavoriteEntryResponse {
 
 message FavoriteListResponse {
   repeated FavoriteEntryResponse favorites = 1;
+}
+
+message PrivacyListRequest {
+  string user_id = 1;
+  string target_type = 2;
+  string library_id = 3;
+  bool filter_library = 4;
+}
+
+message PrivacyCreateRequest {
+  string user_id = 1;
+  string library_id = 2;
+  string target_type = 3;
+  string target_id = 4;
+}
+
+message PrivacyDeleteRequest {
+  string user_id = 1;
+  string library_id = 2;
+  string target_type = 3;
+  string target_id = 4;
+}
+
+message PrivacyEntryResponse {
+  string privacy_id = 1;
+  string user_id = 2;
+  string library_id = 3;
+  string target_type = 4;
+  string target_id = 5;
+  string created_at = 6;
+}
+
+message PrivacyListResponse {
+  repeated PrivacyEntryResponse privacy = 1;
 }
 
 // ---------------------------------------------------------------------------

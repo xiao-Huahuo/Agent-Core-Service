@@ -147,25 +147,30 @@ describe('MarkdownContent streaming code highlight', () => {
     expect(code.element.innerHTML).not.toContain('<span')
   })
 
-  it('reveals only newly appended prose words and keeps a trailing stream cursor', async () => {
+  it('renders growing lists, tables, and code without transient DOM wrappers', async () => {
     const wrapper = mount(MarkdownContent, {
       props: {
-        content: '第一段文字',
+        content: '- 第一项',
         isStreaming: true,
         citationMap: {},
       },
     })
     await nextTick()
 
-    expect(wrapper.find('.stream-cursor').exists()).toBe(true)
-    expect(wrapper.findAll('.stream-reveal-word').map((word) => word.text()).join('')).toBe('第一段文字')
+    expect(wrapper.findAll('li')).toHaveLength(1)
 
-    await wrapper.setProps({ content: '第一段文字 新到 内容' })
+    await wrapper.setProps({ content: '- 第一项\n- 第二项\n\n| 名称 | 状态 |\n| --- | --- |\n| 图谱 | 抽取中 |' })
     await nextTick()
 
-    const words = wrapper.findAll('.stream-reveal-word')
-    expect(words.map((word) => word.text())).toEqual(['新到', '内容'])
-    expect(wrapper.text()).toContain('第一段文字 新到 内容')
+    expect(wrapper.findAll('li')).toHaveLength(2)
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+
+    await wrapper.setProps({ content: '- 第一项\n- 第二项\n\n| 名称 | 状态 |\n| --- | --- |\n| 图谱 | 抽取中 |\n\n```ts\nconst live = true' })
+    await nextTick()
+
+    expect(wrapper.get('pre code').text()).toContain('const live = true')
+    expect(wrapper.find('.stream-reveal-word').exists()).toBe(false)
+    expect(wrapper.find('.stream-cursor').exists()).toBe(false)
   })
 
   it('removes the stream cursor without altering the final markdown content', async () => {

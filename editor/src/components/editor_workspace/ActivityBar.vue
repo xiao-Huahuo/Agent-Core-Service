@@ -22,6 +22,7 @@ const props = defineProps<{
   agentOpen: boolean
   resourcesActive: boolean
   favoritesActive: boolean
+  privacyActive: boolean
   libraryActive: boolean
   componentLibraryActive: boolean
   vaultActive: boolean
@@ -46,6 +47,7 @@ const emit = defineEmits<{
   toggleGit: []
   openResources: []
   openFavorites: []
+  openPrivacy: []
   openLibrary: []
   openComponentLibrary: []
   openVault: []
@@ -337,6 +339,18 @@ function closeKnowledgeMenu() {
     </button>
     <button
       class="activity-button"
+      :class="{ active: privacyActive }"
+      type="button"
+      title="我的隐私"
+      aria-label="我的隐私"
+      @mousedown.prevent="handleRipple"
+      @click="emit('openPrivacy')"
+    >
+      <IcIcon name="visibility-off" :size="18" />
+      <span class="activity-label">隐私</span>
+    </button>
+    <button
+      class="activity-button"
       :class="{ active: searchActive }"
       type="button"
       title="Search"
@@ -592,7 +606,7 @@ function closeKnowledgeMenu() {
   clip-path: polygon(0 0, var(--space-8) 0, 100% 50%, var(--space-8) 100%, 0 100%);
   content: '';
   transform: translateY(-50%);
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .activity-bar.management .knowledge-group {

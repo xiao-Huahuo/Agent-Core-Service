@@ -77,3 +77,47 @@ test('wraps the Agent sidebar in the workspace card shell', async ({ page }) => 
     return agentBackground === workspaceBackground
   }).toBe(true)
 })
+
+test('keeps the library name visible beside ingestion progress', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('agent_editor_profile', JSON.stringify({
+      userId: '1',
+      knowledgeDir: 'D:/Knowledge',
+      activeLibraryId: 'knowledge-library',
+      knowledgeLibraries: [{
+        libraryId: 'knowledge-library',
+        name: 'knowledge',
+        knowledgeDir: 'D:/Knowledge',
+        libraryStorageDir: '.metaweave/library',
+        isActive: true,
+      }],
+    }))
+  })
+  await page.goto('/')
+
+  const libraryName = page.locator('.library-name-input')
+  await expect(libraryName).toBeVisible()
+  await libraryName.evaluate((element) => {
+    const input = element as HTMLInputElement
+    input.value = 'knowledge'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+
+    const brand = input.closest<HTMLElement>('.brand')
+    if (brand) {
+      brand.style.width = '230px'
+      brand.style.maxWidth = '230px'
+      brand.style.flexBasis = '230px'
+    }
+    const progress = document.createElement('div')
+    progress.className = 'ingestion-progress'
+    progress.style.flex = '0 0 140px'
+    progress.style.width = '140px'
+    progress.innerHTML = '<span class="ingestion-progress-track"></span><span class="ingestion-progress-percent">33%</span>'
+    brand?.append(progress)
+  })
+
+  await expect.poll(async () => libraryName.evaluate((element) => {
+    const input = element as HTMLInputElement
+    return input.clientWidth >= input.scrollWidth
+  })).toBe(true)
+})

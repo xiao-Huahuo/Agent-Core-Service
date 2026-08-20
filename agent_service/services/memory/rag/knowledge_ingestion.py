@@ -129,7 +129,11 @@ class KnowledgeIngestionService:
                 memory_type="knowledge_chunk",
                 source_id=document.document_id,
             )
-            chunks_created = self._ingest_document(document=document, user_id=user_id)
+            chunks_created = self._ingest_document(
+                document=document,
+                user_id=user_id,
+                progress_callback=progress_callback,
+            )
             if chunks_created == 0:
                 result.files_skipped += 1
                 self._emit_progress(
@@ -224,7 +228,11 @@ class KnowledgeIngestionService:
             memory_type="knowledge_chunk",
             source_id=document.document_id,
         )
-        chunks_created = self._ingest_document(document=document, user_id=user_id)
+        chunks_created = self._ingest_document(
+            document=document,
+            user_id=user_id,
+            progress_callback=progress_callback,
+        )
         if chunks_created == 0:
             result.files_skipped = 1
             self._emit_progress(
@@ -290,14 +298,20 @@ class KnowledgeIngestionService:
             payload["message"] = message
         progress_callback(payload)
 
-    def _ingest_document(self, *, document: StructuredKnowledgeDocument, user_id: str) -> int:
+    def _ingest_document(
+        self,
+        *,
+        document: StructuredKnowledgeDocument,
+        user_id: str,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    ) -> int:
         """
         将单个结构化知识文档切块并写入长期记忆。
         document: 由 frontmatter_bootstrap 生成的结构化知识文档。
         user_id: 知识切片归属用户。
         """
 
-        total_chunks = 0
+        chunk_rows: list[tuple[Any, Any, str]] = []
         for section in document.sections:
             chunk_inputs = chunk_text(
                 text=section.content,
@@ -306,17 +320,34 @@ class KnowledgeIngestionService:
             )
             if not chunk_inputs:
                 continue
-            chunk_contents = [
-                self._build_chunk_content(
+            for chunk_input in chunk_inputs:
+                chunk_rows.append((
+                    section,
+                    chunk_input,
+                    self._build_chunk_content(
                     document=document,
                     section_heading=section.heading,
                     chunk_text=chunk_input.content,
-                )
-                for chunk_input in chunk_inputs
-            ]
-            logger.debug("    Embedding %d chunks for '%s'...", len(chunk_contents), section.heading)
-            vectors = self.embedding_service.embed_texts(chunk_contents)
-            for chunk_input, chunk_content, vector in zip(chunk_inputs, chunk_contents, vectors, strict=True):
+                    ),
+                ))
+        total_chunks = len(chunk_rows)
+        self._emit_detailed_progress(
+            progress_callback,
+            document=document,
+            stage="split",
+            stage_label=f"切片完成，共 {total_chunks} 个切片",
+            current=total_chunks,
+            total=total_chunks,
+            overall_progress=54,
+        )
+        created = 0
+        batch_size = 16
+        total_batches = max(1, (total_chunks + batch_size - 1) // batch_size)
+        for batch_index, batch_start in enumerate(range(0, total_chunks, batch_size), start=1):
+            batch = chunk_rows[batch_start:batch_start + batch_size]
+            logger.debug("    Embedding batch %d/%d (%d chunks)...", batch_index, total_batches, len(batch))
+            vectors = self.embedding_service.embed_texts([row[2] for row in batch])
+            for (section, chunk_input, chunk_content), vector in zip(batch, vectors, strict=True):
                 self.memory_service.create_memory(
                     LongTermMemorySpecCreate(
                         user_id=user_id,
@@ -355,8 +386,48 @@ class KnowledgeIngestionService:
                         embedding_vector_json=vector,
                     )
                 )
-                total_chunks += 1
-        return total_chunks
+                created += 1
+            self._emit_detailed_progress(
+                progress_callback,
+                document=document,
+                stage="embedding",
+                stage_label=f"正在写入向量批次 {batch_index} / {total_batches}",
+                current=batch_index,
+                total=total_batches,
+                overall_progress=54 + round((batch_index / total_batches) * 42),
+                message=f"已写入 {created} / {total_chunks} 个切片",
+            )
+        return created
+
+    @staticmethod
+    def _emit_detailed_progress(
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        *,
+        document: StructuredKnowledgeDocument,
+        stage: str,
+        stage_label: str,
+        current: int,
+        total: int,
+        overall_progress: int,
+        message: str = "",
+    ) -> None:
+        """发送切片和分批向量写入的真实工作单位。"""
+
+        if not progress_callback:
+            return
+        relative_path = str(document.metadata.get("relative_path") or document.source_uri)
+        progress_callback({
+            "phase": "ingestion",
+            "status": "processing",
+            "path": relative_path.replace("\\", "/"),
+            "name": Path(relative_path).name,
+            "stage": stage,
+            "stage_label": stage_label,
+            "stage_current": current,
+            "stage_total": total,
+            "overall_progress": overall_progress,
+            "message": message,
+        })
 
     @staticmethod
     def _build_chunk_content(

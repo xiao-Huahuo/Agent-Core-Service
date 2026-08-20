@@ -11,17 +11,18 @@ import { computed, ref, watch } from 'vue'
 
 import { ApiError, buildApiUrl } from '@/api/client'
 import { updateCurrentDocumentContext } from '@/api/agent'
-import type { GraphDocStatus } from '@/api/knowledge'
+import type { GraphDocStatus, KnowledgeIngestionJob } from '@/api/knowledge'
 import {
   buildKnowledgeEventsUrl,
+  cancelKnowledgeIngestionJob,
   copyKnowledgePath,
+  createKnowledgeIngestionJobs,
   createKnowledgeFile,
   createKnowledgeFolder,
   deleteKnowledgePath,
   deleteKnowledgeTrashEntry,
   getKnowledgeGraphStatus,
-  ingestKnowledgeFileStream,
-  ingestKnowledgePathStream,
+  listKnowledgeIngestionJobs,
   listKnowledgeFiles,
   listKnowledgeTrash,
   previewKnowledgeFile,
@@ -33,7 +34,6 @@ import {
   uploadKnowledgeFile,
   writeKnowledgeFile,
 } from '@/api/knowledge'
-import { rebuildKnowledgeRootStream } from '@/api/settings'
 import type { KnowledgeIngestionProgressEvent } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
 import type {
@@ -67,6 +67,16 @@ function createId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
 }
 
+/** Calculate whole-task graph progress while retaining active document detail. */
+export function calculateGraphProgress(docs: GraphDocStatus[], total: number): number {
+  if (total <= 0) return 0
+  const completedProgress = docs.reduce((sum, doc) => {
+    if (doc.status === 'done' || doc.status === 'skipped' || doc.status === 'failed') return sum + 100
+    return sum + Math.max(0, Math.min(100, doc.progress ?? 0))
+  }, 0)
+  return Math.round(completedProgress / total)
+}
+
 function flattenNodes(nodes: KnowledgeFileNode[]): KnowledgeFileNode[] {
   return nodes.flatMap((node) => [node, ...(node.children ? flattenNodes(node.children) : [])])
 }
@@ -78,6 +88,16 @@ function flattenIngestibleNodes(nodes: KnowledgeFileNode[]): KnowledgeFileNode[]
     }
     return !node.indexStatus || node.indexStatus === 'dirty' || node.indexStatus === 'failed'
   })
+}
+
+/** Return only files that must be ingested before graph extraction can start. */
+export function graphIngestionTargets(node: KnowledgeFileNode): KnowledgeFileNode[] {
+  return flattenIngestibleNodes([node])
+}
+
+/** Detect an explicit re-extraction request from the persisted tree state. */
+export function shouldForceGraphExtraction(node: KnowledgeFileNode): boolean {
+  return flattenNodes([node]).some((item) => !item.isDir && item.graphStatus === 'graphed')
 }
 
 function formatMtime(date = new Date()): string {
@@ -302,6 +322,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** Active center workspace view. 默认进入主页。 */
   const mainView = ref<WorkspaceMainView>('home')
 
+  /** Temporary editor pane shown beside non-editor pages without changing the active page. */
+  const editorSidebarOpen = ref(false)
+
   /** Temporary right-side browser visibility; it is intentionally not persisted. */
   const browserSidebarOpen = ref(false)
 
@@ -391,6 +414,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** Header-level graph extraction progress shown while graph rebuild runs. */
   const graphProgressVisible = ref(false)
   const graphProgress = ref(0)
+  const graphProgressDetail = ref('正在检查需要抽取的文件')
+  const graphProgressStats = ref({ current: 0, total: 0 })
   const graphQueue = ref<IngestionQueueItem[]>([])
   const graphRebuildPending = ref(false)
   let graphPollingTimer: ReturnType<typeof setInterval> | null = null
@@ -419,6 +444,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function beginGraphProgress(initialValue = 6) {
     graphProgressVisible.value = true
     setGraphProgress(initialValue)
+    graphProgressDetail.value = '正在检查需要抽取的文件'
+    graphProgressStats.value = { current: 0, total: 0 }
   }
 
   function stopGraphPolling() {
@@ -437,6 +464,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     graphProgressTimer = setTimeout(() => {
       graphProgressVisible.value = false
       graphProgress.value = 0
+      graphProgressDetail.value = ''
+      graphProgressStats.value = { current: 0, total: 0 }
       graphProgressTimer = null
     }, 1500)
   }
@@ -498,7 +527,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           ...existing,
           status: doc.status === 'processing' ? 'running' as const : 'waiting' as const,
           progress: doc.progress ?? existing.progress,
-          message: doc.status === 'processing' ? (message || existing.message) : undefined,
+          stageLabel: doc.stage_label ?? existing.stageLabel,
+          stageCurrent: doc.stage_current ?? existing.stageCurrent,
+          stageTotal: doc.stage_total ?? existing.stageTotal,
+          message: doc.message || (doc.status === 'processing' ? message : existing.message),
         })
       } else if (doc.status === 'pending' || doc.status === 'processing') {
         queueMap.set(doc.path, {
@@ -508,8 +540,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           isDir: false,
           status: doc.status === 'processing' ? 'running' as const : 'waiting' as const,
           progress: doc.progress ?? 0,
+          stageLabel: doc.stage_label,
+          stageCurrent: doc.stage_current,
+          stageTotal: doc.stage_total,
           queuedAt: new Date().toISOString(),
-          message: doc.status === 'processing' ? (message || undefined) : undefined,
+          message: doc.message || (doc.status === 'processing' ? message : undefined),
         })
       }
     }
@@ -549,18 +584,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     try {
       const status = await getKnowledgeGraphStatus(userId)
       const docs = status.docs ?? []
+      graphProgressDetail.value = status.message || '正在抽取知识图谱'
+      graphProgressStats.value = { current: status.current, total: status.total }
       if (docs.length > 0) {
         syncGraphQueueFromDocs(docs, status.message)
       }
       if (status.status === 'running' || status.status === 'idle') {
         if (docs.length > 0) {
-          const remainingPending = docs.filter(
-            (d) => d.status === 'pending' || d.status === 'processing'
-          ).length
-          const progress = status.total > 0
-            ? Math.round(((status.total - remainingPending) / status.total) * 100)
-            : 0
-          setGraphProgress(progress)
+          setGraphProgress(calculateGraphProgress(docs, status.total))
         }
         return
       }
@@ -583,10 +614,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   function startGraphPolling() {
     stopGraphPolling()
-    graphPollingTimer = setInterval(pollGraphStatus, 2000)
+    void pollGraphStatus()
+    graphPollingTimer = setInterval(pollGraphStatus, 500)
   }
 
-  async function _triggerGraphExtraction(targetPath?: string) {
+  async function _triggerGraphExtraction(targetPath?: string, force = false) {
     const userId = useSettingsStore().profile.userId
     if (!userId || graphQueue.value.length > 0) {
       return
@@ -594,7 +626,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     beginGraphProgress(6)
     graphQueuePlannedTotal = 0
     try {
-      const result = await rebuildKnowledgeGraph(userId, targetPath)
+      const result = await rebuildKnowledgeGraph(userId, targetPath, force)
       if (result.status === 'already_running') {
         showToast('已有一个图谱抽取任务在运行')
       }
@@ -643,14 +675,25 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!userId || graphQueue.value.length > 0 || graphRebuildPending.value) {
       return
     }
+    const force = shouldForceGraphExtraction(node)
     graphRebuildPending.value = true
     try {
-      showToast(node.isDir ? '开始灌库后抽取文件夹图谱' : '开始灌库后抽取文件图谱')
-      await ingestFile(node)
+      const ingestionTargets = graphIngestionTargets(node)
+      if (ingestionTargets.length > 0) {
+        showToast(node.isDir ? '文件夹尚未完成灌库，灌库后抽取图谱' : '文件尚未灌库，灌库后抽取图谱')
+        await runIngestionJobs(ingestionTargets)
+        const failedTarget = ingestionTargets.find((target) => findFlatNode(target.path)?.indexStatus !== 'indexed')
+        if (failedTarget) {
+          showToast(`${failedTarget.name} 灌库未完成，已停止图谱抽取`)
+          return
+        }
+      } else {
+        showToast(force ? '复用现有灌库结果并重新抽取图谱' : '复用现有灌库结果抽取图谱')
+      }
     } finally {
       graphRebuildPending.value = false
     }
-    await _triggerGraphExtraction(node.path)
+    await _triggerGraphExtraction(node.path, force)
   }
 
   async function extractGraphForNodes(nodes: KnowledgeFileNode[]) {
@@ -671,9 +714,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     graphRebuildPending.value = true
     try {
-      showToast(`开始灌库后抽取选中的 ${targets.length} 项图谱`)
-      for (const node of targets) {
-        await ingestFile(node)
+      const ingestionTargets = targets.flatMap(graphIngestionTargets)
+      if (ingestionTargets.length > 0) {
+        showToast(`选中项尚未完成灌库，灌库后抽取图谱`)
+        await runIngestionJobs(ingestionTargets)
       }
     } finally {
       graphRebuildPending.value = false
@@ -851,7 +895,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     lastIngestionQueueProcessed = 0
     ingestionQueuePlannedTotal = sourceNodes.length
     ingestionFileChunksByPath = new Map()
-    ingestionQueue.value = sourceNodes.map((node, index) => nodeToQueueItem(node, index === 0 ? 'running' : 'waiting', index))
+    ingestionQueue.value = sourceNodes.map((node, index) => nodeToQueueItem(node, index === 0 ? 'running' : 'queued', index))
     sourceNodes.forEach((node) => updateTreeNodeIndexStatus(node.path, 'indexing', { force: true }))
     setIngestionProgressFromQueue()
   }
@@ -954,7 +998,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       .slice(rowsToDequeue)
       .map((item, index) => ({
         ...item,
-        status: index === 0 ? 'running' : 'waiting',
+        status: index === 0 ? 'running' : 'queued',
         progress: index === 0 ? Math.max(0, Math.min(96, Math.round(((processed % Math.max(1, total)) / Math.max(1, total)) * 100))) : 0,
       }))
     setIngestionProgressFromQueue()
@@ -1003,7 +1047,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const nextQueue = ingestionQueue.value.filter((_, index) => index !== rowIndex)
       ingestionQueue.value = nextQueue.map((item, index) => ({
         ...item,
-        status: index === 0 ? 'running' : 'waiting',
+        status: index === 0 ? 'running' : 'queued',
         progress: index === 0 ? progress : 0,
       }))
       setIngestionProgressFromQueue()
@@ -1020,7 +1064,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
       return {
         ...item,
-        status: item.status === 'running' && event.phase === 'ingestion' ? 'waiting' : item.status,
+        status: item.status === 'running' && event.phase === 'ingestion' ? 'queued' : item.status,
       }
     })
   }
@@ -1395,6 +1439,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   function setMainView(view: WorkspaceMainView) {
     mainView.value = view
+    if (view === 'editor') editorSidebarOpen.value = false
+  }
+
+  /** Select a real knowledge file and reveal it in the reusable editor sidebar. */
+  async function openEditorSidebar(node: KnowledgeFileNode) {
+    editorSidebarOpen.value = true
+    await selectFile(node)
+  }
+
+  /** Close the temporary editor sidebar while retaining the current file tab. */
+  function closeEditorSidebar() {
+    editorSidebarOpen.value = false
   }
 
   /** Open the half-width browser panel and optionally navigate its shared session. */
@@ -1456,7 +1512,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     // 文件内容已变更，重置索引状态和图谱状态为未入库
     updateTreeNodeIndexStatus(path, 'dirty', { force: true })
     updateTreeNodeGraphStatus(path, 'dirty')
-    window.dispatchEvent(new CustomEvent('metaweave-knowledge-file-change'))
+    window.dispatchEvent(new CustomEvent('metaweave-knowledge-file-change', { detail: { path } }))
     const savedNode = flatNodes.value.find((n) => n.path === path)
     if (savedNode?.mtime) tab.mtime = savedNode.mtime
     if (path === selectedPath.value) {
@@ -1808,113 +1864,132 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     })
   }
 
-  async function markIndexing() {
-    if (refreshing.value) return
-    refreshing.value = true
-    beginIngestionProgress(10)
-    tree.value = tree.value.map((node) => ({ ...node, indexStatus: 'indexing' }))
-    const settingsStore = useSettingsStore()
-    if (!settingsStore.profile.userId) {
-      refreshing.value = false
-      ingestionQueue.value = []
-      completedIngestionQueueItems = []
-      lastIngestionQueueProcessed = 0
-      finishIngestionProgress()
-      return
+  function ingestionJobToQueueItem(job: KnowledgeIngestionJob): IngestionQueueItem {
+    return {
+      id: job.job_id,
+      jobId: job.job_id,
+      name: job.name,
+      path: job.path,
+      isDir: false,
+      size: job.size,
+      mtime: job.mtime,
+      status: job.status as IngestionQueueItem['status'],
+      progress: job.progress,
+      pipeline: job.pipeline,
+      stage: job.stage,
+      stageLabel: job.stage_label,
+      stageCurrent: job.stage_current,
+      stageTotal: job.stage_total,
+      queuedAt: job.created_at,
+      message: job.message || job.error,
     }
-    let finalStatus: IngestionHistoryStatus = 'finished'
-    let finalResult: {
-      files_seen?: number
-      files_ingested?: number
-      files_skipped?: number
-      chunks_created?: number
-      status_message?: string
-    } | undefined
-    let finalMessage = ''
-    try {
-      await loadKnowledgeTree()
-      beginIngestionQueue(flattenIngestibleNodes(tree.value))
-      if (activeTab.value && !shouldUsePreviewEndpoint(activeTab.value.path)) {
-        const tab = activeTab.value
-        const response = await readKnowledgeFile(settingsStore.profile.userId, tab.path)
-        contentByPath.value = { ...contentByPath.value, [tab.path]: response.content }
-        tab.dirty = false
-        tab.mtime = response.mtime
+  }
+
+  function syncPersistentIngestionJobs(jobs: KnowledgeIngestionJob[]) {
+    const activeStatuses = new Set(['queued', 'running', 'cancelling'])
+    const activeJobs = jobs.filter((job) => activeStatuses.has(job.status))
+    ingestionQueue.value = activeJobs.map(ingestionJobToQueueItem)
+    const activeCutoff = activeJobs.reduce(
+      (earliest, job) => !earliest || job.created_at < earliest ? job.created_at : earliest,
+      '',
+    )
+    const currentBatch = activeCutoff ? jobs.filter((job) => job.created_at >= activeCutoff) : []
+    ingestionQueuePlannedTotal = currentBatch.length
+    const succeeded = currentBatch.filter((job) => job.status === 'finished').length
+    const failed = currentBatch.filter((job) => ['failed', 'cancelled'].includes(job.status)).length
+    const totalProgress = currentBatch.reduce((sum, job) => sum + job.progress, 0)
+    setIngestionProgress(currentBatch.length ? totalProgress / currentBatch.length : 0)
+    setIngestionProgressStats(succeeded, currentBatch.length, failed)
+    jobs.forEach((job) => {
+      if (activeStatuses.has(job.status)) updateTreeNodeIndexStatus(job.path, 'indexing', { force: true })
+      else if (job.status === 'finished') updateTreeNodeIndexStatus(job.path, 'indexed', { force: true })
+      else if (job.status === 'skipped') {
+        const status = job.message.includes('source hash unchanged') ? 'indexed' : 'dirty'
+        updateTreeNodeIndexStatus(job.path, status, { force: true })
       }
-      const result = await rebuildKnowledgeRootStream(settingsStore.profile.userId, applyIngestionProgressEvent)
+      else if (job.status === 'failed') updateTreeNodeIndexStatus(job.path, 'failed', { force: true })
+      else if (job.status === 'cancelled') updateTreeNodeIndexStatus(job.path, 'dirty', { force: true })
+    })
+    const persistentHistory = jobs
+      .filter((job) => !activeStatuses.has(job.status))
+      .map((job): IngestionHistoryItem => ({
+        id: job.job_id,
+        name: job.name,
+        path: job.path,
+        isDir: false,
+        size: job.size,
+        mtime: job.mtime,
+        status: job.status as IngestionHistoryStatus,
+        finishedAt: job.finished_at || job.updated_at,
+        message: job.message || job.error || job.stage_label,
+        sourceType: 'ingestion',
+      }))
+    ingestionHistory.value = [
+      ...persistentHistory,
+      ...ingestionHistory.value.filter((row) => !row.id.startsWith('ingest_')),
+    ].slice(0, 200)
+    persistIngestionHistory()
+  }
+
+  async function loadIngestionJobs(): Promise<KnowledgeIngestionJob[]> {
+    const userId = useSettingsStore().profile.userId
+    if (!userId) return []
+    const response = await listKnowledgeIngestionJobs(userId)
+    syncPersistentIngestionJobs(response.jobs)
+    return response.jobs
+  }
+
+  async function runIngestionJobs(nodes: KnowledgeFileNode[]) {
+    if (refreshing.value || nodes.length === 0) return
+    const userId = useSettingsStore().profile.userId
+    if (!userId) return
+    refreshing.value = true
+    beginIngestionProgress(0)
+    try {
+      const created = await createKnowledgeIngestionJobs(userId, nodes.map((node) => node.path))
+      const targetIds = new Set(created.jobs.map((job) => job.job_id))
+      syncPersistentIngestionJobs(created.jobs)
+      while (true) {
+        const jobs = await loadIngestionJobs()
+        const targets = jobs.filter((job) => targetIds.has(job.job_id))
+        if (targets.length > 0 && targets.every((job) => ['cancelled', 'finished', 'skipped', 'failed'].includes(job.status))) {
+          const finished = targets.filter((job) => job.status === 'finished').length
+          const cancelled = targets.filter((job) => job.status === 'cancelled').length
+          showToast(cancelled > 0 ? `灌库结束 — ${finished} 个完成，${cancelled} 个中止` : `灌库完成 — ${finished} 个文件已索引`)
+          break
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 250))
+      }
       await loadKnowledgeTree()
-      setIngestionProgressFromQueue()
-      finalResult = result
-      finalStatus = result.files_ingested > 0 ? 'finished' : 'skipped'
-      finalMessage = result.files_ingested > 0 ? '全库重建完成' : '没有文件进入向量库'
-      showToast(`灌库完成 — ${result.files_ingested} 个文件重新索引`)
     } catch (error) {
-      setIngestionProgressStats(0, 1, 1)
-      finalStatus = 'failed'
-      const message = error instanceof Error ? error.message : '请检查连接'
-      finalMessage = message
+      const message = error instanceof Error ? error.message : '未知错误'
       showToast(`灌库失败 — ${message}`)
     } finally {
-      completeIngestionQueue(finalStatus, finalResult, finalMessage)
       refreshing.value = false
       finishIngestionProgress()
     }
   }
 
-  async function ingestFile(node: KnowledgeFileNode) {
-    if (refreshing.value) return
-    const settingsStore = useSettingsStore()
-    if (!settingsStore.profile.userId) return
-    refreshing.value = true
-    beginIngestionProgress(12)
-    const targetNodes = node.isDir ? flattenIngestibleNodes([node]) : [node]
-    beginIngestionQueue(targetNodes, node)
-    let finalStatus: IngestionHistoryStatus = 'finished'
-    let finalResult: {
-      files_seen?: number
-      files_ingested?: number
-      files_skipped?: number
-      chunks_created?: number
-      status_message?: string
-    } | undefined
-    let finalMessage = ''
+  async function cancelIngestionJob(item: IngestionQueueItem) {
+    const userId = useSettingsStore().profile.userId
+    if (!userId || !item.jobId) return
     try {
-      const api = node.isDir ? ingestKnowledgePathStream : ingestKnowledgeFileStream
-      const result = await api(settingsStore.profile.userId, node.path, applyIngestionProgressEvent) as {
-        files_seen?: number
-        files_ingested?: number
-        files_skipped?: number
-        chunks_created?: number
-        skip_reason?: string
-        status_message?: string
-      }
-      finalResult = result
-      setIngestionProgressFromQueue()
-      await loadKnowledgeTree()
-      if ((result.files_ingested ?? 0) > 0) {
-        finalStatus = 'finished'
-        finalMessage = `已生成 ${result.chunks_created ?? 0} 个切片`
-        showToast(`已灌库 ${result.files_ingested ?? 0} 个文件, ${result.chunks_created ?? 0} 个切片`)
-      } else if (result.status_message) {
-        finalStatus = 'skipped'
-        finalMessage = result.status_message
-        showToast(result.status_message)
-      } else {
-        finalStatus = 'skipped'
-        finalMessage = '跳过不支持或已屏蔽的文件'
-        showToast('跳过不支持或已屏蔽的文件')
-      }
+      await cancelKnowledgeIngestionJob(userId, item.jobId)
+      await loadIngestionJobs()
+      showToast(`已中止 ${item.name}，文件保持未灌库状态`)
     } catch (error) {
-      setIngestionProgressStats(0, 1, 1)
-      finalStatus = 'failed'
-      const message = error instanceof Error ? error.message : '未知错误'
-      finalMessage = message
-      showToast(`灌库失败 — ${message}`)
-    } finally {
-      completeIngestionQueue(finalStatus, finalResult, finalMessage)
-      refreshing.value = false
-      finishIngestionProgress()
+      showToast(`中止失败 — ${error instanceof Error ? error.message : '未知错误'}`)
     }
+  }
+
+  async function markIndexing() {
+    await loadKnowledgeTree()
+    await runIngestionJobs(flattenIngestibleNodes(tree.value))
+  }
+
+  async function ingestFile(node: KnowledgeFileNode) {
+    const targetNodes = node.isDir ? flattenIngestibleNodes([node]) : [node]
+    await runIngestionJobs(targetNodes)
   }
 
   function setMarkdownHtmlVisualizationMode(mode: MarkdownHtmlVisualizationMode) {
@@ -2658,6 +2733,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     selectionAnchorPath,
     selectedNode,
     mainView,
+    editorSidebarOpen,
     browserSidebarOpen,
     browserSidebarUrl,
     browserSidebarNavigationId,
@@ -2723,6 +2799,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     closeTab,
     setEditorMode,
     setMainView,
+    openEditorSidebar,
+    closeEditorSidebar,
     openBrowserSidebar,
     closeBrowserSidebar,
     toggleBrowserSidebar,
@@ -2752,6 +2830,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     clearIngestionHistory,
     graphProgressVisible,
     graphProgress,
+    graphProgressDetail,
+    graphProgressStats,
     graphQueue,
     graphHistory,
     graphRebuildPending,
@@ -2764,6 +2844,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     syncCurrentDocumentContext,
     markIndexing,
     ingestFile,
+    loadIngestionJobs,
+    cancelIngestionJob,
     createFileAt,
     createFolderAt,
     copyNode,
