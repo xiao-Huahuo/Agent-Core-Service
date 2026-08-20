@@ -826,6 +826,11 @@ watch(
     transform 180ms ease;
 }
 
+.main-shell.ide-panel,
+.agent-col {
+  box-shadow: 0 0 0 4px var(--library-form-ring);
+}
+
 .file-resizer {
   grid-column: 3;
 }
@@ -840,7 +845,7 @@ watch(
   display: flex;
   min-width: 0;
   min-height: 0;
-  margin: 0 var(--space-12) var(--space-12) 0;
+  margin: var(--space-12);
   overflow: hidden;
   border: 0;
   outline: none;
@@ -898,7 +903,7 @@ watch(
   display: flex;
   flex-direction: column;
   min-height: 0;
-  margin: 0 var(--space-12) var(--space-12) 0;
+  margin: var(--space-12);
   border-radius: var(--workspace-card-radius);
   background: var(--color-bg-app);
   transition:
@@ -1066,7 +1071,7 @@ watch(
 
   .main-shell.ide-panel,
   .agent-col {
-    margin: 0 var(--space-8) var(--space-8) 0;
+    margin: var(--space-8);
   }
 }
 </style>

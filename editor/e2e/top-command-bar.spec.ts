@@ -57,6 +57,18 @@ test('wraps the Agent sidebar in the workspace card shell', async ({ page }) => 
     return agentRadius === workspaceRadius
   }).toBe(true)
   await expect(agentCard).toHaveCSS('overflow', 'hidden')
+  await expect(agentCard).toHaveCSS('border-top-width', '0px')
+  await expect(workspaceCard).toHaveCSS('border-top-width', '0px')
+  await expect(agentCard).toHaveCSS('box-shadow', /4px/)
+  await expect(workspaceCard).toHaveCSS('box-shadow', /4px/)
+  await expect(agentCard).toHaveCSS('margin-left', '12px')
+  await expect(agentCard).toHaveCSS('margin-right', '12px')
+  await expect(agentCard).toHaveCSS('margin-top', '12px')
+  await expect(agentCard).toHaveCSS('margin-bottom', '12px')
+  await expect(workspaceCard).toHaveCSS('margin-left', '12px')
+  await expect(workspaceCard).toHaveCSS('margin-right', '12px')
+  await expect(workspaceCard).toHaveCSS('margin-top', '12px')
+  await expect(workspaceCard).toHaveCSS('margin-bottom', '12px')
   await expect.poll(async () => {
     const [agentBackground, workspaceBackground] = await Promise.all([
       agentPanel.evaluate((element) => getComputedStyle(element).backgroundColor),
