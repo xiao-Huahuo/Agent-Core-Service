@@ -13,7 +13,6 @@ import darkTitle from '@/assets/images/暗色标题.png'
 import lightTitle from '@/assets/images/亮色标题.png'
 import lightLogo from '@/assets/images/亮色无底图标.png'
 import darkLogo from '@/assets/images/暗色无底图标.png'
-import FavoriteButton from '@/components/common/FavoriteButton.vue'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +35,6 @@ import ChangeDetailDrawer from '@/components/editor_workspace/agent_chat/ChangeD
 import { useChatStore, useSessionChatStore } from '@/stores/chat'
 import type { AgentUploadedAttachment } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
-import { exportSession } from '@/utils/sessionExport'
 import { useSettingsStore } from '@/stores/settings'
 import { useSkillsStore } from '@/stores/skills'
 import { useFavoritesStore } from '@/stores/favorites'
@@ -172,11 +170,11 @@ const sessionSources = computed(() => {
   return [...unique.values()]
 })
 const modelConfigLabel = computed(() => currentLargeModelName.value || '配置模型')
-const loopModeOptions: Array<{ value: AgentLoopMode; label: string; hint: string }> = [
-  { value: 'auto', label: 'Auto', hint: '自动选择' },
-  { value: 'simple', label: 'Simple', hint: '直接回答' },
-  { value: 'react', label: 'ReAct', hint: '工具循环' },
-  { value: 'plan', label: 'Plan', hint: '规划执行' },
+const loopModeOptions: Array<{ value: AgentLoopMode; label: string }> = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'simple', label: 'Simple' },
+  { value: 'react', label: 'ReAct' },
+  { value: 'plan', label: 'Plan' },
 ]
 const selectedLoopModeLabel = computed(() => {
   return loopModeOptions.find((option) => option.value === settingsStore.agentLoopMode)?.label || 'Auto'
@@ -205,22 +203,6 @@ async function reloadSessions() {
     }
   } finally {
     isBootstrapping.value = false
-  }
-}
-
-const sessionExporting = ref(false)
-
-async function exportCurrentSession() {
-  if (sessionExporting.value) return
-  const session = sessionStore.currentSession
-  if (!session) return
-  sessionExporting.value = true
-  try {
-    await exportSession(session, userId.value)
-  } catch (error) {
-    console.error('导出会话失败:', error)
-  } finally {
-    sessionExporting.value = false
   }
 }
 
@@ -756,12 +738,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
       </button>
       <span class="topbar-title">{{ sessionTitle }}</span>
       <div class="topbar-right">
-        <FavoriteButton
-          class="topbar-tool-button"
-          target-type="session"
-          :target-id="activeSessionId || ''"
-          :disabled="!activeSessionId"
-        />
         <button class="topbar-tool-button" type="button" title="环境与变更" aria-label="环境与变更" :aria-pressed="environmentCardOpen" @click="toggleEnvironmentCard">
           <IcIcon name="dns" :size="17" />
         </button>
@@ -812,7 +788,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
                   @select="selectSkillReference(skill.name)"
                 >
                   <span class="topbar-skill-name">{{ skill.name }}</span>
-                  <span class="topbar-skill-desc">{{ skill.description }}</span>
                 </DropdownMenuItem>
                 <div v-if="extractedSkills.length === 0" class="topbar-skill-empty">
                   {{ skillsStore.loading ? '正在读取' : '暂无 Skill' }}
@@ -835,24 +810,14 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
                 <DropdownMenuRadioItem v-for="option in loopModeOptions" :key="option.value" :value="option.value">
                   <span class="topbar-loop-mode-copy">
                     <strong>{{ option.label }}</strong>
-                    <small>{{ option.hint }}</small>
                   </span>
                 </DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenuPortal>
         </DropdownMenu>
-        <button
-          class="new-session-round-btn"
-          type="button"
-          :title="sessionExporting ? '导出中...' : '导出当前会话'"
-          :disabled="sessionExporting"
-          @click="exportCurrentSession"
-        >
-          <IcIcon name="upload" :size="16" />
-        </button>
-        <button class="new-session-round-btn new-session-labeled" type="button" title="新对话" @click="createSession">
-          <IcIcon name="edit" :size="16" />
+        <button class="panel-new-session" type="button" title="新对话" @click="createSession">
+          <IcIcon name="add" :size="17" />
           <span>新对话</span>
         </button>
       </div>
@@ -900,8 +865,9 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
         >
           <IcIcon name="open-in-full" :size="16" />
         </button>
-        <button class="icon-button" type="button" title="New session" @click="createSession">
-          <IcIcon name="add-comment" :size="16" />
+        <button class="panel-new-session" type="button" title="新对话" @click="createSession">
+          <IcIcon name="add" :size="17" />
+          <span>新对话</span>
         </button>
         <button class="mode-button" type="button" title="Toggle chat render mode" @click="settingsStore.toggleChatMode">
           <IcIcon name="history" :size="15" />
@@ -1114,6 +1080,34 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   min-height: 28px;
   padding: 0 var(--space-10);
   background: transparent;
+}
+
+.agent-titlebar > .drawer-toggle {
+  display: none;
+}
+
+.agent-titlebar > .title-meta {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.agent-titlebar > .title-actions {
+  display: contents;
+}
+
+.agent-titlebar > .title-actions > .icon-button:not(:nth-child(4)),
+.agent-titlebar > .title-actions > .mode-button {
+  display: none;
+}
+
+.agent-titlebar > .title-actions > .icon-button:nth-child(4) {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.agent-titlebar > .title-actions > .panel-new-session {
+  grid-column: 3;
+  grid-row: 1;
 }
 
 .agent-topbar {
@@ -1368,7 +1362,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   background: var(--color-surface);
   color: var(--color-text-tertiary);
   font-family: var(--font-ui);
-  font-size: calc(10px * var(--font-scale));
+  font-size: calc(13px * var(--font-scale));
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
@@ -1460,26 +1454,10 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   color: var(--color-text-primary);
 }
 
-.topbar-skill-option {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-}
-
 .topbar-skill-name {
   color: inherit;
   font-size: calc(12px * var(--font-scale));
   font-weight: 650;
-}
-
-.topbar-skill-desc {
-  flex: 1;
-  overflow: hidden;
-  color: var(--color-text-tertiary);
-  font-size: calc(10px * var(--font-scale));
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .topbar-skill-empty {
@@ -1499,47 +1477,27 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   font-size: calc(12px * var(--font-scale));
 }
 
-.topbar-loop-mode-copy small {
-  overflow: hidden;
-  color: var(--color-text-tertiary);
-  font-size: calc(10px * var(--font-scale));
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.new-session-round-btn {
+.panel-new-session {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-text-tertiary);
-  cursor: pointer;
-  transition:
-    border-color var(--transition-fast),
-    color var(--transition-fast),
-    background var(--transition-fast);
-}
-
-.new-session-round-btn:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-  background: var(--color-accent-muted);
-}
-
-.new-session-labeled {
+  gap: var(--space-6);
   width: auto;
-  min-width: 76px;
-  gap: var(--space-4);
+  height: 28px;
   padding: 0 var(--space-10);
+  border: 0;
   border-radius: 999px;
-  font-family: var(--font-ui);
-  font-size: calc(10px * var(--font-scale));
-  line-height: 1;
-  white-space: nowrap;
+  background: var(--color-primary);
+  color: #ffffff;
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
+  cursor: pointer;
+}
+
+.panel-new-session:hover {
+  border-color: transparent;
+  background: var(--color-primary-hover, var(--color-primary));
+  color: #ffffff;
 }
 
 .agent-body {
@@ -1886,7 +1844,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   height: auto;
   object-fit: contain;
   pointer-events: auto;
-  animation: welcome-fade-in 1.2s ease-out forwards;
 }
 
 @keyframes welcome-cap-in {
@@ -1897,17 +1854,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   to {
     opacity: 1;
     transform: scale(1);
-  }
-}
-
-@keyframes welcome-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 

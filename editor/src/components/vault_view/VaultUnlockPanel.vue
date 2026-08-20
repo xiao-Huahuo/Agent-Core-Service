@@ -132,6 +132,7 @@ label {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-8);
+  padding: var(--space-4);
 }
 
 .unlock-fields {
@@ -141,6 +142,7 @@ label {
 
 .password-field {
   display: grid;
+  padding: var(--space-4);
 }
 
 .vault-input {
