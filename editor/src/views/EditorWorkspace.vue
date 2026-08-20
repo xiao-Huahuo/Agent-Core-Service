@@ -898,7 +898,9 @@ watch(
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--color-chrome-rail-bg);
+  margin: 0 var(--space-12) var(--space-12) 0;
+  border-radius: var(--workspace-card-radius);
+  background: var(--color-bg-app);
   transition:
     opacity 160ms ease,
     transform 180ms ease;
@@ -1062,7 +1064,8 @@ watch(
     --workspace-card-radius: 24px;
   }
 
-  .main-shell.ide-panel {
+  .main-shell.ide-panel,
+  .agent-col {
     margin: 0 var(--space-8) var(--space-8) 0;
   }
 }

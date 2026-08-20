@@ -1021,7 +1021,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   border: 0;
   border-radius: 0;
   outline: none;
-  background: var(--color-chrome-rail-bg);
+  background: var(--color-bg-app);
   height: 100%;
 }
 

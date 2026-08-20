@@ -35,3 +35,33 @@ test('collapsed toolbar search releases its expansion area for window dragging',
   await page.getByRole('button', { name: '搜索', exact: true }).click()
   await expect.poll(async () => (await searchCenter.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(249)
 })
+
+test('wraps the Agent sidebar in the workspace card shell', async ({ page }) => {
+  await page.goto('/')
+  const userIdInput = page.getByRole('textbox', { name: '用户 ID' })
+  if (await userIdInput.isVisible()) {
+    await userIdInput.fill('agent-card-smoke')
+    await page.getByRole('button', { name: '进入', exact: true }).click()
+  }
+
+  await page.getByTitle('切换 Agent 面板').click()
+  const agentCard = page.locator('.agent-col')
+  const agentPanel = agentCard.locator('.agent-panel')
+  const workspaceCard = page.locator('.main-shell.ide-panel')
+  await expect(agentCard).toBeVisible()
+  await expect.poll(async () => {
+    const [agentRadius, workspaceRadius] = await Promise.all([
+      agentCard.evaluate((element) => getComputedStyle(element).borderRadius),
+      workspaceCard.evaluate((element) => getComputedStyle(element).borderRadius),
+    ])
+    return agentRadius === workspaceRadius
+  }).toBe(true)
+  await expect(agentCard).toHaveCSS('overflow', 'hidden')
+  await expect.poll(async () => {
+    const [agentBackground, workspaceBackground] = await Promise.all([
+      agentPanel.evaluate((element) => getComputedStyle(element).backgroundColor),
+      workspaceCard.evaluate((element) => getComputedStyle(element).backgroundColor),
+    ])
+    return agentBackground === workspaceBackground
+  }).toBe(true)
+})
