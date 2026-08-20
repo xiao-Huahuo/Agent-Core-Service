@@ -438,9 +438,50 @@ onBeforeUnmount(() => {
 }
 
 .cancel-model-btn {
-  width: max-content;
+  width: auto;
+  min-width: 0;
   flex: 0 0 auto;
+  padding: 0 var(--space-16);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
   white-space: nowrap;
+}
+
+:global(.settings-body .color-control),
+:global(.settings-body .page-display-control),
+:global(.settings-body .font-family-control) {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding-left: 0 !important;
+}
+
+.color-control-header,
+.page-display-header,
+.font-family-header {
+  flex: 0 0 var(--settings-label-width, 112px);
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.color-control-header label,
+.page-display-header label,
+.font-family-header label {
+  width: var(--settings-label-width, 112px) !important;
+  margin-left: 0 !important;
+}
+
+.color-row,
+.settings-resource-page-switch,
+.font-size-row,
+.font-chip-row {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.font-size-row input[type='range'] {
+  width: 100%;
+  min-width: 0;
 }
 
 .settings-resource-page-switch {
