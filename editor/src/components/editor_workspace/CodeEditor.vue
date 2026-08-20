@@ -35,6 +35,8 @@ const props = defineProps<{
   changeRanges?: Array<{ startLine: number; endLine: number; kind: 'added' | 'removed' }>
   /** Knowledge files offered after typing [[ or ![[ in Markdown. */
   wikiFiles?: KnowledgeFileNode[]
+  /** Shared persisted state of the backlinks bottom panel. */
+  showBacklinks?: boolean
 }>()
 
 /** Scroll and caret data used by EditorPane to synchronize Markdown Split mode. */
@@ -47,6 +49,7 @@ interface EditorScrollPayload {
 const emit = defineEmits<{
   save: []
   scroll: [payload: EditorScrollPayload]
+  toggleBacklinks: []
 }>()
 
 type MarkdownCommand =
@@ -284,7 +287,7 @@ const menuGroups: Array<{
       { command: 'hr', label: '分割线' },
       { command: 'insert-code-block', label: '代码块' },
       { command: 'math-block', label: '数学块' },
-      { command: 'wiki-link', label: '插入反向链接' },
+      { command: 'wiki-link', label: '插入 Wiki 链接' },
       { command: 'wiki-embed', label: '插入嵌入链接' },
     ],
   },
@@ -1551,6 +1554,11 @@ onBeforeUnmount(() => {
       @contextmenu.prevent
     >
       <div class="markdown-context-primary">
+        <button class="markdown-context-action" type="button" @click="emit('toggleBacklinks'); closeContextMenu()">
+          <IcIcon name="link" :size="15" />
+          <span>显示反向链接</span>
+          <span class="markdown-context-check" :class="{ checked: showBacklinks }" aria-hidden="true">✓</span>
+        </button>
         <div
           v-for="group in menuGroups"
           :key="group.title"
@@ -1925,6 +1933,31 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 2px;
 }
+
+.markdown-context-action {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-10);
+  width: 100%;
+  height: 26px;
+  padding: 0 var(--space-8);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+  text-align: left;
+}
+
+.markdown-context-action:hover {
+  background: var(--color-canvas-soft);
+  color: var(--color-primary);
+}
+
+.markdown-context-check { visibility: hidden; }
+.markdown-context-check.checked { visibility: visible; }
 
 .markdown-context-group {
   position: relative;

@@ -28,6 +28,7 @@ export interface SettingsProfileResponse {
   font_size_percent?: number
   theme_primary_color?: string
   theme_soft_color?: string
+  show_backlinks?: boolean
   graph_node_limit?: number
   floating_launch_enabled?: boolean
   editor_image_assets_dir?: string
@@ -149,18 +150,20 @@ export interface AppearanceConfigResponse {
   user_id: string
   theme_primary_color: string
   theme_soft_color: string
+  show_backlinks: boolean
   updated_at: string
 }
 
 export function saveAppearanceConfig(
   userId: string,
-  params: { themePrimaryColor?: string; themeSoftColor?: string },
+  params: { themePrimaryColor?: string; themeSoftColor?: string; showBacklinks?: boolean },
 ): Promise<AppearanceConfigResponse> {
-  const body: { user_id: string; theme_primary_color?: string; theme_soft_color?: string } = {
+  const body: { user_id: string; theme_primary_color?: string; theme_soft_color?: string; show_backlinks?: boolean } = {
     user_id: userId,
   }
   if (params.themePrimaryColor !== undefined) body.theme_primary_color = params.themePrimaryColor
   if (params.themeSoftColor !== undefined) body.theme_soft_color = params.themeSoftColor
+  if (params.showBacklinks !== undefined) body.show_backlinks = params.showBacklinks
   return apiPut<AppearanceConfigResponse>(API_ROUTES.SETTINGS_APPEARANCE_CONFIG, body)
 }
 

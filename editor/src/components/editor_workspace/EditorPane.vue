@@ -10,6 +10,7 @@ import { computed, nextTick, onErrorCaptured, onMounted, onUnmounted, ref, watch
 import { storeToRefs } from 'pinia'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import BacklinksPanel from '@/components/editor_workspace/BacklinksPanel.vue'
 import CodeEditor from '@/components/editor_workspace/CodeEditor.vue'
 import CodePreview from '@/components/editor_workspace/CodePreview.vue'
 import EditorModeSwitch from '@/components/editor_workspace/EditorModeSwitch.vue'
@@ -17,13 +18,17 @@ import MarkdownHtmlVisualizationPanel from '@/components/editor_workspace/Markdo
 import MarkdownPreview from '@/components/editor_workspace/MarkdownPreview.vue'
 import MultimodalPreview from '@/components/editor_workspace/MultimodalPreview.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useSettingsStore } from '@/stores/settings'
 import type { EditorWorkspaceMode } from '@/types/knowledge'
 import { resolveEditorFilePipeline } from '@/utils/editorFilePipeline'
 import { fetchSessionChanges } from '@/api/agentChanges'
+import { readKnowledgeFile } from '@/api/knowledge'
 import { useSessionStore } from '@/stores/session'
-import { parseWikiLink, resolveWikiTargetPath } from './wikiLinks'
+import { buildBacklinks } from './backlinks'
+import { flattenWikiFiles, parseWikiLink, resolveWikiTargetPath } from './wikiLinks'
 
 const workspaceStore = useWorkspaceStore()
+const settingsStore = useSettingsStore()
 const sessionStore = useSessionStore()
 const { editorMode } = storeToRefs(workspaceStore)
 const visualizeMenuOpen = ref(false)
@@ -32,6 +37,71 @@ const markdownPreviewRef = ref<InstanceType<typeof MarkdownPreview> | null>(null
 const lastEditorScroll = ref({ ratio: 0, cursorOffset: 0, contentLength: 0 })
 const wikiFocusAnchor = ref<{ path: string; heading: string; blockId: string; nonce: number } | null>(null)
 let wikiFocusNonce = 0
+const backlinkDocuments = ref<Record<string, string>>({})
+const backlinksLoading = ref(false)
+let backlinksLoadNonce = 0
+const backlinks = computed(() => buildBacklinks(
+  workspaceStore.selectedPath,
+  workspaceStore.tree,
+  backlinkDocuments.value,
+))
+const shouldShowBacklinks = computed(() => (
+  Boolean(settingsStore.profile.showBacklinks)
+  && isMarkdownViewer.value
+  && Boolean(workspaceStore.activeTab)
+))
+
+async function loadBacklinks() {
+  if (!shouldShowBacklinks.value || !settingsStore.profile.userId) {
+    backlinkDocuments.value = {}
+    return
+  }
+  const nonce = ++backlinksLoadNonce
+  backlinksLoading.value = true
+  try {
+    if (workspaceStore.tree.length === 0) await workspaceStore.loadKnowledgeTree()
+    const markdownFiles = flattenWikiFiles(workspaceStore.tree)
+      .filter((node) => /\.(?:md|markdown)$/iu.test(node.path))
+    const results = await Promise.allSettled(markdownFiles.map(async (node) => [
+      node.path,
+      node.path === workspaceStore.selectedPath
+        ? activeContent.value
+        : (await readKnowledgeFile(settingsStore.profile.userId, node.path)).content,
+    ] as const))
+    if (nonce !== backlinksLoadNonce) return
+    backlinkDocuments.value = Object.fromEntries(
+      results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []),
+    )
+  } finally {
+    if (nonce === backlinksLoadNonce) backlinksLoading.value = false
+  }
+}
+
+async function toggleBacklinks() {
+  try {
+    await settingsStore.setShowBacklinks(!settingsStore.profile.showBacklinks)
+  } catch {
+    workspaceStore.showToast('反向链接显示设置保存失败')
+  }
+}
+
+async function closeBacklinks() {
+  try {
+    await settingsStore.setShowBacklinks(false)
+  } catch {
+    workspaceStore.showToast('反向链接显示设置保存失败')
+  }
+}
+
+async function openBacklinkSource(path: string) {
+  const node = workspaceStore.flatNodes.find((item) => !item.isDir && item.path === path)
+  if (node) await workspaceStore.selectFile(node)
+}
+
+async function saveActiveFileAndRefreshBacklinks() {
+  await workspaceStore.saveActiveFile()
+  await loadBacklinks()
+}
 
 const splitRatio = ref(0.5)
 const splitBodyRef = ref<HTMLElement | null>(null)
@@ -216,7 +286,10 @@ watch(effectiveEditorMode, async (mode, previousMode) => {
 
 watch(() => workspaceStore.selectedPath, () => {
   void loadLatestChangeSnapshot()
+  void loadBacklinks()
 })
+
+watch(() => settingsStore.profile.showBacklinks, () => void loadBacklinks())
 
 watch(() => sessionStore.currentSessionId, () => void loadLatestChangeSnapshot(), { immediate: true })
 
@@ -356,6 +429,7 @@ onErrorCaptured((err, vm, info) => {
       v-if="workspaceStore.openTabs.length > 0"
       ref="splitBodyRef"
       class="editor-body"
+      :class="{ 'with-backlinks': shouldShowBacklinks }"
       :data-mode="effectiveEditorMode"
       :style="splitBodyStyle"
     >
@@ -368,8 +442,10 @@ onErrorCaptured((err, vm, info) => {
           :readonly="workspaceStore.activeFileReadonly"
           :change-ranges="activeChangeRanges"
           :wiki-files="workspaceStore.tree"
-          @save="workspaceStore.saveActiveFile"
+          :show-backlinks="Boolean(settingsStore.profile.showBacklinks)"
+          @save="saveActiveFileAndRefreshBacklinks"
           @scroll="handleEditorScroll"
+          @toggle-backlinks="toggleBacklinks"
         />
       </section>
       <div
@@ -403,6 +479,13 @@ onErrorCaptured((err, vm, info) => {
     <div v-else class="editor-empty">
       <p>选择文件以开始编辑。</p>
     </div>
+    <BacklinksPanel
+      v-if="shouldShowBacklinks"
+      :entries="backlinks"
+      :loading="backlinksLoading"
+      @close="closeBacklinks"
+      @open="openBacklinkSource"
+    />
     <MarkdownHtmlVisualizationPanel />
   </main>
 </template>
@@ -653,6 +736,10 @@ onErrorCaptured((err, vm, info) => {
   border: 0;
   border-radius: 0 8px 8px 8px;
   background: var(--color-canvas);
+}
+
+.editor-body.with-backlinks {
+  margin-bottom: var(--space-6);
 }
 
 .split-divider {

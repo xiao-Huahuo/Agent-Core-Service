@@ -53,6 +53,7 @@ const DEFAULT_PROFILE: UserSettingsProfile = {
   textFontSizePercent: 100,
   themePrimaryColor: '',
   themeSoftColor: '',
+  showBacklinks: false,
   graphNodeLimit: 2000,
   floatingLaunchEnabled: false,
   editorImageAssetsDir: './assets/',
@@ -195,6 +196,7 @@ function mapBackendProfile(profileResponse: SettingsProfileResponse): Partial<Us
     ),
     themePrimaryColor: profileResponse.theme_primary_color ?? '',
     themeSoftColor: profileResponse.theme_soft_color ?? '',
+    showBacklinks: Boolean(profileResponse.show_backlinks),
     graphNodeLimit: profileResponse.graph_node_limit ?? 2000,
     floatingLaunchEnabled: Boolean(profileResponse.floating_launch_enabled),
     editorImageAssetsDir: profileResponse.editor_image_assets_dir ?? './assets/',
@@ -508,12 +510,13 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  async function saveAppearanceSettings(params: { themePrimaryColor?: string; themeSoftColor?: string }) {
+  async function saveAppearanceSettings(params: { themePrimaryColor?: string; themeSoftColor?: string; showBacklinks?: boolean }) {
     const nextThemePrimaryColor = normalizeThemeColor(params.themePrimaryColor ?? profile.value.themePrimaryColor)
     const nextThemeSoftColor = normalizeThemeColor(params.themeSoftColor ?? profile.value.themeSoftColor)
     updateProfile({
       themePrimaryColor: nextThemePrimaryColor,
       themeSoftColor: nextThemeSoftColor,
+      showBacklinks: params.showBacklinks ?? profile.value.showBacklinks,
     })
     if (!hasUserId.value) {
       return null
@@ -522,10 +525,12 @@ export const useSettingsStore = defineStore('settings', () => {
       const result = await saveAppearanceConfig(profile.value.userId, {
         themePrimaryColor: nextThemePrimaryColor,
         themeSoftColor: nextThemeSoftColor,
+        showBacklinks: params.showBacklinks,
       })
       updateProfile({
         themePrimaryColor: result.theme_primary_color,
         themeSoftColor: result.theme_soft_color,
+        showBacklinks: result.show_backlinks,
       })
       return result
     } catch (error) {
@@ -533,6 +538,17 @@ export const useSettingsStore = defineStore('settings', () => {
         throw new Error('保存外观设置失败: 后端尚未加载外观配置接口,请重启后端服务')
       }
       throw new Error('保存外观设置失败')
+    }
+  }
+
+  async function setShowBacklinks(value: boolean) {
+    const previous = Boolean(profile.value.showBacklinks)
+    updateProfile({ showBacklinks: value })
+    try {
+      return await saveAppearanceSettings({ showBacklinks: value })
+    } catch (error) {
+      updateProfile({ showBacklinks: previous })
+      throw error
     }
   }
 
@@ -739,6 +755,7 @@ export const useSettingsStore = defineStore('settings', () => {
     saveFontSettings,
     previewAppearanceColors,
     saveAppearanceSettings,
+    setShowBacklinks,
     applyBackendProfile,
     setUserId,
     clearUserId,

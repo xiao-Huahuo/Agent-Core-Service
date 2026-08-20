@@ -52,7 +52,7 @@ export interface MarkdownHtmlVisualizationPayload {
 }
 
 /** File viewer selected by extension and backend preview metadata. */
-export type FileViewerKind = 'markdown' | 'code' | 'image' | 'pdf' | 'table' | 'document' | 'presentation' | 'text' | 'unsupported'
+export type FileViewerKind = 'markdown' | 'code' | 'image' | 'video' | 'pdf' | 'table' | 'document' | 'presentation' | 'text' | 'unsupported'
 
 /** Main center workspace surface controlled by activity bar and commands. */
 export type WorkspaceMainView =
@@ -254,7 +254,7 @@ export interface FilePreviewPayload {
   html?: string
   /** Optional data URL for image/PDF embeds. */
   data_url?: string
-  /** Optional backend raw file URL for iframe/object previews. */
+  /** Optional backend raw file URL for image, video, iframe, or object previews. */
   raw_url?: string
   /** Optional MIME type for binary embeds. */
   mime_type?: string

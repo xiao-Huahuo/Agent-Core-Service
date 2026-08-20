@@ -54,6 +54,8 @@ export interface UserSettingsProfile {
   themePrimaryColor?: string
   /** Optional soft UI color applied to muted primary backgrounds. */
   themeSoftColor?: string
+  /** Whether Markdown editors display the incoming-link bottom panel. */
+  showBacklinks?: boolean
   /** Maximum number of nodes to return in the knowledge graph. */
   graphNodeLimit?: number
   /** Whether to show the floating Agent window when the desktop shell starts. */

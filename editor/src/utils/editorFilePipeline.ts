@@ -21,6 +21,7 @@ const CODE_EXTENSIONS = new Set([
   'yaml', 'yml',
 ])
 const IMAGE_EXTENSIONS = new Set(['gif', 'jpeg', 'jpg', 'png', 'svg', 'webp'])
+const VIDEO_EXTENSIONS = new Set(['m4v', 'mov', 'mp4', 'ogg', 'ogv', 'webm'])
 
 const option = (mode: EditorWorkspaceMode, label: string, icon: string): EditorModeOption => ({ mode, label, icon })
 const EDIT = option('edit', 'Edit', 'edit')
@@ -58,6 +59,9 @@ export function resolveEditorFilePipeline(path: string, backendKind?: FileViewer
   }
   if (extension === 'docx' || extension === 'pdf' || extension === 'pptx' || IMAGE_EXTENSIONS.has(extension)) {
     return { modes: [PREVIEW, MARKDOWN], defaultMode: 'preview', usesPreviewEndpoint: true, editable: false }
+  }
+  if (VIDEO_EXTENSIONS.has(extension)) {
+    return { modes: [PREVIEW], defaultMode: 'preview', usesPreviewEndpoint: true, editable: false }
   }
   if (backendKind === 'text') {
     return { modes: [TEXT], defaultMode: 'text', usesPreviewEndpoint: true, editable: true }

@@ -20,6 +20,7 @@ describe('AppearanceSettingsSection font sizes', () => {
         sidebarDisplayMode: 'icons',
         availableFontFamilies: [],
         fontsLoading: false,
+        showBacklinks: false,
       },
     })
 
@@ -27,5 +28,7 @@ describe('AppearanceSettingsSection font sizes', () => {
     expect(wrapper.text()).toContain('正文字体大小')
     expect(wrapper.find('[data-font-size="ui"]').exists()).toBe(true)
     expect(wrapper.find('[data-font-size="text"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('显示反向链接')
+    expect(wrapper.find('#show-backlinks-setting').attributes('checked')).toBeUndefined()
   })
 })

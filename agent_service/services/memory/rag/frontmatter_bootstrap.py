@@ -775,6 +775,9 @@ class FrontmatterBootstrapService:
     def _can_structure_source_file(path: Path, suffixes: set[str]) -> bool:
         """Supported files are handled by parsers; unsupported files must be plain text."""
 
+        # Videos are preview-only workspace assets. Never guess them as text from a small sample.
+        if path.suffix.lower() in {".mp4", ".webm", ".ogg", ".ogv", ".mov", ".m4v"}:
+            return False
         if path.suffix.lower() in suffixes:
             return True
         return not FrontmatterBootstrapService._is_binary_file(path)

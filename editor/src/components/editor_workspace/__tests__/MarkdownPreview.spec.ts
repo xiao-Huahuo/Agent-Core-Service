@@ -166,4 +166,33 @@ describe('MarkdownPreview Split synchronization', () => {
     link?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(wrapper.emitted('navigateWiki')?.[0]).toEqual(['target#章节|阅读章节'])
   })
+
+  it('renders HTML img and iframe elements as responsive media blocks', async () => {
+    const wrapper = mount(MarkdownPreview, {
+      props: {
+        content: '<img src="./cover.png" alt="封面">\n\n<iframe src="https://video.example/embed/1"></iframe>',
+        path: 'notes/test.md',
+      },
+    })
+    const host = wrapper.get('.markdown-preview-renderer').element as HTMLElement
+    const reset = document.createElement('div')
+    reset.className = 'vditor-reset'
+    reset.innerHTML = '<img src="./cover.png" alt="封面"><iframe src="https://video.example/embed/1"></iframe>'
+    vditorMocks.previewElement.appendChild(reset)
+    host.appendChild(vditorMocks.previewElement)
+
+    const previewOptions = vditorMocks.constructor.options?.preview as {
+      parse?: (element: HTMLElement) => void
+      render?: { media?: { enable?: boolean } }
+    }
+    previewOptions.parse?.(vditorMocks.previewElement)
+    await Promise.resolve()
+
+    expect(previewOptions.render?.media?.enable).toBe(true)
+    expect(reset.querySelector('img')?.classList.contains('markdown-html-image-block')).toBe(true)
+    const iframe = reset.querySelector('iframe')
+    expect(iframe?.classList.contains('markdown-video-block')).toBe(true)
+    expect(iframe?.getAttribute('loading')).toBe('lazy')
+    expect(iframe?.getAttribute('allowfullscreen')).not.toBeNull()
+  })
 })

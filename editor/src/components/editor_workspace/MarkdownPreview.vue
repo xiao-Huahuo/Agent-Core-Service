@@ -11,6 +11,7 @@ import { nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from 'v
 import Vditor from 'vditor'
 
 import {
+  buildRawFileUrl,
   decorateRenderedMarkdownImages,
   rewriteMarkdownImageUrls,
 } from '@/components/editor_workspace/markdownImageUrls'
@@ -297,6 +298,38 @@ function decoratePreviewImages(previewEl: HTMLElement | null) {
     return
   }
   decorateRenderedMarkdownImages(previewEl, context)
+  previewEl.querySelectorAll<HTMLImageElement>('img.markdown-image').forEach((image) => {
+    const parent = image.parentElement
+    const isStandalone = parent?.classList.contains('vditor-reset')
+      || parent?.classList.contains('markdown-image-block')
+    image.classList.toggle('markdown-html-image-block', Boolean(isStandalone))
+  })
+}
+
+/** Turns rendered iframe embeds into constrained, lazy video blocks. */
+function decoratePreviewVideoBlocks(previewEl: HTMLElement | null) {
+  if (!previewEl) return
+  const context = getImageUrlContext()
+  previewEl.querySelectorAll<HTMLIFrameElement>('iframe[src]').forEach((iframe) => {
+    const src = iframe.getAttribute('src') ?? ''
+    if (src && context.currentFilePath && context.userId) {
+      iframe.src = buildRawFileUrl(src, context)
+    }
+    iframe.classList.add('markdown-video-block')
+    iframe.setAttribute('loading', 'lazy')
+    iframe.setAttribute('allowfullscreen', '')
+    iframe.setAttribute('allow', 'autoplay; fullscreen; picture-in-picture')
+    if (!iframe.title) iframe.title = '视频预览'
+  })
+}
+
+/** Decorates the final preview HTML before Vditor writes it into the preview pane. */
+function transformPreviewHtml(html: string): string {
+  const root = document.createElement('div')
+  root.innerHTML = html
+  decoratePreviewImages(root)
+  decoratePreviewVideoBlocks(root)
+  return root.innerHTML
 }
 
 /** Adds per-image download controls only for callers that explicitly request them. */
@@ -691,6 +724,7 @@ function handlePreviewParse(element: HTMLElement) {
   const resetEl = element.querySelector<HTMLElement>('.vditor-reset') ?? element
   renderMathInPreviewDom(resetEl, displayBlocks, inlineBlocks)
   decoratePreviewImages(element)
+  decoratePreviewVideoBlocks(element)
   injectImageDownloadButtons(element)
   highlightVueCodeBlocks(element)
   injectCodeCopyButtons()
@@ -862,6 +896,10 @@ onMounted(() => {
           codeBlockPreview: true,
           mathBlockPreview: true,
         },
+        render: {
+          media: { enable: true },
+        },
+        transform: transformPreviewHtml,
         parse: handlePreviewParse,
       },
       after() {
@@ -1285,6 +1323,27 @@ onBeforeUnmount(() => {
   max-width: 100%;
   height: auto;
   vertical-align: middle;
+}
+
+.markdown-preview :deep(img.markdown-html-image-block),
+.markdown-preview :deep(.vditor-reset > p > img:only-child),
+.markdown-preview :deep(.vditor-reset > img) {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: min(72vh, 960px);
+  margin: var(--space-16) auto;
+  object-fit: contain;
+}
+
+.markdown-preview :deep(iframe.markdown-video-block),
+.markdown-preview :deep(.vditor-reset iframe) {
+  display: block;
+  width: min(100%, 960px);
+  aspect-ratio: 16 / 9;
+  margin: var(--space-16) auto;
+  border: 0;
+  background: #000;
 }
 
 .markdown-preview :deep(p.markdown-image-block) {

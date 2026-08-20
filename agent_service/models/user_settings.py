@@ -16,6 +16,10 @@ from sqlmodel import Column, Field, SQLModel, Text
 from agent_service.models.session import utc_now
 
 
+# Video files remain visible in the workspace player but are never knowledge-ingestion sources.
+DEFAULT_VIDEO_IGNORE_PATTERNS = "\n".join(("*.mp4", "*.webm", "*.ogg", "*.ogv", "*.mov", "*.m4v"))
+
+
 class UserSystemPromptEntry(SQLModel, table=True):
     """用户自定义系统提示词条目。"""
 
@@ -42,7 +46,7 @@ class UserSettingsRecord(SQLModel, table=True):
     auto_ingest_on_upload: bool = Field(default=False)
     ocr_enabled: bool = Field(default=False)
     long_term_memory_enabled: bool = Field(default=True)
-    knowledge_ignore_patterns: str = Field(default="", sa_column=Column(Text))
+    knowledge_ignore_patterns: str = Field(default=DEFAULT_VIDEO_IGNORE_PATTERNS, sa_column=Column(Text))
     disabled_tools: str = Field(default="", sa_column=Column(Text))
     terminal_sandbox_config: str = Field(default="", sa_column=Column(Text))
     ui_font_families: str = Field(default="", sa_column=Column(Text))
@@ -53,6 +57,7 @@ class UserSettingsRecord(SQLModel, table=True):
     font_size_percent: int = Field(default=100)
     theme_primary_color: str = Field(default="", max_length=16)
     theme_soft_color: str = Field(default="", max_length=16)
+    show_backlinks: bool = Field(default=False)
     graph_node_limit: int = Field(default=2000)
     floating_launch_enabled: bool = Field(default=False)
     editor_image_assets_dir: str = Field(default="./assets/", max_length=1024)

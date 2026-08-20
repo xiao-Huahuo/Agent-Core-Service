@@ -67,8 +67,9 @@ test('Obsidian wiki links suggest, navigate, highlight, and recursively embed', 
   await editor.fill(fileContent['notes/source.md'])
   await editor.click({ button: 'right' })
   await page.getByRole('button', { name: '插入', exact: true }).hover()
-  await expect(page.getByText('插入反向链接', { exact: true })).toBeVisible()
+  await expect(page.getByText('插入 Wiki 链接', { exact: true })).toBeVisible()
   await expect(page.getByText('插入嵌入链接', { exact: true })).toBeVisible()
+  await expect(page.getByText('显示反向链接', { exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
 
   await page.getByRole('button', { name: 'Preview' }).click()
@@ -81,4 +82,5 @@ test('Obsidian wiki links suggest, navigate, highlight, and recursively embed', 
   await page.locator('.wiki-link').click()
   await expect(page.getByText('target.md', { exact: true }).last()).toBeVisible()
   await expect(page.locator('h2.wiki-anchor-highlight')).toHaveText('目标章节')
+
 })

@@ -903,6 +903,14 @@ class KnowledgeLibraryService:
             "size": target.stat().st_size,
             "extension": suffix,
         }
+        if suffix in {".mp4", ".webm", ".ogg", ".ogv", ".mov", ".m4v"}:
+            return {
+                **base_payload,
+                "kind": "video",
+                "mime_type": mimetypes.guess_type(target.name)[0] or "application/octet-stream",
+                "raw_url": self._raw_file_url(user_id=user_id, relative_path=str(base_payload["path"])),
+                "readonly": True,
+            }
         if suffix in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
             mime_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
             image_preview = self._preview_image_text_from_frontmatter(

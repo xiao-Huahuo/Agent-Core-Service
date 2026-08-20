@@ -283,6 +283,23 @@ def test_preview_doc_is_classified_as_unsupported_binary(tmp_path: Path) -> None
     assert preview["readonly"] is True
 
 
+def test_preview_video_exposes_inline_player_source_without_ingestion(tmp_path: Path) -> None:
+    """视频仅返回浏览器播放器数据,不能进入知识灌库白名单。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    knowledge_dir.mkdir()
+    (knowledge_dir / "clip.mp4").write_bytes(b"video")
+    service = _service(tmp_path, knowledge_dir)
+
+    preview = service.preview_file(user_id="user-1", path="clip.mp4")
+
+    assert preview["kind"] == "video"
+    assert preview["mime_type"] == "video/mp4"
+    assert preview["raw_url"].endswith("/knowledge/files/raw?user_id=user-1&path=clip.mp4")
+    assert preview["readonly"] is True
+    assert service._can_ingest_source_file(knowledge_dir / "clip.mp4") is False
+
+
 def test_resolve_knowledge_asset_serves_pdf_preview_image(tmp_path: Path) -> None:
     """PDF 预览导出的 /knowledge/assets 图片应能被后端解析为真实文件。"""
 

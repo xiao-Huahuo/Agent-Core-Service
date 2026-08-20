@@ -232,6 +232,16 @@ async function handleSaveThemeColors() {
   }
 }
 
+async function handleSetShowBacklinks(value: boolean) {
+  try {
+    await settingsStore.setShowBacklinks(value)
+    saveError.value = ''
+    saveMessage.value = '反向链接设置已保存'
+  } catch (error) {
+    saveError.value = error instanceof Error ? error.message : '保存反向链接设置失败'
+  }
+}
+
 function handlePreviewThemeColors() {
   settingsStore.previewAppearanceColors({
     themePrimaryColor: themePrimaryColorDraft.value,
@@ -686,6 +696,7 @@ onBeforeUnmount(() => {
         :available-font-families="availableFontFamilies"
         :fonts-loading="fontsLoading"
         :sidebar-display-mode="settingsStore.sidebarDisplayMode"
+        :show-backlinks="Boolean(settingsStore.profile.showBacklinks)"
         :theme-mode="settingsStore.themeMode"
         :theme-options="themeOptions"
         @preview-theme-colors="handlePreviewThemeColors"
@@ -694,6 +705,7 @@ onBeforeUnmount(() => {
         @save-font-size="handleSaveFontSize"
         @save-theme-colors="handleSaveThemeColors"
         @set-sidebar-display-mode="settingsStore.setSidebarDisplayMode"
+        @set-show-backlinks="handleSetShowBacklinks"
         @set-theme-mode="settingsStore.setThemeMode"
       />
 

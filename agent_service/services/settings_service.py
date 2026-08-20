@@ -21,6 +21,7 @@ from sqlalchemy import text
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.models.user_settings import (
+    DEFAULT_VIDEO_IGNORE_PATTERNS,
     UserKnowledgeLibrary,
     UserLLMConfig,
     UserLLMConfigPreset,
@@ -33,6 +34,18 @@ if TYPE_CHECKING:
     from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 
 logger = logging.getLogger(__name__)
+
+
+def _with_default_video_ignore_patterns(patterns: str | None) -> str:
+    """Append mandatory preview-only video rules without duplicating user rules."""
+
+    lines = [line for line in str(patterns or "").splitlines() if line.strip()]
+    known = {line.strip().lower() for line in lines}
+    lines.extend(
+        rule for rule in DEFAULT_VIDEO_IGNORE_PATTERNS.splitlines()
+        if rule.lower() not in known
+    )
+    return "\n".join(lines)
 
 
 class SettingsService:
@@ -97,6 +110,7 @@ class SettingsService:
                 "font_size_percent": "INTEGER NOT NULL DEFAULT 100",
                 "theme_primary_color": "VARCHAR(16) NOT NULL DEFAULT ''",
                 "theme_soft_color": "VARCHAR(16) NOT NULL DEFAULT ''",
+                "show_backlinks": "BOOLEAN NOT NULL DEFAULT 0",
                 "graph_node_limit": "INTEGER NOT NULL DEFAULT 2000",
                 "floating_launch_enabled": "BOOLEAN NOT NULL DEFAULT 0",
                 "editor_image_assets_dir": "VARCHAR(1024) NOT NULL DEFAULT './assets/'",
@@ -563,7 +577,7 @@ class SettingsService:
             "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
             "ocr_enabled": bool(record.ocr_enabled),
             "long_term_memory_enabled": bool(record.long_term_memory_enabled),
-            "knowledge_ignore_patterns": record.knowledge_ignore_patterns,
+            "knowledge_ignore_patterns": _with_default_video_ignore_patterns(record.knowledge_ignore_patterns),
             "knowledge_supported_suffixes": list(self.config.constants.knowledge_supported_suffixes),
             "terminal_sandbox": self._load_terminal_sandbox_payload(record.terminal_sandbox_config),
             "ui_font_families": self._load_font_families(record.ui_font_families),
@@ -573,6 +587,7 @@ class SettingsService:
             "font_size_percent": self._normalize_font_size_percent(record.ui_font_size_percent),
             "theme_primary_color": record.theme_primary_color,
             "theme_soft_color": record.theme_soft_color,
+            "show_backlinks": bool(record.show_backlinks),
             "graph_node_limit": record.graph_node_limit,
             "floating_launch_enabled": bool(record.floating_launch_enabled),
             "editor_image_assets_dir": self._normalize_editor_image_assets_dir(record.editor_image_assets_dir),
@@ -712,8 +727,9 @@ class SettingsService:
         user_id: str,
         theme_primary_color: str | None = None,
         theme_soft_color: str | None = None,
+        show_backlinks: bool | None = None,
     ) -> dict:
-        """Persist the user's editor appearance colors."""
+        """Persist editor appearance colors and backlinks visibility."""
 
         normalized_user_id = user_id.strip()
         if not normalized_user_id:
@@ -732,6 +748,8 @@ class SettingsService:
                 record.theme_primary_color = self._normalize_theme_color(theme_primary_color)
             if theme_soft_color is not None:
                 record.theme_soft_color = self._normalize_theme_color(theme_soft_color)
+            if show_backlinks is not None:
+                record.show_backlinks = bool(show_backlinks)
             record.updated_at = now
             db.add(record)
             db.commit()
@@ -740,6 +758,7 @@ class SettingsService:
                 "user_id": record.user_id,
                 "theme_primary_color": record.theme_primary_color,
                 "theme_soft_color": record.theme_soft_color,
+                "show_backlinks": bool(record.show_backlinks),
                 "updated_at": record.updated_at.isoformat(),
             }
 
@@ -794,6 +813,18 @@ class SettingsService:
                 "editor_image_assets_dir": self._normalize_editor_image_assets_dir(record.editor_image_assets_dir),
                 "updated_at": record.updated_at.isoformat(),
             }
+
+    def get_appearance_config(self, *, user_id: str) -> dict:
+        """Return persisted appearance and backlinks visibility settings."""
+
+        profile = self.ensure_user_profile(user_id=user_id)
+        return {
+            "user_id": profile["user_id"],
+            "theme_primary_color": profile["theme_primary_color"],
+            "theme_soft_color": profile["theme_soft_color"],
+            "show_backlinks": profile["show_backlinks"],
+            "updated_at": profile["updated_at"],
+        }
 
     def list_knowledge_library_dirs(self) -> list[Path]:
         """Return all configured user knowledge library directories."""
@@ -1495,12 +1526,12 @@ class SettingsService:
                     "user_id": normalized_user_id,
                     "auto_ingest_on_upload": False,
                     "ocr_enabled": self.config.ocr.enabled,
-                    "knowledge_ignore_patterns": "",
+                    "knowledge_ignore_patterns": DEFAULT_VIDEO_IGNORE_PATTERNS,
                 }
             return {
                 "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
                 "ocr_enabled": bool(record.ocr_enabled),
-                "knowledge_ignore_patterns": record.knowledge_ignore_patterns,
+                "knowledge_ignore_patterns": _with_default_video_ignore_patterns(record.knowledge_ignore_patterns),
             }
 
     def save_knowledge_ingestion_config(
@@ -1524,7 +1555,7 @@ class SettingsService:
                     knowledge_dir=str(self.config.storage.knowledge_dir),
                     auto_ingest_on_upload=bool(auto_ingest_on_upload),
                     ocr_enabled=bool(ocr_enabled),
-                    knowledge_ignore_patterns=knowledge_ignore_patterns or "",
+                    knowledge_ignore_patterns=_with_default_video_ignore_patterns(knowledge_ignore_patterns),
                     created_at=now,
                     updated_at=now,
                 )
@@ -1537,7 +1568,7 @@ class SettingsService:
                     restart_required = bool(record.ocr_enabled) != next_ocr_enabled
                     record.ocr_enabled = next_ocr_enabled
                 if knowledge_ignore_patterns is not None:
-                    record.knowledge_ignore_patterns = knowledge_ignore_patterns
+                    record.knowledge_ignore_patterns = _with_default_video_ignore_patterns(knowledge_ignore_patterns)
                 record.updated_at = now
             db.add(record)
             db.commit()
@@ -1545,7 +1576,7 @@ class SettingsService:
             return {
                 "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
                 "ocr_enabled": bool(record.ocr_enabled),
-                "knowledge_ignore_patterns": record.knowledge_ignore_patterns,
+                "knowledge_ignore_patterns": _with_default_video_ignore_patterns(record.knowledge_ignore_patterns),
                 "restart_required": restart_required,
             }
 

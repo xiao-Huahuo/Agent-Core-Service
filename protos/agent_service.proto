@@ -77,6 +77,8 @@ service AgentService {
   rpc SaveWebSearchConfig(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc GetFontConfig(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc SaveFontConfig(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc GetAppearanceConfig(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc SaveAppearanceConfig(google.protobuf.Struct) returns (google.protobuf.Struct);
 
   // 知识库重建与上传
   rpc RebuildKnowledge(KnowledgeRebuildRequest) returns (KnowledgeRebuildResponse);

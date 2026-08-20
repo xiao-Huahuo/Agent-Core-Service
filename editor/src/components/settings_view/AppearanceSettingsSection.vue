@@ -22,6 +22,7 @@ const props = defineProps<{
   sidebarDisplayMode: SidebarDisplayMode
   availableFontFamilies: string[]
   fontsLoading: boolean
+  showBacklinks: boolean
 }>()
 
 const emit = defineEmits<{
@@ -32,6 +33,7 @@ const emit = defineEmits<{
   saveThemeColors: []
   resetThemeColors: []
   setSidebarDisplayMode: [mode: SidebarDisplayMode]
+  setShowBacklinks: [value: boolean]
 }>()
 
 const activeFontPicker = ref<'ui' | 'text' | null>(null)
@@ -264,6 +266,20 @@ onBeforeUnmount(() => {
         >
           管理栏
         </button>
+      </div>
+    </div>
+
+    <div class="page-display-control backlinks-display-control">
+      <div class="page-display-header">
+        <label for="show-backlinks-setting">显示反向链接</label>
+      </div>
+      <div class="toggle-row">
+        <input
+          id="show-backlinks-setting"
+          type="checkbox"
+          :checked="showBacklinks"
+          @change="emit('setShowBacklinks', ($event.target as HTMLInputElement).checked)"
+        />
       </div>
     </div>
 

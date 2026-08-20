@@ -168,3 +168,16 @@ def test_user_profile_reports_the_effective_supported_knowledge_suffixes() -> No
     profile = service.ensure_user_profile(user_id="u1")
 
     assert profile["knowledge_supported_suffixes"] == [".md", ".custom"]
+
+
+def test_video_types_are_blocked_by_default_without_becoming_ingestion_types() -> None:
+    """默认屏蔽常见视频扩展,同时不得把视频伪装成可灌库知识格式。"""
+
+    service = make_settings_service()
+
+    ingestion = service.get_knowledge_ingestion_config(user_id="u1")
+    profile = service.ensure_user_profile(user_id="u1")
+
+    assert "*.mp4" in ingestion["knowledge_ignore_patterns"].splitlines()
+    assert "*.webm" in ingestion["knowledge_ignore_patterns"].splitlines()
+    assert ".mp4" not in profile["knowledge_supported_suffixes"]

@@ -2,8 +2,8 @@
   Multimodal file preview surface.
 
   Usage:
-  Renders backend preview payloads for images, PDFs, tables, DOCX-derived HTML,
-  and unsupported binary files in the editor center pane.
+  Renders backend preview payloads for images, videos, PDFs, tables,
+  DOCX-derived HTML, and unsupported binary files in the editor center pane.
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
@@ -83,6 +83,17 @@ function handleDocumentClick(event: MouseEvent) {
       title="PDF preview"
     ></iframe>
 
+    <video
+      v-else-if="preview.kind === 'video'"
+      class="video-preview"
+      controls
+      preload="metadata"
+      playsinline
+    >
+      <source :src="previewSource" :type="preview.mime_type" />
+      当前浏览器无法播放此视频。
+    </video>
+
     <div v-else-if="preview.kind === 'table'" class="table-preview">
       <section v-for="sheet in preview.sheets ?? []" :key="sheet.name" class="table-sheet">
         <h3>{{ sheet.name }}</h3>
@@ -132,6 +143,16 @@ function handleDocumentClick(event: MouseEvent) {
   border: 0;
   background: var(--color-canvas);
   color-scheme: light dark;
+}
+
+.video-preview {
+  align-self: center;
+  width: 100%;
+  max-width: 1200px;
+  max-height: 100%;
+  margin: auto;
+  background: #000;
+  object-fit: contain;
 }
 
 :global(:root[data-theme="light"]) .pdf-preview {

@@ -61,8 +61,9 @@ describe('CodeEditor Markdown context menu', () => {
     await wrapper.findAll('.markdown-context-parent').find((button) => button.text().includes('插入'))?.trigger('click')
 
     const labels = wrapper.findAll('.markdown-context-submenu button').map((button) => button.text())
-    expect(labels).toContain('插入反向链接')
+    expect(labels).toContain('插入 Wiki 链接')
     expect(labels).toContain('插入嵌入链接')
+    expect(wrapper.find('.markdown-context-action').text()).toContain('显示反向链接')
   })
 
   it('emits scroll ratio and caret offset for Split synchronization', async () => {

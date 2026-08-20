@@ -283,7 +283,7 @@ async def save_font_config(body: dict[str, Any]) -> dict[str, Any]:
 @router.post("/settings/appearance/config")
 @router.put("/settings/appearance/config")
 async def save_appearance_config(body: dict[str, Any]) -> dict[str, Any]:
-    """Persist editor appearance colors for a user."""
+    """Persist editor appearance colors and backlinks visibility for a user."""
 
     user_id = str(body.get("user_id") or "").strip()
     if not user_id:
@@ -294,6 +294,7 @@ async def save_appearance_config(body: dict[str, Any]) -> dict[str, Any]:
             user_id=user_id,
             theme_primary_color=body.get("theme_primary_color"),
             theme_soft_color=body.get("theme_soft_color"),
+            show_backlinks=body.get("show_backlinks"),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

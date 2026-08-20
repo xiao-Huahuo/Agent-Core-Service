@@ -971,6 +971,45 @@ class AgentServiceServicer(BaseServicer):
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
         return ParseDict(result, Struct())
 
+    def GetAppearanceConfig(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Return REST-equivalent appearance and backlinks visibility settings."""
+
+        payload = MessageToDict(request)
+        try:
+            result = self._require_settings_service(context).get_appearance_config(
+                user_id=str(payload.get("user_id") or ""),
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(result, Struct())
+
+    def SaveAppearanceConfig(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """Persist REST-equivalent appearance and backlinks visibility settings."""
+
+        payload = MessageToDict(request)
+        try:
+            result = self._require_settings_service(context).save_appearance_config(
+                user_id=str(payload.get("user_id") or ""),
+                theme_primary_color=(
+                    str(payload["theme_primary_color"])
+                    if "theme_primary_color" in payload
+                    else None
+                ),
+                theme_soft_color=(
+                    str(payload["theme_soft_color"])
+                    if "theme_soft_color" in payload
+                    else None
+                ),
+                show_backlinks=(
+                    bool(payload["show_backlinks"])
+                    if "show_backlinks" in payload
+                    else None
+                ),
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(result, Struct())
+
     def SaveWebSearchConfig(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
         """Persist the REST-equivalent web-search and browser settings payload."""
 
