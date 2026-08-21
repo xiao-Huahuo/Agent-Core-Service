@@ -17,19 +17,21 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 class FeedbackCreate(BaseModel):
     """创建用户反馈 DTO。"""
 
-    user_id: str = Field(min_length=1, max_length=128)
-    content: str = Field(min_length=1, max_length=4000)
-    source: str = Field(default="editor_activity_bar", max_length=128)
-    page: str = Field(default="", max_length=128)
+    user_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    content: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.feedback_content_max_length)
+    source: str = Field(default="editor_activity_bar", max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    page: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
 
 
 class FeedbackUpdate(BaseModel):
     """修改用户反馈 DTO。"""
 
-    content: str = Field(min_length=1, max_length=4000)
+    content: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.feedback_content_max_length)
 
 
 class FeedbackOut(BaseModel):

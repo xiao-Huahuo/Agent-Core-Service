@@ -28,7 +28,7 @@ from sklearn.cluster import DBSCAN
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from agent_service.core.agent_config import AgentConfig
+from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.models.knowledge_graph import (
     KnowledgeGraphDocumentStatus,
     KnowledgeGraphEdge,
@@ -80,8 +80,6 @@ RELATION_TYPES = {
     "modifies",
 }
 WEAK_RELATION_TYPES = {"mentions", "related_to"}
-GRAPH_BATCH_MAX_CHARS = 12_000
-GRAPH_BATCH_MAX_SECTIONS = 4
 
 
 class KnowledgeGraphExtractor(Protocol):
@@ -241,29 +239,15 @@ class LLMKnowledgeGraphExtractor:
             source_id=source_id,
         )
 
-    @staticmethod
-    def _system_prompt() -> str:
+    def _system_prompt(self) -> str:
         """返回实体关系抽取系统提示词。"""
 
-        return (
-            "你是知识图谱抽取器。只从给定文本中抽取明确出现的实体和关系,不要推理文本没有表达的事实。"
-            "只输出合法 JSON,不要输出解释。"
-            "实体类型只能是: person, organization, project, module, class, function, file, concept, config, data, other。"
-            "关系类型: defines, contains, depends_on, produces, consumes, calls, configures, uses, creates, modifies, mentions, related_to, likes, knows。"
-            "如果文本描述的是人际/情感关系（如喜欢、认识、了解等）优先使用 likes/knows 类型。"
-            "关系两端必须来自 entities.name。每条关系必须有 evidence, evidence 必须是原文中的短句或短语。"
-            "不确定就不要抽。输出结构固定为 {\"entities\":[],\"relations\":[]}。"
-        )
+        return self.config.prompts.knowledge_graph_extraction_system_prompt
 
-    @classmethod
-    def _batch_system_prompt(cls) -> str:
+    def _batch_system_prompt(self) -> str:
         """返回保留章节归属的批量实体关系抽取提示词。"""
 
-        return cls._system_prompt().replace(
-            '输出结构固定为 {"entities":[],"relations":[]}。',
-            "输入包含多个章节。必须逐章抽取并保持 section_id 不变，"
-            '输出结构固定为 {"sections":[{"section_id":"...","entities":[],"relations":[]}]}。',
-        )
+        return self.config.prompts.knowledge_graph_batch_system_prompt
 
     @staticmethod
     def _batch_human_prompt(
@@ -380,16 +364,10 @@ class LLMKnowledgeGraphExtractor:
 
         return {"entities": merged, "name_mapping": name_mapping}
 
-    @staticmethod
-    def _dedup_system_prompt() -> str:
+    def _dedup_system_prompt(self) -> str:
         """返回实体语义去重系统提示词。"""
 
-        return (
-            "你是实体语义去重器。你的任务是对同一文档中抽取出的实体候选进行语义去重。"
-            "如果多个候选指代的是同一个事物或概念（例如「AI」和「Artificial Intelligence」、"
-            "「用户」和「end user」、「Python」和「Python语言」），将它们合并为一个规范实体。"
-            "只输出合法 JSON，不要输出解释。"
-        )
+        return self.config.prompts.knowledge_graph_dedup_system_prompt
 
     @staticmethod
     def _dedup_human_prompt(
@@ -461,15 +439,10 @@ class LLMKnowledgeGraphExtractor:
                 name_mapping[from_name] = to_name
         return name_mapping
 
-    @staticmethod
-    def _dedup_incremental_system_prompt() -> str:
+    def _dedup_incremental_system_prompt(self) -> str:
         """返回增量去重系统提示词。"""
 
-        return (
-            "你是实体同义判断器。你的任务是判断文档新抽取的实体是否与知识库中已有的实体语义相同。"
-            "每个新实体后附有库中候选列表(含向量相似度)。如果新实体与某个候选指向同一事物，"
-            "输出 from→to 映射。不确定就不映射。只输出 JSON。"
-        )
+        return self.config.prompts.knowledge_graph_incremental_dedup_system_prompt
 
     @staticmethod
     def _dedup_incremental_human_prompt(
@@ -783,10 +756,16 @@ class KnowledgeGraphService:
             result.files_failed = 1
             return result
 
-    def get_graph(self, *, user_id: str, library_id: str, limit: int = 500) -> dict[str, Any]:
+    def get_graph(self, *, user_id: str, library_id: str, limit: int | None = None) -> dict[str, Any]:
         """返回前端 Canvas 可直接消费的图谱数据。"""
 
-        safe_limit = max(50, min(int(limit or 500), 10000))
+        safe_limit = max(
+            self.config.limits.graph_min_node_limit,
+            min(
+                int(limit or self.config.limits.graph_default_node_limit),
+                self.config.limits.graph_max_node_limit,
+            ),
+        )
         with Session(self.engine) as db:
             raw_nodes = list(db.exec(
                 select(KnowledgeGraphNode)
@@ -996,7 +975,7 @@ class KnowledgeGraphService:
         llm_config: dict[str, Any] | None = None,
         eps: float = 0.5,
         min_samples: int = 2,
-        max_cluster_size: int = 500,
+        max_cluster_size: int | None = None,
     ) -> int:
         """全库实体去重: Embedding 聚类 + 逐簇小模型去重。
 
@@ -1004,6 +983,7 @@ class KnowledgeGraphService:
         如果单个簇超过 max_cluster_size 则拆成子批次,避免一次喂给 LLM 太多实体。
         """
 
+        max_cluster_size = max_cluster_size or self.config.limits.graph_dedup_max_cluster_size
         with Session(self.engine) as db:
             entity_rows = db.exec(
                 select(KnowledgeGraphNode)
@@ -1693,8 +1673,8 @@ class GraphExtractionCancelled(RuntimeError):
 def _batch_graph_sections(
     sections: list[StructuredKnowledgeSection],
     *,
-    max_chars: int = GRAPH_BATCH_MAX_CHARS,
-    max_sections: int = GRAPH_BATCH_MAX_SECTIONS,
+    max_chars: int = DEFAULT_BUSINESS_LIMITS.graph_batch_max_chars,
+    max_sections: int = DEFAULT_BUSINESS_LIMITS.graph_batch_max_sections,
 ) -> list[list[StructuredKnowledgeSection]]:
     """按字符数和章节数合并相邻短章节，长章节保持独立。"""
 
@@ -1727,7 +1707,12 @@ def _extract_graph_section_payloads(
 ) -> dict[str, dict[str, Any]]:
     """并发抽取章节批次，并以单调完成计数报告前端进度。"""
 
-    batches = _batch_graph_sections(document.sections)
+    limits = getattr(getattr(extractor, "config", None), "limits", DEFAULT_BUSINESS_LIMITS)
+    batches = _batch_graph_sections(
+        document.sections,
+        max_chars=limits.graph_batch_max_chars,
+        max_sections=limits.graph_batch_max_sections,
+    )
     if not batches:
         return {}
     payloads: dict[str, dict[str, Any]] = {}

@@ -21,7 +21,7 @@ from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.agent_core.nodes.model_decision import extract_token_usage, get_user_llm_overrides
-from agent_service.core.agent_config import AgentConfig
+from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.services.scheduler import (
     FOREGROUND_AGENT_TASK,
     SMALL_MODEL_TIER,
@@ -32,21 +32,6 @@ from agent_service.tools import ToolExecutor
 from agent_service.tools.runtime_context import get_tool_trace_callback
 
 
-
-
-PLANNER_SYSTEM_PROMPT = (
-    "你是一个多步骤任务规划器。根据用户问题、已有计划、工具结果和 observation 决策历史更新探索状态。\n"
-    "输出格式（只输出 JSON，不要其他文字）：\n"
-    '{"covered":["已覆盖方向"],"suggested":["建议方向"],"sub_questions":["待解决子问题"],"current_index":0,"status":"planning|running|ready_to_answer","sufficient":false,"hint":"给 agent 的一两句策略建议"}\n'
-    "字段说明:\n"
-    "- covered: 目前已覆盖了哪些子话题/方向(可为空数组)\n"
-    "- suggested: 建议 agent 下一步探索的方向(可为空数组)\n"
-    "- sub_questions: 为用户问题拆出的有序子问题,最多5个,已完成的也保留在列表里\n"
-    "- current_index: 当前最应该处理的子问题下标,从0开始\n"
-    "- status: planning 初始规划,running 正在探索,ready_to_answer 信息足够可回答\n"
-    "- sufficient: 当前信息是否已经足够回答用户问题\n"
-    "- hint: 给 agent 的具体下一步建议,必须引用 current_index 对应子问题,不要超过80字"
-)
 
 
 class PlannerNode:
@@ -96,7 +81,11 @@ class PlannerNode:
             }
 
         existing_plan = state.get("plan")
-        system_message = SystemMessage(content=PLANNER_SYSTEM_PROMPT)
+        system_prompt = self.config.prompts.planner_system_prompt.format(
+            max_subquestions=self.config.limits.agent_planner_subquestion_limit,
+            max_hint_chars=self.config.limits.agent_planner_hint_chars,
+        )
+        system_message = SystemMessage(content=system_prompt)
         user_content = self._build_planning_prompt(original_prompt, existing_plan, state)
         user_message = SystemMessage(content=user_content)
         trace_callback = get_tool_trace_callback()
@@ -109,7 +98,7 @@ class PlannerNode:
             })
         response = self._call_llm(system_message, user_message, state)
         token_usage = extract_token_usage(response)
-        plan = self._parse_plan(response.content)
+        plan = self._parse_plan(response.content, limits=self.config.limits)
         if plan is not None:
             event = "strategy_updated" if existing_plan else "strategy_generated"
             hint = plan.get("hint", "")
@@ -180,16 +169,23 @@ class PlannerNode:
         covered = existing_plan.get("covered", [])
         if covered:
             parts.append(f"\n当前已覆盖的主题: {', '.join(covered)}")
-        history = self._build_execution_history(state, limit=6)
+        history = self._build_execution_history(state, limit=self.config.limits.agent_planner_history_limit)
         if history:
             parts.append(f"\n最近探索结果:\n{history}")
-        observation_history = self._build_observation_history(state, limit=6)
+        observation_history = self._build_observation_history(
+            state,
+            limit=self.config.limits.agent_planner_history_limit,
+        )
         if observation_history:
             parts.append(f"\nObservation 决策历史:\n{observation_history}")
         parts.append("\n请根据以上信息更新 sub_questions/current_index/status,判断是否已经足够回答用户问题。输出 JSON。")
         return "\n".join(parts)
 
-    def _build_execution_history(self, state: AgentState, limit: int = 6) -> str:
+    def _build_execution_history(
+        self,
+        state: AgentState,
+        limit: int = DEFAULT_BUSINESS_LIMITS.agent_planner_history_limit,
+    ) -> str:
         """
         从状态消息中提取最近的工具调用摘要。
 
@@ -210,7 +206,11 @@ class PlannerNode:
                 name = getattr(msg, "name", "") or ""
                 display = self._lookup_display_name(name) if name else ""
                 label = f"{display}: " if display else ""
-                lines.append(f"- {label}{content[:200]}{'...' if len(content) > 200 else ''}")
+                preview_chars = self.config.limits.agent_planner_history_preview_chars
+                lines.append(
+                    f"- {label}{content[:preview_chars]}"
+                    f"{'...' if len(content) > preview_chars else ''}"
+                )
                 count += 1
             elif isinstance(msg, AIMessage):
                 tool_calls = getattr(msg, "tool_calls", []) or []
@@ -226,7 +226,10 @@ class PlannerNode:
         return "\n".join(lines)
 
     @staticmethod
-    def _build_observation_history(state: AgentState, limit: int = 6) -> str:
+    def _build_observation_history(
+        state: AgentState,
+        limit: int = DEFAULT_BUSINESS_LIMITS.agent_planner_history_limit,
+    ) -> str:
         """从 trace 中提取 observation 的选择历史。"""
 
         traces = state.get("trace", []) or []
@@ -259,7 +262,11 @@ class PlannerNode:
         return tool_name
 
     @staticmethod
-    def _parse_plan(raw_content: str | None) -> dict[str, Any] | None:
+    def _parse_plan(
+        raw_content: str | None,
+        *,
+        limits: AgentConfig.BusinessLimitsConfig = DEFAULT_BUSINESS_LIMITS,
+    ) -> dict[str, Any] | None:
         """从模型响应中解析 JSON 计划。"""
 
         if not raw_content:
@@ -295,13 +302,19 @@ class PlannerNode:
                 if sufficient:
                     status = "ready_to_answer"
                 return {
-                    "covered": [str(item) for item in covered[:8]],
-                    "suggested": [str(item) for item in suggested[:8]],
-                    "sub_questions": [str(item) for item in sub_questions[:5]],
+                    "covered": [
+                        str(item) for item in covered[:limits.agent_planner_covered_limit]
+                    ],
+                    "suggested": [
+                        str(item) for item in suggested[:limits.agent_planner_suggested_limit]
+                    ],
+                    "sub_questions": [
+                        str(item) for item in sub_questions[:limits.agent_planner_subquestion_limit]
+                    ],
                     "current_index": current_index,
                     "status": status,
                     "sufficient": sufficient,
-                    "hint": str(data.get("hint", "") or "")[:120],
+                    "hint": str(data.get("hint", "") or "")[:limits.agent_planner_hint_chars],
                 }
             except json.JSONDecodeError:
                 return None

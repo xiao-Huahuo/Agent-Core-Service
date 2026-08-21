@@ -6,13 +6,14 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.api.rest.deps import _require_todo_service
 
 router = APIRouter()
 
 
 @router.get("/todo/list")
-async def api_list_todos(user_id: str = Query(..., min_length=1)) -> list[dict[str, Any]]:
+async def api_list_todos(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length)) -> list[dict[str, Any]]:
     """获取用户的所有待办。"""
     svc = _require_todo_service()
     return svc.list_todos(user_id=user_id)

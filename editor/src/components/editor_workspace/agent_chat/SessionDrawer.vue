@@ -310,7 +310,7 @@ async function clearAllSessions() {
   max-width: min(280px, 80vw);
   border: 0;
   outline: none;
-  border-radius: 0;
+  border-radius: var(--workspace-card-radius);
   background: var(--color-chrome-rail-bg);
   box-shadow: none;
   backdrop-filter: none;
@@ -324,7 +324,6 @@ async function clearAllSessions() {
 
 .session-drawer.page-mode.open {
   transform: translateX(0);
-  border-radius: 0;
 }
 
 .drawer-titlebar {

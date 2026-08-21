@@ -13,6 +13,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 
 StructuredFieldType = Literal["text", "tag", "number", "boolean", "date"]
 StructuredFieldStatus = Literal["ready", "failed"]
@@ -21,18 +23,18 @@ StructuredFieldStatus = Literal["ready", "failed"]
 class StructuredGenerationSource(BaseModel):
     """字段生成的数据来源。"""
 
-    kind: str = Field(min_length=1, max_length=128)
-    content: str = Field(default="", max_length=200000)
+    kind: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    content: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.structured_source_max_length)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class StructuredGenerationField(BaseModel):
     """需要生成的字段定义。"""
 
-    id: str = Field(min_length=1, max_length=128)
-    title: str = Field(min_length=1, max_length=256)
+    id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    title: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.title_max_length)
     type: StructuredFieldType = "text"
-    description: str = Field(default="", max_length=1024)
+    description: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.secret_max_length)
     options: list[str] = Field(default_factory=list)
     required: bool = True
 
@@ -40,16 +42,19 @@ class StructuredGenerationField(BaseModel):
 class StructuredGenerationOptions(BaseModel):
     """结构化生成选项。"""
 
-    language: str = Field(default="zh", max_length=32)
+    language: str = Field(default="zh", max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
     strict_json: bool = True
 
 
 class StructuredGenerationRequest(BaseModel):
     """结构化字段生成请求。"""
 
-    user_id: str = Field(min_length=1, max_length=128)
+    user_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     source: StructuredGenerationSource
-    fields: list[StructuredGenerationField] = Field(min_length=1, max_length=64)
+    fields: list[StructuredGenerationField] = Field(
+        min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length,
+        max_length=DEFAULT_BUSINESS_LIMITS.structured_fields_max_count,
+    )
     options: StructuredGenerationOptions = Field(default_factory=StructuredGenerationOptions)
 
 

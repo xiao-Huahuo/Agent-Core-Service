@@ -12,6 +12,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.services.editor_context_service import editor_context_service
 from agent_service.services.knowledge_graph_service import (
     _run_graph_extraction,
@@ -327,21 +328,34 @@ def extract_all_file_graphs() -> str:
     return _start_graph_job(paths=None, all_files=True)
 
 
-def _current_graph(limit: int = 5000) -> dict[str, Any]:
+def _current_graph(limit: int | None = None) -> dict[str, Any]:
     """读取当前 active 知识库图谱点边数据。"""
 
-    user_id, library_id, _root, _llm_config, _config = _graph_context()
-    return _graph_service().get_graph(user_id=user_id, library_id=library_id, limit=limit)
+    user_id, library_id, _root, _llm_config, config = _graph_context()
+    return _graph_service().get_graph(
+        user_id=user_id,
+        library_id=library_id,
+        limit=limit or config.limits.api_internal_scan_limit,
+    )
 
 
-def search_knowledge_graph_nodes(query: str, limit: int = 20) -> str:
+def search_knowledge_graph_nodes(query: str, limit: int | None = None) -> str:
     """按标签、类型和元数据搜索图谱节点，并返回每个命中的邻接节点。"""
 
     graph = _current_graph()
     nodes = [node for node in graph.get("nodes") or [] if isinstance(node, dict)]
     links = [link for link in graph.get("links") or [] if isinstance(link, dict)]
     normalized = query.strip().casefold()
-    matches = [node for node in nodes if normalized in _json(node).casefold()][: max(1, min(limit, 100))]
+    try:
+        limits = get_tool_runtime().config.limits
+    except RuntimeError:
+        limits = DEFAULT_BUSINESS_LIMITS
+    matches = [node for node in nodes if normalized in _json(node).casefold()][
+        :max(
+            limits.nonempty_min_length,
+            min(limit or limits.graph_search_default_limit, limits.graph_search_max_limit),
+        )
+    ]
     by_id = {str(node.get("id") or ""): node for node in nodes}
     results: list[dict[str, Any]] = []
     for node in matches:
@@ -361,7 +375,11 @@ def search_knowledge_graph_nodes(query: str, limit: int = 20) -> str:
     return _json({"query": query, "count": len(results), "results": results})
 
 
-def find_knowledge_graph_paths(source_node_id: str, target_node_id: str, max_depth: int = 6) -> str:
+def find_knowledge_graph_paths(
+    source_node_id: str,
+    target_node_id: str,
+    max_depth: int | None = None,
+) -> str:
     """使用无向 BFS 查找两个图谱节点间的最短关系路径。"""
 
     graph = _current_graph()
@@ -381,7 +399,14 @@ def find_knowledge_graph_paths(source_node_id: str, target_node_id: str, max_dep
         current, path, edges = queue.popleft()
         if current == target_node_id:
             return _json({"nodes": [nodes[node_id] for node_id in path], "edges": edges, "depth": len(edges)})
-        if len(edges) >= max(1, min(max_depth, 12)):
+        try:
+            limits = get_tool_runtime().config.limits
+        except RuntimeError:
+            limits = DEFAULT_BUSINESS_LIMITS
+        if len(edges) >= max(
+            limits.nonempty_min_length,
+            min(max_depth or limits.graph_path_default_depth, limits.graph_path_max_depth),
+        ):
             continue
         for neighbor, edge in adjacency.get(current, []):
             if neighbor in visited:

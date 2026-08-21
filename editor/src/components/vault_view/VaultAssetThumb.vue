@@ -18,6 +18,7 @@ const props = defineProps<{
   token: string
   assetId: string
   fallbackIcon: string
+  display?: 'thumbnail' | 'cover'
 }>()
 
 const objectUrl = ref('')
@@ -48,8 +49,8 @@ function revokeObjectUrl() {
 </script>
 
 <template>
-  <img v-if="objectUrl" class="asset-thumb" :src="objectUrl" alt="" />
-  <span v-else class="type-icon" aria-hidden="true">
+  <img v-if="objectUrl" class="asset-thumb" :class="{ cover: display === 'cover' }" :src="objectUrl" alt="" />
+  <span v-else class="type-icon" :class="{ cover: display === 'cover' }" aria-hidden="true">
     <IcIcon :name="fallbackIcon" :size="18" />
   </span>
 </template>
@@ -72,5 +73,15 @@ function revokeObjectUrl() {
 .type-icon {
   background: var(--color-primary-soft);
   color: var(--color-primary);
+}
+
+.asset-thumb.cover,
+.type-icon.cover {
+  align-self: stretch;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: 28px;
 }
 </style>

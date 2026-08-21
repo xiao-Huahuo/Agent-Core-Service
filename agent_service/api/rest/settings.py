@@ -10,6 +10,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.api.rest.deps import _require_agent, _require_knowledge_library_service, _require_settings_service
 
 router = APIRouter()
@@ -199,7 +200,7 @@ async def check_model_disk() -> dict[str, Any]:
 
 
 @router.get("/settings/profile")
-async def get_user_profile(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def get_user_profile(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """获取或初始化用户设置档案。"""
     svc = _require_settings_service()
     try:
@@ -319,7 +320,7 @@ async def save_editor_paste_config(body: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/settings/profile/ingestion")
-async def get_knowledge_ingestion_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def get_knowledge_ingestion_config(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """获取知识库灌库配置。"""
 
     svc = _require_settings_service()
@@ -383,7 +384,7 @@ async def save_graph_config(body: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/settings/memory/system-prompts")
-async def list_system_prompt_entries(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def list_system_prompt_entries(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """列出用户的所有系统提示词条目。"""
     svc = _require_settings_service()
     entries = svc.list_system_prompt_entries(user_id=user_id)
@@ -414,7 +415,7 @@ async def delete_system_prompt_entry(prompt_id: str) -> dict[str, Any]:
 # ---- 用户 LLM 配置 ----
 
 @router.get("/settings/llm/config")
-async def get_llm_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def get_llm_config(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """获取用户的 LLM 配置（返回明文 API Key）。"""
     svc = _require_settings_service()
     return svc.get_llm_config(user_id=user_id)
@@ -450,7 +451,7 @@ async def save_llm_config(body: dict[str, Any]) -> dict[str, Any]:
 # ---- 联网搜索配置 ----
 
 @router.get("/settings/llm/config/saved")
-async def list_llm_config_presets(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def list_llm_config_presets(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """列出用户保存的可复用 LLM 配置。"""
 
     svc = _require_settings_service()
@@ -496,7 +497,7 @@ async def delete_llm_config_preset(config_id: str) -> dict[str, Any]:
 
 
 @router.get("/settings/web-search/config")
-async def get_web_search_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def get_web_search_config(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """获取用户的联网搜索配置（代理地址 + 开关状态）。"""
     svc = _require_settings_service()
     return svc.get_web_search_config(user_id=user_id)
@@ -543,7 +544,7 @@ async def save_web_search_config(body: dict[str, Any]) -> dict[str, Any]:
 # ---- 可开关工具 ----
 
 @router.get("/settings/tools/disabled")
-async def get_disabled_tools(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def get_disabled_tools(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """获取用户关闭的工具名称列表。"""
     svc = _require_settings_service()
     return {"disabled_tools": svc.get_disabled_tools(user_id=user_id)}
@@ -562,14 +563,14 @@ async def save_disabled_tools(body: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/settings/tools/available")
-async def list_available_tools(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def list_available_tools(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """列出全部内置工具及当前用户的开关状态。"""
     svc = _require_settings_service()
     return svc.list_available_tools(user_id=user_id)
 
 
 @router.get("/settings/terminal/sandbox")
-async def get_terminal_sandbox_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def get_terminal_sandbox_config(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """获取用户的 Agent 终端沙盒配置和支持的结构化指令段目录。"""
 
     svc = _require_settings_service()
@@ -595,7 +596,7 @@ async def save_terminal_sandbox_config(body: dict[str, Any]) -> dict[str, Any]:
 # ---- 长期记忆配置与自定义内容 ----
 
 @router.get("/settings/memory/config")
-async def get_memory_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def get_memory_config(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """获取用户的长期记忆总开关。"""
     return _require_settings_service().get_memory_config(user_id=user_id)
 
@@ -615,7 +616,7 @@ async def save_memory_config(body: dict[str, Any]) -> dict[str, Any]:
 # ---- 自定义长期记忆 ----
 
 @router.get("/settings/memory/memories")
-async def list_memories(user_id: str = Query(..., min_length=1, description="用户 ID")) -> list[dict[str, Any]]:
+async def list_memories(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> list[dict[str, Any]]:
     """列出用户的自定义长期记忆。"""
     svc = _require_settings_service()
     return svc.list_memories(user_id=user_id)
@@ -684,7 +685,7 @@ async def save_sensitive_words(body: dict[str, Any]) -> dict[str, Any]:
 # ---- 存储管理 ----
 
 @router.get("/settings/storage/config")
-async def get_storage_config(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def get_storage_config(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """返回所有存储路径的当前值、大小和元数据。"""
 
     svc = _require_settings_service()

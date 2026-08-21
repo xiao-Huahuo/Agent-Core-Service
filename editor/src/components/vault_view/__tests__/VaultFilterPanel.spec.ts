@@ -42,4 +42,24 @@ describe('VaultFilterPanel', () => {
       /\.filter-panel\s*\{[^}]*margin:\s*var\(--space-12\);[^}]*border:\s*1px solid var\(--color-border\);[^}]*border-radius:\s*28px;[^}]*background:\s*var\(--color-surface\);[^}]*box-shadow:\s*0 0 0 4px var\(--library-form-ring\);/su,
     )
   })
+
+  it('places password types before tags and uses the sidebar text colors', () => {
+    const wrapper = mount(VaultFilterPanel, {
+      props: {
+        query: '',
+        tag: '',
+        itemType: '',
+        tags: [{ tag_id: 'tag-1', name: '工作' }],
+        counts: {},
+      },
+    })
+    const buttons = wrapper.findAll('button')
+    const lastTypeIndex = buttons.map((button) => button.classes().includes('type-filter')).lastIndexOf(true)
+    const tagIndex = buttons.findIndex((button) => button.classes('tag-pill'))
+
+    expect(tagIndex).toBeGreaterThan(lastTypeIndex)
+    expect(filterPanelSource).toMatch(/\.tag-pill\s*\{[^}]*color:\s*var\(--color-text-secondary\);/su)
+    expect(filterPanelSource).toMatch(/\.tag-pill\s*\{[^}]*min-height:\s*38px;[^}]*font-size:\s*calc\(13px \* var\(--font-scale\)\);/su)
+    expect(filterPanelSource).toMatch(/\.tag-list\s*\{[^}]*gap:\s*0;/su)
+  })
 })

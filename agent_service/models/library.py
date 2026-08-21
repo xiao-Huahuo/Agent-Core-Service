@@ -16,6 +16,8 @@ from datetime import datetime
 
 from sqlmodel import Column, Field, SQLModel, Text
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 from agent_service.models.session import utc_now
 
 
@@ -24,26 +26,26 @@ class LibraryItem(SQLModel, table=True):
 
     __tablename__ = "library_items"
 
-    item_id: str = Field(primary_key=True, max_length=64)
-    user_id: str = Field(index=True, max_length=128)
-    library_id: str = Field(index=True, max_length=96)
-    parent_id: str = Field(default="", index=True, max_length=64)
-    item_type: str = Field(default="book", index=True, max_length=32)
-    content_type: str = Field(default="knowledge_file", index=True, max_length=32)
-    title: str = Field(default="", max_length=256)
+    item_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    user_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    library_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
+    parent_id: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    item_type: str = Field(default="book", index=True, max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
+    content_type: str = Field(default="knowledge_file", index=True, max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
+    title: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.title_max_length)
     description: str = Field(default="", sa_column=Column(Text))
-    storage_path: str = Field(default="", index=True, max_length=2048)
-    source_path: str = Field(default="", index=True, max_length=2048)
-    source_url: str = Field(default="", max_length=2048)
-    source_name: str = Field(default="", max_length=512)
-    source_mime: str = Field(default="", max_length=256)
+    storage_path: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.path_max_length)
+    source_path: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.path_max_length)
+    source_url: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.path_max_length)
+    source_name: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.summary_max_length)
+    source_mime: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.title_max_length)
     source_size: int = Field(default=0)
-    source_mtime: str = Field(default="", max_length=64)
-    cover_mode: str = Field(default="icon", max_length=32)
-    cover_asset_id: str = Field(default="", max_length=64)
+    source_mtime: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    cover_mode: str = Field(default="icon", max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
+    cover_asset_id: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
     sort_order: int = Field(default=0, index=True)
-    index_status: str = Field(default="", max_length=32)
-    graph_status: str = Field(default="", max_length=32)
+    index_status: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
+    graph_status: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -53,10 +55,10 @@ class LibraryTag(SQLModel, table=True):
 
     __tablename__ = "library_tags"
 
-    tag_id: str = Field(primary_key=True, max_length=64)
-    user_id: str = Field(index=True, max_length=128)
-    library_id: str = Field(index=True, max_length=96)
-    name: str = Field(index=True, max_length=128)
+    tag_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    user_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    library_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
+    name: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     created_at: datetime = Field(default_factory=utc_now)
 
 
@@ -65,8 +67,8 @@ class LibraryItemTag(SQLModel, table=True):
 
     __tablename__ = "library_item_tags"
 
-    item_id: str = Field(primary_key=True, max_length=64)
-    tag_id: str = Field(primary_key=True, max_length=64)
+    item_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    tag_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
 
 
 class LibraryAsset(SQLModel, table=True):
@@ -74,13 +76,13 @@ class LibraryAsset(SQLModel, table=True):
 
     __tablename__ = "library_assets"
 
-    asset_id: str = Field(primary_key=True, max_length=64)
-    user_id: str = Field(index=True, max_length=128)
-    library_id: str = Field(index=True, max_length=96)
-    asset_type: str = Field(default="cover", max_length=32)
-    mime_type: str = Field(default="", max_length=128)
-    file_name: str = Field(default="", max_length=512)
-    storage_path: str = Field(max_length=2048)
+    asset_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    user_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    library_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
+    asset_type: str = Field(default="cover", max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
+    mime_type: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    file_name: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.summary_max_length)
+    storage_path: str = Field(max_length=DEFAULT_BUSINESS_LIMITS.path_max_length)
     width: int = Field(default=0)
     height: int = Field(default=0)
     size: int = Field(default=0)

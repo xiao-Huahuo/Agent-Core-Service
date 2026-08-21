@@ -16,6 +16,7 @@ from uuid import uuid4
 
 from sqlmodel import Session, SQLModel, select
 
+from agent_service.core.agent_config import AgentConfig
 from agent_service.models.agent_queue import AgentQueueSettingsRecord, AgentQueueTaskRecord
 from agent_service.schemas.session import SessionCreate
 from agent_service.services.session_service import SessionService
@@ -28,10 +29,17 @@ class AgentQueueService:
     _BOARD_STATUSES = ("pending", "running", "review")
     _HISTORY_STATUSES = ("confirmed", "terminated")
 
-    def __init__(self, *, engine: Any, session_service: SessionService) -> None:
+    def __init__(
+        self,
+        *,
+        engine: Any,
+        session_service: SessionService,
+        config: AgentConfig | None = None,
+    ) -> None:
         """Bind queue persistence to the application database and session service."""
         self.engine = engine
         self.session_service = session_service
+        self.config = config or AgentConfig()
         # ponytail: one app process owns this scheduler; use a database lease if workers become multi-process.
         self._claim_lock = threading.Lock()
         SQLModel.metadata.create_all(engine)
@@ -84,12 +92,22 @@ class AgentQueueService:
         """Return the user's persisted concurrency override or service default."""
         with Session(self.engine) as db:
             settings = db.get(AgentQueueSettingsRecord, user_id)
-            return {"max_concurrency": settings.max_concurrency if settings else 5}
+            return {
+                "max_concurrency": (
+                    settings.max_concurrency
+                    if settings
+                    else self.config.limits.agent_queue_default_concurrency
+                )
+            }
 
     def update_settings(self, user_id: str, max_concurrency: int) -> dict[str, int]:
         """Persist an explicit per-user concurrency override."""
-        if not 1 <= max_concurrency <= 20:
-            raise ValueError("max_concurrency must be between 1 and 20")
+        if not self.config.limits.nonempty_min_length <= max_concurrency <= self.config.limits.agent_queue_max_concurrency:
+            raise ValueError(
+                "max_concurrency must be between "
+                f"{self.config.limits.nonempty_min_length} and "
+                f"{self.config.limits.agent_queue_max_concurrency}"
+            )
         with Session(self.engine) as db:
             settings = db.get(AgentQueueSettingsRecord, user_id)
             if settings is None:
@@ -108,10 +126,10 @@ class AgentQueueService:
             raise ValueError("invalid priority")
         now = self._now()
         task_session_id = session_id or self.session_service.create_session(
-            SessionCreate(user_id=user_id, session_name=prompt[:80])
+            SessionCreate(user_id=user_id, session_name=prompt[:self.config.limits.queue_session_title_chars])
         ).session_id
         record = AgentQueueTaskRecord(
-            task_id=f"queue_{uuid4().hex[:12]}",
+            task_id=f"queue_{uuid4().hex[:self.config.limits.generated_id_suffix_chars]}",
             user_id=user_id,
             prompt=prompt.strip(),
             priority=priority,
@@ -143,7 +161,11 @@ class AgentQueueService:
         """Atomically reserve the highest-priority eligible task for one scheduler worker."""
         with self._claim_lock, Session(self.engine) as db:
             settings = db.get(AgentQueueSettingsRecord, user_id)
-            limit = settings.max_concurrency if settings else 5
+            limit = (
+                settings.max_concurrency
+                if settings
+                else self.config.limits.agent_queue_default_concurrency
+            )
             running = db.exec(
                 select(AgentQueueTaskRecord).where(
                     AgentQueueTaskRecord.user_id == user_id,

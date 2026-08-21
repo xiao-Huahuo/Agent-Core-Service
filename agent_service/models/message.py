@@ -21,6 +21,8 @@ from typing import Any
 from sqlalchemy import Column, JSON, Text
 from sqlmodel import Field, SQLModel
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 from agent_service.models.session import utc_now
 
 
@@ -37,10 +39,10 @@ class MessageBase(SQLModel):
     is_summarized: 当前消息是否已经被短期摘要覆盖,用于避免重复压缩。
     """
 
-    user_id: str = Field(index=True, min_length=1, max_length=128)
-    role: str = Field(index=True, min_length=1, max_length=32)
+    user_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    role: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
     content: str = Field(default="", sa_column=Column(Text))
-    tool_call_id: str | None = Field(default=None, index=True, max_length=128)
+    tool_call_id: str | None = Field(default=None, index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     tool_calls_json: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON))
     metadata_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     is_summarized: bool = Field(default=False, index=True)
@@ -58,6 +60,6 @@ class MessageRecord(MessageBase, table=True):
 
     __tablename__ = "agent_messages"
 
-    message_id: str = Field(primary_key=True, max_length=64)
-    session_id: str = Field(foreign_key="agent_sessions.session_id", index=True, max_length=64)
+    message_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    session_id: str = Field(foreign_key="agent_sessions.session_id", index=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
     created_at: datetime = Field(default_factory=utc_now, index=True)

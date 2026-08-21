@@ -7,6 +7,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.services.agent_queue_service import AgentQueueService
 
 logger = logging.getLogger(__name__)
@@ -15,11 +16,17 @@ logger = logging.getLogger(__name__)
 class AgentQueueScheduler:
     """Poll durable queue tasks and execute each claimed task without sharing sessions."""
 
-    def __init__(self, *, queue_service: AgentQueueService, agent: Any, poll_seconds: float = 1.0) -> None:
-        self.queue_service, self.agent, self.poll_seconds = queue_service, agent, max(0.2, poll_seconds)
+    def __init__(self, *, queue_service: AgentQueueService, agent: Any, poll_seconds: float | None = None) -> None:
+        limits = getattr(getattr(agent, "config", None), "limits", DEFAULT_BUSINESS_LIMITS)
+        configured_poll = limits.agent_queue_poll_seconds if poll_seconds is None else poll_seconds
+        self.limits = limits
+        self.queue_service, self.agent, self.poll_seconds = queue_service, agent, max(limits.agent_queue_min_poll_seconds, configured_poll)
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
-        self._executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="agent-queue")
+        self._executor = ThreadPoolExecutor(
+            max_workers=limits.agent_queue_worker_count,
+            thread_name_prefix="agent-queue",
+        )
 
     def start(self) -> None:
         """Start the single queue dispatcher."""
@@ -31,7 +38,7 @@ class AgentQueueScheduler:
     def shutdown(self) -> None:
         """Stop new claims and wait for already running Agent calls."""
         self._stop_event.set()
-        if self._thread: self._thread.join(timeout=3)
+        if self._thread: self._thread.join(timeout=self.limits.agent_queue_shutdown_timeout_seconds)
         self._executor.shutdown(wait=False, cancel_futures=False)
 
     def _run_loop(self) -> None:

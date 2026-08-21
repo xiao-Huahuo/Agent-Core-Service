@@ -155,6 +155,22 @@ describe('chat reference history', () => {
     nowSpy.mockRestore()
   })
 
+  it('refreshes follow-up suggestions after a streamed turn completes', async () => {
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield { type: 'delta', node: 'agent', content: '处理完成' }
+    })
+    apiMocks.fetchTaskSuggestions.mockResolvedValue({
+      suggestions: ['检查结果', '继续优化', '解释改动'],
+    })
+    const store = useChatStore()
+
+    await store.send('user-1', 'session-1', '开始处理')
+    await vi.waitFor(() => {
+      expect(apiMocks.fetchTaskSuggestions).toHaveBeenCalledWith('user-1', 'session-1', expect.anything())
+      expect(store.taskSuggestions).toEqual(['检查结果', '继续优化', '解释改动'])
+    })
+  })
+
   it('creates a running action trace from an empty model tool-calls update', async () => {
     apiMocks.streamPrompt.mockImplementation(async function* () {
       yield {

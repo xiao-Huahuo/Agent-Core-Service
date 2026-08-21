@@ -20,6 +20,8 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
+
 if TYPE_CHECKING:
     from agent_service.services.knowledge_library_service import KnowledgeLibraryService
 
@@ -38,10 +40,16 @@ class GitService:
     _STATUS_CONFLICT_CODES = {"DD", "AU", "UD", "UA", "DU", "AA", "UU"}
     _BRANCH_NAME_PATTERN = re.compile(r"^[^\s~^:?*\[\\]+$")
 
-    def __init__(self, *, knowledge_library_service: KnowledgeLibraryService) -> None:
+    def __init__(
+        self,
+        *,
+        knowledge_library_service: KnowledgeLibraryService,
+        config: AgentConfig | None = None,
+    ) -> None:
         """保存知识库服务并创建进程内仓库写锁。"""
 
         self.knowledge_library_service = knowledge_library_service
+        self.config = config or getattr(knowledge_library_service, "config", None) or AgentConfig()
         self._mutation_lock = threading.RLock()
 
     def get_status(self, *, user_id: str) -> dict[str, Any]:
@@ -108,11 +116,15 @@ class GitService:
         result = self._run(root=root, args=args)
         return {"path": normalized_path, "staged": staged, "diff": result.stdout}
 
-    def get_history(self, *, user_id: str, limit: int = 50) -> dict[str, Any]:
+    def get_history(self, *, user_id: str, limit: int | None = None) -> dict[str, Any]:
         """返回提交历史、未推送提交及其涉及的文件。"""
 
         root = self._require_root_repository(user_id=user_id)
-        safe_limit = max(1, min(int(limit), 200))
+        limits = self.config.limits
+        safe_limit = max(
+            limits.nonempty_min_length,
+            min(int(limit or limits.api_default_list_limit), limits.api_max_list_limit),
+        )
         history = self._log(root=root, revision="", limit=safe_limit)
         upstream = self._upstream(root=root)
         if upstream:
@@ -221,7 +233,7 @@ class GitService:
         return {
             "ok": True,
             "commit": commit_hash,
-            "short_commit": commit_hash[:8],
+            "short_commit": commit_hash[:self.config.limits.checksum_short_chars],
             "summary": summary,
             "status": self.get_status(user_id=user_id),
         }
@@ -255,7 +267,7 @@ class GitService:
                 args.append("--set-upstream")
             args.extend([remote_name, f"{local}:{destination}"])
         with self._mutation_lock:
-            result = self._run(root=root, args=args, timeout=120)
+            result = self._run(root=root, args=args, timeout=self.config.limits.git_network_timeout_seconds)
             if all_branches:
                 # `git push --all` 不会自动建立 tracking 关系。为每个同名远程
                 # 分支补齐 upstream，确保“未推送提交”预览在成功后立即归零。
@@ -336,7 +348,11 @@ class GitService:
         remote_name = self._validate_remote_name(remote)
         branch_name = self._validate_branch_name(branch)
         with self._mutation_lock:
-            self._run(root=root, args=["fetch", remote_name, branch_name], timeout=120)
+            self._run(
+                root=root,
+                args=["fetch", remote_name, branch_name],
+                timeout=self.config.limits.git_network_timeout_seconds,
+            )
             affected = self._diff_paths_between(root=root, left="HEAD", right="FETCH_HEAD")
             if affected:
                 self.knowledge_library_service.invalidate_paths(
@@ -418,13 +434,14 @@ class GitService:
         root: Path,
         args: list[str],
         check: bool = True,
-        timeout: int = 30,
+        timeout: int | None = None,
     ) -> subprocess.CompletedProcess[str]:
         """以 UTF-8、无 shell、非交互模式运行 Git。"""
 
         env = os.environ.copy()
         env["GIT_TERMINAL_PROMPT"] = "0"
         env["LC_ALL"] = "C.UTF-8"
+        timeout = timeout or self.config.limits.git_command_timeout_seconds
         try:
             result = subprocess.run(
                 ["git", "-C", str(root), *args],
@@ -745,7 +762,7 @@ class GitService:
         url = str(value or "").strip()
         if (
             not url
-            or len(url) > 4096
+            or len(url) > DEFAULT_BUSINESS_LIMITS.large_text_max_length
             or url.startswith("-")
             or any(character in url for character in {"\0", "\r", "\n"})
         ):

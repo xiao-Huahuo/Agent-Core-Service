@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query, Response
 from starlette.concurrency import run_in_threadpool
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.api.rest.deps import _require_smart_form_service
 from agent_service.schemas.smart_form import SmartFormOut, SmartFormSaveRequest
 
@@ -12,7 +13,7 @@ router = APIRouter()
 
 
 @router.get("/smart-forms/list")
-async def list_smart_forms(user_id: str = Query(..., min_length=1)) -> list[dict]:
+async def list_smart_forms(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length)) -> list[dict]:
     """列出用户智能表格。"""
 
     try:
@@ -22,7 +23,7 @@ async def list_smart_forms(user_id: str = Query(..., min_length=1)) -> list[dict
 
 
 @router.get("/smart-forms/{form_id}")
-async def get_smart_form(form_id: str, user_id: str = Query(..., min_length=1)) -> SmartFormOut:
+async def get_smart_form(form_id: str, user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length)) -> SmartFormOut:
     """读取单张智能表格。"""
 
     try:
@@ -52,7 +53,7 @@ async def save_smart_form(payload: SmartFormSaveRequest) -> SmartFormOut:
 
 
 @router.delete("/smart-forms/{form_id}", status_code=204)
-async def delete_smart_form(form_id: str, user_id: str = Query(..., min_length=1)) -> Response:
+async def delete_smart_form(form_id: str, user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length)) -> Response:
     """删除当前用户拥有的智能表格。"""
 
     try:

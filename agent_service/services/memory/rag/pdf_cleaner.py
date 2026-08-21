@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 
 @dataclass(slots=True)
 class PdfExtractionResult:
@@ -29,7 +31,7 @@ class PdfExtractionResult:
 def extract_pdf_text(
     source_path: Path,
     *,
-    scanned_text_threshold: int = 20,
+    scanned_text_threshold: int = DEFAULT_BUSINESS_LIMITS.scanned_pdf_text_threshold,
     image_output_dir: Path | None = None,
     image_public_prefix: str = "",
     progress_callback: Callable[[int, int], None] | None = None,

@@ -16,6 +16,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.schemas.structured_generation import (
     StructuredGenerationField,
     StructuredGenerationOptions,
@@ -24,7 +25,7 @@ from agent_service.schemas.structured_generation import (
 )
 from agent_service.tools.runtime_context import AGENT_ACCESS_READONLY, get_tool_runtime
 
-DEFAULT_ROW_HEIGHT = 282
+DEFAULT_ROW_HEIGHT = DEFAULT_BUSINESS_LIMITS.smart_form_default_row_height
 
 
 def _smart_form_service() -> Any:
@@ -74,7 +75,11 @@ def _new_row(columns: list[dict[str, Any]]) -> dict[str, Any]:
         if column.get("type") in {"smart_text", "smart_tag"}:
             cell["status"] = "idle"
         cells[column_id] = cell
-    return {"id": f"row_{uuid.uuid4().hex[:12]}", "height": DEFAULT_ROW_HEIGHT, "cells": cells}
+    return {
+        "id": f"row_{uuid.uuid4().hex[:DEFAULT_BUSINESS_LIMITS.generated_id_suffix_chars]}",
+        "height": DEFAULT_ROW_HEIGHT,
+        "cells": cells,
+    }
 
 
 def _default_form(title: str, kind: str) -> dict[str, Any]:
@@ -132,8 +137,8 @@ def create_smart_form(title: str, kind: str = "smart") -> str:
     normalized_title = title.strip()
     if not normalized_title:
         raise ValueError("title is required")
-    slug = re.sub(r"[^0-9A-Za-z_\-\u4e00-\u9fff]+", "-", normalized_title).strip("-")[:64] or "table"
-    asset_dir = f".mw/forms/{slug}-{uuid.uuid4().hex[:8]}"
+    slug = re.sub(r"[^0-9A-Za-z_\-\u4e00-\u9fff]+", "-", normalized_title).strip("-")[:DEFAULT_BUSINESS_LIMITS.standard_id_max_length] or "table"
+    asset_dir = f".mw/forms/{slug}-{uuid.uuid4().hex[:DEFAULT_BUSINESS_LIMITS.checksum_short_chars]}"
     result = _smart_form_service().save_form(
         user_id=runtime.user_id,
         form=_default_form(normalized_title, kind),
@@ -208,7 +213,7 @@ def patch_smart_form_rows(
             cells[str(column_id)] = existing
         row["cells"] = cells
         if "height" in update:
-            row["height"] = max(56, int(update["height"]))
+            row["height"] = max(DEFAULT_BUSINESS_LIMITS.smart_form_min_row_height, int(update["height"]))
     for raw_row in add_rows or []:
         row = _new_row(columns)
         supplied_id = str(raw_row.get("id") or "").strip()

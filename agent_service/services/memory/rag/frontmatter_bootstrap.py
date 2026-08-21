@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from agent_service.core.agent_config import AgentConfig
+from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 
 logger = logging.getLogger(__name__)
 from agent_service.services.memory.rag.frontmatter_document import (
@@ -59,6 +59,7 @@ class FrontmatterBootstrapService:
         self.config = config
         self.ocr_enabled = config.ocr.enabled if ocr_enabled is None else bool(ocr_enabled)
         self.multimodal_cleaner = MultimodalDocumentCleaner(
+            config=config,
             ocr_enabled=self.ocr_enabled,
             image_ocr_service=ImageOcrService(config=config, enabled=self.ocr_enabled) if self.ocr_enabled else None,
         )
@@ -826,13 +827,12 @@ class FrontmatterBootstrapService:
 
         normalized_path = relative_path.as_posix()
         slug = re.sub(r"[^a-zA-Z0-9]+", "_", normalized_path).strip("_").lower()
-        path_hash = hashlib.sha256(normalized_path.encode("utf-8")).hexdigest()[:12]
+        path_hash = hashlib.sha256(normalized_path.encode("utf-8")).hexdigest()[:DEFAULT_BUSINESS_LIMITS.generated_id_suffix_chars]
         if not slug:
             slug = "file"
         return f"doc_{slug}_{path_hash}"
 
-    @staticmethod
-    def _iter_source_files(knowledge_dir: Path, suffixes: set[str]) -> list[Path]:
+    def _iter_source_files(self, knowledge_dir: Path, suffixes: set[str]) -> list[Path]:
         """
         扫描可结构化的原始知识文件。
         knowledge_dir: 原始知识库根目录。
@@ -846,11 +846,22 @@ class FrontmatterBootstrapService:
         return sorted(
             path
             for path in knowledge_dir.rglob("*")
-            if path.is_file() and FrontmatterBootstrapService._can_structure_source_file(path, suffixes)
+            if path.is_file() and self._can_structure_source_file(
+                path,
+                suffixes,
+                sample_size=self.config.limits.frontmatter_binary_sample_bytes,
+                control_char_ratio=self.config.limits.frontmatter_control_char_ratio,
+            )
         )
 
     @staticmethod
-    def _can_structure_source_file(path: Path, suffixes: set[str]) -> bool:
+    def _can_structure_source_file(
+        path: Path,
+        suffixes: set[str],
+        *,
+        sample_size: int = DEFAULT_BUSINESS_LIMITS.frontmatter_binary_sample_bytes,
+        control_char_ratio: float = DEFAULT_BUSINESS_LIMITS.frontmatter_control_char_ratio,
+    ) -> bool:
         """Supported files are handled by parsers; unsupported files must be plain text."""
 
         # Videos are preview-only workspace assets. Never guess them as text from a small sample.
@@ -858,10 +869,19 @@ class FrontmatterBootstrapService:
             return False
         if path.suffix.lower() in suffixes:
             return True
-        return not FrontmatterBootstrapService._is_binary_file(path)
+        return not FrontmatterBootstrapService._is_binary_file(
+            path,
+            sample_size=sample_size,
+            control_char_ratio=control_char_ratio,
+        )
 
     @staticmethod
-    def _is_binary_file(path: Path, sample_size: int = 8192) -> bool:
+    def _is_binary_file(
+        path: Path,
+        *,
+        sample_size: int = DEFAULT_BUSINESS_LIMITS.frontmatter_binary_sample_bytes,
+        control_char_ratio: float = DEFAULT_BUSINESS_LIMITS.frontmatter_control_char_ratio,
+    ) -> bool:
         """Detect likely binary files from a small sample."""
 
         try:
@@ -884,7 +904,7 @@ class FrontmatterBootstrapService:
             1 for char in text
             if ord(char) < 32 and char not in "\n\r\t\f\b"
         )
-        return control_chars / max(len(text), 1) > 0.30
+        return control_chars / max(len(text), 1) > control_char_ratio
 
     @staticmethod
     def _hash_file(source_path: Path) -> str:

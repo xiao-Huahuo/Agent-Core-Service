@@ -11,13 +11,14 @@ import IcIcon from '@/components/common/IcIcon.vue'
 import AgentTracePanel from '@/components/dashboard/AgentTracePanel.vue'
 import MemoryKnowledgePanel from '@/components/dashboard/MemoryKnowledgePanel.vue'
 import ToolRegistryPanel from '@/components/dashboard/ToolRegistryPanel.vue'
+import GlobalConstantsPanel from '@/components/debug/GlobalConstantsPanel.vue'
 import MultimodalIngestionPanel from '@/components/debug/MultimodalIngestionPanel.vue'
 import RuntimeApisPanel from '@/components/debug/RuntimeApisPanel.vue'
 import { useChatStore } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 
-const activeTab = ref<'trace' | 'multimodal' | 'mk' | 'tools' | 'apis'>('trace')
+const activeTab = ref<'trace' | 'multimodal' | 'mk' | 'tools' | 'constants' | 'apis'>('trace')
 const debugTabsRef = ref<HTMLElement | null>(null)
 const debugSliderStyle = ref({ width: '0px', left: '0px' })
 
@@ -113,6 +114,15 @@ onMounted(() => {
       </button>
       <button
         class="debug-tab"
+        :class="{ active: activeTab === 'constants' }"
+        type="button"
+        @click="activeTab = 'constants'"
+      >
+        <IcIcon name="tune" :size="17" />
+        <span>全局常量</span>
+      </button>
+      <button
+        class="debug-tab"
         :class="{ active: activeTab === 'apis' }"
         type="button"
         @click="activeTab = 'apis'"
@@ -127,7 +137,8 @@ onMounted(() => {
       <MultimodalIngestionPanel v-else-if="activeTab === 'multimodal'" />
       <MemoryKnowledgePanel v-else-if="activeTab === 'mk'" />
       <ToolRegistryPanel v-else-if="activeTab === 'tools'" />
-      <RuntimeApisPanel v-else />
+      <GlobalConstantsPanel v-else-if="activeTab === 'constants'" />
+      <RuntimeApisPanel v-else-if="activeTab === 'apis'" />
     </div>
   </div>
 </template>

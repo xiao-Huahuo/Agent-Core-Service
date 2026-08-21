@@ -17,6 +17,8 @@ from typing import Any
 
 from sqlmodel import Field, SQLModel
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 from agent_service.models.message import MessageRecord
 
 
@@ -33,11 +35,11 @@ class MessageCreate(SQLModel):
     metadata_json: 扩展元数据。
     """
 
-    session_id: str = Field(min_length=1, max_length=64)
-    user_id: str = Field(min_length=1, max_length=128)
-    role: str = Field(min_length=1, max_length=32)
+    session_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    user_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    role: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
     content: str = ""
-    tool_call_id: str | None = Field(default=None, max_length=128)
+    tool_call_id: str | None = Field(default=None, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     tool_calls_json: list[dict[str, Any]] = Field(default_factory=list)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 

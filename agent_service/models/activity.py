@@ -12,6 +12,8 @@ from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 from agent_service.models.session import utc_now
 
 
@@ -20,12 +22,12 @@ class ActivityEventRecord(SQLModel, table=True):
 
     __tablename__ = "activity_events"
 
-    event_id: str = Field(primary_key=True, max_length=64)
-    user_id: str = Field(index=True, min_length=1, max_length=128)
-    module: str = Field(index=True, min_length=1, max_length=32)
-    action: str = Field(index=True, min_length=1, max_length=64)
-    score: int = Field(default=1, ge=1, le=20)
-    object_id: str = Field(default="", index=True, max_length=512)
-    title: str = Field(default="", max_length=256)
-    source: str = Field(default="runtime", index=True, max_length=32)
+    event_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    user_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    module: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
+    action: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    score: int = Field(default=1, ge=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, le=DEFAULT_BUSINESS_LIMITS.activity_event_score_max)
+    object_id: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.summary_max_length)
+    title: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.title_max_length)
+    source: str = Field(default="runtime", index=True, max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
     created_at: datetime = Field(default_factory=utc_now, index=True)

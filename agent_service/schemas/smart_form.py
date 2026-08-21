@@ -14,12 +14,14 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 class SmartFormSaveRequest(BaseModel):
     """保存或创建智能表格请求。"""
 
-    user_id: str = Field(min_length=1, max_length=128)
-    form_id: str | None = Field(default=None, max_length=64)
-    asset_dir: str = Field(default="", max_length=1024)
+    user_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    form_id: str | None = Field(default=None, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    asset_dir: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.secret_max_length)
     form: dict[str, Any]
 
 

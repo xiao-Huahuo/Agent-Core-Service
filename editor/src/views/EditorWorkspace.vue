@@ -877,9 +877,6 @@ watch(
 
 .main-shell.ide-panel.agent-page-main-shell {
   overflow: visible;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
 }
 
 .main-shell-content {

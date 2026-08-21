@@ -15,13 +15,15 @@ from pydantic import BaseModel, Field
 PrivacyTargetType = Literal["knowledge_path", "library_item"]
 
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 class PrivacyCreate(BaseModel):
     """Create one backend-persisted privacy flag."""
 
-    user_id: str = Field(min_length=1, max_length=128)
+    user_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     target_type: PrivacyTargetType
-    target_id: str = Field(min_length=1, max_length=2048)
-    library_id: str = Field(default="", max_length=128)
+    target_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.path_max_length)
+    library_id: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
 
 
 class PrivacyOut(BaseModel):

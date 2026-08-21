@@ -16,6 +16,8 @@ from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 from agent_service.models.session import SessionRecord
 
 
@@ -27,8 +29,8 @@ class SessionCreate(SQLModel):
     session_name: 可选会话名称;为空时由业务层使用默认会话名。
     """
 
-    user_id: str = Field(min_length=1, max_length=128)
-    session_name: str | None = Field(default=None, max_length=255)
+    user_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    session_name: str | None = Field(default=None, max_length=DEFAULT_BUSINESS_LIMITS.legacy_filename_max_length)
 
 
 class SessionUpdate(SQLModel):
@@ -38,7 +40,7 @@ class SessionUpdate(SQLModel):
     session_name: 新的会话显示名称。
     """
 
-    session_name: str = Field(min_length=1, max_length=255)
+    session_name: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.legacy_filename_max_length)
 
 
 class SessionStateUpdate(SQLModel):

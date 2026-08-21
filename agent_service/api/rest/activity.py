@@ -14,6 +14,7 @@ from fastapi import APIRouter, Query
 from starlette.concurrency import run_in_threadpool
 
 from agent_service.api.rest.deps import _require_activity_service
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.schemas.activity import ActivityHeatmapOut
 
 router = APIRouter()
@@ -21,8 +22,13 @@ router = APIRouter()
 
 @router.get("/activity/heatmap", response_model=ActivityHeatmapOut)
 async def get_activity_heatmap(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
-    days: int = Query(default=371, ge=7, le=371, description="统计天数"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+    days: int = Query(
+        default=DEFAULT_BUSINESS_LIMITS.activity_heatmap_max_days,
+        ge=DEFAULT_BUSINESS_LIMITS.activity_heatmap_min_days,
+        le=DEFAULT_BUSINESS_LIMITS.activity_heatmap_max_days,
+        description="统计天数",
+    ),
     timezone_name: str = Query(default="Asia/Shanghai", alias="timezone", description="IANA 时区"),
 ) -> dict[str, Any]:
     """Return the user's persisted daily activity heatmap and filter summaries."""

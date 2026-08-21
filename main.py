@@ -143,7 +143,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     task_list_service = TaskListService(session_service=session_service)
     memory_service = LongTermMemoryService(config=config)
     settings_service = SettingsService(config=config, memory_service=memory_service)
-    activity_service = ActivityService(engine=settings_service.engine)
+    activity_service = ActivityService(engine=settings_service.engine, config=config)
 
     knowledge_graph_service = KnowledgeGraphService(config=config)
     knowledge_library_service = KnowledgeLibraryService(
@@ -171,7 +171,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     agent.attachment_service = attachment_service
     if agent.context_builder is not None:
         agent.context_builder.attachment_service = attachment_service
-    git_service = GitService(knowledge_library_service=knowledge_library_service)
+    git_service = GitService(knowledge_library_service=knowledge_library_service, config=config)
     library_service = LibraryService(
         config=config,
         settings_service=settings_service,
@@ -222,15 +222,18 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     from agent_service.services.agent_queue_scheduler import AgentQueueScheduler
     rest_deps._todo_service = TodoService(
         engine=memory_service.engine,
+        config=config,
         legacy_data_dir=str(config.storage.base_data_dir),
     )
     rest_deps._automation_service = AutomationService(
         engine=memory_service.engine,
         todo_service=rest_deps._todo_service,
+        config=config,
     )
     rest_deps._agent_queue_service = AgentQueueService(
         engine=memory_service.engine,
         session_service=session_service,
+        config=config,
     )
     agent_queue_scheduler = AgentQueueScheduler(
         queue_service=rest_deps._agent_queue_service,
@@ -296,7 +299,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         grpc_host = "0.0.0.0"  # Windows does not support IPv6 wildcard
     grpc_address = f"{grpc_host}:{config.server.grpc_port}"
     try:
-        _grpc_server = grpc.server(ThreadPoolExecutor(max_workers=10))
+        _grpc_server = grpc.server(ThreadPoolExecutor(max_workers=config.limits.grpc_max_workers))
         add_AgentServiceServicer_to_server(_grpc_servicer, _grpc_server)
         _grpc_server.add_insecure_port(grpc_address)
         _grpc_server.start()

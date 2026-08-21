@@ -85,6 +85,52 @@ describe('ChatBubble user references', () => {
     ])
   })
 
+  it('appends the three follow-up suggestions below the latest assistant answer', async () => {
+    HTMLElement.prototype.scrollTo = () => {}
+    const wrapper = mount(MessageList, {
+      global: { plugins: [createPinia()] },
+      props: {
+        messages: [
+          { role: 'user', content: '请开始' },
+          { role: 'assistant', content: '第一轮答案', node: 'agent' },
+          { role: 'user', content: '继续' },
+          { role: 'assistant', content: '最新答案', node: 'agent' },
+        ],
+        suggestions: ['检查结果', '继续优化', '解释改动'],
+      },
+    })
+
+    const suggestions = wrapper.get('.task-suggestions')
+    expect(suggestions.findAll('.suggestion-button')).toHaveLength(3)
+    const latestAssistant = wrapper.findAll('.bubble-row.assistant')[1]
+    const suggestionButtons = suggestions.findAll('.suggestion-button')
+    if (!latestAssistant || !suggestionButtons[1]) throw new Error('latest Agent response suggestions were not rendered')
+    expect(latestAssistant.element.compareDocumentPosition(suggestions.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await suggestionButtons[1].trigger('click')
+    expect(wrapper.emitted('select-suggestion')).toEqual([['继续优化']])
+  })
+
+  it('keeps the message list pinned when follow-up suggestions arrive asynchronously', async () => {
+    const scrollTo = vi.fn()
+    HTMLElement.prototype.scrollTo = scrollTo
+    const wrapper = mount(MessageList, {
+      global: { plugins: [createPinia()] },
+      props: {
+        messages: [
+          { role: 'user', content: '请开始' },
+          { role: 'assistant', content: '最新答案', node: 'agent' },
+        ],
+        suggestions: [],
+      },
+    })
+    scrollTo.mockClear()
+
+    await wrapper.setProps({ suggestions: ['检查结果', '继续优化', '解释改动'] })
+    await wrapper.vm.$nextTick()
+
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: expect.any(Number) }))
+  })
+
   it('keeps one avatar on the latest assistant item in a user turn', () => {
     HTMLElement.prototype.scrollTo = () => {}
     const wrapper = mount(MessageList, {
@@ -226,13 +272,14 @@ describe('ChatBubble user references', () => {
     expect(workspaceStore.browserSidebarUrl).toBe('https://example.com/source')
   })
 
-  it('opens a mounted local file in the editor sidebar', async () => {
+  it('opens a mounted local file in the main editor from sidebar mode', async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const workspaceStore = useWorkspaceStore()
     const node = { name: '简单word.docx', path: '文档/简单word.docx', isDir: false }
     workspaceStore.tree = [node]
-    const openEditorSidebar = vi.spyOn(workspaceStore, 'openEditorSidebar').mockResolvedValue()
+    workspaceStore.mainView = 'editor'
+    const selectFile = vi.spyOn(workspaceStore, 'selectFile').mockResolvedValue()
 
     const wrapper = mount(ChatBubble, {
       global: { plugins: [pinia] },
@@ -248,18 +295,47 @@ describe('ChatBubble user references', () => {
     await new Promise((resolve) => window.setTimeout(resolve, 0))
 
     await wrapper.get('.agent-mounted-file').trigger('click')
-    expect(openEditorSidebar).toHaveBeenCalledWith(node)
+    expect(selectFile).toHaveBeenCalledWith(node)
+    expect(workspaceStore.editorSidebarOpen).toBe(false)
   })
 
-  it('opens a mounted local file in the editor sidebar in tool mode', async () => {
+  it('opens a mounted local file in the main editor from tool sidebar mode', async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const workspaceStore = useWorkspaceStore()
     const node = { name: '简单word.docx', path: '文档/简单word.docx', isDir: false }
     workspaceStore.tree = [node]
-    const openEditorSidebar = vi.spyOn(workspaceStore, 'openEditorSidebar').mockResolvedValue()
+    workspaceStore.mainView = 'editor'
+    const selectFile = vi.spyOn(workspaceStore, 'selectFile').mockResolvedValue()
 
     const wrapper = mount(ToolBubble, {
+      global: { plugins: [pinia] },
+      props: {
+        message: {
+          role: 'assistant',
+          content: '[打开《简单word.docx》](/knowledge/files/raw?user_id=1&path=%E6%96%87%E6%A1%A3%2F%E7%AE%80%E5%8D%95word.docx)',
+        },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+      },
+    })
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+
+    await wrapper.get('.agent-mounted-file').trigger('click')
+    expect(selectFile).toHaveBeenCalledWith(node)
+    expect(workspaceStore.editorSidebarOpen).toBe(false)
+  })
+
+  it('keeps mounted-file navigation in the editor sidebar on the Agent page', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const workspaceStore = useWorkspaceStore()
+    const node = { name: '简单word.docx', path: '文档/简单word.docx', isDir: false }
+    workspaceStore.tree = [node]
+    workspaceStore.mainView = 'agent'
+    const openEditorSidebar = vi.spyOn(workspaceStore, 'openEditorSidebar').mockResolvedValue()
+
+    const wrapper = mount(ChatBubble, {
       global: { plugins: [pinia] },
       props: {
         message: {

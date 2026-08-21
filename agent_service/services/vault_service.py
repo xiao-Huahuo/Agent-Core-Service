@@ -34,7 +34,6 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.models.vault import VaultAsset, VaultItem, VaultItemTag, VaultProfile, VaultTag
 
 VAULT_SCOPE = "vault"
-VAULT_TOKEN_MINUTES = 30
 VAULT_ITEM_TYPES = {"login", "card", "identity", "secure_note"}
 VAULT_CARD_BRANDS = {
     "UnionPay银联",
@@ -93,10 +92,10 @@ class VaultService:
         """首次设置主密码并签发密码库 token。"""
 
         normalized_user_id = self._normalize_user_id(user_id)
-        if len(master_password) < 8:
+        if len(master_password) < self.config.limits.vault_password_min_chars:
             raise ValueError("master_password must be at least 8 characters")
         now = self._now()
-        salt = os.urandom(16)
+        salt = os.urandom(self.config.limits.vault_salt_bytes)
         password_hash = self._password_hash(master_password, salt)
         with Session(self.engine) as db:
             if db.get(VaultProfile, normalized_user_id) is not None:
@@ -133,7 +132,7 @@ class VaultService:
         """用新主密码重新加密用户全部条目，并失效该用户的已解锁会话。"""
 
         normalized_user_id = self._normalize_user_id(user_id)
-        if len(new_password) < 8:
+        if len(new_password) < self.config.limits.vault_password_min_chars:
             raise ValueError("master_password must be at least 8 characters")
         with Session(self.engine) as db:
             profile = db.get(VaultProfile, normalized_user_id)
@@ -146,7 +145,7 @@ class VaultService:
             if not source_password:
                 raise ValueError("old master password is required")
             source_session = VaultSession(user_id=normalized_user_id, fernet_key=self._fernet_key(source_password, old_salt))
-            target_salt = os.urandom(16)
+            target_salt = os.urandom(self.config.limits.vault_salt_bytes)
             target_session = VaultSession(user_id=normalized_user_id, fernet_key=self._fernet_key(new_password, target_salt))
             for item in db.exec(select(VaultItem).where(VaultItem.user_id == normalized_user_id)).all():
                 item.encrypted_payload = self._encrypt(target_session, self._decrypt(source_session, item.encrypted_payload))
@@ -584,7 +583,7 @@ class VaultService:
         for name in tag_names:
             normalized = str(name).strip()
             if normalized and normalized not in normalized_names:
-                normalized_names.append(normalized[:128])
+                normalized_names.append(normalized[:self.config.limits.vault_tag_name_max_chars])
         for name in normalized_names:
             tag = db.exec(select(VaultTag).where(VaultTag.user_id == user_id).where(VaultTag.name == name)).first()
             if tag is None:
@@ -643,7 +642,7 @@ class VaultService:
         """生成 30 分钟密码库 JWT。"""
 
         fernet_key = self._fernet_key(master_password, salt)
-        expires_at = self._now() + timedelta(minutes=VAULT_TOKEN_MINUTES)
+        expires_at = self._now() + timedelta(minutes=self.config.limits.vault_unlock_token_minutes)
         session_id = self._new_id("vsession")
         self._unlocked_keys[session_id] = (user_id, fernet_key, expires_at)
         token = jwt.encode(
@@ -675,18 +674,23 @@ class VaultService:
         material = f"{self.config.storage.project_root}|{self.config.storage.sqlite_path}|metaweave-vault"
         return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
-    @staticmethod
-    def _password_hash(master_password: str, salt: bytes, iterations: int = 260_000) -> str:
+    def _password_hash(self, master_password: str, salt: bytes) -> str:
         """用 PBKDF2-HMAC-SHA256 保存主密码校验哈希。"""
 
+        iterations = self.config.limits.vault_password_kdf_iterations
         digest = hashlib.pbkdf2_hmac("sha256", master_password.encode("utf-8"), salt, iterations)
         return f"pbkdf2_sha256${iterations}${base64.urlsafe_b64encode(digest).decode('ascii')}"
 
-    @staticmethod
-    def _fernet_key(master_password: str, salt: bytes) -> str:
+    def _fernet_key(self, master_password: str, salt: bytes) -> str:
         """从主密码派生 Fernet 数据加密密钥。"""
 
-        digest = hashlib.pbkdf2_hmac("sha256", master_password.encode("utf-8"), salt + b":fernet", 390_000, dklen=32)
+        digest = hashlib.pbkdf2_hmac(
+            "sha256",
+            master_password.encode("utf-8"),
+            salt + b":fernet",
+            self.config.limits.vault_encryption_kdf_iterations,
+            dklen=self.config.limits.vault_encryption_key_bytes,
+        )
         return base64.urlsafe_b64encode(digest).decode("ascii")
 
     @staticmethod
@@ -704,18 +708,16 @@ class VaultService:
 
         return datetime.now(timezone.utc)
 
-    @staticmethod
-    def _new_id(prefix: str) -> str:
+    def _new_id(self, prefix: str) -> str:
         """生成业务主键。"""
 
-        return f"{prefix}_{uuid4().hex[:16]}"
+        return f"{prefix}_{uuid4().hex[:self.config.limits.generated_long_id_suffix_chars]}"
 
-    @staticmethod
-    def _safe_filename(value: str) -> str:
+    def _safe_filename(self, value: str) -> str:
         """清理文件名或目录名中的危险字符。"""
 
         cleaned = "".join("_" if char in '<>:"/\\|?*' or ord(char) < 32 else char for char in value.strip())
-        return (cleaned.strip(" .") or "asset")[:120]
+        return (cleaned.strip(" .") or "asset")[:self.config.limits.vault_asset_filename_max_chars]
 
     @staticmethod
     def _delete_asset_file(storage_path: str) -> None:

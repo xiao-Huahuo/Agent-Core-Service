@@ -24,6 +24,7 @@ from uuid import uuid4
 
 from sqlmodel import Session, SQLModel, select
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.models.knowledge_ingestion_job import KnowledgeIngestionJobRecord
 
 
@@ -102,6 +103,7 @@ class KnowledgeIngestionJobService:
 
         self.engine = engine
         self.config = config
+        self.limits = getattr(config, "limits", DEFAULT_BUSINESS_LIMITS)
         self.knowledge_library_service = knowledge_library_service
         self._stop_event = threading.Event()
         self._wake_event = threading.Event()
@@ -133,11 +135,11 @@ class KnowledgeIngestionJobService:
             job_id = self._current_job_id
             if process and process.is_alive():
                 process.terminate()
-                process.join(timeout=2)
+                process.join(timeout=self.limits.knowledge_job_process_join_timeout_seconds)
         if job_id:
             self._finish_cancelled(job_id=job_id, message="应用关闭，入库任务已中止")
         if self._thread:
-            self._thread.join(timeout=3)
+            self._thread.join(timeout=self.limits.knowledge_job_scheduler_join_timeout_seconds)
             self._thread = None
 
     def submit(self, *, user_id: str, paths: list[str]) -> list[dict[str, Any]]:
@@ -243,7 +245,7 @@ class KnowledgeIngestionJobService:
                 process = self._current_process if self._current_job_id == job_id else None
                 if process and process.is_alive():
                     process.terminate()
-                    process.join(timeout=2)
+                    process.join(timeout=self.limits.knowledge_job_process_join_timeout_seconds)
             self._finish_cancelled(job_id=job_id, message="用户中止灌库")
         else:
             self._cleanup_source(user_id=user_id, path=record.path)
@@ -257,7 +259,7 @@ class KnowledgeIngestionJobService:
         while not self._stop_event.is_set():
             job = self._claim_next()
             if job is None:
-                self._wake_event.wait(timeout=1)
+                self._wake_event.wait(timeout=self.limits.knowledge_job_poll_seconds)
                 self._wake_event.clear()
                 continue
             self._run_claimed_job(job)
@@ -304,12 +306,12 @@ class KnowledgeIngestionJobService:
             if self._is_cancel_requested(str(job["job_id"])):
                 process.terminate()
                 break
-            time.sleep(0.05)
-        process.join(timeout=2)
+            time.sleep(self.limits.knowledge_job_process_poll_seconds)
+        process.join(timeout=self.limits.knowledge_job_process_join_timeout_seconds)
         final_event = self._drain_worker_events(job_id=str(job["job_id"]), event_queue=event_queue, final=final_event)
         if final_event is None and not self._is_cancel_requested(str(job["job_id"])):
             try:
-                event = event_queue.get(timeout=0.2)
+                event = event_queue.get(timeout=self.limits.knowledge_job_event_wait_seconds)
             except queue.Empty:
                 event = None
             if event is not None:

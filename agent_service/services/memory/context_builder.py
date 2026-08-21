@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 
-from agent_service.core.agent_config import AgentConfig
+from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.schemas.message import MessageOut
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService, RetrievalDebugSnapshot
 from agent_service.services.message_service import MessageService
@@ -53,7 +53,8 @@ class ContextBuilder:
 
     def build_messages(
         self, *, user_id: str, session_id: str, current_prompt: str, reference: str | None = None,
-        web_search_max_results: int = 10, long_term_memory_enabled: bool = True,
+        web_search_max_results: int = DEFAULT_BUSINESS_LIMITS.default_web_search_max_results,
+        long_term_memory_enabled: bool = True,
     ) -> list[BaseMessage]:
         """
         构建当前轮 Agent 调用需要的 LangChain messages。
@@ -109,7 +110,7 @@ class ContextBuilder:
         session_id: str,
         current_prompt: str,
         has_history: bool,
-        web_search_max_results: int = 10,
+        web_search_max_results: int = DEFAULT_BUSINESS_LIMITS.default_web_search_max_results,
         long_term_memory_enabled: bool = True,
     ) -> tuple[str, dict[str, float | int], dict[str, Any]]:
         """
@@ -187,7 +188,7 @@ class ContextBuilder:
 
         # ---- 构建上下文文本 ----
         sections: list[str] = []
-        sections.extend(self.config.model.retrieval_context_system_prompt.splitlines())
+        sections.extend(self.config.prompts.retrieval_context_system_prompt.splitlines())
         sections.append(
             "引用规则: 当你使用任何知识库片段或工具检索结果回答时,必须在对应句子末尾标注来源编号,"
             "例如 [1] 或 [K1]; 未实际使用的来源不要标注。"
@@ -271,7 +272,7 @@ class ContextBuilder:
         current_prompt: str,
         history: list[MessageOut],
         reference: str | None = None,
-        web_search_max_results: int = 10,
+        web_search_max_results: int = DEFAULT_BUSINESS_LIMITS.default_web_search_max_results,
         long_term_memory_enabled: bool = True,
     ) -> list[BaseMessage]:
         """

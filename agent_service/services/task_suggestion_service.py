@@ -18,6 +18,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from agent_service.agent_core.agent_core import AgentCore
+from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.services.message_service import MessageService
 from agent_service.services.scheduler import BACKGROUND_SUMMARY_TASK, LARGE_MODEL_TIER, SMALL_MODEL_TIER
 
@@ -32,14 +33,28 @@ class TaskSuggestionService:
 
         self.agent = agent
         self.message_service = message_service
+        self.limits = getattr(getattr(agent, "config", None), "limits", DEFAULT_BUSINESS_LIMITS)
+        self.prompts = getattr(agent, "config", AgentConfig()).prompts
 
-    def generate_suggestions(self, *, user_id: str, session_id: str, limit: int = 50) -> dict[str, Any]:
+    def generate_suggestions(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
         """Return up to three follow-up suggestions for the given persisted session."""
 
         messages = self.message_service.list_session_messages(
             user_id=user_id,
             session_id=session_id,
-            limit=max(4, min(limit, 80)),
+            limit=max(
+                self.limits.task_suggestion_min_limit,
+                min(
+                    limit or self.limits.task_suggestion_default_limit,
+                    self.limits.task_suggestion_max_limit,
+                ),
+            ),
             exclude_roles=["system", "tool"],
         )
         conversation = self._format_conversation(messages)
@@ -86,7 +101,7 @@ class TaskSuggestionService:
                 tool_names=[],
                 model_tier=SMALL_MODEL_TIER,
                 temperature=0.35,
-                timeout_seconds=20,
+                timeout_seconds=self.limits.task_suggestion_timeout_seconds,
                 api_key=llm_config.get("api_key"),
                 base_url=llm_config.get("base_url"),
                 model_name=llm_config.get("model_name"),
@@ -100,7 +115,7 @@ class TaskSuggestionService:
                 response=response,
                 model_tier=SMALL_MODEL_TIER,
             )
-            suggestions = self._parse_suggestions(getattr(response, "content", ""))
+            suggestions = self._parse_suggestions(getattr(response, "content", ""), limits=self.limits)
             logger.debug(
                 "Task suggestion small model output parsed | user=%s session=%s count=%s",
                 user_id,
@@ -141,7 +156,7 @@ class TaskSuggestionService:
                 tool_names=[],
                 model_tier=LARGE_MODEL_TIER,
                 temperature=0.35,
-                timeout_seconds=20,
+                timeout_seconds=self.limits.task_suggestion_timeout_seconds,
                 api_key=llm_config.get("api_key"),
                 base_url=llm_config.get("base_url"),
                 model_name=llm_config.get("model_name"),
@@ -152,7 +167,7 @@ class TaskSuggestionService:
                 response=response,
                 model_tier=LARGE_MODEL_TIER,
             )
-            suggestions = self._parse_suggestions(getattr(response, "content", ""))
+            suggestions = self._parse_suggestions(getattr(response, "content", ""), limits=self.limits)
             logger.debug(
                 "Task suggestion primary model output parsed | user=%s session=%s count=%s",
                 user_id,
@@ -182,28 +197,19 @@ class TaskSuggestionService:
             source_id=f"task_suggestion_{session_id}",
         )
 
-    @classmethod
-    def _model_messages(cls, conversation: str) -> list[Any]:
+    def _model_messages(self, conversation: str) -> list[Any]:
         """Build the fixed prompt used for next-task generation."""
 
+        system_prompt = self.prompts.task_suggestion_system_prompt.format(
+            max_count=self.limits.task_suggestion_max_count,
+            max_chars=self.limits.task_suggestion_text_chars,
+        )
         return [
-            SystemMessage(content=cls._system_prompt()),
+            SystemMessage(content=system_prompt),
             HumanMessage(content=f"当前对话上下文:\n{conversation}\n\n只输出 JSON。"),
         ]
 
-    @staticmethod
-    def _system_prompt() -> str:
-        """Return the fixed instruction used for next-task generation."""
-
-        return (
-            "你是对话下一步任务推荐器。基于完整上下文，提出用户最可能继续点击的 3 个问题或任务。"
-            "要求: 每条不超过 28 个中文字符；使用用户会自然发送给 Agent 的第一人称或祈使句；"
-            "避免客套、寒暄、解释和重复已经完成的事；需要能直接作为下一轮用户输入。"
-            '只输出 JSON: {"suggestions":["...","...","..."]}'
-        )
-
-    @staticmethod
-    def _format_conversation(messages: list[Any]) -> str:
+    def _format_conversation(self, messages: list[Any]) -> str:
         """Compress persisted messages into a model prompt while preserving order."""
 
         lines: list[str] = []
@@ -213,12 +219,18 @@ class TaskSuggestionService:
             if role not in {"user", "assistant"} or not content:
                 continue
             label = "用户" if role == "user" else "Agent"
-            preview = re.sub(r"\s+", " ", content)[:900]
+            preview = re.sub(r"\s+", " ", content)[
+                :self.limits.task_suggestion_message_preview_chars
+            ]
             lines.append(f"{label}: {preview}")
-        return "\n".join(lines)[-8000:]
+        return "\n".join(lines)[-self.limits.task_suggestion_history_chars:]
 
     @staticmethod
-    def _parse_suggestions(content: str) -> list[str]:
+    def _parse_suggestions(
+        content: str,
+        *,
+        limits: AgentConfig.BusinessLimitsConfig = DEFAULT_BUSINESS_LIMITS,
+    ) -> list[str]:
         """Parse and sanitize model output into at most three unique suggestions."""
 
         text = (content or "").strip()
@@ -237,10 +249,9 @@ class TaskSuggestionService:
         except json.JSONDecodeError:
             raw_items = [line.strip("- \u3000\t") for line in text.splitlines()]
 
-        return TaskSuggestionService._sanitize_suggestions(raw_items)
+        return TaskSuggestionService._sanitize_suggestions(raw_items, limits=limits)
 
-    @staticmethod
-    def _fallback_suggestions(messages: list[Any]) -> list[str]:
+    def _fallback_suggestions(self, messages: list[Any]) -> list[str]:
         """Build stable local suggestions when both background models are unavailable."""
 
         last_user = ""
@@ -252,16 +263,20 @@ class TaskSuggestionService:
                 last_user = content
                 break
 
-        topic = last_user[:24].strip(" \t\r\n,.;，。；")
+        topic = last_user[:self.limits.task_suggestion_topic_chars].strip(" \t\r\n,.;，。；")
         candidates = [
             f"继续处理：{topic}" if topic else "继续处理当前问题",
             "把上面的结论整理成待办",
             "基于当前结果继续下一步",
         ]
-        return TaskSuggestionService._sanitize_suggestions(candidates)
+        return self._sanitize_suggestions(candidates, limits=self.limits)
 
     @staticmethod
-    def _sanitize_suggestions(raw_items: list[Any]) -> list[str]:
+    def _sanitize_suggestions(
+        raw_items: list[Any],
+        *,
+        limits: AgentConfig.BusinessLimitsConfig = DEFAULT_BUSINESS_LIMITS,
+    ) -> list[str]:
         """Normalize arbitrary suggestion-like values into three display strings."""
 
         result: list[str] = []
@@ -271,7 +286,7 @@ class TaskSuggestionService:
             if not suggestion or suggestion in seen:
                 continue
             seen.add(suggestion)
-            result.append(suggestion[:80])
-            if len(result) >= 3:
+            result.append(suggestion[:limits.task_suggestion_text_chars])
+            if len(result) >= limits.task_suggestion_max_count:
                 break
         return result

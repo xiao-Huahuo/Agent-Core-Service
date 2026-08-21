@@ -183,7 +183,12 @@ async function handleNavigateSource(uri: string) {
     })
   }
   if (node) {
-    await workspaceStore.openEditorSidebar(node)
+    if (workspaceStore.mainView === 'agent') {
+      await workspaceStore.openEditorSidebar(node)
+      return
+    }
+    workspaceStore.setMainView('editor')
+    await workspaceStore.selectFile(node)
   }
 }
 

@@ -16,6 +16,8 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 try:
     from watchdog.events import FileSystemEvent, FileSystemEventHandler
     from watchdog.observers import Observer
@@ -59,7 +61,7 @@ async def create_knowledge_ingestion_jobs(body: dict[str, Any]) -> dict[str, Any
 
 @router.get("/knowledge/ingestion/jobs")
 async def list_knowledge_ingestion_jobs(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
     active_only: bool = Query(False, description="是否只返回等待、运行和中止中的任务"),
 ) -> dict[str, Any]:
     """列出用户持久化入库任务，供队列页面轮询恢复。"""
@@ -150,7 +152,7 @@ class _KnowledgeFileEventHandler(FileSystemEventHandler):
 
 
 @router.get("/knowledge/files")
-async def list_knowledge_files(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def list_knowledge_files(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """列出当前 active 知识库的递归文件树。"""
 
     svc = _require_knowledge_library_service()
@@ -163,8 +165,8 @@ async def list_knowledge_files(user_id: str = Query(..., min_length=1, descripti
 
 @router.get("/knowledge/files/content")
 async def read_knowledge_file(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
-    path: str = Query(..., min_length=1, description="知识库内相对路径"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+    path: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="知识库内相对路径"),
 ) -> dict[str, Any]:
     """读取当前 active 知识库中的文本文件。"""
 
@@ -179,8 +181,8 @@ async def read_knowledge_file(
 
 @router.get("/knowledge/files/preview")
 async def preview_knowledge_file(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
-    path: str = Query(..., min_length=1, description="知识库内相对路径"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+    path: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="知识库内相对路径"),
 ) -> dict[str, Any]:
     """读取当前 active 知识库中文件的多模态预览数据。"""
 
@@ -193,9 +195,9 @@ async def preview_knowledge_file(
 
 @router.get("/knowledge/files/pdf-page")
 async def preview_knowledge_pdf_page(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
-    path: str = Query(..., min_length=1, description="知识库内 PDF 相对路径"),
-    page: int = Query(..., ge=1, description="从 1 开始的 PDF 页码"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+    path: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="知识库内 PDF 相对路径"),
+    page: int = Query(..., ge=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="从 1 开始的 PDF 页码"),
 ) -> FileResponse:
     """按需栅格化并返回 Preview1 当前需要显示的 PDF 页面。"""
 
@@ -214,8 +216,8 @@ async def preview_knowledge_pdf_page(
 
 @router.get("/knowledge/files/raw")
 async def raw_knowledge_file(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
-    path: str = Query(..., min_length=1, description="知识库内相对路径"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+    path: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="知识库内相对路径"),
     download: bool = Query(False, description="是否以附件方式下载"),
 ) -> FileResponse:
     """返回当前 active 知识库中文件的原始字节流,用于 PDF 等 iframe 预览。"""
@@ -310,8 +312,8 @@ async def create_knowledge_folder(body: dict[str, Any]) -> dict[str, Any]:
 
 @router.delete("/knowledge/files")
 async def delete_knowledge_path(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
-    path: str = Query(..., min_length=1, description="知识库内相对路径"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+    path: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="知识库内相对路径"),
 ) -> dict[str, Any]:
     """删除当前 active 知识库中的文件或文件夹。"""
 
@@ -327,7 +329,7 @@ async def delete_knowledge_path(
 
 
 @router.get("/knowledge/files/trash")
-async def list_knowledge_trash(user_id: str = Query(..., min_length=1, description="鐢ㄦ埛 ID")) -> dict[str, Any]:
+async def list_knowledge_trash(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="鐢ㄦ埛 ID")) -> dict[str, Any]:
     """List files moved into the current active knowledge-library trash."""
 
     svc = _require_knowledge_library_service()
@@ -357,7 +359,7 @@ async def restore_knowledge_trash_entry(trash_id: str, body: dict[str, Any]) -> 
 @router.delete("/knowledge/files/trash/{trash_id}")
 async def delete_knowledge_trash_entry(
     trash_id: str,
-    user_id: str = Query(..., min_length=1, description="鐢ㄦ埛 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="鐢ㄦ埛 ID"),
 ) -> dict[str, Any]:
     """Permanently delete one entry from the current active knowledge-library trash."""
 
@@ -459,7 +461,7 @@ async def rebuild_knowledge_stream(body: dict[str, Any]) -> StreamingResponse:
 
 @router.post("/knowledge/files/upload")
 async def upload_knowledge_file(
-    user_id: Annotated[str, Form(min_length=1, description="用户 ID")],
+    user_id: Annotated[str, Form(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")],
     file: Annotated[UploadFile, File(description="知识库文件")],
     relative_dir: Annotated[str, Form(description="知识库内目标子目录")] = "",
     auto_ingest: Annotated[bool | None, Form(description="是否上传后自动灌库;为空时使用用户设置")] = None,
@@ -523,7 +525,7 @@ async def upload_knowledge_file(
             score=1,
             object_id=relative_path,
             title="完成知识入库",
-            dedupe_minutes=30,
+            dedupe_minutes=DEFAULT_BUSINESS_LIMITS.knowledge_activity_dedupe_minutes,
         )
     return result.to_dict()
 
@@ -596,8 +598,8 @@ async def ingest_knowledge_path_stream(body: dict[str, Any]) -> StreamingRespons
 
 @router.get("/knowledge/search")
 async def search_knowledge(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
-    query: str = Query(..., min_length=1, description="搜索关键词"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+    query: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="搜索关键词"),
     fulltext: bool = Query(default=True, description="是否启用全文内容搜索"),
     semantic: bool = Query(default=False, description="是否启用语义搜索"),
 ) -> dict[str, Any]:
@@ -699,8 +701,13 @@ async def search_knowledge(
 
 @router.get("/knowledge/graph")
 async def get_knowledge_graph(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
-    limit: int | None = Query(default=None, ge=50, le=10000, description="返回节点上限,不传则使用用户配置"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+    limit: int | None = Query(
+        default=None,
+        ge=DEFAULT_BUSINESS_LIMITS.graph_min_node_limit,
+        le=DEFAULT_BUSINESS_LIMITS.graph_max_node_limit,
+        description="返回节点上限,不传则使用用户配置",
+    ),
 ) -> dict[str, Any]:
     """返回当前 active 知识库的知识图谱点边数据。"""
 
@@ -710,7 +717,10 @@ async def get_knowledge_graph(
         profile = await run_in_threadpool(settings_svc.ensure_user_profile, user_id=user_id)
         active_library = dict(profile["active_knowledge_library"])
         if limit is None:
-            limit = profile.get("graph_node_limit", 2000)
+            limit = profile.get(
+                "graph_node_limit",
+                DEFAULT_BUSINESS_LIMITS.graph_default_node_limit,
+            )
         return await run_in_threadpool(
             graph_svc.get_graph,
             user_id=str(profile["user_id"]),
@@ -812,7 +822,7 @@ async def rebuild_knowledge_graph(body: dict[str, Any]) -> dict[str, Any]:
 
 @router.get("/knowledge/graph/rebuild/status")
 async def get_graph_rebuild_status(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
 ) -> dict[str, Any]:
     """返回当前图谱抽取进度。"""
     settings_svc = _require_settings_service()
@@ -877,7 +887,7 @@ async def dedup_knowledge_graph(body: dict[str, Any]) -> dict[str, Any]:
 
 @router.get("/knowledge/graph/dedup/status")
 async def get_dedup_status(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
 ) -> dict[str, Any]:
     """返回全库去重进度。"""
     settings_svc = _require_settings_service()
@@ -897,7 +907,7 @@ async def get_dedup_status(
 
 @router.get("/knowledge/files/events")
 async def stream_knowledge_file_events(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
 ) -> StreamingResponse:
     """
     推送当前 active 知识库文件变化事件。
@@ -945,11 +955,14 @@ async def _watchdog_event_stream(*, svc: Any, user_id: str):
     try:
         while True:
             try:
-                path = await asyncio.wait_for(queue.get(), timeout=15)
+                path = await asyncio.wait_for(
+                    queue.get(),
+                    timeout=DEFAULT_BUSINESS_LIMITS.knowledge_file_wait_timeout_seconds,
+                )
             except asyncio.TimeoutError:
                 yield _sse("heartbeat", {"type": "heartbeat"})
                 continue
-            await asyncio.sleep(0.15)
+            await asyncio.sleep(DEFAULT_BUSINESS_LIMITS.knowledge_file_debounce_seconds)
             while not queue.empty():
                 path = queue.get_nowait()
             yield _sse("tree_dirty", {"type": "tree_dirty", "path": path})

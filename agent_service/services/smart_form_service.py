@@ -18,6 +18,7 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, delete, select
 
 import agent_service.models  # noqa: F401
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.models.smart_form import (
     DEFAULT_SMART_FORM_ROW_HEIGHT,
     SmartFormCellRecord,
@@ -47,7 +48,10 @@ class SmartFormService:
         if "height" in columns:
             return
         with self.engine.begin() as connection:
-            connection.execute(text("ALTER TABLE smart_form_rows ADD COLUMN height INTEGER NOT NULL DEFAULT 282"))
+            connection.execute(text(
+                "ALTER TABLE smart_form_rows ADD COLUMN height INTEGER NOT NULL DEFAULT "
+                f"{DEFAULT_BUSINESS_LIMITS.smart_form_default_row_height}"
+            ))
 
     def list_forms(self, *, user_id: str) -> list[dict[str, Any]]:
         """列出用户智能表格。"""
@@ -203,7 +207,7 @@ class SmartFormService:
                 form_id=form_id,
                 row_id=row_id,
                 order_index=row_index,
-                height=max(56, row_height),
+                height=max(DEFAULT_BUSINESS_LIMITS.smart_form_min_row_height, row_height),
             ))
             cells = row.get("cells") if isinstance(row.get("cells"), dict) else {}
             for column_id, cell in cells.items():

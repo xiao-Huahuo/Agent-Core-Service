@@ -24,7 +24,6 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.tools import ToolExecutor
 from agent_service.tools.runtime_context import get_tool_citation_map, get_tool_runtime, get_tool_trace_callback
 
-MAX_TOOL_CALLS_PER_TURN = 4
 TASK_LIST_TOOL_NAMES = {"create_task_list", "complete_task_list_item", "finish_task_list"}
 
 
@@ -99,8 +98,9 @@ class ToolCallNode:
 
         last_message = state["messages"][-1]
         tool_calls = getattr(last_message, "tool_calls", []) or []
-        deferred_tool_calls = tool_calls[MAX_TOOL_CALLS_PER_TURN:]
-        tool_calls = tool_calls[:MAX_TOOL_CALLS_PER_TURN]
+        max_tool_calls = self.config.limits.agent_max_tool_calls_per_turn
+        deferred_tool_calls = tool_calls[max_tool_calls:]
+        tool_calls = tool_calls[:max_tool_calls]
         messages: list[ToolMessage] = []
         traces: list[dict[str, Any]] = []
         trace_callback = get_tool_trace_callback()
@@ -169,7 +169,11 @@ class ToolCallNode:
             }
             messages.append(ToolMessage(content=content, tool_call_id=tool_call_id, name=tool_name))
             result_count = self._count_results(content)
-            summary_text = (str(content).strip()[:200] + "…") if len(str(content).strip()) > 200 else content.strip()
+            completion_text = (
+                f"工具「{display_name}」已完成，共 {result_count} 条结果。"
+                if result_count is not None
+                else f"工具「{display_name}」已完成。"
+            )
             end_trace = {
                 "node": "action",
                 "event": "tool_call_end",
@@ -179,7 +183,7 @@ class ToolCallNode:
                 "tool_args_summary": args_summary,
                 "raw_content": content,
                 "duration_ms": duration_ms,
-                "human_readable": f"工具「{display_name}」返回：{summary_text}",
+                "human_readable": completion_text,
                 "result_count": result_count,
                 "chat_visible": True,
             }
@@ -203,7 +207,7 @@ class ToolCallNode:
             tool_name = tool_call.get("name", "")
             display_name = self._lookup_display_name(tool_name)
             content = (
-                f"工具 {display_name} 本轮暂未执行: 单轮最多执行 {MAX_TOOL_CALLS_PER_TURN} 个工具调用, "
+                f"工具 {display_name} 本轮暂未执行: 单轮最多执行 {max_tool_calls} 个工具调用, "
                 "请根据已获得结果决定是否继续读取剩余文件。"
             )
             messages.append(ToolMessage(content=content, tool_call_id=tool_call_id, name=tool_name))
@@ -238,18 +242,18 @@ class ToolCallNode:
                 return definition.display_name
         return tool_name
 
-    @staticmethod
-    def _summarize_args(arguments: dict[str, Any]) -> str:
+    def _summarize_args(self, arguments: dict[str, Any]) -> str:
         """将工具参数转为简短可读摘要，单行截断。"""
 
         parts: list[str] = []
         for k, v in arguments.items():
             v_str = str(v)
-            if len(v_str) > 80:
-                v_str = v_str[:80] + "…"
+            preview_chars = self.config.limits.agent_tool_argument_preview_chars
+            if len(v_str) > preview_chars:
+                v_str = v_str[:preview_chars] + "…"
             parts.append(f"{k}={v_str}")
         summary = ", ".join(parts) if parts else "无参数"
-        return summary[:200]
+        return summary[:self.config.limits.agent_tool_summary_chars]
 
     @classmethod
     def _build_terminal_command(cls, arguments: dict[str, Any]) -> str:
@@ -295,6 +299,9 @@ class ToolCallNode:
         file_like_count = 0
         for line in lines:
             stripped = line.lstrip()
+            if stripped.startswith(("[FILE]", "[DIR]")):
+                file_like_count += 1
+                continue
             # 匹配 "1. " "2. " 等编号行
             if stripped and stripped[0].isdigit():
                 dot_pos = stripped.find(". ")

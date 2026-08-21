@@ -10,6 +10,7 @@ import { computed, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
+import VaultAssetThumb from '@/components/vault_view/VaultAssetThumb.vue'
 import { uploadVaultAsset, type VaultItem, type VaultItemType, type VaultTag } from '@/api/vault'
 
 defineOptions({ name: 'VaultItemEditor' })
@@ -57,6 +58,7 @@ const allOptionalFields = computed<[string, string][]>(() => [
   ['tags', '标签'],
 ])
 const optionalFields = computed(() => allOptionalFields.value.filter(([key]) => !visibleExtras.value.has(key)))
+const previewAssetId = computed(() => assetIds.value[assetIds.value.length - 1] ?? '')
 
 watch(
   () => props.item,
@@ -139,7 +141,7 @@ function fieldIcon(key: string) {
             <label v-else class="field"><span><IcIcon :name="fieldIcon(key)" :size="14" />{{ label }}</span><select v-if="key === 'brand'" v-model="fields.brand"><option value="">品牌</option><option>UnionPay银联</option><option>Visa</option><option>Mastercard</option><option>American Express</option><option>JCB</option><option>Discover</option><option>Diners Club</option><option>Maestro</option><option>RuPay</option><option>其他</option></select><select v-else-if="key === 'title'" v-model="fields.title"><option value="">称呼</option><option>先生</option><option>夫人</option><option>女士</option><option>Mx</option><option>博士</option></select><input v-else v-model="fields[key]" :type="key === 'security_code' ? 'password' : 'text'" :placeholder="label" /></label>
           </template>
         </div>
-        <div class="cover-zone"><label class="cover-drop"><input type="file" accept="image/*" :disabled="uploadingImage" @change="uploadImage" /><IcIcon name="add-photo" :size="30" /><span>{{ uploadingImage ? '上传中' : '点击上传图片' }}</span><small>{{ assetIds.length ? `${assetIds.length} 张图片已绑定` : '可作为项目图片' }}</small></label></div>
+        <div class="cover-zone"><label class="cover-drop"><input type="file" accept="image/*" :disabled="uploadingImage" @change="uploadImage" /><VaultAssetThumb v-if="previewAssetId" :token="token" :asset-id="previewAssetId" fallback-icon="add-photo" display="cover" /><template v-else><IcIcon name="add-photo" :size="30" /><span>{{ uploadingImage ? '上传中' : '点击上传图片' }}</span><small>可作为项目图片</small></template></label></div>
       </section>
       <footer class="dialog-actions">
         <div class="field-menu extra-menu"><button class="pill-trigger" type="button" :aria-expanded="extraMenuOpen" @click="extraMenuOpen = !extraMenuOpen">+ 添加字段<IcIcon name="chevron-up" :size="14" /></button><div v-if="extraMenuOpen" class="field-menu-list extra-menu-list"><button v-for="[key, label] in optionalFields" :key="key" type="button" @click="addExtra(key)"><IcIcon :name="fieldIcon(key)" :size="16" /><span>{{ label }}</span></button><span v-if="!optionalFields.length">没有可添加字段</span></div></div>

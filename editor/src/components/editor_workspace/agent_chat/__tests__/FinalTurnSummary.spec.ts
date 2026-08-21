@@ -40,4 +40,22 @@ describe('FinalTurnSummary', () => {
     expect(wrapper.find('.stub-sources').exists()).toBe(true)
     expect(wrapper.find('.stub-sources').text()).toBe('true')
   })
+
+  it('shows only one changed file in compact sidebar mode', () => {
+    const files = ['a.md', 'b.md', 'c.md', 'd.md'].map((path) => ({ path, additions: 1, deletions: 0, edits: [] }))
+    const wrapper = mount(FinalTurnSummary, {
+      props: {
+        compact: true,
+        sources: [],
+        changeSnapshot: {
+          snapshot_id: 'snap_2', session_id: 's1', run_id: 'run_2', created_at: '',
+          additions: 4, deletions: 0, is_undone: false, edits: [], files,
+        },
+      },
+    })
+
+    expect(wrapper.classes()).toContain('compact')
+    expect(wrapper.findAll('.change-file-row')).toHaveLength(1)
+    expect(wrapper.text()).toContain('再显示 3 个文件')
+  })
 })

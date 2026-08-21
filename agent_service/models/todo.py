@@ -12,6 +12,7 @@ from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.models.session import utc_now
 
 
@@ -20,15 +21,19 @@ class TodoRecord(SQLModel, table=True):
 
     __tablename__ = "todos"
 
-    todo_id: str = Field(primary_key=True, max_length=64)
-    user_id: str = Field(index=True, max_length=128)
+    todo_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    user_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     text: str
-    category: str = Field(default="task", max_length=64)
+    category: str = Field(default="task", max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
     done: bool = Field(default=False)
     due_at: datetime | None = None
     reminder_at: datetime | None = None
-    recurrence_frequency: str = Field(default="none", max_length=16)
-    recurrence_interval: int = Field(default=1, ge=1, le=365)
+    recurrence_frequency: str = Field(default="none", max_length=DEFAULT_BUSINESS_LIMITS.short_status_max_length)
+    recurrence_interval: int = Field(
+        default=DEFAULT_BUSINESS_LIMITS.nonempty_min_length,
+        ge=DEFAULT_BUSINESS_LIMITS.nonempty_min_length,
+        le=DEFAULT_BUSINESS_LIMITS.todo_recurrence_max_interval,
+    )
     last_completed_at: datetime | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
@@ -39,5 +44,5 @@ class TodoImportRecord(SQLModel, table=True):
 
     __tablename__ = "todo_imports"
 
-    user_id: str = Field(primary_key=True, max_length=128)
+    user_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     imported_at: datetime = Field(default_factory=utc_now)

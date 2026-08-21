@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.api.rest.deps import _require_agent, _require_agent_queue_service
 from agent_service.schemas.agent_queue import (
     AgentQueueSettingsUpdate,
@@ -24,7 +25,7 @@ router = APIRouter()
 
 
 @router.get("/agent-queue/tasks")
-async def list_tasks(user_id: str = Query(..., min_length=1), history: bool = False) -> dict[str, Any]:
+async def list_tasks(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length), history: bool = False) -> dict[str, Any]:
     """List the live board or terminal history for one user."""
     service = _require_agent_queue_service()
     return {"tasks": service.list_tasks(user_id=user_id, history=history), "settings": service.get_settings(user_id)}
@@ -72,7 +73,7 @@ async def transition_task(task_id: str, body: AgentQueueTaskTransitionRequest) -
 
 
 @router.delete("/agent-queue/tasks/{task_id}")
-async def delete_task(task_id: str, user_id: str = Query(..., min_length=1)) -> dict[str, bool]:
+async def delete_task(task_id: str, user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length)) -> dict[str, bool]:
     """Delete an unclaimed task; live work must use termination instead."""
     try:
         deleted = _require_agent_queue_service().delete_task(user_id=user_id, task_id=task_id)

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import tempfile
+from dataclasses import fields, is_dataclass
+from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -15,12 +18,21 @@ from starlette.concurrency import run_in_threadpool
 from agent_service.api.grpc import agent_service_pb2
 import agent_service.api.rest.deps as rest_deps
 from agent_service.api.rest.deps import _require_agent, _require_knowledge_library_service
+from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.services.memory.rag.chunk import chunk_text
 from agent_service.services.memory.rag.frontmatter_bootstrap import FrontmatterBootstrapService
 from agent_service.services.memory.rag.frontmatter_document import StructuredKnowledgeDocument
 from agent_service.services.memory.rag.knowledge_ingestion import KnowledgeIngestionService
 
 router = APIRouter()
+
+
+@router.get("/debug/global-constants")
+async def global_constants() -> JSONResponse:
+    """返回当前 AgentConfig 的全部配置组、字段说明和值,仅供 debug 页面只读展示。"""
+
+    payload = _collect_agent_config_constants(_require_agent().config)
+    return JSONResponse(payload, headers={"Access-Control-Allow-Origin": "*"})
 
 
 @router.get("/debug/runtime-apis")
@@ -46,10 +58,114 @@ async def runtime_apis(request: Request) -> JSONResponse:
     )
 
 
+def _collect_agent_config_constants(config: AgentConfig) -> dict[str, Any]:
+    """动态枚举 AgentConfig 的 dataclass 配置组,不维护字段名或配置类白名单。"""
+
+    configs: list[dict[str, Any]] = []
+    constant_count = 0
+    for config_field in fields(config):
+        config_group = getattr(config, config_field.name)
+        if not is_dataclass(config_group):
+            continue
+        group_fields = fields(config_group)
+        group_description, field_descriptions = _parse_config_docstring(
+            type(config_group),
+            {field_info.name for field_info in group_fields},
+        )
+        constants = [
+            {
+                "name": field_info.name,
+                "description": field_descriptions.get(field_info.name, ""),
+                "type": _value_type_name(getattr(config_group, field_info.name)),
+                "value": _to_json_value(getattr(config_group, field_info.name)),
+            }
+            for field_info in group_fields
+        ]
+        constant_count += len(constants)
+        configs.append(
+            {
+                "key": config_field.name,
+                "name": type(config_group).__name__,
+                "description": group_description,
+                "constants": constants,
+            }
+        )
+    return {
+        "config_count": len(configs),
+        "constant_count": constant_count,
+        "configs": configs,
+    }
+
+
+def _parse_config_docstring(
+    config_type: type[Any],
+    field_names: set[str],
+) -> tuple[str, dict[str, str]]:
+    """从配置类 docstring 提取类介绍与 ``field_name: 说明`` 字段文档。"""
+
+    docstring = inspect.getdoc(config_type) or ""
+    lines = docstring.splitlines()
+    summary_lines: list[str] = []
+    descriptions: dict[str, str] = {}
+    active_field = ""
+    reading_summary = True
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            reading_summary = False
+            active_field = ""
+            continue
+        field_name, separator, description = line.partition(":")
+        normalized_field_name = field_name.strip()
+        if separator and normalized_field_name in field_names:
+            active_field = normalized_field_name
+            descriptions[active_field] = description.strip()
+            reading_summary = False
+            continue
+        if active_field:
+            descriptions[active_field] = f"{descriptions[active_field]} {line}".strip()
+        elif reading_summary:
+            summary_lines.append(line)
+    return " ".join(summary_lines), descriptions
+
+
+def _to_json_value(value: Any) -> Any:
+    """递归转换 AgentConfig 字段值,确保 Path、Enum、集合和嵌套容器可 JSON 序列化。"""
+
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, Enum):
+        return _to_json_value(value.value)
+    if is_dataclass(value):
+        return {
+            field_info.name: _to_json_value(getattr(value, field_info.name))
+            for field_info in fields(value)
+        }
+    if isinstance(value, Mapping):
+        return {str(key): _to_json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_json_value(item) for item in value]
+    if isinstance(value, (set, frozenset)):
+        return [_to_json_value(item) for item in sorted(value, key=str)]
+    return str(value)
+
+
+def _value_type_name(value: Any) -> str:
+    """返回跨平台稳定的配置值类型名称,避免 WindowsPath/PosixPath 等实现差异。"""
+
+    if isinstance(value, Path):
+        return "Path"
+    if isinstance(value, Enum):
+        return type(value).__name__
+    return type(value).__name__
+
+
 @router.get("/debug/multimodal-ingestion")
 async def multimodal_ingestion_observation(
-    user_id: str = Query(..., min_length=1, description="User ID"),
-    path: str = Query(..., min_length=1, description="Path relative to the active knowledge library"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="User ID"),
+    path: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="Path relative to the active knowledge library"),
 ) -> JSONResponse:
     """Return the single-file multimodal ingestion observation without writing vector records."""
 

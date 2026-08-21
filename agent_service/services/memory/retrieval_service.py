@@ -118,8 +118,8 @@ class MemoryRetrievalService:
         self._memory_recall_cache_lock = threading.Lock()
         # 同一 session 内相近查询在短 TTL 内复用召回结果,避免每轮重复
         # 跑完整 embedding + rerank 链路(本地模型推理秒级,是首 token 前的主要耗时)。
-        self._memory_recall_cache_ttl_seconds = 30
-        self._memory_recall_cache_max_entries = 128
+        self._memory_recall_cache_ttl_seconds = config.limits.retrieval_cache_ttl_seconds
+        self._memory_recall_cache_max_entries = config.limits.retrieval_cache_max_entries
 
     def retrieve_long_term_memory(
         self,
@@ -812,8 +812,7 @@ class MemoryRetrievalService:
             item.memory.importance,
         )
 
-    @staticmethod
-    def _freshness_score(memory: LongTermMemorySpecOut, *, now: datetime) -> float:
+    def _freshness_score(self, memory: LongTermMemorySpecOut, *, now: datetime) -> float:
         """
         计算记忆时效性得分。
 
@@ -823,7 +822,7 @@ class MemoryRetrievalService:
 
         updated_at = MemoryRetrievalService._ensure_aware_datetime(memory.updated_at)
         age_days = max((now - updated_at).total_seconds() / 86400.0, 0.0)
-        return 1.0 / (1.0 + age_days / 30.0)
+        return 1.0 / (1.0 + age_days / self.config.limits.retrieval_freshness_half_life_days)
 
     @staticmethod
     def _is_memory_currently_active(memory: LongTermMemorySpecOut) -> bool:

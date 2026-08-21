@@ -86,6 +86,35 @@ def test_observation_uses_small_model_tier() -> None:
     assert scheduler.calls[0]["model_tier"] == SMALL_MODEL_TIER
 
 
+def test_model_boundary_drops_orphaned_tool_messages_before_request() -> None:
+    """每次调用模型前都必须移除没有紧邻 tool_calls 的孤立工具结果。"""
+
+    system_message = SystemMessage(content="system")
+    orphan = ToolMessage(content="[FILE] leaked.md", tool_call_id="missing_call")
+
+    prepared = ModelDecisionNode._prepare_messages_for_llm(
+        system_message,
+        [HumanMessage(content="列出文件"), orphan],
+    )
+
+    assert orphan not in prepared
+
+
+def test_model_boundary_keeps_complete_tool_call_pair() -> None:
+    """统一边界过滤不得破坏完整的 assistant tool_calls 与 ToolMessage 对。"""
+
+    system_message = SystemMessage(content="system")
+    assistant = AIMessage(content="", tool_calls=[{"id": "call_1", "name": "list_knowledge_files", "args": {}}])
+    result = ToolMessage(content="[FILE] a.md", tool_call_id="call_1")
+
+    prepared = ModelDecisionNode._prepare_messages_for_llm(
+        system_message,
+        [HumanMessage(content="列出文件"), assistant, result],
+    )
+
+    assert prepared[-2:] == [assistant, result]
+
+
 def test_observation_respects_continue_after_long_exploration() -> None:
     """观察节点不得因固定观察次数或工具结果数量强制结束探索。"""
 
@@ -271,6 +300,7 @@ def test_model_decision_compacts_tool_messages_before_llm_call() -> None:
     system = SystemMessage(content="system")
     messages = [
         HumanMessage(content="read file"),
+        AIMessage(content="", tool_calls=[{"id": "call_1", "name": "read_knowledge_file", "args": {}}]),
         ToolMessage(content="x" * 2000, tool_call_id="call_1"),
     ]
 
@@ -287,6 +317,7 @@ def test_model_decision_keeps_recent_terminal_results_large_enough_for_directory
     system = SystemMessage(content="system")
     messages = [
         HumanMessage(content="调查知识库"),
+        AIMessage(content="", tool_calls=[{"id": "call_1", "name": "run_terminal_command", "args": {}}]),
         ToolMessage(content="x" * 7000, tool_call_id="call_1", name="run_terminal_command"),
     ]
 

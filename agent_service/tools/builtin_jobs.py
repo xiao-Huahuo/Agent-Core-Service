@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from agent_service.core.agent_config import AgentConfig
+
 
 class ToolJobCancelled(RuntimeError):
     """由任务进度回调抛出，用于在安全检查点终止后台工作。"""
@@ -60,10 +62,11 @@ JobRunner = Callable[[Callable[..., None], threading.Event], dict[str, Any]]
 class ToolJobManager:
     """线程安全地启动和查询 Agent 内置长任务。"""
 
-    def __init__(self) -> None:
+    def __init__(self, *, config: AgentConfig | None = None) -> None:
         """初始化任务表及互斥锁。"""
 
         self._lock = threading.RLock()
+        self.config = config or AgentConfig()
         self._jobs: dict[str, ToolJob] = {}
 
     def start(self, *, user_id: str, kind: str, runner: JobRunner) -> dict[str, Any]:
@@ -133,7 +136,8 @@ class ToolJobManager:
     def _trim_completed_jobs(self) -> None:
         """保留最近 200 个任务，避免长驻进程无限积累瞬时状态。"""
 
-        if len(self._jobs) <= 200:
+        max_entries = self.config.limits.tool_job_registry_max_entries
+        if len(self._jobs) <= max_entries:
             return
         removable = [
             job
@@ -141,7 +145,7 @@ class ToolJobManager:
             if job.status in {"completed", "failed", "cancelled"}
         ]
         removable.sort(key=lambda job: job.updated_at)
-        for job in removable[: len(self._jobs) - 200]:
+        for job in removable[: len(self._jobs) - max_entries]:
             self._jobs.pop(job.job_id, None)
 
 

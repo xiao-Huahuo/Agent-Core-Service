@@ -682,6 +682,8 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
 }
 
 .markdown-body :deep(.agent-mounted-file__name) {
+  display: block;
+  min-width: 0;
   grid-column: 1 / 3;
   overflow: hidden;
   font-weight: 700;

@@ -18,6 +18,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 import grpc
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.struct_pb2 import Struct
@@ -183,6 +185,7 @@ class AgentServiceServicer(BaseServicer):
         smart_form_service: SmartFormService | None = None,
     ) -> None:
         self._agent = agent
+        self._limits = getattr(getattr(agent, "config", None), "limits", DEFAULT_BUSINESS_LIMITS)
         self._session_service = session_service
         self._message_service = message_service
         self._settings_service = settings_service
@@ -733,7 +736,7 @@ class AgentServiceServicer(BaseServicer):
             messages = ms.list_session_messages(
                 user_id=request.user_id,
                 session_id=request.session_id,
-                limit=request.limit or 50,
+                limit=request.limit or self._limits.api_default_list_limit,
             )
         else:
             observability_scope = True
@@ -779,7 +782,7 @@ class AgentServiceServicer(BaseServicer):
         messages = ms.list_session_messages(
             user_id=request.user_id,
             session_id=request.session_id,
-            limit=200,
+            limit=self._limits.api_large_list_limit,
         )
         events = []
         for m in messages:
@@ -792,7 +795,11 @@ class AgentServiceServicer(BaseServicer):
                     message_id=m.message_id,
                     role=m.role,
                     node=node_name,
-                    content=m.content[:500] if m.role in ("assistant", "tool", "system") else "",
+                content=(
+                    m.content[:self._limits.agent_event_content_preview_chars]
+                    if m.role in ("assistant", "tool", "system")
+                    else ""
+                ),
                     tool_calls=_build_tool_call_list(m.tool_calls_json),
                     created_at=_to_iso(m.created_at),
                     metadata=meta,
@@ -853,7 +860,7 @@ class AgentServiceServicer(BaseServicer):
             user_id=request.user_id,
             session_id=request.session_id or None,
             interval=interval,
-            limit=request.limit or 120,
+            limit=request.limit or self._limits.token_usage_default_limit,
         )
         return ParseDict(payload, Struct())
 
@@ -868,7 +875,7 @@ class AgentServiceServicer(BaseServicer):
         service.sync_existing_records(user_id=request.user_id)
         payload = service.get_heatmap(
             user_id=request.user_id,
-            days=request.days or 371,
+            days=request.days or self._limits.activity_heatmap_max_days,
             timezone_name=request.timezone or "Asia/Shanghai",
         )
         return ParseDict(payload, Struct())
@@ -1416,7 +1423,7 @@ class AgentServiceServicer(BaseServicer):
             context,
             self._require_git_service(context).get_history,
             user_id=request.user_id,
-            limit=request.limit or 50,
+            limit=request.limit or self._limits.api_default_list_limit,
         )
 
     def GetGitDiff(  # noqa: N802
@@ -1717,7 +1724,8 @@ class AgentServiceServicer(BaseServicer):
         payload = MessageToDict(request)
         user_id = str(payload.get("user_id") or "")
         automation_id = str(payload.get("automation_id") or "")
-        raw_limit = payload.get("limit", 20)
+        limits = self._limits
+        raw_limit = payload.get("limit", limits.automation_run_default_limit)
         try:
             if isinstance(raw_limit, bool):
                 raise ValueError
@@ -1728,8 +1736,11 @@ class AgentServiceServicer(BaseServicer):
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, "limit must be an integer between 1 and 100")
         if not user_id or not automation_id:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, "user_id and automation_id are required")
-        if not 1 <= limit <= 100:
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "limit must be between 1 and 100")
+        if not limits.nonempty_min_length <= limit <= limits.automation_run_max_limit:
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"limit must be between {limits.nonempty_min_length} and {limits.automation_run_max_limit}",
+            )
         runs = self._require_automation_service(context).list_runs(
             user_id=user_id,
             automation_id=automation_id,

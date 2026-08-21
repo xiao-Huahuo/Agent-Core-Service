@@ -2005,6 +2005,36 @@ def test_tool_call_node_uses_project_executor() -> None:
     assert result["trace"][0]["tool_name"] == "get_current_time"
 
 
+def test_tool_call_trace_keeps_raw_result_out_of_middle_output() -> None:
+    """工具原始结果只应供工具详情展开，不得进入中间输出文案。"""
+
+    class FileListExecutor:
+        registry = ToolRegistry.with_builtin_tools()
+
+        @staticmethod
+        def execute(_name: str, _arguments: dict[str, Any]) -> str:
+            return "[FILE] private/a.md (128 bytes)\n[FILE] private/b.md (256 bytes)"
+
+    result = ToolCallNode(
+        config=make_test_config(),
+        tool_executor=FileListExecutor(),
+    )({
+        "messages": [AIMessage(content="", tool_calls=[{
+            "id": "call_files",
+            "name": "list_knowledge_files",
+            "args": {},
+        }])],
+        "user_id": "u1",
+        "session_id": "s1",
+        "trace": [],
+    })
+
+    completed_trace = result["trace"][1]
+    assert "private/a.md" in completed_trace["raw_content"]
+    assert "private/a.md" not in completed_trace["human_readable"]
+    assert completed_trace["result_count"] == 2
+
+
 def test_tool_call_node_uses_complete_patch_for_finished_trace(monkeypatch: Any) -> None:
     """完成态局部修改预览必须使用实际完整文件版本，确保真实行号可计算。"""
 

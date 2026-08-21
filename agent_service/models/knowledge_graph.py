@@ -17,6 +17,8 @@ from typing import Any
 from sqlalchemy import Column, JSON, Text
 from sqlmodel import Field, SQLModel
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 from agent_service.models.session import utc_now
 
 
@@ -25,15 +27,15 @@ class KnowledgeGraphNode(SQLModel, table=True):
 
     __tablename__ = "knowledge_graph_nodes"
 
-    node_id: str = Field(primary_key=True, max_length=96)
-    user_id: str = Field(index=True, min_length=1, max_length=128)
-    library_id: str = Field(index=True, min_length=1, max_length=128)
-    node_type: str = Field(index=True, min_length=1, max_length=32)
-    label: str = Field(index=True, min_length=1, max_length=255)
-    normalized_label: str = Field(index=True, min_length=1, max_length=255)
-    entity_type: str = Field(default="", index=True, max_length=64)
-    document_id: str = Field(default="", index=True, max_length=255)
-    source_uri: str = Field(default="", max_length=1024)
+    node_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
+    user_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    library_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    node_type: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
+    label: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.legacy_filename_max_length)
+    normalized_label: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.legacy_filename_max_length)
+    entity_type: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    document_id: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.legacy_filename_max_length)
+    source_uri: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.secret_max_length)
     source_range_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     metadata_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=utc_now, index=True)
@@ -45,16 +47,16 @@ class KnowledgeGraphEdge(SQLModel, table=True):
 
     __tablename__ = "knowledge_graph_edges"
 
-    edge_id: str = Field(primary_key=True, max_length=96)
-    user_id: str = Field(index=True, min_length=1, max_length=128)
-    library_id: str = Field(index=True, min_length=1, max_length=128)
-    source_node_id: str = Field(index=True, min_length=1, max_length=96)
-    target_node_id: str = Field(index=True, min_length=1, max_length=96)
-    relation_type: str = Field(index=True, min_length=1, max_length=64)
-    weight: float = Field(default=0.7, ge=0.0, le=1.0)
+    edge_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
+    user_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    library_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    source_node_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
+    target_node_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
+    relation_type: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    weight: float = Field(default=0.7, ge=DEFAULT_BUSINESS_LIMITS.binary_score_min, le=DEFAULT_BUSINESS_LIMITS.binary_score_max)
     evidence: str = Field(default="", sa_column=Column(Text))
-    source_document_id: str = Field(index=True, min_length=1, max_length=255)
-    source_section_id: str = Field(default="", index=True, max_length=128)
+    source_document_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.legacy_filename_max_length)
+    source_section_id: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     metadata_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=utc_now, index=True)
     updated_at: datetime = Field(default_factory=utc_now, index=True)
@@ -65,13 +67,13 @@ class KnowledgeGraphDocumentStatus(SQLModel, table=True):
 
     __tablename__ = "knowledge_graph_document_status"
 
-    status_id: str = Field(primary_key=True, max_length=96)
-    user_id: str = Field(index=True, min_length=1, max_length=128)
-    library_id: str = Field(index=True, min_length=1, max_length=128)
-    document_id: str = Field(index=True, min_length=1, max_length=255)
-    source_hash: str = Field(default="", index=True, max_length=128)
-    status: str = Field(default="pending", index=True, max_length=32)
-    message: str = Field(default="", max_length=1024)
+    status_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
+    user_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    library_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    document_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.legacy_filename_max_length)
+    source_hash: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    status: str = Field(default="pending", index=True, max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
+    message: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.secret_max_length)
     entity_count: int = 0
     relation_count: int = 0
     updated_at: datetime = Field(default_factory=utc_now, index=True)

@@ -195,14 +195,5 @@ class ImportantFactSummaryService:
         """
 
         if mode == "compress":
-            return (
-                f"{self.config.model.important_fact_summary_system_prompt}"
-                "当前任务是上下文压缩。"
-                "输出必须直接帮助后续继续对话或继续工具推理。"
-                "请优先保留当前有效事实、旧值是否失效、当前问题、最近决策和未完成事项。"
-            )
-        return (
-            f"{self.config.model.important_fact_summary_system_prompt}"
-            "当前任务是会话长期记忆摘要。"
-            "请保留对未来轮次仍有价值的稳定事实和约束。"
-        )
+            return self.config.prompts.important_fact_summary_system_prompt + self.config.prompts.important_fact_compression_instruction
+        return self.config.prompts.important_fact_summary_system_prompt + self.config.prompts.important_fact_memory_instruction

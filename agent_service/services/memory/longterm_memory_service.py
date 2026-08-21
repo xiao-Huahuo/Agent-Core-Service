@@ -148,7 +148,7 @@ class LongTermMemoryService:
         *,
         user_id: str,
         memory_type: str | None = None,
-        limit: int = 50,
+        limit: int | None = None,
     ) -> list[LongTermMemorySpecOut]:
         """列出用户的自定义长期记忆。"""
         statement = (
@@ -156,7 +156,7 @@ class LongTermMemoryService:
             .where(LongTermMemorySpec.user_id == user_id)
             .where(LongTermMemorySpec.tag == self.config.constants.memory_tag)
             .order_by(LongTermMemorySpec.created_at.desc())
-            .limit(limit)
+            .limit(limit or self.config.limits.memory_list_default_limit)
         )
         if memory_type:
             statement = statement.where(LongTermMemorySpec.memory_type == memory_type)
@@ -472,7 +472,7 @@ class LongTermMemoryService:
         *,
         query: str,
         user_id: str,
-        limit: int = 20,
+        limit: int | None = None,
     ) -> list[dict[str, Any]]:
         """
         在知识库切片的 content 字段中做全文模糊搜索。
@@ -497,7 +497,7 @@ class LongTermMemoryService:
                 .where(LongTermMemorySpec.memory_type == "knowledge_chunk")
                 .where(LongTermMemorySpec.content.ilike(like_pattern))
                 .order_by(LongTermMemorySpec.source_uri)
-                .limit(limit * 10)
+            .limit((limit or self.config.limits.memory_search_default_limit) * 10)
             ).all()
 
         seen: set[str] = set()

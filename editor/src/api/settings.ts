@@ -490,6 +490,11 @@ export interface DisabledToolsResponse {
   disabled_tools: string[]
 }
 
+/** 读取当前用户关闭的工具,供运行时新增工具合并开关状态。 */
+export function fetchDisabledTools(userId: string): Promise<DisabledToolsResponse> {
+  return apiGet<DisabledToolsResponse>(API_ROUTES.SETTINGS_DISABLED_TOOLS, { user_id: userId })
+}
+
 export function saveDisabledTools(userId: string, toolNames: string[]): Promise<DisabledToolsResponse> {
   return apiPut<DisabledToolsResponse>(API_ROUTES.SETTINGS_DISABLED_TOOLS, {
     user_id: userId,

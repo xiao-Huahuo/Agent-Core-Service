@@ -19,7 +19,8 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, To
 from langchain_openai import ChatOpenAI
 
 from agent_service.agent_core.nodes.base import AgentState
-from agent_service.core.agent_config import AgentConfig
+from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
+from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
 from agent_service.tools import ToolExecutor
 from agent_service.tools.runtime_context import get_agent_token_callback, get_context_mirror_callback, get_tool_trace_callback
@@ -188,7 +189,7 @@ class ModelDecisionNode:
             active_tool_names = [name for name in active_tool_names if name not in MEMORY_TOOL_NAMES]
 
         # 每轮全量绑定所有可用工具(已剔除禁用工具),保证任意工具随时可直接调用。
-        system_content = self.config.model.system_prompt
+        system_content = self.config.prompts.agent_system_prompt
 
         # 追加用户自定义系统提示词(数据库持久化,每次对话自动加载)
         if user_id:
@@ -252,7 +253,11 @@ class ModelDecisionNode:
             user_small_base_url,
             user_small_model_name,
         ) = self._get_user_model_overrides(state)
-        llm_messages = self._prepare_messages_for_llm(system_message, state["messages"])
+        llm_messages = self._prepare_messages_for_llm(
+            system_message,
+            state["messages"],
+            limits=self.config.limits,
+        )
         response = self.task_scheduler.invoke_chat(
             task_type=FOREGROUND_AGENT_TASK,
             messages=llm_messages,
@@ -380,7 +385,11 @@ class ModelDecisionNode:
 
         context_callback = get_context_mirror_callback()
         trace_callback = get_tool_trace_callback()
-        llm_messages = self._prepare_messages_for_llm(system_message, state["messages"])
+        llm_messages = self._prepare_messages_for_llm(
+            system_message,
+            state["messages"],
+            limits=self.config.limits,
+        )
         if context_callback is not None:
             context_callback(self._serialize_messages(llm_messages))
         if trace_callback is not None:
@@ -460,7 +469,12 @@ class ModelDecisionNode:
         return tool_name
 
     @staticmethod
-    def _prepare_messages_for_llm(system_message: SystemMessage, messages: list[BaseMessage]) -> list[BaseMessage]:
+    def _prepare_messages_for_llm(
+        system_message: SystemMessage,
+        messages: list[BaseMessage],
+        *,
+        limits: AgentConfig.BusinessLimitsConfig = DEFAULT_BUSINESS_LIMITS,
+    ) -> list[BaseMessage]:
         """
         压缩工具返回内容后再送入模型,避免文件/搜索结果撑爆上下文。
 
@@ -468,23 +482,20 @@ class ModelDecisionNode:
         工具返回内容由 _compact_tool_message 截断(保留所有消息,仅压缩内容)。
         """
 
-        # 找到最后一条 HumanMessage(当前用户输入),以此分界
-        last_human_idx = -1
-        for i, msg in enumerate(messages):
-            if isinstance(msg, HumanMessage):
-                last_human_idx = i
-
-        if last_human_idx >= 0:
-            filtered = list(messages)  # 保留全部消息序列，确保 tool_call → tool_result 顺序不被破坏
-        else:
-            filtered = messages
+        # 图循环中的消息可能经过压缩或恢复；在真正发给模型前再次保证
+        # 每条 ToolMessage 都有对应且位于其前方的 assistant tool_call。
+        filtered = ContextBuilder._filter_orphaned_tool_messages(list(messages))
 
         tool_seen_from_tail = 0
         prepared_tail: list[BaseMessage] = []
         for message in reversed(filtered):
             if isinstance(message, ToolMessage):
                 tool_seen_from_tail += 1
-                max_chars = ModelDecisionNode._tool_message_max_chars(message, tool_seen_from_tail=tool_seen_from_tail)
+                max_chars = ModelDecisionNode._tool_message_max_chars(
+                    message,
+                    tool_seen_from_tail=tool_seen_from_tail,
+                    limits=limits,
+                )
                 prepared_tail.append(ModelDecisionNode._compact_tool_message(message, max_chars=max_chars))
             else:
                 prepared_tail.append(message)
@@ -492,16 +503,21 @@ class ModelDecisionNode:
         return [system_message, *prepared_tail]
 
     @staticmethod
-    def _tool_message_max_chars(message: ToolMessage, *, tool_seen_from_tail: int) -> int:
+    def _tool_message_max_chars(
+        message: ToolMessage,
+        *,
+        tool_seen_from_tail: int,
+        limits: AgentConfig.BusinessLimitsConfig = DEFAULT_BUSINESS_LIMITS,
+    ) -> int:
         """Return a compression budget tuned for the tool result type."""
 
         tool_name = str(getattr(message, "name", "") or "")
         if tool_name == "list_available_tools":
             # 工具清单本身就是供模型读取的内容,不随位置衰减。
-            return 6000
-        if tool_seen_from_tail <= 4 and tool_name == "read_knowledge_file":
-            return 12000
-        if tool_seen_from_tail <= 4 and tool_name in {
+            return limits.agent_tool_registry_result_chars
+        if tool_seen_from_tail <= limits.agent_tool_recent_full_result_count and tool_name == "read_knowledge_file":
+            return limits.agent_tool_large_result_chars
+        if tool_seen_from_tail <= limits.agent_tool_recent_full_result_count and tool_name in {
             "search_knowledge_graph_nodes",
             "find_knowledge_graph_paths",
             "get_smart_form",
@@ -509,11 +525,15 @@ class ModelDecisionNode:
             "get_component",
             "get_custom_skill",
         }:
-            return 12000
-        if tool_seen_from_tail <= 4 and tool_name == "run_terminal_command":
+            return limits.agent_tool_large_result_chars
+        if tool_seen_from_tail <= limits.agent_tool_recent_full_result_count and tool_name == "run_terminal_command":
             # Directory listings and statistics need enough context to avoid redundant follow-up commands.
-            return 6000
-        return 900 if tool_seen_from_tail <= 8 else 240
+            return limits.agent_tool_registry_result_chars
+        return (
+            limits.agent_tool_recent_result_chars
+            if tool_seen_from_tail <= limits.agent_tool_recent_result_count
+            else limits.agent_tool_old_result_chars
+        )
 
     @staticmethod
     def _compact_tool_message(message: ToolMessage, *, max_chars: int) -> ToolMessage:

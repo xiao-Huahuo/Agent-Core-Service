@@ -125,9 +125,9 @@ class TokenUsageService:
             token_usage_id=f"tok_runtime_{uuid4().hex}",
             user_id=user_id,
             session_id=session_id or NON_SESSION_TOKEN_SOURCE,
-            message_id=source[:64] or NON_SESSION_TOKEN_SOURCE,
-            node=node[:64],
-            event=event[:96],
+            message_id=source[:self.config.limits.token_usage_message_id_chars] or NON_SESSION_TOKEN_SOURCE,
+            node=node[:self.config.limits.token_usage_node_chars],
+            event=event[:self.config.limits.token_usage_event_chars],
             model_tier=model_tier,
             model_name=self._response_model_name(response),
             input_tokens=usage["input_tokens"],
@@ -169,7 +169,7 @@ class TokenUsageService:
         user_id: str,
         session_id: str | None = None,
         interval: str = "5m",
-        limit: int = 120,
+        limit: int | None = None,
         lookback_hours: int | None = None,
         session_sort: str = "time",
     ) -> dict[str, Any]:
@@ -188,10 +188,20 @@ class TokenUsageService:
         records = self._list_records(
             user_id=user_id,
             session_id=session_id,
-            limit=max(1, min(limit, 500)),
+            limit=max(
+                self.config.limits.nonempty_min_length,
+                min(
+                    limit or self.config.limits.token_usage_default_limit,
+                    self.config.limits.token_usage_max_limit,
+                ),
+            ),
             include_non_session=True,
         )
-        all_user_records = self._list_records(user_id=user_id, session_id=None, limit=5000)
+        all_user_records = self._list_records(
+            user_id=user_id,
+            session_id=None,
+            limit=self.config.limits.token_usage_internal_scan_limit,
+        )
         return {
             "interval": interval_key,
             "calls": [self._serialize_record(record) for record in records],
@@ -409,8 +419,7 @@ class TokenUsageService:
                     return usage
         return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
-    @staticmethod
-    def _response_model_name(response: Any) -> str:
+    def _response_model_name(self, response: Any) -> str:
         """Read the provider model name from a LangChain response when present."""
 
         response_metadata = getattr(response, "response_metadata", None)
@@ -418,7 +427,7 @@ class TokenUsageService:
             for key in ("model_name", "model", "model_id"):
                 value = response_metadata.get(key)
                 if value:
-                    return str(value)[:128]
+                    return str(value)[:self.config.limits.token_usage_source_chars]
         return ""
 
     @staticmethod

@@ -23,12 +23,6 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.services.scheduler import BACKGROUND_SUMMARY_TASK, LLMTaskScheduler
 from agent_service.services.settings_service import SettingsService
 
-SKILL_BODY_MAX_CHARS = 8000
-SKILL_ROUTER_MAX_SKILLS = 3
-SKILL_ROUTER_CANDIDATE_LIMIT = 20
-SKILL_INDEX_DESCRIPTION_MAX_CHARS = 240
-
-
 @dataclass(frozen=True, slots=True)
 class SkillRecord:
     skill_id: str
@@ -42,7 +36,7 @@ class SkillRecord:
     has_references: bool
     has_assets: bool
 
-    def to_dict(self, *, include_body: bool = False) -> dict[str, Any]:
+    def to_dict(self, *, include_body: bool = False, body_max_chars: int | None = None) -> dict[str, Any]:
         payload = {
             "skill_id": self.skill_id,
             "name": self.name,
@@ -56,7 +50,7 @@ class SkillRecord:
             "has_assets": self.has_assets,
         }
         if include_body:
-            payload["body"] = self.path.read_text(encoding="utf-8")[:SKILL_BODY_MAX_CHARS]
+            payload["body"] = self.path.read_text(encoding="utf-8")[:body_max_chars]
         return payload
 
 
@@ -97,14 +91,15 @@ class SkillService:
         *,
         user_id: str,
         prompt: str,
-        limit: int = SKILL_ROUTER_CANDIDATE_LIMIT,
+        limit: int | None = None,
     ) -> list[dict[str, str]]:
         """Return a small prompt-matched skill index for the current Agent turn."""
 
         skills = [skill for skill in self.list_skills(user_id=user_id) if skill.get("enabled")]
         ranked = self._rank_skills_by_prompt(prompt=prompt, skills=skills)
         candidates: list[dict[str, str]] = []
-        for _, skill in ranked[: max(0, limit)]:
+        candidate_limit = self.config.limits.skill_router_candidate_limit if limit is None else limit
+        for _, skill in ranked[: max(0, candidate_limit)]:
             candidates.append(self._to_compact_index(skill))
         return candidates
 
@@ -162,7 +157,7 @@ class SkillService:
                 continue
             seen.add(str(skill["skill_id"]))
             selected.append(self._with_body(skill))
-            if len(selected) >= SKILL_ROUTER_MAX_SKILLS:
+            if len(selected) >= self.config.limits.skill_router_max_skills:
                 break
         return selected
 
@@ -208,7 +203,10 @@ class SkillService:
         record = self._read_skill(skill_path=skill_path, source="user", disabled=set())
         if record is None:
             raise ValueError("Created skill could not be read")
-        return record.to_dict(include_body=True)
+        return record.to_dict(
+            include_body=True,
+            body_max_chars=self.config.limits.skill_body_max_chars,
+        )
 
     def update_user_skill(
         self,
@@ -237,7 +235,10 @@ class SkillService:
         record = self._read_skill(skill_path=skill_path, source="user", disabled=self._read_disabled_skill_ids(user_id=user_id))
         if record is None:
             raise ValueError("Updated skill could not be read")
-        return record.to_dict(include_body=True)
+        return record.to_dict(
+            include_body=True,
+            body_max_chars=self.config.limits.skill_body_max_chars,
+        )
 
     def delete_user_skill(self, *, user_id: str, skill_id: str) -> dict[str, Any]:
         """删除用户 Skill 目录，并清理其禁用配置项。"""
@@ -320,13 +321,11 @@ class SkillService:
             f"- skill_id: {skill['skill_id']}\n  name: {skill['name']}\n  description: {skill.get('description') or ''}"
             for skill in skills
         )
+        system_prompt = self.config.prompts.skill_router_system_prompt.format(
+            max_skills=self.config.limits.skill_router_max_skills
+        )
         messages = [
-            SystemMessage(
-                content=(
-                    "You are a skill router. Select at most 3 skills useful for the user input. "
-                    "Return strict JSON only: {\"skills\":[\"skill_id\"]}. Return an empty list if none match."
-                )
-            ),
+            SystemMessage(content=system_prompt),
             HumanMessage(content=f"User input:\n{prompt}\n\nAvailable skills:\n{catalog}"),
         ]
         try:
@@ -345,14 +344,17 @@ class SkillService:
             parsed = json.loads(self._strip_json_fence(text))
             selected = parsed.get("skills")
             if isinstance(selected, list):
-                return [str(item) for item in selected[:SKILL_ROUTER_MAX_SKILLS]]
+                return [str(item) for item in selected[:self.config.limits.skill_router_max_skills]]
         except Exception:
             return []
         return []
 
     def _route_by_keywords(self, *, prompt: str, skills: Sequence[dict[str, Any]]) -> list[str]:
         ranked = self._rank_skills_by_prompt(prompt=prompt, skills=skills)
-        return [str(skill["skill_id"]) for _, skill in ranked[:SKILL_ROUTER_MAX_SKILLS]]
+        return [
+            str(skill["skill_id"])
+            for _, skill in ranked[:self.config.limits.skill_router_max_skills]
+        ]
 
     def _resolve_route_candidates(
         self,
@@ -369,7 +371,12 @@ class SkillService:
                 if skill.get("enabled") and str(skill.get("skill_id") or "") in candidate_ids
             ]
         skills = [skill for skill in self.list_skills(user_id=user_id) if skill.get("enabled")]
-        return [skill for _, skill in self._rank_skills_by_prompt(prompt=prompt, skills=skills)[:SKILL_ROUTER_CANDIDATE_LIMIT]]
+        return [
+            skill
+            for _, skill in self._rank_skills_by_prompt(prompt=prompt, skills=skills)[
+                :self.config.limits.skill_router_candidate_limit
+            ]
+        ]
 
     def _rank_skills_by_prompt(
         self,
@@ -461,14 +468,15 @@ class SkillService:
     def _with_body(self, skill: dict[str, Any]) -> dict[str, Any]:
         path = Path(str(skill["path"]))
         payload = dict(skill)
-        payload["body"] = path.read_text(encoding="utf-8")[:SKILL_BODY_MAX_CHARS]
+        payload["body"] = path.read_text(encoding="utf-8")[:self.config.limits.skill_body_max_chars]
         return payload
 
     @staticmethod
     def _to_compact_index(skill: dict[str, Any]) -> dict[str, str]:
         description = str(skill.get("description") or "")
-        if len(description) > SKILL_INDEX_DESCRIPTION_MAX_CHARS:
-            description = description[:SKILL_INDEX_DESCRIPTION_MAX_CHARS].rstrip() + "..."
+        max_chars = self.config.limits.skill_index_description_max_chars
+        if len(description) > max_chars:
+            description = description[:max_chars].rstrip() + "..."
         return {
             "skill_id": str(skill["skill_id"]),
             "name": str(skill["name"]),

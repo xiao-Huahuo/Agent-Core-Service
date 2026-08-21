@@ -169,6 +169,8 @@ class TerminalSandboxSettings:
     max_timeout_seconds: int
     max_output_chars: int
     max_segments_per_call: int
+    read_default_lines: int
+    read_max_lines: int
 
     @classmethod
     def from_config_payload(
@@ -204,27 +206,29 @@ class TerminalSandboxSettings:
             default_timeout_seconds=_clamp_int(
                 payload.get("default_timeout_seconds"),
                 default=config.terminal_sandbox.default_timeout_seconds,
-                minimum=1,
+                minimum=config.limits.terminal_timeout_min_seconds,
                 maximum=config.terminal_sandbox.max_timeout_seconds,
             ),
             max_timeout_seconds=_clamp_int(
                 payload.get("max_timeout_seconds"),
                 default=config.terminal_sandbox.max_timeout_seconds,
-                minimum=1,
-                maximum=600,
+                minimum=config.limits.terminal_timeout_min_seconds,
+                maximum=config.limits.terminal_timeout_max_seconds,
             ),
             max_output_chars=_clamp_int(
                 payload.get("max_output_chars"),
                 default=config.terminal_sandbox.max_output_chars,
-                minimum=1000,
-                maximum=200000,
+                minimum=config.limits.terminal_output_min_chars,
+                maximum=config.limits.terminal_output_max_chars,
             ),
             max_segments_per_call=_clamp_int(
                 payload.get("max_segments_per_call"),
                 default=config.terminal_sandbox.max_segments_per_call,
-                minimum=1,
-                maximum=50,
+                minimum=config.limits.terminal_segments_min_count,
+                maximum=config.limits.terminal_segments_max_count,
             ),
+            read_default_lines=config.limits.terminal_read_default_lines,
+            read_max_lines=config.limits.terminal_read_max_lines,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -761,7 +765,11 @@ class TerminalSandbox:
     def _internal_read_file_lines(self, *, command: str, args: list[str], cwd: Path) -> str:
         """读取工作区内文本文件的前 N 行或后 N 行。"""
 
-        parsed = _parse_line_window_args(args)
+        parsed = _parse_line_window_args(
+            args,
+            default_lines=self.settings.read_default_lines,
+            max_lines=self.settings.read_max_lines,
+        )
         results: list[str] = []
         for path_arg in parsed["paths"]:
             target = self._resolve_arg_path(path_arg, cwd=cwd)
@@ -1172,7 +1180,12 @@ def _first_non_option_arg(args: list[str]) -> str:
     return ""
 
 
-def _parse_line_window_args(args: list[str]) -> dict[str, Any]:
+def _parse_line_window_args(
+    args: list[str],
+    *,
+    default_lines: int,
+    max_lines: int,
+) -> dict[str, Any]:
     """解析 head/tail 的 `-n 数量 文件...` 或 `文件...` 参数。
 
     返回值: {"lines": int, "paths": list[str]}
@@ -1180,7 +1193,7 @@ def _parse_line_window_args(args: list[str]) -> dict[str, Any]:
 
     if not args:
         raise ValueError("head/tail 必须指定文件路径。")
-    line_count = 40
+    line_count = default_lines
     remaining = list(args)
     if remaining[0] == "-n":
         if len(remaining) < 3:
@@ -1190,8 +1203,8 @@ def _parse_line_window_args(args: list[str]) -> dict[str, Any]:
         except ValueError as exc:
             raise ValueError("head/tail 的 -n 数量必须是整数。") from exc
         remaining = remaining[2:]
-    if line_count < 1 or line_count > 1000:
-        raise ValueError("head/tail 的行数必须在 1 到 1000 之间。")
+    if line_count < 1 or line_count > max_lines:
+        raise ValueError(f"head/tail 的行数必须在 1 到 {max_lines} 之间。")
     if not remaining:
         raise ValueError("head/tail 必须指定文件路径。")
     return {"lines": line_count, "paths": remaining}

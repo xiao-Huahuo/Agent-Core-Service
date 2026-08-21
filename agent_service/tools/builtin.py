@@ -74,7 +74,7 @@ def spawn_child_agent(
 
 def wait_for_child_agents(
     run_ids: list[str] | None = None,
-    timeout_seconds: float | None = 600,
+    timeout_seconds: float | None = None,
 ) -> str:
     """由主 Agent 等待一个后台子 Agent 结果,返回结果和当前子任务快照。"""
 
@@ -286,7 +286,7 @@ def run_terminal_command(
     return dumps_terminal_result(result)
 
 
-def get_long_term_memory(query: str, top_k: int = 3) -> str:
+def get_long_term_memory(query: str, top_k: int | None = None) -> str:
     """
     检索当前用户的长期摘要记忆。
 
@@ -295,6 +295,7 @@ def get_long_term_memory(query: str, top_k: int = 3) -> str:
     """
 
     runtime = get_tool_runtime()
+    top_k = top_k or runtime.config.memory.rerank_top_k
     results = runtime.retrieval_service.retrieve_long_term_memory(
         query=query,
         user_id=runtime.user_id,
@@ -309,7 +310,7 @@ def get_long_term_memory(query: str, top_k: int = 3) -> str:
     return "\n\n".join(lines)
 
 
-def get_knowledge_context(query: str, top_k: int = 3) -> str:
+def get_knowledge_context(query: str, top_k: int | None = None) -> str:
     """
     检索知识库相关片段。
 
@@ -318,6 +319,7 @@ def get_knowledge_context(query: str, top_k: int = 3) -> str:
     """
 
     runtime = get_tool_runtime()
+    top_k = top_k or runtime.config.memory.rerank_top_k
     results = runtime.retrieval_service.retrieve_knowledge(
         query=query,
         user_id=runtime.user_id,
@@ -604,7 +606,8 @@ def delete_long_term_memory(content: str) -> str:
         return "删除失败: content 不能为空。"
     runtime = get_tool_runtime()
     memories = runtime.memory_service.list_user_memories(
-        user_id=runtime.user_id, limit=200,
+        user_id=runtime.user_id,
+        limit=runtime.config.limits.memory_delete_scan_limit,
     )
     lower_content = normalized_content.lower()
     matched = None
@@ -761,7 +764,7 @@ def read_knowledge_file(path: str) -> str:
         adopted_by_default=True,
     )
     prefix = f"Citation ID: [{citation_id}]\nSource: {source_uri}\n\n"
-    max_chars = 6000
+    max_chars = runtime.config.limits.tool_markdown_projection_max_chars
     if len(content) <= max_chars:
         return prefix + content
     return (
@@ -1113,7 +1116,8 @@ def web_search(
         return "联网搜索未启用，请在设置中开启。"
 
     proxy_url = config.get("proxy_url", "") or ""
-    configured_max = config.get("web_search_max_results", 10) or 10
+    limits = runtime.config.limits
+    configured_max = config.get("web_search_max_results", limits.default_web_search_max_results) or limits.default_web_search_max_results
     effective_max = max(1, configured_max)
 
     if not proxy_url:
@@ -1123,18 +1127,18 @@ def web_search(
         from ddgs import DDGS
         import time
         raw_results = []
-        for attempt in range(3):
-            with DDGS(proxy=proxy_url, timeout=20) as ddgs:
+        for attempt in range(limits.web_search_retry_count):
+            with DDGS(proxy=proxy_url, timeout=limits.web_search_timeout_seconds) as ddgs:
                 raw_results = list(ddgs.text(
                     query,
                     region=region,
-                    max_results=effective_max * 2,
+                    max_results=effective_max * limits.web_search_candidate_multiplier,
                     timelimit=time_range if time_range else None,
                 ))
             if raw_results:
                 break
-            if attempt < 2:
-                time.sleep(1)
+            if attempt < limits.web_search_retry_count - 1:
+                time.sleep(limits.web_search_retry_delay_seconds)
     except Exception as exc:
         return f"搜索失败: {exc}"
 
@@ -1151,7 +1155,7 @@ def web_search(
             continue
         if href in seen_hrefs:
             continue
-        if len(body) < 10:
+        if len(body) < limits.web_search_min_snippet_chars:
             continue
         seen_hrefs.add(href)
         filtered.append(item)
@@ -1170,7 +1174,7 @@ def web_search(
         """Fetch a URL and extract readable text. Returns fallback on any failure."""
         try:
             req = url_req.Request(url, headers={"User-Agent": "MetaWeave/1.0"})
-            with url_req.urlopen(req, timeout=15) as resp:
+            with url_req.urlopen(req, timeout=limits.web_fetch_timeout_seconds) as resp:
                 raw = resp.read().decode("utf-8", errors="replace")
             # Strip HTML tags
             text = re_mod.sub(r"<script[^>]*>.*?</script>", "", raw, flags=re_mod.DOTALL | re_mod.IGNORECASE)
@@ -1180,9 +1184,9 @@ def web_search(
             # Collapse whitespace
             text = re_mod.sub(r"\s+", " ", text).strip()
             # Truncate to reasonable length
-            if len(text) > 3000:
-                text = text[:3000] + "..."
-            if len(text) < 50:
+            if len(text) > limits.web_fetch_max_chars:
+                text = text[:limits.web_fetch_max_chars] + "..."
+            if len(text) < limits.web_fetch_min_chars:
                 return fallback
             return text
         except Exception:
@@ -1240,7 +1244,8 @@ def web_image_search(
         return "联网搜索未启用，请在设置中开启。"
 
     proxy_url = config.get("proxy_url", "") or ""
-    configured_max = config.get("web_search_max_results", 10) or 10
+    limits = runtime.config.limits
+    configured_max = config.get("web_search_max_results", limits.default_web_search_max_results) or limits.default_web_search_max_results
     effective_max = max(1, configured_max)
 
     if not proxy_url:
@@ -1250,8 +1255,8 @@ def web_image_search(
         from ddgs import DDGS
         import time
         raw_results = []
-        for attempt in range(3):
-            with DDGS(proxy=proxy_url, timeout=20) as ddgs:
+        for attempt in range(limits.web_search_retry_count):
+            with DDGS(proxy=proxy_url, timeout=limits.web_search_timeout_seconds) as ddgs:
                 raw_results = list(ddgs.images(
                     query,
                     region=region,
@@ -1259,8 +1264,8 @@ def web_image_search(
                 ))
             if raw_results:
                 break
-            if attempt < 2:
-                time.sleep(1)
+            if attempt < limits.web_search_retry_count - 1:
+                time.sleep(limits.web_search_retry_delay_seconds)
     except Exception as exc:
         return f"图片搜索失败: {exc}"
 
@@ -1509,7 +1514,7 @@ def add_automation(
     next_run_at: str,
     timezone_name: str = "Asia/Shanghai",
     recurrence_frequency: str = "none",
-    recurrence_interval: int = 1,
+    recurrence_interval: int | None = None,
     access_mode: str = "sandbox",
 ) -> str:
     """创建一个定时唤醒 Agent 的自动化任务。"""
@@ -1523,7 +1528,10 @@ def add_automation(
             prompt=prompt,
             next_run_at=next_run_at,
             timezone_name=timezone_name,
-            recurrence={"frequency": recurrence_frequency, "interval": recurrence_interval},
+            recurrence={
+                "frequency": recurrence_frequency,
+                "interval": recurrence_interval or runtime.config.limits.nonempty_min_length,
+            },
             access_mode=access_mode,
         )
     except ValueError as exc:
@@ -1901,13 +1909,16 @@ def git_diff(path: str = "", staged: bool = False) -> str:
     return str(payload.get("diff") or "没有差异。")
 
 
-def git_history(limit: int = 30) -> str:
+def git_history(limit: int | None = None) -> str:
     """读取提交历史、未推送提交和文件。"""
 
     import json
 
     runtime = get_tool_runtime()
-    payload = _get_git_service().get_history(user_id=runtime.user_id, limit=limit)
+    payload = _get_git_service().get_history(
+        user_id=runtime.user_id,
+        limit=limit or runtime.config.limits.api_default_list_limit,
+    )
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
@@ -2062,7 +2073,7 @@ def download_file(url: str, save_to_knowledge: bool = False) -> str:
 
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "MetaWeave/1.0"})
-        with urllib.request.urlopen(req, timeout=60) as response:
+        with urllib.request.urlopen(req, timeout=runtime.config.limits.download_timeout_seconds) as response:
             content = response.read()
             content_type = response.headers.get("Content-Type", "")
     except Exception as exc:

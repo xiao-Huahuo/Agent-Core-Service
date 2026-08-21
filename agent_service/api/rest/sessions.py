@@ -12,6 +12,7 @@ import json
 from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import Session as DBSession, select
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.api.rest.deps import _require_message_service, _require_session_service
 from agent_service.models.message import MessageRecord
 from agent_service.models.session import SessionRecord
@@ -22,7 +23,7 @@ router = APIRouter()
 
 
 @router.get("/sessions")
-async def list_sessions(user_id: str = Query(..., min_length=1, description="用户 ID")) -> list[dict[str, Any]]:
+async def list_sessions(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> list[dict[str, Any]]:
     """列出指定用户的所有会话,按更新时间倒序。"""
     service = _require_session_service()
     sessions = service.list_user_sessions(user_id)
@@ -322,11 +323,11 @@ async def update_session_environment(session_id: str, body: dict[str, Any]) -> d
 @router.get("/sessions/messages/history")
 @router.get("/sessions/observability/history")
 async def list_user_message_history(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
     limit: int | None = Query(
         default=None,
-        ge=1,
-        le=1000,
+        ge=DEFAULT_BUSINESS_LIMITS.nonempty_min_length,
+        le=DEFAULT_BUSINESS_LIMITS.session_message_page_max,
         description="最近用户 message 轮次数量;不传则返回全部历史",
     ),
 ) -> list[dict[str, Any]]:
@@ -379,7 +380,7 @@ async def delete_session(session_id: str) -> dict[str, Any]:
 
 
 @router.delete("/sessions")
-async def clear_all_sessions(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def clear_all_sessions(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """清空指定用户的所有会话。"""
     service = _require_session_service()
     count = service.delete_all_user_sessions(user_id)
@@ -419,8 +420,8 @@ async def update_session_name(session_id: str, body: dict[str, Any]) -> dict[str
 @router.get("/sessions/{session_id}/messages")
 async def list_messages(
     session_id: str,
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
-    limit: int | None = Query(default=None, ge=1, description="可选消息数量上限，默认返回完整历史"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+    limit: int | None = Query(default=None, ge=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="可选消息数量上限，默认返回完整历史"),
 ) -> list[dict[str, Any]]:
     """获取指定会话的消息历史。"""
     ms = _require_message_service()

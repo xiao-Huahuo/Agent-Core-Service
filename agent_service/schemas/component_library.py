@@ -12,27 +12,38 @@ from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 
 class ComponentLibraryItemBase(SQLModel):
     """Describe the user-provided fields shared by component DTOs."""
 
-    user_id: str = Field(min_length=1, max_length=128)
-    source: str = Field(min_length=1, max_length=2_000_000)
-    tag: str = Field(min_length=1, max_length=32)
+    user_id: str = Field(
+        min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length,
+        max_length=DEFAULT_BUSINESS_LIMITS.user_id_max_length,
+    )
+    source: str = Field(
+        min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length,
+        max_length=DEFAULT_BUSINESS_LIMITS.component_schema_source_max_length,
+    )
+    tag: str = Field(
+        min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length,
+        max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length,
+    )
 
 
 class ComponentLibraryItemCreate(ComponentLibraryItemBase):
     """Validate one component upload request."""
 
-    filename: str = Field(default="", max_length=256)
+    filename: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.title_max_length)
 
 
 class ComponentLibraryItemUpdate(SQLModel):
     """Validate one persistent component-file rename request."""
 
-    user_id: str = Field(min_length=1, max_length=128)
-    component_id: str = Field(min_length=1, max_length=512)
-    title: str = Field(min_length=1, max_length=180)
+    user_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    component_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.summary_max_length)
+    title: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.component_filename_max_length)
 
 
 class ComponentLibraryItemOut(ComponentLibraryItemBase):

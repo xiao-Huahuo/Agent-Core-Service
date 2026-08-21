@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from starlette.concurrency import run_in_threadpool
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.api.rest.deps import _require_privacy_service
 from agent_service.schemas.privacy import PrivacyCreate, PrivacyListOut, PrivacyOut, PrivacyTargetType
 
@@ -18,7 +19,7 @@ router = APIRouter()
 
 @router.get("/privacy")
 async def list_privacy(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
     target_type: PrivacyTargetType | None = Query(None, description="隐私目标类型"),
     library_id: str | None = Query(None, description="知识库作用域;不传则不过滤"),
 ) -> PrivacyListOut:
@@ -48,9 +49,9 @@ async def add_privacy(payload: PrivacyCreate) -> PrivacyOut:
 
 @router.delete("/privacy")
 async def delete_privacy(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
     target_type: PrivacyTargetType = Query(..., description="隐私目标类型"),
-    target_id: str = Query(..., min_length=1, description="隐私目标 ID"),
+    target_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="隐私目标 ID"),
     library_id: str = Query("", description="知识库作用域"),
 ) -> dict[str, bool]:
     """Delete one privacy flag."""

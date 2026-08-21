@@ -79,6 +79,7 @@ export default defineConfig({
       '/automation': DEV_PROXY_TARGET,
       '/agent-queue': DEV_PROXY_TARGET,
       '/activity': DEV_PROXY_TARGET,
+      '/debug': DEV_PROXY_TARGET,
       '/health': DEV_PROXY_TARGET,
     },
   },

@@ -18,6 +18,7 @@ from fastapi import APIRouter, File, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from starlette.concurrency import run_in_threadpool
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.api.rest.deps import _require_vault_service
 from agent_service.schemas.vault import VaultImportRequest, VaultItemCreate, VaultItemUpdate, VaultPasswordResetRequest, VaultUnlockRequest
 
@@ -34,7 +35,7 @@ def _vault_session(authorization: str) -> Any:
 
 
 @router.get("/vault/status")
-async def vault_status(user_id: str = Query(..., min_length=1)) -> dict[str, Any]:
+async def vault_status(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length)) -> dict[str, Any]:
     """读取当前用户是否已经设置密码库主密码。"""
 
     try:
@@ -44,7 +45,7 @@ async def vault_status(user_id: str = Query(..., min_length=1)) -> dict[str, Any
 
 
 @router.get("/vault/debug/master-password")
-async def vault_debug_master_password(user_id: str = Query(..., min_length=1)) -> dict[str, Any]:
+async def vault_debug_master_password(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length)) -> dict[str, Any]:
     """读取当前用户保存的密码库调试主密码。"""
 
     try:

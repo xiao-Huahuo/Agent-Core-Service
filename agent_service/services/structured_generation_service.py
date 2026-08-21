@@ -116,8 +116,7 @@ class StructuredGenerationService:
             raise ValueError("模型未返回内容")
         return raw
 
-    @staticmethod
-    def _build_messages(request: StructuredGenerationRequest) -> list[Any]:
+    def _build_messages(self, request: StructuredGenerationRequest) -> list[Any]:
         """构造通用结构化字段生成提示。"""
 
         fields = [
@@ -131,18 +130,14 @@ class StructuredGenerationService:
             }
             for field in request.fields
         ]
-        system = (
-            "你是结构化字段生成器。只输出 JSON,不要输出 Markdown 或解释。"
-            "JSON 格式必须是 {\"fields\":[{\"id\":\"字段id\",\"value\":\"字段值\"}]}。"
-            "无法确定时 value 输出空字符串。标签字段如果提供 options,只能从 options 中选择。"
-        )
+        system = self.config.prompts.structured_generation_system_prompt
         user = "\n".join([
             f"来源类型: {request.source.kind}",
             f"语言: {request.options.language}",
             "字段定义:",
             json.dumps(fields, ensure_ascii=False, indent=2),
             "上下文:",
-            request.source.content[:60000],
+            request.source.content[:self.config.limits.structured_prompt_source_chars],
         ])
         return [SystemMessage(content=system), HumanMessage(content=user)]
 

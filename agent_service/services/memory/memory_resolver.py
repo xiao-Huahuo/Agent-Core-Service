@@ -192,18 +192,7 @@ class MemoryResolver:
             task_type=BACKGROUND_FACT_RESOLUTION_TASK,
             model_tier=SMALL_MODEL_TIER,
             messages=[
-                SystemMessage(
-                    content=(
-                        "你负责从记忆摘要中抽取结构化事实。"
-                        "只允许输出 JSON 数组,不要输出额外解释。"
-                        "已知事实 schema 如下:"
-                        "["
-                        "{\"namespace\":\"project\",\"key\":\"project_code\",\"category\":\"single_value\"},"
-                        "{\"namespace\":\"project\",\"key\":\"owner_module\",\"category\":\"single_value\"}"
-                        "]。"
-                        "如果摘要里没有明确事实,返回 []。"
-                    )
-                ),
+                SystemMessage(content=self.config.prompts.memory_fact_extraction_system_prompt),
                 HumanMessage(
                     content=(
                         "请从下面摘要中提取 facts,字段固定为 "

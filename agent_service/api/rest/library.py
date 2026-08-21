@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from starlette.concurrency import run_in_threadpool
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.api.rest.deps import _require_library_service
 
 router = APIRouter()
@@ -14,7 +15,7 @@ router = APIRouter()
 
 @router.get("/library/items")
 async def list_library_items(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
     parent_id: str = Query("", description="虚拟集锦 ID"),
     query: str = Query("", description="名称、描述或真实文件名查找"),
     tag: str = Query("", description="标签名"),
@@ -40,7 +41,7 @@ async def list_library_items(
 
 
 @router.get("/library/tags")
-async def list_library_tags(user_id: str = Query(..., min_length=1, description="用户 ID")) -> dict[str, Any]:
+async def list_library_tags(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """列出当前 active 知识库的图书馆标签。"""
 
     try:
@@ -119,7 +120,7 @@ async def update_library_item(item_id: str, body: dict[str, Any]) -> dict[str, A
 @router.delete("/library/items/{item_id}")
 async def delete_library_item(
     item_id: str,
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
 ) -> dict[str, Any]:
     """将条目移出图书馆,不删除真实文件。"""
 
@@ -131,7 +132,7 @@ async def delete_library_item(
 
 @router.post("/library/assets/cover")
 async def upload_library_cover(
-    user_id: str = Form(..., min_length=1),
+    user_id: str = Form(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
     """上传图书馆封面图片。"""

@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from agent_service.api.recall_details import build_recall_details_payload
 from agent_service.api.rest.deps import _require_agent, _require_attachment_service, _require_message_service, _settings_service
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.services.editor_context_service import editor_context_service
 from agent_service.services.task_suggestion_service import TaskSuggestionService
 
@@ -36,7 +37,7 @@ async def update_current_document_context(body: dict[str, Any]) -> dict[str, Any
 
 @router.get("/agent/editor-context/current-document")
 async def get_current_document_context(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
 ) -> dict[str, Any]:
     """
     读取 editor 前端最近上报的当前文档基本信息。
@@ -63,8 +64,8 @@ async def agent_tools() -> JSONResponse:
 
 @router.post("/agent/attachments/upload")
 async def upload_agent_attachment(
-    user_id: str = Form(..., min_length=1),
-    session_id: str = Form(..., min_length=1),
+    user_id: str = Form(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
+    session_id: str = Form(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
     """Upload a file into the current Agent session context without knowledge ingestion."""
@@ -83,8 +84,8 @@ async def upload_agent_attachment(
 @router.delete("/agent/attachments/{attachment_id}")
 async def delete_agent_attachment(
     attachment_id: str,
-    user_id: str = Query(..., min_length=1),
-    session_id: str = Query(..., min_length=1),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
+    session_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
 ) -> dict[str, Any]:
     """Delete a session attachment and its runtime files."""
 
@@ -127,7 +128,7 @@ def _to_sse(events: Iterator[dict[str, Any]]) -> Iterator[str]:
             _stopped.set()
 
     def _pump_heartbeats() -> None:
-        while not _stopped.wait(timeout=3):
+        while not _stopped.wait(timeout=DEFAULT_BUSINESS_LIMITS.agent_sse_heartbeat_seconds):
             try:
                 _queue.put_nowait(("heartbeat", None))  # type: ignore[arg-type]
             except queue.Full:
@@ -141,7 +142,7 @@ def _to_sse(events: Iterator[dict[str, Any]]) -> Iterator[str]:
     try:
         while True:
             try:
-                item = _queue.get(timeout=1)
+                item = _queue.get(timeout=DEFAULT_BUSINESS_LIMITS.agent_sse_queue_poll_seconds)
             except queue.Empty:
                 if _stopped.is_set():
                     break
@@ -180,9 +181,15 @@ def _build_agent_stream_response(
     agent = _require_agent()
     try:
         _ws_cfg = _settings_service.get_web_search_config(user_id=user_id) if _settings_service is not None else {}
-        ws_max_results = _ws_cfg.get("web_search_max_results", 10) or 10
+        ws_max_results = (
+            _ws_cfg.get(
+                "web_search_max_results",
+                DEFAULT_BUSINESS_LIMITS.default_web_search_max_results,
+            )
+            or DEFAULT_BUSINESS_LIMITS.default_web_search_max_results
+        )
     except Exception:
-        ws_max_results = 10
+        ws_max_results = DEFAULT_BUSINESS_LIMITS.default_web_search_max_results
 
     def _event_generator():
         try:
@@ -214,9 +221,9 @@ def _build_agent_stream_response(
 
 @router.get("/agent/stream")
 async def agent_stream(
-    prompt: str = Query(..., min_length=1, description="用户输入"),
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
-    session_id: str = Query(..., min_length=1, description="会话 ID"),
+    prompt: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户输入"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+    session_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="会话 ID"),
     reference: str | None = Query(default=None, description="用户引用的文本"),
     agent_mode: str = Query(default="auto", description="Agent Loop 模式: auto/simple/react/plan"),
     agent_access_mode: str = Query(default="sandbox", description="Agent 权限模式: readonly/sandbox/full_access"),
@@ -238,9 +245,9 @@ async def agent_stream(
 
 @router.post("/agent/stream")
 async def agent_stream_post(
-    prompt: str = Body(..., embed=True, min_length=1),
-    user_id: str = Body(..., embed=True, min_length=1),
-    session_id: str = Body(..., embed=True, min_length=1),
+    prompt: str = Body(..., embed=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
+    user_id: str = Body(..., embed=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
+    session_id: str = Body(..., embed=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
     reference: str | None = Body(default=None, embed=True),
     agent_mode: str = Body(default="auto", embed=True),
     agent_access_mode: str = Body(default="sandbox", embed=True),
@@ -259,7 +266,7 @@ async def agent_stream_post(
 
 @router.get("/agent/stream-run")
 async def agent_stream_run(
-    prompt: str = Query(..., min_length=1, description="用户输入"),
+    prompt: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户输入"),
     user_id: str = Query(default="stream-run-user", description="用户 ID"),
     session_id: str = Query(default="stream-run-session", description="会话 ID"),
 ) -> StreamingResponse:
@@ -342,7 +349,7 @@ async def agent_cancel(
 
 @router.get("/agent/children")
 async def agent_children(
-    session_id: str = Query(..., min_length=1, description="主 Agent 会话 ID"),
+    session_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="主 Agent 会话 ID"),
 ) -> dict[str, Any]:
     """读取指定会话内子 Agent 的目标、权限、状态和结果。"""
 
@@ -374,8 +381,8 @@ async def update_child_agent(run_id: str, body: dict[str, Any]) -> dict[str, Any
 
 @router.get("/agent/events")
 async def agent_events(
-    session_id: str = Query(..., min_length=1, description="会话 ID"),
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    session_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="会话 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
 ) -> dict[str, Any]:
     """
     获取指定会话的最新执行 trace 事件,供前端观测面板使用。
@@ -383,7 +390,11 @@ async def agent_events(
     从消息表中提取带有 node 信息的 metadata_json,按时间序排列。
     """
     ms = _require_message_service()
-    messages = ms.list_session_messages(user_id=user_id, session_id=session_id, limit=200)
+    messages = ms.list_session_messages(
+        user_id=user_id,
+        session_id=session_id,
+        limit=DEFAULT_BUSINESS_LIMITS.api_large_list_limit,
+    )
 
     events: list[dict[str, Any]] = []
     for m in messages:
@@ -395,7 +406,11 @@ async def agent_events(
             "message_id": m.message_id,
             "role": m.role,
             "node": node_name,
-            "content": m.content[:500] if m.role in ("assistant", "tool", "system") else "",
+                "content": (
+                    m.content[:DEFAULT_BUSINESS_LIMITS.agent_event_content_preview_chars]
+                    if m.role in ("assistant", "tool", "system")
+                    else ""
+                ),
             "tool_calls": m.tool_calls_json,
             "created_at": m.created_at.isoformat(),
             "metadata": meta,
@@ -412,8 +427,8 @@ async def agent_events(
 
 @router.get("/agent/recall-details")
 async def agent_recall_details(
-    session_id: str = Query(..., min_length=1, description="会话 ID"),
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    session_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="会话 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
 ) -> dict[str, Any]:
     """
     获取指定会话最近一次真实召回快照,供 Obs 面板展示 ReRank 前后条目。
@@ -432,8 +447,8 @@ async def agent_recall_details(
 
 @router.post("/agent/task-suggestions")
 async def agent_task_suggestions(
-    user_id: str = Body(..., embed=True, min_length=1),
-    session_id: str = Body(..., embed=True, min_length=1),
+    user_id: str = Body(..., embed=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
+    session_id: str = Body(..., embed=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
 ) -> dict[str, Any]:
     """Generate three likely next user tasks from the current session context."""
 

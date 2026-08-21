@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from starlette.concurrency import run_in_threadpool
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.api.rest.deps import _require_component_library_service
 from agent_service.schemas.component_library import ComponentLibraryItemCreate, ComponentLibraryItemUpdate
 
@@ -15,7 +16,7 @@ router = APIRouter()
 
 @router.get("/component-library/components")
 async def list_component_library_items(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
     tag: str = Query("any", description="固定组件标签；any 表示全部"),
 ) -> dict[str, Any]:
     """List component files from the current user's active knowledge library."""
@@ -65,8 +66,8 @@ async def rename_component_library_item(body: ComponentLibraryItemUpdate) -> dic
 
 @router.delete("/component-library/components")
 async def delete_component_library_item(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
-    component_id: str = Query(..., min_length=1, description="组件 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+    component_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="组件 ID"),
 ) -> dict[str, object]:
     """Delete one canonical component file from the active component library."""
 

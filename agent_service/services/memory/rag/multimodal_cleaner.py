@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Callable
 from xml.etree import ElementTree
 
+from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.services.memory.rag.frontmatter_document import StructuredKnowledgeSection
 from agent_service.services.memory.rag.image_ocr import ImageOcrService
 from agent_service.services.memory.rag.pdf_cleaner import extract_pdf_text
@@ -101,13 +102,16 @@ class MultimodalDocumentCleaner:
     def __init__(
         self,
         *,
-        max_table_rows: int = 80,
+        max_table_rows: int | None = None,
+        config: AgentConfig | None = None,
         ocr_enabled: bool = False,
         image_ocr_service: ImageOcrService | None = None,
     ) -> None:
         """保存清洗参数。"""
 
-        self.max_table_rows = max_table_rows
+        self.config = config or AgentConfig()
+        limits = getattr(self.config, "limits", DEFAULT_BUSINESS_LIMITS)
+        self.max_table_rows = max_table_rows or limits.table_max_rows
         self.ocr_enabled = ocr_enabled
         self.image_ocr_service = image_ocr_service
         self._progress_callback: Callable[[dict[str, Any]], None] | None = None
@@ -415,6 +419,7 @@ class MultimodalDocumentCleaner:
                 image_output_dir = Path(temp_dir.name)
             extracted = extract_pdf_text(
                 source_path,
+                scanned_text_threshold=self.config.limits.scanned_pdf_text_threshold,
                 image_output_dir=image_output_dir,
                 image_public_prefix=asset_public_prefix,
                 progress_callback=lambda current, total: self._emit_progress(

@@ -20,6 +20,7 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, select
 
 import agent_service.models  # noqa: F401
+from agent_service.core.agent_config import AgentConfig
 from agent_service.models.activity import ActivityEventRecord
 from agent_service.models.agent_queue import AgentQueueTaskRecord
 from agent_service.models.favorite import FavoriteRecord
@@ -32,35 +33,20 @@ from agent_service.models.vault import VaultItem
 
 ACTIVITY_MODULES = ("library", "documents", "knowledge", "agent", "tasks", "other")
 
-# Caps implement the agreed scoring rules without discarding the underlying audit event.
-ACTION_DAILY_CAPS: dict[str, int] = {
-    "library_item_created": 10,
-    "metadata_updated": 6,
-    "favorite_added": 4,
-    "document_created": 10,
-    "content_edited": 12,
-    "file_organized": 4,
-    "file_imported": 6,
-    "knowledge_ingested": 10,
-    "knowledge_linked": 10,
-    "agent_task_completed": 15,
-    "skill_used": 5,
-    "task_created": 5,
-    "task_completed": 15,
-    "queue_task_completed": 10,
-    "smart_form_saved": 8,
-    "vault_item_changed": 3,
-    "backup_completed": 2,
-}
-
-
 class ActivityService:
     """Persist meaningful activity and aggregate fixed-threshold heatmap data."""
 
-    def __init__(self, *, engine: Engine, create_tables: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        engine: Engine,
+        config: AgentConfig | None = None,
+        create_tables: bool = True,
+    ) -> None:
         """Reuse the application database engine and create the event table when requested."""
 
         self.engine = engine
+        self.config = config or AgentConfig()
         if create_tables:
             SQLModel.metadata.create_all(self.engine)
 
@@ -75,7 +61,7 @@ class ActivityService:
         title: str = "",
         source: str = "runtime",
         occurred_at: datetime | None = None,
-        dedupe_minutes: int = 0,
+        dedupe_minutes: int | None = None,
         event_key: str = "",
     ) -> bool:
         """Append one event, optionally merging repeated saves of the same object."""
@@ -88,6 +74,11 @@ class ActivityService:
         with Session(self.engine) as db:
             if db.get(ActivityEventRecord, event_id) is not None:
                 return False
+            dedupe_minutes = (
+                self.config.limits.activity_event_dedupe_minutes
+                if dedupe_minutes is None
+                else dedupe_minutes
+            )
             if dedupe_minutes > 0 and object_id:
                 cutoff = timestamp - timedelta(minutes=dedupe_minutes)
                 ceiling = timestamp + timedelta(minutes=dedupe_minutes)
@@ -96,7 +87,7 @@ class ActivityService:
                     .where(ActivityEventRecord.user_id == normalized_user_id)
                     .where(ActivityEventRecord.module == module)
                     .where(ActivityEventRecord.action == action)
-                    .where(ActivityEventRecord.object_id == object_id[:512])
+                    .where(ActivityEventRecord.object_id == object_id[:self.config.limits.summary_max_length])
                     .where(ActivityEventRecord.created_at >= cutoff)
                     .where(ActivityEventRecord.created_at <= ceiling)
                     .limit(1)
@@ -108,11 +99,11 @@ class ActivityService:
                     event_id=event_id,
                     user_id=normalized_user_id,
                     module=module,
-                    action=action[:64],
-                    score=min(score, 20),
-                    object_id=object_id[:512],
-                    title=title[:256],
-                    source=source[:32],
+                    action=action[:self.config.limits.standard_id_max_length],
+                    score=min(score, self.config.limits.activity_event_score_max),
+                    object_id=object_id[:self.config.limits.summary_max_length],
+                    title=title[:self.config.limits.title_max_length],
+                    source=source[:self.config.limits.short_type_max_length],
                     created_at=timestamp,
                 )
             )
@@ -172,7 +163,7 @@ class ActivityService:
                     title="完善图书馆项目",
                     occurred_at=item.updated_at,
                     source="backfill",
-                    dedupe_minutes=1,
+                    dedupe_minutes=self.config.limits.activity_backfill_dedupe_minutes,
                     event_key=f"library-update:{item.item_id}:{item.updated_at.isoformat()}",
                 )
         for favorite in favorites:
@@ -197,7 +188,7 @@ class ActivityService:
                 title="新建智能表格",
                 occurred_at=form.created_at,
                 source="backfill",
-                dedupe_minutes=1,
+                dedupe_minutes=self.config.limits.activity_backfill_dedupe_minutes,
                 event_key=f"form-create:{form.form_id}",
             )
             if self._is_distinct_update(form.created_at, form.updated_at):
@@ -210,7 +201,7 @@ class ActivityService:
                     title="更新智能表格",
                     occurred_at=form.updated_at,
                     source="backfill",
-                    dedupe_minutes=1,
+                    dedupe_minutes=self.config.limits.activity_backfill_dedupe_minutes,
                     event_key=f"form-update:{form.form_id}:{form.updated_at.isoformat()}",
                 )
         for todo in todos:
@@ -248,7 +239,7 @@ class ActivityService:
                     title="完成队列任务",
                     occurred_at=task.finished_at,
                     source="backfill",
-                    dedupe_minutes=1,
+                    dedupe_minutes=self.config.limits.activity_backfill_dedupe_minutes,
                     event_key=f"queue-complete:{task.task_id}:{task.finished_at.isoformat()}",
                 )
         for item in vault_items:
@@ -273,7 +264,7 @@ class ActivityService:
                     title="更新密码库条目",
                     occurred_at=item.updated_at,
                     source="backfill",
-                    dedupe_minutes=1,
+                    dedupe_minutes=self.config.limits.activity_backfill_dedupe_minutes,
                     event_key=f"vault-update:{item.item_id}:{item.updated_at.isoformat()}",
                 )
         return inserted
@@ -292,7 +283,7 @@ class ActivityService:
                 action="skill_used",
                 score=1,
                 object_id=skill_id,
-                title=f"使用 Skill：{str(skill.get('name') or skill_id)[:96]}",
+                title=f"使用 Skill：{str(skill.get('name') or skill_id)[:self.config.limits.activity_title_preview_chars]}",
             )
         return inserted
 
@@ -300,7 +291,7 @@ class ActivityService:
         self,
         *,
         user_id: str,
-        days: int = 371,
+        days: int | None = None,
         timezone_name: str = "Asia/Shanghai",
         now: datetime | None = None,
     ) -> dict[str, Any]:
@@ -308,7 +299,13 @@ class ActivityService:
 
         zone = self._timezone(timezone_name)
         end_date = self._as_utc(now or datetime.now(timezone.utc)).astimezone(zone).date()
-        normalized_days = max(7, min(days, 371))
+        normalized_days = max(
+            self.config.limits.activity_heatmap_min_days,
+            min(
+                days or self.config.limits.activity_heatmap_max_days,
+                self.config.limits.activity_heatmap_max_days,
+            ),
+        )
         start_date = end_date - timedelta(days=normalized_days - 1)
         start_utc = datetime.combine(start_date, time.min, zone).astimezone(timezone.utc)
         end_utc = datetime.combine(end_date + timedelta(days=1), time.min, zone).astimezone(timezone.utc)
@@ -367,7 +364,10 @@ class ActivityService:
         module_scores: dict[str, int] = defaultdict(int)
         module_counts: dict[str, int] = defaultdict(int)
         for event in events:
-            cap = ACTION_DAILY_CAPS.get(event.action, 20)
+            cap = self.config.limits.activity_daily_caps.get(
+                event.action,
+                self.config.limits.activity_default_daily_cap,
+            )
             accepted = min(event.score, max(cap - action_totals[event.action], 0))
             action_totals[event.action] += accepted
             module_scores[event.module] += accepted
@@ -391,7 +391,7 @@ class ActivityService:
                     "title": event.title,
                     "created_at": self._as_utc(event.created_at).isoformat(),
                 }
-                for event in events[:8]
+                for event in events[:self.config.limits.activity_daily_preview_limit]
             ],
         }
 
@@ -424,11 +424,10 @@ class ActivityService:
             "peak_score": max(active_scores, default=0),
         }
 
-    @staticmethod
-    def _stable_event_id(event_key: str) -> str:
+    def _stable_event_id(self, event_key: str) -> str:
         """Create a compact deterministic id for idempotent source backfill."""
 
-        return f"act_{sha256(event_key.encode('utf-8')).hexdigest()[:48]}"
+        return f"act_{sha256(event_key.encode('utf-8')).hexdigest()[:self.config.limits.stable_event_hash_chars]}"
 
     @staticmethod
     def _as_utc(value: datetime) -> datetime:

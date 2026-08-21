@@ -18,6 +18,8 @@ from typing import Any
 
 from sqlmodel import Field, SQLModel
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 from agent_service.models.longterm_memory_spec import LongTermMemorySpec
 
 
@@ -45,23 +47,23 @@ class LongTermMemorySpecCreate(SQLModel):
     embedding_vector_json: 向量列表。
     """
 
-    user_id: str = Field(min_length=1, max_length=128)
-    session_id: str | None = Field(default=None, max_length=64)
-    tag: str = Field(min_length=1, max_length=64)
-    memory_type: str = Field(min_length=1, max_length=128)
-    content: str = Field(min_length=1)
-    source_type: str = Field(min_length=1, max_length=128)
-    source_id: str | None = Field(default=None, max_length=255)
-    source_uri: str | None = Field(default=None, max_length=1024)
-    source_hash: str | None = Field(default=None, max_length=128)
+    user_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    session_id: str | None = Field(default=None, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    tag: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    memory_type: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    content: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length)
+    source_type: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    source_id: str | None = Field(default=None, max_length=DEFAULT_BUSINESS_LIMITS.legacy_filename_max_length)
+    source_uri: str | None = Field(default=None, max_length=DEFAULT_BUSINESS_LIMITS.secret_max_length)
+    source_hash: str | None = Field(default=None, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     source_range_json: dict[str, Any] = Field(default_factory=dict)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
     valid_from: datetime | None = None
     valid_until: datetime | None = None
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
-    importance: float = Field(default=0.5, ge=0.0, le=1.0)
-    authority: float = Field(default=0.5, ge=0.0, le=1.0)
-    embedding_model: str | None = Field(default=None, max_length=255)
+    confidence: float = Field(default=1.0, ge=DEFAULT_BUSINESS_LIMITS.binary_score_min, le=DEFAULT_BUSINESS_LIMITS.binary_score_max)
+    importance: float = Field(default=0.5, ge=DEFAULT_BUSINESS_LIMITS.binary_score_min, le=DEFAULT_BUSINESS_LIMITS.binary_score_max)
+    authority: float = Field(default=0.5, ge=DEFAULT_BUSINESS_LIMITS.binary_score_min, le=DEFAULT_BUSINESS_LIMITS.binary_score_max)
+    embedding_model: str | None = Field(default=None, max_length=DEFAULT_BUSINESS_LIMITS.legacy_filename_max_length)
     embedding_vector_json: list[float] = Field(default_factory=list)
 
 
@@ -84,10 +86,10 @@ class LongTermMemorySpecUpdate(SQLModel):
     metadata_json: dict[str, Any] | None = None
     valid_from: datetime | None = None
     valid_until: datetime | None = None
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-    importance: float | None = Field(default=None, ge=0.0, le=1.0)
-    authority: float | None = Field(default=None, ge=0.0, le=1.0)
-    embedding_model: str | None = Field(default=None, max_length=255)
+    confidence: float | None = Field(default=None, ge=DEFAULT_BUSINESS_LIMITS.binary_score_min, le=DEFAULT_BUSINESS_LIMITS.binary_score_max)
+    importance: float | None = Field(default=None, ge=DEFAULT_BUSINESS_LIMITS.binary_score_min, le=DEFAULT_BUSINESS_LIMITS.binary_score_max)
+    authority: float | None = Field(default=None, ge=DEFAULT_BUSINESS_LIMITS.binary_score_min, le=DEFAULT_BUSINESS_LIMITS.binary_score_max)
+    embedding_model: str | None = Field(default=None, max_length=DEFAULT_BUSINESS_LIMITS.legacy_filename_max_length)
     embedding_vector_json: list[float] | None = None
 
 

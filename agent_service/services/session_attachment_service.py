@@ -167,11 +167,13 @@ class SessionAttachmentService:
         user_id: str,
         session_id: str,
         current_prompt: str,
-        max_total_chars: int = 16000,
-        max_attachment_chars: int = 8000,
+        max_total_chars: int | None = None,
+        max_attachment_chars: int | None = None,
     ) -> AttachmentContext:
         """Build session attachment catalog and relevant content snippets for the model."""
 
+        max_total_chars = max_total_chars or self.config.limits.attachment_context_max_chars
+        max_attachment_chars = max_attachment_chars or self.config.limits.attachment_single_max_chars
         attachments = self.list_session_attachments(user_id=user_id, session_id=session_id)
         if not attachments:
             return AttachmentContext(content="", citation_map={}, attachment_count=0, injected_count=0)
@@ -190,7 +192,10 @@ class SessionAttachmentService:
             lines.append(f"- [A{index}] {item.filename} | {item.size} bytes | {item.source_type}{marker}")
             citation_map[f"A{index}"] = {
                 "source_uri": item.uri or item.path,
-                "content": item.summary or self._read_text_preview(item.text_path, 500),
+                "content": item.summary or self._read_text_preview(
+                    item.text_path,
+                    self.config.limits.attachment_preview_chars,
+                ),
                 "title": item.filename,
                 "source": "session_attachment",
             }
@@ -353,7 +358,7 @@ class SessionAttachmentService:
             return first_path
         stem = first_path.stem
         suffix = first_path.suffix
-        for index in range(1, 1000):
+        for index in range(1, self.config.limits.attachment_name_collision_attempts):
             candidate = (target_dir / f"{stem} ({index}){suffix}").resolve()
             if not candidate.exists():
                 return candidate

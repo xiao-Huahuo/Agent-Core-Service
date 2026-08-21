@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 from agent_service.agent_core.agent_core import AgentCore
 from agent_service.schemas.message import MessageOut
 from agent_service.services.message_service import MessageService
@@ -41,7 +43,7 @@ def build_recall_details_payload(
     message_service: MessageService,
     user_id: str,
     session_id: str,
-    limit: int = 200,
+    limit: int = DEFAULT_BUSINESS_LIMITS.recall_history_limit,
 ) -> dict[str, Any]:
     """
     构建指定会话最近一次召回详情响应。

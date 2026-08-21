@@ -23,12 +23,14 @@ const props = defineProps<{
   messages: AgentChatMessage[]
   isStreaming?: boolean
   mergeAssistants?: boolean
-  // 输入框上方悬浮小模型任务建议时,提高底部留白避免滚动底限遮住消息
-  suggestionOverlay?: boolean
+  suggestions?: string[]
+  /** Reduces secondary details when mounted in the narrow workspace sidebar. */
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{
   'bottom-change': [isAtBottom: boolean]
+  'select-suggestion': [suggestion: string]
 }>()
 
 const { userAvatar, agentAvatar } = useAvatar()
@@ -169,6 +171,11 @@ function isFinalAssistantAnswer(message: AgentChatMessage, index: number) {
   return true
 }
 
+function isLatestFinalAssistantAnswer(message: AgentChatMessage, index: number) {
+  if (!isFinalAssistantAnswer(message, index)) return false
+  return !visibleMessages.value.slice(index + 1).some((nextMessage) => nextMessage.role === 'user')
+}
+
 function shouldShowActions(message: AgentChatMessage, index: number) {
   if (message.role !== 'assistant') {
     return true
@@ -305,6 +312,7 @@ watch(() => props.messages.length, (newLen, oldLen) => {
   scheduleScrollIfNeeded()
 })
 watch(getLastMessageContent, scheduleScrollIfNeeded)
+watch(() => props.suggestions?.length ?? 0, scheduleScrollIfNeeded)
 
 onMounted(() => {
   scrollToBottom()
@@ -320,7 +328,7 @@ defineExpose({
   <div
     ref="containerRef"
     class="message-list"
-    :class="{ 'with-suggestion-overlay': suggestionOverlay }"
+    :class="{ compact }"
     @scroll="handleScroll"
   >
     <template v-for="(message, index) in visibleMessages" :key="message.message_id ?? `${message.role}-${index}`">
@@ -342,8 +350,25 @@ defineExpose({
         :sources="knowledgeSourcesForMessage(message)"
         :change-snapshot="changeSnapshotForMessage(message)"
         :undoing="undoingSnapshotId === changeSnapshotForMessage(message)?.snapshot_id"
+        :compact="compact"
         @undo="undoMessageChange(message)"
       />
+      <div
+        v-if="suggestions?.length && message.role === 'assistant' && isLatestFinalAssistantAnswer(message, index) && !isThinkingActive"
+        class="task-suggestions assistant-summary-offset"
+        :class="{ compact }"
+        aria-label="接下来可以"
+      >
+        <button
+          v-for="suggestion in suggestions.slice(0, 3)"
+          :key="suggestion"
+          class="suggestion-button"
+          type="button"
+          @click="emit('select-suggestion', suggestion)"
+        >
+          {{ suggestion }}
+        </button>
+      </div>
     </template>
     <div v-if="showThinkingBubble" class="thinking-row">
       <img :src="agentAvatar" class="thinking-avatar" alt="agent" />
@@ -363,17 +388,32 @@ defineExpose({
   padding-bottom: 116px;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-text-muted) 52%, transparent) transparent;
 }
 
-/* 任务建议悬浮在输入框上方(bottom: 输入框高 + 8px + 按钮高,单行约 142px,
-   两行约 174px),把滚动底限提高到建议之上,避免最后一条消息被建议遮挡 */
-.message-list.with-suggestion-overlay {
-  padding-bottom: 176px;
+.message-list.compact {
+  padding: var(--space-10);
+  padding-bottom: 108px;
 }
 
 .message-list::-webkit-scrollbar {
-  display: none;
+  width: 10px;
+}
+
+.message-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.message-list::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text-muted) 52%, transparent);
+  background-clip: content-box;
+}
+
+.message-list::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--color-text-muted) 76%, transparent);
 }
 
 .thinking-row {
@@ -400,6 +440,52 @@ defineExpose({
 /* Final cards share the assistant text column rather than the avatar column. */
 .assistant-summary-offset {
   margin-left: calc(36px + var(--space-8));
+}
+
+.assistant-summary-offset.compact {
+  width: calc(100% - 36px - var(--space-8));
+}
+
+/* Keep the original task-suggestion buttons; only their flow position moved
+   from above the composer to beneath the latest completed Agent response. */
+.task-suggestions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6);
+  width: min(100%, 760px);
+  margin-bottom: var(--space-16);
+}
+
+.suggestion-button {
+  max-width: 100%;
+  min-height: 26px;
+  padding: 0 var(--space-8);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: calc(11px * var(--font-scale));
+  line-height: 1.2;
+  cursor: pointer;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.suggestion-button:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-softer);
+  color: var(--color-text);
+  transform: translateY(-1px);
 }
 
 </style>

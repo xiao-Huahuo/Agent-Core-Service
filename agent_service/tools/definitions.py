@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 from agent_service.tools.builtin import (
     BuiltinToolDefinition,
     add_automation,
@@ -907,7 +909,11 @@ TODO_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
                     "enum": ["none", "daily", "weekly", "monthly"],
                     "description": "循环频率，默认 none（仅执行一次）。",
                 },
-                "recurrence_interval": {"type": "integer", "minimum": 1, "maximum": 365},
+                "recurrence_interval": {
+                    "type": "integer",
+                    "minimum": DEFAULT_BUSINESS_LIMITS.nonempty_min_length,
+                    "maximum": DEFAULT_BUSINESS_LIMITS.todo_recurrence_max_interval,
+                },
                 "access_mode": {"type": "string", "enum": ["readonly", "sandbox", "full_access"]},
             },
             "required": ["text", "prompt", "next_run_at"],

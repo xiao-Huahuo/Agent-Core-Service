@@ -21,6 +21,7 @@ import time
 from typing import Any
 from uuid import uuid4
 
+from agent_service.core.agent_config import AgentConfig
 from agent_service.tools.runtime_context import (
     AGENT_ACCESS_FULL,
     AGENT_ACCESS_READONLY,
@@ -57,13 +58,15 @@ class ChildAgentManager:
     def __init__(
         self,
         *,
-        max_workers: int = 4,
+        max_workers: int | None = None,
+        config: AgentConfig | None = None,
         event_callback: Callable[[str, ChildAgentRecord], None] | None = None,
     ) -> None:
         """初始化线程池、运行记录表和按父级隔离的结果队列。"""
 
+        limits = (config or AgentConfig()).limits
         self._executor = ThreadPoolExecutor(
-            max_workers=max(max_workers, 1),
+            max_workers=max(limits.child_agent_max_workers if max_workers is None else max_workers, 1),
             thread_name_prefix="child-agent",
         )
         self._records: dict[str, ChildAgentRecord] = {}

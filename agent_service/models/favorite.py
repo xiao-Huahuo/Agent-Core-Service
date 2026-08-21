@@ -25,6 +25,8 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 class FavoriteRecord(SQLModel, table=True):
     """
     用户收藏数据库模型。
@@ -42,9 +44,9 @@ class FavoriteRecord(SQLModel, table=True):
         UniqueConstraint("user_id", "library_id", "target_type", "target_id", name="uq_favorites_target"),
     )
 
-    favorite_id: str = Field(primary_key=True, max_length=64)
-    user_id: str = Field(index=True, min_length=1, max_length=128)
-    library_id: str = Field(default="", index=True, max_length=128)
-    target_type: str = Field(index=True, min_length=1, max_length=64)
-    target_id: str = Field(index=True, min_length=1, max_length=2048)
+    favorite_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    user_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    library_id: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    target_type: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    target_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.path_max_length)
     created_at: datetime = Field(default_factory=utc_now, index=True)

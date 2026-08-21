@@ -20,7 +20,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 
 from agent_service.agent_core.nodes.base import AgentState
 from agent_service.agent_core.nodes.model_decision import extract_token_usage, get_user_llm_overrides
-from agent_service.core.agent_config import AgentConfig
+from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.scheduler import (
     FOREGROUND_AGENT_TASK,
@@ -30,19 +30,6 @@ from agent_service.services.scheduler import (
 )
 from agent_service.tools import ToolExecutor
 from agent_service.tools.runtime_context import get_observation_content_callback, get_tool_trace_callback
-
-
-OBSERVATION_SYSTEM_PROMPT = (
-    "你是一个执行结果审视器。只根据用户问题、最近工具调用和工具结果判断下一步。\n"
-    "只输出 JSON，不要输出其他文字。格式:\n"
-    '{"decision":"continue|answer|retry|abandon","reason":"一句话原因","next_action":"给 agent 的下一步建议","confidence":0.0}\n'
-    "decision 规则:\n"
-    "- answer: 工具结果已经足够回答用户问题。\n"
-    "- continue: 还缺关键信息,需要回到 planner 更新子问题或继续探索。\n"
-    "- retry: 当前工具失败、参数不合适或结果为空,应让 agent 换参数/换工具重试,不要重新规划。\n"
-    "- abandon: 已尝试后仍不可得,应基于已有信息说明边界并结束。\n"
-    "confidence 为 0 到 1。reason 不超过 40 字,next_action 不超过 60 字。"
-)
 
 
 class ObservationNode:
@@ -95,7 +82,11 @@ class ObservationNode:
                 }],
             }
 
-        system_message = SystemMessage(content=OBSERVATION_SYSTEM_PROMPT)
+        system_prompt = self.config.prompts.observation_system_prompt.format(
+            max_reason_chars=self.config.limits.agent_observation_reason_chars,
+            max_next_action_chars=self.config.limits.agent_observation_next_action_chars,
+        )
+        system_message = SystemMessage(content=system_prompt)
         context_message = SystemMessage(content=summary)
         trace_callback = get_tool_trace_callback()
         if trace_callback is not None:
@@ -107,7 +98,7 @@ class ObservationNode:
             })
         response = self._call_llm(system_message, context_message, state)
         token_usage = extract_token_usage(response)
-        parsed = self._parse_decision(response.content)
+        parsed = self._parse_decision(response.content, limits=self.config.limits)
         llm_decision = parsed["decision"]
         decision = self._check_overflow_then_decide(state, llm_decision)
         if decision == "compress":
@@ -213,7 +204,9 @@ class ObservationNode:
                 for tc in calls:
                     tool_calls.append(tc)
             elif msg_type == "tool" and content:
-                tool_results.append(f"  结果: {content[:2000]}")
+                tool_results.append(
+                    f"  结果: {content[:self.config.limits.agent_observation_tool_result_chars]}"
+                )
 
         if tool_calls:
             tc = tool_calls[-1]
@@ -237,7 +230,11 @@ class ObservationNode:
         return tool_name
 
     @staticmethod
-    def _parse_decision(raw_content: str | None) -> dict[str, Any]:
+    def _parse_decision(
+        raw_content: str | None,
+        *,
+        limits: AgentConfig.BusinessLimitsConfig = DEFAULT_BUSINESS_LIMITS,
+    ) -> dict[str, Any]:
         """从模型响应中解析结构化观察决策。"""
 
         if not raw_content:
@@ -259,13 +256,20 @@ class ObservationNode:
                     decision = "continue"
                 confidence = data.get("confidence", 0.5)
                 try:
-                    confidence = max(0.0, min(1.0, float(confidence)))
+                    confidence = max(
+                        limits.binary_score_min,
+                        min(limits.binary_score_max, float(confidence)),
+                    )
                 except (TypeError, ValueError):
                     confidence = 0.5
                 return {
                     "decision": decision,
-                    "reason": str(data.get("reason", "") or "").strip()[:80],
-                    "next_action": str(data.get("next_action", "") or "").strip()[:120],
+                    "reason": str(data.get("reason", "") or "").strip()[
+                        :limits.agent_observation_reason_chars
+                    ],
+                    "next_action": str(data.get("next_action", "") or "").strip()[
+                        :limits.agent_observation_next_action_chars
+                    ],
                     "confidence": confidence,
                 }
             except json.JSONDecodeError:

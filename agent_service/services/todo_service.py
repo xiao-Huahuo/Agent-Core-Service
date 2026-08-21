@@ -19,6 +19,7 @@ from uuid import uuid4
 
 from sqlmodel import Session, SQLModel, select
 
+from agent_service.core.agent_config import AgentConfig
 from agent_service.models.todo import TodoImportRecord, TodoRecord
 
 logger = logging.getLogger(__name__)
@@ -27,10 +28,17 @@ logger = logging.getLogger(__name__)
 class TodoService:
     """用户 TODO 数据库服务。"""
 
-    def __init__(self, *, engine: Any, legacy_data_dir: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        engine: Any,
+        config: AgentConfig | None = None,
+        legacy_data_dir: str | None = None,
+    ) -> None:
         """初始化数据库服务,并保留旧 JSON 目录作为一次性迁移来源。"""
 
         self.engine = engine
+        self.config = config or AgentConfig()
         self._legacy_storage_dir = Path(legacy_data_dir or "") / "todos" if legacy_data_dir else None
         SQLModel.metadata.create_all(self.engine)
 
@@ -52,8 +60,7 @@ class TodoService:
             return None
         return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
-    @staticmethod
-    def _normalize_recurrence(value: Any) -> tuple[str, int]:
+    def _normalize_recurrence(self, value: Any) -> tuple[str, int]:
         """将循环规则规范化为频率和间隔。"""
 
         payload = value if isinstance(value, dict) else {}
@@ -64,8 +71,12 @@ class TodoService:
             interval = int(payload.get("interval", 1))
         except (TypeError, ValueError) as exc:
             raise ValueError("recurrence.interval must be an integer") from exc
-        if not 1 <= interval <= 365:
-            raise ValueError("recurrence.interval must be between 1 and 365")
+        if not self.config.limits.nonempty_min_length <= interval <= self.config.limits.todo_recurrence_max_interval:
+            raise ValueError(
+                "recurrence.interval must be between "
+                f"{self.config.limits.nonempty_min_length} and "
+                f"{self.config.limits.todo_recurrence_max_interval}"
+            )
         return frequency, interval
 
     @classmethod
@@ -139,7 +150,7 @@ class TodoService:
                     continue
                 frequency, interval = self._normalize_recurrence(item.get("recurrence"))
                 db.add(TodoRecord(
-                    todo_id=str(item.get("id") or f"todo_{uuid4().hex[:12]}"),
+                    todo_id=str(item.get("id") or f"todo_{uuid4().hex[:self.config.limits.generated_id_suffix_chars]}"),
                     user_id=user_id,
                     text=str(item["text"]).strip(),
                     category=str(item.get("category") or "task"),
@@ -175,7 +186,7 @@ class TodoService:
         frequency, interval = self._normalize_recurrence(recurrence)
         now = self._utc_now()
         record = TodoRecord(
-            todo_id=f"todo_{uuid4().hex[:12]}", user_id=user_id, text=text,
+            todo_id=f"todo_{uuid4().hex[:self.config.limits.generated_id_suffix_chars]}", user_id=user_id, text=text,
             category=category.strip() or "task", due_at=self._parse_datetime(due_date),
             reminder_at=self._parse_datetime(reminder_at), recurrence_frequency=frequency,
             recurrence_interval=interval, created_at=now, updated_at=now,

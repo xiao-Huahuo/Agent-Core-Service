@@ -11,11 +11,13 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 class ActivityModuleStatsOut(BaseModel):
     """Score and raw event count for one module on one day."""
 
-    score: int = Field(ge=0)
-    event_count: int = Field(ge=0)
+    score: int = Field(ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
+    event_count: int = Field(ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
 
 
 class ActivityDetailOut(BaseModel):
@@ -23,7 +25,7 @@ class ActivityDetailOut(BaseModel):
 
     module: str
     action: str
-    score: int = Field(ge=1)
+    score: int = Field(ge=DEFAULT_BUSINESS_LIMITS.nonempty_min_length)
     title: str
     created_at: str
 
@@ -32,9 +34,9 @@ class ActivityDayOut(BaseModel):
     """One active calendar day with capped contribution totals."""
 
     date: str
-    score: int = Field(ge=0)
-    level: int = Field(ge=0, le=6)
-    event_count: int = Field(ge=0)
+    score: int = Field(ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
+    level: int = Field(ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value, le=DEFAULT_BUSINESS_LIMITS.weekday_max_index)
+    event_count: int = Field(ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
     modules: dict[str, ActivityModuleStatsOut]
     activities: list[ActivityDetailOut]
 
@@ -42,10 +44,10 @@ class ActivityDayOut(BaseModel):
 class ActivitySummaryOut(BaseModel):
     """Four compact statistics displayed for one heatmap filter."""
 
-    total_score: int = Field(ge=0)
-    active_days: int = Field(ge=0)
-    current_streak: int = Field(ge=0)
-    peak_score: int = Field(ge=0)
+    total_score: int = Field(ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
+    active_days: int = Field(ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
+    current_streak: int = Field(ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
+    peak_score: int = Field(ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
 
 
 class ActivityHeatmapOut(BaseModel):

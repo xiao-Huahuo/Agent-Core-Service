@@ -95,6 +95,26 @@ export interface RuntimeApisResponse {
   groups: RuntimeApiGroup[]
 }
 
+export interface GlobalConstantInfo {
+  name: string
+  description: string
+  type: string
+  value: unknown
+}
+
+export interface GlobalConfigInfo {
+  key: string
+  name: string
+  description: string
+  constants: GlobalConstantInfo[]
+}
+
+export interface GlobalConstantsResponse {
+  config_count: number
+  constant_count: number
+  configs: GlobalConfigInfo[]
+}
+
 export interface MultimodalSemanticChunk {
   index: number
   section_id: string
@@ -152,6 +172,28 @@ export async function fetchRuntimeApis(): Promise<RuntimeApisResponse> {
     }
     throw error
   }
+}
+
+/** 读取后端动态枚举的 AgentConfig 全量只读快照。 */
+export async function fetchGlobalConstants(): Promise<GlobalConstantsResponse> {
+  try {
+    return await apiGet<GlobalConstantsResponse>(API_ROUTES.DEBUG_GLOBAL_CONSTANTS)
+  } catch (error) {
+    if (shouldRetryFromBackendOrigin(error)) {
+      return fetchGlobalConstantsFromBackendOrigin()
+    }
+    throw error
+  }
+}
+
+/** 开发代理不可用时直连本地后端,与其他 debug 页面保持相同恢复策略。 */
+async function fetchGlobalConstantsFromBackendOrigin(): Promise<GlobalConstantsResponse> {
+  const url = `http://127.0.0.1:8002${API_ROUTES.DEBUG_GLOBAL_CONSTANTS}`
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status} ${response.statusText}`)
+  }
+  return readDebugJson<GlobalConstantsResponse>(response, url)
 }
 
 async function fetchRuntimeApisFromBackendOrigin(): Promise<RuntimeApisResponse> {

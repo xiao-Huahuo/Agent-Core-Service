@@ -455,9 +455,9 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
                      len(self._local_worker_threads), len(self._redis_worker_threads))
         self._shutdown_event.set()
         for worker in self._local_worker_threads:
-            worker.join(timeout=1.0)
+            worker.join(timeout=self.config.task_schedule.worker_shutdown_timeout_seconds)
         for worker in self._redis_worker_threads:
-            worker.join(timeout=1.0)
+            worker.join(timeout=self.config.task_schedule.worker_shutdown_timeout_seconds)
         logger.info("LLM 调度器已关闭")
 
     def supports_persistent_summary_jobs(self) -> bool:
@@ -614,7 +614,7 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
 
         while not self._shutdown_event.is_set():
             try:
-                task = task_queue.get(timeout=0.2)
+                task = task_queue.get(timeout=self.config.task_schedule.local_queue_poll_seconds)
             except queue.Empty:
                 continue
             try:

@@ -54,6 +54,18 @@ const typeIcons: Record<VaultItemType, string> = { login: 'shield', card: 'dashb
     </label>
     <p class="section-label">类型</p>
     <button class="type-filter" :class="{ active: !itemType }" type="button" @click="emit('update:itemType', '')"><IcIcon name="layers" :size="16" /><span>全部项目</span><small>{{ Object.values(counts).reduce((sum, count) => sum + count, 0) }}</small></button>
+    <button
+      v-for="(label, key) in typeLabels"
+      :key="key"
+      class="type-filter"
+      :class="{ active: itemType === key }"
+      type="button"
+      @click="emit('update:itemType', itemType === key ? '' : key)"
+    >
+      <IcIcon :name="typeIcons[key]" :size="16" /><span>{{ label }}</span><small>{{ counts[key] || 0 }}</small>
+    </button>
+    <hr />
+    <p class="section-label">标签</p>
     <div class="tag-list">
       <button
         v-for="tagItem in tags.slice(0, 10)"
@@ -66,17 +78,6 @@ const typeIcons: Record<VaultItemType, string> = { login: 'shield', card: 'dashb
         {{ tagItem.name }}
       </button>
     </div>
-    <hr />
-    <button
-      v-for="(label, key) in typeLabels"
-      :key="key"
-      class="type-filter"
-      :class="{ active: itemType === key }"
-      type="button"
-      @click="emit('update:itemType', itemType === key ? '' : key)"
-    >
-      <IcIcon :name="typeIcons[key]" :size="16" /><span>{{ label }}</span><small>{{ counts[key] || 0 }}</small>
-    </button>
   </aside>
 </template>
 
@@ -194,7 +195,7 @@ hr { width: 100%; margin: var(--space-8) 0; border: 0; border-top: 1px solid var
 
 .tag-list {
   display: grid;
-  gap: var(--space-6);
+  gap: 0;
 }
 
 .tag-pill {
@@ -202,16 +203,18 @@ hr { width: 100%; margin: var(--space-8) 0; border: 0; border-top: 1px solid var
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 36px;
+  min-height: 38px;
   overflow: hidden;
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: var(--color-tag-pill-text);
+  color: var(--color-text-secondary);
   padding: 0 var(--space-10);
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
   cursor: pointer;
   transition:
     background-color 150ms ease,
@@ -234,9 +237,10 @@ hr { width: 100%; margin: var(--space-8) 0; border: 0; border-top: 1px solid var
 .tag-pill:hover,
 .tag-pill.active {
   background: var(--color-primary-soft);
-  color: var(--color-tag-pill-text);
+  color: var(--color-text);
 }
 
+.tag-pill.active { color: var(--color-primary); }
 .tag-pill.active::before { transform: scaleY(1); }
 
 @media (max-width: 860px) {

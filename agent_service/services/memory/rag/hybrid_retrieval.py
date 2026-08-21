@@ -231,8 +231,7 @@ class HybridRetrievalService:
         )
         return merged
 
-    @classmethod
-    def extract_keywords(cls, query: str, *, max_keywords: int = 12) -> list[str]:
+    def extract_keywords(self, query: str, *, max_keywords: int | None = None) -> list[str]:
         """
         从 query 中抽取适合关键词召回的 token。
 
@@ -240,17 +239,18 @@ class HybridRetrievalService:
         max_keywords: 最多保留的关键词数。
         """
 
+        max_keywords = max_keywords or self.config.limits.retrieval_keyword_max_count
         keywords: set[str] = set()
         normalized = query.strip().lower()
-        for token in cls.ASCII_TOKEN_PATTERN.findall(normalized):
+        for token in self.ASCII_TOKEN_PATTERN.findall(normalized):
             keywords.add(token)
-        for sequence in cls.CJK_SEQUENCE_PATTERN.findall(normalized):
-            if sequence not in cls.CJK_STOPWORDS:
+        for sequence in self.CJK_SEQUENCE_PATTERN.findall(normalized):
+            if sequence not in self.CJK_STOPWORDS:
                 keywords.add(sequence)
             for size in range(min(4, len(sequence)), 1, -1):
                 for start in range(0, len(sequence) - size + 1):
                     fragment = sequence[start : start + size]
-                    if fragment in cls.CJK_STOPWORDS:
+                    if fragment in self.CJK_STOPWORDS:
                         continue
                     keywords.add(fragment)
         ranked_keywords = sorted(keywords, key=lambda item: (-len(item), item))

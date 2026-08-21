@@ -19,6 +19,7 @@ from uuid import uuid4
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.services.settings_service import SettingsService
 
 COMPONENT_TAGS = (
@@ -35,7 +36,6 @@ COMPONENT_TAGS = (
     "any",
 )
 COMPONENTS_DIRECTORY_NAME = ".mw/components"
-MAX_COMPONENT_SOURCE_LENGTH = 250_000
 SUPPORTED_COMPONENT_SUFFIXES = {".vue", ".html", ".htm"}
 
 
@@ -47,6 +47,7 @@ class ComponentLibraryService:
 
         self.settings_service = settings_service
         self.legacy_engine = legacy_engine
+        self.limits = getattr(getattr(settings_service, "config", None), "limits", DEFAULT_BUSINESS_LIMITS)
 
     def list_components(self, *, user_id: str, tag: str = "any") -> dict[str, object]:
         """Read supported UTF-8 source files from the active components directory."""
@@ -70,7 +71,10 @@ class ComponentLibraryService:
                 source = path.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
-            if not source.strip() or len(source) > MAX_COMPONENT_SOURCE_LENGTH:
+            if (
+                not source.strip()
+                or len(source) > self.limits.component_source_max_length
+            ):
                 continue
             components.append(
                 self._file_to_dict(
@@ -99,7 +103,7 @@ class ComponentLibraryService:
         normalized_source = str(source or "").strip()
         if not normalized_source:
             raise ValueError("component source is required")
-        if len(normalized_source) > MAX_COMPONENT_SOURCE_LENGTH:
+        if len(normalized_source) > self.limits.component_source_max_length:
             raise ValueError("component source is too large")
 
         source_format = "vue" if "<template" in normalized_source.casefold() else "html"
@@ -188,7 +192,7 @@ class ComponentLibraryService:
         next_source = path.read_text(encoding="utf-8") if source is None else str(source).strip()
         if not next_source:
             raise ValueError("component source is required")
-        if len(next_source) > MAX_COMPONENT_SOURCE_LENGTH:
+        if len(next_source) > self.limits.component_source_max_length:
             raise ValueError("component source is too large")
         next_tag = self._tag_from_relative_path(path.relative_to(root)) if tag is None else self._require_tag(tag)
         next_title = path.stem if title is None else str(title).strip()
@@ -242,7 +246,7 @@ class ComponentLibraryService:
         errors: list[str] = []
         if not source.strip():
             errors.append("组件源码为空")
-        if len(source) > MAX_COMPONENT_SOURCE_LENGTH:
+        if len(source) > self.limits.component_source_max_length:
             errors.append("组件源码超过大小限制")
         if source_format == "vue":
             if not re.search(r"<template(?:\s[^>]*)?>", source, flags=re.IGNORECASE):
@@ -269,7 +273,7 @@ class ComponentLibraryService:
             migrated_ids: list[str] = []
             for record in records:
                 source = str(record["source"] or "")
-                if not source.strip() or len(source) > MAX_COMPONENT_SOURCE_LENGTH:
+                if not source.strip() or len(source) > self.limits.component_source_max_length:
                     continue
                 tag = str(record["tag"] or "any").casefold()
                 if tag not in COMPONENT_TAGS:
@@ -350,8 +354,7 @@ class ComponentLibraryService:
             "updated_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
         }
 
-    @staticmethod
-    def _safe_filename(*, filename: str, source_format: str) -> str:
+    def _safe_filename(self, *, filename: str, source_format: str) -> str:
         """Return a safe supported basename or generate one for pasted source."""
 
         raw_name = str(filename or "").strip()
@@ -359,14 +362,14 @@ class ComponentLibraryService:
             raise ValueError("component file name must not contain a directory")
         if not raw_name:
             suffix = ".vue" if source_format == "vue" else ".html"
-            return f"component-{uuid4().hex[:8]}{suffix}"
+            return f"component-{uuid4().hex[:self.limits.checksum_short_chars]}{suffix}"
         suffix = Path(raw_name).suffix.casefold()
         if suffix not in SUPPORTED_COMPONENT_SUFFIXES:
             raise ValueError("supported component file extensions are .vue, .html, and .htm")
         safe_stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "-", Path(raw_name).stem).strip(" .")
         if not safe_stem:
             raise ValueError("component file name is required")
-        return f"{safe_stem[:180]}{suffix}"
+        return f"{safe_stem[:self.limits.component_filename_max_length]}{suffix}"
 
     @staticmethod
     def _unique_path(*, directory: Path, filename: str) -> Path:

@@ -35,6 +35,7 @@ describe('DebugView session initialization', () => {
       global: {
         stubs: {
           AgentTracePanel: true,
+          GlobalConstantsPanel: true,
           IcIcon: true,
           MemoryKnowledgePanel: true,
           MultimodalIngestionPanel: true,
@@ -51,5 +52,28 @@ describe('DebugView session initialization', () => {
     expect(listSessions).toHaveBeenCalledWith('1')
 
     wrapper.unmount()
+  })
+
+  it('opens the read-only global constants subpage from the debug tabs', async () => {
+    const wrapper = mount(DebugView, {
+      global: {
+        stubs: {
+          AgentTracePanel: true,
+          GlobalConstantsPanel: true,
+          IcIcon: true,
+          MemoryKnowledgePanel: true,
+          MultimodalIngestionPanel: true,
+          RuntimeApisPanel: true,
+          ToolRegistryPanel: true,
+        },
+      },
+    })
+
+    const constantsTab = wrapper.findAll('button').find(button => button.text().includes('全局常量'))
+    expect(constantsTab).toBeDefined()
+    expect(constantsTab!.findComponent({ name: 'IcIcon' }).props('name')).toBe('tune')
+    await constantsTab!.trigger('click')
+
+    expect(wrapper.findComponent({ name: 'GlobalConstantsPanel' }).exists()).toBe(true)
   })
 })

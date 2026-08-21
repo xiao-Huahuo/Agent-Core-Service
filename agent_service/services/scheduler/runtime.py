@@ -237,7 +237,10 @@ class LLMTaskRuntimeMixin:
 
         if self._shutdown_event.is_set() or sys.is_finalizing():
             raise RuntimeError("LLM 调度器正在关闭,不再接受新的本地执行任务。")
-        with ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"{task.task_type}-call") as executor:
+        with ThreadPoolExecutor(
+            max_workers=self.task_config.operation_timeout_worker_count,
+            thread_name_prefix=f"{task.task_type}-call",
+        ) as executor:
             future = executor.submit(self._run_operation_future, task.operation)
             try:
                 return future.result(timeout=task.timeout_seconds)

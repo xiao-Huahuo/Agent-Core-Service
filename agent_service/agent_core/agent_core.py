@@ -51,7 +51,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from agent_service.agent_core.graph import AgentGraphBuilder
 from agent_service.agent_core.nodes.model_decision import ModelDecisionNode, extract_token_usage
-from agent_service.core.agent_config import AgentConfig
+from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.schemas.message import MessageCreate
 from agent_service.scripts.draw_agent_graph import draw_agent_graph
 from agent_service.services.memory.context_builder import ContextBuilder
@@ -103,25 +103,7 @@ AGENT_LOOP_DEEP_ALIAS = "deep"
 AGENT_LOOP_MODES = {AGENT_LOOP_AUTO, AGENT_LOOP_SIMPLE, AGENT_LOOP_REACT, AGENT_LOOP_PLAN, AGENT_LOOP_DEEP_ALIAS}
 CITATION_ANCHOR_PATTERN = re.compile(r"\[([A-Z]?\d+)\]")
 
-# 子 Agent 预置类别能力模板:主 Agent 通过 spawn_child_agent 的 category 选择,
-# 命中预置 key 用对应角色设定,空类别不注入,其他自定义字符串作为角色描述注入。
-CHILD_AGENT_CATEGORY_TEMPLATES = {
-    "agent": (
-        "【角色设定】你是全能 Agent，负责通用执行任务。"
-        "你可以进行复杂分析、多步骤任务和代码修改，目标是把任务彻底完成并给出可执行结果。"
-    ),
-    "explore": (
-        "【角色设定】你是只读探索 Agent，用于搜索文件、理解代码结构、定位实现细节。"
-        "【重要约束】你是只读的，禁止修改任何文件、禁止执行任何写操作。"
-    ),
-    "plan": (
-        "【角色设定】你是只读规划研究 Agent，在规划阶段收集代码上下文、辅助制定实施计划。"
-        "【重要约束】你是只读的，禁止修改任何文件，只输出分析与计划。"
-    ),
-}
-
-
-def _resolve_child_agent_category_template(category: str) -> str:
+def _resolve_child_agent_category_template(category: str, prompts: AgentConfig.PromptConfig) -> str:
     """把子 Agent 类别解析为注入 prompt 的角色设定模板。
 
     命中预置 key 用对应模板;空类别返回空串不注入;其他自定义字符串视为角色描述。
@@ -130,7 +112,10 @@ def _resolve_child_agent_category_template(category: str) -> str:
     text = (category or "").strip()
     if not text:
         return ""
-    return CHILD_AGENT_CATEGORY_TEMPLATES.get(text, f"【角色设定】{text}")
+    return prompts.child_agent_category_prompts.get(
+        text,
+        prompts.child_agent_custom_role_template.format(category=text),
+    )
 
 
 def _extract_friendly_error(error_message: str) -> str:
@@ -206,7 +191,10 @@ class AgentCore:
         self.skill_service = skill_service
         self.activity_service: Any = None
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
-        self.child_agent_manager = ChildAgentManager(event_callback=self._on_child_agent_event)
+        self.child_agent_manager = ChildAgentManager(
+            config=config,
+            event_callback=self._on_child_agent_event,
+        )
         self.tool_registry = ToolRegistry.with_builtin_tools(config=config) if tools is None else None
         self.tool_executor = ToolExecutor(registry=self.tool_registry) if self.tool_registry is not None else None
         self._cancel_events: dict[str, threading.Event] = {}
@@ -593,7 +581,7 @@ class AgentCore:
             """
 
             context.raise_if_stopped()
-            template = _resolve_child_agent_category_template(context.category)
+            template = _resolve_child_agent_category_template(context.category, self.config.prompts)
             prompt = f"{template}\n\n{context.goal}" if template else context.goal
             result = self.run_once(
                 prompt=prompt,
@@ -627,14 +615,18 @@ class AgentCore:
         *,
         parent_run_id: str,
         run_ids: list[str] | None = None,
-        timeout_seconds: float | None = 600,
+        timeout_seconds: float | None = None,
     ) -> str:
         """由当前主 Agent 工具上下文等待一个后台子 Agent 结果并返回 JSON。"""
 
         result = self.child_agent_manager.wait_for_children(
             parent_run_id=parent_run_id,
             run_ids=run_ids or [],
-            timeout_seconds=timeout_seconds,
+            timeout_seconds=(
+                self.config.limits.agent_child_wait_timeout_seconds
+                if timeout_seconds is None
+                else timeout_seconds
+            ),
         )
         records = self.child_agent_manager.list_children(parent_run_id)
         if run_ids:
@@ -767,7 +759,7 @@ class AgentCore:
         reference: str | None = None,
         agent_mode: str = AGENT_LOOP_AUTO,
         agent_access_mode: str = "sandbox",
-        web_search_max_results: int = 10,
+        web_search_max_results: int | None = None,
     ) -> Iterator[dict[str, Any]]:
         """
         运行带 session 上下文和消息持久化的一轮 Agent,逐节点产出 dict 事件。
@@ -781,6 +773,8 @@ class AgentCore:
         """
 
         turn_started_at = time.perf_counter()
+        if web_search_max_results is None:
+            web_search_max_results = self.config.limits.default_web_search_max_results
         latency_marks: dict[str, float] = {}
 
         def mark_latency(name: str, started_at: float) -> None:
@@ -834,12 +828,14 @@ class AgentCore:
         child_results = self.child_agent_manager.drain_results_for_session(session_id)
         mark_latency("child_results_ms", child_results_started_at)
         if child_results:
+            child_results_text = "\n".join(
+                f"- 子任务 {result.run_id} [{result.status.value}]：{result.summary}"
+                for result in child_results
+            )
             messages.append(
                 SystemMessage(
-                    content="后台子 Agent 已返回以下结果，请结合当前任务处理：\n"
-                    + "\n".join(
-                        f"- 子任务 {result.run_id} [{result.status.value}]：{result.summary}"
-                        for result in child_results
+                    content=self.config.prompts.child_results_context_template.format(
+                        results=child_results_text
                     )
                 )
             )
@@ -1175,7 +1171,7 @@ class AgentCore:
         try:
             while True:
                 try:
-                    item = token_queue.get(timeout=0.3)
+                    item = token_queue.get(timeout=self.config.limits.agent_stream_queue_poll_seconds)
                 except queue_module.Empty:
                     child_event_payloads = self._drain_child_agent_event_payloads(
                         session_id=session_id,
@@ -1446,7 +1442,7 @@ class AgentCore:
             clear_task_list_callback()
             clear_plan_state()
             clear_tool_runtime()
-            graph_thread.join(timeout=5.0)
+            graph_thread.join(timeout=self.config.limits.agent_graph_join_timeout_seconds)
 
     def _get_message_service(self) -> MessageService:
         """获取或懒加载消息服务。"""
@@ -1756,7 +1752,7 @@ class AgentCore:
         }
         if normalized in simple_exact:
             return True
-        if len(text) > 16:
+        if len(text) > DEFAULT_BUSINESS_LIMITS.agent_simple_prompt_max_chars:
             return False
         toolish_keywords = (
             "搜索",
@@ -1800,7 +1796,7 @@ class AgentCore:
         if not text:
             return False
         normalized = text.lower()
-        if len(text) >= 80:
+        if len(text) >= DEFAULT_BUSINESS_LIMITS.agent_plan_prompt_min_chars:
             return True
         plan_keywords = (
             "计划",
@@ -1910,17 +1906,7 @@ class AgentCore:
         small_api_key = llm_config.get("small_api_key") or api_key
         small_base_url = llm_config.get("small_base_url") or base_url
         small_model_name = llm_config.get("small_model_name") or model_name
-        system_prompt = (
-            "你是 Agent Loop 路由器。只输出 JSON,不要输出解释。\n"
-            "根据用户请求选择一个模式:\n"
-            "- simple: 只适合寒暄、确认、极短且你有把握直接回答的常识性闲聊。"
-            "必须同时满足: 不需要工具、不需要最新信息、不需要读文件、不需要事实核验、你自己能力足够。\n"
-            "- react: 需要调用工具、搜索、读取知识库/文件、获取最近/最新/当前信息,或一步到几步即可完成的任务。\n"
-            "- plan: 需要多步骤规划、复杂分析、调研、比较、排查、设计、实现、重构、修复或整理。\n"
-            "只要你不确定自己能否可靠回答,或可能需要外部信息/工具核验,就不要选择 simple,至少选择 react。\n"
-            "如果用户问最近、最新、今天、现在、当前发生了什么,即使句子很短也必须选择 react。\n"
-            "如果不确定,选择 react。输出格式: {\"mode\":\"simple|react|plan\",\"reason\":\"简短原因\"}"
-        )
+        system_prompt = self.config.prompts.agent_mode_router_system_prompt
         user_prompt = (
             f"用户请求:\n{text}\n\n"
             f"是否带显式引用片段: {'是' if reference else '否'}\n"
@@ -1936,7 +1922,7 @@ class AgentCore:
                 tool_names=[],
                 model_tier=SMALL_MODEL_TIER,
                 temperature=0.0,
-                timeout_seconds=12,
+                timeout_seconds=self.config.limits.agent_mode_decision_timeout_seconds,
                 api_key=api_key,
                 base_url=base_url,
                 model_name=model_name,
@@ -1991,7 +1977,7 @@ class AgentCore:
     def _build_runtime_system_prompt(self, *, user_id: str, session_id: str = "") -> str:
         """构造运行时系统提示词,与模型决策节点保持一致。"""
 
-        system_content = self.config.model.system_prompt
+        system_content = self.config.prompts.agent_system_prompt
         if not user_id:
             return system_content
         try:
@@ -2272,7 +2258,7 @@ class AgentCore:
             raw_terms.append(re.sub(r"^\d+[_\-\s]*", "", stem).replace("_", " ").replace("-", " "))
             raw_terms.append(re.sub(r"^\d+[_\-\s]*", "", stem).replace("_", "").replace("-", ""))
         content = str(source.get("content") or "")
-        for line in content.splitlines()[:12]:
+        for line in content.splitlines()[:DEFAULT_BUSINESS_LIMITS.citation_source_scan_lines]:
             stripped = line.strip()
             if stripped.startswith("#"):
                 raw_terms.append(stripped.lstrip("#").strip())
@@ -2280,7 +2266,7 @@ class AgentCore:
         seen: set[str] = set()
         for term in raw_terms:
             normalized = AgentCore._normalize_citation_match_text(term)
-            if len(normalized) < 3 or normalized in seen:
+            if len(normalized) < DEFAULT_BUSINESS_LIMITS.citation_term_min_chars or normalized in seen:
                 continue
             terms.append(normalized)
             seen.add(normalized)
@@ -2440,7 +2426,10 @@ class AgentCore:
         }
 
     @staticmethod
-    def _sanitize_streaming_content(cumulative_text: str, min_chars: int = 20) -> str:
+    def _sanitize_streaming_content(
+        cumulative_text: str,
+        min_chars: int = AgentConfig.ModelConfig().streaming_sanitize_min_chars,
+    ) -> str:
         """
         流式 token 级的 JSON 检测,仅在累积足够长度后才拦截。
 
@@ -2572,10 +2561,10 @@ def _rename_session_worker(agent: AgentCore, *, user_id: str, session_id: str) -
     try:
         message_service = agent._get_message_service()
         recent = message_service.list_recent_messages(
-            user_id=user_id, session_id=session_id, limit=6,
+            user_id=user_id, session_id=session_id, limit=agent.config.limits.session_title_history_limit,
             include_summarized=True,
         )
-        if len(recent) < 2:
+        if len(recent) < agent.config.limits.session_title_min_messages:
             return None
         for message in reversed(recent):
             if getattr(message, "role", "") != "assistant":
@@ -2587,7 +2576,7 @@ def _rename_session_worker(agent: AgentCore, *, user_id: str, session_id: str) -
                 return None
             break
         lines: list[str] = []
-        for m in recent[-6:]:
+        for m in recent[-agent.config.limits.session_title_history_limit:]:
             role_label = ""
             if m.role == "user":
                 role_label = "用户"
@@ -2595,7 +2584,7 @@ def _rename_session_worker(agent: AgentCore, *, user_id: str, session_id: str) -
                 role_label = "助手"
             if not role_label:
                 continue
-            content_preview = (m.content or "")[:200].replace("\n", " ")
+            content_preview = (m.content or "")[:agent.config.limits.session_title_message_preview_chars].replace("\n", " ")
             lines.append(f"{role_label}: {content_preview}")
         if not lines:
             return None
@@ -2651,7 +2640,7 @@ def _do_rename_llm_call(
         title = (getattr(response, "content", "") or "").strip()
         if not title:
             return None
-        return title[:30]
+        return title[:agent.config.limits.session_title_max_chars]
     except Exception:
         logger.info("重命名 LLM 调用失败 | session=%s tier=%s", session_id, model_tier, exc_info=True)
         return None

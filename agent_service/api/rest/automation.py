@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from agent_service.api.rest.deps import _require_automation_service
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.schemas.automation import (
     AutomationCreateRequest,
     AutomationDeleteRequest,
@@ -17,7 +18,7 @@ router = APIRouter()
 
 
 @router.get("/automation/list")
-async def api_list_automations(user_id: str = Query(..., min_length=1)) -> list[dict[str, Any]]:
+async def api_list_automations(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length)) -> list[dict[str, Any]]:
     """列出用户的自动化任务。"""
 
     return _require_automation_service().list_tasks(user_id=user_id)
@@ -57,9 +58,13 @@ async def api_toggle_automation(body: AutomationToggleRequest) -> dict[str, Any]
 
 @router.get("/automation/runs")
 async def api_list_automation_runs(
-    user_id: str = Query(..., min_length=1),
-    automation_id: str = Query(..., min_length=1),
-    limit: int = Query(default=20, ge=1, le=100),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
+    automation_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
+    limit: int = Query(
+        default=DEFAULT_BUSINESS_LIMITS.automation_run_default_limit,
+        ge=DEFAULT_BUSINESS_LIMITS.nonempty_min_length,
+        le=DEFAULT_BUSINESS_LIMITS.automation_run_max_limit,
+    ),
 ) -> list[dict[str, Any]]:
     """列出自动化任务最近的运行记录。"""
 

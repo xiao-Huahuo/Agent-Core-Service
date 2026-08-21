@@ -13,6 +13,8 @@ from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 from agent_service.models.session import utc_now
 
 
@@ -32,14 +34,14 @@ class TokenUsageRecord(SQLModel, table=True):
 
     __tablename__ = "agent_token_usage"
 
-    token_usage_id: str = Field(primary_key=True, max_length=128)
-    user_id: str = Field(index=True, min_length=1, max_length=128)
-    session_id: str = Field(index=True, min_length=1, max_length=64)
-    message_id: str = Field(index=True, min_length=1, max_length=64)
-    node: str = Field(default="", index=True, max_length=64)
-    event: str = Field(default="", max_length=96)
-    model_tier: str = Field(default="", index=True, max_length=32)
-    model_name: str = Field(default="", index=True, max_length=128)
+    token_usage_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    user_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    session_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    message_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    node: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    event: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
+    model_tier: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
+    model_name: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     input_tokens: int = Field(default=0)
     output_tokens: int = Field(default=0)
     total_tokens: int = Field(default=0, index=True)

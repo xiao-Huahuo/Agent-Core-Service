@@ -153,9 +153,8 @@ class SettingsService:
         except Exception:
             pass
 
-    @staticmethod
-    def _generate_prompt_id() -> str:
-        return f"prompt_{uuid4().hex[:12]}"
+    def _generate_prompt_id(self) -> str:
+        return f"prompt_{uuid4().hex[:self.config.limits.generated_id_suffix_chars]}"
 
     def _utc_now(self) -> datetime:
         return datetime.now(timezone.utc)
@@ -628,15 +627,17 @@ class SettingsService:
             normalized.append(family)
         return json.dumps(normalized, ensure_ascii=False)
 
-    @staticmethod
-    def _normalize_font_size_percent(value: int | float | str | None) -> int:
+    def _normalize_font_size_percent(self, value: int | float | str | None) -> int:
         """Normalize editor font size percentage to the supported 50-150 range."""
 
         try:
             percent = int(round(float(value)))
         except (TypeError, ValueError):
-            percent = 100
-        return max(50, min(150, percent))
+            percent = self.config.limits.default_font_size_percent
+        return max(
+            self.config.limits.font_size_min_percent,
+            min(self.config.limits.font_size_max_percent, percent),
+        )
 
     def save_font_config(
         self,
@@ -871,8 +872,7 @@ class SettingsService:
         except ValueError:
             return ".mw/library"
 
-    @staticmethod
-    def build_library_id(*, user_id: str, knowledge_dir: str) -> str:
+    def build_library_id(self, *, user_id: str, knowledge_dir: str) -> str:
         """
         根据用户和知识库目录生成稳定配置 ID。
 
@@ -880,7 +880,7 @@ class SettingsService:
         knowledge_dir: 规范化后的知识库目录。
         """
 
-        digest = hashlib.sha256(f"{user_id}\0{knowledge_dir}".encode("utf-8")).hexdigest()[:16]
+        digest = hashlib.sha256(f"{user_id}\0{knowledge_dir}".encode("utf-8")).hexdigest()[:self.config.limits.generated_long_id_suffix_chars]
         return f"kb_{digest}"
 
     @staticmethod
@@ -1146,7 +1146,7 @@ class SettingsService:
         now = self._utc_now()
         with Session(self.engine) as db:
             record = UserLLMConfigPreset(
-                config_id=f"llm_cfg_{uuid4().hex[:16]}",
+                config_id=f"llm_cfg_{uuid4().hex[:self.config.limits.generated_long_id_suffix_chars]}",
                 user_id=normalized_user_id,
                 label=self._normalize_optional_text(label) or normalized_model_name or normalized_base_url,
                 api_key=normalized_api_key,
@@ -1205,7 +1205,7 @@ class SettingsService:
                     "browser_proxy_url": "",
                     "browser_home_url": "https://www.google.com",
                     "web_search_enabled": False,
-                    "web_search_max_results": 10,
+                    "web_search_max_results": self.config.limits.default_web_search_max_results,
                 }
             return {
                 "user_id": normalized_user_id,
@@ -1213,7 +1213,10 @@ class SettingsService:
                 "browser_proxy_url": getattr(record, "browser_proxy_url", ""),
                 "browser_home_url": getattr(record, "browser_home_url", "https://www.google.com") or "https://www.google.com",
                 "web_search_enabled": record.web_search_enabled,
-                "web_search_max_results": getattr(record, "web_search_max_results", 10) or 10,
+                "web_search_max_results": (
+                    getattr(record, "web_search_max_results", self.config.limits.default_web_search_max_results)
+                    or self.config.limits.default_web_search_max_results
+                ),
             }
 
     def save_web_search_config(
@@ -1239,7 +1242,9 @@ class SettingsService:
                     browser_proxy_url=browser_proxy_url or "",
                     browser_home_url=browser_home_url or "https://www.google.com",
                     web_search_enabled=web_search_enabled or False,
-                    web_search_max_results=web_search_max_results or 10,
+                    web_search_max_results=(
+                        web_search_max_results or self.config.limits.default_web_search_max_results
+                    ),
                     created_at=now,
                     updated_at=now,
                 )
@@ -1263,7 +1268,10 @@ class SettingsService:
                 "browser_proxy_url": record.browser_proxy_url,
                 "browser_home_url": record.browser_home_url,
                 "web_search_enabled": record.web_search_enabled,
-                "web_search_max_results": getattr(record, "web_search_max_results", 10) or 10,
+                "web_search_max_results": (
+                    getattr(record, "web_search_max_results", self.config.limits.default_web_search_max_results)
+                    or self.config.limits.default_web_search_max_results
+                ),
             }
 
     # ---- 长期记忆配置 ----
@@ -1596,13 +1604,16 @@ class SettingsService:
                 record = UserSettingsRecord(
                     user_id=normalized_user_id,
                     knowledge_dir=str(self.config.storage.knowledge_dir),
-                    graph_node_limit=graph_node_limit or 2000,
+                    graph_node_limit=graph_node_limit or self.config.limits.graph_default_node_limit,
                     created_at=now,
                     updated_at=now,
                 )
             else:
                 if graph_node_limit is not None:
-                    record.graph_node_limit = max(50, min(int(graph_node_limit), 10000))
+                    record.graph_node_limit = max(
+                        self.config.limits.graph_min_node_limit,
+                        min(int(graph_node_limit), self.config.limits.graph_max_node_limit),
+                    )
                 record.updated_at = now
             db.add(record)
             db.commit()

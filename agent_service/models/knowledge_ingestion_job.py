@@ -11,6 +11,8 @@ from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 from agent_service.models.session import utc_now
 
 
@@ -19,18 +21,18 @@ class KnowledgeIngestionJobRecord(SQLModel, table=True):
 
     __tablename__ = "knowledge_ingestion_jobs"
 
-    job_id: str = Field(primary_key=True, max_length=64)
-    user_id: str = Field(index=True, max_length=128)
-    library_id: str = Field(default="", index=True, max_length=128)
+    job_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    user_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    library_id: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     path: str = Field(index=True)
     name: str
-    pipeline: str = Field(default="text", max_length=32)
-    status: str = Field(default="queued", index=True, max_length=24)
-    stage: str = Field(default="queued", max_length=32)
+    pipeline: str = Field(default="text", max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
+    status: str = Field(default="queued", index=True, max_length=DEFAULT_BUSINESS_LIMITS.timestamp_text_max_length)
+    stage: str = Field(default="queued", max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
     stage_label: str = Field(default="等待灌库")
-    progress: int = Field(default=0, ge=0, le=100)
-    stage_current: int = Field(default=0, ge=0)
-    stage_total: int = Field(default=0, ge=0)
+    progress: int = Field(default=0, ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value, le=DEFAULT_BUSINESS_LIMITS.progress_max_percent)
+    stage_current: int = Field(default=0, ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
+    stage_total: int = Field(default=0, ge=DEFAULT_BUSINESS_LIMITS.nonnegative_min_value)
     size: int | None = None
     mtime: str | None = None
     message: str = ""

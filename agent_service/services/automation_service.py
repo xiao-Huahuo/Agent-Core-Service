@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import and_, or_, update
 from sqlmodel import Session, SQLModel, select
 
+from agent_service.core.agent_config import AgentConfig
 from agent_service.models.automation import AutomationRunRecord, AutomationTaskRecord
 from agent_service.models.todo import TodoRecord
 from agent_service.services.todo_service import TodoService
@@ -29,11 +30,18 @@ class AutomationService:
     _FREQUENCIES = {"none", "daily", "weekly", "monthly"}
     _ACCESS_MODES = {"readonly", "sandbox", "full_access"}
 
-    def __init__(self, *, engine: Any, todo_service: TodoService) -> None:
+    def __init__(
+        self,
+        *,
+        engine: Any,
+        todo_service: TodoService,
+        config: AgentConfig | None = None,
+    ) -> None:
         """初始化服务并确保自动化相关表已创建。"""
 
         self.engine = engine
         self.todo_service = todo_service
+        self.config = config or AgentConfig()
         SQLModel.metadata.create_all(self.engine)
 
     @staticmethod
@@ -56,20 +64,23 @@ class AutomationService:
             raise ValueError("next_run_at must include a timezone offset")
         return parsed.astimezone(timezone.utc)
 
-    @classmethod
-    def _normalize_recurrence(cls, value: Any) -> tuple[str, int]:
+    def _normalize_recurrence(self, value: Any) -> tuple[str, int]:
         """校验自动化任务的循环频率和间隔。"""
 
         payload = value if isinstance(value, dict) else {}
         frequency = str(payload.get("frequency") or "none").strip().lower()
-        if frequency not in cls._FREQUENCIES:
+        if frequency not in self._FREQUENCIES:
             raise ValueError("recurrence.frequency must be none, daily, weekly, or monthly")
         try:
             interval = int(payload.get("interval", 1))
         except (TypeError, ValueError) as exc:
             raise ValueError("recurrence.interval must be an integer") from exc
-        if not 1 <= interval <= 365:
-            raise ValueError("recurrence.interval must be between 1 and 365")
+        if not self.config.limits.nonempty_min_length <= interval <= self.config.limits.todo_recurrence_max_interval:
+            raise ValueError(
+                "recurrence.interval must be between "
+                f"{self.config.limits.nonempty_min_length} and "
+                f"{self.config.limits.todo_recurrence_max_interval}"
+            )
         return frequency, interval
 
     @classmethod
@@ -250,7 +261,7 @@ class AutomationService:
         next_run = self._parse_datetime(next_run_at)
         self.todo_service._import_legacy_if_needed(user_id)
         now = self._utc_now()
-        todo_id = f"todo_{uuid4().hex[:12]}"
+        todo_id = f"todo_{uuid4().hex[:self.config.limits.generated_id_suffix_chars]}"
         todo = TodoRecord(
             todo_id=todo_id,
             user_id=user_id,
@@ -260,7 +271,7 @@ class AutomationService:
             updated_at=now,
         )
         record = AutomationTaskRecord(
-            automation_id=f"automation_{uuid4().hex[:12]}",
+            automation_id=f"automation_{uuid4().hex[:self.config.limits.generated_id_suffix_chars]}",
             todo_id=todo_id,
             user_id=user_id,
             prompt=prompt,
@@ -303,10 +314,16 @@ class AutomationService:
             ).first()
             return self._serialize_task(record) if record is not None else None
 
-    def list_runs(self, *, user_id: str, automation_id: str, limit: int = 20) -> list[dict[str, Any]]:
+    def list_runs(self, *, user_id: str, automation_id: str, limit: int | None = None) -> list[dict[str, Any]]:
         """列出一个自动化任务最近的运行记录。"""
 
-        safe_limit = max(1, min(limit, 100))
+        safe_limit = max(
+            self.config.limits.nonempty_min_length,
+            min(
+                limit or self.config.limits.automation_run_default_limit,
+                self.config.limits.automation_run_max_limit,
+            ),
+        )
         with Session(self.engine) as db:
             task = db.get(AutomationTaskRecord, automation_id)
             if task is None or task.user_id != user_id:
@@ -412,7 +429,7 @@ class AutomationService:
         automation_id: str,
         run_id: str,
         lease_id: str,
-        lease_seconds: int = 300,
+        lease_seconds: int | None = None,
         now: datetime | None = None,
     ) -> bool:
         """为仍在运行且仍归当前 worker 所有的任务续租。"""
@@ -431,7 +448,11 @@ class AutomationService:
                     AutomationTaskRecord.lease_id == lease_id,
                     AutomationTaskRecord.lease_until > current,
                 )
-                .values(lease_until=current + timedelta(seconds=lease_seconds))
+                .values(
+                    lease_until=current + timedelta(
+                        seconds=lease_seconds or self.config.limits.automation_lease_seconds
+                    )
+                )
             )
             db.commit()
             return result.rowcount == 1
@@ -440,14 +461,22 @@ class AutomationService:
         self,
         *,
         now: datetime | None = None,
-        lease_seconds: int = 300,
-        limit: int = 20,
+        lease_seconds: int | None = None,
+        limit: int | None = None,
     ) -> list[dict[str, Any]]:
         """抢占到期任务并创建 running 运行记录。"""
 
         current = (now or self._utc_now()).astimezone(timezone.utc)
-        lease_until = current + timedelta(seconds=lease_seconds)
-        safe_limit = max(0, min(limit, 100))
+        lease_until = current + timedelta(
+            seconds=lease_seconds or self.config.limits.automation_lease_seconds
+        )
+        safe_limit = max(
+            0,
+            min(
+                limit or self.config.limits.automation_run_default_limit,
+                self.config.limits.automation_run_max_limit,
+            ),
+        )
         if safe_limit == 0:
             return []
         claimed: list[dict[str, Any]] = []
@@ -464,7 +493,7 @@ class AutomationService:
                 .limit(safe_limit)
             ).all()
             for candidate in candidates:
-                lease_id = f"lease_{uuid4().hex[:12]}"
+                lease_id = f"lease_{uuid4().hex[:self.config.limits.generated_id_suffix_chars]}"
                 result = db.exec(
                     update(AutomationTaskRecord)
                     # SQLite returns naive datetimes; let the database evaluate
@@ -492,7 +521,7 @@ class AutomationService:
                     stale_run.error = "执行租约已过期，已由调度器安全回收"
                     db.add(stale_run)
                 run = AutomationRunRecord(
-                    run_id=f"run_{uuid4().hex[:12]}",
+                    run_id=f"run_{uuid4().hex[:self.config.limits.generated_id_suffix_chars]}",
                     automation_id=candidate.automation_id,
                     user_id=candidate.user_id,
                     started_at=current,

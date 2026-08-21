@@ -856,6 +856,9 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
           } catch {
             // Session reload is non-critical for the active stream result.
           }
+          // Suggestions belong to the completed persisted turn, so refresh
+          // them here for every chat surface instead of relying on a UI watcher.
+          void refreshTaskSuggestions(userId, targetSessionId)
         }
       }
     }

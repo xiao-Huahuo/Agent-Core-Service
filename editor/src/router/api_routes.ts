@@ -51,6 +51,7 @@ export const API_ROUTES = {
   AGENT_CHILDREN: '/agent/children',
   SESSION_MESSAGE_HISTORY: '/sessions/observability/history',
   DEBUG_RUNTIME_APIS: '/debug/runtime-apis',
+  DEBUG_GLOBAL_CONSTANTS: '/debug/global-constants',
   DEBUG_MULTIMODAL_INGESTION: '/debug/multimodal-ingestion',
   KNOWLEDGE_SEARCH: '/knowledge/search',
   KNOWLEDGE_GRAPH: '/knowledge/graph',

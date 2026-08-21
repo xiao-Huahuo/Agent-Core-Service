@@ -116,13 +116,6 @@ const welcomeTitleSrc = computed(() => isDark.value ? darkTitle : lightTitle)
 const logoSrc = computed(() => isDark.value ? darkLogo : lightLogo)
 const hasMessages = computed(() => chatStore.value.messages.filter((m) => m.role !== 'system').length > 0)
 const hasStreamingContent = computed(() => !!chatStore.value.lastMessage?.content)
-// 与 ChatInput 的 .task-suggestions 显示条件一致:非居中(有消息)、无附件、有建议
-const hasSuggestionOverlay = computed(() => {
-  if (chatStore.value.taskSuggestions.length === 0) return false
-  if (!hasMessages.value && !chatStore.value.isStreaming) return false
-  if (chatStore.value.pendingAttachments.length > 0) return false
-  return true
-})
 const isAttachmentDropActive = computed(() => dragDepth.value > 0 || isUploadingAttachment.value)
 
 /** Start or stop silent history synchronization for an externally-run task. */
@@ -503,21 +496,6 @@ watch(() => workspaceStore.pendingAgentReference, (refText) => {
   }
 })
 
-watch(
-  () => chatStore.value.isStreaming,
-  (streaming, wasStreaming) => {
-    if (streaming || !wasStreaming || !userId.value || !activeSessionId.value) {
-      return
-    }
-    window.setTimeout(() => {
-      if (!userId.value || !activeSessionId.value || chatStore.value.isStreaming) {
-        return
-      }
-      void chatStore.value.refreshTaskSuggestions(userId.value, activeSessionId.value)
-    }, 0)
-  },
-)
-
 // 顶栏按钮召唤任务列表卡片:可见时收起(与卡片 X 逻辑一致,仅剩它则收整个侧边栏),不可见时打开
 function toggleTaskListCard() {
   if (taskListCardOpen.value) {
@@ -895,8 +873,10 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
         :messages="chatStore.messages"
         :is-streaming="chatStore.isStreaming"
         :merge-assistants="settingsStore.chatMode === 'chat'"
-        :suggestion-overlay="hasSuggestionOverlay"
+        :suggestions="chatStore.taskSuggestions"
+        :compact="props.mode === 'panel'"
         @bottom-change="handleMessageBottomChange"
+        @select-suggestion="sendSuggestion"
       />
       <StreamingIndicator :is-streaming="chatStore.isStreaming" :has-content="hasStreamingContent" />
       <p v-if="chatStore.streamError" class="stream-error">{{ chatStore.streamError }}</p>
@@ -924,13 +904,10 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
         :agent-access-mode="settingsStore.agentAccessMode"
         :reference="referenceText"
         :attachments="chatStore.pendingAttachments"
-        :suggestions="chatStore.taskSuggestions"
-        :suggestions-loading="chatStore.suggestionsLoading"
         :messages="chatStore.messages"
         :max-context-tokens="contextWindowTokens"
         :is-streaming="chatStore.isStreaming"
         @send="sendMessage"
-        @select-suggestion="sendSuggestion"
         @toggle-web-search="handleToggleWebSearch"
         @configure-model="openModelSettings"
         @set-agent-access-mode="setAgentAccessMode"
@@ -1064,6 +1041,38 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
     0 10px 15px -3px rgba(0, 0, 0, 0.1),
     0 4px 6px -2px rgba(0, 0, 0, 0.05);
   transition: margin-left 200ms ease;
+}
+
+/* The embedded sidebar keeps only the file identity and size; full metadata
+   remains available on the Agent page where the card has room to breathe. */
+.agent-panel:not(.agent-page-mode) :deep(.agent-mounted-file) {
+  width: 100%;
+  min-height: 54px;
+  height: auto;
+  padding: 7px var(--space-8);
+  grid-template-rows: 1fr;
+  border-radius: var(--radius-xl);
+}
+
+.agent-panel:not(.agent-page-mode) :deep(.agent-mounted-file__icon) {
+  grid-row: 1;
+  width: 34px;
+  height: 34px;
+}
+
+.agent-panel:not(.agent-page-mode) :deep(.agent-mounted-file__details) {
+  grid-row: 1;
+  display: block;
+}
+
+.agent-panel:not(.agent-page-mode) :deep(.agent-mounted-file__path),
+.agent-panel:not(.agent-page-mode) :deep(.agent-mounted-file__created),
+.agent-panel:not(.agent-page-mode) :deep(.agent-mounted-file__statuses) {
+  display: none;
+}
+
+.agent-panel:not(.agent-page-mode) :deep(.agent-mounted-file__size) {
+  grid-row: 1;
 }
 
 .agent-panel.attachment-drop-active {
@@ -1913,9 +1922,15 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
 }
 
 .chat-content {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
+}
+
+.chat-content :deep(.message-list) {
+  position: relative;
+  z-index: 2;
 }
 </style>

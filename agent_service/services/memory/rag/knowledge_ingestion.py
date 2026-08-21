@@ -341,7 +341,7 @@ class KnowledgeIngestionService:
             overall_progress=54,
         )
         created = 0
-        batch_size = 16
+        batch_size = self.config.limits.knowledge_ingestion_batch_size
         total_batches = max(1, (total_chunks + batch_size - 1) // batch_size)
         for batch_index, batch_start in enumerate(range(0, total_chunks, batch_size), start=1):
             batch = chunk_rows[batch_start:batch_start + batch_size]

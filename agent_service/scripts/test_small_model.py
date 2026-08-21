@@ -43,12 +43,7 @@ def main() -> None:
     )
     response = client.invoke(
         [
-            SystemMessage(
-                content=(
-                    "你是一个用于配置联通性测试的小模型。"
-                    "请仅返回一行极短文本,格式固定为: SMALL_MODEL_OK:<模型职责判断>。"
-                )
-            ),
+            SystemMessage(content=config.prompts.model_connectivity_test_system_prompt),
             HumanMessage(content="请确认你已收到这条测试消息,并判断自己适合做轻量分类任务。"),
         ]
     )

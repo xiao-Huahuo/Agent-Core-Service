@@ -23,6 +23,8 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 class SessionBase(SQLModel):
     """
     会话基础模型。
@@ -31,8 +33,8 @@ class SessionBase(SQLModel):
     session_name: 会话显示名称。
     """
 
-    user_id: str = Field(index=True, min_length=1, max_length=128)
-    session_name: str = Field(min_length=1, max_length=255)
+    user_id: str = Field(index=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    session_name: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.legacy_filename_max_length)
 
 
 class SessionRecord(SessionBase, table=True):
@@ -47,7 +49,7 @@ class SessionRecord(SessionBase, table=True):
 
     __tablename__ = "agent_sessions"
 
-    session_id: str = Field(primary_key=True, max_length=64)
+    session_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
     created_at: datetime = Field(default_factory=utc_now, index=True)
     updated_at: datetime = Field(default_factory=utc_now, index=True)
     state_json: str | None = Field(default=None, nullable=True)

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 from agent_service.tools.builtin import BuiltinToolDefinition
 from agent_service.tools.builtin_business_ops import (
     add_favorite,
@@ -170,7 +172,15 @@ EXTENDED_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     _tool(
         "search_knowledge_graph_nodes", "搜索语义图谱节点", "按标签、类型和元数据搜索节点，并返回每个命中的邻接节点与边。",
         search_knowledge_graph_nodes,
-        {"query": _string("节点查询文本。"), "limit": _integer("最多返回节点数。", 1, 100)}, ("query",),
+        {
+            "query": _string("节点查询文本。"),
+            "limit": _integer(
+                "最多返回节点数。",
+                DEFAULT_BUSINESS_LIMITS.nonempty_min_length,
+                DEFAULT_BUSINESS_LIMITS.graph_search_max_limit,
+            ),
+        },
+        ("query",),
     ),
     _tool(
         "find_knowledge_graph_paths", "查找图谱关系路径", "查找两个图谱节点间限定深度内的最短关系路径。",
@@ -178,7 +188,11 @@ EXTENDED_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         {
             "source_node_id": _string("起点节点 ID。"),
             "target_node_id": _string("终点节点 ID。"),
-            "max_depth": _integer("最大关系深度。", 1, 12),
+            "max_depth": _integer(
+                "最大关系深度。",
+                DEFAULT_BUSINESS_LIMITS.nonempty_min_length,
+                DEFAULT_BUSINESS_LIMITS.graph_path_max_depth,
+            ),
         },
         ("source_node_id", "target_node_id"),
     ),

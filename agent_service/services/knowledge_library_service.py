@@ -38,7 +38,6 @@ from xml.etree import ElementTree
 
 logger = logging.getLogger(__name__)
 
-TRASH_RETENTION_DAYS = 90
 
 
 def _utcnow_naive() -> datetime:
@@ -46,7 +45,7 @@ def _utcnow_naive() -> datetime:
 
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
-from agent_service.core.agent_config import AgentConfig
+from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 from agent_service.services.memory.rag.embedding import EmbeddingService
 from agent_service.services.memory.rag.frontmatter_bootstrap import FrontmatterBootstrapService
@@ -208,6 +207,7 @@ class KnowledgeLibraryService:
         """保存依赖服务。"""
 
         self.config = config
+        self.limits = getattr(config, "limits", DEFAULT_BUSINESS_LIMITS)
         self.memory_service = memory_service
         self.settings_service = settings_service
         self.embedding_service = embedding_service
@@ -1035,7 +1035,7 @@ class KnowledgeLibraryService:
             "readonly": False,
         }
 
-    def search_file_contents(self, *, user_id: str, query: str, limit: int = 20) -> list[dict[str, str]]:
+    def search_file_contents(self, *, user_id: str, query: str, limit: int | None = None) -> list[dict[str, str]]:
         """
         直接扫描当前 active 知识库中的文本文件内容。
 
@@ -1048,6 +1048,7 @@ class KnowledgeLibraryService:
         if not root.exists():
             return []
         needle = query.strip().lower()
+        limit = limit or self.limits.knowledge_content_search_limit
         if not needle:
             return []
         results: list[dict[str, str]] = []
@@ -1150,7 +1151,7 @@ class KnowledgeLibraryService:
         with _open_text_with_fallback(path) as handle:
             reader = csv.reader(handle, delimiter=delimiter)
             for index, row in enumerate(reader):
-                if index >= 200:
+                if index >= DEFAULT_BUSINESS_LIMITS.knowledge_table_preview_rows:
                     break
                 rows.append([cell.strip() for cell in row])
         return {"name": path.stem, "rows": rows}
@@ -1759,7 +1760,7 @@ class KnowledgeLibraryService:
                 values.append(cls._xlsx_cell_value(cell=cell, shared_strings=shared_strings))
             if any(values):
                 rows.append(values)
-            if len(rows) >= 200:
+            if len(rows) >= DEFAULT_BUSINESS_LIMITS.knowledge_table_preview_rows:
                 break
         return rows
 
@@ -2362,7 +2363,7 @@ class KnowledgeLibraryService:
         content_dir = entry_dir / "content"
         content_dir.mkdir(parents=True, exist_ok=False)
         deleted_at = _utcnow_naive()
-        expires_at = deleted_at + timedelta(days=TRASH_RETENTION_DAYS)
+        expires_at = deleted_at + timedelta(days=self.limits.knowledge_trash_retention_days)
         target = target.resolve()
         stored_name = target.name
         metadata = {

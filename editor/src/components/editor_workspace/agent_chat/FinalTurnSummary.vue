@@ -22,13 +22,18 @@ const props = defineProps<{
   sources: SourceItem[]
   changeSnapshot?: AgentChangeSnapshot | null
   undoing?: boolean
+  /** Uses the narrow sidebar presentation and initially shows one changed file. */
+  compact?: boolean
 }>()
 
 const expandedFiles = ref(false)
 const activePanel = ref<'changes' | 'sources'>(props.changeSnapshot ? 'changes' : 'sources')
 const panelSwitchRef = ref<HTMLElement | null>(null)
 const panelSliderStyle = ref({ width: '0px', left: '0px' })
-const visibleFiles = computed(() => expandedFiles.value ? props.changeSnapshot?.files ?? [] : (props.changeSnapshot?.files ?? []).slice(0, 3))
+const visibleFiles = computed(() => {
+  const files = props.changeSnapshot?.files ?? []
+  return expandedFiles.value ? files : files.slice(0, props.compact ? 1 : 3)
+})
 const hiddenFileCount = computed(() => Math.max(0, (props.changeSnapshot?.files.length ?? 0) - visibleFiles.value.length))
 const panelTabs = computed(() => [
   ...(props.changeSnapshot ? [{ value: 'changes' as const, label: '变更', icon: 'edit-note' }] : []),
@@ -68,7 +73,7 @@ onMounted(updatePanelSlider)
   <section
     v-if="sources.length || changeSnapshot"
     class="final-turn-summary"
-    :class="{ 'has-panel-switch': panelTabs.length > 1 }"
+    :class="{ 'has-panel-switch': panelTabs.length > 1, compact }"
     aria-label="本轮结果"
   >
     <div v-if="panelTabs.length > 1" ref="panelSwitchRef" class="panel-switch" aria-label="本轮结果内容">
@@ -88,7 +93,11 @@ onMounted(updatePanelSlider)
     <div class="summary-content">
       <div v-if="changeSnapshot && activePanel === 'changes'" class="change-summary">
         <div class="change-heading" :class="{ 'has-panel-switch': panelTabs.length > 1 }">
-          <span class="change-label">已编辑 {{ changeSnapshot.files.length }} 个文件</span>
+          <span class="change-label">{{ compact ? `修改了 ${changeSnapshot.files.length} 个文件` : `已编辑 ${changeSnapshot.files.length} 个文件` }}</span>
+          <span v-if="compact" class="compact-change-stats">
+            <b class="change-add">+{{ changeSnapshot.additions }}</b>
+            <b class="change-remove">-{{ changeSnapshot.deletions }}</b>
+          </span>
           <button
             v-if="!changeSnapshot.is_undone && !changeSnapshot.is_imported"
             class="undo-button"
@@ -97,11 +106,11 @@ onMounted(updatePanelSlider)
             @click="emit('undo')"
           >
             <IcIcon name="replay" :size="14" />
-            {{ undoing ? '撤销中' : '撤销' }}
+            <span class="undo-label">{{ undoing ? '撤销中' : '撤销' }}</span>
           </button>
           <span v-else class="undo-done">已撤销</span>
         </div>
-        <div class="change-stats">
+        <div v-if="!compact" class="change-stats">
           <span class="change-add">+{{ changeSnapshot.additions }}</span>
           <span class="change-remove">-{{ changeSnapshot.deletions }}</span>
         </div>
@@ -253,4 +262,29 @@ onMounted(updatePanelSlider)
 .source-summary { min-width: 0; padding-left: 2px; }
 .source-summary :deep(.knowledge-sources) { margin-top: 0; }
 .source-summary :deep(.sources-toggle) { padding-top: 2px; }
+
+.final-turn-summary.compact {
+  border-radius: var(--radius-xl);
+}
+
+.final-turn-summary.compact .panel-switch {
+  position: relative;
+  top: auto;
+  right: auto;
+  display: flex;
+  width: max-content;
+  margin: var(--space-8) var(--space-8) 0 auto;
+}
+
+.final-turn-summary.compact .summary-content { padding: 12px; }
+.final-turn-summary.compact .change-heading.has-panel-switch { padding-right: 0; }
+.final-turn-summary.compact .change-label { font-size: calc(13px * var(--font-scale)); }
+.final-turn-summary.compact .change-heading { align-items: center; min-height: 26px; }
+.final-turn-summary.compact .compact-change-stats { display: flex; flex: 0 0 auto; gap: var(--space-6); font-family: var(--font-code); font-size: calc(11px * var(--font-scale)); }
+.final-turn-summary.compact .undo-button { width: 24px; height: 24px; padding: 0; justify-content: center; }
+.final-turn-summary.compact .undo-label { display: none; }
+.final-turn-summary.compact .change-files { margin-top: var(--space-6); }
+.final-turn-summary.compact .change-files { margin-right: -10px; margin-left: -12px; }
+.final-turn-summary.compact .change-file-row { padding: 0 12px; }
+.final-turn-summary.compact .more-files-button { width: calc(100% + 22px); margin-right: -10px; margin-left: -12px; padding-left: 12px; }
 </style>

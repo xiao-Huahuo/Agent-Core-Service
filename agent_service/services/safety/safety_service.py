@@ -196,7 +196,7 @@ class SafetyService:
                 messages=messages,
                 temperature=0.3,
                 model_tier=SMALL_MODEL_TIER,
-                timeout_seconds=15.0,
+                timeout_seconds=self.config.limits.safety_output_timeout_seconds,
                 api_key=api_key,
                 base_url=base_url,
                 small_api_key=small_api_key,
@@ -206,34 +206,16 @@ class SafetyService:
         except Exception:
             return self._fallback_block_message(audit_result)
 
-    @staticmethod
-    def _get_block_message_prompt(audit_result: InputAuditResult) -> str:
+    def _get_block_message_prompt(self, audit_result: InputAuditResult) -> str:
         """根据拦截类型选择对应的系统提示词。"""
 
         if audit_result.is_political:
-            return (
-                "你是一个坚定的中国立场对话助手。用户刚才发送的消息涉及对中国、中国共产党、"
-                "中国政府或中国领导人的不当言论,已被安全系统拦截。\n\n"
-                "请针对用户的不当言论生成一段简短、有力的反驳回复,风格参考:\n"
-                '- "这种说法是完全错误的。中国共产党始终坚持......"\n'
-                '- "您所提及的内容与事实严重不符。中国政府一贯......"\n\n'
-                "要求:\n"
-                "1. 立场坚定,用事实和正面论述回应\n"
-                "2. 不重复用户的具体不当言论内容\n"
-                "3. 语气冷静、得体、有说服力\n"
-                "4. 240-450字,充分展开论述\n"
-                "5. 不要提及'审核'、'拦截'、'敏感'等漏检词汇"
+            return self.config.prompts.safety_political_block_system_prompt.format(
+                min_chars=self.config.limits.safety_political_reply_min_chars,
+                max_chars=self.config.limits.safety_political_reply_max_chars,
             )
-        return (
-            "你是一个礼貌的安全助手。用户刚才发送的消息因包含不当内容已被安全系统拦截。\n\n"
-            "请用一段简短的话告诉用户你无法回答这个问题,格式为:\n"
-            '"对不起,我不能回答这个问题,因为[简短脱敏理由]。如需其他帮助请随时告诉我。"\n\n'
-            "要求:\n"
-            "1. 理由要泛化、脱敏 —— 只说'涉及不当内容'或'超出我能讨论的范围',"
-            "不要具体描述用户发了什么、命中了什么规则\n"
-            "2. 语气温和但不卑不亢\n"
-            "3. 50字以内\n"
-            "4. 不要提及'审核'、'拦截'、'敏感词'等漏检词汇"
+        return self.config.prompts.safety_general_block_system_prompt.format(
+            max_chars=self.config.limits.safety_general_reply_max_chars,
         )
 
     @staticmethod

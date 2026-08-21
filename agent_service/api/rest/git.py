@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Query
 from starlette.concurrency import run_in_threadpool
 
 from agent_service.api.rest.deps import _require_git_service
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.schemas.git import (
     GitBranchRequest,
     GitCommitRequest,
@@ -35,7 +36,7 @@ def _http_error(exc: GitServiceError) -> HTTPException:
 
 
 @router.get("/status")
-async def get_git_status(user_id: str = Query(..., min_length=1)) -> dict[str, Any]:
+async def get_git_status(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length)) -> dict[str, Any]:
     """读取当前知识库仓库状态。"""
 
     try:
@@ -60,7 +61,7 @@ async def initialize_git_repository(body: GitInitRequest) -> dict[str, Any]:
 
 @router.get("/diff")
 async def get_git_diff(
-    user_id: str = Query(..., min_length=1),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
     path: str = Query(""),
     staged: bool = Query(False),
 ) -> dict[str, Any]:
@@ -79,8 +80,12 @@ async def get_git_diff(
 
 @router.get("/history")
 async def get_git_history(
-    user_id: str = Query(..., min_length=1),
-    limit: int = Query(50, ge=1, le=200),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
+    limit: int = Query(
+        DEFAULT_BUSINESS_LIMITS.api_default_list_limit,
+        ge=DEFAULT_BUSINESS_LIMITS.nonempty_min_length,
+        le=DEFAULT_BUSINESS_LIMITS.api_max_list_limit,
+    ),
 ) -> dict[str, Any]:
     """读取提交历史与未推送内容。"""
 

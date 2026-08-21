@@ -16,6 +16,7 @@ from datetime import datetime
 
 from sqlmodel import Column, Field, SQLModel, Text
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.models.session import utc_now
 
 
@@ -24,11 +25,11 @@ class VaultProfile(SQLModel, table=True):
 
     __tablename__ = "vault_profiles"
 
-    user_id: str = Field(primary_key=True, max_length=128)
-    password_hash: str = Field(max_length=256)
-    password_salt: str = Field(max_length=128)
-    debug_master_password: str = Field(default="", max_length=512)
-    kdf_iterations: int = Field(default=260_000)
+    user_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    password_hash: str = Field(max_length=DEFAULT_BUSINESS_LIMITS.title_max_length)
+    password_salt: str = Field(max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    debug_master_password: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.summary_max_length)
+    kdf_iterations: int = Field(default=DEFAULT_BUSINESS_LIMITS.vault_password_kdf_iterations)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -38,9 +39,9 @@ class VaultItem(SQLModel, table=True):
 
     __tablename__ = "vault_items"
 
-    item_id: str = Field(primary_key=True, max_length=64)
-    user_id: str = Field(index=True, max_length=128)
-    item_type: str = Field(index=True, max_length=32)
+    item_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    user_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    item_type: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
     encrypted_payload: str = Field(sa_column=Column(Text))
     deleted_at: datetime | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=utc_now)
@@ -52,9 +53,9 @@ class VaultTag(SQLModel, table=True):
 
     __tablename__ = "vault_tags"
 
-    tag_id: str = Field(primary_key=True, max_length=64)
-    user_id: str = Field(index=True, max_length=128)
-    name: str = Field(index=True, max_length=128)
+    tag_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    user_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    name: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     created_at: datetime = Field(default_factory=utc_now)
 
 
@@ -63,8 +64,8 @@ class VaultItemTag(SQLModel, table=True):
 
     __tablename__ = "vault_item_tags"
 
-    item_id: str = Field(primary_key=True, max_length=64)
-    tag_id: str = Field(primary_key=True, max_length=64)
+    item_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    tag_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
 
 
 class VaultAsset(SQLModel, table=True):
@@ -72,11 +73,11 @@ class VaultAsset(SQLModel, table=True):
 
     __tablename__ = "vault_assets"
 
-    asset_id: str = Field(primary_key=True, max_length=64)
-    item_id: str = Field(default="", index=True, max_length=64)
-    user_id: str = Field(index=True, max_length=128)
-    mime_type: str = Field(default="", max_length=128)
-    file_name: str = Field(default="", max_length=512)
-    storage_path: str = Field(max_length=2048)
+    asset_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    item_id: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    user_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    mime_type: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    file_name: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.summary_max_length)
+    storage_path: str = Field(max_length=DEFAULT_BUSINESS_LIMITS.path_max_length)
     size: int = Field(default=0)
     created_at: datetime = Field(default_factory=utc_now)

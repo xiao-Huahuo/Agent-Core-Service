@@ -14,6 +14,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.schemas.session import SessionCreate
 from agent_service.services.automation_service import AutomationService
 
@@ -29,18 +30,20 @@ class AutomationScheduler:
         automation_service: AutomationService,
         agent: Any,
         session_service: Any,
-        poll_seconds: float = 15.0,
-        max_workers: int = 2,
-        lease_seconds: int = 300,
+        poll_seconds: float | None = None,
+        max_workers: int | None = None,
+        lease_seconds: int | None = None,
     ) -> None:
         """初始化调度器,不在构造阶段启动线程。"""
 
         self.automation_service = automation_service
         self.agent = agent
         self.session_service = session_service
-        self.poll_seconds = max(1.0, poll_seconds)
-        self.max_workers = max(1, max_workers)
-        self.lease_seconds = max(30, lease_seconds)
+        limits = getattr(getattr(agent, "config", None), "limits", DEFAULT_BUSINESS_LIMITS)
+        self.limits = limits
+        self.poll_seconds = max(limits.scheduler_min_poll_seconds, limits.automation_poll_seconds if poll_seconds is None else poll_seconds)
+        self.max_workers = max(limits.scheduler_min_worker_count, limits.automation_max_workers if max_workers is None else max_workers)
+        self.lease_seconds = max(limits.automation_min_lease_seconds, limits.automation_lease_seconds if lease_seconds is None else lease_seconds)
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._executor = ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix="automation-run")
@@ -61,7 +64,12 @@ class AutomationScheduler:
 
         self._stop_event.set()
         if self._thread is not None:
-            self._thread.join(timeout=max(5.0, self.poll_seconds + 1.0))
+            self._thread.join(
+                timeout=max(
+                    self.limits.automation_shutdown_timeout_seconds,
+                    self.poll_seconds + self.limits.automation_shutdown_grace_seconds,
+                )
+            )
         self._executor.shutdown(wait=True, cancel_futures=False)
         logger.info("自动化任务调度器已停止")
 
@@ -136,7 +144,7 @@ class AutomationScheduler:
                 )
             finally:
                 heartbeat_stop.set()
-                heartbeat.join(timeout=2.0)
+                heartbeat.join(timeout=self.limits.automation_shutdown_timeout_seconds)
             persisted = self.automation_service.finish_run(
                 automation_id=automation_id,
                 run_id=run_id,
@@ -169,7 +177,10 @@ class AutomationScheduler:
         """执行期间周期续租；删除、停用或失去租约时协作取消 Agent。"""
 
         # 同时承担删除/停用后的协作取消探测，最多 10 秒反馈一次。
-        interval = max(1.0, min(10.0, self.lease_seconds / 3))
+        interval = max(
+            self.limits.automation_heartbeat_min_seconds,
+            min(self.limits.automation_heartbeat_max_seconds, self.lease_seconds / 3),
+        )
         while not stop_event.wait(interval):
             if self.automation_service.renew_claim(
                 automation_id=automation_id,

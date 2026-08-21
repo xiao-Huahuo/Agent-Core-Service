@@ -25,8 +25,6 @@ const props = defineProps<{
   agentAccessMode?: AgentAccessMode
   reference?: string
   attachments?: AgentUploadedAttachment[]
-  suggestions?: string[]
-  suggestionsLoading?: boolean
   messages?: unknown[]
   maxContextTokens?: number
   isStreaming?: boolean
@@ -40,7 +38,6 @@ const emit = defineEmits<{
   'clear-reference': []
   'remove-attachment': [attachment: AgentUploadedAttachment]
   'file-select': [file: File]
-  'select-suggestion': [suggestion: string]
   'cancel-stream': []
   'create-task-list': [title: string, items: string[]]
 }>()
@@ -389,19 +386,7 @@ function handleFileChange(event: Event) {
 </script>
 
 <template>
-  <div class="chat-input-wrap" :class="{ centered }">
-    <div v-if="!centered && !attachments?.length && suggestions?.length" class="task-suggestions">
-      <button
-        v-for="suggestion in suggestions"
-        :key="suggestion"
-        class="suggestion-button"
-        type="button"
-        :disabled="disabled"
-        @click="emit('select-suggestion', suggestion)"
-      >
-        {{ suggestion }}
-      </button>
-    </div>
+  <div class="chat-input-wrap" :class="{ centered, compact }">
     <AttachmentBlocks
       v-if="!centered && attachments?.length"
       class="input-attachments"
@@ -487,39 +472,41 @@ function handleFileChange(event: Event) {
             </div>
           </Teleport>
         </div>
-        <button
-          class="model-config-trigger"
-          type="button"
-          :disabled="disabled"
-          title="配置模型"
-          @click="emit('configure-model')"
-        >
-          <IcIcon name="settings" :size="13" />
-          <span>{{ displayedModelLabel }}</span>
-        </button>
-        <ContextProgress
-          :messages="props.messages"
-          :max-context-tokens="props.maxContextTokens"
-        />
-        <button
-          v-if="isStreaming"
-          class="send-btn stop-btn"
-          type="button"
-          title="中断输出"
-          @click="emit('cancel-stream')"
-        >
-          <IcIcon name="stop" :size="14" />
-        </button>
-        <button
-          v-else
-          class="send-btn"
-          :disabled="disabled || !text.trim()"
-          type="button"
-          title="发送"
-          @click="handleSend"
-        >
-          <IcIcon name="send" :size="15" />
-        </button>
+        <div class="toolbar-right">
+          <button
+            class="model-config-trigger"
+            type="button"
+            :disabled="disabled"
+            title="配置模型"
+            @click="emit('configure-model')"
+          >
+            <IcIcon name="settings" :size="13" />
+            <span>{{ displayedModelLabel }}</span>
+          </button>
+          <ContextProgress
+            :messages="props.messages"
+            :max-context-tokens="props.maxContextTokens"
+          />
+          <button
+            v-if="isStreaming"
+            class="send-btn stop-btn"
+            type="button"
+            title="中断输出"
+            @click="emit('cancel-stream')"
+          >
+            <IcIcon name="stop" :size="14" />
+          </button>
+          <button
+            v-else
+            class="send-btn"
+            :disabled="disabled || !text.trim()"
+            type="button"
+            title="发送"
+            @click="handleSend"
+          >
+            <IcIcon name="send" :size="15" />
+          </button>
+        </div>
       </div>
     </div>
     <Transition name="starter-grid-panel">
@@ -634,58 +621,6 @@ function handleFileChange(event: Event) {
 .chat-input-wrap.centered {
   bottom: 42%;
   width: min(90%, 400px);
-}
-
-.task-suggestions {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(100% + 8px);
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-6);
-  align-items: center;
-  justify-content: flex-start;
-  pointer-events: auto;
-}
-
-.suggestion-button {
-  max-width: 100%;
-  min-height: 26px;
-  padding: 0 var(--space-8);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  font-family: var(--font-ui);
-  font-size: calc(11px * var(--font-scale));
-  line-height: 1.2;
-}
-
-.suggestion-button {
-  overflow: hidden;
-  cursor: pointer;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast),
-    color var(--transition-fast),
-    transform var(--transition-fast);
-}
-
-.suggestion-button:hover:not(:disabled) {
-  border-color: var(--color-primary);
-  background: var(--color-primary-softer);
-  color: var(--color-text);
-  transform: translateY(-1px);
-}
-
-.suggestion-button:disabled {
-  cursor: default;
-  opacity: 0.5;
 }
 
 .input-attachments {
@@ -1012,9 +947,44 @@ function handleFileChange(event: Event) {
   padding: 0 8px;
 }
 
+/* Panel mode keeps the essential controls but collapses their text labels so
+   the toolbar remains a single non-overlapping row at sidebar widths. */
+.chat-input-wrap.compact .input-toolbar {
+  gap: 2px;
+  padding: 0 6px;
+}
+
+.chat-input-wrap.compact .toolbar-left,
+.chat-input-wrap.compact .toolbar-right { gap: 3px; }
+
+.chat-input-wrap.compact .model-config-trigger,
+.chat-input-wrap.compact .access-mode-trigger {
+  flex: 0 0 28px;
+  width: 28px;
+  min-width: 28px;
+  padding: 0;
+}
+
+.chat-input-wrap.compact .model-config-trigger span,
+.chat-input-wrap.compact .access-mode-label,
+.chat-input-wrap.compact .access-mode-caret {
+  display: none;
+}
+
+.chat-input-wrap.compact :deep(.context-progress) { display: none; }
+
 .toolbar-left {
   display: flex;
   align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 5px;
   min-width: 0;
   flex: 0 1 auto;
@@ -1503,6 +1473,13 @@ function handleFileChange(event: Event) {
   .access-mode-caret {
     display: none;
   }
+}
+
+/* Compact panel mode has already removed labels and the context meter, so its
+   two primary input actions still fit and must remain discoverable. */
+.chat-input-wrap.compact .attach-file-btn,
+.chat-input-wrap.compact .web-search-toggle {
+  display: inline-flex;
 }
 
 /* ---- 模型状态阻断模态框 ---- */

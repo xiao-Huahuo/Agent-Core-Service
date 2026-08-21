@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from starlette.concurrency import run_in_threadpool
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.api.rest.deps import _require_favorite_service
 from agent_service.schemas.favorite import FavoriteCreate, FavoriteListOut, FavoriteOut, FavoriteTargetType
 
@@ -13,7 +14,7 @@ router = APIRouter()
 
 @router.get("/favorites")
 async def list_favorites(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
     target_type: FavoriteTargetType | None = Query(None, description="收藏目标类型"),
     library_id: str | None = Query(None, description="知识库作用域;不传则不过滤"),
 ) -> FavoriteListOut:
@@ -43,9 +44,9 @@ async def add_favorite(payload: FavoriteCreate) -> FavoriteOut:
 
 @router.delete("/favorites")
 async def delete_favorite(
-    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
     target_type: FavoriteTargetType = Query(..., description="收藏目标类型"),
-    target_id: str = Query(..., min_length=1, description="收藏目标 ID"),
+    target_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="收藏目标 ID"),
     library_id: str = Query("", description="知识库作用域"),
 ) -> dict[str, bool]:
     """删除指定收藏。"""

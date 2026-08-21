@@ -203,9 +203,6 @@ class CompressNode:
         tail_count = max(self.config.memory.context_compression_tail_messages, 1)
         recent_messages = self._collect_valid_tail(original_messages, tail_count)
         summary_message = SystemMessage(
-            content=(
-                "以下是当前会话在上下文压缩后保留的重要事实摘要,继续回答时必须优先参考:\n"
-                f"{summary_text}"
-            )
+            content=self.config.prompts.compressed_context_template.format(summary=summary_text)
         )
         return [summary_message, *recent_messages]

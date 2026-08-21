@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
+
 if TYPE_CHECKING:
     from agent_service.services.session_service import SessionService
 
@@ -89,7 +91,7 @@ class TaskListService:
         now = utc_iso()
         task_items = [
             {
-                "id": f"task_item_{uuid4().hex[:12]}",
+                "id": f"task_item_{uuid4().hex[:DEFAULT_BUSINESS_LIMITS.generated_id_suffix_chars]}",
                 "title": item,
                 "status": "pending",
                 "completion_summary": "",
@@ -103,7 +105,7 @@ class TaskListService:
                 item["status"] = "in_progress"
                 break
         task_list = {
-            "task_list_id": f"task_list_{uuid4().hex[:12]}",
+            "task_list_id": f"task_list_{uuid4().hex[:DEFAULT_BUSINESS_LIMITS.generated_id_suffix_chars]}",
             "session_id": session_id,
             "title": title.strip() or "Task list",
             "status": "active",
