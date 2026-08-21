@@ -240,6 +240,16 @@ export interface TablePreviewSheet {
   rows: string[][]
 }
 
+/** One lazily rendered PDF page used by the continuous Preview1 viewer. */
+export interface PdfPreviewPage {
+  /** Original PDF page width in points. */
+  width: number
+  /** Original PDF page height in points. */
+  height: number
+  /** Backend URL that rasterizes and caches this page only when requested. */
+  url: string
+}
+
 /** Backend-generated multimodal preview payload. */
 export interface FilePreviewPayload {
   /** File path relative to knowledge root. */
@@ -277,6 +287,8 @@ export interface FilePreviewPayload {
   pdf_scanned?: boolean
   /** Optional PDF page count from the backend parser. */
   page_count?: number
+  /** PDF pages and lazy raster URLs used by the continuous Preview1 viewer. */
+  pdf_pages?: PdfPreviewPage[]
   /** Optional count of images detected in a PDF or document. */
   image_count?: number
   /** Optional count of tables detected in a PDF or document. */

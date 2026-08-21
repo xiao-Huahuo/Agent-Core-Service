@@ -117,14 +117,17 @@ function onKeydown(e: KeyboardEvent) {
 function onWheel(e: WheelEvent) {
   e.preventDefault()
   const delta = e.deltaY > 0 ? -0.1 : 0.1
-  const newScale = Math.max(0.2, Math.min(10, scale.value + delta))
+  const previousScale = scale.value
+  const newScale = Math.max(0.2, Math.min(10, previousScale + delta))
+  if (newScale === previousScale) return
+
   const rect = imageRef.value?.getBoundingClientRect()
   if (rect) {
-    const mx = e.clientX - rect.left
-    const my = e.clientY - rect.top
-    const ratio = newScale / scale.value
-    translateX.value = mx - ratio * (mx - translateX.value)
-    translateY.value = my - ratio * (my - translateY.value)
+    const ratio = newScale / previousScale
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    translateX.value += (1 - ratio) * (e.clientX - centerX)
+    translateY.value += (1 - ratio) * (e.clientY - centerY)
   }
   scale.value = newScale
 }

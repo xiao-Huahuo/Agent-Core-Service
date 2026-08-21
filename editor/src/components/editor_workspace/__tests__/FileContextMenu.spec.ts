@@ -90,6 +90,28 @@ describe('FileContextMenu HTML visualization', () => {
     expect(wrapper.text()).not.toContain('重新抽取图谱')
   })
 
+  it('keeps ingestion controls disabled for dot directories without blocking dot files', () => {
+    const dotDirectoryMenu = mountMenu({
+      name: '.git',
+      path: '.git',
+      isDir: true,
+      indexStatus: 'ignored',
+      graphStatus: 'ignored',
+    })
+    const dotFileMenu = mountMenu({
+      name: '.notes.md',
+      path: '.notes.md',
+      isDir: false,
+      indexStatus: 'dirty',
+      graphStatus: 'dirty',
+    })
+
+    expect(buttonByText(dotDirectoryMenu, '灌库文件夹').attributes('disabled')).toBeDefined()
+    expect(buttonByText(dotDirectoryMenu, '文件夹抽取图谱').attributes('disabled')).toBeDefined()
+    expect(buttonByText(dotDirectoryMenu, '取消屏蔽文件夹').attributes('disabled')).toBeDefined()
+    expect(buttonByText(dotFileMenu, '灌库文件').attributes('disabled')).toBeUndefined()
+  })
+
   it('places privacy directly below favorite and emits its dedicated action', async () => {
     const wrapper = mountMenu({ name: 'private.md', path: 'private.md', isDir: false })
     const labels = wrapper.findAll('.context-menu > button').map((button) => button.text().replace(/\s/g, ''))

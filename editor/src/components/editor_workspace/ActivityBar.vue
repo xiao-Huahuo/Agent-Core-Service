@@ -11,7 +11,6 @@ import { computed, ref, watch } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import lightLogo from '@/assets/images/亮色无底图标.png'
 import darkLogo from '@/assets/images/暗色无底图标.png'
-import { useSettingsStore } from '@/stores/settings'
 import type { SidebarDisplayMode } from '@/types/settings'
 
 const props = defineProps<{
@@ -77,8 +76,10 @@ function handleRipple(e: MouseEvent) {
   window.setTimeout(() => ripple.remove(), 450)
 }
 
-const settingsStore = useSettingsStore()
-const agentIconSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
+const agentIconSrc = computed(() => {
+  if (props.agentActive && props.displayMode === 'management') return lightLogo
+  return darkLogo
+})
 const knowledgeMenuOpen = ref(false)
 const knowledgeActive = computed(() => (
   props.resourcesActive
@@ -509,26 +510,41 @@ function closeKnowledgeMenu() {
   width: 100%;
   height: 100%;
   padding: var(--space-8) var(--space-4);
-  background: var(--color-chrome-rail-bg);
+  border: 1px solid var(--color-activity-bar-border);
+  background: var(--color-activity-bar-bg);
+  box-shadow: 0 0 0 4px var(--color-activity-bar-ring);
   overflow: visible;
   transition: padding 180ms ease;
 }
 
+.activity-bar:not(.management) {
+  width: calc(100% - 16px);
+  height: calc(100% - 24px);
+  margin: 12px 4px 12px 12px;
+  padding: var(--space-8) 3px;
+  border-radius: 20px;
+}
+
 .activity-bar.management {
+  left: -4px;
   align-items: stretch;
+  height: calc(100% - 24px);
+  margin: 12px 0;
   padding: var(--space-8) var(--space-6);
+  border-radius: 0 28px 28px 0;
 }
 
 .activity-hover-indicator {
   position: absolute;
   top: 0;
-  right: var(--space-4);
-  left: var(--space-4);
+  left: 50%;
   z-index: 0;
   display: none;
-  height: 32px;
+  width: 36px;
+  height: 36px;
+  margin-left: -18px;
   border-radius: 50%;
-  background: var(--color-bg-hover);
+  background: var(--color-activity-bar-hover);
   pointer-events: none;
   transition:
     transform 220ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -539,6 +555,9 @@ function closeKnowledgeMenu() {
 .activity-bar.management .activity-hover-indicator {
   right: var(--space-6);
   left: var(--space-6);
+  width: auto;
+  height: 32px;
+  margin-left: 0;
   border-radius: var(--radius-sm);
 }
 
@@ -559,12 +578,12 @@ function closeKnowledgeMenu() {
   align-items: center;
   justify-content: center;
   gap: 0;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: 1px solid transparent;
   border-radius: 50%;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--color-activity-bar-muted);
   position: relative;
   overflow: hidden;
   transition:
@@ -576,9 +595,15 @@ function closeKnowledgeMenu() {
     color 0.25s;
 }
 
+.activity-button:hover,
+.activity-button:focus-visible {
+  color: var(--color-activity-bar-text);
+}
+
 .activity-bar.management .activity-button {
   justify-content: center;
   width: 100%;
+  height: 32px;
   padding: 0 32px;
   gap: 0;
   border-radius: var(--radius-sm);
@@ -643,12 +668,12 @@ function closeKnowledgeMenu() {
   z-index: 1000;
   display: grid;
   gap: var(--space-4);
-  min-width: 48px;
-  width: 48px;
+  min-width: 56px;
+  width: 56px;
   padding: var(--space-4);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 999px;
-  background: var(--color-surface);
+  border: 1px solid var(--color-activity-bar-border);
+  border-radius: 16px;
+  background: var(--color-activity-bar-bg);
   box-shadow: var(--shadow-window);
   transform: translateY(-50%);
 }
@@ -675,7 +700,7 @@ function closeKnowledgeMenu() {
   left: 5px;
   width: 1px;
   border-radius: 999px;
-  background: var(--color-border-subtle, var(--color-border));
+  background: var(--color-activity-bar-guide);
   content: '';
   opacity: 0.9;
   transition: opacity 180ms ease;
@@ -687,11 +712,11 @@ function closeKnowledgeMenu() {
   left: 50%;
   z-index: 0;
   display: none;
-  width: 32px;
-  height: 32px;
-  margin-left: -16px;
+  width: 36px;
+  height: 36px;
+  margin-left: -18px;
   border-radius: 50%;
-  background: var(--color-bg-hover);
+  background: var(--color-activity-bar-hover);
   pointer-events: none;
   transition:
     transform 220ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -703,6 +728,7 @@ function closeKnowledgeMenu() {
   right: 0;
   left: var(--space-12);
   width: auto;
+  height: 32px;
   margin-left: 0;
   border-radius: var(--radius-sm);
 }
@@ -721,7 +747,7 @@ function closeKnowledgeMenu() {
 
 .knowledge-submenu .activity-button {
   z-index: 1;
-  width: 32px;
+  width: 36px;
 }
 
 .activity-bar:not(.management) .knowledge-submenu .activity-button {
@@ -740,7 +766,7 @@ function closeKnowledgeMenu() {
   width: 7px;
   height: 1px;
   border-radius: 999px;
-  background: var(--color-border-subtle, var(--color-border));
+  background: var(--color-activity-bar-guide);
   content: '';
   transform: translateY(-50%);
 }
@@ -835,8 +861,8 @@ function closeKnowledgeMenu() {
 
 .activity-bar.management .activity-button.active {
   border-color: transparent;
-  background: var(--color-surface-raised);
-  color: var(--color-text);
+  background: var(--color-activity-bar-active-bg);
+  color: var(--color-activity-bar-active-text);
 }
 
 .activity-agent-icon {
@@ -880,10 +906,6 @@ function closeKnowledgeMenu() {
   text-align: left;
   transform: translateX(0);
   transition-delay: 40ms;
-}
-
-.activity-button.active .activity-agent-icon {
-  filter: brightness(0) invert(1);
 }
 
 .bottom-group {

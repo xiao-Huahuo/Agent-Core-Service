@@ -234,6 +234,11 @@ class AgentServiceStub(object):
                 request_serializer=agent__service__pb2.KnowledgeFileContentRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.KnowledgeFileContentResponse.FromString,
                 _registered_method=True)
+        self.PreviewKnowledgePdfPage = channel.unary_unary(
+                '/agent_service.AgentService/PreviewKnowledgePdfPage',
+                request_serializer=agent__service__pb2.KnowledgePdfPageRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.KnowledgePdfPageResponse.FromString,
+                _registered_method=True)
         self.WriteKnowledgeFile = channel.unary_unary(
                 '/agent_service.AgentService/WriteKnowledgeFile',
                 request_serializer=agent__service__pb2.KnowledgeFileWriteRequest.SerializeToString,
@@ -843,6 +848,12 @@ class AgentServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def ReadKnowledgeFile(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def PreviewKnowledgePdfPage(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -1480,6 +1491,11 @@ def add_AgentServiceServicer_to_server(servicer, server):
                     servicer.ReadKnowledgeFile,
                     request_deserializer=agent__service__pb2.KnowledgeFileContentRequest.FromString,
                     response_serializer=agent__service__pb2.KnowledgeFileContentResponse.SerializeToString,
+            ),
+            'PreviewKnowledgePdfPage': grpc.unary_unary_rpc_method_handler(
+                    servicer.PreviewKnowledgePdfPage,
+                    request_deserializer=agent__service__pb2.KnowledgePdfPageRequest.FromString,
+                    response_serializer=agent__service__pb2.KnowledgePdfPageResponse.SerializeToString,
             ),
             'WriteKnowledgeFile': grpc.unary_unary_rpc_method_handler(
                     servicer.WriteKnowledgeFile,
@@ -2872,6 +2888,33 @@ class AgentService(object):
             '/agent_service.AgentService/ReadKnowledgeFile',
             agent__service__pb2.KnowledgeFileContentRequest.SerializeToString,
             agent__service__pb2.KnowledgeFileContentResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PreviewKnowledgePdfPage(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/PreviewKnowledgePdfPage',
+            agent__service__pb2.KnowledgePdfPageRequest.SerializeToString,
+            agent__service__pb2.KnowledgePdfPageResponse.FromString,
             options,
             channel_credentials,
             insecure,

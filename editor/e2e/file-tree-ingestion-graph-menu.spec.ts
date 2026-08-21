@@ -7,7 +7,11 @@ const profile = {
 }
 
 /** Install the minimal workspace API surface and expose captured execution decisions. */
-async function mockWorkspace(page: import('@playwright/test').Page, initial: 'ready' | 'dirty') {
+async function mockWorkspace(
+  page: import('@playwright/test').Page,
+  initial: 'ready' | 'dirty',
+  includeDotEntries = false,
+) {
   let ingested = initial === 'ready'
   let ingestionPosts = 0
   const graphBodies: Array<Record<string, unknown>> = []
@@ -27,10 +31,18 @@ async function mockWorkspace(page: import('@playwright/test').Page, initial: 're
     if (path === '/health') return route.fulfill({ body: 'ok' })
     if (path === '/settings/models/status') return route.fulfill({ json: { embedding: 'ready', rerank: 'ready' } })
     if (path === '/settings/profile') return route.fulfill({ json: { user_id: 'menu-user', knowledge_dir: 'D:/Knowledge', active_library_id: 'default', knowledge_libraries: [] } })
-    if (path === '/knowledge/files') return route.fulfill({ json: { tree: [{
-      name: 'notes.md', path: 'notes.md', isDir: false, size: 128,
-      indexStatus: ingested ? 'indexed' : 'dirty', graphStatus: initial === 'ready' ? 'graphed' : 'dirty',
-    }] } })
+    if (path === '/knowledge/files') return route.fulfill({ json: { tree: [
+      ...(includeDotEntries ? [{
+        name: '.git', path: '.git', isDir: true, indexStatus: 'ignored', graphStatus: 'ignored',
+        children: [{ name: 'HEAD', path: '.git/HEAD', isDir: false, size: 32, indexStatus: 'ignored', graphStatus: 'ignored' }],
+      }, {
+        name: '.notes.md', path: '.notes.md', isDir: false, size: 64, indexStatus: 'dirty', graphStatus: 'dirty',
+      }] : []),
+      {
+        name: 'notes.md', path: 'notes.md', isDir: false, size: 128,
+        indexStatus: ingested ? 'indexed' : 'dirty', graphStatus: initial === 'ready' ? 'graphed' : 'dirty',
+      },
+    ] } })
     if (path === '/knowledge/ingestion/jobs' && request.method() === 'POST') {
       ingestionPosts += 1
       ingested = true
@@ -45,6 +57,7 @@ async function mockWorkspace(page: import('@playwright/test').Page, initial: 're
       status: 'completed', total: 1, current: 1, message: '完成', docs: [],
     } })
     if (path === '/favorites') return route.fulfill({ json: { favorites: [] } })
+    if (path === '/privacy') return route.fulfill({ json: { privacy: [] } })
     if (path === '/knowledge/trash') return route.fulfill({ json: { entries: [] } })
     if (path === '/sessions') return route.fulfill({ json: [] })
     if (path === '/agent/children') return route.fulfill({ json: { children: [] } })
@@ -84,4 +97,20 @@ test('ingests a dirty file before starting its first graph extraction', async ({
   await expect.poll(() => calls.ingestionPosts()).toBe(1)
   await expect.poll(() => calls.graphBodies.length).toBe(1)
   expect(calls.graphBodies[0]).toMatchObject({ path: 'notes.md', force: false })
+})
+
+test('shows dot directories and their children while keeping them out of ingestion', async ({ page }) => {
+  await mockWorkspace(page, 'dirty', true)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Files' }).dispatchEvent('click')
+  await page.getByRole('button', { name: '刷新文件树' }).dispatchEvent('click')
+
+  const gitDirectory = page.locator('.tree-label').filter({ hasText: '.git' })
+  await expect(gitDirectory).toBeVisible()
+  await expect(page.getByText('.notes.md', { exact: true })).toBeVisible()
+  await gitDirectory.click()
+  await expect(page.getByText('HEAD', { exact: true })).toBeVisible()
+
+  await gitDirectory.dispatchEvent('contextmenu', { clientX: 320, clientY: 180 })
+  await expect(page.locator('.context-menu button').filter({ hasText: '灌库文件夹' })).toBeDisabled()
 })

@@ -27,6 +27,18 @@ describe('ActivityBar', () => {
     expect(activityBarSource).toMatch(/\.activity-bar\.management \.activity-label \{[^}]*width: 100%;[^}]*text-align: left;/)
   })
 
+  it('uses the queue-lane frame with mode-specific outer corners', () => {
+    expect(editorWorkspaceSource).toContain('const ACTIVITY_BAR_ICON_WIDTH = 64')
+    expect(activityBarSource).toMatch(
+      /\.activity-bar \{[^}]*border: 1px solid var\(--color-activity-bar-border\);[^}]*background: var\(--color-activity-bar-bg\);[^}]*box-shadow: 0 0 0 4px var\(--color-activity-bar-ring\);/s,
+    )
+    expect(activityBarSource).toMatch(/\.activity-bar:not\(\.management\) \{[^}]*border-radius: 20px;/s)
+    expect(activityBarSource).toMatch(/\.activity-bar\.management \{[^}]*left: -4px;[^}]*border-radius: 0 28px 28px 0;/s)
+    expect(editorWorkspaceSource).toMatch(
+      /\.main-shell\.ide-panel,[\s\S]*?\.editor-sidebar-content,[\s\S]*?\.agent-col \{[^}]*border: 1px solid var\(--workspace-panel-border\);[^}]*box-shadow: 0 0 0 4px var\(--workspace-panel-ring\);/s,
+    )
+  })
+
   beforeEach(() => {
     setActivePinia(createPinia())
   })

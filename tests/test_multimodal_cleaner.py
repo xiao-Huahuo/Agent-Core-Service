@@ -727,8 +727,8 @@ def test_knowledge_ignore_matcher_supports_gitignore_subset() -> None:
     assert not matcher.is_ignored("docs/readme.md")
 
 
-def test_knowledge_ignore_matcher_hard_ignores_agents_dir() -> None:
-    """`.agents` is a hard-coded system directory and cannot be unignored."""
+def test_knowledge_ignore_matcher_hard_ignores_every_dot_directory() -> None:
+    """任意层级点目录都是不可被反向规则取消的灌库忽略目录。"""
 
     matcher = KnowledgeIgnoreMatcher(
         """
@@ -739,3 +739,4 @@ def test_knowledge_ignore_matcher_hard_ignores_agents_dir() -> None:
     assert matcher.is_ignored(".agents", is_dir=True)
     assert matcher.is_ignored(".agents/skills/demo/SKILL.md")
     assert matcher.is_ignored("nested/.agents/skills/demo/SKILL.md")
+    assert matcher.is_ignored("nested/.cache/draft.md")

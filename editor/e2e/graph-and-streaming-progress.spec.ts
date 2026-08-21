@@ -63,6 +63,8 @@ test('shows responsive graph pipeline and section progress', async ({ page }) =>
   await page.locator('.topbar button[title="图谱抽取"]').click()
   await expect(page.locator('.graph-progress-cell .progress-detail').first()).toContainText('LLM 并发语义抽取')
   await expect(page.getByText('2 / 5', { exact: false })).toBeVisible()
+  await expect(page.getByText('D:\\Knowledge\\notes.md', { exact: true })).toBeVisible()
+  await expect(page.getByText('D:\\Knowledge\\next.md', { exact: true })).toBeVisible()
   await expect(page.locator('.graph-progress .ingestion-progress-percent')).toHaveText('23%')
   await expect(page.locator('.graph-progress-label')).toContainText('图谱 0/2 · LLM 并发语义抽取 2/5')
   await expect.poll(() => graphPolls, { timeout: 1400 }).toBeGreaterThanOrEqual(2)

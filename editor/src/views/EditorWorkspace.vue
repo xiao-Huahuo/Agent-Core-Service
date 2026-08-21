@@ -53,7 +53,7 @@ function handleAskAgent(text: string) {
   workspaceStore.agentSidebarOpen = true
 }
 
-const ACTIVITY_BAR_ICON_WIDTH = 40
+const ACTIVITY_BAR_ICON_WIDTH = 64
 const ACTIVITY_BAR_MANAGEMENT_WIDTH = 204
 const DEFAULT_FILE_WIDTH = 280
 const DEFAULT_AGENT_WIDTH = 340
@@ -850,7 +850,8 @@ watch(
 .main-shell.ide-panel,
 .editor-sidebar-content,
 .agent-col {
-  box-shadow: 0 0 0 4px var(--library-form-ring);
+  border: 1px solid var(--workspace-panel-border);
+  box-shadow: 0 0 0 4px var(--workspace-panel-ring);
 }
 
 .file-resizer {
@@ -869,7 +870,6 @@ watch(
   min-height: 0;
   margin: var(--space-12);
   overflow: hidden;
-  border: 0;
   outline: none;
   border-radius: var(--workspace-card-radius);
   background: var(--color-bg-app);
@@ -877,6 +877,7 @@ watch(
 
 .main-shell.ide-panel.agent-page-main-shell {
   overflow: visible;
+  border: 0;
   background: transparent;
   box-shadow: none;
 }
@@ -906,7 +907,6 @@ watch(
   min-height: 0;
   margin: var(--space-12);
   overflow: hidden;
-  border: 0;
   border-radius: var(--workspace-card-radius);
   background: var(--color-bg-app);
   transition: opacity 160ms ease, transform 180ms ease;
@@ -1054,10 +1054,6 @@ watch(
   border-left: 0;
   border-right: 0;
   background: transparent;
-}
-
-.agent-col {
-  border-right: 0;
 }
 
 .resize-handle {

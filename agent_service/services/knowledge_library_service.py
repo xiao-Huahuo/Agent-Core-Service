@@ -33,13 +33,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from xml.etree import ElementTree
 
 logger = logging.getLogger(__name__)
 
 TRASH_RETENTION_DAYS = 90
-HARD_IGNORED_KNOWLEDGE_DIR_NAMES = {".agents", ".mw"}
 
 
 def _utcnow_naive() -> datetime:
@@ -70,7 +69,8 @@ class KnowledgeIgnoreMatcher:
         if not path:
             return False
         parts = path.split("/")
-        if any(part in HARD_IGNORED_KNOWLEDGE_DIR_NAMES for part in parts):
+        directory_parts = parts if is_dir else parts[:-1]
+        if any(part.startswith(".") for part in directory_parts):
             return True
         ignored = False
         for negate, pattern, directory_only in self.rules:
@@ -350,7 +350,6 @@ class KnowledgeLibraryService:
             self._relative_path(path=path, root=source_root)
             for path in source_root.rglob("*")
             if path.is_file()
-            and not self._relative_path(path=path, root=source_root).startswith(".mw/")
             and ignore_matcher.is_ignored(self._relative_path(path=path, root=source_root), is_dir=False)
         ] if source_root.exists() else []
         chunks_deleted = self._delete_index_artifacts(user_id=normalized_user_id, relative_paths=ignored_paths)
@@ -544,8 +543,13 @@ class KnowledgeLibraryService:
             raise ValueError("path not found")
         if source_path.is_file():
             return self.ingest_single_file(user_id=user_id, path=path, progress_callback=progress_callback)
+        ignore_matcher = self._build_ignore_matcher(user_id=normalized_user_id)
         file_paths = sorted(
-            p for p in source_path.rglob("*") if p.is_file() and self._can_ingest_source_file(p)
+            p
+            for p in source_path.rglob("*")
+            if p.is_file()
+            and self._can_ingest_source_file(p)
+            and not ignore_matcher.is_ignored(self._relative_path(path=p, root=source_root), is_dir=False)
         )
         if not file_paths:
             return KnowledgeLibraryRebuildResult(
@@ -774,7 +778,6 @@ class KnowledgeLibraryService:
                 ocr_enabled=ocr_enabled,
             )
             for path in sorted(root.iterdir(), key=self._sort_path)
-            if not self._is_vcs_metadata_path(path=path, root=root)
         ]
 
     def get_active_root_path(self, *, user_id: str) -> Path:
@@ -1526,17 +1529,61 @@ class KnowledgeLibraryService:
         image_public_prefix: 与输出目录对应的静态资产 URL 前缀。
         """
 
-        import fitz
-
         image_output_dir.mkdir(parents=True, exist_ok=True)
         thumbnail_path = image_output_dir / "page-1.png"
-        with fitz.open(path) as document:
-            if document.page_count < 1:
-                return ""
-            page = document.load_page(0)
-            pixmap = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
-            pixmap.save(thumbnail_path)
+        self._render_pdf_page_image(path=path, page_index=0, output_path=thumbnail_path, scale=1.5)
         return f"{image_public_prefix}/{thumbnail_path.name}"
+
+    @staticmethod
+    def _render_pdf_page_image(*, path: Path, page_index: int, output_path: Path, scale: float = 2.0) -> None:
+        """将指定 PDF 页栅格化为 PNG，供首页封面和连续预览共同复用。"""
+
+        import fitz
+
+        with fitz.open(path) as document:
+            if page_index < 0 or page_index >= document.page_count:
+                raise ValueError("PDF page is out of range")
+            page = document.load_page(page_index)
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+            pixmap.save(output_path)
+
+    def render_pdf_page(self, *, user_id: str, path: str, page: int) -> tuple[Path, str]:
+        """按需生成并缓存一页 PDF PNG，页面编号从 1 开始。"""
+
+        root = self._get_active_root(user_id=user_id)
+        target = self._resolve_child_path(root=root, relative_path=path)
+        if not target.is_file() or target.suffix.lower() != ".pdf":
+            raise ValueError("PDF file not found")
+        if page < 1:
+            raise ValueError("PDF page is out of range")
+
+        relative_path = self._relative_path(path=target, root=root)
+        asset_key = hashlib.sha256(f"{user_id}:{relative_path}".encode("utf-8")).hexdigest()[:24]
+        # Continuous pages use a separate cache because PDF text extraction refreshes pdf_preview.
+        output_dir = self.config.storage.assets_dir / "knowledge" / "pdf_pages" / asset_key
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / f"preview-page-{page}.png"
+        if not output_path.is_file() or output_path.stat().st_mtime_ns < target.stat().st_mtime_ns:
+            self._render_pdf_page_image(path=target, page_index=page - 1, output_path=output_path)
+        return output_path, "image/png"
+
+    @staticmethod
+    def _pdf_pages(*, user_id: str, relative_path: str, path: Path) -> list[dict[str, Any]]:
+        """读取 PDF 页面尺寸并返回不会提前触发栅格化的懒加载 URL。"""
+
+        import fitz
+
+        pages: list[dict[str, Any]] = []
+        with fitz.open(path) as document:
+            for page_index, page in enumerate(document):
+                rect = page.rect
+                query = urlencode({"user_id": user_id, "path": relative_path, "page": page_index + 1})
+                pages.append({
+                    "width": rect.width,
+                    "height": rect.height,
+                    "url": f"/knowledge/files/pdf-page?{query}",
+                })
+        return pages
 
     def _preview_pdf(self, *, user_id: str, relative_path: str, path: Path) -> dict:
         """提取 PDF 渲染 Markdown,并从已灌库 frontmatter 读取文本模式正文。"""
@@ -1544,6 +1591,11 @@ class KnowledgeLibraryService:
         asset_key = hashlib.sha256(f"{user_id}:{relative_path}".encode("utf-8")).hexdigest()[:24]
         image_output_dir = self.config.storage.assets_dir / "knowledge" / "pdf_preview" / asset_key
         image_public_prefix = f"/knowledge/assets/pdf_preview/{asset_key}"
+        try:
+            pdf_pages = self._pdf_pages(user_id=user_id, relative_path=relative_path, path=path)
+        except Exception as exc:
+            logger.warning("PDF page inspection failed for %s: %s", path, exc)
+            pdf_pages = []
         try:
             extracted = extract_pdf_text(
                 path,
@@ -1565,7 +1617,8 @@ class KnowledgeLibraryService:
                 "render_content": "",
                 "text_status": "not_ingested",
                 "pdf_scanned": True,
-                "page_count": 0,
+                "page_count": len(pdf_pages),
+                "pdf_pages": pdf_pages,
                 "image_count": 0,
                 "table_count": 0,
                 "thumbnail_url": thumbnail_url,
@@ -1586,6 +1639,7 @@ class KnowledgeLibraryService:
             "render_content": extracted.content,
             "pdf_scanned": extracted.is_scanned,
             "page_count": extracted.page_count,
+            "pdf_pages": pdf_pages,
             "image_count": extracted.image_count,
             "table_count": extracted.table_count,
             "thumbnail_url": thumbnail_url,
@@ -1958,8 +2012,6 @@ class KnowledgeLibraryService:
             return {}
         signature: dict[str, tuple[int, int, str]] = {}
         for path in root.rglob("*"):
-            if self._is_vcs_metadata_path(path=path, root=root) or self._is_mw_managed_path(path=path, root=root):
-                continue
             # 目录 mtime 会因任一子项变化而改变。只跟踪文件可避免把整个目录
             # 误判为失效目标；目录删除仍会表现为其中所有旧文件路径消失。
             if not path.is_file():
@@ -2140,7 +2192,6 @@ class KnowledgeLibraryService:
                     ocr_enabled=ocr_enabled,
                 )
                 for child in sorted(path.iterdir(), key=self._sort_path)
-                if not self._is_vcs_metadata_path(path=child, root=root)
             ]
             child_ingested_at = [
                 str(child.get("ingestedAt") or "")
@@ -2188,21 +2239,6 @@ class KnowledgeLibraryService:
 
         config = self.settings_service.get_knowledge_ingestion_config(user_id=user_id)
         return KnowledgeIgnoreMatcher(str(config.get("knowledge_ignore_patterns") or ""))
-
-    @staticmethod
-    def _is_vcs_metadata_path(*, path: Path, root: Path) -> bool:
-        """
-        判断路径是否属于版本控制内部元数据目录。
-
-        Git/Hg/SVN 元数据既不应展示在知识库文件树,也不能参与结构化、向量入库和
-        图谱抽取。这里只屏蔽目录本身及其后代,不会屏蔽用户可编辑的 `.gitignore`。
-        """
-
-        try:
-            relative_parts = path.resolve().relative_to(root.resolve()).parts
-        except ValueError:
-            return True
-        return any(part in {".git", ".hg", ".svn"} for part in relative_parts)
 
     @staticmethod
     def _is_mw_managed_path(*, path: Path, root: Path) -> bool:
@@ -2471,11 +2507,14 @@ class KnowledgeLibraryService:
             context["library_id"],
         ).resolve()
         affected: set[str] = set()
+        ignore_matcher = self._build_ignore_matcher(user_id=context["user_id"])
         for raw_path in relative_paths:
             normalized_path = str(raw_path or "").replace("\\", "/").strip("/")
-            if not normalized_path or normalized_path == ".git" or normalized_path.startswith(".git/"):
+            if not normalized_path:
                 continue
             target = self._resolve_child_path(root=root, relative_path=normalized_path)
+            if ignore_matcher.is_ignored(normalized_path, is_dir=target.is_dir()):
+                continue
             if target.is_dir():
                 affected.update(self._collect_relative_file_paths(target=target, root=root))
             elif target.is_file():

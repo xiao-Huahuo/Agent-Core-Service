@@ -7,6 +7,9 @@ import IngestionProgressView from '@/views/IngestionProgressView.vue'
 
 const cancelIngestionJob = vi.fn().mockResolvedValue(undefined)
 const loadIngestionJobs = vi.fn().mockResolvedValue([])
+const settingsStore = {
+  profile: { knowledgeDir: 'D:/Knowledge' },
+}
 const workspaceStore = {
   ingestionViewTab: 'queue',
   mainView: 'ingestion',
@@ -29,7 +32,16 @@ const workspaceStore = {
     queuedAt: '2026-08-20T10:00:00Z',
     message: '已识别第 8 / 20 页',
   }],
-  graphQueue: [],
+  graphQueue: [{
+    id: 'graph_doc_notes/note.md',
+    name: 'note.md',
+    path: 'notes/note.md',
+    isDir: false,
+    status: 'running',
+    progress: 35,
+    stageLabel: '正在抽取实体',
+    queuedAt: '2026-08-20T10:00:00Z',
+  }],
   ingestionHistory: [],
   graphHistory: [],
   loadIngestionJobs,
@@ -45,10 +57,15 @@ vi.mock('@/stores/workspace', () => ({
   useWorkspaceStore: () => workspaceStore,
 }))
 
+vi.mock('@/stores/settings', () => ({
+  useSettingsStore: () => settingsStore,
+}))
+
 describe('IngestionProgressView', () => {
   afterEach(() => {
     vi.clearAllMocks()
     vi.useRealTimers()
+    workspaceStore.ingestionViewTab = 'queue'
   })
 
   it('shows real file pipeline detail and cancels that exact job', async () => {
@@ -61,9 +78,21 @@ describe('IngestionProgressView', () => {
     expect(wrapper.text()).toContain('64%')
     expect(wrapper.text()).toContain('正在 OCR 扫描页')
     expect(wrapper.text()).toContain('8 / 20')
+    expect(wrapper.text()).toContain('所在位置绝对路径')
+    expect(wrapper.text()).toContain('D:\\Knowledge\\papers\\paper.pdf')
 
     await wrapper.get('button[aria-label="中止 paper.pdf 灌库"]').trigger('click')
 
     expect(cancelIngestionJob).toHaveBeenCalledWith(workspaceStore.ingestionQueue[0])
+  })
+
+  it('shows the absolute location path for every graph extraction row', () => {
+    workspaceStore.ingestionViewTab = 'graph-queue'
+    const wrapper = mount(IngestionProgressView, {
+      global: { stubs: { IcIcon: true } },
+    })
+
+    expect(wrapper.text()).toContain('所在位置绝对路径')
+    expect(wrapper.text()).toContain('D:\\Knowledge\\notes\\note.md')
   })
 })

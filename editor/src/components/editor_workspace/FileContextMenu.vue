@@ -63,6 +63,13 @@ const {
 const isBatchSelection = computed(() => props.selectionCount > 1)
 const hasTarget = computed(() => Boolean(props.node))
 const canUseSingleOnlyAction = computed(() => !isBatchSelection.value && hasTarget.value)
+/** 点目录及其后代由后端固定排除灌库，菜单同步禁用不可生效的入口。 */
+const isInDotDirectory = computed(() => {
+  if (!props.node) return false
+  const parts = props.node.path.replace(/\\/g, '/').split('/').filter(Boolean)
+  const directoryParts = props.node.isDir ? parts : parts.slice(0, -1)
+  return directoryParts.some((part) => part.startsWith('.'))
+})
 const isTargetFavorite = computed(() => (
   props.node ? favoritesStore.isFavorite('knowledge_path', props.node.path, favoritesStore.activeLibraryId()) : false
 ))
@@ -148,11 +155,11 @@ defineExpose({
     </button>
     <button type="button" :disabled="!canUseSingleOnlyAction" @click="emit('openDefault')"><IcIcon name="open-in-new" :size="15" /><span>用默认程序打开</span></button>
     <hr class="context-separator" />
-    <button type="button" :disabled="!node" @click="emit('ingest')">
+    <button type="button" :disabled="!node || isInDotDirectory" @click="emit('ingest')">
       <IcIcon name="ingest" :size="15" />
       <span>{{ ingestionActionLabel }}</span>
     </button>
-    <button type="button" :disabled="!node" @click="emit('extractGraph')">
+    <button type="button" :disabled="!node || isInDotDirectory" @click="emit('extractGraph')">
       <IcIcon name="hub" :size="15" />
       <span>{{ graphActionLabel }}</span>
     </button>
@@ -174,7 +181,7 @@ defineExpose({
       <IcIcon name="visibility-off" :size="15" />
       <span>{{ isTargetPrivate ? '取消隐私化' : '隐私化' }}</span>
     </button>
-    <button type="button" :disabled="!node" @click="emit('toggleIgnore')">
+    <button type="button" :disabled="!node || isInDotDirectory" @click="emit('toggleIgnore')">
       <IcIcon name="block" :size="15" />
       <span>
         {{

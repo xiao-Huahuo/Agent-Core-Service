@@ -13,6 +13,7 @@ import mpegts from 'mpegts.js'
 import ImagePreviewer from '@/components/common/ImagePreviewer.vue'
 import { useImagePreviewer } from '@/components/common/useImagePreviewer'
 import type { ImagePreviewItem } from '@/components/common/useImagePreviewer'
+import PdfPreview from '@/components/editor_workspace/PdfPreview.vue'
 import { buildApiUrl } from '@/api/client'
 import type { FilePreviewPayload } from '@/types/knowledge'
 
@@ -114,12 +115,11 @@ function handleDocumentClick(event: MouseEvent) {
       :files="imageFiles"
     />
 
-    <iframe
+    <PdfPreview
       v-else-if="preview.kind === 'pdf'"
-      class="pdf-preview"
-      :src="previewSource"
-      title="PDF preview"
-    ></iframe>
+      :preview="preview"
+      :source="previewSource"
+    />
 
     <video
       v-else-if="preview.kind === 'video'"
@@ -179,15 +179,6 @@ function handleDocumentClick(event: MouseEvent) {
   font-family: var(--font-ui);
 }
 
-.pdf-preview {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  border: 0;
-  background: var(--color-canvas);
-  color-scheme: light dark;
-}
-
 .video-preview {
   align-self: center;
   width: 100%;
@@ -196,14 +187,6 @@ function handleDocumentClick(event: MouseEvent) {
   margin: auto;
   background: #000;
   object-fit: contain;
-}
-
-:global(:root[data-theme="light"]) .pdf-preview {
-  color-scheme: light;
-}
-
-:global(:root[data-theme="dark"]) .pdf-preview {
-  color-scheme: dark;
 }
 
 .table-preview,

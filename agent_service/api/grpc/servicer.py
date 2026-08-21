@@ -84,6 +84,8 @@ from agent_service.api.grpc.agent_service_pb2 import (
     KnowledgePathCopyRequest,
     KnowledgePathDeleteRequest,
     KnowledgePathRenameRequest,
+    KnowledgePdfPageRequest,
+    KnowledgePdfPageResponse,
     KnowledgeRebuildRequest,
     KnowledgeRebuildResponse,
     LLMConfigPresetDeleteRequest,
@@ -1261,6 +1263,22 @@ class AgentServiceServicer(BaseServicer):
             mtime=str(payload.get("mtime", "")),
             size=int(payload.get("size", 0)),
         )
+
+    def PreviewKnowledgePdfPage(  # noqa: N802
+        self, request: KnowledgePdfPageRequest, context: grpc.ServicerContext,
+    ) -> KnowledgePdfPageResponse:
+        """按需栅格化并返回一页 PDF PNG，与 REST Preview1 使用同一缓存。"""
+
+        svc = self._require_knowledge_library_service(context)
+        try:
+            file_path, media_type = svc.render_pdf_page(
+                user_id=request.user_id,
+                path=request.path,
+                page=request.page,
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return KnowledgePdfPageResponse(content=file_path.read_bytes(), mime_type=media_type)
 
     def WriteKnowledgeFile(  # noqa: N802
         self, request: KnowledgeFileWriteRequest, context: grpc.ServicerContext,

@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from agent_service.services.memory.rag.frontmatter_bootstrap import FrontmatterBootstrapService
-from agent_service.services.knowledge_library_service import KnowledgeLibraryService
+from agent_service.services.knowledge_library_service import KnowledgeIgnoreMatcher, KnowledgeLibraryService
 
 
 class _SettingsServiceStub:
@@ -210,20 +210,42 @@ def test_write_file_invalidates_existing_index_artifacts(tmp_path: Path) -> None
     assert not markdown_path.exists()
 
 
-def test_list_files_hides_git_metadata_directory(tmp_path: Path) -> None:
-    """Git 内部元数据不能进入知识库树、入库队列或图谱。"""
+def test_list_files_shows_dot_directories_but_marks_them_ingestion_ignored(tmp_path: Path) -> None:
+    """点目录应完整展示，但目录本身和后代都标记为灌库忽略。"""
 
     knowledge_dir = tmp_path / "knowledge"
     knowledge_dir.mkdir()
     (knowledge_dir / "notes.md").write_text("hello", encoding="utf-8")
+    (knowledge_dir / ".notes.md").write_text("visible dot file", encoding="utf-8")
     git_dir = knowledge_dir / ".git"
     git_dir.mkdir()
     (git_dir / "HEAD").write_text("ref: refs/heads/main", encoding="utf-8")
+    cache_dir = knowledge_dir / "docs" / ".cache"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "draft.md").write_text("ignored draft", encoding="utf-8")
     service, _memory_service, _settings_service, _graph_service = _service(tmp_path, knowledge_dir)
 
-    nodes = service.list_files(user_id="user-1")
+    nodes = {node["name"]: node for node in service.list_files(user_id="user-1")}
 
-    assert [node["name"] for node in nodes] == ["notes.md"]
+    assert set(nodes) == {".git", ".notes.md", "docs", "notes.md"}
+    assert nodes[".git"]["indexStatus"] == "ignored"
+    assert nodes[".git"]["children"][0]["name"] == "HEAD"
+    assert nodes[".git"]["children"][0]["indexStatus"] == "ignored"
+    assert nodes["docs"]["children"][0]["name"] == ".cache"
+    assert nodes["docs"]["children"][0]["children"][0]["indexStatus"] == "ignored"
+    assert nodes[".notes.md"]["indexStatus"] == "dirty"
+
+
+def test_ingestion_ignore_matcher_ignores_every_dot_directory_only() -> None:
+    """灌库默认忽略任意层级点目录，但不按点文件名称扩大规则。"""
+
+    matcher = KnowledgeIgnoreMatcher("")
+
+    assert matcher.is_ignored(".git", is_dir=True) is True
+    assert matcher.is_ignored(".git/HEAD", is_dir=False) is True
+    assert matcher.is_ignored("docs/.cache/draft.md", is_dir=False) is True
+    assert matcher.is_ignored(".notes.md", is_dir=False) is False
+    assert matcher.is_ignored("docs/.draft.md", is_dir=False) is False
 
 
 def test_legacy_forms_are_not_hard_ignored(tmp_path: Path) -> None:

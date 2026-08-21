@@ -78,6 +78,9 @@ test('shows per-pipeline details and moves a cancelled file to un-ingested histo
   await expect(page.getByText('正在解析工作表')).toBeVisible()
   await expect(page.getByText('2 / 5')).toBeVisible()
   await expect(page.getByText('Markdown 标题解析完成，共 6 个章节')).toBeVisible()
+  await expect(page.getByText('D:\\Knowledge\\paper.pdf', { exact: true })).toBeVisible()
+  await expect(page.getByText('D:\\Knowledge\\table.xlsx', { exact: true })).toBeVisible()
+  await expect(page.getByText('D:\\Knowledge\\notes.md', { exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: '中止 paper.pdf 灌库' }).click()
   await expect(page.locator('.file-table-body .file-name[title="paper.pdf"]')).toHaveCount(0)

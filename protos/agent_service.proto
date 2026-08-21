@@ -85,6 +85,7 @@ service AgentService {
   rpc UploadKnowledgeFile(KnowledgeFileUploadRequest) returns (KnowledgeRebuildResponse);
   rpc ListKnowledgeFiles(KnowledgeFileTreeRequest) returns (KnowledgeFileTreeResponse);
   rpc ReadKnowledgeFile(KnowledgeFileContentRequest) returns (KnowledgeFileContentResponse);
+  rpc PreviewKnowledgePdfPage(KnowledgePdfPageRequest) returns (KnowledgePdfPageResponse);
   rpc WriteKnowledgeFile(KnowledgeFileWriteRequest) returns (KnowledgeFileNode);
   rpc CreateKnowledgeFile(KnowledgeFileCreateRequest) returns (KnowledgeFileNode);
   rpc CreateKnowledgeFolder(KnowledgeFolderCreateRequest) returns (KnowledgeFileNode);
@@ -756,6 +757,17 @@ message KnowledgeFileContentResponse {
   string content = 2;
   string mtime = 3;
   int64 size = 4;
+}
+
+message KnowledgePdfPageRequest {
+  string user_id = 1;
+  string path = 2;
+  int32 page = 3;
+}
+
+message KnowledgePdfPageResponse {
+  bytes content = 1;
+  string mime_type = 2;
 }
 
 message KnowledgeFileWriteRequest {

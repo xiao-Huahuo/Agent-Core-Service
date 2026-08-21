@@ -23,6 +23,7 @@ export const API_ROUTES = {
   KNOWLEDGE_FILE_CREATE: '/knowledge/files/file',
   KNOWLEDGE_FILE_CONTENT: '/knowledge/files/content',
   KNOWLEDGE_FILE_PREVIEW: '/knowledge/files/preview',
+  KNOWLEDGE_FILE_PDF_PAGE: '/knowledge/files/pdf-page',
   KNOWLEDGE_FILE_UPLOAD: '/knowledge/files/upload',
   KNOWLEDGE_FILE_INGEST: '/knowledge/files/ingest',
   KNOWLEDGE_FILE_INGEST_STREAM: '/knowledge/files/ingest/stream',

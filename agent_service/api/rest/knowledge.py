@@ -130,11 +130,7 @@ class _KnowledgeFileEventHandler(FileSystemEventHandler):
                 continue
             with contextlib.suppress(ValueError):
                 relative_path = Path(raw_path).resolve().relative_to(self.root).as_posix()
-                if (
-                    relative_path
-                    and relative_path != ".git"
-                    and not relative_path.startswith(".git/")
-                ):
+                if relative_path:
                     relative_paths.append(relative_path)
         if not relative_paths:
             return
@@ -193,6 +189,27 @@ async def preview_knowledge_file(
         return await run_in_threadpool(svc.preview_file, user_id=user_id, path=path)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/knowledge/files/pdf-page")
+async def preview_knowledge_pdf_page(
+    user_id: str = Query(..., min_length=1, description="用户 ID"),
+    path: str = Query(..., min_length=1, description="知识库内 PDF 相对路径"),
+    page: int = Query(..., ge=1, description="从 1 开始的 PDF 页码"),
+) -> FileResponse:
+    """按需栅格化并返回 Preview1 当前需要显示的 PDF 页面。"""
+
+    svc = _require_knowledge_library_service()
+    try:
+        file_path, media_type = await run_in_threadpool(
+            svc.render_pdf_page,
+            user_id=user_id,
+            path=path,
+            page=page,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return FileResponse(file_path, media_type=media_type, content_disposition_type="inline")
 
 
 @router.get("/knowledge/files/raw")
@@ -959,8 +976,6 @@ async def _polling_event_stream(*, svc: Any, user_id: str):
             path
             for path in set(previous_signature) | set(current_signature)
             if previous_signature.get(path) != current_signature.get(path)
-            and path != ".git"
-            and not path.startswith(".git/")
         )
         if changed_paths:
             await run_in_threadpool(

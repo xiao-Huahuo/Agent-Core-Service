@@ -9,12 +9,14 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { HistorySourceType, IngestionHistoryItem, IngestionQueueItem } from '@/types/knowledge'
 
 type IngestionTab = 'queue' | 'graph-queue' | 'history'
 
 const workspaceStore = useWorkspaceStore()
+const settingsStore = useSettingsStore()
 const activeTab = computed({
   get: () => workspaceStore.ingestionViewTab as IngestionTab,
   set: (val: IngestionTab) => { workspaceStore.ingestionViewTab = val },
@@ -76,9 +78,25 @@ const historyRows = computed(() => {
   return allHistoryRows.value.filter((row) => row.sourceType === historyFilter.value)
 })
 
-const queueColumns = 'minmax(220px, 2fr) 145px 90px 90px minmax(210px, 1.4fr) 120px 96px'
-const graphQueueColumns = 'minmax(220px, 2fr) 145px 90px minmax(240px, 1.5fr) 132px'
+const queueColumns = 'minmax(180px, 1.4fr) minmax(300px, 2.2fr) 145px 90px 90px minmax(210px, 1.4fr) 120px 96px'
+const graphQueueColumns = 'minmax(180px, 1.4fr) minmax(300px, 2.2fr) 145px 90px minmax(240px, 1.5fr) 132px'
 const historyColumns = 'minmax(220px, 2fr) 80px 140px 132px 160px 1fr'
+
+function absoluteLocationPath(relativePath: string): string {
+  const root = settingsStore.profile.knowledgeDir.trim()
+  const child = relativePath.replace(/^[\\/]+|[\\/]+$/g, '')
+  if (!root) return child
+
+  const isWindowsPath = /^[A-Za-z]:[\\/]/.test(root) || root.startsWith('\\\\')
+  if (isWindowsPath) {
+    const normalizedRoot = root.replace(/\//g, '\\').replace(/\\+$/g, '')
+    return child ? `${normalizedRoot}\\${child.replace(/[\\/]/g, '\\')}` : normalizedRoot
+  }
+
+  const normalizedRoot = root.replace(/\\/g, '/').replace(/\/+$/g, '') || '/'
+  if (!child) return normalizedRoot
+  return normalizedRoot === '/' ? `/${child.replace(/[\\/]/g, '/')}` : `${normalizedRoot}/${child.replace(/[\\/]/g, '/')}`
+}
 
 async function refresh() {
   await workspaceStore.loadKnowledgeTree()
@@ -232,6 +250,7 @@ function historySummary(row: IngestionHistoryItem): string {
     <div v-if="activeTab === 'queue'" class="file-table">
       <div class="file-table-head" :style="{ gridTemplateColumns: queueColumns }">
         <span>名称</span>
+        <span>所在位置绝对路径</span>
         <span>最后修改日期</span>
         <span>类型</span>
         <span>大小</span>
@@ -251,6 +270,9 @@ function historySummary(row: IngestionHistoryItem): string {
             <IcIcon v-if="row.isDir" name="folder" :size="16" class="kind-icon folder" />
             <IcIcon v-else name="document" :size="16" class="kind-icon file" />
             <span class="file-name" :title="row.path">{{ row.name }}</span>
+          </span>
+          <span class="absolute-path-cell" :title="absoluteLocationPath(row.path)">
+            {{ absoluteLocationPath(row.path) }}
           </span>
           <span>{{ row.mtime ?? '-' }}</span>
           <span>{{ fileKind(row) }}</span>
@@ -290,6 +312,7 @@ function historySummary(row: IngestionHistoryItem): string {
     <div v-else-if="activeTab === 'graph-queue'" class="file-table">
       <div class="file-table-head" :style="{ gridTemplateColumns: graphQueueColumns }">
         <span>名称</span>
+        <span>所在位置绝对路径</span>
         <span>最后修改日期</span>
         <span>类型</span>
         <span>图谱抽取进度</span>
@@ -306,6 +329,9 @@ function historySummary(row: IngestionHistoryItem): string {
           <span class="name-cell">
             <IcIcon name="document" :size="16" class="kind-icon file" />
             <span class="file-name" :title="row.path">{{ row.name }}</span>
+          </span>
+          <span class="absolute-path-cell" :title="absoluteLocationPath(row.path)">
+            {{ absoluteLocationPath(row.path) }}
           </span>
           <span>{{ row.mtime ?? '-' }}</span>
           <span>{{ fileKind(row) }}</span>
@@ -682,6 +708,7 @@ function historySummary(row: IngestionHistoryItem): string {
 }
 
 .file-name,
+.absolute-path-cell,
 .summary-cell {
   overflow: hidden;
   text-overflow: ellipsis;
