@@ -213,18 +213,6 @@ function closeKnowledgeMenu() {
       <IcIcon name="folder" :size="18" />
       <span class="activity-label">文件</span>
     </button>
-    <button
-      class="activity-button"
-      :class="{ active: gitActive }"
-      type="button"
-      title="Git"
-      aria-label="Git"
-      @mousedown.prevent="handleRipple"
-      @click="emit('toggleGit')"
-    >
-      <IcIcon name="git" :size="18" />
-      <span class="activity-label">Git</span>
-    </button>
     <div
       class="knowledge-group"
       @mouseenter="openKnowledgeMenuOnHover"
@@ -328,27 +316,15 @@ function closeKnowledgeMenu() {
     </div>
     <button
       class="activity-button"
-      :class="{ active: favoritesActive }"
+      :class="{ active: agentActive }"
       type="button"
-      title="我的收藏"
-      aria-label="我的收藏"
+      title="Agent"
+      aria-label="Agent"
       @mousedown.prevent="handleRipple"
-      @click="emit('openFavorites')"
+      @click="emit('toggleAgent')"
     >
-      <IcIcon name="star" :size="18" />
-      <span class="activity-label">收藏</span>
-    </button>
-    <button
-      class="activity-button"
-      :class="{ active: privacyActive }"
-      type="button"
-      title="我的隐私"
-      aria-label="我的隐私"
-      @mousedown.prevent="handleRipple"
-      @click="emit('openPrivacy')"
-    >
-      <IcIcon name="visibility-off" :size="18" />
-      <span class="activity-label">隐私</span>
+      <img :src="agentIconSrc" class="activity-agent-icon" alt="" />
+      <span class="activity-label">Agent</span>
     </button>
     <button
       class="activity-button"
@@ -376,30 +352,6 @@ function closeKnowledgeMenu() {
     </button>
     <button
       class="activity-button"
-      :class="{ active: agentActive }"
-      type="button"
-      title="Agent"
-      aria-label="Agent"
-      @mousedown.prevent="handleRipple"
-      @click="emit('toggleAgent')"
-    >
-      <img :src="agentIconSrc" class="activity-agent-icon" alt="" />
-      <span class="activity-label">Agent</span>
-    </button>
-    <button
-      class="activity-button"
-      :class="{ active: agentQueueActive }"
-      type="button"
-      title="任务队列"
-      aria-label="任务队列"
-      @mousedown.prevent="handleRipple"
-      @click="emit('openAgentQueue')"
-    >
-      <IcIcon name="checklist" :size="18" />
-      <span class="activity-label">任务队列</span>
-    </button>
-    <button
-      class="activity-button"
       :class="{ active: graphActive }"
       type="button"
       title="Knowledge graph"
@@ -424,15 +376,39 @@ function closeKnowledgeMenu() {
     </button>
     <button
       class="activity-button"
-      :class="{ active: ingestionActive }"
+      :class="{ active: agentQueueActive }"
       type="button"
-      title="入库进度"
-      aria-label="入库进度"
+      title="任务队列"
+      aria-label="任务队列"
       @mousedown.prevent="handleRipple"
-      @click="emit('openIngestion')"
+      @click="emit('openAgentQueue')"
     >
-      <IcIcon name="ingest" :size="18" />
-      <span class="activity-label">入库</span>
+      <IcIcon name="checklist" :size="18" />
+      <span class="activity-label">任务队列</span>
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: favoritesActive }"
+      type="button"
+      title="我的收藏"
+      aria-label="我的收藏"
+      @mousedown.prevent="handleRipple"
+      @click="emit('openFavorites')"
+    >
+      <IcIcon name="star" :size="18" />
+      <span class="activity-label">收藏</span>
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: privacyActive }"
+      type="button"
+      title="我的隐私"
+      aria-label="我的隐私"
+      @mousedown.prevent="handleRipple"
+      @click="emit('openPrivacy')"
+    >
+      <IcIcon name="visibility-off" :size="18" />
+      <span class="activity-label">隐私</span>
     </button>
     <button
       class="activity-button"
@@ -445,6 +421,18 @@ function closeKnowledgeMenu() {
     >
       <IcIcon name="code" :size="18" />
       <span class="activity-label">MD-HTML</span>
+    </button>
+    <button
+      class="activity-button"
+      :class="{ active: ingestionActive }"
+      type="button"
+      title="入库进度"
+      aria-label="入库进度"
+      @mousedown.prevent="handleRipple"
+      @click="emit('openIngestion')"
+    >
+      <IcIcon name="ingest" :size="18" />
+      <span class="activity-label">入库</span>
     </button>
     <button
       class="activity-button"
@@ -668,13 +656,13 @@ function closeKnowledgeMenu() {
   z-index: 1000;
   display: grid;
   gap: var(--space-4);
-  min-width: 56px;
-  width: 56px;
-  padding: var(--space-4);
+  min-width: 48px;
+  width: 48px;
+  padding: var(--space-8) 3px;
   border: 1px solid var(--color-activity-bar-border);
-  border-radius: 16px;
+  border-radius: 20px;
   background: var(--color-activity-bar-bg);
-  box-shadow: var(--shadow-window);
+  box-shadow: 0 0 0 4px var(--color-activity-bar-ring);
   transform: translateY(-50%);
 }
 

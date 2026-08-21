@@ -24,6 +24,18 @@ class _FakeScheduler:
         return AIMessage(content=self.response_content)
 
 
+class _FakeStreamingScheduler(_FakeScheduler):
+    """Streams one deterministic response for model-call boundary tests."""
+
+    def stream_chat(self, **kwargs):
+        """Yield two deltas and the complete message used by ModelDecisionNode."""
+
+        self.calls.append(kwargs)
+        yield {"content_delta": self.response_content[:1]}
+        yield {"content_delta": self.response_content[1:]}
+        yield {"status": "complete", "message": AIMessage(content=self.response_content)}
+
+
 class _FakeRegistry:
     def get(self, _name: str):
         return None
@@ -113,6 +125,30 @@ def test_model_boundary_keeps_complete_tool_call_pair() -> None:
     )
 
     assert prepared[-2:] == [assistant, result]
+
+
+def test_each_model_stream_resets_the_cumulative_token_boundary() -> None:
+    """工具调用后的下一次模型流必须先重置上一段累计文本基线。"""
+
+    scheduler = _FakeStreamingScheduler("新回复")
+    node = ModelDecisionNode(config=AgentConfig(), task_scheduler=scheduler)
+    callbacks: list[str] = []
+    state = {
+        "messages": [HumanMessage(content="继续")],
+        "user_id": "u1",
+        "session_id": "s1",
+        "trace": [],
+        "llm_config": {},
+    }
+
+    node._streaming_call(
+        system_message=SystemMessage(content="system"),
+        state=state,
+        token_callback=callbacks.append,
+        active_tool_names=[],
+    )
+
+    assert callbacks == ["", "新", "新回复"]
 
 
 def test_observation_respects_continue_after_long_exploration() -> None:

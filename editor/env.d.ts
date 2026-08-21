@@ -44,8 +44,8 @@ interface AgentEditorDesktopApi {
   floatingSetVisible: (visible: boolean) => Promise<boolean>
   floatingGetState: () => Promise<{ visible: boolean; pinMode?: string }>
   floatingToggle: () => void
-  windowSync: (type: string, value: string | null) => void
-  onWindowSync: (callback: (payload: { type: string; value: string | null }) => void) => () => void
+  windowSync: (type: string, value: unknown) => void
+  onWindowSync: (callback: (payload: { type: string; value: unknown }) => void) => () => void
   openAgentPage: () => void
   onOpenAgentPage: (callback: () => void) => () => void
 }

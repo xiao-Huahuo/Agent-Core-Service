@@ -400,6 +400,10 @@ class ModelDecisionNode:
                 "chat_visible": False,
             })
 
+        # Each tool round starts a fresh cumulative model response. Reset the
+        # outer stream's delta baseline before the first token of this call.
+        token_callback("")
+
         (
             user_api_key,
             user_base_url,

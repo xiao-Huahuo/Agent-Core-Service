@@ -15,13 +15,15 @@ import { useWorkspaceStore } from '@/stores/workspace'
 
 defineOptions({ name: 'BrowserPage' })
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   activityOverlayOpen: boolean
   initialUrl?: string
   navigationRequestId?: number
   sidebar?: boolean
   visible?: boolean
-}>()
+}>(), {
+  visible: true,
+})
 
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()

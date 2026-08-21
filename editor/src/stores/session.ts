@@ -25,8 +25,12 @@ export const useSessionStore = defineStore('session', () => {
   const isLoading = ref(false)
   /** Persisted session IDs with a live browser Agent stream. */
   const streamingSessionIds = ref<string[]>([])
+  /** Newly-created sessions whose first local turn must not be replaced by history. */
+  const freshSessionIds = ref<string[]>([])
   /** User whose session list is already represented by `sessions`, including an empty list. */
   let loadedUserId = ''
+  /** Prevent an older list response from erasing a session created meanwhile. */
+  let localMutationVersion = 0
   /** Shared request used when several mounted components load the same user concurrently. */
   let pendingLoad: Promise<void> | null = null
   let pendingLoadUserId = ''
@@ -58,12 +62,19 @@ export const useSessionStore = defineStore('session', () => {
     }
 
     const request = (async () => {
+      const requestMutationVersion = localMutationVersion
       isLoading.value = true
       try {
         const nextSessions = await listSessions(userId)
         loadedUserId = userId
-        sessions.value = nextSessions
-        if (currentSessionId.value && !sessions.value.some((session) => session.session_id === currentSessionId.value)) {
+        sessions.value = requestMutationVersion === localMutationVersion
+          ? nextSessions
+          : [
+              ...sessions.value,
+              ...nextSessions.filter((incoming) => !sessions.value.some((local) => local.session_id === incoming.session_id)),
+            ]
+        if (requestMutationVersion === localMutationVersion
+          && currentSessionId.value && !sessions.value.some((session) => session.session_id === currentSessionId.value)) {
           currentSessionId.value = null
         }
       } finally {
@@ -84,17 +95,20 @@ export const useSessionStore = defineStore('session', () => {
 
   async function create(userId: string, sessionName?: string): Promise<string> {
     const session = await createSession(userId, sessionName)
+    localMutationVersion += 1
     sessions.value = [session, ...sessions.value.filter((item) => item.session_id !== session.session_id)]
+    freshSessionIds.value = [...new Set([...freshSessionIds.value, session.session_id])]
     currentSessionId.value = session.session_id
     localStorage.setItem(ACTIVE_SESSION_KEY, session.session_id)
     window.agentEditorDesktop?.windowSync?.('session', session.session_id)
     return session.session_id
   }
 
-  function select(sessionId: string) {
+  /** Select locally and optionally notify the other Electron Agent window. */
+  function select(sessionId: string, broadcast = true) {
     currentSessionId.value = sessionId
     localStorage.setItem(ACTIVE_SESSION_KEY, sessionId)
-    window.agentEditorDesktop?.windowSync?.('session', sessionId)
+    if (broadcast) window.agentEditorDesktop?.windowSync?.('session', sessionId)
   }
 
   function clearSelection() {
@@ -111,9 +125,15 @@ export const useSessionStore = defineStore('session', () => {
       : streamingSessionIds.value.filter((id) => id !== sessionId)
   }
 
+  function settleFreshSession(sessionId: string) {
+    freshSessionIds.value = freshSessionIds.value.filter((id) => id !== sessionId)
+  }
+
   async function remove(sessionId: string) {
     await deleteSession(sessionId)
+    localMutationVersion += 1
     sessions.value = sessions.value.filter((session) => session.session_id !== sessionId)
+    settleFreshSession(sessionId)
     if (currentSessionId.value === sessionId) {
       currentSessionId.value = null
     }
@@ -121,6 +141,7 @@ export const useSessionStore = defineStore('session', () => {
 
   async function clearAll(userId: string) {
     await clearAllSessions(userId)
+    localMutationVersion += 1
     sessions.value = []
     currentSessionId.value = null
   }
@@ -154,6 +175,7 @@ export const useSessionStore = defineStore('session', () => {
     currentSessionId,
     isLoading,
     streamingSessionIds,
+    freshSessionIds,
     currentSession,
     hasSessions,
     load,
@@ -161,6 +183,7 @@ export const useSessionStore = defineStore('session', () => {
     select,
     clearSelection,
     setSessionStreaming,
+    settleFreshSession,
     remove,
     clearAll,
     rename,

@@ -859,6 +859,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
           // Suggestions belong to the completed persisted turn, so refresh
           // them here for every chat surface instead of relying on a UI watcher.
           void refreshTaskSuggestions(userId, targetSessionId)
+          sessionStore.settleFreshSession(targetSessionId)
         }
       }
     }
@@ -1116,6 +1117,152 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   }
 })
 
+/** Minimal incremental payload relayed between the two Electron Agent views. */
+interface AgentChatWindowState {
+  sessionId: string
+  messageCount: number
+  messagePatches: Array<{ index: number; message: AgentChatMessage }>
+  isStreaming: boolean
+  streamStartedAtMs: number
+  currentNode: string
+  streamError: string
+  loadedSessionId: string
+  activeAgentMode: AgentLoopMode
+  pendingAttachments: AgentUploadedAttachment[]
+  taskSuggestions: string[]
+  suggestionsLoading: boolean
+  streamingSessionId: string
+}
+
+type AgentChatStoreInstance = ReturnType<ReturnType<typeof createChatStore>>
+
+const windowSyncedStores = new Map<string, AgentChatStoreInstance>()
+const previousMessageSignatures = new Map<string, string[]>()
+const previousStateSignatures = new Map<string, string>()
+const applyingRemoteState = new Set<string>()
+let windowSyncListenerInstalled = false
+
+/** Clone Vue state into Electron-safe plain data without sending the full history. */
+function cloneForWindowSync<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+/** Build and send only messages changed since the previous render flush. */
+function broadcastChatState(sessionId: string, store: AgentChatStoreInstance, forceFull = false) {
+  if (!window.agentEditorDesktop?.windowSync || applyingRemoteState.has(sessionId)) return
+  const nextMessageSignatures = store.messages.map((message) => JSON.stringify(message))
+  const previous = previousMessageSignatures.get(sessionId) ?? []
+  const messagePatches = store.messages.flatMap((message, index) => (
+    forceFull || nextMessageSignatures[index] !== previous[index]
+      ? [{ index, message: cloneForWindowSync(message) }]
+      : []
+  ))
+  const scalarState = {
+    isStreaming: store.isStreaming,
+    streamStartedAtMs: store.streamStartedAtMs,
+    currentNode: store.currentNode,
+    streamError: store.streamError,
+    loadedSessionId: store.loadedSessionId,
+    activeAgentMode: store.activeAgentMode,
+    pendingAttachments: store.pendingAttachments,
+    taskSuggestions: store.taskSuggestions,
+    suggestionsLoading: store.suggestionsLoading,
+    streamingSessionId: store.streamingSessionId,
+  }
+  const stateSignature = JSON.stringify(scalarState)
+  if (!forceFull && messagePatches.length === 0 && previous.length === store.messages.length
+    && previousStateSignatures.get(sessionId) === stateSignature) return
+
+  previousMessageSignatures.set(sessionId, nextMessageSignatures)
+  previousStateSignatures.set(sessionId, stateSignature)
+  window.agentEditorDesktop.windowSync('chat-state', {
+    sessionId,
+    messageCount: store.messages.length,
+    messagePatches,
+    ...cloneForWindowSync(scalarState),
+  } satisfies AgentChatWindowState)
+}
+
+/** Apply one remote incremental snapshot without echoing it back to its owner. */
+function applyRemoteChatState(payload: AgentChatWindowState) {
+  if (!payload.sessionId || !Number.isInteger(payload.messageCount)) return
+  const store = useSessionChatStore(payload.sessionId)
+  const messages = store.messages.slice(0, payload.messageCount)
+  for (const patch of payload.messagePatches ?? []) {
+    if (Number.isInteger(patch.index) && patch.index >= 0 && patch.index < payload.messageCount) {
+      messages[patch.index] = cloneForWindowSync(patch.message)
+    }
+  }
+  if (messages.some((message) => !message)) return
+
+  applyingRemoteState.add(payload.sessionId)
+  store.$patch((state) => {
+    state.messages = messages
+    state.isStreaming = Boolean(payload.isStreaming)
+    state.streamStartedAtMs = Number.isFinite(payload.streamStartedAtMs) ? payload.streamStartedAtMs : 0
+    state.currentNode = payload.currentNode || ''
+    state.streamError = payload.streamError || ''
+    state.loadedSessionId = payload.loadedSessionId || ''
+    state.activeAgentMode = payload.activeAgentMode
+    state.pendingAttachments = payload.pendingAttachments ?? []
+    state.taskSuggestions = payload.taskSuggestions ?? []
+    state.suggestionsLoading = Boolean(payload.suggestionsLoading)
+    state.streamingSessionId = payload.streamingSessionId || ''
+  })
+  previousMessageSignatures.set(payload.sessionId, messages.map((message) => JSON.stringify(message)))
+  previousStateSignatures.set(payload.sessionId, JSON.stringify({
+    isStreaming: store.isStreaming,
+    streamStartedAtMs: store.streamStartedAtMs,
+    currentNode: store.currentNode,
+    streamError: store.streamError,
+    loadedSessionId: store.loadedSessionId,
+    activeAgentMode: store.activeAgentMode,
+    pendingAttachments: store.pendingAttachments,
+    taskSuggestions: store.taskSuggestions,
+    suggestionsLoading: store.suggestionsLoading,
+    streamingSessionId: store.streamingSessionId,
+  }))
+  window.setTimeout(() => applyingRemoteState.delete(payload.sessionId), 0)
+}
+
+/** Install the single renderer listener used by every session-scoped store. */
+function installChatWindowSyncListener() {
+  if (windowSyncListenerInstalled || !window.agentEditorDesktop?.onWindowSync) return
+  windowSyncListenerInstalled = true
+  window.agentEditorDesktop.onWindowSync(({ type, value }) => {
+    const payload = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+    const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId : ''
+    if (type === 'chat-state') {
+      applyRemoteChatState(payload as unknown as AgentChatWindowState)
+    } else if (type === 'chat-sync-request' && sessionId) {
+      const store = windowSyncedStores.get(sessionId)
+      // A newly-created mirror has no authoritative state yet. Let the window
+      // that loaded history or owns the live stream answer the request.
+      if (store && (store.loadedSessionId === sessionId || store.messages.length > 0 || store.isStreaming)) {
+        broadcastChatState(sessionId, store, true)
+      }
+    } else if (type === 'chat-cancel' && sessionId) {
+      windowSyncedStores.get(sessionId)?.cancelStream()
+    }
+  })
+}
+
+/** Register one persisted session for incremental cross-window mirroring. */
+function registerChatWindowSync(sessionId: string, store: AgentChatStoreInstance) {
+  if (!sessionId || windowSyncedStores.get(sessionId) === store) return
+  windowSyncedStores.set(sessionId, store)
+  previousMessageSignatures.set(sessionId, store.messages.map((message) => JSON.stringify(message)))
+  store.$subscribe(() => broadcastChatState(sessionId, store), { detached: true, flush: 'post' })
+  installChatWindowSyncListener()
+  window.agentEditorDesktop?.windowSync?.('chat-sync-request', { sessionId })
+}
+
+/** Ask the renderer that owns a stream to cancel it, then update this mirror. */
+export function cancelSessionChatAcrossWindows(sessionId: string, store: AgentChatStoreInstance) {
+  window.agentEditorDesktop?.windowSync?.('chat-cancel', { sessionId })
+  store.cancelStream()
+}
+
 /** The primary Agent page chat store. */
 export const useChatStore = createChatStore('chat')
 
@@ -1130,5 +1277,7 @@ if (import.meta.hot) {
  * views use this instead of the primary page's singleton store.
  */
 export function useSessionChatStore(sessionId: string) {
-  return createChatStore(`chat-session:${sessionId}`)()
+  const store = createChatStore(`chat-session:${sessionId}`)()
+  registerChatWindowSync(sessionId, store)
+  return store
 }

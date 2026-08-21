@@ -59,8 +59,7 @@ contextBridge.exposeInMainWorld('agentEditorDesktop', {
   floatingSetVisible: (visible) => ipcRenderer.invoke('floating:set-visible', { visible }),
   floatingGetState: () => ipcRenderer.invoke('floating:get-state'),
   floatingToggle: () => ipcRenderer.send('floating:toggle'),
-  // Cross-window sync: the main window broadcasts theme/session changes to the
-  // floating window; the floating window subscribes with onWindowSync.
+  // Bidirectional Agent state bridge shared by the main and floating windows.
   windowSync: (type, value) => ipcRenderer.send('agent:window-sync', { type, value }),
   onWindowSync: (callback) => {
     const handler = (_event, payload) => callback(payload)

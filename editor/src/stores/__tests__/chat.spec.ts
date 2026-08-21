@@ -3,11 +3,12 @@
  *
  * Verifies that references saved in message metadata survive history reloads.
  */
+import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createPinia, setActivePinia } from 'pinia'
 
-import { useChatStore } from '../chat'
+import { useChatStore, useSessionChatStore } from '../chat'
 
 const apiMocks = vi.hoisted(() => ({
   fetchMessages: vi.fn(),
@@ -440,6 +441,53 @@ describe('chat reference history', () => {
 
     expect(action?.node).toBe('action')
     expect(action?.trace?.some((trace) => trace.event === 'tool_call_end')).toBe(true)
+  })
+
+  it('mirrors incremental live chat state into the same session store without echoing it', async () => {
+    const sent: Array<{ type: string; value: unknown }> = []
+    let receive: ((payload: { type: string; value: unknown }) => void) | undefined
+    Object.defineProperty(window, 'agentEditorDesktop', {
+      configurable: true,
+      value: {
+        windowSync: (type: string, value: unknown) => sent.push({ type, value }),
+        onWindowSync: (callback: (payload: { type: string; value: unknown }) => void) => {
+          receive = callback
+          return () => undefined
+        },
+      } as Partial<AgentEditorDesktopApi>,
+    })
+    const store = useSessionChatStore('shared-session')
+    const requestsBeforeMirrorProbe = sent.length
+    receive?.({ type: 'chat-sync-request', value: { sessionId: 'shared-session' } })
+    expect(sent).toHaveLength(requestsBeforeMirrorProbe)
+
+    store.$patch({
+      messages: [{ role: 'assistant', content: '第一段流式文本', node: 'agent' }],
+      isStreaming: true,
+      streamStartedAtMs: 1234,
+      streamingSessionId: 'shared-session',
+    })
+    await nextTick()
+
+    const outgoing = [...sent].reverse().find((item) => item.type === 'chat-state')
+    expect(outgoing?.value).toMatchObject({
+      sessionId: 'shared-session',
+      messageCount: 1,
+      isStreaming: true,
+      streamStartedAtMs: 1234,
+      messagePatches: [{ index: 0, message: { content: '第一段流式文本' } }],
+    })
+
+    store.$patch({ messages: [], isStreaming: false, streamStartedAtMs: 0, streamingSessionId: '' })
+    await nextTick()
+    const sendsBeforeRemoteApply = sent.length
+    receive?.({ type: 'chat-state', value: outgoing?.value })
+    await nextTick()
+
+    expect(store.messages[0]?.content).toBe('第一段流式文本')
+    expect(store.isStreaming).toBe(true)
+    expect(store.streamStartedAtMs).toBe(1234)
+    expect(sent).toHaveLength(sendsBeforeRemoteApply)
   })
 
 })

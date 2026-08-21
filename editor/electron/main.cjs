@@ -1046,21 +1046,27 @@ ipcMain.on('floating:toggle', () => {
   toggleFloatingWindow()
 })
 
-// Forward theme / session changes from the main window to the floating window.
-// localStorage storage events do not cross Electron BrowserWindows, so sync
-// happens over IPC instead.
+// Relay Agent state between the main and floating renderer windows. Electron
+// BrowserWindows do not share Pinia or localStorage events, so both directions
+// must receive session, settings, and live-chat updates over IPC.
 ipcMain.on('agent:window-sync', (event, payload) => {
-  if (!floatingWindow || floatingWindow.isDestroyed()) {
-    return
-  }
-  // Ignore echoes coming back from the floating window itself to avoid a loop.
   const sender = BrowserWindow.fromWebContents(event.sender)
-  if (sender === floatingWindow) {
-    return
-  }
   const { type, value } = payload || {}
-  if (type === 'theme' || type === 'session') {
-    floatingWindow.webContents.send('agent:window-sync', { type, value })
+  const allowedTypes = new Set([
+    'theme',
+    'session',
+    'chat-mode',
+    'agent-loop-mode',
+    'agent-access-mode',
+    'chat-state',
+    'chat-sync-request',
+    'chat-cancel',
+  ])
+  if (!allowedTypes.has(type)) return
+  for (const target of [mainWindow, floatingWindow]) {
+    if (target && !target.isDestroyed() && target !== sender) {
+      target.webContents.send('agent:window-sync', { type, value })
+    }
   }
 })
 

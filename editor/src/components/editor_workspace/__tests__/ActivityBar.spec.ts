@@ -39,6 +39,12 @@ describe('ActivityBar', () => {
     )
   })
 
+  it('matches the icon-mode knowledge submenu surface to the activity bar', () => {
+    expect(activityBarSource).toMatch(
+      /\.knowledge-submenu \{[^}]*min-width: 48px;[^}]*width: 48px;[^}]*padding: var\(--space-8\) 3px;[^}]*border: 1px solid var\(--color-activity-bar-border\);[^}]*border-radius: 20px;[^}]*background: var\(--color-activity-bar-bg\);[^}]*box-shadow: 0 0 0 4px var\(--color-activity-bar-ring\);/s,
+    )
+  })
+
   beforeEach(() => {
     setActivePinia(createPinia())
   })

@@ -6,7 +6,7 @@
   keeps observability and settings outside of the editor side panel.
 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import darkTitle from '@/assets/images/暗色标题.png'
@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import ChatInput from '@/components/editor_workspace/agent_chat/ChatInput.vue'
+import AgentPanelTitlebar from '@/components/editor_workspace/agent_chat/AgentPanelTitlebar.vue'
 import LoaderCube from '@/components/editor_workspace/agent_chat/LoaderCube.vue'
 import MessageList from '@/components/editor_workspace/agent_chat/MessageList.vue'
 import SessionDrawer from '@/components/editor_workspace/agent_chat/SessionDrawer.vue'
@@ -32,7 +33,7 @@ import TaskListDrawer from '@/components/editor_workspace/agent_chat/TaskListDra
 import ChildAgentPanel from '@/components/editor_workspace/agent_chat/ChildAgentPanel.vue'
 import EnvironmentChangeCard from '@/components/editor_workspace/agent_chat/EnvironmentChangeCard.vue'
 import ChangeDetailDrawer from '@/components/editor_workspace/agent_chat/ChangeDetailDrawer.vue'
-import { useChatStore, useSessionChatStore } from '@/stores/chat'
+import { cancelSessionChatAcrossWindows, useChatStore, useSessionChatStore } from '@/stores/chat'
 import type { AgentUploadedAttachment } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
@@ -62,14 +63,18 @@ const props = withDefaults(defineProps<{
   sessionId?: string
   /** Silently follow messages persisted by an external queue worker. */
   liveSync?: boolean
+  /** Let Electron use the shared panel titlebar as a native drag region. */
+  panelDraggable?: boolean
 }>(), {
   mode: 'panel',
   sessionId: '',
   liveSync: false,
+  panelDraggable: false,
 })
 // Queue dialogs mount a complete Agent panel for a fixed task session.  Give
 // it its own stream state so opening it cannot replace or cancel the page chat.
-const chatStore = shallowRef(props.sessionId ? useSessionChatStore(props.sessionId) : useChatStore())
+const initialSessionId = props.sessionId || sessionStore.currentSessionId || ''
+const chatStore = shallowRef(initialSessionId ? useSessionChatStore(initialSessionId) : useChatStore())
 const emit = defineEmits<{
   expand: []
 }>()
@@ -89,6 +94,7 @@ const isMessageListAtBottom = ref(true)
 const sessionLoading = ref(false)
 let taskHistoryPollTimer: number | null = null
 const loadingSessionId = ref('')
+const remoteSessionPending = ref('')
 const contextWindowTokens = ref(128000)
 const safetyDisabled = ref(false)
 const safetyLoading = ref(false)
@@ -189,10 +195,13 @@ async function reloadSessions() {
     return
   }
   isBootstrapping.value = true
+  const sessionIdBeforeLoad = activeSessionId.value
   try {
     await sessionStore.load(userId.value)
-    if (activeSessionId.value) {
-      await loadSelectedSessionHistory(activeSessionId.value)
+    // Do not let the mount-time list request erase a conversation created or
+    // selected while that request was in flight.
+    if (sessionIdBeforeLoad && activeSessionId.value === sessionIdBeforeLoad) {
+      await loadSelectedSessionHistory(sessionIdBeforeLoad)
     }
   } finally {
     isBootstrapping.value = false
@@ -220,13 +229,14 @@ async function createSession() {
   }
 }
 
-async function selectSession(sessionId: string) {
+async function selectSession(sessionId: string, broadcast = true, loadHistory = true) {
   // A queue detail is pinned to its task thread.  Navigating its session list
   // must not replace the task conversation currently being inspected.
   if (props.sessionId) return
-  sessionStore.select(sessionId)
+  if (!loadHistory) remoteSessionPending.value = sessionId
+  sessionStore.select(sessionId, broadcast)
   useActiveSessionChat(sessionId)
-  await loadSelectedSessionHistory(sessionId)
+  if (loadHistory) await loadSelectedSessionHistory(sessionId)
 }
 
 async function loadSelectedSessionHistory(sessionId: string, force = false) {
@@ -388,6 +398,30 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 
 function sendSuggestion(suggestion: string) {
   void sendMessage(suggestion)
+}
+
+/** Cancel the renderer that owns this session's HTTP stream, not only its mirror. */
+function cancelActiveStream() {
+  if (activeSessionId.value) {
+    cancelSessionChatAcrossWindows(activeSessionId.value, chatStore.value)
+  }
+}
+
+/** Follow session and titlebar settings changed in the floating Agent window. */
+function handleWindowSync(payload: { type: string; value: unknown }) {
+  if (props.sessionId || !payload) return
+  // Every mounted AgentPanel instance must mark this selection as remote.
+  // The shared session store may already have been updated by a sibling panel,
+  // but this panel still needs to suppress its own history reload watcher.
+  if (payload.type === 'session' && typeof payload.value === 'string') {
+    void selectSession(payload.value, false, false)
+  } else if (payload.type === 'chat-mode' && (payload.value === 'chat' || payload.value === 'tool')) {
+    settingsStore.setChatMode(payload.value, false)
+  } else if (payload.type === 'agent-loop-mode' && typeof payload.value === 'string') {
+    settingsStore.setAgentLoopMode(payload.value as AgentLoopMode, false)
+  } else if (payload.type === 'agent-access-mode' && typeof payload.value === 'string') {
+    settingsStore.setAgentAccessMode(payload.value as AgentAccessMode, false)
+  }
 }
 
 function containsFiles(event: DragEvent) {
@@ -585,14 +619,25 @@ watch([userId, activeSessionId], syncChildAgentWatcher)
 
 watch(
   activeSessionId,
-  (sessionId) => {
+  async (sessionId) => {
     // The first send creates and selects its session after inserting the local
     // user message. Reloading the still-empty history here would clear it.
-    if (sessionId && !chatStore.value.isStreaming) {
+    if (sessionId) useActiveSessionChat(sessionId)
+    if (sessionId && remoteSessionPending.value === sessionId) {
+      remoteSessionPending.value = ''
+      return
+    }
+    if (sessionId && sessionStore.freshSessionIds.includes(sessionId)) return
+    // Session creation updates the selected id before send() appends its local
+    // user bubble. Yield once so a fresh stream wins over an empty history load.
+    await nextTick()
+    if (sessionId && !chatStore.value.isStreaming && chatStore.value.messages.length === 0) {
       void loadSelectedSessionHistory(sessionId)
     }
   },
 )
+
+let unsubscribeWindowSync: (() => void) | undefined
 
 onMounted(() => {
   window.addEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
@@ -609,6 +654,7 @@ onMounted(() => {
   void settingsStore.fetchWebSearchSettings()
   syncChildAgentWatcher()
   syncTaskHistoryPolling(props.liveSync)
+  unsubscribeWindowSync = window.agentEditorDesktop?.onWindowSync?.(handleWindowSync)
 })
 
 /** 嵌入式任务查看器切换到另一任务时，同步加载对应的完整 Agent 会话。 */
@@ -621,6 +667,7 @@ watch(() => props.liveSync, syncTaskHistoryPolling)
 onBeforeUnmount(() => {
   window.removeEventListener('agent-model-config-updated', handleModelConfigUpdated as EventListener)
   window.removeEventListener('agent-change-updated', handleChangeUpdated as EventListener)
+  unsubscribeWindowSync?.()
   taskListStore.setAutoOpenOnUpdate(true)
   chatStore.value.stopChildAgentWatcher()
   if (taskHistoryPollTimer !== null) {
@@ -802,57 +849,25 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
     </header>
 
     <div class="agent-body">
-      <header v-if="props.mode === 'panel'" class="agent-titlebar">
-      <button
-        class="icon-button drawer-toggle"
-        type="button"
-        title="Open sessions"
-        @click="sessionDrawerOpen = !sessionDrawerOpen"
+      <AgentPanelTitlebar
+        v-if="props.mode === 'panel'"
+        compact
+        :draggable="props.panelDraggable"
+        :title="sessionTitle"
+        :chat-mode="settingsStore.chatMode"
+        :environment-open="environmentCardOpen"
+        :task-open="taskListCardOpen"
+        :child-open="childAgentCardOpen"
+        @toggle-sessions="sessionDrawerOpen = !sessionDrawerOpen"
+        @toggle-environment="toggleEnvironmentCard"
+        @toggle-task="toggleTaskListCard"
+        @toggle-child="toggleChildAgentCard"
+        @expand="emit('expand')"
+        @create="createSession"
+        @toggle-chat-mode="settingsStore.toggleChatMode"
       >
-        <IcIcon name="forum" :size="16" />
-      </button>
-       <div class="title-meta">
-         <strong>{{ sessionTitle }}</strong>
-       </div>
-      <div class="title-actions">
-        <button class="icon-button" type="button" title="环境与变更" :aria-pressed="environmentCardOpen" @click="toggleEnvironmentCard"><IcIcon name="dns" :size="16" /></button>
-        <button
-          class="icon-button"
-          type="button"
-          title="任务列表"
-          :aria-pressed="taskListCardOpen"
-          @click="toggleTaskListCard"
-        >
-          <IcIcon name="checklist" :size="16" />
-        </button>
-        <button
-          class="icon-button"
-          type="button"
-          title="子 Agent"
-          :aria-pressed="childAgentCardOpen"
-          @click="toggleChildAgentCard"
-        >
-          <IcIcon name="group" :size="16" />
-        </button>
-        <button
-          v-if="props.mode === 'panel'"
-          class="icon-button"
-          type="button"
-          title="Expand Agent page"
-          @click="emit('expand')"
-        >
-          <IcIcon name="open-in-full" :size="16" />
-        </button>
-        <button class="panel-new-session" type="button" title="新对话" @click="createSession">
-          <IcIcon name="add" :size="17" />
-          <span>新对话</span>
-        </button>
-        <button class="mode-button" type="button" title="Toggle chat render mode" @click="settingsStore.toggleChatMode">
-          <IcIcon name="history" :size="15" />
-          <span>{{ chatModeLabel }}</span>
-        </button>
-      </div>
-    </header>
+        <template #window-controls><slot name="window-controls" /></template>
+      </AgentPanelTitlebar>
 
     <div class="agent-content-row">
     <main class="chat-body" :class="{ dimmed: isBootstrapping }">
@@ -914,7 +929,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
         @clear-reference="clearReference"
         @remove-attachment="removeAttachment"
         @file-select="handleFileSelect"
-        @cancel-stream="chatStore.cancelStream"
+        @cancel-stream="cancelActiveStream"
         @create-task-list="createTaskListFromInput"
       />
     </div>
@@ -1079,44 +1094,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 58%, transparent),
     inset 0 0 80px color-mix(in srgb, var(--color-accent) 18%, transparent);
-}
-
-.agent-titlebar {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-8);
-  min-height: 28px;
-  padding: 0 var(--space-10);
-  background: transparent;
-}
-
-.agent-titlebar > .drawer-toggle {
-  display: none;
-}
-
-.agent-titlebar > .title-meta {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.agent-titlebar > .title-actions {
-  display: contents;
-}
-
-.agent-titlebar > .title-actions > .icon-button:not(:nth-child(4)),
-.agent-titlebar > .title-actions > .mode-button {
-  display: none;
-}
-
-.agent-titlebar > .title-actions > .icon-button:nth-child(4) {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.agent-titlebar > .title-actions > .panel-new-session {
-  grid-column: 3;
-  grid-row: 1;
 }
 
 .agent-topbar {
@@ -1569,68 +1546,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   transform: scale(0.98);
 }
 
-.drawer-toggle {
-  width: 28px;
-  height: 26px;
-  border-radius: var(--radius-sm);
-}
-
-.title-meta {
-  min-width: 0;
-}
-
-.title-meta strong {
-  display: block;
-  overflow: hidden;
-  color: var(--color-text-primary);
-  font-size: calc(13px * var(--font-scale));
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.title-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.icon-button,
-.mode-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 26px;
-  border: 1px solid var(--color-border);
-  background: transparent;
-  color: var(--color-text-tertiary);
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.icon-button {
-  width: 28px;
-  border-radius: 999px;
-  border: none;
-}
-
-.mode-button {
-  gap: var(--space-4);
-  padding: 0 var(--space-8);
-  border-radius: 999px;
-  font-family: var(--font-ui);
-  font-size: calc(10px * var(--font-scale));
-}
-
-.icon-button:hover,
-.mode-button:hover {
-  border-color: var(--color-accent);
-  background: var(--color-accent-muted);
-  color: var(--color-text-primary);
-}
-
 .chat-body {
   position: relative;
   display: flex;
@@ -1897,9 +1812,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
     --agent-input-max-width: min(92vw, 560px);
   }
 
-  .mode-button span {
-    display: none;
-  }
 }
 
 .history-loading {

@@ -389,12 +389,12 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   /** Set explicit theme mode and immediately apply CSS variables. */
-  function setThemeMode(mode: ThemeMode) {
+  function setThemeMode(mode: ThemeMode, broadcast = true) {
     themeMode.value = mode
     localStorage.setItem(THEME_KEY, mode)
     applyTheme()
     // Keep the floating Agent window's theme in sync.
-    window.agentEditorDesktop?.windowSync?.('theme', mode)
+    if (broadcast) window.agentEditorDesktop?.windowSync?.('theme', mode)
   }
 
   /** Toggle between dark and light for the toolbar button. */
@@ -403,9 +403,15 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   /** Toggle between compact chat bubbles and tool-node-aware rendering. */
-  function toggleChatMode() {
-    chatMode.value = chatMode.value === 'chat' ? 'tool' : 'chat'
+  /** Set the shared Agent renderer mode without creating cross-window echoes. */
+  function setChatMode(mode: 'chat' | 'tool', broadcast = true) {
+    chatMode.value = mode
     localStorage.setItem(CHAT_MODE_KEY, chatMode.value)
+    if (broadcast) window.agentEditorDesktop?.windowSync?.('chat-mode', mode)
+  }
+
+  function toggleChatMode() {
+    setChatMode(chatMode.value === 'chat' ? 'tool' : 'chat')
   }
 
   function setShowIndexColumn(value: boolean) {
@@ -438,14 +444,16 @@ export const useSettingsStore = defineStore('settings', () => {
     localStorage.setItem(FLOATING_PIN_MODE_KEY, floatingPinMode.value)
   }
 
-  function setAgentLoopMode(mode: AgentLoopMode) {
+  function setAgentLoopMode(mode: AgentLoopMode, broadcast = true) {
     agentLoopMode.value = mode
     localStorage.setItem(AGENT_LOOP_MODE_KEY, mode)
+    if (broadcast) window.agentEditorDesktop?.windowSync?.('agent-loop-mode', mode)
   }
 
-  function setAgentAccessMode(mode: AgentAccessMode) {
+  function setAgentAccessMode(mode: AgentAccessMode, broadcast = true) {
     agentAccessMode.value = normalizeAgentAccessMode(mode)
     localStorage.setItem(AGENT_ACCESS_MODE_KEY, agentAccessMode.value)
+    if (broadcast) window.agentEditorDesktop?.windowSync?.('agent-access-mode', agentAccessMode.value)
   }
 
   /** Update local profile values until backend settings are connected. */
@@ -751,6 +759,7 @@ export const useSettingsStore = defineStore('settings', () => {
     setThemeMode,
     toggleTheme,
     toggleChatMode,
+    setChatMode,
     setAgentLoopMode,
     setAgentAccessMode,
     setSidebarDisplayMode,
