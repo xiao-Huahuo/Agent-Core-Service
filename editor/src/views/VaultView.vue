@@ -49,7 +49,7 @@ const items = ref<VaultItem[]>([])
 const tags = ref<VaultTag[]>([])
 const query = ref('')
 const selectedTag = ref('')
-const selectedType = ref('')
+const selectedType = ref<VaultItemType | ''>('')
 const inTrash = ref(false)
 const multiSelect = ref(false)
 const selectedIds = ref<Set<string>>(new Set())
@@ -338,6 +338,7 @@ async function contextDelete() {
         <VaultTable
           :token="token"
           :items="items"
+          :item-type="selectedType"
           :selected-ids="selectedIds"
           :multi-select="multiSelect"
           @open="openEdit"

@@ -2172,6 +2172,7 @@ class KnowledgeLibraryService:
             "path": relative_path,
             "isDir": is_dir,
             "mtime": self._format_mtime(path),
+            "createdAt": self._format_ctime(path),
             "indexStatus": index_status,
             "graphStatus": graph_status,
         }
@@ -2639,6 +2640,16 @@ class KnowledgeLibraryService:
         from datetime import datetime
 
         return datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+
+    @staticmethod
+    def _format_ctime(path: Path) -> str:
+        """Format the filesystem creation time for frontend file metadata."""
+
+        from datetime import datetime
+
+        stat = path.stat()
+        timestamp = getattr(stat, "st_birthtime", stat.st_ctime)
+        return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M")
 
     @staticmethod
     def _format_datetime(value: datetime) -> str:

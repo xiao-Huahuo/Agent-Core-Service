@@ -35,13 +35,24 @@ function vaultItem(itemType: VaultItem['item_type'], assetIds: string[] = []): V
     created_at: '2026-08-14T00:00:00Z',
     updated_at: '2026-08-14T00:00:00Z',
     fields: { asset_ids: assetIds },
+    safe_fields: { asset_ids: assetIds },
     tags: [],
-  } as VaultItem
+    deleted_at: '',
+  }
+}
+
+function vaultItemWithFields(itemType: VaultItem['item_type'], id: string, fields: Record<string, unknown>): VaultItem {
+  return {
+    ...vaultItem(itemType),
+    item_id: id,
+    name: String(fields.name ?? id),
+    fields,
+  }
 }
 
 describe('VaultTable icons', () => {
   it('keeps the icon column header visually empty', () => {
-    const wrapper = mount(VaultTable, { props: { token: 'token', items: [], selectedIds: new Set(), multiSelect: false } })
+    const wrapper = mount(VaultTable, { props: { token: 'token', items: [], selectedIds: new Set<string>(), multiSelect: false } })
 
     expect(wrapper.findAll('th')[0]?.text()).toBe('')
     expect(tableSource).not.toContain('<th>图标</th>')
@@ -52,12 +63,12 @@ describe('VaultTable icons', () => {
       props: {
         token: 'token',
         items: [vaultItem('login'), vaultItem('card'), vaultItem('identity'), vaultItem('secure_note')],
-        selectedIds: new Set(),
+        selectedIds: new Set<string>(),
         multiSelect: false,
       },
     })
 
-    expect(wrapper.findAll('.mock-icon').map((icon) => icon.attributes('data-icon'))).toEqual([
+    expect(wrapper.findAll('.type-icon .mock-icon').map((icon) => icon.attributes('data-icon'))).toEqual([
       'shield',
       'dashboard',
       'fact-check',
@@ -71,7 +82,7 @@ describe('VaultTable icons', () => {
       props: {
         token: 'token',
         items: [vaultItem('card', ['asset-1'])],
-        selectedIds: new Set(),
+        selectedIds: new Set<string>(),
         multiSelect: false,
       },
     })
@@ -80,6 +91,49 @@ describe('VaultTable icons', () => {
       'data-asset': 'asset-1',
       'data-fallback': 'dashboard',
     })
-    expect(wrapper.find('.mock-icon').exists()).toBe(false)
+    expect(wrapper.find('.type-icon .mock-icon').exists()).toBe(false)
+  })
+
+  it('uses the union of non-empty fields for the selected password type', () => {
+    const wrapper = mount(VaultTable, {
+      props: {
+        token: 'token',
+        items: [
+          vaultItemWithFields('login', 'login-1', { name: '工作账号', username: 'alice', password: 'secret', uri: '' }),
+          vaultItemWithFields('login', 'login-2', { name: '私人账号', username: '', password: 'secret-2', uri: 'https://example.com' }),
+        ],
+        itemType: 'login',
+        selectedIds: new Set<string>(),
+        multiSelect: false,
+      },
+    })
+
+    expect(wrapper.findAll('th').map((cell) => cell.text())).toEqual([
+      '', '项目名称', '用户名', '密码', '网站 URI', '创建时间', '拥有者',
+    ])
+    expect(wrapper.text()).not.toContain('secret')
+  })
+
+  it('changes the dynamic column count when the selected password type changes', async () => {
+    const wrapper = mount(VaultTable, {
+      props: {
+        token: 'token',
+        items: [vaultItemWithFields('card', 'card-1', { name: '主卡', number: '6222', brand: 'UnionPay银联' })],
+        itemType: 'card',
+        selectedIds: new Set<string>(),
+        multiSelect: false,
+      },
+    })
+    expect(wrapper.findAll('th').map((cell) => cell.text())).toEqual([
+      '', '项目名称', '卡号', '品牌', '创建时间', '拥有者',
+    ])
+
+    await wrapper.setProps({
+      itemType: 'secure_note',
+      items: [vaultItemWithFields('secure_note', 'note-1', { name: '备忘', note: '只有一列' })],
+    })
+    expect(wrapper.findAll('th').map((cell) => cell.text())).toEqual([
+      '', '项目名称', '笔记内容', '创建时间', '拥有者',
+    ])
   })
 })

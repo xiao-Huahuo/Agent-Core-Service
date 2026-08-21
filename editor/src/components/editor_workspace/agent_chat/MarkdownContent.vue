@@ -14,10 +14,24 @@ import { hljs, isHighlightableLanguage } from '../codeHighlight'
 import { renderMathInHtml } from '../mathRender'
 
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useFavoritesStore } from '@/stores/favorites'
+import { usePrivacyStore } from '@/stores/privacy'
+import { useSettingsStore } from '@/stores/settings'
 import type { SourceItem } from '@/stores/chat'
+import type { KnowledgeFileNode } from '@/types/knowledge'
 
 import { useImagePreviewer } from '@/components/common/useImagePreviewer'
 import type { ImagePreviewItem } from '@/components/common/useImagePreviewer'
+import { formatSize } from '@/components/editor_workspace/fileResourceManagerUtils'
+import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
+import blockIconUrl from '@/assets/icons/svg/ic/ic--outline-block.svg?url'
+import checkCircleIconUrl from '@/assets/icons/svg/ic/ic--outline-check-circle.svg?url'
+import errorIconUrl from '@/assets/icons/svg/ic/ic--outline-error-outline.svg?url'
+import graphIconUrl from '@/assets/icons/svg/ic/ic--outline-hub.svg?url'
+import spinnerIconUrl from '@/assets/icons/svg/ic/ic--outline-autorenew.svg?url'
+import starIconUrl from '@/assets/icons/svg/ic/ic--outline-star.svg?url'
+import visibilityIconUrl from '@/assets/icons/svg/ic/ic--outline-visibility.svg?url'
+import visibilityOffIconUrl from '@/assets/icons/svg/ic/ic--outline-visibility-off.svg?url'
 
 marked.setOptions({
   gfm: true,
@@ -57,6 +71,9 @@ const props = defineProps<{
 const imagePreviewer = useImagePreviewer()
 const contentRef = ref<HTMLDivElement | null>(null)
 const workspaceStore = useWorkspaceStore()
+const favoritesStore = useFavoritesStore()
+const privacyStore = usePrivacyStore()
+const settingsStore = useSettingsStore()
 
 // 字符串级代码高亮缓存:key 为 `${lang}\0${code}`,value 为已转义的 hljs 高亮 HTML。
 // 流式刷新时已完成代码块直接命中缓存,只对正在输出的最后一个代码块做真正的高亮,
@@ -106,7 +123,7 @@ const sanitizedHtml = computed(() => {
   // Allow citation-anchor class, data-citation-idx attribute, img tags, and
   // KaTeX style (katex 用 style 定位上下标/strut,DOMPurify 会清洗危险 CSS)。
   const purifyConfig = {
-    ALLOWED_ATTR: ['data-citation-idx', 'class', 'src', 'alt', 'referrerpolicy', 'style'],
+    ALLOWED_ATTR: ['data-citation-idx', 'class', 'src', 'alt', 'referrerpolicy', 'style', 'href'],
     ADD_TAGS: ['sup', 'img'],
   }
   // 代码高亮在 renderer 内完成:代码 fence 内的 HTML 由 hljs 转义保留(不再被剥离),
@@ -122,9 +139,11 @@ const sourceLinkSignature = computed(() => {
     .join('|')
   const workspaceSources = (workspaceStore.flatNodes ?? [])
     .filter((node) => !node.isDir && node.path)
-    .map((node) => node.path)
+    .map((node) => `${node.path}:${node.size ?? ''}:${node.createdAt ?? ''}:${node.indexStatus ?? ''}:${node.graphStatus ?? ''}`)
     .join('|')
-  return `${citationSources}::${workspaceSources}`
+  const favoriteSources = favoritesStore.records.map((record) => `${record.library_id}:${record.target_id}`).join('|')
+  const privateSources = privacyStore.records.map((record) => `${record.library_id}:${record.target_id}`).join('|')
+  return `${citationSources}::${workspaceSources}::${favoriteSources}::${privateSources}`
 })
 
 function handleClick(event: MouseEvent) {
@@ -146,6 +165,12 @@ function handleClick(event: MouseEvent) {
     }
     return
   }
+  const mountedFile = target.closest('.agent-mounted-file') as HTMLButtonElement | null
+  if (mountedFile && props.onNavigateSource) {
+    const uri = mountedFile.dataset.sourceUri
+    if (uri) props.onNavigateSource(uri)
+    return
+  }
   const sourceLink = target.closest('.source-file-link') as HTMLElement | null
   if (sourceLink && props.onNavigateSource) {
     const uri = sourceLink.getAttribute('data-source-uri')
@@ -161,6 +186,121 @@ function handleClick(event: MouseEvent) {
   const map = props.citationMap
   if (!map || !map[idx]) return
   props.onNavigateSource(map[idx].source_uri)
+}
+
+function normalizedKnowledgePath(value: string): string {
+  return value.replace(/\\/g, '/').replace(/^\/+/, '')
+}
+
+function knowledgePathFromHref(rawHref: string): string {
+  try {
+    const url = new URL(rawHref, window.location.origin)
+    if (url.pathname !== '/knowledge/files/raw') return ''
+    return normalizedKnowledgePath(url.searchParams.get('path') ?? '')
+  } catch {
+    return ''
+  }
+}
+
+function absoluteKnowledgePath(relativePath: string): string {
+  const root = settingsStore.profile.knowledgeDir.trim().replace(/[\\/]+$/, '')
+  if (!root) return relativePath
+  const separator = root.includes('\\') ? '\\' : '/'
+  return `${root}${separator}${relativePath.replace(/[\\/]/g, separator)}`
+}
+
+function appendText(parent: HTMLElement, className: string, text: string): HTMLElement {
+  const element = document.createElement('span')
+  element.className = className
+  element.textContent = text
+  parent.appendChild(element)
+  return element
+}
+
+type MountedFileStatus = { iconUrl: string; title: string; state: string }
+
+function indexStatus(node: KnowledgeFileNode): MountedFileStatus {
+  if (node.indexStatus === 'indexed' || node.indexStatus === 'clean') {
+    return { iconUrl: checkCircleIconUrl, title: '已进入向量库', state: 'active' }
+  }
+  if (node.indexStatus === 'ignored') return { iconUrl: blockIconUrl, title: '入库已忽略', state: 'ignored' }
+  if (node.indexStatus === 'failed') return { iconUrl: errorIconUrl, title: '入库失败', state: 'failed' }
+  return { iconUrl: spinnerIconUrl, title: '待入库', state: 'pending' }
+}
+
+function graphStatus(node: KnowledgeFileNode): MountedFileStatus {
+  if (node.graphStatus === 'graphed') return { iconUrl: graphIconUrl, title: '已入图谱', state: 'active' }
+  if (node.graphStatus === 'ignored') return { iconUrl: blockIconUrl, title: '图谱已忽略', state: 'ignored' }
+  return { iconUrl: spinnerIconUrl, title: '待入图谱', state: 'pending' }
+}
+
+function appendStatusIcon(parent: HTMLElement, status: MountedFileStatus) {
+  const wrapper = appendText(parent, `agent-mounted-file__status ${status.state}`, '')
+  wrapper.title = status.title
+  wrapper.setAttribute('aria-label', status.title)
+  const glyph = document.createElement('span')
+  glyph.className = 'agent-mounted-file__status-glyph'
+  glyph.style.maskImage = `url("${status.iconUrl}")`
+  glyph.style.webkitMaskImage = `url("${status.iconUrl}")`
+  wrapper.appendChild(glyph)
+}
+
+function buildMountedFileBlock(node: KnowledgeFileNode): HTMLButtonElement {
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = 'agent-mounted-file'
+  button.dataset.sourceUri = node.path
+  button.title = `打开 ${node.name}`
+
+  const icon = document.createElement('img')
+  icon.className = 'agent-mounted-file__icon'
+  icon.src = materialFileIconForNode(node).src
+  icon.alt = ''
+  icon.setAttribute('aria-hidden', 'true')
+  button.appendChild(icon)
+
+  const details = document.createElement('span')
+  details.className = 'agent-mounted-file__details'
+  appendText(details, 'agent-mounted-file__name', node.name)
+  appendText(details, 'agent-mounted-file__path', absoluteKnowledgePath(node.path))
+  appendText(details, 'agent-mounted-file__created', `创建时间 ${node.createdAt || '-'}`)
+  button.appendChild(details)
+
+  appendText(button, 'agent-mounted-file__size', formatSize(node.size ?? 0))
+  const statuses = document.createElement('span')
+  statuses.className = 'agent-mounted-file__statuses'
+  const isPrivate = privacyStore.isPrivate('knowledge_path', node.path)
+  const isFavorite = favoritesStore.isFavorite('knowledge_path', node.path)
+  const fileStatuses: MountedFileStatus[] = [
+    { iconUrl: isPrivate ? visibilityOffIconUrl : visibilityIconUrl, title: isPrivate ? '私密' : '公开', state: isPrivate ? 'active' : 'inactive' },
+    { iconUrl: starIconUrl, title: isFavorite ? '已收藏' : '未收藏', state: isFavorite ? 'favorite' : 'inactive' },
+    indexStatus(node),
+    graphStatus(node),
+  ]
+  for (const status of fileStatuses) appendStatusIcon(statuses, status)
+  button.appendChild(statuses)
+  return button
+}
+
+function mountKnowledgeFileLinks() {
+  const root = contentRef.value
+  if (!root) return
+  root.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((anchor) => {
+    const path = knowledgePathFromHref(anchor.getAttribute('href') ?? '')
+    if (!path) return
+    const node = (workspaceStore.flatNodes ?? []).find((candidate) => (
+      !candidate.isDir && normalizedKnowledgePath(candidate.path) === path
+    ))
+    if (!node) return
+    const button = buildMountedFileBlock(node)
+    const parent = anchor.parentElement
+    const remainingText = parent?.textContent?.replace(anchor.textContent ?? '', '').trim() ?? ''
+    if (parent?.tagName === 'P' && /^(?:📄|📎)?$/u.test(remainingText)) {
+      parent.replaceWith(button)
+      return
+    }
+    anchor.replaceWith(button)
+  })
 }
 
 function sourceBaseName(uri: string): string {
@@ -296,6 +436,7 @@ function linkSourceNames() {
 
 async function highlightCodeBlocks() {
   await nextTick()
+  mountKnowledgeFileLinks()
   linkSourceNames()
   const root = contentRef.value
   if (!root) return
@@ -493,6 +634,128 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
 
 .markdown-body :deep(.source-file-link:hover) {
   color: var(--color-accent);
+}
+
+.markdown-body :deep(.agent-mounted-file) {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: 1fr 1fr;
+  align-items: center;
+  gap: 0 var(--space-8);
+  width: 50%;
+  height: 75px;
+  box-sizing: border-box;
+  margin: var(--space-8) 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--workspace-card-radius, 28px);
+  background: color-mix(in srgb, var(--color-surface) 18%, transparent);
+  color: inherit;
+  padding: 4px var(--space-8);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.markdown-body :deep(.agent-mounted-file:hover) {
+  border-color: color-mix(in srgb, var(--color-text-primary) 32%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface) 24%);
+}
+
+.markdown-body :deep(.agent-mounted-file__icon) {
+  grid-row: 1 / 3;
+  align-self: stretch;
+  width: auto;
+  height: 100%;
+  max-width: none;
+  object-fit: contain;
+}
+
+.markdown-body :deep(.agent-mounted-file__details) {
+  display: grid;
+  grid-row: 1 / 3;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 1fr 1fr;
+  align-items: center;
+  min-width: 0;
+  gap: 0 var(--space-8);
+}
+
+.markdown-body :deep(.agent-mounted-file__name) {
+  grid-column: 1 / 3;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-body :deep(.agent-mounted-file__path),
+.markdown-body :deep(.agent-mounted-file__created) {
+  overflow: hidden;
+  color: color-mix(in srgb, currentColor 72%, transparent);
+  font-family: var(--font-ui);
+  font-size: calc(10px * var(--font-scale));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-body :deep(.agent-mounted-file__size) {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+  color: color-mix(in srgb, currentColor 82%, transparent);
+  font-family: var(--font-ui);
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.markdown-body :deep(.agent-mounted-file__statuses) {
+  display: flex;
+  grid-column: 3;
+  grid-row: 2;
+  align-self: center;
+  justify-content: flex-end;
+  gap: var(--space-6);
+  min-width: 0;
+  padding-right: var(--space-16);
+}
+
+.markdown-body :deep(.agent-mounted-file__status) {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  color: color-mix(in srgb, currentColor 58%, transparent);
+}
+
+.markdown-body :deep(.agent-mounted-file__status.active) {
+  color: var(--color-primary);
+}
+
+.markdown-body :deep(.agent-mounted-file__status.favorite) {
+  color: #f2b705;
+}
+
+.markdown-body :deep(.agent-mounted-file__status.failed) {
+  color: var(--color-danger);
+}
+
+.markdown-body :deep(.agent-mounted-file__status.ignored) {
+  opacity: 0.62;
+}
+
+.markdown-body :deep(.agent-mounted-file__status-glyph) {
+  display: block;
+  width: 15px;
+  height: 15px;
+  background: currentColor;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
 }
 
 .markdown-body :deep(img) {

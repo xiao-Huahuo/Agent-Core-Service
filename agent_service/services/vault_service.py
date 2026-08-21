@@ -506,6 +506,7 @@ class VaultService:
         fields = self._decrypt(session, item.encrypted_payload)
         safe_fields = {key: value for key, value in fields.items() if key not in SENSITIVE_FIELDS}
         response_fields = fields if reveal_sensitive else safe_fields
+        field_keys = [key for key, value in fields.items() if self._field_value_is_non_empty(value)]
         return {
             "item_id": item.item_id,
             "user_id": item.user_id,
@@ -513,11 +514,24 @@ class VaultService:
             "name": str(fields.get("name") or ""),
             "fields": response_fields,
             "safe_fields": safe_fields,
+            "field_keys": field_keys,
             "tags": tags,
             "deleted_at": item.deleted_at.isoformat() if item.deleted_at else "",
             "created_at": item.created_at.isoformat(),
             "updated_at": item.updated_at.isoformat(),
         }
+
+    @staticmethod
+    def _field_value_is_non_empty(value: Any) -> bool:
+        """Report field presence without exposing an encrypted field value."""
+
+        if value is None:
+            return False
+        if isinstance(value, str):
+            return bool(value.strip())
+        if isinstance(value, (list, tuple, set, dict)):
+            return bool(value)
+        return True
 
     def _redact_item(self, item: dict[str, Any]) -> dict[str, Any]:
         """Return a list-safe item payload with sensitive fields removed."""

@@ -741,6 +741,7 @@ message KnowledgeFileNode {
   int64 size = 6;
   repeated KnowledgeFileNode children = 7;
   string graph_status = 8;
+  string created_at = 9;
 }
 
 message KnowledgeFileTreeResponse {

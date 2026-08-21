@@ -3,7 +3,7 @@
  *
  * Verifies that quoted document text is rendered with the user's message.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -224,5 +224,55 @@ describe('ChatBubble user references', () => {
     const workspaceStore = useWorkspaceStore()
     expect(workspaceStore.browserSidebarOpen).toBe(true)
     expect(workspaceStore.browserSidebarUrl).toBe('https://example.com/source')
+  })
+
+  it('opens a mounted local file in the editor sidebar', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const workspaceStore = useWorkspaceStore()
+    const node = { name: '简单word.docx', path: '文档/简单word.docx', isDir: false }
+    workspaceStore.tree = [node]
+    const openEditorSidebar = vi.spyOn(workspaceStore, 'openEditorSidebar').mockResolvedValue()
+
+    const wrapper = mount(ChatBubble, {
+      global: { plugins: [pinia] },
+      props: {
+        message: {
+          role: 'assistant',
+          content: '[打开《简单word.docx》](/knowledge/files/raw?user_id=1&path=%E6%96%87%E6%A1%A3%2F%E7%AE%80%E5%8D%95word.docx)',
+        },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+      },
+    })
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+
+    await wrapper.get('.agent-mounted-file').trigger('click')
+    expect(openEditorSidebar).toHaveBeenCalledWith(node)
+  })
+
+  it('opens a mounted local file in the editor sidebar in tool mode', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const workspaceStore = useWorkspaceStore()
+    const node = { name: '简单word.docx', path: '文档/简单word.docx', isDir: false }
+    workspaceStore.tree = [node]
+    const openEditorSidebar = vi.spyOn(workspaceStore, 'openEditorSidebar').mockResolvedValue()
+
+    const wrapper = mount(ToolBubble, {
+      global: { plugins: [pinia] },
+      props: {
+        message: {
+          role: 'assistant',
+          content: '[打开《简单word.docx》](/knowledge/files/raw?user_id=1&path=%E6%96%87%E6%A1%A3%2F%E7%AE%80%E5%8D%95word.docx)',
+        },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+      },
+    })
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+
+    await wrapper.get('.agent-mounted-file').trigger('click')
+    expect(openEditorSidebar).toHaveBeenCalledWith(node)
   })
 })

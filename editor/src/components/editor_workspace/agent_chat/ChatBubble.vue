@@ -163,7 +163,7 @@ function setFeedback(kind: 'up' | 'down') {
   })
 }
 
-function handleNavigateSource(uri: string) {
+async function handleNavigateSource(uri: string) {
   if (/^https?:\/\//i.test(uri)) {
     workspaceStore.openBrowserSidebar(uri)
     return
@@ -183,8 +183,7 @@ function handleNavigateSource(uri: string) {
     })
   }
   if (node) {
-    workspaceStore.setMainView('editor')
-    workspaceStore.selectFile(node)
+    await workspaceStore.openEditorSidebar(node)
   }
 }
 

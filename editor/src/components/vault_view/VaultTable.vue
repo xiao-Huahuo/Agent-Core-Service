@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { VaultItem } from '@/api/vault'
+import type { VaultItem, VaultItemType } from '@/api/vault'
 import IcIcon from '@/components/common/IcIcon.vue'
 import VaultAssetThumb from '@/components/vault_view/VaultAssetThumb.vue'
 
@@ -16,6 +16,7 @@ defineOptions({ name: 'VaultTable' })
 const props = defineProps<{
   token: string
   items: VaultItem[]
+  itemType?: VaultItemType | ''
   selectedIds: Set<string>
   multiSelect: boolean
 }>()
@@ -47,6 +48,78 @@ const labels = {
   card: '支付卡',
   identity: '身份',
   secure_note: '安全笔记',
+}
+
+const fieldLabels: Record<string, string> = {
+  password: '密码',
+  username: '用户名',
+  uri: '网站 URI',
+  number: '卡号',
+  cardholder_name: '持卡人姓名',
+  brand: '品牌',
+  security_code: '安全码',
+  first_name: '名字',
+  title: '称呼',
+  company: '公司',
+  email: '电子邮箱',
+  phone: '电话',
+  country: '国家',
+  province: '省',
+  city: '城市',
+  address1: '地址 1',
+  address2: '地址 2',
+  address3: '地址 3',
+  postal_code: '邮政编码',
+  note: '笔记内容',
+  notes: '备注',
+  tags: '标签',
+}
+
+const fieldOrder: Record<VaultItemType, string[]> = {
+  login: ['username', 'password', 'uri', 'notes', 'tags'],
+  card: ['number', 'cardholder_name', 'brand', 'security_code', 'notes', 'tags'],
+  identity: ['first_name', 'title', 'username', 'company', 'email', 'phone', 'country', 'province', 'city', 'address1', 'address2', 'address3', 'postal_code', 'notes', 'tags'],
+  secure_note: ['note', 'notes', 'tags'],
+}
+
+const hiddenFieldKeys = new Set(['name', 'asset_ids', 'custom_fields'])
+const sensitiveFieldKeys = new Set(['password', 'number', 'security_code'])
+
+function isNonEmpty(value: unknown): boolean {
+  if (value === null || value === undefined) return false
+  if (typeof value === 'string') return value.trim().length > 0
+  if (Array.isArray(value)) return value.length > 0
+  if (typeof value === 'object') return Object.keys(value).length > 0
+  return true
+}
+
+function itemFieldKeys(item: VaultItem): string[] {
+  const keys = new Set(item.field_keys ?? [])
+  for (const [key, value] of Object.entries(item.fields)) {
+    if (isNonEmpty(value)) keys.add(key)
+  }
+  if (item.tags.length) keys.add('tags')
+  return [...keys].filter((key) => !hiddenFieldKeys.has(key))
+}
+
+const dynamicFieldKeys = computed(() => {
+  if (!props.itemType) return []
+  const union = new Set(props.items.flatMap(itemFieldKeys))
+  const canonical = fieldOrder[props.itemType].filter((key) => union.has(key))
+  const extras = [...union].filter((key) => !canonical.includes(key)).sort((left, right) => left.localeCompare(right, 'zh-CN'))
+  return [...canonical, ...extras]
+})
+
+function fieldLabel(key: string): string {
+  return fieldLabels[key] ?? key
+}
+
+function fieldValue(item: VaultItem, key: string): string {
+  if (sensitiveFieldKeys.has(key)) return '••••••••'
+  const value = key === 'tags' ? item.tags : item.fields[key]
+  if (Array.isArray(value)) return value.map(String).join('、')
+  if (value && typeof value === 'object') return JSON.stringify(value)
+  return String(value ?? '')
 }
 
 // 与项目其他区域共用已下载的 SVG 图标，避免密码库单独使用 emoji。
@@ -88,7 +161,8 @@ function goToPage(nextPage: number): void {
             <th v-if="multiSelect" aria-label="选择"></th>
             <th aria-label="项目图标"></th>
             <th>项目名称</th>
-            <th>密码类型</th>
+            <th v-for="key in dynamicFieldKeys" :key="key">{{ fieldLabel(key) }}</th>
+            <th v-if="!itemType">密码类型</th>
             <th>创建时间</th>
             <th>拥有者</th>
           </tr>
@@ -116,7 +190,8 @@ function goToPage(nextPage: number): void {
               </span>
             </td>
             <td class="name-cell">{{ item.name }}</td>
-            <td>{{ labels[item.item_type] }}</td>
+            <td v-for="key in dynamicFieldKeys" :key="key" class="field-value-cell">{{ fieldValue(item, key) }}</td>
+            <td v-if="!itemType">{{ labels[item.item_type] }}</td>
             <td>{{ formatDate(item.created_at) }}</td>
             <td>{{ item.user_id }}</td>
           </tr>
@@ -214,6 +289,13 @@ tbody tr.selected {
 .name-cell {
   color: var(--color-text);
   font-weight: 600;
+}
+
+.field-value-cell {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 input[type='checkbox'] {

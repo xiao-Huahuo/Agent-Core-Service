@@ -2177,6 +2177,7 @@ def _knowledge_file_node_to_response(payload: dict[str, Any]) -> KnowledgeFileNo
             for child in payload.get("children", [])
         ],
         graph_status=str(payload.get("graphStatus", "")),
+        created_at=str(payload.get("createdAt", "")),
     )
 
 

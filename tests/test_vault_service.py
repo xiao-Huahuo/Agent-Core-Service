@@ -69,6 +69,7 @@ def test_vault_encrypts_sensitive_payload_and_lists_after_unlock(tmp_path: Path)
     assert listed[0]["item_id"] == created["item_id"]
     assert "password" not in listed[0]["fields"]
     assert "password" not in listed[0]["safe_fields"]
+    assert listed[0]["field_keys"] == ["name", "username", "password", "uri"]
     assert service.get_item(session=session, item_id=created["item_id"])["item"]["fields"]["password"] == "secret"
 
 

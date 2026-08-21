@@ -161,6 +161,7 @@ def test_list_files_includes_graph_status(tmp_path: Path) -> None:
     nodes = {node["name"]: node for node in service.list_files(user_id="user-1")}
 
     assert nodes["graphed.md"]["graphStatus"] == "graphed"
+    assert nodes["graphed.md"]["createdAt"]
     assert nodes["pending.md"]["graphStatus"] == "dirty"
     assert nodes["ignored.md"]["graphStatus"] == "ignored"
 

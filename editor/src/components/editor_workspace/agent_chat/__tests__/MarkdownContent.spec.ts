@@ -107,6 +107,43 @@ describe('MarkdownContent source links', () => {
     await sourceLink.trigger('click')
     expect(onNavigateSource).toHaveBeenCalledWith('1/3/special/09_ocean_acidification_noaa 2.md')
   })
+
+  it('mounts an encoded knowledge file link as a clickable standalone file block', async () => {
+    const workspaceStore = useWorkspaceStore()
+    workspaceStore.tree = [
+      {
+        name: '简单word.docx',
+        path: '文档/简单word.docx',
+        isDir: false,
+        size: 2048,
+        createdAt: '2026-08-21 09:30',
+        indexStatus: 'indexed',
+        graphStatus: 'graphed',
+      },
+    ]
+    const onNavigateSource = vi.fn<(uri: string) => void>()
+
+    const wrapper = mount(MarkdownContent, {
+      props: {
+        content: '📄 [打开《简单word.docx》](/knowledge/files/raw?user_id=1&path=%E6%96%87%E6%A1%A3%2F%E7%AE%80%E5%8D%95word.docx)',
+        citationMap: {},
+        onNavigateSource,
+      },
+    })
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+
+    const fileBlock = wrapper.get('.agent-mounted-file')
+    expect(fileBlock.element.tagName).toBe('BUTTON')
+    expect(fileBlock.text()).toContain('简单word.docx')
+    expect(fileBlock.text()).toContain('文档/简单word.docx')
+    expect(fileBlock.text()).toContain('2026-08-21 09:30')
+    expect(fileBlock.text()).toContain('2.0 KB')
+    expect(fileBlock.findAll('.agent-mounted-file__status')).toHaveLength(4)
+    expect(wrapper.find('a[href*="/knowledge/files/raw"]').exists()).toBe(false)
+
+    await fileBlock.trigger('click')
+    expect(onNavigateSource).toHaveBeenCalledWith('文档/简单word.docx')
+  })
 })
 
 describe('MarkdownContent streaming code highlight', () => {

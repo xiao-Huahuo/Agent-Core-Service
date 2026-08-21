@@ -39,6 +39,8 @@ export interface VaultItem {
   name: string
   fields: Record<string, unknown>
   safe_fields: Record<string, unknown>
+  /** Non-empty encrypted field names; values remain redacted in list responses. */
+  field_keys?: string[]
   tags: string[]
   deleted_at: string
   created_at: string
