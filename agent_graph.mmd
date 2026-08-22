@@ -17,7 +17,9 @@ flowchart TD
     observation -. "answer / retry / abandon → 交给 agent" .-> agent
     observation -. "context overflow" .-> compress
     observation -. "continue → 更新计划" .-> planner
-    planner --> agent
+    planner -. "预算充足 → 主模型决策" .-> agent
+    planner -. "规划后上下文超限 → 同步压缩" .-> compress
     safety_input -. "审核拦截" .-> internal_end
-    safety_input -. "审核通过" .-> planner
+    safety_input -. "审核通过但上下文超限" .-> compress
+    safety_input -. "审核通过且预算充足" .-> planner
     safety_output --> internal_end

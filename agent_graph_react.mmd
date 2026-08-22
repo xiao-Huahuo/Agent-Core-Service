@@ -7,11 +7,13 @@ flowchart TD
     safety_output["safety_output"]
     internal_end["END"]
     internal_start --> safety_input
-    action --> compress
+    action -. "预算充足 → 继续决策" .-> agent
+    action -. "上下文超限 → 同步压缩" .-> compress
     agent -. "conditional" .-> internal_end
     agent -. "有 tool_calls" .-> action
     agent -. "无 tool_calls" .-> safety_output
     compress --> agent
     safety_input -. "审核拦截" .-> internal_end
-    safety_input -. "审核通过" .-> compress
+    safety_input -. "审核通过且预算充足" .-> agent
+    safety_input -. "审核通过但上下文超限" .-> compress
     safety_output --> internal_end

@@ -165,12 +165,15 @@ class ObservationNode:
     def _check_overflow_then_decide(self, state: AgentState, llm_decision: str) -> str:
         """当 LLM 决定 continue 时,检查上下文是否溢出;溢出则返回 compress 迫使进入压缩节点。"""
 
-        if llm_decision != "continue":
-            return llm_decision
-        estimated_tokens = ContextBuilder.estimate_messages_tokens(state.get("messages", []))
-        if estimated_tokens > self.config.memory.summary_trigger_tokens:
+        llm_config = state.get("llm_config") or {}
+        model_name = str(llm_config.get("model_name") or self.config.model.model_name or "") or None
+        if ContextBuilder.should_compress(
+            state.get("messages", []),
+            config=self.config,
+            model_name=model_name,
+        ):
             return "compress"
-        return "continue"
+        return llm_decision
 
     def _build_observation_context(self, state: AgentState) -> str:
         """

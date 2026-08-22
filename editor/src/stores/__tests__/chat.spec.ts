@@ -156,6 +156,37 @@ describe('chat reference history', () => {
     nowSpy.mockRestore()
   })
 
+  it('tracks backend context usage and the synchronous compression lifecycle', async () => {
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield {
+        type: 'compression_started',
+        node: 'compress',
+        metadata: {
+          context_usage: { current_tokens: 160, max_context_tokens: 256, trigger_tokens: 128, target_tokens: 64 },
+        },
+      }
+      yield {
+        type: 'compression_applied',
+        node: 'compress',
+        metadata: {
+          context_usage: { current_tokens: 60, max_context_tokens: 256, trigger_tokens: 128, target_tokens: 64 },
+        },
+      }
+      yield { type: 'delta', node: 'agent', content: '继续回答' }
+    })
+    const store = useChatStore()
+
+    await store.send('user-1', 'session-1', '继续')
+
+    expect(store.compressionStatus).toBe('idle')
+    expect(store.contextUsage).toEqual({
+      current_tokens: 60,
+      max_context_tokens: 256,
+      trigger_tokens: 128,
+      target_tokens: 64,
+    })
+  })
+
   it('refreshes follow-up suggestions after a streamed turn completes', async () => {
     apiMocks.streamPrompt.mockImplementation(async function* () {
       yield { type: 'delta', node: 'agent', content: '处理完成' }

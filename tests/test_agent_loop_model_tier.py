@@ -10,6 +10,7 @@ from agent_service.agent_core.nodes.planner import PlannerNode
 from agent_service.agent_core.nodes.tool_call import ToolCallNode
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.scheduler import SMALL_MODEL_TIER
+from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.tools.builtin import list_available_tools
 from agent_service.tools.runtime_context import clear_tool_runtime, set_tool_runtime
 
@@ -252,6 +253,44 @@ def test_plan_graph_keeps_planner_and_observation_nodes() -> None:
     assert "action" in node_names
     assert "planner" in node_names
     assert "observation" in node_names
+
+
+def test_react_graph_routes_around_compress_until_context_exceeds_budget() -> None:
+    """ReAct 的入口和 action 回环必须先做条件预算路由，而不是无条件执行压缩节点。"""
+
+    config = AgentConfig.load_config(
+        {
+            "memory": {
+                "context_window_tokens": 256,
+                "context_output_reserve_tokens": 0,
+                "context_compression_trigger_ratio": 0.5,
+                "context_compression_target_ratio": 0.25,
+            }
+        },
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    builder = AgentGraphBuilder(config=config, tools=[], safety_service=None)
+    graph = builder.build(mode="react").get_graph()
+    action_edges = [edge for edge in graph.edges if edge.source == "action"]
+
+    assert {(edge.target, edge.conditional) for edge in action_edges} == {
+        ("agent", True),
+        ("compress", True),
+    }
+    assert builder._route_context_budget({"messages": [HumanMessage(content="short")]}) == "agent"
+    assert builder._route_context_budget({"messages": [HumanMessage(content="长" * 300)]}) == "compress"
+
+
+def test_production_context_compression_defaults_use_large_ratio_budget() -> None:
+    """产品默认不得退回测试级 4 万 token 固定阈值。"""
+
+    available, trigger, target = ContextBuilder.compression_limits(AgentConfig())
+
+    assert available == 934_464
+    assert trigger == 747_571
+    assert target == 420_509
 
 
 def test_observation_parses_structured_decisions() -> None:

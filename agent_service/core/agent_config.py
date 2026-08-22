@@ -511,8 +511,11 @@ class AgentConfig:
         管理上下文窗口、RAG 召回、重排与记忆时效相关参数。
 
         context_window_tokens: 会话上下文最大 token 窗口。
-        max_context_messages: 第一版滑动窗口保留的最近历史消息数量。
-        summary_trigger_tokens: 触发上下文摘要压缩的 token 阈值。
+        max_context_messages: 旧版固定消息窗口兼容配置;当前 token 预算窗口不再使用。
+        summary_trigger_tokens: 旧版固定压缩阈值兼容配置;当前按窗口比例计算触发线。
+        context_output_reserve_tokens: 为模型本轮输出预留的 token 数量。
+        context_compression_trigger_ratio: 工作上下文达到有效窗口的该比例时触发同步压缩。
+        context_compression_target_ratio: 压缩后工作上下文应降到有效窗口的该比例以内。
         chunk_size: 知识切片目标大小。
         chunk_overlap: 相邻知识切片的重叠大小。
         vector_top_k: 向量检索召回数量。
@@ -527,9 +530,12 @@ class AgentConfig:
         knowledge_search_semantic_top_k: 知识搜索工具默认语义召回数量。
         """
 
-        context_window_tokens: int = 65536
+        context_window_tokens: int = 1000000
         max_context_messages: int = 20
-        summary_trigger_tokens: int = 49152
+        summary_trigger_tokens: int = 800000
+        context_output_reserve_tokens: int = 65536
+        context_compression_trigger_ratio: float = 0.8
+        context_compression_target_ratio: float = 0.45
         chunk_size: int = 512
         chunk_overlap: int = 128
         vector_top_k: int = 5
@@ -1479,6 +1485,9 @@ class AgentConfig:
             "AGENT_CONTEXT_WINDOW_TOKENS": ("memory", "context_window_tokens", int),
             "AGENT_MAX_CONTEXT_MESSAGES": ("memory", "max_context_messages", int),
             "AGENT_SUMMARY_TRIGGER_TOKENS": ("memory", "summary_trigger_tokens", int),
+            "AGENT_CONTEXT_OUTPUT_RESERVE_TOKENS": ("memory", "context_output_reserve_tokens", int),
+            "AGENT_CONTEXT_COMPRESSION_TRIGGER_RATIO": ("memory", "context_compression_trigger_ratio", float),
+            "AGENT_CONTEXT_COMPRESSION_TARGET_RATIO": ("memory", "context_compression_target_ratio", float),
             "AGENT_MEMORY_CHUNK_SIZE": ("memory", "chunk_size", int),
             "AGENT_MEMORY_CHUNK_OVERLAP": ("memory", "chunk_overlap", int),
             "AGENT_MEMORY_VECTOR_TOP_K": ("memory", "vector_top_k", int),

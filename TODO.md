@@ -6,6 +6,4 @@
 ### IDEAs
 - [ ] DSH Adapter的实现
   - 文档位于`docs/ADAPTER_DESIGN.md`
-- [ ] 上下文压缩
-  - 加载历史的时候上下文显示莫名其妙的到达100%?
 ### BUGs

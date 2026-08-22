@@ -33,6 +33,17 @@ export interface AgentChatMessage {
   thinking_seconds?: number
 }
 
+/** Backend-reported token usage for the exact working context sent to the model. */
+export interface AgentContextUsage {
+  current_tokens: number
+  max_context_tokens: number
+  trigger_tokens: number
+  target_tokens: number
+}
+
+/** Compression lifecycle rendered independently from generic Agent thinking. */
+export type AgentCompressionStatus = 'idle' | 'compressing' | 'failed'
+
 /** Runtime state for one tool call while its preview and result are streamed. */
 interface ToolCallLifecycle {
   /** Stable backend call identity, also used as the rendered toolbar key. */
@@ -81,6 +92,19 @@ function asFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
+function asContextUsage(value: unknown): AgentContextUsage | null {
+  const record = asRecord(value)
+  const currentTokens = asFiniteNumber(record.current_tokens)
+  const maxContextTokens = asFiniteNumber(record.max_context_tokens)
+  if (currentTokens === null || maxContextTokens === null || maxContextTokens <= 0) return null
+  return {
+    current_tokens: Math.max(0, currentTokens),
+    max_context_tokens: maxContextTokens,
+    trigger_tokens: Math.max(0, asFiniteNumber(record.trigger_tokens) ?? 0),
+    target_tokens: Math.max(0, asFiniteNumber(record.target_tokens) ?? 0),
+  }
+}
+
 function asSourceMap(value: unknown): Record<string, SourceItem> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {}
@@ -125,6 +149,8 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   const streamError = ref('')
   const loadedSessionId = ref('')
   const contextMirror = ref<unknown[]>([])
+  const contextUsage = ref<AgentContextUsage | null>(null)
+  const compressionStatus = ref<AgentCompressionStatus>('idle')
   const activeAgentMode = ref<AgentLoopMode>('auto')
   const currentKnowledgeSources = ref<SourceItem[]>([])
   const currentCitationMap = ref<Record<string, SourceItem>>({})
@@ -156,6 +182,13 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
 
   function appendMessage(message: AgentChatMessage) {
     messages.value.push({ ...message })
+  }
+
+  function setContextUsage(value: unknown) {
+    // Replace the meter only with a complete backend-reported usage payload.
+
+    const parsed = asContextUsage(value)
+    if (parsed) contextUsage.value = parsed
   }
 
   function findLastAssistant() {
@@ -461,6 +494,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     streamAbortController = new AbortController()
     const signal = streamAbortController.signal
     isStreaming.value = true
+    compressionStatus.value = 'idle'
     streamingSessionId.value = targetSessionId || ''
     if (targetSessionId) sessionStore.setSessionStreaming(targetSessionId, true)
     streamError.value = ''
@@ -679,6 +713,11 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
         const content = asString(chunk.content)
         const trace = asTrace(chunk.trace)
         const metadata = asRecord(chunk.metadata)
+        const reportedUsage = asContextUsage(metadata.context_usage)
+        if (reportedUsage) contextUsage.value = reportedUsage
+        if (chunk.type === 'compression_started') compressionStatus.value = 'compressing'
+        if (chunk.type === 'compression_applied' || chunk.type === 'compression_cancelled') compressionStatus.value = 'idle'
+        if (chunk.type === 'compression_failed') compressionStatus.value = 'failed'
         const actualMode = asString(metadata.agent_mode)
         if (actualMode === 'simple' || actualMode === 'react' || actualMode === 'plan') {
           activeAgentMode.value = actualMode
@@ -874,6 +913,8 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     clearStreamTimeout()
     messages.value = []
     contextMirror.value = []
+    contextUsage.value = null
+    compressionStatus.value = 'idle'
     activeAgentMode.value = 'auto'
     isStreaming.value = false
     if (streamingSessionId.value) useSessionStore().setSessionStreaming(streamingSessionId.value, false)
@@ -1095,6 +1136,8 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     streamError,
     loadedSessionId,
     contextMirror,
+    contextUsage,
+    compressionStatus,
     activeAgentMode,
     pendingAttachments,
     taskSuggestions,
@@ -1102,6 +1145,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     streamingSessionId,
     lastMessage,
     canSend,
+    setContextUsage,
     loadHistory,
     syncHistory,
     refreshTaskSuggestions,
@@ -1132,6 +1176,8 @@ interface AgentChatWindowState {
   taskSuggestions: string[]
   suggestionsLoading: boolean
   streamingSessionId: string
+  contextUsage: AgentContextUsage | null
+  compressionStatus: AgentCompressionStatus
 }
 
 type AgentChatStoreInstance = ReturnType<ReturnType<typeof createChatStore>>
@@ -1168,6 +1214,8 @@ function broadcastChatState(sessionId: string, store: AgentChatStoreInstance, fo
     taskSuggestions: store.taskSuggestions,
     suggestionsLoading: store.suggestionsLoading,
     streamingSessionId: store.streamingSessionId,
+    contextUsage: store.contextUsage,
+    compressionStatus: store.compressionStatus,
   }
   const stateSignature = JSON.stringify(scalarState)
   if (!forceFull && messagePatches.length === 0 && previous.length === store.messages.length
@@ -1208,6 +1256,8 @@ function applyRemoteChatState(payload: AgentChatWindowState) {
     state.taskSuggestions = payload.taskSuggestions ?? []
     state.suggestionsLoading = Boolean(payload.suggestionsLoading)
     state.streamingSessionId = payload.streamingSessionId || ''
+    state.contextUsage = payload.contextUsage ?? null
+    state.compressionStatus = payload.compressionStatus || 'idle'
   })
   previousMessageSignatures.set(payload.sessionId, messages.map((message) => JSON.stringify(message)))
   previousStateSignatures.set(payload.sessionId, JSON.stringify({
@@ -1221,6 +1271,8 @@ function applyRemoteChatState(payload: AgentChatWindowState) {
     taskSuggestions: store.taskSuggestions,
     suggestionsLoading: store.suggestionsLoading,
     streamingSessionId: store.streamingSessionId,
+    contextUsage: store.contextUsage,
+    compressionStatus: store.compressionStatus,
   }))
   window.setTimeout(() => applyingRemoteState.delete(payload.sessionId), 0)
 }

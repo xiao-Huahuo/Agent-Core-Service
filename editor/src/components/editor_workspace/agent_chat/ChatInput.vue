@@ -25,7 +25,7 @@ const props = defineProps<{
   agentAccessMode?: AgentAccessMode
   reference?: string
   attachments?: AgentUploadedAttachment[]
-  messages?: unknown[]
+  contextTokens?: number
   maxContextTokens?: number
   isStreaming?: boolean
 }>()
@@ -484,7 +484,7 @@ function handleFileChange(event: Event) {
             <span>{{ displayedModelLabel }}</span>
           </button>
           <ContextProgress
-            :messages="props.messages"
+            :current-tokens="props.contextTokens"
             :max-context-tokens="props.maxContextTokens"
           />
           <button

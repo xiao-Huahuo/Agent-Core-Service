@@ -1024,6 +1024,9 @@ class SettingsService:
             "effective_small_model_name": effective_small_model_name,
             "summary_trigger_tokens": self.config.memory.summary_trigger_tokens,
             "context_window_tokens": self.config.memory.context_window_tokens,
+            "context_output_reserve_tokens": self.config.memory.context_output_reserve_tokens,
+            "context_compression_trigger_ratio": self.config.memory.context_compression_trigger_ratio,
+            "context_compression_target_ratio": self.config.memory.context_compression_target_ratio,
             "updated_at": config.updated_at.isoformat(),
         }
 
@@ -1054,6 +1057,9 @@ class SettingsService:
             "effective_small_model_name": effective_small_model_name,
             "summary_trigger_tokens": mm.summary_trigger_tokens,
             "context_window_tokens": mm.context_window_tokens,
+            "context_output_reserve_tokens": mm.context_output_reserve_tokens,
+            "context_compression_trigger_ratio": mm.context_compression_trigger_ratio,
+            "context_compression_target_ratio": mm.context_compression_target_ratio,
             "updated_at": self._utc_now().isoformat(),
         }
 

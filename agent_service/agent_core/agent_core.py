@@ -72,6 +72,7 @@ from agent_service.tools import (
     ToolRegistry,
     clear_agent_token_callback,
     clear_context_mirror_callback,
+    clear_context_compression_callback,
     clear_markdown_html_visualization_callback,
     clear_plan_state,
     clear_planner_content_callback,
@@ -82,6 +83,7 @@ from agent_service.tools import (
     get_plan_state,
     set_agent_token_callback,
     set_context_mirror_callback,
+    set_context_compression_callback,
     set_markdown_html_visualization_callback,
     set_plan_state,
     set_planner_content_callback,
@@ -199,6 +201,7 @@ class AgentCore:
         self.tool_executor = ToolExecutor(registry=self.tool_registry) if self.tool_registry is not None else None
         self._cancel_events: dict[str, threading.Event] = {}
         self._cancel_events_lock = threading.Lock()
+        self._session_state_lock = threading.Lock()
         self.tools = list(tools) if tools is not None else self.tool_registry.to_langchain_tools()
         if message_service is not None:
             self._get_context_builder(message_service=message_service)
@@ -818,11 +821,37 @@ class AgentCore:
             agent_mode,
         )
         context_started_at = time.perf_counter()
+        compression_state = self._load_session_compression_state(session_id)
+        runtime_llm_config = self._get_user_llm_config(user_id) or {}
+        runtime_system_tokens = ContextBuilder.estimate_messages_tokens(
+            [SystemMessage(content=self._build_runtime_system_prompt(user_id=user_id, session_id=session_id))],
+            model_name=str(runtime_llm_config.get("model_name") or self.config.model.model_name or "") or None,
+        )
         messages = context_builder.build_messages(
             user_id=user_id, session_id=session_id, current_prompt=prompt, reference=reference,
             web_search_max_results=web_search_max_results,
             long_term_memory_enabled=long_term_memory_enabled,
+            compression_state=compression_state,
+            model_name=str(runtime_llm_config.get("model_name") or self.config.model.model_name or "") or None,
+            tool_definition_tokens=ContextBuilder.estimate_tool_definition_tokens(
+                self.tools,
+                model_name=str(runtime_llm_config.get("model_name") or self.config.model.model_name or "") or None,
+            ),
+            additional_context_tokens=runtime_system_tokens,
         )
+        if effective_mode == AGENT_LOOP_SIMPLE and ContextBuilder.should_compress(
+            messages,
+            config=self.config,
+            model_name=str(runtime_llm_config.get("model_name") or self.config.model.model_name or "") or None,
+            extra_tokens=(
+                runtime_system_tokens
+                + ContextBuilder.estimate_tool_definition_tokens(
+                    self.tools,
+                    model_name=str(runtime_llm_config.get("model_name") or self.config.model.model_name or "") or None,
+                )
+            ),
+        ):
+            effective_mode = AGENT_LOOP_REACT
         mark_latency("context_build_ms", context_started_at)
         child_results_started_at = time.perf_counter()
         child_results = self.child_agent_manager.drain_results_for_session(session_id)
@@ -926,6 +955,7 @@ class AgentCore:
             prompt=prompt,
             latency_marks=latency_marks,
             turn_started_at=turn_started_at,
+            context_overhead_tokens=runtime_system_tokens,
         )
         _launch_auto_rename(self, user_id=user_id, session_id=session_id)
 
@@ -964,6 +994,7 @@ class AgentCore:
         latency_marks: dict[str, float] | None = None,
         turn_started_at: float | None = None,
         long_term_memory_enabled: bool = True,
+        context_overhead_tokens: int = 0,
     ) -> Iterator[dict[str, Any]]:
         """
         使用给定 LangChain messages 执行图并逐节点产出 dict 事件。
@@ -990,6 +1021,12 @@ class AgentCore:
             "trace": [],
             "llm_config": llm_config,
             "long_term_memory_enabled": long_term_memory_enabled,
+            "compression_state": self._load_session_compression_state(session_id),
+            "context_overhead_tokens": max(context_overhead_tokens, 0),
+            "context_tool_tokens": ContextBuilder.estimate_tool_definition_tokens(
+                self.tools,
+                model_name=str((llm_config or {}).get("model_name") or self.config.model.model_name or "") or None,
+            ),
         }
         if self.task_list_service is not None:
             inputs["task_list"] = self.task_list_service.get_task_list(session_id)
@@ -1024,6 +1061,7 @@ class AgentCore:
             retrieval_service = self.context_builder.retrieval_service
 
         cancel_event = threading.Event()
+        inputs["cancel_event"] = cancel_event
         with self._cancel_events_lock:
             self._cancel_events[session_id] = cancel_event
 
@@ -1094,8 +1132,33 @@ class AgentCore:
                 "trace": [],
             })
 
+        compression_active = [False]
+
         def on_context_mirror(messages: list[dict[str, Any]]) -> None:
-            token_queue.put({"type": "context_mirror", "messages": messages})
+            model_name = str((llm_config or {}).get("model_name") or self.config.model.model_name or "") or None
+            usage = ContextBuilder.context_usage_from_serialized(
+                messages,
+                config=self.config,
+                model_name=model_name,
+                extra_tokens=ContextBuilder.estimate_tool_definition_tokens(self.tools, model_name=model_name),
+            )
+            self._persist_session_state_value(session_id, "context_usage", usage)
+            token_queue.put({"type": "context_mirror", "messages": messages, "context_usage": usage})
+
+        def on_context_compression(event: dict[str, Any]) -> None:
+            compression_active[0] = event.get("event") == "compression_started"
+            if event.get("event") in {"compression_applied", "compression_failed"} and event.get("max_context_tokens"):
+                self._persist_session_state_value(
+                    session_id,
+                    "context_usage",
+                    {
+                        "current_tokens": event.get("tokens_after", event.get("tokens_before", 0)),
+                        "max_context_tokens": event.get("max_context_tokens", 0),
+                        "trigger_tokens": event.get("trigger_tokens", 0),
+                        "target_tokens": event.get("target_tokens", 0),
+                    },
+                )
+            token_queue.put({"type": "context_compression", "event": event})
 
         def on_task_list_update(task_list: dict[str, Any] | None) -> None:
             token_queue.put({"type": "task_list_updated", "task_list": task_list})
@@ -1142,6 +1205,7 @@ class AgentCore:
             set_planner_content_callback(on_planner_content)
             set_observation_content_callback(on_observation_content)
             set_context_mirror_callback(on_context_mirror)
+            set_context_compression_callback(on_context_compression)
             set_task_list_callback(on_task_list_update)
             set_markdown_html_visualization_callback(on_markdown_html_visualization)
             set_plan_state(initial_plan)
@@ -1159,6 +1223,7 @@ class AgentCore:
                 clear_planner_content_callback()
                 clear_observation_content_callback()
                 clear_context_mirror_callback()
+                clear_context_compression_callback()
                 clear_task_list_callback()
                 clear_markdown_html_visualization_callback()
                 clear_plan_state()
@@ -1181,6 +1246,16 @@ class AgentCore:
                             yield payload
                         continue
                     if cancel_event.is_set():
+                        if compression_active[0]:
+                            yield {
+                                "node": "compress",
+                                "type": "compression_cancelled",
+                                "content": "",
+                                "tool_calls": [],
+                                "trace": [],
+                                "model_name": self._model_name_for_node("compress"),
+                                "metadata": {"compression": {"event": "compression_cancelled"}},
+                            }
                         partial = _streamed_content[0]
                         if message_service is not None and partial:
                             try:
@@ -1318,6 +1393,27 @@ class AgentCore:
                         "trace": [],
                         "model_name": self._model_name_for_node("agent"),
                         "context_messages": item.get("messages", []),
+                        "metadata": {"context_usage": item.get("context_usage", {})},
+                    }
+
+                elif item_type == "context_compression":
+                    event = item.get("event", {})
+                    yield {
+                        "node": "compress",
+                        "type": str(event.get("event") or "context_compression"),
+                        "content": "",
+                        "tool_calls": [],
+                        "trace": [],
+                        "model_name": self._model_name_for_node("compress"),
+                        "metadata": {
+                            "compression": event,
+                            "context_usage": {
+                                "current_tokens": event.get("tokens_after", event.get("tokens_before", 0)),
+                                "max_context_tokens": event.get("max_context_tokens", 0),
+                                "trigger_tokens": event.get("trigger_tokens", 0),
+                                "target_tokens": event.get("target_tokens", 0),
+                            },
+                        },
                     }
 
                 elif item_type == "task_list_updated":
@@ -1350,6 +1446,8 @@ class AgentCore:
                         _last_node_completed_at[0] = completed_at
                         logger.debug("图节点执行 | node=%s user=%s session=%s", node_name, user_id, session_id)
                         node_traces = state_update.get("trace", []) if state_update else []
+                        if isinstance(state_update, dict) and isinstance(state_update.get("compression_state"), dict):
+                            self._persist_session_compression_state(session_id, state_update["compression_state"])
                         fresh_traces: list[dict[str, Any]] = []
                         if node_traces:
                             _now = time.time()
@@ -1538,6 +1636,13 @@ class AgentCore:
                     },
                 )
             )
+            serialized_runtime_messages = self._serialize_runtime_messages(runtime_messages)
+            simple_context_usage = ContextBuilder.context_usage_from_serialized(
+                serialized_runtime_messages,
+                config=self.config,
+                model_name=str(model_name or self.config.model.model_name or "") or None,
+            )
+            self._persist_session_state_value(session_id, "context_usage", simple_context_usage)
             yield {
                 "node": "safety_input",
                 "content": "",
@@ -1582,8 +1687,11 @@ class AgentCore:
                 "tool_calls": [],
                 "trace": [],
                 "model_name": self._model_name_for_node("agent_simple"),
-                "context_messages": self._serialize_runtime_messages(runtime_messages),
-                "metadata": latency_metadata(),
+                "context_messages": serialized_runtime_messages,
+                "metadata": {
+                    **latency_metadata(),
+                    "context_usage": simple_context_usage,
+                },
             }
             for chunk in self.task_scheduler.stream_chat(
                 task_type=FOREGROUND_AGENT_TASK,
@@ -2495,6 +2603,46 @@ class AgentCore:
         except (json.JSONDecodeError, TypeError):
             logger.warning("会话状态 JSON 解析失败 | session=%s", session_id)
             return None
+
+    def _load_session_compression_state(self, session_id: str) -> dict[str, Any] | None:
+        """从数据库会话状态恢复最近一次结构化上下文压缩结果。"""
+
+        state = self._load_session_state_dict(session_id)
+        value = state.get("compression_state") if state else None
+        return value if isinstance(value, dict) else None
+
+    def _load_session_state_dict(self, session_id: str) -> dict[str, Any]:
+        """读取兼容旧版 plan-only JSON 的完整会话状态对象。"""
+
+        if self.session_service is None:
+            return {}
+        state_json = self.session_service.get_session_state(session_id)
+        if not state_json:
+            return {}
+        try:
+            state = json.loads(state_json)
+        except (json.JSONDecodeError, TypeError):
+            logger.warning("会话状态 JSON 解析失败 | session=%s", session_id)
+            return {}
+        return state if isinstance(state, dict) else {}
+
+    def _persist_session_state_value(self, session_id: str, key: str, value: Any) -> None:
+        """原子合并一个正式会话状态字段，不覆盖 Planner、环境或子 Agent 状态。"""
+
+        if self.session_service is None:
+            return
+        with self._session_state_lock:
+            state = self._load_session_state_dict(session_id)
+            state[key] = value
+            self.session_service.update_session_state(session_id, json.dumps(state, ensure_ascii=False))
+
+    def _persist_session_compression_state(self, session_id: str, compression_state: dict[str, Any]) -> None:
+        """仅当版本不回退时持久化结构化压缩状态。"""
+
+        current = self._load_session_compression_state(session_id) or {}
+        if int(compression_state.get("version", 0) or 0) < int(current.get("version", 0) or 0):
+            return
+        self._persist_session_state_value(session_id, "compression_state", compression_state)
 
     def _persist_session_plan(self, session_id: str, plan: dict[str, Any] | None) -> None:
         """将探索状态持久化到 DB,供下一轮恢复。"""

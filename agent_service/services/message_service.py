@@ -18,6 +18,7 @@ recent_messages = service.list_recent_messages(user_id="u1", session_id="s1", li
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import time
 from uuid import uuid4
 
 from sqlalchemy import and_, or_
@@ -442,7 +443,7 @@ class MessageService:
     def generate_message_id() -> str:
         """生成消息 ID。"""
 
-        return f"msg_{uuid4().hex}"
+        return f"msg_{time.time_ns():020d}_{uuid4().hex}"
 
     @staticmethod
     def _utc_now() -> datetime:

@@ -32,7 +32,7 @@ const sessionStore = useSessionStore()
 const chatStore = shallowRef(useChatStore())
 const expanded = ref(false)
 const currentHeight = ref(SIZES.collapsed)
-const contextWindowTokens = ref(128000)
+const contextWindowTokens = ref(1000000)
 const modelConfigLabel = ref('配置模型')
 
 const userId = computed(() => settingsStore.profile.userId)
@@ -95,7 +95,7 @@ async function loadModelConfig() {
   if (!userId.value) return
   try {
     const config = await fetchLLMConfig(userId.value)
-    contextWindowTokens.value = config.context_window_tokens ?? 128000
+    contextWindowTokens.value = config.context_window_tokens ?? 1000000
     modelConfigLabel.value = config.model_name || '配置模型'
   } catch {
     modelConfigLabel.value = '配置模型'
@@ -200,8 +200,8 @@ onBeforeUnmount(() => {
           :attachments="[]"
           :suggestions="[]"
           :suggestions-loading="false"
-          :messages="chatStore.messages"
-          :max-context-tokens="contextWindowTokens"
+          :context-tokens="chatStore.contextUsage?.current_tokens ?? 0"
+          :max-context-tokens="chatStore.contextUsage?.max_context_tokens ?? contextWindowTokens"
           :is-streaming="chatStore.isStreaming"
           @send="sendMessage"
           @toggle-web-search="settingsStore.toggleWebSearch(!settingsStore.profile.webSearchEnabled)"

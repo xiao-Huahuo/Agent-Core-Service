@@ -2,39 +2,16 @@
 import { computed } from 'vue'
 
 const props = withDefaults(defineProps<{
-  messages?: unknown[]
+  currentTokens?: number
   maxContextTokens?: number
-  chatMessages?: unknown[]
 }>(), {
-  maxContextTokens: 128000,
-})
-
-const estimatedTokens = computed(() => {
-  // 优先从 chatMessages（即聊天框实际消息）估算，兜底用 contextMirror（后端推送）
-  const source = props.messages
-  const fallback = props.chatMessages as unknown[] | undefined
-  let msgs: unknown[] | undefined
-
-  if (Array.isArray(source) && source.length > 0) {
-    msgs = source
-  } else if (Array.isArray(fallback) && fallback.length > 0) {
-    msgs = fallback
-  }
-
-  if (!msgs || msgs.length === 0) return 0
-  let total = 0
-  for (const msg of msgs) {
-    const content = (msg as Record<string, unknown>)?.content ?? ''
-    const contentStr = typeof content === 'string' ? content : JSON.stringify(content)
-    // Rough estimate: ~4 chars per token for mixed CJK/English
-    total += Math.ceil(contentStr.length / 4)
-  }
-  return total
+  currentTokens: 0,
+  maxContextTokens: 1000000,
 })
 
 const percentage = computed(() => {
-  if (estimatedTokens.value === 0) return 0
-  return Math.min(100, Math.round((estimatedTokens.value / props.maxContextTokens) * 100))
+  if (props.currentTokens <= 0 || props.maxContextTokens <= 0) return 0
+  return Math.min(100, Math.round((props.currentTokens / props.maxContextTokens) * 100))
 })
 
 const ringColor = computed(() => {
@@ -50,7 +27,7 @@ const dashOffset = computed(() => {
 </script>
 
 <template>
-  <div v-if="estimatedTokens > 0" class="context-progress" :title="`约 ${estimatedTokens.toLocaleString()} / ${maxContextTokens.toLocaleString()} tokens`">
+  <div v-if="currentTokens > 0" class="context-progress" :title="`${currentTokens.toLocaleString()} / ${maxContextTokens.toLocaleString()} tokens`">
     <svg class="ring" width="18" height="18" viewBox="0 0 18 18">
       <circle cx="9" cy="9" r="7" fill="none" stroke="rgba(148,163,184,0.15)" stroke-width="2" />
       <circle

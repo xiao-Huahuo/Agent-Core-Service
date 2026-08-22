@@ -15,6 +15,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 import json
 import sys
+import time
+import threading
 import types
 from pathlib import Path
 from types import SimpleNamespace
@@ -38,7 +40,7 @@ from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecOut
 from agent_service.schemas.message import MessageCreate
 from agent_service.schemas.message import MessageOut
-from agent_service.schemas.session import SessionOut
+from agent_service.schemas.session import SessionCreate, SessionOut
 from agent_service.scripts.download_model import MODEL_MARKER_FILE
 from agent_service.scripts.download_model import PADDLEOCR_MARKER_FILE
 from agent_service.scripts.download_model import ensure_paddleocr_models
@@ -58,6 +60,7 @@ from agent_service.services.session_service import SessionService
 from agent_service.services.settings_service import SettingsService
 from agent_service.tools import ToolExecutor, ToolRegistry, clear_tool_runtime, set_tool_runtime
 from agent_service.tools.runtime_context import get_tool_citation_map
+from agent_service.tools.runtime_context import clear_context_compression_callback, set_context_compression_callback
 
 
 TEST_TEMP_DIR = Path(__file__).resolve().parents[1] / "runtime" / "test_tmp"
@@ -1097,15 +1100,16 @@ def test_context_builder_includes_retrieved_memory_context() -> None:
     assert "get_long_term_memory" in messages[0].content
 
 
-def test_context_builder_uses_important_fact_summary_when_budget_is_exceeded() -> None:
-    """验证上下文接近 token 上限时,构建器会保留重要事实摘要并裁剪历史消息。"""
+def test_context_builder_uses_important_fact_summary_with_token_budget_window() -> None:
+    """构建器应保留重要事实摘要，并在有效 token 窗口允许时尽量保留完整近期历史。"""
 
     config = AgentConfig.load_config(
         {
             "memory": {
-                "max_context_messages": 6,
-                "summary_trigger_tokens": 5,
-                "context_compression_tail_messages": 2,
+                "context_window_tokens": 1024,
+                "context_output_reserve_tokens": 0,
+                "context_compression_trigger_ratio": 0.5,
+                "context_compression_target_ratio": 0.25,
             }
         },
         load_env=False,
@@ -1146,7 +1150,7 @@ def test_context_builder_uses_important_fact_summary_when_budget_is_exceeded() -
     assert "重要事实摘要" in messages[0].content
     assert "3333333" in messages[0].content
     history_messages = [message for message in messages[1:-1] if isinstance(message, HumanMessage)]
-    assert len(history_messages) == 2
+    assert len(history_messages) == 4
 
 
 def test_compress_node_replaces_messages_after_context_overflow() -> None:
@@ -1155,7 +1159,10 @@ def test_compress_node_replaces_messages_after_context_overflow() -> None:
     config = AgentConfig.load_config(
         {
             "memory": {
-                "summary_trigger_tokens": 5,
+                "context_window_tokens": 128,
+                "context_output_reserve_tokens": 0,
+                "context_compression_trigger_ratio": 0.25,
+                "context_compression_target_ratio": 0.1,
                 "context_compression_tail_messages": 2,
             }
         },
@@ -1187,7 +1194,130 @@ def test_compress_node_replaces_messages_after_context_overflow() -> None:
     assert isinstance(result["messages"][0], RemoveMessage)
     assert isinstance(result["messages"][1], SystemMessage)
     assert "3333333" in result["messages"][1].content
-    assert persisted == ["当前项目代号为3333333, 旧值1111111和2222222均已失效。"]
+    deadline = time.monotonic() + 1
+    while not persisted and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert persisted and "3333333" in persisted[0]
+
+
+def test_compress_node_merges_repeated_structured_compression_state() -> None:
+    """多次压缩必须把已有事实和动作交给小模型，并原子替换为新版本结构化摘要。"""
+
+    config = AgentConfig.load_config(
+        {
+            "memory": {
+                "context_window_tokens": 256,
+                "context_output_reserve_tokens": 0,
+                "context_compression_trigger_ratio": 0.5,
+                "context_compression_target_ratio": 0.25,
+                "context_compression_tail_messages": 2,
+            }
+        },
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    captured: dict[str, str] = {}
+    fake_summary_service = SimpleNamespace(
+        summarize_text=lambda **kwargs: captured.setdefault("transcript", kwargs["transcript"]) and (
+            '{"important_facts":["项目代号为B"],'
+            '"historical_actions":["已完成配置迁移"],'
+            '"unfinished_actions":["运行回归测试"]}'
+        ),
+        build_hash=lambda *parts: "|".join(parts),
+        persist_summary_memory=lambda **_kwargs: None,
+    )
+    node = CompressNode(config=config, summary_service=fake_summary_service)
+    events: list[dict[str, Any]] = []
+    set_context_compression_callback(events.append)
+    try:
+        result = node({
+            "messages": [
+                HumanMessage(content="项目代号从A改成B。" * 30),
+                AIMessage(content="正在迁移配置。"),
+                HumanMessage(content="继续并运行回归测试。"),
+            ],
+            "user_id": "u1",
+            "session_id": "s1",
+            "trace": [],
+            "compression_state": {
+                "version": 1,
+                "important_facts": ["项目代号为A"],
+                "historical_actions": ["已开始配置迁移"],
+                "unfinished_actions": ["完成配置迁移"],
+            },
+            "long_term_memory_enabled": False,
+        })
+    finally:
+        clear_context_compression_callback()
+
+    assert "项目代号为A" in captured["transcript"]
+    assert result["compression_state"]["version"] == 2
+    assert result["compression_state"]["important_facts"] == ["项目代号为B"]
+    assert result["compression_state"]["unfinished_actions"] == ["运行回归测试"]
+    assert result["trace"][0]["event"] == "compression_applied"
+    assert result["trace"][0]["tokens_after"] < result["trace"][0]["tokens_before"]
+    assert [event["event"] for event in events] == ["compression_started", "compression_applied"]
+
+
+def test_compress_node_failure_uses_safe_original_message_window() -> None:
+    """摘要异常不得覆盖事实；节点应从原消息构造低于触发线的安全滑动窗口。"""
+
+    config = AgentConfig.load_config(
+        {
+            "memory": {
+                "context_window_tokens": 256,
+                "context_output_reserve_tokens": 0,
+                "context_compression_trigger_ratio": 0.5,
+                "context_compression_target_ratio": 0.25,
+            }
+        },
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    fake_summary_service = SimpleNamespace(
+        summarize_text=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("summary unavailable")),
+        build_hash=lambda *_parts: "unused",
+    )
+    node = CompressNode(config=config, summary_service=fake_summary_service)
+    result = node(
+        {
+            "messages": [HumanMessage(content=f"历史-{index}-" + "长" * 80) for index in range(5)],
+            "user_id": "u1",
+            "session_id": "s1",
+            "trace": [],
+            "long_term_memory_enabled": False,
+        }
+    )
+
+    assert isinstance(result["messages"][0], RemoveMessage)
+    assert result["trace"][0]["event"] == "compression_failed"
+    assert result["trace"][0]["tokens_after"] < result["trace"][0]["tokens_before"]
+
+
+def test_agent_core_persists_compression_state_without_overwriting_other_session_state() -> None:
+    """压缩版本、Planner 和环境状态必须共存在正式 Session state_json 中。"""
+
+    config = make_test_config()
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    service = SessionService(config=config, engine=engine, create_tables=False)
+    session = service.create_session(SessionCreate(user_id="u1", session_name="context"))
+    service.update_session_state(session.session_id, json.dumps({"plan": {"status": "running"}, "environment": {"branch": "main"}}))
+    agent = object.__new__(AgentCore)
+    agent.session_service = service
+    agent._session_state_lock = threading.Lock()
+
+    agent._persist_session_compression_state(
+        session.session_id,
+        {"version": 2, "important_facts": ["事实B"], "historical_actions": [], "unfinished_actions": []},
+    )
+
+    state = json.loads(service.get_session_state(session.session_id) or "{}")
+    assert state["plan"] == {"status": "running"}
+    assert state["environment"] == {"branch": "main"}
+    assert state["compression_state"]["version"] == 2
 
 
 def test_extract_friendly_error_explains_rate_limit_and_connection_errors() -> None:

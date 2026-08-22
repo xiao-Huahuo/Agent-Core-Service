@@ -16,6 +16,10 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+import json
+import logging
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, RemoveMessage, SystemMessage, ToolMessage
@@ -26,6 +30,11 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.memory.important_fact_summary_service import ImportantFactSummaryService
 from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
+from agent_service.tools.runtime_context import get_context_compression_callback
+
+
+logger = logging.getLogger(__name__)
+_MEMORY_WRITE_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="context-memory")
 
 
 class CompressNode:
@@ -59,33 +68,82 @@ class CompressNode:
         state: 当前 LangGraph 运行状态。
         """
 
-        estimated_tokens = ContextBuilder.estimate_messages_tokens(state["messages"])
-        if estimated_tokens <= self.config.memory.summary_trigger_tokens:
+        llm_config = state.get("llm_config") or {}
+        model_name = str(llm_config.get("model_name") or self.config.model.model_name or "") or None
+        fixed_request_tokens = int(state.get("context_overhead_tokens", 0) or 0) + int(
+            state.get("context_tool_tokens", 0) or 0
+        )
+        estimated_tokens = (
+            ContextBuilder.estimate_messages_tokens(state["messages"], model_name=model_name)
+            + fixed_request_tokens
+        )
+        available_tokens, trigger_tokens, target_tokens = ContextBuilder.compression_limits(self.config)
+        if estimated_tokens < trigger_tokens:
             return {
                 "trace": [
                     {
                         "node": "compress",
                         "event": "compression_skipped",
                         "estimated_tokens": estimated_tokens,
+                        "trigger_tokens": trigger_tokens,
                         "human_readable": f"当前上下文 {estimated_tokens} tokens，未超过阈值，无需压缩。",
                     }
                 ]
             }
-        transcript = self._build_transcript(state["messages"])
-        summary_text = self.summary_service.summarize_text(
-            transcript=transcript,
-            task_type=FOREGROUND_AGENT_TASK,
-            mode="compress",
-            llm_config=state.get("llm_config"),
+        previous_state = state.get("compression_state") or {}
+        transcript = self._build_transcript(state["messages"], previous_state=previous_state)
+        self._emit_event(
+            {
+                "event": "compression_started",
+                "tokens_before": estimated_tokens,
+                "max_context_tokens": available_tokens,
+                "trigger_tokens": trigger_tokens,
+                "target_tokens": target_tokens,
+                "version": int(previous_state.get("version", 0) or 0) + 1,
+            }
         )
+        try:
+            summary_text = self.summary_service.summarize_text(
+                transcript=transcript,
+                task_type=FOREGROUND_AGENT_TASK,
+                mode="compress",
+                llm_config=state.get("llm_config"),
+            )
+        except Exception as exc:
+            logger.exception("同步上下文压缩失败 | session=%s", state.get("session_id"))
+            return self._build_failure_result(
+                state=state,
+                reason=type(exc).__name__,
+                tokens_before=estimated_tokens,
+                available_tokens=available_tokens,
+                trigger_tokens=trigger_tokens,
+                target_tokens=target_tokens,
+                model_name=model_name,
+            )
         if not summary_text:
+            return self._build_failure_result(
+                state=state,
+                reason="empty_summary",
+                tokens_before=estimated_tokens,
+                available_tokens=available_tokens,
+                trigger_tokens=trigger_tokens,
+                target_tokens=target_tokens,
+                model_name=model_name,
+            )
+        cancel_event = state.get("cancel_event")
+        if cancel_event is not None and cancel_event.is_set():
+            cancelled = {
+                "event": "compression_cancelled",
+                "tokens_before": estimated_tokens,
+                "max_context_tokens": available_tokens,
+            }
+            self._emit_event(cancelled)
             return {
                 "trace": [
                     {
                         "node": "compress",
-                        "event": "compression_empty",
-                        "estimated_tokens": estimated_tokens,
-                        "human_readable": f"上下文 {estimated_tokens} tokens 已超阈值，但摘要生成失败，继续使用原有上下文。",
+                        **cancelled,
+                        "human_readable": "上下文压缩已取消，原工作上下文保持不变。",
                     }
                 ]
             }
@@ -94,52 +152,195 @@ class CompressNode:
             state["user_id"],
             transcript,
         )
+        compression_state = self._parse_compression_state(
+            summary_text,
+            previous_state=previous_state,
+            source_message_count=len(state["messages"]),
+        )
+        persisted_summary = ContextBuilder.compression_state_to_text(compression_state)
         if state.get("long_term_memory_enabled", True):
-            self.summary_service.persist_summary_memory(
+            _MEMORY_WRITE_EXECUTOR.submit(
+                self._persist_memory_safely,
                 user_id=state["user_id"],
                 session_id=state["session_id"],
-                summary_text=summary_text,
+                summary_text=persisted_summary,
                 memory_type=self.config.constants.important_fact_summary_memory_type,
                 source_type="context_compression",
                 source_id=state["session_id"],
                 source_hash=source_hash,
-                source_range_json={"mode": "compress"},
-                metadata_json={"estimated_tokens": estimated_tokens},
+                source_range_json={
+                    "mode": "compress",
+                    "message_count": len(state["messages"]),
+                    "start_index": 0,
+                    "end_index": max(len(state["messages"]) - 1, 0),
+                },
+                metadata_json={"estimated_tokens": estimated_tokens, "version": compression_state["version"]},
                 importance=0.95,
                 authority=0.6,
             )
         compressed_messages = self._build_compressed_messages(
             original_messages=state["messages"],
-            summary_text=summary_text,
+            compression_state=compression_state,
+            target_tokens=max(target_tokens - fixed_request_tokens, 1),
+            model_name=model_name,
         )
+        tokens_after = (
+            ContextBuilder.estimate_messages_tokens(compressed_messages, model_name=model_name)
+            + fixed_request_tokens
+        )
+        retained_message_count = sum(not isinstance(message, SystemMessage) for message in compressed_messages)
+        applied = {
+            "event": "compression_applied",
+            "tokens_before": estimated_tokens,
+            "tokens_after": tokens_after,
+            "max_context_tokens": available_tokens,
+            "trigger_tokens": trigger_tokens,
+            "target_tokens": target_tokens,
+            "version": compression_state["version"],
+            "retained_message_count": retained_message_count,
+            "source_message_count": len(state["messages"]),
+            "retained_message_range": {
+                "start_index": max(len(state["messages"]) - retained_message_count, 0),
+                "end_index": max(len(state["messages"]) - 1, 0),
+            },
+        }
+        self._emit_event(applied)
         return {
             "messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *compressed_messages],
+            "compression_state": compression_state,
             "trace": [
                 {
                     "node": "compress",
-                    "event": "compression_applied",
+                    **applied,
                     "estimated_tokens": estimated_tokens,
                     "compressed_message_count": len(compressed_messages),
-                    "human_readable": f"上下文 {estimated_tokens} tokens 已超阈值，已将历史对话压缩为重要事实摘要后保留最近 {len(compressed_messages)} 条消息。",
+                    "human_readable": f"上下文已从 {estimated_tokens} tokens 压缩到 {tokens_after} tokens，并保留结构化事实、动作状态与最近消息。",
                 }
             ],
         }
 
     @staticmethod
-    def _build_transcript(messages: list[BaseMessage]) -> str:
+    def _build_transcript(messages: list[BaseMessage], *, previous_state: dict[str, Any]) -> str:
         """
         将当前工作消息转换为适合摘要模型消费的文本。
 
         messages: 当前工作消息列表。
         """
 
-        lines: list[str] = []
+        lines: list[str] = [
+            "请输出 JSON 对象，字段必须为 important_facts、historical_actions、unfinished_actions，值均为字符串数组。",
+            "根据事实与动作状态对旧摘要执行保留、替换、新增或删除，禁止简单追加重复、冲突或过期内容。",
+            "[现有压缩状态]",
+            json.dumps(previous_state, ensure_ascii=False, sort_keys=True),
+            "[本次工作上下文]",
+        ]
         for message in messages:
             content = str(getattr(message, "content", "") or "").strip()
-            if not content:
-                continue
-            lines.append(f"{message.type}: {content}")
+            tool_calls = getattr(message, "tool_calls", []) or []
+            if content:
+                lines.append(f"{message.type}: {content}")
+            if tool_calls:
+                lines.append(f"{message.type}_tool_calls: {json.dumps(tool_calls, ensure_ascii=False, sort_keys=True)}")
         return "\n".join(lines)
+
+    @staticmethod
+    def _parse_compression_state(
+        summary_text: str,
+        *,
+        previous_state: dict[str, Any],
+        source_message_count: int,
+    ) -> dict[str, Any]:
+        """校验小模型结构化输出并生成单调递增的压缩状态版本。"""
+
+        normalized = summary_text.strip()
+        if normalized.startswith("```"):
+            normalized = normalized.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        try:
+            parsed = json.loads(normalized)
+        except (json.JSONDecodeError, TypeError):
+            parsed = {"important_facts": [summary_text], "historical_actions": [], "unfinished_actions": []}
+        required_keys = {"important_facts", "historical_actions", "unfinished_actions"}
+        if not isinstance(parsed, dict) or not required_keys.issubset(parsed) or any(
+            not isinstance(parsed.get(key), list) for key in required_keys
+        ):
+            parsed = {
+                key: list(previous_state.get(key, []))
+                for key in required_keys
+            }
+        state: dict[str, Any] = {
+            "version": int(previous_state.get("version", 0) or 0) + 1,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "source_message_count": source_message_count,
+            "source_range": {"start_index": 0, "end_index": max(source_message_count - 1, 0)},
+        }
+        for key in ("important_facts", "historical_actions", "unfinished_actions"):
+            values = parsed.get(key, []) if isinstance(parsed, dict) else []
+            state[key] = list(dict.fromkeys(str(value).strip() for value in values if str(value).strip()))
+        return state
+
+    def _persist_memory_safely(self, **kwargs: Any) -> None:
+        """在后台线程幂等写入长期记忆，失败只记录日志而不影响当前回答。"""
+
+        try:
+            self.summary_service.persist_summary_memory(**kwargs)
+        except Exception:
+            logger.exception("异步写入上下文压缩记忆失败 | session=%s", kwargs.get("session_id"))
+
+    def _build_failure_result(
+        self,
+        *,
+        state: AgentState,
+        reason: str,
+        tokens_before: int,
+        available_tokens: int,
+        trigger_tokens: int,
+        target_tokens: int,
+        model_name: str | None,
+    ) -> dict[str, Any]:
+        """摘要失败时从原消息原子构造安全滑动窗口，并保留最后一条当前消息。"""
+
+        fixed_request_tokens = int(state.get("context_overhead_tokens", 0) or 0) + int(
+            state.get("context_tool_tokens", 0) or 0
+        )
+        fallback_messages = ContextBuilder.select_recent_messages_within_budget(
+            state["messages"],
+            token_budget=max(trigger_tokens - fixed_request_tokens - 1, 1),
+            model_name=model_name,
+        )
+        if not fallback_messages and state["messages"]:
+            fallback_messages = [state["messages"][-1]]
+        tokens_after = (
+            ContextBuilder.estimate_messages_tokens(fallback_messages, model_name=model_name)
+            + fixed_request_tokens
+        )
+        failed = {
+            "event": "compression_failed",
+            "reason": reason,
+            "tokens_before": tokens_before,
+            "tokens_after": tokens_after,
+            "max_context_tokens": available_tokens,
+            "trigger_tokens": trigger_tokens,
+            "target_tokens": target_tokens,
+        }
+        self._emit_event(failed)
+        return {
+            "messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *fallback_messages],
+            "trace": [
+                {
+                    "node": "compress",
+                    **failed,
+                    "human_readable": "上下文摘要失败，已保留原始记录并原子回退到安全 token 滑动窗口。",
+                }
+            ],
+        }
+
+    @staticmethod
+    def _emit_event(payload: dict[str, Any]) -> None:
+        """把压缩生命周期事件立即推送给流式调用方。"""
+
+        callback = get_context_compression_callback()
+        if callback is not None:
+            callback(payload)
 
     @staticmethod
     def _collect_valid_tail(
@@ -191,18 +392,39 @@ class CompressNode:
         self,
         *,
         original_messages: list[BaseMessage],
-        summary_text: str,
+        compression_state: dict[str, Any],
+        target_tokens: int,
+        model_name: str | None,
     ) -> list[BaseMessage]:
         """
         构建压缩后的工作消息列表。
 
         original_messages: 压缩前的完整消息列表。
-        summary_text: 小模型生成的重要事实摘要。
+        compression_state: 小模型合并后的结构化压缩状态。
+        target_tokens: 压缩后的目标 token 预算。
+        model_name: 用于 token 统计的当前模型名。
         """
 
-        tail_count = max(self.config.memory.context_compression_tail_messages, 1)
-        recent_messages = self._collect_valid_tail(original_messages, tail_count)
         summary_message = SystemMessage(
-            content=self.config.prompts.compressed_context_template.format(summary=summary_text)
+            content=self.config.prompts.compressed_context_template.format(
+                summary=ContextBuilder.compression_state_to_text(compression_state)
+            )
         )
-        return [summary_message, *recent_messages]
+        protected_system_messages = [
+            message
+            for message in original_messages
+            if isinstance(message, SystemMessage)
+            and bool((getattr(message, "additional_kwargs", {}) or {}).get("recall_details"))
+        ]
+        summary_tokens = ContextBuilder.estimate_messages_tokens(
+            [*protected_system_messages, summary_message],
+            model_name=model_name,
+        )
+        recent_messages = ContextBuilder.select_recent_messages_within_budget(
+            [message for message in original_messages if message not in protected_system_messages],
+            token_budget=max(target_tokens - summary_tokens, 1),
+            model_name=model_name,
+        )
+        if not recent_messages and original_messages:
+            recent_messages = [original_messages[-1]]
+        return [*protected_system_messages, summary_message, *recent_messages]

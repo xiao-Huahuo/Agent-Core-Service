@@ -47,3 +47,7 @@ class AgentState(TypedDict):
     observation_decision: str
     llm_config: dict[str, Any] | None
     long_term_memory_enabled: bool
+    compression_state: dict[str, Any] | None
+    cancel_event: Any
+    context_overhead_tokens: int
+    context_tool_tokens: int

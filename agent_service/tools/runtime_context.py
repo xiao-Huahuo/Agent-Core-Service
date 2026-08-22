@@ -267,6 +267,32 @@ def clear_context_mirror_callback() -> None:
 
 
 # ------------------------------------------------------------------
+# 上下文压缩生命周期回调 (用于 CompressNode → AgentCore 实时推送)
+# ------------------------------------------------------------------
+
+_CONTEXT_COMPRESSION_CALLBACK: local = local()
+
+
+def set_context_compression_callback(callback: Callable[[dict[str, Any]], None]) -> None:
+    """设置当前线程的压缩生命周期回调。"""
+
+    _CONTEXT_COMPRESSION_CALLBACK.callback = callback
+
+
+def get_context_compression_callback() -> Callable[[dict[str, Any]], None] | None:
+    """返回当前线程的压缩生命周期回调。"""
+
+    return getattr(_CONTEXT_COMPRESSION_CALLBACK, "callback", None)
+
+
+def clear_context_compression_callback() -> None:
+    """清理当前线程的压缩生命周期回调。"""
+
+    if hasattr(_CONTEXT_COMPRESSION_CALLBACK, "callback"):
+        delattr(_CONTEXT_COMPRESSION_CALLBACK, "callback")
+
+
+# ------------------------------------------------------------------
 # Task list update callback
 # ------------------------------------------------------------------
 

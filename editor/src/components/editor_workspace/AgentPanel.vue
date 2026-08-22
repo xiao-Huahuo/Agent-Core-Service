@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import ChatInput from '@/components/editor_workspace/agent_chat/ChatInput.vue'
+import ContextCompressionStatus from '@/components/editor_workspace/agent_chat/ContextCompressionStatus.vue'
 import AgentPanelTitlebar from '@/components/editor_workspace/agent_chat/AgentPanelTitlebar.vue'
 import LoaderCube from '@/components/editor_workspace/agent_chat/LoaderCube.vue'
 import MessageList from '@/components/editor_workspace/agent_chat/MessageList.vue'
@@ -42,7 +43,7 @@ import { useFavoritesStore } from '@/stores/favorites'
 import { useTaskListStore } from '@/stores/taskList'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
-import type { SessionRecord } from '@/api/session'
+import { fetchSessionState, type SessionRecord } from '@/api/session'
 import { uploadAgentAttachment } from '@/api/agent'
 import { fetchLLMConfig, fetchSensitiveWords, saveSensitiveWords } from '@/api/settings'
 import type { AgentChangeSnapshot } from '@/api/agentChanges'
@@ -95,7 +96,7 @@ const sessionLoading = ref(false)
 let taskHistoryPollTimer: number | null = null
 const loadingSessionId = ref('')
 const remoteSessionPending = ref('')
-const contextWindowTokens = ref(128000)
+const contextWindowTokens = ref(1000000)
 const safetyDisabled = ref(false)
 const safetyLoading = ref(false)
 const dragDepth = ref(0)
@@ -247,6 +248,12 @@ async function loadSelectedSessionHistory(sessionId: string, force = false) {
   sessionLoading.value = true
   try {
     await chatStore.value.loadHistory(sessionId, userId.value)
+    try {
+      const state = await fetchSessionState(sessionId)
+      chatStore.value.setContextUsage(state.session_state?.context_usage)
+    } catch {
+      // History remains usable before the session has produced a context-usage snapshot.
+    }
   } finally {
     sessionLoading.value = false
     loadingSessionId.value = ''
@@ -340,7 +347,7 @@ async function loadCurrentModelConfig() {
   try {
     const config = await fetchLLMConfig(userId.value)
     currentLargeModelName.value = config.model_name?.trim() || ''
-    contextWindowTokens.value = config.context_window_tokens ?? 128000
+    contextWindowTokens.value = config.context_window_tokens ?? 1000000
   } catch {
     currentLargeModelName.value = ''
   }
@@ -910,6 +917,10 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
       <div v-if="chatStore.isStreaming" class="thinking-flow" aria-live="polite">
         <span class="thinking-shimmer-text">正在思考</span>
       </div>
+      <ContextCompressionStatus
+        v-if="chatStore.compressionStatus !== 'idle'"
+        :failed="chatStore.compressionStatus === 'failed'"
+      />
       <ChatInput
         :disabled="!userId"
         :centered="!hasMessages && !chatStore.isStreaming"
@@ -919,8 +930,8 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
         :agent-access-mode="settingsStore.agentAccessMode"
         :reference="referenceText"
         :attachments="chatStore.pendingAttachments"
-        :messages="chatStore.messages"
-        :max-context-tokens="contextWindowTokens"
+        :context-tokens="chatStore.contextUsage?.current_tokens ?? 0"
+        :max-context-tokens="chatStore.contextUsage?.max_context_tokens ?? contextWindowTokens"
         :is-streaming="chatStore.isStreaming"
         @send="sendMessage"
         @toggle-web-search="handleToggleWebSearch"

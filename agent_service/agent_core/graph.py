@@ -30,6 +30,7 @@ from agent_service.agent_core.nodes.observation import ObservationNode
 from agent_service.agent_core.nodes.safety import SafetyInputNode, SafetyOutputNode
 from agent_service.agent_core.nodes.tool_call import ToolCallNode
 from agent_service.core.agent_config import AgentConfig
+from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.safety import SafetyService
 from agent_service.services.scheduler import LLMTaskScheduler
 from agent_service.tools import ToolExecutor
@@ -142,24 +143,34 @@ class AgentGraphBuilder:
             )
         if self.safety_service and self.safety_service.supports_input_audit:
             workflow.set_entry_point("safety_input")
-            safe_next = "compress" if normalized_mode == "react" else "planner"
+            safe_next = "agent" if normalized_mode == "react" else "planner"
             workflow.add_conditional_edges(
                 "safety_input",
-                self._route_after_safety_input,
-                path_map={"planner": safe_next, "__end__": END},
+                lambda state: self._route_after_safety_input(state, mode=normalized_mode),
+                path_map={safe_next: safe_next, "compress": "compress", "__end__": END},
             )
-            self._branch_labels[("safety_input", safe_next)] = "审核通过"
+            self._branch_labels[("safety_input", safe_next)] = "审核通过且预算充足"
+            self._branch_labels[("safety_input", "compress")] = "审核通过但上下文超限"
             self._branch_labels[("safety_input", "__end__")] = "审核拦截"
         else:
-            workflow.set_entry_point("compress" if normalized_mode == "react" else "planner")
-        # 压缩节点在进入模型决策前检查上下文是否接近上限;plan 由 observation
-        # 判定溢出触发,react 在每次 action 后回环时检查(阈值内为廉价估算,直接跳过)。
+            default_next = "agent" if normalized_mode == "react" else "planner"
+            workflow.set_conditional_entry_point(
+                lambda state: "compress" if self._context_exceeds_budget(state) else default_next,
+                path_map={default_next: default_next, "compress": "compress"},
+            )
+        # 所有进入主模型的路径先走廉价预算条件边;只有超限分支才执行同步压缩。
         if normalized_mode == "plan":
             workflow.add_edge("compress", "planner")
-            workflow.add_edge("planner", "agent")
+            workflow.add_conditional_edges(
+                "planner",
+                self._route_context_budget,
+                path_map={"agent": "agent", "compress": "compress"},
+            )
+            self._branch_labels[("planner", "agent")] = "预算充足 → 主模型决策"
+            self._branch_labels[("planner", "compress")] = "规划后上下文超限 → 同步压缩"
         else:
             workflow.add_edge("compress", "agent")
-            self._branch_labels[("compress", "agent")] = "压缩或跳过 → 继续决策"
+            self._branch_labels[("compress", "agent")] = "压缩完成 → 继续决策"
         if self.safety_service is not None:
             workflow.add_conditional_edges(
                 "agent",
@@ -177,8 +188,13 @@ class AgentGraphBuilder:
             self._branch_labels[("agent", "action")] = "有 tool_calls"
             self._branch_labels[("agent", "__end__")] = "无 tool_calls → 结束"
         if normalized_mode == "react":
-            workflow.add_edge("action", "compress")
-            self._branch_labels[("action", "compress")] = "工具结果 → 压缩检查 → 继续决策"
+            workflow.add_conditional_edges(
+                "action",
+                self._route_context_budget,
+                path_map={"agent": "agent", "compress": "compress"},
+            )
+            self._branch_labels[("action", "agent")] = "预算充足 → 继续决策"
+            self._branch_labels[("action", "compress")] = "上下文超限 → 同步压缩"
         else:
             workflow.add_edge("action", "observation")
             workflow.add_conditional_edges(
@@ -221,14 +237,43 @@ class AgentGraphBuilder:
             return "compress"
         return "agent"
 
-    @staticmethod
-    def _route_after_safety_input(state: AgentState) -> Literal["planner", "__end__"]:
-        """安全输入审核通过 → planner,拦截 → 直接结束。"""
+    def _route_context_budget(self, state: AgentState) -> Literal["agent", "compress"]:
+        """ReAct 入口和 action 回环按 token 预算选择继续推理或同步压缩。"""
+
+        return "compress" if self._context_exceeds_budget(state) else "agent"
+
+    def _context_exceeds_budget(self, state: AgentState) -> bool:
+        """使用共享 token 预算规则判断当前工作消息是否达到压缩触发线。"""
+
+        llm_config = state.get("llm_config") or {}
+        model_name = str(llm_config.get("model_name") or self.config.model.model_name or "") or None
+        return ContextBuilder.should_compress(
+            state.get("messages", []),
+            config=self.config,
+            model_name=model_name,
+            extra_tokens=(
+                (
+                    int(state.get("context_tool_tokens", 0) or 0)
+                    or ContextBuilder.estimate_tool_definition_tokens(self.tools, model_name=model_name)
+                )
+                + int(state.get("context_overhead_tokens", 0) or 0)
+            ),
+        )
+
+    def _route_after_safety_input(
+        self,
+        state: AgentState,
+        *,
+        mode: str,
+    ) -> Literal["planner", "agent", "compress", "__end__"]:
+        """安全审核通过后先检查预算，再进入 Plan 或 ReAct 的首个推理节点。"""
 
         decision = state.get("observation_decision")
         if decision == "blocked":
             return "__end__"
-        return "planner"
+        if self._context_exceeds_budget(state):
+            return "compress"
+        return "agent" if mode == "react" else "planner"
 
     @staticmethod
     def _route_after_safety_output(state: AgentState) -> Literal["summary", "__end__"]:

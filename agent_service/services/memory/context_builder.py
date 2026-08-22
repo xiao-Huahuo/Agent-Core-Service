@@ -14,7 +14,10 @@ messages = builder.build_messages(user_id="u1", session_id="s1", current_prompt=
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
+
+import tiktoken
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 
@@ -55,6 +58,10 @@ class ContextBuilder:
         self, *, user_id: str, session_id: str, current_prompt: str, reference: str | None = None,
         web_search_max_results: int = DEFAULT_BUSINESS_LIMITS.default_web_search_max_results,
         long_term_memory_enabled: bool = True,
+        compression_state: dict[str, Any] | None = None,
+        model_name: str | None = None,
+        tool_definition_tokens: int = 0,
+        additional_context_tokens: int = 0,
     ) -> list[BaseMessage]:
         """
         构建当前轮 Agent 调用需要的 LangChain messages。
@@ -68,7 +75,7 @@ class ContextBuilder:
         history = self.message_service.list_session_messages(
             user_id=user_id,
             session_id=session_id,
-            limit=self.config.memory.max_context_messages,
+            limit=None,
             exclude_roles=["system"],
         )
         messages: list[BaseMessage] = []
@@ -79,6 +86,7 @@ class ContextBuilder:
             has_history=bool(history),
             web_search_max_results=web_search_max_results,
             long_term_memory_enabled=long_term_memory_enabled,
+            compression_state=compression_state,
         )
         if memory_context:
             messages.append(
@@ -87,21 +95,24 @@ class ContextBuilder:
                     additional_kwargs={"rag_metrics": rag_metrics, "recall_details": recall_details},
                 )
             )
-        messages.extend(self._to_langchain_message(message) for message in history)
-        messages = self._filter_orphaned_tool_messages(messages)
-        messages.append(HumanMessage(content=self._format_user_message_content(current_prompt, reference)))
-        if self.estimate_messages_tokens(messages) > self.config.memory.summary_trigger_tokens:
-            compressed_history = history[-self.config.memory.context_compression_tail_messages :]
-            messages = self._rebuild_messages_for_compressed_context(
-                user_id=user_id,
-                session_id=session_id,
-                current_prompt=current_prompt,
-                history=compressed_history,
-                reference=reference,
-                web_search_max_results=web_search_max_results,
-                long_term_memory_enabled=long_term_memory_enabled,
-            )
-        return messages
+        if compression_state:
+            messages.append(SystemMessage(content=self.compression_state_to_text(compression_state)))
+        history_messages = self._filter_orphaned_tool_messages(
+            [self._to_langchain_message(message) for message in history]
+        )
+        current_message = HumanMessage(content=self._format_user_message_content(current_prompt, reference))
+        available_tokens, _, _ = self.compression_limits(self.config)
+        fixed_tokens = self.estimate_messages_tokens([*messages, current_message], model_name=model_name)
+        history_budget = max(
+            available_tokens - fixed_tokens - max(tool_definition_tokens, 0) - max(additional_context_tokens, 0),
+            0,
+        )
+        selected_history = self.select_recent_messages_within_budget(
+            history_messages,
+            token_budget=history_budget,
+            model_name=model_name,
+        )
+        return [*messages, *selected_history, current_message]
 
     def _build_retrieved_context(
         self,
@@ -112,6 +123,7 @@ class ContextBuilder:
         has_history: bool,
         web_search_max_results: int = DEFAULT_BUSINESS_LIMITS.default_web_search_max_results,
         long_term_memory_enabled: bool = True,
+        compression_state: dict[str, Any] | None = None,
     ) -> tuple[str, dict[str, float | int], dict[str, Any]]:
         """
         构建长期记忆和知识库召回上下文文本,并产出检索指标。
@@ -146,7 +158,7 @@ class ContextBuilder:
         # 重复跑完整 embedding+rerank 链路。仅保留长期记忆自动召回。
         important_summary = (
             self.retrieval_service.get_latest_important_fact_summary(user_id=user_id, session_id=session_id)
-            if long_term_memory_enabled
+            if long_term_memory_enabled and not compression_state
             else None
         )
         attachment_context = (
@@ -264,63 +276,148 @@ class ContextBuilder:
         recall_details["citation_map"] = citation_map
         return "\n".join(sections), metrics, recall_details
 
-    def _rebuild_messages_for_compressed_context(
-        self,
-        *,
-        user_id: str,
-        session_id: str,
-        current_prompt: str,
-        history: list[MessageOut],
-        reference: str | None = None,
-        web_search_max_results: int = DEFAULT_BUSINESS_LIMITS.default_web_search_max_results,
-        long_term_memory_enabled: bool = True,
-    ) -> list[BaseMessage]:
-        """
-        在上下文接近 token 上限时重建更紧凑的消息列表。
-
-        user_id: 用户 ID。
-        session_id: 会话 ID。
-        current_prompt: 当前用户输入。
-        history: 已裁剪后的近期历史消息。
-        reference: 当前用户明确引用的文档片段。
-        """
-
-        messages: list[BaseMessage] = []
-        memory_context, rag_metrics, recall_details = self._build_retrieved_context(
-            user_id=user_id,
-            session_id=session_id,
-            current_prompt=current_prompt,
-            has_history=bool(history),
-            web_search_max_results=web_search_max_results,
-            long_term_memory_enabled=long_term_memory_enabled,
-        )
-        if memory_context:
-            messages.append(
-                SystemMessage(
-                    content=memory_context,
-                    additional_kwargs={"rag_metrics": rag_metrics, "recall_details": recall_details},
-                )
-            )
-        messages.extend(self._to_langchain_message(message) for message in history)
-        messages = self._filter_orphaned_tool_messages(messages)
-        messages.append(HumanMessage(content=self._format_user_message_content(current_prompt, reference)))
-        return messages
-
     @staticmethod
-    def estimate_messages_tokens(messages: list[BaseMessage]) -> int:
+    def estimate_messages_tokens(messages: list[BaseMessage], *, model_name: str | None = None) -> int:
         """
-        使用轻量字符启发式估算消息 token 数量。
+        使用与当前模型匹配的 tiktoken 编码统计序列化消息 token 数量。
 
         messages: 待估算的 LangChain 消息列表。
+        model_name: 当前大模型名称;未知 OpenAI 兼容模型回退到 o200k_base。
         """
 
-        total_characters = 0
+        try:
+            encoding = tiktoken.encoding_for_model(model_name) if model_name else tiktoken.get_encoding("o200k_base")
+        except KeyError:
+            encoding = tiktoken.get_encoding("o200k_base")
+        total_tokens = 3
         for message in messages:
-            total_characters += len(str(getattr(message, "content", "") or ""))
+            total_tokens += 4
+            total_tokens += len(encoding.encode(str(getattr(message, "content", "") or "")))
             tool_calls = getattr(message, "tool_calls", []) or []
             if tool_calls:
-                total_characters += len(str(tool_calls))
-        return max(1, total_characters // 4)
+                total_tokens += len(encoding.encode(json.dumps(tool_calls, ensure_ascii=False, sort_keys=True)))
+            tool_call_id = str(getattr(message, "tool_call_id", "") or "")
+            if tool_call_id:
+                total_tokens += len(encoding.encode(tool_call_id))
+        return max(1, total_tokens)
+
+    @staticmethod
+    def compression_limits(config: AgentConfig) -> tuple[int, int, int]:
+        """返回有效窗口、压缩触发线和压缩目标线。"""
+
+        memory = config.memory
+        available = max(memory.context_window_tokens - memory.context_output_reserve_tokens, 1)
+        trigger = max(1, round(available * memory.context_compression_trigger_ratio))
+        target = max(1, min(trigger - 1 if trigger > 1 else 1, round(available * memory.context_compression_target_ratio)))
+        return available, trigger, target
+
+    @staticmethod
+    def should_compress(
+        messages: list[BaseMessage],
+        *,
+        config: AgentConfig,
+        model_name: str | None = None,
+        extra_tokens: int = 0,
+    ) -> bool:
+        """判断当前工作消息是否达到按模型窗口比例计算的压缩触发线。"""
+
+        _, trigger, _ = ContextBuilder.compression_limits(config)
+        return ContextBuilder.estimate_messages_tokens(messages, model_name=model_name) + max(extra_tokens, 0) >= trigger
+
+    @staticmethod
+    def estimate_tool_definition_tokens(tools: list[Any], *, model_name: str | None = None) -> int:
+        """统计随模型请求发送的工具名称、说明和参数 Schema token。"""
+
+        definitions: list[dict[str, Any]] = []
+        for tool in tools:
+            args_schema = getattr(tool, "args_schema", None)
+            if hasattr(args_schema, "model_json_schema"):
+                schema = args_schema.model_json_schema()
+            elif isinstance(args_schema, dict):
+                schema = args_schema
+            else:
+                schema = {}
+            definitions.append(
+                {
+                    "name": str(getattr(tool, "name", "") or ""),
+                    "description": str(getattr(tool, "description", "") or ""),
+                    "parameters": schema,
+                }
+            )
+        if not definitions:
+            return 0
+        wrapper_tokens = ContextBuilder.estimate_messages_tokens(
+            [SystemMessage(content=json.dumps(definitions, ensure_ascii=False, sort_keys=True))],
+            model_name=model_name,
+        )
+        return max(wrapper_tokens - 7, 0)
+
+    @staticmethod
+    def select_recent_messages_within_budget(
+        messages: list[BaseMessage],
+        *,
+        token_budget: int,
+        model_name: str | None = None,
+    ) -> list[BaseMessage]:
+        """从完整历史末尾选择 token 预算允许的最大安全消息后缀。"""
+
+        selected_reversed: list[BaseMessage] = []
+        selected_tokens = 3
+        for message in reversed(messages):
+            message_tokens = max(
+                ContextBuilder.estimate_messages_tokens([message], model_name=model_name) - 3,
+                1,
+            )
+            if selected_tokens + message_tokens > token_budget:
+                break
+            selected_reversed.append(message)
+            selected_tokens += message_tokens
+        selected = list(reversed(selected_reversed))
+        return ContextBuilder._filter_orphaned_tool_messages(selected)
+
+    @staticmethod
+    def compression_state_to_text(state: dict[str, Any]) -> str:
+        """把结构化压缩状态转换为模型可读且可追溯的系统上下文。"""
+
+        sections = [f"压缩上下文版本: {int(state.get('version', 0) or 0)}"]
+        for key, title in (
+            ("important_facts", "重要事实"),
+            ("historical_actions", "历史动作"),
+            ("unfinished_actions", "当前未完成动作"),
+        ):
+            values = [str(value).strip() for value in state.get(key, []) if str(value).strip()]
+            sections.append(f"{title}:" + ("\n- " + "\n- ".join(values) if values else " 无"))
+        return "\n".join(sections)
+
+    @staticmethod
+    def context_usage_from_serialized(
+        messages: list[dict[str, Any]],
+        *,
+        config: AgentConfig,
+        model_name: str | None = None,
+        extra_tokens: int = 0,
+    ) -> dict[str, int]:
+        """统计实际发送给模型的序列化消息，并返回前端可直接展示的预算数据。"""
+
+        converted: list[BaseMessage] = []
+        for message in messages:
+            role = str(message.get("role") or "")
+            content = str(message.get("content") or "")
+            if role == "system":
+                converted.append(SystemMessage(content=content))
+            elif role == "assistant":
+                converted.append(AIMessage(content=content, tool_calls=message.get("tool_calls") or []))
+            elif role == "tool":
+                converted.append(ToolMessage(content=content, tool_call_id=str(message.get("tool_call_id") or "")))
+            else:
+                converted.append(HumanMessage(content=content))
+        available, trigger, target = ContextBuilder.compression_limits(config)
+        return {
+            "current_tokens": ContextBuilder.estimate_messages_tokens(converted, model_name=model_name) + max(extra_tokens, 0),
+            "max_context_tokens": available,
+            "trigger_tokens": trigger,
+            "target_tokens": target,
+        }
 
     @staticmethod
     def _filter_orphaned_tool_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
