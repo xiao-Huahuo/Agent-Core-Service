@@ -299,7 +299,11 @@ function handlePointerDown(event: PointerEvent) {
     setHighlightNode(node.id)
     node.fx = node.x ?? node.targetX
     node.fy = node.y ?? node.targetY
-    simulation?.alphaTarget(0.22).restart()
+    // Restart without alphaTarget: a sustained target reheats every node and
+    // makes the whole graph expand for as long as one node is held.
+    if (simulation) {
+      simulation.alpha(Math.max(simulation.alpha(), 0.12)).restart()
+    }
     return
   }
   pointerMode = 'pan'
@@ -341,7 +345,6 @@ function handlePointerUp(event: PointerEvent) {
   if (draggedNode) {
     draggedNode.fx = null
     draggedNode.fy = null
-    simulation?.alphaTarget(0)
   }
   if (node && !movedDuringPointer) {
     selectNode(node)
