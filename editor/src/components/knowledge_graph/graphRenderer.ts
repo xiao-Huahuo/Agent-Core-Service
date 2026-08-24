@@ -308,7 +308,7 @@ function drawNode(
     ctx.lineWidth = 1.4 + 1.6 * glowProgress
     ctx.fill()
     ctx.stroke()
-  } else if (node.kind === 'library') {
+  } else if (node.kind === 'library' || node.kind === 'root') {
     ctx.fillStyle = theme.surface
     ctx.fill()
     ctx.save()

@@ -114,10 +114,10 @@ const filteredLibraryItems = computed(() => {
 
 const graphModel = computed(() => {
   if (graphMode.value === 'semantic') {
-    return buildSemanticKnowledgeGraph(semanticGraph.value, knowledgeTitle.value)
+    return buildSemanticKnowledgeGraph(semanticGraph.value)
   }
   if (graphMode.value === 'library') {
-    return buildLibraryGraph(filteredLibraryItems.value, { rootLabel: knowledgeTitle.value })
+    return buildLibraryGraph(filteredLibraryItems.value)
   }
   if (graphMode.value === 'wiki') {
     return buildWikiLinkGraph(tree.value, wikiLinkDocuments.value)

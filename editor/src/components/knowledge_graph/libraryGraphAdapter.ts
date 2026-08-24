@@ -11,13 +11,6 @@ import type { LibraryItem } from '@/types/knowledge'
 
 import type { KnowledgeGraphLink, KnowledgeGraphModel, KnowledgeGraphNode } from './graphTypes'
 
-export interface LibraryGraphAdapterOptions {
-  rootLabel: string
-  rootId?: string
-}
-
-const DEFAULT_ROOT_ID = '__virtual_library_root__'
-
 function normalizeExtension(name: string): string {
   const dotIndex = name.lastIndexOf('.')
   if (dotIndex <= 0 || dotIndex === name.length - 1) {
@@ -42,7 +35,7 @@ function createLink(source: string, target: string): KnowledgeGraphLink {
 function appendItems(
   items: LibraryItem[],
   allItems: LibraryItem[],
-  parentId: string,
+  parentId: string | undefined,
   depth: number,
   nodes: KnowledgeGraphNode[],
   links: KnowledgeGraphLink[],
@@ -62,7 +55,7 @@ function appendItems(
       kind: isCollection ? 'virtual-group' : 'file',
       extension: isCollection ? 'collection' : normalizeExtension(item.source_name || item.source_path),
       depth,
-      parentId,
+      ...(parentId ? { parentId } : {}),
       siblingIndex,
       siblingCount: sorted.length,
       ringIndex: 0,
@@ -71,7 +64,9 @@ function appendItems(
       targetY: 0,
     }
     nodes.push(graphNode)
-    links.push(createLink(parentId, graphNode.id))
+    if (parentId) {
+      links.push(createLink(parentId, graphNode.id))
+    }
     if (isCollection) {
       appendItems(
         allItems.filter((child) => child.parent_id === item.item_id),
@@ -87,26 +82,10 @@ function appendItems(
 
 export function buildLibraryGraph(
   items: LibraryItem[],
-  options: LibraryGraphAdapterOptions,
 ): KnowledgeGraphModel {
-  const rootId = options.rootId ?? DEFAULT_ROOT_ID
   const rootItems = items.filter((item) => !item.parent_id)
-  const nodes: KnowledgeGraphNode[] = [
-    {
-      id: rootId,
-      label: options.rootLabel || '图书馆',
-      path: '',
-      kind: 'library',
-      depth: 0,
-      siblingIndex: 0,
-      siblingCount: 1,
-      ringIndex: 0,
-      radius: 31,
-      targetX: 0,
-      targetY: 0,
-    },
-  ]
+  const nodes: KnowledgeGraphNode[] = []
   const links: KnowledgeGraphLink[] = []
-  appendItems(rootItems, items, rootId, 1, nodes, links)
+  appendItems(rootItems, items, undefined, 0, nodes, links)
   return { nodes, links }
 }
