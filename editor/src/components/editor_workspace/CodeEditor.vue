@@ -49,6 +49,7 @@ interface EditorScrollPayload {
 const emit = defineEmits<{
   save: []
   scroll: [payload: EditorScrollPayload]
+  cursor: [offset: number]
   toggleBacklinks: []
 }>()
 
@@ -459,6 +460,12 @@ function updateWikiSuggestions() {
 function handleEditorInput() {
   flushTypingSnapshot()
   updateWikiSuggestions()
+  emitCursorOffset()
+}
+
+/** Reports the current source caret so the Markdown outline can follow it. */
+function emitCursorOffset() {
+  emit('cursor', textareaRef.value?.selectionStart ?? 0)
 }
 
 /** Replaces the incomplete token with the selected knowledge-file target. */
@@ -981,7 +988,22 @@ function scrollToRatio(ratio: number) {
   requestAnimationFrame(() => { programmaticScroll = false })
 }
 
-defineExpose({ getScrollSnapshot, scrollToRatio })
+/** Moves the caret to a source heading and scrolls it into a comfortable viewport position. */
+function scrollToSourceOffset(offset: number, behavior: ScrollBehavior = 'smooth') {
+  const textarea = textareaRef.value
+  if (!textarea) return
+  const nextOffset = Math.max(0, Math.min(model.value.length, offset))
+  const lineIndex = model.value.slice(0, nextOffset).split('\n').length - 1
+  const top = Math.max(0, lineIndex * editorLineHeight(textarea) - textarea.clientHeight * 0.16)
+  textarea.focus()
+  textarea.setSelectionRange(nextOffset, nextOffset)
+  programmaticScroll = true
+  textarea.scrollTo({ top, behavior })
+  emitCursorOffset()
+  requestAnimationFrame(() => { programmaticScroll = false })
+}
+
+defineExpose({ getScrollSnapshot, scrollToRatio, scrollToSourceOffset })
 
 function editorLineHeight(textarea: HTMLTextAreaElement): number {
   const computedStyle = window.getComputedStyle(textarea)
@@ -1483,6 +1505,8 @@ onBeforeUnmount(() => {
         @keydown="handleEditorKeydown"
         @click="updateWikiSuggestions"
         @input="handleEditorInput"
+        @keyup="emitCursorOffset"
+        @select="emitCursorOffset"
         @paste="handleNativePaste"
         @scroll="handleEditorScroll"
         @contextmenu="openContextMenu"

@@ -40,6 +40,7 @@ class SmartFormService:
         if create_tables:
             SQLModel.metadata.create_all(self.engine)
             self._ensure_row_height_column()
+            self._ensure_column_description_column()
 
     def _ensure_row_height_column(self) -> None:
         """为旧数据库补充行高列,保持现有智能表格可原地升级。"""
@@ -51,6 +52,17 @@ class SmartFormService:
             connection.execute(text(
                 "ALTER TABLE smart_form_rows ADD COLUMN height INTEGER NOT NULL DEFAULT "
                 f"{DEFAULT_BUSINESS_LIMITS.smart_form_default_row_height}"
+            ))
+
+    def _ensure_column_description_column(self) -> None:
+        """为旧数据库补充列辅助描述字段,保持现有智能表格可原地升级。"""
+
+        columns = {column["name"] for column in inspect(self.engine).get_columns("smart_form_columns")}
+        if "description" in columns:
+            return
+        with self.engine.begin() as connection:
+            connection.execute(text(
+                "ALTER TABLE smart_form_columns ADD COLUMN description TEXT NOT NULL DEFAULT ''"
             ))
 
     def list_forms(self, *, user_id: str) -> list[dict[str, Any]]:
@@ -186,6 +198,7 @@ class SmartFormService:
                 column_id=column_id,
                 order_index=index,
                 title=str(column.get("title") or column_id),
+                description=str(column.get("description") or ""),
                 column_type=str(column.get("type") or "text"),
                 removable=bool(column.get("removable", True)),
                 editable=bool(column.get("editable", True)),
@@ -283,6 +296,8 @@ class SmartFormService:
         }
         if options:
             payload["options"] = options
+        if record.description:
+            payload["description"] = record.description
         if record.tone:
             payload["tone"] = record.tone
         return payload

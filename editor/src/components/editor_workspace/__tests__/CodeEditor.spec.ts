@@ -83,6 +83,17 @@ describe('CodeEditor Markdown context menu', () => {
     })
   })
 
+  it('emits the current caret offset for the Markdown outline', async () => {
+    const wrapper = mountMarkdownEditor('# First\n\n## Second')
+    const textarea = wrapper.get('textarea')
+    const element = textarea.element as HTMLTextAreaElement
+    element.setSelectionRange(11, 11)
+
+    await textarea.trigger('select')
+
+    expect(wrapper.emitted('cursor')?.at(-1)?.[0]).toBe(11)
+  })
+
   it('keeps the highlight content pixel-aligned while the clipping layer stays fixed', async () => {
     const wrapper = mountMarkdownEditor('alpha\nbeta\ngamma')
     const textarea = wrapper.get('textarea').element as HTMLTextAreaElement

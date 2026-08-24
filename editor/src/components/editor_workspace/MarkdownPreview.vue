@@ -39,6 +39,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   scroll: [ratio: number]
+  activeHeading: [index: number]
   ready: []
   updateContent: [content: string]
   downloadImage: [src: string, name: string]
@@ -112,6 +113,7 @@ let mounted = false
 let renderVersion = 0
 let programmaticScroll = false
 let programmaticScrollTimer: ReturnType<typeof setTimeout> | null = null
+let pendingHeadingIndex: number | null = null
 let displayBlocks: string[] = []
 let inlineBlocks: string[] = []
 let previewTableDrag: { type: 'row' | 'column'; tableIndex: number; source: number } | null = null
@@ -642,8 +644,23 @@ function getPreviewScrollRatio() {
   return maxScrollTop > 0 ? previewElement.scrollTop / maxScrollTop : 0
 }
 
+/** Resolves the rendered heading nearest the top of the preview viewport. */
+function getActivePreviewHeadingIndex() {
+  const previewElement = getPreviewElement()
+  if (!previewElement) return -1
+  const headings = [...previewElement.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')]
+  if (headings.length === 0) return -1
+  const top = previewElement.getBoundingClientRect().top + 20
+  let activeIndex = 0
+  headings.forEach((heading, index) => {
+    if (heading.getBoundingClientRect().top <= top) activeIndex = index
+  })
+  return activeIndex
+}
+
 function handlePreviewScroll() {
   tableOverlay.value.visible = false
+  emit('activeHeading', getActivePreviewHeadingIndex())
   if (!programmaticScroll) {
     emit('scroll', getPreviewScrollRatio())
   }
@@ -676,7 +693,25 @@ function scrollToSourceOffset(offset: number, contentLength: number, behavior: S
   scrollToRatio(contentLength > 0 ? offset / contentLength : 0, behavior)
 }
 
-defineExpose({ scrollToRatio, scrollToSourceOffset })
+/** Scrolls to an actual rendered heading rather than estimating by source ratio. */
+function flushPendingHeadingScroll() {
+  if (pendingHeadingIndex === null) return
+  const previewElement = getPreviewElement()
+  const target = previewElement?.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')[pendingHeadingIndex]
+  if (!target) return
+  const index = pendingHeadingIndex
+  pendingHeadingIndex = null
+  scrollToPreviewElement(target)
+  emit('activeHeading', index)
+}
+
+/** Queues one heading navigation if Vditor has not rendered its heading DOM yet. */
+function scrollToHeading(index: number) {
+  pendingHeadingIndex = index
+  flushPendingHeadingScroll()
+}
+
+defineExpose({ scrollToRatio, scrollToSourceOffset, scrollToHeading })
 
 function injectCodeCopyButtons() {
   const root = getPreviewElement()
@@ -729,6 +764,7 @@ function handlePreviewParse(element: HTMLElement) {
   highlightVueCodeBlocks(element)
   injectCodeCopyButtons()
   tableOverlay.value.visible = false
+  flushPendingHeadingScroll()
   void decorateWikiPreview(resetEl, {
     tree: workspaceStore.tree,
     currentPath: props.path ?? workspaceStore.selectedPath,
@@ -790,6 +826,8 @@ function syncPreviewContent() {
     ensurePreviewPaneIsRenderable()
     instance.renderPreview()
     emit('ready')
+    emit('activeHeading', getActivePreviewHeadingIndex())
+    flushPendingHeadingScroll()
   } catch (err) {
     console.warn('[MarkdownPreview] syncPreviewContent failed:', err)
   }

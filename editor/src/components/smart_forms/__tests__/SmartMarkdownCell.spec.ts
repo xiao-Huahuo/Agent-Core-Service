@@ -45,6 +45,7 @@ describe('SmartMarkdownCell', () => {
     expect((wrapper.get('textarea').element as HTMLTextAreaElement).style.display).toBe('none')
     await wrapper.get('.smart-markdown-cell').trigger('dblclick')
     expect((wrapper.get('textarea').element as HTMLTextAreaElement).style.display).toBe('')
+    expect(wrapper.get('textarea').attributes('rows')).toBe('1')
   })
 
   it('keeps editing when the active cell is clicked again', async () => {
@@ -77,5 +78,28 @@ describe('SmartMarkdownCell', () => {
 
     expect(wrapper.get('.markdown-body').text()).toBe(value)
     expect(wrapper.emitted('resize')?.[0]).toEqual([true, 282])
+  })
+
+  it('keeps expanded content visible while emitting the closing resize', async () => {
+    vi.useFakeTimers()
+    const value = 'a'.repeat(240)
+    const wrapper = mount(SmartMarkdownCell, {
+      props: { value, path: 'forms/demo/table.md', editable: true, uploadImage: vi.fn() },
+      global: {
+        stubs: {
+          MarkdownContent: { props: ['content'], template: '<div class="markdown-body">{{ content }}</div>' },
+        },
+      },
+    })
+
+    await wrapper.get('.smart-markdown-toggle').trigger('click')
+    await wrapper.get('.smart-markdown-toggle').trigger('click')
+
+    const resizeEvents = wrapper.emitted('resize') ?? []
+    expect(resizeEvents[resizeEvents.length - 1]).toEqual([false, 282])
+    expect(wrapper.get('.markdown-body').text()).toBe(value)
+    await vi.runAllTimersAsync()
+    expect(wrapper.get('.markdown-body').text()).toBe(`${'a'.repeat(200)}...`)
+    vi.useRealTimers()
   })
 })

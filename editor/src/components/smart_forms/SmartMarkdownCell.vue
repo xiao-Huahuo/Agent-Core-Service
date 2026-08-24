@@ -7,7 +7,7 @@
   and uploads pasted images through the form-owned assets callback.
 -->
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import MarkdownPreview from '@/components/editor_workspace/MarkdownPreview.vue'
@@ -31,6 +31,7 @@ const props = defineProps<{
 }>()
 
 const COLLAPSED_CHARACTER_LIMIT = 200
+const CONTENT_ANIMATION_MS = 220
 
 const emit = defineEmits<{
   update: [value: string]
@@ -41,6 +42,7 @@ const emit = defineEmits<{
 
 const editing = ref(false)
 const expanded = ref(false)
+const collapsing = ref(false)
 const draft = ref(props.value)
 const textarea = ref<HTMLTextAreaElement | null>(null)
 const cellRoot = ref<HTMLDivElement | null>(null)
@@ -51,20 +53,35 @@ const usesInteractivePreview = computed(() => /!\[[^\]]*\]\([^)]*\)/.test(displa
   || /(?:^|\n)\s*\|[^\n]+\|\s*\n\s*\|?\s*:?-{3,}/.test(displayValue.value))
 const canExpand = computed(() => props.value.length > COLLAPSED_CHARACTER_LIMIT
   || Boolean(props.plainWhenCollapsed && props.value))
+let collapseTimer: ReturnType<typeof setTimeout> | undefined
 
 watch(() => props.value, (value) => {
   if (!editing.value) draft.value = value
   if (value.length <= COLLAPSED_CHARACTER_LIMIT) expanded.value = false
 })
 
-/** Expands or collapses the cell and reports the rendered content height to the table row. */
+/** Starts the row resize before swapping content so both expansion and collapse receive a transition frame. */
 async function toggleExpanded(): Promise<void> {
-  expanded.value = !expanded.value
+  if (collapsing.value) return
+  if (expanded.value) {
+    collapsing.value = true
+    emit('resize', false, 282)
+    collapseTimer = setTimeout(() => {
+      expanded.value = false
+      collapsing.value = false
+      collapseTimer = undefined
+    }, CONTENT_ANIMATION_MS)
+    return
+  }
+  expanded.value = true
   await nextTick()
   const markdownBody = cellRoot.value?.querySelector<HTMLElement>('.markdown-body')
-  const height = expanded.value ? Math.max(282, markdownBody?.scrollHeight || 282) : 282
-  emit('resize', expanded.value, height)
+  emit('resize', true, Math.max(282, markdownBody?.scrollHeight || 282))
 }
+
+onBeforeUnmount(() => {
+  if (collapseTimer) clearTimeout(collapseTimer)
+})
 
 /** Opens source editing and places the caret at the end. */
 async function startEditing(): Promise<void> {
@@ -146,6 +163,7 @@ function downloadImage(src: string, name: string): void {
   <div
     ref="cellRoot"
     class="smart-markdown-cell"
+    :class="{ expanded, collapsing }"
     tabindex="0"
     @dblclick.stop="startEditing"
     @click="handleCellClick"
@@ -165,25 +183,28 @@ function downloadImage(src: string, name: string): void {
       ref="textarea"
       v-model="draft"
       class="smart-markdown-source"
+      rows="1"
       :readonly="!editable"
       @input="handleSourceInput"
       @blur="finishEditing"
       @keydown.esc.prevent="finishEditing"
     ></textarea>
-    <div
-      v-if="!editing && plainWhenCollapsed && !expanded"
-      class="smart-plain-text"
-    >{{ displayValue }}</div>
-    <MarkdownPreview
-      v-else-if="!editing && usesInteractivePreview"
-      :content="displayValue"
-      :path="path"
-      compact
-      image-download
-      @update-content="emit('update', $event)"
-      @download-image="downloadImage"
-    />
-    <MarkdownContent v-else-if="!editing" :content="displayValue" />
+    <div v-if="!editing" class="smart-markdown-reading">
+      <div
+        v-if="plainWhenCollapsed && !expanded"
+        class="smart-plain-text"
+      >{{ displayValue }}</div>
+      <MarkdownPreview
+        v-else-if="usesInteractivePreview"
+        :content="displayValue"
+        :path="path"
+        compact
+        image-download
+        @update-content="emit('update', $event)"
+        @download-image="downloadImage"
+      />
+      <MarkdownContent v-else :content="displayValue" />
+    </div>
   </div>
 </template>
 
@@ -196,6 +217,29 @@ function downloadImage(src: string, name: string): void {
   min-height: 0;
   outline: 0;
   user-select: text;
+}
+
+.smart-markdown-cell.collapsing {
+  overflow: hidden;
+}
+
+.smart-markdown-cell.collapsing .smart-markdown-reading {
+  position: absolute;
+  inset: 0;
+}
+
+.smart-markdown-reading {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.smart-markdown-cell.expanded:not(.collapsing) .smart-markdown-reading {
+  animation: smart-markdown-expand 220ms ease-out both;
+}
+
+.smart-markdown-cell.collapsing .smart-markdown-reading {
+  animation: smart-markdown-collapse 220ms ease-in both;
 }
 
 .smart-markdown-toggle {
@@ -237,6 +281,8 @@ function downloadImage(src: string, name: string): void {
 .smart-markdown-cell :deep(.markdown-body > :last-child) { margin-bottom: 0; }
 
 .smart-plain-text {
+  position: absolute;
+  inset: 0;
   box-sizing: border-box;
   height: 100%;
   overflow: hidden;
@@ -261,5 +307,15 @@ function downloadImage(src: string, name: string): void {
   color: var(--color-text);
   font: inherit;
   line-height: 1.35;
+}
+
+@keyframes smart-markdown-expand {
+  from { opacity: 0.35; clip-path: inset(0 0 72% 0); transform: translateY(-4px); }
+  to { opacity: 1; clip-path: inset(0); transform: translateY(0); }
+}
+
+@keyframes smart-markdown-collapse {
+  from { opacity: 1; clip-path: inset(0); transform: translateY(0); }
+  to { opacity: 0.25; clip-path: inset(0 0 72% 0); transform: translateY(-4px); }
 }
 </style>

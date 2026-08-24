@@ -40,7 +40,7 @@ Agent 框架不能消除模型幻觉。MetaWeave 因此优先提供检索、引�
 - 前端UI/UX设计规范: [DESIGN.md](docs/DESIGN.md)
 ### 变更
 - TODO: [TODO.md](TODO.md)
-- 变更历史: [CHANGE_HISTORY.md](docs/CHANGE_HISTORY.md)
+- 变更历史: [change_history/](docs/change_history/README.md)
 ### 接口与扩展
 - OPENAPI文档: [metaweave.openapi.json](docs/api/metaweave.openapi.json)
 - MCP 接入: [MCP.md](docs/MCP.md)
@@ -134,6 +134,9 @@ MetaWeave/
 │   └── package.json                # 前端依赖和命令
 ├── tests/                          # 后端测试
 ├── docs/                           # 设计、接口与开发文档
+│   └── change_history/
+│       ├── README.md               # 按日期倒序排列的变更历史索引
+│       └── YYYY-MM-DD.md           # 对应日期的独立变更记录
 ├── agent_graph*.mmd                # Agent 状态图
 ├── 启动.bat                         # 前后端一键启动脚本
 └── README.md                       # 项目说明

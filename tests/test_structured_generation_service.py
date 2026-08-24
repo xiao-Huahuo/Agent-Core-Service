@@ -11,6 +11,10 @@ Structured generation service tests.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import agent_service.services.structured_generation_service as structured_generation_module
 from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.structured_generation import (
     StructuredGenerationField,
@@ -90,3 +94,25 @@ def test_structured_generation_rejects_tag_outside_options() -> None:
 
     assert response.results[1].status == "failed"
     assert "标签不在可选项内" in response.results[1].error
+
+
+def test_structured_generation_uses_foreground_small_model_queue(monkeypatch) -> None:
+    """用户点击触发的结构化生成必须避开后台事实队列,同时继续使用小模型层。"""
+
+    scheduler = MagicMock()
+    scheduler.invoke_chat.return_value = SimpleNamespace(content='{"title":"Fast","paper_type":"研究论文"}')
+    monkeypatch.setattr(
+        structured_generation_module,
+        "get_user_llm_overrides",
+        lambda _configurable: (None, None, None, None, None, None),
+    )
+    service = StructuredGenerationService(
+        config=AgentConfig.load_config(ensure_directories=False, ensure_models=False),
+        task_scheduler=scheduler,
+    )
+
+    response = service.generate_fields(make_request())
+
+    assert response.results[0].value == "Fast"
+    assert scheduler.invoke_chat.call_args.kwargs["task_type"] == "foreground_agent"
+    assert scheduler.invoke_chat.call_args.kwargs["model_tier"] == "small"

@@ -103,6 +103,20 @@ describe('smartLiteratureTable', () => {
     expect(plain.rows[0]?.height).toBe(PLAIN_ROW_HEIGHT)
   })
 
+  it('auto-fits persisted ordinary rows from their text instead of retaining stale editor heights', () => {
+    const plain = normalizeForm({
+      title: '已有普通表格',
+      columns: [{ id: 'col_text', title: '内容', type: 'text', removable: true, editable: true, width: 180 }],
+      rows: [
+        { id: 'empty', height: 56, cells: { col_text: { value: '' } } },
+        { id: 'single', height: 56, cells: { col_text: { value: '一行内容' } } },
+        { id: 'three-lines', height: 112, cells: { col_text: { value: '第一行\n第二行\n第三行' } } },
+      ],
+    })
+
+    expect(plain.rows.map((row) => row.height)).toEqual([PLAIN_ROW_HEIGHT, PLAIN_ROW_HEIGHT, 73])
+  })
+
   it('updates smart cells as ready and keeps non-smart status untouched', () => {
     const form = addColumn(createDefaultLiteratureForm(), BUILTIN_COLUMNS.find((column) => column.id === 'rating')!)
     const titleColumn = form.columns.find((column) => column.id === 'title') as SmartColumn
@@ -119,10 +133,11 @@ describe('smartLiteratureTable', () => {
 
   it('adds, removes, and moves columns while keeping row cells aligned', () => {
     const form = createDefaultLiteratureForm()
-    const customColumn = createCustomColumn('是否精读', 'boolean')
+    const customColumn = createCustomColumn('是否精读', 'boolean', '依据方法部分判断是否需要精读')
     const added = addColumn(form, customColumn, 2)
 
     expect(added.columns[2]?.id).toBe(customColumn.id)
+    expect(added.columns[2]?.description).toBe('依据方法部分判断是否需要精读')
     expect(added.rows.every((row) => row.cells[customColumn.id]?.value === '')).toBe(true)
 
     const moved = moveColumn(added, customColumn.id, 1)

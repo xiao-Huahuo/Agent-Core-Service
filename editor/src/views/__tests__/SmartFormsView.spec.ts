@@ -149,6 +149,45 @@ describe('SmartFormsView', () => {
     expect(headers[1]?.classes()).toContain('sticky-literature-column')
   })
 
+  it('expands and directly edits auxiliary descriptions from every non-index header icon', async () => {
+    const storedForm = createDefaultLiteratureForm('我的文献表')
+    storedForm.columns.find((column) => column.id === 'title')!.description = '提取论文正式标题'
+    vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(storedForm))
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    expect(wrapper.find('th[data-column-id="row_index"] .column-description-toggle').exists()).toBe(false)
+    const toggle = wrapper.get('th[data-column-id="title"] .column-description-toggle')
+    await toggle.trigger('click')
+    expect(wrapper.get('th[data-column-id="title"] .column-description-panel').classes()).toContain('expanded')
+    expect(wrapper.get('th[data-column-id="title"] .column-description-text').text()).toBe('提取论文正式标题')
+
+    await toggle.trigger('dblclick')
+    const input = wrapper.get('th[data-column-id="title"] .column-description-input')
+    await input.setValue('优先使用首页标题')
+    await input.trigger('blur')
+    await nextTick()
+    expect(wrapper.get('th[data-column-id="title"] .column-description-text').text()).toBe('优先使用首页标题')
+  })
+
+  it('appends a column auxiliary description to structured AI generation', async () => {
+    const storedForm = createDefaultLiteratureForm('我的文献表')
+    storedForm.columns.find((column) => column.id === 'title')!.description = '优先使用首页的正式标题'
+    storedForm.rows[0]!.cells.literature_content = { value: '论文正文', status: 'ready' }
+    vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(storedForm))
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    await wrapper.findAll('button').find((button) => button.text().includes('全表智能填充'))?.trigger('click')
+    await flushPromises()
+
+    expect(generateStructuredFields).toHaveBeenCalledWith(expect.objectContaining({
+      fields: expect.arrayContaining([
+        expect.objectContaining({ id: 'title', description: '优先使用首页的正式标题' }),
+      ]),
+    }))
+  })
+
   it('opens uploaded literature in the editor sidebar and exposes file actions', async () => {
     const storedForm = createDefaultLiteratureForm('我的文献表')
     storedForm.rows[0]!.cells.literature_file = {
@@ -347,14 +386,18 @@ describe('SmartFormsView', () => {
     expect(getSmartFormDb).not.toHaveBeenCalled()
   })
 
-  it('adds a new row from the toolbar action', async () => {
+  it('adds a literature row and opens its file picker from the toolbar action', async () => {
     const wrapper = mount(SmartFormsView)
     await flushPromises()
+    const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined)
 
-    await wrapper.findAll('button').find((button) => button.text().includes('新建行'))?.trigger('click')
+    await wrapper.get('button[title="上传文献"]').trigger('click')
+    await nextTick()
 
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+    expect(inputClick).toHaveBeenCalledOnce()
     expect(wrapper.text()).not.toContain('新建列')
+    inputClick.mockRestore()
   })
 
   it('clears failed and empty fields while preserving valid values', async () => {
@@ -536,6 +579,31 @@ describe('SmartFormsView', () => {
     await hoverContextButton('删除')
     await clickContextButton('删除整行')
     expect(wrapper.findAll('tbody tr')).toHaveLength(0)
+  })
+
+  it('moves rows and columns from dedicated context submenus', async () => {
+    const keywordsColumn = BUILTIN_COLUMNS.find((column) => column.id === 'keywords')!
+    const form = addColumn(createDefaultLiteratureForm('我的文献表'), keywordsColumn)
+    const secondRow = createEmptyRow(form.columns)
+    form.rows[0]!.cells.title = { value: '第一行' }
+    secondRow.cells.title = { value: '第二行' }
+    form.rows.push(secondRow)
+    vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(form))
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    await wrapper.findAll('td[data-column-id="title"]')[1]!.trigger('contextmenu')
+    await hoverContextButton('行移动')
+    await clickContextButton('行上移')
+    expect(wrapper.findAll('td[data-column-id="title"] textarea').map((cell) => (cell.element as HTMLTextAreaElement).value)).toEqual(['第二行', '第一行'])
+
+    const columnOrder = () => wrapper.findAll('thead th[data-column-id]').map((header) => header.attributes('data-column-id'))
+    const before = columnOrder()
+    await wrapper.find('th[data-column-id="keywords"]').trigger('contextmenu')
+    await hoverContextButton('列移动')
+    await clickContextButton('列左移')
+    const after = columnOrder()
+    expect(after.indexOf('keywords')).toBe(before.indexOf('keywords') - 1)
   })
 
   it('downgrades to a plain table when the literature source is deleted', async () => {
@@ -1082,7 +1150,7 @@ describe('SmartFormsView', () => {
 
     for (const [index, fileName] of ['paper.csv', 'paper.xlsx', 'paper.docx'].entries()) {
       if (index > 0) {
-        await wrapper.findAll('button').find((button) => button.text().includes('新建行'))?.trigger('click')
+        await wrapper.findAll('button').find((button) => button.text().includes('上传文献'))?.trigger('click')
         await flushPromises()
       }
       const input = wrapper.findAll('input[type="file"]')[index]!.element as HTMLInputElement

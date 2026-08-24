@@ -93,6 +93,7 @@ const createFormOpen = ref(false)
 const newFormTitleInput = ref<HTMLInputElement | null>(null)
 const selectedCell = ref<{ rowId: string; columnId: string } | null>(null)
 const customColumnTitle = ref('')
+const customColumnDescription = ref('')
 const uploadInputByRow = ref<Record<string, HTMLInputElement | null>>({})
 const imagePreviewByPath = ref<Record<string, string>>({})
 const tagEditorKey = ref('')
@@ -108,10 +109,15 @@ const edgeColumnMenuOpen = ref(false)
 const edgeColumnMenuStyle = ref<Record<string, string>>({ left: '0px', top: '0px' })
 const editingColumnId = ref('')
 const columnTitleDraft = ref('')
+const expandedColumnDescriptions = ref(new Set<string>())
+const editingColumnDescriptionId = ref('')
+const columnDescriptionDraft = ref('')
+const columnDescriptionInputById: Record<string, HTMLInputElement | null> = {}
 const structuredGenerationQueue: Array<() => Promise<void>> = []
 const structuredGenerationConcurrency = 2
 let structuredGenerationActive = 0
 let swapAnimationTimer: ReturnType<typeof setTimeout> | undefined
+let columnDescriptionClickTimer: ReturnType<typeof setTimeout> | undefined
 let tableResize: { kind: 'column' | 'row'; id: string; start: number; size: number } | null = null
 
 type TableContextTarget =
@@ -213,6 +219,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('metaweave-knowledge-file-change', handleKnowledgeFileChange)
   if (autoSaveTimer) clearTimeout(autoSaveTimer)
   if (swapAnimationTimer) clearTimeout(swapAnimationTimer)
+  if (columnDescriptionClickTimer) clearTimeout(columnDescriptionClickTimer)
   stopTableResize()
   closeTableContextMenu()
 })
@@ -453,8 +460,8 @@ async function createFolderIfMissing(path: string): Promise<void> {
   }
 }
 
-function addRowAt(rowId: string | undefined, direction: -1 | 1): void {
-  if (!form.value) return
+function addRowAt(rowId: string | undefined, direction: -1 | 1): SmartRow | undefined {
+  if (!form.value) return undefined
   const index = rowId ? form.value.rows.findIndex((row) => row.id === rowId) : form.value.rows.length - 1
   const insertionIndex = Math.max(0, index + (direction > 0 ? 1 : 0))
   const rows = [...form.value.rows]
@@ -466,6 +473,7 @@ function addRowAt(rowId: string | undefined, direction: -1 | 1): void {
     updatedAt: new Date().toISOString(),
     rows,
   })
+  return row
 }
 
 /** Opens the same field-type chooser used by the third-level context menu. */
@@ -480,6 +488,7 @@ function openEdgeColumnMenu(event: MouseEvent): void {
     top: `${Math.min(Math.max(event.clientY, edge), Math.max(edge, viewportHeight - 520))}px`,
   }
   customColumnTitle.value = ''
+  customColumnDescription.value = ''
   edgeColumnMenuOpen.value = true
 }
 
@@ -505,6 +514,13 @@ function editCell(row: SmartRow, column: SmartColumn, value: string): void {
 function resizeEditingCell(row: SmartRow, height: number): void {
   if (!form.value || isLiteratureTable.value) return
   setForm(resizeRow(form.value, row.id, Math.max(PLAIN_ROW_HEIGHT, height), PLAIN_ROW_HEIGHT, PLAIN_MAX_ROW_HEIGHT))
+}
+
+/** Keeps empty and one-line ordinary rows at the current baseline even when stale heights remain in memory. */
+function displayedRowHeight(row: SmartRow): number {
+  if (isLiteratureTable.value) return row.height || DEFAULT_ROW_HEIGHT
+  const isEmpty = Object.values(row.cells).every((cell) => !cell.value.trim())
+  return isEmpty ? PLAIN_ROW_HEIGHT : Math.max(PLAIN_ROW_HEIGHT, row.height || PLAIN_ROW_HEIGHT)
 }
 
 /** Persists generic textarea edits and keeps their ordinary-table row fully visible. */
@@ -612,8 +628,9 @@ function addCustomColumnAt(type: SmartColumnType, direction: -1 | 1): void {
   const targetIndex = targetColumnId
     ? form.value.columns.findIndex((item) => item.id === targetColumnId)
     : form.value.columns.length
-  setForm(addColumn(form.value, createCustomColumn(customColumnTitle.value, type), Math.max(0, targetIndex + (direction > 0 ? 1 : 0))))
+  setForm(addColumn(form.value, createCustomColumn(customColumnTitle.value, type, customColumnDescription.value), Math.max(0, targetIndex + (direction > 0 ? 1 : 0))))
   customColumnTitle.value = ''
+  customColumnDescription.value = ''
 }
 
 function removeColumnById(columnId: string): void {
@@ -675,9 +692,86 @@ function cancelColumnTitleEdit(): void {
   columnTitleDraft.value = ''
 }
 
+/** Expands or collapses one non-index column's auxiliary description row. */
+function toggleColumnDescription(column: SmartColumn): void {
+  if (column.type === 'index') return
+  const expanded = new Set(expandedColumnDescriptions.value)
+  if (expanded.has(column.id)) expanded.delete(column.id)
+  else expanded.add(column.id)
+  expandedColumnDescriptions.value = expanded
+}
+
+/** Delays the single-click action so a double click can enter editing before layout moves the icon. */
+function scheduleColumnDescriptionToggle(column: SmartColumn): void {
+  if (columnDescriptionClickTimer) clearTimeout(columnDescriptionClickTimer)
+  columnDescriptionClickTimer = setTimeout(() => {
+    columnDescriptionClickTimer = undefined
+    toggleColumnDescription(column)
+  }, 220)
+}
+
+/** Cancels the pending single click and opens the exact column description editor. */
+function handleColumnDescriptionDoubleClick(column: SmartColumn): void {
+  if (columnDescriptionClickTimer) clearTimeout(columnDescriptionClickTimer)
+  columnDescriptionClickTimer = undefined
+  void startColumnDescriptionEdit(column)
+}
+
+/** Stores the rendered auxiliary-description input for deterministic focus. */
+function setColumnDescriptionInputRef(columnId: string, element: unknown): void {
+  columnDescriptionInputById[columnId] = element instanceof HTMLInputElement ? element : null
+}
+
+/** Opens direct auxiliary-description editing after a header-icon double click. */
+async function startColumnDescriptionEdit(column: SmartColumn): Promise<void> {
+  if (column.type === 'index') return
+  expandedColumnDescriptions.value = new Set([...expandedColumnDescriptions.value, column.id])
+  editingColumnDescriptionId.value = column.id
+  columnDescriptionDraft.value = column.description ?? ''
+  await nextTick()
+  columnDescriptionInputById[column.id]?.focus()
+}
+
+/** Persists an edited auxiliary description through the table's existing autosave path. */
+function commitColumnDescriptionEdit(column: SmartColumn): void {
+  if (!form.value || editingColumnDescriptionId.value !== column.id) return
+  const description = columnDescriptionDraft.value.trim()
+  setForm({
+    ...form.value,
+    updatedAt: new Date().toISOString(),
+    columns: form.value.columns.map((item) => item.id === column.id
+      ? { ...item, description: description || undefined }
+      : item),
+  })
+  editingColumnDescriptionId.value = ''
+  columnDescriptionDraft.value = ''
+}
+
+/** Leaves auxiliary-description editing without changing persisted column data. */
+function cancelColumnDescriptionEdit(): void {
+  editingColumnDescriptionId.value = ''
+  columnDescriptionDraft.value = ''
+}
+
 function moveRowById(rowId: string, direction: -1 | 1): void {
   if (!form.value) return
   setForm(moveRow(form.value, rowId, direction))
+}
+
+/** Moves the row addressed by the current cell/row context target and closes the menu. */
+function moveContextRow(direction: -1 | 1): void {
+  const target = tableContextTarget.value
+  if (!target || !('rowId' in target)) return
+  moveRowById(target.rowId, direction)
+  closeTableContextMenu()
+}
+
+/** Moves the column addressed by the current cell/column context target and closes the menu. */
+function moveContextColumn(direction: -1 | 1): void {
+  const target = tableContextTarget.value
+  if (!target || !('columnId' in target)) return
+  moveColumnById(target.columnId, direction)
+  closeTableContextMenu()
 }
 
 function startColumnDrag(columnId: string, event: DragEvent): void {
@@ -872,8 +966,16 @@ function openCellContextMenu(row: SmartRow, column: SmartColumn, event: MouseEve
   openTableContextMenu(selectedCellKeys.value.length > 1 ? { kind: 'selection' } : { kind: 'cell', rowId: row.id, columnId: column.id }, event)
 }
 
-function addNewRow(): void {
-  addRowAt(undefined, 1)
+function addNewRow(): SmartRow | undefined {
+  return addRowAt(undefined, 1)
+}
+
+/** Adds a literature row and immediately delegates file selection to its native input. */
+async function addLiteratureRowAndUpload(): Promise<void> {
+  const row = addNewRow()
+  if (!row) return
+  await nextTick()
+  openUpload(row.id)
 }
 
 const TAG_COLORS = ['#7c5cfc', '#eb2463', '#26a269', '#2f88d5', '#e2a72e', '#0ea5b6']
@@ -1299,6 +1401,7 @@ async function generateSmartCellsForRows(rowIds: string[], columnIds?: string[],
             id: column.id,
             title: column.title,
             type: column.type === 'smart_tag' ? 'tag' : 'text',
+            description: column.description?.trim() || undefined,
             options: column.options ?? [],
             required: true,
           })),
@@ -1763,9 +1866,15 @@ function errorMessage(error: unknown): string {
 <template>
   <section class="smart-forms-view" @click="closeFloatingMenus">
     <header class="forms-header">
-      <button v-if="form" class="new-row-btn" type="button" title="新建行" @click.stop="addNewRow">
-        <IcIcon name="add" :size="17" />
-        <span>新建行</span>
+      <button
+        v-if="form"
+        class="new-row-btn"
+        type="button"
+        :title="isLiteratureTable ? '上传文献' : '新建行'"
+        @click.stop="isLiteratureTable ? addLiteratureRowAndUpload() : addNewRow()"
+      >
+        <IcIcon :name="isLiteratureTable ? 'upload' : 'add'" :size="17" />
+        <span>{{ isLiteratureTable ? '上传文献' : '新建行' }}</span>
       </button>
       <div class="header-copy">
         <p class="forms-eyebrow">智能表格</p>
@@ -1959,8 +2068,23 @@ function errorMessage(error: unknown): string {
               @dragend="endColumnDrag"
               @contextmenu.prevent.stop="openTableContextMenu({ kind: 'column', columnId: column.id }, $event)"
             >
-              <div class="column-head">
-                <IcIcon class="column-field-icon" :name="smartColumnIcon(column)" :size="15" />
+              <div class="column-header-block">
+                <div class="column-head">
+                <IcIcon v-if="column.type === 'index'" class="column-field-icon" :name="smartColumnIcon(column)" :size="15" />
+                <button
+                  v-else
+                  class="column-description-toggle"
+                  type="button"
+                  :title="expandedColumnDescriptions.has(column.id) ? '收起辅助描述；双击编辑' : '展开辅助描述；双击编辑'"
+                  :aria-expanded="expandedColumnDescriptions.has(column.id)"
+                  draggable="false"
+                  @pointerdown.stop
+                  @dragstart.prevent
+                  @click.stop="scheduleColumnDescriptionToggle(column)"
+                  @dblclick.prevent.stop="handleColumnDescriptionDoubleClick(column)"
+                >
+                  <IcIcon class="column-field-icon" :name="smartColumnIcon(column)" :size="15" />
+                </button>
                 <span
                   v-if="editingColumnId !== column.id"
                   class="column-title-label"
@@ -1986,16 +2110,48 @@ function errorMessage(error: unknown): string {
                   title="拖动调整列宽"
                   @pointerdown="startColumnResize(column, $event)"
                 ></button>
+                </div>
+                <div
+                  v-if="column.type !== 'index'"
+                  class="column-description-panel"
+                  :class="{ expanded: expandedColumnDescriptions.has(column.id) }"
+                >
+                  <div class="column-description-inner">
+                    <input
+                      v-if="editingColumnDescriptionId === column.id"
+                      :ref="(element) => setColumnDescriptionInputRef(column.id, element)"
+                      v-model="columnDescriptionDraft"
+                      class="column-description-input"
+                      :data-column-id="column.id"
+                      type="text"
+                      aria-label="辅助描述"
+                      draggable="false"
+                      @click.stop
+                      @mousedown.stop
+                      @pointerdown.stop
+                      @dblclick.stop
+                      @keydown.enter.prevent="commitColumnDescriptionEdit(column)"
+                      @keydown.esc.prevent="cancelColumnDescriptionEdit"
+                      @blur="commitColumnDescriptionEdit(column)"
+                    />
+                    <span
+                      v-else
+                      class="column-description-text"
+                      title="双击编辑辅助描述"
+                      @dblclick.prevent.stop="handleColumnDescriptionDoubleClick(column)"
+                    >{{ column.description || '辅助描述' }}</span>
+                  </div>
+                </div>
               </div>
             </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, rowIndex) in visibleRows" :key="row.id" :style="{ height: `${row.height || DEFAULT_ROW_HEIGHT}px` }">
+          <tr v-for="(row, rowIndex) in visibleRows" :key="row.id" :style="{ height: `${displayedRowHeight(row)}px` }">
             <td
               v-for="column in form.columns"
               :key="column.id"
-              :style="{ height: `${row.height || DEFAULT_ROW_HEIGHT}px`, ...cellSelectionStyle(row.id, column.id) }"
+              :style="{ height: `${displayedRowHeight(row)}px`, ...cellSelectionStyle(row.id, column.id) }"
               :data-row-id="row.id"
               :data-column-id="column.id"
               :draggable="column.type === 'index'"
@@ -2258,6 +2414,10 @@ function errorMessage(error: unknown): string {
           <span>自定义字段名</span>
           <input v-model="customColumnTitle" class="form-input-surface" type="text" placeholder="例如：备注" @click.stop />
         </label>
+        <label class="table-context-input">
+          <span>辅助描述</span>
+          <input v-model="customColumnDescription" class="form-input-surface" type="text" placeholder="例如：提取作者明确陈述的局限" @click.stop />
+        </label>
         <span class="table-context-section-title">字段类型</span>
         <button
           v-for="type in availableCustomColumnTypes"
@@ -2328,6 +2488,10 @@ function errorMessage(error: unknown): string {
                 <span>自定义字段名</span>
                 <input v-model="customColumnTitle" class="form-input-surface" type="text" placeholder="例如：备注" @click.stop />
               </label>
+              <label class="table-context-input">
+                <span>辅助描述</span>
+                <input v-model="customColumnDescription" class="form-input-surface" type="text" placeholder="例如：提取作者明确陈述的局限" @click.stop />
+              </label>
               <span class="table-context-section-title">字段类型</span>
               <button
                 v-for="type in availableCustomColumnTypes"
@@ -2380,6 +2544,46 @@ function errorMessage(error: unknown): string {
         >
           <button type="button" :disabled="!contextRowIds().length" class="danger-menu-item" @click="deleteContextRow"><IcIcon name="delete" :size="15" /><span>删除整行</span></button>
           <button type="button" :disabled="!canDeleteContextColumn()" class="danger-menu-item" @click="deleteContextColumn"><IcIcon name="delete" :size="15" /><span>删除整列</span></button>
+        </div>
+      </div>
+
+      <div
+        class="table-context-submenu-item"
+        :class="{ active: tableContextSubmenu === 'move-row' }"
+        @mouseenter="openTableSubmenu('move-row')"
+        @mouseleave="handleTableSubmenuLeave('move-row', $event)"
+      >
+        <button type="button" :disabled="!('rowId' in tableContextTarget)"><IcIcon name="sort" :size="15" /><span>行移动</span><IcIcon name="chevron-right" :size="15" /></button>
+        <div
+          v-show="tableContextSubmenu === 'move-row'"
+          :ref="(element) => setTableContextSubmenuRef('move-row', element)"
+          class="table-context-submenu ui-floating-submenu-surface"
+          :class="{ 'submenu-left': tableContextSubmenuSide === 'left' }"
+          @mouseenter="keepTableSubmenuOpen"
+          @mouseleave="handleTableSubmenuLeave('move-row', $event)"
+        >
+          <button type="button" @click="moveContextRow(-1)"><IcIcon name="arrow-up" :size="15" /><span>行上移</span></button>
+          <button type="button" @click="moveContextRow(1)"><IcIcon name="arrow-down" :size="15" /><span>行下移</span></button>
+        </div>
+      </div>
+
+      <div
+        class="table-context-submenu-item"
+        :class="{ active: tableContextSubmenu === 'move-column' }"
+        @mouseenter="openTableSubmenu('move-column')"
+        @mouseleave="handleTableSubmenuLeave('move-column', $event)"
+      >
+        <button type="button" :disabled="!('columnId' in tableContextTarget)"><IcIcon name="view-column" :size="15" /><span>列移动</span><IcIcon name="chevron-right" :size="15" /></button>
+        <div
+          v-show="tableContextSubmenu === 'move-column'"
+          :ref="(element) => setTableContextSubmenuRef('move-column', element)"
+          class="table-context-submenu ui-floating-submenu-surface"
+          :class="{ 'submenu-left': tableContextSubmenuSide === 'left' }"
+          @mouseenter="keepTableSubmenuOpen"
+          @mouseleave="handleTableSubmenuLeave('move-column', $event)"
+        >
+          <button type="button" @click="moveContextColumn(-1)"><IcIcon name="arrow-left" :size="15" /><span>列左移</span></button>
+          <button type="button" @click="moveContextColumn(1)"><IcIcon name="arrow-right" :size="15" /><span>列右移</span></button>
         </div>
       </div>
 
@@ -3110,65 +3314,69 @@ button:disabled {
   background: var(--color-canvas);
 }
 
-.table-frame.plain-table {
-  width: 100%;
-  max-width: 100%;
-  border: 1px solid var(--color-border);
-  border-radius: 18px;
-  background: var(--color-canvas);
-}
-
-.plain-table .smart-table-shell,
-.plain-table .smart-table {
-  width: max-content;
-  min-width: 0;
-  padding: 0;
-}
-
-.plain-table .smart-table thead tr:first-child,
-.plain-table .table-edge-column-drag,
-.plain-table .table-edge-row-drag {
-  display: none;
-}
-
-.plain-table .smart-table thead tr:nth-child(2) th {
-  top: 0;
-  height: 30px;
-  background: var(--color-surface-raised);
-}
-
-.plain-table th,
-.plain-table td {
-  border-right: 1px solid var(--color-border);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.plain-table .column-head {
-  min-height: 30px;
-  padding: 0 var(--space-6);
-}
-
 .plain-table .cell textarea,
 .plain-table .cell select,
 .plain-table .cell input {
   overflow: hidden;
-  padding: 6px 8px;
+  padding: 2px 6px;
+}
+
+.plain-table .smart-table {
+  font-size: calc(13px * var(--font-scale));
 }
 
 .plain-table .cell select,
 .plain-table .cell input {
   min-height: 0;
-  height: 100%;
+  height: 29px;
 }
 
-.plain-table :deep(.smart-markdown-source) {
+.plain-table :deep(.smart-markdown-source),
+.plain-table :deep(.smart-plain-text),
+.plain-table :deep(.markdown-body) {
   overflow: hidden;
+  padding: 2px 6px;
+  line-height: 1.35;
 }
 
-.plain-table .table-edge-add-row,
-.plain-table .table-edge-add-column {
-  border-color: transparent;
-  background: transparent;
+.plain-table .tag-cell,
+.plain-table .cell-dropdown,
+.plain-table .star-cell {
+  box-sizing: border-box;
+  min-height: 0;
+  height: 29px;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+}
+
+.plain-table .tag-pill,
+.plain-table .tag-add-button {
+  box-sizing: border-box;
+  min-height: 22px;
+  height: 22px;
+  font-size: calc(12px * var(--font-scale));
+}
+
+.plain-table .star-cell button {
+  box-sizing: border-box;
+  height: 22px;
+  padding: 0;
+  font-size: 19px;
+}
+
+.plain-table .cell-dropdown-trigger {
+  min-height: 0;
+  height: 24px;
+}
+
+.plain-table .row-resize-handle {
+  bottom: -2px;
+  height: 4px;
+}
+
+.plain-table .row-resize-handle::after {
+  bottom: 1px;
 }
 
 .smart-table-shell {
@@ -3247,7 +3455,71 @@ th.swapped,
   justify-content: flex-start;
   gap: 6px;
   min-width: 0;
+  min-height: 34px;
   padding: 0 var(--space-6);
+}
+
+.column-header-block {
+  display: flex;
+  min-height: 34px;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.column-description-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.column-description-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 180ms ease, opacity 150ms ease;
+}
+
+.column-description-panel.expanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.column-description-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.column-description-text,
+.column-description-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0 var(--space-6) 6px 27px;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: calc(11px * var(--font-scale));
+  line-height: 1.3;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.column-description-input {
+  border: 0;
+  border-bottom: 1px solid var(--color-primary);
+  outline: 0;
+  background: transparent;
+  color: var(--color-text);
 }
 
 th[data-column-id="row_index"] .column-head {

@@ -25,6 +25,8 @@ export interface SmartColumn {
   id: string
   /** Header text displayed in the editable table. */
   title: string
+  /** Optional guidance appended to this column's structured AI generation field. */
+  description?: string
   /** Column behavior and editor widget type. */
   type: SmartColumnType
   /** Whether the user can remove this column from the table. */
@@ -66,9 +68,11 @@ export const INDEX_COLUMN_WIDTH = 32
 export const MIN_ROW_HEIGHT = 37
 /** Default compact Markdown cell height: approximately 15 lines at 13px/1.35 with 9px vertical padding. */
 export const DEFAULT_ROW_HEIGHT = 282
-/** One-line row baseline for ordinary tables; rows may grow with edited content. */
-export const PLAIN_ROW_HEIGHT = 23
+/** Comfortable one-line baseline for ordinary tables; rows grow with their text. */
+export const PLAIN_ROW_HEIGHT = 31
 export const PLAIN_MAX_ROW_HEIGHT = Infinity
+/** Ordinary rows use the shared text line-height plus modest vertical breathing room. */
+const PLAIN_TEXT_LINE_HEIGHT = 21
 const LEGACY_DEFAULT_ROW_HEIGHT = 112
 
 export interface SmartLiteratureForm {
@@ -178,6 +182,15 @@ export function createDefaultPlainForm(title = '未命名表格'): SmartLiteratu
   }
 }
 
+/** Derives an ordinary row height from its tallest explicit text value and discards stale editor heights. */
+function plainRowHeight(cells: Record<string, SmartCell> | undefined): number {
+  const lineCount = Math.max(1, ...Object.values(cells ?? {}).map((cell) => {
+    const value = cell?.value ?? ''
+    return value ? value.replace(/\r\n/g, '\n').split('\n').length : 1
+  }))
+  return Math.max(PLAIN_ROW_HEIGHT, lineCount * PLAIN_TEXT_LINE_HEIGHT + 10)
+}
+
 export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefined): SmartLiteratureForm {
   const fallback = createDefaultLiteratureForm()
   const sourceColumns = (Array.isArray(raw?.columns) ? raw.columns : fallback.columns)
@@ -211,8 +224,6 @@ export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefin
         ? { ...column, type: 'tag' as const }
         : column)
   const rows = Array.isArray(raw?.rows) ? raw.rows : fallback.rows
-  const minRowHeight = hasLiteratureSource ? MIN_ROW_HEIGHT : PLAIN_ROW_HEIGHT
-  const maxRowHeight = hasLiteratureSource ? Infinity : PLAIN_MAX_ROW_HEIGHT
   return {
     version: 1,
     title: raw?.title || fallback.title,
@@ -220,15 +231,14 @@ export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefin
     columns: normalizedColumns,
     rows: rows.map((row) => ({
       id: row.id || createRowId(),
-      height: Math.min(
-        maxRowHeight,
-        Math.max(
-          minRowHeight,
-          !Number(row.height) || Number(row.height) === LEGACY_DEFAULT_ROW_HEIGHT || (!hasLiteratureSource && Number(row.height) === DEFAULT_ROW_HEIGHT)
-            ? (hasLiteratureSource ? DEFAULT_ROW_HEIGHT : PLAIN_ROW_HEIGHT)
+      height: hasLiteratureSource
+        ? Math.max(
+          MIN_ROW_HEIGHT,
+          !Number(row.height) || Number(row.height) === LEGACY_DEFAULT_ROW_HEIGHT
+            ? DEFAULT_ROW_HEIGHT
             : Number(row.height),
-        ),
-      ),
+        )
+        : plainRowHeight(row.cells),
       cells: Object.fromEntries(normalizedColumns.map((column) => {
         const existing = row.cells?.[column.id]
         const value = column.id === 'reading_progress' && (!existing?.value || existing.value === '未阅读') ? '未读' : existing?.value
@@ -402,11 +412,12 @@ export function uniqueTagValues(form: SmartLiteratureForm): string[] {
   return [...values].sort((a, b) => a.localeCompare(b))
 }
 
-export function createCustomColumn(title: string, type: SmartColumnType): SmartColumn {
+export function createCustomColumn(title: string, type: SmartColumnType, description = ''): SmartColumn {
   const safeTitle = title.trim() || '自定义列'
   return {
     id: `col_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
     title: safeTitle,
+    description: description.trim() || undefined,
     type,
     removable: true,
     editable: type !== 'index' && type !== 'readonly_text' && type !== 'file',

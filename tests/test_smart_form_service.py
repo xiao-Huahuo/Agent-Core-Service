@@ -30,7 +30,7 @@ def test_smart_form_service_round_trips_all_column_types() -> None:
             {"id": "row_index", "title": "序号", "type": "index", "removable": False, "editable": False, "width": 64},
             {"id": "literature_file", "title": "文献上传", "type": "file", "removable": False, "editable": False, "width": 168},
             {"id": "literature_content", "title": "文献内容", "type": "readonly_text", "removable": False, "editable": False, "width": 240},
-            {"id": "title", "title": "标题", "type": "smart_text", "removable": False, "editable": True, "width": 230, "tone": "blue"},
+            {"id": "title", "title": "标题", "description": "提取论文正式标题", "type": "smart_text", "removable": False, "editable": True, "width": 230, "tone": "blue"},
             {"id": "paper_type", "title": "文献类型", "type": "smart_tag", "removable": True, "editable": True, "width": 150, "options": ["研究论文", "综述论文"], "tone": "green"},
             {"id": "rating", "title": "重要性", "type": "star", "removable": True, "editable": True, "width": 150},
             {"id": "reading_progress", "title": "阅读进度", "type": "tag", "removable": True, "editable": True, "width": 132, "options": ["未读", "已读", "阅读中"]},
@@ -59,6 +59,7 @@ def test_smart_form_service_round_trips_all_column_types() -> None:
     assert paper_type["options"] == ["研究论文", "综述论文"]
     row_cells = loaded_form["rows"][0]["cells"]
     assert loaded_form["rows"][0]["height"] == 176
+    assert next(column for column in loaded_form["columns"] if column["id"] == "title")["description"] == "提取论文正式标题"
     assert row_cells["paper_type"]["value"] == "研究论文, 综述论文"
     assert row_cells["literature_file"]["assetPath"] == "forms/项目阅读表/assets/paper.pdf"
     assert row_cells["title"]["status"] == "ready"
@@ -81,6 +82,32 @@ def test_smart_form_service_adds_row_height_to_existing_database() -> None:
 
     columns = {column["name"] for column in inspect(engine).get_columns("smart_form_rows")}
     assert "height" in columns
+
+
+def test_smart_form_service_adds_column_description_to_existing_database() -> None:
+    """旧版列表缺少 description 列时应自动迁移以持久化辅助描述。"""
+
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TABLE smart_form_columns ("
+            "column_record_id VARCHAR(160) PRIMARY KEY, "
+            "form_id VARCHAR(64) NOT NULL, "
+            "column_id VARCHAR(96) NOT NULL, "
+            "order_index INTEGER NOT NULL, "
+            "title VARCHAR(200) NOT NULL, "
+            "column_type VARCHAR(32) NOT NULL, "
+            "removable BOOLEAN NOT NULL, "
+            "editable BOOLEAN NOT NULL, "
+            "width INTEGER NOT NULL, "
+            "options_json TEXT NOT NULL, "
+            "tone VARCHAR(32) NOT NULL)"
+        ))
+
+    SmartFormService(engine=engine)
+
+    columns = {column["name"] for column in inspect(engine).get_columns("smart_form_columns")}
+    assert "description" in columns
 
 
 def test_smart_form_service_deletes_only_the_owners_form() -> None:

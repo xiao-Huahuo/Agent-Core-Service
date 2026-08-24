@@ -434,6 +434,7 @@ def fill_smart_form_cells(
                 id=str(target["column"].get("id")),
                 title=str(target["column"].get("title") or target["column"].get("id")),
                 type="tag" if target["column"].get("type") == "smart_tag" else "text",
+                description=str(target["column"].get("description") or ""),
                 options=[str(item) for item in target["column"].get("options") or []],
                 required=True,
             )

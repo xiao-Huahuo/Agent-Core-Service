@@ -52,6 +52,7 @@ class SmartFormColumnRecord(SQLModel, table=True):
     column_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
     order_index: int = Field(index=True)
     title: str = Field(max_length=DEFAULT_BUSINESS_LIMITS.title_max_length)
+    description: str = Field(default="", sa_column=Column(Text))
     column_type: str = Field(max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
     removable: bool = Field(default=True)
     editable: bool = Field(default=True)

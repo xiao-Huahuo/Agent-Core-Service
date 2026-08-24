@@ -16,7 +16,7 @@ test('smart table renders typed fields, PDF cover, pending mask, and one joined 
     { id: 'row_index', title: '序号', type: 'index', removable: false, editable: false, width: 64 },
     { id: 'literature_file', title: '文献上传', type: 'file', removable: true, editable: false, width: 168 },
     { id: 'literature_content', title: '文献内容', type: 'readonly_text', removable: true, editable: false, width: 240 },
-    { id: 'title', title: '标题', type: 'smart_text', removable: false, editable: true, width: 230, tone: 'blue' },
+    { id: 'title', title: '标题', description: '提取论文首页的正式标题', type: 'smart_text', removable: false, editable: true, width: 230, tone: 'blue' },
     { id: 'keywords', title: '关键词', type: 'smart_text', removable: true, editable: true, width: 180, tone: 'violet' },
     { id: 'abstract', title: '摘要', type: 'smart_text', removable: true, editable: true, width: 260, tone: 'blue' },
   ]
@@ -24,7 +24,7 @@ test('smart table renders typed fields, PDF cover, pending mask, and one joined 
     id: `row-${index + 1}`,
     height: 1,
     cells: Object.fromEntries(columns.map((column) => [column.id, {
-      value: column.id === 'title' ? `原标题 ${index + 1}` : column.id === 'literature_content' ? `文献内容 ${index + 1}` : '',
+      value: column.id === 'title' ? `原标题 ${index + 1}` : column.id === 'literature_content' ? `文献内容 ${index + 1}${'。'.repeat(240)}` : '',
       status: column.type === 'smart_text' ? 'ready' : undefined,
       ...(column.id === 'literature_file' && index === 0 ? {
         value: 'paper.pdf',
@@ -82,6 +82,26 @@ test('smart table renders typed fields, PDF cover, pending mask, and one joined 
   expect((await headers.first().boundingBox())?.height).toBeLessThan(42)
   await expect(page.locator('.smart-table tbody tr').first()).toHaveAttribute('style', /height: 37px/)
 
+  const titleDescriptionToggle = page.locator('th[data-column-id="title"] .column-description-toggle')
+  await titleDescriptionToggle.click()
+  await expect(page.locator('th[data-column-id="title"] .column-description-text')).toHaveText('提取论文首页的正式标题')
+  await expect(page.locator('th[data-column-id="row_index"] .column-description-toggle')).toHaveCount(0)
+
+  const literatureRow = page.locator('.smart-table tbody tr').nth(1)
+  const literatureToggle = page.locator('td[data-row-id="row-2"][data-column-id="literature_content"] .smart-markdown-toggle')
+  const collapsedHeight = (await literatureRow.boundingBox())?.height ?? 0
+  await literatureToggle.click()
+  await expect(literatureRow).toHaveAttribute('style', /height: 282px/)
+  await page.waitForTimeout(240)
+  await literatureToggle.click()
+  await page.waitForTimeout(100)
+  const closingHeight = (await literatureRow.boundingBox())?.height ?? 0
+  expect(closingHeight).toBeGreaterThan(collapsedHeight)
+  expect(closingHeight).toBeLessThan(282)
+  await expect(literatureRow).toHaveAttribute('style', /height: 37px/)
+  await page.waitForTimeout(320)
+  expect((await literatureRow.boundingBox())?.height).toBeLessThanOrEqual(collapsedHeight + 1)
+
   const tableFrame = page.locator('.table-frame')
   const tableDimensions = await tableFrame.evaluate((element) => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
   expect(tableDimensions.scrollWidth).toBeGreaterThan(tableDimensions.clientWidth)
@@ -105,6 +125,27 @@ test('smart table renders typed fields, PDF cover, pending mask, and one joined 
   await expect(titleCell.locator('.smart-cell-loading-mask')).toBeHidden()
   await expect(titleCell.locator('textarea')).toHaveValue('原标题 1')
 
+  const secondTitleCell = page.locator('td[data-row-id="row-2"][data-column-id="title"]')
+  await secondTitleCell.click({ button: 'right' })
+  await page.getByRole('button', { name: '行移动', exact: true }).hover()
+  await page.getByRole('button', { name: '行上移', exact: true }).click()
+  await expect(page.locator('td[data-column-id="title"] textarea').first()).toHaveValue('原标题 2')
+
+  const headerOrder = () => headers.evaluateAll((items) => items.map((item) => item.getAttribute('data-column-id')))
+  const columnOrderBefore = await headerOrder()
+  await page.locator('th[data-column-id="keywords"]').click({ button: 'right' })
+  await page.getByRole('button', { name: '列移动', exact: true }).hover()
+  await page.getByRole('button', { name: '列左移', exact: true }).click()
+  const columnOrderAfter = await headerOrder()
+  expect(columnOrderAfter.indexOf('keywords')).toBe(columnOrderBefore.indexOf('keywords') - 1)
+
+  await page.locator('td[data-row-id="row-2"][data-column-id="title"]').click({ button: 'right' })
+  await page.getByRole('button', { name: '行移动', exact: true }).hover()
+  await page.getByRole('button', { name: '行下移', exact: true }).click()
+  await page.locator('th[data-column-id="keywords"]').click({ button: 'right' })
+  await page.getByRole('button', { name: '列移动', exact: true }).hover()
+  await page.getByRole('button', { name: '列右移', exact: true }).click()
+
   const headerCountBefore = await headers.count()
   const addRowButton = page.locator('.table-edge-add-row')
   const addColumnButton = page.locator('.table-edge-add-column')
@@ -123,12 +164,20 @@ test('smart table renders typed fields, PDF cover, pending mask, and one joined 
   await expect(edgeMenu.locator('.menu-column-type-pill')).toHaveCount(17)
   await expect(edgeMenu.locator('button .ic-icon')).toHaveCount(24)
   const customFieldNameInput = edgeMenu.getByPlaceholder('例如：备注')
+  await expect(edgeMenu.getByText('辅助描述', { exact: true })).toBeVisible()
+  await expect(edgeMenu.getByPlaceholder('例如：提取作者明确陈述的局限')).toBeVisible()
   await expect(customFieldNameInput).toHaveCSS('border-top-width', '0px')
   await customFieldNameInput.focus()
   await page.waitForTimeout(200)
   expect(await customFieldNameInput.evaluate((element) => getComputedStyle(element).boxShadow)).toContain('4px')
   await edgeMenu.locator('button').filter({ hasText: '重要性' }).click()
   await expect(headers).toHaveCount(headerCountBefore + 1)
+
+  const rowsBeforeUpload = await page.locator('.smart-table tbody tr').count()
+  const fileChooserPromise = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: '上传文献', exact: true }).click()
+  await fileChooserPromise
+  await expect(page.locator('.smart-table tbody tr')).toHaveCount(rowsBeforeUpload + 1)
 
   const dragStart = page.locator('td[data-row-id="row-1"][data-column-id="title"]')
   const dragEnd = page.locator('td[data-row-id="row-3"][data-column-id="abstract"]')

@@ -25,7 +25,7 @@ from agent_service.schemas.structured_generation import (
     StructuredGenerationResponse,
 )
 from agent_service.services.scheduler import (
-    BACKGROUND_FACT_RESOLUTION_TASK,
+    FOREGROUND_AGENT_TASK,
     SMALL_MODEL_TIER,
     LLMTaskScheduler,
     get_llm_task_scheduler,
@@ -93,7 +93,7 @@ class StructuredGenerationService:
                 user_small_model_name,
             ) = get_user_llm_overrides({"user_id": user_id})
             response = self.task_scheduler.invoke_chat(
-                task_type=BACKGROUND_FACT_RESOLUTION_TASK,
+                task_type=FOREGROUND_AGENT_TASK,
                 messages=messages,
                 tool_names=[],
                 temperature=0.0,

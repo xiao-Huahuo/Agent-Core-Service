@@ -122,6 +122,7 @@ def test_smart_form_agent_tools_complete_create_edit_export_import_and_fill(monk
     """智能表格 Agent 入口必须复用正式持久化和结构化生成服务完成全链路。"""
 
     service = SmartFormService(engine=create_engine("sqlite:///:memory:"))
+    generated_descriptions: list[str] = []
 
     class _GenerationStub:
         """按请求字段返回稳定生成内容。"""
@@ -129,6 +130,7 @@ def test_smart_form_agent_tools_complete_create_edit_export_import_and_fill(monk
         def generate_fields(self, request):
             """模拟真实结构化生成服务响应。"""
 
+            generated_descriptions.extend(field.description for field in request.fields)
             return SimpleNamespace(results=[
                 StructuredGenerationFieldResult(field_id=field.id, status="ready", value="生成标题")
                 for field in request.fields
@@ -142,6 +144,8 @@ def test_smart_form_agent_tools_complete_create_edit_export_import_and_fill(monk
     created = json.loads(builtin_smart_forms.create_smart_form("论文分析", "smart"))
     form_id = created["form_id"]
     row_id = created["form"]["rows"][0]["id"]
+    created["form"]["columns"][-1]["description"] = "提取论文首页的正式标题"
+    service.save_form(user_id="u1", form_id=form_id, asset_dir=created["asset_dir"], form=created["form"])
     patched = json.loads(builtin_smart_forms.patch_smart_form_rows(
         form_id,
         updates=[{"row_id": row_id, "cells": {
@@ -163,6 +167,7 @@ def test_smart_form_agent_tools_complete_create_edit_export_import_and_fill(monk
     assert literature["literature"][0]["asset_path"] == "docs/paper.pdf"
     assert preview["target_count"] == 1
     assert filled["ready"] == 1
+    assert generated_descriptions == ["提取论文首页的正式标题"]
     assert filled["form"]["form"]["rows"][0]["cells"]["title"]["value"] == "生成标题"
     assert exported["filename"] == "论文分析.csv"
     assert imported["form"]["rows"][0]["cells"]["col_2"]["value"] == "完成"

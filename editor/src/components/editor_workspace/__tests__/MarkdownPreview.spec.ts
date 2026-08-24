@@ -97,6 +97,34 @@ describe('MarkdownPreview Split synchronization', () => {
     frameSpy.mockRestore()
   })
 
+  it('smoothly scrolls to a rendered outline heading and reports it as active', () => {
+    const wrapper = mount(MarkdownPreview, {
+      props: {
+        content: '# Guide\n\n## Usage',
+        path: 'notes/test.md',
+      },
+    })
+    const host = wrapper.get('.markdown-preview-renderer').element as HTMLElement
+    vditorMocks.previewElement.innerHTML = '<div class="vditor-reset"><h1>Guide</h1><h2>Usage</h2></div>'
+    host.appendChild(vditorMocks.previewElement)
+    const target = vditorMocks.previewElement.querySelector('h2') as HTMLElement
+    Object.defineProperty(vditorMocks.previewElement, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, width: 500, height: 300, right: 500, bottom: 300 }),
+    })
+    Object.defineProperty(target, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, top: 420, width: 200, height: 30, right: 200, bottom: 450 }),
+    })
+    const scrollTo = vi.fn()
+    Object.defineProperty(vditorMocks.previewElement, 'scrollTo', { configurable: true, value: scrollTo })
+
+    ;(wrapper.vm as unknown as { scrollToHeading: (index: number) => void }).scrollToHeading(1)
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 408, behavior: 'smooth' })
+    expect(wrapper.emitted('activeHeading')?.at(-1)?.[0]).toBe(1)
+  })
+
   it('emits updated Markdown when adding a row from a rendered preview table', async () => {
     const wrapper = mount(MarkdownPreview, {
       props: {

@@ -15,6 +15,7 @@ import CodeEditor from '@/components/editor_workspace/CodeEditor.vue'
 import CodePreview from '@/components/editor_workspace/CodePreview.vue'
 import EditorModeSwitch from '@/components/editor_workspace/EditorModeSwitch.vue'
 import MarkdownHtmlVisualizationPanel from '@/components/editor_workspace/MarkdownHtmlVisualizationPanel.vue'
+import MarkdownOutline from '@/components/editor_workspace/MarkdownOutline.vue'
 import MarkdownPreview from '@/components/editor_workspace/MarkdownPreview.vue'
 import MultimodalPreview from '@/components/editor_workspace/MultimodalPreview.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -25,6 +26,12 @@ import { fetchSessionChanges } from '@/api/agentChanges'
 import { readKnowledgeFile } from '@/api/knowledge'
 import { useSessionStore } from '@/stores/session'
 import { buildBacklinks } from './backlinks'
+import {
+  flattenMarkdownOutline,
+  headingAtOffset,
+  parseMarkdownOutline,
+  type MarkdownOutlineItem,
+} from './markdownOutline'
 import { flattenWikiFiles, parseWikiLink, resolveWikiTargetPath } from './wikiLinks'
 
 const props = withDefaults(defineProps<{
@@ -47,6 +54,8 @@ const visualizeMenuOpen = ref(false)
 const codeEditorRef = ref<InstanceType<typeof CodeEditor> | null>(null)
 const markdownPreviewRef = ref<InstanceType<typeof MarkdownPreview> | null>(null)
 const lastEditorScroll = ref({ ratio: 0, cursorOffset: 0, contentLength: 0 })
+const outlineOpen = ref(false)
+const activeHeadingOffset = ref(0)
 const wikiFocusAnchor = ref<{ path: string; heading: string; blockId: string; nonce: number } | null>(null)
 let wikiFocusNonce = 0
 const backlinkDocuments = ref<Record<string, string>>({})
@@ -194,6 +203,11 @@ async function loadLatestChangeSnapshot() {
 }
 
 const isMarkdownViewer = computed(() => workspaceStore.activeViewerKind === 'markdown')
+const outlineItems = computed(() => parseMarkdownOutline(activeContent.value))
+const flatOutlineItems = computed(() => flattenMarkdownOutline(outlineItems.value))
+const activeOutlineId = computed(() => (
+  headingAtOffset(outlineItems.value, activeHeadingOffset.value)?.id ?? ''
+))
 const activePipeline = computed(() => resolveEditorFilePipeline(
   workspaceStore.selectedPath,
   workspaceStore.activePreview?.kind,
@@ -241,8 +255,32 @@ function setEditorMode(mode: EditorWorkspaceMode) {
 
 function handleEditorScroll(payload: { ratio: number; cursorOffset: number; contentLength: number }) {
   lastEditorScroll.value = payload
+  activeHeadingOffset.value = payload.cursorOffset
   if (effectiveEditorMode.value === 'split' && isMarkdownViewer.value) {
     markdownPreviewRef.value?.scrollToRatio(payload.ratio)
+  }
+}
+
+/** Tracks the heading that owns the editable Markdown caret. */
+function handleEditorCursor(offset: number) {
+  activeHeadingOffset.value = offset
+}
+
+/** Maps the rendered preview heading order back to its Markdown source offset. */
+function handlePreviewActiveHeading(index: number) {
+  const heading = flatOutlineItems.value[index]
+  if (heading) activeHeadingOffset.value = heading.offset
+}
+
+/** Navigates every visible Markdown surface to the selected outline heading. */
+function navigateToOutlineHeading(item: MarkdownOutlineItem) {
+  activeHeadingOffset.value = item.offset
+  const index = flatOutlineItems.value.findIndex((heading) => heading.id === item.id)
+  if (['edit', 'split'].includes(effectiveEditorMode.value)) {
+    codeEditorRef.value?.scrollToSourceOffset(item.offset, 'smooth')
+  }
+  if (index >= 0 && ['preview', 'split'].includes(effectiveEditorMode.value)) {
+    markdownPreviewRef.value?.scrollToHeading(index)
   }
 }
 
@@ -287,18 +325,36 @@ async function handleWikiNavigate(rawDestination: string) {
 }
 
 watch(effectiveEditorMode, async (mode, previousMode) => {
-  if (mode !== 'split' || previousMode === 'split' || !isMarkdownViewer.value) {
+  if (!isMarkdownViewer.value || mode === previousMode) return
+  await nextTick()
+
+  const activeIndex = flatOutlineItems.value.findIndex((heading) => heading.id === activeOutlineId.value)
+  if (previousMode === 'preview' && ['edit', 'split'].includes(mode)) {
+    codeEditorRef.value?.scrollToSourceOffset(activeHeadingOffset.value, 'auto')
+  }
+  if (mode === 'preview') {
+    if (activeIndex >= 0) markdownPreviewRef.value?.scrollToHeading(activeIndex)
     return
   }
-  await nextTick()
+  if (mode !== 'split' || previousMode === 'split') return
+
   const snapshot = codeEditorRef.value?.getScrollSnapshot() ?? lastEditorScroll.value
   lastEditorScroll.value = snapshot
-  markdownPreviewRef.value?.scrollToSourceOffset(snapshot.cursorOffset, snapshot.contentLength)
+  if (previousMode === 'preview' && activeIndex >= 0) {
+    markdownPreviewRef.value?.scrollToHeading(activeIndex)
+  } else {
+    markdownPreviewRef.value?.scrollToSourceOffset(snapshot.cursorOffset, snapshot.contentLength)
+  }
 })
 
 watch(() => workspaceStore.selectedPath, () => {
+  activeHeadingOffset.value = 0
   void loadLatestChangeSnapshot()
   void loadBacklinks()
+})
+
+watch(isMarkdownViewer, (isMarkdown) => {
+  if (!isMarkdown) outlineOpen.value = false
 })
 
 watch(() => settingsStore.profile.showBacklinks, () => void loadBacklinks())
@@ -384,6 +440,18 @@ onErrorCaptured((err, vm, info) => {
           :options="activePipeline.modes"
           @update:model-value="setEditorMode"
         />
+        <button
+          v-if="isMarkdownViewer"
+          class="editor-tool-button outline-toggle"
+          :class="{ active: outlineOpen }"
+          type="button"
+          :aria-pressed="outlineOpen"
+          title="目录树"
+          @click="outlineOpen = !outlineOpen"
+        >
+          <IcIcon name="view-list" :size="15" />
+          <span>目录树</span>
+        </button>
         <div class="visualize-menu" :class="{ open: visualizeMenuOpen }">
           <button
             class="visualize-trigger"
@@ -426,12 +494,27 @@ onErrorCaptured((err, vm, info) => {
           </div>
         </div>
         <button
-          class="save-button"
+          class="editor-tool-button save-button"
           type="button"
           :disabled="workspaceStore.activeFileReadonly"
           @click="workspaceStore.saveActiveFile"
         >
-          <IcIcon name="save" :size="15" />
+          <svg
+            class="save-motion-icon"
+            aria-hidden="true"
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path data-save-path="box" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+            <path data-save-path="top" d="M7 3v5h8" />
+            <path data-save-path="bottom" d="M17 20v-7H7v7" />
+          </svg>
           <span>Save</span>
         </button>
         <button v-if="props.sidebar" class="sidebar-close-button" type="button" title="关闭编辑区侧边栏" aria-label="关闭编辑区侧边栏" @click="emit('close')">
@@ -460,6 +543,7 @@ onErrorCaptured((err, vm, info) => {
           :show-backlinks="Boolean(settingsStore.profile.showBacklinks)"
           @save="saveActiveFileAndRefreshBacklinks"
           @scroll="handleEditorScroll"
+          @cursor="handleEditorCursor"
           @toggle-backlinks="toggleBacklinks"
         />
       </section>
@@ -476,6 +560,7 @@ onErrorCaptured((err, vm, info) => {
           :path="workspaceStore.selectedPath"
           :focus-anchor="wikiFocusAnchor"
           @scroll="handlePreviewScroll"
+          @active-heading="handlePreviewActiveHeading"
           @update-content="activeContent = $event"
           @ready="handleMarkdownPreviewReady"
           @navigate-wiki="handleWikiNavigate"
@@ -490,6 +575,13 @@ onErrorCaptured((err, vm, info) => {
       <section v-else-if="!isEditableTextMode" class="preview-surface">
         <MultimodalPreview :preview="workspaceStore.activePreview" />
       </section>
+      <MarkdownOutline
+        v-if="isMarkdownViewer"
+        :items="outlineItems"
+        :active-id="activeOutlineId"
+        :open="outlineOpen"
+        @navigate="navigateToOutlineHeading"
+      />
     </div>
     <div v-else class="editor-empty">
       <p>选择文件以开始编辑。</p>
@@ -614,21 +706,40 @@ onErrorCaptured((err, vm, info) => {
   padding-bottom: var(--space-6);
 }
 
-.save-button {
+.editor-tool-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-4);
   height: 22px;
+  padding: 0 var(--space-8);
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--color-text);
+  font-family: inherit;
   font-size: calc(11px * var(--font-scale));
+  cursor: pointer;
   transition:
-    background var(--transition-fast),
-    color var(--transition-fast),
-    border-color var(--transition-fast);
+    background 160ms ease,
+    color 160ms ease,
+    transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.editor-tool-button:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.outline-toggle.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.save-motion-icon,
+.save-motion-icon path {
+  overflow: visible;
+  transform-origin: center;
+  transition: transform 220ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .visualize-menu {
@@ -746,9 +857,11 @@ onErrorCaptured((err, vm, info) => {
 }
 
 .save-button {
-  padding: 0 var(--space-8);
-  border: 0;
-  color: var(--color-text);
+  --save-tilt: -9deg;
+}
+
+.save-button:active:not(:disabled) .save-motion-icon {
+  transform: rotate(-12deg) scale(0.82);
 }
 
 .save-button:disabled {
@@ -761,7 +874,31 @@ onErrorCaptured((err, vm, info) => {
   color: var(--color-text-muted);
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .editor-tool-button:hover:not(:disabled) {
+    background: var(--color-primary-softer);
+    color: var(--color-primary-hover);
+  }
+
+  .save-button:hover:not(:disabled) .save-motion-icon {
+    transform: rotate(var(--save-tilt)) scale(1.1);
+  }
+
+  .save-button:hover:not(:disabled) [data-save-path='box'] {
+    transform: translateY(1px) scale(1.04);
+  }
+
+  .save-button:hover:not(:disabled) [data-save-path='top'] {
+    transform: translate(1.5px, 1.5px) scaleX(0.9);
+  }
+
+  .save-button:hover:not(:disabled) [data-save-path='bottom'] {
+    transform: translateY(-2px) scaleY(0.9);
+  }
+}
+
 .editor-body {
+  position: relative;
   display: grid;
   flex: 1;
   min-height: 0;
@@ -855,12 +992,27 @@ onErrorCaptured((err, vm, info) => {
   }
 
   .visualize-trigger span,
-  .save-button span {
+  .save-button span,
+  .outline-toggle span {
     display: none;
   }
 
   .editor-body[data-mode='split'] {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-tool-button,
+  .save-motion-icon,
+  .save-motion-icon path {
+    transition: color 160ms ease, background 160ms ease;
+  }
+
+  .editor-tool-button:active:not(:disabled),
+  .save-button:hover:not(:disabled) .save-motion-icon,
+  .save-button:hover:not(:disabled) [data-save-path] {
+    transform: none;
   }
 }
 </style>
