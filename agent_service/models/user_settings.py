@@ -58,6 +58,7 @@ class UserSettingsRecord(SQLModel, table=True):
     font_size_percent: int = Field(default=DEFAULT_BUSINESS_LIMITS.default_font_size_percent)
     theme_primary_color: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.short_status_max_length)
     theme_soft_color: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.short_status_max_length)
+    background_cover_url: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.path_max_length)
     show_backlinks: bool = Field(default=False)
     graph_node_limit: int = Field(default=DEFAULT_BUSINESS_LIMITS.graph_default_node_limit)
     floating_launch_enabled: bool = Field(default=False)

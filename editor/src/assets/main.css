@@ -93,7 +93,7 @@ body,
 
 body {
   overflow: hidden;
-  background: var(--color-canvas);
+  background-color: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-ui);
   text-rendering: optimizeLegibility;
@@ -107,10 +107,27 @@ html.electron-window body {
 }
 
 html.electron-window #app {
-  background: var(--color-chrome-rail-bg);
+  background-color: var(--color-chrome-rail-bg);
   border-radius: 28px;
   overflow: hidden;
   contain: paint;
+}
+
+/* Persisted cover backgrounds paint the full shell and each routed main view.
+   A theme-colored veil preserves text contrast without hiding the image. */
+html[data-app-background-cover='true'] #app,
+html[data-app-background-cover='true'] .workspace-page,
+html[data-app-background-cover='true'] .main-shell-content {
+  background-color: var(--color-chrome-rail-bg) !important;
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--color-canvas) 72%, transparent),
+      color-mix(in srgb, var(--color-canvas) 72%, transparent)
+    ),
+    var(--app-background-image) !important;
+  background-position: center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
 }
 
 html.electron-window.maximized #app {

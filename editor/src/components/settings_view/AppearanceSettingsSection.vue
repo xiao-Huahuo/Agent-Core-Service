@@ -7,6 +7,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import LibraryCoverUploader from '@/components/library_view/LibraryCoverUploader.vue'
+import type { LibraryAsset } from '@/types/knowledge'
 import type { SidebarDisplayMode, ThemeMode } from '@/types/settings'
 
 const uiFontFamiliesDraft = defineModel<string[]>('uiFontFamiliesDraft', { required: true })
@@ -23,6 +25,8 @@ const props = defineProps<{
   availableFontFamilies: string[]
   fontsLoading: boolean
   showBacklinks: boolean
+  userId: string
+  backgroundCoverUrl: string
 }>()
 
 const emit = defineEmits<{
@@ -34,6 +38,8 @@ const emit = defineEmits<{
   resetThemeColors: []
   setSidebarDisplayMode: [mode: SidebarDisplayMode]
   setShowBacklinks: [value: boolean]
+  setBackgroundCover: [url: string]
+  resetBackgroundCover: []
 }>()
 
 const activeFontPicker = ref<'ui' | 'text' | null>(null)
@@ -157,6 +163,11 @@ function handleDocumentPointerDown(event: PointerEvent) {
   }
 }
 
+/** Forward the persistent asset URL to the appearance settings owner. */
+function handleBackgroundUploaded(asset: LibraryAsset) {
+  emit('setBackgroundCover', asset.url)
+}
+
 function updateSidebarSlider() {
   void nextTick(() => {
     const container = sidebarSwitchRef.value
@@ -241,6 +252,29 @@ onBeforeUnmount(() => {
     <div class="model-actions appearance-actions">
       <button class="save-model-btn" type="button" @click="$emit('saveThemeColors')">保存主题色</button>
       <button class="cancel-model-btn" type="button" @click="$emit('resetThemeColors')">重置默认色</button>
+    </div>
+
+    <div class="background-cover-control">
+      <div class="background-cover-header">
+        <label>背景封面图片</label>
+      </div>
+      <div class="background-cover-body">
+        <LibraryCoverUploader
+          :user-id="userId"
+          :preview-url="backgroundCoverUrl"
+          empty-label="点击或拖拽上传背景封面"
+          @uploaded="handleBackgroundUploaded"
+        />
+        <button
+          class="cancel-model-btn"
+          type="button"
+          aria-label="重置背景封面"
+          :disabled="!backgroundCoverUrl"
+          @click="emit('resetBackgroundCover')"
+        >
+          重置
+        </button>
+      </div>
     </div>
 
     <h3 style="margin-top: 20px">页面</h3>
@@ -461,6 +495,36 @@ onBeforeUnmount(() => {
   font-family: var(--font-ui);
   font-size: calc(12px * var(--font-scale));
   white-space: nowrap;
+}
+
+.background-cover-control {
+  display: grid;
+  grid-template-columns: var(--settings-label-width, 112px) minmax(0, 360px);
+  align-items: start;
+  gap: var(--space-12);
+  margin-top: var(--space-16);
+}
+
+.background-cover-header label {
+  color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.background-cover-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.background-cover-body :deep(.library-cover-uploader) {
+  min-height: 180px;
+}
+
+.background-cover-body .cancel-model-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
 }
 
 :global(.settings-body .color-control),

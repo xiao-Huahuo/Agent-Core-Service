@@ -10,10 +10,10 @@ import { computed, ref, watch } from 'vue'
 
 import FormHeightTransition from '@/components/common/FormHeightTransition.vue'
 import IcIcon from '@/components/common/IcIcon.vue'
+import LibraryCoverUploader from '@/components/library_view/LibraryCoverUploader.vue'
 import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
 import LibraryRealContentPanel from '@/components/library_view/LibraryRealContentPanel.vue'
-import { uploadLibraryCover } from '@/api/library'
-import type { LibraryItem, LibraryTag } from '@/types/knowledge'
+import type { LibraryAsset, LibraryItem, LibraryTag } from '@/types/knowledge'
 
 const props = defineProps<{
   open: boolean
@@ -41,10 +41,7 @@ const description = ref('')
 const coverMode = ref<LibraryItem['cover_mode']>('icon')
 const coverAssetId = ref('')
 const tags = ref<string[]>([])
-const uploading = ref(false)
-const coverDragActive = ref(false)
 const coverPreviewUrl = ref('')
-const uploadInput = ref<HTMLInputElement | null>(null)
 const editMode = ref<'metadata' | 'content'>('metadata')
 const realContent = ref('')
 const originalRealContent = ref('')
@@ -65,7 +62,6 @@ watch(
     coverAssetId.value = item?.cover_asset_id ?? ''
     coverPreviewUrl.value = item?.cover_asset?.url ?? ''
     tags.value = item?.tags ?? []
-    coverDragActive.value = false
     editMode.value = 'metadata'
     realContent.value = ''
     originalRealContent.value = ''
@@ -96,31 +92,11 @@ function handleRealContentChange(content: string) {
   realContentDirty.value = content !== originalRealContent.value
 }
 
-async function uploadCover(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file || !props.userId) return
-  await uploadCoverFile(file)
-  input.value = ''
-}
-
-async function dropCover(event: DragEvent) {
-  coverDragActive.value = false
-  const file = event.dataTransfer?.files?.[0]
-  if (!file || !props.userId) return
-  await uploadCoverFile(file)
-}
-
-async function uploadCoverFile(file: File) {
-  uploading.value = true
-  try {
-    const response = await uploadLibraryCover(props.userId, file)
-    coverAssetId.value = response.asset?.asset_id ?? ''
-    coverPreviewUrl.value = response.asset?.url ?? ''
-    coverMode.value = 'image'
-  } finally {
-    uploading.value = false
-  }
+/** Apply the shared uploader result to the edited library item. */
+function handleCoverUploaded(asset: LibraryAsset) {
+  coverAssetId.value = asset.asset_id
+  coverPreviewUrl.value = asset.url
+  coverMode.value = 'image'
 }
 </script>
 
@@ -153,24 +129,11 @@ async function uploadCoverFile(file: File) {
             </div>
 
             <div class="cover-zone">
-              <input ref="uploadInput" class="hidden-input" type="file" accept="image/*" @change="uploadCover" />
-              <button
-                class="cover-drop"
-                :class="{ active: coverDragActive }"
-                type="button"
-                :disabled="uploading"
-                @click="uploadInput?.click()"
-                @dragenter.prevent="coverDragActive = true"
-                @dragover.prevent="coverDragActive = true"
-                @dragleave.prevent="coverDragActive = false"
-                @drop.prevent="dropCover"
-              >
-                <img v-if="coverPreviewUrl" class="cover-preview" :src="coverPreviewUrl" alt="" />
-                <template v-else>
-                  <IcIcon name="add-photo" :size="30" />
-                  <span>{{ uploading ? '上传中' : '点击或拖拽上传封面' }}</span>
-                </template>
-              </button>
+              <LibraryCoverUploader
+                :user-id="userId"
+                :preview-url="coverPreviewUrl"
+                @uploaded="handleCoverUploaded"
+              />
             </div>
 
             <LibraryRealContentPanel
@@ -328,44 +291,6 @@ async function uploadCoverFile(file: File) {
   min-height: 0;
 }
 
-.cover-drop {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  flex: 1;
-  border: 1px dashed var(--color-border-strong);
-  border-radius: 28px;
-  background: var(--color-surface-raised);
-  color: var(--color-text-muted);
-  padding: 12px;
-  text-align: center;
-  cursor: pointer;
-}
-
-.cover-drop:hover,
-.cover-drop.active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-softer);
-  color: var(--color-primary);
-}
-
-.cover-drop span {
-  max-width: 100%;
-  color: var(--color-text);
-  font-size: calc(13px * var(--font-scale));
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
-.cover-preview {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 28px;
-}
 
 .cover-options {
   display: flex;
@@ -379,10 +304,6 @@ async function uploadCoverFile(file: File) {
   gap: 6px;
   color: var(--color-text);
   font-size: calc(13px * var(--font-scale));
-}
-
-.hidden-input {
-  display: none;
 }
 
 .dialog-actions {

@@ -110,6 +110,7 @@ class SettingsService:
                 "font_size_percent": "INTEGER NOT NULL DEFAULT 100",
                 "theme_primary_color": "VARCHAR(16) NOT NULL DEFAULT ''",
                 "theme_soft_color": "VARCHAR(16) NOT NULL DEFAULT ''",
+                "background_cover_url": "VARCHAR(2048) NOT NULL DEFAULT ''",
                 "show_backlinks": "BOOLEAN NOT NULL DEFAULT 0",
                 "graph_node_limit": "INTEGER NOT NULL DEFAULT 2000",
                 "floating_launch_enabled": "BOOLEAN NOT NULL DEFAULT 0",
@@ -586,6 +587,7 @@ class SettingsService:
             "font_size_percent": self._normalize_font_size_percent(record.ui_font_size_percent),
             "theme_primary_color": record.theme_primary_color,
             "theme_soft_color": record.theme_soft_color,
+            "background_cover_url": record.background_cover_url,
             "show_backlinks": bool(record.show_backlinks),
             "graph_node_limit": record.graph_node_limit,
             "floating_launch_enabled": bool(record.floating_launch_enabled),
@@ -728,6 +730,7 @@ class SettingsService:
         user_id: str,
         theme_primary_color: str | None = None,
         theme_soft_color: str | None = None,
+        background_cover_url: str | None = None,
         show_backlinks: bool | None = None,
     ) -> dict:
         """Persist editor appearance colors and backlinks visibility."""
@@ -749,6 +752,11 @@ class SettingsService:
                 record.theme_primary_color = self._normalize_theme_color(theme_primary_color)
             if theme_soft_color is not None:
                 record.theme_soft_color = self._normalize_theme_color(theme_soft_color)
+            if background_cover_url is not None:
+                record.background_cover_url = self._normalize_background_cover_url(
+                    user_id=normalized_user_id,
+                    value=background_cover_url,
+                )
             if show_backlinks is not None:
                 record.show_backlinks = bool(show_backlinks)
             record.updated_at = now
@@ -759,6 +767,7 @@ class SettingsService:
                 "user_id": record.user_id,
                 "theme_primary_color": record.theme_primary_color,
                 "theme_soft_color": record.theme_soft_color,
+                "background_cover_url": record.background_cover_url,
                 "show_backlinks": bool(record.show_backlinks),
                 "updated_at": record.updated_at.isoformat(),
             }
@@ -823,9 +832,22 @@ class SettingsService:
             "user_id": profile["user_id"],
             "theme_primary_color": profile["theme_primary_color"],
             "theme_soft_color": profile["theme_soft_color"],
+            "background_cover_url": profile["background_cover_url"],
             "show_backlinks": profile["show_backlinks"],
             "updated_at": profile["updated_at"],
         }
+
+    @staticmethod
+    def _normalize_background_cover_url(*, user_id: str, value: str | None) -> str:
+        """Allow reset or one persistent library asset owned by the current user."""
+
+        normalized = str(value or "").strip()
+        if not normalized:
+            return ""
+        expected_prefix = f"/library/assets/{user_id}/"
+        if not normalized.startswith(expected_prefix) or ".." in normalized or "\\" in normalized or "\x00" in normalized:
+            raise ValueError("background_cover_url must reference the current user's library asset")
+        return normalized
 
     def list_knowledge_library_dirs(self) -> list[Path]:
         """Return all configured user knowledge library directories."""

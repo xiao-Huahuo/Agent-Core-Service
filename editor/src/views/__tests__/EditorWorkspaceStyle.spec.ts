@@ -20,4 +20,14 @@ describe('EditorWorkspace shell styling', () => {
     expect(editorWorkspaceSource).toContain('<EditorPane v-if="editorSidebarVisible" sidebar')
     expect(editorWorkspaceSource).toContain('class="agent-col"')
   })
+
+  it('routes editor and browser left-edge handles through the shared column resize flow', () => {
+    expect(editorWorkspaceSource).toContain("type ResizeTarget = 'file' | 'editor' | 'browser' | 'agent'")
+    expect(editorWorkspaceSource).toContain('aria-label="Resize editor sidebar"')
+    expect(editorWorkspaceSource).toContain("@pointerdown=\"startResize('editor', $event)\"")
+    expect(editorWorkspaceSource).toContain('aria-label="Resize browser sidebar"')
+    expect(editorWorkspaceSource).toContain("@pointerdown=\"startResize('browser', $event)\"")
+    expect(editorWorkspaceSource).toContain("'--editor-resizer-width'")
+    expect(editorWorkspaceSource).toContain("'--browser-resizer-width'")
+  })
 })

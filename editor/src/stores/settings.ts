@@ -54,6 +54,7 @@ const DEFAULT_PROFILE: UserSettingsProfile = {
   textFontSizePercent: 100,
   themePrimaryColor: '',
   themeSoftColor: '',
+  backgroundCoverUrl: '',
   showBacklinks: false,
   graphNodeLimit: 2000,
   floatingLaunchEnabled: false,
@@ -132,6 +133,14 @@ function normalizeEditorImageAssetsDir(value: string | undefined): string {
   return `./${normalized}/`
 }
 
+/** Accept only backend-managed library assets before interpolating a CSS URL. */
+function normalizeBackgroundCoverUrl(value: string | undefined): string {
+  const normalized = (value ?? '').trim()
+  if (!normalized) return ''
+  if (!normalized.startsWith('/library/assets/') || /["'()\\\r\n]/u.test(normalized) || normalized.includes('..')) return ''
+  return normalized
+}
+
 function quoteFontFamily(value: string): string {
   if (value.startsWith('var(') || /^[-_a-zA-Z][-_a-zA-Z0-9]*$/u.test(value)) {
     return value
@@ -158,6 +167,7 @@ function normalizeProfile(profile: UserSettingsProfile): UserSettingsProfile {
     textFontSizePercent: normalizeFontSizePercent(profile.textFontSizePercent ?? profile.fontSizePercent),
     themePrimaryColor: normalizeThemeColor(profile.themePrimaryColor),
     themeSoftColor: normalizeThemeColor(profile.themeSoftColor),
+    backgroundCoverUrl: normalizeBackgroundCoverUrl(profile.backgroundCoverUrl),
     editorImageAssetsDir: normalizeEditorImageAssetsDir(profile.editorImageAssetsDir),
     knowledgeSupportedSuffixes: [...new Set(profile.knowledgeSupportedSuffixes ?? [])],
   }
@@ -197,6 +207,7 @@ function mapBackendProfile(profileResponse: SettingsProfileResponse): Partial<Us
     ),
     themePrimaryColor: profileResponse.theme_primary_color ?? '',
     themeSoftColor: profileResponse.theme_soft_color ?? '',
+    backgroundCoverUrl: profileResponse.background_cover_url ?? '',
     showBacklinks: Boolean(profileResponse.show_backlinks),
     graphNodeLimit: profileResponse.graph_node_limit ?? 2000,
     floatingLaunchEnabled: Boolean(profileResponse.floating_launch_enabled),
@@ -371,13 +382,25 @@ export const useSettingsStore = defineStore('settings', () => {
     window.dispatchEvent(new CustomEvent(APPEARANCE_PREVIEW_EVENT))
   }
 
+  /** Apply one persisted cover behind the application shell without local persistence. */
+  function applyAppearanceBackground() {
+    const url = normalizeBackgroundCoverUrl(profile.value.backgroundCoverUrl)
+    if (url) {
+      document.documentElement.style.setProperty('--app-background-image', `url("${url}")`)
+      document.documentElement.setAttribute('data-app-background-cover', 'true')
+    } else {
+      document.documentElement.style.removeProperty('--app-background-image')
+      document.documentElement.removeAttribute('data-app-background-cover')
+    }
+  }
+
   function previewAppearanceColors(params: { themePrimaryColor?: string; themeSoftColor?: string }) {
     applyAppearanceColorValues(params.themePrimaryColor, params.themeSoftColor)
     window.dispatchEvent(new CustomEvent(APPEARANCE_PREVIEW_EVENT))
   }
 
   function persistProfile() {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile.value))
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile.value, backgroundCoverUrl: '' }))
   }
 
   /** Restore persisted theme and attach system color-scheme listener. */
@@ -385,6 +408,7 @@ export const useSettingsStore = defineStore('settings', () => {
     applyTheme()
     applyFonts()
     applyAppearanceColors()
+    applyAppearanceBackground()
     window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', applyTheme)
   }
 
@@ -462,6 +486,7 @@ export const useSettingsStore = defineStore('settings', () => {
     persistProfile()
     applyFonts()
     applyAppearanceColors()
+    applyAppearanceBackground()
   }
 
   function setUiFontFamilies(fontFamilies: string[]) {
@@ -527,12 +552,18 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  async function saveAppearanceSettings(params: { themePrimaryColor?: string; themeSoftColor?: string; showBacklinks?: boolean }) {
+  async function saveAppearanceSettings(params: {
+    themePrimaryColor?: string
+    themeSoftColor?: string
+    backgroundCoverUrl?: string
+    showBacklinks?: boolean
+  }) {
     const nextThemePrimaryColor = normalizeThemeColor(params.themePrimaryColor ?? profile.value.themePrimaryColor)
     const nextThemeSoftColor = normalizeThemeColor(params.themeSoftColor ?? profile.value.themeSoftColor)
     updateProfile({
       themePrimaryColor: nextThemePrimaryColor,
       themeSoftColor: nextThemeSoftColor,
+      backgroundCoverUrl: params.backgroundCoverUrl ?? profile.value.backgroundCoverUrl,
       showBacklinks: params.showBacklinks ?? profile.value.showBacklinks,
     })
     if (!hasUserId.value) {
@@ -542,11 +573,13 @@ export const useSettingsStore = defineStore('settings', () => {
       const result = await saveAppearanceConfig(profile.value.userId, {
         themePrimaryColor: nextThemePrimaryColor,
         themeSoftColor: nextThemeSoftColor,
+        backgroundCoverUrl: params.backgroundCoverUrl,
         showBacklinks: params.showBacklinks,
       })
       updateProfile({
         themePrimaryColor: result.theme_primary_color,
         themeSoftColor: result.theme_soft_color,
+        backgroundCoverUrl: result.background_cover_url,
         showBacklinks: result.show_backlinks,
       })
       return result

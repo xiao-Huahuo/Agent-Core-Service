@@ -242,6 +242,22 @@ async function handleSetShowBacklinks(value: boolean) {
   }
 }
 
+/** Persist an uploaded library asset as the application background. */
+async function handleSetBackgroundCover(url: string) {
+  try {
+    await settingsStore.saveAppearanceSettings({ backgroundCoverUrl: url })
+    saveError.value = ''
+    saveMessage.value = '背景封面已应用'
+  } catch (error) {
+    saveError.value = error instanceof Error ? error.message : '保存背景封面失败'
+  }
+}
+
+/** Clear the persistent background and restore the default application shell. */
+async function handleResetBackgroundCover() {
+  await handleSetBackgroundCover('')
+}
+
 function handlePreviewThemeColors() {
   settingsStore.previewAppearanceColors({
     themePrimaryColor: themePrimaryColorDraft.value,
@@ -694,19 +710,23 @@ onBeforeUnmount(() => {
         v-model:ui-font-families-draft="uiFontFamiliesDraft"
         v-model:ui-font-size-percent-draft="uiFontSizePercentDraft"
         :available-font-families="availableFontFamilies"
+        :background-cover-url="settingsStore.profile.backgroundCoverUrl ?? ''"
         :fonts-loading="fontsLoading"
         :sidebar-display-mode="settingsStore.sidebarDisplayMode"
         :show-backlinks="Boolean(settingsStore.profile.showBacklinks)"
         :theme-mode="settingsStore.themeMode"
         :theme-options="themeOptions"
+        :user-id="settingsStore.profile.userId"
         @preview-theme-colors="handlePreviewThemeColors"
         @reset-theme-colors="handleResetThemeColors"
         @save-font-families="handleSaveFontFamilies"
         @save-font-size="handleSaveFontSize"
         @save-theme-colors="handleSaveThemeColors"
         @set-sidebar-display-mode="settingsStore.setSidebarDisplayMode"
+        @set-background-cover="handleSetBackgroundCover"
         @set-show-backlinks="handleSetShowBacklinks"
         @set-theme-mode="settingsStore.setThemeMode"
+        @reset-background-cover="handleResetBackgroundCover"
       />
 
       <LlmSettingsSection

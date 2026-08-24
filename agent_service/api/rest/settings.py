@@ -295,6 +295,7 @@ async def save_appearance_config(body: dict[str, Any]) -> dict[str, Any]:
             user_id=user_id,
             theme_primary_color=body.get("theme_primary_color"),
             theme_soft_color=body.get("theme_soft_color"),
+            background_cover_url=body.get("background_cover_url"),
             show_backlinks=body.get("show_backlinks"),
         )
     except ValueError as exc:

@@ -58,10 +58,14 @@ const ACTIVITY_BAR_MANAGEMENT_WIDTH = 204
 const DEFAULT_FILE_WIDTH = 280
 const DEFAULT_AGENT_WIDTH = 340
 const MIN_PANEL_WIDTH = 180
+const MIN_EDITOR_SIDEBAR_WIDTH = 360
+const MIN_BROWSER_SIDEBAR_WIDTH = 320
+const MIN_MAIN_WIDTH = 180
 const MAX_FILE_WIDTH = 460
+const MAX_EDITOR_SIDEBAR_WIDTH = 620
 const COLLAPSE_THRESHOLD = 150
 
-type ResizeTarget = 'file' | 'agent'
+type ResizeTarget = 'file' | 'editor' | 'browser' | 'agent'
 
 const workspaceGrid = ref<HTMLElement | null>(null)
 const fileSidebarOpen = ref(true)
@@ -72,6 +76,8 @@ const feedbackOpen = ref(false)
 const activityOverlayOpen = ref(false)
 const fileWidth = ref(DEFAULT_FILE_WIDTH)
 const agentWidth = ref(DEFAULT_AGENT_WIDTH)
+const editorSidebarWidth = ref<number | null>(null)
+const browserSidebarWidth = ref<number | null>(null)
 const activeResizeTarget = ref<ResizeTarget | null>(null)
 let pendingResizeClientX = 0
 let resizeFrameId = 0
@@ -138,8 +144,14 @@ const workspaceGridStyle = computed<Record<string, string>>(() => ({
   '--file-resizer-width': visibleFileSidebarOpen.value ? '4px' : '0px',
   '--agent-col-width': visibleAgentSidebarOpen.value ? `${agentWidth.value}px` : '0px',
   '--agent-resizer-width': visibleAgentSidebarOpen.value ? '4px' : '0px',
-  '--editor-sidebar-width': editorSidebarVisible.value ? 'clamp(360px, 42vw, 620px)' : '0px',
-  '--browser-col-ratio': browserSidebarVisible.value ? '1fr' : '0fr',
+  '--editor-resizer-width': editorSidebarVisible.value ? '4px' : '0px',
+  '--editor-sidebar-width': editorSidebarVisible.value
+    ? editorSidebarWidth.value === null ? 'clamp(360px, 42vw, 620px)' : `${editorSidebarWidth.value}px`
+    : '0px',
+  '--browser-resizer-width': browserSidebarVisible.value ? '4px' : '0px',
+  '--browser-sidebar-width': browserSidebarVisible.value
+    ? browserSidebarWidth.value === null ? 'minmax(0, 1fr)' : `${browserSidebarWidth.value}px`
+    : '0px',
   '--file-mobile-row': visibleFileSidebarOpen.value ? '300px' : '0px',
   '--agent-mobile-row': visibleAgentSidebarOpen.value ? '360px' : '0px',
 }))
@@ -489,7 +501,7 @@ function applyResizeMove(clientX: number) {
   if (!grid || !activeResizeTarget.value) {
     return
   }
-  if (isAgentPage.value) {
+  if (isAgentPage.value && (activeResizeTarget.value === 'file' || activeResizeTarget.value === 'agent')) {
     return
   }
   const rect = grid.getBoundingClientRect()
@@ -501,6 +513,34 @@ function applyResizeMove(clientX: number) {
     }
     fileSidebarOpen.value = true
     fileWidth.value = clamp(nextWidth, MIN_PANEL_WIDTH, MAX_FILE_WIDTH)
+    return
+  }
+
+  if (activeResizeTarget.value === 'editor' || activeResizeTarget.value === 'browser') {
+    const editorTarget = activeResizeTarget.value === 'editor'
+    const panel = grid.querySelector<HTMLElement>(editorTarget ? '.editor-sidebar-content' : '.browser-sidebar-content')
+    const mainPanel = grid.querySelector<HTMLElement>('.editor-col')
+    if (!panel || !mainPanel) return
+    const panelRect = panel.getBoundingClientRect()
+    const nextWidth = panelRect.right - clientX
+    if (nextWidth < COLLAPSE_THRESHOLD) {
+      if (editorTarget) {
+        workspaceStore.closeEditorSidebar()
+      } else {
+        workspaceStore.closeBrowserSidebar()
+      }
+      return
+    }
+    const minimumWidth = editorTarget ? MIN_EDITOR_SIDEBAR_WIDTH : MIN_BROWSER_SIDEBAR_WIDTH
+    const availableWidth = Math.max(minimumWidth, panelRect.width + mainPanel.getBoundingClientRect().width - MIN_MAIN_WIDTH)
+    const maximumWidth = editorTarget
+      ? Math.max(minimumWidth, Math.min(MAX_EDITOR_SIDEBAR_WIDTH, availableWidth))
+      : availableWidth
+    if (editorTarget) {
+      editorSidebarWidth.value = clamp(nextWidth, minimumWidth, maximumWidth)
+    } else {
+      browserSidebarWidth.value = clamp(nextWidth, minimumWidth, maximumWidth)
+    }
     return
   }
 
@@ -748,9 +788,21 @@ watch(
         <SkillView v-else-if="workspaceStore.mainView === 'skills'" class="main-shell-content" />
         <SettingsView v-else-if="workspaceStore.mainView === 'settings'" class="main-shell-content" />
       </main>
+      <div
+        class="resize-handle editor-resizer"
+        role="separator"
+        aria-label="Resize editor sidebar"
+        @pointerdown="startResize('editor', $event)"
+      ></div>
       <aside class="editor-sidebar-content" :aria-hidden="!editorSidebarVisible">
         <EditorPane v-if="editorSidebarVisible" sidebar @close="workspaceStore.closeEditorSidebar" />
       </aside>
+      <div
+        class="resize-handle browser-resizer"
+        role="separator"
+        aria-label="Resize browser sidebar"
+        @pointerdown="startResize('browser', $event)"
+      ></div>
       <BrowserPage
         v-if="!isBrowserPage"
         class="browser-sidebar-content"
@@ -815,7 +867,8 @@ watch(
   display: grid;
   grid-template-columns:
     var(--activity-col-width) var(--file-col-width) var(--file-resizer-width) minmax(0, 1fr)
-    var(--editor-sidebar-width) minmax(0, var(--browser-col-ratio)) var(--agent-resizer-width) var(--agent-col-width);
+    var(--editor-resizer-width) var(--editor-sidebar-width) var(--browser-resizer-width)
+    var(--browser-sidebar-width) var(--agent-resizer-width) var(--agent-col-width);
   column-gap: 0;
   min-width: 0;
   min-height: 0;
@@ -886,7 +939,7 @@ watch(
 }
 
 .browser-sidebar-content {
-  grid-column: 6;
+  grid-column: 8;
   min-width: 0;
   min-height: 0;
   margin: 0 0 var(--space-12) 0;
@@ -898,7 +951,7 @@ watch(
 }
 
 .editor-sidebar-content {
-  grid-column: 5;
+  grid-column: 6;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -931,12 +984,20 @@ watch(
   }
 }
 
-.agent-resizer {
+.editor-resizer {
+  grid-column: 5;
+}
+
+.browser-resizer {
   grid-column: 7;
 }
 
+.agent-resizer {
+  grid-column: 9;
+}
+
 .agent-col {
-  grid-column: 8;
+  grid-column: 10;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1032,6 +1093,8 @@ watch(
 }
 
 .workspace-grid.file-sidebar-collapsed .file-resizer,
+.workspace-grid.editor-sidebar-collapsed .editor-resizer,
+.workspace-grid.browser-sidebar-collapsed .browser-resizer,
 .workspace-grid.agent-sidebar-collapsed .agent-resizer {
   pointer-events: none;
   opacity: 0;
@@ -1086,12 +1149,16 @@ watch(
 .workspace-page.resizing .workspace-grid,
 .workspace-page.resizing .file-col,
 .workspace-page.resizing .editor-col,
+.workspace-page.resizing .editor-sidebar-content,
+.workspace-page.resizing .browser-sidebar-content,
 .workspace-page.resizing .agent-col {
   transition: none;
 }
 
 .workspace-page.resizing-column .file-col,
 .workspace-page.resizing-column .editor-col,
+.workspace-page.resizing-column .editor-sidebar-content,
+.workspace-page.resizing-column .browser-sidebar-content,
 .workspace-page.resizing-column .agent-col {
   pointer-events: none;
 }

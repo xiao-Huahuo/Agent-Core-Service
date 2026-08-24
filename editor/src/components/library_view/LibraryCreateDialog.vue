@@ -12,9 +12,9 @@ import { computed, ref, watch } from 'vue'
 import CompactCodeInput from '@/components/common/CompactCodeInput.vue'
 import FormHeightTransition from '@/components/common/FormHeightTransition.vue'
 import IcIcon from '@/components/common/IcIcon.vue'
+import LibraryCoverUploader from '@/components/library_view/LibraryCoverUploader.vue'
 import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
-import { uploadLibraryCover } from '@/api/library'
-import type { LibraryItem, LibraryTag } from '@/types/knowledge'
+import type { LibraryAsset, LibraryItem, LibraryTag } from '@/types/knowledge'
 
 type CreateMode = 'book' | 'collection'
 type BookSourceMode = 'file' | 'text' | 'script' | 'url'
@@ -52,10 +52,7 @@ const sourceMode = ref<BookSourceMode>('file')
 const textContent = ref('')
 const scriptExtension = ref('.py')
 const sourceUrl = ref('')
-const coverUploading = ref(false)
-const coverDragActive = ref(false)
 const dragActive = ref(false)
-const coverInput = ref<HTMLInputElement | null>(null)
 const realFileInput = ref<HTMLInputElement | null>(null)
 
 const isBook = computed(() => props.mode === 'book')
@@ -76,7 +73,6 @@ watch(
     textContent.value = ''
     scriptExtension.value = '.py'
     sourceUrl.value = ''
-    coverDragActive.value = false
     dragActive.value = false
   },
 )
@@ -100,30 +96,10 @@ function dropRealFile(event: DragEvent) {
   }
 }
 
-async function uploadCover(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file || !props.userId) return
-  await uploadCoverFile(file)
-  input.value = ''
-}
-
-async function dropCover(event: DragEvent) {
-  coverDragActive.value = false
-  const file = event.dataTransfer?.files?.[0]
-  if (!file || !props.userId) return
-  await uploadCoverFile(file)
-}
-
-async function uploadCoverFile(file: File) {
-  coverUploading.value = true
-  try {
-    const response = await uploadLibraryCover(props.userId, file)
-    coverAssetId.value = response.asset?.asset_id ?? ''
-    coverPreviewUrl.value = response.asset?.url ?? ''
-  } finally {
-    coverUploading.value = false
-  }
+/** Apply the shared uploader result to the pending library item. */
+function handleCoverUploaded(asset: LibraryAsset) {
+  coverAssetId.value = asset.asset_id
+  coverPreviewUrl.value = asset.url
 }
 
 function submit() {
@@ -155,24 +131,11 @@ function submit() {
 
         <section class="upper-grid">
           <div class="cover-zone">
-            <input ref="coverInput" class="hidden-input" type="file" accept="image/*" @change="uploadCover" />
-            <button
-              class="cover-drop"
-              :class="{ active: coverDragActive }"
-              type="button"
-              :disabled="coverUploading"
-              @click="coverInput?.click()"
-              @dragenter.prevent="coverDragActive = true"
-              @dragover.prevent="coverDragActive = true"
-              @dragleave.prevent="coverDragActive = false"
-              @drop.prevent="dropCover"
-            >
-              <img v-if="coverPreviewUrl" class="cover-preview" :src="coverPreviewUrl" alt="" />
-              <template v-else>
-                <IcIcon name="add-photo" :size="30" />
-                <span>{{ coverUploading ? '上传中' : '点击或拖拽上传封面' }}</span>
-              </template>
-            </button>
+            <LibraryCoverUploader
+              :user-id="userId"
+              :preview-url="coverPreviewUrl"
+              @uploaded="handleCoverUploaded"
+            />
           </div>
 
           <div class="metadata-zone">
@@ -385,45 +348,6 @@ function submit() {
 .cover-zone {
   display: flex;
   min-width: 0;
-}
-
-.cover-drop {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  flex: 1;
-  border: 1px dashed var(--color-border-strong);
-  border-radius: 28px;
-  background: var(--color-surface-raised);
-  color: var(--color-text-muted);
-  padding: 12px;
-  text-align: center;
-  cursor: pointer;
-}
-
-.cover-drop:hover,
-.cover-drop.active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-softer);
-  color: var(--color-primary);
-}
-
-.cover-drop span {
-  max-width: 100%;
-  color: var(--color-text);
-  font-size: calc(13px * var(--font-scale));
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
-.cover-preview {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 28px;
 }
 
 .file-zone {

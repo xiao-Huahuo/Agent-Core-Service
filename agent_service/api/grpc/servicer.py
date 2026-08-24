@@ -1070,6 +1070,11 @@ class AgentServiceServicer(BaseServicer):
                     if "theme_soft_color" in payload
                     else None
                 ),
+                background_cover_url=(
+                    str(payload["background_cover_url"])
+                    if "background_cover_url" in payload
+                    else None
+                ),
                 show_backlinks=(
                     bool(payload["show_backlinks"])
                     if "show_backlinks" in payload

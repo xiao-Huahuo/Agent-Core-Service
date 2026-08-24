@@ -21,7 +21,10 @@ describe('AppearanceSettingsSection font sizes', () => {
         availableFontFamilies: [],
         fontsLoading: false,
         showBacklinks: false,
+        userId: 'u1',
+        backgroundCoverUrl: '/library/assets/u1/cover.png',
       },
+      global: { stubs: { LibraryCoverUploader: { template: '<div class="cover-uploader-stub" />' } } },
     })
 
     expect(wrapper.text()).toContain('UI 字体大小')
@@ -29,6 +32,9 @@ describe('AppearanceSettingsSection font sizes', () => {
     expect(wrapper.find('[data-font-size="ui"]').exists()).toBe(true)
     expect(wrapper.find('[data-font-size="text"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('显示反向链接')
+    expect(wrapper.text()).toContain('背景封面图片')
+    expect(wrapper.find('.cover-uploader-stub').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="重置背景封面"]')).toBeTruthy()
     expect(wrapper.find('#show-backlinks-setting').attributes('checked')).toBeUndefined()
   })
 })

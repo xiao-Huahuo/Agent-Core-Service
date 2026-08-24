@@ -159,6 +159,18 @@ test('renders and opens an encoded Agent file block', async ({ page }, testInfo)
   await expect(editorSidebar).toBeVisible()
   await expect(editorSidebar.locator('.sidebar-editor-panel')).toBeVisible()
   await expect.poll(async () => (await editorSidebar.boundingBox())?.width ?? 0).toBeGreaterThan(300)
+  const editorWidthBefore = (await editorSidebar.boundingBox())?.width ?? 0
+  const editorResizer = page.getByRole('separator', { name: 'Resize editor sidebar' })
+  await expect(editorResizer).toBeVisible()
+  const editorHandleBox = await editorResizer.boundingBox()
+  await page.mouse.move(
+    (editorHandleBox?.x ?? 0) + (editorHandleBox?.width ?? 4) / 2,
+    (editorHandleBox?.y ?? 0) + (editorHandleBox?.height ?? 400) / 2,
+  )
+  await page.mouse.down()
+  await page.mouse.move((editorHandleBox?.x ?? 0) + 80, (editorHandleBox?.y ?? 0) + (editorHandleBox?.height ?? 400) / 2)
+  await page.mouse.up()
+  await expect.poll(async () => (await editorSidebar.boundingBox())?.width ?? 0).toBeLessThan(editorWidthBefore - 60)
   await page.screenshot({ path: testInfo.outputPath('agent-file-sidebar-open.png'), fullPage: true })
 })
 

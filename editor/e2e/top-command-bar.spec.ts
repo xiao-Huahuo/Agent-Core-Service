@@ -78,6 +78,34 @@ test('wraps the Agent sidebar in the workspace card shell', async ({ page }) => 
   }).toBe(true)
 })
 
+test('resizes the sidebar browser from its left edge', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 900 })
+  await page.goto('/')
+  const userIdInput = page.getByRole('textbox', { name: '用户 ID' })
+  if (await userIdInput.isVisible()) {
+    await userIdInput.fill('browser-resize-smoke')
+    await page.getByRole('button', { name: '进入', exact: true }).click()
+  }
+
+  await page.getByRole('button', { name: '打开或收起右侧浏览器' }).click()
+  const browserSidebar = page.locator('.browser-sidebar-content')
+  await expect(browserSidebar).toBeVisible()
+  const browserWidthBefore = (await browserSidebar.boundingBox())?.width ?? 0
+  const browserResizer = page.getByRole('separator', { name: 'Resize browser sidebar' })
+  await expect(browserResizer).toBeVisible()
+  const browserHandleBox = await browserResizer.boundingBox()
+  await page.mouse.move(
+    (browserHandleBox?.x ?? 0) + (browserHandleBox?.width ?? 4) / 2,
+    (browserHandleBox?.y ?? 0) + (browserHandleBox?.height ?? 400) / 2,
+  )
+  await page.mouse.down()
+  await page.mouse.move((browserHandleBox?.x ?? 0) - 80, (browserHandleBox?.y ?? 0) + (browserHandleBox?.height ?? 400) / 2)
+  await page.mouse.up()
+
+  await expect.poll(async () => (await browserSidebar.boundingBox())?.width ?? 0).toBeGreaterThan(browserWidthBefore + 60)
+  await page.screenshot({ path: testInfo.outputPath('browser-sidebar-resized.png'), fullPage: true })
+})
+
 test('keeps the library name visible beside ingestion progress', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('agent_editor_profile', JSON.stringify({

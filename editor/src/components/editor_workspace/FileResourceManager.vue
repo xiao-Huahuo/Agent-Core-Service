@@ -895,7 +895,8 @@ onUnmounted(() => {
     @contextmenu.prevent="resourcePage === 'files' && openContextMenu(null, $event)"
   >
     <header class="resource-toolbar">
-      <div ref="pageSwitchRef" class="resource-page-switch" aria-label="Resource pages">
+      <div class="toolbar-primary">
+        <div ref="pageSwitchRef" class="resource-page-switch" aria-label="Resource pages">
         <div class="page-slider" :style="pageSliderStyle"></div>
         <button
           class="page-switch-button"
@@ -915,9 +916,9 @@ onUnmounted(() => {
           <IcIcon name="trash" :size="17" />
           <span>最近删除</span>
         </button>
-      </div>
-      <span class="toolbar-separator"></span>
-      <div class="nav-controls" aria-label="Folder navigation">
+        </div>
+        <span class="toolbar-separator"></span>
+        <div class="nav-controls" aria-label="Folder navigation">
         <button class="tool-button" type="button" title="回退" :disabled="!canGoBack" @click="goBackDirectory">
           <IcIcon name="arrow-left" :size="17" />
         </button>
@@ -937,9 +938,9 @@ onUnmounted(() => {
         >
           <IcIcon name="refresh" :size="17" />
         </button>
-      </div>
-      <span class="toolbar-separator"></span>
-      <button
+        </div>
+        <span class="toolbar-separator"></span>
+        <button
         class="root-button"
         type="button"
         :disabled="switchingRoot"
@@ -947,8 +948,8 @@ onUnmounted(() => {
         @click="openRootPicker"
       >
         <IcIcon name="folder-open" :size="20" />
-      </button>
-      <div v-if="resourcePage === 'files'" class="path-capsule" aria-label="Current path">
+        </button>
+        <div v-if="resourcePage === 'files'" class="path-capsule" aria-label="Current path">
         <button
           v-for="part in pathCapsuleParts"
           :key="part.path || '__root'"
@@ -958,12 +959,14 @@ onUnmounted(() => {
         >
           {{ part.label }}
         </button>
+        </div>
+        <div v-else class="path-capsule trash-path-capsule" aria-label="Current page">
+          <IcIcon name="trash" :size="17" />
+          <span>最近删除</span>
+        </div>
       </div>
-      <div v-else class="path-capsule trash-path-capsule" aria-label="Current page">
-        <IcIcon name="trash" :size="17" />
-        <span>最近删除</span>
-      </div>
-      <button
+      <div class="toolbar-actions">
+        <button
         v-if="resourcePage === 'files'"
         class="tool-button"
         :class="{ active: settingsStore.showIndexColumn || settingsStore.showGraphColumn || settingsStore.showFavoriteColumn || settingsStore.showPrivacyColumn }"
@@ -973,8 +976,8 @@ onUnmounted(() => {
         @click="toggleStatusColumns"
       >
         <IcIcon name="filter" :size="17" />
-      </button>
-      <button
+        </button>
+        <button
         v-if="resourcePage === 'files'"
         class="tool-button"
         :class="{ active: effectiveFavoritesOnly }"
@@ -986,8 +989,8 @@ onUnmounted(() => {
         @click="toggleFavoritesOnly"
       >
         <IcIcon name="star" :size="17" />
-      </button>
-      <button
+        </button>
+        <button
         v-if="resourcePage === 'files'"
         class="tool-button"
         :class="{ active: effectivePrivacyOnly }"
@@ -999,8 +1002,8 @@ onUnmounted(() => {
         @click="togglePrivacyOnly"
       >
         <IcIcon name="visibility-off" :size="17" />
-      </button>
-      <button
+        </button>
+        <button
         v-if="resourcePage === 'files'"
         class="tool-button"
         :class="{ active: multiSelectMode }"
@@ -1010,8 +1013,8 @@ onUnmounted(() => {
         @click="toggleMultiSelectMode"
       >
         <IcIcon name="multi-select" :size="17" />
-      </button>
-      <DropdownMenu v-if="resourcePage === 'files'" v-model:open="sortMenuOpen">
+        </button>
+        <DropdownMenu v-if="resourcePage === 'files'" v-model:open="sortMenuOpen">
         <DropdownMenuTrigger as-child>
           <button
             class="tool-button"
@@ -1056,8 +1059,8 @@ onUnmounted(() => {
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenuPortal>
-      </DropdownMenu>
-      <div v-if="resourcePage === 'files'" class="view-switch" aria-label="View mode">
+        </DropdownMenu>
+        <div v-if="resourcePage === 'files'" class="view-switch" aria-label="View mode">
         <button
           v-for="mode in viewModes"
           :key="mode.value"
@@ -1073,6 +1076,7 @@ onUnmounted(() => {
           <IcIcon v-else name="image" :size="17" />
           <span>{{ mode.label }}</span>
         </button>
+        </div>
       </div>
     </header>
 
@@ -1087,13 +1091,13 @@ onUnmounted(() => {
       <div v-if="resourcePage === 'trash'" class="trash-view">
         <div class="trash-list">
           <div class="trash-header" :style="{ gridTemplateColumns: trashGridColumns }">
-            <span>名称</span>
-            <span>原路径</span>
-            <span>删除时间</span>
-            <span>保留到</span>
-            <span>类型</span>
-            <span>大小</span>
-            <span>操作</span>
+            <span class="trash-column-name">名称</span>
+            <span class="trash-column-original">原路径</span>
+            <span class="trash-column-deleted">删除时间</span>
+            <span class="trash-column-retained">保留到</span>
+            <span class="trash-column-type">类型</span>
+            <span class="trash-column-size">大小</span>
+            <span class="trash-column-actions">操作</span>
           </div>
           <div v-if="workspaceStore.trashLoading" class="trash-empty">正在加载最近删除</div>
           <div v-else-if="workspaceStore.trashEntries.length === 0" class="trash-empty">最近删除为空</div>
@@ -1107,16 +1111,16 @@ onUnmounted(() => {
               animationDelay: `${Math.min(index, 24) * 18}ms`,
             }"
           >
-            <span class="name-cell">
+            <span class="trash-column-name name-cell">
               <img class="material-file-icon" :src="materialIconForEntry(entry).src" alt="" aria-hidden="true" />
               <span class="file-name">{{ entry.name }}</span>
             </span>
-            <span>{{ entry.original_relative_path }}</span>
-            <span>{{ displayTrashDate(entry.deleted_at) }}</span>
-            <span>{{ displayTrashDate(entry.expires_at) }}</span>
-            <span>{{ trashKind(entry) }}</span>
-            <span>{{ formatSize(entry.size) }}</span>
-            <span class="trash-actions">
+            <span class="trash-column-original">{{ entry.original_relative_path }}</span>
+            <span class="trash-column-deleted">{{ displayTrashDate(entry.deleted_at) }}</span>
+            <span class="trash-column-retained">{{ displayTrashDate(entry.expires_at) }}</span>
+            <span class="trash-column-type">{{ trashKind(entry) }}</span>
+            <span class="trash-column-size">{{ formatSize(entry.size) }}</span>
+            <span class="trash-column-actions trash-actions">
               <button class="trash-action-button" type="button" title="恢复" @click="restoreTrash(entry)">
                 <IcIcon name="replay" :size="14" />
                 <span>恢复</span>
@@ -1132,15 +1136,15 @@ onUnmounted(() => {
       <div v-else-if="viewMode === 'list'" class="list-view">
         <div class="list-header" :style="{ gridTemplateColumns: listGridColumns }">
           <span v-if="isMultiSelecting" class="selection-column-header"></span>
-          <span>名称</span>
-          <span>最后修改日期</span>
-          <span>入库日期</span>
-          <span>类型</span>
-          <span>大小</span>
-          <span v-if="settingsStore.showPrivacyColumn">隐私状态</span>
-          <span v-if="settingsStore.showFavoriteColumn">收藏</span>
-          <span v-if="settingsStore.showIndexColumn">入库状态</span>
-          <span v-if="settingsStore.showGraphColumn">图谱状态</span>
+          <span class="column-name">名称</span>
+          <span class="column-modified">最后修改日期</span>
+          <span class="column-ingested">入库日期</span>
+          <span class="column-type">类型</span>
+          <span class="column-size">大小</span>
+          <span v-if="settingsStore.showPrivacyColumn" class="column-privacy">隐私状态</span>
+          <span v-if="settingsStore.showFavoriteColumn" class="column-favorite">收藏</span>
+          <span v-if="settingsStore.showIndexColumn" class="column-index">入库状态</span>
+          <span v-if="settingsStore.showGraphColumn" class="column-graph">图谱状态</span>
         </div>
         <button
           v-for="(node, index) in visibleItems"
@@ -1166,25 +1170,25 @@ onUnmounted(() => {
           <span v-if="isMultiSelecting" class="selection-check" :class="{ checked: selectedPaths.has(node.path) }">
             <IcIcon v-if="selectedPaths.has(node.path)" name="check" :size="12" />
           </span>
-          <span class="name-cell">
+          <span class="column-name name-cell">
             <img class="material-file-icon" :src="materialFileIconForNode(node).src" alt="" aria-hidden="true" />
             <span class="file-name" :class="gitStatusClass(node)">{{ node.name }}</span>
           </span>
-          <span>{{ displayMtime(node) }}</span>
-          <span>{{ displayIngestedAt(node) }}</span>
-          <span>{{ fileKind(node) }}</span>
-          <span>{{ formatSize(nodeSize(node)) }}</span>
-          <span v-if="settingsStore.showPrivacyColumn" class="favorite-cell">
+          <span class="column-modified">{{ displayMtime(node) }}</span>
+          <span class="column-ingested">{{ displayIngestedAt(node) }}</span>
+          <span class="column-type">{{ fileKind(node) }}</span>
+          <span class="column-size">{{ formatSize(nodeSize(node)) }}</span>
+          <span v-if="settingsStore.showPrivacyColumn" class="column-privacy favorite-cell">
             <PrivacyButton target-type="knowledge_path" :target-id="node.path" />
           </span>
-          <span v-if="settingsStore.showFavoriteColumn" class="favorite-cell">
+          <span v-if="settingsStore.showFavoriteColumn" class="column-favorite favorite-cell">
             <FavoriteButton target-type="knowledge_path" :target-id="node.path" />
           </span>
-          <span v-if="settingsStore.showIndexColumn" class="index-status-cell" :class="indexStatusClass(node)">
+          <span v-if="settingsStore.showIndexColumn" class="column-index index-status-cell" :class="indexStatusClass(node)">
             <IcIcon v-if="!node.isDir" :name="indexStatusIcon(node)" :size="13" />
             <span>{{ node.isDir ? '-' : indexStatusTitle(node) }}</span>
           </span>
-          <span v-if="settingsStore.showGraphColumn" class="graph-status-cell" :class="graphStatusClass(node)">
+          <span v-if="settingsStore.showGraphColumn" class="column-graph graph-status-cell" :class="graphStatusClass(node)">
             <IcIcon v-if="!node.isDir" :name="graphStatusIcon(node)" :size="13" />
             <span>{{ node.isDir ? '-' : graphStatusTitle(node) }}</span>
           </span>

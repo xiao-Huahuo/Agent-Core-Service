@@ -6,12 +6,14 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
+  container-type: inline-size;
   background: var(--color-canvas);
   color: var(--color-text);
 }
 
 .resource-toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-8);
   min-height: 44px;
@@ -19,6 +21,21 @@
   border-bottom: 0;
   background: var(--color-panel-bg);
   font-size: calc(12px * var(--font-scale));
+}
+
+.toolbar-primary,
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.toolbar-primary {
+  gap: var(--space-8);
+}
+
+.toolbar-actions {
+  gap: var(--space-4);
 }
 
 .nav-controls {
@@ -641,11 +658,11 @@
 }
 
 .icon-medium {
-  grid-template-columns: repeat(auto-fill, minmax(clamp(112px, 14vw, 156px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(clamp(112px, 18cqi, 156px), 1fr));
 }
 
 .icon-large {
-  grid-template-columns: repeat(auto-fill, minmax(clamp(168px, 18vw, 240px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(clamp(168px, 24cqi, 240px), 1fr));
 }
 
 .icon-tile {
@@ -835,6 +852,200 @@
 .drop-box span {
   color: var(--color-text-secondary);
   font-size: calc(13px * var(--font-scale));
+}
+
+/* The browser sidebar changes this component's width without changing the viewport. */
+@container (max-width: 1040px) {
+  .resource-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+
+  .toolbar-actions {
+    justify-content: flex-end;
+  }
+
+  .list-view,
+  .trash-view {
+    min-width: 0;
+  }
+
+  .list-header,
+  .resource-row,
+  .trash-header,
+  .trash-row {
+    display: flex;
+  }
+
+  .column-name,
+  .trash-column-name {
+    flex: 1 1 180px;
+  }
+
+  .column-modified,
+  .trash-column-deleted,
+  .trash-column-retained {
+    flex: 0 0 132px;
+  }
+
+  .column-size {
+    flex: 0 0 68px;
+  }
+
+  .column-privacy,
+  .column-favorite,
+  .column-index,
+  .column-graph {
+    flex: 0 0 72px;
+  }
+
+  .trash-column-actions {
+    flex: 0 0 100px;
+  }
+
+  .column-ingested,
+  .column-type,
+  .trash-column-original,
+  .trash-column-type,
+  .trash-column-size {
+    display: none;
+  }
+
+  .content-view {
+    grid-template-columns: minmax(220px, 40%) minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 640px) {
+  .resource-toolbar {
+    gap: var(--space-8);
+    padding: var(--space-8);
+  }
+
+  .toolbar-primary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+
+  .toolbar-primary .toolbar-separator {
+    display: none;
+  }
+
+  .nav-controls {
+    justify-self: end;
+  }
+
+  .root-button {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .path-capsule {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .toolbar-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: var(--space-2);
+  }
+
+  .view-switch {
+    margin-left: auto;
+    gap: var(--space-2);
+  }
+
+  .view-button.active {
+    width: 28px;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .view-button.active span {
+    max-width: 0;
+    opacity: 0;
+  }
+
+  .list-view {
+    grid-auto-rows: auto;
+    height: calc(100% - var(--space-16));
+    margin: var(--space-8);
+    border-radius: 14px;
+  }
+
+  .list-header,
+  .trash-header {
+    display: none;
+  }
+
+  .resource-row,
+  .trash-row {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 58px;
+    row-gap: var(--space-4);
+    padding: var(--space-8) var(--space-10);
+    line-height: 1.2;
+  }
+
+  .column-name,
+  .trash-column-name {
+    flex: 1 1 80%;
+  }
+
+  .column-modified,
+  .trash-column-deleted {
+    flex: 1 1 148px;
+    color: var(--color-text-muted);
+    font-size: calc(12px * var(--font-scale));
+  }
+
+  .column-size {
+    flex: 0 0 auto;
+    color: var(--color-text-muted);
+    font-size: calc(12px * var(--font-scale));
+  }
+
+  .column-privacy,
+  .column-favorite,
+  .column-index,
+  .column-graph {
+    flex: 0 0 24px;
+  }
+
+  .column-index > span,
+  .column-graph > span,
+  .trash-column-retained {
+    display: none;
+  }
+
+  .trash-column-actions {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+
+  .content-view {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(180px, 42%) minmax(0, 1fr);
+  }
+
+  .content-list {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .preview-pane {
+    padding: var(--space-12);
+  }
+
+  .icon-medium {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  }
+
+  .icon-large {
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  }
 }
 
 @keyframes refresh-spin {
