@@ -8,11 +8,15 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
-const documents: Record<string, string> = {
-  'notes/source.md': '# 来源\n\n[[target]]\n\n![[target#摘要]]',
-  'notes/target.md': '# 目标\n\n## 摘要\n\n嵌入正文',
-  'notes/isolated.md': '# 独立文档',
-}
+const documents: Record<string, string> = Object.fromEntries([
+  ['notes/source.md', '# 来源\n\n[[target]]\n\n![[target#摘要]]'],
+  ['notes/target.md', '# 目标\n\n## 摘要\n\n嵌入正文'],
+  ['notes/isolated.md', '# 独立文档'],
+  ...Array.from({ length: 45 }, (_, index) => [
+    `notes/isolated-${String(index + 1).padStart(2, '0')}.md`,
+    `# 孤立文档 ${index + 1}`,
+  ]),
+])
 
 /** Finds a rendered Canvas node through the component's real hover hit-test. */
 async function clickFirstGraphNode(page: Page, canvas: Locator) {
@@ -79,14 +83,14 @@ test('bidirectional-link graph counts both wiki edge kinds and opens a clicked d
   await page.getByRole('button', { name: 'Knowledge graph' }).click()
   await page.getByRole('button', { name: '双向链接' }).click()
 
-  await expect(page.locator('.graph-stat')).toContainText('3 文档 / 1 反向 / 1 嵌入')
+  await expect(page.locator('.graph-stat')).toContainText('48 文档 / 1 反向 / 1 嵌入')
   const canvas = page.locator('canvas[aria-label="Knowledge graph canvas"]')
   await expect(canvas).toBeVisible()
   await expect(page.locator('.graph-loading-overlay')).toBeHidden()
   await page.screenshot({ path: testInfo.outputPath('wiki-link-graph.png'), fullPage: true })
   await clickFirstGraphNode(page, canvas)
   await expect(page.locator('.editor-mode-switch')).toBeVisible()
-  await expect(page.getByRole('button', { name: /^(?:source|target|isolated)$/u })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^(?:source|target|isolated|isolated-\d+)$/u })).toBeVisible()
 })
 
 test('semantic graph remains responsive after an outward node drag', async ({ page }, testInfo) => {

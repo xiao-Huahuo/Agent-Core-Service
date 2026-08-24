@@ -34,6 +34,15 @@ function backlinkGraph(): KnowledgeGraphModel {
   }
 }
 
+/** Builds the many-unlinked-document topology visible in backlink screenshots. */
+function isolatedDocumentsGraph(): KnowledgeGraphModel {
+  const nodes = Array.from({ length: 48 }, (_, index) => {
+    const angle = (index / 48) * Math.PI * 2
+    return node(`isolated-${index}`, 'document', 400 + Math.cos(angle) * 120, 300 + Math.sin(angle) * 120)
+  })
+  return { nodes, links: [] }
+}
+
 /** Builds the minimal parent-child topology used by the file-tree graph. */
 function fileTreeGraph(): KnowledgeGraphModel {
   const root = node('root', 'root', 0, 0)
@@ -116,11 +125,12 @@ describe('createLayeredForceSimulation', () => {
     expect(simulation.alpha()).toBe(0.12)
     expect(simulation.alphaDecay()).toBe(0)
     expect(simulation.alphaMin()).toBe(0)
-    expect(simulation.velocityDecay()).toBe(0.48)
+    expect(simulation.velocityDecay()).toBe(0.62)
     expect(simulation.force('link')).toBeTypeOf('function')
     expect(simulation.force('charge')).toBeTypeOf('function')
     expect(simulation.force('collide')).toBeTypeOf('function')
     expect(simulation.force('document-repulsion')).toBeTypeOf('function')
+    expect(simulation.force('cohesion')).toBeTypeOf('function')
     expect(simulation.force('x')).toBeUndefined()
     expect(simulation.force('y')).toBeUndefined()
     expect(simulation.force('center')).toBeUndefined()
@@ -152,5 +162,24 @@ describe('createLayeredForceSimulation', () => {
 
     expect(simulation.alphaTarget()).toBe(0)
     expect(meanPairwiseDistance(untouched) / spreadBefore).toBeLessThan(1.2)
+  })
+
+  it('gives isolated backlink documents a finite compact equilibrium', () => {
+    const model = isolatedDocumentsGraph()
+    const simulation = createLayeredForceSimulation(model, 800, 600).stop()
+
+    simulation.tick(1200)
+    const centerX = model.nodes.reduce((sum, item) => sum + (item.x ?? 0), 0) / model.nodes.length
+    const centerY = model.nodes.reduce((sum, item) => sum + (item.y ?? 0), 0) / model.nodes.length
+    const outerRadius = Math.max(...model.nodes.map((item) => Math.hypot(
+      (item.x ?? 0) - centerX,
+      (item.y ?? 0) - centerY,
+    )))
+
+    expect(simulation.force('cohesion')).toBeTypeOf('function')
+    expect(simulation.force('x')).toBeUndefined()
+    expect(simulation.force('y')).toBeUndefined()
+    expect(simulation.force('center')).toBeUndefined()
+    expect(outerRadius).toBeLessThan(360)
   })
 })

@@ -22,7 +22,7 @@ export const SEMANTIC_FORCE_OPTIONS: LayeredForceLayoutOptions = {
   baseRingRadius: 96,
   ringGap: 68,
   collisionPadding: 7,
-  anchorStrength: 0.0025,
+  anchorStrength: 0.02,
   chargeStrength: -48,
 }
 
@@ -54,6 +54,42 @@ function forceDocumentRepulsion(strength: number) {
         b.vx = (b.vx ?? 0) - fx
         b.vy = (b.vy ?? 0) - fy
       }
+    }
+  }
+
+  force.initialize = (_nodes: KnowledgeGraphNode[]) => {
+    nodes = _nodes
+  }
+
+  return force
+}
+
+/**
+ * Pulls free nodes toward their own live centroid so repulsion has a finite
+ * equilibrium without anchoring the graph to canvas coordinates. Fixed drag
+ * nodes are excluded so moving one node cannot translate the remaining cloud.
+ */
+function forceCohesion(strength: number) {
+  let nodes: KnowledgeGraphNode[]
+
+  function force(alpha: number) {
+    let centerX = 0
+    let centerY = 0
+    let freeCount = 0
+    for (const node of nodes) {
+      if (node.fx != null || node.fy != null) continue
+      centerX += node.x ?? node.targetX
+      centerY += node.y ?? node.targetY
+      freeCount += 1
+    }
+    if (freeCount < 2) return
+    centerX /= freeCount
+    centerY /= freeCount
+    const scaledStrength = strength * alpha
+    for (const node of nodes) {
+      if (node.fx != null || node.fy != null) continue
+      node.vx = (node.vx ?? 0) + (centerX - (node.x ?? node.targetX)) * scaledStrength
+      node.vy = (node.vy ?? 0) + (centerY - (node.y ?? node.targetY)) * scaledStrength
     }
   }
 
@@ -100,9 +136,10 @@ export function createLayeredForceSimulation(
     )
     .force('collide', forceCollide<KnowledgeGraphNode>().radius((node) => node.radius + options.collisionPadding))
     .force('document-repulsion', forceDocumentRepulsion(5000))
+    .force('cohesion', forceCohesion(options.anchorStrength))
     .alpha(0.12)
     .alphaDecay(0)
     .alphaMin(0)
-    .velocityDecay(0.48)
+    .velocityDecay(0.62)
   return simulation
 }
