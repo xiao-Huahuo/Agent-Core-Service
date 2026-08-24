@@ -145,6 +145,7 @@ test('semantic graph remains responsive after an outward node drag', async ({ pa
   const canvas = page.locator('canvas[aria-label="Knowledge graph canvas"]')
   await expect(canvas).toBeVisible()
   await expect(page.locator('.graph-loading-overlay')).toBeHidden()
+  await page.screenshot({ path: testInfo.outputPath('semantic-initial-disk.png'), fullPage: true })
   const hit = await canvas.evaluate(async (element) => {
     const box = element.getBoundingClientRect()
     for (let y = 8; y < box.height - 8; y += 6) {

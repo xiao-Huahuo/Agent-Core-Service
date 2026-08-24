@@ -59,4 +59,22 @@ describe('graph adapters without artificial centers', () => {
       target: 'library-book:nested-book',
     })
   })
+
+  it('seeds semantic nodes across a disk instead of one circumference', () => {
+    const payload: KnowledgeSemanticGraphResponse = {
+      nodes: Array.from({ length: 30 }, (_, index) => ({
+        id: `entity-${index}`,
+        label: `实体 ${index}`,
+        kind: 'entity',
+      })),
+      links: [],
+      stats: {},
+    }
+
+    const model = buildSemanticKnowledgeGraph(payload)
+    const radii = model.nodes.map((item) => Math.hypot(item.x ?? 0, item.y ?? 0))
+
+    expect(new Set(radii.map((radius) => Math.round(radius))).size).toBeGreaterThan(20)
+    expect(Math.min(...radii) / Math.max(...radii)).toBeLessThan(0.2)
+  })
 })

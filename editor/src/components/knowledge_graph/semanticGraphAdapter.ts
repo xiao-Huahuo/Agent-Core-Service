@@ -12,6 +12,9 @@ import type { KnowledgeSemanticGraphResponse } from '@/types/knowledge'
 
 import type { KnowledgeGraphLink, KnowledgeGraphModel, KnowledgeGraphNode, KnowledgeGraphNodeKind } from './graphTypes'
 
+/** Golden-angle increment used for deterministic, even disk seeding. */
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
+
 function nodeRadius(kind: string, connectionCount: number): number {
   if (kind === 'document') {
     return 8
@@ -50,15 +53,13 @@ export function buildSemanticKnowledgeGraph(
     connectionCounts.set(link.target, (connectionCounts.get(link.target) ?? 0) + 1)
   }
 
-  // Spread nodes in a circle as initial positions so d3-force doesn't
-  // pile everything at the canvas center.  The force simulation will
-  // pull related nodes together naturally.
-  // Start nodes in a compact cluster.  The gentle semantic repulsion will
-  // spread them apart naturally; starting too wide makes the link force
-  // struggle to pull connected nodes together.
+  // Seed a compact sunflower disk instead of one circumference. The square
+  // root keeps point density even from center to edge, while the golden angle
+  // prevents backend node ordering from becoming a visible arc.
   const radius = Math.min(500, Math.max(180, nodeCount * 5))
   const nodes: KnowledgeGraphNode[] = backendNodes.map((node, index) => {
-    const angle = (index / Math.max(1, nodeCount)) * Math.PI * 2
+    const angle = index * GOLDEN_ANGLE
+    const radialDistance = radius * Math.sqrt((index + 0.5) / Math.max(1, nodeCount))
     return {
       id: node.id,
       label: node.label,
@@ -70,10 +71,10 @@ export function buildSemanticKnowledgeGraph(
       siblingCount: nodeCount,
       ringIndex: 0,
       radius: nodeRadius(node.kind, connectionCounts.get(node.id) ?? 0),
-      targetX: Math.cos(angle) * radius,
-      targetY: Math.sin(angle) * radius,
-      x: Math.cos(angle) * radius,
-      y: Math.sin(angle) * radius,
+      targetX: Math.cos(angle) * radialDistance,
+      targetY: Math.sin(angle) * radialDistance,
+      x: Math.cos(angle) * radialDistance,
+      y: Math.sin(angle) * radialDistance,
     }
   })
 
