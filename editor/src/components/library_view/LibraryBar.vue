@@ -493,4 +493,35 @@ function handleDrop(event: DragEvent) {
   background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   color: var(--color-primary);
 }
+
+@container (max-width: 640px) {
+  .library-bar {
+    min-height: 92px;
+    border-radius: 14px;
+  }
+
+  .thumb {
+    flex-basis: 76px;
+    margin: 4px 0 4px 4px;
+    border-radius: 11px;
+  }
+
+  .bar-meta {
+    gap: 3px;
+    padding: var(--space-8);
+  }
+
+  .bar-title {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+
+  .bar-description {
+    display: none;
+  }
+
+  .bar-tag-row {
+    min-height: 20px;
+  }
+}
 </style>

@@ -533,6 +533,26 @@ function handleDrop(event: DragEvent) {
 .tag-pill:nth-child(6n + 5) { background: rgba(113, 70, 214, 0.30); color: var(--color-tag-pill-text); }
 .tag-pill:nth-child(6n) { background: rgba(0, 155, 166, 0.30); color: var(--color-tag-pill-text); }
 
+@container (max-width: 640px) {
+  .library-card {
+    gap: var(--space-6);
+    margin-bottom: var(--space-10);
+  }
+
+  .cover {
+    border-radius: 14px;
+  }
+
+  .title-cover {
+    padding: var(--space-16);
+    font-size: calc(18px * var(--font-scale));
+  }
+
+  .meta {
+    gap: var(--space-4);
+  }
+}
+
 .title,
 .source,
 .description,

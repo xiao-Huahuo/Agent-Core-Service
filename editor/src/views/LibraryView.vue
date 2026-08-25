@@ -791,49 +791,52 @@ function errorMessage(error: unknown): string {
             </DropdownMenuContent>
           </DropdownMenuPortal>
         </DropdownMenu>
-        <button class="tool-button" type="button" title="新增文件" @click="openCreateBookDialog">
-          <IcIcon name="new-file" :size="17" />
-        </button>
-        <button
-          class="tool-button"
-          :class="{ active: effectiveFavoritesOnly }"
-          type="button"
-          title="我的收藏"
-          :aria-pressed="effectiveFavoritesOnly"
-          :disabled="favoritesOnlyLocked"
-          @click="toggleFavoritesOnly"
-        >
-          <IcIcon name="star" :size="17" />
-        </button>
-        <button
-          class="tool-button"
-          :class="{ active: effectivePrivacyOnly }"
-          type="button"
-          title="我的隐私"
-          aria-label="我的隐私"
-          :aria-pressed="effectivePrivacyOnly"
-          :disabled="privacyOnlyLocked"
-          @click="togglePrivacyOnly"
-        >
-          <IcIcon name="visibility-off" :size="17" />
-        </button>
-        <button class="tool-button" type="button" title="新增集锦" @click="openCreateCollectionDialog">
-          <IcIcon name="new-folder" :size="17" />
-        </button>
-        <button class="tool-button" :class="{ active: multiSelect }" type="button" title="多选" @click="multiSelect = !multiSelect">
-          <IcIcon name="label" :size="17" />
-          <span v-if="multiSelect" class="multi-indicator">{{ selectedIds.size }}</span>
-        </button>
-        <button
-          class="view-button"
-          :class="{ active: viewMode === 'bar' }"
-          type="button"
-          :title="viewMode === 'card' ? '切换为条形' : '切换为卡片'"
-          @click="viewMode = viewMode === 'card' ? 'bar' : 'card'"
-        >
-          <IcIcon v-if="viewMode === 'card'" name="view-stream" :size="17" />
-          <IcIcon v-else name="grid-view" :size="17" />
-        </button>
+        <div class="library-actions" aria-label="图书馆操作">
+          <button class="tool-button" type="button" title="新增文件" @click="openCreateBookDialog">
+            <IcIcon name="new-file" :size="17" />
+          </button>
+          <button
+            class="tool-button"
+            :class="{ active: effectiveFavoritesOnly }"
+            type="button"
+            title="我的收藏"
+            :aria-pressed="effectiveFavoritesOnly"
+            :disabled="favoritesOnlyLocked"
+            @click="toggleFavoritesOnly"
+          >
+            <IcIcon name="star" :size="17" />
+          </button>
+          <button
+            class="tool-button"
+            :class="{ active: effectivePrivacyOnly }"
+            type="button"
+            title="我的隐私"
+            aria-label="我的隐私"
+            :aria-pressed="effectivePrivacyOnly"
+            :disabled="privacyOnlyLocked"
+            @click="togglePrivacyOnly"
+          >
+            <IcIcon name="visibility-off" :size="17" />
+          </button>
+          <button class="tool-button" type="button" title="新增集锦" @click="openCreateCollectionDialog">
+            <IcIcon name="new-folder" :size="17" />
+          </button>
+          <button class="tool-button" :class="{ active: multiSelect }" type="button" title="多选" @click="multiSelect = !multiSelect">
+            <IcIcon name="label" :size="17" />
+            <span v-if="multiSelect" class="multi-indicator">{{ selectedIds.size }}</span>
+          </button>
+          <button
+            class="view-button"
+            :class="{ active: viewMode === 'bar' }"
+            type="button"
+            :title="viewMode === 'card' ? '切换为条形' : '切换为卡片'"
+            @click="viewMode = viewMode === 'card' ? 'bar' : 'card'"
+          >
+            <IcIcon v-if="viewMode === 'card'" name="view-stream" :size="17" />
+            <IcIcon v-else name="grid-view" :size="17" />
+            <span>{{ viewMode === 'card' ? '条形' : '卡片' }}</span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -1010,6 +1013,7 @@ function errorMessage(error: unknown): string {
   min-width: 0;
   min-height: 0;
   height: 100%;
+  container-type: inline-size;
   background: var(--color-canvas);
   font-family: var(--font-ui);
   font-size: calc(13px * var(--font-scale));
@@ -1039,6 +1043,13 @@ function errorMessage(error: unknown): string {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex: 0 0 auto;
+}
+
+.library-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
   flex: 0 0 auto;
 }
 
@@ -1083,13 +1094,18 @@ function errorMessage(error: unknown): string {
 
 .view-button {
   overflow: hidden;
-  gap: 0;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 28px;
+  gap: var(--space-4);
+  padding: 0 var(--space-10);
   border: 1px solid var(--color-border);
-  border-radius: 50%;
+  border-radius: 999px;
   transition:
     background 180ms ease,
     border-color 180ms ease,
-    color 180ms ease;
+  color 180ms ease;
+  white-space: nowrap;
 }
 
 .tool-button.active,
@@ -1687,9 +1703,44 @@ function errorMessage(error: unknown): string {
   border-top: 1px solid var(--color-border);
 }
 
-@media (max-width: 860px) {
+@container (max-width: 1040px) {
+  .library-toolbar {
+    align-items: stretch;
+  }
+
+  .nav-row {
+    display: grid;
+    grid-template-columns: auto minmax(180px, 1fr) minmax(140px, 220px) auto;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  .nav-buttons {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .path-box {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 180px;
+  }
+
   .search-box {
-    flex: 0 1 150px;
+    grid-column: 3;
+    grid-row: 1;
+    width: 100%;
+  }
+
+  .filter-capsule-btn {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  .library-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-end;
   }
 
   .library-grid {
@@ -1702,6 +1753,94 @@ function errorMessage(error: unknown): string {
 
   .detail-drawer.open {
     flex-basis: 260px;
+  }
+}
+
+@container (max-width: 640px) {
+  .library-toolbar {
+    min-height: 0;
+    padding: var(--space-6) var(--space-8);
+  }
+
+  .nav-row {
+    grid-template-columns: minmax(0, 1fr) minmax(140px, 180px);
+    gap: var(--space-4);
+  }
+
+  .nav-buttons {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .path-box {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+  }
+
+  .search-box {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .filter-capsule-btn {
+    grid-column: 1;
+    grid-row: 3;
+    justify-self: start;
+    width: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .library-actions {
+    grid-column: 2;
+    grid-row: 3;
+    width: max-content;
+    justify-self: end;
+    justify-content: flex-end;
+  }
+
+  .filter-capsule-btn span,
+  .filter-chevron {
+    display: none;
+  }
+
+  .library-body {
+    padding: var(--space-8);
+  }
+
+  .library-grid {
+    column-width: 160px;
+    column-gap: var(--space-10);
+  }
+
+  .library-list {
+    gap: var(--space-6);
+  }
+
+  .library-content {
+    position: relative;
+  }
+
+  .detail-drawer,
+  .detail-drawer.open {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 12;
+    width: min(320px, 100%);
+    flex-basis: auto;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(100%);
+    transition: transform 200ms ease, visibility 200ms;
+  }
+
+  .detail-drawer.open {
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(0);
   }
 }
 </style>
