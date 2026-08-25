@@ -130,8 +130,8 @@ html[data-app-background-cover='true'] .main-shell-content {
   background-repeat: no-repeat !important;
 }
 
-/* Requested cover-through surfaces keep a readable themed veil while showing
-   the shared image beneath them. Skills cards are intentionally excluded. */
+/* Requested cover-through surfaces fully merge into the shared image so their
+   former toolbar/panel boundaries disappear. Skills cards stay opaque. */
 html[data-app-background-cover='true'] .topbar,
 html[data-app-background-cover='true'] .file-col,
 html[data-app-background-cover='true'] .file-panel,
@@ -142,9 +142,12 @@ html[data-app-background-cover='true'] .forms-toolbar,
 html[data-app-background-cover='true'] .queue-lane > section,
 html[data-app-background-cover='true'] .visualization-toolbar,
 html[data-app-background-cover='true'] .result-header {
-  background: color-mix(in srgb, var(--color-canvas) 54%, transparent) !important;
-  backdrop-filter: blur(12px) saturate(0.9);
-  -webkit-backdrop-filter: blur(12px) saturate(0.9);
+  border-color: transparent !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 html[data-app-background-cover='true'] .favorites-view,
