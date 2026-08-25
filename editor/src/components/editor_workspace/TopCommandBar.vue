@@ -6,7 +6,7 @@
   links between the editor, graph preview, settings, and existing console.
 -->
 <script setup lang="ts">
-import { computed, ref, watch, nextTick, onMounted } from 'vue'
+import { computed, ref } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
@@ -69,53 +69,9 @@ const agentActive = computed(() => workspaceStore.agentSidebarOpen)
 const todoActive = computed(() => workspaceStore.todoSidebarOpen)
 const logoSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
 
-const switchingRoot = ref(false)
-const savingLibraryName = ref(false)
-const libraryNameDraft = ref('')
-const nameInputRef = ref<HTMLInputElement | null>(null)
 const activeLibraryName = computed(() => {
   return settingsStore.activeKnowledgeLibrary?.name?.trim() || settingsStore.profile.knowledgeDir
 })
-
-watch(
-  activeLibraryName,
-  (name) => {
-    libraryNameDraft.value = name
-  },
-  { immediate: true },
-)
-
-async function openRootPicker() {
-  if (!window.agentEditorDesktop?.selectDirectory) return
-  const selectedDir = await window.agentEditorDesktop.selectDirectory()
-  if (!selectedDir) return
-  switchingRoot.value = true
-  try {
-    await settingsStore.switchKnowledgeRoot(selectedDir)
-  } catch {
-    // ignore
-  } finally {
-    await workspaceStore.loadKnowledgeTree()
-    workspaceStore.restartFileWatcher()
-    switchingRoot.value = false
-  }
-}
-
-async function commitLibraryName() {
-  const nextName = libraryNameDraft.value.trim()
-  if (!nextName || nextName === activeLibraryName.value) {
-    libraryNameDraft.value = activeLibraryName.value
-    return
-  }
-  savingLibraryName.value = true
-  try {
-    await settingsStore.renameActiveKnowledgeLibrary(nextName)
-  } catch {
-    libraryNameDraft.value = activeLibraryName.value
-  } finally {
-    savingLibraryName.value = false
-  }
-}
 
 async function handleCloseWindow() {
   if (!(await workspaceStore.confirmSaveDirtyBeforeExit())) {
@@ -124,19 +80,6 @@ async function handleCloseWindow() {
   desktopApi?.close()
 }
 
-function autoResizeInput() {
-  const el = nameInputRef.value
-  if (!el) return
-  el.style.width = '0'
-  el.style.width = `${el.scrollWidth}px`
-}
-
-watch(
-  libraryNameDraft,
-  () => nextTick(autoResizeInput),
-)
-
-onMounted(() => nextTick(autoResizeInput))
 </script>
 
 <template>
@@ -146,28 +89,7 @@ onMounted(() => nextTick(autoResizeInput))
         <img :src="logoSrc" class="logo-img" alt="MetaWeave" />
       </button>
       <div class="brand-copy">
-        <button
-          class="library-folder-btn"
-          type="button"
-          aria-label="切换知识库"
-          :disabled="switchingRoot"
-          :title="settingsStore.profile.knowledgeDir"
-          @click="openRootPicker"
-        >
-          <IcIcon name="folder-open" :size="15" />
-        </button>
-        <input
-          ref="nameInputRef"
-          v-model="libraryNameDraft"
-          class="library-name-input"
-          :disabled="savingLibraryName"
-          :title="settingsStore.profile.knowledgeDir"
-          spellcheck="false"
-          @input="autoResizeInput"
-          @blur="commitLibraryName"
-          @keydown.enter.prevent="commitLibraryName"
-          @keydown.escape.prevent="libraryNameDraft = activeLibraryName"
-        />
+        <span class="library-name-text" :title="settingsStore.profile.knowledgeDir">{{ activeLibraryName }}</span>
       </div>
       <div v-if="workspaceStore.ingestionProgressVisible" class="ingestion-progress" aria-live="polite">
         <span class="ingestion-progress-track" aria-hidden="true">
@@ -414,52 +336,17 @@ onMounted(() => nextTick(autoResizeInput))
   opacity: 1;
 }
 
-.library-name-input {
+.library-name-text {
   display: block;
-  width: auto;
   min-width: 40px;
   max-width: min(220px, 24vw);
-  height: 18px;
-  padding: 0;
-  border: 0;
-  outline: 0;
   overflow: hidden;
-  background: transparent;
   color: var(--color-text);
   font-size: calc(13px * var(--font-scale));
   font-weight: 650;
-  white-space: nowrap;
   line-height: 1.2;
-}
-
-.library-name-input:disabled {
-  cursor: wait;
-  opacity: 0.62;
-}
-
-.library-folder-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 20px;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: color var(--transition-fast);
-}
-
-.library-folder-btn:hover:not(:disabled) {
-  color: var(--color-text);
-}
-
-.library-folder-btn:disabled {
-  cursor: wait;
-  opacity: 0.62;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .search-center {
@@ -1155,12 +1042,12 @@ kbd {
 
 .topbar.mobile .brand-copy {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   flex: 1 1 auto;
   overflow: hidden;
 }
 
-.topbar.mobile .library-name-input {
+.topbar.mobile .library-name-text {
   width: 100% !important;
   min-width: 0;
   max-width: none;

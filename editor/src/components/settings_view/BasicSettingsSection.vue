@@ -8,6 +8,7 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue'
 import { checkModelDisk } from '@/api/settings'
+import IcIcon from '@/components/common/IcIcon.vue'
 import { API_ROUTES } from '@/router/api_routes'
 
 const libraryNameDraft = defineModel<string>('libraryNameDraft', { required: true })
@@ -24,11 +25,13 @@ const props = defineProps<{
   saving: boolean
   saveMessage: string
   saveError: string
+  switchingKnowledgeRoot: boolean
 }>()
 
 const emit = defineEmits<{
   save: []
   logout: []
+  selectKnowledgeDirectory: []
 }>()
 
 /* ---- OCR 模型阻断 ---- */
@@ -97,7 +100,19 @@ async function appendBlockedFileType(suffix: string): Promise<void> {
     </div>
     <div class="setting-row">
       <label>知识目录</label>
-      <input v-model="knowledgeDirDraft" spellcheck="false" @blur="$emit('save')" />
+      <div class="knowledge-dir-control">
+        <input v-model="knowledgeDirDraft" spellcheck="false" @blur="$emit('save')" />
+        <button
+          class="knowledge-dir-picker"
+          type="button"
+          title="选择知识库"
+          aria-label="选择知识库"
+          :disabled="props.switchingKnowledgeRoot"
+          @click="$emit('selectKnowledgeDirectory')"
+        >
+          <IcIcon name="folder-open" :size="16" />
+        </button>
+      </div>
     </div>
     <div class="setting-row">
       <label>Markdown 粘贴图片目录</label>
@@ -202,6 +217,54 @@ async function appendBlockedFileType(suffix: string): Promise<void> {
 </template>
 
 <style scoped>
+.knowledge-dir-control {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.knowledge-dir-control input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  outline: 0;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.knowledge-dir-picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.knowledge-dir-picker:hover:not(:disabled) {
+  background: var(--color-primary-softer);
+  color: var(--color-primary);
+}
+
+.knowledge-dir-picker:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
 .blocked-file-types-row {
   display: flex;
   align-items: flex-start;

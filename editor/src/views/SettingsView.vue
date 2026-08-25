@@ -71,6 +71,7 @@ const graphNodeLimitDraft = ref(settingsStore.profile.graphNodeLimit ?? 2000)
 const availableFontFamilies = ref<string[]>([])
 const fontsLoading = ref(false)
 const saving = ref(false)
+const switchingKnowledgeRoot = ref(false)
 const saveError = ref('')
 const saveMessage = ref('')
 const fontSizeSaveTimers: Record<'ui' | 'text', number | null> = { ui: null, text: null }
@@ -316,6 +317,24 @@ async function saveProfile() {
     saveError.value = error instanceof Error ? error.message : '保存失败'
   } finally {
     saving.value = false
+  }
+}
+
+/** Selects and activates a knowledge root from the basic-settings directory row. */
+async function selectKnowledgeDirectory(): Promise<void> {
+  const selectedDir = await window.agentEditorDesktop?.selectDirectory?.()
+  if (!selectedDir) return
+  switchingKnowledgeRoot.value = true
+  saveError.value = ''
+  try {
+    await settingsStore.switchKnowledgeRoot(selectedDir)
+    knowledgeDirDraft.value = settingsStore.profile.knowledgeDir
+    await workspaceStore.loadKnowledgeTree()
+    workspaceStore.restartFileWatcher()
+  } catch (error) {
+    saveError.value = error instanceof Error ? error.message : '切换知识库失败'
+  } finally {
+    switchingKnowledgeRoot.value = false
   }
 }
 
@@ -697,8 +716,10 @@ onBeforeUnmount(() => {
         :save-error="saveError"
         :save-message="saveMessage"
         :saving="saving"
+        :switching-knowledge-root="switchingKnowledgeRoot"
         @logout="handleLogout"
         @save="saveProfile"
+        @select-knowledge-directory="selectKnowledgeDirectory"
       />
 
       <AppearanceSettingsSection
