@@ -93,6 +93,8 @@ const isHomePage = computed(() => workspaceStore.mainView === 'home')
 const isBrowserPage = computed(() => workspaceStore.mainView === 'browser')
 /** Match mobile layouts to the stable content span, excluding the docked file-tree width. */
 const topCommandBarMobile = computed(() => mainShellWidth.value <= 640)
+/** Password-vault filters become an overlay before their legacy horizontal layout can appear. */
+const vaultSidebarMobile = computed(() => mainShellWidth.value <= 860)
 const browserSidebarVisible = computed(() => (
   workspaceStore.browserSidebarOpen && workspaceStore.mainView !== 'browser'
 ))
@@ -822,7 +824,11 @@ watch(
           class="main-shell-content"
           :mobile="topCommandBarMobile"
         />
-        <VaultView v-else-if="workspaceStore.mainView === 'vault'" class="main-shell-content" />
+        <VaultView
+          v-else-if="workspaceStore.mainView === 'vault'"
+          class="main-shell-content"
+          :mobile="vaultSidebarMobile"
+        />
         <SmartFormsView v-else-if="workspaceStore.mainView === 'forms'" class="main-shell-content" />
         <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="main-shell-content" />
         <MarkdownHtmlVisualizationView v-else-if="workspaceStore.mainView === 'visualization'" class="main-shell-content" />

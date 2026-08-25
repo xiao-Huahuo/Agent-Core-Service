@@ -38,6 +38,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 
 defineOptions({ name: 'VaultView' })
 
+withDefaults(defineProps<{ mobile?: boolean }>(), { mobile: false })
+
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 
@@ -54,6 +56,7 @@ const inTrash = ref(false)
 const multiSelect = ref(false)
 const selectedIds = ref<Set<string>>(new Set())
 const editorOpen = ref(false)
+const sidebarOpen = ref(true)
 const editingItem = ref<VaultItem | null>(null)
 const contextItem = ref<VaultItem | null>(null)
 const contextOpen = ref(false)
@@ -303,18 +306,33 @@ async function contextDelete() {
     @unlock="unlock"
     @setup="setup"
   />
-  <section v-else class="vault-view">
+  <section v-else class="vault-view" :class="{ mobile, 'sidebar-collapsed': !sidebarOpen }">
     <VaultFilterPanel
+      class="vault-filter-sidebar"
       :title="inTrash ? '回收站' : '密码库'"
       :title-icon="inTrash ? 'trash' : 'shield'"
+      :mobile="mobile"
       v-model:query="query"
       v-model:tag="selectedTag"
       v-model:item-type="selectedType"
       :tags="tags"
       :counts="typeCounts"
+      @collapse="sidebarOpen = false"
     />
     <div class="vault-workspace">
     <header class="vault-topbar">
+      <Transition name="vault-sidebar-toggle">
+        <button
+          v-if="mobile && !sidebarOpen"
+          class="vault-sidebar-toggle"
+          type="button"
+          title="展开密码库侧边栏"
+          aria-label="展开密码库侧边栏"
+          @click="sidebarOpen = true"
+        >
+          <IcIcon name="arrow-right" :size="18" />
+        </button>
+      </Transition>
       <div class="vault-switch" :class="{ trash: inTrash }">
         <span class="switch-indicator"></span>
         <button :class="{ active: !inTrash }" type="button" @click="inTrash = false"><IcIcon name="shield" :size="17" /><span>密码库</span></button>
@@ -361,6 +379,7 @@ async function contextDelete() {
 
 <style scoped>
 .vault-view {
+  position: relative;
   display: grid;
   grid-template-columns: 222px minmax(0, 1fr);
   min-width: 0;
@@ -370,6 +389,29 @@ async function contextDelete() {
   background: var(--color-canvas);
   font-family: var(--font-ui);
   font-size: calc(14px * var(--font-scale));
+}
+
+.vault-sidebar-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.vault-sidebar-toggle:hover {
+  background: var(--color-selection-blue-soft);
+  color: var(--color-selection-blue);
 }
 
 .vault-workspace {
@@ -591,5 +633,45 @@ async function contextDelete() {
     flex-wrap: wrap;
   }
 
+}
+
+.vault-view.mobile {
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.vault-view.mobile .vault-filter-sidebar {
+  position: absolute;
+  inset: var(--space-8) auto var(--space-8) var(--space-8);
+  z-index: 20;
+  width: min(280px, calc(100% - var(--space-16)));
+  margin: 0;
+  padding: var(--space-12);
+  border-radius: 18px;
+  box-shadow: 12px 0 32px rgba(12, 18, 38, 0.22);
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 160ms ease, transform 180ms ease;
+}
+
+.vault-view.mobile.sidebar-collapsed .vault-filter-sidebar {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(calc(-100% - var(--space-16)));
+}
+
+.vault-view.mobile .vault-sidebar-toggle {
+  display: inline-flex;
+}
+
+.vault-sidebar-toggle-enter-active,
+.vault-sidebar-toggle-leave-active {
+  transition: opacity 160ms ease, transform 180ms ease;
+}
+
+.vault-sidebar-toggle-enter-from,
+.vault-sidebar-toggle-leave-to {
+  opacity: 0;
+  transform: translateX(-12px);
 }
 </style>

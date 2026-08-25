@@ -19,15 +19,18 @@ const props = withDefaults(defineProps<{
   counts: Record<string, number>
   title?: string
   titleIcon?: string
+  mobile?: boolean
 }>(), {
   title: '密码库',
   titleIcon: 'shield',
+  mobile: false,
 })
 
 const emit = defineEmits<{
   'update:query': [value: string]
   'update:tag': [value: string]
   'update:itemType': [value: string]
+  collapse: []
 }>()
 
 const typeLabels: Record<VaultItemType, string> = {
@@ -41,8 +44,20 @@ const typeIcons: Record<VaultItemType, string> = { login: 'shield', card: 'dashb
 </script>
 
 <template>
-  <aside class="filter-panel">
-    <div class="sidebar-title"><IcIcon :name="titleIcon" :size="17" /><span>{{ title }}</span></div>
+  <aside class="filter-panel" :class="{ mobile }">
+    <div class="sidebar-title">
+      <button
+        v-if="mobile"
+        class="vault-sidebar-toggle"
+        type="button"
+        title="折叠密码库侧边栏"
+        aria-label="折叠密码库侧边栏"
+        @click="emit('collapse')"
+      >
+        <IcIcon name="arrow-left" :size="18" />
+      </button>
+      <IcIcon :name="titleIcon" :size="17" /><span>{{ title }}</span>
+    </div>
     <label class="filter-search">
       <IcIcon name="search" :size="15" />
       <input
@@ -98,6 +113,29 @@ const typeIcons: Record<VaultItemType, string> = { login: 'shield', card: 'dashb
   box-shadow: 0 0 0 4px var(--library-form-ring);
   font-family: var(--font-ui);
   font-size: calc(14px * var(--font-scale));
+}
+
+.vault-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.vault-sidebar-toggle:hover {
+  background: var(--color-selection-blue-soft);
+  color: var(--color-selection-blue);
 }
 
 .sidebar-title {
@@ -271,6 +309,40 @@ hr { width: 100%; margin: var(--space-8) 0; border: 0; border-top: 1px solid var
     width: auto;
     min-width: max-content;
   }
+}
+
+.filter-panel.mobile {
+  flex-direction: column;
+  overflow: hidden;
+  gap: var(--space-10);
+}
+
+.filter-panel.mobile .sidebar-title {
+  display: flex;
+  padding: 0;
+}
+
+.filter-panel.mobile .sidebar-title .vault-sidebar-toggle svg {
+  color: inherit;
+}
+
+.filter-panel.mobile .section-label,
+.filter-panel.mobile hr {
+  display: block;
+}
+
+.filter-panel.mobile .filter-search {
+  flex: none;
+}
+
+.filter-panel.mobile .tag-list {
+  display: grid;
+}
+
+.filter-panel.mobile .tag-pill,
+.filter-panel.mobile .type-filter {
+  width: 100%;
+  min-width: 0;
 }
 
 </style>
