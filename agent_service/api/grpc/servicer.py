@@ -157,6 +157,7 @@ from agent_service.services.activity_service import ActivityService
 from agent_service.services.component_library_service import ComponentLibraryService
 from agent_service.services.smart_form_service import SmartFormService
 from agent_service.services.latex_service import LatexService
+from agent_service.services.model_management_service import ModelManagementService
 from agent_service.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
@@ -186,6 +187,7 @@ class AgentServiceServicer(BaseServicer):
         component_library_service: ComponentLibraryService | None = None,
         smart_form_service: SmartFormService | None = None,
         latex_service: LatexService | None = None,
+        model_management_service: ModelManagementService | None = None,
     ) -> None:
         self._agent = agent
         self._limits = getattr(getattr(agent, "config", None), "limits", DEFAULT_BUSINESS_LIMITS)
@@ -206,6 +208,7 @@ class AgentServiceServicer(BaseServicer):
         self._component_library_service = component_library_service
         self._smart_form_service = smart_form_service
         self._latex_service = latex_service
+        self._model_management_service = model_management_service
 
     def shutdown(self) -> None:
         self._agent.close()
@@ -1683,6 +1686,21 @@ class AgentServiceServicer(BaseServicer):
 
         return ParseDict(self._require_latex_service(context).get_status(), Struct())
 
+    def GetLatexManagement(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """返回与 REST `/settings/latex/management` 相同的编译管理详情。"""
+
+        self._require_struct_user_id(request=request, context=context)
+        return ParseDict(self._require_latex_service(context).get_management_status(), Struct())
+
+    def GetModelManagement(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """返回与 REST `/settings/models/management` 相同的模型管理详情。"""
+
+        user_id = self._require_struct_user_id(request=request, context=context)
+        return ParseDict(
+            self._require_model_management_service(context).get_management_status(user_id=user_id),
+            Struct(),
+        )
+
     def StartLatexInstall(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
         """在校验用户标识后启动托管 MiKTeX 安装。"""
 
@@ -2007,6 +2025,13 @@ class AgentServiceServicer(BaseServicer):
         if self._latex_service is None:
             context.abort(grpc.StatusCode.UNAVAILABLE, "LatexService not available")
         return self._latex_service  # type: ignore[return-value]
+
+    def _require_model_management_service(self, context: grpc.ServicerContext) -> ModelManagementService:
+        """返回注入的模型管理服务，未初始化时终止 RPC。"""
+
+        if self._model_management_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "ModelManagementService not available")
+        return self._model_management_service  # type: ignore[return-value]
 
     @staticmethod
     def _require_struct_user_id(*, request: Struct, context: grpc.ServicerContext) -> str:

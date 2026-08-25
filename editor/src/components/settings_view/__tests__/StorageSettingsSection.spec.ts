@@ -21,9 +21,16 @@ describe('storage settings path contract', () => {
     expect(source).not.toContain('handleSaveBaseDataDir')
     expect(source).toContain('v-if="item.entry.can_clear"')
     expect(source).toContain("'latex_distribution_dir'")
-    expect(source).toContain('handleLatexInstall')
-    expect(source).toContain('handleLatexUninstall')
+    expect(source).toContain('<ModelManagement')
+    expect(source).toContain('<CompilerManagement')
+    expect(source).not.toContain('fakePct')
+    expect(source).not.toContain('Math.random()')
     expect(source).toContain("JSON.stringify({ user_id: settingsStore.profile.userId, path_key: pathKey })")
+    expect(source).toContain('managed_resource_distribution')
+    expect(source).toContain('受管资源分布')
+    expect(source).toContain('<span class="pie-title">运行时分布</span>')
+    expect(source).not.toContain('<span class="pie-title">数据库</span>')
+    expect(source).toContain("p.key === 'db_dir' ? '运行时' : p.label")
   })
 
   it('uses the fixed managed library directory as the frontend fallback', () => {

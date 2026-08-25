@@ -32,6 +32,19 @@ function confirmInstall() {
   )
   if (confirmed) emit('install')
 }
+
+/** Format real installer bytes when Setup Utility cannot expose a total size. */
+function formatBytes(bytes = 0): string {
+  if (!bytes) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = bytes
+  let index = 0
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024
+    index += 1
+  }
+  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`
+}
 </script>
 
 <template>
@@ -44,9 +57,10 @@ function confirmInstall() {
     <div v-else-if="status && ['downloading', 'installing', 'cancelling'].includes(status.status)" class="latex-state" role="status">
       <div class="install-line">
         <span>{{ status.message || '正在准备 LaTeX 环境' }}</span>
-        <strong>{{ status.progress }}%</strong>
+        <strong>{{ status.progress !== null ? `${status.progress}%` : formatBytes(status.downloaded_bytes) }}</strong>
       </div>
-      <progress :value="status.progress" max="100"></progress>
+      <progress v-if="status.progress !== null" :value="status.progress" max="100"></progress>
+      <progress v-else class="indeterminate-progress"></progress>
       <button v-if="status.status !== 'cancelling'" type="button" class="text-action danger" @click="emit('cancelInstall')">取消</button>
     </div>
 

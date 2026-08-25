@@ -35,6 +35,7 @@ from agent_service.services.agent_queue_service import AgentQueueService
 from agent_service.services.activity_service import ActivityService
 from agent_service.services.knowledge_ingestion_job_service import KnowledgeIngestionJobService
 from agent_service.services.latex_service import LatexService
+from agent_service.services.model_management_service import ModelManagementService
 
 _agent: AgentCore | None = None
 _session_service: SessionService | None = None
@@ -63,6 +64,7 @@ _agent_queue_service: AgentQueueService | None = None
 _activity_service: ActivityService | None = None
 _knowledge_ingestion_job_service: KnowledgeIngestionJobService | None = None
 _latex_service: LatexService | None = None
+_model_management_service: ModelManagementService | None = None
 
 
 def _require_agent() -> AgentCore:
@@ -247,3 +249,11 @@ def _require_latex_service() -> LatexService:
     if _latex_service is None:
         raise HTTPException(status_code=503, detail="LatexService not initialized yet")
     return _latex_service
+
+
+def _require_model_management_service() -> ModelManagementService:
+    """返回启动阶段注入的模型管理聚合服务。"""
+
+    if _model_management_service is None:
+        raise HTTPException(status_code=503, detail="ModelManagementService not initialized yet")
+    return _model_management_service

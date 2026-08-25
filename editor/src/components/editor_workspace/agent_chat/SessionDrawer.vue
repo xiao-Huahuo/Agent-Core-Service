@@ -22,7 +22,6 @@ import { useFavoritesStore } from '@/stores/favorites'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 import type { SessionRecord } from '@/api/session'
-import { importSessionFile } from '@/api/session'
 import { exportSession } from '@/utils/sessionExport'
 import lightLogo from '@/assets/images/亮色无底图标.png'
 import darkLogo from '@/assets/images/暗色无底图标.png'
@@ -33,7 +32,6 @@ const props = defineProps<{
   open: boolean
   userId: string
   mode?: 'panel' | 'page'
-  favoritesOnlyLocked?: boolean
   /** The panel-local session highlighted by this drawer. */
   selectedSessionId?: string
   /** Sessions with an active Agent stream, rendered with a compact spinner. */
@@ -52,18 +50,12 @@ const favoritesStore = useFavoritesStore()
 const titleSrc = computed(() => settingsStore.isDark ? darkTitle : lightTitle)
 const logoSrc = computed(() => settingsStore.isDark ? darkLogo : lightLogo)
 const exportingId = ref<string | null>(null)
-const importing = ref(false)
-const fileInputRef = ref<HTMLInputElement | null>(null)
-const favoritesOnly = ref(false)
-const effectiveFavoritesOnly = computed(() => props.favoritesOnlyLocked || favoritesOnly.value)
 const streamingSessionIdSet = computed(() => new Set([
   ...(props.streamingSessionIds ?? []),
   ...sessionStore.streamingSessionIds,
 ]))
 const renderedSessions = computed(() => {
-  if (!effectiveFavoritesOnly.value) return sessionStore.sessions
-  const favoriteIds = favoritesStore.idsFor('session', '')
-  return sessionStore.sessions.filter((session) => favoriteIds.has(session.session_id))
+  return sessionStore.sessions
 })
 
 watch(
@@ -79,36 +71,6 @@ onMounted(() => {
     void favoritesStore.load(props.userId, 'session', '')
   }
 })
-
-function toggleFavoritesOnly() {
-  if (props.favoritesOnlyLocked) return
-  favoritesOnly.value = !favoritesOnly.value
-}
-
-function triggerImportFile() {
-  fileInputRef.value?.click()
-}
-
-async function handleImportFile(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-  importing.value = true
-  try {
-    const text = await file.text()
-    const result = await importSessionFile(props.userId, text)
-    // 刷新会话列表并选中导入的会话
-    await sessionStore.load(props.userId, true)
-    sessionStore.select(result.session_id)
-    emit('select', result.session_id)
-  } catch (error) {
-    console.error('导入会话失败:', error)
-    window.alert(error instanceof Error ? error.message : '导入会话失败')
-  } finally {
-    importing.value = false
-    input.value = ''
-  }
-}
 
 function displayName(session: SessionRecord) {
   return session.session_name || session.session_id.slice(0, 8)
@@ -159,39 +121,10 @@ async function clearAllSessions() {
         <img :src="logoSrc" class="brand-logo" alt="" />
         <img :src="titleSrc" class="brand-title" alt="MetaWeave" />
       </button>
-      <button
-        class="titlebar-icon-btn"
-        :class="{ active: effectiveFavoritesOnly }"
-        type="button"
-        title="我的收藏"
-        :aria-pressed="effectiveFavoritesOnly"
-        :disabled="favoritesOnlyLocked"
-        @click="toggleFavoritesOnly"
-      >
-        <IcIcon name="star" :size="15" />
-      </button>
-      <button
-        class="titlebar-icon-btn"
-        type="button"
-        :disabled="importing"
-        :title="importing ? '导入中...' : '导入会话文件'"
-        @click="triggerImportFile"
-      >
-        <IcIcon name="download" :size="15" />
-      </button>
-      <button class="titlebar-icon-btn" type="button" title="收起侧边栏" @click="emit('close')">
-        <IcIcon name="view-sidebar" :size="15" />
+      <button class="drawer-collapse-btn" type="button" title="收起侧边栏" @click="emit('close')">
+        <IcIcon name="arrow-left" :size="18" />
       </button>
     </div>
-
-    <!-- 隐藏的文件选择器,用于导入 YAML/JSON -->
-    <input
-      ref="fileInputRef"
-      type="file"
-      accept=".yaml,.yml,.json"
-      style="display: none"
-      @change="handleImportFile"
-    />
 
     <div class="drawer-toolbar">
       <div class="primary-actions">
@@ -335,7 +268,7 @@ async function clearAllSessions() {
 }
 
 .drawer-titlebar {
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   display: grid;
   align-items: center;
   gap: var(--space-4);
@@ -345,34 +278,26 @@ async function clearAllSessions() {
   background: transparent;
 }
 
-.titlebar-icon-btn {
+.drawer-collapse-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: 0;
-  border-radius: 999px;
+  border-radius: 50%;
   background: transparent;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
   cursor: pointer;
   transition:
-    background 160ms ease,
-    color 160ms ease;
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
-.titlebar-icon-btn:hover:not(:disabled) {
-  background: var(--drawer-page-hover);
-  color: var(--color-text-primary);
-}
-
-.titlebar-icon-btn.active {
-  color: #f2b705;
-}
-
-.titlebar-icon-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
+.drawer-collapse-btn:hover {
+  background: var(--color-selection-blue-soft);
+  color: var(--color-selection-blue);
 }
 
 .brand-copy {
@@ -469,9 +394,7 @@ async function clearAllSessions() {
   transition:
     border-color 180ms ease,
     background 180ms ease,
-    color 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms ease;
+    color 180ms ease;
 }
 
 .mode-btn {
@@ -526,8 +449,6 @@ async function clearAllSessions() {
   border-color: var(--color-accent);
   background: var(--color-accent-muted);
   color: var(--color-text-primary);
-  box-shadow: 0 8px 22px rgba(66, 36, 235, 0.14);
-  transform: translateY(-1px);
 }
 
 .clear-all-btn:hover {
@@ -560,7 +481,7 @@ async function clearAllSessions() {
   min-height: 30px;
   margin-bottom: var(--space-2);
   padding: 0 var(--space-12);
-  border: 1px solid transparent;
+  border: 0;
   border-radius: 999px;
   background: transparent;
   color: var(--color-text-secondary);
@@ -576,7 +497,6 @@ async function clearAllSessions() {
 }
 
 .session-item.active {
-  border-color: color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
   background: var(--drawer-page-active);
   color: var(--color-primary);
 }

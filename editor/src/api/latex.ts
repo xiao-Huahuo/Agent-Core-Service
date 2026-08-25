@@ -17,7 +17,10 @@ export type LatexRuntimeState = 'idle' | 'missing' | 'downloading' | 'installing
 export interface LatexRuntimeStatus {
   status: LatexRuntimeState
   stage: string
-  progress: number
+  progress: number | null
+  downloaded_bytes?: number
+  total_bytes?: number | null
+  indeterminate?: boolean
   message: string
   source: 'managed' | 'system' | 'none'
   managed: boolean
@@ -28,6 +31,23 @@ export interface LatexRuntimeStatus {
   /** Engine selected when the document has no `%!TeX program` declaration. */
   default_engine?: 'pdflatex' | 'xelatex' | 'lualatex' | ''
   runtime_path: string
+}
+
+/** One compiler engine discovered inside the active distribution. */
+export interface LatexEngineDetail {
+  name: 'pdflatex' | 'xelatex' | 'lualatex'
+  available: boolean
+  path: string
+  default: boolean
+}
+
+/** Full compiler-management response used only by storage settings. */
+export interface LatexManagementStatus extends LatexRuntimeStatus {
+  distribution_path: string
+  size_bytes: number
+  file_count: number
+  engines: LatexEngineDetail[]
+  paths: Record<string, string>
 }
 
 /** One source-mapped LaTeX compiler diagnostic. */
@@ -51,6 +71,11 @@ export interface LatexCompileResult {
 /** Detect the active system or managed LaTeX toolchain. */
 export function fetchLatexStatus(userId: string): Promise<LatexRuntimeStatus> {
   return apiGet(API_ROUTES.SETTINGS_LATEX_STATUS, { user_id: userId })
+}
+
+/** Load the detailed distribution, engine and disk state for compiler management. */
+export function fetchLatexManagement(userId: string): Promise<LatexManagementStatus> {
+  return apiGet(API_ROUTES.SETTINGS_LATEX_MANAGEMENT, { user_id: userId })
 }
 
 /** Begin the user-confirmed managed MiKTeX installation. */

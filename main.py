@@ -143,6 +143,8 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     task_list_service = TaskListService(session_service=session_service)
     memory_service = LongTermMemoryService(config=config)
     settings_service = SettingsService(config=config, memory_service=memory_service)
+    from agent_service.services.model_management_service import ModelManagementService
+    model_management_service = ModelManagementService(config=config, settings_service=settings_service)
     activity_service = ActivityService(engine=settings_service.engine, config=config)
 
     knowledge_graph_service = KnowledgeGraphService(config=config)
@@ -202,6 +204,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     smart_form_service = SmartFormService(engine=settings_service.engine)
     structured_generation_service = StructuredGenerationService(config=config)
     rest_deps._settings_service = settings_service
+    rest_deps._model_management_service = model_management_service
     rest_deps._attachment_service = attachment_service
     rest_deps._skill_service = skill_service
     rest_deps._knowledge_library_service = knowledge_library_service
@@ -297,6 +300,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         component_library_service=component_library_service,
         smart_form_service=smart_form_service,
         latex_service=latex_service,
+        model_management_service=model_management_service,
     )
     rest_deps._agent = agent
     rest_deps._session_service = session_service
@@ -343,6 +347,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._session_service = None
         rest_deps._message_service = None
         rest_deps._settings_service = None
+        rest_deps._model_management_service = None
         rest_deps._attachment_service = None
         rest_deps._skill_service = None
         rest_deps._knowledge_library_service = None

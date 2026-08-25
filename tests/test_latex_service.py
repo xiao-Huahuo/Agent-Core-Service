@@ -249,6 +249,29 @@ def test_miktex_install_arguments_are_private_and_do_not_modify_global_path(tmp_
     assert "install" == arguments[-1]
 
 
+def test_miktex_unknown_total_reports_real_bytes_without_fake_percent(tmp_path: Path) -> None:
+    """Setup Utility 总量未知阶段只报告实际目录字节和不确定进度。"""
+
+    service, _, _ = _service(tmp_path)
+    service._set_install_state(
+        "installing",
+        "packages",
+        None,
+        "正在下载 MiKTeX basic 宏包",
+        downloaded_bytes=4096,
+        total_bytes=None,
+        indeterminate=True,
+    )
+
+    status = service.get_status()
+
+    assert status["progress"] is None
+    assert status["downloaded_bytes"] == 4096
+    assert status["total_bytes"] is None
+    assert status["indeterminate"] is True
+    service._set_install_state("idle", "idle", 0, "")
+
+
 def test_install_worker_downloads_verifies_and_installs_managed_miktex(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -266,7 +289,7 @@ def test_install_worker_downloads_verifies_and_installs_managed_miktex(
         with zipfile.ZipFile(target, "w") as archive:
             archive.writestr("miktexsetup_standalone.exe", b"setup")
 
-    def fake_setup(command: list[str]) -> None:
+    def fake_setup(command: list[str], **kwargs: object) -> None:  # noqa: ARG001
         """记录两个 setup 阶段，并在安装阶段创建健康检测文件。"""
 
         commands.append(command)
@@ -319,3 +342,38 @@ def test_real_mcm_template_uses_default_pdflatex_successfully(tmp_path: Path) ->
 
     assert result["success"] is True, result["output"]
     assert result["engine"] == "pdflatex"
+
+
+def test_compiler_management_reports_distribution_source_location_size_and_engines(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """编译管理详情必须解释编译器来源和实际磁盘信息。"""
+
+    service, _, _ = _service(tmp_path)
+    distribution_root = tmp_path / "MiKTeX"
+    bin_dir = distribution_root / "miktex" / "bin" / "x64"
+    bin_dir.mkdir(parents=True)
+    for name in ("pdflatex.exe", "xelatex.exe", "latexmk.exe"):
+        (bin_dir / name).write_bytes(name.encode("ascii"))
+    monkeypatch.setattr(service, "_discover_toolchain", lambda: {
+        "source": "system",
+        "pdflatex": str(bin_dir / "pdflatex.exe"),
+        "xelatex": str(bin_dir / "xelatex.exe"),
+        "lualatex": "",
+        "latexmk": str(bin_dir / "latexmk.exe"),
+        "bin_dir": str(bin_dir),
+    })
+    monkeypatch.setattr(service, "_read_version", lambda path: "MiKTeX-pdfTeX 4.18 (MiKTeX 24.1)")
+
+    result = service.get_management_status()
+
+    assert result["source"] == "system"
+    assert result["distribution"] == "MiKTeX"
+    assert result["distribution_path"] == str(distribution_root)
+    assert result["size_bytes"] == sum(len(name) for name in ("pdflatex.exe", "xelatex.exe", "latexmk.exe"))
+    assert result["file_count"] == 3
+    assert result["default_engine"] == "pdflatex"
+    assert result["engines"][0]["name"] == "pdflatex"
+    assert result["engines"][0]["available"] is True
+    assert result["engines"][2]["available"] is False

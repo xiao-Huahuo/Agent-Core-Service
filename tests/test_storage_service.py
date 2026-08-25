@@ -82,6 +82,26 @@ def test_managed_paths_are_fixed_and_read_only(tmp_path: Path) -> None:
     assert all(not paths[key]["can_clear"] for key in ("managed_root", "markdown_dir", "frontmatter_dir", "library_storage_dir", "forms_dir", "components_dir"))
 
 
+def test_managed_resource_distribution_reports_real_top_level_usage(tmp_path: Path) -> None:
+    """受管资源分布按一级目录统计，并合并根目录中的散落文件。"""
+
+    service = _make_service(tmp_path)
+    assets_dir = service.config.storage.assets_dir
+    (assets_dir / "images").mkdir(parents=True)
+    (assets_dir / "images" / "cover.png").write_bytes(b"image")
+    (assets_dir / "attachments").mkdir()
+    (assets_dir / "attachments" / "paper.pdf").write_bytes(b"document")
+    (assets_dir / "index.json").write_bytes(b"{}")
+
+    response = service.get_storage_config(user_id="u1")
+
+    assert response["managed_resource_distribution"] == [
+        {"name": "attachments", "size_bytes": len(b"document")},
+        {"name": "images", "size_bytes": len(b"image")},
+        {"name": "根目录文件", "size_bytes": len(b"{}")},
+    ]
+
+
 def test_storage_paths_cannot_be_overridden(tmp_path: Path) -> None:
     """存储设置 API 不再接受 `.mw` 或运行时路径覆盖。"""
 

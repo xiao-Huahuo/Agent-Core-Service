@@ -6,7 +6,10 @@
 
 ### TODOs
 - [x] 修复智能表格的智能填充极慢的问题,按道理调用个API不可能这么慢.
+
+- [ ] 图谱抽取需要消耗大量的小模型API额度,能不能变成本地模型?
 ### IDEAs
+- [ ] 添加"识图"小模型(Qwen3-VL-2B-Instruct,磁盘5~8G,内存10G),将识图能力包装成Agent工具.识图能力仅作为Agent主动触发,不被动触发.
 - [x] 支持 LaTeX 编辑、编译与分屏 PDF 预览，并提供托管 MiKTeX 安装和存储管理。
 - [ ] DSH Adapter的实现
   - 文档位于`docs/ADAPTER_DESIGN.md`

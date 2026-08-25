@@ -882,6 +882,32 @@ onBeforeUnmount(() => {
   overflow: visible;
 }
 
+@media (max-width: 600px) {
+  .settings-page {
+    flex-direction: column;
+  }
+
+  .settings-sidebar {
+    width: 100%;
+    flex-direction: row;
+    gap: 2px;
+    padding: var(--space-6) var(--space-8);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .sidebar-tab {
+    width: auto;
+    flex: 0 0 auto;
+    padding: var(--space-6) var(--space-10);
+    white-space: nowrap;
+  }
+
+  .settings-body {
+    padding: var(--space-10) var(--space-12);
+  }
+}
+
 .setting-section h3 {
   margin: 0 0 var(--space-10);
   font-size: calc(12px * var(--font-scale));

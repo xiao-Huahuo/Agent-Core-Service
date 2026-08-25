@@ -44,7 +44,7 @@ describe('PdfPreview compiled LaTeX download', () => {
     await wrapper.get('.pdf-download-button').trigger('click')
 
     expect(click).toHaveBeenCalledOnce()
-    const anchor = click.mock.instances[0]
+    const anchor = click.mock.instances[0] as HTMLAnchorElement | undefined
     expect(anchor?.download).toBe('paper.pdf')
     expect(anchor?.href).toContain('download=true')
   })

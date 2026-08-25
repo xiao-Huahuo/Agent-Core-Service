@@ -28,10 +28,20 @@ const emit = defineEmits<{
   'open-node': [node: KnowledgeGraphNodeEvent]
 }>()
 
+const props = withDefaults(defineProps<{
+  /** Main workspace width used to keep the graph toolbar at one or two rows. */
+  availableWidth?: number
+}>(), {
+  availableWidth: Number.POSITIVE_INFINITY,
+})
+
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 const { tree, treeLoading } = storeToRefs(workspaceStore)
 const graphCanvasRef = ref<InstanceType<typeof KnowledgeGraphCanvas> | null>(null)
+const compactToolbar = computed(() => props.availableWidth <= 900)
+const mobileToolbar = computed(() => props.availableWidth <= 640)
+const compressedToolbar = computed(() => props.availableWidth <= 360)
 const selectedNode = ref<KnowledgeGraphNodeEvent | null>(null)
 const showGraphLabels = ref(true)
 const graphMode = ref<'tree' | 'semantic' | 'library' | 'wiki'>('semantic')
@@ -65,6 +75,7 @@ const dedupLoading = ref(false)
 const dedupProgress = ref(0) // 0~100
 const dedupMessage = ref('')
 let dedupTimer: ReturnType<typeof setInterval> | null = null
+let graphModeResizeObserver: ResizeObserver | null = null
 
 // Sidebar state
 const sidebarOpen = ref(false)
@@ -354,6 +365,8 @@ async function pollDedupProgress() {
 }
 
 onUnmounted(() => {
+  graphModeResizeObserver?.disconnect()
+  graphModeResizeObserver = null
   if (dedupTimer) {
     clearInterval(dedupTimer)
     dedupTimer = null
@@ -372,6 +385,8 @@ function kindLabel(kind: string): string {
 
 onMounted(() => {
   updateGraphModeSlider()
+  graphModeResizeObserver = new ResizeObserver(updateGraphModeSlider)
+  if (graphModeRef.value) graphModeResizeObserver.observe(graphModeRef.value)
   if (settingsStore.profile.userId) {
     if (tree.value.length === 0) {
       void workspaceStore.loadKnowledgeTree()
@@ -402,10 +417,16 @@ watch(
     }
   },
 )
+
+/** Repositions the active mode slider when responsive toolbar geometry changes. */
+watch([compactToolbar, compressedToolbar], updateGraphModeSlider)
 </script>
 
 <template>
-  <section class="graph-pane">
+  <section
+    class="graph-pane"
+    :class="{ 'compact-toolbar': compactToolbar, 'mobile-toolbar': mobileToolbar, 'compressed-toolbar': compressedToolbar }"
+  >
     <header class="graph-toolbar">
       <div ref="graphModeRef" class="graph-mode">
         <div class="graph-mode-slider" :style="graphModeSliderStyle"></div>
@@ -446,11 +467,11 @@ watch(
           <span>双向链接</span>
         </button>
       </div>
+      <span v-if="graphMode === 'wiki'" class="graph-stat mono">
+        {{ graphStats.nodes }} 文档 / {{ graphStats.references }} 反向 / {{ graphStats.embeds }} 嵌入
+      </span>
+      <span v-else class="graph-stat mono">{{ graphStats.nodes }} nodes / {{ graphStats.links }} links</span>
       <div class="graph-actions">
-        <span v-if="graphMode === 'wiki'" class="graph-stat mono">
-          {{ graphStats.nodes }} 文档 / {{ graphStats.references }} 反向 / {{ graphStats.embeds }} 嵌入
-        </span>
-        <span v-else class="graph-stat mono">{{ graphStats.nodes }} nodes / {{ graphStats.links }} links</span>
         <button
           v-if="graphMode === 'library'"
           class="graph-action"
@@ -637,8 +658,10 @@ watch(
 }
 
 .graph-stat {
+  margin-left: auto;
   color: var(--color-text-muted);
   font-size: calc(12px * var(--font-scale));
+  white-space: nowrap;
 }
 
 .graph-action {
@@ -654,6 +677,7 @@ watch(
   color: var(--color-text-secondary);
   font: inherit;
   font-size: calc(12px * var(--font-scale));
+  white-space: nowrap;
 }
 
 .graph-action:hover {
@@ -677,6 +701,70 @@ watch(
 
 .graph-action:disabled {
   opacity: 0.5;
+}
+
+.graph-pane.compact-toolbar .graph-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-4);
+}
+
+.graph-pane.compact-toolbar .graph-mode {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: flex-start;
+  justify-self: start;
+  width: max-content;
+  max-width: 100%;
+}
+
+.graph-pane.compact-toolbar .graph-stat {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  margin-left: 0;
+}
+
+.graph-pane.compact-toolbar .graph-actions {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+.graph-pane.compressed-toolbar .graph-mode {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100%;
+}
+
+.graph-pane.compressed-toolbar .graph-mode-button,
+.graph-pane.compressed-toolbar .graph-action {
+  padding: 0;
+  justify-self: center;
+}
+
+.graph-pane.compressed-toolbar .graph-mode-button {
+  width: 100%;
+}
+
+.graph-pane.compressed-toolbar .graph-action {
+  width: 28px;
+}
+
+.graph-pane.compressed-toolbar .graph-mode-button span,
+.graph-pane.compressed-toolbar .graph-action span,
+.graph-pane.compressed-toolbar .graph-stat {
+  display: none;
+}
+
+.graph-pane.compressed-toolbar .graph-actions {
+  justify-content: space-around;
+}
+
+.graph-pane.mobile-toolbar .graph-stat {
+  display: none;
 }
 
 .graph-mode {

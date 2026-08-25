@@ -15,6 +15,7 @@ from agent_service.api.rest.deps import (
     _require_agent,
     _require_knowledge_library_service,
     _require_latex_service,
+    _require_model_management_service,
     _require_settings_service,
 )
 
@@ -64,7 +65,17 @@ async def download_model(body: dict[str, Any]) -> dict[str, Any]:
                 _trigger_embedding_load(config)
             else:
                 set_model_state("embedding", ModelState.ERROR)
-        except Exception:
+        except Exception as exc:
+            from agent_service.scripts.download_model import update_download_progress
+
+            update_download_progress(
+                "embedding",
+                status="error",
+                stage="failed",
+                downloaded_bytes=0,
+                total_bytes=None,
+                message=str(exc),
+            )
             set_model_state("embedding", ModelState.ERROR)
 
     def _download_rerank() -> None:
@@ -81,12 +92,60 @@ async def download_model(body: dict[str, Any]) -> dict[str, Any]:
                 _trigger_rerank_load(config)
             else:
                 set_model_state("rerank", ModelState.ERROR)
-        except Exception:
+        except Exception as exc:
+            from agent_service.scripts.download_model import update_download_progress
+
+            update_download_progress(
+                "rerank",
+                status="error",
+                stage="failed",
+                downloaded_bytes=0,
+                total_bytes=None,
+                message=str(exc),
+            )
             set_model_state("rerank", ModelState.ERROR)
 
     def _download_paddleocr() -> None:
+        stop_progress = threading.Event()
+
+        def _tracked_bytes() -> int:
+            """Return real bytes written to MetaWeave and PaddleX OCR model roots."""
+
+            roots = [
+                Path(config.storage.paddleocr_model_dir),
+                Path.home() / ".paddlex" / "official_models" / config.ocr.text_detection_model_name,
+                Path.home() / ".paddlex" / "official_models" / config.ocr.text_recognition_model_name,
+            ]
+            total = 0
+            for root in roots:
+                if root.exists():
+                    for item in root.rglob("*"):
+                        if not item.is_file():
+                            continue
+                        try:
+                            total += item.stat().st_size
+                        except OSError:
+                            continue
+            return total
+
+        def _track_ocr() -> None:
+            from agent_service.scripts.download_model import update_download_progress
+
+            while not stop_progress.is_set():
+                update_download_progress(
+                    "paddleocr",
+                    status="downloading",
+                    stage="official_models",
+                    downloaded_bytes=_tracked_bytes(),
+                    total_bytes=None,
+                    message="正在准备 OCR 检测与识别模型",
+                )
+                stop_progress.wait(0.75)
+
+        tracker = threading.Thread(target=_track_ocr, daemon=True)
+        tracker.start()
         try:
-            from agent_service.scripts.download_model import ensure_paddleocr_models
+            from agent_service.scripts.download_model import ensure_paddleocr_models, update_download_progress
 
             set_model_state("paddleocr", ModelState.DOWNLOADING)
             ensure_paddleocr_models(
@@ -96,9 +155,31 @@ async def download_model(body: dict[str, Any]) -> dict[str, Any]:
                 text_recognition_model_name=config.ocr.text_recognition_model_name,
                 device=config.ocr.device,
             )
+            downloaded_bytes = _tracked_bytes()
+            update_download_progress(
+                "paddleocr",
+                status="completed",
+                stage="completed",
+                downloaded_bytes=downloaded_bytes,
+                total_bytes=downloaded_bytes,
+                message="OCR 模型准备完成",
+            )
             set_model_state("paddleocr", ModelState.READY)
-        except Exception:
+        except Exception as exc:
+            from agent_service.scripts.download_model import update_download_progress
+
+            update_download_progress(
+                "paddleocr",
+                status="error",
+                stage="failed",
+                downloaded_bytes=_tracked_bytes(),
+                total_bytes=None,
+                message=str(exc),
+            )
             set_model_state("paddleocr", ModelState.ERROR)
+        finally:
+            stop_progress.set()
+            tracker.join(timeout=2)
 
     t = threading.Thread(target={
         "embedding": _download_embedding,
@@ -161,12 +242,21 @@ async def load_model(body: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/settings/models/download-progress")
-async def get_download_progress() -> dict[str, float]:
-    """返回各模型下载进度百分比。"""
+async def get_download_progress() -> dict[str, dict[str, object]]:
+    """返回各模型真实字节、总量、阶段和确定/不确定进度。"""
 
     from agent_service.scripts.download_model import get_all_download_progress
 
     return get_all_download_progress()
+
+
+@router.get("/settings/models/management")
+async def get_model_management(
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+) -> dict[str, Any]:
+    """返回模型管理区需要的配置、磁盘、运行和真实下载状态。"""
+
+    return _require_model_management_service().get_management_status(user_id=user_id)
 
 
 @router.post("/settings/models/check")
@@ -745,6 +835,15 @@ async def get_latex_status(
     """检测系统或 MetaWeave 托管的 LaTeX 编译环境。"""
 
     return _require_latex_service().get_status()
+
+
+@router.get("/settings/latex/management")
+async def get_latex_management(
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),  # noqa: ARG001
+) -> dict[str, Any]:
+    """返回编译管理区需要的发行版、来源、引擎、路径和磁盘详情。"""
+
+    return _require_latex_service().get_management_status()
 
 
 @router.post("/settings/latex/install")

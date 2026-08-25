@@ -11,6 +11,7 @@ import {
   cancelLatexInstall,
   compileLatexFile,
   fetchLatexStatus,
+  fetchLatexManagement,
   installLatexRuntime,
   uninstallLatexRuntime,
 } from '@/api/latex'
@@ -52,5 +53,16 @@ describe('LaTeX API client', () => {
       '/settings/latex/install/cancel',
       '/settings/latex/uninstall',
     ])
+  })
+
+  it('loads compiler-management details through the dedicated settings endpoint', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({
+      status: 'ready', source: 'system', distribution_path: 'D:/MiKTeX', engines: [],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchLatexManagement('user/1')
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/settings/latex/management?user_id=user%2F1')
   })
 })

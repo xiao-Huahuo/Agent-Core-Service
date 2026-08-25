@@ -362,13 +362,15 @@ ul {
 
 .tree-label,
 .file-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
   height: 28px;
   padding: 4px 8px;
-  border-radius: 4px;
+  overflow: hidden;
+  border-radius: 9px;
   box-sizing: border-box;
   cursor: pointer;
   color: var(--color-text);
@@ -376,20 +378,39 @@ ul {
   font-size: 14px;
   text-decoration: none;
   user-select: none;
-  transition: background-color 0.2s;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.tree-label::before,
+.file-item::before {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  content: '';
+  transform: scaleY(0);
+  transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .tree-label:hover,
 .file-item:hover,
 .drag-over > .tree-label,
 .file-item.drag-over {
-  background-color: var(--color-surface-raised);
+  background-color: var(--color-canvas-soft);
 }
 
 .is-selected {
-  background-color: var(--color-surface-raised);
-  color: var(--color-text);
-  font-weight: 500;
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.is-selected::before {
+  transform: scaleY(1);
 }
 
 .icon {

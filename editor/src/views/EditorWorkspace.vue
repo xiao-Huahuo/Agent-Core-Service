@@ -843,7 +843,12 @@ watch(
           :mobile="topCommandBarMobile"
         />
         <AgentQueueView v-else-if="workspaceStore.mainView === 'agent-queue'" class="main-shell-content" />
-        <GraphPane v-else-if="workspaceStore.mainView === 'graph'" class="main-shell-content" @open-node="openGraphNode" />
+        <GraphPane
+          v-else-if="workspaceStore.mainView === 'graph'"
+          class="main-shell-content"
+          :available-width="mainShellWidth"
+          @open-node="openGraphNode"
+        />
         <DashboardView v-else-if="workspaceStore.mainView === 'dashboard'" class="main-shell-content" />
         <DebugView v-else-if="workspaceStore.mainView === 'debug'" class="main-shell-content" />
         <SearchPage v-else-if="workspaceStore.mainView === 'search'" class="main-shell-content" />

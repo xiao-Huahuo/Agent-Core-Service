@@ -110,4 +110,53 @@ test('Agent workspace has the shared frame and a draggable scrollbar', async ({ 
   await page.mouse.move(visibleBounds.x + visibleBounds.width - 4, visibleBounds.y + 180, { steps: 8 })
   await page.mouse.up()
   await expect.poll(() => messageList.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+
+  const environmentButton = page.getByRole('button', { name: '环境变更', exact: true })
+  await environmentButton.click()
+  await expect(environmentButton).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.environment-card-shell')).toBeVisible()
+  await expect(page.locator('.task-list-card')).toBeVisible()
+  await expect(page.locator('.child-agent-card')).toBeVisible()
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('agent-change-updated', {
+      detail: {
+        snapshot_id: 'e2e-snapshot',
+        session_id: '',
+        run_id: 'e2e-run',
+        additions: 1,
+        deletions: 1,
+        is_undone: false,
+        created_at: new Date().toISOString(),
+        files: [{
+          path: 'example.ts', additions: 1, deletions: 1,
+          edits: [{ path: 'example.ts', before: 'old', after: 'new', additions: 1, deletions: 1 }],
+        }],
+        edits: [{ path: 'example.ts', before: 'old', after: 'new', additions: 1, deletions: 1 }],
+      },
+    }))
+  })
+  await page.locator('.change-row').click()
+  const changeDetail = page.locator('.change-detail')
+  await changeDetail.waitFor({ state: 'attached' })
+  const enteringWidth = await changeDetail.evaluate((element) => element.getBoundingClientRect().width)
+  await page.waitForTimeout(300)
+  const settledBounds = await changeDetail.boundingBox()
+  expect(settledBounds).not.toBeNull()
+  expect(settledBounds!.width).toBeGreaterThan(enteringWidth)
+
+  await changeDetail.locator('header button').click()
+  await page.waitForTimeout(40)
+  await expect(changeDetail).toBeAttached()
+  const leavingBounds = await changeDetail.boundingBox()
+  expect(leavingBounds).not.toBeNull()
+  expect(leavingBounds!.x).toBeGreaterThan(settledBounds!.x)
+  await expect(changeDetail).toHaveCount(0)
+
+  await environmentButton.click()
+  await expect(environmentButton).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.agent-sidebar')).not.toHaveClass(/open/)
+  await expect(page.locator('.environment-card-shell')).toBeHidden()
+  await expect(page.locator('.task-list-card')).toBeHidden()
+  await expect(page.locator('.child-agent-card')).toBeHidden()
 })

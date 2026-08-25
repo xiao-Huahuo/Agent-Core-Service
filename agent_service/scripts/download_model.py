@@ -48,23 +48,71 @@ MODEL_TOKENIZER_FILES = {
 PADDLEOCR_MARKER_FILE = ".paddleocr_download_complete"
 
 # ---- 下载进度跟踪 ----
-_download_progress: dict[str, float] = {}
+_download_progress: dict[str, dict[str, object]] = {}
 _download_progress_lock = threading.Lock()
 
 
-def update_download_progress(model_type: str, pct: float) -> None:
+def update_download_progress(
+    model_type: str,
+    *,
+    status: str,
+    stage: str,
+    downloaded_bytes: int,
+    total_bytes: int | None,
+    message: str,
+) -> None:
+    """记录真实落盘字节；总量未知时明确返回不确定进度而非伪百分比。"""
+
+    percent = (
+        min(100.0, round(downloaded_bytes / total_bytes * 100, 1))
+        if total_bytes and total_bytes > 0
+        else None
+    )
     with _download_progress_lock:
-        _download_progress[model_type] = pct
+        _download_progress[model_type] = {
+            "status": status,
+            "stage": stage,
+            "downloaded_bytes": max(0, int(downloaded_bytes)),
+            "total_bytes": int(total_bytes) if total_bytes is not None else None,
+            "percent": percent,
+            "indeterminate": percent is None and status == "downloading",
+            "message": message,
+        }
 
 
-def get_download_progress(model_type: str) -> float:
+def reset_download_progress(model_type: str) -> None:
+    """将一个模型进度恢复为空闲状态，供重试和磁盘检测使用。"""
+
+    update_download_progress(
+        model_type,
+        status="idle",
+        stage="idle",
+        downloaded_bytes=0,
+        total_bytes=None,
+        message="",
+    )
+
+
+def get_download_progress(model_type: str) -> dict[str, object]:
+    """返回一个模型的结构化下载状态。"""
+
     with _download_progress_lock:
-        return _download_progress.get(model_type, 0.0)
+        return dict(_download_progress.get(model_type, {
+            "status": "idle",
+            "stage": "idle",
+            "downloaded_bytes": 0,
+            "total_bytes": None,
+            "percent": None,
+            "indeterminate": False,
+            "message": "",
+        }))
 
 
-def get_all_download_progress() -> dict[str, float]:
+def get_all_download_progress() -> dict[str, dict[str, object]]:
+    """返回所有已记录模型的结构化真实进度快照。"""
+
     with _download_progress_lock:
-        return dict(_download_progress)
+        return {key: dict(value) for key, value in _download_progress.items()}
 
 
 def _tracked_hf_download(
@@ -74,38 +122,84 @@ def _tracked_hf_download(
 ) -> None:
     """从 Hugging Face 下载模型并按文件数估算进度。"""
 
-    from huggingface_hub import list_repo_files, snapshot_download
+    from huggingface_hub import HfApi, snapshot_download
 
-    update_download_progress(model_type, 0.0)
-    total_files = 0
+    total_bytes: int | None = None
     try:
-        repo_files = list_repo_files(model_name)
-        total_files = len(repo_files)
+        info = HfApi().model_info(model_name, files_metadata=True)
+        sibling_sizes = [int(item.size) for item in (info.siblings or []) if item.size is not None]
+        if sibling_sizes:
+            total_bytes = sum(sibling_sizes)
     except Exception:
         pass
 
     target_dir.mkdir(parents=True, exist_ok=True)
-    initial_count = sum(1 for _ in target_dir.rglob("*") if _.is_file()) if target_dir.exists() else 0
     stop_event = threading.Event()
 
-    if total_files > 0:
-        def _track() -> None:
-            while not stop_event.is_set():
-                current = sum(1 for _ in target_dir.rglob("*") if _.is_file()) - initial_count
-                pct = min(99.0, round(current / total_files * 100, 1))
-                update_download_progress(model_type, pct)
-                stop_event.wait(1.5)
+    def _observed_download_bytes() -> int:
+        """Return resumable model bytes, clamped to known repository payload size."""
 
-        threading.Thread(target=_track, daemon=True).start()
+        observed = _directory_size(target_dir)
+        return min(observed, total_bytes) if total_bytes is not None else observed
 
-    snapshot_download(
-        repo_id=model_name,
-        local_dir=str(target_dir),
-        local_dir_use_symlinks=False,
+    def _track() -> None:
+        while not stop_event.is_set():
+            update_download_progress(
+                model_type,
+                status="downloading",
+                stage="model_files",
+                downloaded_bytes=_observed_download_bytes(),
+                total_bytes=total_bytes,
+                message="正在下载模型文件",
+            )
+            stop_event.wait(0.75)
+
+    tracker = threading.Thread(target=_track, daemon=True)
+    tracker.start()
+    try:
+        snapshot_download(
+            repo_id=model_name,
+            local_dir=str(target_dir),
+            local_dir_use_symlinks=False,
+        )
+        (target_dir / MODEL_MARKER_FILE).write_text(model_name, encoding="utf-8")
+    except Exception:
+        update_download_progress(
+            model_type,
+            status="error",
+            stage="failed",
+            downloaded_bytes=_observed_download_bytes(),
+            total_bytes=total_bytes,
+            message="模型下载失败",
+        )
+        raise
+    finally:
+        stop_event.set()
+        tracker.join(timeout=2)
+    downloaded = _observed_download_bytes()
+    update_download_progress(
+        model_type,
+        status="completed",
+        stage="completed",
+        downloaded_bytes=downloaded,
+        total_bytes=total_bytes or downloaded,
+        message="模型下载完成",
     )
-    (target_dir / MODEL_MARKER_FILE).write_text(model_name, encoding="utf-8")
-    stop_event.set()
-    update_download_progress(model_type, 100.0)
+
+
+def _directory_size(path: Path) -> int:
+    """计算下载目录当前落盘字节，用于实时进度而非文件数量估算。"""
+
+    if not path.exists():
+        return 0
+    total = 0
+    for item in path.rglob("*"):
+        if item.is_file():
+            try:
+                total += item.stat().st_size
+            except OSError:
+                continue
+    return total
 
 
 def ensure_model(model_name: str, model_dir: Path | str, model_type: str | None = None) -> Path | None:

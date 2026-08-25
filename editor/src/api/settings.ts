@@ -549,3 +549,47 @@ export function fetchModelStatus(): Promise<ModelStatusResponse> {
 export function checkModelDisk(): Promise<ModelStatusResponse> {
   return apiPost<ModelStatusResponse>(API_ROUTES.SETTINGS_MODEL_CHECK, {})
 }
+
+/** Real byte/stage progress returned by backend download workers. */
+export interface ModelDownloadProgress {
+  status: 'idle' | 'downloading' | 'completed' | 'error' | string
+  stage: string
+  downloaded_bytes: number
+  total_bytes: number | null
+  percent: number | null
+  indeterminate: boolean
+  message: string
+}
+
+/** One model row with backend-owned runtime, disk and configuration details. */
+export interface ManagedModelStatus {
+  key: 'embedding' | 'rerank' | 'paddleocr'
+  label: string
+  role: string
+  name: string
+  path: string
+  base_path: string
+  size_bytes: number
+  file_count: number
+  status: string
+  enabled: boolean
+  active: boolean
+  downloaded: boolean
+  progress: ModelDownloadProgress
+  details: Record<string, string>
+}
+
+/** Fetch all data displayed by the model-management block. */
+export function fetchModelManagement(userId: string): Promise<{ models: ManagedModelStatus[] }> {
+  return apiGet(API_ROUTES.SETTINGS_MODEL_MANAGEMENT, { user_id: userId })
+}
+
+/** Start a backend-owned model download. */
+export function downloadManagedModel(model: ManagedModelStatus['key']): Promise<{ status: string; model: string }> {
+  return apiPost(API_ROUTES.SETTINGS_MODEL_DOWNLOAD, { model })
+}
+
+/** Load an already-downloaded Embedding or ReRank model into memory. */
+export function loadManagedModel(model: 'embedding' | 'rerank'): Promise<{ status: string; model: string }> {
+  return apiPost(API_ROUTES.SETTINGS_MODEL_LOAD, { model })
+}

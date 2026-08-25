@@ -6,19 +6,14 @@
     <StorageSettingsSection />
 -->
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import VChart from 'vue-echarts'
 import 'echarts'
 import IcIcon from '@/components/common/IcIcon.vue'
+import CompilerManagement from '@/components/settings_view/CompilerManagement.vue'
+import ModelManagement from '@/components/settings_view/ModelManagement.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { API_ROUTES } from '@/router/api_routes'
-import {
-  cancelLatexInstall,
-  fetchLatexStatus,
-  installLatexRuntime,
-  uninstallLatexRuntime,
-  type LatexRuntimeStatus,
-} from '@/api/latex'
 
 interface StoragePathEntry {
   key: string
@@ -34,289 +29,20 @@ interface StorageConfigResponse {
   paths: StoragePathEntry[]
   knowledge_dir_total_bytes: number
   runtime_total_bytes: number
+  managed_resource_distribution: Array<{ name: string; size_bytes: number }>
 }
-
-interface ModelStatusData {
-  embedding: string
-  rerank: string
-  paddleocr: string
-}
-
-const MODEL_KEYS = ['embedding_model_dir', 'paddleocr_model_dir', 'rerank_model_dir'] as const
 
 const settingsStore = useSettingsStore()
 
 const paths = ref<StoragePathEntry[]>([])
 const knowledgeDirTotal = ref(0)
 const runtimeTotal = ref(0)
+const managedResourceDistribution = ref<Array<{ name: string; value: number }>>([])
 const loading = ref(false)
 const clearing = ref<string | null>(null)
 const savingKey = ref<string | null>(null)
 const feedback = ref('')
 const knowledgeDirDraft = ref('')
-
-/* ---- 模型状态 ---- */
-const modelStatus = ref<ModelStatusData>({ embedding: 'unknown', rerank: 'unknown', paddleocr: 'unknown' })
-const modelDownloading = ref<Set<string>>(new Set())
-const modelProgress = ref<Record<string, number>>({})
-const latexStatus = ref<LatexRuntimeStatus | null>(null)
-let latexStatusTimer: ReturnType<typeof setInterval> | null = null
-
-function modelStatusText(model: string): string {
-  const s = modelStatus.value[model as keyof ModelStatusData]
-  if (modelDownloading.value.has(model)) {
-    const pct = modelProgress.value[model]
-    if (pct !== undefined && pct > 0) return `下载中 ${pct}%`
-    return '下载中...'
-  }
-  switch (s) {
-    case 'ready': return '已就绪'
-    case 'downloaded': return '已下载'
-    case 'downloading': return '下载中...'
-    case 'loading': return '加载中...'
-    case 'error': return '下载失败'
-    case 'not_downloaded': return '未下载'
-    default: return '未知'
-  }
-}
-
-function modelStatusClass(model: string): string {
-  const s = modelStatus.value[model as keyof ModelStatusData]
-  if (s === 'ready') return 'status-ready'
-  if (s === 'downloaded') return 'status-downloaded'
-  if (s === 'downloading' || modelDownloading.value.has(model)) return 'status-downloading'
-  if (s === 'loading') return 'status-loading'
-  if (s === 'error') return 'status-error'
-  if (s === 'not_downloaded') return 'status-missing'
-  return 'status-unknown'
-}
-
-async function checkAllModels() {
-  try {
-    const res = await fetch(API_ROUTES.SETTINGS_MODEL_CHECK, { method: 'POST' })
-    if (res.ok) {
-      modelStatus.value = await res.json()
-    }
-  } catch { /* ignore */ }
-}
-
-async function pollModelStatus() {
-  try {
-    const res = await fetch(`${API_ROUTES.SETTINGS_MODEL_STATUS}?t=${Date.now()}`)
-    if (res.ok) {
-      modelStatus.value = await res.json()
-    }
-  } catch { /* ignore */ }
-}
-
-function modelKeyToType(modelDirKey: string): string {
-  if (modelDirKey === 'embedding_model_dir') return 'embedding'
-  if (modelDirKey === 'paddleocr_model_dir') return 'paddleocr'
-  if (modelDirKey === 'rerank_model_dir') return 'rerank'
-  return ''
-}
-
-function isModelReady(modelDirKey: string): boolean {
-  const t = modelKeyToType(modelDirKey)
-  return modelStatus.value[t as keyof ModelStatusData] === 'ready'
-}
-
-function shouldShowDownloadButton(modelDirKey: string): boolean {
-  const t = modelKeyToType(modelDirKey)
-  const s = modelStatus.value[t as keyof ModelStatusData]
-  // 已下载、加载中、已就绪时都不显示下载按钮
-  return s === 'not_downloaded' || s === 'error' || s === '' || s === 'unknown'
-}
-
-async function triggerDownload(modelDirKey: string) {
-  const modelType = modelKeyToType(modelDirKey)
-  if (!modelType) return
-  modelDownloading.value = new Set([...modelDownloading.value, modelType])
-  modelProgress.value = { ...modelProgress.value, [modelType]: 0 }
-
-  // 假进度：缓缓爬到 64% 后等待
-  let fakePct = 0
-  const fakeInterval = setInterval(() => {
-    if (fakePct < 64) {
-      fakePct += Math.random() * 4 + 0.5
-      if (fakePct > 64) fakePct = 64
-      modelProgress.value = { ...modelProgress.value, [modelType]: Math.round(fakePct) }
-    }
-  }, 600)
-
-  const interval = setInterval(async () => {
-    await pollModelStatus()
-    const s = modelStatus.value[modelType as keyof ModelStatusData]
-
-    if (s === 'downloaded') {
-      modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
-      await triggerLoad(modelType)
-      // 加载已触发，切换到只观察状态变化，不再重复触发的轮询
-      clearInterval(interval)
-      const watchInterval = setInterval(async () => {
-        await pollModelStatus()
-        const st = modelStatus.value[modelType as keyof ModelStatusData]
-        if (st === 'ready') {
-          modelProgress.value = { ...modelProgress.value, [modelType]: 100 }
-          clearInterval(fakeInterval)
-          setTimeout(() => {
-            modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
-          }, 300)
-          clearInterval(watchInterval)
-          show(`${modelType} 模型已就绪`)
-          await loadStorageConfig()
-          await checkAllModels()
-        } else if (st === 'error') {
-          clearInterval(fakeInterval)
-          clearInterval(watchInterval)
-          modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
-          show(`${modelType} 模型加载失败`)
-        }
-      }, 1500)
-    } else if (s === 'loading') {
-      modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
-    } else if (s === 'ready') {
-      modelProgress.value = { ...modelProgress.value, [modelType]: 100 }
-      clearInterval(fakeInterval)
-      setTimeout(() => {
-        modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
-      }, 300)
-      clearInterval(interval)
-      show(`${modelType} 模型已就绪`)
-      await loadStorageConfig()
-      await checkAllModels()
-    } else if (s === 'error') {
-      clearInterval(fakeInterval)
-      clearInterval(interval)
-      modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
-      show(`${modelType} 模型下载失败`)
-    }
-  }, 1500)
-
-  try {
-    const res = await fetch(API_ROUTES.SETTINGS_MODEL_DOWNLOAD, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: modelType }),
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  } catch (e: unknown) {
-    clearInterval(fakeInterval)
-    clearInterval(interval)
-    modelDownloading.value = new Set([...modelDownloading.value].filter(m => m !== modelType))
-    show(e instanceof Error ? e.message : '下载启动失败')
-  }
-}
-
-async function triggerLoad(modelType: string) {
-  try {
-    await fetch(API_ROUTES.SETTINGS_MODEL_LOAD, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: modelType }),
-    })
-  } catch { /* ignore */ }
-}
-
-async function handleClickModel(modelDirKey: string) {
-  const modelType = modelKeyToType(modelDirKey)
-  if (!modelType) return
-  const s = modelStatus.value[modelType as keyof ModelStatusData]
-  if (s === 'downloaded') {
-    // 立即本地设为 loading 显示 spinner
-    modelStatus.value = { ...modelStatus.value, [modelType]: 'loading' as any }
-    show(`${modelType} 模型加载中...`)
-    await triggerLoad(modelType)
-    // 轮询跟踪真实状态
-    const poll = setInterval(async () => {
-      await pollModelStatus()
-      const st = modelStatus.value[modelType as keyof ModelStatusData]
-      if (st === 'loading') {
-        show(`${modelType} 模型加载中...`)
-      } else if (st === 'ready') {
-        show(`${modelType} 模型已就绪`)
-        clearInterval(poll)
-      } else if (st === 'error') {
-        show(`${modelType} 模型加载失败`, 4000)
-        clearInterval(poll)
-      }
-    }, 1500)
-  }
-}
-
-async function pollModelProgress() {
-  try {
-    const res = await fetch(API_ROUTES.SETTINGS_MODEL_DOWNLOAD_PROGRESS)
-    if (res.ok) {
-      modelProgress.value = await res.json()
-    }
-  } catch { /* ignore */ }
-}
-
-/** Refresh the real system-or-managed LaTeX runtime state. */
-async function checkLatexRuntime() {
-  if (!settingsStore.profile.userId) return
-  try {
-    latexStatus.value = await fetchLatexStatus(settingsStore.profile.userId)
-  } catch {
-    latexStatus.value = null
-  }
-}
-
-/** Poll only while installation is active, then refresh storage sizes once. */
-function startLatexStatusPolling() {
-  if (latexStatusTimer) clearInterval(latexStatusTimer)
-  latexStatusTimer = setInterval(async () => {
-    await checkLatexRuntime()
-    const status = latexStatus.value?.status
-    if (!status || ['downloading', 'installing', 'cancelling'].includes(status)) return
-    if (latexStatusTimer) clearInterval(latexStatusTimer)
-    latexStatusTimer = null
-    await loadStorageConfig()
-  }, 1000)
-}
-
-/** Ask for consent and start the backend-managed MiKTeX deployment. */
-async function handleLatexInstall() {
-  if (!settingsStore.profile.userId) return
-  const confirmed = window.confirm('将从 MiKTeX 官网下载并安装当前用户范围的 LaTeX 运行环境，下载量约 150–350 MB，是否继续？')
-  if (!confirmed) return
-  try {
-    latexStatus.value = await installLatexRuntime(settingsStore.profile.userId)
-    startLatexStatusPolling()
-  } catch (error: unknown) {
-    show(error instanceof Error ? error.message : 'MiKTeX 安装启动失败')
-  }
-}
-
-/** Cancel the active MiKTeX setup process. */
-async function handleLatexCancel() {
-  if (!settingsStore.profile.userId) return
-  latexStatus.value = await cancelLatexInstall(settingsStore.profile.userId)
-}
-
-/** Remove only MetaWeave's managed runtime after a destructive confirmation. */
-async function handleLatexUninstall() {
-  if (!settingsStore.profile.userId) return
-  const confirmed = window.confirm('确认卸载 MetaWeave 托管的 MiKTeX？系统中其他 LaTeX 环境不会受影响。')
-  if (!confirmed) return
-  try {
-    latexStatus.value = await uninstallLatexRuntime(settingsStore.profile.userId)
-    await loadStorageConfig()
-    show('托管 MiKTeX 已卸载')
-  } catch (error: unknown) {
-    show(error instanceof Error ? error.message : '托管 MiKTeX 卸载失败')
-  }
-}
-
-/** Map backend runtime states onto the existing semantic status styles. */
-function latexStatusClass(): string {
-  const status = latexStatus.value?.status
-  if (status === 'ready') return 'status-ready'
-  if (['downloading', 'installing', 'cancelling'].includes(status || '')) return 'status-downloading'
-  if (status === 'failed') return 'status-error'
-  return 'status-missing'
-}
 
 /* ---- 颜色板：主色/点缀色/语义色 ---- */
 const PIE_COLORS = [
@@ -413,14 +139,13 @@ const totalPieOption = computed(() => ({
   }],
 }))
 
-const runtimePieData = computed(() =>
-  (runtimePieOption.value as any)?.series?.[0]?.data as { name: string; value: number }[] | undefined
-)
+const runtimePieData = computed(() => paths.value
+  .filter(p => p.key !== 'knowledge_dir' && p.key !== 'base_data_dir' && p.parent === 'base_data_dir')
+  .filter(p => p.size_bytes > 0)
+  .map(p => ({ name: p.key === 'db_dir' ? '运行时' : p.label, value: p.size_bytes })))
 
-const runtimePieOption = computed(() => {
-  const entries = paths.value
-    .filter(p => p.key !== 'knowledge_dir' && p.key !== 'base_data_dir' && p.parent === 'base_data_dir')
-    .filter(p => p.size_bytes > 0)
+/** 为运行时和受管资源分类复用相同的饼图交互与主题配置。 */
+function createDistributionPieOption(data: Array<{ name: string; value: number }>) {
   return {
     tooltip: {
       trigger: 'item' as const,
@@ -436,14 +161,17 @@ const runtimePieOption = computed(() => {
       center: ['50%', '50%'],
       emphasis: { label: { fontWeight: 'bold' } },
       label: { show: false },
-      data: entries.map((e, i) => ({
-        name: e.label,
-        value: e.size_bytes,
+      data: data.map((e, i) => ({
+        name: e.name,
+        value: e.value,
         itemStyle: { color: PIE_COLORS[i % PIE_COLORS.length] },
       })),
     }],
   }
-})
+}
+
+const runtimePieOption = computed(() => createDistributionPieOption(runtimePieData.value))
+const managedResourcePieOption = computed(() => createDistributionPieOption(managedResourceDistribution.value))
 
 /* ---- 工具函数 ---- */
 function formatBytes(bytes: number): string {
@@ -478,6 +206,9 @@ async function loadStorageConfig() {
     paths.value = data.paths
     knowledgeDirTotal.value = data.knowledge_dir_total_bytes
     runtimeTotal.value = data.runtime_total_bytes
+    managedResourceDistribution.value = (data.managed_resource_distribution ?? [])
+      .filter(item => item.size_bytes > 0)
+      .map(item => ({ name: item.name, value: item.size_bytes }))
 
     const kd = data.paths.find((p: StoragePathEntry) => p.key === 'knowledge_dir')
     if (kd) knowledgeDirDraft.value = kd.value
@@ -522,26 +253,14 @@ async function handleClear(pathKey: string, label: string) {
   } finally {
     clearing.value = null
     await loadStorageConfig()
-    await checkAllModels()
   }
 }
 
-onMounted(() => {
-  loadStorageConfig()
-  checkAllModels()
-})
-
 watch(
   () => settingsStore.profile.userId,
-  (userId) => {
-    if (userId) void checkLatexRuntime()
-  },
+  (userId) => { if (userId) void loadStorageConfig() },
   { immediate: true },
 )
-
-onUnmounted(() => {
-  if (latexStatusTimer) clearInterval(latexStatusTimer)
-})
 </script>
 
 <template>
@@ -579,18 +298,36 @@ onUnmounted(() => {
           <div class="pie-chart-item">
             <VChart class="pie-canvas" :option="runtimePieOption" autoresize />
             <span class="pie-title">运行时分布</span>
+            <div v-if="runtimePieData.length > 1" class="pie-legend">
+              <span v-for="(item, i) in runtimePieData" :key="String(item.name)" class="legend-item">
+                <span class="legend-dot" :style="{ background: PIE_COLORS[i % PIE_COLORS.length] }"></span>
+                {{ item.name }}
+              </span>
+            </div>
           </div>
-        </div>
-        <div v-if="(runtimePieData?.length ?? 0) > 1" class="pie-legend">
-          <span v-for="(item, i) in runtimePieData ?? []" :key="String(item.name)" class="legend-item">
-            <span class="legend-dot" :style="{ background: PIE_COLORS[i % PIE_COLORS.length] }"></span>
-            {{ item.name }}
-          </span>
+          <div class="pie-chart-item">
+            <VChart v-if="managedResourceDistribution.length > 0" class="pie-canvas" :option="managedResourcePieOption" autoresize />
+            <div v-else class="pie-canvas pie-empty">暂无数据</div>
+            <span class="pie-title">受管资源分布</span>
+            <div v-if="managedResourceDistribution.length > 1" class="pie-legend">
+              <span v-for="(item, i) in managedResourceDistribution" :key="String(item.name)" class="legend-item">
+                <span class="legend-dot" :style="{ background: PIE_COLORS[i % PIE_COLORS.length] }"></span>
+                {{ item.name }}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
     <p v-if="feedback" class="feedback">{{ feedback }}</p>
+
+    <ModelManagement :user-id="settingsStore.profile.userId" @storage-changed="loadStorageConfig" />
+    <CompilerManagement :user-id="settingsStore.profile.userId" @storage-changed="loadStorageConfig" />
+
+    <header class="storage-path-header">
+      <h4>存储路径</h4>
+    </header>
 
     <!-- 路径树 -->
     <div v-if="paths.length > 0" class="storage-tree">
@@ -618,70 +355,12 @@ onUnmounted(() => {
                   {{ savingKey === item.entry.key ? '...' : '保存' }}
                 </button>
               </template>
-              <template v-else-if="item.entry.key === 'latex_distribution_dir'">
-                <span class="tree-value mono">{{ latexStatus?.compiler_path || item.entry.value }}</span>
-              </template>
-              <template v-else-if="MODEL_KEYS.includes(item.entry.key as any)">
-                <span class="tree-value mono">{{ item.entry.value }}</span>
-              </template>
               <template v-else>
                 <span class="tree-value mono">{{ item.entry.value }}</span>
               </template>
             </div>
             <div class="tree-size-cell">{{ formatBytes(item.entry.size_bytes) }}</div>
             <div class="tree-action-cell">
-              <template v-if="MODEL_KEYS.includes(item.entry.key as any) && !modelDownloading.has(modelKeyToType(item.entry.key))">
-                <span
-                  class="model-status-dot"
-                  :class="[modelStatusClass(modelKeyToType(item.entry.key)), { clickable: modelStatus[modelKeyToType(item.entry.key) as keyof ModelStatusData] === 'downloaded' }]"
-                  :title="modelStatusText(modelKeyToType(item.entry.key))"
-                  @click="handleClickModel(item.entry.key)"
-                ></span>
-                <span
-                  class="model-status-label"
-                  :class="[modelStatusClass(modelKeyToType(item.entry.key)), { clickable: modelStatus[modelKeyToType(item.entry.key) as keyof ModelStatusData] === 'downloaded' }]"
-                  @click="handleClickModel(item.entry.key)"
-                >{{ modelStatusText(modelKeyToType(item.entry.key)) }}</span>
-                <span v-if="modelStatus[modelKeyToType(item.entry.key) as keyof ModelStatusData] === 'loading'" class="model-loading-spinner"></span>
-                <button
-                  v-if="shouldShowDownloadButton(item.entry.key)"
-                  class="save-model-btn"
-                  :disabled="modelDownloading.has(modelKeyToType(item.entry.key))"
-                  @click="triggerDownload(item.entry.key)"
-                >
-                  下载
-                </button>
-              </template>
-              <template v-else-if="item.entry.key === 'latex_distribution_dir'">
-                <span class="model-status-dot" :class="latexStatusClass()"></span>
-                <span class="model-status-label" :class="latexStatusClass()">
-                  {{ latexStatus?.status === 'ready' ? `${latexStatus.source === 'managed' ? '托管' : '系统'} ${latexStatus.distribution || 'LaTeX'} ${latexStatus.version || ''}` : (latexStatus?.message || '未安装') }}
-                </span>
-                <button
-                  v-if="!latexStatus || ['missing', 'failed', 'idle'].includes(latexStatus.status)"
-                  type="button"
-                  class="save-model-btn"
-                  @click="handleLatexInstall"
-                >安装</button>
-                <button
-                  v-else-if="['downloading', 'installing'].includes(latexStatus.status)"
-                  type="button"
-                  class="save-model-btn"
-                  @click="handleLatexCancel"
-                >取消 {{ latexStatus.progress }}%</button>
-                <button
-                  v-else-if="latexStatus.status === 'ready' && latexStatus.managed"
-                  type="button"
-                  class="save-model-btn"
-                  @click="handleLatexUninstall"
-                >卸载</button>
-              </template>
-              <template v-if="modelDownloading.has(modelKeyToType(item.entry.key))">
-                <div class="model-progress-bar">
-                  <div class="model-progress-fill" :style="{ width: `${modelProgress[modelKeyToType(item.entry.key)] || 0}%` }"></div>
-                </div>
-                <span class="model-progress-pct">{{ modelProgress[modelKeyToType(item.entry.key)] || 0 }}%</span>
-              </template>
               <button
                 v-if="item.entry.can_clear"
                 class="delete-btn"
@@ -747,6 +426,7 @@ onUnmounted(() => {
 /* ---- 统计概览：左右两栏 ---- */
 .stats-row {
   display: grid;
+  min-width: 0;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   gap: var(--space-16);
   margin-bottom: var(--space-8);
@@ -760,12 +440,14 @@ onUnmounted(() => {
 
 .stats-left {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: var(--space-8);
 }
 
 .stats-right {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   align-items: center;
   gap: var(--space-6);
@@ -820,14 +502,20 @@ onUnmounted(() => {
 /* ---- 饼图 ---- */
 .pie-charts {
   display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: var(--space-12);
 }
 
 .pie-chart-item {
   display: flex;
+  flex: 1 1 180px;
   flex-direction: column;
   align-items: center;
   gap: var(--space-4);
+  min-width: 0;
 }
 
 .pie-canvas {
@@ -841,9 +529,24 @@ onUnmounted(() => {
   color: var(--color-text-muted);
 }
 
+.pie-empty {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+  font-size: calc(11px * var(--font-scale));
+}
+
+@media (max-width: 480px) {
+  .pie-canvas {
+    width: 128px;
+    height: 128px;
+  }
+}
+
 /* 图例 */
 .pie-legend {
   display: flex;
+  max-width: 220px;
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--space-4) var(--space-10);
@@ -1030,75 +733,16 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-/* ---- 模型状态指示 ---- */
-.model-status-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.model-status-dot.status-ready { background: #26a269; }
-.model-status-dot.status-downloading { background: #e2a72e; }
-.model-status-dot.status-downloaded { background: #e2a72e; }
-.model-status-dot.status-loading { background: #e2a72e; }
-.model-status-dot.status-error { background: #ef4444; }
-.model-status-dot.status-missing { background: #888; }
-.model-status-dot.status-unknown { background: #555; }
-
-.model-status-label {
-  font-size: calc(11px * var(--font-scale));
-  white-space: nowrap;
-}
-.model-status-label.status-ready { color: #26a269; }
-.model-status-label.status-downloaded { color: #e2a72e; }
-.model-status-label.status-downloading { color: #e2a72e; }
-.model-status-label.status-loading { color: #e2a72e; }
-.model-status-label.status-error { color: #ef4444; }
-.model-status-label.status-missing { color: #888; }
-.model-status-label.status-unknown { color: #555; }
-
-.model-status-dot.clickable { cursor: pointer; }
-.model-status-label.clickable { cursor: pointer; text-decoration: underline dotted; }
-
-/* ---- 模型加载 spinner ---- */
-.model-loading-spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--color-border);
-  border-top-color: #e2a72e;
-  border-radius: 50%;
-  animation: model-loader-spin 0.7s linear infinite;
+.storage-path-header {
+  min-height: 34px;
+  margin-top: var(--space-16);
+  border-bottom: 1px solid var(--color-border);
 }
 
-@keyframes model-loader-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* ---- 模型下载进度条 ---- */
-.model-progress-bar {
-  width: 80px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--color-border);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.model-progress-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--color-primary);
-  transition: width 0.8s ease;
-}
-
-.model-progress-pct {
-  font-size: calc(10px * var(--font-scale));
-  color: var(--color-text-muted);
-  white-space: nowrap;
-  min-width: 32px;
-  text-align: right;
+.storage-path-header h4 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: calc(14px * var(--font-scale));
 }
 </style>
 
@@ -1106,8 +750,9 @@ onUnmounted(() => {
 .stat-card {
   min-height: 44px;
   border: 0;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-text) 6%);
-  box-shadow: 0 0 0 3px var(--library-form-ring);
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 </style>

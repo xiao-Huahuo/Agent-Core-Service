@@ -7,6 +7,8 @@
  */
 import { describe, expect, it } from 'vitest'
 
+import agentPanelSource from '@/components/editor_workspace/AgentPanel.vue?raw'
+import changeDetailDrawerSource from '@/components/editor_workspace/agent_chat/ChangeDetailDrawer.vue?raw'
 import messageListSource from '@/components/editor_workspace/agent_chat/MessageList.vue?raw'
 import sessionDrawerSource from '@/components/editor_workspace/agent_chat/SessionDrawer.vue?raw'
 import editorWorkspaceSource from '@/views/EditorWorkspace.vue?raw'
@@ -35,5 +37,30 @@ describe('Agent page workspace appearance', () => {
     expect(sessionDrawerSource).not.toMatch(
       /\.session-drawer\.page-mode(?:\.open)? \{[^}]*border-radius: 0;/s,
     )
+  })
+
+  it('uses one Environment Change control for all three stacked cards', () => {
+    expect(agentPanelSource).toContain('aria-label="环境变更"')
+    expect(agentPanelSource).toContain('@click="toggleEnvironmentWorkspace"')
+    expect(agentPanelSource).toMatch(/environmentCardOpen\.value = nextOpen[\s\S]*taskListCardOpen\.value = nextOpen[\s\S]*childAgentCardOpen\.value = nextOpen/)
+    expect(agentPanelSource).not.toContain('aria-label="环境与变更"')
+    expect(agentPanelSource).not.toContain('aria-label="任务列表"')
+    expect(agentPanelSource).not.toContain('aria-label="子 Agent"')
+  })
+
+  it('matches the Library toolbar and filter-menu controls', () => {
+    expect(agentPanelSource).toMatch(/class="topbar-tool-button"[\s\S]*:class="\{ active: environmentWorkspaceOpen \}"[\s\S]*aria-label="环境变更"[\s\S]*<IcIcon name="dns"/)
+    expect(agentPanelSource).not.toContain('<span>环境变更</span>')
+    expect(agentPanelSource).toMatch(/class="topbar-skill-trigger"[\s\S]*<IcIcon name="auto-awesome"/)
+    expect(agentPanelSource).toMatch(/class="topbar-loop-mode-trigger"[\s\S]*<IcIcon name="psychology"/)
+    expect(agentPanelSource.match(/class="topbar-filter-menu"/g)).toHaveLength(2)
+    expect(agentPanelSource).toMatch(/\.topbar-loop-mode-trigger,[\s\S]*height: 28px;[\s\S]*border-radius: 999px;[\s\S]*background: var\(--color-canvas\);/)
+  })
+
+  it('slides the change detail drawer horizontally during enter and leave', () => {
+    expect(agentPanelSource).toContain('<Transition name="change-detail-slide">')
+    expect(changeDetailDrawerSource).toContain('.change-detail-slide-enter-from')
+    expect(changeDetailDrawerSource).toContain('.change-detail-slide-leave-to')
+    expect(changeDetailDrawerSource).toMatch(/transform:\s*translateX\(28px\)/)
   })
 })

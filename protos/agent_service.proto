@@ -180,6 +180,8 @@ service AgentService {
   rpc UninstallManagedLatex(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc CompileLatex(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc ClearLatexStorage(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc GetLatexManagement(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc GetModelManagement(google.protobuf.Struct) returns (google.protobuf.Struct);
 
   // Scheduled Agent automation. Struct mirrors the existing REST request
   // fields while serialized tasks and runs keep their current camelCase form.

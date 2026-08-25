@@ -45,6 +45,9 @@ class LatexService:
         "status": "idle",
         "stage": "idle",
         "progress": 0,
+        "downloaded_bytes": 0,
+        "total_bytes": None,
+        "indeterminate": False,
         "message": "",
     }
 
@@ -80,6 +83,9 @@ class LatexService:
                 "status": "missing",
                 "stage": "idle",
                 "progress": 0,
+                "downloaded_bytes": 0,
+                "total_bytes": None,
+                "indeterminate": False,
                 "message": "未检测到 LaTeX 编译器",
                 "source": "none",
                 "managed": False,
@@ -106,6 +112,45 @@ class LatexService:
             "latexmk_path": str(toolchain.get("latexmk") or ""),
             "default_engine": default_engine,
             "runtime_path": str(self.runtime_root),
+        }
+
+    def get_management_status(self) -> dict[str, Any]:
+        """返回编译管理区所需的来源、发行版、引擎、路径和真实磁盘占用。"""
+
+        status = self.get_status()
+        toolchain = self._discover_toolchain()
+        if toolchain:
+            distribution_path = (
+                self.managed_install_dir
+                if toolchain["source"] == "managed"
+                else self._system_distribution_root(Path(toolchain["bin_dir"]))
+            )
+        else:
+            distribution_path = self.managed_install_dir
+        size_bytes, file_count = self._directory_stats(distribution_path)
+        engines = [
+            {
+                "name": engine,
+                "available": bool(toolchain and toolchain.get(engine)),
+                "path": str(toolchain.get(engine) or "") if toolchain else "",
+                "default": status.get("default_engine") == engine,
+            }
+            for engine in SUPPORTED_ENGINES
+        ]
+        return {
+            **status,
+            "distribution_path": str(distribution_path),
+            "size_bytes": size_bytes,
+            "file_count": file_count,
+            "engines": engines,
+            "paths": {
+                "runtime": str(self.runtime_root),
+                "install": str(self.managed_install_dir),
+                "repository": str(self.repository_dir),
+                "config": str(self.managed_config_dir),
+                "data": str(self.managed_data_dir),
+                "temp": str(self.temp_dir),
+            },
         }
 
     def compile_file(self, *, user_id: str, path: str) -> dict[str, Any]:
@@ -230,7 +275,7 @@ class LatexService:
             if self._discover_toolchain():
                 return self.get_status()
             self._install_cancel.clear()
-            self._set_install_state("downloading", "setup", 1, "正在下载 MiKTeX 安装工具")
+            self._set_install_state("downloading", "setup", 0, "正在下载 MiKTeX 安装工具")
             thread = threading.Thread(target=self._install_worker, name="latex-runtime-install", daemon=True)
             thread.start()
             return dict(self._install_state)
@@ -299,7 +344,9 @@ class LatexService:
             if setup_path is None:
                 raise RuntimeError("MiKTeX Setup Utility 压缩包缺少可执行文件")
 
-            self._set_install_state("installing", "packages", 25, "正在下载 MiKTeX basic 宏包")
+            self._set_install_state(
+                "installing", "packages", None, "正在下载 MiKTeX basic 宏包", indeterminate=True,
+            )
             download_arguments = [
                 str(setup_path),
                 "--quiet",
@@ -307,14 +354,34 @@ class LatexService:
                 "--package-set=basic",
                 "download",
             ]
-            self._run_setup(download_arguments)
-            self._set_install_state("installing", "runtime", 70, "正在安装 MiKTeX 运行环境")
-            self._run_setup(self.build_install_arguments(setup_path=setup_path))
+            self._run_setup(
+                download_arguments,
+                progress_path=self.repository_dir,
+                stage="packages",
+                message="正在下载 MiKTeX basic 宏包",
+            )
+            self._set_install_state(
+                "installing", "runtime", None, "正在安装 MiKTeX 运行环境", indeterminate=True,
+            )
+            self._run_setup(
+                self.build_install_arguments(setup_path=setup_path),
+                progress_path=self.managed_install_dir,
+                stage="runtime",
+                message="正在安装 MiKTeX 运行环境",
+            )
             self._enable_package_installer()
             self.managed_marker.write_text("MetaWeave managed MiKTeX\n", encoding="utf-8")
             if not self._discover_toolchain():
                 raise RuntimeError("MiKTeX 安装完成，但未找到 xelatex")
-            self._set_install_state("ready", "ready", 100, "MiKTeX 安装完成")
+            installed_bytes, _ = self._directory_stats(self.managed_install_dir)
+            self._set_install_state(
+                "ready",
+                "ready",
+                100,
+                "MiKTeX 安装完成",
+                downloaded_bytes=installed_bytes,
+                total_bytes=installed_bytes,
+            )
         except Exception as exc:
             if self._install_cancel.is_set():
                 self._set_install_state("idle", "cancelled", 0, "安装已取消")
@@ -341,12 +408,27 @@ class LatexService:
                     break
                 output.write(chunk)
                 downloaded += len(chunk)
-                progress = min(20, int(downloaded * 20 / total)) if total else 5
-                self._set_install_state("downloading", "setup", progress, "正在下载 MiKTeX 安装工具")
+                progress = min(100, int(downloaded * 100 / total)) if total else None
+                self._set_install_state(
+                    "downloading",
+                    "setup",
+                    progress,
+                    "正在下载 MiKTeX 安装工具",
+                    downloaded_bytes=downloaded,
+                    total_bytes=total or None,
+                    indeterminate=not bool(total),
+                )
         partial.replace(target)
 
-    def _run_setup(self, command: list[str]) -> None:
-        """运行一个可取消的 Setup Utility 阶段并检查退出码。"""
+    def _run_setup(
+        self,
+        command: list[str],
+        *,
+        progress_path: Path | None = None,
+        stage: str = "runtime",
+        message: str = "正在安装 MiKTeX",
+    ) -> None:
+        """运行可取消 Setup Utility，并持续报告阶段目录的真实落盘字节。"""
 
         environment = self._compiler_environment(bin_dir=self.managed_install_dir / "miktex" / "bin" / "x64")
         with self._state_lock:
@@ -359,7 +441,29 @@ class LatexService:
                 shell=False,
             )
             process = self._install_process
-        output, _ = process.communicate()
+        stop_progress = threading.Event()
+
+        def _track_setup_bytes() -> None:
+            while progress_path is not None and not stop_progress.is_set():
+                downloaded_bytes, _ = self._directory_stats(progress_path)
+                self._set_install_state(
+                    "installing",
+                    stage,
+                    None,
+                    message,
+                    downloaded_bytes=downloaded_bytes,
+                    total_bytes=None,
+                    indeterminate=True,
+                )
+                stop_progress.wait(0.75)
+
+        tracker = threading.Thread(target=_track_setup_bytes, daemon=True)
+        tracker.start()
+        try:
+            output, _ = process.communicate()
+        finally:
+            stop_progress.set()
+            tracker.join(timeout=2)
         if self._install_cancel.is_set():
             raise RuntimeError("安装已取消")
         if process.returncode != 0:
@@ -416,6 +520,35 @@ class LatexService:
         if expected.is_file():
             return expected
         return next(self.managed_install_dir.rglob(filename), None) if self.managed_install_dir.exists() else None
+
+    @staticmethod
+    def _system_distribution_root(bin_dir: Path) -> Path:
+        """从系统编译器 bin 目录推断 MiKTeX/TeX Live/TinyTeX 安装根目录。"""
+
+        candidates = [
+            parent
+            for parent in (bin_dir, *bin_dir.parents)
+            if parent.name.lower() in {"miktex", "texlive", "tinytex"}
+        ]
+        return candidates[-1] if candidates else bin_dir.parent
+
+    @staticmethod
+    def _directory_stats(path: Path) -> tuple[int, int]:
+        """返回编译发行版真实字节数和文件数。"""
+
+        if not path.exists():
+            return 0, 0
+        size_bytes = 0
+        file_count = 0
+        for item in path.rglob("*"):
+            if not item.is_file():
+                continue
+            try:
+                size_bytes += item.stat().st_size
+                file_count += 1
+            except OSError:
+                continue
+        return size_bytes, file_count
 
     def _build_compile_command(
         self,
@@ -564,14 +697,27 @@ class LatexService:
         return digest.hexdigest()
 
     @classmethod
-    def _set_install_state(cls, status: str, stage: str, progress: int, message: str) -> None:
-        """原子更新进程级安装状态。"""
+    def _set_install_state(
+        cls,
+        status: str,
+        stage: str,
+        progress: int | None,
+        message: str,
+        *,
+        downloaded_bytes: int = 0,
+        total_bytes: int | None = None,
+        indeterminate: bool = False,
+    ) -> None:
+        """原子更新安装状态；未知总量使用空百分比和真实落盘字节。"""
 
         with cls._state_lock:
             cls._install_state = {
                 "status": status,
                 "stage": stage,
-                "progress": max(0, min(100, int(progress))),
+                "progress": max(0, min(100, int(progress))) if progress is not None else None,
+                "downloaded_bytes": max(0, int(downloaded_bytes)),
+                "total_bytes": int(total_bytes) if total_bytes is not None else None,
+                "indeterminate": bool(indeterminate),
                 "message": message,
             }
 

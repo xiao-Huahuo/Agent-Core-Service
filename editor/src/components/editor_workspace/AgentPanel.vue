@@ -90,6 +90,9 @@ const taskListCardOpen = ref(false)
 const childAgentCardOpen = ref(false)
 const environmentCardOpen = ref(false)
 const changeDetailOpen = ref(false)
+const environmentWorkspaceOpen = computed(() => (
+  environmentCardOpen.value || taskListCardOpen.value || childAgentCardOpen.value
+))
 const selectedChangeSnapshot = ref<AgentChangeSnapshot | null>(null)
 const isBootstrapping = ref(false)
 const referenceText = ref('')
@@ -570,6 +573,16 @@ function toggleEnvironmentCard() {
   }
 }
 
+/** Opens or closes the complete Environment Change stack from the page topbar. */
+function toggleEnvironmentWorkspace() {
+  const nextOpen = !environmentWorkspaceOpen.value
+  environmentCardOpen.value = nextOpen
+  taskListCardOpen.value = nextOpen
+  childAgentCardOpen.value = nextOpen
+  agentSidebarOpen.value = nextOpen
+  if (!nextOpen) changeDetailOpen.value = false
+}
+
 function closeEnvironmentCard() {
   environmentCardOpen.value = false
   changeDetailOpen.value = false
@@ -584,7 +597,7 @@ function showChangeDetails(snapshot: AgentChangeSnapshot) {
 // 叉掉任务列表卡片:若另一张(子 Agent)卡片也不可见则一并收起整个侧边栏
 function closeTaskListCard() {
   taskListCardOpen.value = false
-  if (!childAgentCardOpen.value) {
+  if (!childAgentCardOpen.value && !environmentCardOpen.value) {
     agentSidebarOpen.value = false
   }
 }
@@ -592,7 +605,7 @@ function closeTaskListCard() {
 // 叉掉子 Agent 卡片:若另一张(任务列表)卡片也不可见则一并收起整个侧边栏
 function closeChildAgentCard() {
   childAgentCardOpen.value = false
-  if (!taskListCardOpen.value) {
+  if (!taskListCardOpen.value && !environmentCardOpen.value) {
     agentSidebarOpen.value = false
   }
 }
@@ -774,36 +787,27 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
       </button>
       <span class="topbar-title">{{ sessionTitle }}</span>
       <div class="topbar-right">
-        <button class="topbar-tool-button" type="button" title="环境与变更" aria-label="环境与变更" :aria-pressed="environmentCardOpen" @click="toggleEnvironmentCard">
+        <button
+          class="topbar-tool-button"
+          :class="{ active: environmentWorkspaceOpen }"
+          type="button"
+          title="环境变更"
+          aria-label="环境变更"
+          :aria-pressed="environmentWorkspaceOpen"
+          @click="toggleEnvironmentWorkspace"
+        >
           <IcIcon name="dns" :size="17" />
-        </button>
-        <button
-          class="topbar-tool-button"
-          type="button"
-          title="任务列表"
-          :aria-pressed="taskListCardOpen"
-          @click="toggleTaskListCard"
-        >
-          <IcIcon name="checklist" :size="17" />
-        </button>
-        <button
-          class="topbar-tool-button"
-          type="button"
-          title="子 Agent"
-          :aria-pressed="childAgentCardOpen"
-          @click="toggleChildAgentCard"
-        >
-          <IcIcon name="group" :size="17" />
         </button>
         <DropdownMenu v-model:open="skillMenuOpen">
           <DropdownMenuTrigger as-child>
             <button class="topbar-skill-trigger" type="button" title="Skill" aria-label="Skill" :disabled="!userId">
+              <IcIcon name="auto-awesome" :size="16" />
               <span>Skill</span>
-              <IcIcon name="chevron-down" :size="12" />
+              <IcIcon class="topbar-filter-chevron" name="chevron-down" :size="14" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuPortal>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent class="topbar-filter-menu" align="end">
               <div class="topbar-skill-menu-head">
                 <DropdownMenuLabel>Skills</DropdownMenuLabel>
                 <button
@@ -820,7 +824,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
                 <DropdownMenuItem
                   v-for="skill in extractedSkills"
                   :key="skill.skill_id"
-                  class="topbar-skill-option"
                   @select="selectSkillReference(skill.name)"
                 >
                   <span class="topbar-skill-name">{{ skill.name }}</span>
@@ -835,18 +838,17 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
         <DropdownMenu v-model:open="loopModeMenuOpen">
           <DropdownMenuTrigger as-child>
             <button class="topbar-loop-mode-trigger" type="button" title="Agent Loop 模式" aria-label="Agent Loop 模式" :disabled="!userId">
+              <IcIcon name="psychology" :size="16" />
               <span>{{ selectedLoopModeLabel }}</span>
-              <IcIcon name="chevron-down" :size="12" />
+              <IcIcon class="topbar-filter-chevron" name="chevron-down" :size="14" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuPortal>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent class="topbar-filter-menu" align="end">
               <DropdownMenuLabel>思考模式</DropdownMenuLabel>
               <DropdownMenuRadioGroup v-model="agentLoopModeModel">
                 <DropdownMenuRadioItem v-for="option in loopModeOptions" :key="option.value" :value="option.value">
-                  <span class="topbar-loop-mode-copy">
-                    <strong>{{ option.label }}</strong>
-                  </span>
+                  {{ option.label }}
                 </DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
@@ -974,11 +976,13 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
         />
       </section>
     </aside>
-    <ChangeDetailDrawer
-      v-if="changeDetailOpen"
-      :snapshot="selectedChangeSnapshot"
-      @close="changeDetailOpen = false"
-    />
+    <Transition name="change-detail-slide">
+      <ChangeDetailDrawer
+        v-if="changeDetailOpen"
+        :snapshot="selectedChangeSnapshot"
+        @close="changeDetailOpen = false"
+      />
+    </Transition>
     </div>
     </div>
     </div>
@@ -1265,7 +1269,8 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
 }
 
 .topbar-right :deep(.topbar-tool-button:hover:not(:disabled)),
-.topbar-right .topbar-tool-button:hover:not(:disabled) {
+.topbar-right .topbar-tool-button:hover:not(:disabled),
+.topbar-right .topbar-tool-button.active {
   border-color: var(--color-primary);
   background: var(--color-primary-softer);
   color: var(--color-primary);
@@ -1356,42 +1361,50 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-4);
-  height: 32px;
-  min-width: 78px;
-  padding: 0 var(--space-8);
+  gap: 5px;
+  height: 28px;
+  padding: 0 12px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: var(--color-surface);
-  color: var(--color-text-tertiary);
-  font-family: var(--font-ui);
-  font-size: calc(13px * var(--font-scale));
-  line-height: 1;
+  background: var(--color-canvas);
+  color: var(--color-text-secondary);
+  font: inherit;
   white-space: nowrap;
   cursor: pointer;
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.topbar-skill-trigger {
-  min-width: 76px;
 }
 
 .topbar-loop-mode-trigger:hover,
+.topbar-skill-trigger:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  color: var(--color-primary);
+}
+
 .topbar-loop-mode-trigger[data-state='open'],
-.topbar-skill-trigger:hover,
 .topbar-skill-trigger[data-state='open'] {
-  border-color: var(--color-accent);
-  background: var(--color-accent-muted);
-  color: var(--color-text-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.topbar-filter-chevron {
+  margin-right: -3px;
+  opacity: 0.62;
+  transition: transform var(--transition-fast);
+}
+
+.topbar-loop-mode-trigger[data-state='open'] .topbar-filter-chevron,
+.topbar-skill-trigger[data-state='open'] .topbar-filter-chevron {
+  transform: rotate(180deg);
+}
+
+.topbar-filter-menu {
+  width: 260px;
+  max-height: min(520px, var(--reka-dropdown-menu-content-available-height));
+  overflow-y: auto;
 }
 
 .topbar-skill-list {
-  width: 248px;
-  max-height: 340px;
-  overflow: auto;
+  width: 100%;
 }
 
 .topbar-skill-menu-head {
@@ -1400,11 +1413,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   justify-content: space-between;
   gap: var(--space-8);
   min-height: 30px;
-  padding: var(--space-4) var(--space-6) var(--space-6);
-  color: var(--color-text-tertiary);
-  font-family: var(--font-ui);
-  font-size: calc(10px * var(--font-scale));
-  text-transform: uppercase;
+  padding-right: var(--space-4);
 }
 
 .topbar-skill-refresh {
@@ -1437,30 +1446,8 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   animation: safety-spin 0.8s linear infinite;
 }
 
-.topbar-skill-option {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  width: 100%;
-  min-height: 34px;
-  padding: var(--space-6) var(--space-8);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-family: var(--font-ui);
-  text-align: left;
-}
-
-.topbar-skill-option[data-highlighted] {
-  background: var(--color-primary-softer);
-  color: var(--color-text-primary);
-}
-
 .topbar-skill-name {
   color: inherit;
-  font-size: calc(12px * var(--font-scale));
-  font-weight: 650;
 }
 
 .topbar-skill-empty {
@@ -1469,15 +1456,6 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   font-family: var(--font-ui);
   font-size: calc(11px * var(--font-scale));
   text-align: center;
-}
-
-.topbar-loop-mode-copy {
-  display: grid;
-  min-width: 0;
-}
-
-.topbar-loop-mode-copy strong {
-  font-size: calc(12px * var(--font-scale));
 }
 
 .panel-new-session {

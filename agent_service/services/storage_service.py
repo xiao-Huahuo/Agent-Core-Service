@@ -93,6 +93,27 @@ def _dir_size(path: Path) -> int:
     return total
 
 
+def _directory_distribution(path: Path) -> list[dict[str, int | str]]:
+    """统计目录的一级子目录占用，并将根目录文件合并为一个图表分类。"""
+
+    if not path.exists() or not path.is_dir():
+        return []
+    distribution: list[dict[str, int | str]] = []
+    root_file_bytes = 0
+    try:
+        for child in sorted(path.iterdir(), key=lambda item: item.name.casefold()):
+            size_bytes = _dir_size(child)
+            if child.is_file():
+                root_file_bytes += size_bytes
+            elif size_bytes > 0:
+                distribution.append({"name": child.name, "size_bytes": size_bytes})
+    except PermissionError:
+        return []
+    if root_file_bytes > 0:
+        distribution.append({"name": "根目录文件", "size_bytes": root_file_bytes})
+    return distribution
+
+
 class StorageService:
     """存储管理服务：展示真实路径，并只清理运行中可安全回收的目录。"""
 
@@ -195,6 +216,7 @@ class StorageService:
             "paths": paths,
             "knowledge_dir_total_bytes": knowledge_dir_total,
             "runtime_total_bytes": runtime_total,
+            "managed_resource_distribution": _directory_distribution(Path(storage.assets_dir)),
         }
 
     def save_storage_config(self, *, user_id: str, paths: dict[str, str]) -> dict:
