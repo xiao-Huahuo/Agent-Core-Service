@@ -19,7 +19,11 @@ describe('storage settings path contract', () => {
     expect(source).not.toContain('baseDataDirDraft')
     expect(source).not.toContain('handleSaveLibraryStorageDir')
     expect(source).not.toContain('handleSaveBaseDataDir')
-    expect(source).toContain("item.entry.can_clear && item.entry.key === 'trash_dir'")
+    expect(source).toContain('v-if="item.entry.can_clear"')
+    expect(source).toContain("'latex_distribution_dir'")
+    expect(source).toContain('handleLatexInstall')
+    expect(source).toContain('handleLatexUninstall')
+    expect(source).toContain("JSON.stringify({ user_id: settingsStore.profile.userId, path_key: pathKey })")
   })
 
   it('uses the fixed managed library directory as the frontend fallback', () => {

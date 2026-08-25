@@ -108,3 +108,34 @@ def test_only_trash_can_be_cleared_while_service_is_running(tmp_path: Path) -> N
 
     assert result["freed_bytes"] == len("deleted")
     assert list(service.config.storage.trash_dir.iterdir()) == []
+
+
+def test_latex_runtime_and_build_cache_are_reported_and_only_caches_are_clearable(tmp_path: Path) -> None:
+    """LaTeX 核心运行时不可粗暴清空，仓库、临时目录和 `.mw` 编译缓存可安全回收。"""
+
+    service = _make_service(tmp_path)
+    latex_root = service.config.storage.base_data_dir / "latex"
+    (latex_root / "miktex" / "engine.bin").parent.mkdir(parents=True)
+    (latex_root / "miktex" / "engine.bin").write_bytes(b"runtime")
+    (latex_root / "repository" / "package.tar").parent.mkdir(parents=True)
+    (latex_root / "repository" / "package.tar").write_bytes(b"repository")
+    (latex_root / "temp" / "setup.tmp").parent.mkdir(parents=True)
+    (latex_root / "temp" / "setup.tmp").write_bytes(b"temp")
+    build_cache = service.settings_service.knowledge_dir / ".mw" / "latex" / "document"
+    build_cache.mkdir(parents=True)
+    (build_cache / "main.pdf").write_bytes(b"pdf")
+
+    response = service.get_storage_config(user_id="u1")
+    paths = {entry["key"]: entry for entry in response["paths"]}
+
+    assert paths["latex_runtime_dir"]["parent"] == "base_data_dir"
+    assert paths["latex_distribution_dir"]["can_clear"] is False
+    assert paths["latex_repository_dir"]["can_clear"] is True
+    assert paths["latex_temp_dir"]["can_clear"] is True
+    assert paths["latex_build_cache_dir"]["parent"] == "managed_root"
+    assert paths["latex_build_cache_dir"]["can_clear"] is True
+
+    with pytest.raises(ValueError, match="不允许清空"):
+        service.clear_path(path_key="latex_distribution_dir", user_id="u1")
+    assert service.clear_path(path_key="latex_repository_dir", user_id="u1")["freed_bytes"] == len("repository")
+    assert service.clear_path(path_key="latex_build_cache_dir", user_id="u1")["freed_bytes"] == len("pdf")

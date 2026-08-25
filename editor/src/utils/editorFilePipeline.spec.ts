@@ -16,6 +16,7 @@ describe('resolveEditorFilePipeline', () => {
     ['clip.mp4', ['preview'], 'preview', true, false],
     ['recording.webm', ['preview'], 'preview', true, false],
     ['script.py', ['code'], 'code', false, true],
+    ['paper.tex', ['code', 'preview', 'split'], 'code', false, true],
     ['legacy.doc', ['binary'], 'binary', true, false],
   ])('%s resolves its complete editor contract', (path, modes, defaultMode, usesPreview, editable) => {
     const pipeline = resolveEditorFilePipeline(path)

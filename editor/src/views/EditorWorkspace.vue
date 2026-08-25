@@ -798,7 +798,7 @@ watch(
         ref="mainShell"
         class="main-shell editor-col ide-panel"
         :class="{
-          'agent-page-main-shell': isAgentPage,
+          'agent-page-main-shell': isAgentPage && !topCommandBarMobile,
         }"
       >
         <Transition name="mobile-sidebar-toggle">
@@ -829,10 +829,19 @@ watch(
           class="main-shell-content"
           :mobile="vaultSidebarMobile"
         />
-        <SmartFormsView v-else-if="workspaceStore.mainView === 'forms'" class="main-shell-content" />
+        <SmartFormsView
+          v-else-if="workspaceStore.mainView === 'forms'"
+          class="main-shell-content"
+          :mobile="topCommandBarMobile"
+          :available-width="mainShellWidth"
+        />
         <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="main-shell-content" />
         <MarkdownHtmlVisualizationView v-else-if="workspaceStore.mainView === 'visualization'" class="main-shell-content" />
-        <AgentPage v-else-if="workspaceStore.mainView === 'agent'" class="main-shell-content" />
+        <AgentPage
+          v-else-if="workspaceStore.mainView === 'agent'"
+          class="main-shell-content"
+          :mobile="topCommandBarMobile"
+        />
         <AgentQueueView v-else-if="workspaceStore.mainView === 'agent-queue'" class="main-shell-content" />
         <GraphPane v-else-if="workspaceStore.mainView === 'graph'" class="main-shell-content" @open-node="openGraphNode" />
         <DashboardView v-else-if="workspaceStore.mainView === 'dashboard'" class="main-shell-content" />

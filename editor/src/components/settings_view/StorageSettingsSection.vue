@@ -6,12 +6,19 @@
     <StorageSettingsSection />
 -->
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import VChart from 'vue-echarts'
 import 'echarts'
 import IcIcon from '@/components/common/IcIcon.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { API_ROUTES } from '@/router/api_routes'
+import {
+  cancelLatexInstall,
+  fetchLatexStatus,
+  installLatexRuntime,
+  uninstallLatexRuntime,
+  type LatexRuntimeStatus,
+} from '@/api/latex'
 
 interface StoragePathEntry {
   key: string
@@ -52,6 +59,8 @@ const knowledgeDirDraft = ref('')
 const modelStatus = ref<ModelStatusData>({ embedding: 'unknown', rerank: 'unknown', paddleocr: 'unknown' })
 const modelDownloading = ref<Set<string>>(new Set())
 const modelProgress = ref<Record<string, number>>({})
+const latexStatus = ref<LatexRuntimeStatus | null>(null)
+let latexStatusTimer: ReturnType<typeof setInterval> | null = null
 
 function modelStatusText(model: string): string {
   const s = modelStatus.value[model as keyof ModelStatusData]
@@ -244,6 +253,71 @@ async function pollModelProgress() {
   } catch { /* ignore */ }
 }
 
+/** Refresh the real system-or-managed LaTeX runtime state. */
+async function checkLatexRuntime() {
+  if (!settingsStore.profile.userId) return
+  try {
+    latexStatus.value = await fetchLatexStatus(settingsStore.profile.userId)
+  } catch {
+    latexStatus.value = null
+  }
+}
+
+/** Poll only while installation is active, then refresh storage sizes once. */
+function startLatexStatusPolling() {
+  if (latexStatusTimer) clearInterval(latexStatusTimer)
+  latexStatusTimer = setInterval(async () => {
+    await checkLatexRuntime()
+    const status = latexStatus.value?.status
+    if (!status || ['downloading', 'installing', 'cancelling'].includes(status)) return
+    if (latexStatusTimer) clearInterval(latexStatusTimer)
+    latexStatusTimer = null
+    await loadStorageConfig()
+  }, 1000)
+}
+
+/** Ask for consent and start the backend-managed MiKTeX deployment. */
+async function handleLatexInstall() {
+  if (!settingsStore.profile.userId) return
+  const confirmed = window.confirm('将从 MiKTeX 官网下载并安装当前用户范围的 LaTeX 运行环境，下载量约 150–350 MB，是否继续？')
+  if (!confirmed) return
+  try {
+    latexStatus.value = await installLatexRuntime(settingsStore.profile.userId)
+    startLatexStatusPolling()
+  } catch (error: unknown) {
+    show(error instanceof Error ? error.message : 'MiKTeX 安装启动失败')
+  }
+}
+
+/** Cancel the active MiKTeX setup process. */
+async function handleLatexCancel() {
+  if (!settingsStore.profile.userId) return
+  latexStatus.value = await cancelLatexInstall(settingsStore.profile.userId)
+}
+
+/** Remove only MetaWeave's managed runtime after a destructive confirmation. */
+async function handleLatexUninstall() {
+  if (!settingsStore.profile.userId) return
+  const confirmed = window.confirm('确认卸载 MetaWeave 托管的 MiKTeX？系统中其他 LaTeX 环境不会受影响。')
+  if (!confirmed) return
+  try {
+    latexStatus.value = await uninstallLatexRuntime(settingsStore.profile.userId)
+    await loadStorageConfig()
+    show('托管 MiKTeX 已卸载')
+  } catch (error: unknown) {
+    show(error instanceof Error ? error.message : '托管 MiKTeX 卸载失败')
+  }
+}
+
+/** Map backend runtime states onto the existing semantic status styles. */
+function latexStatusClass(): string {
+  const status = latexStatus.value?.status
+  if (status === 'ready') return 'status-ready'
+  if (['downloading', 'installing', 'cancelling'].includes(status || '')) return 'status-downloading'
+  if (status === 'failed') return 'status-error'
+  return 'status-missing'
+}
+
 /* ---- 颜色板：主色/点缀色/语义色 ---- */
 const PIE_COLORS = [
   '#4224eb', '#eb2463', '#26a269', '#e2a72e', '#ef4444',
@@ -251,10 +325,11 @@ const PIE_COLORS = [
 
 /* ---- 排序 ---- */
 const ROOT_ORDER = [
-  'knowledge_dir', 'managed_root', 'markdown_dir', 'frontmatter_dir', 'library_storage_dir', 'forms_dir', 'components_dir', 'base_data_dir',
+  'knowledge_dir', 'managed_root', 'markdown_dir', 'frontmatter_dir', 'library_storage_dir', 'forms_dir', 'components_dir', 'latex_build_cache_dir', 'base_data_dir',
   'assets_dir', 'db_dir', 'relation_db_dir', 'vector_db_dir', 'sqlite_path', 'chroma_persist_dir',
   'log_dir', 'models_dir',
   'embedding_model_dir', 'paddleocr_model_dir', 'rerank_model_dir',
+  'latex_runtime_dir', 'latex_distribution_dir', 'latex_repository_dir', 'latex_temp_dir',
   'trash_dir',
 ]
 
@@ -437,7 +512,7 @@ async function handleClear(pathKey: string, label: string) {
     const res = await fetch(API_ROUTES.SETTINGS_STORAGE_CLEAR, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path_key: pathKey }),
+      body: JSON.stringify({ user_id: settingsStore.profile.userId, path_key: pathKey }),
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
@@ -454,6 +529,18 @@ async function handleClear(pathKey: string, label: string) {
 onMounted(() => {
   loadStorageConfig()
   checkAllModels()
+})
+
+watch(
+  () => settingsStore.profile.userId,
+  (userId) => {
+    if (userId) void checkLatexRuntime()
+  },
+  { immediate: true },
+)
+
+onUnmounted(() => {
+  if (latexStatusTimer) clearInterval(latexStatusTimer)
 })
 </script>
 
@@ -531,6 +618,9 @@ onMounted(() => {
                   {{ savingKey === item.entry.key ? '...' : '保存' }}
                 </button>
               </template>
+              <template v-else-if="item.entry.key === 'latex_distribution_dir'">
+                <span class="tree-value mono">{{ latexStatus?.compiler_path || item.entry.value }}</span>
+              </template>
               <template v-else-if="MODEL_KEYS.includes(item.entry.key as any)">
                 <span class="tree-value mono">{{ item.entry.value }}</span>
               </template>
@@ -562,6 +652,30 @@ onMounted(() => {
                   下载
                 </button>
               </template>
+              <template v-else-if="item.entry.key === 'latex_distribution_dir'">
+                <span class="model-status-dot" :class="latexStatusClass()"></span>
+                <span class="model-status-label" :class="latexStatusClass()">
+                  {{ latexStatus?.status === 'ready' ? `${latexStatus.source === 'managed' ? '托管' : '系统'} ${latexStatus.distribution || 'LaTeX'} ${latexStatus.version || ''}` : (latexStatus?.message || '未安装') }}
+                </span>
+                <button
+                  v-if="!latexStatus || ['missing', 'failed', 'idle'].includes(latexStatus.status)"
+                  type="button"
+                  class="save-model-btn"
+                  @click="handleLatexInstall"
+                >安装</button>
+                <button
+                  v-else-if="['downloading', 'installing'].includes(latexStatus.status)"
+                  type="button"
+                  class="save-model-btn"
+                  @click="handleLatexCancel"
+                >取消 {{ latexStatus.progress }}%</button>
+                <button
+                  v-else-if="latexStatus.status === 'ready' && latexStatus.managed"
+                  type="button"
+                  class="save-model-btn"
+                  @click="handleLatexUninstall"
+                >卸载</button>
+              </template>
               <template v-if="modelDownloading.has(modelKeyToType(item.entry.key))">
                 <div class="model-progress-bar">
                   <div class="model-progress-fill" :style="{ width: `${modelProgress[modelKeyToType(item.entry.key)] || 0}%` }"></div>
@@ -569,7 +683,7 @@ onMounted(() => {
                 <span class="model-progress-pct">{{ modelProgress[modelKeyToType(item.entry.key)] || 0 }}%</span>
               </template>
               <button
-                v-if="item.entry.can_clear && item.entry.key === 'trash_dir'"
+                v-if="item.entry.can_clear"
                 class="delete-btn"
                 :disabled="clearing === item.entry.key"
                 :title="`清空 ${item.entry.label}`"

@@ -300,6 +300,14 @@ async function clearAllSessions() {
   pointer-events: auto;
 }
 
+/* Mobile Agent main view mirrors the file tree's left-anchored floating panel. */
+.session-drawer.mobile-floating {
+  border: 1px solid var(--workspace-panel-border);
+  border-radius: 18px;
+  background: var(--color-bg-app);
+  box-shadow: 12px 0 32px rgba(12, 18, 38, 0.22);
+}
+
 .session-drawer.page-mode {
   --drawer-page-hover: var(--color-primary-softer);
   --drawer-page-active: var(--color-primary-soft);

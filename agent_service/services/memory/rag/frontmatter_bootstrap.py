@@ -384,7 +384,7 @@ class FrontmatterBootstrapService:
             source_type = self._resolve_source_type(source_path)
             extra_metadata: dict[str, Any] = {"modality": "document"}
             summary = str(metadata.get("summary") or "")
-        elif source_path.suffix.lower() == ".txt" or source_path.suffix.lower() not in self.config.constants.knowledge_supported_suffixes:
+        elif source_path.suffix.lower() in {".txt", ".tex"} or source_path.suffix.lower() not in self.config.constants.knowledge_supported_suffixes:
             body_text = self._read_text_with_fallback(source_path)
             self._emit_stage_progress(
                 progress_callback,

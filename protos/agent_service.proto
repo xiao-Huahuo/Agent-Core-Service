@@ -173,6 +173,14 @@ service AgentService {
   rpc DeleteAgentQueueTask(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc UpdateAgentQueueSettings(google.protobuf.Struct) returns (google.protobuf.Struct);
 
+  // LaTeX 运行时、编译和缓存管理，与 REST /settings/latex、/knowledge/latex 对齐。
+  rpc GetLatexStatus(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc StartLatexInstall(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc CancelLatexInstall(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc UninstallManagedLatex(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc CompileLatex(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc ClearLatexStorage(google.protobuf.Struct) returns (google.protobuf.Struct);
+
   // Scheduled Agent automation. Struct mirrors the existing REST request
   // fields while serialized tasks and runs keep their current camelCase form.
   rpc ListAutomations(google.protobuf.Struct) returns (google.protobuf.Struct);

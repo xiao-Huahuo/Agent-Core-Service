@@ -556,6 +556,31 @@ def test_frontmatter_bootstrap_ingests_unknown_text_suffix(tmp_path: Path) -> No
     assert not (frontmatter_dir / "image.json").exists()
 
 
+def test_frontmatter_bootstrap_ingests_supported_tex_as_text(tmp_path: Path) -> None:
+    """`.tex` 加入知识白名单后仍必须走文本管线，不能误入多模态清洗器。"""
+
+    knowledge_dir = tmp_path / "knowledge"
+    frontmatter_dir = tmp_path / "frontmatter"
+    knowledge_dir.mkdir()
+    (knowledge_dir / "paper.tex").write_text(
+        "\\documentclass{article}\n\\begin{document}Knowledge text\\end{document}\n",
+        encoding="utf-8",
+    )
+    config = AgentConfig.load_config(load_env=False, ensure_directories=False, ensure_models=False)
+    service = FrontmatterBootstrapService(config=config)
+
+    result = service.build_frontmatter_dir(
+        knowledge_dir=knowledge_dir,
+        frontmatter_dir=frontmatter_dir,
+        supported_suffixes={".tex"},
+    )
+
+    payload = json.loads((frontmatter_dir / "paper.json").read_text(encoding="utf-8"))
+    assert result.files_written == 1
+    assert payload["metadata"]["modality"] == "text"
+    assert "Knowledge text" in payload["sections"][0]["content"]
+
+
 def test_frontmatter_bootstrap_rejects_unknown_binary_single_file(tmp_path: Path) -> None:
     """Single-file ingestion should skip unknown binary formats instead of parsing them."""
 

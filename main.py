@@ -178,6 +178,12 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         knowledge_library_service=knowledge_library_service,
         knowledge_graph_service=knowledge_graph_service,
     )
+    from agent_service.services.latex_service import LatexService
+    latex_service = LatexService(
+        config=config,
+        settings_service=settings_service,
+        knowledge_library_service=knowledge_library_service,
+    )
     knowledge_ingestion_job_service = KnowledgeIngestionJobService(
         engine=memory_service.engine,
         config=config,
@@ -199,6 +205,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     rest_deps._attachment_service = attachment_service
     rest_deps._skill_service = skill_service
     rest_deps._knowledge_library_service = knowledge_library_service
+    rest_deps._latex_service = latex_service
     rest_deps._knowledge_ingestion_job_service = knowledge_ingestion_job_service
     rest_deps._knowledge_graph_service = knowledge_graph_service
     rest_deps._git_service = git_service
@@ -289,6 +296,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         activity_service=activity_service,
         component_library_service=component_library_service,
         smart_form_service=smart_form_service,
+        latex_service=latex_service,
     )
     rest_deps._agent = agent
     rest_deps._session_service = session_service
@@ -338,6 +346,7 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
         rest_deps._attachment_service = None
         rest_deps._skill_service = None
         rest_deps._knowledge_library_service = None
+        rest_deps._latex_service = None
         rest_deps._knowledge_ingestion_job_service = None
         rest_deps._knowledge_graph_service = None
         rest_deps._git_service = None

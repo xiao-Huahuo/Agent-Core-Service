@@ -22,6 +22,7 @@ import java from 'highlight.js/lib/languages/java'
 import javascript from 'highlight.js/lib/languages/javascript'
 import json from 'highlight.js/lib/languages/json'
 import kotlin from 'highlight.js/lib/languages/kotlin'
+import latex from 'highlight.js/lib/languages/latex'
 import markdown from 'highlight.js/lib/languages/markdown'
 import php from 'highlight.js/lib/languages/php'
 import plaintext from 'highlight.js/lib/languages/plaintext'
@@ -44,6 +45,7 @@ hljs.registerLanguage('java', java)
 hljs.registerLanguage('javascript', javascript)
 hljs.registerLanguage('json', json)
 hljs.registerLanguage('kotlin', kotlin)
+hljs.registerLanguage('latex', latex)
 hljs.registerLanguage('markdown', markdown)
 hljs.registerLanguage('php', php)
 hljs.registerLanguage('plaintext', plaintext)
@@ -74,6 +76,7 @@ hljs.registerLanguage('golang', go)
 hljs.registerLanguage('h', c)
 hljs.registerLanguage('hpp', cpp)
 hljs.registerLanguage('text', plaintext)
+hljs.registerLanguage('tex', latex)
 
 /** 判断指定语言标识是否已注册,未注册时调用方可回退到纯文本。 */
 export function isHighlightableLanguage(language: string): boolean {

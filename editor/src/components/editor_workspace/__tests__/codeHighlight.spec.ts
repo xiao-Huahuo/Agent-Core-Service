@@ -50,6 +50,8 @@ const TARGET_LANGUAGES = [
   'xml',
   'plaintext',
   'text',
+  'latex',
+  'tex',
 ]
 
 /** 每门语言的代表性代码片段,用于验证高亮产出词法 span。 */
@@ -66,6 +68,7 @@ const SAMPLES: Array<{ language: string; code: string }> = [
   { language: 'vue', code: '<template><div>{{ message }}</div></template>' },
   { language: 'jsx', code: 'const App = () => <div className="x">{items.length}</div>;' },
   { language: 'tsx', code: 'const Card: React.FC<{title: string}> = ({ title }) => <b>{title}</b>;' },
+  { language: 'tex', code: '\\documentclass{article}\n\\begin{document}$E=mc^2$\\end{document}' },
 ]
 
 describe('codeHighlight language registration', () => {

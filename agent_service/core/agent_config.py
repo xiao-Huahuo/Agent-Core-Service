@@ -82,6 +82,7 @@ class AgentConfig:
                 ".html",
                 ".htm",
                 ".xml",
+                ".tex",
                 ".docx",
                 ".xlsx",
                 ".pptx",

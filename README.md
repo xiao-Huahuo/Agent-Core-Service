@@ -10,7 +10,7 @@
 ### 产品定位
 
 **MetaWeave(元织)** 是一款**AI原生**的、以**多模态**为基础、以**多知识形态**为根本、以**Agent**能力全面智能集成的**本地个人知识库**. 
-- **多模态支持**: Markdown、纯文本、CSV、TSV、代码、DOCX、XLSX、PPTX、PDF 和常见图片格式, 均可在桌面工作台中实时查看,并内置**全模态转Markdown**的能力.
+- **多模态支持**: Markdown、LaTeX、纯文本、CSV、TSV、代码、DOCX、XLSX、PPTX、PDF 和常见图片格式, 均可在桌面工作台中实时查看,并内置**全模态转Markdown**的能力.
 - **多知识形态**: 文件库、图书馆、智能化表格、组件库、密码库 ,五库均配备在**统一的大知识库**,由Agent统一调度,从根本上杜绝了混乱的知识存储机制的来源.
 
 文件树会显示包括 `.git` 在内的所有点文件和点目录，但灌库会自动忽略任意以 `.` 开头的文件夹及其全部内容。
@@ -53,7 +53,7 @@ Agent 框架不能消除模型幻觉。MetaWeave 因此优先提供检索、引�
 * 通信与工具协议: gRPC + REST/HTTP + MCP
 * 观测面板：Vue 3 + Pinia + TypeScript/JavaScript
 * 知识图谱：D3.js + Canvas
-* 文档编辑器：CodeEditor + MarkdownPreview + 多模态原件预览器，按文件类型切换编辑、图片、视频、表格或 Markdown 中间层预览
+* 文档编辑器：CodeEditor + MarkdownPreview + PDF/多模态原件预览器，按文件类型切换编辑、LaTeX 编译、图片、视频、表格或 Markdown 中间层预览
 * 反向代理：Vite
 * 智能体编排：LangGraph + LangChain
 * 模型接入：支持用户配置的 OpenAI 兼容大小模型接口
@@ -166,6 +166,12 @@ runtime/
 │   ├── embedding/                  # Embedding 模型
 │   ├── rerank/                     # ReRank 模型
 │   └── paddleocr/                  # OCR 模型
+├── latex/
+│   ├── miktex/                     # MetaWeave 托管的 MiKTeX 核心与宏包
+│   ├── repository/                 # MiKTeX 下载仓库，可在存储管理中清理
+│   ├── config/                     # 托管 MiKTeX 用户配置
+│   ├── data/                       # 托管 MiKTeX 用户数据
+│   └── temp/                       # 安装与编译临时文件，可安全清理
 ├── logs/                           # 服务日志与轮转文件
 ├── trash/                          # 知识库“最近删除”
 └── frontmatter/                    # 服务级兼容结构化目录
@@ -175,7 +181,7 @@ runtime/
 
 ### .mw 知识库内锚点
 
-每个知识库根目录下都有一个由 MetaWeave 管理的 `.mw/`。它是应用功能在该知识库内的固定锚点：多模态中间层、图书馆、智能表格和组件库都从这里定位。`.mw/` 默认不会作为普通知识文件展示或灌库，也不允许在存储设置中单独改到其他位置。
+每个知识库根目录下都有一个由 MetaWeave 管理的 `.mw/`。它是应用功能在该知识库内的固定锚点：多模态中间层、图书馆、智能表格、组件库和 LaTeX 编译缓存都从这里定位。文件树可以显示 `.mw/` 供用户查看受管文件，但其中内容不会作为普通源文件重复灌库，也不允许在存储设置中单独改到其他位置。
 
 ```text
 <知识库>/
@@ -186,7 +192,8 @@ runtime/
     ├── assets/                     # PDF、Office 等文档抽取出的图片
     ├── library/                    # 图书馆图书与集锦目录
     ├── forms/                      # 智能表格及其文献附件
-    └── components/                 # 组件库中的 Vue 与 HTML 文件
+    ├── components/                 # 组件库中的 Vue 与 HTML 文件
+    └── latex/                      # LaTeX PDF、AUX、LOG 与 SyncTeX 编译缓存
 ```
 
 `md/`、`frontmatter/` 和 `assets/` 主要由原文件派生，必要时可以重新入库生成；`library/`、`forms/` 和 `components/` 包含用户管理的业务内容，备份知识库时应与原始文件一起保留。切换活动知识库时，应用使用的 `.mw/` 也随之切换。
@@ -195,7 +202,7 @@ runtime/
 
 以下是 MetaWeave(元织) 的核心功能,部分业务工作流流程图可见[WORKFLOW.md](docs/WORKFLOW.md).
 
-### 六类知识库
+### 五类知识库
 
 #### 多模态文档库
 
@@ -207,7 +214,7 @@ runtime/
 - 默认采用惰性灌库：文件进入知识库时不自动写入向量库，用户可以手动灌入单个文件，也可以通过顶部命令栏对整个知识库重新灌库。
 - 用户可以屏蔽单个文件或建立屏蔽区。被屏蔽的文件不会入库；已经入库的文件被屏蔽后，系统会删除以该文件为来源的知识切片。灌库过程会自动忽略被屏蔽的文件及屏蔽目录的子树。
 
-知识库可以解析 Markdown、纯文本、CSV、TSV、代码、DOCX、XLSX、PPTX、PDF 和常见图片格式，并将结果转换为可检索内容。
+知识库可以解析 Markdown、LaTeX、纯文本、CSV、TSV、代码、DOCX、XLSX、PPTX、PDF 和常见图片格式，并将结果转换为可检索内容。
 
 - Markdown 和纯文本按标题、段落等结构处理；JSON、JSONL、CSV、TSV 和 XML 会保留可识别的结构信息，HTML 会忽略脚本与样式内容。
 - DOCX 会提取段落、表格和内嵌图片；XLSX 按工作表与表格内容处理；PPTX 从演示文稿结构中提取文字与媒体。旧版 DOC 和 PPT 不在专用解析范围内。
@@ -222,12 +229,35 @@ runtime/
 - **Markdown**：`Edit / Preview / Split`，支持源码编辑、渲染预览与分栏查看。分栏模式会同步编辑区与预览区的滚动位置。
 - **纯文本**：`Text`，直接编辑原始文本。
 - **代码与标记语言**：`Code`，提供语法高亮和编辑能力。
+- **LaTeX**：`Code / Preview / Split`，编辑 `.tex` 源码、编译 PDF，或在同一工作区分屏查看源码与 PDF。
 - **CSV**：`Text / Forms`，可以在原始 CSV 文本与表格之间切换。
 - **XLS / XLSX**：`Forms`，以表格形式查看。
 - **DOCX / PDF / 图片**：`Preview / Markdown`，分别查看原件和 `.mw/md/` 中间层全文。
 - **PPTX**：`Preview / Markdown`，当前原件预览留空，Markdown 显示中间层全文。
 - **视频**：`Preview`，MP4、WebM、Ogg/Ogv、MOV 与 M4V 使用内置播放器查看；视频默认屏蔽且始终不参与知识灌库。
 - **其他格式**：可解码文本显示 `Text`；二进制文件显示 `Binary` 状态且不可查看。旧版 DOC 按不支持格式处理。
+
+###### LaTeX 编译与 PDF 预览
+
+打开 `.tex` 文件后，Code 模式提供 LaTeX 语法高亮。切换到 Preview 或 Split 时，MetaWeave 会先保存源文件，再选择匹配的 LaTeX 引擎编译主文档；在任意模式下按保存也会刷新最近一次编译结果。Split 在宽屏中左右排列，在窄屏中上下排列。
+
+MetaWeave 优先使用自身托管的 MiKTeX；没有托管运行时时，会检测系统 `PATH` 中已有的 pdfLaTeX、XeLaTeX、LuaLaTeX 和 latexmk。没有可用引擎时，预览区会显示“安装 MiKTeX”：用户确认后，应用从 [MiKTeX 官网](https://miktex.org/download)下载经过 SHA-256 校验的 Setup Utility，并以当前用户范围安装，不要求管理员权限，也不修改系统 `PATH`。安装过程可以取消；缺失宏包由 MiKTeX 按需下载。
+
+默认 recipe 与 LaTeX Workshop 一致，使用 `latexmk + pdfLaTeX`；每次预览会强制检查并重建，避免上一次失败后停在 `Nothing to do`。文档需要 XeLaTeX 或 LuaLaTeX 时，可以在前 50 行声明编译器：
+
+```tex
+%!TeX program = xelatex
+```
+
+可用值为 `pdflatex`、`xelatex` 和 `lualatex`。没有 latexmk 时，MetaWeave 会直接运行所选引擎两轮以更新交叉引用。编译始终禁用 unrestricted shell escape。多文件项目可以在子文件前 50 行声明主文档：
+
+```tex
+%!TeX root = ../main.tex
+```
+
+主文档必须位于当前知识库内。编译错误会在预览区显示文件、行号和完整日志，点击错误可以回到对应源码位置。PDF 预览顶栏提供下载按钮，可以直接导出编译后的同名 PDF。PDF、`.aux`、`.log` 和 `.synctex.gz` 等派生文件写入 `<知识库>/.mw/latex/`，不会散落到 `.tex` 旁边，也不会覆盖源文件。
+
+“设置 → 存储管理”会显示 LaTeX 运行环境、MiKTeX 核心与宏包、下载仓库、临时文件和当前知识库编译缓存的实际路径与占用。下载仓库、临时文件和编译缓存可以单独清理；MiKTeX 核心只能通过“卸载”操作移除。系统已有的 LaTeX 只读展示，MetaWeave 不会卸载或修改它。
 
 ![编辑区](docs/assets/多模态编辑区.png)
 

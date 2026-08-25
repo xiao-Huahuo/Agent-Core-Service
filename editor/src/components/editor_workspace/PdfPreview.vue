@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { Minus, Plus, RotateCcw } from 'lucide-vue-next'
+import { Download, Minus, Plus, RotateCcw } from 'lucide-vue-next'
 
 import { buildApiUrl } from '@/api/client'
 import type { FilePreviewPayload, PdfPreviewPage } from '@/types/knowledge'
@@ -36,6 +36,7 @@ let pendingWheelDelta = 0
 let pendingPointer = { x: 0, y: 0 }
 
 const pages = computed(() => props.preview.pdf_pages ?? [])
+const isCompiledLatexPdf = computed(() => props.preview.path.replace(/\\/gu, '/').startsWith('.mw/latex/'))
 const maxPageWidth = computed(() => Math.max(...pages.value.map((page) => page.width), 1))
 const zoomLabel = computed(() => `${Math.round(scale.value * 100)}%`)
 
@@ -162,6 +163,18 @@ function markPageFailed(pageNumber: number) {
   failedPages.value = new Set(failedPages.value).add(pageNumber)
 }
 
+/** Download this generated TeX PDF through the existing raw-file attachment response. */
+function downloadCompiledPdf() {
+  const downloadUrl = new URL(props.source, window.location.href)
+  downloadUrl.searchParams.set('download', 'true')
+  const anchor = document.createElement('a')
+  anchor.href = downloadUrl.toString()
+  anchor.download = props.preview.path.replace(/\\/gu, '/').split('/').pop() || 'document.pdf'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+}
+
 watch(() => props.preview.path, () => {
   viewerMode.value = 'pages'
   scale.value = 1
@@ -192,11 +205,23 @@ onBeforeUnmount(() => {
         <button class="preview-option" :class="{ active: viewerMode === 'native' }" type="button" @click="viewerMode = 'native'">Preview2</button>
       </div>
 
-      <div v-if="viewerMode === 'pages'" class="zoom-controls">
-        <button type="button" title="缩小" aria-label="缩小" @click="zoomFromCenter(0.8)"><Minus :size="16" /></button>
-        <button type="button" class="zoom-value" title="重置缩放" @click="zoomFromCenter(1 / scale)">{{ zoomLabel }}</button>
-        <button type="button" title="放大" aria-label="放大" @click="zoomFromCenter(1.25)"><Plus :size="16" /></button>
-        <button type="button" title="重置缩放" aria-label="重置缩放" @click="zoomFromCenter(1 / scale)"><RotateCcw :size="15" /></button>
+      <div class="pdf-toolbar-actions">
+        <div v-if="viewerMode === 'pages'" class="zoom-controls">
+          <button type="button" title="缩小" aria-label="缩小" @click="zoomFromCenter(0.8)"><Minus :size="16" /></button>
+          <button type="button" class="zoom-value" title="重置缩放" @click="zoomFromCenter(1 / scale)">{{ zoomLabel }}</button>
+          <button type="button" title="放大" aria-label="放大" @click="zoomFromCenter(1.25)"><Plus :size="16" /></button>
+          <button type="button" class="zoom-reset-button" title="重置缩放" aria-label="重置缩放" @click="zoomFromCenter(1 / scale)"><RotateCcw :size="15" /></button>
+        </div>
+        <button
+          v-if="isCompiledLatexPdf"
+          type="button"
+          class="pdf-download-button"
+          title="下载编译 PDF"
+          aria-label="下载编译 PDF"
+          @click="downloadCompiledPdf"
+        >
+          <Download :size="16" />
+        </button>
       </div>
     </header>
 
@@ -236,6 +261,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   min-height: 0;
+  container-type: inline-size;
   flex-direction: column;
   background: var(--color-canvas);
 }
@@ -298,7 +324,14 @@ onBeforeUnmount(() => {
   gap: 3px;
 }
 
-.zoom-controls button {
+.pdf-toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.zoom-controls button,
+.pdf-download-button {
   display: inline-grid;
   min-width: 28px;
   height: 28px;
@@ -312,7 +345,8 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.zoom-controls button:hover {
+.zoom-controls button:hover,
+.pdf-download-button:hover {
   background: color-mix(in srgb, var(--color-surface) 92%, var(--color-text) 8%);
   color: var(--color-text);
 }
@@ -321,6 +355,17 @@ onBeforeUnmount(() => {
   min-width: 50px;
   font-size: calc(11px * var(--font-scale));
   font-variant-numeric: tabular-nums;
+}
+
+@container (max-width: 420px) {
+  .zoom-value,
+  .zoom-reset-button {
+    display: none;
+  }
+
+  .pdf-toolbar {
+    padding-inline: var(--space-6);
+  }
 }
 
 .pdf-pages-scroll {

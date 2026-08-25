@@ -18,12 +18,22 @@ import MarkdownHtmlVisualizationPanel from '@/components/editor_workspace/Markdo
 import MarkdownOutline from '@/components/editor_workspace/MarkdownOutline.vue'
 import MarkdownPreview from '@/components/editor_workspace/MarkdownPreview.vue'
 import MultimodalPreview from '@/components/editor_workspace/MultimodalPreview.vue'
+import LatexPreview from '@/components/editor_workspace/LatexPreview.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useSettingsStore } from '@/stores/settings'
 import type { EditorWorkspaceMode } from '@/types/knowledge'
 import { resolveEditorFilePipeline } from '@/utils/editorFilePipeline'
 import { fetchSessionChanges } from '@/api/agentChanges'
 import { readKnowledgeFile } from '@/api/knowledge'
+import {
+  cancelLatexInstall,
+  compileLatexFile,
+  fetchLatexStatus,
+  installLatexRuntime,
+  type LatexCompileError,
+  type LatexCompileResult,
+  type LatexRuntimeStatus,
+} from '@/api/latex'
 import { useSessionStore } from '@/stores/session'
 import { buildBacklinks } from './backlinks'
 import {
@@ -61,6 +71,10 @@ let wikiFocusNonce = 0
 const backlinkDocuments = ref<Record<string, string>>({})
 const backlinksLoading = ref(false)
 let backlinksLoadNonce = 0
+const latexRuntimeStatus = ref<LatexRuntimeStatus | null>(null)
+const latexCompileResult = ref<LatexCompileResult | null>(null)
+const latexCompiling = ref(false)
+let latexStatusTimer: ReturnType<typeof setInterval> | null = null
 const backlinks = computed(() => buildBacklinks(
   workspaceStore.selectedPath,
   workspaceStore.tree,
@@ -121,6 +135,7 @@ async function openBacklinkSource(path: string) {
 
 async function saveActiveFileAndRefreshBacklinks() {
   await workspaceStore.saveActiveFile()
+  if (isLatexViewer.value) await compileActiveLatex({ save: false })
   await loadBacklinks()
 }
 
@@ -203,6 +218,7 @@ async function loadLatestChangeSnapshot() {
 }
 
 const isMarkdownViewer = computed(() => workspaceStore.activeViewerKind === 'markdown')
+const isLatexViewer = computed(() => /\.tex$/iu.test(workspaceStore.selectedPath))
 const outlineItems = computed(() => parseMarkdownOutline(activeContent.value))
 const flatOutlineItems = computed(() => flattenMarkdownOutline(outlineItems.value))
 const activeOutlineId = computed(() => (
@@ -220,6 +236,7 @@ const effectiveEditorMode = computed<EditorWorkspaceMode>(() => (
 const isEditableTextMode = computed(() => (
   ['edit', 'text', 'code'].includes(effectiveEditorMode.value)
   || (isMarkdownViewer.value && effectiveEditorMode.value === 'split')
+  || (isLatexViewer.value && effectiveEditorMode.value === 'split')
 ))
 const isProjectionMode = computed(() => effectiveEditorMode.value === 'markdown')
 
@@ -251,6 +268,97 @@ function handleVisualizationOptionChange(
 function setEditorMode(mode: EditorWorkspaceMode) {
   if (!activePipeline.value.modes.some((item) => item.mode === mode)) return
   editorMode.value = mode
+  if (isLatexViewer.value && ['preview', 'split'].includes(mode)) {
+    void compileActiveLatex({ save: true })
+  }
+}
+
+/** Refresh compiler status without starting a download or changing the machine. */
+async function refreshLatexStatus() {
+  if (!isLatexViewer.value || !settingsStore.profile.userId) return
+  try {
+    latexRuntimeStatus.value = await fetchLatexStatus(settingsStore.profile.userId)
+  } catch {
+    latexRuntimeStatus.value = null
+  }
+}
+
+/** Save when requested, compile the active `.tex`, and preserve compiler diagnostics. */
+async function compileActiveLatex({ save }: { save: boolean }) {
+  if (!isLatexViewer.value || !settingsStore.profile.userId || latexCompiling.value) return
+  latexCompiling.value = true
+  try {
+    const loadDeadline = Date.now() + 8_000
+    while (workspaceStore.isFileLoading && Date.now() < loadDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 40))
+    }
+    if (workspaceStore.isFileLoading) {
+      workspaceStore.showToast('文件仍在加载，暂不能编译')
+      return
+    }
+    if (save) await workspaceStore.saveActiveFile()
+    await refreshLatexStatus()
+    if (latexRuntimeStatus.value?.status !== 'ready') return
+    latexCompileResult.value = await compileLatexFile(
+      settingsStore.profile.userId,
+      workspaceStore.selectedPath,
+    )
+  } catch {
+    await refreshLatexStatus()
+    workspaceStore.showToast('LaTeX 编译请求失败')
+  } finally {
+    latexCompiling.value = false
+  }
+}
+
+/** Start user-confirmed managed MiKTeX installation and poll the real backend state. */
+async function startLatexInstall() {
+  if (!settingsStore.profile.userId) return
+  try {
+    latexRuntimeStatus.value = await installLatexRuntime(settingsStore.profile.userId)
+  } catch {
+    workspaceStore.showToast('MiKTeX 安装启动失败')
+    return
+  }
+  if (latexStatusTimer) clearInterval(latexStatusTimer)
+  latexStatusTimer = setInterval(async () => {
+    await refreshLatexStatus()
+    const status = latexRuntimeStatus.value?.status
+    if (!status || ['downloading', 'installing', 'cancelling'].includes(status)) return
+    if (latexStatusTimer) clearInterval(latexStatusTimer)
+    latexStatusTimer = null
+    if (status === 'ready') void compileActiveLatex({ save: false })
+  }, 1000)
+}
+
+/** Cancel an active managed runtime installation. */
+async function stopLatexInstall() {
+  if (!settingsStore.profile.userId) return
+  latexRuntimeStatus.value = await cancelLatexInstall(settingsStore.profile.userId)
+}
+
+/** Open the compiler-reported source file and move its editable pane to the diagnostic line. */
+async function openLatexError(error: LatexCompileError) {
+  const reported = error.file.replace(/\\/gu, '/').replace(/^\(+|\)+$/gu, '')
+  const rootPath = latexCompileResult.value?.root_path ?? workspaceStore.selectedPath
+  const rootParent = rootPath.includes('/') ? rootPath.slice(0, rootPath.lastIndexOf('/')) : ''
+  const relativeCandidate = reported.match(/^[A-Za-z]:\//u)
+    ? ''
+    : [rootParent, reported].filter(Boolean).join('/').replace(/\/\.\//gu, '/')
+  const targetNode = workspaceStore.flatNodes.find((node) => !node.isDir && (
+    node.path === relativeCandidate
+    || node.path === reported
+    || node.path.endsWith(`/${reported}`)
+  ))
+  if (targetNode && targetNode.path !== workspaceStore.selectedPath) {
+    await workspaceStore.selectFile(targetNode)
+  }
+  const sourceLines = activeContent.value.split('\n')
+  const line = Math.max(1, error.line)
+  const offset = sourceLines.slice(0, line - 1).reduce((total, value) => total + value.length + 1, 0)
+  editorMode.value = 'split'
+  await nextTick()
+  codeEditorRef.value?.scrollToSourceOffset(offset, 'smooth')
 }
 
 function handleEditorScroll(payload: { ratio: number; cursorOffset: number; contentLength: number }) {
@@ -349,8 +457,10 @@ watch(effectiveEditorMode, async (mode, previousMode) => {
 
 watch(() => workspaceStore.selectedPath, () => {
   activeHeadingOffset.value = 0
+  latexCompileResult.value = null
   void loadLatestChangeSnapshot()
   void loadBacklinks()
+  void refreshLatexStatus()
 })
 
 watch(isMarkdownViewer, (isMarkdown) => {
@@ -379,9 +489,9 @@ function handleEditorShortcut(event: KeyboardEvent) {
     return
   }
   const key = event.key.toLowerCase()
-  if (!isMarkdownViewer.value) return
+  if (!isMarkdownViewer.value && !isLatexViewer.value) return
   const modeByKey: Record<string, EditorWorkspaceMode> = {
-    e: 'edit',
+    e: isLatexViewer.value ? 'code' : 'edit',
     p: 'preview',
     t: 'split',
   }
@@ -406,6 +516,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('agent-turn-finished', handleAgentTurnFinished)
+  if (latexStatusTimer) clearInterval(latexStatusTimer)
 })
 
 onErrorCaptured((err, vm, info) => {
@@ -499,7 +610,7 @@ onErrorCaptured((err, vm, info) => {
           class="editor-tool-button save-button"
           type="button"
           :disabled="workspaceStore.activeFileReadonly"
-          @click="workspaceStore.saveActiveFile"
+          @click="saveActiveFileAndRefreshBacklinks"
         >
           <svg
             class="save-motion-icon"
@@ -566,6 +677,17 @@ onErrorCaptured((err, vm, info) => {
           @update-content="activeContent = $event"
           @ready="handleMarkdownPreviewReady"
           @navigate-wiki="handleWikiNavigate"
+        />
+      </section>
+      <section v-else-if="isLatexViewer && ['preview', 'split'].includes(effectiveEditorMode)" class="preview-surface">
+        <LatexPreview
+          :status="latexRuntimeStatus"
+          :result="latexCompileResult"
+          :compiling="latexCompiling"
+          @install="startLatexInstall"
+          @cancel-install="stopLatexInstall"
+          @retry="compileActiveLatex({ save: true })"
+          @open-error="openLatexError"
         />
       </section>
       <section v-else-if="isProjectionMode" class="preview-surface projection-source-surface">
@@ -1000,7 +1122,13 @@ onErrorCaptured((err, vm, info) => {
   }
 
   .editor-body[data-mode='split'] {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) 6px minmax(0, 1fr);
+  }
+
+  .editor-body[data-mode='split'] .split-divider {
+    min-height: 6px;
+    cursor: row-resize;
   }
 }
 

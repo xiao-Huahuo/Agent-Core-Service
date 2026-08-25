@@ -156,6 +156,8 @@ from agent_service.services.automation_service import AutomationService
 from agent_service.services.activity_service import ActivityService
 from agent_service.services.component_library_service import ComponentLibraryService
 from agent_service.services.smart_form_service import SmartFormService
+from agent_service.services.latex_service import LatexService
+from agent_service.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +185,7 @@ class AgentServiceServicer(BaseServicer):
         activity_service: ActivityService | None = None,
         component_library_service: ComponentLibraryService | None = None,
         smart_form_service: SmartFormService | None = None,
+        latex_service: LatexService | None = None,
     ) -> None:
         self._agent = agent
         self._limits = getattr(getattr(agent, "config", None), "limits", DEFAULT_BUSINESS_LIMITS)
@@ -202,6 +205,7 @@ class AgentServiceServicer(BaseServicer):
         self._activity_service = activity_service
         self._component_library_service = component_library_service
         self._smart_form_service = smart_form_service
+        self._latex_service = latex_service
 
     def shutdown(self) -> None:
         self._agent.close()
@@ -1671,6 +1675,76 @@ class AgentServiceServicer(BaseServicer):
         return ParseDict(self._queue_call(context, self._require_agent_queue_service(context).update_settings, MessageToDict(request)), Struct())
 
     # ------------------------------------------------------------------
+    # LaTeX 运行时与编译 RPC
+    # ------------------------------------------------------------------
+
+    def GetLatexStatus(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802, ARG002
+        """返回与 REST `/settings/latex/status` 相同的运行时状态。"""
+
+        return ParseDict(self._require_latex_service(context).get_status(), Struct())
+
+    def StartLatexInstall(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """在校验用户标识后启动托管 MiKTeX 安装。"""
+
+        self._require_struct_user_id(request=request, context=context)
+        try:
+            payload = self._require_latex_service(context).start_install()
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(payload, Struct())
+
+    def CancelLatexInstall(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """取消当前托管 MiKTeX 安装。"""
+
+        self._require_struct_user_id(request=request, context=context)
+        return ParseDict(self._require_latex_service(context).cancel_install(), Struct())
+
+    def UninstallManagedLatex(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """只卸载 MetaWeave 托管的 MiKTeX。"""
+
+        self._require_struct_user_id(request=request, context=context)
+        try:
+            payload = self._require_latex_service(context).uninstall_managed()
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(payload, Struct())
+
+    def CompileLatex(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """编译知识库 LaTeX 并返回 REST 同形结果。"""
+
+        payload = MessageToDict(request)
+        user_id = str(payload.get("user_id") or "")
+        path = str(payload.get("path") or "")
+        if not user_id or not path:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "user_id and path are required")
+        try:
+            result = self._require_latex_service(context).compile_file(user_id=user_id, path=path)
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        except RuntimeError as exc:
+            context.abort(grpc.StatusCode.FAILED_PRECONDITION, str(exc))
+        return ParseDict(result, Struct())
+
+    def ClearLatexStorage(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """清理明确允许回收的 LaTeX 仓库、临时或编译缓存。"""
+
+        payload = MessageToDict(request)
+        user_id = str(payload.get("user_id") or "")
+        path_key = str(payload.get("path_key") or "")
+        allowed = {"latex_repository_dir", "latex_temp_dir", "latex_build_cache_dir"}
+        if not user_id or path_key not in allowed:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "valid user_id and LaTeX cache path_key are required")
+        service = StorageService(
+            config=self._agent.config,
+            settings_service=self._require_settings_service(context),
+        )
+        try:
+            result = service.clear_path(path_key=path_key, user_id=user_id)
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(result, Struct())
+
+    # ------------------------------------------------------------------
     # 定时自动化 RPC
     # ------------------------------------------------------------------
 
@@ -1926,6 +2000,22 @@ class AgentServiceServicer(BaseServicer):
         if self._smart_form_service is None:
             context.abort(grpc.StatusCode.UNAVAILABLE, "SmartFormService not available")
         return self._smart_form_service  # type: ignore[return-value]
+
+    def _require_latex_service(self, context: grpc.ServicerContext) -> LatexService:
+        """返回注入的 LaTeX 服务，未初始化时终止 RPC。"""
+
+        if self._latex_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "LatexService not available")
+        return self._latex_service  # type: ignore[return-value]
+
+    @staticmethod
+    def _require_struct_user_id(*, request: Struct, context: grpc.ServicerContext) -> str:
+        """从通用 Struct 请求中提取必需的用户标识。"""
+
+        user_id = str(MessageToDict(request).get("user_id") or "")
+        if not user_id:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "user_id is required")
+        return user_id
 
     @staticmethod
     def _component_library_struct(

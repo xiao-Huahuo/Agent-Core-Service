@@ -48,6 +48,9 @@ export function resolveEditorFilePipeline(path: string, backendKind?: FileViewer
   if (TEXT_EXTENSIONS.has(extension)) {
     return { modes: [TEXT], defaultMode: 'text', usesPreviewEndpoint: false, editable: true }
   }
+  if (extension === 'tex') {
+    return { modes: [CODE, PREVIEW, SPLIT], defaultMode: 'code', usesPreviewEndpoint: false, editable: true }
+  }
   if (CODE_EXTENSIONS.has(extension)) {
     return { modes: [CODE], defaultMode: 'code', usesPreviewEndpoint: false, editable: true }
   }

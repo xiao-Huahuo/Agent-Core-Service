@@ -34,6 +34,7 @@ from agent_service.services.agent_change_service import AgentChangeService
 from agent_service.services.agent_queue_service import AgentQueueService
 from agent_service.services.activity_service import ActivityService
 from agent_service.services.knowledge_ingestion_job_service import KnowledgeIngestionJobService
+from agent_service.services.latex_service import LatexService
 
 _agent: AgentCore | None = None
 _session_service: SessionService | None = None
@@ -61,6 +62,7 @@ _agent_change_service: AgentChangeService | None = None
 _agent_queue_service: AgentQueueService | None = None
 _activity_service: ActivityService | None = None
 _knowledge_ingestion_job_service: KnowledgeIngestionJobService | None = None
+_latex_service: LatexService | None = None
 
 
 def _require_agent() -> AgentCore:
@@ -237,3 +239,11 @@ def _require_knowledge_ingestion_job_service() -> KnowledgeIngestionJobService:
     if _knowledge_ingestion_job_service is None:
         raise HTTPException(status_code=503, detail="KnowledgeIngestionJobService not initialized yet")
     return _knowledge_ingestion_job_service
+
+
+def _require_latex_service() -> LatexService:
+    """返回启动阶段注入的 LaTeX 运行时服务。"""
+
+    if _latex_service is None:
+        raise HTTPException(status_code=503, detail="LatexService not initialized yet")
+    return _latex_service

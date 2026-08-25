@@ -5,7 +5,16 @@
  * Exercises the shared library uploader, persisted appearance request, live
  * application background, and reset path through the real settings UI.
  */
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
+
+/** Return whether one rendered surface has a transparent alpha channel. */
+async function isTranslucent(locator: Locator) {
+  return locator.evaluate((element) => {
+    const color = getComputedStyle(element).backgroundColor
+    const match = color.match(/(?:,|\/)\s*([\d.]+)\s*\)$/u)
+    return color === 'transparent' || (match ? Number(match[1]) < 1 : false)
+  })
+}
 
 test('uploads, applies, persists, and resets an application background cover', async ({ page }, testInfo) => {
   let persistedBackground = ''
@@ -48,6 +57,16 @@ test('uploads, applies, persists, and resets an application background cover', a
     if (path === '/privacy') return json({ privacy: [] })
     if (path === '/sessions' || path === '/todo/list') return json([])
     if (path === '/knowledge/files') return json({ tree: [] })
+    if (path === '/library/items') return json({ items: [], parent: null, breadcrumbs: [] })
+    if (path === '/library/tags') return json({ tags: [] })
+    if (path === '/component-library/components') return json({ components: [], count: 0 })
+    if (path === '/smart-forms/list') return json({ forms: [] })
+    if (path === '/agent-queue/tasks') return json({ tasks: [], settings: { max_concurrency: 5 } })
+    if (path === '/skills') return json({ skills: [{
+      skill_id: 'background-skill', name: 'Background Skill', description: 'Opaque card check',
+      source: 'builtin', path: 'skills/background', enabled: true, metadata: {},
+      has_scripts: false, has_references: false, has_assets: false,
+    }], count: 1 })
     return json({})
   })
   await page.route('**/library/assets/background-user/asset-bg.svg', (route) => route.fulfill({
@@ -75,8 +94,119 @@ test('uploads, applies, persists, and resets an application background cover', a
     image: expect.stringContaining('asset-bg.svg'),
     cached: '',
   })
+  const transparency = await page.evaluate(() => {
+    const host = document.createElement('div')
+    host.style.position = 'fixed'
+    host.style.left = '-10000px'
+    const surfaces: Array<[string, string]> = [
+      ['topbar', 'topbar'],
+      ['fileColumn', 'file-col'],
+      ['filePanel', 'file-panel'],
+      ['libraryToolbar', 'library-toolbar'],
+      ['componentToolbar', 'component-toolbar'],
+      ['formsHeader', 'forms-header'],
+      ['formsToolbar', 'forms-toolbar'],
+      ['visualizationToolbar', 'visualization-toolbar'],
+      ['resultHeader', 'result-header'],
+      ['favoritesView', 'favorites-view'],
+      ['favoritesBody', 'favorites-body'],
+      ['skillCard', 'skill-card'],
+    ]
+    for (const [key, className] of surfaces) {
+      const element = document.createElement('div')
+      element.className = className
+      element.dataset.bgSurface = key
+      element.style.backgroundColor = 'rgb(10, 20, 30)'
+      host.append(element)
+    }
+    const lane = document.createElement('div')
+    lane.className = 'queue-lane'
+    const laneCard = document.createElement('section')
+    laneCard.dataset.bgSurface = 'queueLane'
+    laneCard.style.backgroundColor = 'rgb(10, 20, 30)'
+    lane.append(laneCard)
+    host.append(lane)
+    document.body.append(host)
+    const inspectSurface = (key: string) => {
+      const color = getComputedStyle(host.querySelector(`[data-bg-surface="${key}"]`) as HTMLElement).backgroundColor
+      const match = color.match(/(?:,|\/)\s*([\d.]+)\s*\)$/u)
+      return { color, translucent: color === 'transparent' || (match ? Number(match[1]) < 1 : false) }
+    }
+    const result = Object.fromEntries([...surfaces.map(([key]) => [key, inspectSurface(key)]), ['queueLane', inspectSurface('queueLane')]])
+    host.remove()
+    return result
+  })
+  expect(transparency).toMatchObject({
+    topbar: { translucent: true },
+    fileColumn: { translucent: true },
+    filePanel: { translucent: true },
+    libraryToolbar: { translucent: true },
+    componentToolbar: { translucent: true },
+    formsHeader: { translucent: true },
+    formsToolbar: { translucent: true },
+    queueLane: { translucent: true },
+    favoritesView: { translucent: true },
+    favoritesBody: { translucent: true },
+    visualizationToolbar: { translucent: true },
+    resultHeader: { translucent: true },
+    skillCard: { translucent: false },
+  })
+
+  await expect.poll(() => isTranslucent(page.locator('.topbar'))).toBe(true)
+  await expect.poll(() => isTranslucent(page.locator('.file-col'))).toBe(true)
+  await expect.poll(() => isTranslucent(page.locator('.file-panel'))).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('background-topbar-file-tree.png'), fullPage: true })
+
+  const knowledgeButton = page.locator('.knowledge-button')
+  await knowledgeButton.click()
+  await page.locator('.knowledge-submenu .activity-button').nth(1).dispatchEvent('click')
+  await expect.poll(() => isTranslucent(page.locator('.library-toolbar'))).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('background-library-toolbar.png'), fullPage: true })
+
+  await knowledgeButton.click()
+  await page.locator('.knowledge-submenu .activity-button').nth(2).dispatchEvent('click')
+  await expect.poll(() => isTranslucent(page.locator('.component-toolbar'))).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('background-component-toolbar.png'), fullPage: true })
+
+  await knowledgeButton.click()
+  await page.locator('.knowledge-submenu .activity-button').nth(4).dispatchEvent('click')
+  await expect.poll(() => isTranslucent(page.locator('.forms-header'))).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('background-smart-forms-toolbar.png'), fullPage: true })
+
+  await page.getByRole('button', { name: '任务队列' }).click()
+  await expect(page.locator('.queue-board .queue-lane > section')).toHaveCount(3)
+  await expect.poll(async () => page.locator('.queue-board .queue-lane > section').evaluateAll((elements) => elements.every((element) => {
+    const color = getComputedStyle(element).backgroundColor
+    const match = color.match(/(?:,|\/)\s*([\d.]+)\s*\)$/u)
+    return color === 'transparent' || (match ? Number(match[1]) < 1 : false)
+  }))).toBe(true)
+  await page.getByRole('button', { name: /历史/u }).click()
+  await expect(page.locator('.history-list .queue-lane > section')).toHaveCount(2)
+  await expect.poll(async () => page.locator('.history-list .queue-lane > section').evaluateAll((elements) => elements.every((element) => {
+    const color = getComputedStyle(element).backgroundColor
+    const match = color.match(/(?:,|\/)\s*([\d.]+)\s*\)$/u)
+    return color === 'transparent' || (match ? Number(match[1]) < 1 : false)
+  }))).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('background-queue-cards.png'), fullPage: true })
+
+  await page.getByRole('button', { name: '我的收藏' }).click()
+  await expect.poll(() => isTranslucent(page.locator('.favorites-view'))).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('background-favorites.png'), fullPage: true })
+  await page.getByRole('button', { name: '我的隐私' }).click()
+  await expect.poll(() => isTranslucent(page.locator('.favorites-view'))).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('background-privacy.png'), fullPage: true })
+
+  await page.getByRole('button', { name: 'MD-HTML' }).click()
+  await expect.poll(() => isTranslucent(page.locator('.visualization-toolbar'))).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('background-md-html-toolbar.png'), fullPage: true })
+
+  await page.getByRole('button', { name: 'Skills' }).click()
+  await expect(page.locator('.skill-card')).toHaveCount(1)
+  await expect.poll(() => isTranslucent(page.locator('.skill-card'))).toBe(false)
+  await page.screenshot({ path: testInfo.outputPath('background-skills-opaque.png'), fullPage: true })
   await page.screenshot({ path: testInfo.outputPath('appearance-background-applied.png'), fullPage: true })
 
+  await page.getByRole('button', { name: 'Settings' }).click()
   await page.getByRole('button', { name: '重置背景封面' }).click()
   await expect.poll(() => persistedBackground).toBe('')
   await expect.poll(() => page.evaluate(() => ({

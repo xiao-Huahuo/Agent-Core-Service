@@ -66,11 +66,14 @@ const props = withDefaults(defineProps<{
   liveSync?: boolean
   /** Let Electron use the shared panel titlebar as a native drag region. */
   panelDraggable?: boolean
+  /** Use panel density as the mobile Agent main view rather than as a docked sidebar. */
+  mobileMain?: boolean
 }>(), {
   mode: 'panel',
   sessionId: '',
   liveSync: false,
   panelDraggable: false,
+  mobileMain: false,
 })
 // Queue dialogs mount a complete Agent panel for a fixed task session.  Give
 // it its own stream state so opening it cannot replace or cancel the page chat.
@@ -717,6 +720,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
     <SessionDrawer
       :open="sessionDrawerOpen"
       :mode="props.mode"
+      :class="{ 'mobile-floating': props.mobileMain }"
       :user-id="userId"
       :selected-session-id="activeSessionId"
       :streaming-session-ids="sessionStore.streamingSessionIds"
@@ -859,6 +863,8 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
       <AgentPanelTitlebar
         v-if="props.mode === 'panel'"
         compact
+        :history-toggle="props.mobileMain"
+        :session-icon-src="props.mobileMain ? logoSrc : ''"
         :draggable="props.panelDraggable"
         :title="sessionTitle"
         :chat-mode="settingsStore.chatMode"

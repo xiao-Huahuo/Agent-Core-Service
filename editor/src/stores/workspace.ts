@@ -182,6 +182,7 @@ const CODE_EXTENSIONS = new Set([
   'rs',
   'sh',
   'sql',
+  'tex',
   'ts',
   'tsx',
   'vue',

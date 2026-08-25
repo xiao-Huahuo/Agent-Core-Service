@@ -29,6 +29,7 @@ except ImportError:  # pragma: no cover - fallback only used when optional depen
 from agent_service.api.rest.deps import (
     _require_knowledge_graph_service,
     _require_knowledge_library_service,
+    _require_latex_service,
     _require_knowledge_ingestion_job_service,
     _require_activity_service,
     _require_retrieval_service,
@@ -212,6 +213,26 @@ async def preview_knowledge_pdf_page(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return FileResponse(file_path, media_type=media_type, content_disposition_type="inline")
+
+
+@router.post("/knowledge/latex/compile")
+async def compile_latex_file(body: dict[str, Any]) -> dict[str, Any]:
+    """保存完成后编译知识库 `.tex`，返回日志、错误位置和现有 PDF 预览数据。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    path = str(body.get("path") or "").strip()
+    if not user_id or not path:
+        raise HTTPException(status_code=422, detail="user_id and path are required")
+    try:
+        return await run_in_threadpool(
+            _require_latex_service().compile_file,
+            user_id=user_id,
+            path=path,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/knowledge/files/raw")

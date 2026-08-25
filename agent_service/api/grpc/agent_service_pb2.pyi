@@ -853,7 +853,7 @@ class KnowledgeFileTreeRequest(_message.Message):
     def __init__(self, user_id: _Optional[str] = ...) -> None: ...
 
 class KnowledgeFileNode(_message.Message):
-    __slots__ = ("name", "path", "is_dir", "mtime", "index_status", "size", "children", "graph_status")
+    __slots__ = ("name", "path", "is_dir", "mtime", "index_status", "size", "children", "graph_status", "created_at")
     NAME_FIELD_NUMBER: _ClassVar[int]
     PATH_FIELD_NUMBER: _ClassVar[int]
     IS_DIR_FIELD_NUMBER: _ClassVar[int]
@@ -862,6 +862,7 @@ class KnowledgeFileNode(_message.Message):
     SIZE_FIELD_NUMBER: _ClassVar[int]
     CHILDREN_FIELD_NUMBER: _ClassVar[int]
     GRAPH_STATUS_FIELD_NUMBER: _ClassVar[int]
+    CREATED_AT_FIELD_NUMBER: _ClassVar[int]
     name: str
     path: str
     is_dir: bool
@@ -870,7 +871,8 @@ class KnowledgeFileNode(_message.Message):
     size: int
     children: _containers.RepeatedCompositeFieldContainer[KnowledgeFileNode]
     graph_status: str
-    def __init__(self, name: _Optional[str] = ..., path: _Optional[str] = ..., is_dir: bool = ..., mtime: _Optional[str] = ..., index_status: _Optional[str] = ..., size: _Optional[int] = ..., children: _Optional[_Iterable[_Union[KnowledgeFileNode, _Mapping]]] = ..., graph_status: _Optional[str] = ...) -> None: ...
+    created_at: str
+    def __init__(self, name: _Optional[str] = ..., path: _Optional[str] = ..., is_dir: bool = ..., mtime: _Optional[str] = ..., index_status: _Optional[str] = ..., size: _Optional[int] = ..., children: _Optional[_Iterable[_Union[KnowledgeFileNode, _Mapping]]] = ..., graph_status: _Optional[str] = ..., created_at: _Optional[str] = ...) -> None: ...
 
 class KnowledgeFileTreeResponse(_message.Message):
     __slots__ = ("tree",)
@@ -897,6 +899,24 @@ class KnowledgeFileContentResponse(_message.Message):
     mtime: str
     size: int
     def __init__(self, path: _Optional[str] = ..., content: _Optional[str] = ..., mtime: _Optional[str] = ..., size: _Optional[int] = ...) -> None: ...
+
+class KnowledgePdfPageRequest(_message.Message):
+    __slots__ = ("user_id", "path", "page")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    PATH_FIELD_NUMBER: _ClassVar[int]
+    PAGE_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    path: str
+    page: int
+    def __init__(self, user_id: _Optional[str] = ..., path: _Optional[str] = ..., page: _Optional[int] = ...) -> None: ...
+
+class KnowledgePdfPageResponse(_message.Message):
+    __slots__ = ("content", "mime_type")
+    CONTENT_FIELD_NUMBER: _ClassVar[int]
+    MIME_TYPE_FIELD_NUMBER: _ClassVar[int]
+    content: bytes
+    mime_type: str
+    def __init__(self, content: _Optional[bytes] = ..., mime_type: _Optional[str] = ...) -> None: ...
 
 class KnowledgeFileWriteRequest(_message.Message):
     __slots__ = ("user_id", "path", "content")

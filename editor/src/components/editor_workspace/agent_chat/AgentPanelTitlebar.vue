@@ -17,6 +17,10 @@ const props = withDefaults(defineProps<{
   childOpen?: boolean
   showEnvironment?: boolean
   compact?: boolean
+  /** Replace compact panel expansion with the session-history toggle. */
+  historyToggle?: boolean
+  /** Optional branded history-toggle icon supplied by the full Agent surface. */
+  sessionIconSrc?: string
   draggable?: boolean
 }>(), {
   environmentOpen: false,
@@ -24,6 +28,8 @@ const props = withDefaults(defineProps<{
   childOpen: false,
   showEnvironment: true,
   compact: false,
+  historyToggle: false,
+  sessionIconSrc: '',
   draggable: false,
 })
 
@@ -39,9 +45,10 @@ defineEmits<{
 </script>
 
 <template>
-  <header class="agent-panel-titlebar" :class="{ compact: props.compact, draggable: props.draggable }">
+  <header class="agent-panel-titlebar" :class="{ compact: props.compact, 'history-toggle': props.historyToggle, draggable: props.draggable }">
     <button class="titlebar-button session-button" type="button" title="会话" @click="$emit('toggleSessions')">
-      <IcIcon name="forum" :size="16" />
+      <img v-if="props.sessionIconSrc" :src="props.sessionIconSrc" class="titlebar-history-logo" alt="" />
+      <IcIcon v-else name="forum" :size="16" />
     </button>
     <button class="titlebar-button expand-button" type="button" title="展开 Agent 页面" @click="$emit('expand')">
       <IcIcon name="open-in-full" :size="16" />
@@ -78,6 +85,7 @@ defineEmits<{
 .render-mode-button,
 .new-session-button { display: inline-flex; align-items: center; justify-content: center; height: 26px; border: 0; font: inherit; cursor: pointer; }
 .titlebar-button { width: 28px; border-radius: 999px; background: transparent; color: var(--color-text-tertiary); }
+.titlebar-history-logo { display: block; width: 18px; height: 18px; object-fit: contain; }
 .titlebar-button:hover,
 .titlebar-button[aria-pressed="true"],
 .render-mode-button:hover { background: var(--color-accent-muted); color: var(--color-text-primary); }
@@ -89,6 +97,8 @@ defineEmits<{
 .agent-panel-titlebar.compact .session-button,
 .agent-panel-titlebar.compact .secondary-action { display: none; }
 .agent-panel-titlebar.compact .expand-button { display: inline-flex; }
+.agent-panel-titlebar.compact.history-toggle .session-button { display: inline-flex; }
+.agent-panel-titlebar.compact.history-toggle .expand-button { display: none; }
 
 @media (max-width: 480px) {
   .new-session-button span,

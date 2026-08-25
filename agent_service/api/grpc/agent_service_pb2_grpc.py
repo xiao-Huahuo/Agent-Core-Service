@@ -564,6 +564,36 @@ class AgentServiceStub(object):
                 request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
                 _registered_method=True)
+        self.GetLatexStatus = channel.unary_unary(
+                '/agent_service.AgentService/GetLatexStatus',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.StartLatexInstall = channel.unary_unary(
+                '/agent_service.AgentService/StartLatexInstall',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.CancelLatexInstall = channel.unary_unary(
+                '/agent_service.AgentService/CancelLatexInstall',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.UninstallManagedLatex = channel.unary_unary(
+                '/agent_service.AgentService/UninstallManagedLatex',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.CompileLatex = channel.unary_unary(
+                '/agent_service.AgentService/CompileLatex',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.ClearLatexStorage = channel.unary_unary(
+                '/agent_service.AgentService/ClearLatexStorage',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
         self.ListAutomations = channel.unary_unary(
                 '/agent_service.AgentService/ListAutomations',
                 request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
@@ -1260,6 +1290,43 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetLatexStatus(self, request, context):
+        """LaTeX 运行时、编译和缓存管理，与 REST /settings/latex、/knowledge/latex 对齐。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def StartLatexInstall(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CancelLatexInstall(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UninstallManagedLatex(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CompileLatex(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ClearLatexStorage(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def ListAutomations(self, request, context):
         """Scheduled Agent automation. Struct mirrors the existing REST request
         fields while serialized tasks and runs keep their current camelCase form.
@@ -1819,6 +1886,36 @@ def add_AgentServiceServicer_to_server(servicer, server):
             ),
             'UpdateAgentQueueSettings': grpc.unary_unary_rpc_method_handler(
                     servicer.UpdateAgentQueueSettings,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'GetLatexStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetLatexStatus,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'StartLatexInstall': grpc.unary_unary_rpc_method_handler(
+                    servicer.StartLatexInstall,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'CancelLatexInstall': grpc.unary_unary_rpc_method_handler(
+                    servicer.CancelLatexInstall,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'UninstallManagedLatex': grpc.unary_unary_rpc_method_handler(
+                    servicer.UninstallManagedLatex,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'CompileLatex': grpc.unary_unary_rpc_method_handler(
+                    servicer.CompileLatex,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'ClearLatexStorage': grpc.unary_unary_rpc_method_handler(
+                    servicer.ClearLatexStorage,
                     request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
                     response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             ),
@@ -4668,6 +4765,168 @@ class AgentService(object):
             request,
             target,
             '/agent_service.AgentService/UpdateAgentQueueSettings',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetLatexStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetLatexStatus',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StartLatexInstall(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/StartLatexInstall',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CancelLatexInstall(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/CancelLatexInstall',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UninstallManagedLatex(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/UninstallManagedLatex',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CompileLatex(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/CompileLatex',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ClearLatexStorage(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/ClearLatexStorage',
             google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             google_dot_protobuf_dot_struct__pb2.Struct.FromString,
             options,

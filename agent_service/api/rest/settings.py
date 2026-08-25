@@ -11,7 +11,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
-from agent_service.api.rest.deps import _require_agent, _require_knowledge_library_service, _require_settings_service
+from agent_service.api.rest.deps import (
+    _require_agent,
+    _require_knowledge_library_service,
+    _require_latex_service,
+    _require_settings_service,
+)
 
 router = APIRouter()
 
@@ -719,12 +724,57 @@ async def clear_storage_path(body: dict[str, Any]) -> dict[str, Any]:
     """清空指定存储路径的内容，保留目录本身。"""
 
     path_key = str(body.get("path_key") or "").strip()
-    if not path_key:
-        raise HTTPException(status_code=422, detail="path_key is required")
+    user_id = str(body.get("user_id") or "").strip()
+    if not path_key or not user_id:
+        raise HTTPException(status_code=422, detail="user_id and path_key are required")
     svc = _require_settings_service()
     from agent_service.services.storage_service import StorageService
     storage_svc = StorageService(config=svc.config, settings_service=svc)
     try:
-        return storage_svc.clear_path(path_key=path_key)
+        return storage_svc.clear_path(path_key=path_key, user_id=user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ---- LaTeX 运行环境 ----
+
+@router.get("/settings/latex/status")
+async def get_latex_status(
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),  # noqa: ARG001
+) -> dict[str, Any]:
+    """检测系统或 MetaWeave 托管的 LaTeX 编译环境。"""
+
+    return _require_latex_service().get_status()
+
+
+@router.post("/settings/latex/install")
+async def install_latex_runtime(body: dict[str, Any]) -> dict[str, Any]:
+    """在用户确认后异步安装当前用户范围的托管 MiKTeX。"""
+
+    if not str(body.get("user_id") or "").strip():
+        raise HTTPException(status_code=422, detail="user_id is required")
+    try:
+        return _require_latex_service().start_install()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/settings/latex/install/cancel")
+async def cancel_latex_install(body: dict[str, Any]) -> dict[str, Any]:
+    """取消当前 MiKTeX 下载或安装任务。"""
+
+    if not str(body.get("user_id") or "").strip():
+        raise HTTPException(status_code=422, detail="user_id is required")
+    return _require_latex_service().cancel_install()
+
+
+@router.post("/settings/latex/uninstall")
+async def uninstall_latex_runtime(body: dict[str, Any]) -> dict[str, Any]:
+    """只卸载 MetaWeave 自己部署的 MiKTeX，不操作系统 TeX。"""
+
+    if not str(body.get("user_id") or "").strip():
+        raise HTTPException(status_code=422, detail="user_id is required")
+    try:
+        return _require_latex_service().uninstall_managed()
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

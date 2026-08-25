@@ -34,11 +34,16 @@ STORAGE_PATH_DEFINITIONS: dict[str, dict[str, Any]] = {
     "embedding_model_dir": {"label": "Embedding 模型", "parent": "models_dir", "can_clear": False, "requires_restart": False},
     "paddleocr_model_dir": {"label": "OCR 模型", "parent": "models_dir", "can_clear": False, "requires_restart": False},
     "rerank_model_dir": {"label": "CrossEncoder 模型", "parent": "models_dir", "can_clear": False, "requires_restart": False},
+    "latex_runtime_dir": {"label": "LaTeX 运行环境", "parent": "base_data_dir", "can_clear": False, "requires_restart": False},
+    "latex_distribution_dir": {"label": "MiKTeX 核心与宏包", "parent": "latex_runtime_dir", "can_clear": False, "requires_restart": False},
+    "latex_repository_dir": {"label": "MiKTeX 下载仓库", "parent": "latex_runtime_dir", "can_clear": True, "requires_restart": False},
+    "latex_temp_dir": {"label": "LaTeX 临时文件", "parent": "latex_runtime_dir", "can_clear": True, "requires_restart": False},
+    "latex_build_cache_dir": {"label": "LaTeX 编译缓存", "parent": "managed_root", "can_clear": True, "requires_restart": False},
     "trash_dir": {"label": "最近删除", "parent": "base_data_dir", "can_clear": True, "requires_restart": False},
 }
 
 # 虚拟节点 key（不对应实际 config.storage 属性）
-VIRTUAL_KEYS = {"models_dir", "db_dir", "managed_root", "markdown_dir", "frontmatter_dir", "forms_dir", "components_dir"}
+VIRTUAL_KEYS = {"models_dir", "db_dir", "latex_runtime_dir", "managed_root", "markdown_dir", "frontmatter_dir", "forms_dir", "components_dir"}
 
 MANAGED_KNOWLEDGE_PATHS = {
     "managed_root": ".mw",
@@ -46,6 +51,19 @@ MANAGED_KNOWLEDGE_PATHS = {
     "frontmatter_dir": ".mw/frontmatter",
     "forms_dir": ".mw/forms",
     "components_dir": ".mw/components",
+    "latex_build_cache_dir": ".mw/latex",
+}
+
+RUNTIME_VIRTUAL_PATHS = {
+    "models_dir": "models",
+    "db_dir": "db",
+    "latex_runtime_dir": "latex",
+}
+
+RUNTIME_LATEX_PATHS = {
+    "latex_distribution_dir": "latex/miktex",
+    "latex_repository_dir": "latex/repository",
+    "latex_temp_dir": "latex/temp",
 }
 
 # 明确可清空的路径 key 列表
@@ -124,15 +142,15 @@ class StorageService:
                     "label": definition["label"],
                     "value": str(current_path),
                     "size_bytes": _dir_size(current_path),
-                    "requires_restart": False,
-                    "can_clear": False,
+                    "requires_restart": definition["requires_restart"],
+                    "can_clear": definition["can_clear"],
                     "parent": definition["parent"],
                 })
                 continue
             if key in VIRTUAL_KEYS:
                 # 虚拟节点：路径基于 base_data_dir 拼接，大小为子项之和
                 base = Path(getattr(storage, "base_data_dir")).expanduser().resolve()
-                sub = "models" if key == "models_dir" else "db"
+                sub = RUNTIME_VIRTUAL_PATHS.get(key, "")
                 virtual_path = base / sub
                 size_bytes = _dir_size(virtual_path)
                 paths.append({
@@ -140,6 +158,18 @@ class StorageService:
                     "label": definition["label"],
                     "value": str(virtual_path),
                     "size_bytes": size_bytes,
+                    "requires_restart": definition["requires_restart"],
+                    "can_clear": definition["can_clear"],
+                    "parent": definition["parent"],
+                })
+                continue
+            if key in RUNTIME_LATEX_PATHS:
+                current_path = (Path(storage.base_data_dir) / RUNTIME_LATEX_PATHS[key]).resolve()
+                paths.append({
+                    "key": key,
+                    "label": definition["label"],
+                    "value": str(current_path),
+                    "size_bytes": _dir_size(current_path),
                     "requires_restart": definition["requires_restart"],
                     "can_clear": definition["can_clear"],
                     "parent": definition["parent"],
@@ -174,14 +204,20 @@ class StorageService:
             raise ValueError("存储路径为只读配置；仅知识库根目录可以切换")
         return {"requires_restart": False, "saved": []}
 
-    def clear_path(self, *, path_key: str) -> dict:
-        """删除指定路径的内容（保留目录本身）。"""
+    def clear_path(self, *, path_key: str, user_id: str = "") -> dict:
+        """删除精确白名单缓存内容并保留目录本身；用户源文件永不进入目标集合。"""
 
         if path_key not in CLEARABLE_KEYS:
             raise ValueError(f"不允许清空路径: {path_key}")
 
         storage = self.config.storage
-        target = Path(getattr(storage, path_key)).expanduser().resolve()
+        if path_key == "latex_build_cache_dir":
+            active_library = self.settings_service.get_active_knowledge_library(user_id=user_id)
+            target = (Path(str(active_library["knowledge_dir"])).expanduser().resolve() / ".mw" / "latex").resolve()
+        elif path_key in RUNTIME_LATEX_PATHS:
+            target = (Path(storage.base_data_dir) / RUNTIME_LATEX_PATHS[path_key]).resolve()
+        else:
+            target = Path(getattr(storage, path_key)).expanduser().resolve()
         freed = _dir_size(target)
 
         if not target.exists():

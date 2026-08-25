@@ -7,7 +7,7 @@
   assets, filter rows, and export CSV/Markdown without leaving the workspace.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { buildApiUrl } from '@/api/client'
 import { createKnowledgeFolder, listKnowledgeFiles, previewKnowledgeFile, readKnowledgeFile, uploadKnowledgeFile } from '@/api/knowledge'
@@ -16,9 +16,12 @@ import IcIcon from '@/components/common/IcIcon.vue'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
@@ -66,6 +69,15 @@ defineOptions({ name: 'SmartFormsView' })
 
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
+const props = withDefaults(defineProps<{
+  /** Main-workspace mobile state measured outside the table's wide scroll content. */
+  mobile?: boolean
+  /** Main card width used for sub-mobile controls and table columns. */
+  availableWidth?: number
+}>(), {
+  mobile: false,
+  availableWidth: Number.POSITIVE_INFINITY,
+})
 
 interface SmartFormEntry {
   /** Database form id. */
@@ -77,6 +89,10 @@ interface SmartFormEntry {
 }
 
 const FORMS_ROOT_DIR = '.mw/forms'
+/** 页面根容器，用于按容器宽度感知移动端断点（控制 Teleport 到 body 的菜单项）。 */
+const smartFormsShell = ref<HTMLElement | null>(null)
+/** 容器宽度是否已进入移动端（<=640px，与 @container 断点保持一致）。 */
+const isMobileLayout = ref(false)
 const form = ref<SmartLiteratureForm | null>(null)
 const formEntries = ref<SmartFormEntry[]>([])
 const activeFormId = ref('')
@@ -100,6 +116,7 @@ const tagEditorKey = ref('')
 const tagDraft = ref('')
 const dropdownOpen = ref('')
 const tagFilterMenuOpen = ref(false)
+const compactFiltersOpen = ref(false)
 const ratingFilterMenuOpen = ref(false)
 const swappedColumnId = ref('')
 const swappedRowId = ref('')
@@ -119,6 +136,7 @@ let structuredGenerationActive = 0
 let swapAnimationTimer: ReturnType<typeof setTimeout> | undefined
 let columnDescriptionClickTimer: ReturnType<typeof setTimeout> | undefined
 let tableResize: { kind: 'column' | 'row'; id: string; start: number; size: number } | null = null
+let shellResizeObserver: ResizeObserver | null = null
 
 type TableContextTarget =
   | { kind: 'table' }
@@ -163,6 +181,7 @@ const {
 } = useSubmenuIntent(tableContextSubmenu)
 
 const visibleRows = computed(() => form.value ? filterRows(form.value, query.value, tagFilter.value, minRating.value) : [])
+const isCompressedLayout = computed(() => props.availableWidth <= 360)
 const tagFilters = computed(() => form.value ? uniqueTagValues(form.value) : [])
 const isLiteratureTable = computed(() => Boolean(form.value?.columns.some((column) => column.id === 'literature_file' || column.id === 'literature_content')))
 const availableBuiltinColumns = computed(() => BUILTIN_COLUMNS)
@@ -208,15 +227,42 @@ const customColumnTypes: { value: SmartColumnType; label: string }[] = [
 ]
 const refreshingLiteraturePaths = new Set<string>()
 
+/** 同步根容器宽度到移动端标记；初始即为窄屏时也立即生效。 */
+function updateShellLayout(): void {
+  isMobileLayout.value = props.mobile || props.availableWidth <= 640 || (smartFormsShell.value?.clientWidth ?? 0) <= 640
+}
+
+watch([() => props.mobile, () => props.availableWidth], updateShellLayout)
+
+/** Shrinks the two leading literature columns so ultra-narrow views retain context. */
+function responsiveColumnWidth(column: SmartColumn): number {
+  if (!isMobileLayout.value || !Number.isFinite(props.availableWidth)) return column.width
+  const halfContentWidth = Math.floor((props.availableWidth - 44) / 2)
+  if (column.id === 'literature_file') return Math.min(column.width, Math.max(120, halfContentWidth))
+  if (column.id === 'literature_content') return Math.min(column.width, Math.max(150, halfContentWidth))
+  return column.width
+}
+
+/** Applies one responsive column width consistently to both header rows. */
+function columnWidthStyle(column: SmartColumn): Record<string, string> {
+  const width = responsiveColumnWidth(column)
+  return { width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }
+}
+
 onMounted(() => {
   window.addEventListener('mouseup', stopCellSelection)
   window.addEventListener('metaweave-knowledge-file-change', handleKnowledgeFileChange)
+  updateShellLayout()
+  shellResizeObserver = new ResizeObserver(updateShellLayout)
+  if (smartFormsShell.value) shellResizeObserver.observe(smartFormsShell.value)
   void loadForm()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('mouseup', stopCellSelection)
   window.removeEventListener('metaweave-knowledge-file-change', handleKnowledgeFileChange)
+  shellResizeObserver?.disconnect()
+  shellResizeObserver = null
   if (autoSaveTimer) clearTimeout(autoSaveTimer)
   if (swapAnimationTimer) clearTimeout(swapAnimationTimer)
   if (columnDescriptionClickTimer) clearTimeout(columnDescriptionClickTimer)
@@ -1864,36 +1910,58 @@ function errorMessage(error: unknown): string {
 </script>
 
 <template>
-  <section class="smart-forms-view" @click="closeFloatingMenus">
+  <section
+    ref="smartFormsShell"
+    class="smart-forms-view"
+    :class="{ 'mobile-layout': props.mobile, 'compressed-layout': isCompressedLayout }"
+    @click="closeFloatingMenus"
+  >
     <header class="forms-header">
-      <button
-        v-if="form"
-        class="new-row-btn"
-        type="button"
-        :title="isLiteratureTable ? '上传文献' : '新建行'"
-        @click.stop="isLiteratureTable ? addLiteratureRowAndUpload() : addNewRow()"
-      >
-        <IcIcon :name="isLiteratureTable ? 'upload' : 'add'" :size="17" />
-        <span>{{ isLiteratureTable ? '上传文献' : '新建行' }}</span>
-      </button>
-      <div class="header-copy">
-        <p class="forms-eyebrow">智能表格</p>
-        <h1>{{ form?.title || '创建你的第一张表' }}</h1>
-      </div>
-      <div class="header-actions">
+      <div class="forms-primary-row">
+        <button
+          v-if="form"
+          class="new-row-btn"
+          type="button"
+          :title="isLiteratureTable ? '上传文献' : '新建行'"
+          @click.stop="isLiteratureTable ? addLiteratureRowAndUpload() : addNewRow()"
+        >
+          <IcIcon :name="isLiteratureTable ? 'upload' : 'add'" :size="17" />
+          <span>{{ isLiteratureTable ? '上传文献' : '新建行' }}</span>
+        </button>
+        <span v-else class="primary-icon-placeholder"></span>
+        <div class="header-copy">
+          <p class="forms-eyebrow">智能表格</p>
+          <h1>{{ form?.title || '创建你的第一张表' }}</h1>
+        </div>
         <label v-if="form" class="search-box">
           <IcIcon name="search" :size="15" />
           <input v-model="query" type="search" placeholder="搜索全表" />
         </label>
-        <div
-          v-if="formEntries.length > 1"
-          class="smart-dropdown"
-          @click.stop
+        <span v-else class="primary-search-placeholder"></span>
+        <button class="primary-btn new-form-btn" type="button" title="新建表格" @click="openCreateForm">
+          <IcIcon name="add" :size="17" />
+          <span>新建表格</span>
+        </button>
+        <button
+          v-if="form"
+          class="delete-form-toolbar-btn mobile-hidden-action"
+          type="button"
+          title="删除表格"
+          :disabled="!activeFormId || saving"
+          @click="deleteCurrentSmartForm"
         >
+          <IcIcon name="trash" :size="17" />
+          <span>删除表格</span>
+        </button>
+      </div>
+
+      <div v-if="form" class="forms-secondary-row">
+        <div v-if="formEntries.length" class="smart-dropdown form-switch-control responsive-control-shell" @click.stop>
           <button class="smart-dropdown-trigger" type="button" title="切换表格" @click="toggleDropdown('forms')">
             <IcIcon name="table-chart" :size="17" />
-            <span>{{ activeFormName }}</span>
-            <IcIcon name="chevron-down" :size="14" />
+            <span class="wide-control-label">{{ activeFormName }}</span>
+            <span class="compact-control-label">切换表格</span>
+            <IcIcon class="control-caret" name="chevron-down" :size="14" />
           </button>
           <div v-if="dropdownOpen === 'forms'" class="smart-dropdown-menu" @click.stop>
             <button
@@ -1909,20 +1977,99 @@ function errorMessage(error: unknown): string {
             </button>
           </div>
         </div>
-        <div v-if="form" class="smart-dropdown export-menu" @click.stop>
-          <button class="icon-btn" type="button" title="导出表格" aria-label="导出表格" @click="toggleDropdown('export')">
-            <IcIcon name="download" :size="17" />
-          </button>
+        <button v-if="isLiteratureTable" class="toolbar-btn desktop-secondary-action" type="button" @click="generateSmartCells('all')">
+          <IcIcon name="psychology" :size="17" />
+          <span>全表智能填充</span>
+        </button>
+        <div class="filter-controls" :class="{ open: compactFiltersOpen }">
+          <div class="responsive-control-shell filter-control-shell">
+          <DropdownMenu v-model:open="tagFilterMenuOpen">
+            <DropdownMenuTrigger as-child>
+              <button class="smart-dropdown-trigger tag-filter-trigger" type="button" title="标签筛选">
+                <IcIcon name="label" :size="17" />
+                <span class="wide-control-label">{{ tagFilterLabel }}</span>
+                <span class="compact-control-label">标签筛选</span>
+                <IcIcon class="control-caret" name="chevron-down" :size="14" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuPortal>
+              <DropdownMenuContent align="end">
+                <DropdownMenuRadioGroup v-model="tagFilter">
+                  <DropdownMenuRadioItem v-for="option in tagFilterOptions" :key="option.value || 'all-tags'" :value="option.value">{{ option.label }}</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenuPortal>
+          </DropdownMenu>
+          </div>
+          <div class="responsive-control-shell filter-control-shell">
+          <DropdownMenu v-model:open="ratingFilterMenuOpen">
+            <DropdownMenuTrigger as-child>
+              <button class="smart-dropdown-trigger rating-filter-trigger" type="button" title="星级筛选">
+                <IcIcon name="star" :size="17" />
+                <span class="wide-control-label">{{ ratingFilterLabel }}</span>
+                <span class="compact-control-label">星级筛选</span>
+                <IcIcon class="control-caret" name="chevron-down" :size="14" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuPortal>
+              <DropdownMenuContent align="end">
+                <DropdownMenuRadioGroup v-model="minRating">
+                  <DropdownMenuRadioItem v-for="option in ratingFilterOptions" :key="option.value" :value="option.value">{{ option.label }}</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenuPortal>
+          </DropdownMenu>
+          </div>
+        </div>
+        <div class="responsive-control-shell compact-filter-shell">
+        <button
+          class="smart-dropdown-trigger compact-filter-toggle"
+          :class="{ active: compactFiltersOpen }"
+          type="button"
+          title="筛选"
+          aria-label="筛选"
+          :aria-expanded="compactFiltersOpen"
+          @click.stop="compactFiltersOpen = !compactFiltersOpen"
+        >
+          <IcIcon name="filter" :size="17" />
+          <span class="compact-control-label">筛选</span>
+        </button>
+        </div>
+        <button class="toolbar-btn clear-invalid-btn desktop-secondary-action" type="button" title="清除失败或空字段" @click="clearInvalidFields">
+          <IcIcon name="trash" :size="17" />
+          <span>清空无效字段</span>
+        </button>
+        <div class="smart-dropdown export-menu desktop-secondary-action" @click.stop>
+          <button class="icon-btn" type="button" title="导出表格" aria-label="导出表格" @click="toggleDropdown('export')"><IcIcon name="download" :size="17" /></button>
           <div v-if="dropdownOpen === 'export'" class="smart-dropdown-menu export-menu-panel">
             <button type="button" :style="{ '--item-index': 0 }" @click="downloadMarkdown">Markdown</button>
             <button type="button" :style="{ '--item-index': 1 }" @click="downloadCsv">CSV</button>
             <button type="button" :style="{ '--item-index': 2 }" @click="downloadZip">ZIP</button>
           </div>
         </div>
-        <button class="primary-btn new-form-btn" type="button" title="新建表格" @click="openCreateForm">
-          <IcIcon name="add" :size="17" />
-          <span>新建表格</span>
-        </button>
+        <div class="responsive-control-shell compact-more-shell">
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <button class="smart-dropdown-trigger compact-more-trigger" type="button" title="其他操作">
+              <IcIcon name="more-horiz" :size="17" />
+              <span class="compact-control-label">其他</span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem :disabled="!isLiteratureTable" @select="generateSmartCells('all')"><IcIcon name="psychology" :size="16" /><span>全表智能填充</span></DropdownMenuItem>
+              <DropdownMenuItem @select="clearInvalidFields"><IcIcon name="trash" :size="16" /><span>清空无效字段</span></DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>导出</DropdownMenuLabel>
+              <DropdownMenuItem @select="downloadMarkdown">Markdown</DropdownMenuItem>
+              <DropdownMenuItem @select="downloadCsv">CSV</DropdownMenuItem>
+              <DropdownMenuItem @select="downloadZip">ZIP</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem v-if="isMobileLayout" variant="destructive" :disabled="!activeFormId || saving" @select="deleteCurrentSmartForm"><IcIcon name="trash" :size="16" /><span>删除表格</span></DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenuPortal>
+        </DropdownMenu>
+        </div>
       </div>
     </header>
 
@@ -1972,67 +2119,6 @@ function errorMessage(error: unknown): string {
       <p>还没有表格。输入表名后创建，数据会自动保存到数据库。</p>
     </div>
 
-    <div v-if="form" class="forms-toolbar">
-      <button v-if="isLiteratureTable" class="toolbar-btn" type="button" @click="generateSmartCells('all')">
-        <IcIcon name="psychology" :size="17" />
-        <span>全表智能填充</span>
-      </button>
-      <DropdownMenu v-model:open="tagFilterMenuOpen">
-        <DropdownMenuTrigger as-child>
-          <button class="smart-dropdown-trigger tag-filter-trigger" type="button" title="标签筛选">
-            <IcIcon name="label" :size="17" />
-            <span>{{ tagFilterLabel }}</span>
-            <IcIcon name="chevron-down" :size="14" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuPortal>
-          <DropdownMenuContent align="end">
-            <DropdownMenuRadioGroup v-model="tagFilter">
-              <DropdownMenuRadioItem
-                v-for="option in tagFilterOptions"
-                :key="option.value || 'all-tags'"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenuPortal>
-      </DropdownMenu>
-      <DropdownMenu v-model:open="ratingFilterMenuOpen">
-        <DropdownMenuTrigger as-child>
-          <button class="smart-dropdown-trigger rating-filter-trigger" type="button" title="星级筛选">
-            <IcIcon name="star" :size="17" />
-            <span>{{ ratingFilterLabel }}</span>
-            <IcIcon name="chevron-down" :size="14" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuPortal>
-          <DropdownMenuContent align="end">
-            <DropdownMenuRadioGroup v-model="minRating">
-              <DropdownMenuRadioItem
-                v-for="option in ratingFilterOptions"
-                :key="option.value"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenuPortal>
-      </DropdownMenu>
-      <div class="forms-toolbar-actions">
-        <button class="toolbar-btn clear-invalid-btn" type="button" title="清除失败或空字段" @click="clearInvalidFields">
-          <IcIcon name="trash" :size="17" />
-          <span>清空无效字段</span>
-        </button>
-        <button v-if="form" class="delete-form-toolbar-btn" type="button" title="删除表格" :disabled="!activeFormId || saving" @click="deleteCurrentSmartForm">
-          <IcIcon name="trash" :size="17" />
-          <span>删除表格</span>
-        </button>
-      </div>
-    </div>
-
     <div v-if="form" class="table-frame" :class="{ loading, 'plain-table': !isLiteratureTable }" @mouseup="stopCellSelection" @contextmenu.prevent.stop="openTableContextMenu({ kind: 'table' }, $event)">
       <div class="smart-table-shell">
       <table class="smart-table" @selectstart="preventTableTextSelection">
@@ -2042,7 +2128,7 @@ function errorMessage(error: unknown): string {
               v-for="column in form.columns"
               :key="column.id"
               :class="{ 'sticky-literature-column': column.id === 'literature_file' }"
-              :style="{ width: `${column.width}px`, minWidth: `${column.width}px` }"
+              :style="columnWidthStyle(column)"
             >
               <button
                 class="table-edge-column-drag"
@@ -2061,7 +2147,7 @@ function errorMessage(error: unknown): string {
               draggable="true"
               :data-column-id="column.id"
               :class="['tone-' + (column.tone || 'none'), { dragging: draggedColumnId === column.id, swapped: swappedColumnId === column.id, 'sticky-literature-column': column.id === 'literature_file' }]"
-              :style="{ width: `${column.width}px`, minWidth: `${column.width}px` }"
+              :style="columnWidthStyle(column)"
               @dragstart="startColumnDrag(column.id, $event)"
               @dragover.prevent
               @drop.prevent="dropColumn(column.id)"
@@ -2597,7 +2683,7 @@ function errorMessage(error: unknown): string {
 
     <footer v-if="form" class="forms-footer">
       <span>存储: {{ activeFormStorageLabel }}</span>
-      <span>导出: {{ activeFormCsvFile }}</span>
+      <span class="footer-export-info">导出: {{ activeFormCsvFile }}</span>
       <span>更新: {{ updatedAtLabel }}</span>
     </footer>
   </section>
@@ -2606,9 +2692,10 @@ function errorMessage(error: unknown): string {
 <style scoped>
 .smart-forms-view {
   display: grid;
-  grid-template-rows: 44px 44px minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
   height: 100%;
+  container-type: inline-size;
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-ui);
@@ -4250,28 +4337,364 @@ th.sticky-literature-column {
   }
 }
 
-@media (max-width: 760px) {
-  .smart-forms-view {
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+.forms-header {
+  display: grid;
+  align-items: stretch;
+  justify-content: stretch;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 0;
+  padding: 0;
+}
+
+.forms-primary-row,
+.forms-secondary-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-8) var(--space-12);
+}
+
+.forms-primary-row .header-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.forms-primary-row .search-box {
+  flex: 0 1 220px;
+}
+
+.forms-secondary-row {
+  flex-wrap: wrap;
+}
+
+.forms-secondary-row .filter-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.compact-control-label,
+.compact-filter-toggle,
+.compact-more-trigger {
+  display: none;
+}
+
+.compact-filter-shell,
+.compact-more-shell {
+  display: none;
+}
+
+/* Secondary toolbar controls are borderless at every responsive width. */
+.smart-forms-view .forms-secondary-row .smart-dropdown-trigger {
+  border: 0;
+}
+
+.primary-icon-placeholder,
+.primary-search-placeholder {
+  display: none;
+}
+
+@container (max-width: 1040px) {
+  .smart-forms-view .forms-header {
+    display: grid;
+    gap: var(--space-4);
+    padding: var(--space-8) var(--space-10);
   }
 
-  .forms-header {
-    align-items: flex-start;
-    flex-direction: column;
+  .smart-forms-view .forms-primary-row {
+    display: grid;
+    grid-template-columns: 28px minmax(100px, 1fr) 28px 28px;
+    grid-template-rows: auto auto;
+    gap: var(--space-4);
+    min-height: 0;
+    padding: 0;
   }
 
-  .header-copy {
+  .smart-forms-view .new-row-btn,
+  .smart-forms-view .primary-icon-placeholder {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .smart-forms-view .search-box,
+  .smart-forms-view .primary-search-placeholder {
+    grid-column: 2;
+    grid-row: 1;
     width: 100%;
+    min-width: 0;
+    max-width: none;
   }
 
-  .header-actions,
-  .forms-toolbar {
+  .smart-forms-view .new-form-btn {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .smart-forms-view .delete-form-toolbar-btn {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  .smart-forms-view .new-row-btn,
+  .smart-forms-view .new-form-btn,
+  .smart-forms-view .delete-form-toolbar-btn {
+    width: 28px;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .smart-forms-view .new-row-btn span,
+  .smart-forms-view .new-form-btn span,
+  .smart-forms-view .delete-form-toolbar-btn span {
+    display: none;
+  }
+
+  .smart-forms-view .forms-primary-row .header-copy {
+    grid-column: 1 / -1;
+    grid-row: 2;
     width: 100%;
-    justify-content: flex-start;
+    height: 28px;
+    padding: 0 var(--space-10);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
   }
 
-  .search-box {
-    flex: 1 1 100%;
+  .smart-forms-view .forms-primary-row .header-copy h1,
+  .smart-forms-view .forms-primary-row .forms-eyebrow {
+    display: inline;
+    font-size: calc(12px * var(--font-scale));
+    font-weight: 500;
   }
+
+  .smart-forms-view .forms-primary-row .forms-eyebrow::after {
+    display: inline;
+    margin: 0 var(--space-6);
+    content: '›';
+  }
+
+  .smart-forms-view .forms-secondary-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+    min-height: 0;
+    padding: 0;
+  }
+
+  .smart-forms-view .form-switch-control,
+  .smart-forms-view .compact-filter-shell,
+  .smart-forms-view .compact-more-shell,
+  .smart-forms-view .filter-control-shell {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    max-width: 220px;
+    justify-self: center;
+    container-type: inline-size;
+  }
+
+  .smart-forms-view .form-switch-control,
+  .smart-forms-view .filter-control-shell {
+    container-name: smart-filter-control;
+  }
+
+  .smart-forms-view .compact-filter-shell,
+  .smart-forms-view .compact-more-shell {
+    container-name: smart-compact-action;
+  }
+
+  .smart-forms-view .compact-filter-toggle,
+  .smart-forms-view .compact-more-trigger {
+    display: inline-flex;
+  }
+
+  .smart-forms-view .form-switch-control {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .smart-forms-view .compact-filter-shell {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .smart-forms-view .compact-more-shell {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .smart-forms-view .forms-secondary-row .smart-dropdown-trigger {
+    width: 100%;
+    min-width: 0;
+    max-width: 220px;
+    justify-content: center;
+    gap: var(--space-4);
+    padding: 0 var(--space-6);
+    white-space: nowrap;
+  }
+
+  .smart-forms-view .wide-control-label,
+  .smart-forms-view .desktop-secondary-action {
+    display: none;
+  }
+
+  .smart-forms-view .compact-control-label {
+    display: inline;
+  }
+
+  .smart-forms-view .compact-filter-toggle.active {
+    background: var(--color-primary-softer);
+    color: var(--color-primary);
+  }
+
+  .smart-forms-view .forms-secondary-row .filter-controls {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: max-height 180ms ease, opacity 150ms ease;
+  }
+
+  .smart-forms-view .forms-secondary-row .filter-controls.open {
+    max-height: 32px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .smart-forms-view .filter-controls .smart-dropdown-trigger {
+    width: 100%;
+    max-width: 220px;
+  }
+}
+
+@container smart-filter-control (max-width: 112px) {
+  .smart-forms-view .forms-secondary-row .smart-dropdown-trigger {
+    width: 28px;
+    max-width: 28px;
+    gap: 0;
+    padding: 0;
+  }
+
+  .smart-forms-view .compact-control-label,
+  .smart-forms-view .control-caret {
+    display: none;
+  }
+}
+
+@container smart-compact-action (max-width: 88px) {
+  .smart-forms-view .forms-secondary-row .smart-dropdown-trigger {
+    width: 28px;
+    max-width: 28px;
+    gap: 0;
+    padding: 0;
+  }
+
+  .smart-forms-view .compact-control-label {
+    display: none;
+  }
+}
+
+@container (max-width: 640px) {
+  /* 移动端：页面骨架收紧，首行隐藏"删除表格"（危险操作移入"其他"菜单）。 */
+  .smart-forms-view .forms-header {
+    gap: var(--space-2);
+    padding: var(--space-6) var(--space-8);
+  }
+
+  .smart-forms-view .forms-primary-row {
+    grid-template-columns: 28px minmax(72px, 1fr) 28px;
+  }
+
+  .smart-forms-view .delete-form-toolbar-btn.mobile-hidden-action {
+    display: none;
+  }
+
+  /* 移动端：表格留出横向滚动，固定左侧"行号"列，滚动时始终可见。 */
+  .smart-forms-view .table-frame {
+    margin: 0 var(--space-6);
+  }
+
+  .smart-forms-view th[data-column-id="row_index"],
+  .smart-forms-view td[data-column-id="row_index"] {
+    position: sticky;
+    left: 0;
+    z-index: 6;
+    background: var(--color-canvas);
+    box-shadow: 1px 0 0 var(--color-border);
+  }
+
+  .smart-forms-view th[data-column-id="row_index"] {
+    z-index: 9;
+  }
+
+  /* 文献列紧跟行索引列右侧让位，避免两个固定列重叠。 */
+  .smart-forms-view th.sticky-literature-column,
+  .smart-forms-view td.sticky-literature-column {
+    left: 32px;
+  }
+
+  /* 移动端：底部信息条精简，隐藏导出文件名。 */
+  .smart-forms-view .forms-footer {
+    min-height: 28px;
+    padding: 0 var(--space-8);
+    font-size: calc(11px * var(--font-scale));
+  }
+
+  .smart-forms-view .footer-export-info {
+    display: none;
+  }
+}
+
+/* The workspace owns the authoritative mobile width; wide table content must not override it. */
+.smart-forms-view.mobile-layout .forms-primary-row {
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+}
+
+.smart-forms-view.mobile-layout .search-box {
+  min-width: 0;
+  max-width: none;
+}
+
+.smart-forms-view.mobile-layout .new-form-btn {
+  grid-column: 3;
+  display: inline-flex;
+}
+
+.smart-forms-view.mobile-layout .delete-form-toolbar-btn.mobile-hidden-action {
+  display: none;
+}
+
+.smart-forms-view.compressed-layout .forms-secondary-row .responsive-control-shell,
+.smart-forms-view.compressed-layout .forms-secondary-row .smart-dropdown-trigger {
+  width: 28px;
+  max-width: 28px;
+}
+
+.smart-forms-view.compressed-layout .forms-secondary-row .smart-dropdown-trigger {
+  gap: 0;
+  padding: 0;
+}
+
+.smart-forms-view.compressed-layout .forms-secondary-row .compact-control-label,
+.smart-forms-view.compressed-layout .forms-secondary-row .control-caret {
+  display: none;
+}
+
+.smart-forms-view.compressed-layout .forms-footer {
+  justify-content: flex-end;
+}
+
+.smart-forms-view.compressed-layout .forms-footer > span:first-child {
+  display: none;
 }
 </style>
