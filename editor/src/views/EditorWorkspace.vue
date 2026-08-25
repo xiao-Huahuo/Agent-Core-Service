@@ -801,7 +801,7 @@ watch(
       >
         <Transition name="mobile-sidebar-toggle">
           <button
-            v-if="topCommandBarMobile && !visibleFileSidebarOpen"
+            v-if="topCommandBarMobile && workspaceStore.mainView === 'editor' && !visibleFileSidebarOpen"
             class="mobile-file-sidebar-expand"
             type="button"
             title="展开文件树"
@@ -817,7 +817,11 @@ watch(
         <FavoritesView v-else-if="workspaceStore.mainView === 'favorites'" class="main-shell-content" />
         <PrivacyView v-else-if="workspaceStore.mainView === 'privacy'" class="main-shell-content" />
         <LibraryView v-else-if="workspaceStore.mainView === 'library'" class="main-shell-content" />
-        <ComponentLibraryView v-else-if="workspaceStore.mainView === 'component-library'" class="main-shell-content" />
+        <ComponentLibraryView
+          v-else-if="workspaceStore.mainView === 'component-library'"
+          class="main-shell-content"
+          :mobile="topCommandBarMobile"
+        />
         <VaultView v-else-if="workspaceStore.mainView === 'vault'" class="main-shell-content" />
         <SmartFormsView v-else-if="workspaceStore.mainView === 'forms'" class="main-shell-content" />
         <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="main-shell-content" />

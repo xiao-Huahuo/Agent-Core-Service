@@ -31,8 +31,10 @@ defineOptions({ name: 'ComponentLibraryView' })
 
 const props = withDefaults(defineProps<{
   favoritesOnlyLocked?: boolean
+  mobile?: boolean
 }>(), {
   favoritesOnlyLocked: false,
+  mobile: false,
 })
 
 const settingsStore = useSettingsStore()
@@ -44,6 +46,7 @@ const componentQuery = ref('')
 const loading = ref(false)
 const error = ref('')
 const uploadOpen = ref(false)
+const sidebarOpen = ref(true)
 const selectedComponent = ref<ComponentLibraryItem | null>(null)
 const renamingComponentId = ref('')
 const deletingComponentId = ref('')
@@ -233,9 +236,22 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="component-library-view">
+  <section
+    class="component-library-view"
+    :class="{ mobile, 'sidebar-collapsed': !sidebarOpen }"
+  >
     <aside class="tag-sidebar" aria-label="组件标签">
       <div class="sidebar-title">
+        <button
+          v-if="mobile"
+          class="component-sidebar-toggle"
+          type="button"
+          title="折叠组件库侧边栏"
+          aria-label="折叠组件库侧边栏"
+          @click="sidebarOpen = false"
+        >
+          <IcIcon name="arrow-left" :size="18" />
+        </button>
         <IcIcon name="grid-view" :size="17" />
         <span>组件库</span>
       </div>
@@ -277,6 +293,18 @@ onMounted(() => {
     <main class="component-main">
       <header class="component-toolbar">
         <div class="toolbar-context">
+          <Transition name="component-sidebar-toggle">
+            <button
+              v-if="mobile && !sidebarOpen"
+              class="component-sidebar-toggle"
+              type="button"
+              title="展开组件库侧边栏"
+              aria-label="展开组件库侧边栏"
+              @click="sidebarOpen = true"
+            >
+              <IcIcon name="arrow-right" :size="18" />
+            </button>
+          </Transition>
           <button
             v-if="selectedComponent"
             class="detail-back"
@@ -362,6 +390,7 @@ onMounted(() => {
 
 <style scoped>
 .component-library-view {
+  position: relative;
   display: grid;
   grid-template-columns: 222px minmax(0, 1fr);
   min-width: 0;
@@ -370,6 +399,29 @@ onMounted(() => {
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-ui);
+}
+
+.component-sidebar-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.component-sidebar-toggle:hover {
+  background: var(--color-selection-blue-soft);
+  color: var(--color-selection-blue);
 }
 
 .tag-sidebar {
@@ -673,43 +725,74 @@ onMounted(() => {
   to { opacity: 1; transform: translateX(0) scale(1); }
 }
 
-@media (max-width: 760px) {
-  .component-library-view {
+.component-library-view.mobile {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
+    overflow: hidden;
+}
 
-  .tag-sidebar {
-    flex-direction: row;
-    overflow-x: auto;
-    margin: var(--space-8);
-    border: 0;
-  }
-
-  .sidebar-title {
-    display: none;
-  }
-
-  .component-search {
-    flex: 0 0 164px;
-  }
-
-  .tag-list {
-    display: flex;
-  }
-
-  .tag-option {
-    width: auto;
-    min-width: max-content;
-  }
-
-  .component-toolbar {
-    padding: 0 var(--space-12);
-  }
-
-  .component-content {
+.component-library-view.mobile .tag-sidebar {
+    position: absolute;
+    inset: var(--space-8) auto var(--space-8) var(--space-8);
+    z-index: 20;
+    width: min(280px, calc(100% - var(--space-16)));
+    margin: 0;
     padding: var(--space-12);
-  }
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    box-shadow: 12px 0 32px rgba(12, 18, 38, 0.22);
+    opacity: 1;
+    transform: translateX(0);
+    animation: none;
+    transition: opacity 160ms ease, transform 180ms ease;
+}
+
+.component-library-view.mobile.sidebar-collapsed .tag-sidebar {
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(calc(-100% - var(--space-16)));
+}
+
+.component-library-view.mobile .component-sidebar-toggle {
+    display: inline-flex;
+}
+
+.component-library-view.mobile .sidebar-title {
+    display: flex;
+    padding: 0;
+}
+
+.component-library-view.mobile .component-search {
+    flex: none;
+}
+
+.component-library-view.mobile .tag-list {
+    display: grid;
+    overflow-y: auto;
+}
+
+.component-library-view.mobile .tag-option {
+    width: 100%;
+    min-width: 0;
+}
+
+.component-library-view.mobile .component-toolbar {
+    padding: var(--space-8) var(--space-12);
+}
+
+.component-library-view.mobile .component-content {
+    padding: var(--space-12);
+}
+
+.component-sidebar-toggle-enter-active,
+.component-sidebar-toggle-leave-active {
+    transition: opacity 160ms ease, transform 180ms ease;
+}
+
+.component-sidebar-toggle-enter-from,
+.component-sidebar-toggle-leave-to {
+    opacity: 0;
+    transform: translateX(-12px);
 }
 
 @media (prefers-reduced-motion: reduce) {
