@@ -17,7 +17,7 @@ import lightLogo from '@/assets/images/亮色无底图标.png'
 import darkLogo from '@/assets/images/暗色无底图标.png'
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
-defineProps<{ gitOpen: boolean; browserOpen: boolean }>()
+defineProps<{ gitOpen: boolean; browserOpen: boolean; mobile?: boolean }>()
 
 /* ---- 模型阻断模态框 ---- */
 const modelModalVisible = ref(false)
@@ -140,7 +140,7 @@ onMounted(() => nextTick(autoResizeInput))
 </script>
 
 <template>
-  <header class="topbar">
+  <header class="topbar" :class="{ mobile }">
     <div class="brand">
       <button class="logo-btn" type="button" title="回到首页" @click="emit('openHome')">
         <img :src="logoSrc" class="logo-img" alt="MetaWeave" />
@@ -219,7 +219,7 @@ onMounted(() => nextTick(autoResizeInput))
         <IcIcon name="language" :size="17" />
       </button>
       <button
-        class="topbar-icon-button"
+        class="topbar-icon-button topbar-git-btn"
         :class="{ active: gitOpen }"
         type="button"
         title="Git 版本控制"
@@ -229,7 +229,7 @@ onMounted(() => nextTick(autoResizeInput))
         <IcIcon name="git" :size="17" />
       </button>
       <button
-        class="topbar-icon-button topbar-optional"
+        class="topbar-icon-button topbar-todo-btn topbar-optional"
         :class="{ active: todoActive }"
         type="button"
         title="待办"
@@ -1133,6 +1133,84 @@ kbd {
     flex: 0 1 250px;
     min-width: 160px;
   }
+}
+
+.topbar.mobile {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto;
+  justify-content: stretch;
+  padding: var(--space-8) var(--space-10);
+}
+
+.topbar.mobile .actions > * {
+  display: none;
+}
+
+.topbar.mobile .brand {
+  display: flex;
+  width: 100%;
+  max-width: none;
+  overflow: hidden;
+}
+
+.topbar.mobile .brand-copy {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.topbar.mobile .library-name-input {
+  width: 100% !important;
+  min-width: 0;
+  max-width: none;
+  text-overflow: ellipsis;
+}
+
+.topbar.mobile .actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  overflow: visible;
+}
+
+.topbar.mobile .agent-play-btn,
+.topbar.mobile .topbar-git-btn,
+.topbar.mobile .topbar-todo-btn,
+.topbar.mobile .search-center,
+.topbar.mobile .window-controls {
+  display: inline-flex;
+}
+
+.topbar.mobile .agent-play-btn {
+  order: 1;
+  width: 28px;
+  padding: 0;
+  gap: 0;
+}
+
+.topbar.mobile .agent-play,
+.topbar.mobile .agent-now {
+  display: none;
+}
+
+.topbar.mobile .agent-play-btn:hover .agent-play-img {
+  transform: none;
+}
+
+.topbar.mobile .topbar-git-btn {
+  order: 2;
+}
+
+.topbar.mobile .topbar-todo-btn {
+  order: 3;
+}
+
+.topbar.mobile .search-center {
+  order: 4;
+}
+
+.topbar.mobile .window-controls {
+  order: 5;
 }
 
 /* ---- 模型阻断模态框 ---- */

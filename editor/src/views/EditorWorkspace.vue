@@ -68,6 +68,8 @@ const COLLAPSE_THRESHOLD = 150
 type ResizeTarget = 'file' | 'editor' | 'browser' | 'agent'
 
 const workspaceGrid = ref<HTMLElement | null>(null)
+const mainShell = ref<HTMLElement | null>(null)
+const mainShellWidth = ref(Number.POSITIVE_INFINITY)
 const fileSidebarOpen = ref(true)
 const agentSidebarOpen = ref(true)
 const gitLeftOpen = ref(false)
@@ -88,6 +90,8 @@ const isAgentQueuePage = computed(() => workspaceStore.mainView === 'agent-queue
 const isGraphPage = computed(() => workspaceStore.mainView === 'graph')
 const isHomePage = computed(() => workspaceStore.mainView === 'home')
 const isBrowserPage = computed(() => workspaceStore.mainView === 'browser')
+/** Match page-level mobile layouts to the main workspace card, including sidebar resizing. */
+const topCommandBarMobile = computed(() => mainShellWidth.value <= 640)
 const browserSidebarVisible = computed(() => (
   workspaceStore.browserSidebarOpen && workspaceStore.mainView !== 'browser'
 ))
@@ -635,6 +639,7 @@ function refreshGitAfterKnowledgeFileChange(): void {
 }
 
 let unsubscribeOpenAgentPage: (() => void) | undefined
+let mainShellResizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
@@ -643,6 +648,13 @@ onMounted(() => {
   unsubscribeOpenAgentPage = window.agentEditorDesktop?.onOpenAgentPage?.(() => {
     workspaceStore.setMainView('agent')
   })
+  if (mainShell.value) {
+    mainShellWidth.value = mainShell.value.getBoundingClientRect().width
+    mainShellResizeObserver = new ResizeObserver(([entry]) => {
+      if (entry) mainShellWidth.value = entry.contentRect.width
+    })
+    mainShellResizeObserver.observe(mainShell.value)
+  }
   void gitStore.refresh()
 })
 
@@ -650,6 +662,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('metaweave-knowledge-file-change', refreshGitAfterKnowledgeFileChange)
   unsubscribeOpenAgentPage?.()
+  mainShellResizeObserver?.disconnect()
   stopResize()
   stopTodoResize()
 })
@@ -676,6 +689,7 @@ watch(
     <TopCommandBar
       :git-open="gitRightOpen"
       :browser-open="browserSidebarVisible"
+      :mobile="topCommandBarMobile"
       @toggle-agent="toggleAgentSidebar"
       @open-home="openHome"
       @open-settings="openSettings"
@@ -758,6 +772,7 @@ watch(
         @pointerdown="startResize('file', $event)"
       ></div>
       <main
+        ref="mainShell"
         class="main-shell editor-col ide-panel"
         :class="{
           'agent-page-main-shell': isAgentPage,
