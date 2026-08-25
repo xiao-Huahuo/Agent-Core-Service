@@ -24,6 +24,9 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 import { buildRecentFileGroups, type RecentFileVisit } from '@/utils/recentFileHistory'
 
+defineProps<{ mobileOverlay?: boolean }>()
+const emit = defineEmits<{ collapse: []; fileOpened: [] }>()
+
 const settingsStore = useSettingsStore()
 const isDark = computed(() => settingsStore.isDark)
 const workspaceStore = useWorkspaceStore()
@@ -466,6 +469,7 @@ function handleSelect(node: KnowledgeFileNode, event?: MouseEvent | KeyboardEven
   if (!node.isDir) {
     workspaceStore.setMainView('editor')
     void workspaceStore.selectFile(node)
+    emit('fileOpened')
   }
 }
 
@@ -959,6 +963,16 @@ onUnmounted(() => {
         <div class="header-row header-row-main">
           <div class="header-main-actions">
             <button
+              v-if="mobileOverlay"
+              class="header-action"
+              type="button"
+              title="折叠文件树"
+              aria-label="折叠文件树侧边栏"
+              @click="emit('collapse')"
+            >
+              <IcIcon name="arrow-left" :size="18" />
+            </button>
+            <button
               class="header-action"
               :class="{ active: treeSearchOpen }"
               type="button"
@@ -1084,6 +1098,16 @@ onUnmounted(() => {
       </template>
       <template v-else>
         <div class="header-row">
+          <button
+            v-if="mobileOverlay"
+            class="header-action"
+            type="button"
+            title="折叠文件树"
+            aria-label="折叠文件树侧边栏"
+            @click="emit('collapse')"
+          >
+            <IcIcon name="arrow-left" :size="18" />
+          </button>
           <button
             class="header-action"
             type="button"

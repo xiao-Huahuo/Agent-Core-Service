@@ -436,6 +436,8 @@ onErrorCaptured((err, vm, info) => {
 
       <div class="tab-actions">
         <EditorModeSwitch
+          class="editor-mode-control"
+          :class="{ 'single-mode': activePipeline.modes.length === 1 }"
           :model-value="effectiveEditorMode"
           :options="activePipeline.modes"
           @update:model-value="setEditorMode"

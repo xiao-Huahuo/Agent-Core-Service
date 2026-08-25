@@ -10,6 +10,7 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch 
 
 import ActivityBar from '@/components/editor_workspace/ActivityBar.vue'
 import AgentPanel from '@/components/editor_workspace/AgentPanel.vue'
+import IcIcon from '@/components/common/IcIcon.vue'
 import CommandPalette from '@/components/editor_workspace/CommandPalette.vue'
 import EditorPane from '@/components/editor_workspace/EditorPane.vue'
 import ImagePreviewer from '@/components/common/ImagePreviewer.vue'
@@ -90,7 +91,7 @@ const isAgentQueuePage = computed(() => workspaceStore.mainView === 'agent-queue
 const isGraphPage = computed(() => workspaceStore.mainView === 'graph')
 const isHomePage = computed(() => workspaceStore.mainView === 'home')
 const isBrowserPage = computed(() => workspaceStore.mainView === 'browser')
-/** Match page-level mobile layouts to the main workspace card, including sidebar resizing. */
+/** Match mobile layouts to the stable content span, excluding the docked file-tree width. */
 const topCommandBarMobile = computed(() => mainShellWidth.value <= 640)
 const browserSidebarVisible = computed(() => (
   workspaceStore.browserSidebarOpen && workspaceStore.mainView !== 'browser'
@@ -144,8 +145,8 @@ watch(
 
 const workspaceGridStyle = computed<Record<string, string>>(() => ({
   '--activity-col-width': `${activityBarWidth.value}px`,
-  '--file-col-width': visibleFileSidebarOpen.value ? `${fileWidth.value}px` : '0px',
-  '--file-resizer-width': visibleFileSidebarOpen.value ? '4px' : '0px',
+  '--file-col-width': visibleFileSidebarOpen.value && !topCommandBarMobile.value ? `${fileWidth.value}px` : '0px',
+  '--file-resizer-width': visibleFileSidebarOpen.value && !topCommandBarMobile.value ? '4px' : '0px',
   '--agent-col-width': visibleAgentSidebarOpen.value ? `${agentWidth.value}px` : '0px',
   '--agent-resizer-width': visibleAgentSidebarOpen.value ? '4px' : '0px',
   '--editor-resizer-width': editorSidebarVisible.value ? '4px' : '0px',
@@ -194,6 +195,11 @@ function toggleFileSidebar() {
     return
   }
   openFileSidebar()
+}
+
+/** Close the overlay after a normal file opens while retaining desktop docking behavior. */
+function handleFileTreeFileOpened(): void {
+  if (topCommandBarMobile.value) fileSidebarOpen.value = false
 }
 
 function toggleAgentSidebar() {
@@ -641,6 +647,16 @@ function refreshGitAfterKnowledgeFileChange(): void {
 let unsubscribeOpenAgentPage: (() => void) | undefined
 let mainShellResizeObserver: ResizeObserver | null = null
 
+/** Measure the content span that remains stable when the mobile file tree becomes an overlay. */
+function updateMainShellWidth(): void {
+  const grid = workspaceGrid.value
+  const shell = mainShell.value
+  if (!grid || !shell) return
+  const gridRect = grid.getBoundingClientRect()
+  const shellRect = shell.getBoundingClientRect()
+  mainShellWidth.value = shellRect.right - gridRect.left - activityBarWidth.value
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('metaweave-knowledge-file-change', refreshGitAfterKnowledgeFileChange)
@@ -648,12 +664,11 @@ onMounted(() => {
   unsubscribeOpenAgentPage = window.agentEditorDesktop?.onOpenAgentPage?.(() => {
     workspaceStore.setMainView('agent')
   })
-  if (mainShell.value) {
-    mainShellWidth.value = mainShell.value.getBoundingClientRect().width
-    mainShellResizeObserver = new ResizeObserver(([entry]) => {
-      if (entry) mainShellWidth.value = entry.contentRect.width
-    })
+  if (mainShell.value && workspaceGrid.value) {
+    updateMainShellWidth()
+    mainShellResizeObserver = new ResizeObserver(updateMainShellWidth)
     mainShellResizeObserver.observe(mainShell.value)
+    mainShellResizeObserver.observe(workspaceGrid.value)
   }
   void gitStore.refresh()
 })
@@ -707,6 +722,7 @@ watch(
         'browser-sidebar-collapsed': !browserSidebarVisible,
         'agent-main-view': isAgentPage,
         'graph-main-view': isGraphPage,
+        'mobile-main-layout': topCommandBarMobile,
       }"
       :style="workspaceGridStyle"
     >
@@ -763,7 +779,12 @@ watch(
       />
       <div class="file-col ide-panel" :aria-hidden="!visibleFileSidebarOpen">
         <GitSidebar v-if="gitLeftOpen" />
-        <FileTreePanel v-else />
+        <FileTreePanel
+          v-else
+          :mobile-overlay="topCommandBarMobile"
+          @collapse="toggleFileSidebar"
+          @file-opened="handleFileTreeFileOpened"
+        />
       </div>
       <div
         class="resize-handle file-resizer"
@@ -778,6 +799,18 @@ watch(
           'agent-page-main-shell': isAgentPage,
         }"
       >
+        <Transition name="mobile-sidebar-toggle">
+          <button
+            v-if="topCommandBarMobile && !visibleFileSidebarOpen"
+            class="mobile-file-sidebar-expand"
+            type="button"
+            title="展开文件树"
+            aria-label="展开文件树侧边栏"
+            @click="openFileSidebar"
+          >
+            <IcIcon name="arrow-right" :size="18" />
+          </button>
+        </Transition>
         <HomeView v-if="workspaceStore.mainView === 'home'" class="main-shell-content" />
         <EditorPane v-else-if="workspaceStore.mainView === 'editor'" class="main-shell-content" />
         <FileResourceManager v-else-if="workspaceStore.mainView === 'resources'" class="main-shell-content" />
@@ -879,6 +912,7 @@ watch(
 }
 
 .workspace-grid {
+  position: relative;
   display: grid;
   grid-template-columns:
     var(--activity-col-width) var(--file-col-width) var(--file-resizer-width) minmax(0, 1fr)
@@ -913,6 +947,113 @@ watch(
   transition:
     opacity 160ms ease,
     transform 180ms ease;
+}
+
+.workspace-grid.mobile-main-layout .file-col {
+  position: absolute;
+  grid-column: auto;
+  grid-row: auto;
+  top: var(--space-8);
+  bottom: var(--space-8);
+  left: calc(var(--activity-col-width) + var(--space-8));
+  z-index: 90;
+  width: min(320px, calc(100% - var(--activity-col-width) - var(--space-16)));
+  border: 1px solid var(--workspace-panel-border);
+  border-radius: 18px;
+  background: var(--color-bg-app);
+  box-shadow: 12px 0 32px rgba(12, 18, 38, 0.22);
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.workspace-grid.mobile-main-layout.file-sidebar-collapsed .file-col {
+  opacity: 0;
+  transform: translateX(calc(-100% - var(--space-16)));
+}
+
+.workspace-grid.mobile-main-layout .file-resizer {
+  display: none;
+}
+
+.mobile-file-sidebar-expand {
+  position: absolute;
+  top: var(--space-8);
+  left: var(--space-10);
+  z-index: 70;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.mobile-file-sidebar-expand:hover {
+  background: var(--color-selection-blue-soft);
+  color: var(--color-selection-blue);
+}
+
+.mobile-file-sidebar-expand + .main-shell-content :deep(.tab-list) {
+  margin-left: 36px;
+}
+
+.workspace-grid.mobile-main-layout .main-shell-content :deep(.tab-strip) {
+  position: relative;
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.workspace-grid.mobile-main-layout .main-shell-content :deep(.tab-list) {
+  margin-right: 36px;
+}
+
+.workspace-grid.mobile-main-layout .main-shell-content :deep(.tab-actions) {
+  width: 100%;
+  justify-content: flex-start;
+  overflow: visible;
+}
+
+.workspace-grid.mobile-main-layout .main-shell-content :deep(.editor-mode-control) {
+  align-self: flex-start;
+}
+
+.workspace-grid.mobile-main-layout .main-shell-content :deep(.editor-mode-control.single-mode) {
+  display: none;
+}
+
+.workspace-grid.mobile-main-layout .main-shell-content :deep(.code-editor-header) {
+  display: none;
+}
+
+.workspace-grid.mobile-main-layout .main-shell-content :deep(.save-button) {
+  position: absolute;
+  top: var(--space-8);
+  right: var(--space-10);
+  width: 28px;
+  padding: 0;
+}
+
+.workspace-grid.mobile-main-layout .main-shell-content :deep(.save-button span) {
+  display: none;
+}
+
+.mobile-sidebar-toggle-enter-active,
+.mobile-sidebar-toggle-leave-active {
+  transition: opacity 160ms ease, transform 180ms ease;
+}
+
+.mobile-sidebar-toggle-enter-from,
+.mobile-sidebar-toggle-leave-to {
+  opacity: 0;
+  transform: translateX(-12px);
 }
 
 .main-shell.ide-panel,
