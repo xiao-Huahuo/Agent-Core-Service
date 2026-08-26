@@ -63,7 +63,16 @@ const { editorMode } = storeToRefs(workspaceStore)
 const visualizeMenuOpen = ref(false)
 const codeEditorRef = ref<InstanceType<typeof CodeEditor> | null>(null)
 const markdownPreviewRef = ref<InstanceType<typeof MarkdownPreview> | null>(null)
-const lastEditorScroll = ref({ ratio: 0, cursorOffset: 0, contentLength: 0 })
+type EditorScrollSnapshot = {
+  ratio: number
+  cursorOffset: number
+  contentLength: number
+  cursorViewportRatio: number
+}
+
+const lastEditorScroll = ref<EditorScrollSnapshot>({ ratio: 0, cursorOffset: 0, contentLength: 0, cursorViewportRatio: 0.16 })
+let previewFeedbackLocked = false
+let previewFeedbackTimer: ReturnType<typeof setTimeout> | null = null
 const outlineOpen = ref(false)
 const activeHeadingOffset = ref(0)
 const wikiFocusAnchor = ref<{ path: string; heading: string; blockId: string; nonce: number } | null>(null)
@@ -361,17 +370,39 @@ async function openLatexError(error: LatexCompileError) {
   codeEditorRef.value?.scrollToSourceOffset(offset, 'smooth')
 }
 
-function handleEditorScroll(payload: { ratio: number; cursorOffset: number; contentLength: number }) {
+/** Keeps the rendered caret block at the same visual height without feedback scrolling the editor. */
+function syncMarkdownPreviewToCaret(snapshot: EditorScrollSnapshot, behavior: ScrollBehavior = 'auto') {
+  if (effectiveEditorMode.value !== 'split' || !isMarkdownViewer.value) return
+  previewFeedbackLocked = true
+  if (previewFeedbackTimer) clearTimeout(previewFeedbackTimer)
+  markdownPreviewRef.value?.scrollToSourceOffset(
+    snapshot.cursorOffset,
+    snapshot.contentLength,
+    behavior,
+    snapshot.cursorViewportRatio,
+  )
+  previewFeedbackTimer = setTimeout(() => {
+    previewFeedbackLocked = false
+    previewFeedbackTimer = null
+  }, 180)
+}
+
+function handleEditorScroll(payload: EditorScrollSnapshot) {
   lastEditorScroll.value = payload
   activeHeadingOffset.value = payload.cursorOffset
-  if (effectiveEditorMode.value === 'split' && isMarkdownViewer.value) {
-    markdownPreviewRef.value?.scrollToRatio(payload.ratio)
-  }
+  syncMarkdownPreviewToCaret(payload)
 }
 
 /** Tracks the heading that owns the editable Markdown caret. */
 function handleEditorCursor(offset: number) {
   activeHeadingOffset.value = offset
+  if (effectiveEditorMode.value === 'split' && isMarkdownViewer.value) {
+    void nextTick(() => {
+      const snapshot = codeEditorRef.value?.getScrollSnapshot() ?? lastEditorScroll.value
+      lastEditorScroll.value = snapshot
+      syncMarkdownPreviewToCaret(snapshot)
+    })
+  }
 }
 
 /** Maps the rendered preview heading order back to its Markdown source offset. */
@@ -393,7 +424,7 @@ function navigateToOutlineHeading(item: MarkdownOutlineItem) {
 }
 
 function handlePreviewScroll(ratio: number) {
-  if (effectiveEditorMode.value === 'split' && isMarkdownViewer.value) {
+  if (!previewFeedbackLocked && effectiveEditorMode.value === 'split' && isMarkdownViewer.value) {
     codeEditorRef.value?.scrollToRatio(ratio)
   }
 }
@@ -403,7 +434,8 @@ function handleMarkdownPreviewReady() {
     return
   }
   const snapshot = codeEditorRef.value?.getScrollSnapshot() ?? lastEditorScroll.value
-  markdownPreviewRef.value?.scrollToSourceOffset(snapshot.cursorOffset, snapshot.contentLength)
+  lastEditorScroll.value = snapshot
+  syncMarkdownPreviewToCaret(snapshot)
 }
 
 async function handleWikiNavigate(rawDestination: string) {
@@ -451,7 +483,7 @@ watch(effectiveEditorMode, async (mode, previousMode) => {
   if (previousMode === 'preview' && activeIndex >= 0) {
     markdownPreviewRef.value?.scrollToHeading(activeIndex)
   } else {
-    markdownPreviewRef.value?.scrollToSourceOffset(snapshot.cursorOffset, snapshot.contentLength)
+    syncMarkdownPreviewToCaret(snapshot)
   }
 })
 
@@ -517,6 +549,7 @@ onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('agent-turn-finished', handleAgentTurnFinished)
   if (latexStatusTimer) clearInterval(latexStatusTimer)
+  if (previewFeedbackTimer) clearTimeout(previewFeedbackTimer)
 })
 
 onErrorCaptured((err, vm, info) => {

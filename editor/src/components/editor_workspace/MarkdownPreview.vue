@@ -253,8 +253,37 @@ function moveSourceTableColumn(tableIndex: number, sourceColumn: number, targetC
   replaceSourceTable(table, nextRows)
 }
 
+/** Converts ==highlight== outside fenced and inline code into native mark elements. */
+function rewriteMarkdownHighlights(content: string): string {
+  let fenceChar = ''
+  let fenceLength = 0
+  return content.split('\n').map((line) => {
+    const fence = line.match(/^\s{0,3}(`{3,}|~{3,})/u)?.[1] ?? ''
+    if (fence) {
+      const marker = fence[0] ?? ''
+      if (!fenceChar) {
+        fenceChar = marker
+        fenceLength = fence.length
+      } else if (marker === fenceChar && fence.length >= fenceLength) {
+        fenceChar = ''
+        fenceLength = 0
+      }
+      return line
+    }
+    if (fenceChar) return line
+    return line.split(/(`+[^`]*`+)/u).map((segment, index) => {
+      if (index % 2 === 1) return segment
+      return segment.replace(
+        /(^|[^\\=])==(\S(?:[^\n]*?\S)?)==(?=$|[^=])/gu,
+        (_match, prefix: string, text: string) => `${prefix}<mark>${text}</mark>`,
+      )
+    }).join('')
+  }).join('\n')
+}
+
 function preparePreviewMarkdown(content: string): string {
-  const renderContent = rewriteMarkdownImageUrls(content, getImageUrlContext())
+  const highlightedContent = rewriteMarkdownHighlights(content)
+  const renderContent = rewriteMarkdownImageUrls(highlightedContent, getImageUrlContext())
   const { markdown, displayBlocks: nextDisplayBlocks, inlineBlocks: nextInlineBlocks } = extractPreviewMath(renderContent)
   displayBlocks = nextDisplayBlocks
   inlineBlocks = nextInlineBlocks
@@ -688,9 +717,44 @@ function scrollToRatio(ratio: number, behavior: ScrollBehavior = 'auto') {
   requestAnimationFrame(() => { programmaticScroll = false })
 }
 
-/** Maps the source caret offset to the corresponding proportional preview position. */
-function scrollToSourceOffset(offset: number, contentLength: number, behavior: ScrollBehavior = 'smooth') {
-  scrollToRatio(contentLength > 0 ? offset / contentLength : 0, behavior)
+/** Anchors the rendered source block at the same visual height as the editor caret. */
+function scrollToSourceOffset(
+  offset: number,
+  contentLength: number,
+  behavior: ScrollBehavior = 'auto',
+  viewportRatio = 0.16,
+) {
+  const previewElement = getPreviewElement()
+  const resetElement = previewElement?.querySelector<HTMLElement>('.vditor-reset')
+  const blocks = resetElement
+    ? [...resetElement.children].filter((child): child is HTMLElement => child instanceof HTMLElement)
+    : []
+  if (!previewElement || blocks.length === 0) {
+    scrollToRatio(contentLength > 0 ? offset / contentLength : 0, behavior)
+    return
+  }
+  const sourceLineCount = Math.max(1, props.content.split('\n').length)
+  const boundedOffset = Math.max(0, Math.min(offset, props.content.length))
+  const sourceLine = props.content.slice(0, boundedOffset).split('\n').length - 1
+  const blockIndex = Math.round((sourceLine / Math.max(1, sourceLineCount - 1)) * (blocks.length - 1))
+  const target = blocks[Math.max(0, Math.min(blockIndex, blocks.length - 1))]
+  if (!target) return
+  const previewRect = previewElement.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const anchorRatio = Math.max(0.05, Math.min(0.95, viewportRatio))
+  const top = Math.max(0, previewElement.scrollTop + targetRect.top - previewRect.top - previewElement.clientHeight * anchorRatio)
+  programmaticScroll = true
+  if (behavior === 'smooth') {
+    previewElement.scrollTo({ top, behavior })
+    if (programmaticScrollTimer !== null) clearTimeout(programmaticScrollTimer)
+    programmaticScrollTimer = setTimeout(() => {
+      programmaticScroll = false
+      programmaticScrollTimer = null
+    }, 800)
+    return
+  }
+  previewElement.scrollTop = top
+  requestAnimationFrame(() => { programmaticScroll = false })
 }
 
 /** Scrolls to an actual rendered heading rather than estimating by source ratio. */
@@ -765,6 +829,7 @@ function handlePreviewParse(element: HTMLElement) {
   injectCodeCopyButtons()
   tableOverlay.value.visible = false
   flushPendingHeadingScroll()
+  emit('ready')
   void decorateWikiPreview(resetEl, {
     tree: workspaceStore.tree,
     currentPath: props.path ?? workspaceStore.selectedPath,
@@ -825,7 +890,6 @@ function syncPreviewContent() {
     }
     ensurePreviewPaneIsRenderable()
     instance.renderPreview()
-    emit('ready')
     emit('activeHeading', getActivePreviewHeadingIndex())
     flushPendingHeadingScroll()
   } catch (err) {
@@ -1184,6 +1248,13 @@ onBeforeUnmount(() => {
 
 .markdown-preview :deep(.vditor-reset li)::marker {
   color: var(--color-primary);
+}
+
+.markdown-preview :deep(mark) {
+  padding: 0 0.12em;
+  border-radius: 2px;
+  background: color-mix(in srgb, #ffd84d 48%, transparent);
+  color: inherit;
 }
 
 .markdown-preview :deep(.wiki-link) {

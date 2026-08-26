@@ -44,6 +44,8 @@ interface EditorScrollPayload {
   ratio: number
   cursorOffset: number
   contentLength: number
+  /** Caret height inside the visible editor viewport, used as the Split anchor. */
+  cursorViewportRatio: number
 }
 
 const emit = defineEmits<{
@@ -945,13 +947,21 @@ function selectMatch(index: number) {
 function getScrollSnapshot(): EditorScrollPayload {
   const textarea = textareaRef.value
   if (!textarea) {
-    return { ratio: 0, cursorOffset: 0, contentLength: model.value.length }
+    return { ratio: 0, cursorOffset: 0, contentLength: model.value.length, cursorViewportRatio: 0.16 }
   }
   const maxScrollTop = Math.max(0, textarea.scrollHeight - textarea.clientHeight)
+  const cursorOffset = textarea.selectionStart ?? 0
+  const cursorLine = model.value.slice(0, cursorOffset).split('\n').length - 1
+  const paddingTop = Number.parseFloat(window.getComputedStyle(textarea).paddingTop || '0')
+  const cursorViewportTop = paddingTop + cursorLine * editorLineHeight(textarea) - textarea.scrollTop
+  const cursorViewportRatio = textarea.clientHeight > 0
+    ? Math.max(0.05, Math.min(0.95, cursorViewportTop / textarea.clientHeight))
+    : 0.16
   return {
     ratio: maxScrollTop > 0 ? textarea.scrollTop / maxScrollTop : 0,
-    cursorOffset: textarea.selectionStart ?? 0,
+    cursorOffset,
     contentLength: model.value.length,
+    cursorViewportRatio,
   }
 }
 

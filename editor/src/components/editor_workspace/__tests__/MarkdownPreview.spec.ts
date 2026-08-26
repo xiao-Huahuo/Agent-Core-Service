@@ -67,6 +67,7 @@ describe('MarkdownPreview Split synchronization', () => {
     vi.clearAllMocks()
     vditorMocks.instance.getValue.mockReturnValue('initial')
     vditorMocks.previewElement.innerHTML = ''
+    vditorMocks.previewElement.scrollTop = 0
   })
 
   it('renders immediately when content changes instead of waiting for animation frame', async () => {
@@ -95,6 +96,48 @@ describe('MarkdownPreview Split synchronization', () => {
     expect(frameSpy).not.toHaveBeenCalled()
 
     frameSpy.mockRestore()
+  })
+
+  it('renders ==text== as mark while preserving inline and fenced code', () => {
+    mount(MarkdownPreview, {
+      props: {
+        content: 'plain ==marked== and `==inline==`\n\n```md\n==fenced==\n```',
+        path: 'notes/test.md',
+      },
+    })
+
+    const value = vditorMocks.constructor.options?.value as string
+    expect(value).toContain('plain <mark>marked</mark>')
+    expect(value).toContain('`==inline==`')
+    expect(value).toContain('```md\n==fenced==\n```')
+  })
+
+  it('anchors the rendered block at the caret viewport position', () => {
+    const wrapper = mount(MarkdownPreview, {
+      props: {
+        content: '# First\n\nMiddle\n\nLast',
+        path: 'notes/test.md',
+      },
+    })
+    const host = wrapper.get('.markdown-preview-renderer').element as HTMLElement
+    vditorMocks.previewElement.innerHTML = '<div class="vditor-reset"><h1>First</h1><p>Middle</p><p>Last</p></div>'
+    host.appendChild(vditorMocks.previewElement)
+    const target = vditorMocks.previewElement.querySelectorAll('p')[1] as HTMLElement
+    Object.defineProperties(vditorMocks.previewElement, {
+      clientHeight: { configurable: true, value: 300 },
+      scrollHeight: { configurable: true, value: 900 },
+      scrollTop: { configurable: true, writable: true, value: 200 },
+      getBoundingClientRect: { configurable: true, value: () => ({ left: 0, top: 100, width: 500, height: 300, right: 500, bottom: 400 }) },
+    })
+    Object.defineProperty(target, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, top: 500, width: 200, height: 30, right: 200, bottom: 530 }),
+    })
+
+    ;(wrapper.vm as unknown as { scrollToSourceOffset: (offset: number, contentLength: number, behavior: ScrollBehavior, viewportRatio: number) => void })
+      .scrollToSourceOffset(24, 24, 'auto', 0.4)
+
+    expect(vditorMocks.previewElement.scrollTop).toBe(480)
   })
 
   it('smoothly scrolls to a rendered outline heading and reports it as active', () => {

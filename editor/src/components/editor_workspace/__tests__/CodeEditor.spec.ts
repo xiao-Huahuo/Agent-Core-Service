@@ -80,6 +80,7 @@ describe('CodeEditor Markdown context menu', () => {
       ratio: 0.5,
       cursorOffset: 6,
       contentLength: 16,
+      cursorViewportRatio: expect.any(Number),
     })
   })
 
