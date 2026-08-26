@@ -19,6 +19,7 @@ python -m agent_service.scripts.download_model \
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import shutil
@@ -202,6 +203,59 @@ def _directory_size(path: Path) -> int:
     return total
 
 
+def model_downloaded_bytes(target_dir: Path) -> int:
+    """Return logical bytes already present for completed and resumable model files."""
+
+    return _directory_size(target_dir)
+
+
+def has_partial_model_download(target_dir: Path) -> bool:
+    """Return whether Hugging Face left resumable `.incomplete` files for a model."""
+
+    download_dir = target_dir / ".cache" / "huggingface" / "download"
+    return download_dir.is_dir() and any(download_dir.glob("*.incomplete"))
+
+
+def infer_model_repository_total_bytes(target_dir: Path) -> int | None:
+    """Infer repository bytes offline from a Safetensors index and downloaded support files."""
+
+    index_path = target_dir / "model.safetensors.index.json"
+    if not index_path.is_file():
+        return None
+    try:
+        payload = json.loads(index_path.read_text(encoding="utf-8"))
+        weight_bytes = int((payload.get("metadata") or {}).get("total_size") or 0)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    if weight_bytes <= 0:
+        return None
+    support_bytes = 0
+    for item in target_dir.iterdir():
+        if not item.is_file() or item.name == MODEL_MARKER_FILE or item.name.endswith(".safetensors"):
+            continue
+        try:
+            support_bytes += item.stat().st_size
+        except OSError:
+            continue
+    return weight_bytes + support_bytes
+
+
+def restore_partial_download_progress(model_type: str, target_dir: Path) -> dict[str, object]:
+    """Rebuild process-local progress from resumable Hugging Face artifacts after restart."""
+
+    downloaded_bytes = _directory_size(target_dir)
+    total_bytes = infer_model_repository_total_bytes(target_dir)
+    update_download_progress(
+        model_type,
+        status="downloading",
+        stage="resuming",
+        downloaded_bytes=downloaded_bytes,
+        total_bytes=total_bytes,
+        message="检测到下载断点，正在恢复模型文件",
+    )
+    return get_download_progress(model_type)
+
+
 def ensure_model(model_name: str, model_dir: Path | str, model_type: str | None = None) -> Path | None:
     """
     检查指定模型是否已经存在,不存在时从 Hugging Face 下载。
@@ -380,7 +434,9 @@ def is_model_available(target_dir: Path) -> bool:
         return False
     file_names = {path.name for path in target_dir.rglob("*") if path.is_file()}
     has_config = bool(file_names & MODEL_CONFIG_FILES)
-    has_weight = bool(file_names & MODEL_WEIGHT_FILES)
+    has_weight = bool(file_names & MODEL_WEIGHT_FILES) or any(
+        name.endswith(".safetensors") for name in file_names
+    )
     has_tokenizer = bool(file_names & MODEL_TOKENIZER_FILES)
     has_marker = (target_dir / MODEL_MARKER_FILE).exists()
     return has_marker and has_config and has_weight and has_tokenizer

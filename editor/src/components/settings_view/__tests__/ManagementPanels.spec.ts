@@ -87,6 +87,47 @@ describe('management panels', () => {
     expect(wrapper.text()).toContain('Hugging Face')
   })
 
+  it('polls automatically when an active download is discovered on initial load', async () => {
+    vi.useFakeTimers()
+    const downloadingModel = (percent: number) => ({
+      key: 'local_qwen',
+      label: '本地 Qwen 大语言模型',
+      role: '本地主 Agent、小模型回退与图片理解',
+      name: 'Qwen/Qwen3.5-2B',
+      path: 'D:/models/qwen',
+      base_path: 'D:/models',
+      size_bytes: percent,
+      file_count: 4,
+      status: 'downloading',
+      enabled: true,
+      active: false,
+      downloaded: false,
+      progress: {
+        status: 'downloading', stage: 'model_files', downloaded_bytes: percent,
+        total_bytes: 100, percent, indeterminate: false, message: '正在下载模型文件',
+      },
+      details: { provider: 'Hugging Face' },
+    })
+    fetchModelManagement
+      .mockResolvedValueOnce({ models: [downloadingModel(25)] })
+      .mockResolvedValueOnce({ models: [downloadingModel(50)] })
+
+    const wrapper = mount(ModelManagement, {
+      props: { userId: 'u1' },
+      global: { stubs: { IcIcon: iconStub } },
+    })
+    await flushPromises()
+    expect(wrapper.get('progress').attributes('value')).toBe('25')
+
+    await vi.advanceTimersByTimeAsync(750)
+    await flushPromises()
+
+    expect(fetchModelManagement).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('progress').attributes('value')).toBe('50')
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+
   it('shows compiler source, location, size, engines and honest unknown progress', async () => {
     fetchLatexManagement.mockResolvedValue({
       status: 'installing', stage: 'packages', progress: null, message: '正在下载 MiKTeX basic 宏包',

@@ -12,6 +12,7 @@ import changeDetailDrawerSource from '@/components/editor_workspace/agent_chat/C
 import messageListSource from '@/components/editor_workspace/agent_chat/MessageList.vue?raw'
 import sessionDrawerSource from '@/components/editor_workspace/agent_chat/SessionDrawer.vue?raw'
 import editorWorkspaceSource from '@/views/EditorWorkspace.vue?raw'
+import settingsViewSource from '@/views/SettingsView.vue?raw'
 
 describe('Agent page workspace appearance', () => {
   it('shows a draggable vertical scrollbar for the chat history', () => {
@@ -62,5 +63,10 @@ describe('Agent page workspace appearance', () => {
     expect(changeDetailDrawerSource).toContain('.change-detail-slide-enter-from')
     expect(changeDetailDrawerSource).toContain('.change-detail-slide-leave-to')
     expect(changeDetailDrawerSource).toMatch(/transform:\s*translateX\(28px\)/)
+  })
+
+  it('shows the effective local fallback model in the input control', () => {
+    expect(agentPanelSource).toContain("config.effective_model_name?.trim() || config.model_name?.trim() || ''")
+    expect(settingsViewSource).toContain("modelName: saved.effective_model_name || saved.model_name")
   })
 })

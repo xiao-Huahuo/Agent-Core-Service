@@ -265,15 +265,49 @@ def test_llm_task_scheduler_small_model_inherits_runtime_large_model() -> None:
     assert base_url == "https://user-large.example.com/v1"
 
 
-def test_llm_task_scheduler_requires_runtime_large_model_name() -> None:
-    """验证后端不再提供硬编码默认大模型名称。"""
+def test_llm_task_scheduler_uses_local_qwen_for_both_tiers_without_remote_config() -> None:
+    """大模型完全未配置时，前后台模型池都必须回退到同一个本地 Qwen。"""
 
     scheduler = get_llm_task_scheduler(make_scheduler_test_config())
 
-    with pytest.raises(ValueError, match="大模型未配置模型名称"):
-        scheduler._resolve_model_runtime(
-            model_tier=None,
-            requested_temperature=None,
-            api_key="user-large-key",
-            base_url="https://user-large.example.com/v1",
-        )
+    large = scheduler._resolve_model_runtime(model_tier=None, requested_temperature=None)
+    small = scheduler._resolve_model_runtime(model_tier=SMALL_MODEL_TIER, requested_temperature=None)
+
+    assert large[:3] == (scheduler.config.model.local_model_name, "", "")
+    assert small[:3] == (scheduler.config.model.local_model_name, "", "")
+
+
+def test_llm_task_scheduler_ignores_small_only_config_without_large_model() -> None:
+    """大模型缺失时，即使残留小模型字段也必须统一使用本地 Qwen。"""
+
+    scheduler = get_llm_task_scheduler(make_scheduler_test_config())
+
+    resolved = scheduler._resolve_model_runtime(
+        model_tier=SMALL_MODEL_TIER,
+        requested_temperature=None,
+        small_model_name="orphan-small",
+        small_api_key="orphan-key",
+        small_base_url="https://orphan.example.com/v1",
+    )
+
+    assert resolved[:3] == (scheduler.config.model.local_model_name, "", "")
+
+
+def test_llm_task_scheduler_uses_local_qwen_for_incomplete_large_config() -> None:
+    """只有模型名但没有 API Key 不算配置完成，必须回退本地 Qwen。"""
+
+    scheduler = get_llm_task_scheduler(make_scheduler_test_config())
+
+    large = scheduler._resolve_model_runtime(
+        model_tier="large",
+        requested_temperature=None,
+        model_name="remote-without-key",
+    )
+    small = scheduler._resolve_model_runtime(
+        model_tier=SMALL_MODEL_TIER,
+        requested_temperature=None,
+        model_name="remote-without-key",
+    )
+
+    assert large[:3] == (scheduler.config.model.local_model_name, "", "")
+    assert small[:3] == (scheduler.config.model.local_model_name, "", "")

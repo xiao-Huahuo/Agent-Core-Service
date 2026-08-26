@@ -30,14 +30,14 @@ describe('model management API client', () => {
     }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await downloadManagedModel('embedding')
-    await loadManagedModel('rerank')
+    await downloadManagedModel('local_qwen')
+    await loadManagedModel('local_qwen')
 
     expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
       '/settings/models/download',
       '/settings/models/load',
     ])
-    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ model: 'embedding' })
-    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({ model: 'rerank' })
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ model: 'local_qwen' })
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({ model: 'local_qwen' })
   })
 })

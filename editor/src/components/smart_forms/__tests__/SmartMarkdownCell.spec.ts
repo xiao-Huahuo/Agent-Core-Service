@@ -2,16 +2,19 @@
  * Smart Markdown cell interaction tests.
  *
  * Usage:
- * Run with Vitest to verify editing and clipboard image insertion without a
- * live knowledge backend or a full Vditor instance.
+ * Run with Vitest to verify editing, clipboard image insertion, and persistent
+ * figure previews without a live knowledge backend or Vditor instance.
  */
 
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SmartMarkdownCell from '@/components/smart_forms/SmartMarkdownCell.vue'
 
 describe('SmartMarkdownCell', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
   it('uploads pasted images and emits form-relative Markdown', async () => {
     const image = new File(['image'], 'clipboard.png', { type: 'image/png' })
     const uploadImage = vi.fn().mockResolvedValue({ name: 'clipboard.png', relativePath: 'assets/clipboard.png' })
@@ -101,5 +104,60 @@ describe('SmartMarkdownCell', () => {
     await vi.runAllTimersAsync()
     expect(wrapper.get('.markdown-body').text()).toBe(`${'a'.repeat(200)}...`)
     vi.useRealTimers()
+  })
+
+  it('shows figure previews while collapsed and expanded', async () => {
+    const wrapper = mount(SmartMarkdownCell, {
+      props: {
+        value: `![Figure 1](/.mw/assets/paper/image_0001.png)\n\n${'说明'.repeat(120)}`,
+        path: '.mw/forms/demo/table.md',
+        editable: false,
+        plainWhenCollapsed: false,
+        inlineMarkdownPreview: true,
+        uploadImage: async () => ({ name: 'unused.png', relativePath: 'assets/unused.png' }),
+      },
+      global: {
+        stubs: {
+          MarkdownContent: { template: '<div class="markdown-content-stub" />' },
+          IcIcon: { template: '<span />' },
+        },
+      },
+    })
+
+    expect(wrapper.find('.markdown-content-stub').exists()).toBe(true)
+    expect(wrapper.find('.smart-plain-text').exists()).toBe(false)
+
+    await wrapper.get('.smart-markdown-toggle').trigger('click')
+
+    expect(wrapper.find('.markdown-content-stub').exists()).toBe(true)
+    expect(wrapper.find('.smart-plain-text').exists()).toBe(false)
+  })
+
+  it('keeps complete formula Markdown rendered while collapsed and expanded', async () => {
+    const value = `${'$$E = mc^2$$\n\n'.repeat(20)}$$F = ma$$`
+    const wrapper = mount(SmartMarkdownCell, {
+      props: {
+        value,
+        path: '.mw/forms/demo/table.md',
+        editable: true,
+        plainWhenCollapsed: false,
+        inlineMarkdownPreview: true,
+        uploadImage: vi.fn(),
+      },
+      global: {
+        stubs: {
+          MarkdownContent: { props: ['content'], template: '<div class="formula-preview-stub">{{ content }}</div>' },
+          IcIcon: { template: '<span />' },
+        },
+      },
+    })
+
+    expect(wrapper.get('.formula-preview-stub').text()).toBe(value)
+    expect(wrapper.find('.smart-plain-text').exists()).toBe(false)
+
+    await wrapper.get('.smart-markdown-toggle').trigger('click')
+
+    expect(wrapper.get('.formula-preview-stub').text()).toBe(value)
+    expect(wrapper.find('.smart-plain-text').exists()).toBe(false)
   })
 })

@@ -36,7 +36,7 @@ a = Analysis(
     datas=[
         _required_data_dir('editor/dist'),
     ],
-    hiddenimports=collect_submodules('agent_service') + ['xlrd'],
+    hiddenimports=collect_submodules('agent_service') + ['xlrd', 'torchvision'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -44,7 +44,6 @@ a = Analysis(
         'pytest',
         'pip',
         'torchaudio',
-        'torchvision',
         'nvidia',
         'caffe2',
         'grpcio_tools',

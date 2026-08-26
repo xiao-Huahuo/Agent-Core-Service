@@ -707,7 +707,7 @@ class LLMConfigSaveRequest(_message.Message):
     def __init__(self, user_id: _Optional[str] = ..., api_key: _Optional[str] = ..., base_url: _Optional[str] = ..., model_name: _Optional[str] = ..., small_api_key: _Optional[str] = ..., small_base_url: _Optional[str] = ..., small_model_name: _Optional[str] = ...) -> None: ...
 
 class LLMConfigResponse(_message.Message):
-    __slots__ = ("user_id", "api_key", "base_url", "model_name", "small_api_key", "small_base_url", "small_model_name", "effective_small_api_key", "effective_small_base_url", "effective_small_model_name", "updated_at")
+    __slots__ = ("user_id", "api_key", "base_url", "model_name", "small_api_key", "small_base_url", "small_model_name", "effective_small_api_key", "effective_small_base_url", "effective_small_model_name", "updated_at", "effective_api_key", "effective_base_url", "effective_model_name", "effective_model_source", "effective_small_model_source")
     USER_ID_FIELD_NUMBER: _ClassVar[int]
     API_KEY_FIELD_NUMBER: _ClassVar[int]
     BASE_URL_FIELD_NUMBER: _ClassVar[int]
@@ -719,6 +719,11 @@ class LLMConfigResponse(_message.Message):
     EFFECTIVE_SMALL_BASE_URL_FIELD_NUMBER: _ClassVar[int]
     EFFECTIVE_SMALL_MODEL_NAME_FIELD_NUMBER: _ClassVar[int]
     UPDATED_AT_FIELD_NUMBER: _ClassVar[int]
+    EFFECTIVE_API_KEY_FIELD_NUMBER: _ClassVar[int]
+    EFFECTIVE_BASE_URL_FIELD_NUMBER: _ClassVar[int]
+    EFFECTIVE_MODEL_NAME_FIELD_NUMBER: _ClassVar[int]
+    EFFECTIVE_MODEL_SOURCE_FIELD_NUMBER: _ClassVar[int]
+    EFFECTIVE_SMALL_MODEL_SOURCE_FIELD_NUMBER: _ClassVar[int]
     user_id: str
     api_key: str
     base_url: str
@@ -730,7 +735,12 @@ class LLMConfigResponse(_message.Message):
     effective_small_base_url: str
     effective_small_model_name: str
     updated_at: str
-    def __init__(self, user_id: _Optional[str] = ..., api_key: _Optional[str] = ..., base_url: _Optional[str] = ..., model_name: _Optional[str] = ..., small_api_key: _Optional[str] = ..., small_base_url: _Optional[str] = ..., small_model_name: _Optional[str] = ..., effective_small_api_key: _Optional[str] = ..., effective_small_base_url: _Optional[str] = ..., effective_small_model_name: _Optional[str] = ..., updated_at: _Optional[str] = ...) -> None: ...
+    effective_api_key: str
+    effective_base_url: str
+    effective_model_name: str
+    effective_model_source: str
+    effective_small_model_source: str
+    def __init__(self, user_id: _Optional[str] = ..., api_key: _Optional[str] = ..., base_url: _Optional[str] = ..., model_name: _Optional[str] = ..., small_api_key: _Optional[str] = ..., small_base_url: _Optional[str] = ..., small_model_name: _Optional[str] = ..., effective_small_api_key: _Optional[str] = ..., effective_small_base_url: _Optional[str] = ..., effective_small_model_name: _Optional[str] = ..., updated_at: _Optional[str] = ..., effective_api_key: _Optional[str] = ..., effective_base_url: _Optional[str] = ..., effective_model_name: _Optional[str] = ..., effective_model_source: _Optional[str] = ..., effective_small_model_source: _Optional[str] = ...) -> None: ...
 
 class LLMConfigPresetSaveRequest(_message.Message):
     __slots__ = ("user_id", "label", "api_key", "base_url", "model_name")

@@ -110,6 +110,7 @@ class AgentConfig:
         vector_db_dir: 向量数据库运行数据目录 (chroma_persist_dir 父目录)。
         embedding_model_dir: Embedding 模型本地缓存目录。
         rerank_model_dir: ReRank 模型本地缓存目录。
+        local_model_dir: CPU 本地 Qwen 大语言模型缓存目录。
         paddleocr_model_dir: PaddleOCR 模型本地缓存目录。
         knowledge_dir: 本地知识库原始资源目录,用于 frontmatter 结构化预处理扫描。
         frontmatter_dir: 结构化知识文档 JSON 目录,用于 frontmatter_bootstrap 输出与 knowledge_bootstrap 输入。
@@ -128,6 +129,7 @@ class AgentConfig:
         vector_db_dir: Path = field(default_factory=lambda: Path("db/vector"))
         embedding_model_dir: Path = field(default_factory=lambda: Path("models/embedding"))
         rerank_model_dir: Path = field(default_factory=lambda: Path("models/rerank"))
+        local_model_dir: Path = field(default_factory=lambda: Path("models/local-llm"))
         paddleocr_model_dir: Path = field(default_factory=lambda: Path("models/paddleocr"))
         knowledge_dir: Path = field(default_factory=lambda: Path("resources/knowledge"))
         frontmatter_dir: Path = field(default_factory=lambda: Path("frontmatter"))
@@ -147,6 +149,7 @@ class AgentConfig:
             self.vector_db_dir = self._resolve_runtime_path(self.vector_db_dir)
             self.embedding_model_dir = self._resolve_runtime_path(self.embedding_model_dir)
             self.rerank_model_dir = self._resolve_runtime_path(self.rerank_model_dir)
+            self.local_model_dir = self._resolve_runtime_path(self.local_model_dir)
             self.paddleocr_model_dir = self._resolve_runtime_path(self.paddleocr_model_dir)
             self.knowledge_dir = self._resolve_project_path(self.knowledge_dir)
             self.frontmatter_dir = self._resolve_runtime_path(self.frontmatter_dir)
@@ -196,6 +199,7 @@ class AgentConfig:
             self.vector_db_dir.mkdir(parents=True, exist_ok=True)
             self.embedding_model_dir.mkdir(parents=True, exist_ok=True)
             self.rerank_model_dir.mkdir(parents=True, exist_ok=True)
+            self.local_model_dir.mkdir(parents=True, exist_ok=True)
             self.paddleocr_model_dir.mkdir(parents=True, exist_ok=True)
             self.knowledge_dir.mkdir(parents=True, exist_ok=True)
             self.frontmatter_dir.mkdir(parents=True, exist_ok=True)
@@ -222,6 +226,9 @@ class AgentConfig:
         small_model_base_url: 小模型 API 基础地址。
         small_model_temperature: 小模型采样温度。
         small_model_timeout_seconds: 小模型请求超时时间,单位为秒。
+        local_model_name: 未配置远程大模型时使用的 CPU 本地 Qwen 仓库名称。
+        local_model_max_new_tokens: 本地 Qwen 普通文本与工具调用的最大生成 token 数。
+        local_model_vision_max_new_tokens: 本地 Qwen 单次图片理解的最大生成 token 数。
         temperature: 模型采样温度。
         timeout_seconds: 模型请求超时时间,单位为秒。
         streaming_sanitize_min_chars: 流式输出 JSON 检测最低字符数,低于此值跳过 JSON 语法检查。
@@ -242,6 +249,9 @@ class AgentConfig:
         small_model_base_url: str = ""
         small_model_temperature: float = 0.0
         small_model_timeout_seconds: int = 120
+        local_model_name: str = "Qwen/Qwen3.5-2B"
+        local_model_max_new_tokens: int = 1024
+        local_model_vision_max_new_tokens: int = 512
         temperature: float = 0.0
         timeout_seconds: int = 240
         streaming_sanitize_min_chars: int = 20
@@ -1446,6 +1456,7 @@ class AgentConfig:
             "AGENT_VECTOR_DB_DIR": ("storage", "vector_db_dir", str),
             "AGENT_EMBEDDING_MODEL_DIR": ("storage", "embedding_model_dir", str),
             "AGENT_RERANK_MODEL_DIR": ("storage", "rerank_model_dir", str),
+            "AGENT_LOCAL_MODEL_DIR": ("storage", "local_model_dir", str),
             "AGENT_PADDLEOCR_MODEL_DIR": ("storage", "paddleocr_model_dir", str),
             "AGENT_KNOWLEDGE_DIR": ("storage", "knowledge_dir", str),
             "AGENT_FRONTMATTER_DIR": ("storage", "frontmatter_dir", str),
@@ -1464,6 +1475,9 @@ class AgentConfig:
             "AGENT_SMALL_MODEL_BASE_URL": ("model", "small_model_base_url", str),
             "AGENT_SMALL_MODEL_TEMPERATURE": ("model", "small_model_temperature", float),
             "AGENT_SMALL_MODEL_TIMEOUT_SECONDS": ("model", "small_model_timeout_seconds", int),
+            "AGENT_LOCAL_MODEL_NAME": ("model", "local_model_name", str),
+            "AGENT_LOCAL_MODEL_MAX_NEW_TOKENS": ("model", "local_model_max_new_tokens", int),
+            "AGENT_LOCAL_MODEL_VISION_MAX_NEW_TOKENS": ("model", "local_model_vision_max_new_tokens", int),
             "AGENT_MODEL_TEMPERATURE": ("model", "temperature", float),
             "AGENT_MODEL_TIMEOUT_SECONDS": ("model", "timeout_seconds", int),
             "AGENT_STREAMING_SANITIZE_MIN_CHARS": ("model", "streaming_sanitize_min_chars", int),

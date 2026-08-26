@@ -1051,6 +1051,70 @@ def save_uploaded_attachment_to_knowledge(
     )
 
 
+def understand_image(attachment: str = "", prompt: str = "") -> str:
+    """使用本地 Qwen 重新理解当前会话中的一张已上传图片。
+
+    attachment: 可选 attachment_id、完整文件名或文件名关键词；为空使用最新图片。
+    prompt: 可选识图问题；为空返回对象、布局、关系和图表语义的综合描述。
+    """
+
+    from pathlib import Path
+
+    from sqlalchemy import desc
+    from sqlmodel import Session, create_engine, select
+
+    from agent_service.models.attachment import SessionAttachmentRecord
+    from agent_service.services.local_qwen_service import get_local_qwen_service
+
+    runtime = get_tool_runtime()
+    engine = create_engine(f"sqlite:///{runtime.config.storage.sqlite_path}", pool_pre_ping=True)
+    statement = (
+        select(SessionAttachmentRecord)
+        .where(SessionAttachmentRecord.user_id == runtime.user_id)
+        .where(SessionAttachmentRecord.session_id == runtime.session_id)
+        .order_by(desc(SessionAttachmentRecord.created_at))
+    )
+    with Session(engine) as db_session:
+        images = [
+            item for item in db_session.exec(statement).all()
+            if Path(item.filename).suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+        ]
+    if not images:
+        return "当前会话没有可识别的已上传图片。"
+    normalized = attachment.strip().casefold()
+    matches = images if not normalized else [
+        item for item in images
+        if item.attachment_id.casefold() == normalized
+        or item.filename.casefold() == normalized
+        or normalized in item.filename.casefold()
+    ]
+    if not matches:
+        return "未找到指定图片。可用图片:\n" + "\n".join(
+            f"- {item.filename} ({item.attachment_id})" for item in images[:8]
+        )
+    if len(matches) > 1 and normalized:
+        return "匹配到多张图片，请指定 attachment_id:\n" + "\n".join(
+            f"- {item.filename} ({item.attachment_id})" for item in matches[:8]
+        )
+    record = matches[0]
+    image_path = Path(record.path).expanduser().resolve()
+    if not image_path.is_file():
+        return f"图片文件已不存在: {record.filename}"
+    ocr_text = ""
+    text_path = Path(record.text_path).expanduser().resolve() if record.text_path else None
+    if text_path is not None and text_path.is_file():
+        ocr_text = text_path.read_text(encoding="utf-8", errors="replace")
+    try:
+        description = get_local_qwen_service(runtime.config).understand_image(
+            image_path=image_path,
+            ocr_text=ocr_text,
+            prompt=prompt,
+        )
+    except Exception as exc:
+        return f"本地识图失败: {type(exc).__name__}: {exc}"
+    return f"图片: {record.filename}\n视觉理解:\n{description}"
+
+
 def get_current_viewing_document() -> str:
     """
     获取当前用户在 editor 前端正在观看的文档基本信息。

@@ -19,6 +19,9 @@ from agent_service.scripts.download_model import (
     MODEL_MARKER_FILE,
     PADDLEOCR_MARKER_FILE,
     get_all_download_progress,
+    is_model_available,
+    has_partial_model_download,
+    restore_partial_download_progress,
     model_target_dir,
     reset_download_progress,
     update_download_progress,
@@ -51,19 +54,26 @@ def test_management_reports_real_model_details_and_enabled_state(tmp_path: Path)
 
     embedding_root = tmp_path / "models" / "embedding"
     rerank_root = tmp_path / "models" / "rerank"
+    local_llm_root = tmp_path / "models" / "local-llm"
     ocr_root = tmp_path / "models" / "ocr"
     embedding_name = "BAAI/test-embedding"
     rerank_name = "BAAI/test-rerank"
+    local_model_name = "Qwen/test-local"
     embedding_target = model_target_dir(embedding_name, embedding_root)
     _complete_hf_model(embedding_target, embedding_name)
     ocr_root.mkdir(parents=True)
     (ocr_root / PADDLEOCR_MARKER_FILE).write_text("language=ch", encoding="utf-8")
     (ocr_root / "det.bin").write_bytes(b"ocr-data")
     config = SimpleNamespace(
-        model=SimpleNamespace(embedding_model_name=embedding_name, rerank_model_name=rerank_name),
+        model=SimpleNamespace(
+            embedding_model_name=embedding_name,
+            rerank_model_name=rerank_name,
+            local_model_name=local_model_name,
+        ),
         storage=SimpleNamespace(
             embedding_model_dir=embedding_root,
             rerank_model_dir=rerank_root,
+            local_model_dir=local_llm_root,
             paddleocr_model_dir=ocr_root,
         ),
         ocr=SimpleNamespace(
@@ -76,6 +86,7 @@ def test_management_reports_real_model_details_and_enabled_state(tmp_path: Path)
     set_model_state("embedding", ModelState.READY)
     set_model_state("rerank", ModelState.NOT_DOWNLOADED)
     set_model_state("paddleocr", ModelState.READY)
+    set_model_state("local_qwen", ModelState.NOT_DOWNLOADED)
     reset_download_progress("embedding")
 
     result = ModelManagementService(config=config, settings_service=_SettingsStub()).get_management_status(user_id="u1")
@@ -88,6 +99,9 @@ def test_management_reports_real_model_details_and_enabled_state(tmp_path: Path)
     assert models["embedding"]["enabled"] is True
     assert models["embedding"]["active"] is True
     assert models["rerank"]["downloaded"] is False
+    assert models["local_qwen"]["name"] == local_model_name
+    assert models["local_qwen"]["role"] == "本地主 Agent、小模型回退与图片理解"
+    assert models["local_qwen"]["details"]["device"] == "CPU"
     assert models["paddleocr"]["enabled"] is True
     assert models["paddleocr"]["details"]["language"] == "ch"
 
@@ -126,6 +140,42 @@ def test_download_progress_uses_real_bytes_and_honest_unknown_total() -> None:
     assert progress["paddleocr"]["downloaded_bytes"] == 75
     assert progress["paddleocr"]["percent"] is None
     assert progress["paddleocr"]["indeterminate"] is True
+
+
+def test_model_completeness_accepts_sharded_qwen_safetensors(tmp_path: Path) -> None:
+    """本地 Qwen 的分片 Safetensors 必须被统一下载器识别为完整权重。"""
+
+    target = tmp_path / "qwen"
+    target.mkdir()
+    (target / MODEL_MARKER_FILE).write_text("Qwen/Qwen3.5-2B", encoding="utf-8")
+    (target / "config.json").write_text("{}", encoding="utf-8")
+    (target / "tokenizer.json").write_text("{}", encoding="utf-8")
+    (target / "model.safetensors-00001-of-00001.safetensors").write_bytes(b"weights")
+
+    assert is_model_available(target) is True
+
+
+def test_partial_qwen_progress_is_reconstructed_from_incomplete_bytes(tmp_path: Path) -> None:
+    """后端重启后应从断点文件和权重索引恢复真实下载比例。"""
+
+    target = tmp_path / "qwen"
+    cache = target / ".cache" / "huggingface" / "download"
+    cache.mkdir(parents=True)
+    index_payload = '{"metadata":{"total_size":400},"weight_map":{}}'
+    (target / "model.safetensors.index.json").write_text(index_payload, encoding="utf-8")
+    (target / "config.json").write_bytes(b"c" * 20)
+    (cache / "weight.incomplete").write_bytes(b"w" * 100)
+
+    assert has_partial_model_download(target) is True
+
+    progress = restore_partial_download_progress("local_qwen", target)
+
+    assert progress["status"] == "downloading"
+    assert progress["downloaded_bytes"] >= 120
+    expected_total = 400 + len(index_payload.encode("utf-8")) + 20
+    assert progress["total_bytes"] == expected_total
+    assert progress["percent"] == round(progress["downloaded_bytes"] / expected_total * 100, 1)
+    assert progress["message"] == "检测到下载断点，正在恢复模型文件"
 
 
 def test_huggingface_tracker_observes_real_intermediate_file_bytes(tmp_path: Path, monkeypatch) -> None:

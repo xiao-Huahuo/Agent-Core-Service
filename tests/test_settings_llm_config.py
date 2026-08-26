@@ -51,6 +51,50 @@ def test_llm_config_small_model_inherits_large_model_fields() -> None:
     assert config["effective_small_model_name"] == "large-model"
 
 
+def test_llm_config_without_remote_models_reports_local_qwen_fallback() -> None:
+    """没有任何用户模型配置时，前端和运行时都应看到本地 Qwen 的有效配置。"""
+
+    service = make_settings_service()
+
+    config = service.get_llm_config(user_id="u-local")
+
+    assert config["model_name"] == ""
+    assert config["small_model_name"] == ""
+    assert config["effective_model_name"] == service.config.model.local_model_name
+    assert config["effective_small_model_name"] == service.config.model.local_model_name
+    assert config["effective_model_source"] == "local"
+    assert config["effective_small_model_source"] == "local"
+
+
+def test_llm_config_without_large_model_ignores_orphan_small_model() -> None:
+    """只配置小模型不构成有效远程配置，大小模型仍统一回退本地 Qwen。"""
+
+    service = make_settings_service()
+
+    config = service.save_llm_config(
+        user_id="u-orphan-small",
+        small_api_key="small-key",
+        small_base_url="https://small.example.com/v1",
+        small_model_name="small-model",
+    )
+
+    assert config["effective_model_name"] == service.config.model.local_model_name
+    assert config["effective_small_model_name"] == service.config.model.local_model_name
+    assert config["effective_small_api_key"] == ""
+
+
+def test_llm_config_with_model_name_but_without_key_uses_local_qwen() -> None:
+    """未填写 API Key 的远程模型配置不得阻断本地回退。"""
+
+    service = make_settings_service()
+
+    config = service.save_llm_config(user_id="u-incomplete", model_name="remote-without-key")
+
+    assert config["effective_model_name"] == service.config.model.local_model_name
+    assert config["effective_small_model_name"] == service.config.model.local_model_name
+    assert config["effective_model_source"] == "local"
+
+
 def test_llm_config_empty_small_fields_clear_stale_values() -> None:
     service = make_settings_service()
 

@@ -12,8 +12,9 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import MarkdownPreview from '@/components/editor_workspace/MarkdownPreview.vue'
 import MarkdownContent from '@/components/editor_workspace/agent_chat/MarkdownContent.vue'
-import { buildMarkdownDownloadUrl } from '@/components/editor_workspace/markdownImageUrls'
+import { buildMarkdownDownloadUrl, rewriteMarkdownImageUrls } from '@/components/editor_workspace/markdownImageUrls'
 import { insertMarkdownImage } from '@/components/smart_forms/smartLiteratureTable'
+import { useSettingsStore } from '@/stores/settings'
 
 defineOptions({ name: 'SmartMarkdownCell' })
 
@@ -26,12 +27,15 @@ const props = defineProps<{
   editable: boolean
   /** Whether the collapsed reading view should show escaped plain text. */
   plainWhenCollapsed?: boolean
+  /** Whether to keep complete Markdown rendered locally in both row states. */
+  inlineMarkdownPreview?: boolean
   /** Uploads an image into the active form assets directory. */
   uploadImage: (file: File) => Promise<{ name: string; relativePath: string }>
 }>()
 
 const COLLAPSED_CHARACTER_LIMIT = 200
 const CONTENT_ANIMATION_MS = 220
+const settingsStore = useSettingsStore()
 
 const emit = defineEmits<{
   update: [value: string]
@@ -46,9 +50,13 @@ const collapsing = ref(false)
 const draft = ref(props.value)
 const textarea = ref<HTMLTextAreaElement | null>(null)
 const cellRoot = ref<HTMLDivElement | null>(null)
-const displayValue = computed(() => expanded.value || props.value.length <= COLLAPSED_CHARACTER_LIMIT
+const displayValue = computed(() => props.inlineMarkdownPreview || expanded.value || props.value.length <= COLLAPSED_CHARACTER_LIMIT
   ? props.value
   : `${props.value.slice(0, COLLAPSED_CHARACTER_LIMIT)}...`)
+const resolvedInlinePreview = computed(() => rewriteMarkdownImageUrls(displayValue.value, {
+  currentFilePath: props.path,
+  userId: settingsStore.profile.userId,
+}))
 const usesInteractivePreview = computed(() => /!\[[^\]]*\]\([^)]*\)/.test(displayValue.value)
   || /(?:^|\n)\s*\|[^\n]+\|\s*\n\s*\|?\s*:?-{3,}/.test(displayValue.value))
 const canExpand = computed(() => props.value.length > COLLAPSED_CHARACTER_LIMIT
@@ -163,7 +171,7 @@ function downloadImage(src: string, name: string): void {
   <div
     ref="cellRoot"
     class="smart-markdown-cell"
-    :class="{ expanded, collapsing }"
+    :class="{ expanded, collapsing, 'inline-markdown-preview': inlineMarkdownPreview }"
     tabindex="0"
     @dblclick.stop="startEditing"
     @click="handleCellClick"
@@ -194,6 +202,7 @@ function downloadImage(src: string, name: string): void {
         v-if="plainWhenCollapsed && !expanded"
         class="smart-plain-text"
       >{{ displayValue }}</div>
+      <MarkdownContent v-else-if="inlineMarkdownPreview" :content="resolvedInlinePreview" />
       <MarkdownPreview
         v-else-if="usesInteractivePreview"
         :content="displayValue"
@@ -232,6 +241,11 @@ function downloadImage(src: string, name: string): void {
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+.smart-markdown-cell.inline-markdown-preview .smart-markdown-reading {
+  position: absolute;
+  inset: 0;
 }
 
 .smart-markdown-cell.expanded:not(.collapsing) .smart-markdown-reading {

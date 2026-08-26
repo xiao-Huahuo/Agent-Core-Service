@@ -144,7 +144,14 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     memory_service = LongTermMemoryService(config=config)
     settings_service = SettingsService(config=config, memory_service=memory_service)
     from agent_service.services.model_management_service import ModelManagementService
+    from agent_service.services.local_qwen_service import (
+        get_local_qwen_service,
+        resume_interrupted_local_qwen_download,
+    )
     model_management_service = ModelManagementService(config=config, settings_service=settings_service)
+    local_qwen_service = get_local_qwen_service(config)
+    if resume_interrupted_local_qwen_download(config):
+        logger.info("检测到本地 Qwen 下载断点，已自动恢复后台下载")
     activity_service = ActivityService(engine=settings_service.engine, config=config)
 
     knowledge_graph_service = KnowledgeGraphService(config=config)
@@ -169,7 +176,11 @@ async def _lifespan(app: FastAPI) -> Any:  # noqa: ARG001
     skill_service = SkillService(config=config, settings_service=settings_service)
     agent.skill_service = skill_service
     agent.activity_service = activity_service
-    attachment_service = SessionAttachmentService(config=config, settings_service=settings_service)
+    attachment_service = SessionAttachmentService(
+        config=config,
+        settings_service=settings_service,
+        vision_service=local_qwen_service,
+    )
     agent.attachment_service = attachment_service
     if agent.context_builder is not None:
         agent.context_builder.attachment_service = attachment_service

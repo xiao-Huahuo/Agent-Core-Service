@@ -45,6 +45,7 @@ import {
   createEmptyRow,
   exportCsv,
   exportMarkdown,
+  extractMarkdownImages,
   filterRows,
   moveColumn,
   moveRow,
@@ -184,7 +185,10 @@ const visibleRows = computed(() => form.value ? filterRows(form.value, query.val
 const isCompressedLayout = computed(() => props.availableWidth <= 360)
 const tagFilters = computed(() => form.value ? uniqueTagValues(form.value) : [])
 const isLiteratureTable = computed(() => Boolean(form.value?.columns.some((column) => column.id === 'literature_file' || column.id === 'literature_content')))
-const availableBuiltinColumns = computed(() => BUILTIN_COLUMNS)
+const availableBuiltinColumns = computed(() => BUILTIN_COLUMNS.filter((builtin) => {
+  if (builtin.id !== 'figures') return true
+  return isLiteratureTable.value && !form.value?.columns.some((column) => column.id === builtin.id)
+}))
 const availableCustomColumnTypes = computed(() => customColumnTypes)
 const activeFormStorageLabel = computed(() => activeFormId.value ? `SQLite: smart_forms/${activeFormId.value}` : '')
 const activeFormCsvFile = computed(() => form.value ? `${form.value.title}.csv` : '')
@@ -239,7 +243,7 @@ function responsiveColumnWidth(column: SmartColumn): number {
   if (!isMobileLayout.value || !Number.isFinite(props.availableWidth)) return column.width
   const halfContentWidth = Math.floor((props.availableWidth - 44) / 2)
   if (column.id === 'literature_file') return Math.min(column.width, Math.max(120, halfContentWidth))
-  if (column.id === 'literature_content') return Math.min(column.width, Math.max(150, halfContentWidth))
+  if (column.id === 'literature_content' || column.id === 'figures') return Math.min(column.width, Math.max(150, halfContentWidth))
   return column.width
 }
 
@@ -1652,6 +1656,7 @@ async function uploadLiterature(row: SmartRow, event: Event): Promise<void> {
   } catch (error) {
     patchRowCells(row.id, {
       literature_content: { value: `上传或灌库失败: ${errorMessage(error)}`, status: 'failed' },
+      figures: { value: '', status: 'failed' },
     })
     workspaceStore.showToast(`上传失败 - ${errorMessage(error)}`)
   }
@@ -1665,15 +1670,17 @@ async function refillLiteratureRow(rowId: string, assetPath: string, fileName?: 
   patchRowCells(rowId, {
     ...(fileName ? { literature_file: { value: fileName, fileName, assetPath } } : {}),
     literature_content: { value: '正在灌库并提取文献内容...', status: 'pending' },
+    figures: { value: '正在汇总 PDF 图表...', status: 'pending' },
   })
   await workspaceStore.ingestFile({ name: resolvedName, path: assetPath, isDir: false, indexStatus: 'dirty' })
-  const content = await extractUploadedLiteratureContent(assetPath)
+  const extracted = await extractUploadedLiterature(assetPath)
   patchRowCells(rowId, {
-    literature_content: content
-      ? { value: content, status: 'ready' }
+    literature_content: extracted.content
+      ? { value: extracted.content, status: 'ready' }
       : { value: '文献已入库，但暂未取得可显示文本。请检查文件是否为扫描件或 OCR 设置。', status: 'failed' },
+    figures: { value: extracted.figures, status: 'ready' },
   })
-  if (content) await generateSmartCellsForRows([rowId])
+  if (extracted.content) await generateSmartCellsForRows([rowId])
   await persistForm(false)
   await workspaceStore.loadKnowledgeTree()
 }
@@ -1747,30 +1754,35 @@ function patchRowCells(rowId: string, cells: Record<string, SmartCell>): void {
   })
 }
 
-async function extractUploadedLiteratureContent(assetPath: string): Promise<string> {
-  if (!settingsStore.profile.userId) return ''
+/** Reads ingested literature text and concentrates its PDF image links for the built-in figure column. */
+async function extractUploadedLiterature(assetPath: string): Promise<{ content: string; figures: string }> {
+  if (!settingsStore.profile.userId) return { content: '', figures: '' }
   try {
     const preview = await previewKnowledgeFile(settingsStore.profile.userId, assetPath)
     const content = [preview.semantic_markdown, preview.content, preview.render_content]
       .find((value) => typeof value === 'string' && value.trim())
-    if (content) return normalizeLiteratureContent(content)
+    const persistedFigures = extractMarkdownImages(preview.semantic_markdown)
+    const figures = /\.pdf$/i.test(assetPath)
+      ? persistedFigures || extractMarkdownImages(preview.render_content)
+      : ''
+    if (content) return { content: normalizeLiteratureContent(content), figures }
     const tableContent = preview.sheets
       ?.flatMap((sheet) => [sheet.name, ...sheet.rows.map((row) => row.join('\t'))])
       .join('\n')
-    if (tableContent?.trim()) return normalizeLiteratureContent(tableContent)
+    if (tableContent?.trim()) return { content: normalizeLiteratureContent(tableContent), figures }
     if (preview.html?.trim()) {
       const document = new DOMParser().parseFromString(preview.html, 'text/html')
       const htmlContent = document.body.textContent?.trim() ?? ''
-      if (htmlContent) return normalizeLiteratureContent(htmlContent)
+      if (htmlContent) return { content: normalizeLiteratureContent(htmlContent), figures }
     }
   } catch {
     // Fall through to direct text read for editable text/markdown uploads.
   }
   try {
     const response = await readKnowledgeFile(settingsStore.profile.userId, assetPath)
-    return normalizeLiteratureContent(response.content)
+    return { content: normalizeLiteratureContent(response.content), figures: '' }
   } catch {
-    return ''
+    return { content: '', figures: '' }
   }
 }
 
@@ -2414,6 +2426,7 @@ function errorMessage(error: unknown): string {
                 :path="`${activeFormDir}/table.md`"
                 :editable="column.editable"
                 :plain-when-collapsed="column.id === 'literature_content'"
+                :inline-markdown-preview="column.id === 'figures' || column.id === 'formulas'"
                 :upload-image="uploadCellImage"
                 @update="editCell(row, column, $event)"
                 @resize="(expanded, height) => resizeExpandedTextCell(row, expanded, height)"

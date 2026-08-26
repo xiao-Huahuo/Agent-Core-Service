@@ -100,8 +100,11 @@ def test_smart_form_tools_create_both_templates_and_export_content() -> None:
     smart_ids = {column["id"] for column in smart["columns"]}
     plain_ids = {column["id"] for column in plain["columns"]}
 
-    assert {"literature_file", "literature_content", "title"} <= smart_ids
+    assert {"literature_file", "literature_content", "figures", "title"} <= smart_ids
     assert "literature_file" not in plain_ids
+    assert "figures" not in plain_ids
+    assert next(column for column in smart["columns"] if column["id"] == "figures")["title"] == "图表"
+    assert all(str(column.get("description") or "").strip() for column in smart["columns"])
     assert next(column for column in smart["columns"] if column["id"] == "title")["type"] == "smart_text"
     assert next(column for column in plain["columns"] if column["id"] == "title")["type"] == "text"
     assert "标题" in builtin_smart_forms._export_csv(plain)

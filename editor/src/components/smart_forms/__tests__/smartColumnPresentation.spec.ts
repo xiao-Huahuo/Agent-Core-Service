@@ -11,7 +11,9 @@ import { BUILTIN_COLUMNS, createDefaultLiteratureForm } from '@/components/smart
 
 describe('smartColumnPresentation', () => {
   it('assigns a distinct local icon to every required and optional built-in field', () => {
-    const builtins = [...createDefaultLiteratureForm().columns, ...BUILTIN_COLUMNS]
+    const builtins = [...new Map(
+      [...createDefaultLiteratureForm().columns, ...BUILTIN_COLUMNS].map((column) => [column.id, column]),
+    ).values()]
     const icons = builtins.map((column) => BUILTIN_COLUMN_ICONS[column.id])
 
     expect(icons.every(Boolean)).toBe(true)

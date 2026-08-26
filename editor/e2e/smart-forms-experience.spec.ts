@@ -2,8 +2,8 @@
  * Smart-table experience browser regression.
  *
  * Usage:
- * Exercises field metadata, generation masking, compact rows, PDF covers,
- * typed edge insertion, and joined rectangular selection in real Chromium.
+ * Exercises field metadata, figure previews, generation masking, compact rows,
+ * PDF covers, typed edge insertion, and joined rectangular selection in Chromium.
  */
 import { expect, test } from '@playwright/test'
 
@@ -16,6 +16,8 @@ test('smart table renders typed fields, PDF cover, pending mask, and one joined 
     { id: 'row_index', title: '序号', type: 'index', removable: false, editable: false, width: 64 },
     { id: 'literature_file', title: '文献上传', type: 'file', removable: true, editable: false, width: 168 },
     { id: 'literature_content', title: '文献内容', type: 'readonly_text', removable: true, editable: false, width: 240 },
+    { id: 'figures', title: '图表', type: 'readonly_text', removable: true, editable: false, width: 240 },
+    { id: 'formulas', title: '公式', description: '提取主要 LaTeX 数学公式并使用 $$...$$ 包裹。', type: 'smart_text', removable: true, editable: true, width: 260, tone: 'violet' },
     { id: 'title', title: '标题', description: '提取论文首页的正式标题', type: 'smart_text', removable: false, editable: true, width: 230, tone: 'blue' },
     { id: 'keywords', title: '关键词', type: 'smart_text', removable: true, editable: true, width: 180, tone: 'violet' },
     { id: 'abstract', title: '摘要', type: 'smart_text', removable: true, editable: true, width: 260, tone: 'blue' },
@@ -24,7 +26,15 @@ test('smart table renders typed fields, PDF cover, pending mask, and one joined 
     id: `row-${index + 1}`,
     height: 1,
     cells: Object.fromEntries(columns.map((column) => [column.id, {
-      value: column.id === 'title' ? `原标题 ${index + 1}` : column.id === 'literature_content' ? `文献内容 ${index + 1}${'。'.repeat(240)}` : '',
+      value: column.id === 'title'
+        ? `原标题 ${index + 1}`
+        : column.id === 'literature_content'
+          ? `文献内容 ${index + 1}${'。'.repeat(240)}`
+          : column.id === 'figures'
+            ? index === 0 ? `![图表 1](/.mw/assets/paper/image_1.png)\n\n${'图表说明。'.repeat(50)}` : ''
+            : column.id === 'formulas'
+              ? index === 0 ? Array.from({ length: 16 }, (_, formulaIndex) => `$$E_${formulaIndex} = mc^2 + \\frac{p^2}{2m}$$`).join('\n\n') : ''
+            : '',
       status: column.type === 'smart_text' ? 'ready' : undefined,
       ...(column.id === 'literature_file' && index === 0 ? {
         value: 'paper.pdf',
@@ -58,6 +68,9 @@ test('smart table renders typed fields, PDF cover, pending mask, and one joined 
     if (request.method() === 'GET' && url.pathname === '/knowledge/files/preview') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ path: url.searchParams.get('path'), kind: 'pdf', thumbnail_url: PNG_DATA_URL, raw_url: '/knowledge/raw/paper.pdf', mtime: form.updatedAt, size: 128, extension: '.pdf', readonly: true }) })
     }
+    if (request.method() === 'GET' && url.pathname === '/knowledge/files/raw') {
+      return route.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from(PNG_DATA_URL.split(',')[1]!, 'base64') })
+    }
     if (request.method() === 'POST' && url.pathname === '/structured-generation/fields') {
       await new Promise((resolve) => setTimeout(resolve, 600))
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ raw_output: 'invalid', results: [{ field_id: 'title', status: 'failed', value: '', error: 'invalid result' }] }) })
@@ -76,11 +89,31 @@ test('smart table renders typed fields, PDF cover, pending mask, and one joined 
   await expect(headers).toHaveCount(columns.length)
   await expect(headers.locator('.column-field-icon')).toHaveCount(columns.length)
   await expect(headers.locator('.column-type-pill')).toHaveCount(columns.length)
-  await expect(headers.locator('.column-ai-pill')).toHaveCount(3)
+  await expect(headers.locator('.column-ai-pill')).toHaveCount(4)
   await expect(headers.locator('.column-actions')).toHaveCount(0)
   expect((await headers.first().boundingBox())?.width).toBeLessThanOrEqual(33)
   expect((await headers.first().boundingBox())?.height).toBeLessThan(42)
   await expect(page.locator('.smart-table tbody tr').first()).toHaveAttribute('style', /height: 37px/)
+
+  const figureCell = page.locator('td[data-row-id="row-1"][data-column-id="figures"]')
+  const figurePreview = figureCell.locator('img[alt^="图表"]')
+  const figureToggle = figureCell.locator('.smart-markdown-toggle')
+  await expect(figurePreview).toBeVisible()
+  await figureToggle.click()
+  await expect(figurePreview).toBeVisible()
+  await figureToggle.click()
+  await expect(figureCell.locator('.smart-markdown-cell')).not.toHaveClass(/collapsing/)
+  await expect(figurePreview).toBeVisible()
+
+  const formulaCell = page.locator('td[data-row-id="row-1"][data-column-id="formulas"]')
+  const formulaPreview = formulaCell.locator('.katex-display').first()
+  const formulaToggle = formulaCell.locator('.smart-markdown-toggle')
+  await expect(formulaPreview).toBeVisible()
+  await formulaToggle.click()
+  await expect(formulaPreview).toBeVisible()
+  await formulaToggle.click()
+  await expect(formulaCell.locator('.smart-markdown-cell')).not.toHaveClass(/collapsing/)
+  await expect(formulaPreview).toBeVisible()
 
   const titleDescriptionToggle = page.locator('th[data-column-id="title"] .column-description-toggle')
   await titleDescriptionToggle.click()
@@ -91,7 +124,7 @@ test('smart table renders typed fields, PDF cover, pending mask, and one joined 
   const literatureToggle = page.locator('td[data-row-id="row-2"][data-column-id="literature_content"] .smart-markdown-toggle')
   const collapsedHeight = (await literatureRow.boundingBox())?.height ?? 0
   await literatureToggle.click()
-  await expect(literatureRow).toHaveAttribute('style', /height: 282px/)
+  await expect.poll(async () => (await literatureRow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(282)
   await page.waitForTimeout(240)
   await literatureToggle.click()
   await page.waitForTimeout(100)
@@ -161,8 +194,8 @@ test('smart table renders typed fields, PDF cover, pending mask, and one joined 
   await expect(headers).toHaveCount(headerCountBefore)
   const edgeMenu = page.locator('.edge-column-menu')
   await expect(edgeMenu).toBeVisible()
-  await expect(edgeMenu.locator('.menu-column-type-pill')).toHaveCount(17)
-  await expect(edgeMenu.locator('button .ic-icon')).toHaveCount(24)
+  await expect(edgeMenu.locator('.menu-column-type-pill')).toHaveCount(18)
+  await expect(edgeMenu.locator('button .ic-icon')).toHaveCount(25)
   const customFieldNameInput = edgeMenu.getByPlaceholder('例如：备注')
   await expect(edgeMenu.getByText('辅助描述', { exact: true })).toBeVisible()
   await expect(edgeMenu.getByPlaceholder('例如：提取作者明确陈述的局限')).toBeVisible()
@@ -179,6 +212,7 @@ test('smart table renders typed fields, PDF cover, pending mask, and one joined 
   await fileChooserPromise
   await expect(page.locator('.smart-table tbody tr')).toHaveCount(rowsBeforeUpload + 1)
 
+  await page.setViewportSize({ width: 1800, height: 720 })
   const dragStart = page.locator('td[data-row-id="row-1"][data-column-id="title"]')
   const dragEnd = page.locator('td[data-row-id="row-3"][data-column-id="abstract"]')
   const startBox = await dragStart.boundingBox()

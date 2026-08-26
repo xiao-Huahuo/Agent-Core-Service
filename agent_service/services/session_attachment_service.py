@@ -9,6 +9,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 from uuid import uuid4
 
 from sqlalchemy.engine import Engine
@@ -32,6 +33,15 @@ class AttachmentContext:
     injected_count: int
 
 
+class ImageUnderstandingService(Protocol):
+    """附件服务使用的最小本地图像理解接口。"""
+
+    def understand_image(self, *, image_path: Path, ocr_text: str, prompt: str = "") -> str:
+        """结合原图与 OCR 文本返回视觉语义。"""
+
+        ...
+
+
 class SessionAttachmentService:
     """Manage uploaded files that are available to the current Agent session only."""
 
@@ -46,11 +56,13 @@ class SessionAttachmentService:
         *,
         config: AgentConfig,
         settings_service: SettingsService,
+        vision_service: ImageUnderstandingService | None = None,
         engine: Engine | None = None,
         create_tables: bool = True,
     ) -> None:
         self.config = config
         self.settings_service = settings_service
+        self.vision_service = vision_service
         self.engine = engine or create_engine(f"sqlite:///{config.storage.sqlite_path}", pool_pre_ping=True)
         if create_tables:
             SQLModel.metadata.create_all(self.engine)
@@ -235,7 +247,9 @@ class SessionAttachmentService:
         frontmatter_dir = upload_dir / ".attachments" / "frontmatter"
         text_dir = upload_dir / ".attachments" / "text"
         text_dir.mkdir(parents=True, exist_ok=True)
-        ocr_enabled = self.settings_service.is_ocr_enabled_for_user(user_id=user_id)
+        is_direct_image = source_path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+        ocr_enabled = is_direct_image or self.settings_service.is_ocr_enabled_for_user(user_id=user_id)
+        frontmatter_path: Path | None = None
         try:
             _, frontmatter_path = FrontmatterBootstrapService(
                 config=self.config,
@@ -250,9 +264,53 @@ class SessionAttachmentService:
             document = StructuredKnowledgeDocument.from_dict(payload)
         except ValueError:
             document = self._build_fallback_document(source_path=source_path, upload_dir=upload_dir)
+        if is_direct_image:
+            self._append_image_understanding(document=document, source_path=source_path)
+            if frontmatter_path is not None:
+                frontmatter_path.write_text(
+                    json.dumps(document.to_dict(), ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
         text_path = text_dir / f"{attachment_id}.txt"
         text_path.write_text(self._document_to_text(document), encoding="utf-8")
         return text_path, document
+
+    def _append_image_understanding(
+        self,
+        *,
+        document: StructuredKnowledgeDocument,
+        source_path: Path,
+    ) -> None:
+        """在 OCR 之后调用本地模型，并把互补视觉描述追加到附件正文。"""
+
+        if self.vision_service is None:
+            document.metadata["vision_status"] = "unavailable"
+            return
+        ocr_text = self._document_to_text(document)
+        try:
+            description = self.vision_service.understand_image(
+                image_path=source_path,
+                ocr_text=ocr_text,
+            ).strip()
+        except Exception as exc:
+            document.metadata["vision_status"] = "error"
+            document.metadata["vision_error"] = type(exc).__name__
+            return
+        if not description:
+            document.metadata["vision_status"] = "empty"
+            return
+        document.sections.append(
+            StructuredKnowledgeSection(
+                section_id="vision-understanding",
+                heading="视觉理解",
+                title_path=[document.title, "视觉理解"],
+                content=description,
+                start_char=0,
+                end_char=len(description),
+            )
+        )
+        document.metadata["vision_status"] = "completed"
+        document.metadata["vision_model"] = self.config.model.local_model_name
 
     def _build_fallback_document(self, *, source_path: Path, upload_dir: Path) -> StructuredKnowledgeDocument:
         """Build a lightweight attachment document for unsupported suffixes."""

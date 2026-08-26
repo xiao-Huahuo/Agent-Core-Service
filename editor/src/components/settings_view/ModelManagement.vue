@@ -54,6 +54,7 @@ async function refresh({ checkDisk = false }: { checkDisk?: boolean } = {}) {
   try {
     if (checkDisk) await checkModelDisk()
     models.value = (await fetchModelManagement(props.userId)).models
+    if (hasActiveWork.value) ensurePolling()
   } catch (error: unknown) {
     feedback.value = error instanceof Error ? error.message : '模型状态加载失败'
   } finally {
@@ -82,7 +83,6 @@ async function startDownload(model: ManagedModelStatus) {
   try {
     await downloadManagedModel(model.key)
     await refresh()
-    ensurePolling()
   } catch (error: unknown) {
     feedback.value = error instanceof Error ? error.message : '模型下载启动失败'
   } finally {
@@ -90,14 +90,13 @@ async function startDownload(model: ManagedModelStatus) {
   }
 }
 
-/** Load an existing embedding/rerank model into the active process. */
+/** Load an existing local Qwen, embedding, or rerank model into the active process. */
 async function startLoad(model: ManagedModelStatus) {
   if (model.key === 'paddleocr') return
   actionKey.value = model.key
   try {
     await loadManagedModel(model.key)
     await refresh()
-    ensurePolling()
   } catch (error: unknown) {
     feedback.value = error instanceof Error ? error.message : '模型加载失败'
   } finally {
@@ -144,6 +143,8 @@ function detailLabel(key: string): string {
     device: '运行设备',
     detection_model: '检测模型',
     recognition_model: '识别模型',
+    capabilities: '能力',
+    fallback: '回退规则',
   }
   return labels[key] || key
 }

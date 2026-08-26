@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import FormHeightTransition from '@/components/common/FormHeightTransition.vue'
 import { fetchSystemPrompts, addSystemPromptEntry, deleteSystemPromptEntry, fetchMemories, addMemory, deleteMemory, fetchMemoryConfig, saveMemoryConfig, fetchLLMConfig, saveLLMConfig, fetchSavedLLMConfigs, saveLLMConfigPreset, deleteLLMConfigPreset, fetchWebSearchConfig, saveWebSearchConfig, fetchTerminalSandboxConfig, saveTerminalSandboxConfig } from '@/api/settings'
-import type { SystemPromptEntry, MemoryEntry, SavedLLMConfig, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
+import type { LLMConfigResponse, SystemPromptEntry, MemoryEntry, SavedLLMConfig, TerminalSandboxConfig, TerminalSandboxConfigResponse, TerminalSegmentInfo, TerminalShellKey } from '@/api/settings'
 import AppearanceSettingsSection from '@/components/settings_view/AppearanceSettingsSection.vue'
 import BasicSettingsSection from '@/components/settings_view/BasicSettingsSection.vue'
 import BrowserSettingsSection from '@/components/settings_view/BrowserSettingsSection.vue'
@@ -536,11 +536,27 @@ const showSmallKey = ref(false)
 const modelSaving = ref(false)
 const modelMsg = ref('')
 const modelEditing = ref(false)
+const modelConfigLoaded = ref(false)
+const effectiveLargeModelName = ref('')
+const effectiveLargeModelSource = ref<'remote' | 'local' | ''>('')
+const effectiveSmallModelName = ref('')
+const effectiveSmallModelSource = ref<'remote' | 'local' | ''>('')
+const savedSmallModelConfigured = ref(false)
 const modelConfigSaved = computed(() => !!(largeModelName.value || largeBaseUrl.value || largeApiKey.value))
 const savedModelConfigs = ref<SavedLLMConfig[]>([])
 
+/** Store only backend-resolved values so unsaved drafts are never shown as active models. */
+function applyEffectiveModelConfig(config: LLMConfigResponse) {
+  effectiveLargeModelName.value = config.effective_model_name || ''
+  effectiveLargeModelSource.value = config.effective_model_source || ''
+  effectiveSmallModelName.value = config.effective_small_model_name || ''
+  effectiveSmallModelSource.value = config.effective_small_model_source || ''
+  savedSmallModelConfigured.value = Boolean(config.small_model_name?.trim())
+}
+
 async function loadModelConfig() {
   if (!settingsStore.profile.userId) return
+  modelConfigLoaded.value = false
   try {
     const cfg = await fetchLLMConfig(settingsStore.profile.userId)
     if (!cfg || !cfg.user_id) return
@@ -550,7 +566,9 @@ async function loadModelConfig() {
     smallModelName.value = cfg.small_model_name || ''
     smallBaseUrl.value = cfg.small_base_url || ''
     smallApiKey.value = cfg.small_api_key || ''
+    applyEffectiveModelConfig(cfg)
   } catch { /* ignore */ }
+  finally { modelConfigLoaded.value = true }
 }
 
 async function loadSavedModelConfigs() {
@@ -568,7 +586,7 @@ async function handleSaveModel() {
   modelSaving.value = true
   modelMsg.value = ''
   try {
-    await saveLLMConfig(settingsStore.profile.userId, {
+    const saved = await saveLLMConfig(settingsStore.profile.userId, {
       apiKey: largeApiKey.value,
       baseUrl: largeBaseUrl.value,
       modelName: largeModelName.value,
@@ -577,8 +595,11 @@ async function handleSaveModel() {
       smallModelName: smallModelName.value,
     })
     modelEditing.value = false
+    applyEffectiveModelConfig(saved)
     await loadSavedModelConfigs()
-    window.dispatchEvent(new CustomEvent('agent-model-config-updated', { detail: { modelName: largeModelName.value } }))
+    window.dispatchEvent(new CustomEvent('agent-model-config-updated', {
+      detail: { modelName: saved.effective_model_name || saved.model_name },
+    }))
     showMessage(modelMsg, '已保存')
   } catch {
     showMessage(modelMsg, '保存失败')
@@ -762,9 +783,15 @@ onBeforeUnmount(() => {
         v-model:small-base-url="smallBaseUrl"
         v-model:small-model-name="smallModelName"
         :model-config-saved="modelConfigSaved"
+        :model-config-loaded="modelConfigLoaded"
         :model-msg="modelMsg"
         :model-saving="modelSaving"
         :saved-configs="savedModelConfigs"
+        :effective-large-model-name="effectiveLargeModelName"
+        :effective-large-model-source="effectiveLargeModelSource"
+        :effective-small-model-name="effectiveSmallModelName"
+        :effective-small-model-source="effectiveSmallModelSource"
+        :saved-small-model-configured="savedSmallModelConfigured"
         @cancel="modelEditing = false; loadModelConfig()"
         @delete-saved-config="handleDeleteSavedModelConfig"
         @import-saved-config="importSavedModelConfig"

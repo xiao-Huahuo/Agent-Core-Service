@@ -352,7 +352,7 @@ async function loadCurrentModelConfig() {
   }
   try {
     const config = await fetchLLMConfig(userId.value)
-    currentLargeModelName.value = config.model_name?.trim() || ''
+    currentLargeModelName.value = config.effective_model_name?.trim() || config.model_name?.trim() || ''
     contextWindowTokens.value = config.context_window_tokens ?? 1000000
   } catch {
     currentLargeModelName.value = ''

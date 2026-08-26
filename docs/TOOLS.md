@@ -98,6 +98,7 @@
 | `retry_failed_knowledge_files` | 重试灌库任务中的失败文件。 |
 | `run_terminal_command` | 在权限约束下执行结构化终端指令。 |
 | `save_uploaded_attachment_to_knowledge` | 将会话附件保存并可选灌入知识库。 |
+| `understand_image` | 使用 CPU 本地 Qwen 结合先行 OCR 文本重新理解当前会话中的指定图片。 |
 | `search_knowledge` | 联合搜索文件名、路径、全文和语义内容。 |
 | `search_knowledge_graph_nodes` | 搜索图谱节点并返回邻接节点和边。 |
 | `set_skill_enabled` | 启用或停用内置或用户 Skill。 |

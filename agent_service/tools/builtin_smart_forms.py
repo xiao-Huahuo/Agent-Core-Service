@@ -89,13 +89,14 @@ def _default_form(title: str, kind: str) -> dict[str, Any]:
     if normalized_kind not in {"smart", "plain"}:
         raise ValueError("kind must be smart or plain")
     columns: list[dict[str, Any]] = [
-        {"id": "row_index", "title": "序号", "type": "index", "removable": False, "editable": False, "width": 64},
-        {"id": "literature_file", "title": "文献上传", "type": "file", "removable": True, "editable": False, "width": 168},
-        {"id": "literature_content", "title": "文献内容", "type": "readonly_text", "removable": True, "editable": False, "width": 240},
-        {"id": "title", "title": "标题", "type": "smart_text", "removable": False, "editable": True, "width": 230, "tone": "blue"},
+        {"id": "row_index", "title": "序号", "description": "显示当前行在表格中的顺序编号。", "type": "index", "removable": False, "editable": False, "width": 64},
+        {"id": "literature_file", "title": "文献上传", "description": "上传并关联本行用于灌库与分析的原始文献文件。", "type": "file", "removable": True, "editable": False, "width": 168},
+        {"id": "literature_content", "title": "文献内容", "description": "显示文献灌库后提取的正文，并作为智能字段的生成上下文。", "type": "readonly_text", "removable": True, "editable": False, "width": 240},
+        {"id": "figures", "title": "图表", "description": "集中显示 PDF 灌库过程中抽取出的图表图片预览。", "type": "readonly_text", "removable": True, "editable": False, "width": 240},
+        {"id": "title", "title": "标题", "description": "从文献内容中提取正式标题。", "type": "smart_text", "removable": False, "editable": True, "width": 230, "tone": "blue"},
     ]
     if normalized_kind == "plain":
-        columns = [column for column in columns if column["id"] not in {"literature_file", "literature_content"}]
+        columns = [column for column in columns if column["id"] not in {"literature_file", "literature_content", "figures"}]
         columns = [
             {**column, "type": "text"} if column["type"] == "smart_text" else column
             for column in columns

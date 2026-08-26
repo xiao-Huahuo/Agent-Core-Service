@@ -1021,6 +1021,38 @@ class SettingsService:
 
         return str(value or "").strip()
 
+    def _effective_llm_fields(
+        self,
+        *,
+        large_api_key: str,
+        large_base_url: str,
+        large_model_name: str,
+        small_api_key: str,
+        small_base_url: str,
+        small_model_name: str,
+    ) -> dict[str, str]:
+        """Resolve the documented remote/remote/local model fallback matrix."""
+
+        local_model_name = self._normalize_optional_text(self.config.model.local_model_name)
+        large_is_remote = bool(large_model_name and large_api_key)
+        effective_model_name = large_model_name if large_is_remote else local_model_name
+        effective_small_model_name = (
+            (small_model_name or large_model_name)
+            if large_is_remote
+            else local_model_name
+        )
+        small_uses_remote = large_is_remote
+        return {
+            "effective_api_key": large_api_key if large_is_remote else "",
+            "effective_base_url": large_base_url if large_is_remote else "",
+            "effective_model_name": effective_model_name,
+            "effective_model_source": "remote" if large_is_remote else "local",
+            "effective_small_api_key": (small_api_key or large_api_key) if small_uses_remote else "",
+            "effective_small_base_url": (small_base_url or large_base_url) if small_uses_remote else "",
+            "effective_small_model_name": effective_small_model_name,
+            "effective_small_model_source": "remote" if small_uses_remote else "local",
+        }
+
     def _serialize_llm_config(self, config: UserLLMConfig) -> dict:
         """Serialize current LLM settings and expose effective small-model fallback fields."""
 
@@ -1030,9 +1062,14 @@ class SettingsService:
         small_api_key = self._normalize_optional_text(config.small_api_key)
         small_base_url = self._normalize_optional_text(config.small_base_url)
         small_model_name = self._normalize_optional_text(config.small_model_name)
-        effective_small_model_name = small_model_name or large_model_name
-        effective_small_api_key = (small_api_key or large_api_key) if small_model_name else large_api_key
-        effective_small_base_url = (small_base_url or large_base_url) if small_model_name else large_base_url
+        effective = self._effective_llm_fields(
+            large_api_key=large_api_key,
+            large_base_url=large_base_url,
+            large_model_name=large_model_name,
+            small_api_key=small_api_key,
+            small_base_url=small_base_url,
+            small_model_name=small_model_name,
+        )
         return {
             "user_id": config.user_id,
             "api_key": large_api_key,
@@ -1041,9 +1078,7 @@ class SettingsService:
             "small_api_key": small_api_key,
             "small_base_url": small_base_url,
             "small_model_name": small_model_name,
-            "effective_small_api_key": effective_small_api_key,
-            "effective_small_base_url": effective_small_base_url,
-            "effective_small_model_name": effective_small_model_name,
+            **effective,
             "summary_trigger_tokens": self.config.memory.summary_trigger_tokens,
             "context_window_tokens": self.config.memory.context_window_tokens,
             "context_output_reserve_tokens": self.config.memory.context_output_reserve_tokens,
@@ -1063,9 +1098,14 @@ class SettingsService:
         small_api_key = self._normalize_optional_text(m.small_model_api_key)
         small_base_url = self._normalize_optional_text(m.small_model_base_url)
         small_model_name = self._normalize_optional_text(m.small_model_name)
-        effective_small_model_name = small_model_name or large_model_name
-        effective_small_api_key = (small_api_key or large_api_key) if small_model_name else large_api_key
-        effective_small_base_url = (small_base_url or large_base_url) if small_model_name else large_base_url
+        effective = self._effective_llm_fields(
+            large_api_key=large_api_key,
+            large_base_url=large_base_url,
+            large_model_name=large_model_name,
+            small_api_key=small_api_key,
+            small_base_url=small_base_url,
+            small_model_name=small_model_name,
+        )
         return {
             "user_id": user_id,
             "api_key": large_api_key,
@@ -1074,9 +1114,7 @@ class SettingsService:
             "small_api_key": small_api_key,
             "small_base_url": small_base_url,
             "small_model_name": small_model_name,
-            "effective_small_api_key": effective_small_api_key,
-            "effective_small_base_url": effective_small_base_url,
-            "effective_small_model_name": effective_small_model_name,
+            **effective,
             "summary_trigger_tokens": mm.summary_trigger_tokens,
             "context_window_tokens": mm.context_window_tokens,
             "context_output_reserve_tokens": mm.context_output_reserve_tokens,

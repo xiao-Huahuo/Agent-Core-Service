@@ -23,6 +23,9 @@ from agent_service.api.grpc.agent_service_pb2_grpc import (
 )
 from agent_service.api.grpc.servicer import AgentServiceServicer
 from agent_service.api.rest import settings as settings_rest
+from agent_service.core.agent_config import AgentConfig
+from agent_service.core.model_status import ModelState, set_model_state
+from agent_service.scripts.download_model import reset_download_progress, update_download_progress
 
 
 class _ModelManagementStub:
@@ -111,3 +114,33 @@ def test_management_grpc_matches_rest_fields() -> None:
 
     assert models["models"][0]["path"] == "D:/models/demo"
     assert compiler["distribution"] == "MiKTeX"
+
+
+def test_model_disk_check_does_not_overwrite_active_local_download(tmp_path, monkeypatch: Any) -> None:
+    """轮询磁盘状态时必须保留本地 Qwen 的 downloading 状态。"""
+
+    config = AgentConfig.load_config(
+        {"storage": {"base_data_dir": str(tmp_path / "runtime")}},
+        load_env=False,
+        ensure_directories=True,
+        ensure_models=False,
+    )
+    monkeypatch.setattr(settings_rest, "_require_settings_service", lambda: SimpleNamespace(config=config))
+    update_download_progress(
+        "local_qwen",
+        status="downloading",
+        stage="model_files",
+        downloaded_bytes=100,
+        total_bytes=1000,
+        message="正在恢复",
+    )
+    set_model_state("local_qwen", ModelState.DOWNLOADING)
+    app = FastAPI()
+    app.include_router(settings_rest.router)
+    try:
+        response = TestClient(app).post("/settings/models/check", json={})
+    finally:
+        reset_download_progress("local_qwen")
+
+    assert response.status_code == 200
+    assert response.json()["local_qwen"] == "downloading"

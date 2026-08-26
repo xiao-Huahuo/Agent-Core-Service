@@ -409,9 +409,14 @@ export interface LLMConfigResponse {
   small_api_key: string
   small_base_url: string
   small_model_name: string
+  effective_api_key?: string
+  effective_base_url?: string
+  effective_model_name?: string
+  effective_model_source?: 'remote' | 'local'
   effective_small_api_key?: string
   effective_small_base_url?: string
   effective_small_model_name?: string
+  effective_small_model_source?: 'remote' | 'local'
   context_window_tokens?: number
   updated_at: string
 }
@@ -539,6 +544,7 @@ export interface ModelStatusResponse {
   embedding: string
   rerank: string
   paddleocr: string
+  local_qwen: string
 }
 
 export function fetchModelStatus(): Promise<ModelStatusResponse> {
@@ -563,7 +569,7 @@ export interface ModelDownloadProgress {
 
 /** One model row with backend-owned runtime, disk and configuration details. */
 export interface ManagedModelStatus {
-  key: 'embedding' | 'rerank' | 'paddleocr'
+  key: 'embedding' | 'rerank' | 'paddleocr' | 'local_qwen'
   label: string
   role: string
   name: string
@@ -590,6 +596,6 @@ export function downloadManagedModel(model: ManagedModelStatus['key']): Promise<
 }
 
 /** Load an already-downloaded Embedding or ReRank model into memory. */
-export function loadManagedModel(model: 'embedding' | 'rerank'): Promise<{ status: string; model: string }> {
+export function loadManagedModel(model: 'embedding' | 'rerank' | 'local_qwen'): Promise<{ status: string; model: string }> {
   return apiPost(API_ROUTES.SETTINGS_MODEL_LOAD, { model })
 }

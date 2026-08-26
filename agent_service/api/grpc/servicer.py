@@ -2261,6 +2261,11 @@ def _llm_config_to_response(payload: dict[str, Any]) -> LLMConfigResponse:
         effective_small_base_url=str(payload.get("effective_small_base_url", "")),
         effective_small_model_name=str(payload.get("effective_small_model_name", "")),
         updated_at=str(payload.get("updated_at", "")),
+        effective_api_key=str(payload.get("effective_api_key", "")),
+        effective_base_url=str(payload.get("effective_base_url", "")),
+        effective_model_name=str(payload.get("effective_model_name", "")),
+        effective_model_source=str(payload.get("effective_model_source", "")),
+        effective_small_model_source=str(payload.get("effective_small_model_source", "")),
     )
 
 

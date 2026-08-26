@@ -2,7 +2,7 @@
 模型加载状态追踪模块。
 
 用途:
-- 全局单例追踪 Embedding / ReRank / PaddleOCR 三个模型的下载和加载状态。
+- 全局单例追踪 Embedding / ReRank / PaddleOCR / 本地 Qwen 的下载和加载状态。
 - 模型 provider 在开始下载/加载/完成/失败时调用 set_model_state() 更新状态。
 - 前端通过 GET /settings/models/status 轮询状态快照,未就绪时阻断 Agent 功能。
 
@@ -34,12 +34,14 @@ class ModelStatusSnapshot:
     embedding: ModelState = ModelState.NOT_DOWNLOADED
     rerank: ModelState = ModelState.NOT_DOWNLOADED
     paddleocr: ModelState = ModelState.NOT_DOWNLOADED
+    local_qwen: ModelState = ModelState.NOT_DOWNLOADED
 
     def to_dict(self) -> dict:
         return {
             "embedding": self.embedding.value,
             "rerank": self.rerank.value,
             "paddleocr": self.paddleocr.value,
+            "local_qwen": self.local_qwen.value,
         }
 
 
@@ -56,6 +58,7 @@ def get_model_status() -> ModelStatusSnapshot:
             embedding=_model_status.embedding,
             rerank=_model_status.rerank,
             paddleocr=_model_status.paddleocr,
+            local_qwen=_model_status.local_qwen,
         )
 
 
@@ -63,7 +66,7 @@ def set_model_state(model: str, state: ModelState) -> None:
     """更新指定模型的状态（线程安全）。
 
     Args:
-        model: "embedding" | "rerank" | "paddleocr"
+        model: "embedding" | "rerank" | "paddleocr" | "local_qwen"
         state: 新状态
     """
 
@@ -74,5 +77,7 @@ def set_model_state(model: str, state: ModelState) -> None:
             _model_status.rerank = state
         elif model == "paddleocr":
             _model_status.paddleocr = state
+        elif model == "local_qwen":
+            _model_status.local_qwen = state
         else:
             raise ValueError(f"未知模型类型: {model}")

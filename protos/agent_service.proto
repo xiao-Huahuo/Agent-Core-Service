@@ -671,6 +671,11 @@ message LLMConfigResponse {
   string effective_small_base_url = 9;
   string effective_small_model_name = 10;
   string updated_at = 11;
+  string effective_api_key = 12;
+  string effective_base_url = 13;
+  string effective_model_name = 14;
+  string effective_model_source = 15;
+  string effective_small_model_source = 16;
 }
 
 message LLMConfigPresetSaveRequest {

@@ -73,7 +73,12 @@ class LLMTaskRuntimeMixin:
             small_base_url=small_base_url,
             small_model_name=small_model_name,
         )
-        if not resolved_api_key:
+        use_local_qwen = (
+            model_name == self.config.model.local_model_name
+            and not resolved_api_key
+            and not resolved_base_url
+        )
+        if not resolved_api_key and not use_local_qwen:
             logger = __import__("logging").getLogger(__name__)
             logger.error(
                 "_get_chat_model: MISSING API KEY tier=%s model=%s has_api_key_param=%s has_small_api_key_param=%s",
@@ -95,16 +100,24 @@ class LLMTaskRuntimeMixin:
             model = self._model_cache.get(cache_key)
             if model is not None:
                 return model
-            model_kwargs = self.config.model.get_model_kwargs(model_name)
-            model = ChatOpenAI(
-                model=model_name,
-                api_key=resolved_api_key,
-                base_url=resolved_base_url,
-                temperature=final_temperature,
-                timeout=timeout_seconds,
-                max_retries=0,
-                **model_kwargs,
-            )
+            if use_local_qwen:
+                from agent_service.services.local_qwen_service import LocalQwenChatModel, get_local_qwen_service
+
+                model = LocalQwenChatModel(
+                    service=get_local_qwen_service(self.config),
+                    temperature=final_temperature,
+                )
+            else:
+                model_kwargs = self.config.model.get_model_kwargs(model_name)
+                model = ChatOpenAI(
+                    model=model_name,
+                    api_key=resolved_api_key,
+                    base_url=resolved_base_url,
+                    temperature=final_temperature,
+                    timeout=timeout_seconds,
+                    max_retries=0,
+                    **model_kwargs,
+                )
             if tool_names:
                 tool_registry = self._get_tool_registry()
                 tools = [
@@ -131,26 +144,21 @@ class LLMTaskRuntimeMixin:
     ) -> tuple[str, str, str, float]:
         """根据模型池等级解析实际调用所需的模型参数。"""
 
-        primary_model_name = (model_name or self.config.model.model_name or "").strip()
-        primary_api_key = api_key or self.config.model.api_key
-        primary_base_url = base_url or self.config.model.base_url
+        configured_primary_model = (model_name or self.config.model.model_name or "").strip()
+        primary_api_key = (api_key or self.config.model.api_key or "").strip()
+        primary_base_url = (base_url or self.config.model.base_url or "").strip()
+        primary_is_remote = bool(configured_primary_model and primary_api_key)
+        primary_model_name = configured_primary_model if primary_is_remote else self.config.model.local_model_name
         resolved_small_model_name = (
-            small_model_name
-            or model_name
-            or self.config.model.small_model_name
-            or self.config.model.model_name
-            or ""
+            (
+                small_model_name
+                or self.config.model.small_model_name
+                or configured_primary_model
+            )
+            if primary_is_remote
+            else self.config.model.local_model_name
         ).strip()
         if model_tier == SMALL_MODEL_TIER:
-            if not resolved_small_model_name:
-                logger.warning("小模型未配置,降级使用大模型 | resolved_small_model_name=%r", resolved_small_model_name)
-                return self._resolve_model_runtime(
-                    model_tier=LARGE_MODEL_TIER,
-                    requested_temperature=requested_temperature,
-                    api_key=api_key,
-                    base_url=base_url,
-                    model_name=model_name,
-                )
             small_temperature = self.config.model._normalize_temperature_for_model(
                 model_name=resolved_small_model_name,
                 requested_temperature=(
@@ -159,14 +167,14 @@ class LLMTaskRuntimeMixin:
                     else requested_temperature
                 ),
             )
+            if not primary_is_remote:
+                return resolved_small_model_name, "", "", small_temperature
             return (
                 resolved_small_model_name,
-                small_api_key or self.config.model.small_model_api_key or primary_api_key,
-                small_base_url or self.config.model.small_model_base_url or primary_base_url,
+                (small_api_key or self.config.model.small_model_api_key or primary_api_key or "").strip(),
+                (small_base_url or self.config.model.small_model_base_url or primary_base_url or "").strip(),
                 small_temperature,
             )
-        if not primary_model_name:
-            raise ValueError("大模型未配置模型名称,请先在设置页配置模型。")
         primary_temperature = self.config.model._normalize_temperature_for_model(
             model_name=primary_model_name,
             requested_temperature=(
@@ -175,12 +183,9 @@ class LLMTaskRuntimeMixin:
                 else requested_temperature
             ),
         )
-        return (
-            primary_model_name,
-            primary_api_key,
-            primary_base_url,
-            primary_temperature,
-        )
+        if not primary_is_remote:
+            return primary_model_name, "", "", primary_temperature
+        return primary_model_name, primary_api_key, primary_base_url, primary_temperature
 
     @contextmanager
     def _acquire_model_pool(self, model_tier: str) -> Any:

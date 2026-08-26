@@ -22,6 +22,7 @@ import {
   createEmptyRow,
   exportCsv,
   exportMarkdown,
+  extractMarkdownImages,
   filterRows,
   joinTags,
   moveColumn,
@@ -53,6 +54,7 @@ describe('smartLiteratureTable', () => {
       'row_index',
       'literature_file',
       'literature_content',
+      'figures',
       'title',
     ])
     expect(form.columns.find((column) => column.id === 'literature_file')?.title).toBe('文献上传')
@@ -64,6 +66,59 @@ describe('smartLiteratureTable', () => {
     expect(form.rows[0]?.height).toBe(DEFAULT_ROW_HEIGHT)
     expect(form.rows[0]?.cells.title?.value).toBe('')
     expect(form.rows[0]?.cells.literature_content?.value).toBe('')
+    expect(form.rows[0]?.cells.figures?.value).toBe('')
+    expect(BUILTIN_COLUMNS.find((column) => column.id === 'figures')).toMatchObject({
+      title: '图表',
+      type: 'readonly_text',
+      editable: false,
+    })
+    expect(form.columns.some((column) => column.id === 'formulas')).toBe(false)
+  })
+
+  it('registers formulas as an optional smart field with strict LaTeX guidance', () => {
+    const formulaColumn = BUILTIN_COLUMNS.find((column) => column.id === 'formulas')
+
+    expect(formulaColumn).toMatchObject({ title: '公式', type: 'smart_text', removable: true, editable: true })
+    expect(formulaColumn?.description).toContain('主要 LaTeX 数学公式')
+    expect(formulaColumn?.description).toContain('单个符号及过短表达式')
+    expect(formulaColumn?.description).toContain('$$...$$')
+  })
+
+  it('gives every required and optional built-in column a default description', () => {
+    const builtins = [...new Map(
+      [...createDefaultLiteratureForm().columns, ...BUILTIN_COLUMNS].map((column) => [column.id, column]),
+    ).values()]
+
+    expect(builtins.every((column) => Boolean(column.description?.trim()))).toBe(true)
+  })
+
+  it('restores missing built-in descriptions without replacing user guidance', () => {
+    const formulaColumn = BUILTIN_COLUMNS.find((column) => column.id === 'formulas')!
+    const legacy = addColumn(createDefaultLiteratureForm(), { ...formulaColumn, description: undefined })
+    legacy.columns = legacy.columns.map((column) => ({
+      ...column,
+      description: column.id === 'title' ? '用户自定义标题提示' : undefined,
+    }))
+
+    const normalized = normalizeForm(legacy)
+
+    expect(normalized.columns.every((column) => Boolean(column.description?.trim()))).toBe(true)
+    expect(normalized.columns.find((column) => column.id === 'title')?.description).toBe('用户自定义标题提示')
+    expect(normalized.columns.find((column) => column.id === 'formulas')?.description).toContain('$$...$$')
+  })
+
+  it('collects every unique Markdown image from ingested PDF projections', () => {
+    const semanticMarkdown = '# Paper\n\n![Figure 1](/.mw/assets/paper/image_0001.png)\n\n正文'
+    const renderMarkdown = [
+      '## Page 1',
+      '![Figure 1](/.mw/assets/paper/image_0001.png)',
+      '![Figure 2](/.mw/assets/paper/image_0002.png)',
+    ].join('\n\n')
+
+    expect(extractMarkdownImages(semanticMarkdown, renderMarkdown)).toBe([
+      '![Figure 1](/.mw/assets/paper/image_0001.png)',
+      '![Figure 2](/.mw/assets/paper/image_0002.png)',
+    ].join('\n\n'))
   })
 
   it('creates a plain table with ten empty text columns and ten one-line rows', () => {
@@ -230,7 +285,7 @@ describe('smartLiteratureTable', () => {
     expect(csv.split('\n')[0]).toContain('标题')
     expect(csv.split('\n')[0]).not.toContain('文献上传')
     expect(csv).toContain('真实抽取的文献内容')
-    expect(markdown).toContain('| 序号 | 文献内容 | 标题 |')
+    expect(markdown).toContain('| 序号 | 文献内容 | 图表 | 标题 |')
     expect(markdown).not.toContain('文献上传')
   })
 
@@ -252,13 +307,14 @@ describe('smartLiteratureTable', () => {
     const form = createDefaultLiteratureForm()
     const reordered = normalizeForm({
       ...form,
-      columns: [form.columns[0]!, form.columns[1]!, form.columns[3]!, form.columns[2]!],
+      columns: [form.columns[0]!, form.columns[1]!, form.columns[4]!, form.columns[3]!, form.columns[2]!],
     })
 
-    expect(reordered.columns.map((column) => column.id).slice(0, 4)).toEqual([
+    expect(reordered.columns.map((column) => column.id).slice(0, 5)).toEqual([
       'row_index',
       'literature_file',
       'title',
+      'figures',
       'literature_content',
     ])
   })

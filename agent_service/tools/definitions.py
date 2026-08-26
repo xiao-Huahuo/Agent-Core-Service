@@ -60,6 +60,7 @@ from agent_service.tools.builtin import (
     run_terminal_command,
     spawn_child_agent,
     save_uploaded_attachment_to_knowledge,
+    understand_image,
     search_knowledge,
     show_markdown_html,
     toggle_todo,
@@ -476,6 +477,24 @@ KNOWLEDGE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         },
         function=save_uploaded_attachment_to_knowledge,
         display_name="附件存入知识库",
+    ),
+    BuiltinToolDefinition(
+        name="understand_image",
+        description=(
+            "使用 CPU 本地 Qwen 理解当前会话中用户直接上传的图片。"
+            "系统会同时提供先行 OCR 文本，适合分析对象、布局、空间关系、图表趋势和图片语义；"
+            "需要重新观察图片或回答特定视觉问题时调用。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "attachment": {"type": "string", "description": "可选。attachment_id、完整文件名或文件名关键词。"},
+                "prompt": {"type": "string", "description": "可选。希望本地模型针对图片回答的问题。"},
+            },
+            "required": [],
+        },
+        function=understand_image,
+        display_name="识图",
     ),
     BuiltinToolDefinition(
         name="get_knowledge_file_url",

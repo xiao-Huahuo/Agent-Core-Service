@@ -21,7 +21,7 @@ from agent_service.scripts.download_model import (
 
 
 class ModelManagementService:
-    """把三个本地模型的配置、磁盘和运行状态合并为稳定管理 DTO。"""
+    """把四类本地模型的配置、磁盘和运行状态合并为稳定管理 DTO。"""
 
     def __init__(self, *, config: Any, settings_service: Any) -> None:
         """保存只读服务配置和用户设置依赖。"""
@@ -30,7 +30,7 @@ class ModelManagementService:
         self.settings_service = settings_service
 
     def get_management_status(self, *, user_id: str) -> dict[str, list[dict[str, Any]]]:
-        """返回 Embedding、ReRank 与 PaddleOCR 的完整管理状态。"""
+        """返回本地 Qwen、Embedding、ReRank 与 PaddleOCR 的完整管理状态。"""
 
         states = get_model_status().to_dict()
         embedding = self._hf_model(
@@ -48,6 +48,19 @@ class ModelManagementService:
             name=self.config.model.rerank_model_name,
             base_path=Path(self.config.storage.rerank_model_dir),
             state=states["rerank"],
+        )
+        local_qwen = self._hf_model(
+            key="local_qwen",
+            label="本地 Qwen 大语言模型",
+            role="本地主 Agent、小模型回退与图片理解",
+            name=self.config.model.local_model_name,
+            base_path=Path(self.config.storage.local_model_dir),
+            state=states["local_qwen"],
+            extra_details={
+                "device": "CPU",
+                "capabilities": "文本生成 / 工具调用 / 图片理解",
+                "fallback": "未配置大模型时同时承担主模型与小模型",
+            },
         )
         ocr_path = Path(self.config.storage.paddleocr_model_dir).expanduser().resolve()
         ocr_size, ocr_files = self._directory_stats(ocr_path)
@@ -74,7 +87,7 @@ class ModelManagementService:
                 "recognition_model": self.config.ocr.text_recognition_model_name,
             },
         }
-        return {"models": [embedding, rerank, paddleocr]}
+        return {"models": [local_qwen, embedding, rerank, paddleocr]}
 
     def _hf_model(
         self,
@@ -85,6 +98,7 @@ class ModelManagementService:
         name: str,
         base_path: Path,
         state: str,
+        extra_details: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """构造一个 Hugging Face 模型的磁盘与运行状态。"""
 
@@ -108,6 +122,7 @@ class ModelManagementService:
                 "provider": "Hugging Face",
                 "repository": name,
                 "model_type": key,
+                **(extra_details or {}),
             },
         }
 

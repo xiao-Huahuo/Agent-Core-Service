@@ -41,6 +41,8 @@ export const BUILTIN_COLUMN_ICONS: Record<string, string> = {
   row_index: 'checklist',
   literature_file: 'upload',
   literature_content: 'document',
+  figures: 'image',
+  formulas: 'calculate',
   title: 'title',
   paper_type: 'book',
   rating: 'star',

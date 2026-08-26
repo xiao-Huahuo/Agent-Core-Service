@@ -20,6 +20,13 @@ import SmartFormsView from '@/views/SmartFormsView.vue'
 import smartFormsSource from '@/views/SmartFormsView.vue?raw'
 import editorWorkspaceSource from '@/views/EditorWorkspace.vue?raw'
 
+/** jsdom observer stub used by the responsive smart-table shell. */
+class ResizeObserverStub {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
 vi.mock('@/api/agent', () => ({
   updateCurrentDocumentContext: vi.fn().mockResolvedValue(undefined),
 }))
@@ -92,6 +99,7 @@ describe('SmartFormsView', () => {
   }
 
   beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub)
     setActivePinia(createPinia())
     localStorage.clear()
     vi.clearAllMocks()
@@ -121,6 +129,7 @@ describe('SmartFormsView', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it('renders a user-created smart literature table from forms', async () => {
@@ -140,10 +149,10 @@ describe('SmartFormsView', () => {
     await flushPromises()
 
     const headers = wrapper.findAll('thead tr:nth-child(2) th')
-    expect(headers).toHaveLength(4)
+    expect(headers).toHaveLength(5)
     expect(headers.every((header) => header.find('.column-field-icon').exists())).toBe(true)
-    expect(headers.map((header) => header.get('.column-type-pill').text())).toEqual(['索引', '文件', '只读文本', '智能文本'])
-    expect(headers[3]?.get('.column-ai-pill').text()).toBe('AI生成')
+    expect(headers.map((header) => header.get('.column-type-pill').text())).toEqual(['索引', '文件', '只读文本', '只读文本', '智能文本'])
+    expect(headers[4]?.get('.column-ai-pill').text()).toBe('AI生成')
     expect(headers.every((header) => !header.find('.column-actions').exists())).toBe(true)
     expect(headers[0]?.attributes('style')).toContain('32px')
     expect(headers[1]?.classes()).toContain('sticky-literature-column')
@@ -300,14 +309,14 @@ describe('SmartFormsView', () => {
     await wrapper.get('.table-edge-add-column').trigger('click')
 
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
-    expect(wrapper.findAll('thead tr:nth-child(2) th')).toHaveLength(4)
+    expect(wrapper.findAll('thead tr:nth-child(2) th')).toHaveLength(5)
     const edgeMenu = document.querySelector('.edge-column-menu') as HTMLElement
     expect(edgeMenu).not.toBeNull()
-    expect(edgeMenu.querySelectorAll('.menu-column-type-pill')).toHaveLength(BUILTIN_COLUMNS.length)
+    expect(edgeMenu.querySelectorAll('.menu-column-type-pill')).toHaveLength(BUILTIN_COLUMNS.length - 1)
     ;[...edgeMenu.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent?.includes('摘要'))?.click()
     await nextTick()
-    expect(wrapper.findAll('thead tr:nth-child(2) th')).toHaveLength(5)
-    expect(wrapper.findAll('.table-edge-column-drag')).toHaveLength(5)
+    expect(wrapper.findAll('thead tr:nth-child(2) th')).toHaveLength(6)
+    expect(wrapper.findAll('.table-edge-column-drag')).toHaveLength(6)
     expect(wrapper.find('button[title="拖动表格行"]').exists()).toBe(true)
     expect(wrapper.find('button[title="拖动表格列"]').exists()).toBe(true)
   })
@@ -759,12 +768,12 @@ describe('SmartFormsView', () => {
     vi.useFakeTimers()
     const headers = () => wrapper.findAll('thead tr:nth-child(2) th').map((header) => header.get('.column-title-label').text())
 
-    await wrapper.findAll('thead tr:nth-child(2) th')[3]!.trigger('dragstart')
+    await wrapper.findAll('thead tr:nth-child(2) th')[4]!.trigger('dragstart')
     await wrapper.findAll('thead tr:nth-child(2) th')[2]!.trigger('drop')
     await vi.advanceTimersByTimeAsync(300)
     await flushPromises()
 
-    expect(headers().slice(0, 4)).toEqual(['序号', '文献上传', '标题', '文献内容'])
+    expect(headers().slice(0, 5)).toEqual(['序号', '文献上传', '标题', '文献内容', '图表'])
     expect(saveSmartFormDb).toHaveBeenCalledWith(expect.objectContaining({
       form: expect.objectContaining({
         columns: expect.arrayContaining([
@@ -1103,6 +1112,77 @@ describe('SmartFormsView', () => {
       }),
     }))
     expect(wrapper.find('.status-dot').exists()).toBe(false)
+  })
+
+  it('fills the built-in figure column from ingested PDF Markdown image links', async () => {
+    vi.mocked(uploadKnowledgeFile).mockResolvedValueOnce({
+      uploaded_path: 'D:/Knowledge/.mw/forms/我的文献表/assets/paper.pdf',
+      knowledge_dir: 'D:/Knowledge',
+    })
+    vi.mocked(previewKnowledgeFile).mockResolvedValue({
+      path: '.mw/forms/我的文献表/assets/paper.pdf',
+      kind: 'document',
+      semantic_markdown: [
+        '# Paper',
+        '![Figure 1](/.mw/assets/.mw/forms/我的文献表/assets/paper.pdf/image_0001.png)',
+        '正文',
+        '![Figure 2](/.mw/assets/.mw/forms/我的文献表/assets/paper.pdf/image_0002.png)',
+      ].join('\n\n'),
+      render_content: '![preview duplicate](/knowledge/assets/pdf_preview/demo/image_0001.png)',
+      mtime: '2026-08-09T10:00:00',
+      size: 128,
+      extension: '.pdf',
+      readonly: true,
+    })
+    vi.spyOn(useWorkspaceStore(), 'ingestFile').mockResolvedValue(undefined)
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+    const input = wrapper.get('input[type="file"]').element as HTMLInputElement
+    Object.defineProperty(input, 'files', {
+      value: [new File(['pdf'], 'paper.pdf', { type: 'application/pdf' })],
+      configurable: true,
+    })
+
+    await wrapper.get('input[type="file"]').trigger('change')
+    await flushPromises()
+
+    const savedFigures = vi.mocked(saveSmartFormDb).mock.calls
+      .map(([payload]) => payload.form.rows[0]?.cells.figures?.value)
+      .filter(Boolean)
+    expect(savedFigures).toContain([
+      '![Figure 1](/.mw/assets/.mw/forms/我的文献表/assets/paper.pdf/image_0001.png)',
+      '![Figure 2](/.mw/assets/.mw/forms/我的文献表/assets/paper.pdf/image_0002.png)',
+    ].join('\n\n'))
+    expect(savedFigures.some((value) => value?.includes('preview duplicate'))).toBe(false)
+    expect(wrapper.find('td[data-column-id="figures"] .smart-markdown-cell').exists()).toBe(true)
+    expect(wrapper.find('td[data-column-id="figures"] .smart-plain-text').exists()).toBe(false)
+  })
+
+  it('generates the optional formula column from literature content with its default prompt', async () => {
+    const formulaColumn = BUILTIN_COLUMNS.find((column) => column.id === 'formulas')!
+    const storedForm = addColumn(createDefaultLiteratureForm('公式表'), formulaColumn)
+    storedForm.rows[0]!.cells.literature_content = { value: '正文包含能量方程和动量方程。', status: 'ready' }
+    vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(storedForm))
+    vi.mocked(generateStructuredFields).mockResolvedValueOnce({
+      raw_output: '{"formulas":"$$E = mc^2$$"}',
+      results: [{ field_id: 'formulas', status: 'ready', value: '$$E = mc^2$$' }],
+    })
+    const wrapper = mount(SmartFormsView)
+    await flushPromises()
+
+    await wrapper.find('td[data-column-id="formulas"]').trigger('contextmenu')
+    await clickContextButton('智能填充', true)
+    await flushPromises()
+
+    expect(generateStructuredFields).toHaveBeenCalledWith(expect.objectContaining({
+      source: expect.objectContaining({ content: '正文包含能量方程和动量方程。' }),
+      fields: [expect.objectContaining({
+        id: 'formulas',
+        type: 'text',
+        description: expect.stringContaining('$$...$$'),
+      })],
+    }))
+    expect(wrapper.find('td[data-column-id="formulas"] .smart-plain-text').exists()).toBe(false)
   })
 
   it('uses structured table and document previews as literature text', async () => {

@@ -88,7 +88,46 @@ export interface SmartLiteratureForm {
   rows: SmartRow[]
 }
 
+/** Concise built-in field semantics reused for headers and LLM generation guidance. */
+const BUILTIN_COLUMN_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  row_index: '显示当前行在表格中的顺序编号。',
+  literature_file: '上传并关联本行用于灌库与分析的原始文献文件。',
+  literature_content: '显示文献灌库后提取的正文，并作为智能字段的生成上下文。',
+  figures: '集中显示 PDF 灌库过程中抽取出的图表图片预览。',
+  formulas: '从文献内容中提取所有主要 LaTeX 数学公式；忽略单个符号及过短表达式；每个公式必须完整包裹为 $$...$$，只输出公式。',
+  title: '从文献内容中提取正式标题。',
+  paper_type: '判断文献所属的主要类型。',
+  rating: '记录这篇文献对当前研究的重要程度。',
+  reading_progress: '记录当前阅读进度。',
+  keywords: '提取能够代表文献主题的关键词。',
+  abstract: '提取或概括文献摘要。',
+  journal: '提取文献发表的期刊或会议名称。',
+  authors: '提取文献作者名单。',
+  year: '提取文献发表年份。',
+  why: '概括研究背景、问题动机与研究必要性。',
+  what: '概括文献研究的核心对象与内容。',
+  how: '概括研究采用的方法、实验或技术路线。',
+  result: '概括文献的主要研究结果。',
+  innovation: '概括文献相对已有工作的主要创新点。',
+  limitations: '概括作者陈述或证据显示的主要局限。',
+  future_work: '概括文献提出或可推导的后续研究方向。',
+  doi: '提取文献的 DOI 标识符。',
+  url: '提取文献的公开访问链接。',
+}
+
+/** Applies the canonical description to one built-in column definition. */
+function withBuiltinDescription(column: SmartColumn): SmartColumn {
+  return { ...column, description: BUILTIN_COLUMN_DESCRIPTIONS[column.id] }
+}
+
+/** Built-in PDF figure field shared by the default schema and add-column menu. */
+export const FIGURES_COLUMN: SmartColumn = withBuiltinDescription({
+  id: 'figures', title: '图表', type: 'readonly_text', removable: true, editable: false, width: 240,
+})
+
 export const BUILTIN_COLUMNS: SmartColumn[] = [
+  FIGURES_COLUMN,
+  { id: 'formulas', title: '公式', type: 'smart_text', removable: true, editable: true, width: 260, tone: 'violet' },
   { id: 'paper_type', title: '文献类型', type: 'smart_tag', removable: true, editable: true, width: 200, options: ['研究论文', '综述论文', '方法论文', '病例报告'], tone: 'green' },
   { id: 'rating', title: '重要性', type: 'star', removable: true, editable: true, width: 150 },
   { id: 'reading_progress', title: '阅读进度', type: 'tag', removable: true, editable: true, width: 180, options: ['未读', '已读', '阅读中'] },
@@ -106,14 +145,15 @@ export const BUILTIN_COLUMNS: SmartColumn[] = [
   { id: 'future_work', title: '未来展望', type: 'smart_text', removable: true, editable: true, width: 240, tone: 'violet' },
   { id: 'doi', title: 'DOI', type: 'smart_text', removable: true, editable: true, width: 180, tone: 'neutral' },
   { id: 'url', title: 'URL', type: 'smart_text', removable: true, editable: true, width: 200, tone: 'neutral' },
-]
+].map(withBuiltinDescription)
 
 const REQUIRED_COLUMNS: SmartColumn[] = [
   { id: 'row_index', title: '序号', type: 'index', removable: false, editable: false, width: INDEX_COLUMN_WIDTH },
   { id: 'literature_file', title: '文献上传', type: 'file', removable: true, editable: false, width: 168 },
   { id: 'literature_content', title: '文献内容', type: 'readonly_text', removable: true, editable: false, width: 240 },
+  FIGURES_COLUMN,
   { id: 'title', title: '标题', type: 'smart_text', removable: false, editable: true, width: 230, tone: 'blue' },
-]
+].map(withBuiltinDescription)
 
 /** Separator between multiple tags inside a tag-like cell value. */
 const TAG_SEPARATOR = ';'
@@ -195,13 +235,18 @@ export function normalizeForm(raw: Partial<SmartLiteratureForm> | null | undefin
   const fallback = createDefaultLiteratureForm()
   const sourceColumns = (Array.isArray(raw?.columns) ? raw.columns : fallback.columns)
     .map((column) => {
-      if (column.id === 'row_index') return { ...column, width: INDEX_COLUMN_WIDTH }
-      if (column.id === 'literature_file') return { ...column, title: '文献上传', removable: true, editable: false }
-      if (column.id === 'literature_content') return { ...column, removable: true, editable: false }
-      if (column.id === 'title') return { ...column, removable: false }
-      if (column.id === 'reading_progress') return { ...column, options: ['未读', '已读', '阅读中'] }
-      if (column.id === 'rating') return { ...column, title: '重要性' }
-      return column
+      const normalizedColumn = {
+        ...column,
+        description: column.description?.trim() || BUILTIN_COLUMN_DESCRIPTIONS[column.id],
+      }
+      if (column.id === 'row_index') return { ...normalizedColumn, width: INDEX_COLUMN_WIDTH }
+      if (column.id === 'literature_file') return { ...normalizedColumn, title: '文献上传', removable: true, editable: false }
+      if (column.id === 'literature_content') return { ...normalizedColumn, removable: true, editable: false }
+      if (column.id === 'figures') return { ...normalizedColumn, title: '图表', removable: true, editable: false }
+      if (column.id === 'title') return { ...normalizedColumn, removable: false }
+      if (column.id === 'reading_progress') return { ...normalizedColumn, options: ['未读', '已读', '阅读中'] }
+      if (column.id === 'rating') return { ...normalizedColumn, title: '重要性' }
+      return normalizedColumn
     })
   const hasLiteratureSource = sourceColumns.some((column) => column.id === 'literature_file' || column.id === 'literature_content')
   // Ordinary tables have no generated sequence column; legacy copies are removed here on every load path.
@@ -280,6 +325,12 @@ export function insertMarkdownImage(value: string, cursor: number, name: string,
   const suffix = after && !after.startsWith('\n') ? '\n' : ''
   const insertion = `${prefix}${markdown}${suffix}`
   return { value: `${before}${insertion}${after}`, cursor: cursor + insertion.length }
+}
+
+/** Collects Markdown image references in source order and removes exact duplicates. */
+export function extractMarkdownImages(...sources: Array<string | undefined>): string {
+  const images = sources.flatMap((source) => source?.match(/!\[[^\]]*]\(\s*(?:<[^>\n]+>|[^)\n]+)\s*\)/g) ?? [])
+  return [...new Set(images)].join('\n\n')
 }
 
 export function updateCell(row: SmartRow, column: SmartColumn, value: string): SmartRow {

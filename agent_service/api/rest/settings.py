@@ -38,18 +38,24 @@ async def get_model_status() -> dict[str, Any]:
 async def download_model(body: dict[str, Any]) -> dict[str, Any]:
     """异步触发指定模型的后台下载。
 
-    body: { "model": "embedding" | "rerank" | "paddleocr" }
+    body: { "model": "embedding" | "rerank" | "paddleocr" | "local_qwen" }
     返回后前端轮询 GET /settings/models/status 获取进度。
     """
 
     model = str(body.get("model") or "").strip()
-    if model not in ("embedding", "rerank", "paddleocr"):
-        raise HTTPException(status_code=422, detail="model 必须是 embedding / rerank / paddleocr")
+    if model not in ("embedding", "rerank", "paddleocr", "local_qwen"):
+        raise HTTPException(status_code=422, detail="model 必须是 embedding / rerank / paddleocr / local_qwen")
 
     from agent_service.core.model_status import ModelState, set_model_state
 
     svc = _require_settings_service()
     config = svc.config
+
+    if model == "local_qwen":
+        from agent_service.services.local_qwen_service import start_local_qwen_download
+
+        started = start_local_qwen_download(config, load_after=True)
+        return {"status": "started" if started else "already_running", "model": model}
 
     def _download_embedding() -> None:
         try:
@@ -218,15 +224,29 @@ def _trigger_rerank_load(config: Any) -> None:
         pass
 
 
+def _trigger_local_qwen_load(config: Any) -> None:
+    """在后台线程中加载共享 CPU Qwen 实例。"""
+
+    def _load() -> None:
+        try:
+            from agent_service.services.local_qwen_service import get_local_qwen_service
+
+            get_local_qwen_service(config).ensure_loaded()
+        except Exception:
+            logger.exception("本地 Qwen 后台加载失败")
+
+    threading.Thread(target=_load, daemon=True, name="local-qwen-load").start()
+
+
 @router.post("/settings/models/load")
 async def load_model(body: dict[str, Any]) -> dict[str, Any]:
     """触发指定模型的后台加载（不下载，只加载到内存）。
 
-    body: { "model": "embedding" | "rerank" }
+    body: { "model": "embedding" | "rerank" | "local_qwen" }
     """
     model = str(body.get("model") or "").strip()
-    if model not in ("embedding", "rerank"):
-        raise HTTPException(status_code=422, detail="model 必须是 embedding / rerank")
+    if model not in ("embedding", "rerank", "local_qwen"):
+        raise HTTPException(status_code=422, detail="model 必须是 embedding / rerank / local_qwen")
 
     from agent_service.core.model_status import ModelState, set_model_state
 
@@ -235,8 +255,10 @@ async def load_model(body: dict[str, Any]) -> dict[str, Any]:
 
     if model == "embedding":
         _trigger_embedding_load(config)
-    else:
+    elif model == "rerank":
         _trigger_rerank_load(config)
+    else:
+        _trigger_local_qwen_load(config)
 
     return {"status": "triggered", "model": model}
 
@@ -264,15 +286,27 @@ async def check_model_disk() -> dict[str, Any]:
     """磁盘级检测模型文件是否存在，同步真实状态。"""
 
     from agent_service.core.model_status import ModelState, set_model_state, get_model_status
-    from agent_service.scripts.download_model import is_model_available, model_target_dir
+    from agent_service.scripts.download_model import get_download_progress, is_model_available, model_target_dir
 
     svc = _require_settings_service()
     config = svc.config
 
-    models = {"embedding": config.model.embedding_model_name, "rerank": config.model.rerank_model_name}
-    dirs = {"embedding": config.storage.embedding_model_dir, "rerank": config.storage.rerank_model_dir}
+    models = {
+        "embedding": config.model.embedding_model_name,
+        "rerank": config.model.rerank_model_name,
+        "local_qwen": config.model.local_model_name,
+    }
+    dirs = {
+        "embedding": config.storage.embedding_model_dir,
+        "rerank": config.storage.rerank_model_dir,
+        "local_qwen": config.storage.local_model_dir,
+    }
 
-    for key in ("embedding", "rerank"):
+    for key in ("embedding", "rerank", "local_qwen"):
+        progress = get_download_progress(key)
+        if progress.get("status") == "downloading":
+            set_model_state(key, ModelState.DOWNLOADING)
+            continue
         target = model_target_dir(models[key], dirs[key])
         available = is_model_available(target)
         if available:

@@ -11,6 +11,20 @@ test('Agent workspace has the shared frame and a draggable scrollbar', async ({ 
   await page.route('**/*', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
+    if (url.pathname === '/settings/llm/config') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          model_name: '',
+          effective_model_name: 'Qwen/Qwen3.5-2B',
+          effective_model_source: 'local',
+          context_window_tokens: 32768,
+          updated_at: new Date().toISOString(),
+        }),
+      })
+      return
+    }
     if (url.pathname === '/health') {
       await route.fulfill({ status: 200, body: 'ok' })
       return
@@ -44,8 +58,16 @@ test('Agent workspace has the shared frame and a draggable scrollbar', async ({ 
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{"favorites":[]}' })
       return
     }
+    if (url.pathname === '/privacy') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"privacy":[]}' })
+      return
+    }
     if (url.pathname === '/knowledge/files') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{"tree":[]}' })
+      return
+    }
+    if (url.pathname === '/knowledge/files/events') {
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' })
       return
     }
     if (request.resourceType() === 'fetch' || request.resourceType() === 'xhr') {
@@ -65,6 +87,16 @@ test('Agent workspace has the shared frame and a draggable scrollbar', async ({ 
 
   await page.goto('/')
   await page.getByRole('button', { name: 'Agent', exact: true }).click()
+
+  const modelLabel = page.locator('.model-config-trigger span')
+  await expect(modelLabel).toBeVisible()
+  await expect(modelLabel).toHaveText('Qwen/Qwen3.5-2B')
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('agent-model-config-updated', {
+      detail: { modelName: 'remote-model-after-save' },
+    }))
+  })
+  await expect(modelLabel).toHaveText('remote-model-after-save')
 
   const workspace = page.locator('.main-shell.agent-page-main-shell')
   await expect(workspace).toBeVisible()

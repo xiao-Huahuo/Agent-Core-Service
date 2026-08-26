@@ -2472,9 +2472,13 @@ class AgentCore:
         runtime_nodes = {"action", "context_builder", "safety_input", "safety_output", "error", "interrupted"}
         if node_name in runtime_nodes:
             return ""
-        if node_name in small_nodes and self.config.model.small_model_name:
-            return self.config.model.small_model_name
-        return self.config.model.model_name
+        if node_name in small_nodes:
+            return (
+                self.config.model.small_model_name
+                or self.config.model.model_name
+                or self.config.model.local_model_name
+            )
+        return self.config.model.model_name or self.config.model.local_model_name
 
     @staticmethod
     def _get_user_llm_config(user_id: str) -> dict[str, Any] | None:

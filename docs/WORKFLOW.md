@@ -308,11 +308,14 @@ flowchart TD
     S3 --> SA
     S4 --> SA
 
-    LA --> ML["主模型\\n(AGENT_MODEL_NAME / API_KEY / BASE_URL)"]
-    SA --> M2{"是否配置了独立小模型?\\n(AGENT_SMALL_MODEL_*)"}
-
-    M2 -->|"是"| ML2["独立小模型"]
-    M2 -->|"否"| MF2["回退主模型\\n(仍占 small pool 配额)"]
+    LA --> C1{"是否配置了大模型?"}
+    C1 -->|"否"| LQ["CPU 本地 Qwen3.5-2B"]
+    C1 -->|"是"| ML["用户大模型\\n(AGENT_MODEL_NAME / API_KEY / BASE_URL)"]
+    SA --> C2{"是否配置了大模型?"}
+    C2 -->|"否"| LQ
+    C2 -->|"是"| M2{"是否配置了独立小模型?\\n(AGENT_SMALL_MODEL_*)"}
+    M2 -->|"是"| ML2["用户独立小模型"]
+    M2 -->|"否"| MF2["复用用户大模型\\n(仍占 small pool 配额)"]
 ```
 
 ##### (Redis)多级队列调度
@@ -423,7 +426,7 @@ flowchart TD
 - `.docx`：将文件作为 ZIP 包读取，解析 `word/document.xml` 及图片关系引用。段落按标题样式或段落结构生成文本块；表格保留结构并生成检索摘要；图片优先使用替代文本，否则执行 OCR。提取出的图片保存到 `.mw/assets/`，并在 Markdown 中登记资源位置。
 - `.pptx`：将文件作为 ZIP 包读取并解析 `ppt/slides/slide*.xml`。旧版 `.ppt` 不属于支持格式。
 - `.xlsx`：将文件作为 ZIP 包读取，解析 `xl/sharedStrings.xml` 和 `xl/worksheets/sheet*.xml`。小表完整提取行列；大表提取结构、表头、样例、统计信息和工作表摘要；超大或不适合语义检索的表格只索引工作表名、列名、数据范围等元信息。
-- 图片（`.jpg`、`.jpeg`、`.png`、`.webp`）：使用 PaddleOCR 识别中英文文字和表格截图。OCR 默认关闭，在设置页开启后对后续灌库立即生效，无需重启；模型缓存位于 `runtime/models/paddleocr/`。当前已落地文字 OCR，图表描述、照片描述等重度视觉处理根据内容类型决定是否执行。
+- 图片（`.jpg`、`.jpeg`、`.png`、`.webp`）：知识库入库使用 PaddleOCR 识别中英文文字和表格截图；OCR 默认关闭，在设置页开启后对后续灌库立即生效，无需重启，模型缓存位于 `runtime/models/paddleocr/`。直接上传到 Agent 会话的图片在统一解析器完成 OCR 后，还会交给 CPU 本地 Qwen 补充对象、布局、空间关系、图表趋势和其他视觉语义。
 - `.pdf`：文档型 PDF 优先提取文本层、表格和图片；扫描型 PDF 按页渲染并执行 OCR；混合型 PDF 逐页判断是否存在文本层；表格无法稳定识别时至少输出文本块和页码范围。
 - 文档内嵌图片：图片本体不作为独立语义文档写入向量库，结构化 JSON 记录图片引用、OCR 状态和识别结果。PDF 与 Office 文档提取的图片统一保存在 `.mw/assets/`，并结合相邻标题、段落、表格编号和图注形成检索上下文。
 - 其他格式：系统先检查支持的后缀白名单；白名单外文件读取前 8192 字节，通过空字节、UTF-8/GBK 等编码解码结果和控制字符占比判断是文本还是二进制。可解码文本按普通文本处理；无法识别的二进制文件登记为资源占位并禁止入库。
@@ -511,7 +514,11 @@ flowchart TD
     B --> C["SessionAttachmentService<br/>校验 user_id/session_id/active library"]
     C --> D["保存原文件<br/>runtime/uploads/{user_id}/{library}/{session_id}/"]
     D --> E["统一解析器<br/>FrontmatterBootstrapService + MultimodalDocumentCleaner"]
-    E --> F["抽取结构化章节/正文<br/>写入 .attachments/{attachment_id}.txt"]
+    E --> E1{"是否为直接上传图片?"}
+    E1 -->|"否"| F["抽取结构化章节/正文<br/>写入 .attachments/{attachment_id}.txt"]
+    E1 -->|"是"| V1["PaddleOCR 先行文字提取"]
+    V1 --> V2["CPU 本地 Qwen 读取原图 + OCR<br/>生成对象、布局、关系和图表语义"]
+    V2 --> F
     F --> G["SQLite: session_attachments<br/>保存 uri、路径、摘要、metadata"]
     G --> H["ContextBuilder.build_messages()"]
     H --> I{"当前问题是否指向上传附件?"}
@@ -524,7 +531,9 @@ flowchart TD
 
 - 上传附件是 session-scoped context asset, 不是知识库资产; 它不写入知识库目录, 不生成可灌库 frontmatter, 不进入 Embedding/ChromaDB。
 - 解析链路复用文件树/知识库的同一套结构化解析器。差别只在消费端: 知识库文件解析后进入灌库, 上传附件解析后只登记到会话附件表并供 ContextBuilder 注入。
+- 图片附件的 OCR 文本和本地 Qwen 视觉描述写入同一份附件正文；OCR 负责精确文字，本地模型补充非文字视觉信息。视觉模型异常时保留已完成的 OCR 结果，不让附件上传整体失败。
 - 同一个 session 的后续提问会保留附件目录; 当用户说“这个文件”“刚才上传的文件”或直接提到文件名时, ContextBuilder 会把相关附件正文片段放进本轮 system context。
+- `understand_image`（界面显示为“识图”）允许 Agent 按 attachment_id、文件名或关键词重新读取当前会话图片，并向同一 CPU 本地 Qwen 提出新的视觉问题。
 
 ##### 知识图谱实体提取
 
