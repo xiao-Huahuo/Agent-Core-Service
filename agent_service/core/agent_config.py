@@ -250,8 +250,8 @@ class AgentConfig:
         small_model_temperature: float = 0.0
         small_model_timeout_seconds: int = 120
         local_model_name: str = "Qwen/Qwen3.5-2B"
-        local_model_max_new_tokens: int = 1024
-        local_model_vision_max_new_tokens: int = 512
+        local_model_max_new_tokens: int = 256
+        local_model_vision_max_new_tokens: int = 128
         temperature: float = 0.0
         timeout_seconds: int = 240
         streaming_sanitize_min_chars: int = 20

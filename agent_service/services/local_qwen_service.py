@@ -35,6 +35,17 @@ from agent_service.scripts.download_model import (
 logger = logging.getLogger(__name__)
 
 _TOOL_CALL_PATTERN = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
+_QWEN_FUNCTION_PATTERN = re.compile(
+    r"<function=([^>\s]+)>\s*(.*?)\s*</function>",
+    re.DOTALL,
+)
+_QWEN_PARAMETER_PATTERN = re.compile(
+    r"<parameter=([^>\s]+)>\s*(.*?)\s*</parameter>",
+    re.DOTALL,
+)
+_TOOL_CALL_OPEN = "<tool_call>"
+# CPU 推理仅保留云端系统提示的关键首尾，避免长操作手册阻塞首 token。
+_LOCAL_SYSTEM_CONTEXT_CHARS = 800
 
 
 def parse_qwen_response(text: str) -> AIMessage:
@@ -45,7 +56,17 @@ def parse_qwen_response(text: str) -> AIMessage:
         try:
             payload = json.loads(raw_payload)
         except json.JSONDecodeError:
-            continue
+            function_match = _QWEN_FUNCTION_PATTERN.search(raw_payload)
+            if function_match is None:
+                continue
+            arguments: dict[str, Any] = {}
+            for name, raw_value in _QWEN_PARAMETER_PATTERN.findall(function_match.group(2)):
+                value = raw_value.strip()
+                try:
+                    arguments[name] = json.loads(value)
+                except json.JSONDecodeError:
+                    arguments[name] = value
+            payload = {"name": function_match.group(1), "arguments": arguments}
         if not isinstance(payload, dict) or not str(payload.get("name") or "").strip():
             continue
         arguments = payload.get("arguments", {})
@@ -89,7 +110,7 @@ class LocalQwenService:
         return self._model is not None and self._processor is not None
 
     def ensure_loaded(self) -> None:
-        """按需下载并使用现有 CPU PyTorch 以 BF16 加载模型。"""
+        """按需下载并使用 CPU PyTorch 以 AVX2 高效的 FP32 加载模型。"""
 
         if self.loaded:
             return
@@ -112,7 +133,7 @@ class LocalQwenService:
                 self._processor = AutoProcessor.from_pretrained(str(target))
                 self._model = AutoModelForImageTextToText.from_pretrained(
                     str(target),
-                    dtype=torch.bfloat16,
+                    dtype=torch.float32,
                     attn_implementation="sdpa",
                 ).eval().to("cpu")
                 set_model_state("local_qwen", ModelState.READY)
@@ -301,17 +322,23 @@ class LocalQwenService:
 
     @staticmethod
     def _serialize_messages(messages: Sequence[BaseMessage]) -> list[dict[str, Any]]:
-        """保留系统、用户、助手和工具消息的对话语义。"""
+        """保留对话语义，并把多个系统上下文合并为 Qwen 要求的首条消息。"""
 
         serialized: list[dict[str, Any]] = []
+        system_parts: list[str] = []
         for message in messages:
             role = {"system": "system", "human": "user", "ai": "assistant", "tool": "tool"}.get(
                 message.type,
                 message.type,
             )
+            content = str(message.content or "")
+            if role == "system":
+                if content.strip():
+                    system_parts.append(content)
+                continue
             item: dict[str, Any] = {
                 "role": role,
-                "content": [{"type": "text", "text": str(message.content or "")}],
+                "content": [{"type": "text", "text": content}],
             }
             tool_calls = getattr(message, "tool_calls", None) or []
             if tool_calls:
@@ -319,7 +346,7 @@ class LocalQwenService:
                     "type": "function",
                     "function": {
                         "name": str(call.get("name") or ""),
-                        "arguments": json.dumps(call.get("args") or {}, ensure_ascii=False),
+                        "arguments": call.get("args") or {},
                     },
                 } for call in tool_calls]
             if role == "tool":
@@ -327,6 +354,19 @@ class LocalQwenService:
                 if getattr(message, "name", None):
                     item["name"] = str(message.name)
             serialized.append(item)
+        if system_parts:
+            system_content = "\n\n".join(system_parts)
+            if len(system_content) > _LOCAL_SYSTEM_CONTEXT_CHARS:
+                half = _LOCAL_SYSTEM_CONTEXT_CHARS // 2
+                system_content = (
+                    system_content[:half]
+                    + "\n\n[本地上下文已压缩]\n\n"
+                    + system_content[-half:]
+                )
+            serialized.insert(0, {
+                "role": "system",
+                "content": [{"type": "text", "text": system_content}],
+            })
         return serialized
 
 
@@ -354,21 +394,48 @@ class LocalQwenChatModel:
     def invoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
         """同步调用共享本地模型。"""
 
-        return self.service.chat(messages=messages, tools=self.tools, temperature=self.temperature)
+        return self.service.chat(
+            messages=messages,
+            tools=self._select_tools(messages),
+            temperature=self.temperature,
+        )
 
     def stream(self, messages: Sequence[BaseMessage]) -> Iterator[AIMessageChunk]:
-        """自然语言按 token 流式返回；工具决策缓冲到完整 JSON 后一次返回。"""
+        """立即流出自然语言；仅从工具标记开始缓冲并转换为结构化调用。"""
 
         generated = ""
-        if self.tools:
+        selected_tools = self._select_tools(messages)
+        if selected_tools:
+            emitted_chars = 0
+            tool_markup_started = False
             for fragment in self.service.stream_chat(
                 messages=messages,
-                tools=self.tools,
+                tools=selected_tools,
                 temperature=self.temperature,
             ):
                 generated += fragment
+                if tool_markup_started:
+                    continue
+                marker_index = generated.find(_TOOL_CALL_OPEN, emitted_chars)
+                if marker_index >= 0:
+                    if marker_index > emitted_chars:
+                        yield AIMessageChunk(content=generated[emitted_chars:marker_index])
+                    emitted_chars = marker_index
+                    tool_markup_started = True
+                    continue
+                safe_end = len(generated)
+                for suffix_size in range(min(len(_TOOL_CALL_OPEN) - 1, len(generated)), 0, -1):
+                    if generated.endswith(_TOOL_CALL_OPEN[:suffix_size]):
+                        safe_end -= suffix_size
+                        break
+                if safe_end > emitted_chars:
+                    yield AIMessageChunk(content=generated[emitted_chars:safe_end])
+                    emitted_chars = safe_end
             parsed = parse_qwen_response(generated)
-            yield AIMessageChunk(content=parsed.content, tool_calls=parsed.tool_calls)
+            if parsed.tool_calls:
+                yield AIMessageChunk(content="", tool_calls=parsed.tool_calls)
+            elif emitted_chars < len(generated):
+                yield AIMessageChunk(content=generated[emitted_chars:])
             return
         for fragment in self.service.stream_chat(
             messages=messages,
@@ -376,6 +443,50 @@ class LocalQwenChatModel:
         ):
             generated += fragment
             yield AIMessageChunk(content=fragment)
+
+    def _select_tools(self, messages: Sequence[BaseMessage]) -> tuple[Any, ...]:
+        """按当前用户请求选择至多一个工具，限制 CPU 模型的提示词预填充量。"""
+
+        if len(self.tools) <= 1:
+            return self.tools
+        prompt = next(
+            (
+                str(message.content or "")
+                for message in reversed(messages)
+                if message.type == "human"
+            ),
+            "",
+        ).lower()
+        if not prompt.strip():
+            return ()
+        prompt_ascii, prompt_han = self._text_features(prompt)
+        ranked: list[tuple[int, int, Any]] = []
+        for index, tool in enumerate(self.tools):
+            name = str(getattr(tool, "name", "") or "").lower()
+            description = str(getattr(tool, "description", "") or "").lower()
+            name_alias = name.replace("_", " ")
+            tool_ascii, tool_han = self._text_features(f"{name_alias} {description}")
+            exact_name_score = 100 if name and (name in prompt or name_alias in prompt) else 0
+            score = (
+                exact_name_score
+                + 3 * len(prompt_ascii & tool_ascii)
+                + len(prompt_han & tool_han)
+            )
+            if score >= 2:
+                ranked.append((score, -index, tool))
+        if not ranked:
+            return ()
+        return (max(ranked, key=lambda item: (item[0], item[1]))[2],)
+
+    @staticmethod
+    def _text_features(text: str) -> tuple[set[str], set[str]]:
+        """提取英文词和中文双字片段，供无需额外模型的轻量工具匹配使用。"""
+
+        ascii_words = set(re.findall(r"[a-z0-9]{2,}", text.lower()))
+        han_bigrams: set[str] = set()
+        for segment in re.findall(r"[\u4e00-\u9fff]+", text):
+            han_bigrams.update(segment[index:index + 2] for index in range(len(segment) - 1))
+        return ascii_words, han_bigrams
 
 
 _SERVICES: dict[str, LocalQwenService] = {}

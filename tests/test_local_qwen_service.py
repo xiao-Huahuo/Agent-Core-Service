@@ -5,7 +5,9 @@
 这些测试只验证纯文本协议，不加载真实模型权重。
 """
 
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 from agent_service.services.local_qwen_service import (
     LocalQwenChatModel,
@@ -14,7 +16,7 @@ from agent_service.services.local_qwen_service import (
     start_local_qwen_download,
 )
 from agent_service.services.scheduler import get_llm_task_scheduler, reset_llm_task_schedulers
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from agent_service.core.agent_config import AgentConfig
 from agent_service.tools.tool_registry import ToolRegistry
 
@@ -51,6 +53,22 @@ def test_local_qwen_serializes_text_as_multimodal_content_blocks() -> None:
     }]
 
 
+def test_local_qwen_compacts_long_system_context_for_cpu_prefill() -> None:
+    """本地 CPU 模型应保留长系统上下文首尾，但不得预填充完整云端提示。"""
+
+    serialized = LocalQwenService._serialize_messages([
+        SystemMessage(content="开" * 1200),
+        SystemMessage(content="结" * 1200),
+        HumanMessage(content="你好"),
+    ])
+    system_text = serialized[0]["content"][0]["text"]
+
+    assert len(system_text) < 1000
+    assert system_text.startswith("开")
+    assert system_text.endswith("结")
+    assert "本地上下文已压缩" in system_text
+
+
 def test_local_qwen_runtime_dependencies_stay_cpu_compatible() -> None:
     """本地多模态模型必须声明匹配版本的 CPU Torch、Torchvision 与 Transformers。"""
 
@@ -64,6 +82,60 @@ def test_local_qwen_runtime_dependencies_stay_cpu_compatible() -> None:
     assert "sentence-transformers==6.0.0" in requirements
     assert "['xlrd', 'torchvision']" in spec
     assert "'torchvision'," not in spec.split("excludes=[", maxsplit=1)[1]
+
+
+def test_local_qwen_loads_fp32_on_avx2_cpu(tmp_path, monkeypatch: object) -> None:
+    """AVX2 CPU 不得使用会落入极慢软件模拟路径的 BF16 权重。"""
+
+    import agent_service.services.local_qwen_service as local_module
+
+    config = AgentConfig.load_config(
+        {"storage": {"local_model_dir": str(tmp_path / "models")}},
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    captured: dict[str, object] = {}
+    fake_torch = SimpleNamespace(float32=object(), bfloat16=object())
+
+    class _FakeProcessorFactory:
+        """返回不加载真实权重的 processor 占位对象。"""
+
+        @staticmethod
+        def from_pretrained(path: str) -> object:  # noqa: ARG004
+            return object()
+
+    class _FakeModel:
+        """模拟 Transformers 模型的链式加载接口。"""
+
+        def eval(self):  # noqa: ANN201
+            return self
+
+        def to(self, device: str):  # noqa: ANN201, ARG002
+            return self
+
+    class _FakeModelFactory:
+        """记录本地 Qwen 实际请求的权重 dtype。"""
+
+        @staticmethod
+        def from_pretrained(path: str, **kwargs: object) -> _FakeModel:  # noqa: ARG004
+            captured.update(kwargs)
+            return _FakeModel()
+
+    monkeypatch.setattr(local_module, "ensure_model", lambda *args, **kwargs: tmp_path)
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(
+        sys.modules,
+        "transformers",
+        SimpleNamespace(
+            AutoModelForImageTextToText=_FakeModelFactory,
+            AutoProcessor=_FakeProcessorFactory,
+        ),
+    )
+
+    LocalQwenService(config=config).ensure_loaded()
+
+    assert captured["dtype"] is fake_torch.float32
 
 
 def test_image_understanding_tool_is_registered() -> None:
@@ -125,6 +197,62 @@ def test_local_qwen_stream_buffers_tool_markup_into_tool_call_chunk() -> None:
     assert len(chunks) == 1
     assert chunks[0].content == ""
     assert chunks[0].tool_calls[0]["name"] == "understand_image"
+
+
+def test_local_qwen_does_not_send_unrelated_tool_schemas_for_plain_chat() -> None:
+    """普通对话不得让 CPU 模型预填充整份工具注册表。"""
+
+    class _FakeService:
+        """记录本轮实际传给本地模型的工具。"""
+
+        def __init__(self) -> None:
+            self.tools: tuple[object, ...] = ()
+
+        def stream_chat(self, **kwargs: object):  # noqa: ANN201
+            self.tools = tuple(kwargs.get("tools", ()))
+            yield "你好"
+
+    service = _FakeService()
+    model = LocalQwenChatModel(
+        service=service,  # type: ignore[arg-type]
+        temperature=0.0,
+        tools=[
+            SimpleNamespace(name="web_search", description="联网搜索公开网页内容"),
+            SimpleNamespace(name="run_terminal_command", description="执行终端命令"),
+        ],
+    )
+
+    chunks = list(model.stream([HumanMessage(content="你好")]))
+
+    assert service.tools == ()
+    assert "".join(str(chunk.content) for chunk in chunks) == "你好"
+
+
+def test_local_qwen_sends_only_the_relevant_tool_schema() -> None:
+    """需要工具时只绑定与当前请求最相关的一个工具。"""
+
+    class _FakeService:
+        """记录本轮实际传给本地模型的工具。"""
+
+        def __init__(self) -> None:
+            self.tools: tuple[object, ...] = ()
+
+        def stream_chat(self, **kwargs: object):  # noqa: ANN201
+            self.tools = tuple(kwargs.get("tools", ()))
+            yield "已搜索"
+
+    web_tool = SimpleNamespace(name="web_search", description="联网搜索公开网页内容")
+    terminal_tool = SimpleNamespace(name="run_terminal_command", description="执行终端命令")
+    service = _FakeService()
+    model = LocalQwenChatModel(
+        service=service,  # type: ignore[arg-type]
+        temperature=0.0,
+        tools=[terminal_tool, web_tool],
+    )
+
+    list(model.stream([HumanMessage(content="请搜索网页上的最新资料")]))
+
+    assert service.tools == (web_tool,)
 
 
 def test_local_qwen_download_start_is_idempotent(tmp_path, monkeypatch: object) -> None:
