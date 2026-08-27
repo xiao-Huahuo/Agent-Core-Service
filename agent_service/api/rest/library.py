@@ -67,7 +67,7 @@ async def create_library_book(body: dict[str, Any]) -> dict[str, Any]:
             source_url=str(body.get("source_url") or ""),
             title=str(body.get("title") or ""),
             description=str(body.get("description") or ""),
-            cover_mode=str(body.get("cover_mode") or "icon"),
+            cover_mode=str(body.get("cover_mode") or ""),
             cover_asset_id=str(body.get("cover_asset_id") or ""),
             tags=[str(tag) for tag in body.get("tags", [])] if isinstance(body.get("tags"), list) else [],
         )

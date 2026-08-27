@@ -78,4 +78,21 @@ describe('LibraryCreateDialog', () => {
       source_url: '',
     })
   })
+
+  it.each(['png', 'jpg', 'jpeg', 'webp', 'gif'])('uses a selected %s real file as the optional default cover', async (extension) => {
+    const wrapper = mountDialog()
+    const file = new File(['image'], `真实图片.${extension}`, { type: '' })
+    const input = wrapper.get('.file-zone input[type="file"]')
+    Object.defineProperty(input.element, 'files', { configurable: true, value: [file] })
+
+    await input.trigger('change')
+
+    expect(wrapper.get('.cover-zone button').text()).toBe('可选；未上传时使用原图')
+    await wrapper.get('.primary-btn').trigger('click')
+    expect(wrapper.emitted('create')?.[0]?.[0]).toMatchObject({
+      file,
+      cover_mode: 'source_image',
+      cover_asset_id: '',
+    })
+  })
 })

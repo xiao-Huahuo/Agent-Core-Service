@@ -14,6 +14,7 @@ import FormHeightTransition from '@/components/common/FormHeightTransition.vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import LibraryCoverUploader from '@/components/library_view/LibraryCoverUploader.vue'
 import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
+import { isLibrarySourceImage } from '@/components/library_view/librarySourceImage'
 import type { LibraryAsset, LibraryItem, LibraryTag } from '@/types/knowledge'
 
 type CreateMode = 'book' | 'collection'
@@ -57,7 +58,23 @@ const realFileInput = ref<HTMLInputElement | null>(null)
 
 const isBook = computed(() => props.mode === 'book')
 const heading = computed(() => (isBook.value ? '新增图书' : '新增集锦'))
-const coverMode = computed<LibraryItem['cover_mode']>(() => (coverAssetId.value ? 'image' : 'title'))
+/** Whether the selected real file can replace an independently uploaded cover. */
+const canUseRealFileAsCover = computed(() => Boolean(
+  isBook.value
+  && sourceMode.value === 'file'
+  && realFile.value
+  && isLibrarySourceImage(realFile.value.name, realFile.value.type),
+))
+/** Persist an uploaded cover first, otherwise use an eligible source image or the normal title cover. */
+const coverMode = computed<LibraryItem['cover_mode']>(() => (
+  coverAssetId.value ? 'image' : canUseRealFileAsCover.value ? 'source_image' : 'title'
+))
+/** Explain the optional cover behavior only after an eligible real image is selected. */
+const coverEmptyLabel = computed(() => (
+  canUseRealFileAsCover.value
+    ? '可选；未上传时使用原图'
+    : '点击或拖拽上传封面'
+))
 
 watch(
   () => props.open,
@@ -134,6 +151,7 @@ function submit() {
             <LibraryCoverUploader
               :user-id="userId"
               :preview-url="coverPreviewUrl"
+              :empty-label="coverEmptyLabel"
               @uploaded="handleCoverUploaded"
             />
           </div>
@@ -258,6 +276,8 @@ function submit() {
 
 .dialog-panel {
   width: min(760px, calc(100vw - 32px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
   border: 1px solid var(--color-border);
   border-radius: 28px;
   background: var(--color-surface);
@@ -348,6 +368,12 @@ function submit() {
 .cover-zone {
   display: flex;
   min-width: 0;
+}
+
+.cover-zone :deep(.cover-drop span) {
+  color: var(--color-text-secondary);
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 400;
 }
 
 .file-zone {
@@ -547,18 +573,37 @@ function submit() {
 }
 
 @media (max-width: 720px) {
+  .dialog-panel {
+    border-radius: 20px;
+  }
+
   .upper-grid {
     grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding-top: 10px;
+  }
+
+  .cover-zone :deep(.library-cover-uploader) {
+    min-height: 132px;
+  }
+
+  .file-drop {
+    min-height: 120px;
   }
 
   .dialog-actions {
-    align-items: stretch;
-    flex-direction: column;
+    gap: 4px;
+    padding: 10px;
   }
 
   .source-mode-actions,
   .submit-actions {
-    justify-content: flex-end;
+    gap: 4px;
+  }
+
+  .secondary-btn,
+  .primary-btn {
+    padding: 0 10px;
   }
 }
 </style>

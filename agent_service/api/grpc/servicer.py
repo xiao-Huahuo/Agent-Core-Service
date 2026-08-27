@@ -1874,6 +1874,80 @@ class AgentServiceServicer(BaseServicer):
             context.abort(grpc.StatusCode.NOT_FOUND, "Smart form not found")
         return ParseDict({"deleted": True}, Struct())
 
+    def ListLiteratureEntries(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """列出当前知识库的智能表格文献行摘要。"""
+
+        payload = MessageToDict(request)
+        try:
+            entries = self._require_smart_form_service(context).list_literature_entries(
+                user_id=str(payload.get("user_id") or ""),
+                library_id=str(payload.get("library_id") or ""),
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict({"entries": entries}, Struct())
+
+    def TouchLiteratureEntry(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """记录文献行浏览时间。"""
+
+        payload = MessageToDict(request)
+        try:
+            result = self._require_smart_form_service(context).touch_literature_entry(
+                user_id=str(payload.get("user_id") or ""),
+                library_id=str(payload.get("library_id") or ""),
+                form_id=str(payload.get("form_id") or ""),
+                row_id=str(payload.get("row_id") or ""),
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(result, Struct())
+
+    def PatchLiteratureRow(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """增量更新文献行。"""
+
+        payload = MessageToDict(request)
+        try:
+            result = self._require_smart_form_service(context).patch_literature_row(
+                user_id=str(payload.get("user_id") or ""),
+                form_id=str(payload.get("form_id") or ""),
+                row_id=str(payload.get("row_id") or ""),
+                cells=dict(payload.get("cells") or {}),
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(result, Struct())
+
+    def DuplicateLiteratureRow(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """复制文献行和真实文件。"""
+
+        payload = MessageToDict(request)
+        try:
+            result = self._require_smart_form_service(context).duplicate_literature_row(
+                user_id=str(payload.get("user_id") or ""),
+                form_id=str(payload.get("form_id") or ""),
+                row_id=str(payload.get("row_id") or ""),
+            )
+        except (OSError, ValueError) as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(result, Struct())
+
+    def DeleteLiteratureRow(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """删除文献行并可同步删除真实文件。"""
+
+        payload = MessageToDict(request)
+        try:
+            deleted = self._require_smart_form_service(context).delete_literature_row(
+                user_id=str(payload.get("user_id") or ""),
+                form_id=str(payload.get("form_id") or ""),
+                row_id=str(payload.get("row_id") or ""),
+                delete_file=bool(payload.get("delete_file", True)),
+            )
+        except (OSError, ValueError) as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        if not deleted:
+            context.abort(grpc.StatusCode.NOT_FOUND, "Literature row not found")
+        return ParseDict({"deleted": True}, Struct())
+
     def ListComponentLibraryComponents(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
         """List component cards with the same fields as the REST endpoint."""
 

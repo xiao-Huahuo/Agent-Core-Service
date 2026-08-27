@@ -35,6 +35,8 @@ CONTENT_KNOWLEDGE_FILE = "knowledge_file"
 CONTENT_WEB_URL = "web_url"
 CONTENT_EXTERNAL_FILE = "external_file"
 COVER_MODES = {"icon", "image", "description", "source_image", "title"}
+# Only the image formats explicitly supported as real-file book covers.
+SOURCE_IMAGE_SUFFIXES = {".gif", ".jpeg", ".jpg", ".png", ".webp"}
 
 
 class LibraryService:
@@ -265,7 +267,7 @@ class LibraryService:
         source_url: str = "",
         title: str = "",
         description: str = "",
-        cover_mode: str = "icon",
+        cover_mode: str = "",
         cover_asset_id: str = "",
         tags: list[str] | None = None,
     ) -> dict[str, Any]:
@@ -304,6 +306,12 @@ class LibraryService:
                     source_path=normalized_source_path,
                     source_url=normalized_source_url,
                 )
+            requested_cover_mode = cover_mode.strip()
+            resolved_cover_mode = (
+                requested_cover_mode
+                or ("image" if cover_asset_id.strip() else "")
+                or ("source_image" if Path(normalized_source_path).suffix.lower() in SOURCE_IMAGE_SUFFIXES else "icon")
+            )
             item = LibraryItem(
                 item_id=self._new_id("lib"),
                 user_id=context["user_id"],
@@ -320,7 +328,7 @@ class LibraryService:
                 source_mime=source_meta["source_mime"],
                 source_size=source_meta["source_size"],
                 source_mtime=source_meta["source_mtime"],
-                cover_mode=self._normalize_cover_mode(cover_mode),
+                cover_mode=self._normalize_cover_mode(resolved_cover_mode),
                 cover_asset_id=cover_asset_id.strip(),
                 index_status=source_meta["index_status"],
                 graph_status=source_meta["graph_status"],

@@ -55,6 +55,10 @@ export interface SmartCell {
 export interface SmartRow {
   /** Stable row id. */
   id: string
+  /** Backend-owned entry timestamp retained across full table saves. */
+  createdAt?: string
+  /** Backend-owned last mutation timestamp. */
+  updatedAt?: string
   /** Persisted row height in pixels. */
   height?: number
   /** Cell map keyed by column id. */

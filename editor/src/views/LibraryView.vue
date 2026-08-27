@@ -24,6 +24,7 @@ import LibraryBar from '@/components/library_view/LibraryBar.vue'
 import LibraryCard from '@/components/library_view/LibraryCard.vue'
 import LibraryCreateDialog from '@/components/library_view/LibraryCreateDialog.vue'
 import LibraryItemDialog from '@/components/library_view/LibraryItemDialog.vue'
+import { isLibrarySourceImage } from '@/components/library_view/librarySourceImage'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,6 +86,10 @@ const forwardStack = ref<string[]>([])
 const contextMenuTarget = ref<LibraryItem | null>(null)
 const contextMenuOpen = ref(false)
 const contextMenuStyle = ref({ left: '0px', top: '0px' })
+/** Page-level external file drag state; internal library-item drags do not enter this flow. */
+const libraryFileDragDepth = ref(0)
+const libraryFileDragActive = ref(false)
+const libraryFileDropBusy = ref(false)
 
 function sortItems(list: LibraryItem[]): LibraryItem[] {
   return [...list].sort((a, b) => {
@@ -484,6 +489,90 @@ function openCreateCollectionDialog() {
   createDialogMode.value = 'collection'
 }
 
+/** Return whether one drag event carries operating-system files rather than an internal library item. */
+function carriesExternalFiles(event: DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes('Files')
+}
+
+/** Show one page-level drop target while an external file crosses nested library elements. */
+function handleLibraryFileDragEnter(event: DragEvent) {
+  if (!carriesExternalFiles(event) || libraryFileDropBusy.value) return
+  event.preventDefault()
+  libraryFileDragDepth.value += 1
+  libraryFileDragActive.value = true
+}
+
+/** Keep external file drops enabled without interfering with the existing internal item drag flow. */
+function handleLibraryFileDragOver(event: DragEvent) {
+  if (!carriesExternalFiles(event) || libraryFileDropBusy.value) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+}
+
+/** Hide the page-level target only after the external drag leaves the complete library surface. */
+function handleLibraryFileDragLeave(event: DragEvent) {
+  if (!carriesExternalFiles(event)) return
+  libraryFileDragDepth.value = Math.max(0, libraryFileDragDepth.value - 1)
+  if (libraryFileDragDepth.value === 0) libraryFileDragActive.value = false
+}
+
+/** Upload one source file and persist its virtual book through the existing production APIs. */
+async function createFileBook(sourceFile: File, payload: {
+  title: string
+  description: string
+  tags: string[]
+  cover_mode: LibraryItem['cover_mode']
+  cover_asset_id: string
+}): Promise<boolean> {
+  const libraryStorageDir = settingsStore.activeKnowledgeLibrary?.libraryStorageDir || '.mw/library'
+  const result = await uploadKnowledgeFile(settingsStore.profile.userId, sourceFile, libraryStorageDir, false, 'rename') as { uploaded_path?: string; knowledge_dir?: string }
+  const relativePath = relativeUploadedPath(result.uploaded_path ?? '', result.knowledge_dir ?? settingsStore.profile.knowledgeDir)
+  if (!relativePath) return false
+  await createLibraryBook({
+    user_id: settingsStore.profile.userId,
+    parent_id: currentParentId.value,
+    content_type: 'knowledge_file',
+    source_path: relativePath,
+    title: payload.title,
+    description: payload.description,
+    cover_mode: payload.cover_mode,
+    cover_asset_id: payload.cover_asset_id,
+    tags: payload.tags,
+  })
+  return true
+}
+
+/** Create a book immediately when one external file is dropped on the library page. */
+async function handleLibraryFileDrop(event: DragEvent) {
+  if (!carriesExternalFiles(event) || libraryFileDropBusy.value) return
+  event.preventDefault()
+  libraryFileDragDepth.value = 0
+  libraryFileDragActive.value = false
+  const sourceFile = event.dataTransfer?.files?.[0]
+  if (!sourceFile) return
+  libraryFileDropBusy.value = true
+  try {
+    const created = await createFileBook(sourceFile, {
+      title: '',
+      description: '',
+      tags: [],
+      cover_mode: isLibrarySourceImage(sourceFile.name, sourceFile.type) ? 'source_image' : 'title',
+      cover_asset_id: '',
+    })
+    if (!created) {
+      workspaceStore.showToast('上传完成但无法识别知识库相对路径')
+      return
+    }
+    await workspaceStore.loadKnowledgeTree()
+    await Promise.all([loadItems(), loadTags()])
+    workspaceStore.showToast('已从拖入文件创建图书')
+  } catch (error) {
+    workspaceStore.showToast(`创建失败 — ${errorMessage(error)}`)
+  } finally {
+    libraryFileDropBusy.value = false
+  }
+}
+
 async function createFromDialog(payload: {
   title: string
   description: string
@@ -539,24 +628,17 @@ async function createFromDialog(payload: {
         workspaceStore.showToast('请输入文本内容')
         return
       }
-      const libraryStorageDir = settingsStore.activeKnowledgeLibrary?.libraryStorageDir || '.mw/library'
-      const result = await uploadKnowledgeFile(settingsStore.profile.userId, sourceFile, libraryStorageDir, false, 'rename') as { uploaded_path?: string; knowledge_dir?: string }
-      const relativePath = relativeUploadedPath(result.uploaded_path ?? '', result.knowledge_dir ?? settingsStore.profile.knowledgeDir)
-      if (!relativePath) {
-        workspaceStore.showToast('上传完成但无法识别知识库相对路径')
-        return
-      }
-      await createLibraryBook({
-        user_id: settingsStore.profile.userId,
-        parent_id: currentParentId.value,
-        content_type: 'knowledge_file',
-        source_path: relativePath,
+      const created = await createFileBook(sourceFile, {
         title: payload.title,
         description: payload.description,
         cover_mode: payload.cover_mode,
         cover_asset_id: payload.cover_asset_id,
         tags: payload.tags,
       })
+      if (!created) {
+        workspaceStore.showToast('上传完成但无法识别知识库相对路径')
+        return
+      }
       await workspaceStore.loadKnowledgeTree()
       workspaceStore.showToast(payload.source_mode === 'script' ? '已保存脚本并加入图书馆' : payload.source_mode === 'text' ? '已保存文本并加入图书馆' : '已新增文件并加入图书馆')
     }
@@ -705,7 +787,16 @@ function errorMessage(error: unknown): string {
 </script>
 
 <template>
-  <section class="library-view">
+  <section
+    class="library-view"
+    @dragenter="handleLibraryFileDragEnter"
+    @dragover="handleLibraryFileDragOver"
+    @dragleave="handleLibraryFileDragLeave"
+    @drop="handleLibraryFileDrop"
+  >
+    <div v-if="libraryFileDragActive || libraryFileDropBusy" class="library-file-drop-overlay" aria-live="polite">
+      {{ libraryFileDropBusy ? '正在自动创建图书' : '松开文件即可自动创建图书；图片文件将直接作为封面' }}
+    </div>
     <header class="library-toolbar">
       <div class="nav-row">
         <div class="nav-buttons">
@@ -1008,6 +1099,7 @@ function errorMessage(error: unknown): string {
 
 <style scoped>
 .library-view {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -1017,6 +1109,23 @@ function errorMessage(error: unknown): string {
   background: var(--color-canvas);
   font-family: var(--font-ui);
   font-size: calc(13px * var(--font-scale));
+}
+
+.library-file-drop-overlay {
+  position: absolute;
+  inset: 8px;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  border: 2px dashed var(--color-primary);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  color: var(--color-primary);
+  padding: 24px;
+  text-align: center;
+  font-size: calc(14px * var(--font-scale));
+  font-weight: 700;
 }
 
 .library-toolbar {

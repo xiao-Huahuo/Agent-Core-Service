@@ -9,7 +9,7 @@
 import { apiDelete, apiGet, apiPost } from '@/api/client'
 import { API_ROUTES } from '@/router/api_routes'
 
-export type PrivacyTargetType = 'knowledge_path' | 'library_item'
+export type PrivacyTargetType = 'knowledge_path' | 'library_item' | 'smart_form_row'
 
 export interface PrivacyRecord {
   privacy_id: string

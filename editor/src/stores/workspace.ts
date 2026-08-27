@@ -338,6 +338,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** Pending virtual-library collection to open when LibraryView is mounted. */
   const pendingLibraryParentId = ref('')
 
+  /** One-shot smart-form row target consumed when LiteratureReadingView mounts. */
+  const pendingLiteratureEntry = ref<{ formId: string; rowId: string } | null>(null)
+
   /** Active tab within the ingestion progress view: 'queue' | 'graph-queue' | 'history'. */
   const ingestionViewTab = ref<'queue' | 'graph-queue' | 'history'>('queue')
 
@@ -1477,6 +1480,20 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function openLibraryParent(parentId: string) {
     pendingLibraryParentId.value = parentId
     mainView.value = 'library'
+  }
+
+  /** Opens literature reading and records the exact smart-form row to select. */
+  function openLiteratureEntry(formId: string, rowId: string): void {
+    pendingLiteratureEntry.value = { formId, rowId }
+    editorSidebarOpen.value = false
+    mainView.value = 'literature-reading'
+  }
+
+  /** Returns and clears the pending row after the literature list has loaded. */
+  function consumePendingLiteratureEntry(): { formId: string; rowId: string } | null {
+    const target = pendingLiteratureEntry.value
+    pendingLiteratureEntry.value = null
+    return target
   }
 
   function updateActiveContent(content: string) {
@@ -2739,6 +2756,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     browserSidebarUrl,
     browserSidebarNavigationId,
     pendingLibraryParentId,
+    pendingLiteratureEntry,
     ingestionViewTab,
     editorMode,
     openTabs,
@@ -2806,6 +2824,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     closeBrowserSidebar,
     toggleBrowserSidebar,
     openLibraryParent,
+    openLiteratureEntry,
+    consumePendingLiteratureEntry,
     updateActiveContent,
     saveActiveFile,
     saveAllDirtyFiles,

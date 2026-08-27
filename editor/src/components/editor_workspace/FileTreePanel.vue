@@ -11,6 +11,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
 import RecentFileList from '@/components/editor_workspace/RecentFileList.vue'
+import SortMenu from '@/components/editor_workspace/SortMenu.vue'
 import TreeNode from '@/components/editor_workspace/TreeNode.vue'
 import {
   collectExpandedPathsForFilteredTree,
@@ -315,16 +316,11 @@ function toggleExpandAll() {
   }
 }
 
-const sortKeyOptions: { value: 'name' | 'mtime' | 'ingested' | 'size'; label: string }[] = [
-  { value: 'name', label: '名称排序' },
-  { value: 'mtime', label: '修改时间排序' },
-  { value: 'ingested', label: '入库时间排序' },
-  { value: 'size', label: '大小排序' },
-]
-
-const sortDirectionOptions: { value: 'asc' | 'desc'; label: string }[] = [
-  { value: 'asc', label: '升序' },
-  { value: 'desc', label: '降序' },
+const sortKeyOptions: { value: 'name' | 'mtime' | 'ingested' | 'size'; label: string; icon: string }[] = [
+  { value: 'name', label: '名称排序', icon: 'title' },
+  { value: 'mtime', label: '修改时间排序', icon: 'schedule' },
+  { value: 'ingested', label: '入库时间排序', icon: 'ingest' },
+  { value: 'size', label: '大小排序', icon: 'storage' },
 ]
 
 function selectSortKey(value: 'name' | 'mtime' | 'ingested' | 'size') {
@@ -334,6 +330,10 @@ function selectSortKey(value: 'name' | 'mtime' | 'ingested' | 'size') {
 function selectSortDirection(value: 'asc' | 'desc') {
   sortDirection.value = value
   sortMenuOpen.value = false
+}
+
+function selectSortKeyFromMenu(value: string): void {
+  selectSortKey(value as 'name' | 'mtime' | 'ingested' | 'size')
 }
 
 function toggleStatusColumns() {
@@ -1020,32 +1020,14 @@ onUnmounted(() => {
                 <IcIcon name="sort" :size="14" />
                 <span>排序</span>
               </button>
-              <div v-if="sortMenuOpen" class="sort-menu" @click.stop>
-                <button
-                  v-for="option in sortKeyOptions"
-                  :key="option.value"
-                  type="button"
-                  @click="selectSortKey(option.value)"
-                >
-                  <IcIcon name="check" v-if="sortKey === option.value" :size="14" />
-                  <span v-else class="sort-check-placeholder"></span>
-                  <span class="sort-icon-placeholder"></span>
-                  <span>{{ option.label }}</span>
-                </button>
-                <hr />
-                <button
-                  v-for="option in sortDirectionOptions"
-                  :key="option.value"
-                  type="button"
-                  @click="selectSortDirection(option.value)"
-                >
-                  <IcIcon name="check" v-if="sortDirection === option.value" :size="14" />
-                  <span v-else class="sort-check-placeholder"></span>
-                  <IcIcon name="arrow-up" v-if="option.value === 'asc'" :size="14" />
-                  <IcIcon name="arrow-down" v-else :size="14" />
-                  <span>{{ option.label }}</span>
-                </button>
-              </div>
+              <SortMenu
+                v-if="sortMenuOpen"
+                :options="sortKeyOptions"
+                :sort-key="sortKey"
+                :direction="sortDirection"
+                @select-key="selectSortKeyFromMenu"
+                @select-direction="selectSortDirection"
+              />
             </div>
           </div>
         </div>

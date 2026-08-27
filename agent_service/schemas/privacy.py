@@ -2,7 +2,7 @@
 
 Usage:
 Use PrivacyCreate at write boundaries and PrivacyOut/PrivacyListOut for public
-responses. Only knowledge files and library items can be private.
+responses. Knowledge files, library items, and smart-form literature rows can be private.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-PrivacyTargetType = Literal["knowledge_path", "library_item"]
+PrivacyTargetType = Literal["knowledge_path", "library_item", "smart_form_row"]
 
 
 from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS

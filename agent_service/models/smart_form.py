@@ -32,6 +32,8 @@ class SmartFormRecord(SQLModel, table=True):
 
     form_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
     user_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    library_id: str = Field(default="", index=True, max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
+    form_kind: str = Field(default="literature", index=True, max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
     title: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.title_max_length)
     asset_dir: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.secret_max_length)
     version: int = Field(default=1)
@@ -74,6 +76,24 @@ class SmartFormRowRecord(SQLModel, table=True):
     row_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
     order_index: int = Field(index=True)
     height: int = Field(default=DEFAULT_BUSINESS_LIMITS.smart_form_default_row_height)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)
+
+
+class LiteratureReadingStateRecord(SQLModel, table=True):
+    """用户在一个知识库中浏览某条智能表格文献行的持久化状态。"""
+
+    __tablename__ = "literature_reading_states"
+    __table_args__ = (
+        UniqueConstraint("user_id", "library_id", "form_id", "row_id", name="uq_literature_reading_target"),
+    )
+
+    state_id: str = Field(primary_key=True, max_length=DEFAULT_BUSINESS_LIMITS.title_max_length)
+    user_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
+    library_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
+    form_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    row_id: str = Field(index=True, max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
+    last_viewed_at: datetime = Field(default_factory=utc_now, index=True)
 
 
 class SmartFormCellRecord(SQLModel, table=True):

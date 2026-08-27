@@ -18,7 +18,7 @@ from agent_service.models.privacy import PrivacyRecord
 from agent_service.schemas.privacy import PrivacyCreate, PrivacyOut, PrivacyTargetType
 
 
-VALID_TARGET_TYPES = {"knowledge_path", "library_item"}
+VALID_TARGET_TYPES = {"knowledge_path", "library_item", "smart_form_row"}
 
 
 class PrivacyService:
@@ -105,11 +105,11 @@ class PrivacyService:
 
     @staticmethod
     def _normalize_target_type(value: str) -> PrivacyTargetType:
-        """Restrict privacy to the two target types requested by the UI."""
+        """Restrict privacy to supported persisted UI target types."""
 
         normalized = value.strip()
         if normalized not in VALID_TARGET_TYPES:
-            raise ValueError("target_type must be knowledge_path or library_item")
+            raise ValueError("target_type must be knowledge_path, library_item, or smart_form_row")
         return normalized  # type: ignore[return-value]
 
     @staticmethod

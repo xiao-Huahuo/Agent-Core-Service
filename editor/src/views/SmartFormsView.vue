@@ -27,6 +27,7 @@ import {
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
 import { useSubmenuIntent } from '@/components/editor_workspace/submenuIntent'
 import SmartMarkdownCell from '@/components/smart_forms/SmartMarkdownCell.vue'
+import SmartFormAddColumnMenu from '@/components/smart_forms/SmartFormAddColumnMenu.vue'
 import {
   SMART_COLUMN_TYPE_ICONS,
   smartColumnIcon,
@@ -174,6 +175,7 @@ const draggedColumnId = ref('')
 const draggedRowId = ref('')
 const expandedTextRowHeights = new Map<string, number>()
 let autoSaveTimer: ReturnType<typeof setTimeout> | undefined
+let literatureFileClickTimer: ReturnType<typeof setTimeout> | undefined
 let formRevision = 0
 const {
   openSubmenu: openTableSubmenu,
@@ -270,6 +272,7 @@ onBeforeUnmount(() => {
   if (autoSaveTimer) clearTimeout(autoSaveTimer)
   if (swapAnimationTimer) clearTimeout(swapAnimationTimer)
   if (columnDescriptionClickTimer) clearTimeout(columnDescriptionClickTimer)
+  if (literatureFileClickTimer) clearTimeout(literatureFileClickTimer)
   stopTableResize()
   closeTableContextMenu()
 })
@@ -302,7 +305,10 @@ async function loadForm(): Promise<void> {
 /** Loads user-created smart forms from the database. */
 async function listSmartForms(): Promise<SmartFormEntry[]> {
   if (!settingsStore.profile.userId) return []
-  const entries = await listSmartFormsDb(settingsStore.profile.userId)
+  const entries = await listSmartFormsDb(
+    settingsStore.profile.userId,
+    settingsStore.activeKnowledgeLibrary?.libraryId || settingsStore.profile.activeLibraryId,
+  )
   return entries.map((entry) => ({
     formId: entry.form_id,
     name: entry.title,
@@ -323,6 +329,8 @@ async function importLegacySmartForms(): Promise<SmartFormEntry[]> {
       const legacyForm = normalizeForm(JSON.parse(legacy.content) as SmartLiteratureForm)
       await saveSmartFormDb({
         user_id: settingsStore.profile.userId,
+        library_id: settingsStore.activeKnowledgeLibrary?.libraryId || settingsStore.profile.activeLibraryId,
+        form_kind: 'literature',
         asset_dir: node.path,
         form: legacyForm,
       })
@@ -462,6 +470,8 @@ async function persistForm(showSuccessToast: boolean): Promise<void> {
     const response = await saveSmartFormDb({
       user_id: settingsStore.profile.userId,
       form_id: activeFormId.value || undefined,
+      library_id: settingsStore.activeKnowledgeLibrary?.libraryId || settingsStore.profile.activeLibraryId,
+      form_kind: isLiteratureTable.value ? 'literature' : 'plain',
       asset_dir: activeFormDir.value,
       form: formToSave,
     })
@@ -1312,7 +1322,7 @@ function clearTableContext(): void {
   closeTableContextMenu()
 }
 
-/** Clears failed or non-pending empty cells without removing uploaded file metadata. */
+/** Clears failure markers only from empty cells without touching retained content. */
 function clearInvalidFields(): void {
   if (!form.value) return
   let clearedCount = 0
@@ -1320,7 +1330,7 @@ function clearInvalidFields(): void {
     ...row,
     cells: Object.fromEntries(form.value!.columns.map((column) => {
       const cell = row.cells[column.id] ?? { value: '' }
-      const invalid = cell.status === 'failed' || (cell.status !== 'pending' && !cell.value.trim())
+      const invalid = cell.status === 'failed' && !cell.value.trim()
       if (!invalid) return [column.id, cell]
       clearedCount += 1
       return [column.id, { ...cell, value: '', status: undefined } as SmartCell]
@@ -1383,13 +1393,6 @@ function addContextCustomColumn(type: SmartColumnType, direction: -1 | 1): void 
 function addEdgeColumn(column: SmartColumn): void {
   if (!isLiteratureTable.value && (column.type === 'smart_text' || column.type === 'smart_tag')) return
   addColumnAt(column, 1)
-  edgeColumnMenuOpen.value = false
-}
-
-/** Appends a typed custom field selected from the table's right-edge chooser. */
-function addEdgeCustomColumn(type: SmartColumnType): void {
-  if (!isLiteratureTable.value && (type === 'smart_text' || type === 'smart_tag')) return
-  addCustomColumnAt(type, 1)
   edgeColumnMenuOpen.value = false
 }
 
@@ -1549,10 +1552,11 @@ function patchStructuredGenerationResults(rowId: string, columns: SmartColumn[],
       return
     }
     failed += 1
+    const retainedValue = currentRow?.cells[column.id]?.value || ''
     generatedCells.push([column.id, {
       ...currentRow?.cells[column.id],
-      value: currentRow?.cells[column.id]?.value || '',
-      status: 'failed',
+      value: retainedValue,
+      status: retainedValue.trim() ? 'ready' : 'failed',
     }])
   })
   const cells = Object.fromEntries(generatedCells)
@@ -1608,6 +1612,29 @@ async function openLiteratureFile(row: SmartRow): Promise<void> {
     path: cell.assetPath,
     isDir: false,
   })
+}
+
+/** Defers the single-click sidebar action so a double click can navigate instead. */
+function scheduleOpenLiteratureFile(row: SmartRow): void {
+  if (literatureFileClickTimer) clearTimeout(literatureFileClickTimer)
+  literatureFileClickTimer = setTimeout(() => {
+    literatureFileClickTimer = undefined
+    void openLiteratureFile(row)
+  }, 220)
+}
+
+/** Opens the literature reader at this exact table row without firing the sidebar action. */
+function openLiteratureReader(row: SmartRow): void {
+  if (literatureFileClickTimer) {
+    clearTimeout(literatureFileClickTimer)
+    literatureFileClickTimer = undefined
+  }
+  const cell = row.cells.literature_file
+  if (!cell?.assetPath || !activeFormId.value) {
+    openUpload(row.id)
+    return
+  }
+  workspaceStore.openLiteratureEntry(activeFormId.value, row.id)
 }
 
 /** Downloads an uploaded source file without changing the selected workspace file. */
@@ -2275,7 +2302,7 @@ function errorMessage(error: unknown): string {
                 ><IcIcon name="unfold" :size="10" /></button>
               </span>
               <div v-else-if="column.type === 'file'" class="file-cell">
-                <button class="file-picker" type="button" @click.stop="openLiteratureFile(row)">
+                <button class="file-picker" type="button" @click.stop="scheduleOpenLiteratureFile(row)" @dblclick.prevent.stop="openLiteratureReader(row)">
                   <img
                     v-if="row.cells[column.id]?.assetPath && imagePreviewByPath[row.cells[column.id]?.assetPath || '']"
                     class="file-preview-image"
@@ -2449,7 +2476,7 @@ function errorMessage(error: unknown): string {
                 <span class="pixel-loader" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
               </div>
               <span
-                v-if="row.cells[column.id]?.status === 'failed'"
+                v-if="row.cells[column.id]?.status === 'failed' && !row.cells[column.id]?.value.trim()"
                 class="status-dot"
                 :class="row.cells[column.id]?.status"
               >
@@ -2489,45 +2516,15 @@ function errorMessage(error: unknown): string {
     </div>
 
     <Teleport to="body">
-      <div
+      <SmartFormAddColumnMenu
         v-if="edgeColumnMenuOpen"
-        class="edge-column-menu table-context-submenu-level-three ui-floating-submenu-surface"
-        :class="{ dark: settingsStore.isDark }"
+        class="edge-column-menu table-context-submenu-level-three"
         :style="edgeColumnMenuStyle"
+        :columns="form?.columns ?? []"
+        :is-literature="isLiteratureTable"
+        @add="addEdgeColumn"
         @click.stop
-      >
-        <span class="table-context-section-title">内置字段</span>
-        <button
-          v-for="column in availableBuiltinColumns"
-          :key="column.id"
-          type="button"
-          :disabled="Boolean(form?.columns.some((item) => item.id === column.id)) || (!isLiteratureTable && (column.type === 'smart_text' || column.type === 'smart_tag'))"
-          @click="addEdgeColumn(column)"
-        >
-          <IcIcon :name="smartColumnIcon(column)" :size="15" />
-          <span>{{ column.title }}</span>
-          <span class="menu-column-type-pill">{{ smartColumnTypeLabel(column.type) }}</span>
-        </button>
-        <hr class="table-context-separator" />
-        <label class="table-context-input">
-          <span>自定义字段名</span>
-          <input v-model="customColumnTitle" class="form-input-surface" type="text" placeholder="例如：备注" @click.stop />
-        </label>
-        <label class="table-context-input">
-          <span>辅助描述</span>
-          <input v-model="customColumnDescription" class="form-input-surface" type="text" placeholder="例如：提取作者明确陈述的局限" @click.stop />
-        </label>
-        <span class="table-context-section-title">字段类型</span>
-        <button
-          v-for="type in availableCustomColumnTypes"
-          :key="type.value"
-          type="button"
-          :disabled="!isLiteratureTable && (type.value === 'smart_text' || type.value === 'smart_tag')"
-          @click="addEdgeCustomColumn(type.value)"
-        >
-          <IcIcon :name="SMART_COLUMN_TYPE_ICONS[type.value]" :size="15" /><span>{{ type.label }}</span>
-        </button>
-      </div>
+      />
     </Teleport>
 
     <Teleport to="body">
@@ -4407,9 +4404,14 @@ th.sticky-literature-column {
   display: none;
 }
 
-/* Secondary toolbar controls are borderless at every responsive width. */
+/* Secondary toolbar controls stay borderless except for the table selector. */
 .smart-forms-view .forms-secondary-row .smart-dropdown-trigger {
   border: 0;
+}
+
+.smart-forms-view .forms-secondary-row .form-switch-control .smart-dropdown-trigger {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
 }
 
 .primary-icon-placeholder,

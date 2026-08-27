@@ -26,6 +26,7 @@ const props = defineProps<{
   componentLibraryActive: boolean
   vaultActive: boolean
   formsActive: boolean
+  literatureActive: boolean
   ingestionActive: boolean
   visualizationActive: boolean
   agentActive: boolean
@@ -50,6 +51,7 @@ const emit = defineEmits<{
   openComponentLibrary: []
   openVault: []
   openForms: []
+  openLiterature: []
   openIngestion: []
   openVisualization: []
   toggleAgent: []
@@ -88,6 +90,7 @@ const knowledgeActive = computed(() => (
   || props.componentLibraryActive
   || props.vaultActive
   || props.formsActive
+  || props.literatureActive
 ))
 const entertainmentActive = computed(() => props.visualizationActive)
 const mineActive = computed(() => props.favoritesActive || props.privacyActive || props.feedbackOpen)
@@ -321,6 +324,18 @@ function closeActivityMenu() {
           >
             <IcIcon name="table-chart" :size="18" />
             <span class="activity-label">智能表格</span>
+          </button>
+          <button
+            class="activity-button"
+            :class="{ active: literatureActive }"
+            type="button"
+            title="文献阅读"
+            aria-label="文献阅读"
+            @mousedown.prevent="handleRipple"
+            @click="emit('openLiterature'); closeActivityMenu()"
+          >
+            <IcIcon name="document" :size="18" />
+            <span class="activity-label">文献阅读</span>
           </button>
         </div>
       </Transition>

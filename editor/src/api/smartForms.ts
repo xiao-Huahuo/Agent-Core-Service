@@ -14,6 +14,8 @@ export interface SmartFormListItem {
   form_id: string
   title: string
   asset_dir: string
+  library_id?: string
+  form_kind?: 'literature' | 'plain'
   updated_at: string
 }
 
@@ -21,6 +23,8 @@ export interface SmartFormResponse {
   form_id: string
   user_id: string
   asset_dir: string
+  library_id?: string
+  form_kind?: 'literature' | 'plain'
   form: SmartLiteratureForm
   updated_at: string
 }
@@ -47,8 +51,8 @@ export interface StructuredGenerationResponse {
   raw_output: string
 }
 
-export function listSmartFormsDb(userId: string): Promise<SmartFormListItem[]> {
-  return apiGet<SmartFormListItem[]>(API_ROUTES.SMART_FORMS_LIST, { user_id: userId })
+export function listSmartFormsDb(userId: string, libraryId = '', formKind = ''): Promise<SmartFormListItem[]> {
+  return apiGet<SmartFormListItem[]>(API_ROUTES.SMART_FORMS_LIST, { user_id: userId, library_id: libraryId, form_kind: formKind })
 }
 
 export function getSmartFormDb(userId: string, formId: string): Promise<SmartFormResponse> {
@@ -58,6 +62,8 @@ export function getSmartFormDb(userId: string, formId: string): Promise<SmartFor
 export function saveSmartFormDb(payload: {
   user_id: string
   form_id?: string
+  library_id?: string
+  form_kind?: 'literature' | 'plain'
   asset_dir: string
   form: SmartLiteratureForm
 }): Promise<SmartFormResponse> {

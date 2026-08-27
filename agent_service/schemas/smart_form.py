@@ -21,6 +21,8 @@ class SmartFormSaveRequest(BaseModel):
 
     user_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     form_id: str | None = Field(default=None, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
+    library_id: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.graph_identifier_max_length)
+    form_kind: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
     asset_dir: str = Field(default="", max_length=DEFAULT_BUSINESS_LIMITS.secret_max_length)
     form: dict[str, Any]
 
@@ -31,6 +33,8 @@ class SmartFormListItem(BaseModel):
     form_id: str
     title: str
     asset_dir: str
+    library_id: str = ""
+    form_kind: str = "literature"
     updated_at: datetime
 
 
@@ -40,5 +44,7 @@ class SmartFormOut(BaseModel):
     form_id: str
     user_id: str
     asset_dir: str
+    library_id: str = ""
+    form_kind: str = "literature"
     form: dict[str, Any]
     updated_at: datetime

@@ -65,6 +65,7 @@ export type WorkspaceMainView =
   | 'component-library'
   | 'vault'
   | 'forms'
+  | 'literature-reading'
   | 'ingestion'
   | 'visualization'
   | 'graph'

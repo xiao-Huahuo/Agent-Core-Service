@@ -168,6 +168,8 @@ describe('SmartFormsView', () => {
     expect(wrapper.find('th[data-column-id="row_index"] .column-description-toggle').exists()).toBe(false)
     const toggle = wrapper.get('th[data-column-id="title"] .column-description-toggle')
     await toggle.trigger('click')
+    await new Promise((resolve) => window.setTimeout(resolve, 230))
+    await nextTick()
     expect(wrapper.get('th[data-column-id="title"] .column-description-panel').classes()).toContain('expanded')
     expect(wrapper.get('th[data-column-id="title"] .column-description-text').text()).toBe('提取论文正式标题')
 
@@ -207,6 +209,7 @@ describe('SmartFormsView', () => {
     vi.mocked(getSmartFormDb).mockResolvedValueOnce(dbResponse(storedForm))
     const workspaceStore = useWorkspaceStore()
     const openEditorSidebar = vi.spyOn(workspaceStore, 'openEditorSidebar').mockResolvedValue(undefined)
+    const openLiteratureEntry = vi.spyOn(workspaceStore, 'openLiteratureEntry')
     const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
     vi.mocked(previewKnowledgeFile).mockResolvedValue({
       path: '.mw/forms/我的文献表/assets/paper.pdf',
@@ -224,12 +227,19 @@ describe('SmartFormsView', () => {
     expect(wrapper.get('.file-preview-image').attributes('src')).toContain('/knowledge/assets/pdf_preview/demo/page-1.png')
 
     await wrapper.get('.file-picker').trigger('click')
+    await new Promise((resolve) => window.setTimeout(resolve, 230))
 
     expect(openEditorSidebar).toHaveBeenCalledWith({
       name: 'paper.pdf',
       path: '.mw/forms/我的文献表/assets/paper.pdf',
       isDir: false,
     })
+    openEditorSidebar.mockClear()
+    await wrapper.get('.file-picker').trigger('click')
+    await wrapper.get('.file-picker').trigger('dblclick')
+    expect(openLiteratureEntry).toHaveBeenCalledWith('sf_demo', storedForm.rows[0]!.id)
+    await new Promise((resolve) => window.setTimeout(resolve, 230))
+    expect(openEditorSidebar).not.toHaveBeenCalled()
     expect(wrapper.find('button[title="下载原文件"]').exists()).toBe(true)
     expect(wrapper.find('button[title="重新上传"]').exists()).toBe(true)
     await wrapper.get('button[title="下载原文件"]').trigger('click')
@@ -409,7 +419,7 @@ describe('SmartFormsView', () => {
     inputClick.mockRestore()
   })
 
-  it('clears failed and empty fields while preserving valid values', async () => {
+  it('clears only empty failed markers while preserving every existing value', async () => {
     const form = addColumn(addColumn(createDefaultLiteratureForm('我的文献表'), BUILTIN_COLUMNS.find((column) => column.id === 'keywords')!), BUILTIN_COLUMNS.find((column) => column.id === 'journal')!)
     form.rows[0]!.cells.title = { value: '生成失败: 模型错误', status: 'failed' }
     form.rows[0]!.cells.keywords = { value: '', status: 'idle' }
@@ -420,7 +430,7 @@ describe('SmartFormsView', () => {
 
     await wrapper.findAll('button').find((button) => button.text().includes('清空无效字段'))?.trigger('click')
 
-    expect(wrapper.find('td[data-column-id="title"] textarea').element).toMatchObject({ value: '' })
+    expect(wrapper.find('td[data-column-id="title"] textarea').element).toMatchObject({ value: '生成失败: 模型错误' })
     expect(wrapper.find('td[data-column-id="title"] .status-dot').exists()).toBe(false)
     expect(wrapper.find('td[data-column-id="keywords"] textarea').element).toMatchObject({ value: '' })
     expect(wrapper.find('td[data-column-id="journal"] textarea').element).toMatchObject({ value: 'Plant Cell' })
@@ -952,7 +962,7 @@ describe('SmartFormsView', () => {
     })
     await flushPromises()
 
-    expect(wrapper.find('.status-dot.failed').exists()).toBe(true)
+    expect(wrapper.find('.status-dot.failed').exists()).toBe(false)
     expect(wrapper.find('td[data-column-id="title"] textarea').element).toMatchObject({
       value: '原来的标题',
     })

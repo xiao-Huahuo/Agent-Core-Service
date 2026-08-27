@@ -95,6 +95,23 @@ def test_library_starts_empty_until_user_adds_items(tmp_path: Path) -> None:
     assert response["items"] == []
 
 
+@pytest.mark.parametrize("suffix", [".png", ".jpg", ".jpeg", ".webp", ".gif"])
+def test_image_book_without_uploaded_cover_uses_source_file_as_cover(tmp_path: Path, suffix: str) -> None:
+    """未上传独立封面时，受支持的真实图片应成为图书封面。"""
+
+    source = tmp_path / f"source{suffix}"
+    source.write_bytes(b"image")
+    service = make_service(tmp_path)
+
+    book = service.create_item(
+        user_id="u1",
+        content_type="knowledge_file",
+        source_path=source.name,
+    )["item"]
+
+    assert book["cover_mode"] == "source_image"
+
+
 def test_collection_and_book_are_virtual_metadata(tmp_path: Path) -> None:
     """集锦和图书条目写入虚拟编目,真实文件只被 source_path 引用。"""
 

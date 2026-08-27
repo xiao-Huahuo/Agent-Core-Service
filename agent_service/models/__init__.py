@@ -19,7 +19,7 @@ from agent_service.models.feedback import FeedbackRecord
 from agent_service.models.knowledge_ingestion_job import KnowledgeIngestionJobRecord
 from agent_service.models.message import MessageBase, MessageRecord
 from agent_service.models.session import SessionBase, SessionRecord
-from agent_service.models.smart_form import SmartFormCellRecord, SmartFormColumnRecord, SmartFormRecord, SmartFormRowRecord
+from agent_service.models.smart_form import LiteratureReadingStateRecord, SmartFormCellRecord, SmartFormColumnRecord, SmartFormRecord, SmartFormRowRecord
 from agent_service.models.token_usage import TokenUsageRecord
 from agent_service.models.user_settings import UserSettingsRecord, UserSystemPromptEntry
 

@@ -62,6 +62,7 @@ describe('ActivityBar', () => {
     componentLibraryActive: false,
     vaultActive: false,
     formsActive: false,
+    literatureActive: false,
     ingestionActive: false,
     visualizationActive: false,
     agentActive: false,
@@ -72,7 +73,6 @@ describe('ActivityBar', () => {
     feedbackOpen: false,
     searchActive: false,
     browserActive: false,
-    skillsActive: false,
     settingsActive: false,
   }
 
@@ -83,7 +83,7 @@ describe('ActivityBar', () => {
     await wrapper.get('button[aria-label="库"]').trigger('click')
 
     expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(true)
-    expect(wrapper.findAll('[aria-label="知识库菜单"] button')).toHaveLength(5)
+    expect(wrapper.findAll('[aria-label="知识库菜单"] button')).toHaveLength(6)
 
     await wrapper.get('button[aria-label="组件库"]').trigger('click')
     expect(wrapper.emitted('openComponentLibrary')).toHaveLength(1)
@@ -93,6 +93,10 @@ describe('ActivityBar', () => {
     await wrapper.get('button[aria-label="智能表格"]').trigger('click')
     expect(wrapper.emitted('openForms')).toHaveLength(1)
     expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(false)
+
+    await wrapper.get('button[aria-label="库"]').trigger('click')
+    await wrapper.get('button[aria-label="文献阅读"]').trigger('click')
+    expect(wrapper.emitted('openLiterature')).toHaveLength(1)
   })
 
   it('opens the capsule on hover in icon mode', async () => {
@@ -169,15 +173,11 @@ describe('ActivityBar', () => {
     expect(indicator.attributes('style')).toContain('opacity: 1')
   })
 
-  it('places ingestion, MD-HTML, and skills at the bottom of the main group', () => {
-    const labels = wrapperLabels(mount(ActivityBar, { props }))
+  it('keeps ingestion above Debug and My directly below Debug', () => {
+    const wrapper = mount(ActivityBar, { props })
+    const labels = wrapper.get('.bottom-group').findAll('.activity-button').map((button) => button.attributes('aria-label'))
 
-    expect(labels.indexOf('看板')).toBeLessThan(labels.indexOf('入库进度'))
-    expect(labels.indexOf('入库进度')).toBeLessThan(labels.indexOf('MD-HTML'))
-    expect(labels.indexOf('MD-HTML')).toBeLessThan(labels.indexOf('Skills'))
+    expect(labels).toEqual(['入库进度', 'Debug', '我的', 'Settings'])
+    expect(wrapper.find('button[aria-label="娱乐功能"]').exists()).toBe(true)
   })
 })
-
-function wrapperLabels(wrapper: ReturnType<typeof mount<typeof ActivityBar>>): string[] {
-  return wrapper.findAll('.activity-bar > .activity-button').map((button) => button.attributes('aria-label') || '')
-}

@@ -47,7 +47,7 @@ def test_privacy_service_rejects_unsupported_target_types(tmp_path) -> None:
 
     service = PrivacyService(engine=create_engine(f"sqlite:///{tmp_path / 'privacy.db'}"))
 
-    with pytest.raises(ValueError, match="knowledge_path or library_item"):
+    with pytest.raises(ValueError, match="smart_form_row"):
         service.add_privacy(
             PrivacyCreate.model_construct(
                 user_id="user-1",

@@ -69,6 +69,7 @@ export default defineConfig({
       '/privacy': DEV_PROXY_TARGET,
       '/feedback': DEV_PROXY_TARGET,
       '/smart-forms': DEV_PROXY_TARGET,
+      '/literature-reading': DEV_PROXY_TARGET,
       '/structured-generation': DEV_PROXY_TARGET,
       '/sessions': DEV_PROXY_TARGET,
       '/settings': DEV_PROXY_TARGET,

@@ -12,8 +12,9 @@ Smart form service tests.
 from __future__ import annotations
 
 from sqlalchemy import inspect, text
-from sqlmodel import create_engine
+from sqlmodel import Session, create_engine
 
+from agent_service.models.user_settings import UserKnowledgeLibrary
 from agent_service.services.smart_form_service import SmartFormService
 
 
@@ -129,3 +130,66 @@ def test_smart_form_service_deletes_only_the_owners_form() -> None:
     assert service.get_form(user_id="owner", form_id=saved["form_id"]) is not None
     assert service.delete_form(user_id="owner", form_id=saved["form_id"]) is True
     assert service.get_form(user_id="owner", form_id=saved["form_id"]) is None
+
+
+def test_literature_entries_are_library_scoped_and_preserve_entry_time(tmp_path) -> None:
+    """文献阅读只列出所属知识库智能表行，整表保存后入表时间保持稳定。"""
+
+    engine = create_engine("sqlite:///:memory:")
+    service = SmartFormService(engine=engine)
+    with Session(engine) as db:
+        db.add(UserKnowledgeLibrary(library_id="lib-1", user_id="u1", name="项目库", knowledge_dir=str(tmp_path), is_active=True))
+        db.commit()
+    asset_dir = tmp_path / ".mw" / "forms" / "papers" / "assets"
+    asset_dir.mkdir(parents=True)
+    source = asset_dir / "paper.pdf"
+    source.write_bytes(b"pdf")
+    form = {
+        "title": "论文表",
+        "columns": [
+            {"id": "literature_file", "title": "文献上传", "type": "file"},
+            {"id": "literature_content", "title": "文献内容", "type": "readonly_text"},
+            {"id": "title", "title": "标题", "type": "smart_text"},
+        ],
+        "rows": [{"id": "row-1", "cells": {
+            "literature_file": {"value": "paper.pdf", "fileName": "paper.pdf", "assetPath": ".mw/forms/papers/assets/paper.pdf"},
+            "literature_content": {"value": "完整正文"},
+            "title": {"value": "论文标题"},
+        }}],
+    }
+    saved = service.save_form(user_id="u1", library_id="lib-1", form_kind="literature", asset_dir=".mw/forms/papers", form=form)
+    first_created_at = saved["form"]["rows"][0]["createdAt"]
+    saved_again = service.save_form(user_id="u1", form_id=saved["form_id"], library_id="lib-1", form_kind="literature", asset_dir=".mw/forms/papers", form=saved["form"])
+
+    assert saved_again["form"]["rows"][0]["createdAt"] == first_created_at
+    entries = service.list_literature_entries(user_id="u1", library_id="lib-1")
+    assert [(entry["title"], entry["file_size"]) for entry in entries] == [("论文标题", 3)]
+    assert service.list_forms(user_id="u1", library_id="other") == []
+
+
+def test_duplicate_and_delete_literature_row_manage_independent_real_files(tmp_path) -> None:
+    """复制行应复制真实文件，删除副本时不能破坏原文献。"""
+
+    engine = create_engine("sqlite:///:memory:")
+    service = SmartFormService(engine=engine)
+    with Session(engine) as db:
+        db.add(UserKnowledgeLibrary(library_id="lib-1", user_id="u1", name="项目库", knowledge_dir=str(tmp_path), is_active=True))
+        db.commit()
+    asset_dir = tmp_path / ".mw" / "forms" / "papers" / "assets"
+    asset_dir.mkdir(parents=True)
+    source = asset_dir / "paper.pdf"
+    source.write_bytes(b"pdf")
+    saved = service.save_form(user_id="u1", library_id="lib-1", form_kind="literature", asset_dir=".mw/forms/papers", form={
+        "title": "论文表",
+        "columns": [{"id": "literature_file", "title": "文献上传", "type": "file"}, {"id": "literature_content", "title": "文献内容", "type": "readonly_text"}],
+        "rows": [{"id": "row-1", "cells": {"literature_file": {"value": "paper.pdf", "fileName": "paper.pdf", "assetPath": ".mw/forms/papers/assets/paper.pdf"}}}],
+    })
+    duplicated = service.duplicate_literature_row(user_id="u1", form_id=saved["form_id"], row_id="row-1")
+    copied_row = duplicated["form"]["rows"][1]
+    copied_path = tmp_path / copied_row["cells"]["literature_file"]["assetPath"]
+
+    assert copied_path.exists()
+    assert copied_path != source
+    assert service.delete_literature_row(user_id="u1", form_id=saved["form_id"], row_id=copied_row["id"], delete_file=True)
+    assert not copied_path.exists()
+    assert source.exists()

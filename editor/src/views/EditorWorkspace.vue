@@ -41,6 +41,7 @@ const LibraryView = defineAsyncComponent(() => import('@/views/LibraryView.vue')
 const ComponentLibraryView = defineAsyncComponent(() => import('@/views/ComponentLibraryView.vue'))
 const VaultView = defineAsyncComponent(() => import('@/views/VaultView.vue'))
 const SmartFormsView = defineAsyncComponent(() => import('@/views/SmartFormsView.vue'))
+const LiteratureReadingView = defineAsyncComponent(() => import('@/views/LiteratureReadingView.vue'))
 const FavoritesView = defineAsyncComponent(() => import('@/views/FavoritesView.vue'))
 const PrivacyView = defineAsyncComponent(() => import('@/views/PrivacyView.vue'))
 const MarkdownHtmlVisualizationView = defineAsyncComponent(() => import('@/views/MarkdownHtmlVisualizationView.vue'))
@@ -139,6 +140,10 @@ watch(
     }
     if (mainView === 'visualization' && agentOpen) {
       fileSidebarOpen.value = false
+    }
+    if (mainView === 'literature-reading') {
+      fileSidebarOpen.value = false
+      agentSidebarOpen.value = false
     }
   },
 )
@@ -414,6 +419,16 @@ function openVault() {
 
 function openForms() {
   const next = workspaceStore.mainView === 'forms' ? 'editor' : 'forms'
+  workspaceStore.setMainView(next)
+  if (next !== 'editor') {
+    fileSidebarOpen.value = false
+    agentSidebarOpen.value = false
+  }
+}
+
+/** Opens the smart-form-backed literature reading workspace. */
+function openLiterature() {
+  const next = workspaceStore.mainView === 'literature-reading' ? 'editor' : 'literature-reading'
   workspaceStore.setMainView(next)
   if (next !== 'editor') {
     fileSidebarOpen.value = false
@@ -731,6 +746,7 @@ watch(
         :component-library-active="workspaceStore.mainView === 'component-library'"
         :vault-active="workspaceStore.mainView === 'vault'"
         :forms-active="workspaceStore.mainView === 'forms'"
+        :literature-active="workspaceStore.mainView === 'literature-reading'"
         :ingestion-active="workspaceStore.mainView === 'ingestion'"
         :visualization-active="workspaceStore.mainView === 'visualization'"
         :agent-active="workspaceStore.mainView === 'agent'"
@@ -753,6 +769,7 @@ watch(
         @open-component-library="openComponentLibrary"
         @open-vault="openVault"
         @open-forms="openForms"
+        @open-literature="openLiterature"
         @open-ingestion="openIngestion"
         @open-visualization="openVisualization"
         @toggle-agent="openAgentPage"
@@ -823,6 +840,7 @@ watch(
           :mobile="topCommandBarMobile"
           :available-width="mainShellWidth"
         />
+        <LiteratureReadingView v-else-if="workspaceStore.mainView === 'literature-reading'" class="main-shell-content" />
         <IngestionProgressView v-else-if="workspaceStore.mainView === 'ingestion'" class="main-shell-content" />
         <MarkdownHtmlVisualizationView v-else-if="workspaceStore.mainView === 'visualization'" class="main-shell-content" />
         <AgentPage

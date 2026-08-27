@@ -192,6 +192,12 @@ service AgentService {
   rpc DeleteAutomation(google.protobuf.Struct) returns (google.protobuf.Struct);
   // 智能表格删除，与 REST DELETE /smart-forms/{form_id} 对齐。
   rpc DeleteSmartForm(google.protobuf.Struct) returns (google.protobuf.Struct);
+  // 文献阅读行级能力，与 REST /literature-reading 对齐。
+  rpc ListLiteratureEntries(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc TouchLiteratureEntry(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc PatchLiteratureRow(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc DuplicateLiteratureRow(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc DeleteLiteratureRow(google.protobuf.Struct) returns (google.protobuf.Struct);
 }
 
 // ---------------------------------------------------------------------------

@@ -13,6 +13,7 @@ import IcIcon from '@/components/common/IcIcon.vue'
 import LibraryCoverUploader from '@/components/library_view/LibraryCoverUploader.vue'
 import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
 import LibraryRealContentPanel from '@/components/library_view/LibraryRealContentPanel.vue'
+import { isLibrarySourceImage } from '@/components/library_view/librarySourceImage'
 import type { LibraryAsset, LibraryItem, LibraryTag } from '@/types/knowledge'
 
 const props = defineProps<{
@@ -49,8 +50,8 @@ const realContentDirty = ref(false)
 
 const isCollection = computed(() => props.item?.item_type === 'collection')
 const canUseSourceImage = computed(() => {
-  const mime = props.item?.source_mime ?? ''
-  return mime.startsWith('image/')
+  const item = props.item
+  return Boolean(item && isLibrarySourceImage(item.source_path || item.source_name, item.source_mime))
 })
 
 watch(
@@ -155,8 +156,8 @@ function handleCoverUploaded(asset: LibraryAsset) {
             <label><input v-model="coverMode" type="radio" value="icon" /> 文件类型图标</label>
             <label><input v-model="coverMode" type="radio" value="title" /> 标题文字</label>
             <label><input v-model="coverMode" type="radio" value="description" /> 描述文字</label>
-            <label><input v-model="coverMode" type="radio" value="image" /> 上传图片</label>
-            <label v-if="canUseSourceImage"><input v-model="coverMode" type="radio" value="source_image" /> 使用真实图片</label>
+            <label v-if="!canUseSourceImage"><input v-model="coverMode" type="radio" value="image" /> 上传图片</label>
+            <label v-else><input v-model="coverMode" type="radio" value="source_image" /> 使用真实图片</label>
           </div>
         </div>
 
@@ -206,6 +207,8 @@ function handleCoverUploaded(asset: LibraryAsset) {
 
 .dialog-panel {
   width: min(760px, calc(100vw - 32px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
   border: 1px solid var(--color-border);
   border-radius: 28px;
   background: var(--color-surface);
