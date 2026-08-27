@@ -4354,6 +4354,7 @@ th.sticky-literature-column {
   display: grid;
   align-items: stretch;
   justify-content: stretch;
+  gap: 0;
   width: 100%;
   box-sizing: border-box;
   min-height: 0;
@@ -4383,6 +4384,10 @@ th.sticky-literature-column {
 
 .forms-secondary-row {
   flex-wrap: wrap;
+}
+
+.forms-secondary-row .clear-invalid-btn {
+  margin-left: auto;
 }
 
 .forms-secondary-row .filter-controls {

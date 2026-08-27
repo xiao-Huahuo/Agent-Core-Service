@@ -9,6 +9,7 @@ import BasicSettingsSection from '@/components/settings_view/BasicSettingsSectio
 import BrowserSettingsSection from '@/components/settings_view/BrowserSettingsSection.vue'
 import LlmSettingsSection from '@/components/settings_view/LlmSettingsSection.vue'
 import MemorySettingsSection from '@/components/settings_view/MemorySettingsSection.vue'
+import McpSettingsSection from '@/components/settings_view/McpSettingsSection.vue'
 import SettingsSidebar from '@/components/settings_view/SettingsSidebar.vue'
 import type { SettingsTabKey } from '@/components/settings_view/SettingsSidebar.vue'
 import TerminalSandboxSettingsSection from '@/components/settings_view/TerminalSandboxSettingsSection.vue'
@@ -18,6 +19,7 @@ import GraphSettingsSection from '@/components/settings_view/GraphSettingsSectio
 import SafetySettingsSection from '@/components/settings_view/SafetySettingsSection.vue'
 import StorageSettingsSection from '@/components/settings_view/StorageSettingsSection.vue'
 import FloatingSettingsSection from '@/components/settings_view/FloatingSettingsSection.vue'
+import SkillView from '@/views/SkillView.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { ThemeMode } from '@/types/settings'
@@ -40,6 +42,8 @@ const tabs = [
   { key: 'safety' as const, label: '密码与安全' },
   { key: 'storage' as const, label: '存储管理' },
   { key: 'floating' as const, label: '悬浮窗' },
+  { key: 'skills' as const, label: 'Skills' },
+  { key: 'mcp' as const, label: 'MCP' },
 ]
 
 watch(activeTab, (tab) => {
@@ -720,7 +724,7 @@ onBeforeUnmount(() => {
       @select="activeTab = $event"
     />
 
-    <div class="settings-body">
+    <div class="settings-body" :class="{ 'settings-body-skills': activeTab === 'skills' }">
       <FormHeightTransition :watch-key="activeTab">
         <div class="settings-body-content">
           <BasicSettingsSection
@@ -866,6 +870,8 @@ onBeforeUnmount(() => {
           <FloatingSettingsSection
             v-if="activeTab === 'floating'"
           />
+          <SkillView v-if="activeTab === 'skills'" />
+          <McpSettingsSection v-if="activeTab === 'mcp'" />
         </div>
       </FormHeightTransition>
     </div>
@@ -928,6 +934,10 @@ onBeforeUnmount(() => {
 
 .settings-body > .form-height-transition {
   overflow: visible;
+}
+
+.settings-body.settings-body-skills {
+  padding: 0;
 }
 
 @media (max-width: 600px) {

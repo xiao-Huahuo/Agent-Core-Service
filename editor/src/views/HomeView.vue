@@ -107,6 +107,11 @@ const toolSlides: CarouselSlide[] = [
 ]
 
 function openView(view: WorkspaceMainView) {
+  if (view === 'skills') {
+    localStorage.setItem('agent_editor_settings_active_tab', 'skills')
+    workspaceStore.setMainView('settings')
+    return
+  }
   workspaceStore.setMainView(view)
 }
 </script>

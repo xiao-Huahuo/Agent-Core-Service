@@ -36,7 +36,6 @@ const props = defineProps<{
   feedbackOpen: boolean
   searchActive: boolean
   browserActive: boolean
-  skillsActive: boolean
   settingsActive: boolean
 }>()
 
@@ -62,7 +61,6 @@ const emit = defineEmits<{
   openSearch: []
   openBrowser: []
   knowledgeMenuVisibilityChange: [open: boolean]
-  openSkills: []
   openSettings: []
 }>()
 
@@ -80,7 +78,10 @@ const agentIconSrc = computed(() => {
   if (props.agentActive && props.displayMode === 'management') return lightLogo
   return darkLogo
 })
-const knowledgeMenuOpen = ref(false)
+type ActivityMenu = 'knowledge' | 'entertainment' | 'mine'
+
+/** Only one rail submenu stays open so every grouped entry shares the library interaction model. */
+const activeMenu = ref<ActivityMenu | null>(null)
 const knowledgeActive = computed(() => (
   props.resourcesActive
   || props.libraryActive
@@ -88,6 +89,8 @@ const knowledgeActive = computed(() => (
   || props.vaultActive
   || props.formsActive
 ))
+const entertainmentActive = computed(() => props.visualizationActive)
+const mineActive = computed(() => props.favoritesActive || props.privacyActive || props.feedbackOpen)
 const activityBarRef = ref<HTMLElement | null>(null)
 const hoverIndicatorTop = ref(0)
 const hoverIndicatorVisible = ref(false)
@@ -95,8 +98,11 @@ const knowledgeSubmenuRef = ref<HTMLElement | null>(null)
 const knowledgeHoverIndicatorTop = ref(0)
 const knowledgeHoverIndicatorVisible = ref(false)
 
-/** Let native workspace surfaces yield while the DOM submenu is visible. */
-watch(knowledgeMenuOpen, (open) => emit('knowledgeMenuVisibilityChange', open))
+/** Let native workspace surfaces yield while any DOM submenu is visible. */
+watch(activeMenu, (menu) => {
+  knowledgeHoverIndicatorVisible.value = false
+  emit('knowledgeMenuVisibilityChange', menu !== null)
+})
 
 /** Resolves a rail button from delegated hover/focus events. */
 function resolveActivityButton(target: EventTarget | null): HTMLElement | null {
@@ -104,8 +110,9 @@ function resolveActivityButton(target: EventTarget | null): HTMLElement | null {
   if (!activityBar || !(target instanceof Element)) return null
   const button = target.closest<HTMLElement>('.activity-button')
   if (!button || !activityBar.contains(button)) return null
-  return button.closest('.knowledge-submenu')
-    ? activityBar.querySelector<HTMLElement>('.knowledge-button')
+  const submenu = button.closest('.knowledge-submenu')
+  return submenu
+    ? submenu.closest('.knowledge-group')?.querySelector<HTMLElement>('.knowledge-button') ?? null
     : button
 }
 
@@ -152,21 +159,25 @@ function hideKnowledgeHoverIndicator(event: MouseEvent | FocusEvent): void {
   knowledgeHoverIndicatorVisible.value = false
 }
 
-function toggleKnowledgeMenu() {
-  knowledgeMenuOpen.value = !knowledgeMenuOpen.value
+/** Toggles one library-style grouped menu and closes any sibling menu. */
+function toggleActivityMenu(menu: ActivityMenu) {
+  activeMenu.value = activeMenu.value === menu ? null : menu
 }
 
-function openKnowledgeMenuOnHover() {
-  if (props.displayMode === 'icons') knowledgeMenuOpen.value = true
+/** Opens a grouped menu on hover in compact icon mode. */
+function openActivityMenuOnHover(menu: ActivityMenu) {
+  if (props.displayMode === 'icons') activeMenu.value = menu
 }
 
-function closeKnowledgeMenuOnLeave() {
-  if (props.displayMode === 'icons') knowledgeMenuOpen.value = false
+/** Closes the hovered grouped menu after the pointer leaves its triangle bridge. */
+function closeActivityMenuOnLeave(menu: ActivityMenu) {
+  if (props.displayMode === 'icons' && activeMenu.value === menu) activeMenu.value = null
 }
 
-function closeKnowledgeMenu() {
+/** Closes a compact submenu after navigation while expanded management menus stay visible. */
+function closeActivityMenu() {
   if (props.displayMode === 'management') return
-  knowledgeMenuOpen.value = false
+  activeMenu.value = null
 }
 </script>
 
@@ -215,8 +226,8 @@ function closeKnowledgeMenu() {
     </button>
     <div
       class="knowledge-group"
-      @mouseenter="openKnowledgeMenuOnHover"
-      @mouseleave="closeKnowledgeMenuOnLeave"
+      @mouseenter="openActivityMenuOnHover('knowledge')"
+      @mouseleave="closeActivityMenuOnLeave('knowledge')"
     >
       <button
         class="activity-button knowledge-button"
@@ -224,17 +235,17 @@ function closeKnowledgeMenu() {
         type="button"
       title="库"
       aria-label="库"
-        :aria-expanded="knowledgeMenuOpen"
+        :aria-expanded="activeMenu === 'knowledge'"
         @mousedown="handleRipple"
-        @click.stop="toggleKnowledgeMenu"
+        @click.stop="toggleActivityMenu('knowledge')"
       >
         <IcIcon name="book" :size="18" />
         <span class="activity-label">库</span>
-        <IcIcon class="knowledge-chevron" :class="{ 'is-open': knowledgeMenuOpen }" name="chevron-right" :size="14" />
+        <IcIcon class="knowledge-chevron" :class="{ 'is-open': activeMenu === 'knowledge' }" name="chevron-right" :size="14" />
       </button>
       <Transition name="knowledge-submenu">
         <div
-          v-if="knowledgeMenuOpen"
+          v-if="activeMenu === 'knowledge'"
           ref="knowledgeSubmenuRef"
           class="knowledge-submenu"
           aria-label="知识库菜单"
@@ -258,7 +269,7 @@ function closeKnowledgeMenu() {
             title="文件资源管理器"
             aria-label="文件资源管理器"
             @mousedown.prevent="handleRipple"
-            @click="emit('openResources'); closeKnowledgeMenu()"
+            @click="emit('openResources'); closeActivityMenu()"
           >
             <IcIcon name="folder-open" :size="18" />
             <span class="activity-label">文件资源管理器</span>
@@ -270,7 +281,7 @@ function closeKnowledgeMenu() {
             title="图书馆"
             aria-label="图书馆"
             @mousedown.prevent="handleRipple"
-            @click="emit('openLibrary'); closeKnowledgeMenu()"
+            @click="emit('openLibrary'); closeActivityMenu()"
           >
             <IcIcon name="book" :size="18" />
             <span class="activity-label">图书馆</span>
@@ -282,7 +293,7 @@ function closeKnowledgeMenu() {
             title="组件库"
             aria-label="组件库"
             @mousedown.prevent="handleRipple"
-            @click="emit('openComponentLibrary'); closeKnowledgeMenu()"
+            @click="emit('openComponentLibrary'); closeActivityMenu()"
           >
             <IcIcon name="grid-view" :size="18" />
             <span class="activity-label">组件库</span>
@@ -294,7 +305,7 @@ function closeKnowledgeMenu() {
             title="密码库"
             aria-label="密码库"
             @mousedown.prevent="handleRipple"
-            @click="emit('openVault'); closeKnowledgeMenu()"
+            @click="emit('openVault'); closeActivityMenu()"
           >
             <IcIcon name="shield" :size="18" />
             <span class="activity-label">密码库</span>
@@ -306,7 +317,7 @@ function closeKnowledgeMenu() {
             title="智能表格"
             aria-label="智能表格"
             @mousedown.prevent="handleRipple"
-            @click="emit('openForms'); closeKnowledgeMenu()"
+            @click="emit('openForms'); closeActivityMenu()"
           >
             <IcIcon name="table-chart" :size="18" />
             <span class="activity-label">智能表格</span>
@@ -386,78 +397,71 @@ function closeKnowledgeMenu() {
       <IcIcon name="checklist" :size="18" />
       <span class="activity-label">任务队列</span>
     </button>
-    <button
-      class="activity-button"
-      :class="{ active: favoritesActive }"
-      type="button"
-      title="我的收藏"
-      aria-label="我的收藏"
-      @mousedown.prevent="handleRipple"
-      @click="emit('openFavorites')"
+    <div
+      class="knowledge-group"
+      @mouseenter="openActivityMenuOnHover('entertainment')"
+      @mouseleave="closeActivityMenuOnLeave('entertainment')"
     >
-      <IcIcon name="star" :size="18" />
-      <span class="activity-label">收藏</span>
-    </button>
-    <button
-      class="activity-button"
-      :class="{ active: privacyActive }"
-      type="button"
-      title="我的隐私"
-      aria-label="我的隐私"
-      @mousedown.prevent="handleRipple"
-      @click="emit('openPrivacy')"
-    >
-      <IcIcon name="visibility-off" :size="18" />
-      <span class="activity-label">隐私</span>
-    </button>
-    <button
-      class="activity-button"
-      :class="{ active: visualizationActive }"
-      type="button"
-      title="MD-HTML"
-      aria-label="MD-HTML"
-      @mousedown.prevent="handleRipple"
-      @click="emit('openVisualization')"
-    >
-      <IcIcon name="code" :size="18" />
-      <span class="activity-label">MD-HTML</span>
-    </button>
-    <button
-      class="activity-button"
-      :class="{ active: ingestionActive }"
-      type="button"
-      title="入库进度"
-      aria-label="入库进度"
-      @mousedown.prevent="handleRipple"
-      @click="emit('openIngestion')"
-    >
-      <IcIcon name="ingest" :size="18" />
-      <span class="activity-label">入库</span>
-    </button>
-    <button
-      class="activity-button"
-      :class="{ active: skillsActive }"
-      type="button"
-      title="Skills"
-      aria-label="Skills"
-      @mousedown.prevent="handleRipple"
-      @click="emit('openSkills')"
-    >
-      <IcIcon name="auto-awesome" :size="18" />
-      <span class="activity-label">Skills</span>
-    </button>
+      <button
+        class="activity-button knowledge-button"
+        :class="{ active: entertainmentActive }"
+        type="button"
+        title="娱乐功能"
+        aria-label="娱乐功能"
+        :aria-expanded="activeMenu === 'entertainment'"
+        @mousedown="handleRipple"
+        @click.stop="toggleActivityMenu('entertainment')"
+      >
+        <IcIcon name="auto-awesome" :size="18" />
+        <span class="activity-label">娱乐功能</span>
+        <IcIcon class="knowledge-chevron" :class="{ 'is-open': activeMenu === 'entertainment' }" name="chevron-right" :size="14" />
+      </button>
+      <Transition name="knowledge-submenu">
+        <div
+          v-if="activeMenu === 'entertainment'"
+          ref="knowledgeSubmenuRef"
+          class="knowledge-submenu"
+          aria-label="娱乐功能菜单"
+          @mouseover="moveKnowledgeHoverIndicator"
+          @mouseleave="hideKnowledgeHoverIndicator"
+          @focusin="moveKnowledgeHoverIndicator"
+          @focusout="hideKnowledgeHoverIndicator"
+        >
+          <span
+            class="knowledge-hover-indicator"
+            aria-hidden="true"
+            :style="{
+              transform: `translate3d(0, ${knowledgeHoverIndicatorTop}px, 0)`,
+              opacity: knowledgeHoverIndicatorVisible ? 1 : 0,
+            }"
+          ></span>
+          <button
+            class="activity-button"
+            :class="{ active: visualizationActive }"
+            type="button"
+            title="MD-HTML"
+            aria-label="MD-HTML"
+            @mousedown.prevent="handleRipple"
+            @click="emit('openVisualization'); closeActivityMenu()"
+          >
+            <IcIcon name="code" :size="18" />
+            <span class="activity-label">MD-HTML</span>
+          </button>
+        </div>
+      </Transition>
+    </div>
     <div class="bottom-group">
       <button
         class="activity-button"
-        :class="{ active: feedbackOpen }"
+        :class="{ active: ingestionActive }"
         type="button"
-        title="用户反馈"
-        aria-label="用户反馈"
+        title="入库进度"
+        aria-label="入库进度"
         @mousedown.prevent="handleRipple"
-        @click="emit('toggleFeedback')"
+        @click="emit('openIngestion')"
       >
-        <IcIcon name="feedback" :size="18" />
-        <span class="activity-label">反馈</span>
+        <IcIcon name="ingest" :size="18" />
+        <span class="activity-label">入库</span>
       </button>
       <button
         class="activity-button"
@@ -471,6 +475,83 @@ function closeKnowledgeMenu() {
         <IcIcon name="bug" :size="18" />
         <span class="activity-label">Debug</span>
       </button>
+      <div
+        class="knowledge-group"
+        @mouseenter="openActivityMenuOnHover('mine')"
+        @mouseleave="closeActivityMenuOnLeave('mine')"
+      >
+        <button
+          class="activity-button knowledge-button"
+          :class="{ active: mineActive }"
+          type="button"
+          title="我的"
+          aria-label="我的"
+          :aria-expanded="activeMenu === 'mine'"
+          @mousedown="handleRipple"
+          @click.stop="toggleActivityMenu('mine')"
+        >
+          <IcIcon name="group" :size="18" />
+          <span class="activity-label">我的</span>
+          <IcIcon class="knowledge-chevron" :class="{ 'is-open': activeMenu === 'mine' }" name="chevron-right" :size="14" />
+        </button>
+        <Transition name="knowledge-submenu">
+          <div
+            v-if="activeMenu === 'mine'"
+            ref="knowledgeSubmenuRef"
+            class="knowledge-submenu"
+            aria-label="我的菜单"
+            @mouseover="moveKnowledgeHoverIndicator"
+            @mouseleave="hideKnowledgeHoverIndicator"
+            @focusin="moveKnowledgeHoverIndicator"
+            @focusout="hideKnowledgeHoverIndicator"
+          >
+            <span
+              class="knowledge-hover-indicator"
+              aria-hidden="true"
+              :style="{
+                transform: `translate3d(0, ${knowledgeHoverIndicatorTop}px, 0)`,
+                opacity: knowledgeHoverIndicatorVisible ? 1 : 0,
+              }"
+            ></span>
+            <button
+              class="activity-button"
+              :class="{ active: favoritesActive }"
+              type="button"
+              title="我的收藏"
+              aria-label="我的收藏"
+              @mousedown.prevent="handleRipple"
+              @click="emit('openFavorites'); closeActivityMenu()"
+            >
+              <IcIcon name="star" :size="18" />
+              <span class="activity-label">我的收藏</span>
+            </button>
+            <button
+              class="activity-button"
+              :class="{ active: privacyActive }"
+              type="button"
+              title="我的隐私"
+              aria-label="我的隐私"
+              @mousedown.prevent="handleRipple"
+              @click="emit('openPrivacy'); closeActivityMenu()"
+            >
+              <IcIcon name="visibility-off" :size="18" />
+              <span class="activity-label">我的隐私</span>
+            </button>
+            <button
+              class="activity-button"
+              :class="{ active: feedbackOpen }"
+              type="button"
+              title="用户反馈"
+              aria-label="用户反馈"
+              @mousedown.prevent="handleRipple"
+              @click="emit('toggleFeedback'); closeActivityMenu()"
+            >
+              <IcIcon name="feedback" :size="18" />
+              <span class="activity-label">用户反馈</span>
+            </button>
+          </div>
+        </Transition>
+      </div>
       <button
         class="activity-button"
         :class="{ active: settingsActive }"

@@ -46,7 +46,6 @@ const PrivacyView = defineAsyncComponent(() => import('@/views/PrivacyView.vue')
 const MarkdownHtmlVisualizationView = defineAsyncComponent(() => import('@/views/MarkdownHtmlVisualizationView.vue'))
 const SearchPage = defineAsyncComponent(() => import('@/views/SearchPage.vue'))
 const BrowserPage = defineAsyncComponent(() => import('@/views/BrowserPage.vue'))
-const SkillView = defineAsyncComponent(() => import('@/views/SkillView.vue'))
 import SettingsView from '@/views/SettingsView.vue'
 
 function handleAskAgent(text: string) {
@@ -469,15 +468,6 @@ function toggleBrowserSidebar() {
   workspaceStore.toggleBrowserSidebar()
 }
 
-function openSkills() {
-  const next = workspaceStore.mainView === 'skills' ? 'editor' : 'skills'
-  workspaceStore.setMainView(next)
-  if (next !== 'editor') {
-    fileSidebarOpen.value = false
-    agentSidebarOpen.value = false
-  }
-}
-
 function openSettings() {
   const next = workspaceStore.mainView === 'settings' ? 'editor' : 'settings'
   workspaceStore.setMainView(next)
@@ -751,7 +741,6 @@ watch(
         :feedback-open="feedbackOpen"
         :search-active="workspaceStore.mainView === 'search'"
         :browser-active="workspaceStore.mainView === 'browser'"
-        :skills-active="workspaceStore.mainView === 'skills'"
         :settings-active="workspaceStore.mainView === 'settings'"
         :display-mode="settingsStore.sidebarDisplayMode"
         @open-home="openHome"
@@ -776,7 +765,6 @@ watch(
         @open-search="openSearch"
         @open-browser="openBrowser"
         @knowledge-menu-visibility-change="activityOverlayOpen = $event"
-        @open-skills="openSkills"
         @open-settings="openSettings"
       />
       <div class="file-col ide-panel" :aria-hidden="!visibleFileSidebarOpen">
@@ -857,7 +845,6 @@ watch(
           class="main-shell-content"
           :activity-overlay-open="activityOverlayOpen"
         />
-        <SkillView v-else-if="workspaceStore.mainView === 'skills'" class="main-shell-content" />
         <SettingsView v-else-if="workspaceStore.mainView === 'settings'" class="main-shell-content" />
       </main>
       <div
