@@ -11,5 +11,3 @@
 - [ ] DSH Adapter的实现
   - 文档位于`docs/ADAPTER_DESIGN.md`
 ### BUGs
-- [ ] 将所有模型的验证下载和加载弄成可选项,不再阻碍在启动过程中间.
-  - 
