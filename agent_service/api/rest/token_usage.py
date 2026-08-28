@@ -14,7 +14,7 @@ from fastapi import APIRouter, Query
 
 from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
-from agent_service.services.token_usage_service import SUPPORTED_INTERVALS, TokenUsageService
+from agent_service.services.token_usage.service import SUPPORTED_INTERVALS, TokenUsageService
 
 router = APIRouter()
 

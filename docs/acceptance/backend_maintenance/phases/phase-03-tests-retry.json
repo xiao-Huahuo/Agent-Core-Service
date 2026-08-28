@@ -1,0 +1,67 @@
+[
+  {
+    "path": "tests/test_automation_scheduler.py",
+    "returncode": 0,
+    "output": "......                                                                   [100%]\n6 passed in 0.76s\n"
+  },
+  {
+    "path": "tests/test_database_migrations.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n3 passed in 5.81s\n"
+  },
+  {
+    "path": "tests/test_feedback_service.py",
+    "returncode": 0,
+    "output": "....                                                                     [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n4 passed, 1 warning in 6.98s\n"
+  },
+  {
+    "path": "tests/test_knowledge_graph_service.py",
+    "returncode": 0,
+    "output": "..................                                                       [100%]\n18 passed in 6.78s\n"
+  },
+  {
+    "path": "tests/test_library_service.py",
+    "returncode": 0,
+    "output": "............                                                             [100%]\n12 passed in 7.02s\n"
+  },
+  {
+    "path": "tests/test_privacy_api.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2 passed, 1 warning in 8.48s\n"
+  },
+  {
+    "path": "tests/test_privacy_service.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n2 passed in 3.56s\n"
+  },
+  {
+    "path": "tests/test_session_attachment_vision.py",
+    "returncode": 0,
+    "output": ".                                                                        [100%]\n1 passed in 6.69s\n"
+  },
+  {
+    "path": "tests/test_settings_font_config.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n2 passed in 0.60s\n"
+  },
+  {
+    "path": "tests/test_settings_llm_config.py",
+    "returncode": 0,
+    "output": ".............                                                            [100%]\n13 passed in 6.50s\n"
+  },
+  {
+    "path": "tests/test_smart_form_service.py",
+    "returncode": 0,
+    "output": "....                                                                     [100%]\n4 passed in 0.69s\n"
+  },
+  {
+    "path": "tests/test_todo_service.py",
+    "returncode": 0,
+    "output": ".............                                                            [100%]\n13 passed in 2.48s\n"
+  },
+  {
+    "path": "tests/test_vault_service.py",
+    "returncode": 0,
+    "output": ".....                                                                    [100%]\n5 passed in 2.17s\n"
+  }
+]

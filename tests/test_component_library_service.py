@@ -14,8 +14,8 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, text
 
-from agent_service.services.component_library_service import COMPONENT_TAGS, ComponentLibraryService
-from agent_service.services.knowledge_library_service import KnowledgeIgnoreMatcher
+from agent_service.services.component_library.service import COMPONENT_TAGS, ComponentLibraryService
+from agent_service.services.knowledge_library import KnowledgeIgnoreMatcher
 
 
 class _SettingsStub:

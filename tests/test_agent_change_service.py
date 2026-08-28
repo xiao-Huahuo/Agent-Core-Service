@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from agent_service.core.agent_config import AgentConfig
-from agent_service.services.agent_change_service import AgentChangeService
+from agent_service.services.agent_change.service import AgentChangeService
 
 
 class _KnowledgeServiceStub:

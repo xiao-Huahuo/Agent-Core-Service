@@ -14,11 +14,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from sqlmodel import Session, create_engine, select
+from sqlmodel import Session, select
+
+from tests.db_test_utils import create_test_engine as create_engine
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.models.vault import VaultItem
-from agent_service.services.vault_service import VaultService
+from agent_service.services.vault.service import VaultService
 
 
 def make_service(tmp_path: Path) -> VaultService:

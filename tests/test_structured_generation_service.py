@@ -14,14 +14,14 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import agent_service.services.structured_generation_service as structured_generation_module
+import agent_service.services.structured_generation.service as structured_generation_module
 from agent_service.core.agent_config import AgentConfig
 from agent_service.schemas.structured_generation import (
     StructuredGenerationField,
     StructuredGenerationRequest,
     StructuredGenerationSource,
 )
-from agent_service.services.structured_generation_service import StructuredGenerationService
+from agent_service.services.structured_generation.service import StructuredGenerationService
 
 
 def make_request(*, fields: list[StructuredGenerationField] | None = None) -> StructuredGenerationRequest:

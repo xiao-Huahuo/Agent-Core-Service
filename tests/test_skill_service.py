@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from agent_service.core.agent_config import AgentConfig
-from agent_service.services.skill_service import SkillService
+from agent_service.services.skill.service import SkillService
 
 
 class _SettingsStub:

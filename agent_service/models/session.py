@@ -6,7 +6,7 @@ Session 数据库模型。
 中的 `agent_sessions` 表,用于保存用户会话的生命周期信息。
 
 使用说明:
-业务层应通过 `agent_service.services.session_service.SessionService` 操作本模型,
+业务层应通过 `agent_service.services.session.service.SessionService` 操作本模型,
 不要在 API 层或 AgentCore 中直接操作数据库表。
 """
 

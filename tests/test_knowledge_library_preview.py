@@ -13,8 +13,8 @@ from types import SimpleNamespace
 import fitz
 
 from agent_service.api.rest import debug as debug_api
-import agent_service.services.knowledge_library_service as knowledge_library_module
-from agent_service.services.knowledge_library_service import KnowledgeLibraryService
+import agent_service.services.knowledge_library.preview as knowledge_library_module
+from agent_service.services.knowledge_library import KnowledgeLibraryService
 from agent_service.services.memory.rag.frontmatter_bootstrap import FrontmatterBootstrapService
 from agent_service.services.memory.rag.image_ocr import ImageOcrService
 from agent_service.services.memory.rag.pdf_cleaner import PdfExtractionResult

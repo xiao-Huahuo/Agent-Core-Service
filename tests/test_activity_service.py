@@ -19,7 +19,7 @@ from agent_service.models.session import SessionRecord
 from agent_service.models.smart_form import SmartFormRecord
 from agent_service.models.todo import TodoRecord
 from agent_service.models.vault import VaultItem
-from agent_service.services.activity_service import ActivityService
+from agent_service.services.activity.service import ActivityService
 
 
 def _service() -> ActivityService:

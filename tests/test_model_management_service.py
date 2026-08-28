@@ -27,7 +27,7 @@ from agent_service.scripts.download_model import (
     update_download_progress,
 )
 import agent_service.scripts.download_model as download_module
-from agent_service.services.model_management_service import ModelManagementService
+from agent_service.services.model_management.service import ModelManagementService
 
 
 class _SettingsStub:

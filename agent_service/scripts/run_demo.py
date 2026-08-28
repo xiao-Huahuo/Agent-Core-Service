@@ -26,8 +26,8 @@ from agent_service.scripts.db_init import initialize_database
 from agent_service.scripts.knowledge_bootstrap import bootstrap_knowledge
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.memory.summary_service import SessionSummaryService
-from agent_service.services.message_service import MessageService
-from agent_service.services.session_service import SessionService
+from agent_service.services.message.service import MessageService
+from agent_service.services.session.service import SessionService
 from agent_service.services.scheduler import reset_llm_task_schedulers
 
 

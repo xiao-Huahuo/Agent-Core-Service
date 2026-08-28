@@ -752,7 +752,7 @@ async def get_knowledge_graph(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-from agent_service.services.knowledge_graph_service import (
+from agent_service.services.knowledge_graph import (
     KnowledgeGraphService,
     _run_graph_extraction,
     _update_graph_progress,

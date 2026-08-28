@@ -33,7 +33,7 @@ class AgentState(TypedDict):
     skill_index: 本轮用户输入命中的少量 Skill 候选摘要,不是全量 Skill 注册表。
     active_skills: 本轮路由命中的 Skill 正文,只在当前图运行中生效。
 
-    llm_config: 可选,预读取的用户 LLM 配置,避免图重入时重复从 _settings_service 读取。
+    llm_config: 可选,预读取的用户 LLM 配置,避免图重入时重复读取 SettingsService。
     """
 
     messages: Annotated[list[BaseMessage], add_messages]

@@ -14,10 +14,15 @@ from fastapi import APIRouter, Body, File, Form, Query, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from agent_service.api.recall_details import build_recall_details_payload
-from agent_service.api.rest.deps import _require_agent, _require_attachment_service, _require_message_service, _settings_service
+from agent_service.api.rest.deps import (
+    _require_agent,
+    _require_attachment_service,
+    _require_message_service,
+    _require_settings_service,
+)
 from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
-from agent_service.services.editor_context_service import editor_context_service
-from agent_service.services.task_suggestion_service import TaskSuggestionService
+from agent_service.services.editor_context.service import editor_context_service
+from agent_service.services.task_suggestion.service import TaskSuggestionService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -180,7 +185,7 @@ def _build_agent_stream_response(
 
     agent = _require_agent()
     try:
-        _ws_cfg = _settings_service.get_web_search_config(user_id=user_id) if _settings_service is not None else {}
+        _ws_cfg = _require_settings_service().get_web_search_config(user_id=user_id)
         ws_max_results = (
             _ws_cfg.get(
                 "web_search_max_results",

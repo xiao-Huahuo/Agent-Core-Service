@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from agent_service.services.memory.rag.frontmatter_bootstrap import FrontmatterBootstrapService
-from agent_service.services.knowledge_library_service import KnowledgeIgnoreMatcher, KnowledgeLibraryService
+from agent_service.services.knowledge_library import KnowledgeIgnoreMatcher, KnowledgeLibraryService
 
 
 class _SettingsServiceStub:

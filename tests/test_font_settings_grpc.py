@@ -8,7 +8,7 @@ import grpc
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.struct_pb2 import Struct
 from sqlalchemy.pool import StaticPool
-from sqlmodel import create_engine
+from tests.db_test_utils import create_test_engine as create_engine
 
 from agent_service.api.grpc.agent_service_pb2_grpc import (
     AgentServiceStub,
@@ -16,7 +16,7 @@ from agent_service.api.grpc.agent_service_pb2_grpc import (
 )
 from agent_service.api.grpc.servicer import AgentServiceServicer
 from agent_service.core.agent_config import AgentConfig
-from agent_service.services.settings_service import SettingsService
+from agent_service.services.settings.service import SettingsService
 
 
 class _StubAgent:

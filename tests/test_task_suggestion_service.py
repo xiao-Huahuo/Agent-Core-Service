@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from agent_service.services.scheduler import LARGE_MODEL_TIER, SMALL_MODEL_TIER
-from agent_service.services.task_suggestion_service import TaskSuggestionService
+from agent_service.services.task_suggestion.service import TaskSuggestionService
 
 
 @dataclass

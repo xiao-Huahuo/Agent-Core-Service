@@ -18,11 +18,13 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 
 if TYPE_CHECKING:
+    from sqlalchemy.engine import Engine
     from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
     from agent_service.services.memory.rag.embedding import EmbeddingService
-    from agent_service.services.skill_service import SkillService
-    from agent_service.services.task_list_service import TaskListService
-    from agent_service.services.agent_change_service import AgentChangeService
+    from agent_service.services.skill.service import SkillService
+    from agent_service.services.settings.service import SettingsService
+    from agent_service.services.task_list.service import TaskListService
+    from agent_service.services.agent_change.service import AgentChangeService
 
 AGENT_ACCESS_READONLY = "readonly"
 AGENT_ACCESS_SANDBOX = "sandbox"
@@ -53,6 +55,8 @@ class ToolRuntimeState:
     task_list_service: TaskListService | None = None
     change_service: AgentChangeService | None = None
     skill_service: SkillService | None = None
+    settings_service: SettingsService | None = None
+    database_engine: Engine | None = None
     agent_access_mode: str = AGENT_ACCESS_SANDBOX
     long_term_memory_enabled: bool = True
     citation_map: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -78,6 +82,8 @@ def set_tool_runtime(
     task_list_service: TaskListService | None = None,
     change_service: AgentChangeService | None = None,
     skill_service: Any = None,
+    settings_service: Any = None,
+    database_engine: Any = None,
     citation_map: dict[str, dict[str, Any]] | None = None,
     agent_access_mode: str = AGENT_ACCESS_SANDBOX,
     long_term_memory_enabled: bool = True,
@@ -98,17 +104,20 @@ def set_tool_runtime(
     from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
     from agent_service.services.memory.rag.embedding import EmbeddingService
 
+    resolved_memory_service = memory_service or LongTermMemoryService(config=config)
     _TOOL_RUNTIME.state = ToolRuntimeState(
         config=config,
         user_id=user_id,
         session_id=session_id,
         run_id=run_id or session_id,
         retrieval_service=retrieval_service or MemoryRetrievalService(config=config),
-        memory_service=memory_service or LongTermMemoryService(config=config),
+        memory_service=resolved_memory_service,
         embedding_service=embedding_service or EmbeddingService(config=config),
         task_list_service=task_list_service,
         change_service=change_service,
         skill_service=skill_service,
+        settings_service=settings_service,
+        database_engine=database_engine or getattr(resolved_memory_service, "engine", None),
         agent_access_mode=normalize_agent_access_mode(agent_access_mode),
         long_term_memory_enabled=bool(long_term_memory_enabled),
         citation_map=citation_map if citation_map is not None else {},

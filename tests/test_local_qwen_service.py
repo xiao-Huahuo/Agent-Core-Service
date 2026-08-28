@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from agent_service.services.local_qwen_service import (
+from agent_service.services.local_qwen.service import (
     LocalQwenChatModel,
     LocalQwenService,
     parse_qwen_response,
@@ -87,7 +87,7 @@ def test_local_qwen_runtime_dependencies_stay_cpu_compatible() -> None:
 def test_local_qwen_loads_fp32_on_avx2_cpu(tmp_path, monkeypatch: object) -> None:
     """AVX2 CPU 不得使用会落入极慢软件模拟路径的 BF16 权重。"""
 
-    import agent_service.services.local_qwen_service as local_module
+    import agent_service.services.local_qwen.service as local_module
 
     config = AgentConfig.load_config(
         {"storage": {"local_model_dir": str(tmp_path / "models")}},
@@ -260,7 +260,7 @@ def test_local_qwen_download_start_is_idempotent(tmp_path, monkeypatch: object) 
 
     from threading import Event
 
-    import agent_service.services.local_qwen_service as local_module
+    import agent_service.services.local_qwen.service as local_module
 
     config = AgentConfig.load_config(
         {"storage": {"local_model_dir": str(tmp_path / "models")}},
@@ -291,7 +291,7 @@ def test_local_qwen_download_start_is_idempotent(tmp_path, monkeypatch: object) 
 def test_backend_startup_resumes_detected_local_qwen_partial(tmp_path, monkeypatch: object) -> None:
     """启动恢复入口应识别断点并委托唯一下载线程续传。"""
 
-    import agent_service.services.local_qwen_service as local_module
+    import agent_service.services.local_qwen.service as local_module
 
     config = AgentConfig.load_config(
         {"storage": {"local_model_dir": str(tmp_path / "models")}},

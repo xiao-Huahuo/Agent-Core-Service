@@ -1,6 +1,8 @@
 """AgentService REST 接口层 — 按领域拆分路由模块。"""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from agent_service.api.rest.deps import bind_application_services
 
 from agent_service.api.rest.health import router as health_router
 from agent_service.api.rest.sessions import router as sessions_router
@@ -26,7 +28,7 @@ from agent_service.api.rest.agent_changes import router as agent_changes_router
 from agent_service.api.rest.agent_queue import router as agent_queue_router
 from agent_service.api.rest.activity import router as activity_router
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(bind_application_services)])
 router.include_router(health_router)
 router.include_router(sessions_router)
 router.include_router(agent_router)

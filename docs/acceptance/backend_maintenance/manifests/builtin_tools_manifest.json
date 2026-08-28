@@ -1,0 +1,2430 @@
+[
+  {
+    "callable": "agent_service.tools.builtin.utility.list_available_tools",
+    "description": "列出当前可用的全部工具(中文名、工具名、一句话用途),每行一个。当本轮仅预绑定了部分工具时,可调用本工具查看完整清单,再在回复中说出所需工具名,下一轮即可放开绑定使用。",
+    "name": "list_available_tools",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.utility.get_current_time",
+    "description": "获取指定 IANA 时区的当前时间。默认使用 UTC。",
+    "name": "get_current_time",
+    "parameters": {
+      "properties": {
+        "timezone_name": {
+          "description": "IANA 时区名称,例如 UTC、Asia/Shanghai。",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.terminal.run_terminal_command",
+    "description": "在项目终端沙盒中执行一个或多个结构化指令段。必须传 shell、segments、cwd; 禁止传整条 shell 字符串。\n\n内部读取指令(internal_command 类型): pwd(当前目录), ls/dir(列出目录,支持 -a/R/l 和 /s/b 等标志,支持 *.docx 通配符), cat/type(读文件), head/tail -n N 文件(行窗口), stat(文件状态), wc(统计行/词/字符数,可用 -c/-l/-w 筛选但始终显示三项;未指定文件则返回总计数)。\n内部写入指令: write(覆写), append(追加), touch(创建/时间戳), mkdir(始终 -p 模式), rm/del(目录递归删除), mv/move(移动/重命名)。\n\n外部程序段(external_program 类型): 在沙盒/只读模式下需在白名单内,白名单程序包括 python/pytest/pip/git/npm/node/eslint/vitest/go/cargo/find/wc 等;find 用于搜索文件(如 find . -name '*.docx' -type f), wc 用于带标志统计(如 wc -l file.txt)。完全访问模式下所有外部程序都允许(嵌套 shell 仍禁止)。\n\n权限模式影响:\n- readonly: 仅内部读取指令(pwd/ls/cat/head/tail/stat/wc),禁止写入和外部程序。\n- sandbox(默认): 内部读取可穿透工作区根目录;写入和外部程序限制在工作区内。\n- full_access: 所有内部指令和外部程序放开限制,额外支持 kill/taskkill 杀进程,rm -rf/mkdir -p/批量 cat/mv 等都允许。\n\n注意事项:\n- 读取或解析知识库中的文档正文时, 不要使用本工具; 统一用 read_knowledge_file 读取源文件的 Markdown 投影。\n- 文件搜索优先用 ls/dir *.docx /s /b 或 find . -name '*.docx'。\n- 需要标志的 wc(如 wc -l)用 external_program 类型;仅统计用 internal_command。\n- 所有 internal_command 都无需 shell 程序支持,在任何环境下可用。",
+    "name": "run_terminal_command",
+    "parameters": {
+      "properties": {
+        "cwd": {
+          "description": "相对沙盒工作区的工作目录,默认当前工作区根目录。",
+          "type": "string"
+        },
+        "segments": {
+          "description": "指令段数组。外部程序段格式为 {type:'external_program', program:'python', args:['-m','pytest']};内部系统指令段格式为 {type:'internal_command', command:'ls', args:['.']}。",
+          "type": "array"
+        },
+        "shell": {
+          "description": "终端策略名: cmd、powershell 或 bash。",
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "description": "可选单段超时时间,受沙盒最大值限制。",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "shell",
+        "segments"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.web.download_file",
+    "description": "下载文件到本地存储。注意: 展示图片时请直接使用 Markdown 热链接嵌入原始图片 URL,不要使用本工具。仅在用户明确要求保存或下载文件时才调用本工具。如果 save_to_knowledge=True,还会将文件拷贝到知识库并灌库。下载后的文件可通过 /downloads/ 路径在 Markdown 中引用。",
+    "name": "download_file",
+    "parameters": {
+      "properties": {
+        "knowledge_path": {
+          "description": "可选。保存到知识库时的相对路径。",
+          "type": "string"
+        },
+        "save_to_knowledge": {
+          "description": "是否同时保存到当前 active 知识库并灌库。默认 false。",
+          "type": "boolean"
+        },
+        "url": {
+          "description": "待下载文件的完整 URL。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.git.git_status",
+    "description": "读取当前知识库仓库状态、分支、远程、更改和未跟踪文件。",
+    "name": "git_status",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.git.git_diff",
+    "description": "读取当前知识库工作区或暂存区的 Git diff。",
+    "name": "git_diff",
+    "parameters": {
+      "properties": {
+        "path": {
+          "description": "可选知识库相对路径。",
+          "type": "string"
+        },
+        "staged": {
+          "description": "是否读取暂存区差异。",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.git.git_history",
+    "description": "读取提交历史、未推送提交和未推送文件。",
+    "name": "git_history",
+    "parameters": {
+      "properties": {
+        "limit": {
+          "description": "最大提交数,默认 30。",
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.git.git_init_repository",
+    "description": "在当前知识库根目录初始化 Git 仓库。",
+    "name": "git_init_repository",
+    "parameters": {
+      "properties": {
+        "initial_branch": {
+          "description": "初始分支名,默认 main。",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.git.git_restore_files",
+    "description": "回滚选中文件。已跟踪文件恢复到 HEAD 并清理旧知识索引;未跟踪文件移入 MetaWeave 最近删除,不会永久清除。",
+    "name": "git_restore_files",
+    "parameters": {
+      "properties": {
+        "paths": {
+          "description": "知识库相对路径列表。",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "paths"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.git.git_commit_files",
+    "description": "暂存选中的知识库文件并创建本地提交。",
+    "name": "git_commit_files",
+    "parameters": {
+      "properties": {
+        "message": {
+          "description": "提交概要。",
+          "type": "string"
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "paths",
+        "message"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.git.git_push_branch",
+    "description": "推送本地分支到远程。必须先获得用户明确确认并传 confirm=true;force-with-lease 还需要独立的 confirm_force=true。",
+    "name": "git_push_branch",
+    "parameters": {
+      "properties": {
+        "all_branches": {
+          "description": "为 true 时推送所有本地分支。",
+          "type": "boolean"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "confirm_force": {
+          "type": "boolean"
+        },
+        "force_with_lease": {
+          "type": "boolean"
+        },
+        "local_branch": {
+          "type": "string"
+        },
+        "remote": {
+          "type": "string"
+        },
+        "remote_branch": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "local_branch",
+        "remote",
+        "remote_branch",
+        "confirm"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.git.git_create_branch",
+    "description": "创建本地 Git 分支,可选择立即切换。",
+    "name": "git_create_branch",
+    "parameters": {
+      "properties": {
+        "checkout": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.git.git_add_remote",
+    "description": "为当前知识库 Git 仓库新增命名远程。",
+    "name": "git_add_remote",
+    "parameters": {
+      "properties": {
+        "name": {
+          "description": "远程名称,例如 origin。",
+          "type": "string"
+        },
+        "url": {
+          "description": "HTTPS、SSH 或本地 Git 仓库地址。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "url"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.git.git_switch_branch",
+    "description": "切换本地 Git 分支并使实际变化文件的知识索引失效。",
+    "name": "git_switch_branch",
+    "parameters": {
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.git.git_pull_branch",
+    "description": "获取并快进合并远程分支,不会自动创建合并提交。",
+    "name": "git_pull_branch",
+    "parameters": {
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "remote": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "remote",
+        "branch"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.utility.list_skills",
+    "description": "List all skills visible to the current user, including built-in and user-level skills, their sources, descriptions, and enabled states.",
+    "name": "list_skills",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.utility.use_skill",
+    "description": "Load one enabled Skill's SKILL.md body into the current turn when the Agent needs detailed instructions for a specific skill. Use skill_ref from list_skills, such as skill_id, name, or folder name.",
+    "name": "use_skill",
+    "parameters": {
+      "properties": {
+        "skill_ref": {
+          "description": "Skill id, Skill name, or skill folder name returned by list_skills.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_ref"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.memory.get_long_term_memory",
+    "description": "检索当前用户在长期记忆中的相关摘要信息,用于跨轮对话回忆项目目标、约束、偏好和历史事实。",
+    "name": "get_long_term_memory",
+    "parameters": {
+      "properties": {
+        "query": {
+          "description": "需要检索的记忆查询文本。",
+          "type": "string"
+        },
+        "top_k": {
+          "description": "最多返回多少条结果,默认 3。",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.memory.write_long_term_memory",
+    "description": "向当前用户的长期记忆中写入一条记录,包含向量化后可被后续对话检索召回。可用于手动存储重要信息、项目代号、用户偏好等需要跨会话持久化的内容。",
+    "name": "write_long_term_memory",
+    "parameters": {
+      "properties": {
+        "authority": {
+          "description": "权威性(0~1),默认 0.5。",
+          "type": "number"
+        },
+        "content": {
+          "description": "需要记忆的内容,建议简洁完整,以便后续检索。",
+          "type": "string"
+        },
+        "importance": {
+          "description": "重要性(0~1),默认 0.5。",
+          "type": "number"
+        },
+        "memory_type": {
+          "description": "记忆子类型,默认 important_fact_summary。一般无需修改。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.memory.write_long_term_rule",
+    "description": "向当前用户的长期系统规则中追加一条必须遵守的指令,效果等同于用户在设置页手动添加系统提示词。该规则每轮都会注入系统提示词,不依赖 RAG 召回。",
+    "name": "write_long_term_rule",
+    "parameters": {
+      "properties": {
+        "content": {
+          "description": "需要长期遵守的规则内容。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.memory.delete_long_term_memory",
+    "description": "删除当前用户的一条长期记忆。按内容文本匹配后删除,会先尝试精确匹配,再尝试包含匹配。用于清理或修正错误写入的记忆。",
+    "name": "delete_long_term_memory",
+    "parameters": {
+      "properties": {
+        "content": {
+          "description": "需要删除的记忆内容关键词或完整句子。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.memory.delete_long_term_rule",
+    "description": "删除当前用户的一条长期系统规则。按内容文本匹配后删除,会先尝试精确匹配,再尝试包含匹配。用于清理或修正不再需要的长期规则。",
+    "name": "delete_long_term_rule",
+    "parameters": {
+      "properties": {
+        "content": {
+          "description": "需要删除的规则内容关键词或完整句子。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.memory.get_knowledge_context",
+    "description": "按语义召回当前用户知识库中的正文片段,返回可直接用于回答的内容摘录和来源。适合用户已经在问某个事实、概念或文档内容,需要查正文来回答时使用。它不是文件名搜索;如果目标是找文件、按文件名关键词定位路径,请使用 search_knowledge 或 list_knowledge_files。",
+    "name": "get_knowledge_context",
+    "parameters": {
+      "properties": {
+        "query": {
+          "description": "用于语义召回正文片段的问题、主题或事实查询。",
+          "type": "string"
+        },
+        "top_k": {
+          "description": "最多返回多少条结果,默认 3。",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge.search_knowledge",
+    "description": "全库联合搜索: 在当前用户知识库中同时做文件名/路径关键词匹配、全文内容匹配,并可选语义搜索。适合用户要找某个文件、确认哪些文件包含关键词、或不知道路径但记得文件名/主题时使用。如果只需要完整列出目录树和所有文件路径,请使用 list_knowledge_files;如果已经要回答正文内容,请使用 get_knowledge_context。",
+    "name": "search_knowledge",
+    "parameters": {
+      "properties": {
+        "fulltext": {
+          "description": "是否启用全文内容搜索,默认 true。",
+          "type": "boolean"
+        },
+        "query": {
+          "description": "文件名、路径关键词、正文关键词或语义描述文本。",
+          "type": "string"
+        },
+        "semantic": {
+          "description": "是否启用语义搜索,默认 false。",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge.save_uploaded_attachment_to_knowledge",
+    "description": "把当前会话中用户上传的附件复制到当前 active 知识库,并可立即灌库。仅当用户明确要求长期保存上传附件时使用。",
+    "name": "save_uploaded_attachment_to_knowledge",
+    "parameters": {
+      "properties": {
+        "attachment": {
+          "description": "可选。attachment_id、完整文件名或文件名关键词。",
+          "type": "string"
+        },
+        "conflict_strategy": {
+          "description": "同名冲突策略: rename、overwrite 或 skip。默认 rename。",
+          "type": "string"
+        },
+        "ingest": {
+          "description": "是否保存后立即灌库。默认 true。",
+          "type": "boolean"
+        },
+        "target_path": {
+          "description": "可选。保存到知识库内的相对路径。",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge.understand_image",
+    "description": "使用 CPU 本地 Qwen 理解当前会话中用户直接上传的图片。系统会同时提供先行 OCR 文本，适合分析对象、布局、空间关系、图表趋势和图片语义；需要重新观察图片或回答特定视觉问题时调用。",
+    "name": "understand_image",
+    "parameters": {
+      "properties": {
+        "attachment": {
+          "description": "可选。attachment_id、完整文件名或文件名关键词。",
+          "type": "string"
+        },
+        "prompt": {
+          "description": "可选。希望本地模型针对图片回答的问题。",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge.get_knowledge_file_url",
+    "description": "获取知识库中本地文件的浏览器可访问 URL。返回的 URL 可用于 Markdown 图片或链接,在回复中直接引用知识库文件。",
+    "name": "get_knowledge_file_url",
+    "parameters": {
+      "properties": {
+        "path": {
+          "description": "文件相对于知识库根目录的路径。例如 images/diagram.png。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.library.list_library_items",
+    "description": "列出当前用户知识库的图书馆条目(图书与集锦),返回条目标题、item_id、路径、状态与标签。parent_id 传集锦 item_id 可进入对应集锦,传空表示图书馆根层。返回的 item_id 供 add_library_book/add_library_collection 的 parent_id、update_library_item、remove_library_item 使用。",
+    "name": "list_library_items",
+    "parameters": {
+      "properties": {
+        "content_type": {
+          "description": "knowledge_file/web_url/external_file/collection 过滤。",
+          "type": "string"
+        },
+        "direction": {
+          "description": "asc 或 desc。",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "集锦 item_id;为空表示图书馆根层。",
+          "type": "string"
+        },
+        "query": {
+          "description": "按标题、描述或真实文件名关键词过滤。",
+          "type": "string"
+        },
+        "sort": {
+          "description": "title/source_mtime/updated_at/created_at/sort_order。",
+          "type": "string"
+        },
+        "tag": {
+          "description": "按标签名过滤。",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.library.list_library_tags",
+    "description": "列出当前用户知识库的图书馆标签,供新增条目时复用已有标签。",
+    "name": "list_library_tags",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.library.add_library_book",
+    "description": "将一份资料加入图书馆成为图书卡片。content_type 为 knowledge_file 时用 source_path 指定知识库相对路径,web_url 时用 source_url 指定网页地址,external_file 时用 source_path 指定外部本地文件路径。parent_id 传入集锦 item_id 可放入对应集锦;用户要求整理、收藏、归档资料到图书馆时使用。",
+    "name": "add_library_book",
+    "parameters": {
+      "properties": {
+        "content_type": {
+          "description": "knowledge_file/web_url/external_file,默认 knowledge_file。",
+          "type": "string"
+        },
+        "description": {
+          "description": "图书描述。",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "目标集锦 item_id;为空放入图书馆根层。",
+          "type": "string"
+        },
+        "source_path": {
+          "description": "knowledge_file/external_file 时的源文件路径(知识库相对路径或外部绝对路径)。",
+          "type": "string"
+        },
+        "source_url": {
+          "description": "web_url 时的网页地址。",
+          "type": "string"
+        },
+        "tags": {
+          "description": "标签名列表。",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "description": "图书标题;为空自动用源文件名。",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.library.add_library_collection",
+    "description": "在图书馆中新增一个集锦(资料分组),可嵌套到其他集锦。用户要求整理、归类、建分组、收藏主题资料时使用。",
+    "name": "add_library_collection",
+    "parameters": {
+      "properties": {
+        "description": {
+          "description": "集锦描述。",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "父集锦 item_id;为空放在图书馆根层。",
+          "type": "string"
+        },
+        "tags": {
+          "description": "标签名列表。",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "description": "集锦名称,会自动转换成可用文件夹名。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.library.update_library_item",
+    "description": "更新图书馆条目的虚拟元数据:改名(title)、移动集锦(parent_id,传空字符串移回根层)、改描述(description)、换标签(tags)。不传的字段保持不变。item_id 由 list_library_items 返回。",
+    "name": "update_library_item",
+    "parameters": {
+      "properties": {
+        "description": {
+          "description": "新描述。",
+          "type": "string"
+        },
+        "item_id": {
+          "description": "目标条目 ID,由 list_library_items 返回。",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "新所在集锦 ID;传空字符串移回根层;不传不移动。",
+          "type": "string"
+        },
+        "tags": {
+          "description": "新的标签列表;传空数组清空标签;不传不修改。",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "description": "新标题;不传保留原标题。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.library.remove_library_item",
+    "description": "将条目移出图书馆,不删除真实文件。删除集锦时连带移除其嵌套子项。item_id 由 list_library_items 返回。",
+    "name": "remove_library_item",
+    "parameters": {
+      "properties": {
+        "item_id": {
+          "description": "目标条目 ID;集锦会连带移除嵌套子项。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge.get_current_viewing_document",
+    "description": "获取当前用户在 editor 前端正在观看的文档基本信息;如需正文请继续调用 read_knowledge_file。",
+    "name": "get_current_viewing_document",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge.list_knowledge_files",
+    "description": "列出当前用户知识库的完整文件树,返回所有文件和文件夹的路径、类型和修改时间。适合需要浏览目录结构、获得可传给 read_knowledge_file 的准确路径、或全面盘点文件数量时使用。它不会按关键词过滤;如果用户要按文件名、路径或正文关键词搜索,请使用 search_knowledge。",
+    "name": "list_knowledge_files",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge.read_knowledge_file",
+    "description": "读取知识库中任意支持源文件的 Markdown 中间层正文，包括文本、Markdown、代码、PDF、图片、扫描件、Office 和表格。传入源文件相对于当前知识库根目录的准确 path；工具会读取 `.mw/md` 投影，尚未灌库或投影过期时自动执行单文件灌库。不要传 `.mw/md` 内部路径，也不要调用 run_terminal_command、get_knowledge_file_url、download_file 或 Python 库自行解析源文件。",
+    "name": "read_knowledge_file",
+    "parameters": {
+      "properties": {
+        "path": {
+          "description": "源文件相对于当前知识库根目录的路径。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge.patch_knowledge_file",
+    "description": "局部修改已有文本/Markdown/代码文件。old_text 必须是文件内唯一的原文片段；优先使用本工具，只有新建文件或明确整文件重写时才使用 write_knowledge_file。",
+    "name": "patch_knowledge_file",
+    "parameters": {
+      "properties": {
+        "new_text": {
+          "description": "替换后的片段。",
+          "type": "string"
+        },
+        "old_text": {
+          "description": "唯一命中的原文片段。",
+          "type": "string"
+        },
+        "path": {
+          "description": "文件相对路径。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "old_text",
+        "new_text"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge.write_knowledge_file",
+    "description": "创建新文本文件，或在用户明确要求整文件重写时覆盖已有文件。修改已有文件请优先使用 patch_knowledge_file。",
+    "name": "write_knowledge_file",
+    "parameters": {
+      "properties": {
+        "content": {
+          "description": "要写入的完整文件内容。",
+          "type": "string"
+        },
+        "path": {
+          "description": "文件相对于知识库根目录的路径。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge.show_markdown_html",
+    "description": "Display a generated Markdown/document HTML visualization in the editor front-end. Use this only after you have produced the final complete HTML for the current document visualization. The tool saves the HTML under runtime/visualizations, returns the local path and URL, and automatically triggers the front-end iframe mount. For any knowledge document, first read its canonical Markdown projection with read_knowledge_file and build the HTML from that content.",
+    "name": "show_markdown_html",
+    "parameters": {
+      "properties": {
+        "filename": {
+          "description": "Optional preferred HTML filename; it will be sanitized and timestamped.",
+          "type": "string"
+        },
+        "html": {
+          "description": "Complete standalone HTML document or valid HTML fragment.",
+          "type": "string"
+        },
+        "source_path": {
+          "description": "Optional source document path in the knowledge library.",
+          "type": "string"
+        },
+        "title": {
+          "description": "Visualization title shown in the front-end panel.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "html"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge.delete_knowledge_file",
+    "description": "删除知识库中的文件或文件夹。删除文件夹会递归删除其下所有内容,请谨慎使用。",
+    "name": "delete_knowledge_file",
+    "parameters": {
+      "properties": {
+        "path": {
+          "description": "文件或文件夹相对于知识库根目录的路径。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge.rename_knowledge_file",
+    "description": "重命名或移动知识库中的文件/文件夹。可以只改文件名,也可以移动到其他目录。",
+    "name": "rename_knowledge_file",
+    "parameters": {
+      "properties": {
+        "source_path": {
+          "description": "文件/文件夹的当前相对路径。",
+          "type": "string"
+        },
+        "target_path": {
+          "description": "新的相对路径。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_path",
+        "target_path"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge.create_knowledge_folder",
+    "description": "在知识库中创建新文件夹(目录)。用于组织文件结构。",
+    "name": "create_knowledge_folder",
+    "parameters": {
+      "properties": {
+        "path": {
+          "description": "文件夹相对于知识库根目录的路径。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.tasks.get_task_list_status",
+    "description": "Read the current session task list without changing it. Use this when you need to confirm task list status, item ids, current item, or completion summaries before continuing long-running work.",
+    "name": "get_task_list_status",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.tasks.create_task_list",
+    "description": "【强制规则】在开始执行任何需要多步骤、分阶段或可验收交付的任务之前,必须先调用本工具创建任务列表。适用场景包括:代码修改、调试、文件操作、文档处理、数据分析、工具链操作、多文件检查、分阶段调研/调查、资料整理、方案实现等所有需要先后完成多个具体步骤的请求。【例外】只有直接问答、单步说明、无需执行推进的概念解释或用户明确要求管理长期 Todo 时,才不创建。Task List 仅用于当前 Agent 会话内的执行进度跟踪,与用户长期 Todo 完全无关,二者不得混用。创建后,必须持续推进该列表,直到调用 finish_task_list 为止。",
+    "name": "create_task_list",
+    "parameters": {
+      "properties": {
+        "items": {
+          "description": "Concrete task items to complete. Each item should be a short actionable string.",
+          "type": "array"
+        },
+        "title": {
+          "description": "Short title for the task list.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.tasks.complete_task_list_item",
+    "description": "每实际完成一个任务列表项,必须立即调用本工具将其标记完成,并填写具体的事实性完成摘要(做了什么、得到什么结论),再开始下一项。Mark one task list item complete. You must call this after actually completing an item, and include a concrete completion summary before starting another item.",
+    "name": "complete_task_list_item",
+    "parameters": {
+      "properties": {
+        "completion_summary": {
+          "description": "A concise factual summary of what was completed for this item.",
+          "type": "string"
+        },
+        "item_id": {
+          "description": "The task list item id.",
+          "type": "string"
+        },
+        "next_item_id": {
+          "description": "Optional id of the next item to mark in progress.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id",
+        "completion_summary"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.tasks.finish_task_list",
+    "description": "所有有用任务项都完成后,必须调用本工具结束当前任务列表并做总体收尾。End the active session task list after the long-running task is complete. Do not call this until no useful task list work remains.",
+    "name": "finish_task_list",
+    "parameters": {
+      "properties": {
+        "final_summary": {
+          "description": "Optional overall summary for the finished list.",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.agent.spawn_child_agent",
+    "description": "【何时必须使用】当用户请求需要彻底调研或全面盘点一个范围(如调研整个知识库含有什么内容、理解项目全部文件/代码结构)、或需要并行分析多个相互独立的方向(如分别比较多个方案)时,必须先调用本工具创建只读 explore 子 Agent 分头探索,再用 wait_for_child_agents 收取结果。不确定是否需要并行探索时,优先派 explore 子 Agent 探索,它只读不写、成本更低。创建一个不能继续召唤其他子 Agent 的子 Agent。必须提供明确目标。mode=foreground 会阻塞直到子 Agent 完成并返回结果;mode=background 只启动后台子 Agent 并立即返回 run_id,不会等待最终结果。一旦使用 background 创建了本轮所需的全部子 Agent,必须反复调用 wait_for_child_agents 逐个收取结果;只要还有 created/running 子 Agent,就继续等待,不要输出最终结论。子 Agent 默认继承主 Agent 工具,但主 Agent 可缩小工具范围和沙盒权限。",
+    "name": "spawn_child_agent",
+    "parameters": {
+      "properties": {
+        "access_mode": {
+          "description": "readonly、sandbox 或 full_access。",
+          "type": "string"
+        },
+        "allowed_tools": {
+          "description": "允许子 Agent 使用的工具名列表。",
+          "type": "array"
+        },
+        "category": {
+          "description": "子 Agent 能力模板:agent(全能执行)/explore(只读探索)/plan(只读规划研究),或自定义角色描述。留空则不注入角色设定。",
+          "type": "string"
+        },
+        "goal": {
+          "description": "子 Agent 必须完成的具体目标。",
+          "type": "string"
+        },
+        "input_refs": {
+          "description": "传给子 Agent 的输入引用列表。",
+          "type": "array"
+        },
+        "mode": {
+          "description": "foreground 或 background。默认 background。",
+          "type": "string"
+        },
+        "name": {
+          "description": "子 Agent 名字,由主 Agent 起名;留空自动用角色模板名(如 plan1/agent1)。",
+          "type": "string"
+        },
+        "output_contract": {
+          "description": "对子 Agent 结果格式的要求。",
+          "type": "object"
+        }
+      },
+      "required": [
+        "goal"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.agent.wait_for_child_agents",
+    "description": "等待当前父 Agent 已召唤的一个后台子 Agent 产出终态结果。使用 spawn_child_agent 派发后台子 Agent 后,必须调用本工具逐个收取结果,否则子 Agent 结果不会出现在本轮。本工具一次最多返回一个子 Agent 的 completed/failed/stopped 结果;如果结果队列已有结果会立即返回,否则阻塞到下一个结果或超时。run_ids 为空时等待当前父 Agent 任意子 Agent 的下一个结果。如果返回的 children 中仍有 created/running 子 Agent,必须继续调用本工具。只有所有需要的后台子 Agent 都进入 completed/failed/stopped 后,才能汇总最终回答。",
+    "name": "wait_for_child_agents",
+    "parameters": {
+      "properties": {
+        "run_ids": {
+          "description": "可选,要等待的子 Agent run_id 列表。为空表示等待全部。",
+          "type": "array"
+        },
+        "timeout_seconds": {
+          "description": "可选等待秒数,默认 600。超时会返回当时状态。",
+          "type": "number"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.tasks.list_todos",
+    "description": "列出当前用户的所有待办事项。每行包含编号、ID(todo_xxx)、完成状态和截止日期。后续切换/编辑/删除时需要从输出中提取该 ID。",
+    "name": "list_todos",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.tasks.add_todo",
+    "description": "新增一条待办事项。可指定可选的截止日期。返回值包含新待办的 ID(todo_xxx),可供后续切换/编辑/删除使用。",
+    "name": "add_todo",
+    "parameters": {
+      "properties": {
+        "due_date": {
+          "description": "可选截止日期,格式 YYYY-MM-DD。",
+          "type": "string"
+        },
+        "text": {
+          "description": "待办事项的文字描述。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.tasks.add_automation",
+    "description": "创建一个定时自动化任务,到时间后独立唤醒 Agent 执行指定 prompt。涉及写文件、git commit 等操作时,需要明确指定合适的 access_mode。",
+    "name": "add_automation",
+    "parameters": {
+      "properties": {
+        "access_mode": {
+          "enum": [
+            "readonly",
+            "sandbox",
+            "full_access"
+          ],
+          "type": "string"
+        },
+        "next_run_at": {
+          "description": "下一次执行时间,必须是带时区偏移的 ISO 时间,例如 2026-08-03T21:00:00+08:00。",
+          "type": "string"
+        },
+        "prompt": {
+          "description": "到时间后交给 Agent 执行的任务说明。",
+          "type": "string"
+        },
+        "recurrence_frequency": {
+          "description": "循环频率，默认 none（仅执行一次）。",
+          "enum": [
+            "none",
+            "daily",
+            "weekly",
+            "monthly"
+          ],
+          "type": "string"
+        },
+        "recurrence_interval": {
+          "maximum": 365,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "text": {
+          "description": "侧边栏中显示的自动化任务名称。",
+          "type": "string"
+        },
+        "timezone_name": {
+          "description": "循环使用的 IANA 时区,默认 Asia/Shanghai。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "prompt",
+        "next_run_at"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.tasks.toggle_todo",
+    "description": "切换待办事项的完成状态(已完成↔未完成)。需要 todo_id。",
+    "name": "toggle_todo",
+    "parameters": {
+      "properties": {
+        "todo_id": {
+          "description": "待办的唯一 ID,可通过 list_todos 获取。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "todo_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.tasks.edit_todo",
+    "description": "编辑待办事项的文本或截止日期。只传需要修改的字段。不传 text 则保留原文本。",
+    "name": "edit_todo",
+    "parameters": {
+      "properties": {
+        "due_date": {
+          "description": "新的截止日期(YYYY-MM-DD),传入空字符串清除截止日期,不传则不修改。",
+          "type": "string"
+        },
+        "text": {
+          "description": "新的待办文本,留空则不修改文本。",
+          "type": "string"
+        },
+        "todo_id": {
+          "description": "待办的唯一 ID,可通过 list_todos 获取。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "todo_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.tasks.delete_todo",
+    "description": "删除指定的待办事项。需要 todo_id。",
+    "name": "delete_todo",
+    "parameters": {
+      "properties": {
+        "todo_id": {
+          "description": "待办的唯一 ID,可通过 list_todos 获取。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "todo_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.web.web_search",
+    "description": "通过 DuckDuckGo 搜索互联网,返回格式化搜索结果列表(标题+URL+摘要)。尽量少次搜索,每次搜索要覆盖全面——宁可一次搜完,也不要分多次搜。本工具仅返回文本结果,无法搜索图片。如需搜索图片请使用 web_image_search 工具。",
+    "name": "web_search",
+    "parameters": {
+      "properties": {
+        "max_results": {
+          "description": "最大返回结果数,不传则使用用户的配置值。",
+          "type": "integer"
+        },
+        "query": {
+          "description": "搜索关键词。尽量精确、全面,一次覆盖所有可能的关键词。",
+          "type": "string"
+        },
+        "region": {
+          "description": "搜索区域代码,默认 cn-zh。",
+          "type": "string"
+        },
+        "time_range": {
+          "description": "时间范围筛选。d/w/m/y。留空表示不限时间。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.web.web_image_search",
+    "description": "通过 DuckDuckGo 搜索图片,返回图片 URL 列表,每个结果附带标题、图片地址、缩略图地址和来源页面 URL。搜索到图片后直接用 Markdown 热链接展示,不要调用 download_file 下载。",
+    "name": "web_image_search",
+    "parameters": {
+      "properties": {
+        "max_results": {
+          "description": "最大返回结果数,不传则使用用户的配置值。",
+          "type": "integer"
+        },
+        "query": {
+          "description": "搜索关键词。尽量精确、全面,一次覆盖所有可能的关键词。",
+          "type": "string"
+        },
+        "region": {
+          "description": "搜索区域代码,默认 cn-zh。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.get_selected_knowledge_files",
+    "description": "读取文件资源管理器当前多选的知识库路径；无多选时回退当前文档。",
+    "name": "get_selected_knowledge_files",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.ingest_selected_knowledge_files",
+    "description": "为指定多个源文件启动后台灌库，返回 job_id；随后用 get_knowledge_job_status 查询进度。",
+    "name": "ingest_selected_knowledge_files",
+    "parameters": {
+      "properties": {
+        "paths": {
+          "description": "源文件相对路径列表。",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "paths"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.ingest_all_knowledge_files",
+    "description": "扫描并灌入当前 active 知识库全部支持文件，返回 job_id。",
+    "name": "ingest_all_knowledge_files",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.get_knowledge_job_status",
+    "description": "查询灌库或图谱后台任务的进度、结果和逐文件失败。",
+    "name": "get_knowledge_job_status",
+    "parameters": {
+      "properties": {
+        "job_id": {
+          "description": "任务 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.cancel_knowledge_job",
+    "description": "请求灌库或图谱任务在下一个安全检查点取消。",
+    "name": "cancel_knowledge_job",
+    "parameters": {
+      "properties": {
+        "job_id": {
+          "description": "任务 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.retry_failed_knowledge_files",
+    "description": "只重新灌入历史任务中失败的文件并返回新 job_id。",
+    "name": "retry_failed_knowledge_files",
+    "parameters": {
+      "properties": {
+        "job_id": {
+          "description": "历史灌库任务 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.get_knowledge_file_status",
+    "description": "查询源文件、Markdown 投影、frontmatter、向量索引和图谱状态。",
+    "name": "get_knowledge_file_status",
+    "parameters": {
+      "properties": {
+        "path": {
+          "description": "源文件相对路径。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.list_knowledge_trash",
+    "description": "列出当前知识库最近删除的条目及 trash_id。",
+    "name": "list_knowledge_trash",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.restore_knowledge_file",
+    "description": "按 trash_id 从最近删除恢复文件或文件夹。",
+    "name": "restore_knowledge_file",
+    "parameters": {
+      "properties": {
+        "trash_id": {
+          "description": "最近删除条目 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "trash_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.permanently_delete_knowledge_trash",
+    "description": "永久删除最近删除条目，不可恢复，必须由用户明确确认。",
+    "name": "permanently_delete_knowledge_trash",
+    "parameters": {
+      "properties": {
+        "confirm": {
+          "description": "用户是否明确确认永久删除。",
+          "type": "boolean"
+        },
+        "trash_id": {
+          "description": "最近删除条目 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "trash_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.extract_selected_file_graphs",
+    "description": "自动灌库并为指定多个源文件后台抽取图谱，返回 job_id。",
+    "name": "extract_selected_file_graphs",
+    "parameters": {
+      "properties": {
+        "paths": {
+          "description": "源文件相对路径列表。",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "paths"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.extract_all_file_graphs",
+    "description": "为当前 active 知识库全部文件后台抽取语义图谱。",
+    "name": "extract_all_file_graphs",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.search_knowledge_graph_nodes",
+    "description": "按标签、类型和元数据搜索节点，并返回每个命中的邻接节点与边。",
+    "name": "search_knowledge_graph_nodes",
+    "parameters": {
+      "properties": {
+        "limit": {
+          "description": "最多返回节点数。",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "query": {
+          "description": "节点查询文本。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.find_knowledge_graph_paths",
+    "description": "查找两个图谱节点间限定深度内的最短关系路径。",
+    "name": "find_knowledge_graph_paths",
+    "parameters": {
+      "properties": {
+        "max_depth": {
+          "description": "最大关系深度。",
+          "maximum": 12,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "source_node_id": {
+          "description": "起点节点 ID。",
+          "type": "string"
+        },
+        "target_node_id": {
+          "description": "终点节点 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_node_id",
+        "target_node_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.delete_file_graph",
+    "description": "删除指定源文件对应的文档节点、实体关系和抽取状态。",
+    "name": "delete_file_graph",
+    "parameters": {
+      "properties": {
+        "path": {
+          "description": "源文件相对路径。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.knowledge_ops.retry_failed_graph_extraction",
+    "description": "只重新抽取历史图谱任务中失败的文件。",
+    "name": "retry_failed_graph_extraction",
+    "parameters": {
+      "properties": {
+        "job_id": {
+          "description": "历史图谱任务 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.get_custom_skill",
+    "description": "读取一个用户定制 Skill 的完整 SKILL.md。",
+    "name": "get_custom_skill",
+    "parameters": {
+      "properties": {
+        "skill_id": {
+          "description": "user:* Skill ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.create_custom_skill",
+    "description": "创建与 Skill 页面一致的用户 Skill。",
+    "name": "create_custom_skill",
+    "parameters": {
+      "properties": {
+        "body": {
+          "description": "完整工作流正文。",
+          "type": "string"
+        },
+        "description": {
+          "description": "用途与触发说明。",
+          "type": "string"
+        },
+        "name": {
+          "description": "Skill 名称。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "body"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.update_custom_skill",
+    "description": "增量修改用户 Skill 的名称、说明或正文。",
+    "name": "update_custom_skill",
+    "parameters": {
+      "properties": {
+        "body": {
+          "description": "新正文。",
+          "type": "string"
+        },
+        "description": {
+          "description": "新说明。",
+          "type": "string"
+        },
+        "name": {
+          "description": "新名称。",
+          "type": "string"
+        },
+        "skill_id": {
+          "description": "user:* Skill ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.delete_custom_skill",
+    "description": "删除用户 Skill，必须取得用户明确确认。",
+    "name": "delete_custom_skill",
+    "parameters": {
+      "properties": {
+        "confirm": {
+          "description": "用户是否明确确认。",
+          "type": "boolean"
+        },
+        "skill_id": {
+          "description": "user:* Skill ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.validate_custom_skill",
+    "description": "验证 Skill frontmatter、正文和索引可读性。",
+    "name": "validate_custom_skill",
+    "parameters": {
+      "properties": {
+        "skill_id": {
+          "description": "user:* Skill ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.test_custom_skill",
+    "description": "使用真实关键词路由器测试 Skill 对给定提示的匹配。",
+    "name": "test_custom_skill",
+    "parameters": {
+      "properties": {
+        "prompt": {
+          "description": "测试提示。",
+          "type": "string"
+        },
+        "skill_id": {
+          "description": "user:* Skill ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_id",
+        "prompt"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.set_skill_enabled",
+    "description": "启用或停用一个内置或用户 Skill。",
+    "name": "set_skill_enabled",
+    "parameters": {
+      "properties": {
+        "enabled": {
+          "description": "是否启用。",
+          "type": "boolean"
+        },
+        "skill_id": {
+          "description": "Skill ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "skill_id",
+        "enabled"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.list_user_feedback",
+    "description": "列出当前用户提交的全部反馈。",
+    "name": "list_user_feedback",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.get_user_feedback",
+    "description": "按 feedback_id 读取当前用户的一条反馈。",
+    "name": "get_user_feedback",
+    "parameters": {
+      "properties": {
+        "feedback_id": {
+          "description": "反馈 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "feedback_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.create_user_feedback",
+    "description": "以当前用户身份新增反馈。",
+    "name": "create_user_feedback",
+    "parameters": {
+      "properties": {
+        "content": {
+          "description": "反馈正文。",
+          "type": "string"
+        },
+        "page": {
+          "description": "关联页面。",
+          "type": "string"
+        },
+        "source": {
+          "description": "反馈来源。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.update_user_feedback",
+    "description": "修改当前用户拥有的反馈正文。",
+    "name": "update_user_feedback",
+    "parameters": {
+      "properties": {
+        "content": {
+          "description": "新正文。",
+          "type": "string"
+        },
+        "feedback_id": {
+          "description": "反馈 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "feedback_id",
+        "content"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.delete_user_feedback",
+    "description": "删除当前用户拥有的一条反馈。",
+    "name": "delete_user_feedback",
+    "parameters": {
+      "properties": {
+        "feedback_id": {
+          "description": "反馈 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "feedback_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.get_library_item",
+    "description": "读取单个图书或集锦的完整元数据；筛选列表继续使用 list_library_items。",
+    "name": "get_library_item",
+    "parameters": {
+      "properties": {
+        "item_id": {
+          "description": "图书馆条目 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.list_components",
+    "description": "按组件类型筛选并列出用户组件。",
+    "name": "list_components",
+    "parameters": {
+      "properties": {
+        "component_type": {
+          "description": "组件类型；any 表示全部。",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.get_component",
+    "description": "读取一个组件的完整源码和元数据。",
+    "name": "get_component",
+    "parameters": {
+      "properties": {
+        "component_id": {
+          "description": "组件 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "component_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.create_component",
+    "description": "创建 Vue SFC 或独立 HTML 组件。",
+    "name": "create_component",
+    "parameters": {
+      "properties": {
+        "component_type": {
+          "description": "组件类型。",
+          "type": "string"
+        },
+        "filename": {
+          "description": "可选文件名。",
+          "type": "string"
+        },
+        "source": {
+          "description": "组件源码。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "component_type"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.update_component",
+    "description": "增量修改组件源码、类型或标题。",
+    "name": "update_component",
+    "parameters": {
+      "properties": {
+        "component_id": {
+          "description": "组件 ID。",
+          "type": "string"
+        },
+        "component_type": {
+          "description": "新组件类型。",
+          "type": "string"
+        },
+        "source": {
+          "description": "新源码。",
+          "type": "string"
+        },
+        "title": {
+          "description": "新标题。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "component_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.delete_component",
+    "description": "删除用户组件，必须取得用户明确确认。",
+    "name": "delete_component",
+    "parameters": {
+      "properties": {
+        "component_id": {
+          "description": "组件 ID。",
+          "type": "string"
+        },
+        "confirm": {
+          "description": "用户是否明确确认。",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "component_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.validate_component",
+    "description": "验证组件源码格式及 Vue/HTML 基本结构。",
+    "name": "validate_component",
+    "parameters": {
+      "properties": {
+        "component_id": {
+          "description": "组件 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "component_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.list_favorites",
+    "description": "按目标类型和知识库作用域列出收藏。",
+    "name": "list_favorites",
+    "parameters": {
+      "properties": {
+        "library_id": {
+          "description": "可选知识库 ID。",
+          "type": "string"
+        },
+        "target_type": {
+          "description": "knowledge_path、library_item、component 或 session。",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.add_favorite",
+    "description": "收藏知识库路径、图书馆条目、组件或会话。",
+    "name": "add_favorite",
+    "parameters": {
+      "properties": {
+        "library_id": {
+          "description": "可选知识库 ID。",
+          "type": "string"
+        },
+        "target_id": {
+          "description": "目标 ID。",
+          "type": "string"
+        },
+        "target_type": {
+          "description": "收藏目标类型。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_type",
+        "target_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.business_ops.remove_favorite",
+    "description": "取消知识库路径、图书馆条目、组件或会话收藏。",
+    "name": "remove_favorite",
+    "parameters": {
+      "properties": {
+        "library_id": {
+          "description": "可选知识库 ID。",
+          "type": "string"
+        },
+        "target_id": {
+          "description": "目标 ID。",
+          "type": "string"
+        },
+        "target_type": {
+          "description": "收藏目标类型。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_type",
+        "target_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.smart_forms.list_smart_forms",
+    "description": "按标题关键词列出当前用户表格。",
+    "name": "list_smart_forms",
+    "parameters": {
+      "properties": {
+        "query": {
+          "description": "可选标题关键词。",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.smart_forms.create_smart_form",
+    "description": "创建 smart 智能文献表或 plain 普通表。",
+    "name": "create_smart_form",
+    "parameters": {
+      "properties": {
+        "kind": {
+          "description": "smart 或 plain。",
+          "enum": [
+            "smart",
+            "plain"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "description": "表格标题。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.smart_forms.get_smart_form",
+    "description": "读取表格完整列、行和单元格。",
+    "name": "get_smart_form",
+    "parameters": {
+      "properties": {
+        "form_id": {
+          "description": "表格 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "form_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.smart_forms.get_smart_form_schema",
+    "description": "仅读取表格列定义、基本信息和行数。",
+    "name": "get_smart_form_schema",
+    "parameters": {
+      "properties": {
+        "form_id": {
+          "description": "表格 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "form_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.smart_forms.update_smart_form",
+    "description": "使用完整表格结构覆盖更新指定表格。",
+    "name": "update_smart_form",
+    "parameters": {
+      "properties": {
+        "form": {
+          "description": "完整表格结构。",
+          "type": "object"
+        },
+        "form_id": {
+          "description": "表格 ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "form_id",
+        "form"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.smart_forms.patch_smart_form_rows",
+    "description": "按 row_id 增量修改、增加或删除表格行和单元格。",
+    "name": "patch_smart_form_rows",
+    "parameters": {
+      "properties": {
+        "add_rows": {
+          "description": "新增行。",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "delete_row_ids": {
+          "description": "删除行 ID。",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "form_id": {
+          "description": "表格 ID。",
+          "type": "string"
+        },
+        "updates": {
+          "description": "行更新。",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "form_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.smart_forms.get_smart_form_literature",
+    "description": "读取表项关联文献的文件名、知识库路径和抽取内容。",
+    "name": "get_smart_form_literature",
+    "parameters": {
+      "properties": {
+        "form_id": {
+          "description": "表格 ID。",
+          "type": "string"
+        },
+        "row_ids": {
+          "description": "可选行 ID。",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "form_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.smart_forms.export_smart_form",
+    "description": "导出为 csv、markdown 或 json，返回文件名和完整内容。",
+    "name": "export_smart_form",
+    "parameters": {
+      "properties": {
+        "form_id": {
+          "description": "表格 ID。",
+          "type": "string"
+        },
+        "format": {
+          "description": "csv、markdown 或 json。",
+          "enum": [
+            "csv",
+            "markdown",
+            "json"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "form_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.smart_forms.import_smart_form",
+    "description": "从 JSON 或 CSV 内容创建新表格。",
+    "name": "import_smart_form",
+    "parameters": {
+      "properties": {
+        "content": {
+          "description": "完整导入内容。",
+          "type": "string"
+        },
+        "format": {
+          "description": "json 或 csv。",
+          "enum": [
+            "json",
+            "csv"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "description": "导入后的标题。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.smart_forms.preview_smart_form_fill",
+    "description": "列出将被智能填充的单元格及文献上下文状态，不调用模型、不写数据库。",
+    "name": "preview_smart_form_fill",
+    "parameters": {
+      "properties": {
+        "column_ids": {
+          "description": "可选智能列 ID。",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "form_id": {
+          "description": "表格 ID。",
+          "type": "string"
+        },
+        "row_ids": {
+          "description": "可选行 ID。",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "form_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  },
+  {
+    "callable": "agent_service.tools.builtin.smart_forms.fill_smart_form_cells",
+    "description": "根据每行文献内容调用结构化生成服务并持久化智能单元格。",
+    "name": "fill_smart_form_cells",
+    "parameters": {
+      "properties": {
+        "column_ids": {
+          "description": "可选智能列 ID。",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "form_id": {
+          "description": "表格 ID。",
+          "type": "string"
+        },
+        "row_ids": {
+          "description": "可选行 ID。",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "form_id"
+      ],
+      "type": "object"
+    },
+    "status": "pending",
+    "target_file": "pending"
+  }
+]

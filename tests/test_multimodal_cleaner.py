@@ -22,7 +22,7 @@ from agent_service.services.memory.rag.image_ocr import ImageOcrService
 import agent_service.services.memory.rag.multimodal_cleaner as multimodal_cleaner_module
 from agent_service.services.memory.rag.multimodal_cleaner import MultimodalDocumentCleaner
 from agent_service.services.memory.rag.pdf_cleaner import PdfExtractionResult
-from agent_service.services.knowledge_library_service import KnowledgeIgnoreMatcher
+from agent_service.services.knowledge_library import KnowledgeIgnoreMatcher
 
 
 def test_image_ocr_parses_paddleocr_v3_nested_result() -> None:

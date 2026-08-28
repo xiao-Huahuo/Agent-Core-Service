@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 def get_user_llm_overrides(
     state: AgentState,
+    settings_service: Any = None,
 ) -> tuple[str | None, str | None, str | None, str | None, str | None, str | None]:
     """从 SettingsService 读取用户的 LLM 配置。
 
@@ -64,12 +65,11 @@ def get_user_llm_overrides(
             small_model_name,
         )
 
+    if settings_service is None:
+        logger.warning("get_user_llm_overrides: settings_service is None")
+        return None, None, None, None, None, None
     try:
-        from agent_service.api.rest.deps import _settings_service
-        if _settings_service is None:
-            logger.warning("get_user_llm_overrides: _settings_service is None")
-            return None, None, None, None, None, None
-        config = _settings_service.get_llm_config(user_id=user_id)
+        config = settings_service.get_llm_config(user_id=user_id)
         api_key = _normalize_optional_str(config.get("api_key"))
         base_url = _normalize_optional_str(config.get("base_url"))
         model_name = _normalize_optional_str(config.get("model_name"))
@@ -151,6 +151,7 @@ class ModelDecisionNode:
         tools: Sequence[Any] | None = None,
         task_scheduler: LLMTaskScheduler | None = None,
         tool_executor: ToolExecutor | None = None,
+        settings_service: Any = None,
     ) -> None:
         """初始化聊天模型,并在存在工具时绑定工具。"""
 
@@ -159,6 +160,7 @@ class ModelDecisionNode:
         self.tool_names = [str(tool.name) for tool in self.tools if getattr(tool, "name", None)]
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.tool_executor = tool_executor
+        self.settings_service = settings_service
         # 模型不在 __init__ 时创建，由调用方按需通过 self.task_scheduler 获取。
         # 用户可自行在客户端设置中配置 API Key，启动时无需强制提供。
 
@@ -175,9 +177,8 @@ class ModelDecisionNode:
             active_tool_names = [t for t in active_tool_names if t not in disabled_set]
         elif user_id:
             try:
-                from agent_service.api.rest.deps import _settings_service
-                if _settings_service is not None:
-                    disabled_tools = _settings_service.get_disabled_tools(user_id=user_id)
+                if self.settings_service is not None:
+                    disabled_tools = self.settings_service.get_disabled_tools(user_id=user_id)
                     disabled_set = set(disabled_tools)
                     active_tool_names = [t for t in active_tool_names if t not in disabled_set]
             except Exception:
@@ -194,9 +195,8 @@ class ModelDecisionNode:
         # 追加用户自定义系统提示词(数据库持久化,每次对话自动加载)
         if user_id:
             try:
-                from agent_service.api.rest.deps import _settings_service
-                if _settings_service is not None:
-                    custom_prompt = _settings_service.get_system_prompt(user_id=user_id)
+                if self.settings_service is not None:
+                    custom_prompt = self.settings_service.get_system_prompt(user_id=user_id)
                     if custom_prompt:
                         system_content += f"\n\n【用户自定义指令】\n{custom_prompt}"
             except Exception:
@@ -563,7 +563,7 @@ class ModelDecisionNode:
     ) -> tuple[str | None, str | None, str | None, str | None, str | None, str | None]:
         """从 SettingsService 读取用户的 LLM 配置。"""
 
-        return get_user_llm_overrides(state)
+        return get_user_llm_overrides(state, self.settings_service)
 
     @staticmethod
     def _serialize_messages(messages: list) -> list[dict[str, Any]]:

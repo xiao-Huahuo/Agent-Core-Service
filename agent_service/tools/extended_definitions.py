@@ -12,7 +12,7 @@ from typing import Any, Callable
 from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 
 from agent_service.tools.builtin import BuiltinToolDefinition
-from agent_service.tools.builtin_business_ops import (
+from agent_service.tools.builtin.business_ops import (
     add_favorite,
     create_component,
     create_custom_skill,
@@ -36,7 +36,7 @@ from agent_service.tools.builtin_business_ops import (
     validate_component,
     validate_custom_skill,
 )
-from agent_service.tools.builtin_knowledge_ops import (
+from agent_service.tools.builtin.knowledge_ops import (
     cancel_knowledge_job,
     delete_file_graph,
     extract_all_file_graphs,
@@ -54,7 +54,7 @@ from agent_service.tools.builtin_knowledge_ops import (
     retry_failed_knowledge_files,
     search_knowledge_graph_nodes,
 )
-from agent_service.tools.builtin_smart_forms import (
+from agent_service.tools.builtin.smart_forms import (
     create_smart_form,
     export_smart_form,
     fill_smart_form_cells,

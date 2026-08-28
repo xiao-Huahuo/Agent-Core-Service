@@ -6,7 +6,7 @@ User feedback database model.
 持久化,禁止使用浏览器存储或临时 JSON 文件保存。
 
 使用说明:
-业务层通过 `agent_service.services.feedback_service.FeedbackService` 写入反馈记录。
+业务层通过 `agent_service.services.feedback.service.FeedbackService` 写入反馈记录。
 """
 
 from __future__ import annotations

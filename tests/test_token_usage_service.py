@@ -17,8 +17,8 @@ from agent_service.core.agent_config import AgentConfig
 from agent_service.models.session import SessionRecord
 from agent_service.models.token_usage import TokenUsageRecord
 from agent_service.schemas.message import MessageCreate
-from agent_service.services.message_service import MessageService
-from agent_service.services.token_usage_service import NON_SESSION_TOKEN_SOURCE, TokenUsageService
+from agent_service.services.message.service import MessageService
+from agent_service.services.token_usage.service import NON_SESSION_TOKEN_SOURCE, TokenUsageService
 
 
 def test_message_create_persists_token_usage_and_dashboard_stats() -> None:

@@ -12,17 +12,17 @@ import threading
 import time
 from types import SimpleNamespace
 
-from sqlmodel import create_engine
+from tests.db_test_utils import create_test_engine as create_engine
 
 from agent_service.schemas.structured_generation import StructuredGenerationFieldResult
-from agent_service.services.component_library_service import ComponentLibraryService
-from agent_service.services.editor_context_service import EditorContextService
-from agent_service.services.favorite_service import FavoriteService
-from agent_service.services.feedback_service import FeedbackService
-from agent_service.services.smart_form_service import SmartFormService
+from agent_service.services.component_library.service import ComponentLibraryService
+from agent_service.services.editor_context.service import EditorContextService
+from agent_service.services.favorite.service import FavoriteService
+from agent_service.services.feedback.service import FeedbackService
+from agent_service.services.smart_form.service import SmartFormService
 from agent_service.tools import builtin_business_ops, builtin_knowledge_ops, builtin_smart_forms
 from agent_service.tools.runtime_context import AGENT_ACCESS_SANDBOX
-from agent_service.tools.builtin_jobs import ToolJobCancelled, ToolJobManager
+from agent_service.tools.builtin.jobs import ToolJobCancelled, ToolJobManager
 
 
 def test_editor_context_tracks_multi_file_selection() -> None:

@@ -6,10 +6,10 @@
 
 from __future__ import annotations
 
-from sqlmodel import create_engine
+from tests.db_test_utils import create_test_engine as create_engine
 
 from agent_service.core.agent_config import AgentConfig
-from agent_service.services.settings_service import SettingsService
+from agent_service.services.settings.service import SettingsService
 
 
 class _MemoryServiceStub:

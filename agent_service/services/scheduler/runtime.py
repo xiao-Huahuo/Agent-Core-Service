@@ -101,7 +101,7 @@ class LLMTaskRuntimeMixin:
             if model is not None:
                 return model
             if use_local_qwen:
-                from agent_service.services.local_qwen_service import LocalQwenChatModel, get_local_qwen_service
+                from agent_service.services.local_qwen.service import LocalQwenChatModel, get_local_qwen_service
 
                 model = LocalQwenChatModel(
                     service=get_local_qwen_service(self.config),

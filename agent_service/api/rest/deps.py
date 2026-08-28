@@ -1,259 +1,242 @@
-"""
-REST 路由共享依赖。
+"""REST 路由共享的应用服务依赖。
 
-由 main.py 在 lifespan 启动后注入 AgentCore / SessionService / MessageService,
-各子路由模块通过 _require_* 助手按需获取,未注入时抛出 503。
+FastAPI 在每个请求开始时通过 ``bind_application_services`` 从
+``request.app.state.services`` 获取 ``ApplicationServices``，并绑定到请求级
+``ContextVar``。现有路由继续调用 ``_require_*``，但不再依赖模块级 Service 实例。
 """
 
 from __future__ import annotations
 
-from fastapi import HTTPException
+from contextvars import ContextVar
+from typing import AsyncIterator, TypeVar, cast
+
+from fastapi import HTTPException, Request
 
 from agent_service.agent_core.agent_core import AgentCore
-from agent_service.services.message_service import MessageService
-from agent_service.services.session_service import SessionService
-from agent_service.services.settings_service import SettingsService
-from agent_service.services.knowledge_library_service import KnowledgeLibraryService
-from agent_service.services.knowledge_graph_service import KnowledgeGraphService
-from agent_service.services.git_service import GitService
-from agent_service.services.library_service import LibraryService
-from agent_service.services.component_library_service import ComponentLibraryService
-from agent_service.services.vault_service import VaultService
+from agent_service.core.bootstrap.services_bootstrap import ApplicationServices
+from agent_service.services.activity.service import ActivityService
+from agent_service.services.agent_change.service import AgentChangeService
+from agent_service.services.agent_queue.service import AgentQueueService
+from agent_service.services.automation.service import AutomationService
+from agent_service.services.component_library.service import ComponentLibraryService
+from agent_service.services.favorite.service import FavoriteService
+from agent_service.services.feedback.service import FeedbackService
+from agent_service.services.git.service import GitService
+from agent_service.services.knowledge_graph import KnowledgeGraphService
+from agent_service.services.knowledge_ingestion_job.service import KnowledgeIngestionJobService
+from agent_service.services.knowledge_library import KnowledgeLibraryService
+from agent_service.services.latex.service import LatexService
+from agent_service.services.library.service import LibraryService
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
-from agent_service.services.session_attachment_service import SessionAttachmentService
-from agent_service.services.skill_service import SkillService
-from agent_service.services.task_list_service import TaskListService
-from agent_service.services.todo_service import TodoService
-from agent_service.services.automation_service import AutomationService
-from agent_service.services.favorite_service import FavoriteService
-from agent_service.services.privacy_service import PrivacyService
-from agent_service.services.feedback_service import FeedbackService
-from agent_service.services.smart_form_service import SmartFormService
-from agent_service.services.structured_generation_service import StructuredGenerationService
-from agent_service.services.agent_change_service import AgentChangeService
-from agent_service.services.agent_queue_service import AgentQueueService
-from agent_service.services.activity_service import ActivityService
-from agent_service.services.knowledge_ingestion_job_service import KnowledgeIngestionJobService
-from agent_service.services.latex_service import LatexService
-from agent_service.services.model_management_service import ModelManagementService
+from agent_service.services.message.service import MessageService
+from agent_service.services.model_management.service import ModelManagementService
+from agent_service.services.privacy.service import PrivacyService
+from agent_service.services.session_attachment.service import SessionAttachmentService
+from agent_service.services.session.service import SessionService
+from agent_service.services.settings.service import SettingsService
+from agent_service.services.skill.service import SkillService
+from agent_service.services.smart_form.service import SmartFormService
+from agent_service.services.structured_generation.service import StructuredGenerationService
+from agent_service.services.task_list.service import TaskListService
+from agent_service.services.todo.service import TodoService
+from agent_service.services.vault.service import VaultService
 
-_agent: AgentCore | None = None
-_session_service: SessionService | None = None
-_message_service: MessageService | None = None
-_settings_service: SettingsService | None = None
-_knowledge_library_service: KnowledgeLibraryService | None = None
-_knowledge_graph_service: KnowledgeGraphService | None = None
-_git_service: GitService | None = None
-_library_service: LibraryService | None = None
-_component_library_service: ComponentLibraryService | None = None
-_vault_service: VaultService | None = None
-_retrieval_service: MemoryRetrievalService | None = None
-_attachment_service: SessionAttachmentService | None = None
-_skill_service: SkillService | None = None
-_task_list_service: TaskListService | None = None
-_grpc_running = False
-_todo_service: TodoService | None = None
-_automation_service: AutomationService | None = None
-_favorite_service: FavoriteService | None = None
-_privacy_service: PrivacyService | None = None
-_feedback_service: FeedbackService | None = None
-_smart_form_service: SmartFormService | None = None
-_structured_generation_service: StructuredGenerationService | None = None
-_agent_change_service: AgentChangeService | None = None
-_agent_queue_service: AgentQueueService | None = None
-_activity_service: ActivityService | None = None
-_knowledge_ingestion_job_service: KnowledgeIngestionJobService | None = None
-_latex_service: LatexService | None = None
-_model_management_service: ModelManagementService | None = None
+ServiceT = TypeVar("ServiceT")
+_current_services: ContextVar[ApplicationServices | None] = ContextVar(
+    "agent_service_rest_services",
+    default=None,
+)
+
+
+def get_application_services(request: Request) -> ApplicationServices:
+    """从当前 FastAPI app 获取已初始化的应用服务容器。"""
+
+    services = getattr(request.app.state, "services", None)
+    if services is None:
+        raise HTTPException(status_code=503, detail="Application services not initialized yet")
+    return cast(ApplicationServices, services)
+
+
+async def bind_application_services(request: Request) -> AsyncIterator[ApplicationServices]:
+    """在一个请求的完整生命周期内绑定应用服务容器。"""
+
+    services = get_application_services(request)
+    token = _current_services.set(services)
+    try:
+        yield services
+    finally:
+        _current_services.reset(token)
+
+
+def _require(attribute: str, label: str) -> ServiceT:
+    """从当前请求容器取得一个具名 Service，未绑定时返回 503。"""
+
+    services = _current_services.get()
+    if services is None:
+        raise HTTPException(status_code=503, detail="Application services not bound to request")
+    service = getattr(services, attribute, None)
+    if service is None:
+        raise HTTPException(status_code=503, detail=f"{label} not initialized yet")
+    return cast(ServiceT, service)
 
 
 def _require_agent() -> AgentCore:
-    if _agent is None:
-        raise HTTPException(status_code=503, detail="AgentCore not initialized yet")
-    return _agent
+    """返回当前请求的 AgentCore。"""
+
+    return _require("agent", "AgentCore")
 
 
 def _require_session_service() -> SessionService:
-    if _session_service is None:
-        raise HTTPException(status_code=503, detail="SessionService not initialized yet")
-    return _session_service
+    """返回当前请求的 SessionService。"""
+
+    return _require("session_service", "SessionService")
 
 
 def _require_message_service() -> MessageService:
-    if _message_service is None:
-        raise HTTPException(status_code=503, detail="MessageService not initialized yet")
-    return _message_service
+    """返回当前请求的 MessageService。"""
+
+    return _require("message_service", "MessageService")
 
 
 def _require_settings_service() -> SettingsService:
-    if _settings_service is None:
-        raise HTTPException(status_code=503, detail="SettingsService not initialized yet")
-    return _settings_service
+    """返回当前请求的 SettingsService。"""
+
+    return _require("settings_service", "SettingsService")
 
 
 def _require_knowledge_library_service() -> KnowledgeLibraryService:
-    if _knowledge_library_service is None:
-        raise HTTPException(status_code=503, detail="KnowledgeLibraryService not initialized yet")
-    return _knowledge_library_service
+    """返回当前请求的 KnowledgeLibraryService。"""
+
+    return _require("knowledge_library_service", "KnowledgeLibraryService")
 
 
 def _require_knowledge_graph_service() -> KnowledgeGraphService:
-    if _knowledge_graph_service is None:
-        raise HTTPException(status_code=503, detail="KnowledgeGraphService not initialized yet")
-    return _knowledge_graph_service
+    """返回当前请求的 KnowledgeGraphService。"""
+
+    return _require("knowledge_graph_service", "KnowledgeGraphService")
 
 
 def _require_git_service() -> GitService:
-    """返回启动阶段注入的知识库 Git 服务。"""
+    """返回当前请求的 GitService。"""
 
-    if _git_service is None:
-        raise HTTPException(status_code=503, detail="GitService not initialized yet")
-    return _git_service
+    return _require("git_service", "GitService")
 
 
 def _require_library_service() -> LibraryService:
-    if _library_service is None:
-        raise HTTPException(status_code=503, detail="LibraryService not initialized yet")
-    return _library_service
+    """返回当前请求的 LibraryService。"""
+
+    return _require("library_service", "LibraryService")
 
 
 def _require_component_library_service() -> ComponentLibraryService:
-    """Return the component library service injected during application startup."""
+    """返回当前请求的 ComponentLibraryService。"""
 
-    if _component_library_service is None:
-        raise HTTPException(status_code=503, detail="ComponentLibraryService not initialized yet")
-    return _component_library_service
+    return _require("component_library_service", "ComponentLibraryService")
 
 
 def _require_vault_service() -> VaultService:
-    """返回启动阶段注入的密码库服务。"""
+    """返回当前请求的 VaultService。"""
 
-    if _vault_service is None:
-        raise HTTPException(status_code=503, detail="VaultService not initialized yet")
-    return _vault_service
+    return _require("vault_service", "VaultService")
 
 
 def _require_retrieval_service() -> MemoryRetrievalService:
-    if _retrieval_service is None:
-        raise HTTPException(status_code=503, detail="MemoryRetrievalService not initialized yet")
-    return _retrieval_service
+    """返回当前请求的 MemoryRetrievalService。"""
+
+    return _require("retrieval_service", "MemoryRetrievalService")
 
 
 def _require_attachment_service() -> SessionAttachmentService:
-    if _attachment_service is None:
-        raise HTTPException(status_code=503, detail="SessionAttachmentService not initialized yet")
-    return _attachment_service
+    """返回当前请求的 SessionAttachmentService。"""
+
+    return _require("attachment_service", "SessionAttachmentService")
 
 
 def _require_todo_service() -> TodoService:
-    if _todo_service is None:
-        raise HTTPException(status_code=503, detail="TodoService not initialized yet")
-    return _todo_service
+    """返回当前请求的 TodoService。"""
+
+    return _require("todo_service", "TodoService")
 
 
 def _require_automation_service() -> AutomationService:
-    """返回启动阶段注入的自动化任务服务。"""
+    """返回当前请求的 AutomationService。"""
 
-    if _automation_service is None:
-        raise HTTPException(status_code=503, detail="AutomationService not initialized yet")
-    return _automation_service
+    return _require("automation_service", "AutomationService")
 
 
 def _require_task_list_service() -> TaskListService:
-    if _task_list_service is None:
-        raise HTTPException(status_code=503, detail="TaskListService not initialized yet")
-    return _task_list_service
+    """返回当前请求的 TaskListService。"""
+
+    return _require("task_list_service", "TaskListService")
 
 
 def _require_skill_service() -> SkillService:
-    if _skill_service is None:
-        raise HTTPException(status_code=503, detail="SkillService not initialized yet")
-    return _skill_service
+    """返回当前请求的 SkillService。"""
+
+    return _require("skill_service", "SkillService")
 
 
 def _require_favorite_service() -> FavoriteService:
-    """返回启动阶段注入的用户收藏服务。"""
+    """返回当前请求的 FavoriteService。"""
 
-    if _favorite_service is None:
-        raise HTTPException(status_code=503, detail="FavoriteService not initialized yet")
-    return _favorite_service
+    return _require("favorite_service", "FavoriteService")
 
 
 def _require_privacy_service() -> PrivacyService:
-    """返回启动阶段注入的用户隐私服务。"""
+    """返回当前请求的 PrivacyService。"""
 
-    if _privacy_service is None:
-        raise HTTPException(status_code=503, detail="PrivacyService not initialized yet")
-    return _privacy_service
+    return _require("privacy_service", "PrivacyService")
 
 
 def _require_feedback_service() -> FeedbackService:
-    """返回启动阶段注入的用户反馈服务。"""
+    """返回当前请求的 FeedbackService。"""
 
-    if _feedback_service is None:
-        raise HTTPException(status_code=503, detail="FeedbackService not initialized yet")
-    return _feedback_service
+    return _require("feedback_service", "FeedbackService")
 
 
 def _require_smart_form_service() -> SmartFormService:
-    """返回启动阶段注入的智能表格服务。"""
+    """返回当前请求的 SmartFormService。"""
 
-    if _smart_form_service is None:
-        raise HTTPException(status_code=503, detail="SmartFormService not initialized yet")
-    return _smart_form_service
+    return _require("smart_form_service", "SmartFormService")
 
 
 def _require_structured_generation_service() -> StructuredGenerationService:
-    """返回启动阶段注入的通用结构化字段生成服务。"""
+    """返回当前请求的 StructuredGenerationService。"""
 
-    if _structured_generation_service is None:
-        raise HTTPException(status_code=503, detail="StructuredGenerationService not initialized yet")
-    return _structured_generation_service
+    return _require("structured_generation_service", "StructuredGenerationService")
 
 
 def _require_agent_change_service() -> AgentChangeService:
-    """Return the persistent Agent change service injected at application startup."""
+    """返回当前请求的 AgentChangeService。"""
 
-    if _agent_change_service is None:
-        raise HTTPException(status_code=503, detail="AgentChangeService not initialized yet")
-    return _agent_change_service
+    return _require("agent_change_service", "AgentChangeService")
 
 
 def _require_agent_queue_service() -> AgentQueueService:
-    """Return the persistent Agent task queue service injected at startup."""
+    """返回当前请求的 AgentQueueService。"""
 
-    if _agent_queue_service is None:
-        raise HTTPException(status_code=503, detail="AgentQueueService not initialized yet")
-    return _agent_queue_service
+    return _require("agent_queue_service", "AgentQueueService")
 
 
 def _require_activity_service() -> ActivityService:
-    """Return the persistent daily activity service injected at startup."""
+    """返回当前请求的 ActivityService。"""
 
-    if _activity_service is None:
-        raise HTTPException(status_code=503, detail="ActivityService not initialized yet")
-    return _activity_service
+    return _require("activity_service", "ActivityService")
 
 
 def _require_knowledge_ingestion_job_service() -> KnowledgeIngestionJobService:
-    """返回启动阶段注入的单文件入库任务服务。"""
+    """返回当前请求的 KnowledgeIngestionJobService。"""
 
-    if _knowledge_ingestion_job_service is None:
-        raise HTTPException(status_code=503, detail="KnowledgeIngestionJobService not initialized yet")
-    return _knowledge_ingestion_job_service
+    return _require("knowledge_ingestion_job_service", "KnowledgeIngestionJobService")
 
 
 def _require_latex_service() -> LatexService:
-    """返回启动阶段注入的 LaTeX 运行时服务。"""
+    """返回当前请求的 LatexService。"""
 
-    if _latex_service is None:
-        raise HTTPException(status_code=503, detail="LatexService not initialized yet")
-    return _latex_service
+    return _require("latex_service", "LatexService")
 
 
 def _require_model_management_service() -> ModelManagementService:
-    """返回启动阶段注入的模型管理聚合服务。"""
+    """返回当前请求的 ModelManagementService。"""
 
-    if _model_management_service is None:
-        raise HTTPException(status_code=503, detail="ModelManagementService not initialized yet")
-    return _model_management_service
+    return _require("model_management_service", "ModelManagementService")

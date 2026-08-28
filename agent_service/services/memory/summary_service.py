@@ -22,7 +22,7 @@ from agent_service.services.memory.important_fact_summary_service import Importa
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 from agent_service.services.memory.memory_resolver import MemoryResolver
 from agent_service.services.memory.rag.embedding import EmbeddingService
-from agent_service.services.message_service import MessageService
+from agent_service.services.message.service import MessageService
 from agent_service.services.scheduler import BACKGROUND_SUMMARY_TASK, LLMTaskScheduler, get_llm_task_scheduler
 
 

@@ -24,10 +24,10 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.schemas.message import MessageOut
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService, RetrievalDebugSnapshot
-from agent_service.services.message_service import MessageService
+from agent_service.services.message.service import MessageService
 
 if TYPE_CHECKING:
-    from agent_service.services.session_attachment_service import SessionAttachmentService
+    from agent_service.services.session_attachment.service import SessionAttachmentService
 
 
 class ContextBuilder:

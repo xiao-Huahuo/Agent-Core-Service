@@ -20,10 +20,11 @@ from uuid import uuid4
 from sqlalchemy import func
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, select
 
 import agent_service.models  # noqa: F401
 from agent_service.core.agent_config import AgentConfig
+from agent_service.core.db.engine import get_database_engine
 from agent_service.models.longterm_memory_spec import LongTermMemorySpec
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate, LongTermMemorySpecOut
 
@@ -54,13 +55,9 @@ class LongTermMemoryService:
         """初始化 SQLite 引擎和 ChromaDB 客户端,并按需创建表。"""
 
         self.config = config
-        self.engine = engine or create_engine(
-            f"sqlite:///{config.storage.sqlite_path}", pool_pre_ping=True
-        )
+        self.engine = engine or get_database_engine(config)
         self._chroma_client = None
         self._chroma_collection = None
-        if create_tables:
-            SQLModel.metadata.create_all(self.engine)
 
     @property
     def chroma_available(self) -> bool:

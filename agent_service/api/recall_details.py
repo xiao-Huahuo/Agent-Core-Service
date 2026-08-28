@@ -18,7 +18,7 @@ from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 
 from agent_service.agent_core.agent_core import AgentCore
 from agent_service.schemas.message import MessageOut
-from agent_service.services.message_service import MessageService
+from agent_service.services.message.service import MessageService
 from agent_service.services.memory.retrieval_service import RetrievedMemory, RetrievalDebugSnapshot
 
 

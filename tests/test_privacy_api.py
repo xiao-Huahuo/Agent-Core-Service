@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlmodel import create_engine
+from tests.db_test_utils import create_test_engine as create_engine
 
 from agent_service.api.grpc import agent_service_pb2, agent_service_pb2_grpc
 from agent_service.api.grpc.servicer import AgentServiceServicer
 from agent_service.api.rest import privacy as privacy_rest
-from agent_service.services.privacy_service import PrivacyService
+from agent_service.services.privacy.service import PrivacyService
 
 
 def test_privacy_rest_lifecycle(monkeypatch, tmp_path) -> None:

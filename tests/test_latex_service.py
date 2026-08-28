@@ -15,8 +15,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import agent_service.services.latex_service as latex_module
-from agent_service.services.latex_service import LatexService
+import agent_service.services.latex.service as latex_module
+from agent_service.services.latex.service import LatexService
 
 
 class _SettingsStub:

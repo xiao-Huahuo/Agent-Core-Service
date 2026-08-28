@@ -1,0 +1,35 @@
+[
+  {
+    "kind": "class",
+    "line": 58,
+    "methods": [
+      {
+        "line": 64,
+        "name": "is_ignored"
+      }
+    ],
+    "name": "KnowledgeIgnoreMatcher"
+  },
+  {
+    "kind": "class",
+    "line": 129,
+    "methods": [
+      {
+        "line": 166,
+        "name": "to_dict"
+      }
+    ],
+    "name": "KnowledgeLibraryRebuildResult"
+  },
+  {
+    "kind": "class",
+    "line": 194,
+    "methods": [
+      {
+        "line": 223,
+        "name": "supported_suffixes"
+      }
+    ],
+    "name": "KnowledgeLibraryService"
+  }
+]

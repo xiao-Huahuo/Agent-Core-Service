@@ -69,10 +69,11 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
     config: 全局配置对象。
     """
 
-    def __init__(self, *, config: AgentConfig) -> None:
+    def __init__(self, *, config: AgentConfig, settings_service: Any = None) -> None:
         """初始化本地队列、Redis backend、worker 池和熔断器。"""
 
         self.config = config
+        self.settings_service = settings_service
         self.task_config = config.task_schedule
         logger.info(
             "LLM 调度器初始化 | redis=%s large_pool=%d small_pool=%d global_max=%d",
@@ -899,8 +900,7 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
     def _run_summary_business_task(self, *, user_id: str, session_id: str) -> str | None:
         """执行 Summary 业务任务。"""
 
-        from agent_service.api.rest.deps import _settings_service
-        if _settings_service is not None and not _settings_service.get_memory_config(
+        if self.settings_service is not None and not self.settings_service.get_memory_config(
             user_id=user_id
         ).get("long_term_memory_enabled", True):
             logger.info("长期记忆已关闭,跳过会话摘要写入 | user=%s session=%s", user_id, session_id)
@@ -918,15 +918,17 @@ _SCHEDULER_REGISTRY: dict[str, LLMTaskScheduler] = {}
 _SCHEDULER_REGISTRY_LOCK = threading.Lock()
 
 
-def get_llm_task_scheduler(config: AgentConfig) -> LLMTaskScheduler:
+def get_llm_task_scheduler(config: AgentConfig, settings_service: Any = None) -> LLMTaskScheduler:
     """获取按项目路径缓存的进程内调度器单例。"""
 
     scheduler_key = f"{config.storage.project_root}|{config.task_schedule.redis_url}"
     with _SCHEDULER_REGISTRY_LOCK:
         scheduler = _SCHEDULER_REGISTRY.get(scheduler_key)
         if scheduler is not None:
+            if settings_service is not None:
+                scheduler.settings_service = settings_service
             return scheduler
-        scheduler = LLMTaskScheduler(config=config)
+        scheduler = LLMTaskScheduler(config=config, settings_service=settings_service)
         _SCHEDULER_REGISTRY[scheduler_key] = scheduler
         return scheduler
 

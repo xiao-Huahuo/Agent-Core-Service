@@ -8,10 +8,10 @@ and limited to knowledge files and library items.
 from __future__ import annotations
 
 import pytest
-from sqlmodel import create_engine
+from tests.db_test_utils import create_test_engine as create_engine
 
 from agent_service.schemas.privacy import PrivacyCreate
-from agent_service.services.privacy_service import PrivacyService
+from agent_service.services.privacy.service import PrivacyService
 
 
 def test_privacy_service_persists_scoped_flags(tmp_path) -> None:

@@ -8,11 +8,13 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, create_engine, select
+from sqlmodel import Session, select
+
+from tests.db_test_utils import create_test_engine as create_engine
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.models.knowledge_graph import KnowledgeGraphDocumentStatus
-from agent_service.services.knowledge_graph_service import (
+from agent_service.services.knowledge_graph import (
     LLMKnowledgeGraphExtractor,
     KnowledgeGraphService,
     _build_llm_config,
@@ -327,7 +329,7 @@ def test_entity_dedup_merges_semantic_duplicates(tmp_path: Path) -> None:
 
     from unittest.mock import MagicMock
 
-    from agent_service.services.knowledge_graph_service import (
+    from agent_service.services.knowledge_graph import (
         EntityCandidate,
         LLMKnowledgeGraphExtractor,
     )
@@ -387,7 +389,7 @@ def test_entity_dedup_passthrough_on_single_entity(tmp_path: Path) -> None:
 
     from unittest.mock import MagicMock
 
-    from agent_service.services.knowledge_graph_service import (
+    from agent_service.services.knowledge_graph import (
         EntityCandidate,
         LLMKnowledgeGraphExtractor,
     )
@@ -788,7 +790,7 @@ def test_knowledge_graph_service_infers_explicit_similarity_relation(tmp_path: P
 def test_cosine_similarity_identical_vectors() -> None:
     """相同向量的余弦相似度应为 1.0。"""
 
-    from agent_service.services.knowledge_graph_service import KnowledgeGraphService
+    from agent_service.services.knowledge_graph import KnowledgeGraphService
 
     a = [1.0, 0.0, 0.0]
     assert KnowledgeGraphService._cosine_similarity(a, a) == 1.0
@@ -797,7 +799,7 @@ def test_cosine_similarity_identical_vectors() -> None:
 def test_cosine_similarity_orthogonal_vectors() -> None:
     """正交向量的余弦相似度应为 0.0。"""
 
-    from agent_service.services.knowledge_graph_service import KnowledgeGraphService
+    from agent_service.services.knowledge_graph import KnowledgeGraphService
 
     a = [1.0, 0.0, 0.0]
     b = [0.0, 1.0, 0.0]
@@ -812,7 +814,7 @@ def test_incremental_dedup_passthrough_on_empty_db(tmp_path: Path) -> None:
     from sqlalchemy.pool import StaticPool
 
     from agent_service.core.agent_config import AgentConfig
-    from agent_service.services.knowledge_graph_service import (
+    from agent_service.services.knowledge_graph import (
         EntityCandidate,
         KnowledgeGraphService,
         LLMKnowledgeGraphExtractor,

@@ -1,0 +1,54 @@
+"""FastAPI 应用生命周期实现。
+
+``agent_service_lifespan`` 依次加载配置、创建业务服务、启动后台调度器、加载模型
+并启动 gRPC；关闭时按原顺序释放资源。运行时容器保存在 ``app.state``。
+"""
+
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator
+
+from fastapi import FastAPI
+
+from agent_service.core.bootstrap.config_bootstrap import load_startup_config
+from agent_service.core.bootstrap.grpc_bootstrap import GrpcRuntime
+from agent_service.core.bootstrap.models_bootstrap import autoload_available_embedding_models
+from agent_service.core.bootstrap.services_bootstrap import create_application_services
+from agent_service.core.db.engine import create_database_engine
+from agent_service.core.db.migration import upgrade_database
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def agent_service_lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """管理当前 FastAPI app 独占的服务容器、后台任务和 gRPC 运行时。"""
+
+    config = load_startup_config()
+    database_engine = create_database_engine(config)
+    upgrade_database(config=config, engine=database_engine)
+    services = create_application_services(config, database_engine=database_engine)
+    grpc_runtime = GrpcRuntime()
+    app.state.services = services
+    app.state.grpc_runtime = grpc_runtime
+    try:
+        services.start_background_services()
+        logger.info("SettingsService 初始化完成")
+        autoload_available_embedding_models(config)
+        grpc_runtime.start(services)
+
+        static_dir = getattr(app.state, "static_dir", None)
+        if static_dir is not None:
+            logger.info("前端静态文件已挂载 | path=%s", static_dir)
+        else:
+            logger.info("未找到前端静态文件,开发时请单独启动 editor Vite dev server (npm run dev:electron --prefix editor)")
+        yield
+    finally:
+        logger.info("AgentService 正在关闭...")
+        services.shutdown_background_services()
+        grpc_runtime.stop()
+        app.state.services = None
+        app.state.grpc_runtime = None
+        logger.info("AgentService 已关闭")

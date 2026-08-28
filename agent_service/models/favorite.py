@@ -6,7 +6,7 @@ Favorite database models.
 SQLite 持久化,禁止用浏览器存储或临时 JSON 文件保存。
 
 使用说明:
-业务层应通过 `agent_service.services.favorite_service.FavoriteService` 操作本模型。
+业务层应通过 `agent_service.services.favorite.service.FavoriteService` 操作本模型。
 `target_type` 用于区分知识库文件、图书馆条目和 Agent 会话,`library_id` 用于隔离
 同一用户的不同知识库收藏。
 """

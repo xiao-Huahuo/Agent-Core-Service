@@ -40,7 +40,7 @@ from agent_service.services.memory.rag.hybrid_retrieval import (
     HybridRetrievalService,
 )
 from agent_service.services.memory.rag.rerank import RerankService
-from agent_service.services.settings_service import SettingsService
+from agent_service.services.settings.service import SettingsService
 
 
 @dataclass(slots=True)

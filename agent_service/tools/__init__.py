@@ -13,6 +13,10 @@ MCP 适配仍位于 `agent_service.tools.mcp` 子包中,但通过 `ToolRegistry.
 - BUILTIN_TOOL_DEFINITIONS  合并全部,保持向后兼容
 """
 
+from agent_service.tools.builtin import business_ops as builtin_business_ops
+from agent_service.tools.builtin import knowledge_ops as builtin_knowledge_ops
+from agent_service.tools.builtin import smart_forms as builtin_smart_forms
+
 from agent_service.tools.builtin import (
     BUILTIN_TOOL_DEFINITIONS,
     FILE_TOOL_DEFINITIONS,

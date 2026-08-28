@@ -17,11 +17,21 @@ from agent_service.models.favorite import FavoriteRecord
 from agent_service.models.privacy import PrivacyRecord
 from agent_service.models.feedback import FeedbackRecord
 from agent_service.models.knowledge_ingestion_job import KnowledgeIngestionJobRecord
+from agent_service.models.knowledge_graph import KnowledgeGraphDocumentStatus, KnowledgeGraphEdge, KnowledgeGraphNode
+from agent_service.models.library import LibraryAsset, LibraryItem, LibraryItemTag, LibraryTag
 from agent_service.models.message import MessageBase, MessageRecord
 from agent_service.models.session import SessionBase, SessionRecord
 from agent_service.models.smart_form import LiteratureReadingStateRecord, SmartFormCellRecord, SmartFormColumnRecord, SmartFormRecord, SmartFormRowRecord
 from agent_service.models.token_usage import TokenUsageRecord
-from agent_service.models.user_settings import UserSettingsRecord, UserSystemPromptEntry
+from agent_service.models.todo import TodoImportRecord, TodoRecord
+from agent_service.models.user_settings import (
+    UserKnowledgeLibrary,
+    UserLLMConfig,
+    UserLLMConfigPreset,
+    UserSettingsRecord,
+    UserSystemPromptEntry,
+)
+from agent_service.models.vault import VaultAsset, VaultItem, VaultItemTag, VaultProfile, VaultTag
 
 __all__ = [
     "LongTermMemorySpec",
@@ -37,6 +47,13 @@ __all__ = [
     "PrivacyRecord",
     "FeedbackRecord",
     "KnowledgeIngestionJobRecord",
+    "KnowledgeGraphDocumentStatus",
+    "KnowledgeGraphEdge",
+    "KnowledgeGraphNode",
+    "LibraryAsset",
+    "LibraryItem",
+    "LibraryItemTag",
+    "LibraryTag",
     "MessageBase",
     "MessageRecord",
     "SessionBase",
@@ -46,6 +63,16 @@ __all__ = [
     "SmartFormRecord",
     "SmartFormRowRecord",
     "TokenUsageRecord",
+    "TodoImportRecord",
+    "TodoRecord",
+    "UserKnowledgeLibrary",
+    "UserLLMConfig",
+    "UserLLMConfigPreset",
     "UserSettingsRecord",
     "UserSystemPromptEntry",
+    "VaultAsset",
+    "VaultItem",
+    "VaultItemTag",
+    "VaultProfile",
+    "VaultTag",
 ]

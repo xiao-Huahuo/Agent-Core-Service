@@ -1,0 +1,322 @@
+[
+  {
+    "path": "tests/test_activity_service.py",
+    "returncode": 0,
+    "output": "....                                                                     [100%]\n4 passed in 0.54s\n"
+  },
+  {
+    "path": "tests/test_activity_tracking.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n2 passed in 0.39s\n"
+  },
+  {
+    "path": "tests/test_agent_access_policy.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n2 passed in 8.60s\n"
+  },
+  {
+    "path": "tests/test_agent_change_service.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n2 passed in 9.03s\n"
+  },
+  {
+    "path": "tests/test_agent_config_business_limits.py",
+    "returncode": 0,
+    "output": "....                                                                     [100%]\n4 passed in 0.13s\n"
+  },
+  {
+    "path": "tests/test_agent_config_prompts.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n3 passed in 0.55s\n"
+  },
+  {
+    "path": "tests/test_agent_core_service.py",
+    "returncode": 3221225477,
+    "output": "...........F.......F.....FFF......F.FF........F.........Windows fatal exception: access violation\n\nCurrent thread 0x000040f0 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\torch\\storage.py\", line 471 in __getitem__\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\transformers\\core_model_loading.py\", line 786 in _materialize_copy\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\transformers\\core_model_loading.py\", line 799 in _job\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\concurrent\\futures\\thread.py\", line 59 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\concurrent\\futures\\thread.py\", line 93 in _worker\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00006fe4 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\concurrent\\futures\\thread.py\", line 90 in _worker\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00003a38 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 610 in _local_fact_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00002518 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 610 in _local_fact_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00005274 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 610 in _local_fact_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x000027b4 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 605 in _local_summary_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00001160 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 600 in _local_foreground_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x000076cc (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 600 in _local_foreground_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00007f9c (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 600 in _local_foreground_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x000062d0 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 600 in _local_foreground_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x000069c8 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 355 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 655 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 999 in start\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\concurrent\\futures\\thread.py\", line 203 in _adjust_thread_count\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\concurrent\\futures\\thread.py\", line 180 in submit\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\transformers\\core_model_loading.py\", line 802 in spawn_materialize\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\transformers\\core_model_loading.py\", line 1191 in convert_and_load_state_dict_in_model\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\transformers\\modeling_utils.py\", line 4191 in _load_pretrained_model\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\transformers\\modeling_utils.py\", line 4072 in from_pretrained\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\transformers\\models\\auto\\auto_factory.py\", line 374 in from_pretrained\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\sentence_transformers\\base\\modules\\transformer.py\", line 2333 in _load_model\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\sentence_transformers\\base\\modules\\transformer.py\", line 847 in __init__\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\sentence_transformers\\util\\decorators.py\", line 92 in wrapper\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\sentence_transformers\\cross_encoder\\model.py\", line 272 in _load_default_modules\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\sentence_transformers\\base\\model.py\", line 1070 in _load_modules\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\sentence_transformers\\base\\model.py\", line 236 in __init__\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\sentence_transformers\\cross_encoder\\model.py\", line 186 in __init__\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\sentence_transformers\\util\\decorators.py\", line 165 in wrapper\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\memory\\rag\\rerank.py\", line 177 in _load_model_in_thread\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00000770 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 610 in _local_fact_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00007e7c (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 610 in _local_fact_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x000042a0 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 610 in _local_fact_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00004634 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 605 in _local_summary_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00007f90 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 600 in _local_foreground_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00001e18 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 600 in _local_foreground_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00007f44 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 600 in _local_foreground_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00007bcc (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 359 in wait\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\queue.py\", line 180 in get\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 617 in _consume_local_queue\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\scheduler\\scheduler.py\", line 600 in _local_foreground_worker_loop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1012 in run\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1075 in _bootstrap_inner\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\threading.py\", line 1032 in _bootstrap\n\nThread 0x00007778 (most recent call first):\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\shutil.py\", line 460 in copy2\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\shutil.py\", line 540 in _copytree\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\shutil.py\", line 600 in copytree\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\shutil.py\", line 536 in _copytree\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\shutil.py\", line 600 in copytree\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\shutil.py\", line 536 in _copytree\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\shutil.py\", line 600 in copytree\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\shutil.py\", line 536 in _copytree\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\shutil.py\", line 600 in copytree\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\scripts\\download_model.py\", line 411 in _sync_paddlex_official_model\n  File \"D:\\Projects\\Python\\MetaWeave\\agent_service\\scripts\\download_model.py\", line 337 in ensure_paddleocr_models\n  File \"D:\\Projects\\Python\\MetaWeave\\tests\\test_agent_core_service.py\", line 2024 in test_paddleocr_model_prepare_initializes_pipeline\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\python.py\", line 166 in pytest_pyfunc_call\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_callers.py\", line 121 in _multicall\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_manager.py\", line 120 in _hookexec\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_hooks.py\", line 512 in __call__\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\python.py\", line 1720 in runtest\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\runner.py\", line 179 in pytest_runtest_call\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_callers.py\", line 121 in _multicall\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_manager.py\", line 120 in _hookexec\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_hooks.py\", line 512 in __call__\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\runner.py\", line 245 in <lambda>\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\runner.py\", line 353 in from_call\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\runner.py\", line 244 in call_and_report\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\runner.py\", line 137 in runtestprotocol\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\runner.py\", line 118 in pytest_runtest_protocol\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_callers.py\", line 121 in _multicall\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_manager.py\", line 120 in _hookexec\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_hooks.py\", line 512 in __call__\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\main.py\", line 396 in pytest_runtestloop\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_callers.py\", line 121 in _multicall\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_manager.py\", line 120 in _hookexec\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_hooks.py\", line 512 in __call__\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\main.py\", line 372 in _main\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\main.py\", line 318 in wrap_session\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\main.py\", line 365 in pytest_cmdline_main\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_callers.py\", line 121 in _multicall\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_manager.py\", line 120 in _hookexec\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pluggy\\_hooks.py\", line 512 in __call__\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\config\\__init__.py\", line 199 in main\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\_pytest\\config\\__init__.py\", line 223 in console_main\n  File \"D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\pytest\\__main__.py\", line 9 in <module>\n  File \"<frozen runpy>\", line 88 in _run_code\n  File \"<frozen runpy>\", line 198 in _run_module_as_main\n"
+  },
+  {
+    "path": "tests/test_agent_loop_model_tier.py",
+    "returncode": 0,
+    "output": ".....................                                                    [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n21 passed, 1 warning in 9.25s\n"
+  },
+  {
+    "path": "tests/test_agent_queue_service.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n3 passed in 0.51s\n"
+  },
+  {
+    "path": "tests/test_agent_tool_registry.py",
+    "returncode": 0,
+    "output": ".                                                                        [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 6.57s\n"
+  },
+  {
+    "path": "tests/test_appearance_background.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2 passed, 1 warning in 7.31s\n"
+  },
+  {
+    "path": "tests/test_automation_builtin_tools.py",
+    "returncode": 0,
+    "output": ".......                                                                  [100%]\n7 passed in 6.50s\n"
+  },
+  {
+    "path": "tests/test_automation_grpc.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2 passed, 1 warning in 7.06s\n"
+  },
+  {
+    "path": "tests/test_automation_rest.py",
+    "returncode": 0,
+    "output": "....                                                                     [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n4 passed, 1 warning in 7.28s\n"
+  },
+  {
+    "path": "tests/test_automation_scheduler.py",
+    "returncode": 0,
+    "output": "......                                                                   [100%]\n6 passed in 0.67s\n"
+  },
+  {
+    "path": "tests/test_backlinks_settings.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3 passed, 1 warning in 7.22s\n"
+  },
+  {
+    "path": "tests/test_browser_settings_grpc.py",
+    "returncode": 0,
+    "output": ".                                                                        [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 6.80s\n"
+  },
+  {
+    "path": "tests/test_child_agent_manager.py",
+    "returncode": 0,
+    "output": "..........                                                               [100%]\n10 passed in 6.45s\n"
+  },
+  {
+    "path": "tests/test_component_library_grpc.py",
+    "returncode": 0,
+    "output": ".                                                                        [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 6.82s\n"
+  },
+  {
+    "path": "tests/test_component_library_schema.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n2 passed in 0.38s\n"
+  },
+  {
+    "path": "tests/test_component_library_service.py",
+    "returncode": 0,
+    "output": "........                                                                 [100%]\n8 passed in 6.66s\n"
+  },
+  {
+    "path": "tests/test_context_builder_memory_toggle.py",
+    "returncode": 0,
+    "output": ".                                                                        [100%]\n1 passed in 5.40s\n"
+  },
+  {
+    "path": "tests/test_context_builder_tool_message_filter.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n3 passed in 5.16s\n"
+  },
+  {
+    "path": "tests/test_debug_global_constants.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2 passed, 1 warning in 7.00s\n"
+  },
+  {
+    "path": "tests/test_extended_builtin_tools.py",
+    "returncode": 0,
+    "output": "........                                                                 [100%]\n8 passed in 6.87s\n"
+  },
+  {
+    "path": "tests/test_feedback_service.py",
+    "returncode": 0,
+    "output": "....                                                                     [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n4 passed, 1 warning in 7.46s\n"
+  },
+  {
+    "path": "tests/test_font_settings_grpc.py",
+    "returncode": 0,
+    "output": ".                                                                        [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 7.01s\n"
+  },
+  {
+    "path": "tests/test_git_service.py",
+    "returncode": 0,
+    "output": "........                                                                 [100%]\n8 passed in 10.13s\n"
+  },
+  {
+    "path": "tests/test_grpc_imports.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n============================== warnings summary ===============================\ntests/test_grpc_imports.py::test_generated_grpc_module_uses_package_import_path\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3 passed, 1 warning in 6.82s\n"
+  },
+  {
+    "path": "tests/test_knowledge_graph_service.py",
+    "returncode": 0,
+    "output": "..................                                                       [100%]\n18 passed in 7.38s\n"
+  },
+  {
+    "path": "tests/test_knowledge_ingestion_job_service.py",
+    "returncode": 0,
+    "output": "....                                                                     [100%]\n4 passed in 5.15s\n"
+  },
+  {
+    "path": "tests/test_knowledge_ingestion_jobs_grpc.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2 passed, 1 warning in 6.87s\n"
+  },
+  {
+    "path": "tests/test_knowledge_ingestion_jobs_rest.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3 passed, 1 warning in 7.35s\n"
+  },
+  {
+    "path": "tests/test_knowledge_ingestion_progress.py",
+    "returncode": 0,
+    "output": ".                                                                        [100%]\n1 passed in 5.33s\n"
+  },
+  {
+    "path": "tests/test_knowledge_library_preview.py",
+    "returncode": 0,
+    "output": "...............                                                          [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n15 passed, 1 warning in 7.73s\n"
+  },
+  {
+    "path": "tests/test_knowledge_library_search.py",
+    "returncode": 0,
+    "output": ".                                                                        [100%]\n1 passed in 7.91s\n"
+  },
+  {
+    "path": "tests/test_knowledge_library_trash.py",
+    "returncode": 0,
+    "output": "...........                                                              [100%]\n11 passed in 6.59s\n"
+  },
+  {
+    "path": "tests/test_latex_grpc.py",
+    "returncode": 0,
+    "output": ".                                                                        [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 6.70s\n"
+  },
+  {
+    "path": "tests/test_latex_rest.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3 passed, 1 warning in 7.40s\n"
+  },
+  {
+    "path": "tests/test_latex_service.py",
+    "returncode": 0,
+    "output": ".............                                                            [100%]\n13 passed in 5.85s\n"
+  },
+  {
+    "path": "tests/test_library_service.py",
+    "returncode": 0,
+    "output": "............                                                             [100%]\n12 passed in 7.43s\n"
+  },
+  {
+    "path": "tests/test_local_qwen_service.py",
+    "returncode": 0,
+    "output": ".............                                                            [100%]\n13 passed in 6.82s\n"
+  },
+  {
+    "path": "tests/test_management_api.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3 passed, 1 warning in 7.30s\n"
+  },
+  {
+    "path": "tests/test_mcp_client.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n2 passed in 6.45s\n"
+  },
+  {
+    "path": "tests/test_mcp_tool_registry.py",
+    "returncode": 1,
+    "output": "F.                                                                       [100%]\n================================== FAILURES ===================================\n_____________ test_tool_registry_registers_builtin_and_mcp_tools ______________\n\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001B80EC61DC0>\n\n    def test_tool_registry_registers_builtin_and_mcp_tools(monkeypatch: Any) -> None:\n        \"\"\"��֤ MCP ���߻���ԭ������һ��ע�ᵽͳһ ToolRegistry��\"\"\"\n    \n        async def fake_discover_server_tools(\n            self: MCPToolRegistryAdapter,\n            _server_config: Any,\n        ) -> list[Any]:\n            return [\n                SimpleNamespace(\n                    name=\"echo_remote\",\n                    description=\"Զ�̻���\",\n                    input_schema={\n                        \"type\": \"object\",\n                        \"properties\": {\"text\": {\"type\": \"string\", \"description\": \"�����ı�\"}},\n                        \"required\": [\"text\"],\n                    },\n                )\n            ]\n    \n        monkeypatch.setattr(\n            MCPToolRegistryAdapter,\n            \"_discover_server_tools\",\n            fake_discover_server_tools,\n        )\n        config = build_test_config()\n    \n        registry = ToolRegistry.with_builtin_tools(config=config)\n    \n>       assert registry.get(\"echo_text\") is not None\nE       AssertionError: assert None is not None\nE        +  where None = get('echo_text')\nE        +    where get = <agent_service.tools.tool_registry.ToolRegistry object at 0x000001B80ED41010>.get\n\ntests\\test_mcp_tool_registry.py:70: AssertionError\n=========================== short test summary info ===========================\nFAILED tests/test_mcp_tool_registry.py::test_tool_registry_registers_builtin_and_mcp_tools\n1 failed, 1 passed in 6.51s\n"
+  },
+  {
+    "path": "tests/test_memory_rag.py",
+    "returncode": 0,
+    "output": "....                                                                     [100%]\n4 passed in 5.64s\n"
+  },
+  {
+    "path": "tests/test_model_management_service.py",
+    "returncode": 0,
+    "output": ".....                                                                    [100%]\n5 passed in 1.36s\n"
+  },
+  {
+    "path": "tests/test_multimodal_cleaner.py",
+    "returncode": 0,
+    "output": "...........................                                              [100%]\n27 passed in 7.58s\n"
+  },
+  {
+    "path": "tests/test_privacy_api.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2 passed, 1 warning in 8.93s\n"
+  },
+  {
+    "path": "tests/test_privacy_service.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n2 passed in 3.00s\n"
+  },
+  {
+    "path": "tests/test_session_attachment_vision.py",
+    "returncode": 0,
+    "output": ".                                                                        [100%]\n1 passed in 6.65s\n"
+  },
+  {
+    "path": "tests/test_settings_font_config.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n3 passed in 0.51s\n"
+  },
+  {
+    "path": "tests/test_settings_llm_config.py",
+    "returncode": 0,
+    "output": ".............                                                            [100%]\n13 passed in 6.94s\n"
+  },
+  {
+    "path": "tests/test_skill_service.py",
+    "returncode": 0,
+    "output": ".                                                                        [100%]\n1 passed in 5.01s\n"
+  },
+  {
+    "path": "tests/test_smart_form_service.py",
+    "returncode": 0,
+    "output": "......                                                                   [100%]\n6 passed in 0.57s\n"
+  },
+  {
+    "path": "tests/test_storage_service.py",
+    "returncode": 0,
+    "output": ".....                                                                    [100%]\n5 passed in 0.49s\n"
+  },
+  {
+    "path": "tests/test_structured_generation_service.py",
+    "returncode": 0,
+    "output": "......                                                                   [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n6 passed, 1 warning in 6.52s\n"
+  },
+  {
+    "path": "tests/test_task_scheduler.py",
+    "returncode": 0,
+    "output": "...........                                                              [100%]\n11 passed in 7.13s\n"
+  },
+  {
+    "path": "tests/test_task_suggestion_service.py",
+    "returncode": 0,
+    "output": ".....                                                                    [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n5 passed, 1 warning in 6.54s\n"
+  },
+  {
+    "path": "tests/test_terminal_sandbox.py",
+    "returncode": 0,
+    "output": "..................................                                       [100%]\n34 passed in 6.95s\n"
+  },
+  {
+    "path": "tests/test_todo_automation_rest.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2 passed, 1 warning in 7.11s\n"
+  },
+  {
+    "path": "tests/test_todo_service.py",
+    "returncode": 0,
+    "output": ".............                                                            [100%]\n13 passed in 2.01s\n"
+  },
+  {
+    "path": "tests/test_token_usage_service.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n3 passed in 0.47s\n"
+  },
+  {
+    "path": "tests/test_vault_service.py",
+    "returncode": 0,
+    "output": ".....                                                                    [100%]\n5 passed in 2.27s\n"
+  }
+]

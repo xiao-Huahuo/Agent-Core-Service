@@ -12,7 +12,7 @@ from sqlmodel import SQLModel, create_engine
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
-from agent_service.services.settings_service import SettingsService
+from agent_service.services.settings.service import SettingsService
 from agent_service.services.terminal.command_sandbox import TerminalSandbox, TerminalSandboxSettings
 from agent_service.tools.runtime_context import AGENT_ACCESS_FULL, AGENT_ACCESS_READONLY
 

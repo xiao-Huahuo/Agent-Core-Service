@@ -144,6 +144,41 @@ MetaWeave/
 
 `build/`、`dist/`、`editor/dist/` 和 `editor/release/` 是构建产物，不属于源码结构。
 
+#### 后端维护后结构
+
+后端启动装配、数据库、Agent runtime、双协议适配和业务服务已经按职责拆分：
+
+```text
+agent_service/
+├── core/
+│   ├── bootstrap/                 # 配置、模型、Service 与 gRPC 装配
+│   ├── db/                        # 统一 engine/session factory 与 Alembic migrations
+│   ├── lifespan.py                # FastAPI 生命周期
+│   └── agent_config.py            # 只读服务级配置
+├── agent_core/
+│   ├── nodes/                     # LangGraph 节点
+│   └── runtime/                   # 图运行、流式转换、会话、附件、子 Agent、取消、模型、token、错误恢复
+├── api/
+│   ├── rest/                      # FastAPI 路由与 app.state/Depends 依赖
+│   └── grpc/
+│       ├── handlers/              # 按业务领域划分的 RPC handler
+│       ├── mappers/               # 错误、依赖和响应转换
+│       └── servicer.py            # RPC 注册、集成与资源关闭
+├── services/
+│   ├── knowledge_library/         # 文件树、入库、预览、搜索、回收站
+│   ├── knowledge_graph/           # 重建、抽取、持久化、去重、查询
+│   ├── memory/                    # 长期记忆与 RAG
+│   ├── scheduler/                 # LLM 调度
+│   └── <domain>/                  # 其余 Service 与 scheduler/tracking 等角色
+└── tools/
+    ├── builtin/                   # 按 agent、memory、knowledge、web、tasks、library、git 等分类
+    ├── mcp/                       # MCP 工具接入
+    ├── tool_registry.py           # 工具注册
+    └── executor.py                # 工具执行
+```
+
+数据库 schema 只允许由根目录 `alembic.ini` 指向的版本脚本升级，业务 Service 构造过程不建表、不执行 `ALTER TABLE`，并共享启动阶段创建的应用级 engine。
+
 ### runtime 运行时结构
 
 `runtime/` 保存 MetaWeave 的应用级状态。开发模式下它位于项目根目录；正式安装后位于 `%APPDATA%/MetaWeave/runtime`。其中既有可重新下载或重新生成的数据，也有会话、设置和密码库附件等需要保留的数据，不能把整个目录当作缓存清空。

@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlmodel import Session, SQLModel, create_engine
 
 from agent_service.models.agent_queue import AgentQueueTaskRecord
-from agent_service.services.agent_queue_service import AgentQueueService
+from agent_service.services.agent_queue.service import AgentQueueService
 
 
 class StubSessionService:

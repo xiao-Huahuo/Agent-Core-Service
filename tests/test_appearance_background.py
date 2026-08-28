@@ -16,7 +16,7 @@ from agent_service.api.grpc.agent_service_pb2_grpc import AgentServiceStub, add_
 from agent_service.api.grpc.servicer import AgentServiceServicer
 from agent_service.api.rest import settings as settings_rest
 from agent_service.core.agent_config import AgentConfig
-from agent_service.services.settings_service import SettingsService
+from agent_service.services.settings.service import SettingsService
 
 
 class _MemoryServiceStub:

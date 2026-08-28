@@ -15,7 +15,8 @@ from PIL import Image
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.memory.rag.image_ocr import ImageOcrResult, ImageOcrService
-from agent_service.services.session_attachment_service import SessionAttachmentService
+from agent_service.services.session_attachment.service import SessionAttachmentService
+from tests.db_test_utils import create_test_engine
 
 
 class _SettingsStub:
@@ -87,6 +88,8 @@ def test_uploaded_image_combines_ocr_text_and_local_vision_description(
     )
     service = SessionAttachmentService(
         config=config,
+        engine=create_test_engine(f"sqlite:///{tmp_path / 'runtime' / 'db' / 'attachments.db'}"),
+        create_tables=False,
         settings_service=_SettingsStub(tmp_path / "knowledge"),  # type: ignore[arg-type]
         vision_service=vision,
     )

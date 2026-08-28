@@ -10,39 +10,6 @@
 ### IDEAs
 - [ ] DSH Adapter的实现
   - 文档位于`docs/ADAPTER_DESIGN.md`
-- [ ] 维护后端的屎山代码(+readme表示在readme的文件树里面补充),禁止修改任何业务逻辑,仅转移和规范和适配代码.务必遵循`开发规范.md`:
-  - `agent_core.py`是上帝类,拆解:
-    - `agent_service/agent_core/runtime/`:    
-      - 图运行、流式事件转换、会话、附件、子 Agent、取消、模型调用、token 统计和错误恢复,每种分别创建一个文件.
-  - `main.py`拆解:  (以下全都+readme)
-    - `agent_service/core/bootstrap/`: 
-      - `services_bootstrap.py` 服务创建和相互连接    
-      - `grpc_bootstrap.py` 启动grpc    
-      - `config_bootstrap.py` 加载配置
-      - `models_bootstrap.py` 加载和下载模型
-    - `agent_service/core/lifespan.py` 生命周期
-  - `agent_service/api/rest/deps.py`里面定义了大量 `_xxx_service` 全局变量，再由 `main.py` 逐个赋值.
-    - 新建 ApplicationServices 容器，由 bootstrap 创建并保存到 app.state.services；REST 使用 FastAPI Depends 获取依赖。AgentConfig 只管理静态配置，不持有任何 service 实例。
-  - `knowledge_library_service.py` 知识库业务太大.
-    - 彻底拆解,拆到`agent_service/services/knowledge_library/`里面.原服务文件删除.   
-      - 文件树,入库,预览,搜索,回收站,其他操作,分别写一个文件.
-  - `knowledge_graph_service.py` 知识图谱业务太大.
-    - 彻底拆解,拆到`agent_service/services/knowledge_graph/`里面.原服务文件删除.   
-      - 按照图谱的构成过程拆.
-  - 多达十几个 service 自行调用 `SQLModel.metadata.create_all()`,而且数据库没有一个真正的统一迁移器.
-    - 新建`agent_service/core/db/engine.py`: 统一的数据库factory.    +readme
-    - 引入Alembic,建立带版本号的migration,新建`agent_service/core/db/migration.py`,集中处理数据库版本迁移,只在应用启动前统一迁移一次.
-    - 将所有service里面越权的`create_all()`去掉,接收 session/repository，不自行建表或建 engine,将现有所有 `ALTER TABLE` 转成幂等迁移版本。
-  - `agent_service/core/agent_config.py`暂时不要变
-  - `agent_service/tools/`里面的builtin太散乱.
-    - 把所有的builtin全都弄到`agent_service/tools/builtin/`里面,按照系统规定的职责划分文件.一类工具一个文件.只移动builtin.
-    - `builtin.py`仅保留加载工具的核心逻辑.
-  - service层重构: 现有的service层太混杂,单文件和领域文件夹混在一起.
-    - 将所有的单文件都归类放在领域文件夹里面,允许一个文件夹只放一个文件.(我就要这么做!)
-  - `agent_service/api/grpc/servicer.py`太大,并且业务内容过多.
-    - 业务内容全都拆到`agent_service/api/grpc/handlers/`里面去,按照业务领域划分文件     +readme
-    - 共享业务逻辑进入`agent_service/services/use_cases/`或者现有的领域service
-    - 新增`agent_service/api/grpc/mappers/`处理错误和响应     +readme
-    - 本体只承担注册和转换和派发职责.
-    - servicer之间相互解耦,REST 和 gRPC 只做 DTO 转换、调用 use case、错误映射。
 ### BUGs
+- [ ] 将所有模型的验证下载和加载弄成可选项,不再阻碍在启动过程中间.
+  - 

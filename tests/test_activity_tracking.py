@@ -6,7 +6,7 @@ Protects the centralized mutation tracker from counting destructive or passive
 requests and verifies that meaningful operations map to the agreed modules.
 """
 
-from agent_service.services.activity_tracking import classify_activity, should_inspect_activity_request
+from agent_service.services.activity.tracking import classify_activity, should_inspect_activity_request
 
 
 def test_document_edit_is_scored_and_deduplicated_by_path() -> None:

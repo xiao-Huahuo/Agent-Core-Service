@@ -18,11 +18,9 @@ python -m agent_service.scripts.db_init
 
 from __future__ import annotations
 
-from sqlmodel import SQLModel, create_engine
-from sqlalchemy import text
-
-import agent_service.models  # noqa: F401
 from agent_service.core.agent_config import AgentConfig
+from agent_service.core.db.engine import create_database_engine
+from agent_service.core.db.migration import upgrade_database
 
 
 def initialize_database(*, config: AgentConfig) -> None:
@@ -33,21 +31,12 @@ def initialize_database(*, config: AgentConfig) -> None:
     并使用 storage.chroma_persist_dir 初始化 ChromaDB 集合。
     """
 
-    engine = create_engine(f"sqlite:///{config.storage.sqlite_path}", pool_pre_ping=True)
-    SQLModel.metadata.create_all(engine)
-
-    # 迁移: 旧数据库可能缺少 web_search_max_results 列
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT COUNT(*) FROM pragma_table_info('user_settings') WHERE name='web_search_max_results'")
-        )
-        if result.scalar() == 0:
-            conn.execute(text("ALTER TABLE user_settings ADD COLUMN web_search_max_results INTEGER DEFAULT 10"))
-            conn.commit()
+    engine = create_database_engine(config)
+    upgrade_database(config=config, engine=engine)
 
     from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 
-    memory_service = LongTermMemoryService(config=config, create_tables=False)
+    memory_service = LongTermMemoryService(config=config, engine=engine, create_tables=False)
     memory_service._ensure_chroma_collection(vector_dimension=512)
 
 

@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
-from agent_service.services.git_service import GitService
+from agent_service.services.git.service import GitService
 
 
 class _KnowledgeServiceStub:

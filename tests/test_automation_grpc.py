@@ -20,15 +20,15 @@ import pytest
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.struct_pb2 import Struct
 from sqlalchemy.pool import StaticPool
-from sqlmodel import create_engine
+from tests.db_test_utils import create_test_engine as create_engine
 
 from agent_service.api.grpc.agent_service_pb2_grpc import (
     AgentServiceStub,
     add_AgentServiceServicer_to_server,
 )
 from agent_service.api.grpc.servicer import AgentServiceServicer
-from agent_service.services.automation_service import AutomationService
-from agent_service.services.todo_service import TodoService
+from agent_service.services.automation.service import AutomationService
+from agent_service.services.todo.service import TodoService
 
 
 class _StubAgent:

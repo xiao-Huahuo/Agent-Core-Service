@@ -20,7 +20,7 @@ from agent_service.api.grpc.agent_service_pb2_grpc import (
     add_AgentServiceServicer_to_server,
 )
 from agent_service.api.grpc.servicer import AgentServiceServicer
-from agent_service.services.component_library_service import ComponentLibraryService
+from agent_service.services.component_library.service import ComponentLibraryService
 
 
 class _StubAgent:

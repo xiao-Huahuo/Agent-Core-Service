@@ -16,7 +16,6 @@ from fastapi.routing import APIRoute
 from starlette.concurrency import run_in_threadpool
 
 from agent_service.api.grpc import agent_service_pb2
-import agent_service.api.rest.deps as rest_deps
 from agent_service.api.rest.deps import _require_agent, _require_knowledge_library_service
 from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.services.memory.rag.chunk import chunk_text
@@ -44,7 +43,8 @@ async def runtime_apis(request: Request) -> JSONResponse:
     grpc_host = "0.0.0.0" if config.server.grpc_host == "[::]" else config.server.grpc_host
     grpc_address = f"{grpc_host}:{config.server.grpc_port}"
     apis = _collect_rest_apis(request=request, base_url=rest_base_url)
-    apis.extend(_collect_grpc_apis(address=grpc_address, running=rest_deps._grpc_running))
+    grpc_runtime = getattr(request.app.state, "grpc_runtime", None)
+    apis.extend(_collect_grpc_apis(address=grpc_address, running=bool(grpc_runtime and grpc_runtime.running)))
     return JSONResponse(
         {
             "apis": apis,

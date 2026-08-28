@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 from sqlmodel import SQLModel, create_engine
 
-from agent_service.services.knowledge_ingestion_job_service import KnowledgeIngestionJobService
+from agent_service.services.knowledge_ingestion_job.service import KnowledgeIngestionJobService
 
 
 class _LibraryStub:

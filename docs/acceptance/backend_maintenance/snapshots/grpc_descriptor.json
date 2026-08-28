@@ -1,0 +1,3274 @@
+{
+  "file": [
+    {
+      "dependency": [
+        "google/protobuf/struct.proto"
+      ],
+      "message_type": [
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "GitUserRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "initial_branch",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "GitInitRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "limit",
+              "number": 2,
+              "type": "TYPE_INT32"
+            }
+          ],
+          "name": "GitHistoryRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "path",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "staged",
+              "number": 3,
+              "type": "TYPE_BOOL"
+            }
+          ],
+          "name": "GitDiffRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "paths",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "GitPathsRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "paths",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "message",
+              "number": 3,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "GitCommitRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "local_branch",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "remote",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "remote_branch",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "force_with_lease",
+              "number": 5,
+              "type": "TYPE_BOOL"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "set_upstream",
+              "number": 6,
+              "type": "TYPE_BOOL"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "all_branches",
+              "number": 7,
+              "type": "TYPE_BOOL"
+            }
+          ],
+          "name": "GitPushRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "name",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "checkout",
+              "number": 3,
+              "type": "TYPE_BOOL"
+            }
+          ],
+          "name": "GitBranchRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "name",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "url",
+              "number": 3,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "GitRemoteRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "remote",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "branch",
+              "number": 3,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "GitPullRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "prompt",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "reference",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "agent_mode",
+              "number": 5,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "agent_access_mode",
+              "number": 6,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "RunRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "graph_diagram",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "final_output",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "events",
+              "number": 3,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Struct"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "graph_diagram_path",
+              "number": 4,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "RunResult"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "name",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "args",
+              "number": 2,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Struct"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "id",
+              "number": 3,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "ToolCall"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "node",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "event",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "error_type",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "message",
+              "number": 4,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "TraceEntry"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "node",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "tool_calls",
+              "number": 3,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.ToolCall"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "trace",
+              "number": 4,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.TraceEntry"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "done",
+              "number": 5,
+              "type": "TYPE_BOOL"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "model_name",
+              "number": 6,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "type",
+              "number": 7,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "context_messages",
+              "number": 8,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Struct"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "metadata",
+              "number": 9,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Struct"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "error",
+              "number": 10,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "ChunkMessage"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_name",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "SessionCreateRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "SessionIdRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "ListSessionsRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_name",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "SessionUpdateRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_name",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "updated_at",
+              "number": 5,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "SessionResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_REPEATED",
+              "name": "sessions",
+              "number": 1,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.SessionResponse"
+            }
+          ],
+          "name": "ListSessionsResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "ok",
+              "number": 1,
+              "type": "TYPE_BOOL"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "deleted_count",
+              "number": 2,
+              "type": "TYPE_INT32"
+            }
+          ],
+          "name": "DeleteResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "DeleteAllSessionsRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_type",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "library_id",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "filter_library",
+              "number": 4,
+              "type": "TYPE_BOOL"
+            }
+          ],
+          "name": "FavoriteListRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "library_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_type",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_id",
+              "number": 4,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "FavoriteCreateRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "library_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_type",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_id",
+              "number": 4,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "FavoriteDeleteRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "favorite_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "library_id",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_type",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_id",
+              "number": 5,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 6,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "FavoriteEntryResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_REPEATED",
+              "name": "favorites",
+              "number": 1,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.FavoriteEntryResponse"
+            }
+          ],
+          "name": "FavoriteListResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_type",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "library_id",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "filter_library",
+              "number": 4,
+              "type": "TYPE_BOOL"
+            }
+          ],
+          "name": "PrivacyListRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "library_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_type",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_id",
+              "number": 4,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "PrivacyCreateRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "library_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_type",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_id",
+              "number": 4,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "PrivacyDeleteRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "privacy_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "library_id",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_type",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_id",
+              "number": 5,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 6,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "PrivacyEntryResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_REPEATED",
+              "name": "privacy",
+              "number": 1,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.PrivacyEntryResponse"
+            }
+          ],
+          "name": "PrivacyListResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "source",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "page",
+              "number": 4,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "FeedbackCreateRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "FeedbackListRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "feedback_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "FeedbackUpdateRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "feedback_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "FeedbackDeleteRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "feedback_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "source",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "page",
+              "number": 5,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 6,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "FeedbackEntryResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_REPEATED",
+              "name": "feedback",
+              "number": 1,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.FeedbackEntryResponse"
+            }
+          ],
+          "name": "FeedbackListResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "limit",
+              "number": 3,
+              "type": "TYPE_INT32"
+            }
+          ],
+          "name": "ListMessagesRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "message_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "role",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 5,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "tool_calls",
+              "number": 6,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.ToolCall"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "metadata",
+              "number": 7,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Struct"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 8,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "MessageEntry"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_REPEATED",
+              "name": "messages",
+              "number": 1,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.MessageEntry"
+            }
+          ],
+          "name": "ListMessagesResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "EventsRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "message_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "role",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "node",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "tool_calls",
+              "number": 5,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.ToolCall"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 6,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "metadata",
+              "number": 7,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Struct"
+            }
+          ],
+          "name": "EventEntry"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "event_count",
+              "number": 3,
+              "type": "TYPE_INT32"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "events",
+              "number": 4,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.EventEntry"
+            }
+          ],
+          "name": "EventsResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "RecallDetailsRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "query",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "rag_metrics",
+              "number": 5,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Struct"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "memory_recall",
+              "number": 6,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Struct"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "knowledge_recall",
+              "number": 7,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Struct"
+            }
+          ],
+          "name": "RecallDetailsResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "TaskSuggestionsRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_REPEATED",
+              "name": "suggestions",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "TaskSuggestionsResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "interval",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "limit",
+              "number": 4,
+              "type": "TYPE_INT32"
+            }
+          ],
+          "name": "TokenUsageRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "days",
+              "number": 2,
+              "type": "TYPE_INT32"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "timezone",
+              "number": 3,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "ActivityHeatmapRequest"
+        },
+        {
+          "name": "ToolListRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "name",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "display_name",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "description",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "args_schema",
+              "number": 4,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Struct"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "argument_count",
+              "number": 5,
+              "type": "TYPE_INT32"
+            }
+          ],
+          "name": "ToolInfo"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "tool_count",
+              "number": 1,
+              "type": "TYPE_INT32"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "tools",
+              "number": 2,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.ToolInfo"
+            }
+          ],
+          "name": "ToolListResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "CancelRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "ok",
+              "number": 1,
+              "type": "TYPE_BOOL"
+            }
+          ],
+          "name": "CancelResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "ChildAgentListRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "run_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "parent_run_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "goal",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "mode",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "status",
+              "number": 5,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "access_mode",
+              "number": 6,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "allowed_tools",
+              "number": 7,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "summary",
+              "number": 8,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "result_json",
+              "number": 9,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "error",
+              "number": 10,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "category",
+              "number": 11,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "name",
+              "number": 12,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "ChildAgentRecord"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "session_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "children",
+              "number": 2,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.ChildAgentRecord"
+            }
+          ],
+          "name": "ChildAgentListResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "run_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "ChildAgentControlRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "run_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "update",
+              "number": 2,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Struct"
+            }
+          ],
+          "name": "ChildAgentUpdateRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "ok",
+              "number": 1,
+              "type": "TYPE_BOOL"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "run_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "ChildAgentControlResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "UserProfileRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "knowledge_dir",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "name",
+              "number": 3,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "UserKnowledgeDirUpdateRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "knowledge_dir",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "updated_at",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "active_library_id",
+              "number": 5,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "active_knowledge_library",
+              "number": 6,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.KnowledgeLibraryEntry"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "knowledge_libraries",
+              "number": 7,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.KnowledgeLibraryEntry"
+            }
+          ],
+          "name": "UserProfileResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "LLMConfigRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "api_key",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "base_url",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "model_name",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "small_api_key",
+              "number": 5,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "small_base_url",
+              "number": 6,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "small_model_name",
+              "number": 7,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "LLMConfigSaveRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "api_key",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "base_url",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "model_name",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "small_api_key",
+              "number": 5,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "small_base_url",
+              "number": 6,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "small_model_name",
+              "number": 7,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "effective_small_api_key",
+              "number": 8,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "effective_small_base_url",
+              "number": 9,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "effective_small_model_name",
+              "number": 10,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "updated_at",
+              "number": 11,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "effective_api_key",
+              "number": 12,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "effective_base_url",
+              "number": 13,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "effective_model_name",
+              "number": 14,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "effective_model_source",
+              "number": 15,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "effective_small_model_source",
+              "number": 16,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "LLMConfigResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "label",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "api_key",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "base_url",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "model_name",
+              "number": 5,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "LLMConfigPresetSaveRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "config_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "LLMConfigPresetDeleteRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "config_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "label",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "api_key",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "base_url",
+              "number": 5,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "model_name",
+              "number": 6,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 7,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "updated_at",
+              "number": 8,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "LLMConfigPresetResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_REPEATED",
+              "name": "configs",
+              "number": 1,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.LLMConfigPresetResponse"
+            }
+          ],
+          "name": "LLMConfigPresetListResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "library_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "name",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "knowledge_dir",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "is_active",
+              "number": 5,
+              "type": "TYPE_BOOL"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 6,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "updated_at",
+              "number": 7,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "KnowledgeLibraryEntry"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "knowledge_dir",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "KnowledgeRebuildRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "filename",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "relative_dir",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 4,
+              "type": "TYPE_BYTES"
+            }
+          ],
+          "name": "KnowledgeFileUploadRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "knowledge_dir",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "frontmatter_dir",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "frontmatter_files_seen",
+              "number": 4,
+              "type": "TYPE_INT32"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "frontmatter_files_written",
+              "number": 5,
+              "type": "TYPE_INT32"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "frontmatter_files_skipped",
+              "number": 6,
+              "type": "TYPE_INT32"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "files_seen",
+              "number": 7,
+              "type": "TYPE_INT32"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "files_ingested",
+              "number": 8,
+              "type": "TYPE_INT32"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "files_skipped",
+              "number": 9,
+              "type": "TYPE_INT32"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "chunks_created",
+              "number": 10,
+              "type": "TYPE_INT32"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "chunks_deleted",
+              "number": 11,
+              "type": "TYPE_INT32"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "uploaded_path",
+              "number": 12,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "library_id",
+              "number": 13,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "KnowledgeRebuildResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "KnowledgeFileTreeRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "name",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "path",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "is_dir",
+              "number": 3,
+              "type": "TYPE_BOOL"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "mtime",
+              "number": 4,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "index_status",
+              "number": 5,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "size",
+              "number": 6,
+              "type": "TYPE_INT64"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "children",
+              "number": 7,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.KnowledgeFileNode"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "graph_status",
+              "number": 8,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 9,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "KnowledgeFileNode"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_REPEATED",
+              "name": "tree",
+              "number": 1,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.KnowledgeFileNode"
+            }
+          ],
+          "name": "KnowledgeFileTreeResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "path",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "KnowledgeFileContentRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "path",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "mtime",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "size",
+              "number": 4,
+              "type": "TYPE_INT64"
+            }
+          ],
+          "name": "KnowledgeFileContentResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "path",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "page",
+              "number": 3,
+              "type": "TYPE_INT32"
+            }
+          ],
+          "name": "KnowledgePdfPageRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 1,
+              "type": "TYPE_BYTES"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "mime_type",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "KnowledgePdfPageResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "path",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 3,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "KnowledgeFileWriteRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "path",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 3,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "KnowledgeFileCreateRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "path",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "KnowledgeFolderCreateRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "source_path",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_path",
+              "number": 3,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "KnowledgePathCopyRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "path",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "KnowledgePathDeleteRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "source_path",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "target_path",
+              "number": 3,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "KnowledgePathRenameRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "SystemPromptRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "prompt_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 3,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "SystemPromptEntryResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_REPEATED",
+              "name": "entries",
+              "number": 1,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.SystemPromptEntryResponse"
+            }
+          ],
+          "name": "SystemPromptEntriesResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 2,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "SystemPromptAddRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "prompt_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "SystemPromptDeleteRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "MemoryListRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "memory_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "importance",
+              "number": 3,
+              "type": "TYPE_DOUBLE"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 4,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "MemoryEntryResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_REPEATED",
+              "name": "entries",
+              "number": 1,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".agent_service.MemoryEntryResponse"
+            }
+          ],
+          "name": "MemoryListResponse"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "user_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "content",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "importance",
+              "number": 3,
+              "type": "TYPE_DOUBLE"
+            }
+          ],
+          "name": "MemoryAddRequest"
+        },
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "memory_id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "MemoryDeleteRequest"
+        }
+      ],
+      "name": "agent_service.proto",
+      "package": "agent_service",
+      "service": [
+        {
+          "method": [
+            {
+              "input_type": ".agent_service.RunRequest",
+              "name": "StreamRun",
+              "output_type": ".agent_service.ChunkMessage",
+              "server_streaming": true
+            },
+            {
+              "input_type": ".agent_service.RunRequest",
+              "name": "RunOnce",
+              "output_type": ".agent_service.RunResult"
+            },
+            {
+              "input_type": ".agent_service.RunRequest",
+              "name": "StreamSessionPrompt",
+              "output_type": ".agent_service.ChunkMessage",
+              "server_streaming": true
+            },
+            {
+              "input_type": ".agent_service.RunRequest",
+              "name": "RunSessionPrompt",
+              "output_type": ".agent_service.RunResult"
+            },
+            {
+              "input_type": ".agent_service.SessionCreateRequest",
+              "name": "CreateSession",
+              "output_type": ".agent_service.SessionResponse"
+            },
+            {
+              "input_type": ".agent_service.SessionIdRequest",
+              "name": "GetSession",
+              "output_type": ".agent_service.SessionResponse"
+            },
+            {
+              "input_type": ".agent_service.ListSessionsRequest",
+              "name": "ListUserSessions",
+              "output_type": ".agent_service.ListSessionsResponse"
+            },
+            {
+              "input_type": ".agent_service.SessionUpdateRequest",
+              "name": "UpdateSessionName",
+              "output_type": ".agent_service.SessionResponse"
+            },
+            {
+              "input_type": ".agent_service.SessionIdRequest",
+              "name": "DeleteSession",
+              "output_type": ".agent_service.DeleteResponse"
+            },
+            {
+              "input_type": ".agent_service.DeleteAllSessionsRequest",
+              "name": "DeleteAllSessions",
+              "output_type": ".agent_service.DeleteResponse"
+            },
+            {
+              "input_type": ".agent_service.ListMessagesRequest",
+              "name": "ListMessages",
+              "output_type": ".agent_service.ListMessagesResponse"
+            },
+            {
+              "input_type": ".agent_service.CancelRequest",
+              "name": "CancelSession",
+              "output_type": ".agent_service.CancelResponse"
+            },
+            {
+              "input_type": ".agent_service.ChildAgentListRequest",
+              "name": "ListChildAgents",
+              "output_type": ".agent_service.ChildAgentListResponse"
+            },
+            {
+              "input_type": ".agent_service.ChildAgentControlRequest",
+              "name": "StopChildAgent",
+              "output_type": ".agent_service.ChildAgentControlResponse"
+            },
+            {
+              "input_type": ".agent_service.ChildAgentUpdateRequest",
+              "name": "UpdateChildAgent",
+              "output_type": ".agent_service.ChildAgentControlResponse"
+            },
+            {
+              "input_type": ".agent_service.EventsRequest",
+              "name": "GetEvents",
+              "output_type": ".agent_service.EventsResponse"
+            },
+            {
+              "input_type": ".agent_service.RecallDetailsRequest",
+              "name": "GetRecallDetails",
+              "output_type": ".agent_service.RecallDetailsResponse"
+            },
+            {
+              "input_type": ".agent_service.TaskSuggestionsRequest",
+              "name": "GetTaskSuggestions",
+              "output_type": ".agent_service.TaskSuggestionsResponse"
+            },
+            {
+              "input_type": ".agent_service.TokenUsageRequest",
+              "name": "GetTokenUsage",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.ActivityHeatmapRequest",
+              "name": "GetActivityHeatmap",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.ToolListRequest",
+              "name": "GetRegisteredTools",
+              "output_type": ".agent_service.ToolListResponse"
+            },
+            {
+              "input_type": ".agent_service.UserProfileRequest",
+              "name": "EnsureUserProfile",
+              "output_type": ".agent_service.UserProfileResponse"
+            },
+            {
+              "input_type": ".agent_service.UserKnowledgeDirUpdateRequest",
+              "name": "UpdateUserKnowledgeDir",
+              "output_type": ".agent_service.UserProfileResponse"
+            },
+            {
+              "input_type": ".agent_service.LLMConfigRequest",
+              "name": "GetLLMConfig",
+              "output_type": ".agent_service.LLMConfigResponse"
+            },
+            {
+              "input_type": ".agent_service.LLMConfigSaveRequest",
+              "name": "SaveLLMConfig",
+              "output_type": ".agent_service.LLMConfigResponse"
+            },
+            {
+              "input_type": ".agent_service.LLMConfigRequest",
+              "name": "ListLLMConfigPresets",
+              "output_type": ".agent_service.LLMConfigPresetListResponse"
+            },
+            {
+              "input_type": ".agent_service.LLMConfigPresetSaveRequest",
+              "name": "SaveLLMConfigPreset",
+              "output_type": ".agent_service.LLMConfigPresetResponse"
+            },
+            {
+              "input_type": ".agent_service.LLMConfigPresetDeleteRequest",
+              "name": "DeleteLLMConfigPreset",
+              "output_type": ".agent_service.DeleteResponse"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "GetWebSearchConfig",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "SaveWebSearchConfig",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "GetFontConfig",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "SaveFontConfig",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "GetAppearanceConfig",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "SaveAppearanceConfig",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.KnowledgeRebuildRequest",
+              "name": "RebuildKnowledge",
+              "output_type": ".agent_service.KnowledgeRebuildResponse"
+            },
+            {
+              "input_type": ".agent_service.KnowledgeFileUploadRequest",
+              "name": "UploadKnowledgeFile",
+              "output_type": ".agent_service.KnowledgeRebuildResponse"
+            },
+            {
+              "input_type": ".agent_service.KnowledgeFileTreeRequest",
+              "name": "ListKnowledgeFiles",
+              "output_type": ".agent_service.KnowledgeFileTreeResponse"
+            },
+            {
+              "input_type": ".agent_service.KnowledgeFileContentRequest",
+              "name": "ReadKnowledgeFile",
+              "output_type": ".agent_service.KnowledgeFileContentResponse"
+            },
+            {
+              "input_type": ".agent_service.KnowledgePdfPageRequest",
+              "name": "PreviewKnowledgePdfPage",
+              "output_type": ".agent_service.KnowledgePdfPageResponse"
+            },
+            {
+              "input_type": ".agent_service.KnowledgeFileWriteRequest",
+              "name": "WriteKnowledgeFile",
+              "output_type": ".agent_service.KnowledgeFileNode"
+            },
+            {
+              "input_type": ".agent_service.KnowledgeFileCreateRequest",
+              "name": "CreateKnowledgeFile",
+              "output_type": ".agent_service.KnowledgeFileNode"
+            },
+            {
+              "input_type": ".agent_service.KnowledgeFolderCreateRequest",
+              "name": "CreateKnowledgeFolder",
+              "output_type": ".agent_service.KnowledgeFileNode"
+            },
+            {
+              "input_type": ".agent_service.KnowledgePathCopyRequest",
+              "name": "CopyKnowledgePath",
+              "output_type": ".agent_service.KnowledgeFileNode"
+            },
+            {
+              "input_type": ".agent_service.KnowledgePathDeleteRequest",
+              "name": "DeleteKnowledgePath",
+              "output_type": ".agent_service.DeleteResponse"
+            },
+            {
+              "input_type": ".agent_service.KnowledgePathRenameRequest",
+              "name": "RenameKnowledgePath",
+              "output_type": ".agent_service.KnowledgeFileNode"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "CreateKnowledgeIngestionJobs",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "ListKnowledgeIngestionJobs",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "CancelKnowledgeIngestionJob",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.GitUserRequest",
+              "name": "GetGitStatus",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.GitInitRequest",
+              "name": "InitGitRepository",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.GitHistoryRequest",
+              "name": "GetGitHistory",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.GitDiffRequest",
+              "name": "GetGitDiff",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.GitPathsRequest",
+              "name": "RestoreGitPaths",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.GitCommitRequest",
+              "name": "CommitGitPaths",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.GitPushRequest",
+              "name": "PushGitBranch",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.GitBranchRequest",
+              "name": "CreateGitBranch",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.GitRemoteRequest",
+              "name": "AddGitRemote",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.GitBranchRequest",
+              "name": "SwitchGitBranch",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.GitPullRequest",
+              "name": "PullGitBranch",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".agent_service.SystemPromptRequest",
+              "name": "ListSystemPromptEntries",
+              "output_type": ".agent_service.SystemPromptEntriesResponse"
+            },
+            {
+              "input_type": ".agent_service.SystemPromptAddRequest",
+              "name": "AddSystemPromptEntry",
+              "output_type": ".agent_service.SystemPromptEntryResponse"
+            },
+            {
+              "input_type": ".agent_service.SystemPromptDeleteRequest",
+              "name": "DeleteSystemPromptEntry",
+              "output_type": ".agent_service.DeleteResponse"
+            },
+            {
+              "input_type": ".agent_service.MemoryListRequest",
+              "name": "ListCustomMemories",
+              "output_type": ".agent_service.MemoryListResponse"
+            },
+            {
+              "input_type": ".agent_service.MemoryAddRequest",
+              "name": "AddCustomMemory",
+              "output_type": ".agent_service.MemoryEntryResponse"
+            },
+            {
+              "input_type": ".agent_service.MemoryDeleteRequest",
+              "name": "DeleteCustomMemory",
+              "output_type": ".agent_service.DeleteResponse"
+            },
+            {
+              "input_type": ".agent_service.FavoriteListRequest",
+              "name": "ListFavorites",
+              "output_type": ".agent_service.FavoriteListResponse"
+            },
+            {
+              "input_type": ".agent_service.FavoriteCreateRequest",
+              "name": "AddFavorite",
+              "output_type": ".agent_service.FavoriteEntryResponse"
+            },
+            {
+              "input_type": ".agent_service.FavoriteDeleteRequest",
+              "name": "DeleteFavorite",
+              "output_type": ".agent_service.DeleteResponse"
+            },
+            {
+              "input_type": ".agent_service.PrivacyListRequest",
+              "name": "ListPrivacy",
+              "output_type": ".agent_service.PrivacyListResponse"
+            },
+            {
+              "input_type": ".agent_service.PrivacyCreateRequest",
+              "name": "AddPrivacy",
+              "output_type": ".agent_service.PrivacyEntryResponse"
+            },
+            {
+              "input_type": ".agent_service.PrivacyDeleteRequest",
+              "name": "DeletePrivacy",
+              "output_type": ".agent_service.DeleteResponse"
+            },
+            {
+              "input_type": ".agent_service.FeedbackListRequest",
+              "name": "ListFeedback",
+              "output_type": ".agent_service.FeedbackListResponse"
+            },
+            {
+              "input_type": ".agent_service.FeedbackCreateRequest",
+              "name": "AddFeedback",
+              "output_type": ".agent_service.FeedbackEntryResponse"
+            },
+            {
+              "input_type": ".agent_service.FeedbackUpdateRequest",
+              "name": "UpdateFeedback",
+              "output_type": ".agent_service.FeedbackEntryResponse"
+            },
+            {
+              "input_type": ".agent_service.FeedbackDeleteRequest",
+              "name": "DeleteFeedback",
+              "output_type": ".agent_service.DeleteResponse"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultStatus",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultDebugMasterPassword",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultSetup",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultUnlock",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultResetPassword",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultLock",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultListItems",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultGetItem",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultCreateItem",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultUpdateItem",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultMoveToTrash",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultRestoreItems",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultPurgeItems",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultExportItems",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultImportItems",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "VaultListTags",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "ListComponentLibraryComponents",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "CreateComponentLibraryComponent",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "RenameComponentLibraryComponent",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "DeleteComponentLibraryComponent",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "GetSessionChanges",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "UndoSessionChange",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "ListAgentQueueTasks",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "CreateAgentQueueTask",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "UpdateAgentQueueTask",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "ContinueAgentQueueTask",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "TransitionAgentQueueTask",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "DeleteAgentQueueTask",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "UpdateAgentQueueSettings",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "GetLatexStatus",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "StartLatexInstall",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "CancelLatexInstall",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "UninstallManagedLatex",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "CompileLatex",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "ClearLatexStorage",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "GetLatexManagement",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "GetModelManagement",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "ListAutomations",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "CreateAutomation",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "ToggleAutomation",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "ListAutomationRuns",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "DeleteAutomation",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "DeleteSmartForm",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "ListLiteratureEntries",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "TouchLiteratureEntry",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "PatchLiteratureRow",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "DuplicateLiteratureRow",
+              "output_type": ".google.protobuf.Struct"
+            },
+            {
+              "input_type": ".google.protobuf.Struct",
+              "name": "DeleteLiteratureRow",
+              "output_type": ".google.protobuf.Struct"
+            }
+          ],
+          "name": "AgentService"
+        }
+      ],
+      "syntax": "proto3"
+    },
+    {
+      "enum_type": [
+        {
+          "name": "NullValue",
+          "value": [
+            {
+              "name": "NULL_VALUE",
+              "number": 0
+            }
+          ]
+        }
+      ],
+      "message_type": [
+        {
+          "field": [
+            {
+              "json_name": "fields",
+              "label": "LABEL_REPEATED",
+              "name": "fields",
+              "number": 1,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Struct.FieldsEntry"
+            }
+          ],
+          "name": "Struct",
+          "nested_type": [
+            {
+              "field": [
+                {
+                  "json_name": "key",
+                  "label": "LABEL_OPTIONAL",
+                  "name": "key",
+                  "number": 1,
+                  "type": "TYPE_STRING"
+                },
+                {
+                  "json_name": "value",
+                  "label": "LABEL_OPTIONAL",
+                  "name": "value",
+                  "number": 2,
+                  "type": "TYPE_MESSAGE",
+                  "type_name": ".google.protobuf.Value"
+                }
+              ],
+              "name": "FieldsEntry",
+              "options": {
+                "map_entry": true
+              }
+            }
+          ]
+        },
+        {
+          "field": [
+            {
+              "json_name": "nullValue",
+              "label": "LABEL_OPTIONAL",
+              "name": "null_value",
+              "number": 1,
+              "oneof_index": 0,
+              "type": "TYPE_ENUM",
+              "type_name": ".google.protobuf.NullValue"
+            },
+            {
+              "json_name": "numberValue",
+              "label": "LABEL_OPTIONAL",
+              "name": "number_value",
+              "number": 2,
+              "oneof_index": 0,
+              "type": "TYPE_DOUBLE"
+            },
+            {
+              "json_name": "stringValue",
+              "label": "LABEL_OPTIONAL",
+              "name": "string_value",
+              "number": 3,
+              "oneof_index": 0,
+              "type": "TYPE_STRING"
+            },
+            {
+              "json_name": "boolValue",
+              "label": "LABEL_OPTIONAL",
+              "name": "bool_value",
+              "number": 4,
+              "oneof_index": 0,
+              "type": "TYPE_BOOL"
+            },
+            {
+              "json_name": "structValue",
+              "label": "LABEL_OPTIONAL",
+              "name": "struct_value",
+              "number": 5,
+              "oneof_index": 0,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Struct"
+            },
+            {
+              "json_name": "listValue",
+              "label": "LABEL_OPTIONAL",
+              "name": "list_value",
+              "number": 6,
+              "oneof_index": 0,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.ListValue"
+            }
+          ],
+          "name": "Value",
+          "oneof_decl": [
+            {
+              "name": "kind"
+            }
+          ]
+        },
+        {
+          "field": [
+            {
+              "json_name": "values",
+              "label": "LABEL_REPEATED",
+              "name": "values",
+              "number": 1,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".google.protobuf.Value"
+            }
+          ],
+          "name": "ListValue"
+        }
+      ],
+      "name": "google/protobuf/struct.proto",
+      "options": {
+        "cc_enable_arenas": true,
+        "csharp_namespace": "Google.Protobuf.WellKnownTypes",
+        "go_package": "google.golang.org/protobuf/types/known/structpb",
+        "java_multiple_files": true,
+        "java_outer_classname": "StructProto",
+        "java_package": "com.google.protobuf",
+        "objc_class_prefix": "GPB"
+      },
+      "package": "google.protobuf",
+      "syntax": "proto3"
+    }
+  ]
+}

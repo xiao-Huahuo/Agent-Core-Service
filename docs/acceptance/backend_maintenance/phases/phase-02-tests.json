@@ -1,0 +1,52 @@
+[
+  {
+    "path": "tests/test_appearance_background.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2 passed, 1 warning in 7.11s\n"
+  },
+  {
+    "path": "tests/test_application_lifespan.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2 passed, 1 warning in 6.68s\n"
+  },
+  {
+    "path": "tests/test_automation_rest.py",
+    "returncode": 0,
+    "output": "....                                                                     [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n4 passed, 1 warning in 6.92s\n"
+  },
+  {
+    "path": "tests/test_backlinks_settings.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3 passed, 1 warning in 7.18s\n"
+  },
+  {
+    "path": "tests/test_feedback_service.py",
+    "returncode": 0,
+    "output": "....                                                                     [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n4 passed, 1 warning in 7.17s\n"
+  },
+  {
+    "path": "tests/test_management_api.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3 passed, 1 warning in 6.99s\n"
+  },
+  {
+    "path": "tests/test_privacy_api.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2 passed, 1 warning in 8.81s\n"
+  },
+  {
+    "path": "tests/test_rest_application_services.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2 passed, 1 warning in 6.93s\n"
+  },
+  {
+    "path": "tests/test_settings_font_config.py",
+    "returncode": 0,
+    "output": "...                                                                      [100%]\n3 passed in 0.50s\n"
+  },
+  {
+    "path": "tests/test_todo_automation_rest.py",
+    "returncode": 0,
+    "output": "..                                                                       [100%]\n============================== warnings summary ===============================\n..\\..\\..\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8\n  D:\\Softwares\\Python\\Python312\\Lib\\site-packages\\langgraph\\cache\\base\\__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.\n    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n2 passed, 1 warning in 7.23s\n"
+  }
+]

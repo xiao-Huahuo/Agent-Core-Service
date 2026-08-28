@@ -1,0 +1,12 @@
+[
+  {
+    "path": "tests/test_knowledge_graph_service.py",
+    "returncode": 2,
+    "output": "\n=================================== ERRORS ====================================\n___________ ERROR collecting tests/test_knowledge_graph_service.py ____________\nImportError while importing test module 'D:\\Projects\\Python\\MetaWeave\\tests\\test_knowledge_graph_service.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nD:\\Softwares\\Python\\Python312\\Lib\\importlib\\__init__.py:90: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_knowledge_graph_service.py:17: in <module>\n    from agent_service.services.knowledge_graph import (\nE   ImportError: cannot import name '_build_llm_config' from 'agent_service.services.knowledge_graph' (D:\\Projects\\Python\\MetaWeave\\agent_service\\services\\knowledge_graph\\__init__.py)\n=========================== short test summary info ===========================\nERROR tests/test_knowledge_graph_service.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 error in 7.01s\n"
+  },
+  {
+    "path": "tests/test_knowledge_library_search.py",
+    "returncode": 0,
+    "output": ".                                                                        [100%]\n1 passed in 6.36s\n"
+  }
+]

@@ -10,14 +10,16 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from types import SimpleNamespace
+
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
-from sqlmodel import create_engine
+from tests.db_test_utils import create_test_engine as create_engine
 
 import agent_service.api.rest.deps as rest_deps
 from agent_service.api.rest.feedback import router as feedback_router
-from agent_service.services.feedback_service import FeedbackService
+from agent_service.services.feedback.service import FeedbackService
 from agent_service.schemas.feedback import FeedbackCreate
 from main import app as main_app
 
@@ -30,9 +32,12 @@ def make_client() -> TestClient:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    rest_deps._feedback_service = FeedbackService(engine=engine)
     app = FastAPI()
-    app.include_router(feedback_router)
+    app.state.services = SimpleNamespace(feedback_service=FeedbackService(engine=engine))
+    app.include_router(
+        feedback_router,
+        dependencies=[Depends(rest_deps.bind_application_services)],
+    )
     return TestClient(app)
 
 
@@ -52,7 +57,7 @@ def test_list_feedback_reads_all_when_user_id_is_missing() -> None:
         assert unscoped.status_code == 200
         assert {item["content"] for item in unscoped.json()["feedback"]} == {"first", "second"}
     finally:
-        rest_deps._feedback_service = None
+        client.close()
 
 
 def test_feedback_allows_electron_renderer_cors_preflight() -> None:

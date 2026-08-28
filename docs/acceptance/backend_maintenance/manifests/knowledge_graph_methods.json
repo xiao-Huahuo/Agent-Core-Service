@@ -1,0 +1,76 @@
+[
+  {
+    "kind": "class",
+    "line": 86,
+    "methods": [
+      {
+        "line": 89,
+        "name": "extract"
+      }
+    ],
+    "name": "KnowledgeGraphExtractor"
+  },
+  {
+    "kind": "class",
+    "line": 94,
+    "methods": [],
+    "name": "GraphExtractionResult"
+  },
+  {
+    "kind": "class",
+    "line": 107,
+    "methods": [],
+    "name": "EntityCandidate"
+  },
+  {
+    "kind": "class",
+    "line": 118,
+    "methods": [],
+    "name": "RelationCandidate"
+  },
+  {
+    "kind": "class",
+    "line": 128,
+    "methods": [
+      {
+        "line": 149,
+        "name": "extract"
+      },
+      {
+        "line": 172,
+        "name": "extract_batch"
+      },
+      {
+        "line": 293,
+        "name": "deduplicate_entities"
+      },
+      {
+        "line": 399,
+        "name": "deduplicate_entities_incremental"
+      }
+    ],
+    "name": "LLMKnowledgeGraphExtractor"
+  },
+  {
+    "kind": "class",
+    "line": 530,
+    "methods": [],
+    "name": "KnowledgeGraphService"
+  },
+  {
+    "kind": "class",
+    "line": 593,
+    "methods": [],
+    "name": "GraphExtractionCancelled"
+  },
+  {
+    "kind": "function",
+    "line": 664,
+    "name": "get_graph_extraction_progress"
+  },
+  {
+    "kind": "function",
+    "line": 706,
+    "name": "get_dedup_progress"
+  }
+]

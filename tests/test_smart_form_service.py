@@ -11,11 +11,12 @@ Smart form service tests.
 
 from __future__ import annotations
 
-from sqlalchemy import inspect, text
-from sqlmodel import Session, create_engine
+from sqlmodel import Session
+
+from tests.db_test_utils import create_test_engine as create_engine
 
 from agent_service.models.user_settings import UserKnowledgeLibrary
-from agent_service.services.smart_form_service import SmartFormService
+from agent_service.services.smart_form.service import SmartFormService
 
 
 def test_smart_form_service_round_trips_all_column_types() -> None:
@@ -64,51 +65,6 @@ def test_smart_form_service_round_trips_all_column_types() -> None:
     assert row_cells["paper_type"]["value"] == "研究论文, 综述论文"
     assert row_cells["literature_file"]["assetPath"] == "forms/项目阅读表/assets/paper.pdf"
     assert row_cells["title"]["status"] == "ready"
-
-
-def test_smart_form_service_adds_row_height_to_existing_database() -> None:
-    """旧版行表缺少 height 列时应自动迁移且保留已有数据。"""
-
-    engine = create_engine("sqlite:///:memory:")
-    with engine.begin() as connection:
-        connection.execute(text(
-            "CREATE TABLE smart_form_rows ("
-            "row_record_id VARCHAR(160) PRIMARY KEY, "
-            "form_id VARCHAR(64) NOT NULL, "
-            "row_id VARCHAR(96) NOT NULL, "
-            "order_index INTEGER NOT NULL)"
-        ))
-
-    SmartFormService(engine=engine)
-
-    columns = {column["name"] for column in inspect(engine).get_columns("smart_form_rows")}
-    assert "height" in columns
-
-
-def test_smart_form_service_adds_column_description_to_existing_database() -> None:
-    """旧版列表缺少 description 列时应自动迁移以持久化辅助描述。"""
-
-    engine = create_engine("sqlite:///:memory:")
-    with engine.begin() as connection:
-        connection.execute(text(
-            "CREATE TABLE smart_form_columns ("
-            "column_record_id VARCHAR(160) PRIMARY KEY, "
-            "form_id VARCHAR(64) NOT NULL, "
-            "column_id VARCHAR(96) NOT NULL, "
-            "order_index INTEGER NOT NULL, "
-            "title VARCHAR(200) NOT NULL, "
-            "column_type VARCHAR(32) NOT NULL, "
-            "removable BOOLEAN NOT NULL, "
-            "editable BOOLEAN NOT NULL, "
-            "width INTEGER NOT NULL, "
-            "options_json TEXT NOT NULL, "
-            "tone VARCHAR(32) NOT NULL)"
-        ))
-
-    SmartFormService(engine=engine)
-
-    columns = {column["name"] for column in inspect(engine).get_columns("smart_form_columns")}
-    assert "description" in columns
 
 
 def test_smart_form_service_deletes_only_the_owners_form() -> None:

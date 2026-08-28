@@ -13,11 +13,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from sqlmodel import create_engine
+from tests.db_test_utils import create_test_engine as create_engine
 
-from agent_service.services.automation_scheduler import AutomationScheduler
-from agent_service.services.automation_service import AutomationService
-from agent_service.services.todo_service import TodoService
+from agent_service.services.automation.scheduler import AutomationScheduler
+from agent_service.services.automation.service import AutomationService
+from agent_service.services.todo.service import TodoService
 
 
 class FakeSessionService:

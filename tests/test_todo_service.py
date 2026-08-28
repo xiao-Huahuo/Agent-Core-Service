@@ -13,11 +13,13 @@ from pathlib import Path
 from threading import Barrier
 
 import pytest
-from sqlmodel import Session, create_engine
+from sqlmodel import Session
+
+from tests.db_test_utils import create_test_engine as create_engine
 
 from agent_service.models.automation import AutomationRunRecord, AutomationTaskRecord
-from agent_service.services.automation_service import AutomationService
-from agent_service.services.todo_service import TodoService
+from agent_service.services.automation.service import AutomationService
+from agent_service.services.todo.service import TodoService
 
 
 def test_legacy_json_is_imported_once(tmp_path: Path) -> None:

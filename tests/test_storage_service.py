@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from agent_service.core.agent_config import AgentConfig
-from agent_service.services.storage_service import StorageService
+from agent_service.services.storage.service import StorageService
 
 
 class _SettingsStub:

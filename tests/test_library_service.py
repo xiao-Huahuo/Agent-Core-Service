@@ -14,12 +14,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from sqlmodel import Session, create_engine
+from sqlmodel import Session
+
+from tests.db_test_utils import create_test_engine as create_engine
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.models.user_settings import UserKnowledgeLibrary
-from agent_service.services.library_service import LibraryService
-from agent_service.services.settings_service import SettingsService
+from agent_service.services.library.service import LibraryService
+from agent_service.services.settings.service import SettingsService
 
 
 class _MemoryServiceStub:

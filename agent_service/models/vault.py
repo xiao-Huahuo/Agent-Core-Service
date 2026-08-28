@@ -6,8 +6,8 @@
 敏感业务字段不以明文列保存,统一放入 VaultItem.encrypted_payload。
 
 使用说明:
-VaultService 在启动时调用 SQLModel.metadata.create_all 创建这些表,REST 和
-gRPC 层只通过服务层读写,不得直接操作模型。
+Alembic 在应用启动前创建和升级这些表,REST 和 gRPC 层只通过服务层读写,
+不得直接操作模型。
 """
 
 from __future__ import annotations

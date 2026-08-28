@@ -13,13 +13,15 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-from sqlmodel import Session, create_engine, select
+from sqlmodel import Session, select
 
-import agent_service.tools.builtin as builtin
+from tests.db_test_utils import create_test_engine as create_engine
+
+import agent_service.tools.builtin.tasks as builtin
 from agent_service.models.automation import AutomationRunRecord, AutomationTaskRecord
 from agent_service.models.todo import TodoRecord
-from agent_service.services.automation_service import AutomationService
-from agent_service.services.todo_service import TodoService
+from agent_service.services.automation.service import AutomationService
+from agent_service.services.todo.service import TodoService
 
 
 def install_tool_services(

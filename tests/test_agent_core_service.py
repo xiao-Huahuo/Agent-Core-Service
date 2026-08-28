@@ -54,10 +54,10 @@ from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 from agent_service.services.memory.rag.embedding import EmbeddingService
 from agent_service.services.memory.rag.knowledge_ingestion import KnowledgeIngestionService
-from agent_service.services.message_service import MessageService
+from agent_service.services.message.service import MessageService
 from agent_service.services.safety import SafetyService
-from agent_service.services.session_service import SessionService
-from agent_service.services.settings_service import SettingsService
+from agent_service.services.session.service import SessionService
+from agent_service.services.settings.service import SettingsService
 from agent_service.tools import ToolExecutor, ToolRegistry, clear_tool_runtime, set_tool_runtime
 from agent_service.tools.runtime_context import get_tool_citation_map
 from agent_service.tools.runtime_context import clear_context_compression_callback, set_context_compression_callback
@@ -1653,7 +1653,7 @@ def test_read_knowledge_file_registers_tool_citation(monkeypatch: Any) -> None:
 
     config = AgentConfig.load_config(load_env=False, ensure_directories=False, ensure_models=False)
     monkeypatch.setattr(
-        "agent_service.tools.builtin._build_knowledge_service",
+        "agent_service.tools.builtin.knowledge._build_knowledge_service",
         lambda: FakeKnowledgeService(),
     )
     set_tool_runtime(
@@ -1787,7 +1787,7 @@ def test_web_search_registers_network_citations(monkeypatch: Any) -> None:
 
     from agent_service.tools.builtin import web_search
 
-    monkeypatch.setattr("agent_service.api.rest.deps._settings_service", FakeSettingsService())
+    monkeypatch.setattr("agent_service.api.rest.agent._require_settings_service", lambda: FakeSettingsService())
     monkeypatch.setitem(sys.modules, "ddgs", types.SimpleNamespace(DDGS=FakeDDGS))
     config = AgentConfig.load_config(load_env=False, ensure_directories=False, ensure_models=False)
     set_tool_runtime(

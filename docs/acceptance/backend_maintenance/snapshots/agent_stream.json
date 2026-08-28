@@ -1,0 +1,18 @@
+[
+  {
+    "content": "契约测试回复",
+    "metadata": {},
+    "model_name": "contract-model",
+    "node": "agent",
+    "tool_calls": [],
+    "trace": [
+      {
+        "duration_ms": "<duration_ms>",
+        "event": "model_response",
+        "model_name": "contract-model",
+        "node": "agent",
+        "ts": "<ts>"
+      }
+    ]
+  }
+]

@@ -9,7 +9,7 @@ active 知识库中的文本。
 from pathlib import Path
 from types import SimpleNamespace
 
-from agent_service.services.knowledge_library_service import KnowledgeLibraryService
+from agent_service.services.knowledge_library import KnowledgeLibraryService
 
 
 class _SettingsServiceStub:

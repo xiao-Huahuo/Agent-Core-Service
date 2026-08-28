@@ -24,7 +24,7 @@ from agent_service.schemas.git import (
     GitPushRequest,
     GitRemoteRequest,
 )
-from agent_service.services.git_service import GitServiceError
+from agent_service.services.git.service import GitServiceError
 
 router = APIRouter(prefix="/git", tags=["git"])
 

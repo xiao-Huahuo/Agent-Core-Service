@@ -55,6 +55,7 @@ class AgentGraphBuilder:
         tool_executor: ToolExecutor | None = None,
         task_scheduler: LLMTaskScheduler | None = None,
         safety_service: SafetyService | None = None,
+        settings_service: Any = None,
     ) -> None:
         """保存构图所需的配置和工具列表。"""
 
@@ -63,6 +64,7 @@ class AgentGraphBuilder:
         self.tool_executor = tool_executor
         self.task_scheduler = task_scheduler
         self.safety_service = safety_service
+        self.settings_service = settings_service
         self._branch_labels: dict[tuple[str, str], str] = {}
 
     @property
@@ -121,6 +123,7 @@ class AgentGraphBuilder:
                 tools=self.tools,
                 task_scheduler=self.task_scheduler,
                 tool_executor=self.tool_executor,
+                settings_service=self.settings_service,
             ),
         )
         workflow.add_node(

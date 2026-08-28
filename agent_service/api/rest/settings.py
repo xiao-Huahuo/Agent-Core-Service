@@ -52,7 +52,7 @@ async def download_model(body: dict[str, Any]) -> dict[str, Any]:
     config = svc.config
 
     if model == "local_qwen":
-        from agent_service.services.local_qwen_service import start_local_qwen_download
+        from agent_service.services.local_qwen.service import start_local_qwen_download
 
         started = start_local_qwen_download(config, load_after=True)
         return {"status": "started" if started else "already_running", "model": model}
@@ -229,7 +229,7 @@ def _trigger_local_qwen_load(config: Any) -> None:
 
     def _load() -> None:
         try:
-            from agent_service.services.local_qwen_service import get_local_qwen_service
+            from agent_service.services.local_qwen.service import get_local_qwen_service
 
             get_local_qwen_service(config).ensure_loaded()
         except Exception:
@@ -819,7 +819,7 @@ async def get_storage_config(user_id: str = Query(..., min_length=DEFAULT_BUSINE
     """返回所有存储路径的当前值、大小和元数据。"""
 
     svc = _require_settings_service()
-    from agent_service.services.storage_service import StorageService
+    from agent_service.services.storage.service import StorageService
     storage_svc = StorageService(config=svc.config, settings_service=svc)
     return storage_svc.get_storage_config(user_id=user_id)
 
@@ -835,7 +835,7 @@ async def save_storage_config(body: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(paths, dict):
         raise HTTPException(status_code=422, detail="paths must be a dict")
     svc = _require_settings_service()
-    from agent_service.services.storage_service import StorageService
+    from agent_service.services.storage.service import StorageService
     storage_svc = StorageService(config=svc.config, settings_service=svc)
     try:
         return storage_svc.save_storage_config(user_id=user_id, paths=paths)
@@ -852,7 +852,7 @@ async def clear_storage_path(body: dict[str, Any]) -> dict[str, Any]:
     if not path_key or not user_id:
         raise HTTPException(status_code=422, detail="user_id and path_key are required")
     svc = _require_settings_service()
-    from agent_service.services.storage_service import StorageService
+    from agent_service.services.storage.service import StorageService
     storage_svc = StorageService(config=svc.config, settings_service=svc)
     try:
         return storage_svc.clear_path(path_key=path_key, user_id=user_id)
