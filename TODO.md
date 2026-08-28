@@ -2,11 +2,11 @@
 ### UI/UX
 - [ ] 工作区大卡片响应式布局优化: 主要测试手段是打开联网搜索侧边栏然后拽住左边拖动,此时工作区大卡片就会左右坍缩,根据当前宽度实现响应式布局:
 
-
 ### TODOs
 ### IDEAs
 - [ ] 规范后端源代码
   - 
 - [ ] DSH Adapter的实现
   - 文档位于`docs/ADAPTER_DESIGN.md`
+  - dsh是如何召唤claudecode/codex子agent的
 ### BUGs
