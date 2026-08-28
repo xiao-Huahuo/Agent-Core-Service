@@ -8,5 +8,4 @@
   - 
 - [ ] DSH Adapter的实现
   - 文档位于`docs/ADAPTER_DESIGN.md`
-  - dsh是如何召唤claudecode/codex子agent的
 ### BUGs
