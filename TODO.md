@@ -4,8 +4,6 @@
 
 ### TODOs
 ### IDEAs
-- [ ] 规范后端源代码
-  - 
 - [ ] DSH Adapter的实现
   - 文档位于`docs/ADAPTER_DESIGN.md`
 ### BUGs
