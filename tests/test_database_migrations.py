@@ -100,11 +100,14 @@ def test_supported_unversioned_database_is_backed_up_stamped_and_upgraded(tmp_pa
 
     with engine.connect() as connection:
         version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "20260829_0002"
+    assert version == "20260829_0003"
     assert "small_model_name" in {
         column["name"] for column in inspect(engine).get_columns("user_llm_config")
     }
     assert {"ui_font_size_percent", "text_font_size_percent"} <= {
+        column["name"] for column in inspect(engine).get_columns("user_settings")
+    }
+    assert "model_auto_download_enabled" in {
         column["name"] for column in inspect(engine).get_columns("user_settings")
     }
     assert {"height", "created_at", "updated_at"} <= {
@@ -136,5 +139,5 @@ def test_compatibility_revision_downgrade_and_upgrade_round_trip(tmp_path: Path)
     command.upgrade(alembic_config, "head")
 
     with engine.connect() as connection:
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20260829_0002"
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20260829_0003"
     assert set(SQLModel.metadata.tables) <= set(inspect(engine).get_table_names())

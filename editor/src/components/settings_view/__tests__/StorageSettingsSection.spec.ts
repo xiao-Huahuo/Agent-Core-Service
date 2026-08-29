@@ -23,6 +23,8 @@ describe('storage settings path contract', () => {
     expect(source).toContain("'latex_distribution_dir'")
     expect(source).toContain('<ModelManagement')
     expect(source).toContain('<CompilerManagement')
+    expect(source.indexOf('启用自动下载')).toBeLessThan(source.indexOf('<ModelManagement'))
+    expect(source).toContain('saveModelPreferences')
     expect(source).not.toContain('fakePct')
     expect(source).not.toContain('Math.random()')
     expect(source).toContain("JSON.stringify({ user_id: settingsStore.profile.userId, path_key: pathKey })")

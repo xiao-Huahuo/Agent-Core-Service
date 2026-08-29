@@ -15,6 +15,7 @@ const {
   fetchModelManagement,
   checkModelDisk,
   downloadManagedModel,
+  deleteManagedModel,
   loadManagedModel,
   fetchLatexManagement,
   installLatexRuntime,
@@ -24,6 +25,7 @@ const {
   fetchModelManagement: vi.fn(),
   checkModelDisk: vi.fn().mockResolvedValue({}),
   downloadManagedModel: vi.fn().mockResolvedValue({ status: 'started', model: 'embedding' }),
+  deleteManagedModel: vi.fn().mockResolvedValue({ model: 'embedding', deleted: true, path: 'D:/models/demo' }),
   loadManagedModel: vi.fn().mockResolvedValue({ status: 'triggered', model: 'rerank' }),
   fetchLatexManagement: vi.fn(),
   installLatexRuntime: vi.fn(),
@@ -35,6 +37,7 @@ vi.mock('@/api/settings', () => ({
   fetchModelManagement,
   checkModelDisk,
   downloadManagedModel,
+  deleteManagedModel,
   loadManagedModel,
 }))
 

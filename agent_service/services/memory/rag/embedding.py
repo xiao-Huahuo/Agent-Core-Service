@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from agent_service.core.agent_config import AgentConfig
-from agent_service.scripts.download_model import ensure_model, model_target_dir
+from agent_service.scripts.download_model import is_model_available, model_target_dir
 
 logger = logging.getLogger(__name__)
 
@@ -143,24 +143,14 @@ class SentenceTransformerEmbeddingProvider:
             set_model_state("embedding", ModelState.ERROR)
             self._load_error = ValueError("config.model.embedding_model_name 不能为空。")
             return
-        set_model_state("embedding", ModelState.DOWNLOADING)
-        try:
-            model_path = ensure_model(
-                self.config.model.embedding_model_name,
-                self.config.storage.embedding_model_dir,
-            )
-        except Exception as exc:
-            set_model_state("embedding", ModelState.ERROR)
-            self._load_error = exc
-            return
-        if model_path is None:
-            model_path = model_target_dir(
-                self.config.model.embedding_model_name,
-                self.config.storage.embedding_model_dir,
-            )
-        if not model_path.exists():
-            set_model_state("embedding", ModelState.ERROR)
-            self._load_error = FileNotFoundError(f"Embedding 模型目录不存在: {model_path}")
+        model_path = model_target_dir(
+            self.config.model.embedding_model_name,
+            self.config.storage.embedding_model_dir,
+        )
+        if not is_model_available(model_path):
+            set_model_state("embedding", ModelState.AWAITING_DOWNLOAD)
+            with self._load_lock:
+                self._load_thread = None
             return
         import os
         os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")

@@ -4,7 +4,7 @@
 用途:
 - 全局单例追踪 Embedding / ReRank / PaddleOCR / 本地 Qwen 的下载和加载状态。
 - 模型 provider 在开始下载/加载/完成/失败时调用 set_model_state() 更新状态。
-- 前端通过 GET /settings/models/status 轮询状态快照,未就绪时阻断 Agent 功能。
+- 前端通过 GET /settings/models/status 轮询状态快照并显示独立悬浮进度，不阻断其他业务。
 
 线程安全: 使用 threading.Lock 保护状态读写。
 """
@@ -20,6 +20,8 @@ class ModelState(enum.Enum):
     """模型加载状态枚举。"""
 
     NOT_DOWNLOADED = "not_downloaded"
+    VERIFYING = "verifying"
+    AWAITING_DOWNLOAD = "awaiting_download"
     DOWNLOADING = "downloading"
     DOWNLOADED = "downloaded"
     LOADING = "loading"
@@ -29,7 +31,7 @@ class ModelState(enum.Enum):
 
 @dataclass
 class ModelStatusSnapshot:
-    """三个模型的当前状态快照。"""
+    """四类受管模型的当前状态快照。"""
 
     embedding: ModelState = ModelState.NOT_DOWNLOADED
     rerank: ModelState = ModelState.NOT_DOWNLOADED

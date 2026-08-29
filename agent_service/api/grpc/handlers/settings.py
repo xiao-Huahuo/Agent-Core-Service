@@ -449,3 +449,68 @@ class SettingsGrpcHandlerMixin:
             self._require_model_management_service(context).get_management_status(user_id=user_id),
             Struct(),
         )
+
+    def GetModelPreferences(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """返回与 REST 模型偏好接口相同的持久化设置。"""
+
+        user_id = self._require_struct_user_id(request=request, context=context)
+        return ParseDict(
+            self._require_settings_service(context).get_model_preferences(user_id=user_id),
+            Struct(),
+        )
+
+    def SaveModelPreferences(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """保存模型自动下载偏好。"""
+
+        payload = MessageToDict(request)
+        user_id = self._require_struct_user_id(request=request, context=context)
+        if "auto_download_enabled" not in payload:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "auto_download_enabled is required")
+        result = self._require_settings_service(context).save_model_preferences(
+            user_id=user_id,
+            auto_download_enabled=bool(payload["auto_download_enabled"]),
+        )
+        if result["auto_download_enabled"]:
+            self._require_model_management_service(context).initialize_after_startup(user_id=user_id)
+        return ParseDict(result, Struct())
+
+    def InitializeModels(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """在客户端界面已启动后触发独立模型任务。"""
+
+        user_id = self._require_struct_user_id(request=request, context=context)
+        return ParseDict(
+            self._require_model_management_service(context).initialize_after_startup(user_id=user_id),
+            Struct(),
+        )
+
+    def StartModelDownload(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """在用户确认后启动一个模型下载。"""
+
+        payload = MessageToDict(request)
+        user_id = self._require_struct_user_id(request=request, context=context)
+        model = str(payload.get("model") or "")
+        try:
+            started = self._require_model_management_service(context).start_download(
+                model,
+                user_id=user_id,
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(
+            {"status": "started" if started else "already_running", "model": model},
+            Struct(),
+        )
+
+    def DeleteManagedModel(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """删除一个受管模型并设置本进程自动下载抑制。"""
+
+        payload = MessageToDict(request)
+        user_id = self._require_struct_user_id(request=request, context=context)
+        try:
+            result = self._require_model_management_service(context).delete_model(
+                str(payload.get("model") or ""),
+                user_id=user_id,
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return ParseDict(result, Struct())

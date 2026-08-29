@@ -1,7 +1,6 @@
-"""创建、恢复并按既有规则加载本地模型组件。
+"""创建模型服务，并提供启动完成后可调用的模型加载辅助入口。
 
-本模块只搬运原 ``main.py`` 中的模型管理流程，不改变下载目录、断点恢复、缓存
-检测或后台加载语义。
+应用装配阶段只创建轻量服务对象，不验证、下载或加载任何模型。
 """
 
 from __future__ import annotations
@@ -10,7 +9,7 @@ import logging
 from typing import Any
 
 from agent_service.core.agent_config import AgentConfig
-from agent_service.services.local_qwen.service import get_local_qwen_service, resume_interrupted_local_qwen_download
+from agent_service.services.local_qwen.service import get_local_qwen_service
 from agent_service.services.model_management.service import ModelManagementService
 from agent_service.services.settings.service import SettingsService
 
@@ -22,12 +21,10 @@ def create_model_services(
     config: AgentConfig,
     settings_service: SettingsService,
 ) -> tuple[ModelManagementService, Any]:
-    """创建模型管理和本地 Qwen 服务，并恢复中断的本地模型下载。"""
+    """创建模型管理和本地 Qwen 服务，不在启动装配阶段触碰模型文件。"""
 
     model_management_service = ModelManagementService(config=config, settings_service=settings_service)
     local_qwen_service = get_local_qwen_service(config)
-    if resume_interrupted_local_qwen_download(config):
-        logger.info("检测到本地 Qwen 下载断点，已自动恢复后台下载")
     return model_management_service, local_qwen_service
 
 

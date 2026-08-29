@@ -13,6 +13,7 @@ import { buildApiUrl } from '@/api/client'
 import { createKnowledgeFolder, listKnowledgeFiles, previewKnowledgeFile, readKnowledgeFile, uploadKnowledgeFile } from '@/api/knowledge'
 import { deleteSmartFormDb, generateStructuredFields, getSmartFormDb, listSmartFormsDb, saveSmartFormDb, type StructuredGenerationFieldResult } from '@/api/smartForms'
 import IcIcon from '@/components/common/IcIcon.vue'
+import PixelLoader from '@/components/common/PixelLoader.vue'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -2473,7 +2474,7 @@ function errorMessage(error: unknown): string {
                 role="status"
                 aria-label="正在生成智能字段"
               >
-                <span class="pixel-loader" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+                <PixelLoader />
               </div>
               <span
                 v-if="row.cells[column.id]?.status === 'failed' && !row.cells[column.id]?.value.trim()"
@@ -4245,33 +4246,6 @@ th.sticky-literature-column {
   place-items: center;
   background: color-mix(in srgb, var(--color-canvas) 90%, transparent);
   backdrop-filter: blur(4px);
-}
-
-.pixel-loader {
-  display: grid;
-  grid-template-columns: repeat(5, 5px);
-  gap: 3px;
-  height: 13px;
-  align-items: end;
-}
-
-.pixel-loader i {
-  display: block;
-  width: 5px;
-  height: 5px;
-  background: var(--color-primary);
-  image-rendering: pixelated;
-  animation: smart-pixel-loader 800ms steps(2, end) infinite;
-}
-
-.pixel-loader i:nth-child(2),
-.pixel-loader i:nth-child(4) { animation-delay: 120ms; }
-
-.pixel-loader i:nth-child(3) { animation-delay: 240ms; }
-
-@keyframes smart-pixel-loader {
-  0%, 100% { height: 5px; opacity: 0.38; }
-  50% { height: 13px; opacity: 1; }
 }
 
 .tone-blue {

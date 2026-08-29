@@ -19,7 +19,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from agent_service.core.agent_config import AgentConfig
-from agent_service.scripts.download_model import ensure_model, model_target_dir
+from agent_service.scripts.download_model import is_model_available, model_target_dir
 from agent_service.services.memory.rag.hybrid_retrieval import HybridRetrievalCandidate
 
 logger = logging.getLogger(__name__)
@@ -122,24 +122,13 @@ class SentenceTransformerCrossEncoderProvider:
             set_model_state("rerank", ModelState.ERROR)
             self._load_error = ValueError("config.model.rerank_model_name 不能为空。")
             return
-        set_model_state("rerank", ModelState.DOWNLOADING)
-        try:
-            model_path = ensure_model(
-                self.config.model.rerank_model_name,
-                self.config.storage.rerank_model_dir,
-            )
-        except Exception as exc:
-            set_model_state("rerank", ModelState.ERROR)
-            self._load_error = exc
-            return
-        if model_path is None:
-            model_path = model_target_dir(
-                self.config.model.rerank_model_name,
-                self.config.storage.rerank_model_dir,
-            )
-        if not model_path.exists():
-            set_model_state("rerank", ModelState.ERROR)
-            self._load_error = FileNotFoundError(f"ReRank 模型目录不存在: {model_path}")
+        model_path = model_target_dir(
+            self.config.model.rerank_model_name,
+            self.config.storage.rerank_model_dir,
+        )
+        if not is_model_available(model_path):
+            set_model_state("rerank", ModelState.AWAITING_DOWNLOAD)
+            self._load_event.clear()
             return
         set_model_state("rerank", ModelState.LOADING)
         banner = "=" * 57

@@ -14,7 +14,6 @@ from fastapi import FastAPI
 
 from agent_service.core.bootstrap.config_bootstrap import load_startup_config
 from agent_service.core.bootstrap.grpc_bootstrap import GrpcRuntime
-from agent_service.core.bootstrap.models_bootstrap import autoload_available_embedding_models
 from agent_service.core.bootstrap.services_bootstrap import create_application_services
 from agent_service.core.db.engine import create_database_engine
 from agent_service.core.db.migration import upgrade_database
@@ -36,7 +35,6 @@ async def agent_service_lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         services.start_background_services()
         logger.info("SettingsService 初始化完成")
-        autoload_available_embedding_models(config)
         grpc_runtime.start(services)
 
         static_dir = getattr(app.state, "static_dir", None)

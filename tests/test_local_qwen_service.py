@@ -9,12 +9,15 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from agent_service.services.local_qwen.service import (
     LocalQwenChatModel,
     LocalQwenService,
     parse_qwen_response,
     start_local_qwen_download,
 )
+from agent_service.core.model_status import ModelState, get_model_status
 from agent_service.services.scheduler import get_llm_task_scheduler, reset_llm_task_schedulers
 from langchain_core.messages import HumanMessage, SystemMessage
 from agent_service.core.agent_config import AgentConfig
@@ -122,7 +125,7 @@ def test_local_qwen_loads_fp32_on_avx2_cpu(tmp_path, monkeypatch: object) -> Non
             captured.update(kwargs)
             return _FakeModel()
 
-    monkeypatch.setattr(local_module, "ensure_model", lambda *args, **kwargs: tmp_path)
+    monkeypatch.setattr(local_module, "is_model_available", lambda _path: True)
     monkeypatch.setitem(sys.modules, "torch", fake_torch)
     monkeypatch.setitem(
         sys.modules,
@@ -313,3 +316,21 @@ def test_backend_startup_resumes_detected_local_qwen_partial(tmp_path, monkeypat
 
     assert resumed is True
     assert calls == [True]
+
+
+def test_local_qwen_missing_weights_waits_for_confirmed_download(tmp_path, monkeypatch: object) -> None:
+    """任意 AI 首次触发本地 Qwen 时只验证磁盘，缺失权重不得隐式下载。"""
+
+    import agent_service.services.local_qwen.service as local_module
+
+    config = SimpleNamespace(
+        model=SimpleNamespace(local_model_name="Qwen/test-local"),
+        storage=SimpleNamespace(local_model_dir=tmp_path / "models"),
+    )
+    monkeypatch.setattr(local_module, "ensure_model", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not download")))
+    service = LocalQwenService(config=config)
+
+    with pytest.raises(RuntimeError, match="确认下载"):
+        service.ensure_loaded()
+
+    assert get_model_status().local_qwen is ModelState.AWAITING_DOWNLOAD

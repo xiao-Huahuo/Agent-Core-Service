@@ -56,7 +56,7 @@ class FakeGrpcRuntime:
         self.running = False
 
 
-def _install_fakes(monkeypatch: pytest.MonkeyPatch, events: list[str], *, fail_autoload: bool = False) -> None:
+def _install_fakes(monkeypatch: pytest.MonkeyPatch, events: list[str]) -> None:
     """把 lifespan 的外部装配点替换为不产生资源的测试对象。"""
 
     config = SimpleNamespace()
@@ -71,18 +71,8 @@ def _install_fakes(monkeypatch: pytest.MonkeyPatch, events: list[str], *, fail_a
     )
     monkeypatch.setattr(lifespan_module, "GrpcRuntime", lambda: FakeGrpcRuntime(events))
 
-    def autoload(_config: Any) -> None:
-        """记录模型加载，按测试需要模拟失败。"""
-
-        events.append("models.autoload")
-        if fail_autoload:
-            raise RuntimeError("autoload failed")
-
-    monkeypatch.setattr(lifespan_module, "autoload_available_embedding_models", autoload)
-
-
 def test_lifespan_starts_and_stops_resources_in_stable_order(monkeypatch: pytest.MonkeyPatch) -> None:
-    """正常生命周期必须启动后台和 gRPC，并在退出时逆向清理。"""
+    """正常生命周期必须先完成服务启动，且启动阶段不得验证或加载任何模型。"""
 
     events: list[str] = []
     _install_fakes(monkeypatch, events)
@@ -101,32 +91,10 @@ def test_lifespan_starts_and_stops_resources_in_stable_order(monkeypatch: pytest
     assert events == [
         "database.upgrade",
         "services.start",
-        "models.autoload",
         "grpc.start",
         "yield",
         "services.stop",
         "grpc.stop",
     ]
-    assert app.state.services is None
-    assert app.state.grpc_runtime is None
-
-
-def test_lifespan_cleans_background_services_when_startup_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    """模型加载阶段异常时也必须关闭已经启动的后台组件。"""
-
-    events: list[str] = []
-    _install_fakes(monkeypatch, events, fail_autoload=True)
-    app = FastAPI()
-
-    async def run_lifespan() -> None:
-        """进入预期失败的生命周期。"""
-
-        async with lifespan_module.agent_service_lifespan(app):
-            raise AssertionError("lifespan must not yield after startup failure")
-
-    with pytest.raises(RuntimeError, match="autoload failed"):
-        asyncio.run(run_lifespan())
-
-    assert events == ["database.upgrade", "services.start", "models.autoload", "services.stop", "grpc.stop"]
     assert app.state.services is None
     assert app.state.grpc_runtime is None

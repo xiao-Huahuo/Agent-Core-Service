@@ -12,6 +12,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import {
   checkModelDisk,
+  deleteManagedModel,
   downloadManagedModel,
   fetchModelManagement,
   loadManagedModel,
@@ -31,7 +32,7 @@ const feedback = ref('')
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const hasActiveWork = computed(() => models.value.some((model) => (
-  ['downloading', 'loading'].includes(model.status) || model.progress.status === 'downloading'
+  ['verifying', 'downloading', 'loading'].includes(model.status) || model.progress.status === 'downloading'
 )))
 
 /** Format actual model bytes using compact binary units. */
@@ -81,10 +82,26 @@ async function startDownload(model: ManagedModelStatus) {
   actionKey.value = model.key
   feedback.value = ''
   try {
-    await downloadManagedModel(model.key)
+    await downloadManagedModel(model.key, props.userId)
     await refresh()
   } catch (error: unknown) {
     feedback.value = error instanceof Error ? error.message : '模型下载启动失败'
+  } finally {
+    actionKey.value = ''
+  }
+}
+
+/** Delete only the selected managed model and suppress auto-download until next launch. */
+async function removeModel(model: ManagedModelStatus) {
+  if (!window.confirm(`确认删除 ${model.name}？下次启动前不会自动重新下载。`)) return
+  actionKey.value = model.key
+  feedback.value = ''
+  try {
+    await deleteManagedModel(model.key, props.userId)
+    await refresh()
+    emit('storageChanged')
+  } catch (error: unknown) {
+    feedback.value = error instanceof Error ? error.message : '模型删除失败'
   } finally {
     actionKey.value = ''
   }
@@ -116,6 +133,8 @@ function toggleDetails(key: string) {
 function statusText(model: ManagedModelStatus): string {
   const labels: Record<string, string> = {
     ready: '使用中',
+    verifying: '验证中',
+    awaiting_download: '等待确认下载',
     loading: '加载中',
     downloading: '下载中',
     downloaded: '已下载',
@@ -127,7 +146,7 @@ function statusText(model: ManagedModelStatus): string {
 
 function statusClass(model: ManagedModelStatus): string {
   if (model.active) return 'ready'
-  if (['loading', 'downloading'].includes(model.status)) return 'working'
+  if (['verifying', 'loading', 'downloading'].includes(model.status)) return 'working'
   if (model.status === 'error') return 'error'
   if (model.downloaded) return 'downloaded'
   return 'missing'
@@ -214,6 +233,13 @@ onUnmounted(() => {
               :disabled="actionKey === model.key"
               @click="startLoad(model)"
             >加载</button>
+            <button
+              v-if="model.downloaded"
+              type="button"
+              class="text-button danger-text-button"
+              :disabled="actionKey === model.key || hasActiveWork"
+              @click="removeModel(model)"
+            >删除</button>
             <button type="button" class="plain-icon-button" title="打开模型位置" aria-label="打开模型位置" @click="openPath(model.path)">
               <IcIcon name="folder-open" :size="15" />
             </button>
@@ -336,6 +362,7 @@ onUnmounted(() => {
 .management-size { text-align: right; font-variant-numeric: tabular-nums; }
 .management-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-6); }
 .text-button { color: var(--color-primary); font: inherit; font-size: calc(11px * var(--font-scale)); }
+.danger-text-button { color: var(--color-danger, #d64545); }
 
 .real-progress {
   display: grid;

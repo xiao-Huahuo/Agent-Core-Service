@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   downloadManagedModel,
+  initializeManagedModels,
+  saveModelPreferences,
   fetchModelManagement,
   loadManagedModel,
 } from '@/api/settings'
@@ -30,14 +32,20 @@ describe('model management API client', () => {
     }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await downloadManagedModel('local_qwen')
+    await downloadManagedModel('local_qwen', 'u1')
     await loadManagedModel('local_qwen')
+    await initializeManagedModels('u1')
+    await saveModelPreferences('u1', true)
 
     expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
-      '/settings/models/download',
+      '/settings/models/download-confirmed',
       '/settings/models/load',
+      '/settings/models/initialize',
+      '/settings/models/preferences',
     ])
-    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ model: 'local_qwen' })
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ model: 'local_qwen', user_id: 'u1' })
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({ model: 'local_qwen' })
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({ user_id: 'u1' })
+    expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body))).toEqual({ user_id: 'u1', auto_download_enabled: true })
   })
 })

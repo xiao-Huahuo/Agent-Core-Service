@@ -21,7 +21,7 @@ from uuid import uuid4
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 from langchain_core.utils.function_calling import convert_to_openai_tool
 
-from agent_service.core.model_status import ModelState, set_model_state
+from agent_service.core.model_status import ModelState, get_model_status, set_model_state
 from agent_service.scripts.download_model import (
     ensure_model,
     has_partial_model_download,
@@ -110,7 +110,7 @@ class LocalQwenService:
         return self._model is not None and self._processor is not None
 
     def ensure_loaded(self) -> None:
-        """按需下载并使用 CPU PyTorch 以 AVX2 高效的 FP32 加载模型。"""
+        """在首次真实 AI 调用时验证并加载已确认下载的本地模型。"""
 
         if self.loaded:
             return
@@ -118,14 +118,12 @@ class LocalQwenService:
             if self.loaded:
                 return
             try:
-                set_model_state("local_qwen", ModelState.DOWNLOADING)
-                target = ensure_model(
-                    self.config.model.local_model_name,
-                    self.config.storage.local_model_dir,
-                    model_type="local_qwen",
-                )
-                if target is None:
-                    raise RuntimeError("本地 Qwen 模型名称为空。")
+                set_model_state("local_qwen", ModelState.VERIFYING)
+                target = self.model_path
+                if not is_model_available(target):
+                    set_model_state("local_qwen", ModelState.AWAITING_DOWNLOAD)
+                    raise RuntimeError("本地 Qwen 模型未下载，请先在悬浮框中确认下载。")
+                set_model_state("local_qwen", ModelState.DOWNLOADED)
                 set_model_state("local_qwen", ModelState.LOADING)
                 import torch
                 from transformers import AutoModelForImageTextToText, AutoProcessor
@@ -140,7 +138,8 @@ class LocalQwenService:
             except Exception:
                 self._processor = None
                 self._model = None
-                set_model_state("local_qwen", ModelState.ERROR)
+                if get_model_status().local_qwen is not ModelState.AWAITING_DOWNLOAD:
+                    set_model_state("local_qwen", ModelState.ERROR)
                 logger.exception("本地 Qwen 加载失败 | model=%s", self.config.model.local_model_name)
                 raise
 

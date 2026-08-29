@@ -8,16 +8,24 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
+import shutil
+import threading
 from typing import Any
 
-from agent_service.core.model_status import get_model_status
+from agent_service.core.model_status import ModelState, get_model_status, set_model_state
 from agent_service.scripts.download_model import (
     PADDLEOCR_MARKER_FILE,
     get_download_progress,
     is_model_available,
     model_target_dir,
+    reset_download_progress,
 )
+
+logger = logging.getLogger(__name__)
+
+MODEL_KEYS = ("embedding", "rerank", "paddleocr", "local_qwen")
 
 
 class ModelManagementService:
@@ -28,6 +36,234 @@ class ModelManagementService:
 
         self.config = config
         self.settings_service = settings_service
+        self._worker_lock = threading.Lock()
+        self._workers: dict[str, threading.Thread] = {}
+        self._auto_download_suppressed: set[tuple[str, str]] = set()
+
+    def initialize_after_startup(self, *, user_id: str) -> dict[str, str]:
+        """在前端已显示应用后，为四类模型分别启动独立的验证任务。"""
+
+        preferences = self.settings_service.get_model_preferences(user_id=user_id)
+        auto_download = bool(preferences.get("auto_download_enabled"))
+        ocr_enabled = self.settings_service.is_ocr_enabled_for_user(user_id=user_id)
+        self.prepare_model_async(
+            "embedding", user_id=user_id, load_after=True,
+            download_if_missing=auto_download, prompt_if_missing=True,
+        )
+        self.prepare_model_async(
+            "rerank", user_id=user_id, load_after=True,
+            download_if_missing=auto_download, prompt_if_missing=True,
+        )
+        self.prepare_model_async(
+            "paddleocr", user_id=user_id, load_after=ocr_enabled,
+            download_if_missing=auto_download, prompt_if_missing=ocr_enabled,
+        )
+        self.prepare_model_async(
+            "local_qwen", user_id=user_id, load_after=False,
+            download_if_missing=auto_download, prompt_if_missing=False,
+        )
+        return {"status": "started"}
+
+    def prepare_model_async(
+        self,
+        model: str,
+        *,
+        user_id: str,
+        load_after: bool,
+        download_if_missing: bool,
+        prompt_if_missing: bool,
+    ) -> bool:
+        """异步验证一个模型，并按调用方策略下载或加载，绝不阻塞请求线程。"""
+
+        self._validate_model_key(model)
+
+        def prepare() -> None:
+            """执行当前模型独占的验证、可选下载和可选加载链路。"""
+
+            if self._model_is_available(model):
+                set_model_state(model, ModelState.DOWNLOADED)
+                if load_after:
+                    self._load_model(model)
+                return
+            suppressed = (user_id, model) in self._auto_download_suppressed
+            if download_if_missing and not suppressed:
+                self._download_model(model)
+                if load_after:
+                    self._load_model(model)
+                return
+            set_model_state(
+                model,
+                ModelState.AWAITING_DOWNLOAD if prompt_if_missing else ModelState.NOT_DOWNLOADED,
+            )
+
+        silent_qwen_disk_check = model == "local_qwen" and not (
+            load_after or download_if_missing or prompt_if_missing
+        )
+        return self._start_worker(
+            model=model,
+            state=ModelState.NOT_DOWNLOADED if silent_qwen_disk_check else ModelState.VERIFYING,
+            target=prepare,
+        )
+
+    def start_download(self, model: str, *, user_id: str, load_after: bool = True) -> bool:
+        """在用户确认或自动下载策略授权后启动一个模型下载线程。"""
+
+        self._validate_model_key(model)
+
+        def download() -> None:
+            """下载完整模型，并仅在领域条件允许时加载。"""
+
+            self._download_model(model)
+            should_load = load_after and (
+                model != "paddleocr" or self.settings_service.is_ocr_enabled_for_user(user_id=user_id)
+            )
+            if should_load:
+                self._load_model(model)
+
+        return self._start_worker(model=model, state=ModelState.DOWNLOADING, target=download)
+
+    def delete_model(self, model: str, *, user_id: str) -> dict[str, object]:
+        """删除一个模型的受管磁盘目录，并抑制本进程内的再次自动下载。"""
+
+        self._validate_model_key(model)
+        with self._worker_lock:
+            worker = self._workers.get(model)
+            if worker is not None and worker.is_alive():
+                raise ValueError("模型任务仍在运行，暂时无法删除")
+        target = self._model_path(model)
+        removed = target.exists()
+        if removed:
+            shutil.rmtree(target)
+        self._auto_download_suppressed.add((user_id, model))
+        reset_download_progress(model)
+        set_model_state(model, ModelState.NOT_DOWNLOADED)
+        return {"model": model, "deleted": removed, "path": str(target)}
+
+    def _start_worker(self, *, model: str, state: ModelState, target: Any) -> bool:
+        """为单个模型启动唯一守护线程；不同模型可完全并行。"""
+
+        with self._worker_lock:
+            current = self._workers.get(model)
+            if current is not None and current.is_alive():
+                return False
+            set_model_state(model, state)
+
+            def run() -> None:
+                """执行模型任务并发布可见错误状态。"""
+
+                try:
+                    target()
+                except Exception:
+                    set_model_state(model, ModelState.ERROR)
+                    logger.exception("模型后台任务失败 | model=%s", model)
+                finally:
+                    with self._worker_lock:
+                        self._workers.pop(model, None)
+
+            worker = threading.Thread(target=run, daemon=True, name=f"model-{model}-worker")
+            self._workers[model] = worker
+            worker.start()
+            return True
+
+    def _download_model(self, model: str) -> None:
+        """使用现有下载器下载指定模型，并验证完整性。"""
+
+        set_model_state(model, ModelState.DOWNLOADING)
+        if model == "paddleocr":
+            from agent_service.scripts.download_model import ensure_paddleocr_models, update_download_progress
+
+            update_download_progress(
+                "paddleocr", status="downloading", stage="official_models",
+                downloaded_bytes=self._directory_stats(self._model_path(model))[0], total_bytes=None,
+                message="正在准备 OCR 检测与识别模型",
+            )
+            ensure_paddleocr_models(
+                paddleocr_model_dir=self.config.storage.paddleocr_model_dir,
+                language=self.config.ocr.language,
+                text_detection_model_name=self.config.ocr.text_detection_model_name,
+                text_recognition_model_name=self.config.ocr.text_recognition_model_name,
+                device=self.config.ocr.device,
+            )
+            downloaded_bytes = self._directory_stats(self._model_path(model))[0]
+            update_download_progress(
+                "paddleocr", status="completed", stage="completed",
+                downloaded_bytes=downloaded_bytes, total_bytes=downloaded_bytes,
+                message="OCR 模型下载完成",
+            )
+        else:
+            from agent_service.scripts.download_model import ensure_model
+
+            name, base_path = self._hf_model_config(model)
+            ensure_model(name, base_path, model_type=model)
+        if not self._model_is_available(model):
+            raise RuntimeError(f"模型下载后仍不完整: {self._model_path(model)}")
+        set_model_state(model, ModelState.DOWNLOADED)
+
+    def _load_model(self, model: str) -> None:
+        """调用现有模型门面的异步预热入口。"""
+
+        set_model_state(model, ModelState.LOADING)
+        if model == "embedding":
+            from agent_service.services.memory.rag.embedding import _get_shared_provider
+
+            provider = _get_shared_provider(self.config)
+            provider.warmup()
+            if provider._model is not None:
+                set_model_state(model, ModelState.READY)
+        elif model == "rerank":
+            from agent_service.services.memory.rag.rerank import _get_shared_rerank_provider
+
+            provider = _get_shared_rerank_provider(self.config)
+            provider.warmup()
+            if provider._model is not None:
+                set_model_state(model, ModelState.READY)
+        elif model == "paddleocr":
+            from agent_service.services.memory.rag.image_ocr import ImageOcrService
+
+            service = ImageOcrService(config=self.config, enabled=True)
+            service.warmup()
+            if service.loaded:
+                set_model_state(model, ModelState.READY)
+        else:
+            from agent_service.services.local_qwen.service import get_local_qwen_service
+
+            service = get_local_qwen_service(self.config)
+            service.ensure_loaded()
+            if service.loaded:
+                set_model_state(model, ModelState.READY)
+
+    def _model_is_available(self, model: str) -> bool:
+        """按模型类型执行只读磁盘完整性验证。"""
+
+        if model == "paddleocr":
+            return (self._model_path(model) / PADDLEOCR_MARKER_FILE).is_file()
+        return is_model_available(self._model_path(model))
+
+    def _model_path(self, model: str) -> Path:
+        """返回模型实际受管目录。"""
+
+        if model == "paddleocr":
+            return Path(self.config.storage.paddleocr_model_dir).expanduser().resolve()
+        name, base_path = self._hf_model_config(model)
+        return model_target_dir(name, base_path)
+
+    def _hf_model_config(self, model: str) -> tuple[str, Path]:
+        """返回 Hugging Face 模型名称与缓存根目录。"""
+
+        values = {
+            "embedding": (self.config.model.embedding_model_name, self.config.storage.embedding_model_dir),
+            "rerank": (self.config.model.rerank_model_name, self.config.storage.rerank_model_dir),
+            "local_qwen": (self.config.model.local_model_name, self.config.storage.local_model_dir),
+        }
+        name, base_path = values[model]
+        return str(name), Path(base_path)
+
+    @staticmethod
+    def _validate_model_key(model: str) -> None:
+        """拒绝任何不属于四类受管模型的键。"""
+
+        if model not in MODEL_KEYS:
+            raise ValueError("model 必须是 embedding / rerank / paddleocr / local_qwen")
 
     def get_management_status(self, *, user_id: str) -> dict[str, list[dict[str, Any]]]:
         """返回本地 Qwen、Embedding、ReRank 与 PaddleOCR 的完整管理状态。"""

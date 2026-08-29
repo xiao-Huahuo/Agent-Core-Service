@@ -182,6 +182,11 @@ service AgentService {
   rpc ClearLatexStorage(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc GetLatexManagement(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc GetModelManagement(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc GetModelPreferences(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc SaveModelPreferences(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc InitializeModels(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc StartModelDownload(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc DeleteManagedModel(google.protobuf.Struct) returns (google.protobuf.Struct);
 
   // Scheduled Agent automation. Struct mirrors the existing REST request
   // fields while serialized tasks and runs keep their current camelCase form.

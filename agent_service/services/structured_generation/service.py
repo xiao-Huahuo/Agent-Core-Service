@@ -41,12 +41,14 @@ class StructuredGenerationService:
         self,
         *,
         config: AgentConfig,
+        settings_service: Any = None,
         task_scheduler: LLMTaskScheduler | None = None,
         chat_invoker: ChatInvoker | None = None,
     ) -> None:
-        """保存配置和可测试的模型调用入口。"""
+        """保存配置、用户设置依赖和可测试的模型调用入口。"""
 
         self.config = config
+        self.settings_service = settings_service
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config)
         self.chat_invoker = chat_invoker
 
@@ -91,7 +93,10 @@ class StructuredGenerationService:
                 user_small_api_key,
                 user_small_base_url,
                 user_small_model_name,
-            ) = get_user_llm_overrides({"user_id": user_id})
+            ) = get_user_llm_overrides(
+                {"user_id": user_id},
+                self.settings_service,
+            )
             response = self.task_scheduler.invoke_chat(
                 task_type=FOREGROUND_AGENT_TASK,
                 messages=messages,

@@ -466,21 +466,21 @@ tools: (可选) 需要启用的工具列表
 }
 
 .skill-card {
+  position: relative;
   display: inline-flex;
   flex-direction: column;
-  gap: var(--space-10);
+  gap: 12px;
   width: 100%;
+  min-height: 88px;
   min-width: 0;
   margin-bottom: var(--space-12);
-  padding: var(--space-16) var(--space-20);
+  padding: 14px;
   border: 1px solid var(--color-border);
-  border-radius: 18px;
-  background: var(--color-bg-panel);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.10);
-  transition:
-    box-shadow 160ms ease,
-    transform 160ms ease,
-    background 160ms ease;
+  border-radius: 28px;
+  background: var(--color-surface);
+  box-shadow: 0 0 0 4px var(--library-form-ring);
+  color: var(--color-text);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
   break-inside: avoid;
   page-break-inside: avoid;
   vertical-align: top;
@@ -488,8 +488,6 @@ tools: (可选) 需要启用的工具列表
 
 .skill-card:hover {
   background: var(--color-surface-raised);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
-  transform: translateY(-1px);
 }
 
 /* TransitionGroup animations */
@@ -527,8 +525,7 @@ tools: (可选) 需要启用的工具列表
 }
 
 .skill-card h3 {
-  font-size: 16px;
-  line-height: 1.3;
+  font: 600 calc(13px * var(--font-scale))/1.45 var(--font-ui);
   margin: 0;
 }
 

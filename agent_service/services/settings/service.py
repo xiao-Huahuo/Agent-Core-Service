@@ -482,6 +482,7 @@ class SettingsService:
             "knowledge_libraries": [self._serialize_knowledge_library(item) for item in libraries],
             "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
             "ocr_enabled": bool(record.ocr_enabled),
+            "model_auto_download_enabled": bool(record.model_auto_download_enabled),
             "long_term_memory_enabled": bool(record.long_term_memory_enabled),
             "knowledge_ignore_patterns": _with_default_video_ignore_patterns(record.knowledge_ignore_patterns),
             "knowledge_supported_suffixes": list(self.config.constants.knowledge_supported_suffixes),
@@ -1636,6 +1637,41 @@ class SettingsService:
         with Session(self.engine) as db:
             record = db.get(UserSettingsRecord, normalized_user_id)
             return bool(record and record.ocr_enabled)
+
+    def get_model_preferences(self, *, user_id: str) -> dict[str, object]:
+        """返回模型下载偏好；未创建用户档案时默认关闭自动下载。"""
+
+        normalized_user_id = user_id.strip()
+        if not normalized_user_id:
+            raise ValueError("user_id is required")
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            return {
+                "user_id": normalized_user_id,
+                "auto_download_enabled": bool(record and record.model_auto_download_enabled),
+            }
+
+    def save_model_preferences(self, *, user_id: str, auto_download_enabled: bool) -> dict[str, object]:
+        """持久化用户显式选择的模型自动下载开关。"""
+
+        normalized_user_id = user_id.strip()
+        if not normalized_user_id:
+            raise ValueError("user_id is required")
+        now = self._utc_now()
+        with Session(self.engine) as db:
+            record = db.get(UserSettingsRecord, normalized_user_id)
+            if record is None:
+                record = UserSettingsRecord(
+                    user_id=normalized_user_id,
+                    knowledge_dir=str(self.config.storage.knowledge_dir),
+                    created_at=now,
+                    updated_at=now,
+                )
+            record.model_auto_download_enabled = bool(auto_download_enabled)
+            record.updated_at = now
+            db.add(record)
+            db.commit()
+        return {"user_id": normalized_user_id, "auto_download_enabled": bool(auto_download_enabled)}
 
     def _ensure_paddleocr_models_if_required(self) -> None:
         """当已有用户开启 OCR 时,启动阶段检查并预热 PaddleOCR 模型。"""

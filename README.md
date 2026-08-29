@@ -1,4 +1,17 @@
 # MetaWeave 元织 - 个人多模态知识库 Agent
+![AI Native](https://img.shields.io/badge/AI-native-8A2BE2)
+![Multimodal](https://img.shields.io/badge/knowledge-multimodal-FF6F61)
+[![GitHub Release](https://img.shields.io/github/v/release/xiao-Huahuo/MetaWeave?include_prereleases)](https://github.com/xiao-Huahuo/MetaWeave/releases/latest)
+![Agent](https://img.shields.io/badge/system-AI_Agent-8B5CF6)
+![RAG](https://img.shields.io/badge/retrieval-RAG-7C3AED)
+![Multi Agent](https://img.shields.io/badge/Agent-multi--agent-8B5CF6)
+![Knowledge Base](https://img.shields.io/badge/product-knowledge_base-0EA5E9)
+![Knowledge Graph](https://img.shields.io/badge/knowledge-graph-2563EB)
+![Markdown](https://img.shields.io/badge/editor-Markdown-000000?logo=markdown&logoColor=white)
+![LaTeX](https://img.shields.io/badge/typesetting-LaTeX-008080?logo=latex&logoColor=white)
+![MCP](https://img.shields.io/badge/protocol-MCP-8B5CF6)
+![PaddleOCR](https://img.shields.io/badge/OCR-PaddleOCR-005BAC)
+
 
 ## 简介
 
@@ -71,138 +84,126 @@ Agent 框架不能消除模型幻觉。MetaWeave 因此优先提供检索、引�
 
 ### 源代码（资源文件）项目结构
 
-开发环境中的项目根目录包含后端、桌面前端、协议、测试和随程序分发的默认资源。`resources/` 是可编辑的资源目录，不属于运行时数据；正式安装后，它会与 `runtime/` 一同放在 `%APPDATA%/MetaWeave`，而不是写入安装目录。
+开发环境中的项目根目录包含后端、桌面前端、协议、测试、文档和随程序分发的默认资源。下面列出主要目录，并只展开入口、生命周期、注册、迁移、构建及集中配置等核心单文件；普通业务单文件由其所属目录概括。`resources/` 是可编辑的资源目录，不属于运行时数据；正式安装后，它会与 `runtime/` 一同放在 `%APPDATA%/MetaWeave`。
 
 ```text
-MetaWeave/
-├── main.py                         # FastAPI 与 gRPC 后端入口
-├── AgentService.spec               # PyInstaller 后端构建配置
-├── protos/
-│   └── agent_service.proto         # gRPC 协议
-├── agent_service/
-│   ├── core/
-│   │   └── agent_config.py         # 服务配置与环境变量入口
-│   ├── api/
-│   │   ├── rest/                   # FastAPI REST 路由
-│   │   └── grpc/
-│   │       └── servicer.py         # gRPC 服务实现
-│   ├── agent_core/
-│   │   └── nodes/                  # Agent 状态图、节点与执行循环
-│   ├── tools/
-│   │   └── mcp/                    # 内置工具和 MCP 接入
-│   ├── services/
-│   │   ├── memory/
-│   │   │   └── rag/                # 上下文、长期记忆与知识检索
-│   │   ├── safety/                 # 输入与输出安全审核
-│   │   ├── child_agent/            # 子 Agent 生命周期
-│   │   ├── scheduler/              # 调度、并发与熔断
-│   │   └── terminal/               # 终端沙箱
-│   ├── models/                     # SQLModel 数据模型
-│   ├── schemas/                    # API DTO 和校验模型
-│   ├── scripts/                    # 初始化与维护脚本
-│   └── requirements.txt            # Python 依赖
-├── resources/
-│   ├── mcp/
-│   │   └── example.json            # MCP 配置模板
-│   ├── safety/                     # 安全规则
-│   ├── skills/                     # 内置 Skill
-│   └── knowledge/                  # 首次启动使用的默认知识库
-├── editor/
-│   ├── electron/
-│   │   └── main.cjs                # 桌面主进程与内置后端生命周期
-│   ├── src/
-│   │   ├── main.ts                 # Vue 启动入口
-│   │   ├── App.vue                 # 根组件
-│   │   ├── views/                  # 页面
-│   │   ├── components/             # 业务与通用组件
-│   │   ├── floating/               # 悬浮窗口
-│   │   ├── supercomponents/        # 复合功能组件
-│   │   ├── api/                    # 前端 API 客户端
-│   │   ├── router/
-│   │   │   ├── index.ts            # 页面路由登记
-│   │   │   └── api_routes.ts       # API 路由登记
-│   │   ├── stores/
-│   │   │   ├── settings.ts         # 用户配置状态
-│   │   │   └── workspace.ts        # 工作区状态
-│   │   ├── composable/             # 组合式逻辑
-│   │   ├── types/                  # 领域类型
-│   │   ├── utils/                  # 通用工具
-│   │   ├── assets/                 # 图标、字体、图片与样式
-│   │   └── __tests__/              # 前端测试
-│   ├── scripts/                    # 构建与安装包脚本
-│   ├── vite.config.ts              # Vite 与代理配置
-│   └── package.json                # 前端依赖和命令
-├── tests/                          # 后端测试
-├── docs/                           # 设计、接口与开发文档
-│   └── change_history/
-│       ├── README.md               # 按日期倒序排列的变更历史索引
-│       └── YYYY-MM-DD.md           # 对应日期的独立变更记录
-├── agent_graph*.mmd                # Agent 状态图
-├── 启动.bat                         # 前后端一键启动脚本
-└── README.md                       # 项目说明
+MetaWeave/                                  # 项目仓库根目录
+├── agent_service/                         # Python 后端
+│   ├── agent_core/                        # Agent 图编排与运行核心
+│   │   ├── nodes/                         # LangGraph 节点
+│   │   ├── runtime/                       # 图运行、流转换、会话、附件、模型和恢复逻辑
+│   │   ├── agent_core.py                  # AgentCore 兼容门面
+│   │   └── graph.py                       # Agent 图集中定义
+│   ├── api/                               # REST 与 gRPC 协议适配层
+│   │   ├── rest/                          # FastAPI 路由
+│   │   │   └── deps.py                    # REST 依赖与 ApplicationServices 获取入口
+│   │   └── grpc/                          # gRPC 接口适配层
+│   │       ├── handlers/                  # 按业务领域拆分的 RPC handler
+│   │       ├── mappers/                   # 错误与响应映射
+│   │       └── servicer.py                # RPC 注册、转换和派发
+│   ├── core/                              # 应用基础设施与启动装配
+│   │   ├── bootstrap/                     # 启动阶段集中装配
+│   │   │   ├── config_bootstrap.py        # 配置装配
+│   │   │   ├── grpc_bootstrap.py          # gRPC 启动装配
+│   │   │   ├── models_bootstrap.py        # 模型加载与下载装配
+│   │   │   └── services_bootstrap.py      # Service 容器创建与连接
+│   │   ├── db/                            # 数据库引擎与迁移基础设施
+│   │   │   ├── alembic/                   # Alembic 迁移环境
+│   │   │   │   └── versions/              # 数据库版本脚本
+│   │   │   ├── engine.py                  # 统一 engine/session factory
+│   │   │   └── migration.py               # 集中迁移入口
+│   │   ├── agent_config.py                # 只读服务级集中配置
+│   │   ├── lifespan.py                    # FastAPI 生命周期
+│   │   └── model_status.py                # 模型状态集中管理
+│   ├── models/                            # SQLModel 数据模型
+│   ├── schemas/                           # API DTO 与校验模型
+│   ├── scripts/                           # 初始化、维护和演示脚本
+│   ├── services/                          # 领域 Service；每个主领域独立成目录
+│   ├── tools/                             # Agent 工具定义、注册与执行
+│   │   ├── builtin/                       # 按职责划分的内置工具
+│   │   ├── mcp/                           # MCP 客户端与注册
+│   │   ├── definitions.py                 # 工具定义集中入口
+│   │   ├── executor.py                    # 工具执行入口
+│   │   ├── runtime_context.py             # 工具运行上下文
+│   │   └── tool_registry.py               # 工具注册中心
+│   └── requirements.txt                   # 后端依赖
+├── editor/                                # Electron + Vue 桌面前端
+│   ├── .vscode/                           # 编辑器项目配置
+│   ├── e2e/                               # Playwright 端到端测试
+│   ├── electron/                          # Electron 主进程代码
+│   │   ├── main.cjs                       # Electron 主进程与后端生命周期
+│   │   └── preload.cjs                    # 渲染进程安全桥接
+│   ├── public/                            # 静态公开资源
+│   ├── scripts/                           # 构建与安装包脚本
+│   ├── src/                               # Vue 渲染进程源码
+│   │   ├── api/                           # 后端 API 客户端
+│   │   ├── assets/                        # 样式、图标、字体与图片资源
+│   │   ├── components/                    # 页面配套与通用子组件
+│   │   ├── composable/                    # Vue 组合式逻辑
+│   │   ├── floating/                      # 悬浮窗口界面
+│   │   ├── supercomponents/               # 复合功能组件
+│   │   ├── types/                         # 前端领域类型
+│   │   ├── utils/                         # 前端通用工具
+│   │   ├── views/                         # 路由页面组件
+│   │   ├── __tests__/                     # 前端单元测试
+│   │   ├── router/                        # 页面与 API 路由集中配置
+│   │   │   ├── api_routes.ts              # API 路由集中登记
+│   │   │   └── index.ts                   # 页面路由与守卫
+│   │   ├── stores/                        # Pinia 全局状态
+│   │   │   ├── settings.ts                # 全局外观与用户设置状态
+│   │   │   └── workspace.ts               # 工作区集中状态
+│   │   ├── App.vue                        # Vue 根组件
+│   │   └── main.ts                        # Vue 启动入口
+│   ├── package.json                       # 前端依赖与命令
+│   ├── vite.config.ts                     # Vite 与开发代理配置
+│   └── vitest.config.ts                   # 前端单元测试配置
+├── tests/                                 # Python 后端测试
+│   ├── contracts/                         # 低内存契约导出与串行验证工具
+│   └── 测试文件/                           # 测试夹具和样例文件
+├── protos/                                # gRPC 协议定义
+│   └── agent_service.proto                # gRPC 协议源文件
+├── resources/                             # 随程序分发的默认资源
+│   ├── knowledge/                         # 首次启动的默认知识库
+│   ├── mcp/                               # MCP 配置模板
+│   ├── safety/                            # 安全规则
+│   └── skills/                            # 随程序分发的内置 Skill
+├── supercomponents/                       # 独立组件原型与素材库
+│   ├── downloaded/                        # 下载的组件素材
+│   ├── new/                               # 当前组件候选
+│   └── old/                               # 历史组件素材
+├── main.py                                # FastAPI 与 gRPC 后端入口
+├── alembic.ini                            # Alembic 集中配置
+├── AgentService.spec                      # PyInstaller 后端构建配置
+├── agent_graph*.mmd                       # Agent 状态图源文件
+└── 启动.bat                               # 前后端一键启动脚本
 ```
 
-`build/`、`dist/`、`editor/dist/` 和 `editor/release/` 是构建产物，不属于源码结构。
-
-#### 后端维护后结构
-
-后端启动装配、数据库、Agent runtime、双协议适配和业务服务已经按职责拆分：
-
-```text
-agent_service/
-├── core/
-│   ├── bootstrap/                 # 配置、模型、Service 与 gRPC 装配
-│   ├── db/                        # 统一 engine/session factory 与 Alembic migrations
-│   ├── lifespan.py                # FastAPI 生命周期
-│   └── agent_config.py            # 只读服务级配置
-├── agent_core/
-│   ├── nodes/                     # LangGraph 节点
-│   └── runtime/                   # 图运行、流式转换、会话、附件、子 Agent、取消、模型、token、错误恢复
-├── api/
-│   ├── rest/                      # FastAPI 路由与 app.state/Depends 依赖
-│   └── grpc/
-│       ├── handlers/              # 按业务领域划分的 RPC handler
-│       ├── mappers/               # 错误、依赖和响应转换
-│       └── servicer.py            # RPC 注册、集成与资源关闭
-├── services/
-│   ├── knowledge_library/         # 文件树、入库、预览、搜索、回收站
-│   ├── knowledge_graph/           # 重建、抽取、持久化、去重、查询
-│   ├── memory/                    # 长期记忆与 RAG
-│   ├── scheduler/                 # LLM 调度
-│   └── <domain>/                  # 其余 Service 与 scheduler/tracking 等角色
-└── tools/
-    ├── builtin/                   # 按 agent、memory、knowledge、web、tasks、library、git 等分类
-    ├── mcp/                       # MCP 工具接入
-    ├── tool_registry.py           # 工具注册
-    └── executor.py                # 工具执行
-```
-
-数据库 schema 只允许由根目录 `alembic.ini` 指向的版本脚本升级，业务 Service 构造过程不建表、不执行 `ALTER TABLE`，并共享启动阶段创建的应用级 engine。
+依赖、缓存和构建输出不属于源码主目录，因此不在上树展开，包括 `node_modules/`、`__pycache__/`、`.pytest_cache/`、`build/`、`dist/`、`editor/dist/`、`editor/release/`、测试报告及开发工具私有目录。数据库 schema 只允许由根目录 `alembic.ini` 指向的版本脚本升级，业务 Service 构造过程不建表、不执行 `ALTER TABLE`，并共享启动阶段创建的应用级 engine。
 
 ### runtime 运行时结构
 
 `runtime/` 保存 MetaWeave 的应用级状态。开发模式下它位于项目根目录；正式安装后位于 `%APPDATA%/MetaWeave/runtime`。其中既有可重新下载或重新生成的数据，也有会话、设置和密码库附件等需要保留的数据，不能把整个目录当作缓存清空。
 
 ```text
-runtime/
-├── db/
-│   ├── relation/
+runtime/                                   # 应用运行时数据根目录
+├── db/                                    # 关系与向量数据库
+│   ├── relation/                          # SQLite 关系数据
 │   │   └── agent_service.db        # 会话、设置、业务记录、记忆和索引元数据
-│   └── vector/
+│   └── vector/                            # 向量数据库数据
 │       └── chroma/                 # ChromaDB 向量索引
-├── assets/
+├── assets/                                # 运行期间生成或保存的业务资源
 │   ├── downloads/                  # 下载与临时导出资源
 │   ├── knowledge/                  # 知识文件预览资源
 │   ├── library/                    # 图书馆封面等运行资产
 │   └── vault/                      # 密码库附件
 ├── uploads/                        # 按用户、知识库和 Session 隔离的会话附件
 ├── visualizations/                 # Markdown-to-HTML 生成结果
-├── models/
+├── models/                                # 本地模型文件
 │   ├── embedding/                  # Embedding 模型
 │   ├── rerank/                     # ReRank 模型
 │   ├── local-llm/                  # 本地 Qwen 主/小模型与识图模型
 │   └── paddleocr/                  # OCR 模型
-├── latex/
+├── latex/                                 # 托管 LaTeX 发行版与编译环境
 │   ├── miktex/                     # MetaWeave 托管的 MiKTeX 核心与宏包
 │   ├── repository/                 # MiKTeX 下载仓库，可在存储管理中清理
 │   ├── config/                     # 托管 MiKTeX 用户配置
@@ -220,9 +221,9 @@ runtime/
 每个知识库根目录下都有一个由 MetaWeave 管理的 `.mw/`。它是应用功能在该知识库内的固定锚点：多模态中间层、图书馆、智能表格、组件库和 LaTeX 编译缓存都从这里定位。文件树可以显示 `.mw/` 供用户查看受管文件，但其中内容不会作为普通源文件重复灌库，也不允许在存储设置中单独改到其他位置。
 
 ```text
-<知识库>/
+<知识库>/                                  # 用户当前知识库根目录
 ├── 用户文件与目录                  # Markdown、PDF、Office、图片、代码等原始资料
-└── .mw/
+└── .mw/                                   # MetaWeave 管理的知识库内固定锚点
     ├── md/                         # 按原目录映射的 Markdown 中间层
     ├── frontmatter/                # 结构化 JSON、资源引用与 source map
     ├── assets/                     # PDF、Office 等文档抽取出的图片
@@ -642,11 +643,11 @@ Skill能力是Agent从通用Agent走向专用Agent的关键。其设计如下：
 - 统一兼容[OpenAI开放标准](https://developers.openai.com/api/docs/guides/tools-skills)作为主标准，兼容[Anthropic标准](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)扩展字段。
 - 目录结构：
   ```text
-  skill-name/
-    SKILL.md (必须有）
-    scripts/ （可选）
-    references/ （可选）
-    assets/ （可选）
+  skill-name/                 # 单个 Skill 的根目录
+    SKILL.md                  # Skill 元信息与执行说明，必须存在
+    scripts/                  # Skill 使用的脚本，可选
+    references/               # Skill 按需读取的参考资料，可选
+    assets/                   # Skill 使用的静态资源与模板，可选
   ```
 - 用户级Skill按用户知识库隔离，**用户登录或知识库目录变更时**扫描Skill目录，读取元信息，建立索引。索引只作为本地路由数据使用，不把所有已启用Skill的索引信息全量注入主模型上下文。
 - 对于非Simple思考模式下的每次用户输入，Agent决策前先进行本地候选召回：基于Skill的`name`、`description`、`keywords`、`triggers`等元信息做关键词/BM25式粗筛，只保留少量候选（默认不超过20个）交给`Skill路由器`。`Skill路由器`调用小模型从候选中返回针对当前询问场景适合的3个Skill；小模型不可用或返回异常时，使用本地候选分数兜底。随后只将命中的Skill正文（`SKILL.md`）注入本轮运行上下文（用户下一轮询问后从上下文中去除），Skill正文默认只对当前轮生效，下一轮重新路由。

@@ -12,6 +12,7 @@ import 'echarts'
 import IcIcon from '@/components/common/IcIcon.vue'
 import CompilerManagement from '@/components/settings_view/CompilerManagement.vue'
 import ModelManagement from '@/components/settings_view/ModelManagement.vue'
+import { saveModelPreferences } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
 import { API_ROUTES } from '@/router/api_routes'
 
@@ -41,6 +42,7 @@ const managedResourceDistribution = ref<Array<{ name: string; value: number }>>(
 const loading = ref(false)
 const clearing = ref<string | null>(null)
 const savingKey = ref<string | null>(null)
+const savingModelPreference = ref(false)
 const feedback = ref('')
 const knowledgeDirDraft = ref('')
 
@@ -195,6 +197,28 @@ function show(msg: string, ms = 2000) {
   setTimeout(() => { feedback.value = '' }, ms)
 }
 
+/** Persist the opt-in model auto-download setting in the backend user profile. */
+async function handleModelAutoDownload(enabled: boolean) {
+  if (!settingsStore.profile.userId || savingModelPreference.value) return
+  const previous = Boolean(settingsStore.profile.modelAutoDownloadEnabled)
+  settingsStore.updateProfile({ modelAutoDownloadEnabled: enabled })
+  savingModelPreference.value = true
+  try {
+    const result = await saveModelPreferences(settingsStore.profile.userId, enabled)
+    settingsStore.updateProfile({ modelAutoDownloadEnabled: result.auto_download_enabled })
+  } catch (error: unknown) {
+    settingsStore.updateProfile({ modelAutoDownloadEnabled: previous })
+    show(error instanceof Error ? error.message : '自动下载设置保存失败')
+  } finally {
+    savingModelPreference.value = false
+  }
+}
+
+/** Read the native checkbox value without embedding TypeScript casts in the template. */
+function handleModelAutoDownloadChange(event: Event) {
+  void handleModelAutoDownload((event.target as HTMLInputElement).checked)
+}
+
 /* ---- API ---- */
 async function loadStorageConfig() {
   if (!settingsStore.profile.userId) return
@@ -271,6 +295,16 @@ watch(
         <IcIcon name="refresh" :size="15" :class="{ spinning: loading }" />
       </button>
     </div>
+
+    <label class="model-download-setting">
+      <span>启用自动下载</span>
+      <input
+        type="checkbox"
+        :checked="Boolean(settingsStore.profile.modelAutoDownloadEnabled)"
+        :disabled="savingModelPreference"
+        @change="handleModelAutoDownloadChange"
+      />
+    </label>
 
     <!-- 统计概览：左数字 / 右饼图 -->
     <div class="stats-row">
@@ -387,6 +421,21 @@ watch(
   align-items: center;
   justify-content: space-between;
   margin-bottom: var(--space-10);
+}
+
+.model-download-setting {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-12);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.model-download-setting input {
+  accent-color: var(--color-primary);
 }
 
 .icon-btn {

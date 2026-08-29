@@ -177,7 +177,10 @@ def create_application_services(config: AgentConfig, *, database_engine: Engine)
     privacy_service = PrivacyService(engine=database_engine, create_tables=False)
     feedback_service = FeedbackService(engine=database_engine, create_tables=False)
     smart_form_service = SmartFormService(engine=database_engine, create_tables=False)
-    structured_generation_service = StructuredGenerationService(config=config)
+    structured_generation_service = StructuredGenerationService(
+        config=config,
+        settings_service=settings_service,
+    )
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
     todo_service = TodoService(
         engine=memory_service.engine,

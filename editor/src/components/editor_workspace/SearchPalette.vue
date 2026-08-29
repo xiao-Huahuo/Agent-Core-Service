@@ -622,12 +622,13 @@ defineExpose({ focus })
   max-height: 360px;
   overflow: hidden;
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-lg);
+  border-radius: 13px;
   background: var(--color-surface);
 }
 
 .search-dropdown.page-search-dropdown {
   max-height: 520px;
+  border-radius: 24px;
 }
 
 .search-dropdown.page-search-dropdown .result-list {

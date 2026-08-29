@@ -281,6 +281,70 @@ async def get_model_management(
     return _require_model_management_service().get_management_status(user_id=user_id)
 
 
+@router.get("/settings/models/preferences")
+async def get_model_preferences(
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+) -> dict[str, Any]:
+    """返回当前用户持久化的模型自动下载偏好。"""
+
+    return _require_settings_service().get_model_preferences(user_id=user_id)
+
+
+@router.put("/settings/models/preferences")
+async def save_model_preferences(body: dict[str, Any]) -> dict[str, Any]:
+    """保存模型自动下载偏好；该设置默认关闭。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id or "auto_download_enabled" not in body:
+        raise HTTPException(status_code=422, detail="user_id and auto_download_enabled are required")
+    result = _require_settings_service().save_model_preferences(
+        user_id=user_id,
+        auto_download_enabled=bool(body["auto_download_enabled"]),
+    )
+    if result["auto_download_enabled"]:
+        _require_model_management_service().initialize_after_startup(user_id=user_id)
+    return result
+
+
+@router.post("/settings/models/initialize")
+async def initialize_models(body: dict[str, Any]) -> dict[str, Any]:
+    """在前端完整启动后触发四类模型的独立后台验证任务。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    return _require_model_management_service().initialize_after_startup(user_id=user_id)
+
+
+@router.post("/settings/models/download-confirmed")
+async def download_confirmed_model(body: dict[str, Any]) -> dict[str, Any]:
+    """在用户确认后启动指定模型的后台下载。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    model = str(body.get("model") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    try:
+        started = _require_model_management_service().start_download(model, user_id=user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"status": "started" if started else "already_running", "model": model}
+
+
+@router.post("/settings/models/delete")
+async def delete_managed_model(body: dict[str, Any]) -> dict[str, Any]:
+    """删除用户明确选择的模型，并抑制本次进程内自动重新下载。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    model = str(body.get("model") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    try:
+        return _require_model_management_service().delete_model(model, user_id=user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.post("/settings/models/check")
 async def check_model_disk() -> dict[str, Any]:
     """磁盘级检测模型文件是否存在，同步真实状态。"""
@@ -311,7 +375,7 @@ async def check_model_disk() -> dict[str, Any]:
         available = is_model_available(target)
         if available:
             current = get_model_status().to_dict().get(key)
-            if current in ("ready", "loading", "downloading"):
+            if current in ("ready", "loading", "downloading", "verifying"):
                 continue
             set_model_state(key, ModelState.DOWNLOADED)
         else:
@@ -323,7 +387,12 @@ async def check_model_disk() -> dict[str, Any]:
     marker = Path(config.storage.paddleocr_model_dir) / PADDLEOCR_MARKER_FILE
     if marker.exists():
         paddleocr_available = True
-    set_model_state("paddleocr", ModelState.READY if paddleocr_available else ModelState.NOT_DOWNLOADED)
+    current_ocr = get_model_status().to_dict().get("paddleocr")
+    if current_ocr not in ("ready", "loading", "downloading", "verifying"):
+        set_model_state(
+            "paddleocr",
+            ModelState.DOWNLOADED if paddleocr_available else ModelState.NOT_DOWNLOADED,
+        )
 
     return get_model_status().to_dict()
 
@@ -471,6 +540,15 @@ async def save_knowledge_ingestion_config(body: dict[str, Any]) -> dict[str, Any
         ocr_enabled=body.get("ocr_enabled"),
         knowledge_ignore_patterns=body.get("knowledge_ignore_patterns"),
     )
+    if body.get("ocr_enabled") is True:
+        preferences = svc.get_model_preferences(user_id=user_id)
+        _require_model_management_service().prepare_model_async(
+            "paddleocr",
+            user_id=user_id,
+            load_after=True,
+            download_if_missing=bool(preferences.get("auto_download_enabled")),
+            prompt_if_missing=True,
+        )
     if "knowledge_ignore_patterns" in body:
         try:
             cleanup_result = _require_knowledge_library_service().cleanup_ignored_sources(user_id=user_id)

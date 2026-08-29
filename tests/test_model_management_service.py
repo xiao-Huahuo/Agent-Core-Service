@@ -38,6 +38,11 @@ class _SettingsStub:
 
         return True
 
+    def get_model_preferences(self, *, user_id: str) -> dict[str, object]:  # noqa: ARG002
+        """测试用户默认不自动下载。"""
+
+        return {"auto_download_enabled": False}
+
 
 def _complete_hf_model(path: Path, marker: str) -> None:
     """创建满足现有完整性规则的最小 Hugging Face 模型目录。"""
@@ -212,3 +217,70 @@ def test_huggingface_tracker_observes_real_intermediate_file_bytes(tmp_path: Pat
     assert any(item["status"] == "downloading" and item["percent"] == 25.0 for item in observed)
     assert observed[-1]["status"] == "completed"
     assert observed[-1]["percent"] == 100.0
+
+
+def test_post_startup_initialization_applies_four_independent_model_policies(monkeypatch) -> None:
+    """启动成功后的四模型任务必须独立触发，并严格遵守各自加载条件。"""
+
+    config = SimpleNamespace()
+    service = ModelManagementService(config=config, settings_service=_SettingsStub())
+    calls: list[tuple[str, bool, bool, bool]] = []
+    monkeypatch.setattr(
+        service,
+        "prepare_model_async",
+        lambda model, *, user_id, load_after, download_if_missing, prompt_if_missing: calls.append(
+            (model, load_after, download_if_missing, prompt_if_missing)
+        ) or True,
+    )
+
+    result = service.initialize_after_startup(user_id="u1")
+
+    assert result == {"status": "started"}
+    assert calls == [
+        ("embedding", True, False, True),
+        ("rerank", True, False, True),
+        ("paddleocr", True, False, True),
+        ("local_qwen", False, False, False),
+    ]
+
+
+def test_user_deleted_model_is_not_auto_downloaded_again_until_restart(tmp_path: Path, monkeypatch) -> None:
+    """主动删除后本进程必须抑制自动下载，但不写入跨启动抑制状态。"""
+
+    embedding_name = "BAAI/test-embedding"
+    embedding_root = tmp_path / "models" / "embedding"
+    target = model_target_dir(embedding_name, embedding_root)
+    _complete_hf_model(target, embedding_name)
+    config = SimpleNamespace(
+        model=SimpleNamespace(
+            embedding_model_name=embedding_name,
+            rerank_model_name="BAAI/test-rerank",
+            local_model_name="Qwen/test-local",
+        ),
+        storage=SimpleNamespace(
+            embedding_model_dir=embedding_root,
+            rerank_model_dir=tmp_path / "models" / "rerank",
+            local_model_dir=tmp_path / "models" / "qwen",
+            paddleocr_model_dir=tmp_path / "models" / "ocr",
+        ),
+    )
+    service = ModelManagementService(config=config, settings_service=_SettingsStub())
+    downloaded: list[str] = []
+    monkeypatch.setattr(service, "_model_is_available", lambda _model: False)
+    monkeypatch.setattr(service, "_download_model", lambda model: downloaded.append(model))
+
+    deleted = service.delete_model("embedding", user_id="u1")
+    service.prepare_model_async(
+        "embedding",
+        user_id="u1",
+        load_after=False,
+        download_if_missing=True,
+        prompt_if_missing=False,
+    )
+    worker = service._workers.get("embedding")
+    if worker is not None:
+        worker.join(timeout=2)
+
+    assert deleted["deleted"] is True
+    assert target.exists() is False
+    assert downloaded == []

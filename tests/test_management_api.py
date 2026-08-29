@@ -41,6 +41,25 @@ class _ModelManagementStub:
             "details": {"user_id": user_id},
         }]}
 
+    def initialize_after_startup(self, *, user_id: str) -> dict[str, str]:
+        """返回不会触发任何真实模型工作的初始化结果。"""
+
+        return {"status": f"started:{user_id}"}
+
+
+class _SettingsStub:
+    """提供模型自动下载偏好的纯内存替身。"""
+
+    def get_model_preferences(self, *, user_id: str) -> dict[str, object]:
+        """返回默认关闭状态。"""
+
+        return {"user_id": user_id, "auto_download_enabled": False}
+
+    def save_model_preferences(self, *, user_id: str, auto_download_enabled: bool) -> dict[str, object]:
+        """原样返回显式保存值。"""
+
+        return {"user_id": user_id, "auto_download_enabled": auto_download_enabled}
+
 
 class _LatexManagementStub:
     """返回系统 MiKTeX 管理详情。"""
@@ -74,6 +93,7 @@ def test_management_rest_returns_service_owned_details(monkeypatch: Any) -> None
     """REST 管理接口不得由前端拼接模型或编译器详情。"""
 
     monkeypatch.setattr(settings_rest, "_require_model_management_service", lambda: _ModelManagementStub())
+    monkeypatch.setattr(settings_rest, "_require_settings_service", lambda: _SettingsStub())
     monkeypatch.setattr(settings_rest, "_require_latex_service", lambda: _LatexManagementStub())
     app = FastAPI()
     app.include_router(settings_rest.router)
@@ -86,6 +106,52 @@ def test_management_rest_returns_service_owned_details(monkeypatch: Any) -> None
     assert models.json()["models"][0]["details"]["user_id"] == "u1"
     assert compiler.status_code == 200
     assert compiler.json()["source"] == "system"
+
+
+def test_model_preferences_and_initialization_match_over_rest_and_grpc(monkeypatch: Any) -> None:
+    """模型偏好与启动后初始化必须通过 REST 和 gRPC 暴露相同字段。"""
+
+    model_service = _ModelManagementStub()
+    settings_service = _SettingsStub()
+    monkeypatch.setattr(settings_rest, "_require_model_management_service", lambda: model_service)
+    monkeypatch.setattr(settings_rest, "_require_settings_service", lambda: settings_service)
+    app = FastAPI()
+    app.include_router(settings_rest.router)
+    client = TestClient(app)
+
+    rest_saved = client.put(
+        "/settings/models/preferences",
+        json={"user_id": "u1", "auto_download_enabled": True},
+    )
+    rest_initialized = client.post("/settings/models/initialize", json={"user_id": "u1"})
+
+    server = grpc.server(ThreadPoolExecutor(max_workers=1))
+    add_AgentServiceServicer_to_server(
+        AgentServiceServicer(
+            agent=_AgentStub(),  # type: ignore[arg-type]
+            session_service=SimpleNamespace(),  # type: ignore[arg-type]
+            settings_service=settings_service,  # type: ignore[arg-type]
+            model_management_service=model_service,  # type: ignore[arg-type]
+        ),
+        server,
+    )
+    port = server.add_insecure_port("127.0.0.1:0")
+    server.start()
+    channel = grpc.insecure_channel(f"127.0.0.1:{port}")
+    try:
+        stub = AgentServiceStub(channel)
+        grpc_saved = MessageToDict(stub.SaveModelPreferences(_struct({
+            "user_id": "u1", "auto_download_enabled": True,
+        }), timeout=5))
+        grpc_initialized = MessageToDict(stub.InitializeModels(_struct({"user_id": "u1"}), timeout=5))
+    finally:
+        channel.close()
+        server.stop(0).wait(timeout=5)
+
+    assert rest_saved.json() == {"user_id": "u1", "auto_download_enabled": True}
+    assert grpc_saved == rest_saved.json()
+    assert rest_initialized.json() == {"status": "started:u1"}
+    assert grpc_initialized == rest_initialized.json()
 
 
 def test_management_grpc_matches_rest_fields() -> None:

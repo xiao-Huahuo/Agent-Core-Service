@@ -17,6 +17,7 @@ export interface SettingsProfileResponse {
   knowledge_libraries?: SettingsKnowledgeLibraryResponse[]
   auto_ingest_on_upload?: boolean
   ocr_enabled?: boolean
+  model_auto_download_enabled?: boolean
   knowledge_ignore_patterns?: string
   knowledge_supported_suffixes?: string[]
   terminal_sandbox?: TerminalSandboxConfig
@@ -591,11 +592,43 @@ export function fetchModelManagement(userId: string): Promise<{ models: ManagedM
 }
 
 /** Start a backend-owned model download. */
-export function downloadManagedModel(model: ManagedModelStatus['key']): Promise<{ status: string; model: string }> {
-  return apiPost(API_ROUTES.SETTINGS_MODEL_DOWNLOAD, { model })
+export function downloadManagedModel(
+  model: ManagedModelStatus['key'],
+  userId: string,
+): Promise<{ status: string; model: string }> {
+  return apiPost(API_ROUTES.SETTINGS_MODEL_DOWNLOAD_CONFIRMED, { model, user_id: userId })
 }
 
 /** Load an already-downloaded Embedding or ReRank model into memory. */
 export function loadManagedModel(model: 'embedding' | 'rerank' | 'local_qwen'): Promise<{ status: string; model: string }> {
   return apiPost(API_ROUTES.SETTINGS_MODEL_LOAD, { model })
+}
+
+/** Trigger all post-startup model policies after the application shell is visible. */
+export function initializeManagedModels(userId: string): Promise<{ status: string }> {
+  return apiPost(API_ROUTES.SETTINGS_MODEL_INITIALIZE, { user_id: userId })
+}
+
+/** Fetch the persisted opt-in automatic download preference. */
+export function fetchModelPreferences(userId: string): Promise<{ user_id: string; auto_download_enabled: boolean }> {
+  return apiGet(API_ROUTES.SETTINGS_MODEL_PREFERENCES, { user_id: userId })
+}
+
+/** Persist the user's explicit automatic download preference. */
+export function saveModelPreferences(
+  userId: string,
+  autoDownloadEnabled: boolean,
+): Promise<{ user_id: string; auto_download_enabled: boolean }> {
+  return apiPut(API_ROUTES.SETTINGS_MODEL_PREFERENCES, {
+    user_id: userId,
+    auto_download_enabled: autoDownloadEnabled,
+  })
+}
+
+/** Delete one managed model after explicit user confirmation. */
+export function deleteManagedModel(
+  model: ManagedModelStatus['key'],
+  userId: string,
+): Promise<{ model: string; deleted: boolean; path: string }> {
+  return apiPost(API_ROUTES.SETTINGS_MODEL_DELETE, { model, user_id: userId })
 }

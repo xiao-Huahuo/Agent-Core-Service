@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Any
 
 from agent_service.core.agent_config import AgentConfig
+from agent_service.scripts.download_model import PADDLEOCR_MARKER_FILE, _build_paddleocr_pipeline
 from agent_service.scripts.download_model import _disable_paddleocr_mkldnn_by_default
-from agent_service.scripts.download_model import _build_paddleocr_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -95,10 +95,25 @@ class ImageOcrService:
             engine_available=True,
         )
 
-    def _get_pipeline(self) -> Any | None:
-        """同步获取可复用的 OCR pipeline，避免首次请求返回假空结果。"""
+    def warmup(self) -> None:
+        """在独立守护线程中预热 OCR pipeline，不阻塞设置保存或其他业务。"""
 
-        key = (
+        threading.Thread(
+            target=self._get_pipeline,
+            daemon=True,
+            name="paddleocr-load",
+        ).start()
+
+    @property
+    def loaded(self) -> bool:
+        """返回当前配置对应的 OCR pipeline 是否已在共享缓存中。"""
+
+        return self._pipeline_key() in self._pipeline_cache
+
+    def _pipeline_key(self) -> tuple[str, ...]:
+        """构造当前 OCR 配置的稳定共享缓存键。"""
+
+        return (
             self.config.ocr.language,
             self.config.ocr.text_detection_model_name,
             self.config.ocr.text_recognition_model_name,
@@ -106,6 +121,18 @@ class ImageOcrService:
             str(self.config.storage.paddleocr_model_dir / "text_detection"),
             str(self.config.storage.paddleocr_model_dir / "text_recognition"),
         )
+
+    def _get_pipeline(self) -> Any | None:
+        """同步获取可复用的 OCR pipeline，避免首次请求返回假空结果。"""
+
+        from agent_service.core.model_status import ModelState, set_model_state
+
+        marker = Path(self.config.storage.paddleocr_model_dir) / PADDLEOCR_MARKER_FILE
+        if not marker.is_file():
+            set_model_state("paddleocr", ModelState.AWAITING_DOWNLOAD)
+            return None
+
+        key = self._pipeline_key()
         if key in self._pipeline_cache:
             return self._pipeline_cache[key]
         if key in self._pipeline_errors:

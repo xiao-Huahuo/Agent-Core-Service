@@ -6,12 +6,14 @@
   - Renders the active route for the editor front-end.
 -->
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { RouterView } from 'vue-router'
 
 import WifiLoader from '@/components/common/WifiLoader.vue'
 import UserIdGate from '@/components/common/UserIdGate.vue'
 import FloatingAgentRoot from '@/components/floating/FloatingAgentRoot.vue'
+import ModelLifecycleOverlay from '@/components/common/ModelLifecycleOverlay.vue'
+import { initializeManagedModels } from '@/api/settings'
 import { isFloatingWindow } from '@/floating/isFloating'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -28,41 +30,34 @@ async function waitForBackend(maxRetries = 120): Promise<void> {
   }
 }
 
-async function waitForModelsReady(maxRetries = 300): Promise<void> {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const r = await fetch('/settings/models/status')
-      if (r.ok) {
-        const s: Record<string, string> = await r.json()
-        // embedding 和 rerank 都就绪即可结束；
-        // 如果未下载或出错也结束（不卡住用户去手动下载）
-        const e = s.embedding
-        const rr = s.rerank
-        if (e === 'ready' && rr === 'ready') return
-        if (e === 'not_downloaded' || e === 'downloaded' || e === 'error') return
-        if (rr === 'not_downloaded' || rr === 'downloaded' || rr === 'error') return
-      }
-    } catch { /* ignore */ }
-    await new Promise(r => setTimeout(r, 1000))
+const initializedUsers = new Set<string>()
+
+/** Refresh user settings, then trigger model work without awaiting any model task. */
+async function initializeUserModels(userId: string) {
+  if (!userId || initializedUsers.has(userId) || isFloatingWindow) return
+  initializedUsers.add(userId)
+  try {
+    await settingsStore.refreshUserProfile()
+    await initializeManagedModels(userId)
+    await window.agentEditorDesktop?.floatingSetVisible?.(Boolean(settingsStore.profile.floatingLaunchEnabled))
+  } catch {
+    initializedUsers.delete(userId)
   }
 }
 
 onMounted(async () => {
   settingsStore.initTheme()
   await waitForBackend()
-  await waitForModelsReady()
   backendReady.value = true
-  if (settingsStore.hasUserId) {
-    try {
-      await settingsStore.refreshUserProfile()
-      if (!isFloatingWindow) {
-        await window.agentEditorDesktop?.floatingSetVisible?.(Boolean(settingsStore.profile.floatingLaunchEnabled))
-      }
-    } catch {
-      settingsStore.clearUserId()
-    }
-  }
+  void initializeUserModels(settingsStore.profile.userId)
 })
+
+watch(
+  () => settingsStore.profile.userId,
+  (userId) => {
+    if (backendReady.value) void initializeUserModels(userId)
+  },
+)
 </script>
 
 <template>
@@ -70,7 +65,10 @@ onMounted(async () => {
     <WifiLoader />
   </div>
   <FloatingAgentRoot v-else-if="isFloatingWindow && settingsStore.hasUserId" />
-  <RouterView v-else-if="settingsStore.hasUserId" />
+  <template v-else-if="settingsStore.hasUserId">
+    <RouterView />
+    <ModelLifecycleOverlay :user-id="settingsStore.profile.userId" />
+  </template>
   <UserIdGate v-else />
 </template>
 
