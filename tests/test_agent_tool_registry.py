@@ -23,3 +23,11 @@ def test_agent_core_lists_registered_tools_from_final_registry() -> None:
     assert search_tool["display_name"] == "搜索知识库"
     assert search_tool["argument_count"] >= 1
     assert "properties" in search_tool["args_schema"]
+
+
+def test_current_time_tool_is_not_registered() -> None:
+    """用户提问自带时间后，Agent 不应再暴露重复的当前时间工具。"""
+
+    registry = ToolRegistry.with_builtin_tools()
+
+    assert registry.get("get_current_time") is None

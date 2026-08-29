@@ -24,6 +24,8 @@ export interface CarouselSlide {
   target: WorkspaceMainView
   /** 背景图对应的块目录名(assets/images/home/<名>), 缺省则纯色底。 */
   image?: string
+  /** 当前入口的全局语义强调色,缺省时沿用全局主色。 */
+  accent?: string
 }
 </script>
 
@@ -89,6 +91,10 @@ const DEFAULT_SLIDES: CarouselSlide[] = [
 const slides = computed(() => props.slides ?? DEFAULT_SLIDES)
 const activeIndex = ref(0)
 const paused = ref(false)
+/** 让轮播边框、光效、图标、提示和活动圆点共享当前入口颜色。 */
+const activeAccentStyle = computed(() => ({
+  '--home-carousel-accent': slides.value[activeIndex.value]?.accent ?? 'var(--color-primary)',
+}))
 
 const AUTOPLAY_MS = 5000
 let timer: ReturnType<typeof setInterval> | null = null
@@ -121,6 +127,7 @@ onBeforeUnmount(stopAutoplay)
   <div
     class="carousel-block"
     :class="{ compact: isCompact }"
+    :style="activeAccentStyle"
     @mouseenter="paused = true"
     @mouseleave="paused = false"
     @focusin="paused = true"
@@ -144,6 +151,7 @@ onBeforeUnmount(stopAutoplay)
         :key="`dot-${slide.target}`"
         class="carousel-dot"
         :class="{ active: index === activeIndex }"
+        :style="{ '--home-dot-accent': slide.accent ?? 'var(--color-primary)' }"
         type="button"
         :aria-label="`切换到第 ${index + 1} 张`"
         @click="goTo(index)"
@@ -174,15 +182,15 @@ onBeforeUnmount(stopAutoplay)
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: radial-gradient(120% 130% at 50% 0%, var(--home-hover-glow), transparent 68%);
+  background: radial-gradient(120% 130% at 50% 0%, color-mix(in srgb, var(--home-carousel-accent) 28%, transparent), transparent 68%);
   opacity: 0;
   transition: opacity var(--transition-normal);
   pointer-events: none;
 }
 
 .carousel-block:hover {
-  border-color: var(--home-hover-border);
-  box-shadow: var(--home-hover-shadow, var(--home-card-shadow));
+  border-color: color-mix(in srgb, var(--home-carousel-accent) 68%, transparent);
+  box-shadow: var(--home-card-shadow), 0 0 12px color-mix(in srgb, var(--home-carousel-accent) 24%, transparent);
 }
 
 .carousel-block:hover::after {
@@ -223,11 +231,11 @@ onBeforeUnmount(stopAutoplay)
 .carousel-dot.active {
   width: 20px;
   border-radius: 999px;
-  background: var(--color-primary);
+  background: var(--home-dot-accent);
 }
 
 .carousel-dot:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--home-dot-accent, var(--color-primary));
   outline-offset: 2px;
 }
 

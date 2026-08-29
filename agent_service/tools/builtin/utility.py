@@ -6,9 +6,7 @@
 from __future__ import annotations
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Callable
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from agent_service.tools.runtime_context import (
     AGENT_ACCESS_READONLY,
     get_markdown_html_visualization_callback,
@@ -25,19 +23,6 @@ from agent_service.tools.builtin.builtin import (
     _safe_visualization_filename, _strip_markdown_html_fence,
 )
 
-def get_current_time(timezone_name: str = "UTC") -> str:
-    """
-    获取指定时区的当前时间。
-
-    timezone_name: IANA 时区名称,例如 `UTC`、`Asia/Shanghai`、`America/New_York`。
-    """
-
-    normalized_timezone_name = timezone_name or "UTC"
-    try:
-        target_timezone = ZoneInfo(normalized_timezone_name)
-    except ZoneInfoNotFoundError:
-        return f"未知时区: {normalized_timezone_name}"
-    return datetime.now(target_timezone).isoformat()
 def list_available_tools() -> str:
     """
     列出当前可用的全部工具名称与用途。

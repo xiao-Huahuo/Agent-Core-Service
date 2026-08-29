@@ -146,6 +146,15 @@ test('resizes the sidebar browser from its left edge', async ({ page }, testInfo
 test('mobile sidebars float and the latest one replaces the previous overlay', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 600, height: 820 })
   await page.route('**/health', (route) => route.fulfill({ status: 200, body: '{"status":"ok"}' }))
+  await page.route((url) => url.pathname === '/settings/profile', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      user_id: 'mobile-sidebar-smoke', knowledge_dir: 'D:/Knowledge', active_library_id: 'mobile-library',
+      active_knowledge_library: { library_id: 'mobile-library', user_id: 'mobile-sidebar-smoke', name: 'knowledge', knowledge_dir: 'D:/Knowledge', is_active: true, created_at: '', updated_at: '' },
+      knowledge_libraries: [], created_at: '', updated_at: '',
+    }),
+  }))
   await page.route((url) => url.pathname === '/knowledge/files', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -153,13 +162,34 @@ test('mobile sidebars float and the latest one replaces the previous overlay', a
       tree: [{ name: 'report.pdf', path: 'docs/report.pdf', isDir: false }],
     }),
   }))
-  await page.route((url) => url.pathname === '/knowledge/search', (route) => route.fulfill({
+  await page.route((url) => url.pathname === '/search', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({
-      filename_results: [{ name: 'report.pdf', path: 'docs/report.pdf' }],
-      fulltext_results: [],
-      semantic_results: [],
+      query: 'report',
+      selected_sources: ['files', 'library', 'components', 'literature'],
+      fulltext: true,
+      semantic: false,
+      results: [{
+        id: 'docs/report.pdf',
+        source: 'files',
+        title: 'report.pdf',
+        snippet: '',
+        locator: 'docs/report.pdf',
+        updated_at: '',
+        score: 0.92,
+        matched_modes: ['title'],
+        item: { name: 'report.pdf', path: 'docs/report.pdf', isDir: false },
+      }],
+      groups: {
+        files: [{
+          id: 'docs/report.pdf', source: 'files', title: 'report.pdf', snippet: '', locator: 'docs/report.pdf',
+          updated_at: '', score: 0.92, matched_modes: ['title'], item: { name: 'report.pdf', path: 'docs/report.pdf', isDir: false },
+        }],
+        library: [], components: [], literature: [],
+      },
+      counts: { files: 1, library: 0, components: 0, literature: 0 },
+      total: 1,
     }),
   }))
   await page.route((url) => url.pathname === '/knowledge/files/preview', (route) => route.fulfill({
@@ -222,12 +252,12 @@ test('mobile sidebars float and the latest one replaces the previous overlay', a
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   await page.locator('.page-variant .search-input').fill('report')
   await page.locator('.search-box-submit').click()
-  const searchResult = page.locator('.result-card')
+  const searchResult = page.locator('.unified-result-row')
   await expect(searchResult).toBeVisible()
   await page.waitForTimeout(300)
   await searchResult.click()
   const searchPreview = page.locator('.editor-sidebar-content')
-  await expect(searchPreview).toHaveCSS('position', 'absolute')
+  await expect(searchPreview).toHaveCSS('position', 'fixed')
   await expect(searchPreview).toHaveCSS('opacity', '1')
   await expect(searchPreview.locator('.pdf-viewer')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('mobile-search-preview.png'), fullPage: true })

@@ -157,6 +157,18 @@ export function apiPostForm<T>(path: string, body: FormData, init?: ApiRequestIn
   })
 }
 
+/** Maximum event burst processed before the stream cooperatively yields. */
+const SSE_EVENTS_PER_RENDER_TASK = 16
+
+/** Lets timers, input events, and Vue rendering run during a buffered SSE burst. */
+function yieldToRenderer(): Promise<void> {
+  const scheduler = (globalThis as typeof globalThis & { scheduler?: { yield?: () => Promise<void> } }).scheduler
+  if (scheduler?.yield) {
+    return scheduler.yield()
+  }
+  return new Promise((resolve) => globalThis.setTimeout(resolve, 0))
+}
+
 export async function* streamLines(
   path: string,
   options: RequestInit = {},
@@ -172,6 +184,7 @@ export async function* streamLines(
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let eventsSinceYield = 0
 
   const signal = options.signal
   if (signal) {
@@ -193,6 +206,9 @@ export async function* streamLines(
       buffer = parts.pop() ?? ''
 
       for (const part of parts) {
+        if (signal?.aborted) {
+          return
+        }
         const trimmed = part.trim()
         if (!trimmed) {
           continue
@@ -207,6 +223,11 @@ export async function* streamLines(
           }
           try {
             yield JSON.parse(payload) as Record<string, unknown>
+            eventsSinceYield += 1
+            if (eventsSinceYield >= SSE_EVENTS_PER_RENDER_TASK) {
+              eventsSinceYield = 0
+              await yieldToRenderer()
+            }
           } catch {
             // Ignore malformed stream chunks and continue reading.
           }

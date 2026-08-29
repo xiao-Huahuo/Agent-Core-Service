@@ -181,15 +181,17 @@ class ComponentLibraryGrpcHandlerMixin:
             filename=str(payload.get("filename", "")),
         )
     def RenameComponentLibraryComponent(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
-        """Persist one inline component title edit through the shared file service."""
+        """Persist one incremental component title, source, or tag update."""
 
         payload = MessageToDict(request)
         return self._component_library_struct(
             context,
-            self._require_component_library_service(context).rename_component,
+            self._require_component_library_service(context).update_component,
             user_id=str(payload.get("user_id", "")),
             component_id=str(payload.get("component_id", "")),
-            title=str(payload.get("title", "")),
+            title=str(payload["title"]) if "title" in payload else None,
+            source=str(payload["source"]) if "source" in payload else None,
+            tag=str(payload["tag"]) if "tag" in payload else None,
         )
     def DeleteComponentLibraryComponent(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
         """Delete one component through the same file service as REST."""

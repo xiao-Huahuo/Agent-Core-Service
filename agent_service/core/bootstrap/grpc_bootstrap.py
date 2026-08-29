@@ -49,6 +49,7 @@ class GrpcRuntime:
             automation_service=services.automation_service,
             activity_service=services.activity_service,
             component_library_service=services.component_library_service,
+            unified_search_service=services.unified_search_service,
             smart_form_service=services.smart_form_service,
             latex_service=services.latex_service,
             model_management_service=services.model_management_service,

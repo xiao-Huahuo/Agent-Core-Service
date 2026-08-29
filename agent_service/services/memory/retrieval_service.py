@@ -162,6 +162,29 @@ class MemoryRetrievalService:
         """
         return self.retrieve_knowledge_with_debug(query=query, user_id=user_id, top_k=top_k).post_rerank_results
 
+    def retrieve_unified_search(
+        self,
+        *,
+        query: str,
+        user_id: str,
+        top_k: int | None = None,
+    ) -> list[RetrievedMemory]:
+        """检索当前知识库下图书馆、组件库和文献库的联合搜索索引。
+
+        query: 用户搜索文本。
+        user_id: 已包含 active library 的知识库 owner ID。
+        top_k: 最多返回的精排结果数。
+        """
+
+        return self._retrieve_with_debug(
+            query=query,
+            user_id=user_id,
+            session_id=None,
+            tag=self.config.constants.knowledge_tag,
+            memory_type="unified_search_chunk",
+            top_k=top_k,
+        ).post_rerank_results
+
     def retrieve_long_term_memory_with_debug(
         self,
         *,

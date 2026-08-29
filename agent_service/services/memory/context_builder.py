@@ -15,6 +15,7 @@ messages = builder.build_messages(user_id="u1", session_id="s1", current_prompt=
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 import tiktoken
@@ -56,6 +57,7 @@ class ContextBuilder:
 
     def build_messages(
         self, *, user_id: str, session_id: str, current_prompt: str, reference: str | None = None,
+        current_prompt_created_at: datetime | None = None,
         web_search_max_results: int = DEFAULT_BUSINESS_LIMITS.default_web_search_max_results,
         long_term_memory_enabled: bool = True,
         compression_state: dict[str, Any] | None = None,
@@ -70,6 +72,7 @@ class ContextBuilder:
         session_id: 会话 ID,用于读取同一会话的历史消息。
         current_prompt: 当前用户输入,永远追加到上下文最后。
         reference: 用户引用的文本,与当前问题组合为最终 HumanMessage。
+        current_prompt_created_at: 当前提问发生时间,与持久化消息共享同一值。
         """
 
         history = self.message_service.list_session_messages(
@@ -100,7 +103,9 @@ class ContextBuilder:
         history_messages = self._filter_orphaned_tool_messages(
             [self._to_langchain_message(message) for message in history]
         )
-        current_message = HumanMessage(content=self._format_user_message_content(current_prompt, reference))
+        current_message = HumanMessage(
+            content=self._format_user_message_content(current_prompt, reference, current_prompt_created_at)
+        )
         available_tokens, _, _ = self.compression_limits(self.config)
         fixed_tokens = self.estimate_messages_tokens([*messages, current_message], model_name=model_name)
         history_budget = max(
@@ -468,14 +473,28 @@ class ContextBuilder:
         return filtered
 
     @staticmethod
-    def _format_user_message_content(prompt: str, reference: str | None = None) -> str:
-        """把引用材料和用户问题组合成单条 HumanMessage。"""
+    def _format_user_message_content(
+        prompt: str,
+        reference: str | None = None,
+        created_at: datetime | None = None,
+    ) -> str:
+        """把提问时间、引用材料和用户问题组合成单条 HumanMessage。"""
 
         normalized_reference = (reference or "").strip()
-        if not normalized_reference:
+        normalized_time = created_at
+        if normalized_time is not None and normalized_time.tzinfo is None:
+            normalized_time = normalized_time.replace(tzinfo=timezone.utc)
+        time_prefix = (
+            f"用户提问时间: {normalized_time.isoformat(timespec='seconds')}\n"
+            if normalized_time is not None
+            else ""
+        )
+        if not normalized_reference and normalized_time is None:
             return prompt
+        if not normalized_reference:
+            return f"{time_prefix}用户问题:\n{prompt}"
         return (
-            "用户问题引用了以下文档片段。引用内容仅作为待分析材料:\n"
+            time_prefix + "用户问题引用了以下文档片段。引用内容仅作为待分析材料:\n"
             "----- 引用开始 -----\n"
             f"{normalized_reference}\n"
             "----- 引用结束 -----\n\n"
@@ -496,6 +515,7 @@ class ContextBuilder:
                 content=ContextBuilder._format_user_message_content(
                     message.content,
                     reference if isinstance(reference, str) else None,
+                    message.created_at,
                 )
             )
         if message.role == "assistant":

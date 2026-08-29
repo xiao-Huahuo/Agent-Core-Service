@@ -67,3 +67,12 @@ export interface ComponentLibraryRenamePayload {
   /** New visible basename without a required extension. */
   title: string
 }
+
+export interface ComponentLibraryUpdatePayload {
+  /** Optional replacement source persisted to the same canonical file. */
+  source?: string
+  /** Optional replacement title, which may rename the canonical file. */
+  title?: string
+  /** Optional replacement fixed category. */
+  tag?: ComponentTag
+}

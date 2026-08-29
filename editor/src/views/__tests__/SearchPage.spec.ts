@@ -1,209 +1,198 @@
-/*
- * Search page result interaction tests.
+/**
+ * Four-library search page presentation and interaction tests.
  *
  * Usage:
- * Verifies that one click opens an in-page readonly preview while a double
- * click alone enters the regular editor workflow.
+ * Verifies unified source labels, shared pagination, split native sections,
+ * and the existing file preview/open workflow without running a browser server.
  */
+
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useWorkspaceStore } from '@/stores/workspace'
 import SearchPage from '@/views/SearchPage.vue'
-import searchPageSource from '@/views/SearchPage.vue?raw'
+import { useWorkspaceStore } from '@/stores/workspace'
+import type { SearchSource, UnifiedSearchResponse, UnifiedSearchResult } from '@/types/unifiedSearch'
 
-vi.mock('@/api/agent', () => ({
-  updateCurrentDocumentContext: vi.fn().mockResolvedValue(undefined),
+const searchAllLibraries = vi.fn()
+
+vi.mock('@/api/unifiedSearch', () => ({
+  searchAllLibraries: (...args: unknown[]) => searchAllLibraries(...args),
 }))
-
-vi.mock('@/api/settings', () => ({
-  rebuildKnowledgeRootStream: vi.fn(),
-}))
-
+vi.mock('@/api/agent', () => ({ updateCurrentDocumentContext: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('@/api/settings', () => ({ rebuildKnowledgeRootStream: vi.fn() }))
 vi.mock('@/api/knowledge', () => ({
   buildKnowledgeEventsUrl: vi.fn(() => '/events'),
-  copyKnowledgePath: vi.fn(),
-  createKnowledgeFile: vi.fn(),
-  createKnowledgeFolder: vi.fn(),
-  deleteKnowledgePath: vi.fn(),
-  deleteKnowledgeTrashEntry: vi.fn(),
   getKnowledgeGraphStatus: vi.fn(),
-  ingestKnowledgeFileStream: vi.fn(),
-  ingestKnowledgePathStream: vi.fn(),
-  listKnowledgeFiles: vi.fn(),
-  listKnowledgeTrash: vi.fn(),
+  readKnowledgeFile: vi.fn().mockResolvedValue({ path: 'docs/notes.md', content: 'alpha', mtime: '', size: 5 }),
   previewKnowledgeFile: vi.fn(),
-  readKnowledgeFile: vi.fn().mockResolvedValue({
-    path: 'docs/notes.md',
-    content: 'alpha beta',
-    mtime: '2026-07-30T09:00:00',
-    size: 10,
-  }),
-  rebuildKnowledgeGraph: vi.fn(),
-  renameKnowledgePath: vi.fn(),
-  restoreKnowledgeTrashEntry: vi.fn(),
-  searchKnowledge: vi.fn(),
-  uploadKnowledgeFile: vi.fn(),
-  writeKnowledgeFile: vi.fn(),
 }))
 
-describe('SearchPage result opening', () => {
+const emptyGroups = (): Record<SearchSource, UnifiedSearchResult[]> => ({ files: [], library: [], components: [], literature: [] })
+
+function response(results: UnifiedSearchResult[]): UnifiedSearchResponse {
+  const groups = emptyGroups()
+  for (const result of results) groups[result.source].push(result)
+  return {
+    query: 'alpha',
+    selected_sources: ['files', 'library', 'components', 'literature'],
+    fulltext: true,
+    semantic: false,
+    results,
+    groups,
+    counts: {
+      files: groups.files.length,
+      library: groups.library.length,
+      components: groups.components.length,
+      literature: groups.literature.length,
+    },
+    total: results.length,
+  }
+}
+
+function fileResult(index = 1): UnifiedSearchResult {
+  const path = `docs/note-${index}.md`
+  return {
+    id: path,
+    source: 'files',
+    title: `note-${index}.md`,
+    snippet: 'alpha beta',
+    locator: path,
+    updated_at: '',
+    score: 0.9,
+    matched_modes: ['title', 'fulltext'],
+    item: { name: `note-${index}.md`, path, isDir: false, size: 10 },
+  }
+}
+
+function mountPage() {
+  return mount(SearchPage, {
+    global: {
+      stubs: {
+        SplitText: true,
+        ComponentLibraryCard: { props: ['item'], template: '<article class="component-native">{{ item.title }}</article>' },
+        LibraryCard: { props: ['item'], template: '<article class="library-native">{{ item.display_title }}</article>' },
+        LiteratureEntryCard: { name: 'LiteratureEntryCard', props: ['entry', 'expandable'], template: '<article class="literature-native">{{ entry.title }}</article>' },
+        SearchFileMediumTile: { props: ['node'], template: '<button class="file-native">{{ node.name }}</button>' },
+      },
+    },
+  })
+}
+
+describe('SearchPage four-library results', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
-    vi.clearAllMocks()
+    searchAllLibraries.mockReset().mockResolvedValue(response([]))
   })
 
-  it('reuses the same workspace editor sidebar as smart-form file cells', () => {
-    expect(searchPageSource).toContain('await workspaceStore.openEditorSidebar(node)')
-    expect(searchPageSource).not.toContain('SearchResultPreview')
-  })
+  it('keeps the unified row style and identifies every result source at top right', async () => {
+    const store = useWorkspaceStore()
+    store.mainView = 'search'
+    store.searchQuery = 'alpha'
+    store.searchResults = response([
+      fileResult(),
+      { id: 'lib-1', source: 'library', title: 'Alpha Book', snippet: 'book', locator: 'library/a.pdf', updated_at: '', score: 0.8, matched_modes: ['title'], item: { item_id: 'lib-1', parent_id: '', display_title: 'Alpha Book' } },
+      { id: 'cards/a.vue', source: 'components', title: 'AlphaCard', snippet: '<article>', locator: 'cards/a.vue', updated_at: '', score: 0.7, matched_modes: ['fulltext'], item: { component_id: 'cards/a.vue', title: 'AlphaCard' } },
+      { id: 'form:row', source: 'literature', title: 'Alpha Paper', snippet: 'paper', locator: 'paper.pdf', updated_at: '', score: 0.6, matched_modes: ['semantic'], item: { form_id: 'form', row_id: 'row', title: 'Alpha Paper' } },
+    ])
 
-  it('keeps single-click preview on the search page and opens the editor on double click', async () => {
-    const workspaceStore = useWorkspaceStore()
-    workspaceStore.mainView = 'search'
-    workspaceStore.searchQuery = 'alpha'
-    workspaceStore.searchResults = {
-      filename_results: [{ path: 'docs/notes.md', name: 'notes.md' }],
-      fulltext_results: [],
-      semantic_results: [],
-    }
-    workspaceStore.tree = [{
-      name: 'docs',
-      path: 'docs',
-      isDir: true,
-      children: [{ name: 'notes.md', path: 'docs/notes.md', isDir: false }],
-    }]
-    const selectFile = vi.spyOn(workspaceStore, 'selectFile').mockResolvedValue(undefined)
-    const openEditorSidebar = vi.spyOn(workspaceStore, 'openEditorSidebar').mockResolvedValue(undefined)
-    vi.spyOn(workspaceStore, 'performSearch').mockResolvedValue(undefined)
-    const wrapper = mount(SearchPage, {
-      global: {
-        stubs: {
-          SplitText: true,
-        },
-      },
-    })
-    await wrapper.get('.search-box-submit').trigger('click')
-    expect(wrapper.find('.results-empty').exists()).toBe(false)
-    const result = wrapper.get('.result-card')
-
-    await result.trigger('click')
-
-    expect(workspaceStore.mainView).toBe('search')
-    expect(openEditorSidebar).toHaveBeenCalledWith({ name: 'notes.md', path: 'docs/notes.md', isDir: false })
-    expect(selectFile).not.toHaveBeenCalled()
-
-    await result.trigger('dblclick')
-
-    expect(workspaceStore.mainView).toBe('editor')
-    expect(selectFile).toHaveBeenCalledOnce()
-  })
-
-  it('paginates the displayed result sequence at twenty items per page', async () => {
-    const workspaceStore = useWorkspaceStore()
-    workspaceStore.mainView = 'search'
-    workspaceStore.searchUnified = false
-    workspaceStore.searchQuery = 'note'
-    workspaceStore.searchResults = {
-      filename_results: Array.from({ length: 25 }, (_, index) => ({
-        path: `docs/note-${index + 1}.md`,
-        name: `note-${index + 1}.md`,
-      })),
-      fulltext_results: [],
-      semantic_results: [],
-    }
-    vi.spyOn(workspaceStore, 'performSearch').mockResolvedValue(undefined)
-    const wrapper = mount(SearchPage, {
-      global: {
-        stubs: {
-          SplitText: true,
-        },
-      },
-    })
-
-    await wrapper.get('.search-box-submit').trigger('click')
-
-    expect(wrapper.findAll('.result-card')).toHaveLength(20)
-    expect(wrapper.find('.results-empty').exists()).toBe(false)
-    expect(wrapper.get('.pagination-status').text()).toContain('1 / 2')
-
-    await wrapper.get('.pagination-next').trigger('click')
-
-    expect(wrapper.findAll('.result-card')).toHaveLength(5)
-    expect(wrapper.get('.pagination-status').text()).toContain('2 / 2')
-  })
-
-  it('reuses the toolbar search dropdown for both initial and searched page states', async () => {
-    const workspaceStore = useWorkspaceStore()
-    workspaceStore.mainView = 'search'
-    workspaceStore.addSearchHistory('previous query')
-    vi.spyOn(workspaceStore, 'performSearch').mockResolvedValue(undefined)
-    const wrapper = mount(SearchPage, {
-      attachTo: document.body,
-      global: { stubs: { SplitText: true } },
-    })
-    const pageInput = wrapper.get('.page-variant .search-input')
-
-    await pageInput.trigger('focus')
-    expect(document.body.querySelector('.page-search-dropdown')?.textContent).toContain('previous query')
-
-    workspaceStore.searchQuery = 'alpha'
-    workspaceStore.searchResults = {
-      filename_results: [{ path: 'docs/notes.md', name: 'notes.md' }],
-      fulltext_results: [],
-      semantic_results: [],
-    }
+    const wrapper = mountPage()
     await flushPromises()
 
-    expect(document.body.querySelector('.page-search-dropdown')?.textContent).toContain('notes.md')
-
-    wrapper.unmount()
+    expect(wrapper.findAll('.unified-result-row')).toHaveLength(4)
+    expect(wrapper.text()).not.toContain('来自')
+    expect(wrapper.text()).toContain('文件库')
+    expect(wrapper.text()).toContain('图书馆')
+    expect(wrapper.text()).toContain('组件库')
+    expect(wrapper.text()).toContain('文献库')
+    expect(wrapper.findAll('.result-source .source-result-icon')).toHaveLength(4)
   })
 
-  it('does not focus the large search input merely because the search page opened', () => {
-    const workspaceStore = useWorkspaceStore()
-    workspaceStore.mainView = 'search'
-    const wrapper = mount(SearchPage, {
-      attachTo: document.body,
-      global: { stubs: { SplitText: true } },
-    })
-    const input = wrapper.get('.page-variant .search-input')
+  it('paginates the shared ranked sequence at twenty rows', async () => {
+    const store = useWorkspaceStore()
+    store.mainView = 'search'
+    store.searchQuery = 'alpha'
+    store.searchResults = response(Array.from({ length: 25 }, (_, index) => fileResult(index + 1)))
+    const wrapper = mountPage()
+    await flushPromises()
 
-    expect(document.activeElement).not.toBe(input.element)
-
-    wrapper.unmount()
+    expect(wrapper.findAll('.unified-result-row')).toHaveLength(20)
+    await wrapper.get('.pagination button:last-child').trigger('click')
+    expect(wrapper.findAll('.unified-result-row')).toHaveLength(5)
   })
 
-  it('routes PDF results through the shared editor sidebar pipeline', async () => {
-    const workspaceStore = useWorkspaceStore()
-    workspaceStore.mainView = 'search'
-    workspaceStore.searchQuery = 'report'
-    workspaceStore.searchResults = {
-      filename_results: [{ path: 'docs/report.pdf', name: 'report.pdf' }],
-      fulltext_results: [],
-      semantic_results: [],
+  it('switches to four vertical native sections without issuing another search', async () => {
+    const store = useWorkspaceStore()
+    store.mainView = 'search'
+    store.searchQuery = 'alpha'
+    store.searchResults = response([
+      fileResult(),
+      { id: 'lib-1', source: 'library', title: 'Book', snippet: '', locator: '', updated_at: '', score: 1, matched_modes: ['title'], item: { item_id: 'lib-1', display_title: 'Book' } },
+      { id: 'c.vue', source: 'components', title: 'Card', snippet: '', locator: '', updated_at: '', score: 1, matched_modes: ['title'], item: { component_id: 'c.vue', title: 'Card' } },
+      { id: 'f:r', source: 'literature', title: 'Paper', snippet: '', locator: '', updated_at: '', score: 1, matched_modes: ['title'], item: { form_id: 'f', row_id: 'r', title: 'Paper' } },
+    ])
+    const wrapper = mountPage()
+    await flushPromises()
+    searchAllLibraries.mockClear()
+
+    await wrapper.findAll('.presentation-switch button')[1].trigger('click')
+
+    expect(wrapper.findAll('.split-section')).toHaveLength(4)
+    expect(wrapper.find('.file-native').exists()).toBe(true)
+    expect(wrapper.find('.library-native').exists()).toBe(true)
+    expect(wrapper.find('.component-native').exists()).toBe(true)
+    expect(wrapper.find('.literature-native').exists()).toBe(true)
+    expect(wrapper.getComponent({ name: 'LiteratureEntryCard' }).props('expandable')).toBe(false)
+    expect(searchAllLibraries).not.toHaveBeenCalled()
+    expect(wrapper.find('.presentation-indicator.split').exists()).toBe(true)
+  })
+
+  it('keeps single-click file preview inside search', async () => {
+    const store = useWorkspaceStore()
+    store.mainView = 'search'
+    store.searchQuery = 'alpha'
+    store.searchResults = response([fileResult()])
+    store.tree = [{ name: 'docs', path: 'docs', isDir: true, children: [{ name: 'note-1.md', path: 'docs/note-1.md', isDir: false }] }]
+    const preview = vi.spyOn(store, 'openEditorSidebar').mockResolvedValue(undefined)
+    const wrapper = mountPage()
+    await flushPromises()
+
+    await wrapper.get('.unified-result-row').trigger('click')
+
+    expect(store.mainView).toBe('search')
+    expect(preview).toHaveBeenCalledOnce()
+  })
+
+  it('opens non-file results in the shared editor sidebar without leaving search', async () => {
+    const store = useWorkspaceStore()
+    store.mainView = 'search'
+    store.searchQuery = 'alpha'
+    const libraryResult: UnifiedSearchResult = {
+      id: 'lib-1', source: 'library', title: 'Book', snippet: '', locator: '', updated_at: '', score: 1,
+      matched_modes: ['title'], item: { item_id: 'lib-1', display_title: 'Book' },
     }
-    workspaceStore.tree = [{
-      name: 'docs',
-      path: 'docs',
-      isDir: true,
-      children: [{ name: 'report.pdf', path: 'docs/report.pdf', isDir: false }],
-    }]
-    const openEditorSidebar = vi.spyOn(workspaceStore, 'openEditorSidebar').mockResolvedValue(undefined)
-    vi.spyOn(workspaceStore, 'performSearch').mockResolvedValue(undefined)
-    const wrapper = mount(SearchPage, {
-      global: { stubs: { SplitText: true } },
-    })
+    store.searchResults = response([libraryResult])
+    const wrapper = mountPage()
+    await flushPromises()
 
-    await wrapper.get('.search-box-submit').trigger('click')
-    await wrapper.get('.result-card').trigger('click')
+    await wrapper.get('.unified-result-row').trigger('click')
 
-    expect(openEditorSidebar).toHaveBeenCalledWith({
-      name: 'report.pdf',
-      path: 'docs/report.pdf',
-      isDir: false,
-    })
+    expect(store.mainView).toBe('search')
+    expect(store.editorSidebarOpen).toBe(true)
+    expect(store.searchSidebarResult?.id).toBe('lib-1')
+  })
+
+  it('reuses the smart-table PixelLoader for active search work', async () => {
+    const store = useWorkspaceStore()
+    store.mainView = 'search'
+    store.searchQuery = 'alpha'
+    store.searchResults = response([fileResult()])
+    store.searching = true
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.find('.search-status .pixel-loader').exists()).toBe(true)
+    expect(wrapper.find('.search-status .spinner').exists()).toBe(false)
   })
 })

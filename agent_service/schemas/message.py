@@ -33,6 +33,7 @@ class MessageCreate(SQLModel):
     tool_call_id: 工具结果对应的 tool_call ID。
     tool_calls_json: assistant 消息中的工具调用列表。
     metadata_json: 扩展元数据。
+    created_at: 可选的消息发生时间；用于让模型上下文与持久化记录共享同一时间。
     """
 
     session_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length)
@@ -42,6 +43,7 @@ class MessageCreate(SQLModel):
     tool_call_id: str | None = Field(default=None, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     tool_calls_json: list[dict[str, Any]] = Field(default_factory=list)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
 
 
 class MessageUpdate(SQLModel):

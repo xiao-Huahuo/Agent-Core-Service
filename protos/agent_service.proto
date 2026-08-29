@@ -99,6 +99,7 @@ service AgentService {
   rpc CreateKnowledgeIngestionJobs(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc ListKnowledgeIngestionJobs(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc CancelKnowledgeIngestionJob(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc SearchAllLibraries(google.protobuf.Struct) returns (google.protobuf.Struct);
 
   // 当前 active 知识库的 Git 管理
   rpc GetGitStatus(GitUserRequest) returns (google.protobuf.Struct);

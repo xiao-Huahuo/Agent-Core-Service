@@ -6,11 +6,12 @@
   exact stored source. Navigation is owned by ComponentLibraryView.
 -->
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import ComponentPreview from '@/components/component_library/ComponentPreview.vue'
 import CodePreview from '@/components/editor_workspace/CodePreview.vue'
+import CodeEditor from '@/components/editor_workspace/CodeEditor.vue'
 import type { ComponentLibraryItem } from '@/types/componentLibrary'
 
 defineOptions({ name: 'ComponentLibraryDetail' })
@@ -18,13 +19,24 @@ defineOptions({ name: 'ComponentLibraryDetail' })
 const props = withDefaults(defineProps<{
   item: ComponentLibraryItem
   deleting?: boolean
+  editable?: boolean
+  compact?: boolean
 }>(), {
   deleting: false,
+  editable: false,
+  compact: false,
 })
 const emit = defineEmits<{
   delete: [item: ComponentLibraryItem]
+  save: [source: string]
 }>()
 const copied = ref(false)
+const sourceDraft = ref(props.item.source)
+
+/** Reset the editor when the sidebar switches to another component result. */
+watch(() => props.item, (item) => {
+  sourceDraft.value = item.source
+}, { deep: true })
 
 /** Copy the original source represented by the detail workbench. */
 async function copySource(): Promise<void> {
@@ -37,14 +49,14 @@ async function copySource(): Promise<void> {
 </script>
 
 <template>
-  <section class="detail-workbench" aria-label="组件详情">
+  <section class="detail-workbench" :class="{ compact }" aria-label="组件详情">
     <section class="detail-preview-panel">
       <header class="panel-header">
         <span class="panel-label"><IcIcon name="visibility" :size="15" />实时预览</span>
         <span class="tag-pill">{{ item.tag }}</span>
       </header>
       <div class="detail-preview-surface">
-        <ComponentPreview :source="item.source" :source-format="item.source_format" :label="item.title" />
+        <ComponentPreview :source="editable ? sourceDraft : item.source" :source-format="item.source_format" :label="item.title" />
       </div>
     </section>
 
@@ -62,6 +74,17 @@ async function copySource(): Promise<void> {
             <IcIcon :name="copied ? 'check' : 'copy'" :size="15" />
           </button>
           <button
+            v-if="editable"
+            class="detail-save-button"
+            type="button"
+            title="保存组件源码"
+            aria-label="保存组件源码"
+            :disabled="sourceDraft === item.source"
+            @click="emit('save', sourceDraft)"
+          >
+            <IcIcon name="save" :size="15" />
+          </button>
+          <button
             class="detail-delete-button"
             type="button"
             title="删除组件"
@@ -73,7 +96,8 @@ async function copySource(): Promise<void> {
           </button>
         </div>
       </header>
-      <CodePreview :content="item.source" :language="item.source_format" />
+      <CodeEditor v-if="editable" v-model="sourceDraft" :language="item.source_format" @save="emit('save', sourceDraft)" />
+      <CodePreview v-else :content="item.source" :language="item.source_format" />
     </section>
   </section>
 </template>
@@ -120,6 +144,7 @@ async function copySource(): Promise<void> {
 .panel-label,
 .panel-actions,
 .detail-copy-button,
+.detail-save-button,
 .detail-delete-button {
   display: inline-flex;
   align-items: center;
@@ -173,6 +198,9 @@ async function copySource(): Promise<void> {
   color: var(--color-primary);
 }
 
+.detail-save-button:hover:not(:disabled) { color: var(--color-primary); }
+.detail-save-button:disabled { cursor: default; opacity: 0.36; }
+
 .detail-delete-button:hover:not(:disabled) {
   color: var(--color-danger);
 }
@@ -191,10 +219,22 @@ async function copySource(): Promise<void> {
 
 @media (hover: hover) and (pointer: fine) {
   .detail-copy-button:hover,
+  .detail-save-button:hover:not(:disabled),
   .detail-delete-button:hover:not(:disabled) {
     transform: scale(1.1);
   }
 }
+
+.detail-workbench.compact {
+  width: 100%;
+  max-width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(260px, 0.8fr) minmax(320px, 1fr);
+  overflow-y: auto;
+}
+
+.detail-workbench.compact .detail-preview-surface,
+.detail-workbench.compact .detail-code-panel { max-width: 100%; overflow: hidden; }
 
 @keyframes detail-workbench-enter {
   from { opacity: 0; transform: scale(0.99); }

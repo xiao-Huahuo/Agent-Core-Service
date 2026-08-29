@@ -155,6 +155,7 @@ from agent_service.services.agent_queue.service import AgentQueueService
 from agent_service.services.automation.service import AutomationService
 from agent_service.services.activity.service import ActivityService
 from agent_service.services.component_library.service import ComponentLibraryService
+from agent_service.services.unified_search import UnifiedSearchService
 from agent_service.services.smart_form.service import SmartFormService
 from agent_service.services.latex.service import LatexService
 from agent_service.services.model_management.service import ModelManagementService
@@ -207,6 +208,7 @@ class AgentServiceServicer(GrpcErrorMapperMixin, GrpcResponseMapperMixin, AgentG
         automation_service: AutomationService | None = None,
         activity_service: ActivityService | None = None,
         component_library_service: ComponentLibraryService | None = None,
+        unified_search_service: UnifiedSearchService | None = None,
         smart_form_service: SmartFormService | None = None,
         latex_service: LatexService | None = None,
         model_management_service: ModelManagementService | None = None,
@@ -229,6 +231,7 @@ class AgentServiceServicer(GrpcErrorMapperMixin, GrpcResponseMapperMixin, AgentG
         self._automation_service = automation_service
         self._activity_service = activity_service
         self._component_library_service = component_library_service
+        self._unified_search_service = unified_search_service
         self._smart_form_service = smart_form_service
         self._latex_service = latex_service
         self._model_management_service = model_management_service

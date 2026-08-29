@@ -173,6 +173,8 @@ test('uploads, applies, persists, and resets an application background cover', a
   await expect.poll(() => isTranslucent(page.locator('.forms-header'))).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('background-smart-forms-toolbar.png'), fullPage: true })
 
+  const entertainmentButton = page.getByRole('button', { name: '娱乐功能' })
+  await entertainmentButton.click()
   await page.getByRole('button', { name: '任务队列' }).click()
   await expect(page.locator('.queue-board .queue-lane > section')).toHaveCount(3)
   await expect.poll(async () => page.locator('.queue-board .queue-lane > section').evaluateAll((elements) => elements.every((element) => {
@@ -196,6 +198,7 @@ test('uploads, applies, persists, and resets an application background cover', a
   await expect.poll(() => isTranslucent(page.locator('.favorites-view'))).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('background-privacy.png'), fullPage: true })
 
+  await entertainmentButton.click()
   await page.getByRole('button', { name: 'MD-HTML' }).click()
   await expect.poll(() => isTranslucent(page.locator('.visualization-toolbar'))).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('background-md-html-toolbar.png'), fullPage: true })

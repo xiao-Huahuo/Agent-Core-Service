@@ -9,6 +9,7 @@ from agent_service.api.rest.sessions import router as sessions_router
 from agent_service.api.rest.agent import router as agent_router
 from agent_service.api.rest.debug import router as debug_router
 from agent_service.api.rest.knowledge import router as knowledge_router
+from agent_service.api.rest.unified_search import router as unified_search_router
 from agent_service.api.rest.git import router as git_router
 from agent_service.api.rest.library import router as library_router
 from agent_service.api.rest.component_library import router as component_library_router
@@ -34,6 +35,7 @@ router.include_router(sessions_router)
 router.include_router(agent_router)
 router.include_router(debug_router)
 router.include_router(knowledge_router)
+router.include_router(unified_search_router)
 router.include_router(git_router)
 router.include_router(library_router)
 router.include_router(component_library_router)

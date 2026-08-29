@@ -39,11 +39,13 @@ class ComponentLibraryItemCreate(ComponentLibraryItemBase):
 
 
 class ComponentLibraryItemUpdate(SQLModel):
-    """Validate one persistent component-file rename request."""
+    """Validate one incremental component title, source, or tag update."""
 
     user_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.medium_name_max_length)
     component_id: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.summary_max_length)
-    title: str = Field(min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.component_filename_max_length)
+    title: str | None = Field(default=None, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.component_filename_max_length)
+    source: str | None = Field(default=None, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.component_schema_source_max_length)
+    tag: str | None = Field(default=None, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, max_length=DEFAULT_BUSINESS_LIMITS.short_type_max_length)
 
 
 class ComponentLibraryItemOut(ComponentLibraryItemBase):

@@ -59,4 +59,27 @@ describe('ComponentLibraryDetail', () => {
     await deleteButton.trigger('click')
     expect(wrapper.emitted('delete')).toEqual([[item]])
   })
+
+  it('reuses the code editor and emits edited source in sidebar mode', async () => {
+    const wrapper = mount(ComponentLibraryDetail, {
+      props: { item, editable: true, compact: true },
+      global: {
+        stubs: {
+          ComponentPreview: { props: ['source'], template: '<div class="preview-source">{{ source }}</div>' },
+          CodeEditor: {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<button class="edit-source" @click="$emit(\'update:modelValue\', \'<template>changed</template>\')">edit</button>',
+          },
+          IcIcon: { template: '<span />' },
+        },
+      },
+    })
+
+    await wrapper.get('.edit-source').trigger('click')
+    await wrapper.get('.detail-save-button').trigger('click')
+
+    expect(wrapper.emitted('save')).toEqual([['<template>changed</template>']])
+    expect(wrapper.get('.detail-workbench').classes()).toContain('compact')
+  })
 })

@@ -40,6 +40,26 @@ describe('streamPrompt reference transport', () => {
     })
   })
 
+  it('posts the current user bubble attachments in the streaming request body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('data: [DONE]\n\n', {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const attachment = {
+      attachment_id: 'att-1', user_id: 'user-1', session_id: 'session-1',
+      library_id: 'default', library_name: '默认知识库', filename: '报告.pdf', stored_name: '报告.pdf',
+      uri: 'session-upload://user-1/default/session-1/报告.pdf', mime_type: 'application/pdf',
+      size: 42, source_type: 'document', created_at: '2026-08-30T08:00:00Z',
+    }
+
+    const stream = streamPrompt('user-1', 'session-1', '分析附件', { attachments: [attachment] })
+    await stream.next()
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(String(init.body)).attachments).toEqual([attachment])
+  })
+
   it('reports the current multi-file selection to Agent context', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('{}', {
       status: 200,

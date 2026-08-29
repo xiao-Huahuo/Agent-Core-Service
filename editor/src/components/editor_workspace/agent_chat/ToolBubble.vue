@@ -83,6 +83,26 @@ const copyableContent = computed(() => {
   return props.message.content?.trim() || ''
 })
 
+/** Display the persisted instant in the viewer's local timezone. */
+const formattedCreatedAt = computed(() => {
+  if (!props.message.created_at) return ''
+  const parsed = new Date(props.message.created_at)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(parsed)
+})
+
+const compactCreatedAt = computed(() => {
+  if (!props.message.created_at) return ''
+  const parsed = new Date(props.message.created_at)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(parsed)
+})
+
 function fallbackCopy(text: string) {
   const textarea = document.createElement('textarea')
   textarea.value = text
@@ -245,6 +265,10 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   </div>
 
   <div v-else-if="message.role === 'user'" class="bubble-row user">
+    <time v-if="formattedCreatedAt" class="message-time" :datetime="message.created_at">
+      <span class="message-time-full">{{ formattedCreatedAt }}</span>
+      <span class="message-time-compact">{{ compactCreatedAt }}</span>
+    </time>
     <div class="bubble-col">
       <AttachmentBlocks
         v-if="message.attachments?.length"
@@ -286,7 +310,25 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
 }
 
 .bubble-row.user {
+  position: relative;
   align-self: flex-end;
+}
+
+.message-time {
+  position: absolute;
+  right: calc(100% + var(--space-4));
+  bottom: 22px;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-ui);
+  font-size: calc(9px * var(--font-scale));
+  font-weight: 300;
+  line-height: 1;
+  opacity: 0.42;
+  white-space: nowrap;
+}
+
+.message-time-compact {
+  display: none;
 }
 
 .bubble-row.assistant {
@@ -548,6 +590,21 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   overflow-y: auto;
   color: var(--color-text-tertiary);
   font-size: calc(11px * var(--font-scale));
+}
+
+@media (max-width: 480px) {
+  .message-time {
+    right: calc(100% + var(--space-4));
+    font-size: calc(9px * var(--font-scale));
+  }
+
+  .message-time-full {
+    display: none;
+  }
+
+  .message-time-compact {
+    display: inline;
+  }
 }
 
 </style>

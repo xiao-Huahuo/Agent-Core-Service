@@ -4,7 +4,7 @@
   用法:
   以类似 GTAOL 主页的图片分块引导各个页面入口,最大区块为轮播。
   布局: 上半左 2/3 为轮播、右 1/3 上下切两块;下半左/中 1/3 各一块、
-  右 1/3 上下切两块(上块切 Skills/搜索),右下角为第二个轮播(看板/Debug/MD-HTML)。
+  右 1/3 上下切两块(上块切看板/浏览器),右下角为剩余工具入口轮播。
   块直角、带小阴影、有间隙、悬停光效,点击跳转到对应视图。桌面 3 列,平板 2 列,窄屏纵向堆叠。
 -->
 <script setup lang="ts">
@@ -30,7 +30,65 @@ interface HomeTile {
   image?: string
 }
 
-/** 上半右侧上下两块: Agent 与 文件(原知识图谱位置,经两次互换)。 */
+/** 左上主轮播: 六种知识形态入口。 */
+const knowledgeSlides: CarouselSlide[] = [
+  {
+    icon: 'folder-open',
+    title: '文件资源管理器',
+    subtitle: '浏览与管理知识库文件',
+    hint: '管理文件',
+    target: 'resources',
+    image: 'files',
+    accent: 'var(--color-search-files)',
+  },
+  {
+    icon: 'book',
+    title: '图书馆',
+    subtitle: '管理图书与集锦',
+    hint: '进入图书馆',
+    target: 'library',
+    image: 'library',
+    accent: 'var(--color-search-library)',
+  },
+  {
+    icon: 'grid-view',
+    title: '组件库',
+    subtitle: '收藏与复用交互组件',
+    hint: '浏览组件',
+    target: 'component-library',
+    image: 'components-vault',
+    accent: 'var(--color-search-components)',
+  },
+  {
+    icon: 'shield',
+    title: '密码库',
+    subtitle: '集中管理私密凭据',
+    hint: '打开密码库',
+    target: 'vault',
+    image: 'secret-vault',
+    accent: 'var(--color-library-vault)',
+  },
+  {
+    icon: 'table-chart',
+    title: '智能表格',
+    subtitle: '结构化整理与批量比较',
+    hint: '打开表格',
+    target: 'forms',
+    image: 'intelligent-forms',
+    accent: 'var(--color-library-forms)',
+  },
+  {
+    icon: 'document',
+    title: '文献阅读',
+    subtitle: '逐篇阅读与编辑科研文献',
+    hint: '阅读文献',
+    target: 'literature-reading',
+    image: 'literature-reading',
+    accent: 'var(--color-search-literature)',
+  },
+]
+
+/** 上半右侧上下两块: Agent 与任务队列。 */
 const upperTiles: HomeTile[] = [
   {
     area: 'a',
@@ -42,23 +100,23 @@ const upperTiles: HomeTile[] = [
   },
   {
     area: 'b',
-    icon: 'folder-open',
-    title: '文件',
-    subtitle: '文件资源管理器',
-    target: 'resources',
-    image: 'files',
+    icon: 'checklist',
+    title: '任务队列',
+    subtitle: '并行调度独立 Agent 任务',
+    target: 'agent-queue',
+    image: 'mission-queue',
   },
 ]
 
-/** 下半三列: 左图书馆、中知识图谱(原搜索位置)。 */
+/** 下半三列: 左全库联合搜索、中知识图谱。 */
 const lowerTiles: HomeTile[] = [
   {
     area: 'c',
-    icon: 'book',
-    title: '图书馆',
-    subtitle: '浏览与管理知识库',
-    target: 'library',
-    image: 'library',
+    icon: 'search',
+    title: '全库联合搜索',
+    subtitle: '统一检索文件、图书、组件与文献',
+    target: 'search',
+    image: 'search',
   },
   {
     area: 'd',
@@ -70,16 +128,8 @@ const lowerTiles: HomeTile[] = [
   },
 ]
 
-/** 右下角轮播: 看板 / Debug / MD-HTML。 */
+/** 右下角轮播: 页面其余位置尚未展示的有图入口。 */
 const toolSlides: CarouselSlide[] = [
-  {
-    icon: 'dashboard',
-    title: '看板',
-    subtitle: '时间与用量观测',
-    hint: '打开看板',
-    target: 'dashboard',
-    image: 'visualization',
-  },
   {
     icon: 'bug',
     title: 'Debug',
@@ -104,6 +154,14 @@ const toolSlides: CarouselSlide[] = [
     target: 'settings',
     image: 'settings',
   },
+  {
+    icon: 'auto-awesome',
+    title: 'Skills',
+    subtitle: '技能目录与编排',
+    hint: '管理技能',
+    target: 'skills',
+    image: 'skills',
+  },
 ]
 
 function openView(view: WorkspaceMainView) {
@@ -118,7 +176,7 @@ function openView(view: WorkspaceMainView) {
 
 <template>
   <div class="home-view">
-    <CarouselBlock class="home-carousel" @open="openView" />
+    <CarouselBlock class="home-carousel" :slides="knowledgeSlides" @open="openView" />
     <NavBlock
       v-for="tile in upperTiles"
       :key="tile.target"
@@ -133,26 +191,26 @@ function openView(view: WorkspaceMainView) {
       v-bind="tile"
       @open="openView"
     />
-    <!-- e 区水平切割: 左 Skills、右 搜索(与文件互换后) -->
+    <!-- e 区水平切割: 左看板、右浏览器。 -->
     <div class="tile-split" :style="{ gridArea: 'e' }">
       <NavBlock
-        icon="auto-awesome"
-        title="Skills"
-        subtitle="技能目录与编排"
-        target="skills"
-        image="skills"
+        icon="dashboard"
+        title="看板"
+        subtitle="时间与用量观测"
+        target="dashboard"
+        image="visualization"
         @open="openView"
       />
       <NavBlock
-        icon="search"
-        title="搜索"
-        subtitle="全文与语义检索"
-        target="search"
-        image="search"
+        icon="language"
+        title="浏览器"
+        subtitle="内置网页浏览与资料查阅"
+        target="browser"
+        image="browser"
         @open="openView"
       />
     </div>
-    <!-- f 区: 右下角轮播,展示 看板 / Debug / MD-HTML -->
+    <!-- f 区: 右下角轮播,展示其余有图入口。 -->
     <CarouselBlock
       class="home-tile-carousel"
       :style="{ gridArea: 'f' }"

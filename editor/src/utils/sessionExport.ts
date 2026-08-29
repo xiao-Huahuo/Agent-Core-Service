@@ -19,7 +19,7 @@ interface ExportMessage {
   created_at: string
   node?: string
   reference?: string
-  attachments?: Array<{ name: string; url: string }>
+  attachments?: Array<Record<string, unknown>>
   tool_calls?: unknown[]
   trace_human_readable?: string[]
   trace_details?: unknown[]
@@ -58,6 +58,11 @@ function formatMessages(records: SessionMessageRecord[]): ExportMessage[] {
       }
       if (metadata.reference) {
         exportMsg.reference = String(metadata.reference)
+      }
+      if (Array.isArray(metadata.attachments)) {
+        exportMsg.attachments = metadata.attachments.filter(
+          (attachment): attachment is Record<string, unknown> => Boolean(attachment && typeof attachment === 'object'),
+        )
       }
       if (metadata.child_agent_event && typeof metadata.child_agent_event === 'object') {
         exportMsg.child_agent_event = metadata.child_agent_event

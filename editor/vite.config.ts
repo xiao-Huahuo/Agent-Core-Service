@@ -62,6 +62,7 @@ export default defineConfig({
       },
       '/git': DEV_PROXY_TARGET,
       '/knowledge': DEV_PROXY_TARGET,
+      '/search': DEV_PROXY_TARGET,
       '/library': DEV_PROXY_TARGET,
       '/component-library': DEV_PROXY_TARGET,
       '/vault': DEV_PROXY_TARGET,

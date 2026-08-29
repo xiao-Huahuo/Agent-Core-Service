@@ -132,6 +132,7 @@ def _do_import(body: dict[str, Any]) -> dict[str, Any]:
         - created_at (可选): ISO 格式时间,默认当前时间
         - node (可选): 图节点名,写入 metadata.node
         - reference (可选): 用户引用,写入 metadata.reference
+        - attachments (可选): 用户气泡关联的附件列表,写入 metadata.attachments
         - tool_calls (可选): 工具调用列表
         - trace_details (可选): trace 事件列表,写入 metadata.trace
         - child_agent_event (可选): 子 Agent 生命周期事件,写入 metadata.child_agent_event
@@ -174,6 +175,9 @@ def _do_import(body: dict[str, Any]) -> dict[str, Any]:
             reference = raw.get("reference")
             if reference:
                 metadata["reference"] = reference
+            attachments = raw.get("attachments")
+            if isinstance(attachments, list):
+                metadata["attachments"] = [item for item in attachments if isinstance(item, dict)]
             trace_details = raw.get("trace_details")
             if trace_details and isinstance(trace_details, list):
                 metadata["trace"] = trace_details

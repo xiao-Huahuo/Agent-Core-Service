@@ -39,6 +39,7 @@ from agent_service.services.smart_form.service import SmartFormService
 from agent_service.services.structured_generation.service import StructuredGenerationService
 from agent_service.services.task_list.service import TaskListService
 from agent_service.services.todo.service import TodoService
+from agent_service.services.unified_search import UnifiedSearchService
 from agent_service.services.vault.service import VaultService
 
 ServiceT = TypeVar("ServiceT")
@@ -132,6 +133,12 @@ def _require_component_library_service() -> ComponentLibraryService:
     """返回当前请求的 ComponentLibraryService。"""
 
     return _require("component_library_service", "ComponentLibraryService")
+
+
+def _require_unified_search_service() -> UnifiedSearchService:
+    """返回当前请求的 UnifiedSearchService。"""
+
+    return _require("unified_search_service", "UnifiedSearchService")
 
 
 def _require_vault_service() -> VaultService:

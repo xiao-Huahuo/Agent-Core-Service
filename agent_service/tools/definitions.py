@@ -30,7 +30,6 @@ from agent_service.tools.builtin import (
     download_file,
     edit_todo,
     finish_task_list,
-    get_current_time,
     git_commit_files,
     git_add_remote,
     git_create_branch,
@@ -89,22 +88,6 @@ UTILITY_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         },
         function=list_available_tools,
         display_name="查看可用工具",
-    ),
-    BuiltinToolDefinition(
-        name="get_current_time",
-        description="获取指定 IANA 时区的当前时间。默认使用 UTC。",
-        args_schema={
-            "type": "object",
-            "properties": {
-                "timezone_name": {
-                    "type": "string",
-                    "description": "IANA 时区名称,例如 UTC、Asia/Shanghai。",
-                }
-            },
-            "required": [],
-        },
-        function=get_current_time,
-        display_name="获取当前时间",
     ),
     BuiltinToolDefinition(
         name="run_terminal_command",

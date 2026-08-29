@@ -55,6 +55,7 @@ export const API_ROUTES = {
   DEBUG_GLOBAL_CONSTANTS: '/debug/global-constants',
   DEBUG_MULTIMODAL_INGESTION: '/debug/multimodal-ingestion',
   KNOWLEDGE_SEARCH: '/knowledge/search',
+  UNIFIED_SEARCH: '/search',
   KNOWLEDGE_GRAPH: '/knowledge/graph',
   KNOWLEDGE_GRAPH_REBUILD: '/knowledge/graph/rebuild',
   KNOWLEDGE_GRAPH_REBUILD_STATUS: '/knowledge/graph/rebuild/status',

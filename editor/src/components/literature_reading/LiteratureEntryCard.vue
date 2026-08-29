@@ -17,14 +17,19 @@ import type { LiteratureEntry } from '@/api/literatureReading'
 import type { SmartLiteratureForm, SmartRow } from '@/components/smart_forms/smartLiteratureTable'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   entry: LiteratureEntry
   form: SmartLiteratureForm | null
   row: SmartRow | null
   selected: boolean
   renaming: boolean
   pendingColumnIds: string[]
-}>()
+  defaultExpanded?: boolean
+  expandable?: boolean
+}>(), {
+  defaultExpanded: false,
+  expandable: true,
+})
 
 const emit = defineEmits<{
   select: []
@@ -37,7 +42,7 @@ const emit = defineEmits<{
   fillField: [columnId: string]
 }>()
 
-const expanded = ref(false)
+const expanded = ref(props.expandable && props.defaultExpanded)
 const renameDraft = ref('')
 const renameInput = ref<HTMLInputElement | null>(null)
 const node = computed<KnowledgeFileNode>(() => ({
@@ -52,6 +57,7 @@ const visibleColumns = computed(() => props.form?.columns.filter((column) => col
 
 /** Expands the row after requesting its full table detail from the page. */
 function toggleExpanded(): void {
+  if (!props.expandable) return
   expanded.value = !expanded.value
   if (expanded.value) emit('expand')
 }
@@ -70,6 +76,12 @@ function commitRename(): void {
 
 watch(() => props.renaming, (renaming) => {
   if (renaming) focusRename()
+})
+watch(() => props.defaultExpanded, (value) => {
+  expanded.value = props.expandable && value
+})
+watch(() => props.expandable, (value) => {
+  if (!value) expanded.value = false
 })
 </script>
 
@@ -91,13 +103,13 @@ watch(() => props.renaming, (renaming) => {
         <span :title="entry.file_name">{{ entry.file_name }}</span>
         <p>{{ entry.content_excerpt || '暂无文献内容' }}</p>
       </div>
-      <button class="expand-button" type="button" :title="expanded ? '收起字段' : '展开全部字段'" @click.stop="toggleExpanded">
+      <button v-if="expandable" class="expand-button" type="button" :title="expanded ? '收起字段' : '展开全部字段'" @click.stop="toggleExpanded">
         <IcIcon :name="expanded ? 'chevron-down' : 'chevron-right'" :size="15" />
       </button>
       <time :datetime="entry.entered_at">{{ new Date(entry.entered_at).toLocaleString([], { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) }}</time>
     </div>
     <FormHeightTransition :watch-key="expanded ? 'expanded' : 'collapsed'">
-      <div v-if="expanded" class="field-list" @click.stop>
+      <div v-if="expandable && expanded" class="field-list" @click.stop>
         <LiteratureFieldBlock
           v-for="column in visibleColumns"
           :key="column.id"

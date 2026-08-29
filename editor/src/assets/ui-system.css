@@ -64,6 +64,12 @@
   --color-success: #26a269;
   --color-warning: #e2a72e;
   --color-danger: #f05d5e;
+  --color-search-files: var(--color-primary);
+  --color-search-library: var(--color-warning);
+  --color-search-components: var(--color-accent);
+  --color-search-literature: var(--color-success);
+  --color-library-vault: var(--color-sky);
+  --color-library-forms: color-mix(in srgb, var(--color-primary) 52%, var(--color-accent));
   --color-git-modified: #4b8edc;
   --color-git-added: #55a36f;
   --color-git-renamed: #4b8edc;
@@ -246,8 +252,8 @@
   --color-chrome-bg-top: #ffffff;
   --color-chrome-bg-bottom: #ffffff;
   --color-chrome-bg-solid: #ffffff;
-  --color-chrome-topbar-bg: rgba(244, 245, 247, 0.92);
-  --color-chrome-rail-bg: rgba(244, 245, 247, 0.92);
+  --color-chrome-topbar-bg: #fafaf8;
+  --color-chrome-rail-bg: #fafaf8;
   --color-activity-bar-bg: #0a0a0a;
   --color-activity-bar-text: #f4f4f6;
   --color-activity-bar-muted: #9da1b1;

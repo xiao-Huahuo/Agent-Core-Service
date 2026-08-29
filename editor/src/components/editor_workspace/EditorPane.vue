@@ -10,6 +10,7 @@ import { computed, nextTick, onErrorCaptured, onMounted, onUnmounted, ref, watch
 import { storeToRefs } from 'pinia'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import EditorSidebarCloseButton from '@/components/editor_workspace/EditorSidebarCloseButton.vue'
 import BacklinksPanel from '@/components/editor_workspace/BacklinksPanel.vue'
 import CodeEditor from '@/components/editor_workspace/CodeEditor.vue'
 import CodePreview from '@/components/editor_workspace/CodePreview.vue'
@@ -370,27 +371,39 @@ async function openLatexError(error: LatexCompileError) {
   codeEditorRef.value?.scrollToSourceOffset(offset, 'smooth')
 }
 
-/** Keeps the rendered caret block at the same visual height without feedback scrolling the editor. */
-function syncMarkdownPreviewToCaret(snapshot: EditorScrollSnapshot, behavior: ScrollBehavior = 'auto') {
-  if (effectiveEditorMode.value !== 'split' || !isMarkdownViewer.value) return
+/** Prevents a programmatic preview move from feeding the same scroll back into the editor. */
+function lockPreviewFeedback() {
   previewFeedbackLocked = true
   if (previewFeedbackTimer) clearTimeout(previewFeedbackTimer)
-  markdownPreviewRef.value?.scrollToSourceOffset(
-    snapshot.cursorOffset,
-    snapshot.contentLength,
-    behavior,
-    snapshot.cursorViewportRatio,
-  )
   previewFeedbackTimer = setTimeout(() => {
     previewFeedbackLocked = false
     previewFeedbackTimer = null
   }, 180)
 }
 
+/** Keeps the rendered caret block at the same visual height without feedback scrolling the editor. */
+function syncMarkdownPreviewToCaret(snapshot: EditorScrollSnapshot, behavior: ScrollBehavior = 'auto') {
+  if (effectiveEditorMode.value !== 'split' || !isMarkdownViewer.value) return
+  lockPreviewFeedback()
+  markdownPreviewRef.value?.scrollToSourceOffset(
+    snapshot.cursorOffset,
+    snapshot.contentLength,
+    behavior,
+    snapshot.cursorViewportRatio,
+  )
+}
+
+/** Maps wheel/scroll movement across panes by each surface's complete scrollable range. */
+function syncMarkdownPreviewToRatio(ratio: number) {
+  if (effectiveEditorMode.value !== 'split' || !isMarkdownViewer.value) return
+  lockPreviewFeedback()
+  markdownPreviewRef.value?.scrollToRatio(ratio)
+}
+
 function handleEditorScroll(payload: EditorScrollSnapshot) {
   lastEditorScroll.value = payload
   activeHeadingOffset.value = payload.cursorOffset
-  syncMarkdownPreviewToCaret(payload)
+  syncMarkdownPreviewToRatio(payload.ratio)
 }
 
 /** Tracks the heading that owns the editable Markdown caret. */
@@ -663,9 +676,7 @@ onErrorCaptured((err, vm, info) => {
           </svg>
           <span>Save</span>
         </button>
-        <button v-if="props.sidebar" class="sidebar-close-button" type="button" title="关闭编辑区侧边栏" aria-label="关闭编辑区侧边栏" @click="emit('close')">
-          <IcIcon name="close" :size="15" />
-        </button>
+        <EditorSidebarCloseButton v-if="props.sidebar" @close="emit('close')" />
       </div>
     </div>
 
@@ -768,22 +779,6 @@ onErrorCaptured((err, vm, info) => {
 .sidebar-editor-panel {
   width: 100%;
   min-width: 0;
-}
-
-.sidebar-close-button {
-  display: inline-grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.sidebar-close-button:hover {
-  color: var(--color-text);
 }
 
 .tab-strip {

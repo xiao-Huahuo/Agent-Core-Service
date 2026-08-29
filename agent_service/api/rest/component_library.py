@@ -49,14 +49,16 @@ async def create_component_library_item(body: ComponentLibraryItemCreate) -> dic
 
 @router.patch("/component-library/components")
 async def rename_component_library_item(body: ComponentLibraryItemUpdate) -> dict[str, Any]:
-    """Persist an inline title edit by renaming its canonical source file."""
+    """Persist an incremental component title, source, or tag update."""
 
     try:
         return await run_in_threadpool(
-            _require_component_library_service().rename_component,
+            _require_component_library_service().update_component,
             user_id=body.user_id,
             component_id=body.component_id,
             title=body.title,
+            source=body.source,
+            tag=body.tag,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

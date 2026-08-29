@@ -108,6 +108,16 @@ def test_component_library_grpc_upload_and_list_match_rest_fields(tmp_path: Path
                 timeout=5,
             )
         )["component"]
+        updated = MessageToDict(
+            stub.RenameComponentLibraryComponent(
+                _struct({
+                    "user_id": "u1",
+                    "component_id": renamed["component_id"],
+                    "source": "<template><button>UPDATED</button></template>",
+                }),
+                timeout=5,
+            )
+        )["component"]
         listed = MessageToDict(
             stub.ListComponentLibraryComponents(
                 _struct({"user_id": "u1", "tag": "buttons"}),
@@ -129,6 +139,7 @@ def test_component_library_grpc_upload_and_list_match_rest_fields(tmp_path: Path
 
         assert created["tag"] == "buttons"
         assert renamed["component_id"] == "buttons/renamed-button.vue"
-        assert listed["components"] == [renamed]
+        assert updated["source"] == "<template><button>UPDATED</button></template>"
+        assert listed["components"] == [updated]
         assert deleted == {"component_id": renamed["component_id"], "deleted": True}
         assert listed_after_delete.get("components", []) == []

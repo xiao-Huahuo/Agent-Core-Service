@@ -22,6 +22,7 @@ import GitSidebar from '@/components/git_sidebar/GitSidebar.vue'
 import SelectionToolbar from '@/components/editor_workspace/SelectionToolbar.vue'
 import TodoSidebar from '@/components/editor_workspace/TodoSidebar.vue'
 import TopCommandBar from '@/components/editor_workspace/TopCommandBar.vue'
+import SearchResultSidebar from '@/components/search_page/SearchResultSidebar.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useGitStore } from '@/stores/git'
@@ -909,7 +910,12 @@ watch(
         @pointerdown="startResize('editor', $event)"
       ></div>
       <aside class="editor-sidebar-content" :aria-hidden="!editorSidebarVisible">
-        <EditorPane v-if="editorSidebarVisible" sidebar @close="workspaceStore.closeEditorSidebar" />
+        <SearchResultSidebar
+          v-if="editorSidebarVisible && workspaceStore.searchSidebarResult"
+          :result="workspaceStore.searchSidebarResult"
+          @close="workspaceStore.closeEditorSidebar"
+        />
+        <EditorPane v-else-if="editorSidebarVisible" sidebar @close="workspaceStore.closeEditorSidebar" />
       </aside>
       <div
         class="resize-handle browser-resizer"
@@ -1051,6 +1057,8 @@ watch(
   bottom: var(--space-8);
   z-index: 90;
   width: min(360px, calc(100% - var(--activity-col-width) - var(--space-16)));
+  max-width: calc(100% - var(--activity-col-width) - var(--space-16));
+  box-sizing: border-box;
   margin: 0;
   border: 1px solid var(--workspace-panel-border);
   border-radius: 18px;
@@ -1064,6 +1072,15 @@ watch(
 .workspace-grid.mobile-main-layout .browser-resizer,
 .workspace-grid.mobile-main-layout .agent-resizer {
   display: none;
+}
+
+/* Keep the search editor card inside the viewport even if top-bar content widens the grid. */
+.workspace-grid.mobile-main-layout .editor-sidebar-content {
+  position: fixed;
+  top: 64px;
+  right: var(--space-8);
+  width: min(360px, calc(100vw - var(--activity-col-width) - var(--space-16)));
+  max-width: calc(100vw - var(--activity-col-width) - var(--space-16));
 }
 
 .workspace-grid.mobile-main-layout.editor-sidebar-collapsed .editor-sidebar-content,
@@ -1214,7 +1231,10 @@ watch(
   border-radius: var(--workspace-card-radius);
   background: var(--color-bg-app);
   transition: opacity 160ms ease, transform 180ms ease;
+  contain: inline-size;
 }
+
+.editor-sidebar-content > * { width: 100%; max-width: 100%; }
 
 .workspace-grid.editor-sidebar-collapsed .editor-sidebar-content {
   pointer-events: none;

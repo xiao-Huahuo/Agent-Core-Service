@@ -9,7 +9,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import PixelLoader from '@/components/common/PixelLoader.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
+import type { SearchSource, UnifiedSearchResult } from '@/types/unifiedSearch'
+import { SEARCH_SOURCE_PRESENTATION } from '@/utils/searchSourcePresentation'
 
 defineOptions({ name: 'SearchPalette' })
 
@@ -27,26 +30,50 @@ const workspaceStore = useWorkspaceStore()
 
 const inputEl = ref<HTMLInputElement | null>(null)
 const wrapperEl = ref<HTMLElement | null>(null)
+const dropdownEl = ref<HTMLElement | null>(null)
 const focused = ref(false)
 const dropdownPos = ref({ top: 0, left: 0, width: 0 })
 let wrapperResizeObserver: ResizeObserver | null = null
+let anchorFrame: number | null = null
 
 function updateDropdownPos() {
   if (!wrapperEl.value) return
   const rect = wrapperEl.value.getBoundingClientRect()
-  dropdownPos.value = {
-    top: rect.bottom + 4,
-    left: rect.left,
-    width: rect.width,
+  const next = { top: rect.bottom + 4, left: rect.left, width: rect.width }
+  if (next.top !== dropdownPos.value.top || next.left !== dropdownPos.value.left || next.width !== dropdownPos.value.width) {
+    dropdownPos.value = next
   }
 }
 
 const showDropdown = computed(() => focused.value)
 
 function handleClickOutside(event: MouseEvent) {
-  if (wrapperEl.value && !wrapperEl.value.contains(event.target as Node)) {
+  const target = event.target as Node
+  if (
+    wrapperEl.value
+    && !wrapperEl.value.contains(target)
+    && !dropdownEl.value?.contains(target)
+  ) {
     focused.value = false
   }
+}
+
+/** Track position, not only size, while surrounding sidebars animate. */
+function trackDropdownAnchor() {
+  updateDropdownPos()
+  if (focused.value) anchorFrame = window.requestAnimationFrame(trackDropdownAnchor)
+}
+
+/** Start one bounded animation-frame loop for the currently open dropdown. */
+function startAnchorTracking() {
+  if (anchorFrame !== null) window.cancelAnimationFrame(anchorFrame)
+  anchorFrame = window.requestAnimationFrame(trackDropdownAnchor)
+}
+
+/** Stop position tracking immediately after the menu closes. */
+function stopAnchorTracking() {
+  if (anchorFrame !== null) window.cancelAnimationFrame(anchorFrame)
+  anchorFrame = null
 }
 
 onMounted(() => {
@@ -64,6 +91,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', updateDropdownPos)
   wrapperResizeObserver?.disconnect()
   wrapperResizeObserver = null
+  stopAnchorTracking()
 })
 
 function selectHistory(query: string) {
@@ -80,27 +108,26 @@ watch(() => workspaceStore.searchOpen, (open) => {
 
 function onFocus() {
   focused.value = true
-  nextTick(updateDropdownPos)
+  nextTick(() => {
+    updateDropdownPos()
+    startAnchorTracking()
+  })
 }
 
 /** Collapse only when keyboard focus leaves the complete search control. */
 function onBlur(event: FocusEvent) {
-  if (!wrapperEl.value?.contains(event.relatedTarget as Node | null)) {
+  const nextTarget = event.relatedTarget as Node | null
+  if (!wrapperEl.value?.contains(nextTarget) && !dropdownEl.value?.contains(nextTarget)) {
     focused.value = false
+    stopAnchorTracking()
   }
 }
 
-function handleOpenFile(path: string) {
-  let node = workspaceStore.flatNodes?.find((n) => n.path === path)
-  if (!node) {
-    const name = baseName(path)
-    node = workspaceStore.flatNodes?.find((n) => n.path.endsWith(`/${name}`) || n.name === name)
-  }
-  if (node) {
-    workspaceStore.setMainView('editor')
-    workspaceStore.selectFile(node)
-  }
-  workspaceStore.closeSearch()
+/** Open one dropdown result through its owning library workflow. */
+function handleOpenResult(result: UnifiedSearchResult) {
+  void workspaceStore.openSearchResultSidebar(result)
+  focused.value = false
+  stopAnchorTracking()
 }
 
 function toggleFulltext() {
@@ -117,14 +144,14 @@ function toggleSemantic() {
   }
 }
 
+/** Toggle one backend source while the store protects the last active source. */
+function toggleSource(source: SearchSource) {
+  workspaceStore.toggleSearchSource(source)
+}
+
 function clearQuery() {
   workspaceStore.searchQuery = ''
   inputEl.value?.focus()
-}
-
-function baseName(uri: string): string {
-  const parts = uri.replace(/\\/g, '/').split('/').filter(Boolean)
-  return parts[parts.length - 1] ?? uri
 }
 
 function askAgentSearch() {
@@ -181,10 +208,11 @@ defineExpose({ focus })
         :aria-expanded="showDropdown"
         aria-haspopup="listbox"
         @focus="onFocus"
+        @click="onFocus"
         @blur="onBlur"
         @keydown.enter.prevent="handleSubmit"
       />
-      <IcIcon v-if="workspaceStore.searching" name="spinner" :size="14" class="spinner" />
+      <PixelLoader v-if="workspaceStore.searching" class="search-pixel-loader" />
       <button
         v-if="workspaceStore.searchQuery && !workspaceStore.searching"
         class="clear-btn"
@@ -210,6 +238,7 @@ defineExpose({ focus })
       <Transition name="dropdown">
         <div
           v-if="showDropdown"
+          ref="dropdownEl"
           class="search-dropdown"
           :class="{ 'page-search-dropdown': variant === 'page' }"
           :style="{
@@ -275,6 +304,24 @@ defineExpose({ focus })
           </button>
         </div>
 
+        <div class="source-toggle-row" :class="{ 'toolbar-source-row': variant === 'toolbar' }" aria-label="搜索来源">
+          <button
+            v-for="(presentation, source) in SEARCH_SOURCE_PRESENTATION"
+            :key="source"
+            class="source-toggle-btn"
+            :class="{ on: workspaceStore.searchSources.includes(source) }"
+            type="button"
+            :title="presentation.label"
+            :aria-label="presentation.label"
+            :aria-pressed="workspaceStore.searchSources.includes(source)"
+            :style="{ '--source-color': presentation.color }"
+            @mousedown.prevent="toggleSource(source)"
+          >
+            <IcIcon class="source-toggle-icon" :name="presentation.icon" :size="14" />
+            <span v-if="variant === 'page'" class="source-toggle-label">{{ presentation.label }}</span>
+          </button>
+        </div>
+
         <!-- History: no query, has history -->
         <template v-if="!workspaceStore.searchQuery && workspaceStore.searchHistory.length">
           <div class="result-list">
@@ -301,56 +348,20 @@ defineExpose({ focus })
         <template v-if="workspaceStore.searchQuery">
           <!-- Results -->
           <div v-if="workspaceStore.searchResults" class="result-list">
-            <!-- Filename results -->
-            <div v-if="workspaceStore.searchResults.filename_results.length" class="result-group">
-              <div class="group-label">文件</div>
-              <button
-                v-for="item in workspaceStore.searchResults.filename_results"
-                :key="item.path"
-                class="result-row"
-                type="button"
-                @mousedown.prevent="handleOpenFile(item.path)"
-              >
-                <span class="result-name">{{ item.name }}</span>
-              </button>
-            </div>
-
-            <hr v-if="workspaceStore.searchResults.filename_results.length && workspaceStore.searchResults.fulltext_results.length" />
-
-            <!-- Full-text results -->
-            <div v-if="workspaceStore.searchResults.fulltext_results.length" class="result-group">
-              <div class="group-label">内容匹配</div>
-              <button
-                v-for="item in workspaceStore.searchResults.fulltext_results"
-                :key="item.source_uri"
-                class="result-row"
-                type="button"
-                @mousedown.prevent="handleOpenFile(item.source_uri)"
-              >
-                <span class="result-name">{{ baseName(item.source_uri) }}</span>
-                <span class="result-meta">{{ item.snippet }}</span>
-              </button>
-            </div>
-
-            <hr v-if="(workspaceStore.searchResults.filename_results.length || workspaceStore.searchResults.fulltext_results.length) && workspaceStore.searchResults.semantic_results.length" />
-
-            <!-- Semantic results -->
-            <div v-if="workspaceStore.searchResults.semantic_results.length" class="result-group">
-              <div class="group-label">语义匹配</div>
-              <button
-                v-for="item in workspaceStore.searchResults.semantic_results"
-                :key="(item as Record<string, unknown>).memory_id as string"
-                class="result-row"
-                type="button"
-                @mousedown.prevent="handleOpenFile((item as Record<string, unknown>).source_uri as string)"
-              >
-                <span class="result-name">{{ baseName((item as Record<string, unknown>).source_uri as string) }}</span>
-                <span class="result-meta">{{ (item as Record<string, unknown>).content }}</span>
-              </button>
-            </div>
+            <button
+              v-for="item in workspaceStore.searchResults.results.slice(0, 12)"
+              :key="`${item.source}:${item.id}`"
+              class="result-row"
+              type="button"
+              @mousedown.prevent="handleOpenResult(item)"
+            >
+              <span class="result-name">{{ item.title }}</span>
+              <span class="result-meta">{{ item.snippet || item.locator }}</span>
+              <span class="result-source">{{ SEARCH_SOURCE_PRESENTATION[item.source].label }}</span>
+            </button>
           </div>
           <div v-else-if="!workspaceStore.searching" class="result-list empty-state">
-            无匹配结果
+            {{ workspaceStore.searchError || '无匹配结果' }}
           </div>
         </template>
       </div>
@@ -364,6 +375,7 @@ defineExpose({ focus })
   position: relative;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   max-width: 336px;
   width: 100%;
   margin: 2px 0;
@@ -392,6 +404,7 @@ defineExpose({ focus })
 
 .search-bar {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: var(--space-6);
   height: 26px;
@@ -423,7 +436,7 @@ defineExpose({ focus })
 }
 
 .search-wrapper:not(.page-variant):not(.focused) .search-input,
-.search-wrapper:not(.page-variant):not(.focused) .spinner,
+.search-wrapper:not(.page-variant):not(.focused) .search-pixel-loader,
 .search-wrapper:not(.page-variant):not(.focused) .clear-btn {
   display: none;
 }
@@ -518,14 +531,8 @@ defineExpose({ focus })
   color: #9393a0;
 }
 
-.spinner {
+.search-pixel-loader {
   flex-shrink: 0;
-  color: var(--color-primary);
-  animation: spin 700ms linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .clear-btn {
@@ -654,6 +661,57 @@ defineExpose({ focus })
   gap: var(--space-6);
   padding: var(--space-6) var(--space-10);
   border-bottom: 1px solid var(--color-border);
+}
+
+.source-toggle-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+  padding: 0 var(--space-10) var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.source-toggle-btn {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--source-color);
+  font-family: var(--font-ui);
+  font-size: calc(11px * var(--font-scale));
+  cursor: pointer;
+  opacity: 0.42;
+  transition: opacity var(--transition-fast), border-color var(--transition-fast);
+}
+
+.source-toggle-btn.on {
+  border-bottom-color: var(--source-color);
+  opacity: 1;
+}
+
+.source-toggle-btn:hover,
+.source-toggle-btn:focus-visible {
+  opacity: 1;
+}
+
+.source-toggle-icon {
+  color: currentColor;
+}
+
+.source-toggle-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar-source-row .source-toggle-btn {
+  min-height: 26px;
+  padding-inline: 0;
 }
 
 .toggle-btn {
@@ -887,6 +945,20 @@ defineExpose({ focus })
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+}
+
+.result-source {
+  flex: 0 0 auto;
+  align-self: center;
+  color: var(--color-primary);
+  font-size: calc(10px * var(--font-scale));
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .source-toggle-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 hr {

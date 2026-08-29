@@ -158,6 +158,30 @@ from agent_service.api.grpc.mappers.responses import (
 logger = logging.getLogger(__name__)
 
 class KnowledgeGrpcHandlerMixin:
+    def SearchAllLibraries(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """执行与 REST 完全相同的四库联合搜索。"""
+
+        payload = MessageToDict(request)
+        user_id = str(payload.get("user_id") or "").strip()
+        query = str(payload.get("query") or "").strip()
+        raw_sources = payload.get("sources") or []
+        sources = {str(source).strip() for source in raw_sources if str(source).strip()}
+        if not user_id or not query:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "user_id and query are required")
+        try:
+            result = self._require_unified_search_service(context).search(
+                user_id=user_id,
+                query=query,
+                sources=sources,
+                fulltext=bool(payload.get("fulltext", True)),
+                semantic=bool(payload.get("semantic", False)),
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        except RuntimeError as exc:
+            context.abort(grpc.StatusCode.FAILED_PRECONDITION, str(exc))
+        return ParseDict(result, Struct())
+
     def UpdateUserKnowledgeDir(  # noqa: N802
         self, request: UserKnowledgeDirUpdateRequest, context: grpc.ServicerContext,
     ) -> UserProfileResponse:

@@ -12,6 +12,7 @@ import re
 import threading
 import time
 from collections.abc import Iterator, Sequence
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -206,6 +207,7 @@ class GraphRunnerMixin:
         user_id: str,
         session_id: str,
         reference: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
         agent_mode: str = AGENT_LOOP_AUTO,
         agent_access_mode: str = "sandbox",
     ) -> dict[str, Any]:
@@ -216,6 +218,7 @@ class GraphRunnerMixin:
         user_id: 用户 ID。
         session_id: 会话 ID。
         reference: 用户明确引用的文档片段。
+        attachments: 本轮用户气泡关联的会话附件。
         agent_mode: Agent Loop 模式,支持 auto / simple / react / plan。兼容 deep 旧别名。
         """
 
@@ -225,6 +228,7 @@ class GraphRunnerMixin:
                 user_id=user_id,
                 session_id=session_id,
                 reference=reference,
+                attachments=attachments,
                 agent_mode=agent_mode,
                 agent_access_mode=agent_access_mode,
             )
@@ -253,6 +257,7 @@ class GraphRunnerMixin:
         user_id: str,
         session_id: str,
         reference: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
         agent_mode: str = AGENT_LOOP_AUTO,
         agent_access_mode: str = "sandbox",
         web_search_max_results: int | None = None,
@@ -264,11 +269,13 @@ class GraphRunnerMixin:
         user_id: 用户 ID。
         session_id: 会话 ID。
         reference: 用户引用的文本,作为额外上下文注入。
+        attachments: 本轮用户气泡关联的附件；服务端按用户和会话重新校验。
         agent_mode: Agent Loop 模式,支持 auto / simple / react / plan。兼容 deep 旧别名。
         web_search_max_results: 联网搜索每次最大结果数,用于系统提示词引导 agent 行为。
         """
 
         turn_started_at = time.perf_counter()
+        user_message_created_at = datetime.now(timezone.utc)
         if web_search_max_results is None:
             web_search_max_results = self.config.limits.default_web_search_max_results
         latency_marks: dict[str, float] = {}
@@ -322,6 +329,7 @@ class GraphRunnerMixin:
         )
         messages = context_builder.build_messages(
             user_id=user_id, session_id=session_id, current_prompt=prompt, reference=reference,
+            current_prompt_created_at=user_message_created_at,
             web_search_max_results=web_search_max_results,
             long_term_memory_enabled=long_term_memory_enabled,
             compression_state=compression_state,
@@ -376,6 +384,21 @@ class GraphRunnerMixin:
                 )
                 if msg_create is not None:
                     message_service.create_message(msg_create)
+        persisted_attachments: list[dict[str, Any]] = []
+        for attachment in attachments or []:
+            attachment_id = str(attachment.get("attachment_id") or "") if isinstance(attachment, dict) else ""
+            if not attachment_id or self.attachment_service is None:
+                continue
+            try:
+                persisted_attachments.append(
+                    self.attachment_service.get_attachment(
+                        user_id=user_id,
+                        session_id=session_id,
+                        attachment_id=attachment_id,
+                    )
+                )
+            except ValueError:
+                logger.warning("忽略不属于当前会话的附件 | session=%s attachment=%s", session_id, attachment_id)
         message_service.create_message(
             MessageCreate(
                 session_id=session_id,
@@ -385,7 +408,9 @@ class GraphRunnerMixin:
                 metadata_json={
                     "source": "stream_session_prompt",
                     **({"reference": reference} if reference else {}),
+                    **({"attachments": persisted_attachments} if persisted_attachments else {}),
                 },
+                created_at=user_message_created_at,
             )
         )
 

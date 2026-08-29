@@ -10,6 +10,7 @@ import { computed, ref, watch } from 'vue'
 
 import FormHeightTransition from '@/components/common/FormHeightTransition.vue'
 import IcIcon from '@/components/common/IcIcon.vue'
+import EditorSidebarCloseButton from '@/components/editor_workspace/EditorSidebarCloseButton.vue'
 import LibraryCoverUploader from '@/components/library_view/LibraryCoverUploader.vue'
 import LibraryTagPicker from '@/components/library_view/LibraryTagPicker.vue'
 import LibraryRealContentPanel from '@/components/library_view/LibraryRealContentPanel.vue'
@@ -21,6 +22,8 @@ const props = defineProps<{
   userId: string
   item: LibraryItem | null
   availableTags: LibraryTag[]
+  embedded?: boolean
+  hideHeader?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -102,14 +105,12 @@ function handleCoverUploaded(asset: LibraryAsset) {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="open && item" class="dialog-backdrop" @click.self="emit('close')">
-    <section class="dialog-panel library-form-surface" role="dialog" aria-modal="true">
-        <header class="dialog-head">
+  <Teleport to="body" :disabled="embedded">
+    <div v-if="open && item" class="dialog-backdrop" :class="{ embedded }" @click.self="emit('close')">
+    <section class="dialog-panel library-form-surface" :class="{ embedded }" role="dialog" :aria-modal="!embedded">
+        <header v-if="!hideHeader" class="dialog-head">
           <h2>{{ isCollection ? '编辑集锦' : '编辑图书' }}</h2>
-          <button class="icon-btn" type="button" title="关闭" @click="emit('close')">
-            <IcIcon name="close" :size="16" />
-          </button>
+          <EditorSidebarCloseButton @close="emit('close')" />
         </header>
 
         <FormHeightTransition :watch-key="editMode">
@@ -203,6 +204,24 @@ function handleCoverUploaded(asset: LibraryAsset) {
   display: grid;
   place-items: center;
   background: rgba(0, 0, 0, 0.42);
+}
+
+.dialog-backdrop.embedded {
+  position: relative;
+  inset: auto;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+}
+
+.dialog-panel.embedded {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .dialog-panel {

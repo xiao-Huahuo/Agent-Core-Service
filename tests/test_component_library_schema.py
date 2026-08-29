@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from agent_service.schemas.component_library import ComponentLibraryItemCreate
+from agent_service.schemas.component_library import ComponentLibraryItemCreate, ComponentLibraryItemUpdate
 
 
 def test_component_source_accepts_large_stylesheets() -> None:
@@ -21,3 +21,16 @@ def test_component_source_rejects_over_two_megabytes() -> None:
 
     with pytest.raises(ValidationError):
         ComponentLibraryItemCreate(user_id="u1", source="a" * 2_000_001, tag="cards")
+
+
+def test_component_update_accepts_source_without_forcing_a_rename() -> None:
+    """侧栏源码保存可以只传 source，原组件 ID 和标题保持不变。"""
+
+    payload = ComponentLibraryItemUpdate(
+        user_id="u1",
+        component_id="cards/demo.vue",
+        source="<template><article>new</article></template>",
+    )
+
+    assert payload.title is None
+    assert payload.source.endswith("</template>")

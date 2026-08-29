@@ -20,6 +20,7 @@ const props = defineProps<{
   item: LibraryItem
   selected: boolean
   multiSelect: boolean
+  readonly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -101,7 +102,7 @@ function handleClick() {
 }
 
 async function startTitleEdit() {
-  if (isCollection.value) return
+  if (isCollection.value || props.readonly) return
   emit('select', props.item)
   editTitle.value = props.item.display_title
   titleEditing.value = true
@@ -111,7 +112,7 @@ async function startTitleEdit() {
 }
 
 async function startDescriptionEdit() {
-  if (isCollection.value) return
+  if (isCollection.value || props.readonly) return
   emit('select', props.item)
   detailsOpen.value = true
   editDescription.value = props.item.description
@@ -142,6 +143,10 @@ function toggleDetails() {
 }
 
 function handleDragStart(event: DragEvent) {
+  if (props.readonly) {
+    event.preventDefault()
+    return
+  }
   event.dataTransfer?.setData('text/plain', props.item.item_id)
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move'
@@ -170,7 +175,7 @@ function handleDrop(event: DragEvent) {
   <article
     class="library-card"
     :class="{ selected, missing: !item.source_exists, 'drag-over': dragOver, collection: isCollection, 'details-open': detailsOpen }"
-    draggable="true"
+    :draggable="!readonly"
     @click="handleClick"
     @dblclick.stop="isCollection ? emit('open', item) : emit('edit', item)"
     @contextmenu.prevent="emit('contextmenu', $event, item)"

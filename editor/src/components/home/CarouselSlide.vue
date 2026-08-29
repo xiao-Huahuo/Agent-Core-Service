@@ -116,7 +116,7 @@ const { frontUrl, textTone } = useHomeBlockImage(props.slide.image ?? '', rootRe
   right: var(--space-32);
   transform: translateY(-50%);
   opacity: 0.4;
-  color: var(--home-icon, var(--color-text-secondary));
+  color: var(--home-carousel-accent, var(--home-icon, var(--color-text-secondary)));
   transition: opacity var(--transition-normal), transform var(--transition-normal);
 }
 
@@ -174,15 +174,15 @@ const { frontUrl, textTone } = useHomeBlockImage(props.slide.image ?? '', rootRe
   align-items: center;
   padding: var(--space-6) var(--space-16);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
-  color: var(--color-primary);
+  background: color-mix(in srgb, var(--home-carousel-accent, var(--color-primary)) 16%, transparent);
+  color: var(--home-carousel-accent, var(--color-primary));
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   transition: background var(--transition-fast);
 }
 
 .carousel-slide:hover .carousel-hint {
-  background: color-mix(in srgb, var(--color-primary) 26%, transparent);
+  background: color-mix(in srgb, var(--home-carousel-accent, var(--color-primary)) 26%, transparent);
 }
 
 /* 紧凑模式: 标题/图标对齐导航块,不显示胶囊 */
@@ -208,7 +208,7 @@ const { frontUrl, textTone } = useHomeBlockImage(props.slide.image ?? '', rootRe
 }
 
 .carousel-slide:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--home-carousel-accent, var(--color-primary));
   outline-offset: -2px;
 }
 

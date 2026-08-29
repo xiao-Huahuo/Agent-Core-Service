@@ -7,6 +7,7 @@ import {
   deleteComponentLibraryItem,
   listComponentLibraryItems,
   renameComponentLibraryItem,
+  updateComponentLibraryItem,
 } from '@/api/componentLibrary'
 
 describe('Component library API client', () => {
@@ -72,6 +73,27 @@ describe('Component library API client', () => {
       user_id: 'u1',
       component_id: 'cards/old.vue',
       title: '新卡片',
+    })
+  })
+
+  it('updates persisted component source through the same canonical endpoint', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ component: {} }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await updateComponentLibraryItem('u1', 'cards/old.vue', {
+      source: '<template><article>new</article></template>',
+    })
+
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('PATCH')
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      user_id: 'u1',
+      component_id: 'cards/old.vue',
+      source: '<template><article>new</article></template>',
     })
   })
 

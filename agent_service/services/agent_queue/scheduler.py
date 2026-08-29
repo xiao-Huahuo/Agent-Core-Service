@@ -58,6 +58,7 @@ class AgentQueueScheduler:
             self.agent.run_session_prompt(
                 prompt="请先创建任务列表，再按列表完成此独立任务。\n\n" + str(task["prompt"]),
                 user_id=str(task["user_id"]), session_id=str(task["session_id"]), agent_mode="auto", agent_access_mode="sandbox",
+                attachments=list(task.get("attachments") or []),
             )
             self.queue_service.finish(str(task["task_id"]), "review")
         except Exception:

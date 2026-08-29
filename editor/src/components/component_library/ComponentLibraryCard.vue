@@ -20,9 +20,11 @@ const props = withDefaults(defineProps<{
   item: ComponentLibraryItem
   renaming?: boolean
   deleting?: boolean
+  readonly?: boolean
 }>(), {
   renaming: false,
   deleting: false,
+  readonly: false,
 })
 const emit = defineEmits<{
   open: [item: ComponentLibraryItem]
@@ -80,14 +82,17 @@ async function copySource(): Promise<void> {
     <footer class="component-meta">
       <div class="component-identity">
         <ComponentNameEditor
+          v-if="!readonly"
           :name="item.title"
           :compact="true"
           :saving="renaming"
           @rename="emit('rename', item, $event)"
         />
+        <strong v-else class="readonly-title">{{ item.title }}</strong>
         <span class="tag-pill">{{ item.tag }}</span>
       </div>
       <button
+        v-if="!readonly"
         class="delete-button"
         type="button"
         title="删除组件"
@@ -192,6 +197,14 @@ async function copySource(): Promise<void> {
   display: grid;
   min-width: 0;
   gap: var(--space-6);
+}
+
+.readonly-title {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: calc(13px * var(--font-scale));
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tag-pill {

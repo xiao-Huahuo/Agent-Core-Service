@@ -86,7 +86,7 @@ class MessageService:
             tool_call_id=message_create.tool_call_id,
             tool_calls_json=message_create.tool_calls_json,
             metadata_json=message_create.metadata_json,
-            created_at=self._utc_now(),
+            created_at=message_create.created_at or self._utc_now(),
         )
         with Session(self.engine) as db_session:
             db_session.add(record)

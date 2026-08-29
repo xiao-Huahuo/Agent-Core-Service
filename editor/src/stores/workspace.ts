@@ -11,6 +11,7 @@ import { computed, ref, watch } from 'vue'
 
 import { ApiError, buildApiUrl } from '@/api/client'
 import { updateCurrentDocumentContext } from '@/api/agent'
+import { searchAllLibraries } from '@/api/unifiedSearch'
 import type { GraphDocStatus, KnowledgeIngestionJob } from '@/api/knowledge'
 import {
   buildKnowledgeEventsUrl,
@@ -30,7 +31,6 @@ import {
   rebuildKnowledgeGraph,
   renameKnowledgePath,
   restoreKnowledgeTrashEntry,
-  searchKnowledge,
   uploadKnowledgeFile,
   writeKnowledgeFile,
 } from '@/api/knowledge'
@@ -54,9 +54,9 @@ import type {
   MarkdownHtmlVisualizationPayload,
   MarkdownHtmlVisualizationPreset,
   GraphStatus,
-  SearchResults,
   WorkspaceMainView,
 } from '@/types/knowledge'
+import { SEARCH_SOURCES, type SearchSource, type UnifiedSearchResponse, type UnifiedSearchResult } from '@/types/unifiedSearch'
 import {
   updateRecentFileVisits,
   type RecentFileVisit,
@@ -813,12 +813,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   /** Search palette state. */
   const searchQuery = ref('')
-  const searchResults = ref<SearchResults | null>(null)
+  const searchResults = ref<UnifiedSearchResponse | null>(null)
   const searchOpen = ref(false)
   const searching = ref(false)
+  const searchError = ref('')
   const fulltextEnabled = ref(true)
   const semanticEnabled = ref(false)
-  const searchUnified = ref(false)
+  const searchUnified = ref(true)
+  const searchSources = ref<SearchSource[]>([...SEARCH_SOURCES])
+  /** Non-file search resource rendered inside the reusable editor sidebar column. */
+  const searchSidebarResult = ref<UnifiedSearchResult | null>(null)
+  let searchRequestId = 0
 
   /** Search history (persisted to localStorage). */
   const SEARCH_HISTORY_KEY = 'metweave_search_history'
@@ -1443,18 +1448,58 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   function setMainView(view: WorkspaceMainView) {
     mainView.value = view
-    if (view === 'editor') editorSidebarOpen.value = false
+    if (view === 'editor') {
+      editorSidebarOpen.value = false
+      searchSidebarResult.value = null
+    }
   }
 
   /** Select a real knowledge file and reveal it in the reusable editor sidebar. */
   async function openEditorSidebar(node: KnowledgeFileNode) {
+    searchSidebarResult.value = null
     editorSidebarOpen.value = true
     await selectFile(node)
+  }
+
+  /** Open any search result in the existing draggable editor-sidebar column. */
+  async function openSearchResultSidebar(result: UnifiedSearchResult) {
+    if (result.source === 'files') {
+      await openEditorSidebar(result.item as unknown as KnowledgeFileNode)
+      return
+    }
+    searchSidebarResult.value = result
+    editorSidebarOpen.value = true
+    if (result.source === 'literature') {
+      const entry = result.item as Record<string, unknown>
+      const path = String(entry.asset_path || '')
+      if (path) {
+        await selectFile({
+          name: String(entry.file_name || result.title),
+          path,
+          isDir: false,
+          mtime: String(entry.updated_at || result.updated_at),
+          size: Number(entry.file_size || 0),
+        })
+      }
+    }
+  }
+
+  /** Replace one edited result in place so watchers do not interpret the edit as a new search. */
+  function updateSearchSidebarResult(result: UnifiedSearchResult) {
+    searchSidebarResult.value = result
+    const response = searchResults.value
+    if (!response) return
+    const resultIndex = response.results.findIndex((item) => item.source === result.source && item.id === result.id)
+    if (resultIndex >= 0) response.results.splice(resultIndex, 1, result)
+    const group = response.groups[result.source]
+    const groupIndex = group.findIndex((item) => item.id === result.id)
+    if (groupIndex >= 0) group.splice(groupIndex, 1, result)
   }
 
   /** Close the temporary editor sidebar while retaining the current file tab. */
   function closeEditorSidebar() {
     editorSidebarOpen.value = false
+    searchSidebarResult.value = null
   }
 
   /** Open the half-width browser panel and optionally navigate its shared session. */
@@ -1824,6 +1869,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   function closeSearch() {
+    searchRequestId += 1
     searchOpen.value = false
     searchQuery.value = ''
     searchResults.value = null
@@ -1831,24 +1877,48 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   async function performSearch(query: string) {
     const trimmed = query.trim()
+    const requestId = ++searchRequestId
     if (!trimmed) {
       searchResults.value = null
+      searchError.value = ''
+      searching.value = false
       return
     }
     addSearchHistory(trimmed)
     searching.value = true
+    searchError.value = ''
     try {
       const settingsStore = useSettingsStore()
-      searchResults.value = await searchKnowledge(
+      const response = await searchAllLibraries(
         settingsStore.profile.userId,
         trimmed,
+        searchSources.value,
         fulltextEnabled.value,
         semanticEnabled.value,
       )
-    } catch {
-      searchResults.value = null
+      if (requestId === searchRequestId) searchResults.value = response
+    } catch (error: unknown) {
+      if (requestId === searchRequestId) {
+        searchResults.value = null
+        searchError.value = error instanceof ApiError ? error.message : '搜索失败，请稍后重试'
+      }
     } finally {
-      searching.value = false
+      if (requestId === searchRequestId) searching.value = false
+    }
+  }
+
+  /** Toggle one library filter while ensuring at least one source remains active. */
+  function toggleSearchSource(source: SearchSource) {
+    if (searchSources.value.includes(source)) {
+      if (searchSources.value.length === 1) return
+      searchSources.value = searchSources.value.filter((item) => item !== source)
+    } else {
+      searchSources.value = SEARCH_SOURCES.filter((item) => (
+        item === source || searchSources.value.includes(item)
+      ))
+    }
+    if (searchQuery.value.trim()) {
+      void performSearch(searchQuery.value)
     }
   }
 
@@ -2752,6 +2822,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     selectedNode,
     mainView,
     editorSidebarOpen,
+    searchSidebarResult,
     browserSidebarOpen,
     browserSidebarUrl,
     browserSidebarNavigationId,
@@ -2819,6 +2890,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     setEditorMode,
     setMainView,
     openEditorSidebar,
+    openSearchResultSidebar,
+    updateSearchSidebarResult,
     closeEditorSidebar,
     openBrowserSidebar,
     closeBrowserSidebar,
@@ -2840,9 +2913,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     searchResults,
     searchOpen,
     searching,
+    searchError,
     fulltextEnabled,
     semanticEnabled,
     searchUnified,
+    searchSources,
+    toggleSearchSource,
     openSearch,
     closeSearch,
     searchHistory,

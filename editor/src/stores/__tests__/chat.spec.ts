@@ -67,6 +67,44 @@ describe('chat reference history', () => {
     expect(store.messages[0]?.reference).toBe('被引用的文档内容')
   })
 
+  it('restores persisted user attachments and their original timestamp', async () => {
+    const attachment = {
+      attachment_id: 'att-history', user_id: 'user-1', session_id: 'session-1',
+      library_id: 'default', library_name: '默认知识库', filename: '报告.pdf', stored_name: '报告.pdf',
+      uri: 'session-upload://user-1/default/session-1/报告.pdf', mime_type: 'application/pdf',
+      size: 42, source_type: 'document', created_at: '2026-08-30T08:00:00Z',
+    }
+    apiMocks.fetchMessages.mockResolvedValue([{
+      message_id: 'message-attachment', role: 'user', content: '分析附件',
+      metadata: { attachments: [attachment] }, created_at: '2026-08-30T08:01:00Z',
+    }])
+    const store = useChatStore()
+
+    await store.loadHistory('session-1', 'user-1')
+
+    expect(store.messages[0]?.created_at).toBe('2026-08-30T08:01:00Z')
+    expect(store.messages[0]?.attachments).toEqual([attachment])
+  })
+
+  it('sends the displayed attachment list for backend message persistence', async () => {
+    const attachment = {
+      attachment_id: 'att-live', user_id: 'user-1', session_id: 'session-1',
+      library_id: 'default', library_name: '默认知识库', filename: '数据.csv', stored_name: '数据.csv',
+      uri: 'session-upload://user-1/default/session-1/数据.csv', mime_type: 'text/csv',
+      size: 12, source_type: 'document', created_at: '2026-08-30T08:00:00Z',
+    }
+    apiMocks.streamPrompt.mockImplementation(async function* () {})
+    const store = useChatStore()
+    store.addPendingAttachment(attachment)
+
+    await store.send('user-1', 'session-1', '分析附件')
+
+    expect(apiMocks.streamPrompt).toHaveBeenCalledWith(
+      'user-1', 'session-1', '分析附件',
+      expect.objectContaining({ attachments: [attachment] }),
+    )
+  })
+
   it('restores persisted child agent event messages with empty content', async () => {
     const childAgentEvent = {
       event_name: 'child_agent.completed',

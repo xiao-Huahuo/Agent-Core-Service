@@ -128,6 +128,7 @@ export interface ImportedMessage {
   created_at?: string
   node?: string
   reference?: string
+  attachments?: Array<Record<string, unknown>>
   tool_calls?: unknown[]
   trace_details?: unknown[]
   child_agent_event?: unknown

@@ -101,6 +101,25 @@ describe('sessionExport child agent events', () => {
     expect(message.metadata.trace[0].patch.path).toBe('a.md')
   })
 
+  it('exports user attachment metadata with the original message time', async () => {
+    const attachment = {
+      attachment_id: 'att-1', user_id: 'user-1', session_id: 'session-1',
+      library_id: 'default', library_name: '默认知识库', filename: '报告.pdf', stored_name: '报告.pdf',
+      uri: 'session-upload://user-1/default/session-1/报告.pdf', mime_type: 'application/pdf',
+      size: 42, source_type: 'document', created_at: '2026-08-30T08:00:00Z',
+    }
+    mocks.fetchMessages.mockResolvedValue([{
+      message_id: 'message-user', session_id: 'session-1', role: 'user', content: '分析附件',
+      created_at: '2026-08-30T08:01:00Z', metadata: { attachments: [attachment] }, tool_calls: [],
+    }])
+
+    await exportSession({ session_id: 'session-1', user_id: 'user-1', session_name: '测试', created_at: '', updated_at: '' }, 'user-1')
+
+    const message = mocks.toYaml.mock.calls[0]?.[0].messages[0]
+    expect(message.created_at).toBe('2026-08-30T08:01:00Z')
+    expect(message.attachments).toEqual([attachment])
+  })
+
   it('exports the recoverable environment, task list, and child-agent snapshots', async () => {
     mocks.fetchMessages.mockResolvedValue([])
     mocks.fetchSessionTaskList.mockResolvedValue({ task_list: { task_list_id: 'tasks-1', items: [] } })

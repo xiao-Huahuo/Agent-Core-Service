@@ -143,6 +143,7 @@ from agent_service.services.agent_queue.service import AgentQueueService
 from agent_service.services.automation.service import AutomationService
 from agent_service.services.activity.service import ActivityService
 from agent_service.services.component_library.service import ComponentLibraryService
+from agent_service.services.unified_search import UnifiedSearchService
 from agent_service.services.smart_form.service import SmartFormService
 from agent_service.services.latex.service import LatexService
 from agent_service.services.model_management.service import ModelManagementService
@@ -223,6 +224,12 @@ class GrpcErrorMapperMixin:
         if self._component_library_service is None:
             context.abort(grpc.StatusCode.UNAVAILABLE, "ComponentLibraryService not available")
         return self._component_library_service  # type: ignore[return-value]
+    def _require_unified_search_service(self, context: grpc.ServicerContext) -> UnifiedSearchService:
+        """返回注入的四库联合搜索服务，未初始化时终止 RPC。"""
+
+        if self._unified_search_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "UnifiedSearchService not available")
+        return self._unified_search_service  # type: ignore[return-value]
     def _require_smart_form_service(self, context: grpc.ServicerContext) -> SmartFormService:
         """返回注入的智能表格服务,未初始化时终止 RPC。"""
 

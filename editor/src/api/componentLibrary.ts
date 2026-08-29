@@ -13,6 +13,7 @@ import type {
   ComponentLibraryItem,
   ComponentLibraryResponse,
   ComponentLibraryRenamePayload,
+  ComponentLibraryUpdatePayload,
   ComponentTag,
 } from '@/types/componentLibrary'
 
@@ -46,6 +47,19 @@ export function renameComponentLibraryItem(
     title,
   }
   return apiPatch<{ component: ComponentLibraryItem }>(API_ROUTES.COMPONENT_LIBRARY_ITEMS, payload)
+}
+
+/** Persist source, title, or tag changes without requiring unrelated fields. */
+export function updateComponentLibraryItem(
+  userId: string,
+  componentId: string,
+  changes: ComponentLibraryUpdatePayload,
+): Promise<{ component: ComponentLibraryItem }> {
+  return apiPatch<{ component: ComponentLibraryItem }>(API_ROUTES.COMPONENT_LIBRARY_ITEMS, {
+    user_id: userId,
+    component_id: componentId,
+    ...changes,
+  })
 }
 
 /** Delete one canonical component file from the active component library. */

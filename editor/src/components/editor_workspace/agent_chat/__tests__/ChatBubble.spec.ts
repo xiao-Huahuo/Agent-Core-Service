@@ -14,6 +14,37 @@ import ToolBubble from '../ToolBubble.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 describe('ChatBubble user references', () => {
+  it('renders a grey timestamp to the left of the user bubble', () => {
+    const wrapper = mount(ChatBubble, {
+      global: { plugins: [createPinia()] },
+      props: {
+        message: { role: 'user', content: '带时间的问题', created_at: '2026-08-30T08:01:00Z' },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+      },
+    })
+
+    const timestamp = wrapper.get('.message-time')
+    const bubbleColumn = wrapper.get('.bubble-col')
+    expect(timestamp.text()).toBeTruthy()
+    expect(timestamp.element.compareDocumentPosition(bubbleColumn.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(timestamp.classes()).toContain('message-time')
+  })
+
+  it('renders the same user timestamp in tool mode', () => {
+    const wrapper = mount(ToolBubble, {
+      global: { plugins: [createPinia()] },
+      props: {
+        message: { role: 'user', content: '工具模式问题', created_at: '2026-08-30T08:01:00Z' },
+        userAvatar: 'user.png', agentAvatar: 'agent.png',
+      },
+    })
+
+    const timestamp = wrapper.get('.message-time')
+    expect(timestamp.text()).toBeTruthy()
+    expect(timestamp.element.compareDocumentPosition(wrapper.get('.bubble-col').element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('renders the reference above the user message', () => {
     const wrapper = mount(ChatBubble, {
       global: {

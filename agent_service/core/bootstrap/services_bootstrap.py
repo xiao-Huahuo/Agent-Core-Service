@@ -44,6 +44,7 @@ from agent_service.services.smart_form.service import SmartFormService
 from agent_service.services.structured_generation.service import StructuredGenerationService
 from agent_service.services.task_list.service import TaskListService
 from agent_service.services.todo.service import TodoService
+from agent_service.services.unified_search import UnifiedSearchService
 from agent_service.services.vault.service import VaultService
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ class ApplicationServices:
     git_service: GitService
     library_service: LibraryService
     component_library_service: ComponentLibraryService
+    unified_search_service: UnifiedSearchService
     vault_service: VaultService
     favorite_service: FavoriteService
     privacy_service: PrivacyService
@@ -182,6 +184,14 @@ def create_application_services(config: AgentConfig, *, database_engine: Engine)
         settings_service=settings_service,
     )
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
+    unified_search_service = UnifiedSearchService(
+        settings_service=settings_service,
+        knowledge_library_service=knowledge_library_service,
+        library_service=library_service,
+        component_library_service=component_library_service,
+        smart_form_service=smart_form_service,
+        retrieval_service=retrieval_service,
+    )
     todo_service = TodoService(
         engine=memory_service.engine,
         config=config,
@@ -219,6 +229,7 @@ def create_application_services(config: AgentConfig, *, database_engine: Engine)
         git_service=git_service,
         library_service=library_service,
         component_library_service=component_library_service,
+        unified_search_service=unified_search_service,
         vault_service=vault_service,
         favorite_service=favorite_service,
         privacy_service=privacy_service,

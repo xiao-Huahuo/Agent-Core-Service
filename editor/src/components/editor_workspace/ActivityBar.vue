@@ -95,7 +95,7 @@ const knowledgeActive = computed(() => (
   || props.formsActive
   || props.literatureActive
 ))
-const entertainmentActive = computed(() => props.visualizationActive)
+const entertainmentActive = computed(() => props.visualizationActive || props.agentQueueActive)
 const mineActive = computed(() => props.favoritesActive || props.privacyActive || props.feedbackOpen)
 const activityBarRef = ref<HTMLElement | null>(null)
 const hoverIndicatorTop = ref(0)
@@ -264,7 +264,7 @@ function closeActivityMenu() {
             @mousedown.prevent="handleRipple"
             @click="emit('openResources'); closeActivityMenu()"
           >
-            <IcIcon name="folder-open" :size="18" />
+            <IcIcon class="library-entry-icon library-color-files" name="folder-open" :size="18" />
             <span class="activity-label">文件资源管理器</span>
           </button>
           <button
@@ -276,7 +276,7 @@ function closeActivityMenu() {
             @mousedown.prevent="handleRipple"
             @click="emit('openLibrary'); closeActivityMenu()"
           >
-            <IcIcon name="book" :size="18" />
+            <IcIcon class="library-entry-icon library-color-library" name="book" :size="18" />
             <span class="activity-label">图书馆</span>
           </button>
           <button
@@ -288,7 +288,7 @@ function closeActivityMenu() {
             @mousedown.prevent="handleRipple"
             @click="emit('openComponentLibrary'); closeActivityMenu()"
           >
-            <IcIcon name="grid-view" :size="18" />
+            <IcIcon class="library-entry-icon library-color-components" name="grid-view" :size="18" />
             <span class="activity-label">组件库</span>
           </button>
           <button
@@ -300,7 +300,7 @@ function closeActivityMenu() {
             @mousedown.prevent="handleRipple"
             @click="emit('openVault'); closeActivityMenu()"
           >
-            <IcIcon name="shield" :size="18" />
+            <IcIcon class="library-entry-icon library-color-vault" name="shield" :size="18" />
             <span class="activity-label">密码库</span>
           </button>
           <button
@@ -312,7 +312,7 @@ function closeActivityMenu() {
             @mousedown.prevent="handleRipple"
             @click="emit('openForms'); closeActivityMenu()"
           >
-            <IcIcon name="table-chart" :size="18" />
+            <IcIcon class="library-entry-icon library-color-forms" name="table-chart" :size="18" />
             <span class="activity-label">智能表格</span>
           </button>
           <button
@@ -324,7 +324,7 @@ function closeActivityMenu() {
             @mousedown.prevent="handleRipple"
             @click="emit('openLiterature'); closeActivityMenu()"
           >
-            <IcIcon name="document" :size="18" />
+            <IcIcon class="library-entry-icon library-color-literature" name="document" :size="18" />
             <span class="activity-label">文献阅读</span>
           </button>
         </div>
@@ -390,18 +390,6 @@ function closeActivityMenu() {
       <IcIcon name="dashboard" :size="18" />
       <span class="activity-label">看板</span>
     </button>
-    <button
-      class="activity-button"
-      :class="{ active: agentQueueActive }"
-      type="button"
-      title="任务队列"
-      aria-label="任务队列"
-      @mousedown.prevent="handleRipple"
-      @click="emit('openAgentQueue')"
-    >
-      <IcIcon name="checklist" :size="18" />
-      <span class="activity-label">任务队列</span>
-    </button>
     <div class="knowledge-group">
       <button
         class="activity-button knowledge-button"
@@ -436,6 +424,18 @@ function closeActivityMenu() {
               opacity: knowledgeHoverIndicatorVisible ? 1 : 0,
             }"
           ></span>
+          <button
+            class="activity-button"
+            :class="{ active: agentQueueActive }"
+            type="button"
+            title="任务队列"
+            aria-label="任务队列"
+            @mousedown.prevent="handleRipple"
+            @click="emit('openAgentQueue'); closeActivityMenu()"
+          >
+            <IcIcon name="checklist" :size="18" />
+            <span class="activity-label">任务队列</span>
+          </button>
           <button
             class="activity-button"
             :class="{ active: visualizationActive }"
@@ -933,6 +933,13 @@ function closeActivityMenu() {
   position: relative;
   z-index: 1;
 }
+
+.library-color-files { color: var(--color-search-files); }
+.library-color-library { color: var(--color-search-library); }
+.library-color-components { color: var(--color-search-components); }
+.library-color-vault { color: var(--color-library-vault); }
+.library-color-forms { color: var(--color-library-forms); }
+.library-color-literature { color: var(--color-search-literature); }
 
 .activity-label {
   display: inline-block;

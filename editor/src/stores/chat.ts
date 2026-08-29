@@ -88,6 +88,13 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : []
 }
 
+/** Keep only persisted attachment objects before rendering restored history. */
+function asAttachments(value: unknown): AgentUploadedAttachment[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is AgentUploadedAttachment => Boolean(item && typeof item === 'object'))
+    : []
+}
+
 function asFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
@@ -173,7 +180,6 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   const pendingContent = new Map<AgentChatMessage, string>()
   let flushTimer: number | null = null
   let turnStartedAtMs = 0
-  const contentFlushMs = 50
   /** Fast tools keep one perceptible shimmer window before the result replaces it. */
   const toolPreviewMinMs = 800
 
@@ -293,7 +299,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     if (flushTimer !== null) {
       return
     }
-    flushTimer = window.setTimeout(flushStreamContent, contentFlushMs)
+    flushTimer = window.requestAnimationFrame(() => flushStreamContent())
   }
 
   /** Buffers a delta against its immutable owner rather than the latest message. */
@@ -329,7 +335,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
       pendingContent.clear()
     }
     if (flushTimer !== null && pendingContent.size === 0) {
-      window.clearTimeout(flushTimer)
+      window.cancelAnimationFrame(flushTimer)
       flushTimer = null
     }
   }
@@ -337,7 +343,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   /** Immediately commits buffered text, preserving other owners if one is selected. */
   function forceFlushContent(target?: AgentChatMessage) {
     if (flushTimer !== null) {
-      window.clearTimeout(flushTimer)
+      window.cancelAnimationFrame(flushTimer)
       flushTimer = null
     }
     flushStreamContent(target)
@@ -371,6 +377,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
         trace: asTrace(message.metadata?.trace),
         created_at: message.created_at,
         reference: asString(message.metadata?.reference) || undefined,
+        attachments: asAttachments(message.metadata?.attachments),
       }))
   }
 
@@ -706,7 +713,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
         userId,
         targetSessionId,
         prompt,
-        { signal, reference, agentMode, agentAccessMode },
+        { signal, reference, agentMode, agentAccessMode, attachments: attachmentsForTurn },
       )) {
         const chunk = asRecord(rawChunk)
         const node = asString(chunk.node)

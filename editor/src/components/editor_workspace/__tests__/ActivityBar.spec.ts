@@ -140,12 +140,40 @@ describe('ActivityBar', () => {
     expect(wrapper.get('button[aria-label="库"]').classes()).toContain('active')
   })
 
+  it('gives all six library entries distinct color roles and aligns the four searchable libraries', async () => {
+    const wrapper = mount(ActivityBar, { props })
+    await wrapper.get('button[aria-label="库"]').trigger('click')
+    const icons = wrapper.findAll('[aria-label="知识库菜单"] .library-entry-icon')
+
+    expect(icons).toHaveLength(6)
+    expect(icons.map((icon) => icon.classes().find((name) => name.startsWith('library-color-')))).toEqual([
+      'library-color-files',
+      'library-color-library',
+      'library-color-components',
+      'library-color-vault',
+      'library-color-forms',
+      'library-color-literature',
+    ])
+  })
+
   it('opens the embedded browser from its left-rail entry', async () => {
     const wrapper = mount(ActivityBar, { props })
 
     await wrapper.get('button[aria-label="浏览器"]').trigger('click')
 
     expect(wrapper.emitted('openBrowser')).toHaveLength(1)
+  })
+
+  it('opens the Agent queue from the entertainment submenu instead of the top-level rail', async () => {
+    const wrapper = mount(ActivityBar, { props })
+
+    expect(wrapper.find('.activity-bar > button[aria-label="任务队列"]').exists()).toBe(false)
+    await wrapper.get('button[aria-label="娱乐功能"]').trigger('click')
+    const menu = wrapper.get('[aria-label="娱乐功能菜单"]')
+    await menu.get('button[aria-label="任务队列"]').trigger('click')
+
+    expect(wrapper.emitted('openAgentQueue')).toHaveLength(1)
+    expect(wrapper.find('[aria-label="娱乐功能菜单"]').exists()).toBe(false)
   })
 
   it('moves one shared hover indicator to the pointed navigation button', async () => {

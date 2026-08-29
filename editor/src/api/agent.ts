@@ -43,13 +43,20 @@ export function streamPrompt(
   userId: string,
   sessionId: string,
   prompt: string,
-  options: { signal?: AbortSignal; reference?: string; agentMode?: AgentLoopMode; agentAccessMode?: AgentAccessMode } = {},
+  options: {
+    signal?: AbortSignal
+    reference?: string
+    agentMode?: AgentLoopMode
+    agentAccessMode?: AgentAccessMode
+    attachments?: AgentAttachmentUploadResponse['attachment'][]
+  } = {},
 ): AsyncGenerator<Record<string, unknown>> {
   const body = {
     user_id: userId,
     session_id: sessionId,
     prompt,
     reference: options.reference?.trim() || undefined,
+    attachments: options.attachments?.length ? options.attachments : undefined,
     agent_mode: options.agentMode || 'auto',
     agent_access_mode: options.agentAccessMode || 'sandbox',
   }

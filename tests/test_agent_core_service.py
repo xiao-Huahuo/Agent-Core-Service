@@ -28,6 +28,7 @@ from sqlmodel import SQLModel, create_engine
 from agent_service.agent_core import AgentCore
 from agent_service.agent_core.agent_core import _extract_friendly_error
 from agent_service.api.rest.sessions import _restore_session_state
+import agent_service.api.rest.sessions as sessions_api
 from agent_service.agent_core.nodes.compress import CompressNode
 from agent_service.agent_core.nodes.model_decision import get_user_llm_overrides
 from agent_service.agent_core.nodes.summary import SummaryNode
@@ -287,6 +288,43 @@ def test_restore_session_state_rebinds_portable_snapshots() -> None:
     assert state["child_agents"] == [{"run_id": "child-2", "status": "failed"}]
 
 
+def test_session_import_preserves_user_time_and_attachments(monkeypatch: Any) -> None:
+    """结构化导入应把原始时间和用户气泡附件写回正式消息历史。"""
+
+    config = make_test_config()
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    session_service = SessionService(config=config, engine=engine, create_tables=False)
+    message_service = MessageService(config=config, engine=engine, create_tables=False)
+    monkeypatch.setattr(sessions_api, "_require_session_service", lambda: session_service)
+    monkeypatch.setattr(sessions_api, "_require_message_service", lambda: message_service)
+    attachment = {
+        "attachment_id": "att-imported",
+        "filename": "导入报告.pdf",
+        "stored_name": "导入报告.pdf",
+        "uri": "session-upload://source/default/source-session/导入报告.pdf",
+    }
+
+    result = sessions_api._do_import({
+        "user_id": "user_import",
+        "session_name": "导入会话",
+        "messages": [{
+            "role": "user",
+            "content": "分析附件",
+            "created_at": "2026-08-30T08:01:00+00:00",
+            "attachments": [attachment],
+        }],
+    })
+    messages = message_service.list_session_messages(
+        user_id="user_import",
+        session_id=result["session_id"],
+        limit=None,
+    )
+
+    assert messages[0].created_at.isoformat().startswith("2026-08-30T08:01:00")
+    assert messages[0].metadata_json["attachments"] == [attachment]
+
+
 def test_agent_core_run_once_returns_structured_result() -> None:
     """验证 AgentCore.run_once 会返回最终输出、事件列表和原始流式数据。"""
 
@@ -341,6 +379,21 @@ def test_agent_core_run_session_prompt_uses_context_and_persists_messages() -> N
         message_service=message_service,
         retrieval_service=retrieval_service,
     )
+    attachment = {
+        "attachment_id": "att_formal",
+        "user_id": "user_1",
+        "session_id": "sess_formal",
+        "filename": "报告.pdf",
+        "stored_name": "报告.pdf",
+        "uri": "session-upload://user_1/default/sess_formal/报告.pdf",
+        "mime_type": "application/pdf",
+        "size": 42,
+        "source_type": "document",
+        "created_at": "2026-08-30T01:00:00+00:00",
+    }
+    attachment_service = SimpleNamespace(
+        get_attachment=lambda **_kwargs: attachment,
+    )
     message_service.create_message(
         MessageCreate(
             session_id="sess_formal",
@@ -364,6 +417,7 @@ def test_agent_core_run_session_prompt_uses_context_and_persists_messages() -> N
         graph=fake_graph,
         message_service=message_service,
         context_builder=context_builder,
+        attachment_service=attachment_service,
     )
 
     result = agent.run_session_prompt(
@@ -371,17 +425,25 @@ def test_agent_core_run_session_prompt_uses_context_and_persists_messages() -> N
         user_id="user_1",
         session_id="sess_formal",
         reference="引用中的关键词是 blue-river",
+        attachments=[attachment],
+        agent_mode="plan",
     )
     saved_messages = message_service.list_recent_messages(user_id="user_1", session_id="sess_formal", limit=10)
 
     assert result["final_output"] == "blue-river"
     assert isinstance(fake_graph.stream_inputs[0]["messages"][0], SystemMessage)
-    assert fake_graph.stream_inputs[0]["messages"][1].content == "上一轮关键词是 blue-river"
+    assert "上一轮关键词是 blue-river" in fake_graph.stream_inputs[0]["messages"][1].content
     assert "引用中的关键词是 blue-river" in fake_graph.stream_inputs[0]["messages"][-1].content
     assert "关键词是什么?" in fake_graph.stream_inputs[0]["messages"][-1].content
     assert {message.role for message in saved_messages} == {"user", "system", "assistant"}
-    assert saved_messages[-2].metadata_json["reference"] == "引用中的关键词是 blue-river"
-    assert saved_messages[-1].content == "blue-river"
+    current_user = next(
+        message for message in saved_messages
+        if message.role == "user" and message.metadata_json.get("source") == "stream_session_prompt"
+    )
+    assert current_user.metadata_json["reference"] == "引用中的关键词是 blue-river"
+    assert current_user.metadata_json["attachments"] == [attachment]
+    assert current_user.created_at.isoformat(timespec="seconds") in fake_graph.stream_inputs[0]["messages"][-1].content
+    assert any(message.role == "assistant" and message.content == "blue-river" for message in saved_messages)
 
 
 def test_agent_core_build_human_readable_process() -> None:
@@ -910,6 +972,53 @@ def test_context_builder_keeps_references_in_history_and_compressed_current_prom
     assert any("历史引用材料" in content and "历史问题" in content for content in human_contents)
     assert "当前引用材料" in str(messages[-1].content)
     assert "当前问题" in str(messages[-1].content)
+
+
+def test_context_builder_marks_current_and_historical_user_questions_with_time() -> None:
+    """每条历史及当前用户提问都应把其持久化时间交给模型。"""
+
+    config = AgentConfig.load_config(
+        {"memory": {"max_context_messages": 4}},
+        load_env=False,
+        ensure_directories=False,
+        ensure_models=False,
+    )
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    service = MessageService(config=config, engine=engine, create_tables=False)
+    empty_snapshot = SimpleNamespace(post_rerank_results=[])
+    retrieval_service = SimpleNamespace(
+        retrieve_long_term_memory_with_debug=lambda **_kwargs: empty_snapshot,
+        get_latest_session_summary=lambda **_kwargs: None,
+        retrieve_knowledge_with_debug=lambda **_kwargs: empty_snapshot,
+        get_latest_important_fact_summary=lambda **_kwargs: None,
+        serialize_debug_snapshot=lambda _snapshot: {},
+    )
+    builder = ContextBuilder(config=config, message_service=service, retrieval_service=retrieval_service)
+    historical_time = datetime(2026, 8, 29, 16, 30, tzinfo=timezone.utc)
+    current_time = datetime(2026, 8, 30, 1, 2, 3, tzinfo=timezone.utc)
+    service.create_message(
+        MessageCreate(
+            session_id="sess_time",
+            user_id="user_1",
+            role="user",
+            content="历史问题",
+            created_at=historical_time,
+        )
+    )
+
+    messages = builder.build_messages(
+        user_id="user_1",
+        session_id="sess_time",
+        current_prompt="当前问题",
+        current_prompt_created_at=current_time,
+    )
+
+    human_contents = [str(message.content) for message in messages if isinstance(message, HumanMessage)]
+    assert "2026-08-29T16:30:00+00:00" in human_contents[0]
+    assert "历史问题" in human_contents[0]
+    assert "2026-08-30T01:02:03+00:00" in human_contents[-1]
+    assert "当前问题" in human_contents[-1]
 
 
 def test_context_builder_drops_incomplete_assistant_tool_call_history() -> None:
@@ -2078,12 +2187,12 @@ def test_tool_registry_exports_builtin_langchain_tools() -> None:
     tools = registry.to_langchain_tools()
 
     tool_names = {tool.name for tool in tools}
-    assert registry.get("get_current_time") is not None
+    assert registry.get("get_current_time") is None
     assert tool_names >= {
         "get_knowledge_context",
         "get_long_term_memory",
         "write_long_term_rule",
-        "get_current_time",
+        "list_available_tools",
         "search_knowledge",
         "list_knowledge_files",
     }
@@ -2105,9 +2214,13 @@ def test_tool_executor_runs_builtin_tool() -> None:
 
     executor = ToolExecutor(registry=ToolRegistry.with_builtin_tools())
 
-    result = executor.execute("get_current_time", {"timezone_name": "UTC"})
+    set_tool_runtime(config=make_test_config(), user_id="u1", session_id="s1")
+    try:
+        result = executor.execute("list_available_tools", {})
+    finally:
+        clear_tool_runtime()
 
-    assert "T" in result
+    assert "查看可用工具" in result
 
 
 def test_tool_call_node_uses_project_executor() -> None:
@@ -2120,7 +2233,7 @@ def test_tool_call_node_uses_project_executor() -> None:
         "messages": [
             AIMessage(
                 content="",
-                tool_calls=[{"id": "call_time", "name": "get_current_time", "args": {"timezone_name": "UTC"}}],
+                tool_calls=[{"id": "call_tools", "name": "list_available_tools", "args": {}}],
             )
         ],
         "user_id": "u1",
@@ -2128,11 +2241,15 @@ def test_tool_call_node_uses_project_executor() -> None:
         "trace": [],
     }
 
-    result = node(state)
+    set_tool_runtime(config=config, user_id="u1", session_id="s1")
+    try:
+        result = node(state)
+    finally:
+        clear_tool_runtime()
 
-    assert "T" in result["messages"][0].content
+    assert "查看可用工具" in result["messages"][0].content
     assert result["trace"][0]["event"] == "tool_call_start"
-    assert result["trace"][0]["tool_name"] == "get_current_time"
+    assert result["trace"][0]["tool_name"] == "list_available_tools"
 
 
 def test_tool_call_trace_keeps_raw_result_out_of_middle_output() -> None:

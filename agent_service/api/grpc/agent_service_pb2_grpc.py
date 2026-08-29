@@ -304,6 +304,11 @@ class AgentServiceStub(object):
                 request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
                 _registered_method=True)
+        self.SearchAllLibraries = channel.unary_unary(
+                '/agent_service.AgentService/SearchAllLibraries',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
         self.GetGitStatus = channel.unary_unary(
                 '/agent_service.AgentService/GetGitStatus',
                 request_serializer=agent__service__pb2.GitUserRequest.SerializeToString,
@@ -1042,6 +1047,12 @@ class AgentServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def CancelKnowledgeIngestionJob(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SearchAllLibraries(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -1803,6 +1814,11 @@ def add_AgentServiceServicer_to_server(servicer, server):
             ),
             'CancelKnowledgeIngestionJob': grpc.unary_unary_rpc_method_handler(
                     servicer.CancelKnowledgeIngestionJob,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'SearchAllLibraries': grpc.unary_unary_rpc_method_handler(
+                    servicer.SearchAllLibraries,
                     request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
                     response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             ),
@@ -3618,6 +3634,33 @@ class AgentService(object):
             request,
             target,
             '/agent_service.AgentService/CancelKnowledgeIngestionJob',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SearchAllLibraries(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/SearchAllLibraries',
             google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             google_dot_protobuf_dot_struct__pb2.Struct.FromString,
             options,
