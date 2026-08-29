@@ -78,10 +78,6 @@ const historyRows = computed(() => {
   return allHistoryRows.value.filter((row) => row.sourceType === historyFilter.value)
 })
 
-const queueColumns = 'minmax(180px, 1.4fr) minmax(300px, 2.2fr) 145px 90px 90px minmax(210px, 1.4fr) 120px 96px'
-const graphQueueColumns = 'minmax(180px, 1.4fr) minmax(300px, 2.2fr) 145px 90px minmax(240px, 1.5fr) 132px'
-const historyColumns = 'minmax(220px, 2fr) 80px 140px 132px 160px 1fr'
-
 function absoluteLocationPath(relativePath: string): string {
   const root = settingsStore.profile.knowledgeDir.trim()
   const child = relativePath.replace(/^[\\/]+|[\\/]+$/g, '')
@@ -182,7 +178,8 @@ function historySummary(row: IngestionHistoryItem): string {
           @click="activeTab = 'queue'"
         >
           <IcIcon name="ingest" :size="17" />
-          <span>入库队列</span>
+          <span class="tab-label-long">入库队列</span>
+          <span class="tab-label-short">入库</span>
         </button>
         <button
           class="tab-button"
@@ -192,7 +189,8 @@ function historySummary(row: IngestionHistoryItem): string {
           @click="activeTab = 'graph-queue'"
         >
           <IcIcon name="hub" :size="17" />
-          <span>图谱抽取队列</span>
+          <span class="tab-label-long">图谱抽取队列</span>
+          <span class="tab-label-short">图谱</span>
         </button>
         <button
           class="tab-button"
@@ -202,7 +200,8 @@ function historySummary(row: IngestionHistoryItem): string {
           @click="activeTab = 'history'"
         >
           <IcIcon name="history" :size="17" />
-          <span>入库历史</span>
+          <span class="tab-label-long">入库历史</span>
+          <span class="tab-label-short">历史</span>
         </button>
       </div>
       <div class="heading-actions">
@@ -247,16 +246,16 @@ function historySummary(row: IngestionHistoryItem): string {
     </header>
 
     <!-- Ingestion Queue Tab -->
-    <div v-if="activeTab === 'queue'" class="file-table">
-      <div class="file-table-head" :style="{ gridTemplateColumns: queueColumns }">
-        <span>名称</span>
-        <span>所在位置绝对路径</span>
-        <span>最后修改日期</span>
-        <span>类型</span>
-        <span>大小</span>
-        <span>灌库进度</span>
-        <span>状态</span>
-        <span>操作</span>
+    <div v-if="activeTab === 'queue'" class="file-table queue-table">
+      <div class="file-table-head">
+        <span class="column-name">名称</span>
+        <span class="column-path">所在位置绝对路径</span>
+        <span class="column-modified">最后修改日期</span>
+        <span class="column-kind">类型</span>
+        <span class="column-size">大小</span>
+        <span class="column-progress">灌库进度</span>
+        <span class="column-status">状态</span>
+        <span class="column-action">操作</span>
       </div>
       <TransitionGroup name="ingestion-row" tag="div" class="file-table-body">
         <div
@@ -264,20 +263,19 @@ function historySummary(row: IngestionHistoryItem): string {
           :key="row.id"
           class="file-row"
           :class="row.status"
-          :style="{ gridTemplateColumns: queueColumns }"
         >
-          <span class="name-cell">
+          <span class="name-cell column-name">
             <IcIcon v-if="row.isDir" name="folder" :size="16" class="kind-icon folder" />
             <IcIcon v-else name="document" :size="16" class="kind-icon file" />
             <span class="file-name" :title="row.path">{{ row.name }}</span>
           </span>
-          <span class="absolute-path-cell" :title="absoluteLocationPath(row.path)">
+          <span class="absolute-path-cell column-path" :title="absoluteLocationPath(row.path)">
             {{ absoluteLocationPath(row.path) }}
           </span>
-          <span>{{ row.mtime ?? '-' }}</span>
-          <span>{{ fileKind(row) }}</span>
-          <span>{{ formatSize(row.size) }}</span>
-          <span class="progress-cell ingestion-progress-cell">
+          <span class="column-modified">{{ row.mtime ?? '-' }}</span>
+          <span class="column-kind">{{ fileKind(row) }}</span>
+          <span class="column-size">{{ formatSize(row.size) }}</span>
+          <span class="progress-cell ingestion-progress-cell column-progress">
             <div class="progress-bar-wrap" :title="row.message || row.stageLabel">
               <div class="progress-bar-fill" :style="{ width: `${row.progress ?? 0}%` }" />
               <span class="progress-pct">{{ row.progress ?? 0 }}%</span>
@@ -287,12 +285,12 @@ function historySummary(row: IngestionHistoryItem): string {
               <template v-if="row.stageTotal"> · {{ row.stageCurrent }} / {{ row.stageTotal }}</template>
             </span>
           </span>
-          <span class="status-cell">
+          <span class="status-cell column-status">
             <IcIcon v-if="row.status === 'running' || row.status === 'cancelling'" name="spinner" :size="14" class="spin" />
             <IcIcon v-else name="radio-unchecked" :size="14" />
             <span class="status-pill" :class="row.status">{{ queueStatusLabel(row.status) }}</span>
           </span>
-          <span>
+          <span class="column-action">
             <button
               class="cancel-ingestion-button"
               type="button"
@@ -309,14 +307,14 @@ function historySummary(row: IngestionHistoryItem): string {
     </div>
 
     <!-- Graph Queue Tab -->
-    <div v-else-if="activeTab === 'graph-queue'" class="file-table">
-      <div class="file-table-head" :style="{ gridTemplateColumns: graphQueueColumns }">
-        <span>名称</span>
-        <span>所在位置绝对路径</span>
-        <span>最后修改日期</span>
-        <span>类型</span>
-        <span>图谱抽取进度</span>
-        <span>状态</span>
+    <div v-else-if="activeTab === 'graph-queue'" class="file-table graph-queue-table">
+      <div class="file-table-head">
+        <span class="column-name">名称</span>
+        <span class="column-path">所在位置绝对路径</span>
+        <span class="column-modified">最后修改日期</span>
+        <span class="column-kind">类型</span>
+        <span class="column-progress">图谱抽取进度</span>
+        <span class="column-status">状态</span>
       </div>
       <TransitionGroup name="ingestion-row" tag="div" class="file-table-body">
         <div
@@ -324,18 +322,17 @@ function historySummary(row: IngestionHistoryItem): string {
           :key="row.id"
           class="file-row"
           :class="row.status"
-          :style="{ gridTemplateColumns: graphQueueColumns }"
         >
-          <span class="name-cell">
+          <span class="name-cell column-name">
             <IcIcon name="document" :size="16" class="kind-icon file" />
             <span class="file-name" :title="row.path">{{ row.name }}</span>
           </span>
-          <span class="absolute-path-cell" :title="absoluteLocationPath(row.path)">
+          <span class="absolute-path-cell column-path" :title="absoluteLocationPath(row.path)">
             {{ absoluteLocationPath(row.path) }}
           </span>
-          <span>{{ row.mtime ?? '-' }}</span>
-          <span>{{ fileKind(row) }}</span>
-          <span class="progress-cell graph-progress-cell">
+          <span class="column-modified">{{ row.mtime ?? '-' }}</span>
+          <span class="column-kind">{{ fileKind(row) }}</span>
+          <span class="progress-cell graph-progress-cell column-progress">
             <div class="progress-bar-wrap" :title="row.message || row.stageLabel">
               <div class="progress-bar-fill" :style="{ width: `${row.progress ?? 0}%` }" />
               <span class="progress-pct">{{ row.progress ?? 0 }}%</span>
@@ -345,7 +342,7 @@ function historySummary(row: IngestionHistoryItem): string {
               <template v-if="row.stageTotal"> · {{ row.stageCurrent }} / {{ row.stageTotal }}</template>
             </span>
           </span>
-          <span class="status-cell">
+          <span class="status-cell column-status">
             <IcIcon v-if="row.status === 'running'" name="spinner" :size="14" class="spin" />
             <IcIcon v-else name="radio-unchecked" :size="14" />
             <span class="status-pill" :class="row.status">{{ row.status === 'running' ? '正在抽取' : '等待抽取' }}</span>
@@ -358,14 +355,14 @@ function historySummary(row: IngestionHistoryItem): string {
     </div>
 
     <!-- Merged History Tab -->
-    <div v-else class="file-table">
-      <div class="file-table-head" :style="{ gridTemplateColumns: historyColumns }">
-        <span>名称</span>
-        <span>来源</span>
-        <span>类型</span>
-        <span>结果</span>
-        <span>完成时间</span>
-        <span>摘要</span>
+    <div v-else class="file-table history-table">
+      <div class="file-table-head">
+        <span class="column-name">名称</span>
+        <span class="column-source">来源</span>
+        <span class="column-kind">类型</span>
+        <span class="column-status">结果</span>
+        <span class="column-finished">完成时间</span>
+        <span class="column-summary">摘要</span>
       </div>
       <div class="file-table-body">
         <div class="history-filter-bar">
@@ -393,26 +390,25 @@ function historySummary(row: IngestionHistoryItem): string {
           :key="`${row.sourceType}-${row.id}`"
           class="file-row"
           :class="row.status"
-          :style="{ gridTemplateColumns: historyColumns }"
         >
-          <span class="name-cell">
+          <span class="name-cell column-name">
             <IcIcon v-if="row.isDir" name="folder" :size="16" class="kind-icon folder" />
             <IcIcon v-else-if="row.sourceType !== 'graph'" name="document" :size="16" class="kind-icon file" />
             <IcIcon v-else name="psychology" :size="16" class="kind-icon graph" />
             <span class="file-name" :title="row.path || row.name">{{ row.name }}</span>
           </span>
-          <span class="history-source-cell">
+          <span class="history-source-cell column-source">
             <span class="source-chip" :class="row.sourceType">{{ historySourceLabel(row.sourceType) }}</span>
           </span>
-          <span>{{ fileKind(row) }}</span>
-          <span class="status-cell">
+          <span class="column-kind">{{ fileKind(row) }}</span>
+          <span class="status-cell column-status">
             <IcIcon v-if="row.status === 'finished'" name="check-circle" :size="14" />
             <IcIcon v-else-if="row.status === 'skipped'" name="radio-unchecked" :size="14" />
             <IcIcon v-else name="cancel" :size="14" />
             <span class="status-pill" :class="row.status">{{ historyStatusLabel(row.status) }}</span>
           </span>
-          <span>{{ formatDate(row.finishedAt) }}</span>
-          <span class="summary-cell" :title="historySummary(row)">{{ historySummary(row) }}</span>
+          <span class="column-finished">{{ formatDate(row.finishedAt) }}</span>
+          <span class="summary-cell column-summary" :title="historySummary(row)">{{ historySummary(row) }}</span>
         </div>
       </div>
       <div v-if="historyRows.length === 0" class="empty-state">
@@ -506,6 +502,10 @@ function historySummary(row: IngestionHistoryItem): string {
 
 .tab-button.active {
   color: var(--color-primary);
+}
+
+.tab-label-short {
+  display: none;
 }
 
 .icon-button {
@@ -649,7 +649,22 @@ function historySummary(row: IngestionHistoryItem): string {
 .file-row {
   display: grid;
   align-items: center;
-  min-width: 760px;
+  min-width: 0;
+}
+
+.queue-table .file-table-head,
+.queue-table .file-row {
+  grid-template-columns: minmax(180px, 1.4fr) minmax(300px, 2.2fr) 145px 90px 90px minmax(210px, 1.4fr) 120px 96px;
+}
+
+.graph-queue-table .file-table-head,
+.graph-queue-table .file-row {
+  grid-template-columns: minmax(180px, 1.4fr) minmax(300px, 2.2fr) 145px 90px minmax(240px, 1.5fr) 132px;
+}
+
+.history-table .file-table-head,
+.history-table .file-row {
+  grid-template-columns: minmax(220px, 2fr) 80px 140px 132px 160px 1fr;
 }
 
 .file-table-head {
@@ -915,18 +930,129 @@ function historySummary(row: IngestionHistoryItem): string {
   }
 }
 
+@media (max-width: 1320px) {
+  .queue-table .file-table-head,
+  .queue-table .file-row {
+    grid-template-columns: minmax(160px, 1.1fr) minmax(220px, 1.6fr) minmax(180px, 1.25fr) 112px 86px;
+  }
+
+  .graph-queue-table .file-table-head,
+  .graph-queue-table .file-row {
+    grid-template-columns: minmax(160px, 1.1fr) minmax(220px, 1.6fr) minmax(190px, 1.25fr) 120px;
+  }
+
+  .history-table .file-table-head,
+  .history-table .file-row {
+    grid-template-columns: minmax(180px, 1.5fr) 72px 120px 150px minmax(180px, 1fr);
+  }
+
+  .column-modified,
+  .column-kind,
+  .column-size {
+    display: none;
+  }
+}
+
 @media (max-width: 760px) {
   .ingestion-page {
-    padding: var(--space-12);
+    gap: var(--space-8);
+    padding: var(--space-8);
   }
 
   .page-heading {
     align-items: stretch;
     flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .tab-switch {
+    display: flex;
+    width: 100%;
+  }
+
+  .tab-button {
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .heading-actions {
-    justify-content: space-between;
+    align-self: flex-end;
+    justify-content: flex-end;
+  }
+
+  .queue-table .file-table-head,
+  .queue-table .file-row {
+    grid-template-columns: minmax(0, 1.35fr) minmax(120px, 1fr) 104px 76px;
+  }
+
+  .graph-queue-table .file-table-head,
+  .graph-queue-table .file-row {
+    grid-template-columns: minmax(0, 1.3fr) minmax(130px, 1fr) 104px;
+  }
+
+  .history-table .file-table-head,
+  .history-table .file-row {
+    grid-template-columns: minmax(0, 1.4fr) 64px 104px;
+  }
+
+  .column-path,
+  .column-finished,
+  .column-summary {
+    display: none;
+  }
+
+  .file-table-head span,
+  .file-row > span {
+    padding-right: var(--space-8);
+    padding-left: var(--space-8);
+  }
+
+  .file-table-head span:first-child,
+  .file-row > span:first-child {
+    padding-left: var(--space-12);
+  }
+
+  .file-table-head span:last-child,
+  .file-row > span:last-child {
+    padding-right: var(--space-12);
+  }
+
+  .cancel-ingestion-button {
+    padding: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .tab-button {
+    gap: var(--space-4);
+    padding: 0 var(--space-4);
+  }
+
+  .tab-label-long {
+    display: none;
+  }
+
+  .tab-label-short {
+    display: inline;
+  }
+
+  .queue-table .file-table-head,
+  .queue-table .file-row {
+    grid-template-columns: minmax(0, 1fr) minmax(108px, 0.8fr) 58px;
+  }
+
+  .graph-queue-table .file-table-head,
+  .graph-queue-table .file-row {
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 0.9fr);
+  }
+
+  .queue-table .column-status,
+  .graph-queue-table .column-status {
+    display: none;
+  }
+
+  .cancel-ingestion-button {
+    font-size: calc(11px * var(--font-scale));
   }
 }
 </style>

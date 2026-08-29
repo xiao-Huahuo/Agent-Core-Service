@@ -180,7 +180,39 @@ class SettingsGrpcHandlerMixin:
                 _knowledge_library_to_response(item)
                 for item in profile.get("knowledge_libraries", [])
             ],
+            ocr_enabled=bool(profile.get("ocr_enabled")),
+            vision_understanding_enabled=bool(profile.get("vision_understanding_enabled")),
+            auto_ingest_on_upload=bool(profile.get("auto_ingest_on_upload")),
         )
+
+    def GetKnowledgeIngestionConfig(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """返回与 REST 相同的灌库、OCR 和识图用户设置。"""
+
+        user_id = self._require_struct_user_id(request=request, context=context)
+        return ParseDict(
+            self._require_settings_service(context).get_knowledge_ingestion_config(user_id=user_id),
+            Struct(),
+        )
+
+    def SaveKnowledgeIngestionConfig(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """保存与 REST 相同的灌库、OCR 和识图用户设置。"""
+
+        payload = MessageToDict(request)
+        user_id = self._require_struct_user_id(request=request, context=context)
+        result = self._require_settings_service(context).save_knowledge_ingestion_config(
+            user_id=user_id,
+            auto_ingest_on_upload=(bool(payload["auto_ingest_on_upload"]) if "auto_ingest_on_upload" in payload else None),
+            ocr_enabled=(bool(payload["ocr_enabled"]) if "ocr_enabled" in payload else None),
+            vision_understanding_enabled=(
+                bool(payload["vision_understanding_enabled"])
+                if "vision_understanding_enabled" in payload else None
+            ),
+            knowledge_ignore_patterns=(
+                str(payload["knowledge_ignore_patterns"])
+                if "knowledge_ignore_patterns" in payload else None
+            ),
+        )
+        return ParseDict(result, Struct())
     def GetLLMConfig(  # noqa: N802
         self, request: LLMConfigRequest, context: grpc.ServicerContext,
     ) -> LLMConfigResponse:

@@ -6,7 +6,7 @@
  * chat endpoint as the console front-end.
  */
 
-import { apiDelete, apiGet, apiPost, apiPostForm, apiPut, buildApiUrl, streamLines } from '@/api/client'
+import { ApiError, apiDelete, apiGet, apiPost, apiPostForm, apiPut, buildApiUrl, streamLines } from '@/api/client'
 import type { ApiRequestInit } from '@/api/client'
 import { API_ROUTES } from '@/router/api_routes'
 import type { MarkdownHtmlVisualizationPayload } from '@/types/knowledge'
@@ -92,13 +92,52 @@ export function uploadAgentAttachment(
   userId: string,
   sessionId: string,
   file: File,
+  onProgress?: (percent: number) => void,
 ): Promise<AgentAttachmentUploadResponse> {
   const form = new FormData()
   form.set('user_id', userId)
   form.set('session_id', sessionId)
   form.set('file', file)
-  return apiPostForm<AgentAttachmentUploadResponse>(API_ROUTES.AGENT_ATTACHMENTS_UPLOAD, form, {
-    timeoutMs: 600_000,
+  if (!onProgress) {
+    return apiPostForm<AgentAttachmentUploadResponse>(API_ROUTES.AGENT_ATTACHMENTS_UPLOAD, form, {
+      timeoutMs: 600_000,
+    })
+  }
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest()
+    request.open('POST', buildApiUrl(API_ROUTES.AGENT_ATTACHMENTS_UPLOAD))
+    request.timeout = 600_000
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        onProgress(Math.round(event.loaded / event.total * 100))
+      }
+    }
+    request.onerror = () => reject(new ApiError(0, '附件上传网络失败'))
+    request.ontimeout = () => reject(new ApiError(0, '附件上传超时'))
+    request.onload = () => {
+      if (request.status < 200 || request.status >= 300) {
+        reject(new ApiError(request.status, `附件上传失败: ${request.status}`))
+        return
+      }
+      try {
+        resolve(JSON.parse(request.responseText) as AgentAttachmentUploadResponse)
+      } catch {
+        reject(new ApiError(request.status, '附件上传接口返回了无效数据'))
+      }
+    }
+    request.send(form)
+  })
+}
+
+/** Fetch one attachment's backend-owned parsing progress. */
+export function fetchAgentAttachment(
+  userId: string,
+  sessionId: string,
+  attachmentId: string,
+): Promise<AgentAttachmentUploadResponse> {
+  return apiGet(`${API_ROUTES.AGENT_ATTACHMENTS}/${encodeURIComponent(attachmentId)}`, {
+    user_id: userId,
+    session_id: sessionId,
   })
 }
 

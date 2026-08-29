@@ -70,7 +70,7 @@ withDefaults(defineProps<{
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: 28px;
   background: var(--color-surface);
   box-shadow: 0 0 0 4px var(--library-form-ring);

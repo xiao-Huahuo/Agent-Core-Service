@@ -10,6 +10,14 @@
 @import 'vditor/dist/index.css';
 
 @font-face {
+  font-family: "HYWenHei-85W";
+  src: url("./fonts/HYWenHei-85W.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: "Google Sans";
   src: url("./fonts/GoogleSans-Regular.ttf") format("truetype");
   font-weight: 400;

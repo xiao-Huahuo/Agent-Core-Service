@@ -46,6 +46,8 @@ class UserSettingsRecord(SQLModel, table=True):
     web_search_max_results: int = Field(default=DEFAULT_BUSINESS_LIMITS.default_web_search_max_results)
     auto_ingest_on_upload: bool = Field(default=False)
     ocr_enabled: bool = Field(default=False)
+    # 用户显式开启后，Agent 图片附件和 understand_image 工具才允许调用本地 Qwen。
+    vision_understanding_enabled: bool = Field(default=False)
     # 用户显式启用后，启动后验证到的缺失模型才允许自动下载。
     model_auto_download_enabled: bool = Field(default=False)
     long_term_memory_enabled: bool = Field(default=True)

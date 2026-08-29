@@ -164,6 +164,10 @@ function setFeedback(kind: 'up' | 'down') {
 }
 
 async function handleNavigateSource(uri: string) {
+  if (/^session-upload:\/\//i.test(uri)) {
+    // MarkdownContent resolves attachment URIs through the exact raw endpoint.
+    return
+  }
   if (/^https?:\/\//i.test(uri)) {
     workspaceStore.openBrowserSidebar(uri)
     return

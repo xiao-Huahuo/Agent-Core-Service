@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from tests.db_test_utils import create_test_engine as create_engine
+from sqlalchemy import text
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.settings.service import SettingsService
@@ -40,3 +41,29 @@ def test_model_auto_download_defaults_to_false_and_persists() -> None:
     assert saved == {"user_id": "u1", "auto_download_enabled": True}
     assert service.get_model_preferences(user_id="u1")["auto_download_enabled"] is True
     assert service.ensure_user_profile(user_id="u1")["model_auto_download_enabled"] is True
+
+
+def test_vision_understanding_defaults_to_false_and_persists() -> None:
+    """识图必须默认关闭，并通过正式用户设置保存显式开启值。"""
+
+    service = _make_settings_service()
+    assert service.ensure_user_profile(user_id="u1")["vision_understanding_enabled"] is False
+
+    saved = service.save_knowledge_ingestion_config(user_id="u1", vision_understanding_enabled=True)
+
+    assert saved["vision_understanding_enabled"] is True
+    assert service.is_vision_understanding_enabled_for_user(user_id="u1") is True
+
+
+def test_ocr_flag_lookup_ignores_unrelated_newer_columns() -> None:
+    """模型管理读取 OCR 时不得因热重载数据库暂缺其他设置列而整体 500。"""
+
+    service = _make_settings_service()
+    with service.engine.begin() as connection:
+        connection.execute(text("DROP TABLE user_settings"))
+        connection.execute(text(
+            "CREATE TABLE user_settings (user_id VARCHAR(128) PRIMARY KEY, ocr_enabled BOOLEAN NOT NULL)"
+        ))
+        connection.execute(text("INSERT INTO user_settings (user_id, ocr_enabled) VALUES ('u1', 1)"))
+
+    assert service.is_ocr_enabled_for_user(user_id="u1") is True

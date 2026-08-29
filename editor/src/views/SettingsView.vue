@@ -63,6 +63,7 @@ const knowledgeDirDraft = ref(settingsStore.profile.knowledgeDir)
 const watchEnabledDraft = ref(settingsStore.profile.knowledgeWatchEnabled)
 const autoIngestOnUploadDraft = ref(Boolean(settingsStore.profile.autoIngestOnUpload))
 const ocrEnabledDraft = ref(Boolean(settingsStore.profile.ocrEnabled))
+const visionUnderstandingEnabledDraft = ref(Boolean(settingsStore.profile.visionUnderstandingEnabled))
 const knowledgeIgnorePatternsDraft = ref(settingsStore.profile.knowledgeIgnorePatterns ?? '')
 const editorImageAssetsDirDraft = ref(settingsStore.profile.editorImageAssetsDir ?? './assets/')
 const uiFontFamiliesDraft = ref<string[]>([...(settingsStore.profile.uiFontFamilies ?? [])])
@@ -87,6 +88,7 @@ const hasChanges = computed(() => {
     watchEnabledDraft.value !== settingsStore.profile.knowledgeWatchEnabled ||
     autoIngestOnUploadDraft.value !== Boolean(settingsStore.profile.autoIngestOnUpload) ||
     ocrEnabledDraft.value !== Boolean(settingsStore.profile.ocrEnabled) ||
+    visionUnderstandingEnabledDraft.value !== Boolean(settingsStore.profile.visionUnderstandingEnabled) ||
     knowledgeIgnorePatternsDraft.value !== (settingsStore.profile.knowledgeIgnorePatterns ?? '') ||
     editorImageAssetsDirDraft.value !== (settingsStore.profile.editorImageAssetsDir ?? './assets/')
   )
@@ -110,6 +112,11 @@ watch(
 watch(
   () => settingsStore.profile.ocrEnabled,
   (value) => { ocrEnabledDraft.value = Boolean(value) },
+)
+
+watch(
+  () => settingsStore.profile.visionUnderstandingEnabled,
+  (value) => { visionUnderstandingEnabledDraft.value = Boolean(value) },
 )
 
 watch(
@@ -288,6 +295,7 @@ async function saveProfile() {
   const nextLibraryName = libraryNameDraft.value.trim()
   const ignorePatternsChanged = knowledgeIgnorePatternsDraft.value !== (settingsStore.profile.knowledgeIgnorePatterns ?? '')
   const ocrEnabledChanged = ocrEnabledDraft.value !== Boolean(settingsStore.profile.ocrEnabled)
+  const visionUnderstandingChanged = visionUnderstandingEnabledDraft.value !== Boolean(settingsStore.profile.visionUnderstandingEnabled)
   const editorImageAssetsDirChanged = editorImageAssetsDirDraft.value !== (settingsStore.profile.editorImageAssetsDir ?? './assets/')
   try {
     settingsStore.updateProfile({ knowledgeWatchEnabled: watchEnabledDraft.value })
@@ -300,11 +308,13 @@ async function saveProfile() {
     if (
       autoIngestOnUploadDraft.value !== Boolean(settingsStore.profile.autoIngestOnUpload) ||
       ocrEnabledChanged ||
+      visionUnderstandingChanged ||
       ignorePatternsChanged
     ) {
       const result = await settingsStore.saveKnowledgeIngestionSettings({
         autoIngestOnUpload: autoIngestOnUploadDraft.value,
         ocrEnabled: ocrEnabledDraft.value,
+        visionUnderstandingEnabled: visionUnderstandingEnabledDraft.value,
         knowledgeIgnorePatterns: knowledgeIgnorePatternsDraft.value,
       })
       if (result?.restart_required) {
@@ -735,6 +745,7 @@ onBeforeUnmount(() => {
         v-model:knowledge-ignore-patterns-draft="knowledgeIgnorePatternsDraft"
         v-model:library-name-draft="libraryNameDraft"
         v-model:ocr-enabled-draft="ocrEnabledDraft"
+        v-model:vision-understanding-enabled-draft="visionUnderstandingEnabledDraft"
         v-model:watch-enabled-draft="watchEnabledDraft"
         :supported-file-types="settingsStore.profile.knowledgeSupportedSuffixes ?? []"
         :has-changes="hasChanges"

@@ -9,9 +9,9 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
-import { previewKnowledgeFile } from '@/api/knowledge'
 import { useWorkspaceStore } from '@/stores/workspace'
 import SearchPage from '@/views/SearchPage.vue'
+import searchPageSource from '@/views/SearchPage.vue?raw'
 
 vi.mock('@/api/agent', () => ({
   updateCurrentDocumentContext: vi.fn().mockResolvedValue(undefined),
@@ -55,6 +55,11 @@ describe('SearchPage result opening', () => {
     vi.clearAllMocks()
   })
 
+  it('reuses the same workspace editor sidebar as smart-form file cells', () => {
+    expect(searchPageSource).toContain('await workspaceStore.openEditorSidebar(node)')
+    expect(searchPageSource).not.toContain('SearchResultPreview')
+  })
+
   it('keeps single-click preview on the search page and opens the editor on double click', async () => {
     const workspaceStore = useWorkspaceStore()
     workspaceStore.mainView = 'search'
@@ -71,6 +76,7 @@ describe('SearchPage result opening', () => {
       children: [{ name: 'notes.md', path: 'docs/notes.md', isDir: false }],
     }]
     const selectFile = vi.spyOn(workspaceStore, 'selectFile').mockResolvedValue(undefined)
+    const openEditorSidebar = vi.spyOn(workspaceStore, 'openEditorSidebar').mockResolvedValue(undefined)
     vi.spyOn(workspaceStore, 'performSearch').mockResolvedValue(undefined)
     const wrapper = mount(SearchPage, {
       global: {
@@ -86,87 +92,13 @@ describe('SearchPage result opening', () => {
     await result.trigger('click')
 
     expect(workspaceStore.mainView).toBe('search')
-    expect(wrapper.find('.search-result-preview').exists()).toBe(true)
+    expect(openEditorSidebar).toHaveBeenCalledWith({ name: 'notes.md', path: 'docs/notes.md', isDir: false })
     expect(selectFile).not.toHaveBeenCalled()
 
     await result.trigger('dblclick')
 
     expect(workspaceStore.mainView).toBe('editor')
     expect(selectFile).toHaveBeenCalledOnce()
-  })
-
-  it('renders Markdown syntax highlighting in a readonly semantic result preview', async () => {
-    const workspaceStore = useWorkspaceStore()
-    workspaceStore.mainView = 'search'
-    workspaceStore.searchQuery = 'concept'
-    workspaceStore.searchResults = {
-      filename_results: [],
-      fulltext_results: [],
-      semantic_results: [{
-        memory_id: 'memory_1',
-        source_uri: 'docs/notes.md',
-        content: 'alpha beta',
-      }],
-    }
-    workspaceStore.tree = [{
-      name: 'docs',
-      path: 'docs',
-      isDir: true,
-      children: [{ name: 'notes.md', path: 'docs/notes.md', isDir: false }],
-    }]
-    vi.spyOn(workspaceStore, 'performSearch').mockResolvedValue(undefined)
-    const wrapper = mount(SearchPage, {
-      global: {
-        stubs: {
-          SplitText: true,
-        },
-      },
-    })
-
-    await wrapper.get('.search-box-submit').trigger('click')
-    await wrapper.get('.result-card').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.get('.search-result-preview textarea').attributes('readonly')).toBeDefined()
-    expect(wrapper.find('.search-result-preview .syntax-highlight-layer').exists()).toBe(true)
-  })
-
-  it('shows the shared editor mode bar while keeping Edit readonly', async () => {
-    const workspaceStore = useWorkspaceStore()
-    workspaceStore.mainView = 'search'
-    workspaceStore.searchQuery = 'alpha'
-    workspaceStore.searchResults = {
-      filename_results: [{ path: 'docs/notes.md', name: 'notes.md' }],
-      fulltext_results: [],
-      semantic_results: [],
-    }
-    workspaceStore.tree = [{
-      name: 'docs',
-      path: 'docs',
-      isDir: true,
-      children: [{ name: 'notes.md', path: 'docs/notes.md', isDir: false }],
-    }]
-    vi.spyOn(workspaceStore, 'performSearch').mockResolvedValue(undefined)
-    const wrapper = mount(SearchPage, {
-      global: {
-        stubs: {
-          SplitText: true,
-        },
-      },
-    })
-
-    await wrapper.get('.search-box-submit').trigger('click')
-    await wrapper.get('.result-card').trigger('click')
-    await flushPromises()
-
-    const modeButtons = wrapper.findAll('.search-result-preview .editor-mode-switch button')
-    expect(modeButtons.map((button) => button.text())).toEqual(['Edit', 'Preview', 'Split'])
-    expect(wrapper.get('.search-result-preview textarea').attributes('readonly')).toBeDefined()
-
-    await modeButtons[1]?.trigger('click')
-
-    expect(wrapper.find('.search-result-preview textarea').exists()).toBe(false)
-    expect(wrapper.find('.search-result-preview .markdown-preview').exists()).toBe(true)
   })
 
   it('paginates the displayed result sequence at twenty items per page', async () => {
@@ -201,37 +133,6 @@ describe('SearchPage result opening', () => {
 
     expect(wrapper.findAll('.result-card')).toHaveLength(5)
     expect(wrapper.get('.pagination-status').text()).toContain('2 / 2')
-  })
-
-  it('clears the selected result when the active card is clicked again', async () => {
-    const workspaceStore = useWorkspaceStore()
-    workspaceStore.mainView = 'search'
-    workspaceStore.searchQuery = 'alpha'
-    workspaceStore.searchResults = {
-      filename_results: [{ path: 'docs/notes.md', name: 'notes.md' }],
-      fulltext_results: [],
-      semantic_results: [],
-    }
-    workspaceStore.tree = [{
-      name: 'docs',
-      path: 'docs',
-      isDir: true,
-      children: [{ name: 'notes.md', path: 'docs/notes.md', isDir: false }],
-    }]
-    vi.spyOn(workspaceStore, 'performSearch').mockResolvedValue(undefined)
-    const wrapper = mount(SearchPage, {
-      global: { stubs: { SplitText: true } },
-    })
-    await wrapper.get('.search-box-submit').trigger('click')
-    const result = wrapper.get('.result-card')
-
-    await result.trigger('click')
-    expect(result.classes()).toContain('selected')
-    expect(wrapper.find('.search-result-preview').exists()).toBe(true)
-
-    await result.trigger('click')
-    expect(result.classes()).not.toContain('selected')
-    expect(wrapper.find('.search-result-preview').exists()).toBe(false)
   })
 
   it('reuses the toolbar search dropdown for both initial and searched page states', async () => {
@@ -275,7 +176,7 @@ describe('SearchPage result opening', () => {
     wrapper.unmount()
   })
 
-  it('uses the native PDF viewer in Preview mode while keeping extracted text in Edit', async () => {
+  it('routes PDF results through the shared editor sidebar pipeline', async () => {
     const workspaceStore = useWorkspaceStore()
     workspaceStore.mainView = 'search'
     workspaceStore.searchQuery = 'report'
@@ -290,16 +191,7 @@ describe('SearchPage result opening', () => {
       isDir: true,
       children: [{ name: 'report.pdf', path: 'docs/report.pdf', isDir: false }],
     }]
-    vi.mocked(previewKnowledgeFile).mockResolvedValue({
-      path: 'docs/report.pdf',
-      kind: 'pdf',
-      raw_url: '/knowledge/raw/report.pdf',
-      content: 'extracted report text',
-      mtime: '2026-07-31T09:00:00',
-      size: 100,
-      extension: '.pdf',
-      readonly: true,
-    })
+    const openEditorSidebar = vi.spyOn(workspaceStore, 'openEditorSidebar').mockResolvedValue(undefined)
     vi.spyOn(workspaceStore, 'performSearch').mockResolvedValue(undefined)
     const wrapper = mount(SearchPage, {
       global: { stubs: { SplitText: true } },
@@ -307,12 +199,11 @@ describe('SearchPage result opening', () => {
 
     await wrapper.get('.search-box-submit').trigger('click')
     await wrapper.get('.result-card').trigger('click')
-    await flushPromises()
 
-    expect(wrapper.find('.search-result-preview textarea').exists()).toBe(true)
-    await wrapper.findAll('.search-result-preview .editor-mode-switch button')[1]?.trigger('click')
-
-    expect(wrapper.find('.search-result-preview .pdf-preview').exists()).toBe(true)
-    expect(wrapper.find('.search-result-preview .code-preview').exists()).toBe(false)
+    expect(openEditorSidebar).toHaveBeenCalledWith({
+      name: 'report.pdf',
+      path: 'docs/report.pdf',
+      isDir: false,
+    })
   })
 })

@@ -481,6 +481,7 @@ class LongTermMemoryService:
 
         from sqlalchemy import func
 
+        effective_limit = limit or self.config.limits.memory_search_default_limit
         like_pattern = f"%{query}%"
         with Session(self.engine) as db_session:
             rows = db_session.exec(
@@ -494,7 +495,7 @@ class LongTermMemoryService:
                 .where(LongTermMemorySpec.memory_type == "knowledge_chunk")
                 .where(LongTermMemorySpec.content.ilike(like_pattern))
                 .order_by(LongTermMemorySpec.source_uri)
-            .limit((limit or self.config.limits.memory_search_default_limit) * 10)
+                .limit(effective_limit * 10)
             ).all()
 
         seen: set[str] = set()
@@ -512,6 +513,6 @@ class LongTermMemoryService:
             if end < content_len:
                 snippet = f"{snippet}..."
             results.append({"source_uri": source_uri, "snippet": snippet})
-            if len(results) >= limit:
+            if len(results) >= effective_limit:
                 break
         return results

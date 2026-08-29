@@ -13,6 +13,12 @@ import { nextTick } from 'vue'
 import MarkdownContent from '../MarkdownContent.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 
+const { openImagePreview } = vi.hoisted(() => ({ openImagePreview: vi.fn() }))
+
+vi.mock('@/components/common/useImagePreviewer', () => ({
+  useImagePreviewer: () => ({ open: openImagePreview }),
+}))
+
 describe('MarkdownContent source links', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -20,6 +26,7 @@ describe('MarkdownContent source links', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    openImagePreview.mockClear()
   })
 
   it('links a unique workspace filename even without citation metadata', async () => {
@@ -106,6 +113,44 @@ describe('MarkdownContent source links', () => {
     expect(sourceLink.text()).toBe('09_ocean_acidification_noaa 2.md')
     await sourceLink.trigger('click')
     expect(onNavigateSource).toHaveBeenCalledWith('1/3/special/09_ocean_acidification_noaa 2.md')
+  })
+
+  it('opens the exact session attachment even when the workspace has the same filename', async () => {
+    const workspaceStore = useWorkspaceStore()
+    workspaceStore.tree = [{ name: 'image11.png', path: 'old/image11.png', isDir: false }]
+    const onNavigateSource = vi.fn<(uri: string) => void>()
+    const uri = 'session-upload://u1/library/s1/image11.png'
+    const wrapper = mount(MarkdownContent, {
+      props: {
+        content: '1. image11.png — Vue.js 介绍',
+        citationMap: { A1: { source_uri: uri, content: 'OCR', title: 'image11.png' } },
+        onNavigateSource,
+      },
+    })
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+
+    await wrapper.get('.source-file-link').trigger('click')
+
+    expect(onNavigateSource).not.toHaveBeenCalled()
+    expect(openImagePreview).toHaveBeenCalledWith([{
+      src: `/agent/attachments/raw?uri=${encodeURIComponent(uri)}`,
+      alt: 'image11.png',
+    }], 0)
+  })
+
+  it('does not auto-link duplicate attachment filenames ambiguously', async () => {
+    const wrapper = mount(MarkdownContent, {
+      props: {
+        content: 'image11.png',
+        citationMap: {
+          A1: { source_uri: 'session-upload://u1/library/s1/image11.png', content: '', title: 'image11.png' },
+          A2: { source_uri: 'session-upload://u1/library/s2/image11.png', content: '', title: 'image11.png' },
+        },
+      },
+    })
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+
+    expect(wrapper.find('.source-file-link').exists()).toBe(false)
   })
 
   it('mounts an encoded knowledge file link as a clickable standalone file block', async () => {

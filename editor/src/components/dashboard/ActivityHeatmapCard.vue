@@ -622,4 +622,37 @@ function todayIso(): string {
   .filter-rail,
   .metric-strip { border-color: var(--color-text-secondary); }
 }
+
+@media (max-width: 560px) {
+  .filter-rail {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+    border-radius: var(--radius-md);
+  }
+
+  .filter-slider {
+    display: none;
+  }
+
+  .filter-button {
+    padding: 4px;
+  }
+
+  .filter-button.active {
+    background: color-mix(in srgb, var(--heat-color) 14%, transparent);
+  }
+
+  .metric-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric-item:nth-child(3) {
+    border-left: 0;
+  }
+
+  .metric-item:nth-child(n + 3) {
+    border-top: 1px solid var(--color-border);
+  }
+}
 </style>

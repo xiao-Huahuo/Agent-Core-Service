@@ -482,6 +482,7 @@ class SettingsService:
             "knowledge_libraries": [self._serialize_knowledge_library(item) for item in libraries],
             "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
             "ocr_enabled": bool(record.ocr_enabled),
+            "vision_understanding_enabled": bool(record.vision_understanding_enabled),
             "model_auto_download_enabled": bool(record.model_auto_download_enabled),
             "long_term_memory_enabled": bool(record.long_term_memory_enabled),
             "knowledge_ignore_patterns": _with_default_video_ignore_patterns(record.knowledge_ignore_patterns),
@@ -1507,11 +1508,13 @@ class SettingsService:
                     "user_id": normalized_user_id,
                     "auto_ingest_on_upload": False,
                     "ocr_enabled": self.config.ocr.enabled,
+                    "vision_understanding_enabled": False,
                     "knowledge_ignore_patterns": DEFAULT_VIDEO_IGNORE_PATTERNS,
                 }
             return {
                 "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
                 "ocr_enabled": bool(record.ocr_enabled),
+                "vision_understanding_enabled": bool(record.vision_understanding_enabled),
                 "knowledge_ignore_patterns": _with_default_video_ignore_patterns(record.knowledge_ignore_patterns),
             }
 
@@ -1521,6 +1524,7 @@ class SettingsService:
         user_id: str,
         auto_ingest_on_upload: bool | None = None,
         ocr_enabled: bool | None = None,
+        vision_understanding_enabled: bool | None = None,
         knowledge_ignore_patterns: str | None = None,
     ) -> dict:
         """保存用户知识库灌库配置。"""
@@ -1536,6 +1540,7 @@ class SettingsService:
                     knowledge_dir=str(self.config.storage.knowledge_dir),
                     auto_ingest_on_upload=bool(auto_ingest_on_upload),
                     ocr_enabled=bool(ocr_enabled),
+                    vision_understanding_enabled=bool(vision_understanding_enabled),
                     knowledge_ignore_patterns=_with_default_video_ignore_patterns(knowledge_ignore_patterns),
                     created_at=now,
                     updated_at=now,
@@ -1548,6 +1553,8 @@ class SettingsService:
                     next_ocr_enabled = bool(ocr_enabled)
                     restart_required = bool(record.ocr_enabled) != next_ocr_enabled
                     record.ocr_enabled = next_ocr_enabled
+                if vision_understanding_enabled is not None:
+                    record.vision_understanding_enabled = bool(vision_understanding_enabled)
                 if knowledge_ignore_patterns is not None:
                     record.knowledge_ignore_patterns = _with_default_video_ignore_patterns(knowledge_ignore_patterns)
                 record.updated_at = now
@@ -1557,6 +1564,7 @@ class SettingsService:
             return {
                 "auto_ingest_on_upload": bool(record.auto_ingest_on_upload),
                 "ocr_enabled": bool(record.ocr_enabled),
+                "vision_understanding_enabled": bool(record.vision_understanding_enabled),
                 "knowledge_ignore_patterns": _with_default_video_ignore_patterns(record.knowledge_ignore_patterns),
                 "restart_required": restart_required,
             }
@@ -1635,8 +1643,28 @@ class SettingsService:
 
         normalized_user_id = user_id.strip()
         with Session(self.engine) as db:
-            record = db.get(UserSettingsRecord, normalized_user_id)
-            return bool(record and record.ocr_enabled)
+            value = db.exec(
+                select(UserSettingsRecord.ocr_enabled).where(UserSettingsRecord.user_id == normalized_user_id)
+            ).first()
+            return bool(value)
+
+    def is_vision_understanding_enabled_for_user(self, *, user_id: str) -> bool:
+        """返回用户是否显式允许本地 Qwen 执行图片语义识别。"""
+
+        normalized_user_id = user_id.strip()
+        if not normalized_user_id:
+            return False
+        try:
+            with Session(self.engine) as db:
+                value = db.exec(
+                    select(UserSettingsRecord.vision_understanding_enabled).where(
+                        UserSettingsRecord.user_id == normalized_user_id
+                    )
+                ).first()
+                return bool(value)
+        except Exception:  # noqa: BLE001
+            logger.warning("读取识图设置失败，安全回退为关闭 | user=%s", normalized_user_id, exc_info=True)
+            return False
 
     def get_model_preferences(self, *, user_id: str) -> dict[str, object]:
         """返回模型下载偏好；未创建用户档案时默认关闭自动下载。"""

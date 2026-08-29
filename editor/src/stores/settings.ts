@@ -46,6 +46,7 @@ const DEFAULT_PROFILE: UserSettingsProfile = {
   webSearchMaxResults: 10,
   autoIngestOnUpload: false,
   ocrEnabled: false,
+  visionUnderstandingEnabled: false,
   modelAutoDownloadEnabled: false,
   knowledgeIgnorePatterns: '',
   knowledgeSupportedSuffixes: [],
@@ -196,6 +197,7 @@ function mapBackendProfile(profileResponse: SettingsProfileResponse): Partial<Us
     knowledgeLibraries: (profileResponse.knowledge_libraries ?? []).map(mapKnowledgeLibrary),
     autoIngestOnUpload: Boolean(profileResponse.auto_ingest_on_upload),
     ocrEnabled: Boolean(profileResponse.ocr_enabled),
+    visionUnderstandingEnabled: Boolean(profileResponse.vision_understanding_enabled),
     modelAutoDownloadEnabled: Boolean(profileResponse.model_auto_download_enabled),
     knowledgeIgnorePatterns: profileResponse.knowledge_ignore_patterns ?? '',
     knowledgeSupportedSuffixes: profileResponse.knowledge_supported_suffixes ?? [],
@@ -680,11 +682,12 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  async function saveKnowledgeIngestionSettings(params: { autoIngestOnUpload?: boolean; ocrEnabled?: boolean; knowledgeIgnorePatterns?: string }) {
+  async function saveKnowledgeIngestionSettings(params: { autoIngestOnUpload?: boolean; ocrEnabled?: boolean; visionUnderstandingEnabled?: boolean; knowledgeIgnorePatterns?: string }) {
     if (!hasUserId.value) {
       updateProfile({
         autoIngestOnUpload: params.autoIngestOnUpload ?? profile.value.autoIngestOnUpload,
         ocrEnabled: params.ocrEnabled ?? profile.value.ocrEnabled,
+        visionUnderstandingEnabled: params.visionUnderstandingEnabled ?? profile.value.visionUnderstandingEnabled,
         knowledgeIgnorePatterns: params.knowledgeIgnorePatterns ?? profile.value.knowledgeIgnorePatterns,
       })
       return
@@ -692,11 +695,13 @@ export const useSettingsStore = defineStore('settings', () => {
     const prev = {
       autoIngestOnUpload: profile.value.autoIngestOnUpload,
       ocrEnabled: profile.value.ocrEnabled,
+      visionUnderstandingEnabled: profile.value.visionUnderstandingEnabled,
       knowledgeIgnorePatterns: profile.value.knowledgeIgnorePatterns,
     }
     updateProfile({
       autoIngestOnUpload: params.autoIngestOnUpload ?? profile.value.autoIngestOnUpload,
       ocrEnabled: params.ocrEnabled ?? profile.value.ocrEnabled,
+      visionUnderstandingEnabled: params.visionUnderstandingEnabled ?? profile.value.visionUnderstandingEnabled,
       knowledgeIgnorePatterns: params.knowledgeIgnorePatterns ?? profile.value.knowledgeIgnorePatterns,
     })
     try {
@@ -704,6 +709,7 @@ export const useSettingsStore = defineStore('settings', () => {
       updateProfile({
         autoIngestOnUpload: result.auto_ingest_on_upload,
         ocrEnabled: result.ocr_enabled,
+        visionUnderstandingEnabled: result.vision_understanding_enabled,
         knowledgeIgnorePatterns: result.knowledge_ignore_patterns,
       })
       return result

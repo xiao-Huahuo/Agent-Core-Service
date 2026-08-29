@@ -21,6 +21,8 @@ from agent_service.schemas.automation import (
     AutomationToggleRequest,
 )
 from agent_service.api.grpc.agent_service_pb2 import (
+    AttachmentRawRequest,
+    AttachmentRawResponse,
     CancelRequest,
     CancelResponse,
     ChildAgentControlRequest,
@@ -158,6 +160,37 @@ from agent_service.api.grpc.mappers.responses import (
 logger = logging.getLogger(__name__)
 
 class AgentGrpcHandlerMixin:
+    def GetSessionAttachmentRaw(  # noqa: N802
+        self,
+        request: AttachmentRawRequest,
+        context: grpc.ServicerContext,
+    ) -> AttachmentRawResponse:
+        """按完整 session-upload URI 返回附件原始字节。"""
+
+        if self._attachment_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "SessionAttachmentService not initialized")
+        try:
+            path, mime_type, filename = self._attachment_service.get_attachment_file_by_uri(uri=request.uri)
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.NOT_FOUND, str(exc))
+        return AttachmentRawResponse(content=path.read_bytes(), mime_type=mime_type, filename=filename)
+
+    def GetSessionAttachment(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
+        """返回一个会话附件的最新后台解析状态。"""
+
+        if self._attachment_service is None:
+            context.abort(grpc.StatusCode.UNAVAILABLE, "SessionAttachmentService not initialized")
+        payload = MessageToDict(request)
+        try:
+            result = self._attachment_service.get_attachment(
+                user_id=str(payload.get("user_id") or ""),
+                session_id=str(payload.get("session_id") or ""),
+                attachment_id=str(payload.get("attachment_id") or ""),
+            )
+        except ValueError as exc:
+            context.abort(grpc.StatusCode.NOT_FOUND, str(exc))
+        return ParseDict({"ok": True, "attachment": result}, Struct())
+
     def StreamRun(self, request: RunRequest, context: grpc.ServicerContext):  # noqa: N802
         """无状态流式运行。"""
         logger.info("StreamRun user=%s session=%s", request.user_id, request.session_id)

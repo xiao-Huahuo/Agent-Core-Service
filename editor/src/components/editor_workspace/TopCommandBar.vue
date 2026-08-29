@@ -2,8 +2,8 @@
   Top command bar.
 
   Usage:
-  Shows the active knowledge root, global actions, theme switch, and navigation
-  links between the editor, graph preview, settings, and existing console.
+  Shows the active knowledge root, global actions, and navigation links between
+  the editor, graph preview, settings, and existing console.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
@@ -201,46 +201,6 @@ async function handleCloseWindow() {
       >
         <IcIcon name="open-in-new" :size="14" />
       </button>
-      <label class="switch" title="切换主题">
-        <input
-          type="checkbox"
-          :checked="settingsStore.isDark"
-          @change="settingsStore.toggleTheme"
-        />
-        <span class="slider">
-          <div class="moons-hole">
-            <div class="moon-hole"></div>
-            <div class="moon-hole"></div>
-            <div class="moon-hole"></div>
-          </div>
-          <div class="clouds">
-            <div class="cloud"></div>
-            <div class="cloud"></div>
-            <div class="cloud"></div>
-            <div class="cloud"></div>
-            <div class="cloud"></div>
-            <div class="cloud"></div>
-            <div class="cloud"></div>
-          </div>
-          <div class="stars">
-            <svg class="star" viewBox="0 0 20 20">
-              <path d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z" />
-            </svg>
-            <svg class="star" viewBox="0 0 20 20">
-              <path d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z" />
-            </svg>
-            <svg class="star" viewBox="0 0 20 20">
-              <path d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z" />
-            </svg>
-            <svg class="star" viewBox="0 0 20 20">
-              <path d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z" />
-            </svg>
-            <svg class="star" viewBox="0 0 20 20">
-              <path d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z" />
-            </svg>
-          </div>
-        </span>
-      </label>
       <div v-if="desktopApi?.isDesktop" class="window-controls" aria-label="Window controls">
         <button type="button" title="最小化" @click="desktopApi.minimize">
           <IcIcon name="remove" :size="13" />
@@ -439,254 +399,6 @@ async function handleCloseWindow() {
 
 .floating-window-btn {
   display: none;
-}
-
-/* ── Theme switch (sun/moon animation) ── */
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 58px;
-  height: 28px;
-  border: 1px solid var(--color-border);
-  border-radius: 22px;
-  flex-shrink: 0;
-  margin: -3.5px -7.25px;
-  transform: scale(0.75);
-  transform-origin: center;
-  order: 100;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--color-primary);
-  border-radius: 20px;
-  transition: 0.4s;
-  overflow: hidden;
-  z-index: 2;
-}
-
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 20px;
-  width: 20px;
-  left: 35px;
-  bottom: 3px;
-  background-color: orange;
-  transition: 1s;
-  border-radius: 50%;
-  overflow: hidden;
-  z-index: 3;
-}
-
-/* ── Dark: slider moves to left, bg turns black ── */
-input:checked + .slider {
-  background-color: black;
-}
-
-input:checked + .slider:before {
-  left: 3px;
-  background-color: white;
-}
-
-.moons-hole {
-  content: "";
-  position: absolute;
-  opacity: 0;
-  transition: 1s;
-  z-index: 4;
-}
-
-.moon-hole {
-  position: absolute;
-  border-radius: 50%;
-  transform: translateX(0px);
-}
-
-.moon-hole:nth-child(1) {
-  background-color: rgb(85, 85, 85);
-  height: 5px;
-  width: 5px;
-  top: 18px;
-  left: 14px;
-}
-
-.moon-hole:nth-child(2) {
-  background-color: rgb(85, 85, 85);
-  height: 10px;
-  width: 10px;
-  top: 10px;
-  left: 5px;
-}
-
-.moon-hole:nth-child(3) {
-  background-color: rgb(85, 85, 85);
-  height: 4px;
-  width: 4px;
-  top: 7px;
-  left: 15px;
-}
-
-input:checked + .slider .moons-hole {
-  opacity: 1;
-}
-
-.stars {
-  right: 4px;
-  top: 0;
-  bottom: 0;
-  transition: 1s;
-  transform: translateY(-22px);
-  opacity: 0;
-  position: absolute;
-  z-index: 4;
-}
-
-.star {
-  position: absolute;
-  fill: white;
-  animation: star-twinkle 2s infinite;
-  opacity: 1;
-}
-
-.star:nth-child(1) {
-  top: 3px;
-  right: 10px;
-  width: 15px;
-  animation-delay: 0.3s;
-}
-
-.star:nth-child(2) {
-  top: 12px;
-  right: 4px;
-  width: 12px;
-}
-
-.star:nth-child(3) {
-  top: 3px;
-  right: 8px;
-  width: 8px;
-  animation-delay: 0.6s;
-}
-
-.star:nth-child(4) {
-  top: 18px;
-  right: 14px;
-  width: 10px;
-  animation-delay: 0.9s;
-}
-
-.star:nth-child(5) {
-  top: 1px;
-  right: 30px;
-  width: 6px;
-  animation-delay: 1.2s;
-}
-
-input:checked + .slider .stars {
-  transform: translateY(0px);
-  opacity: 1;
-}
-
-@keyframes star-twinkle {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.2); }
-  80% { transform: scale(0.8); }
-  100% { transform: scale(1); }
-}
-
-.clouds {
-  position: absolute;
-  left: 4px;
-  top: 0;
-  bottom: 0;
-  width: 14px;
-  transition: 1s;
-  transform: translateX(0px);
-  opacity: 1;
-  z-index: 1;
-}
-
-.cloud {
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  background-color: white;
-  border-radius: 50%;
-  z-index: 1;
-  animation: cloud-move 6s infinite;
-}
-
-.cloud:nth-child(1) {
-  top: 0;
-  height: 15px;
-  width: 15px;
-  right: 10px;
-}
-
-.cloud:nth-child(2) {
-  height: 18px;
-  width: 18px;
-  border-radius: 50%;
-  top: 10px;
-  right: 4px;
-}
-
-.cloud:nth-child(3) {
-  height: 16px;
-  width: 16px;
-  top: 19px;
-  left: 3px;
-}
-
-.cloud:nth-child(4) {
-  top: 18px;
-  left: 15px;
-}
-
-.cloud:nth-child(5) {
-  top: 20px;
-  left: 20px;
-}
-
-.cloud:nth-child(6) {
-  top: 19px;
-  left: 30px;
-}
-
-.cloud:nth-child(7) {
-  top: 21px;
-  left: 38px;
-}
-
-input:checked + .slider .clouds {
-  transform: translateX(-40px);
-  opacity: 0;
-}
-
-.black-clouds {
-  display: none;
-}
-
-.black-cloud {
-  display: none;
-}
-
-@keyframes cloud-move {
-  0% { transform: translateX(-22px); }
-  40% { transform: translateX(-26px); }
-  80% { transform: translateX(-18px); }
-  100% { transform: translateX(-22px); }
 }
 
 .github-btn-topbar {
@@ -1091,6 +803,7 @@ kbd {
 
 .topbar.mobile .agent-play-btn,
 .topbar.mobile .model-compact-loader,
+.topbar.mobile .topbar-browser-btn,
 .topbar.mobile .topbar-git-btn,
 .topbar.mobile .topbar-todo-btn,
 .topbar.mobile .search-center,
@@ -1114,20 +827,24 @@ kbd {
   transform: none;
 }
 
-.topbar.mobile .topbar-git-btn {
+.topbar.mobile .topbar-browser-btn {
   order: 2;
 }
 
-.topbar.mobile .topbar-todo-btn {
+.topbar.mobile .topbar-git-btn {
   order: 3;
 }
 
-.topbar.mobile .search-center {
+.topbar.mobile .topbar-todo-btn {
   order: 4;
 }
 
-.topbar.mobile .window-controls {
+.topbar.mobile .search-center {
   order: 5;
+}
+
+.topbar.mobile .window-controls {
+  order: 6;
 }
 
 /* ---- 模型阻断模态框 ---- */

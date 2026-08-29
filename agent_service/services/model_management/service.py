@@ -268,6 +268,7 @@ class ModelManagementService:
     def get_management_status(self, *, user_id: str) -> dict[str, list[dict[str, Any]]]:
         """返回本地 Qwen、Embedding、ReRank 与 PaddleOCR 的完整管理状态。"""
 
+        self._reconcile_loaded_runtime_states()
         states = get_model_status().to_dict()
         embedding = self._hf_model(
             key="embedding",
@@ -324,6 +325,18 @@ class ModelManagementService:
             },
         }
         return {"models": [local_qwen, embedding, rerank, paddleocr]}
+
+    @staticmethod
+    def _reconcile_loaded_runtime_states() -> None:
+        """用真实共享 provider 缓存修复被并发状态写入覆盖的 READY 状态。"""
+
+        from agent_service.services.memory.rag.embedding import is_shared_embedding_provider_loaded
+        from agent_service.services.memory.rag.rerank import is_shared_rerank_provider_loaded
+
+        if is_shared_embedding_provider_loaded():
+            set_model_state("embedding", ModelState.READY)
+        if is_shared_rerank_provider_loaded():
+            set_model_state("rerank", ModelState.READY)
 
     def _hf_model(
         self,

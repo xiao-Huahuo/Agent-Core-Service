@@ -6,7 +6,7 @@
   upload target, and watcher/index status placeholders.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import FileContextMenu from '@/components/editor_workspace/FileContextMenu.vue'
@@ -48,6 +48,7 @@ const treeVersion = ref(0)
 const sortMenuOpen = ref(false)
 const sortKey = ref<'name' | 'mtime' | 'ingested' | 'size'>('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
+
 /** Whether the panel is displaying the recent-files layout. */
 const recentMode = ref(false)
 /** Filename-only query applied to the frozen recent visit snapshot. */
@@ -110,6 +111,18 @@ const inlineEdit = ref<{
 } | null>(null)
 const deleteTargets = ref<KnowledgeFileNode[]>([])
 const actionError = ref('')
+
+/** Reload privacy flags when the asynchronous profile refresh changes the active library scope. */
+watch(
+  () => privacyStore.activeLibraryId(),
+  (libraryId) => {
+    const userId = settingsStore.profile.userId
+    if (!userId || !libraryId || privacyStore.hasLoaded('knowledge_path', libraryId)) return
+    void privacyStore.load(userId, 'knowledge_path', libraryId).catch((error: unknown) => {
+      actionError.value = error instanceof Error ? error.message : '隐私状态加载失败'
+    })
+  },
+)
 const selectedTreePath = computed(() => (
   workspaceStore.selectedTreePath || (workspaceStore.treeSelectionCleared ? '' : workspaceStore.selectedPath)
 ))

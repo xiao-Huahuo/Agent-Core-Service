@@ -59,6 +59,27 @@ function toneFor(filename: string) {
   if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'ico'].includes(ext)) return 'pink'
   return 'neutral'
 }
+
+function processingStatus(attachment: AgentUploadedAttachment): string {
+  return String(attachment.metadata?.processing_status || 'completed')
+}
+
+function processingProgress(attachment: AgentUploadedAttachment): number {
+  const value = Number(attachment.metadata?.processing_progress ?? 100)
+  return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0
+}
+
+function processingLabel(attachment: AgentUploadedAttachment): string {
+  const status = processingStatus(attachment)
+  const stage = String(attachment.metadata?.processing_stage || '')
+  if (status === 'failed') return '失败'
+  if (status === 'uploading') return '上传中'
+  if (stage === 'ocr') return 'OCR'
+  if (stage === 'vision') return '识图'
+  if (status === 'queued') return '等待解析'
+  if (status === 'processing') return '解析中'
+  return ''
+}
 </script>
 
 <template>
@@ -66,24 +87,36 @@ function toneFor(filename: string) {
     <div
       v-for="attachment in visibleAttachments"
       :key="attachment.attachment_id"
-      class="attachment-card"
-      :class="`tone-${toneFor(attachment.filename || attachment.stored_name)}`"
+      class="attachment-item"
+      :class="[`tone-${toneFor(attachment.filename || attachment.stored_name)}`, `status-${processingStatus(attachment)}`]"
       :title="attachment.filename || attachment.stored_name"
     >
-      <div class="attachment-icon-box">
-        <IcIcon :name="iconFor(attachment.filename || attachment.stored_name)" :size="24" />
-        <span class="attachment-kind">{{ kindFor(attachment.filename || attachment.stored_name) }}</span>
+      <div class="attachment-card">
+        <div class="attachment-icon-box">
+          <IcIcon :name="iconFor(attachment.filename || attachment.stored_name)" :size="24" />
+          <span class="attachment-kind">{{ kindFor(attachment.filename || attachment.stored_name) }}</span>
+        </div>
+        <span class="attachment-name">{{ attachment.filename || attachment.stored_name }}</span>
+        <button
+          class="attachment-remove"
+          type="button"
+          title="Remove attachment"
+          aria-label="Remove attachment"
+          @click.stop="emit('remove', attachment)"
+        >
+          <IcIcon name="close" :size="15" />
+        </button>
       </div>
-      <span class="attachment-name">{{ attachment.filename || attachment.stored_name }}</span>
-      <button
-        class="attachment-remove"
-        type="button"
-        title="Remove attachment"
-        aria-label="Remove attachment"
-        @click.stop="emit('remove', attachment)"
+      <div
+        v-if="processingStatus(attachment) !== 'completed'"
+        class="attachment-processing"
+        :title="String(attachment.metadata?.processing_error || processingLabel(attachment))"
       >
-        <IcIcon name="close" :size="15" />
-      </button>
+        <span>{{ processingLabel(attachment) }}</span>
+        <span class="attachment-progress-track" aria-hidden="true">
+          <span :style="{ width: `${processingProgress(attachment)}%` }"></span>
+        </span>
+      </div>
     </div>
   </div>
 </template>
@@ -91,6 +124,7 @@ function toneFor(filename: string) {
 <style scoped>
 .attachment-blocks {
   display: flex;
+  align-items: flex-start;
   flex-wrap: nowrap;
   gap: var(--space-6);
   min-width: 0;
@@ -114,13 +148,23 @@ function toneFor(filename: string) {
   justify-content: center;
 }
 
-/* 在 rtl 下卡片内容需要重新 ltr，否则文件名会反向 */
-.attachment-blocks.align-right .attachment-card {
+/* 在 rtl 下附件内容需要重新 ltr，否则文件名会反向 */
+.attachment-blocks.align-right .attachment-item {
   direction: ltr;
 }
 
-.attachment-card {
+.attachment-item {
   --attachment-color: var(--color-text-secondary);
+  display: flex;
+  width: 70px;
+  min-width: 70px;
+  flex: 0 0 70px;
+  flex-direction: column;
+  align-self: flex-start;
+  gap: var(--space-4);
+}
+
+.attachment-card {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -243,6 +287,38 @@ function toneFor(filename: string) {
   word-break: break-all;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.attachment-processing {
+  display: grid;
+  width: 100%;
+  gap: 2px;
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
+  font-size: calc(6px * var(--font-scale));
+  line-height: 1;
+  text-align: center;
+}
+
+.attachment-progress-track {
+  display: block;
+  width: 100%;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--attachment-color) 18%, transparent);
+}
+
+.attachment-progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--attachment-color);
+  transition: width 180ms ease;
+}
+
+.attachment-item.status-failed {
+  --attachment-color: var(--color-danger);
 }
 
 :global(.dark) .attachment-card,

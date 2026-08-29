@@ -9,7 +9,6 @@
 import { nextTick, ref } from 'vue'
 import { checkModelDisk } from '@/api/settings'
 import IcIcon from '@/components/common/IcIcon.vue'
-import { API_ROUTES } from '@/router/api_routes'
 
 const libraryNameDraft = defineModel<string>('libraryNameDraft', { required: true })
 const knowledgeDirDraft = defineModel<string>('knowledgeDirDraft', { required: true })
@@ -17,6 +16,7 @@ const editorImageAssetsDirDraft = defineModel<string>('editorImageAssetsDirDraft
 const watchEnabledDraft = defineModel<boolean>('watchEnabledDraft', { required: true })
 const autoIngestOnUploadDraft = defineModel<boolean>('autoIngestOnUploadDraft', { required: true })
 const ocrEnabledDraft = defineModel<boolean>('ocrEnabledDraft', { required: true })
+const visionUnderstandingEnabledDraft = defineModel<boolean>('visionUnderstandingEnabledDraft', { required: true })
 const knowledgeIgnorePatternsDraft = defineModel<string>('knowledgeIgnorePatternsDraft', { required: true })
 
 const props = defineProps<{
@@ -132,6 +132,11 @@ async function appendBlockedFileType(suffix: string): Promise<void> {
       <label>OCR</label>
       <input v-model="ocrEnabledDraft" type="checkbox" @change="handleOcrToggle" />
       <span class="hint-text">开启后后续灌库会识别图片和内嵌图片中的文字</span>
+    </div>
+    <div class="setting-row toggle-row">
+      <label>识图</label>
+      <input v-model="visionUnderstandingEnabledDraft" type="checkbox" @change="$emit('save')" />
+      <span class="hint-text">开启后才会调用本地 Qwen 补充图片语义；关闭时仅保留 OCR</span>
     </div>
     <div class="setting-row ignore-row">
       <label>屏蔽区</label>

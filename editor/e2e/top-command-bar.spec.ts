@@ -7,6 +7,43 @@
  */
 import { expect, test } from '@playwright/test'
 
+test('moves the persisted theme toggle from the top bar to the activity rail', async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('agent_editor_theme_mode', 'dark')
+  })
+  await page.goto('/')
+  const userIdInput = page.getByRole('textbox', { name: '用户 ID' })
+  if (await userIdInput.isVisible()) {
+    await userIdInput.fill('theme-toggle-smoke')
+    await page.getByRole('button', { name: '进入', exact: true }).click()
+  }
+
+  await expect(page.locator('.topbar .theme-toggle-button')).toHaveCount(0)
+  const activityToggle = page.locator('.activity-bar > .theme-toggle-button')
+  const homeButton = page.getByRole('button', { name: '主页' })
+  await expect(activityToggle).toBeVisible()
+  await expect.poll(async () => {
+    const [toggleBox, homeBox] = await Promise.all([activityToggle.boundingBox(), homeButton.boundingBox()])
+    return Boolean(
+      toggleBox
+      && homeBox
+      && toggleBox.y < homeBox.y
+      && Math.abs(toggleBox.width - homeBox.width) <= 1
+      && Math.abs(toggleBox.height - homeBox.height) <= 1,
+    )
+  }).toBe(true)
+
+  await activityToggle.click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('agent_editor_theme_mode'))).toBe('light')
+  await page.screenshot({ path: testInfo.outputPath('theme-toggle-activity-light.png'), fullPage: true })
+
+  await page.getByRole('button', { name: 'Settings' }).click()
+  await page.getByRole('button', { name: '外观' }).click()
+  await expect(page.locator('.settings-body .theme-toggle-button')).toHaveCount(0)
+  await page.screenshot({ path: testInfo.outputPath('theme-toggle-removed-from-settings.png'), fullPage: true })
+})
+
 test('collapsed toolbar search releases its expansion area for window dragging', async ({ page }) => {
   await page.goto('/')
   const userIdInput = page.getByRole('textbox', { name: '用户 ID' })
@@ -104,6 +141,103 @@ test('resizes the sidebar browser from its left edge', async ({ page }, testInfo
 
   await expect.poll(async () => (await browserSidebar.boundingBox())?.width ?? 0).toBeGreaterThan(browserWidthBefore + 60)
   await page.screenshot({ path: testInfo.outputPath('browser-sidebar-resized.png'), fullPage: true })
+})
+
+test('mobile sidebars float and the latest one replaces the previous overlay', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 600, height: 820 })
+  await page.route('**/health', (route) => route.fulfill({ status: 200, body: '{"status":"ok"}' }))
+  await page.route((url) => url.pathname === '/knowledge/files', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      tree: [{ name: 'report.pdf', path: 'docs/report.pdf', isDir: false }],
+    }),
+  }))
+  await page.route((url) => url.pathname === '/knowledge/search', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      filename_results: [{ name: 'report.pdf', path: 'docs/report.pdf' }],
+      fulltext_results: [],
+      semantic_results: [],
+    }),
+  }))
+  await page.route((url) => url.pathname === '/knowledge/files/preview', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      path: 'docs/report.pdf',
+      kind: 'pdf',
+      raw_url: '/knowledge/raw/report.pdf',
+      content: 'Extracted PDF text.',
+      mtime: '2026-08-29T00:00:00',
+      size: 128,
+      extension: '.pdf',
+      readonly: true,
+    }),
+  }))
+  await page.goto('/')
+  const userIdInput = page.getByRole('textbox', { name: '用户 ID' })
+  await expect(userIdInput.or(page.locator('.topbar'))).toBeVisible()
+  if (await userIdInput.isVisible()) {
+    await userIdInput.fill('mobile-sidebar-smoke')
+    await page.getByRole('button', { name: '进入', exact: true }).click()
+  }
+  await expect(page.locator('.topbar')).toBeVisible()
+  await page.evaluate(() => {
+    const grid = document.querySelector('.workspace-grid')
+    let mobile = grid?.classList.contains('mobile-main-layout') ?? false
+    ;(window as typeof window & { __mobileLayoutFlipCount?: number }).__mobileLayoutFlipCount = 0
+    new MutationObserver(() => {
+      const nextMobile = grid?.classList.contains('mobile-main-layout') ?? false
+      if (nextMobile !== mobile) {
+        mobile = nextMobile
+        const target = window as typeof window & { __mobileLayoutFlipCount?: number }
+        target.__mobileLayoutFlipCount = (target.__mobileLayoutFlipCount ?? 0) + 1
+      }
+    }).observe(grid!, { attributes: true, attributeFilter: ['class'] })
+  })
+
+  const browserButton = page.getByRole('button', { name: '打开或收起右侧浏览器' })
+  await expect(browserButton).toBeVisible()
+  await browserButton.click()
+
+  const browserSidebar = page.locator('.browser-sidebar-content')
+  await expect(browserSidebar).toBeVisible()
+  await expect(browserSidebar).toHaveCSS('position', 'absolute')
+
+  await page.getByTitle('切换 Agent 面板').click()
+  const agentSidebar = page.locator('.agent-col')
+  await expect(agentSidebar).toBeVisible()
+  await expect(agentSidebar).toHaveCSS('position', 'absolute')
+  await expect(browserButton).not.toHaveClass(/active/)
+  await expect(browserSidebar).toHaveCSS('opacity', '0')
+
+  await page.getByRole('button', { name: 'Files' }).click()
+  const fileSidebar = page.locator('.file-col')
+  await expect(fileSidebar).toBeVisible()
+  await expect(agentSidebar).toHaveCSS('opacity', '0')
+  await page.screenshot({ path: testInfo.outputPath('mobile-latest-sidebar.png'), fullPage: true })
+
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  await page.locator('.page-variant .search-input').fill('report')
+  await page.locator('.search-box-submit').click()
+  const searchResult = page.locator('.result-card')
+  await expect(searchResult).toBeVisible()
+  await page.waitForTimeout(300)
+  await searchResult.click()
+  const searchPreview = page.locator('.editor-sidebar-content')
+  await expect(searchPreview).toHaveCSS('position', 'absolute')
+  await expect(searchPreview).toHaveCSS('opacity', '1')
+  await expect(searchPreview.locator('.pdf-viewer')).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('mobile-search-preview.png'), fullPage: true })
+
+  await page.getByTitle('切换 Agent 面板').click()
+  await expect(searchPreview).toHaveCSS('opacity', '0')
+  await page.waitForTimeout(500)
+  await expect.poll(() => page.evaluate(
+    () => (window as typeof window & { __mobileLayoutFlipCount?: number }).__mobileLayoutFlipCount ?? 0,
+  )).toBe(0)
 })
 
 test('keeps the library name visible beside ingestion progress', async ({ page }) => {

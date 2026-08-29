@@ -20,6 +20,7 @@ from typing import Protocol
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.scripts.download_model import is_model_available, model_target_dir
+from agent_service.services.memory.rag.torch_loading import load_with_safe_module_apply
 from agent_service.services.memory.rag.hybrid_retrieval import HybridRetrievalCandidate
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,12 @@ def _get_shared_rerank_provider(config: AgentConfig) -> SentenceTransformerCross
         if _rerank_provider is None:
             _rerank_provider = SentenceTransformerCrossEncoderProvider(config=config)
         return _rerank_provider
+
+
+def is_shared_rerank_provider_loaded() -> bool:
+    """返回共享 ReRank provider 是否已经持有可用模型，不触发加载。"""
+
+    return _rerank_provider is not None and _rerank_provider.loaded
 
 
 class RerankProvider(Protocol):
@@ -62,13 +69,20 @@ class SentenceTransformerCrossEncoderProvider:
 
         self.config = config
         self._model: object | None = None
-        self._load_event = threading.Event()
+        self._load_lock = threading.Lock()
+        self._load_thread: threading.Thread | None = None
         self._load_error: Exception | None = None
 
     def warmup(self) -> None:
         """触发后台模型加载，不阻塞。"""
 
         self._get_model()
+
+    @property
+    def loaded(self) -> bool:
+        """返回当前 provider 是否已经完成模型加载。"""
+
+        return self._model is not None
 
     def score_pairs(self, *, query: str, documents: Sequence[str]) -> list[float]:
         """
@@ -94,14 +108,27 @@ class SentenceTransformerCrossEncoderProvider:
         """
 
         if self._model is not None:
+            from agent_service.core.model_status import ModelState, set_model_state
+
+            set_model_state("rerank", ModelState.READY)
             return self._model
         if self._load_error is not None:
             raise self._load_error
-        if not self._load_event.is_set():
-            self._load_event.set()
-            t = threading.Thread(target=self._load_model_in_thread, daemon=True)
-            t.start()
-            return None
+        with self._load_lock:
+            if (
+                self._load_thread is not None
+                and not self._load_thread.is_alive()
+                and self._model is None
+                and self._load_error is None
+            ):
+                self._load_thread = None
+            if self._load_thread is None:
+                self._load_thread = threading.Thread(
+                    target=self._load_model_in_thread,
+                    daemon=True,
+                    name="rerank-model-load",
+                )
+                self._load_thread.start()
         return None
 
     def _load_model_in_thread(self) -> None:
@@ -128,7 +155,6 @@ class SentenceTransformerCrossEncoderProvider:
         )
         if not is_model_available(model_path):
             set_model_state("rerank", ModelState.AWAITING_DOWNLOAD)
-            self._load_event.clear()
             return
         set_model_state("rerank", ModelState.LOADING)
         banner = "=" * 57
@@ -139,33 +165,10 @@ class SentenceTransformerCrossEncoderProvider:
         try:
             import torch as _torch
 
-            def _materialize_recursive(module: _torch.nn.Module) -> None:
-                """递归物化本模块及其所有子模块的 meta tensor 到 CPU。"""
-                for _pname, _p in list(module._parameters.items()):
-                    if _p is not None and _p.is_meta:
-                        module._parameters[_pname] = _torch.nn.Parameter(
-                            _torch.empty(_p.shape, device='cpu', dtype=_p.dtype)
-                        )
-                for _bname, _b in list(module._buffers.items()):
-                    if _b is not None and _b.is_meta:
-                        module._buffers[_bname] = _torch.empty(
-                            _b.shape, device='cpu', dtype=_b.dtype
-                        )
-                for _child in module.children():
-                    _materialize_recursive(_child)
-
-            _orig_apply = _torch.nn.Module._apply
-
-            def _patched_apply(module: _torch.nn.Module, fn: object) -> object:
-                # 预先物化所有 meta tensor,然后让 _apply 正常遍历子模块并执行 fn
-                _materialize_recursive(module)
-                return _orig_apply(module, fn)
-
-            _torch.nn.Module._apply = _patched_apply
-            try:
-                self._model = CrossEncoder(str(model_path))
-            finally:
-                _torch.nn.Module._apply = _orig_apply
+            self._model = load_with_safe_module_apply(
+                _torch,
+                lambda: CrossEncoder(str(model_path)),
+            )
             set_model_state("rerank", ModelState.READY)
         except Exception as exc:
             set_model_state("rerank", ModelState.ERROR)

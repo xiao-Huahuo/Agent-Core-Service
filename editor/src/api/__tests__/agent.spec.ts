@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { streamPrompt, updateCurrentDocumentContext } from '../agent'
+import { fetchAgentAttachment, streamPrompt, updateCurrentDocumentContext, uploadAgentAttachment } from '../agent'
 
 describe('streamPrompt reference transport', () => {
   afterEach(() => {
@@ -61,5 +61,42 @@ describe('streamPrompt reference transport', () => {
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(JSON.parse(String(init.body)).selected_paths).toEqual(['docs/a.pdf', 'docs/b.docx'])
+  })
+
+  it('fetches one attachment processing state with user and session ownership', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, attachment: {} }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchAgentAttachment('user/1', 'session 1', 'att-1')
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/agent/attachments/att-1?user_id=user%2F1&session_id=session+1')
+  })
+
+  it('reports native upload progress without blocking on attachment parsing', async () => {
+    const progress: number[] = []
+
+    class FakeRequest {
+      upload: { onprogress?: (event: ProgressEvent) => void } = {}
+      timeout = 0
+      status = 200
+      responseText = JSON.stringify({ ok: true, attachment: { attachment_id: 'att-1' } })
+      onerror?: () => void
+      ontimeout?: () => void
+      onload?: () => void
+      open() { /* request construction is covered by the response assertion */ }
+      send() {
+        this.upload.onprogress?.({ lengthComputable: true, loaded: 50, total: 100 } as ProgressEvent)
+        this.onload?.()
+      }
+    }
+    vi.stubGlobal('XMLHttpRequest', FakeRequest)
+
+    const response = await uploadAgentAttachment('u1', 's1', new File(['image'], 'image.png'), (value) => progress.push(value))
+
+    expect(progress).toEqual([50])
+    expect(response.attachment.attachment_id).toBe('att-1')
   })
 })

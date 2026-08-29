@@ -19,6 +19,7 @@ function mountSection(ignorePatterns = '*.md') {
       watchEnabledDraft: true,
       autoIngestOnUploadDraft: false,
       ocrEnabledDraft: false,
+      visionUnderstandingEnabledDraft: false,
       knowledgeIgnorePatternsDraft: ignorePatterns,
       supportedFileTypes: ['.md', '.pdf'],
       hasChanges: false,
@@ -33,6 +34,14 @@ function mountSection(ignorePatterns = '*.md') {
 let wrapper: ReturnType<typeof mount<InstanceType<typeof BasicSettingsSection>>>
 
 describe('BasicSettingsSection blocked file types', () => {
+  it('places the default-off image-understanding switch directly below OCR', () => {
+    wrapper = mountSection()
+    const labels = wrapper.findAll('.toggle-row label').map((item) => item.text())
+
+    expect(labels.indexOf('识图')).toBe(labels.indexOf('OCR') + 1)
+    expect(wrapper.props('visionUnderstandingEnabledDraft')).toBe(false)
+  })
+
   it('renders below the ignore area and appends each supported extension only once', async () => {
     wrapper = mountSection()
     const ignoreArea = wrapper.get('.ignore-row')

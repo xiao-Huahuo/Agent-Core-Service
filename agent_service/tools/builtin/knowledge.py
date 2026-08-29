@@ -546,6 +546,11 @@ def understand_image(attachment: str = "", prompt: str = "") -> str:
     from agent_service.services.local_qwen.service import get_local_qwen_service
 
     runtime = get_tool_runtime()
+    if (
+        runtime.settings_service is None
+        or not runtime.settings_service.is_vision_understanding_enabled_for_user(user_id=runtime.user_id)
+    ):
+        return "识图功能未开启；当前图片仅使用已提取的 OCR 文字，不会加载本地 Qwen。"
     engine = runtime.database_engine
     if engine is None:
         return "当前工具运行时没有可用的应用数据库。"

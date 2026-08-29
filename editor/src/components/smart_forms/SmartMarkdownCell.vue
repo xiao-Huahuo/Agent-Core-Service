@@ -48,6 +48,7 @@ const editing = ref(false)
 const expanded = ref(false)
 const collapsing = ref(false)
 const draft = ref(props.value)
+const editingMinHeight = ref(0)
 const textarea = ref<HTMLTextAreaElement | null>(null)
 const cellRoot = ref<HTMLDivElement | null>(null)
 const displayValue = computed(() => props.inlineMarkdownPreview || expanded.value || props.value.length <= COLLAPSED_CHARACTER_LIMIT
@@ -94,6 +95,7 @@ onBeforeUnmount(() => {
 /** Opens source editing and places the caret at the end. */
 async function startEditing(): Promise<void> {
   if (!props.editable) return
+  editingMinHeight.value = cellRoot.value?.offsetHeight ?? 0
   draft.value = props.value
   editing.value = true
   await nextTick()
@@ -123,6 +125,7 @@ function handleSourceInput(): void {
 function finishEditing(): void {
   if (!editing.value) return
   editing.value = false
+  editingMinHeight.value = 0
   if (draft.value !== props.value) emit('update', draft.value)
 }
 
@@ -165,6 +168,8 @@ function downloadImage(src: string, name: string): void {
   anchor.download = name
   anchor.click()
 }
+
+defineExpose({ startEditing })
 </script>
 
 <template>
@@ -172,6 +177,7 @@ function downloadImage(src: string, name: string): void {
     ref="cellRoot"
     class="smart-markdown-cell"
     :class="{ expanded, collapsing, 'inline-markdown-preview': inlineMarkdownPreview }"
+    :style="editingMinHeight ? { minHeight: `${editingMinHeight}px` } : undefined"
     tabindex="0"
     @dblclick.stop="startEditing"
     @click="handleCellClick"

@@ -52,6 +52,7 @@ class GrpcRuntime:
             smart_form_service=services.smart_form_service,
             latex_service=services.latex_service,
             model_management_service=services.model_management_service,
+            attachment_service=services.attachment_service,
         )
         grpc_host = services.config.server.grpc_host
         if grpc_host == "[::]" and sys.platform == "win32":

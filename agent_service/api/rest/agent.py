@@ -11,7 +11,7 @@ import threading
 from typing import Any, Iterator
 
 from fastapi import APIRouter, Body, File, Form, Query, UploadFile
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
 from agent_service.api.recall_details import build_recall_details_payload
 from agent_service.api.rest.deps import (
@@ -86,6 +86,24 @@ async def upload_agent_attachment(
     return {"ok": True, "attachment": attachment}
 
 
+@router.get("/agent/attachments/raw")
+async def get_agent_attachment_raw(
+    uri: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
+) -> FileResponse:
+    """按完整 session-upload URI 返回对应附件原文件。"""
+
+    try:
+        path, mime_type, filename = _require_attachment_service().get_attachment_file_by_uri(uri=uri)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(
+        path,
+        media_type=mime_type or None,
+        filename=filename,
+        content_disposition_type="inline",
+    )
+
+
 @router.delete("/agent/attachments/{attachment_id}")
 async def delete_agent_attachment(
     attachment_id: str,
@@ -100,6 +118,25 @@ async def delete_agent_attachment(
         attachment_id=attachment_id,
     )
     return {"ok": deleted, "deleted": deleted, "attachment_id": attachment_id}
+
+
+@router.get("/agent/attachments/{attachment_id}")
+async def get_agent_attachment(
+    attachment_id: str,
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
+    session_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
+) -> dict[str, Any]:
+    """返回单个会话附件的最新后台解析状态。"""
+
+    try:
+        attachment = _require_attachment_service().get_attachment(
+            user_id=user_id,
+            session_id=session_id,
+            attachment_id=attachment_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"ok": True, "attachment": attachment}
 
 
 @router.options("/agent/tools")

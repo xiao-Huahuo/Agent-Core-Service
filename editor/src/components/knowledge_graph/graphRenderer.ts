@@ -45,6 +45,9 @@ const ENTITY_TYPE_COLORS: Record<string, string> = {
   other: '#94a3b8',
 }
 
+/** Zoom boundary below which labels would crowd the compact graph silhouette. */
+const COMPACT_GRAPH_SCALE = 0.72
+
 function currentUiFont(): string {
   if (typeof document === 'undefined') {
     return 'system-ui, sans-serif'
@@ -80,6 +83,9 @@ function nodeColor(node: KnowledgeGraphNode, theme: KnowledgeGraphRenderTheme): 
 }
 
 function shouldShowLabel(node: KnowledgeGraphNode, state: KnowledgeGraphRenderState): boolean {
+  if (state.viewport.scale < COMPACT_GRAPH_SCALE) {
+    return false
+  }
   const isActive = node.id === state.hoveredNodeId || node.id === state.selectedNodeId
   if (!state.showLabels) {
     return node.id === state.hoveredNodeId
@@ -164,31 +170,38 @@ function drawGlowCircle(
   color: string,
   progress: number,
   theme: KnowledgeGraphRenderTheme,
+  viewportScale: number,
 ) {
   if (progress <= 0) {
     return
   }
+  const scaleProgress = clamp01(viewportScale)
   ctx.save()
   ctx.beginPath()
-  ctx.arc(x, y, radius + 7 + 5 * progress, 0, Math.PI * 2)
+  ctx.arc(x, y, radius + 3 + 3 * scaleProgress * progress, 0, Math.PI * 2)
   ctx.fillStyle = color
-  ctx.globalAlpha = 0.16 * progress
+  ctx.globalAlpha = 0.1 * progress
   ctx.fill()
   ctx.globalAlpha = 1
   ctx.shadowColor = color
-  ctx.shadowBlur = (theme.isDark ? 48 : 14) * progress
+  ctx.shadowBlur = (theme.isDark ? 10 + 10 * scaleProgress : 6 + 4 * scaleProgress) * progress
   ctx.strokeStyle = color
-  ctx.lineWidth = 0.9 + 0.5 * progress
+  ctx.lineWidth = 0.8 + 0.4 * progress
   ctx.stroke()
   ctx.restore()
 }
 
-function applyAmbientNodeGlow(ctx: CanvasRenderingContext2D, color: string, theme: KnowledgeGraphRenderTheme) {
+function applyAmbientNodeGlow(
+  ctx: CanvasRenderingContext2D,
+  color: string,
+  theme: KnowledgeGraphRenderTheme,
+  viewportScale: number,
+) {
   if (!theme.isDark) {
     return
   }
   ctx.shadowColor = color
-  ctx.shadowBlur = 24
+  ctx.shadowBlur = 4 + 8 * clamp01(viewportScale)
   ctx.shadowOffsetX = 0
   ctx.shadowOffsetY = 0
 }
@@ -240,6 +253,11 @@ function drawLink(
   ctx.moveTo(sourceX, sourceY)
   ctx.lineTo(targetX, targetY)
   ctx.strokeStyle = theme.edge
+  if (theme.isDark) {
+    // A restrained shared edge glow keeps compact nodes reading as one graph.
+    ctx.shadowColor = theme.edgeActive
+    ctx.shadowBlur = 2 + 3 * clamp01(state.viewport.scale)
+  }
   const bothEntity = source.kind === 'entity' && target.kind === 'entity'
   const oneEntity = source.kind === 'entity' || target.kind === 'entity'
   ctx.lineWidth = bothEntity ? 0.6 : oneEntity ? 0.3 : 0.6
@@ -293,11 +311,12 @@ function drawNode(
   ctx.save()
   ctx.globalAlpha = hasActive && !isRelated ? 0.38 : 1
   if (glowProgress > 0) {
-    drawGlowCircle(ctx, x, y, node.radius, color, glowProgress, theme)
+    drawGlowCircle(ctx, x, y, node.radius, color, glowProgress, theme, state.viewport.scale)
     ctx.shadowColor = color
-    ctx.shadowBlur = (theme.isDark ? 24 : 8) + (theme.isDark ? 24 : 8) * glowProgress
+    const scaleProgress = clamp01(state.viewport.scale)
+    ctx.shadowBlur = (theme.isDark ? 6 + 8 * scaleProgress : 4 + 4 * scaleProgress) * (1 + 0.5 * glowProgress)
   } else {
-    applyAmbientNodeGlow(ctx, color, theme)
+    applyAmbientNodeGlow(ctx, color, theme, state.viewport.scale)
   }
   ctx.beginPath()
   ctx.arc(x, y, node.radius, 0, Math.PI * 2)
@@ -337,7 +356,7 @@ function drawNode(
   if (glowProgress > 0) {
     ctx.beginPath()
     ctx.setLineDash([])
-    ctx.arc(x, y, node.radius + 7, 0, Math.PI * 2)
+    ctx.arc(x, y, node.radius + 3 + 3 * clamp01(state.viewport.scale), 0, Math.PI * 2)
     ctx.strokeStyle = color
     ctx.globalAlpha = isRelated ? glowProgress : hasActive ? 0.08 : 0.38
     ctx.lineWidth = 0.8 + 0.4 * glowProgress

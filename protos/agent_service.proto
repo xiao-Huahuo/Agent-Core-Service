@@ -63,6 +63,8 @@ service AgentService {
   rpc GetTokenUsage(TokenUsageRequest) returns (google.protobuf.Struct);
   rpc GetActivityHeatmap(ActivityHeatmapRequest) returns (google.protobuf.Struct);
   rpc GetRegisteredTools(ToolListRequest) returns (ToolListResponse);
+  rpc GetSessionAttachment(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc GetSessionAttachmentRaw(AttachmentRawRequest) returns (AttachmentRawResponse);
 
   // ---- 用户设置 ----
 
@@ -79,6 +81,8 @@ service AgentService {
   rpc SaveFontConfig(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc GetAppearanceConfig(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc SaveAppearanceConfig(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc GetKnowledgeIngestionConfig(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc SaveKnowledgeIngestionConfig(google.protobuf.Struct) returns (google.protobuf.Struct);
 
   // 知识库重建与上传
   rpc RebuildKnowledge(KnowledgeRebuildRequest) returns (KnowledgeRebuildResponse);
@@ -654,6 +658,19 @@ message UserProfileResponse {
   string active_library_id = 5;
   KnowledgeLibraryEntry active_knowledge_library = 6;
   repeated KnowledgeLibraryEntry knowledge_libraries = 7;
+  bool ocr_enabled = 8;
+  bool vision_understanding_enabled = 9;
+  bool auto_ingest_on_upload = 10;
+}
+
+message AttachmentRawRequest {
+  string uri = 1;
+}
+
+message AttachmentRawResponse {
+  bytes content = 1;
+  string mime_type = 2;
+  string filename = 3;
 }
 
 message LLMConfigRequest {

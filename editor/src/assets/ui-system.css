@@ -9,8 +9,8 @@
 
 :root {
   --library-form-ring: color-mix(in srgb, var(--color-border) 40%, transparent);
-  --font-ui-default: "Google Sans", "Noto Sans SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-text-default: "Google Sans", "Noto Sans SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-ui-default: "HYWenHei-85W", "Google Sans", "Noto Sans SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-text-default: "HYWenHei-85W", "Google Sans", "Noto Sans SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-code: "JetBrains Mono", "Hack", "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --font-ui: var(--font-ui-default);
   --font-text: var(--font-text-default);

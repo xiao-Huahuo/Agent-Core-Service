@@ -170,6 +170,8 @@ describe('FileTreePanel search wiring', () => {
     expect(source).toContain('placeholder="按文件名搜索"')
     expect(source).toContain('title="搜索文件"')
     expect(source).toContain(':expanded-paths="effectiveExpandedPaths"')
+    expect(source).toContain('() => privacyStore.activeLibraryId()')
+    expect(source).toContain("privacyStore.load(userId, 'knowledge_path', libraryId)")
   })
 })
 

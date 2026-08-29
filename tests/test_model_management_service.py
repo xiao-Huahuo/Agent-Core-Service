@@ -14,7 +14,7 @@ import time
 from types import ModuleType
 from types import SimpleNamespace
 
-from agent_service.core.model_status import ModelState, set_model_state
+from agent_service.core.model_status import ModelState, get_model_status, set_model_state
 from agent_service.scripts.download_model import (
     MODEL_MARKER_FILE,
     PADDLEOCR_MARKER_FILE,
@@ -284,3 +284,21 @@ def test_user_deleted_model_is_not_auto_downloaded_again_until_restart(tmp_path:
     assert deleted["deleted"] is True
     assert target.exists() is False
     assert downloaded == []
+
+
+def test_management_status_reconciles_loaded_provider_cache(monkeypatch) -> None:
+    """共享模型已在内存时，任何遗留 loading 状态都必须自愈为 ready。"""
+
+    import agent_service.services.memory.rag.embedding as embedding_module
+    import agent_service.services.memory.rag.rerank as rerank_module
+
+    monkeypatch.setattr(embedding_module, "is_shared_embedding_provider_loaded", lambda: True)
+    monkeypatch.setattr(rerank_module, "is_shared_rerank_provider_loaded", lambda: True)
+    set_model_state("embedding", ModelState.LOADING)
+    set_model_state("rerank", ModelState.LOADING)
+
+    ModelManagementService._reconcile_loaded_runtime_states()
+    states = get_model_status().to_dict()
+
+    assert states["embedding"] == "ready"
+    assert states["rerank"] == "ready"

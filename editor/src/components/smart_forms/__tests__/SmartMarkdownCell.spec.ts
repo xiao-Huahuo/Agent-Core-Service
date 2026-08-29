@@ -51,6 +51,19 @@ describe('SmartMarkdownCell', () => {
     expect(wrapper.get('textarea').attributes('rows')).toBe('1')
   })
 
+  it('retains its rendered height when double-click enters source editing', async () => {
+    const wrapper = mount(SmartMarkdownCell, {
+      props: { value: '多行\n内容', path: 'forms/demo/table.md', editable: true, uploadImage: vi.fn() },
+      global: { stubs: { MarkdownContent: { template: '<div class="markdown-body"></div>' } } },
+    })
+    const cell = wrapper.get('.smart-markdown-cell')
+    Object.defineProperty(cell.element, 'offsetHeight', { configurable: true, value: 96 })
+
+    await cell.trigger('dblclick')
+
+    expect(cell.attributes('style')).toContain('min-height: 96px')
+  })
+
   it('keeps editing when the active cell is clicked again', async () => {
     const wrapper = mount(SmartMarkdownCell, {
       props: { value: '可编辑内容', path: 'forms/demo/table.md', editable: true, uploadImage: vi.fn() },

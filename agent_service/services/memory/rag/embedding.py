@@ -21,6 +21,7 @@ from typing import Protocol
 
 from agent_service.core.agent_config import AgentConfig
 from agent_service.scripts.download_model import is_model_available, model_target_dir
+from agent_service.services.memory.rag.torch_loading import load_with_safe_module_apply
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,12 @@ def _get_shared_provider(config: AgentConfig) -> SentenceTransformerEmbeddingPro
         if _provider is None:
             _provider = SentenceTransformerEmbeddingProvider(config=config)
         return _provider
+
+
+def is_shared_embedding_provider_loaded() -> bool:
+    """返回共享 Embedding provider 是否已经持有可用模型，不触发加载。"""
+
+    return _provider is not None and _provider.loaded
 
 
 class EmbeddingProvider(Protocol):
@@ -62,7 +69,6 @@ class SentenceTransformerEmbeddingProvider:
 
         self.config = config
         self._model: object | None = None
-        self._load_event = threading.Event()
         self._load_lock = threading.Lock()
         self._load_thread: threading.Thread | None = None
         self._load_error: Exception | None = None
@@ -94,6 +100,12 @@ class SentenceTransformerEmbeddingProvider:
 
         self._get_model(wait=False)
 
+    @property
+    def loaded(self) -> bool:
+        """返回当前 provider 是否已经完成模型加载。"""
+
+        return self._model is not None
+
     def _get_model(self, *, wait: bool) -> object | None:
         """异步加载本地 sentence-transformers 模型。
 
@@ -102,27 +114,34 @@ class SentenceTransformerEmbeddingProvider:
         """
 
         if self._model is not None:
+            from agent_service.core.model_status import ModelState, set_model_state
+
+            set_model_state("embedding", ModelState.READY)
             return self._model
         if self._load_error is not None:
             raise self._load_error
 
+        with self._load_lock:
+            if (
+                self._load_thread is not None
+                and not self._load_thread.is_alive()
+                and self._model is None
+                and self._load_error is None
+            ):
+                self._load_thread = None
+            if self._load_thread is None:
+                self._load_thread = threading.Thread(
+                    target=self._load_model_in_thread,
+                    daemon=True,
+                    name="embedding-model-load",
+                )
+                self._load_thread.start()
+            load_thread = self._load_thread
         if wait:
-            with self._load_lock:
-                if self._load_thread is None:
-                    self._load_event.set()
-                    self._load_thread = threading.Thread(target=self._load_model_in_thread, daemon=True)
-                    self._load_thread.start()
-                load_thread = self._load_thread
             load_thread.join()
             if self._load_error is not None:
                 raise self._load_error
             return self._model
-
-        with self._load_lock:
-            if self._load_thread is None:
-                self._load_event.set()
-                self._load_thread = threading.Thread(target=self._load_model_in_thread, daemon=True)
-                self._load_thread.start()
         return self._model
 
     def _load_model_in_thread(self) -> None:
@@ -149,8 +168,6 @@ class SentenceTransformerEmbeddingProvider:
         )
         if not is_model_available(model_path):
             set_model_state("embedding", ModelState.AWAITING_DOWNLOAD)
-            with self._load_lock:
-                self._load_thread = None
             return
         import os
         os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -168,33 +185,10 @@ class SentenceTransformerEmbeddingProvider:
             # 解决方案: 在调用 _apply 前,预先将整个模型树中所有 meta tensor 物化到 CPU。
             import torch as _torch
 
-            def _materialize_recursive(module: _torch.nn.Module) -> None:
-                """递归物化本模块及其所有子模块的 meta tensor 到 CPU。"""
-                for _pname, _p in list(module._parameters.items()):
-                    if _p is not None and _p.is_meta:
-                        module._parameters[_pname] = _torch.nn.Parameter(
-                            _torch.empty(_p.shape, device='cpu', dtype=_p.dtype)
-                        )
-                for _bname, _b in list(module._buffers.items()):
-                    if _b is not None and _b.is_meta:
-                        module._buffers[_bname] = _torch.empty(
-                            _b.shape, device='cpu', dtype=_b.dtype
-                        )
-                for _child in module.children():
-                    _materialize_recursive(_child)
-
-            _orig_apply = _torch.nn.Module._apply
-
-            def _patched_apply(module: _torch.nn.Module, fn: object) -> object:
-                # 预先物化所有 meta tensor,然后让 _apply 正常遍历子模块并执行 fn
-                _materialize_recursive(module)
-                return _orig_apply(module, fn)
-
-            _torch.nn.Module._apply = _patched_apply
-            try:
-                self._model = SentenceTransformer(str(model_path))
-            finally:
-                _torch.nn.Module._apply = _orig_apply
+            self._model = load_with_safe_module_apply(
+                _torch,
+                lambda: SentenceTransformer(str(model_path)),
+            )
             set_model_state("embedding", ModelState.READY)
         except Exception as exc:
             logger.exception("Embedding 模型加载失败: %s", exc)

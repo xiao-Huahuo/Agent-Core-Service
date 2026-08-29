@@ -67,9 +67,9 @@ const MAX_EDITOR_SIDEBAR_WIDTH = 620
 const COLLAPSE_THRESHOLD = 150
 
 type ResizeTarget = 'file' | 'editor' | 'browser' | 'agent'
+type MobileSidebar = 'file' | 'editor' | 'browser' | 'git' | 'agent' | 'todo'
 
 const workspaceGrid = ref<HTMLElement | null>(null)
-const mainShell = ref<HTMLElement | null>(null)
 const mainShellWidth = ref(Number.POSITIVE_INFINITY)
 const fileSidebarOpen = ref(true)
 const agentSidebarOpen = ref(true)
@@ -153,14 +153,14 @@ const workspaceGridStyle = computed<Record<string, string>>(() => ({
   '--activity-col-width': `${activityBarWidth.value}px`,
   '--file-col-width': visibleFileSidebarOpen.value && !topCommandBarMobile.value ? `${fileWidth.value}px` : '0px',
   '--file-resizer-width': visibleFileSidebarOpen.value && !topCommandBarMobile.value ? '4px' : '0px',
-  '--agent-col-width': visibleAgentSidebarOpen.value ? `${agentWidth.value}px` : '0px',
-  '--agent-resizer-width': visibleAgentSidebarOpen.value ? '4px' : '0px',
-  '--editor-resizer-width': editorSidebarVisible.value ? '4px' : '0px',
-  '--editor-sidebar-width': editorSidebarVisible.value
+  '--agent-col-width': visibleAgentSidebarOpen.value && !topCommandBarMobile.value ? `${agentWidth.value}px` : '0px',
+  '--agent-resizer-width': visibleAgentSidebarOpen.value && !topCommandBarMobile.value ? '4px' : '0px',
+  '--editor-resizer-width': editorSidebarVisible.value && !topCommandBarMobile.value ? '4px' : '0px',
+  '--editor-sidebar-width': editorSidebarVisible.value && !topCommandBarMobile.value
     ? editorSidebarWidth.value === null ? 'clamp(360px, 42vw, 620px)' : `${editorSidebarWidth.value}px`
     : '0px',
-  '--browser-resizer-width': browserSidebarVisible.value ? '4px' : '0px',
-  '--browser-sidebar-width': browserSidebarVisible.value
+  '--browser-resizer-width': browserSidebarVisible.value && !topCommandBarMobile.value ? '4px' : '0px',
+  '--browser-sidebar-width': browserSidebarVisible.value && !topCommandBarMobile.value
     ? browserSidebarWidth.value === null ? 'minmax(0, 1fr)' : `${browserSidebarWidth.value}px`
     : '0px',
   '--file-mobile-row': visibleFileSidebarOpen.value ? '300px' : '0px',
@@ -231,6 +231,45 @@ watch(() => workspaceStore.todoSidebarOpen, (val) => {
 
 watch(todoSidebarOpen, (val) => {
   workspaceStore.todoSidebarOpen = val
+})
+
+/** Keep mobile overlays mutually exclusive while preserving desktop multi-panel layouts. */
+const lastOpenedMobileSidebar = ref<MobileSidebar>('file')
+
+function activateMobileSidebar(sidebar: MobileSidebar): void {
+  lastOpenedMobileSidebar.value = sidebar
+  if (!topCommandBarMobile.value) return
+  if (sidebar !== 'file') {
+    fileSidebarOpen.value = false
+    gitLeftOpen.value = false
+  }
+  if (sidebar !== 'editor') workspaceStore.closeEditorSidebar()
+  if (sidebar !== 'browser') workspaceStore.closeBrowserSidebar()
+  if (sidebar !== 'git') gitRightOpen.value = false
+  if (sidebar !== 'agent') agentSidebarOpen.value = false
+  if (sidebar !== 'todo') todoSidebarOpen.value = false
+}
+
+watch(fileSidebarOpen, (open, wasOpen) => {
+  if (open && !wasOpen) activateMobileSidebar('file')
+})
+watch(() => workspaceStore.editorSidebarOpen, (open, wasOpen) => {
+  if (open && !wasOpen) activateMobileSidebar('editor')
+})
+watch(() => workspaceStore.browserSidebarOpen, (open, wasOpen) => {
+  if (open && !wasOpen) activateMobileSidebar('browser')
+})
+watch(gitRightOpen, (open, wasOpen) => {
+  if (open && !wasOpen) activateMobileSidebar('git')
+})
+watch(agentSidebarOpen, (open, wasOpen) => {
+  if (open && !wasOpen) activateMobileSidebar('agent')
+})
+watch(todoSidebarOpen, (open, wasOpen) => {
+  if (open && !wasOpen) activateMobileSidebar('todo')
+})
+watch(topCommandBarMobile, (mobile) => {
+  if (mobile) activateMobileSidebar(lastOpenedMobileSidebar.value)
 })
 
 function toggleTodoSidebar() {
@@ -654,14 +693,12 @@ function refreshGitAfterKnowledgeFileChange(): void {
 let unsubscribeOpenAgentPage: (() => void) | undefined
 let mainShellResizeObserver: ResizeObserver | null = null
 
-/** Measure the content span that remains stable when the mobile file tree becomes an overlay. */
+/** Measure the stable workspace span so sidebar layout changes cannot flip the mobile breakpoint. */
 function updateMainShellWidth(): void {
   const grid = workspaceGrid.value
-  const shell = mainShell.value
-  if (!grid || !shell) return
+  if (!grid) return
   const gridRect = grid.getBoundingClientRect()
-  const shellRect = shell.getBoundingClientRect()
-  mainShellWidth.value = shellRect.right - gridRect.left - activityBarWidth.value
+  mainShellWidth.value = gridRect.width - activityBarWidth.value
 }
 
 onMounted(() => {
@@ -671,10 +708,9 @@ onMounted(() => {
   unsubscribeOpenAgentPage = window.agentEditorDesktop?.onOpenAgentPage?.(() => {
     workspaceStore.setMainView('agent')
   })
-  if (mainShell.value && workspaceGrid.value) {
+  if (workspaceGrid.value) {
     updateMainShellWidth()
     mainShellResizeObserver = new ResizeObserver(updateMainShellWidth)
-    mainShellResizeObserver.observe(mainShell.value)
     mainShellResizeObserver.observe(workspaceGrid.value)
   }
   void gitStore.refresh()
@@ -759,6 +795,7 @@ watch(
         :browser-active="workspaceStore.mainView === 'browser'"
         :settings-active="workspaceStore.mainView === 'settings'"
         :display-mode="settingsStore.sidebarDisplayMode"
+        :is-dark="settingsStore.isDark"
         @open-home="openHome"
         @toggle-file="toggleFileSidebar"
         @toggle-git="toggleLeftGitSidebar"
@@ -783,6 +820,7 @@ watch(
         @open-browser="openBrowser"
         @knowledge-menu-visibility-change="activityOverlayOpen = $event"
         @open-settings="openSettings"
+        @toggle-theme="settingsStore.toggleTheme"
       />
       <div class="file-col ide-panel" :aria-hidden="!visibleFileSidebarOpen">
         <GitSidebar v-if="gitLeftOpen" />
@@ -800,7 +838,6 @@ watch(
         @pointerdown="startResize('file', $event)"
       ></div>
       <main
-        ref="mainShell"
         class="main-shell editor-col ide-panel"
         :class="{
           'agent-page-main-shell': isAgentPage && !topCommandBarMobile,
@@ -1002,6 +1039,38 @@ watch(
 
 .workspace-grid.mobile-main-layout .file-resizer {
   display: none;
+}
+
+.workspace-grid.mobile-main-layout .editor-sidebar-content,
+.workspace-grid.mobile-main-layout .browser-sidebar-content,
+.workspace-grid.mobile-main-layout .agent-col {
+  position: absolute;
+  grid-column: auto;
+  top: var(--space-8);
+  right: var(--space-8);
+  bottom: var(--space-8);
+  z-index: 90;
+  width: min(360px, calc(100% - var(--activity-col-width) - var(--space-16)));
+  margin: 0;
+  border: 1px solid var(--workspace-panel-border);
+  border-radius: 18px;
+  background: var(--color-bg-app);
+  box-shadow: -12px 0 32px rgba(12, 18, 38, 0.22);
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.workspace-grid.mobile-main-layout .editor-resizer,
+.workspace-grid.mobile-main-layout .browser-resizer,
+.workspace-grid.mobile-main-layout .agent-resizer {
+  display: none;
+}
+
+.workspace-grid.mobile-main-layout.editor-sidebar-collapsed .editor-sidebar-content,
+.workspace-grid.mobile-main-layout.browser-sidebar-collapsed .browser-sidebar-content,
+.workspace-grid.mobile-main-layout.agent-sidebar-collapsed .agent-col {
+  opacity: 0;
+  transform: translateX(calc(100% + var(--space-16)));
 }
 
 .mobile-file-sidebar-expand {

@@ -20,11 +20,16 @@ from typing import Sequence
 from sqlmodel import SQLModel, create_engine
 
 from agent_service.core.agent_config import AgentConfig
+from agent_service.core.model_status import ModelState, get_model_status, set_model_state
 from agent_service.schemas.longterm_memory_spec import LongTermMemorySpecCreate
 from agent_service.services.memory.longterm_memory_service import LongTermMemoryService
 from agent_service.services.memory.rag.embedding import EmbeddingService, SentenceTransformerEmbeddingProvider
 from agent_service.services.memory.rag.hybrid_retrieval import HybridRetrievalService
-from agent_service.services.memory.rag.rerank import RerankProvider, RerankService
+from agent_service.services.memory.rag.rerank import (
+    RerankProvider,
+    RerankService,
+    SentenceTransformerCrossEncoderProvider,
+)
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 
 
@@ -88,6 +93,74 @@ def test_sentence_transformer_embedding_provider_waits_for_warmup_load() -> None
 
     assert not embed_thread.is_alive()
     assert vectors == [[5.0]]
+
+
+def test_embedding_provider_restarts_a_stale_loader_thread() -> None:
+    """无结果退出的旧加载线程不得让后续 Embedding 预热永久失效。"""
+
+    provider = SentenceTransformerEmbeddingProvider(config=make_rag_test_config())
+    stale = threading.Thread(target=lambda: None)
+    stale.start()
+    stale.join(timeout=1)
+    provider._load_thread = stale
+    restarted = threading.Event()
+    provider._load_model_in_thread = restarted.set  # type: ignore[method-assign]
+
+    provider.warmup()
+
+    assert restarted.wait(timeout=1)
+
+
+def test_rerank_provider_restarts_a_stale_loader_thread() -> None:
+    """无结果退出的旧加载线程不得让后续 ReRank 预热永久失效。"""
+
+    provider = SentenceTransformerCrossEncoderProvider(config=make_rag_test_config())
+    stale = threading.Thread(target=lambda: None)
+    stale.start()
+    stale.join(timeout=1)
+    provider._load_thread = stale
+    restarted = threading.Event()
+    provider._load_model_in_thread = restarted.set  # type: ignore[method-assign]
+
+    provider.warmup()
+
+    assert restarted.wait(timeout=1)
+
+
+def test_cached_embedding_and_rerank_publish_ready_again() -> None:
+    """缓存命中必须纠正后来被覆盖的 loading 状态。"""
+
+    config = make_rag_test_config()
+    embedding = SentenceTransformerEmbeddingProvider(config=config)
+    rerank = SentenceTransformerCrossEncoderProvider(config=config)
+    embedding._model = object()
+    rerank._model = object()
+    set_model_state("embedding", ModelState.LOADING)
+    set_model_state("rerank", ModelState.LOADING)
+
+    embedding.warmup()
+    rerank.warmup()
+    states = get_model_status().to_dict()
+
+    assert states["embedding"] == "ready"
+    assert states["rerank"] == "ready"
+
+
+def test_shared_embedding_and_rerank_factories_create_singletons(monkeypatch) -> None:
+    """共享 provider 工厂必须能创建并稳定复用实例，供模型管理与业务入口调用。"""
+
+    import agent_service.services.memory.rag.embedding as embedding_module
+    import agent_service.services.memory.rag.rerank as rerank_module
+
+    monkeypatch.setattr(embedding_module, "_provider", None)
+    monkeypatch.setattr(rerank_module, "_rerank_provider", None)
+    config = make_rag_test_config()
+
+    embedding = embedding_module._get_shared_provider(config)
+    rerank = rerank_module._get_shared_rerank_provider(config)
+
+    assert embedding_module._get_shared_provider(config) is embedding
+    assert rerank_module._get_shared_rerank_provider(config) is rerank
 
 
 class FakeRerankProvider(RerankProvider):
@@ -192,6 +265,33 @@ def test_hybrid_retrieval_service_returns_keyword_candidates() -> None:
     assert candidates
     assert candidates[0].memory.content.startswith("项目代号是 stone-cat")
     assert "项目代号" in candidates[0].matched_terms or "负责模块" in candidates[0].matched_terms
+
+
+def test_search_knowledge_content_uses_default_limit_when_omitted() -> None:
+    """联合搜索未显式传 limit 时也必须返回全文命中，不能比较 ``int`` 与 ``None``。"""
+
+    config = make_rag_test_config()
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    memory_service = LongTermMemoryService(config=config, engine=engine, create_tables=False)
+    memory_service.create_memory(
+        LongTermMemorySpecCreate(
+            user_id="user_1:library_1",
+            session_id=None,
+            tag="Knowledge",
+            memory_type="knowledge_chunk",
+            content="CSV 文件包含实验数据。",
+            source_type="knowledge_file",
+            source_id="csv.csv",
+            source_uri="D:/Knowledge/csv.csv",
+            embedding_model="fake",
+            embedding_vector_json=[1.0, 2.0, 3.0],
+        )
+    )
+
+    results = memory_service.search_knowledge_content(query="CSV", user_id="user_1")
+
+    assert results == [{"source_uri": "D:/Knowledge/csv.csv", "snippet": "CSV 文件包含实验数据。"}]
 
 
 def test_memory_retrieval_service_uses_hybrid_and_rerank_workflow() -> None:

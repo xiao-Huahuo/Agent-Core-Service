@@ -528,7 +528,7 @@ async def get_knowledge_ingestion_config(user_id: str = Query(..., min_length=DE
 
 @router.put("/settings/profile/ingestion")
 async def save_knowledge_ingestion_config(body: dict[str, Any]) -> dict[str, Any]:
-    """保存知识库灌库配置。body: user_id 必填,auto_ingest_on_upload/ocr_enabled 可选。"""
+    """保存知识库灌库、OCR 与本地识图配置。"""
 
     user_id = str(body.get("user_id") or "").strip()
     if not user_id:
@@ -538,6 +538,7 @@ async def save_knowledge_ingestion_config(body: dict[str, Any]) -> dict[str, Any
         user_id=user_id,
         auto_ingest_on_upload=body.get("auto_ingest_on_upload"),
         ocr_enabled=body.get("ocr_enabled"),
+        vision_understanding_enabled=body.get("vision_understanding_enabled"),
         knowledge_ignore_patterns=body.get("knowledge_ignore_patterns"),
     )
     if body.get("ocr_enabled") is True:

@@ -395,12 +395,6 @@ const lineOption = computed(() => {
   font-size: var(--font-size-xs);
 }
 
-@media (max-width: 1180px) {
-  .gauges-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 760px) {
   .gauges-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));

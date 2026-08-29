@@ -431,7 +431,7 @@ onMounted(() => {
   gap: var(--space-10);
   margin: var(--space-12);
   padding: var(--space-16) var(--space-12);
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: 28px;
   background: var(--color-surface);
   box-shadow: 0 0 0 4px var(--library-form-ring);
@@ -738,7 +738,7 @@ onMounted(() => {
     margin: 0;
     padding: var(--space-12);
     overflow: hidden;
-    border: 1px solid var(--color-border);
+    border: 0;
     border-radius: 18px;
     box-shadow: 12px 0 32px rgba(12, 18, 38, 0.22);
     opacity: 1;

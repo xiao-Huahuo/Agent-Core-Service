@@ -65,13 +65,8 @@ watch(
   display: flex;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
-}
-
-@media (max-width: 768px) {
-  .dashboard-view {
-    display: block;
-    overflow: auto;
-  }
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 </style>

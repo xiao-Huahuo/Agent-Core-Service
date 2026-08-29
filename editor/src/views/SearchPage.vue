@@ -14,7 +14,6 @@ import { highlightMatch } from '@/utils/highlight'
 import { useWorkspaceStore } from '@/stores/workspace'
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import SplitText from '@/components/editor_workspace/SplitText.vue'
-import SearchResultPreview from '@/components/search_page/SearchResultPreview.vue'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 
 const workspaceStore = useWorkspaceStore()
@@ -24,15 +23,12 @@ const hasSearched = ref(false)
 const PAGE_SIZE = 20
 /** One-based page currently displayed in the result list. */
 const currentPage = ref(1)
-/** Result currently displayed in the in-page readonly preview. */
-const selectedPreview = ref<{ path: string; semanticOnly: boolean } | null>(null)
-
 const unifiedMode = computed({
   get: () => workspaceStore.searchUnified,
   set: (v: boolean) => {
     workspaceStore.searchUnified = v
     currentPage.value = 1
-    selectedPreview.value = null
+    workspaceStore.closeEditorSidebar()
   },
 })
 
@@ -46,7 +42,7 @@ function onSubmit() {
   if (!q) return
   hasSearched.value = true
   currentPage.value = 1
-  selectedPreview.value = null
+  workspaceStore.closeEditorSidebar()
   workspaceStore.performSearch(q)
 }
 
@@ -60,15 +56,11 @@ function resolveResultNode(path: string): KnowledgeFileNode | undefined {
   return node
 }
 
-/** Opens a result inside the search page without mutating editor selection. */
-function previewResult(path: string, semanticOnly = false) {
+/** Opens a result through the same editor sidebar pipeline used by smart-form file cells. */
+async function previewResult(path: string): Promise<void> {
   const node = resolveResultNode(path)
   if (!node || node.isDir) return
-  if (selectedPreview.value?.path === node.path) {
-    selectedPreview.value = null
-    return
-  }
-  selectedPreview.value = { path: node.path, semanticOnly }
+  await workspaceStore.openEditorSidebar(node)
 }
 
 /** Enters the regular editor workflow after a result is double-clicked. */
@@ -78,11 +70,6 @@ function openResult(path: string) {
     workspaceStore.setMainView('editor')
     workspaceStore.selectFile(node)
   }
-}
-
-/** Unified results highlight when they contain lexical evidence, not semantic evidence alone. */
-function isSemanticOnlyResult(item: MergedResult): boolean {
-  return Boolean(item.semanticContent && !item.fulltextSnippet && !item.filenameMatched)
 }
 
 // ---- unified mode merge logic ----
@@ -185,7 +172,7 @@ function setPage(page: number) {
   const nextPage = Math.min(totalPages.value, Math.max(1, page))
   if (nextPage === currentPage.value) return
   currentPage.value = nextPage
-  selectedPreview.value = null
+  workspaceStore.closeEditorSidebar()
 }
 
 function syncFromStore() {
@@ -204,7 +191,7 @@ watch(() => workspaceStore.mainView, (view) => {
 
 watch(() => workspaceStore.searchResults, () => {
   currentPage.value = 1
-  selectedPreview.value = null
+  workspaceStore.closeEditorSidebar()
 })
 
 onMounted(() => {
@@ -230,7 +217,7 @@ onMounted(() => {
 
     <!-- Results (below absolute search-stage, scrolls with page) -->
     <div v-if="hasSearched && workspaceStore.searchQuery" class="results-area">
-      <div class="results-workspace" :class="{ 'preview-open': selectedPreview }">
+      <div class="results-workspace">
         <div class="results-list-pane">
           <div v-if="workspaceStore.searchResults" class="results-header">
             <span class="results-count">
@@ -257,7 +244,7 @@ onMounted(() => {
                   v-for="item in pagedFilenameResults"
                   :key="item.path"
                   class="result-card"
-                  :class="{ selected: selectedPreview?.path === resolveResultNode(item.path)?.path }"
+                  :class="{ selected: workspaceStore.editorSidebarOpen && workspaceStore.selectedPath === resolveResultNode(item.path)?.path }"
                   type="button"
                   @click="previewResult(item.path)"
                   @dblclick="openResult(item.path)"
@@ -275,7 +262,7 @@ onMounted(() => {
                   v-for="item in pagedFulltextResults"
                   :key="item.source_uri"
                   class="result-card"
-                  :class="{ selected: selectedPreview?.path === resolveResultNode(item.source_uri)?.path }"
+                  :class="{ selected: workspaceStore.editorSidebarOpen && workspaceStore.selectedPath === resolveResultNode(item.source_uri)?.path }"
                   type="button"
                   @click="previewResult(item.source_uri)"
                   @dblclick="openResult(item.source_uri)"
@@ -294,9 +281,9 @@ onMounted(() => {
                   v-for="item in pagedSemanticResults"
                   :key="(item as Record<string, unknown>).memory_id as string"
                   class="result-card"
-                  :class="{ selected: selectedPreview?.path === resolveResultNode((item as Record<string, unknown>).source_uri as string)?.path }"
+                  :class="{ selected: workspaceStore.editorSidebarOpen && workspaceStore.selectedPath === resolveResultNode((item as Record<string, unknown>).source_uri as string)?.path }"
                   type="button"
-                  @click="previewResult((item as Record<string, unknown>).source_uri as string, true)"
+                  @click="previewResult((item as Record<string, unknown>).source_uri as string)"
                   @dblclick="openResult((item as Record<string, unknown>).source_uri as string)"
                 >
                   <div class="card-title">
@@ -315,9 +302,9 @@ onMounted(() => {
                 v-for="item in pagedUnifiedResults"
                 :key="item.path"
                 class="result-card"
-                :class="{ selected: selectedPreview?.path === resolveResultNode(item.path)?.path }"
+                :class="{ selected: workspaceStore.editorSidebarOpen && workspaceStore.selectedPath === resolveResultNode(item.path)?.path }"
                 type="button"
-                @click="previewResult(item.path, isSemanticOnlyResult(item))"
+                @click="previewResult(item.path)"
                 @dblclick="openResult(item.path)"
               >
                 <div class="card-title">
@@ -367,14 +354,6 @@ onMounted(() => {
 
         </div>
 
-        <Transition name="preview-slide">
-          <SearchResultPreview
-            v-if="selectedPreview"
-            :path="selectedPreview.path"
-            :highlight-query="selectedPreview.semanticOnly ? '' : workspaceStore.searchQuery"
-            @close="selectedPreview = null"
-          />
-        </Transition>
       </div>
     </div>
   </div>
@@ -763,11 +742,6 @@ onMounted(() => {
   transition: width 220ms ease;
 }
 
-.results-workspace.preview-open {
-  width: 100%;
-  grid-template-columns: minmax(320px, 520px) minmax(0, 1fr);
-}
-
 .results-list-pane {
   min-width: 0;
 }
@@ -971,32 +945,8 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.preview-slide-enter-active,
-.preview-slide-leave-active {
-  transition: opacity 200ms ease, transform 220ms ease;
-}
-
-.preview-slide-enter-from,
-.preview-slide-leave-to {
-  opacity: 0;
-  transform: translateX(18px);
-}
-
-@media (max-width: 900px) {
-  .results-workspace.preview-open {
-    width: min(96%, 720px);
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .results-workspace.preview-open :deep(.search-result-preview) {
-    height: 60vh;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .results-workspace,
-  .preview-slide-enter-active,
-  .preview-slide-leave-active {
+  .results-workspace {
     transition: none;
   }
 }

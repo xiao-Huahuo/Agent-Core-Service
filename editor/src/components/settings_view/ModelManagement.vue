@@ -29,6 +29,7 @@ const expanded = ref(new Set<string>())
 const loading = ref(false)
 const actionKey = ref('')
 const feedback = ref('')
+const lastRefreshFailed = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const hasActiveWork = computed(() => models.value.some((model) => (
@@ -53,11 +54,23 @@ async function refresh({ checkDisk = false }: { checkDisk?: boolean } = {}) {
   if (!props.userId) return
   loading.value = true
   try {
-    if (checkDisk) await checkModelDisk()
+    if (checkDisk) {
+      try {
+        await checkModelDisk()
+      } catch {
+        // Disk synchronization is advisory; management data may still be available.
+      }
+    }
     models.value = (await fetchModelManagement(props.userId)).models
+    lastRefreshFailed.value = false
+    feedback.value = ''
     if (hasActiveWork.value) ensurePolling()
   } catch (error: unknown) {
-    feedback.value = error instanceof Error ? error.message : '模型状态加载失败'
+    lastRefreshFailed.value = true
+    feedback.value = error instanceof TypeError
+      ? '模型服务连接暂不可用，正在自动重试'
+      : error instanceof Error ? error.message : '模型状态加载失败'
+    ensurePolling()
   } finally {
     loading.value = false
   }
@@ -68,7 +81,7 @@ function ensurePolling() {
   if (pollTimer) return
   pollTimer = setInterval(async () => {
     await refresh()
-    if (!hasActiveWork.value && pollTimer) {
+    if (!lastRefreshFailed.value && !hasActiveWork.value && pollTimer) {
       clearInterval(pollTimer)
       pollTimer = null
       emit('storageChanged')

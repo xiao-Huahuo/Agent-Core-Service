@@ -216,6 +216,8 @@ watch(() => workspaceStore.markdownHtmlVisualization, (visualization) => {
         <button
           type="button"
           class="mode-button"
+          aria-label="原结构模式"
+          title="原结构模式"
           :class="{ active: workspaceStore.markdownHtmlVisualizationMode === 'structure' }"
           @click="setMode('structure')"
         >
@@ -225,6 +227,8 @@ watch(() => workspaceStore.markdownHtmlVisualization, (visualization) => {
         <button
           type="button"
           class="mode-button"
+          aria-label="AI提炼模式"
+          title="AI提炼模式"
           :class="{ active: workspaceStore.markdownHtmlVisualizationMode === 'insight' }"
           @click="setMode('insight')"
         >
@@ -240,6 +244,8 @@ watch(() => workspaceStore.markdownHtmlVisualization, (visualization) => {
           <button
             type="button"
             class="secondary-action"
+            aria-label="高级选项"
+            title="高级选项"
             :class="{ active: advancedOptionsOpen }"
             :aria-expanded="advancedOptionsOpen"
             aria-haspopup="menu"
@@ -303,6 +309,8 @@ watch(() => workspaceStore.markdownHtmlVisualization, (visualization) => {
         <button
           type="button"
           class="visualize-button"
+          :aria-label="visualizationActionLabel"
+          :title="visualizationActionLabel"
           :disabled="!workspaceStore.selectedNode || workspaceStore.selectedNode.isDir || workspaceStore.refreshing"
           @click="startVisualization"
         >
@@ -933,7 +941,9 @@ watch(() => workspaceStore.markdownHtmlVisualization, (visualization) => {
   gap: var(--space-8);
   min-width: 0;
   min-height: 0;
+  padding: var(--space-16);
   color: var(--color-text-muted);
+  text-align: center;
 }
 
 .selected-file-card {
@@ -1011,26 +1021,71 @@ watch(() => workspaceStore.markdownHtmlVisualization, (visualization) => {
   .visualization-toolbar {
     align-items: stretch;
     flex-direction: column;
-    padding: var(--space-10);
+    gap: var(--space-8);
+    padding: var(--space-8) var(--space-10);
+  }
+
+  .mode-pill {
+    align-self: flex-start;
   }
 
   .toolbar-actions {
-    align-items: stretch;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 28px auto auto;
+    align-items: center;
+    justify-content: end;
   }
 
   .advanced-menu-wrap {
-    display: grid;
+    display: inline-flex;
   }
 
   .advanced-menu {
-    position: static;
-    width: 100%;
-    margin-top: var(--space-8);
+    position: absolute;
+    right: calc(-100% - var(--space-8));
+    width: min(360px, calc(100vw - 100px));
+    max-height: calc(100vh - 132px);
+    margin-top: 0;
+    overflow-y: auto;
   }
 
   .toolbar-actions > button {
+    width: auto;
+  }
+
+  .task-progress-card {
+    top: calc(84px + var(--space-12));
+  }
+}
+
+@media (max-width: 420px) {
+  .mode-pill {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
+  }
+
+  .mode-button {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .toolbar-actions {
+    grid-template-columns: repeat(3, 28px);
+  }
+
+  .advanced-menu-wrap .secondary-action,
+  .toolbar-actions > button.visualize-button {
+    width: 28px;
+    padding: 0;
+  }
+
+  .mode-button span,
+  .advanced-menu-wrap .secondary-action span,
+  .advanced-menu-wrap .secondary-action > :last-child,
+  .toolbar-actions > button.visualize-button span {
+    display: none;
   }
 }
 </style>

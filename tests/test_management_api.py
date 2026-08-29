@@ -60,6 +60,16 @@ class _SettingsStub:
 
         return {"user_id": user_id, "auto_download_enabled": auto_download_enabled}
 
+    def get_knowledge_ingestion_config(self, *, user_id: str) -> dict[str, object]:
+        """返回默认关闭的识图设置。"""
+
+        return {"user_id": user_id, "ocr_enabled": False, "vision_understanding_enabled": False}
+
+    def save_knowledge_ingestion_config(self, *, user_id: str, **payload: object) -> dict[str, object]:
+        """返回 gRPC 传入的识图覆盖值。"""
+
+        return {"user_id": user_id, **{key: value for key, value in payload.items() if value is not None}}
+
 
 class _LatexManagementStub:
     """返回系统 MiKTeX 管理详情。"""
@@ -152,6 +162,34 @@ def test_model_preferences_and_initialization_match_over_rest_and_grpc(monkeypat
     assert grpc_saved == rest_saved.json()
     assert rest_initialized.json() == {"status": "started:u1"}
     assert grpc_initialized == rest_initialized.json()
+
+
+def test_vision_setting_is_available_over_grpc() -> None:
+    """gRPC 面板必须能保存与 REST 同形的识图开关。"""
+
+    settings_service = _SettingsStub()
+    server = grpc.server(ThreadPoolExecutor(max_workers=1))
+    add_AgentServiceServicer_to_server(
+        AgentServiceServicer(
+            agent=_AgentStub(),  # type: ignore[arg-type]
+            session_service=SimpleNamespace(),  # type: ignore[arg-type]
+            settings_service=settings_service,  # type: ignore[arg-type]
+        ),
+        server,
+    )
+    port = server.add_insecure_port("127.0.0.1:0")
+    server.start()
+    channel = grpc.insecure_channel(f"127.0.0.1:{port}")
+    try:
+        payload = MessageToDict(AgentServiceStub(channel).SaveKnowledgeIngestionConfig(_struct({
+            "user_id": "u1", "vision_understanding_enabled": True,
+        }), timeout=5))
+    finally:
+        channel.close()
+        server.stop(0).wait(timeout=5)
+
+    assert payload["user_id"] == "u1"
+    assert payload["vision_understanding_enabled"] is True
 
 
 def test_management_grpc_matches_rest_fields() -> None:

@@ -225,15 +225,31 @@ function extractCitationIds(content: string) {
   return ids
 }
 
-function citationMapForMessage(message: AgentChatMessage): Record<string, SourceItem> {
+function citationMapForMessage(message: AgentChatMessage, messageIndex = -1): Record<string, SourceItem> {
   if (isThinkingActive.value || !isCompletedAssistantContentMessage(message)) {
     return {}
   }
-  return asSourceMap(message.metadata?.citation_map)
+  const persisted = asSourceMap(message.metadata?.citation_map)
+  if (Object.keys(persisted).length > 0 || messageIndex < 0) return persisted
+  for (let index = messageIndex - 1; index >= 0; index -= 1) {
+    const candidate = visibleMessages.value[index]
+    if (candidate?.role !== 'user') continue
+    const attachments = candidate.attachments?.filter((item) => item.uri?.startsWith('session-upload://')) ?? []
+    return Object.fromEntries(attachments.map((attachment, attachmentIndex) => [
+      `A${attachmentIndex + 1}`,
+      {
+        source_uri: attachment.uri,
+        content: attachment.summary ?? '',
+        source: 'session_attachment',
+        title: attachment.filename,
+      },
+    ]))
+  }
+  return persisted
 }
 
-function knowledgeSourcesForMessage(message: AgentChatMessage): SourceItem[] {
-  const citationMap = citationMapForMessage(message)
+function knowledgeSourcesForMessage(message: AgentChatMessage, messageIndex = -1): SourceItem[] {
+  const citationMap = citationMapForMessage(message, messageIndex)
   const metadataUsed = Array.isArray(message.metadata?.used_citations)
     ? message.metadata.used_citations.filter((item): item is string => typeof item === 'string')
     : []
@@ -341,13 +357,13 @@ defineExpose({
         :show-avatar="shouldShowAvatar(message, index)"
         :show-actions="shouldShowActions(message, index)"
         :knowledge-sources="[]"
-        :citation-map="message.role === 'assistant' ? citationMapForMessage(message) : {}"
+        :citation-map="message.role === 'assistant' ? citationMapForMessage(message, index) : {}"
         :change-snapshot="message.node === 'action' ? changeSnapshotForAction(index) : changeSnapshotForMessage(message)"
       />
       <FinalTurnSummary
         v-if="message.role === 'assistant' && isFinalAssistantAnswer(message, index) && !isThinkingActive"
         class="assistant-summary-offset"
-        :sources="knowledgeSourcesForMessage(message)"
+        :sources="knowledgeSourcesForMessage(message, index)"
         :change-snapshot="changeSnapshotForMessage(message)"
         :undoing="undoingSnapshotId === changeSnapshotForMessage(message)?.snapshot_id"
         :compact="compact"

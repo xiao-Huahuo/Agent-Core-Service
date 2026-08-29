@@ -489,6 +489,12 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
   min-height: 142px;
 }
 
+@media (max-width: 1200px) {
+  .card-body {
+    overflow-y: visible;
+  }
+}
+
 @media (max-width: 480px) {
   .breakdown-charts {
     grid-template-columns: 1fr;
@@ -541,5 +547,8 @@ function onLineClick(params: { componentType?: string; dataIndex?: number }): vo
   font-family: var(--font-ui);
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 </style>

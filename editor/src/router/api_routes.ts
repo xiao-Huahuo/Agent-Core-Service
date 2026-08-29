@@ -41,6 +41,7 @@ export const API_ROUTES = {
   AGENT_STREAM_RUN: '/agent/stream-run',
   AGENT_ATTACHMENTS_UPLOAD: '/agent/attachments/upload',
   AGENT_ATTACHMENTS: '/agent/attachments',
+  AGENT_ATTACHMENT_RAW: '/agent/attachments/raw',
   AGENT_CURRENT_DOCUMENT_CONTEXT: '/agent/editor-context/current-document',
   AGENT_TOOLS: '/agent/tools',
   AGENT_EVENTS: '/agent/events',

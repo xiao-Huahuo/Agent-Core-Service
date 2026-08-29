@@ -378,11 +378,11 @@ function handleDrop(event: DragEvent) {
   aspect-ratio: 2 / 3;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: 18px;
   background: var(--color-surface-raised);
-  box-shadow: none;
-  transition: background 160ms ease;
+  box-shadow: 0 0 0 4px var(--workspace-panel-ring);
+  transition: background 160ms ease, box-shadow 160ms ease;
 }
 
 .cover.image-cover {
@@ -394,7 +394,10 @@ function handleDrop(event: DragEvent) {
 .library-card:hover .cover,
 .library-card.selected .cover {
   background: var(--color-surface-raised);
-  box-shadow: none;
+}
+
+.library-card:hover .cover {
+  box-shadow: 0 0 0 4px var(--color-primary-soft);
 }
 
 .cover-image {

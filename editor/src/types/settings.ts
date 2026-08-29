@@ -34,6 +34,8 @@ export interface UserSettingsProfile {
   autoIngestOnUpload?: boolean
   /** Whether OCR should be enabled after restarting the backend service. */
   ocrEnabled?: boolean
+  /** Whether local Qwen may add semantic understanding to uploaded images. */
+  visionUnderstandingEnabled?: boolean
   /** Whether missing managed models should download automatically. */
   modelAutoDownloadEnabled?: boolean
   /** Gitignore-like rules for files that must never enter the vector store. */

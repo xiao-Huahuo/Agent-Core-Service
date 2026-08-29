@@ -1096,6 +1096,24 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     pendingAttachments.value.push(attachment)
   }
 
+  function replacePendingAttachment(attachmentId: string, attachment: AgentUploadedAttachment) {
+    pendingAttachments.value = pendingAttachments.value.map((item) => (
+      item.attachment_id === attachmentId ? attachment : item
+    ))
+  }
+
+  function updateAttachmentLocal(attachment: AgentUploadedAttachment) {
+    pendingAttachments.value = pendingAttachments.value.map((item) => (
+      item.attachment_id === attachment.attachment_id ? attachment : item
+    ))
+    messages.value = messages.value.map((message) => ({
+      ...message,
+      attachments: message.attachments?.map((item) => (
+        item.attachment_id === attachment.attachment_id ? attachment : item
+      )),
+    }))
+  }
+
   function removeAttachmentLocal(attachmentId: string) {
     pendingAttachments.value = pendingAttachments.value.filter((item) => item.attachment_id !== attachmentId)
     messages.value = messages.value.map((message) => {
@@ -1115,6 +1133,10 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
       return
     }
     removeAttachmentLocal(attachmentId)
+
+    if (attachmentId.startsWith('local-upload-')) {
+      return
+    }
 
     const userId = attachment.user_id
     const sessionId = attachment.session_id
@@ -1153,6 +1175,8 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     cancelStream,
     clear,
     addPendingAttachment,
+    replacePendingAttachment,
+    updateAttachmentLocal,
     deleteAttachment,
     currentKnowledgeSources,
     currentCitationMap,

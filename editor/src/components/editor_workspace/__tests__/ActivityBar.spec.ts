@@ -99,15 +99,23 @@ describe('ActivityBar', () => {
     expect(wrapper.emitted('openLiterature')).toHaveLength(1)
   })
 
-  it('opens the capsule on hover in icon mode', async () => {
+  it('opens grouped menus only on click in icon mode', async () => {
     const wrapper = mount(ActivityBar, { props })
+    const group = wrapper.get('.knowledge-group')
+    const trigger = group.get('.knowledge-button')
 
-    await wrapper.get('.knowledge-group').trigger('mouseenter')
+    await group.trigger('mouseenter')
+    expect(group.find('.knowledge-submenu').exists()).toBe(false)
 
-    expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(true)
+    await trigger.trigger('click')
+
+    expect(group.find('.knowledge-submenu').exists()).toBe(true)
     expect(wrapper.emitted('knowledgeMenuVisibilityChange')).toEqual([[true]])
 
-    await wrapper.get('.knowledge-group').trigger('mouseleave')
+    await group.trigger('mouseleave')
+    expect(group.find('.knowledge-submenu').exists()).toBe(true)
+
+    await trigger.trigger('click')
     expect(wrapper.emitted('knowledgeMenuVisibilityChange')).toEqual([[true], [false]])
   })
 

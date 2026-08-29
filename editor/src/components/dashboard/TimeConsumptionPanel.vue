@@ -201,7 +201,10 @@ function fileTypeOf(node: KnowledgeFileNode): string {
   flex-direction: column;
   gap: var(--space-10);
   flex: 1;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
+  box-sizing: border-box;
   overflow: hidden;
   padding: var(--space-10);
 }
@@ -271,7 +274,7 @@ function fileTypeOf(node: KnowledgeFileNode): string {
 
 .planning-left {
   flex: 1 1 auto;
-  border: 1px solid var(--color-border);
+  border: 0;
   border-radius: 28px;
   background: var(--color-surface);
   box-shadow: 0 0 0 4px var(--library-form-ring);
@@ -372,29 +375,37 @@ function fileTypeOf(node: KnowledgeFileNode): string {
 }
 
 @media (max-width: 1200px) {
+  .time-panel {
+    flex: 0 0 auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
   .row-lower {
     grid-template-columns: minmax(0, 1fr);
+    flex: none;
   }
 
   .row-upper {
-    flex-direction: column;
-    height: auto;
-  }
-
-  .col-rag {
-    flex: 1 1 auto;
-    max-width: none;
-    min-height: 180px;
-    max-height: none;
-  }
-
-  .col-token {
     flex: none;
-    height: 300px;
   }
 
   .col-planning {
     grid-template-columns: minmax(180px, 0.65fr) minmax(0, 1.35fr);
+    min-height: 460px;
+  }
+
+  .col-latency {
+    height: auto;
+    min-height: 320px;
+  }
+
+  .col-latency > * {
+    height: auto;
+  }
+
+  .planning-left {
+    overflow: visible;
   }
 }
 
@@ -408,16 +419,37 @@ function fileTypeOf(node: KnowledgeFileNode): string {
   .row-upper,
   .row-lower {
     display: flex;
+    flex: none;
     flex-direction: column;
+  }
+
+  .row-upper {
+    height: auto;
+  }
+
+  .col-rag {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    height: 220px;
+    min-height: 220px;
   }
 
   .col-planning {
     display: flex;
     flex-direction: column;
+    min-height: 0;
   }
 
   .planning-right {
     min-height: 420px;
+  }
+
+  .type-share-panel {
+    flex: none;
+    height: clamp(180px, 40vw, 260px);
+    aspect-ratio: auto;
+    margin-top: 0;
   }
 
   .col-token {
@@ -427,7 +459,8 @@ function fileTypeOf(node: KnowledgeFileNode): string {
 
   .col-latency {
     flex: none;
-    height: 320px;
+    height: auto;
+    min-height: 320px;
   }
 }
 

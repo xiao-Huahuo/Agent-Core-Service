@@ -30,4 +30,20 @@ describe('EditorWorkspace shell styling', () => {
     expect(editorWorkspaceSource).toContain("'--editor-resizer-width'")
     expect(editorWorkspaceSource).toContain("'--browser-resizer-width'")
   })
+
+  it('floats every right sidebar and keeps only the latest mobile overlay active', () => {
+    expect(editorWorkspaceSource).toContain("type MobileSidebar = 'file' | 'editor' | 'browser' | 'git' | 'agent' | 'todo'")
+    expect(editorWorkspaceSource).toContain('function activateMobileSidebar(sidebar: MobileSidebar): void')
+    expect(editorWorkspaceSource).toContain("if (sidebar !== 'file')")
+    expect(editorWorkspaceSource).toContain("if (sidebar !== 'browser') workspaceStore.closeBrowserSidebar()")
+    expect(editorWorkspaceSource).toContain("if (sidebar !== 'agent') agentSidebarOpen.value = false")
+    expect(editorWorkspaceSource).toMatch(
+      /\.workspace-grid\.mobile-main-layout \.editor-sidebar-content,[\s\S]*?\.browser-sidebar-content,[\s\S]*?\.agent-col \{[\s\S]*?position: absolute;/,
+    )
+  })
+
+  it('measures the mobile breakpoint independently from docked sidebar widths', () => {
+    expect(editorWorkspaceSource).toContain('mainShellWidth.value = gridRect.width - activityBarWidth.value')
+    expect(editorWorkspaceSource).not.toContain('shellRect.right - gridRect.left - activityBarWidth.value')
+  })
 })

@@ -156,6 +156,29 @@ def test_image_understanding_tool_is_registered() -> None:
     assert definition.display_name == "识图"
 
 
+def test_image_understanding_tool_does_not_load_qwen_when_disabled(monkeypatch: object) -> None:
+    """用户关闭识图时，即使 Agent 选择工具也必须在 Qwen 服务调用前返回。"""
+
+    import agent_service.services.local_qwen.service as local_module
+    import agent_service.tools.builtin.knowledge as knowledge_module
+
+    settings = SimpleNamespace(
+        is_vision_understanding_enabled_for_user=lambda *, user_id: False,
+    )
+    runtime = SimpleNamespace(user_id="u1", settings_service=settings)
+    monkeypatch.setattr(knowledge_module, "get_tool_runtime", lambda: runtime)
+    monkeypatch.setattr(
+        local_module,
+        "get_local_qwen_service",
+        lambda _config: (_ for _ in ()).throw(AssertionError("Qwen must not load")),
+    )
+
+    result = knowledge_module.understand_image()
+
+    assert "识图功能未开启" in result
+    assert "不会加载本地 Qwen" in result
+
+
 def test_scheduler_builds_local_qwen_adapter_without_remote_credentials() -> None:
     """完全未配置远程模型时，调度器必须构造本地适配器而非 ChatOpenAI。"""
 

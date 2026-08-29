@@ -158,6 +158,7 @@ from agent_service.services.component_library.service import ComponentLibrarySer
 from agent_service.services.smart_form.service import SmartFormService
 from agent_service.services.latex.service import LatexService
 from agent_service.services.model_management.service import ModelManagementService
+from agent_service.services.session_attachment.service import SessionAttachmentService
 from agent_service.services.storage.service import StorageService
 
 logger = logging.getLogger(__name__)
@@ -209,6 +210,7 @@ class AgentServiceServicer(GrpcErrorMapperMixin, GrpcResponseMapperMixin, AgentG
         smart_form_service: SmartFormService | None = None,
         latex_service: LatexService | None = None,
         model_management_service: ModelManagementService | None = None,
+        attachment_service: SessionAttachmentService | None = None,
     ) -> None:
         self._agent = agent
         self._limits = getattr(getattr(agent, "config", None), "limits", DEFAULT_BUSINESS_LIMITS)
@@ -230,6 +232,7 @@ class AgentServiceServicer(GrpcErrorMapperMixin, GrpcResponseMapperMixin, AgentG
         self._smart_form_service = smart_form_service
         self._latex_service = latex_service
         self._model_management_service = model_management_service
+        self._attachment_service = attachment_service
 
     def shutdown(self) -> None:
         self._agent.close()

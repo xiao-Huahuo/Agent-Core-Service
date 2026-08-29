@@ -149,6 +149,16 @@ class AgentServiceStub(object):
                 request_serializer=agent__service__pb2.ToolListRequest.SerializeToString,
                 response_deserializer=agent__service__pb2.ToolListResponse.FromString,
                 _registered_method=True)
+        self.GetSessionAttachment = channel.unary_unary(
+                '/agent_service.AgentService/GetSessionAttachment',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.GetSessionAttachmentRaw = channel.unary_unary(
+                '/agent_service.AgentService/GetSessionAttachmentRaw',
+                request_serializer=agent__service__pb2.AttachmentRawRequest.SerializeToString,
+                response_deserializer=agent__service__pb2.AttachmentRawResponse.FromString,
+                _registered_method=True)
         self.EnsureUserProfile = channel.unary_unary(
                 '/agent_service.AgentService/EnsureUserProfile',
                 request_serializer=agent__service__pb2.UserProfileRequest.SerializeToString,
@@ -211,6 +221,16 @@ class AgentServiceStub(object):
                 _registered_method=True)
         self.SaveAppearanceConfig = channel.unary_unary(
                 '/agent_service.AgentService/SaveAppearanceConfig',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.GetKnowledgeIngestionConfig = channel.unary_unary(
+                '/agent_service.AgentService/GetKnowledgeIngestionConfig',
+                request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                _registered_method=True)
+        self.SaveKnowledgeIngestionConfig = channel.unary_unary(
+                '/agent_service.AgentService/SaveKnowledgeIngestionConfig',
                 request_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
                 _registered_method=True)
@@ -838,6 +858,18 @@ class AgentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetSessionAttachment(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetSessionAttachmentRaw(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def EnsureUserProfile(self, request, context):
         """---- 用户设置 ----
 
@@ -913,6 +945,18 @@ class AgentServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def SaveAppearanceConfig(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetKnowledgeIngestionConfig(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SaveKnowledgeIngestionConfig(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -1607,6 +1651,16 @@ def add_AgentServiceServicer_to_server(servicer, server):
                     request_deserializer=agent__service__pb2.ToolListRequest.FromString,
                     response_serializer=agent__service__pb2.ToolListResponse.SerializeToString,
             ),
+            'GetSessionAttachment': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSessionAttachment,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'GetSessionAttachmentRaw': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSessionAttachmentRaw,
+                    request_deserializer=agent__service__pb2.AttachmentRawRequest.FromString,
+                    response_serializer=agent__service__pb2.AttachmentRawResponse.SerializeToString,
+            ),
             'EnsureUserProfile': grpc.unary_unary_rpc_method_handler(
                     servicer.EnsureUserProfile,
                     request_deserializer=agent__service__pb2.UserProfileRequest.FromString,
@@ -1669,6 +1723,16 @@ def add_AgentServiceServicer_to_server(servicer, server):
             ),
             'SaveAppearanceConfig': grpc.unary_unary_rpc_method_handler(
                     servicer.SaveAppearanceConfig,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'GetKnowledgeIngestionConfig': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetKnowledgeIngestionConfig,
+                    request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+                    response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            ),
+            'SaveKnowledgeIngestionConfig': grpc.unary_unary_rpc_method_handler(
+                    servicer.SaveKnowledgeIngestionConfig,
                     request_deserializer=google_dot_protobuf_dot_struct__pb2.Struct.FromString,
                     response_serializer=google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             ),
@@ -2730,6 +2794,60 @@ class AgentService(object):
             _registered_method=True)
 
     @staticmethod
+    def GetSessionAttachment(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetSessionAttachment',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSessionAttachmentRaw(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetSessionAttachmentRaw',
+            agent__service__pb2.AttachmentRawRequest.SerializeToString,
+            agent__service__pb2.AttachmentRawResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def EnsureUserProfile(request,
             target,
             options=(),
@@ -3068,6 +3186,60 @@ class AgentService(object):
             request,
             target,
             '/agent_service.AgentService/SaveAppearanceConfig',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetKnowledgeIngestionConfig(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/GetKnowledgeIngestionConfig',
+            google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
+            google_dot_protobuf_dot_struct__pb2.Struct.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SaveKnowledgeIngestionConfig(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent_service.AgentService/SaveKnowledgeIngestionConfig',
             google_dot_protobuf_dot_struct__pb2.Struct.SerializeToString,
             google_dot_protobuf_dot_struct__pb2.Struct.FromString,
             options,

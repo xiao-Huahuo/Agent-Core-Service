@@ -562,9 +562,10 @@ defineExpose({ focus })
   cursor: pointer;
   flex-shrink: 0;
   overflow: hidden;
+  isolation: isolate;
   white-space: nowrap;
   line-height: 22px;
-  transition: color 0.25s, background 0.25s;
+  transition: color 0.3s 0.1s ease-out;
   outline: none;
   text-align: center;
 }
@@ -584,24 +585,26 @@ defineExpose({ focus })
   left: -5em;
   text-align: center;
   transition: box-shadow 0.5s ease-out;
-  z-index: -1;
+  z-index: 0;
 }
 
 .submit-icon {
   position: absolute;
   left: 5px;
   top: 50%;
+  z-index: 1;
   transform: translateY(-50%);
 }
 
 .submit-label {
+  position: relative;
+  z-index: 1;
   opacity: 0;
   transition: opacity 180ms ease;
 }
 
 .search-submit-btn:hover {
   color: #fff;
-  background: var(--color-primary);
 }
 
 .search-submit-btn:hover::before {

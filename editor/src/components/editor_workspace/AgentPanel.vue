@@ -44,7 +44,7 @@ import { useTaskListStore } from '@/stores/taskList'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
 import { fetchSessionState, type SessionRecord } from '@/api/session'
-import { uploadAgentAttachment } from '@/api/agent'
+import { fetchAgentAttachment, uploadAgentAttachment } from '@/api/agent'
 import { fetchLLMConfig, fetchSensitiveWords, saveSensitiveWords } from '@/api/settings'
 import type { AgentChangeSnapshot } from '@/api/agentChanges'
 
@@ -106,8 +106,7 @@ const contextWindowTokens = ref(1000000)
 const safetyDisabled = ref(false)
 const safetyLoading = ref(false)
 const dragDepth = ref(0)
-const isUploadingAttachment = ref(false)
-const uploadStatusText = ref('')
+const attachmentPollTimers = new Map<string, number>()
 const modeSwitchRef = ref<HTMLElement | null>(null)
 const loopModeMenuOpen = ref(false)
 const skillMenuOpen = ref(false)
@@ -129,7 +128,7 @@ const welcomeTitleSrc = computed(() => isDark.value ? darkTitle : lightTitle)
 const logoSrc = computed(() => isDark.value ? darkLogo : lightLogo)
 const hasMessages = computed(() => chatStore.value.messages.filter((m) => m.role !== 'system').length > 0)
 const hasStreamingContent = computed(() => !!chatStore.value.lastMessage?.content)
-const isAttachmentDropActive = computed(() => dragDepth.value > 0 || isUploadingAttachment.value)
+const isAttachmentDropActive = computed(() => dragDepth.value > 0)
 
 /** Start or stop silent history synchronization for an externally-run task. */
 function syncTaskHistoryPolling(enabled: boolean) {
@@ -474,7 +473,7 @@ async function handleDrop(event: DragEvent) {
     targetSessionId = await sessionStore.create(userId.value)
     if (!props.sessionId) sessionStore.select(targetSessionId)
   }
-  await uploadFiles(files, targetSessionId)
+  uploadFiles(files, targetSessionId)
 }
 
 async function handleFileSelect(file: File) {
@@ -484,29 +483,92 @@ async function handleFileSelect(file: File) {
     targetSessionId = await sessionStore.create(userId.value)
     if (!props.sessionId) sessionStore.select(targetSessionId)
   }
-  await uploadFiles([file], targetSessionId)
+  uploadFiles([file], targetSessionId)
 }
 
-async function uploadFiles(files: File[], sessionId: string) {
-  isUploadingAttachment.value = true
-  try {
-    for (const [index, file] of files.entries()) {
-      uploadStatusText.value = `Uploading ${index + 1}/${files.length}: ${file.name}`
-      const response = await uploadAgentAttachment(userId.value!, sessionId, file)
-      chatStore.value.addPendingAttachment(response.attachment)
-    }
-    const firstUploadedFile = files[0]
-    uploadStatusText.value = files.length === 1 && firstUploadedFile
-      ? `Uploaded ${firstUploadedFile.name}`
-      : `Uploaded ${files.length} files`
-    window.setTimeout(() => {
-      if (!isUploadingAttachment.value) uploadStatusText.value = ''
-    }, 1600)
-  } catch (error) {
-    uploadStatusText.value = error instanceof Error ? error.message : 'Upload failed'
-  } finally {
-    isUploadingAttachment.value = false
+function uploadFiles(files: File[], sessionId: string) {
+  for (const file of files) void uploadFile(file, sessionId)
+}
+
+/** Upload one file without blocking the panel and keep progress on its own attachment card. */
+async function uploadFile(file: File, sessionId: string) {
+  const localId = `local-upload-${crypto.randomUUID()}`
+  let placeholder: AgentUploadedAttachment = {
+    attachment_id: localId,
+    user_id: userId.value!,
+    session_id: sessionId,
+    library_id: '',
+    library_name: '',
+    filename: file.name,
+    stored_name: file.name,
+    uri: '',
+    mime_type: file.type,
+    size: file.size,
+    source_type: 'uploading',
+    metadata: {
+      processing_status: 'uploading',
+      processing_stage: 'uploading',
+      processing_progress: 0,
+    },
+    created_at: new Date().toISOString(),
   }
+  chatStore.value.addPendingAttachment(placeholder)
+  try {
+    const response = await uploadAgentAttachment(userId.value!, sessionId, file, (percent) => {
+      placeholder = {
+        ...placeholder,
+        metadata: { ...placeholder.metadata, processing_progress: percent },
+      }
+      chatStore.value.updateAttachmentLocal(placeholder)
+    })
+    chatStore.value.replacePendingAttachment(localId, response.attachment)
+    scheduleAttachmentPoll(response.attachment)
+  } catch (error) {
+    chatStore.value.updateAttachmentLocal({
+      ...placeholder,
+      metadata: {
+        ...placeholder.metadata,
+        processing_status: 'failed',
+        processing_stage: 'failed',
+        processing_progress: 100,
+        processing_error: error instanceof Error ? error.message : 'Upload failed',
+      },
+    })
+  }
+}
+
+/** Poll only this attachment until its background parser reaches a terminal state. */
+function scheduleAttachmentPoll(attachment: AgentUploadedAttachment, attempt = 0) {
+  const status = String(attachment.metadata?.processing_status || '')
+  if (status === 'completed' || status === 'failed') return
+  if (attempt >= 1200) {
+    chatStore.value.updateAttachmentLocal({
+      ...attachment,
+      metadata: {
+        ...attachment.metadata,
+        processing_status: 'failed',
+        processing_stage: 'timeout',
+        processing_progress: 100,
+        processing_error: '附件解析超时',
+      },
+    })
+    return
+  }
+  const timer = window.setTimeout(async () => {
+    attachmentPollTimers.delete(attachment.attachment_id)
+    try {
+      const response = await fetchAgentAttachment(
+        attachment.user_id,
+        attachment.session_id,
+        attachment.attachment_id,
+      )
+      chatStore.value.updateAttachmentLocal(response.attachment)
+      scheduleAttachmentPoll(response.attachment, attempt + 1)
+    } catch {
+      scheduleAttachmentPoll(attachment, attempt + 1)
+    }
+  }, 500)
+  attachmentPollTimers.set(attachment.attachment_id, timer)
 }
 
 watch(userId, () => {
@@ -697,6 +759,8 @@ onBeforeUnmount(() => {
     window.clearInterval(taskHistoryPollTimer)
     taskHistoryPollTimer = null
   }
+  for (const timer of attachmentPollTimers.values()) window.clearTimeout(timer)
+  attachmentPollTimers.clear()
 })
 
 /** Keeps an open detail drawer in sync with a just-completed file patch. */
@@ -726,7 +790,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
     <Transition name="attachment-drop-fade">
       <div v-if="isAttachmentDropActive" class="attachment-drop-overlay" aria-live="polite">
         <IcIcon name="cloud-upload" :size="38" />
-        <span>{{ uploadStatusText || 'Drop files to attach to this session' }}</span>
+        <span>Drop files to attach to this session</span>
       </div>
     </Transition>
 

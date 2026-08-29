@@ -7,7 +7,18 @@
   reuses EditorPane for the selected real knowledge file on the right.
 -->
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+  DropdownMenuRoot as DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from 'reka-ui'
 
 import { buildApiUrl } from '@/api/client'
 import { addFavorite, deleteFavorite, listFavorites } from '@/api/favorites'
@@ -17,7 +28,6 @@ import { addPrivacy, deletePrivacy, listPrivacy } from '@/api/privacy'
 import { generateStructuredFields, getSmartFormDb, listSmartFormsDb, saveSmartFormDb } from '@/api/smartForms'
 import IcIcon from '@/components/common/IcIcon.vue'
 import EditorPane from '@/components/editor_workspace/EditorPane.vue'
-import SortMenu from '@/components/editor_workspace/SortMenu.vue'
 import LiteratureContextMenu from '@/components/literature_reading/LiteratureContextMenu.vue'
 import LiteratureCreateDialog from '@/components/literature_reading/LiteratureCreateDialog.vue'
 import LiteratureEntryCard from '@/components/literature_reading/LiteratureEntryCard.vue'
@@ -29,6 +39,19 @@ import { useWorkspaceStore } from '@/stores/workspace'
 defineOptions({ name: 'LiteratureReadingView' })
 
 type SortKey = 'title' | 'size' | 'entered' | 'viewed'
+
+/** Active literature menu and its position relative to the owning card or field. */
+interface LiteratureMenuState {
+  open: boolean
+  kind: 'row' | 'field'
+  x: number
+  y: number
+  entry: LiteratureEntry | null
+  columnId: string
+  anchor: HTMLElement | null
+  anchorOffsetX: number
+  anchorOffsetY: number
+}
 
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
@@ -46,6 +69,7 @@ const minRating = ref(0)
 const sortKey = ref<SortKey>('entered')
 const sortDirection = ref<'asc' | 'desc'>('desc')
 const sortMenuOpen = ref(false)
+const filterMenuOpen = ref(false)
 const loading = ref(false)
 const createOpen = ref(false)
 const preparing = ref(false)
@@ -59,7 +83,17 @@ const addColumnMenu = ref({ open: false, x: 0, y: 0, formId: '' })
 const favoriteTargets = ref(new Set<string>())
 const privateTargets = ref(new Set<string>())
 const pendingCellKeys = ref(new Set<string>())
-const contextMenu = ref<{ open: boolean; kind: 'row' | 'field'; x: number; y: number; entry: LiteratureEntry | null; columnId: string }>({ open: false, kind: 'row', x: 0, y: 0, entry: null, columnId: '' })
+const contextMenu = ref<LiteratureMenuState>({
+  open: false,
+  kind: 'row',
+  x: 0,
+  y: 0,
+  entry: null,
+  columnId: '',
+  anchor: null,
+  anchorOffsetX: 0,
+  anchorOffsetY: 0,
+})
 const sortOptions = [
   { value: 'title', label: '标题', icon: 'title' },
   { value: 'size', label: '文献大小', icon: 'storage' },
@@ -68,6 +102,11 @@ const sortOptions = [
 ]
 
 const libraryId = computed(() => settingsStore.activeKnowledgeLibrary?.libraryId || settingsStore.profile.activeLibraryId)
+const ratingFilter = computed({
+  get: () => String(minRating.value),
+  set: (value: string) => { minRating.value = Number(value) },
+})
+const hasActiveFilter = computed(() => Boolean(tagFilter.value || minRating.value || selectedFormId.value))
 const tags = computed(() => [...new Set(entries.value.flatMap((entry) => entry.tags))].sort((a, b) => a.localeCompare(b)))
 const visibleEntries = computed(() => {
   const normalized = query.value.trim().toLowerCase()
@@ -108,15 +147,6 @@ async function openSearch(): Promise<void> {
 function closeSearch(): void {
   if (query.value) return
   searchOpen.value = false
-}
-
-function selectLiteratureSort(value: string): void {
-  sortKey.value = value as SortKey
-}
-
-function selectLiteratureDirection(value: 'asc' | 'desc'): void {
-  sortDirection.value = value
-  sortMenuOpen.value = false
 }
 
 /** Loads only literature forms and their lightweight row summaries for the active knowledge library. */
@@ -186,12 +216,59 @@ function absolutePath(entry: LiteratureEntry): string {
   return `${settingsStore.profile.knowledgeDir.replace(/[\\/]+$/u, '')}/${entry.asset_path}`.replace(/\//gu, '\\')
 }
 
-function openRowMenu(entry: LiteratureEntry, event: MouseEvent): void {
-  contextMenu.value = { open: true, kind: 'row', x: Math.min(event.clientX, window.innerWidth - 252), y: Math.min(event.clientY, window.innerHeight - 440), entry, columnId: '' }
+/** Closes the active row or field menu from any click outside the menu itself. */
+function closeContextMenu(): void {
+  contextMenu.value.open = false
 }
 
+/** Handles outside presses in capture phase so nested stop modifiers cannot leave the menu open. */
+function handleDocumentPointerDown(event: PointerEvent): void {
+  const target = event.target instanceof Element ? event.target : null
+  if (target?.closest('.literature-context')) return
+  closeContextMenu()
+}
+
+/** Keeps the fixed menu attached to its owning block while the sidebar scrolls. */
+function updateContextMenuPosition(): void {
+  const menu = contextMenu.value
+  if (!menu.open || !menu.anchor) return
+  if (!document.contains(menu.anchor)) {
+    closeContextMenu()
+    return
+  }
+  const rect = menu.anchor.getBoundingClientRect()
+  const menuHeight = menu.kind === 'row' ? 440 : 130
+  menu.x = Math.max(8, Math.min(rect.left + menu.anchorOffsetX, window.innerWidth - 252))
+  menu.y = Math.max(8, Math.min(rect.top + menu.anchorOffsetY, window.innerHeight - menuHeight))
+}
+
+/** Opens one menu at the pointer while retaining the owning block as its anchor. */
+function setContextMenu(kind: 'row' | 'field', entry: LiteratureEntry, columnId: string, event: MouseEvent): void {
+  const selector = kind === 'row' ? '.literature-card' : '.literature-field'
+  const anchor = (event.target as HTMLElement | null)?.closest<HTMLElement>(selector) ?? null
+  const rect = anchor?.getBoundingClientRect()
+  contextMenu.value = {
+    open: true,
+    kind,
+    x: event.clientX,
+    y: event.clientY,
+    entry,
+    columnId,
+    anchor,
+    anchorOffsetX: event.clientX - (rect?.left ?? event.clientX),
+    anchorOffsetY: event.clientY - (rect?.top ?? event.clientY),
+  }
+  updateContextMenuPosition()
+}
+
+/** Opens the row menu anchored to the literature card. */
+function openRowMenu(entry: LiteratureEntry, event: MouseEvent): void {
+  setContextMenu('row', entry, '', event)
+}
+
+/** Opens the field menu anchored to the selected field block. */
 function openFieldMenu(entry: LiteratureEntry, columnId: string, event: MouseEvent): void {
-  contextMenu.value = { open: true, kind: 'field', x: Math.min(event.clientX, window.innerWidth - 252), y: Math.min(event.clientY, window.innerHeight - 130), entry, columnId }
+  setContextMenu('field', entry, columnId, event)
 }
 
 /** Calls the existing structured-generation contract for a complete row or one smart field. */
@@ -434,6 +511,9 @@ async function handleReupload(event: Event): Promise<void> {
 }
 
 onMounted(async () => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown, true)
+  window.addEventListener('resize', updateContextMenuPosition)
+  window.addEventListener('scroll', updateContextMenuPosition, true)
   await load()
   const target = workspaceStore.consumePendingLiteratureEntry()
   if (!target) return
@@ -446,31 +526,92 @@ onMounted(async () => {
   await ensureForm(entry.form_id)
   await selectEntry(entry)
 })
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown, true)
+  window.removeEventListener('resize', updateContextMenuPosition)
+  window.removeEventListener('scroll', updateContextMenuPosition, true)
+})
 </script>
 
 <template>
-  <section class="literature-reading" @click="contextMenu.open = false; addColumnMenu.open = false; sortMenuOpen = false">
+  <section class="literature-reading" @click="addColumnMenu.open = false">
     <aside class="literature-sidebar">
       <header class="literature-toolbar">
         <div class="toolbar-row toolbar-primary-row">
           <label class="literature-search" :class="{ open: searchOpen || query }" @click.stop>
-            <button class="toolbar-icon" type="button" title="搜索" aria-label="搜索文献" @click="openSearch"><IcIcon name="search" :size="16" /></button>
+            <button class="toolbar-command" type="button" title="搜索" aria-label="搜索文献" @click="openSearch">
+              <IcIcon name="search" :size="15" />
+              <span>搜索</span>
+            </button>
             <input ref="searchInput" v-model="query" type="search" placeholder="搜索文献" @focus="searchOpen = true" @blur="closeSearch" @keydown.esc="query = ''; searchOpen = false" />
             <button v-if="query" class="search-clear" type="button" title="清除搜索" @mousedown.prevent @click="query = ''"><IcIcon name="close" :size="12" /></button>
           </label>
           <div class="toolbar-actions">
-            <div class="sort-control" @click.stop>
-              <button class="toolbar-icon" :class="{ active: sortMenuOpen }" type="button" title="排序" aria-label="排序" @click="sortMenuOpen = !sortMenuOpen"><IcIcon name="sort" :size="16" /></button>
-              <SortMenu v-if="sortMenuOpen" :options="sortOptions" :sort-key="sortKey" :direction="sortDirection" @select-key="selectLiteratureSort" @select-direction="selectLiteratureDirection" />
-            </div>
-            <button class="toolbar-icon" type="button" title="刷新" @click="load"><IcIcon name="refresh" :size="16" /></button>
-            <button class="toolbar-icon" type="button" title="新建" @click="openCreate()"><IcIcon name="add" :size="17" /></button>
+            <DropdownMenu v-model:open="sortMenuOpen">
+              <DropdownMenuTrigger as-child>
+                <button class="toolbar-command menu-trigger" type="button" title="排序">
+                  <IcIcon name="sort" :size="15" /><span>排序</span><IcIcon class="toolbar-chevron" name="chevron-down" :size="12" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuContent class="literature-toolbar-menu" align="end">
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>排序字段</DropdownMenuLabel>
+                    <DropdownMenuRadioGroup v-model="sortKey">
+                      <DropdownMenuRadioItem v-for="option in sortOptions" :key="option.value" :value="option.value">{{ option.label }}</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>排序方向</DropdownMenuLabel>
+                    <DropdownMenuRadioGroup v-model="sortDirection">
+                      <DropdownMenuRadioItem value="asc">升序</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="desc">降序</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenuPortal>
+            </DropdownMenu>
+            <DropdownMenu v-model:open="filterMenuOpen">
+              <DropdownMenuTrigger as-child>
+                <button class="toolbar-command menu-trigger" :class="{ active: hasActiveFilter }" type="button" title="筛选">
+                  <IcIcon name="filter" :size="15" /><span>筛选</span><IcIcon class="toolbar-chevron" name="chevron-down" :size="12" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuContent class="literature-toolbar-menu literature-filter-menu" align="end">
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>标签</DropdownMenuLabel>
+                    <DropdownMenuRadioGroup v-model="tagFilter">
+                      <DropdownMenuRadioItem value="">全部标签</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem v-for="tag in tags" :key="tag" :value="tag">{{ tag }}</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>星级</DropdownMenuLabel>
+                    <DropdownMenuRadioGroup v-model="ratingFilter">
+                      <DropdownMenuRadioItem value="0">全部星级</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="3">3 星以上</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="4">4 星以上</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="5">5 星</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>表格</DropdownMenuLabel>
+                    <DropdownMenuRadioGroup v-model="selectedFormId">
+                      <DropdownMenuRadioItem value="">全部表格</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem v-for="form in forms" :key="form.form_id" :value="form.form_id">{{ form.title }}</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenuPortal>
+            </DropdownMenu>
+            <button class="toolbar-command" type="button" title="刷新" @click="load"><IcIcon name="refresh" :size="15" /><span>刷新</span></button>
+            <button class="toolbar-command" type="button" title="新建" @click="openCreate()"><IcIcon name="add" :size="16" /><span>新建</span></button>
           </div>
-        </div>
-        <div class="toolbar-row toolbar-secondary-row">
-          <select v-model="tagFilter" title="标签筛选"><option value="">全部标签</option><option v-for="tag in tags" :key="tag" :value="tag">{{ tag }}</option></select>
-          <select v-model.number="minRating" title="星级筛选"><option :value="0">全部星级</option><option :value="3">3 星以上</option><option :value="4">4 星以上</option><option :value="5">5 星</option></select>
-          <select v-model="selectedFormId" title="表格"><option value="">All</option><option v-for="form in forms" :key="form.form_id" :value="form.form_id">{{ form.title }}</option></select>
         </div>
       </header>
       <div class="literature-list">
@@ -532,15 +673,30 @@ onMounted(async () => {
 <style scoped>
 .literature-reading { display: grid; grid-template-columns: 384px minmax(0, 1fr); width: 100%; height: 100%; min-width: 0; min-height: 0; background: var(--color-bg-app); color: var(--color-text); }
 .literature-add-column-menu { position: fixed; z-index: 1300; }
-.literature-sidebar { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: var(--space-6); margin: var(--space-12); padding: var(--space-8); overflow: hidden; border: 1px solid var(--color-border); border-radius: 28px; background: var(--color-surface); box-shadow: 0 0 0 4px var(--library-form-ring); animation: literature-sidebar-enter 220ms cubic-bezier(.23,1,.32,1) both; }
-.literature-toolbar { display: grid; gap: var(--space-6); padding: 0; }.toolbar-row { display: flex; align-items: center; min-width: 0; gap: var(--space-6); }.toolbar-primary-row { justify-content: space-between; }.toolbar-secondary-row select { flex: 1 1 0; }
-.toolbar-actions { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }.sort-control { position: relative; }
-.toolbar-icon { display: inline-grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--color-text-secondary); }.toolbar-icon:hover,.toolbar-icon.active { background: color-mix(in srgb, var(--color-primary) 10%, transparent); color: var(--color-primary); }
-.literature-toolbar select { min-width: 0; height: 28px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-canvas); color: var(--color-text); padding: 0 9px; font: inherit; font-size: calc(11px * var(--font-scale)); }
-.literature-search { display: flex; align-items: center; width: 28px; height: 28px; overflow: hidden; border: 0; border-radius: 999px; background: transparent; transition: width 200ms ease-in-out, border-color 160ms ease, background 160ms ease; }.literature-search.open { width: 190px; border: 1px solid var(--color-border); background: var(--color-canvas); }.literature-search > .toolbar-icon { border-radius: 50%; }.literature-search.open > .toolbar-icon { width: 26px; flex-basis: 26px; }.literature-search input { width: 0; min-width: 0; flex: 1; opacity: 0; pointer-events: none; border: 0; outline: 0; background: transparent; color: var(--color-text); font: inherit; transition: opacity 160ms ease; }.literature-search.open input { width: auto; opacity: 1; pointer-events: auto; }.search-clear { display: grid; width: 20px; height: 20px; flex: 0 0 20px; place-items: center; padding: 0; border: 0; background: transparent; color: var(--color-text-muted); }
+.literature-sidebar { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: var(--space-6); margin: var(--space-12); padding: var(--space-8); overflow: hidden; border: 0; border-radius: 28px; background: var(--color-surface); box-shadow: 0 0 0 4px var(--library-form-ring); animation: literature-sidebar-enter 220ms cubic-bezier(.23,1,.32,1) both; }
+.literature-toolbar { display: grid; padding: 0; }
+.toolbar-row { display: flex; align-items: center; min-width: 0; gap: var(--space-4); }
+.toolbar-primary-row { justify-content: space-between; }
+.toolbar-actions { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
+.toolbar-command { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 28px; padding: 0 7px; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--color-text-muted); font: inherit; font-size: calc(12px * var(--font-scale)); font-weight: 400; white-space: nowrap; cursor: pointer; }
+.toolbar-command:hover { color: var(--color-primary); }
+.toolbar-command.menu-trigger { border-color: var(--color-border); background: var(--color-canvas); color: var(--color-text-secondary); }
+.toolbar-command.menu-trigger:hover { border-color: color-mix(in srgb, var(--color-primary) 40%, transparent); color: var(--color-primary); }
+.toolbar-command.menu-trigger.active,.toolbar-command.menu-trigger[data-state='open'] { border-color: color-mix(in srgb, var(--color-primary) 45%, transparent); background: var(--color-primary-soft); color: var(--color-primary); }
+.toolbar-chevron { margin-right: -3px; opacity: .62; transition: transform var(--transition-fast); }
+.toolbar-command[data-state='open'] .toolbar-chevron { transform: rotate(180deg); }
+.literature-toolbar-menu { width: 236px; max-height: min(480px, var(--reka-dropdown-menu-content-available-height)); overflow-y: auto; }
+.literature-filter-menu { width: 260px; }
+.literature-search { display: flex; align-items: center; width: 61px; height: 28px; min-width: 0; overflow: hidden; border: 0; border-radius: 999px; background: transparent; transition: width 200ms ease-in-out, border-color 160ms ease, background 160ms ease; }
+.literature-search.open { width: 112px; border: 1px solid var(--color-border); background: var(--color-canvas); }
+.literature-search.open > .toolbar-command { padding-right: 2px; border: 0; }
+.literature-search.open > .toolbar-command span { display: none; }
+.literature-search input { width: 0; min-width: 0; flex: 1; opacity: 0; pointer-events: none; border: 0; outline: 0; background: transparent; color: var(--color-text); font: inherit; font-size: calc(12px * var(--font-scale)); transition: opacity 160ms ease; }
+.literature-search.open input { width: auto; opacity: 1; pointer-events: auto; }
+.search-clear { display: grid; width: 20px; height: 20px; flex: 0 0 20px; place-items: center; padding: 0; border: 0; background: transparent; color: var(--color-text-muted); }
 .literature-list { flex: 1; min-height: 0; overflow: auto; padding: 8px; }.form-group { display: grid; gap: 7px; }.form-group + .form-group { margin-top: 14px; }.form-group h2 { margin: 0; padding: 5px 3px; color: var(--color-text-muted); font-size: calc(11px * var(--font-scale)); }
 .literature-editor { min-width: 0; min-height: 0; overflow: hidden; }.literature-editor :deep(.editor-panel) { height: 100%; }.editor-empty { display: grid; height: 100%; place-items: center; align-content: center; gap: 10px; color: var(--color-text-muted); }.editor-empty p { margin: 0; }.hidden-input { display: none; }.empty-copy { padding: 28px 16px; color: var(--color-text-muted); text-align: center; }
 @keyframes literature-sidebar-enter { from { opacity: 0; transform: translateX(-8px) scale(.985); } to { opacity: 1; transform: none; } }
-@media (max-width: 900px) { .literature-reading { grid-template-columns: 348px minmax(0, 1fr); } .literature-search.open { width: 160px; } .toolbar-secondary-row { flex-wrap: wrap; }.toolbar-secondary-row select { flex: 1 1 110px; } }
-@media (max-width: 640px) { .literature-reading { grid-template-columns: 1fr; grid-template-rows: minmax(260px, 46%) minmax(0, 1fr); }.literature-sidebar { margin: var(--space-8); padding: var(--space-8); border-radius: 18px; }.literature-search.open { width: min(190px, calc(100vw - 180px)); }.toolbar-secondary-row { display: grid; grid-template-columns: 1fr 1fr; }.toolbar-secondary-row select:last-child { grid-column: 1 / -1; }.literature-list { padding-inline: 0; }.literature-editor { min-height: 0; } }
+@media (max-width: 900px) { .literature-reading { grid-template-columns: 348px minmax(0, 1fr); } .toolbar-command { padding-inline: 5px; } .literature-search.open { width: 100px; } }
+@media (max-width: 640px) { .literature-reading { grid-template-columns: 1fr; grid-template-rows: minmax(260px, 46%) minmax(0, 1fr); }.literature-sidebar { margin: var(--space-8); padding: var(--space-8); border-radius: 18px; }.toolbar-primary-row { flex-wrap: wrap; }.literature-search.open { width: min(160px, calc(100vw - 220px)); }.literature-list { padding-inline: 0; }.literature-editor { min-height: 0; } }
 </style>

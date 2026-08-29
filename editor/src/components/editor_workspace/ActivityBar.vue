@@ -9,6 +9,7 @@
 import { computed, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
+import ThemeToggleButton from '@/components/common/ThemeToggleButton.vue'
 import lightLogo from '@/assets/images/亮色无底图标.png'
 import darkLogo from '@/assets/images/暗色无底图标.png'
 import type { SidebarDisplayMode } from '@/types/settings'
@@ -38,6 +39,7 @@ const props = defineProps<{
   searchActive: boolean
   browserActive: boolean
   settingsActive: boolean
+  isDark: boolean
 }>()
 
 const emit = defineEmits<{
@@ -64,6 +66,7 @@ const emit = defineEmits<{
   openBrowser: []
   knowledgeMenuVisibilityChange: [open: boolean]
   openSettings: []
+  toggleTheme: []
 }>()
 
 function handleRipple(e: MouseEvent) {
@@ -167,16 +170,6 @@ function toggleActivityMenu(menu: ActivityMenu) {
   activeMenu.value = activeMenu.value === menu ? null : menu
 }
 
-/** Opens a grouped menu on hover in compact icon mode. */
-function openActivityMenuOnHover(menu: ActivityMenu) {
-  if (props.displayMode === 'icons') activeMenu.value = menu
-}
-
-/** Closes the hovered grouped menu after the pointer leaves its triangle bridge. */
-function closeActivityMenuOnLeave(menu: ActivityMenu) {
-  if (props.displayMode === 'icons' && activeMenu.value === menu) activeMenu.value = null
-}
-
 /** Closes a compact submenu after navigation while expanded management menus stay visible. */
 function closeActivityMenu() {
   if (props.displayMode === 'management') return
@@ -203,6 +196,7 @@ function closeActivityMenu() {
         opacity: hoverIndicatorVisible ? 1 : 0,
       }"
     ></span>
+    <ThemeToggleButton :dark="isDark" @toggle="emit('toggleTheme')" />
     <button
       class="activity-button"
       :class="{ active: homeActive }"
@@ -227,11 +221,7 @@ function closeActivityMenu() {
       <IcIcon name="folder" :size="18" />
       <span class="activity-label">文件</span>
     </button>
-    <div
-      class="knowledge-group"
-      @mouseenter="openActivityMenuOnHover('knowledge')"
-      @mouseleave="closeActivityMenuOnLeave('knowledge')"
-    >
+    <div class="knowledge-group">
       <button
         class="activity-button knowledge-button"
         :class="{ active: knowledgeActive }"
@@ -412,11 +402,7 @@ function closeActivityMenu() {
       <IcIcon name="checklist" :size="18" />
       <span class="activity-label">任务队列</span>
     </button>
-    <div
-      class="knowledge-group"
-      @mouseenter="openActivityMenuOnHover('entertainment')"
-      @mouseleave="closeActivityMenuOnLeave('entertainment')"
-    >
+    <div class="knowledge-group">
       <button
         class="activity-button knowledge-button"
         :class="{ active: entertainmentActive }"
@@ -490,11 +476,7 @@ function closeActivityMenu() {
         <IcIcon name="bug" :size="18" />
         <span class="activity-label">Debug</span>
       </button>
-      <div
-        class="knowledge-group"
-        @mouseenter="openActivityMenuOnHover('mine')"
-        @mouseleave="closeActivityMenuOnLeave('mine')"
-      >
+      <div class="knowledge-group">
         <button
           class="activity-button knowledge-button"
           :class="{ active: mineActive }"
@@ -704,18 +686,6 @@ function closeActivityMenu() {
 .knowledge-group {
   position: relative;
   z-index: 101;
-}
-
-.activity-bar:not(.management) .knowledge-group::after {
-  position: absolute;
-  top: 50%;
-  right: calc(-1 * (var(--space-8) + 16px));
-  width: calc(var(--space-8) + 16px);
-  height: 96px;
-  clip-path: polygon(0 0, var(--space-8) 0, 100% 50%, var(--space-8) 100%, 0 100%);
-  content: '';
-  transform: translateY(-50%);
-  pointer-events: auto;
 }
 
 .activity-bar.management .knowledge-group {

@@ -17,6 +17,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useFavoritesStore } from '@/stores/favorites'
 import { usePrivacyStore } from '@/stores/privacy'
 import { useSettingsStore } from '@/stores/settings'
+import { buildApiUrl } from '@/api/client'
+import { API_ROUTES } from '@/router/api_routes'
 import type { SourceItem } from '@/stores/chat'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 
@@ -135,7 +137,7 @@ const sanitizedHtml = computed(() => {
 
 const sourceLinkSignature = computed(() => {
   const citationSources = Object.entries(props.citationMap ?? {})
-    .map(([id, source]) => `${id}:${source.source_uri}`)
+    .map(([id, source]) => `${id}:${source.source_uri}:${source.title ?? ''}`)
     .join('|')
   const workspaceSources = (workspaceStore.flatNodes ?? [])
     .filter((node) => !node.isDir && node.path)
@@ -172,20 +174,32 @@ function handleClick(event: MouseEvent) {
     return
   }
   const sourceLink = target.closest('.source-file-link') as HTMLElement | null
-  if (sourceLink && props.onNavigateSource) {
+  if (sourceLink) {
     const uri = sourceLink.getAttribute('data-source-uri')
     if (uri) {
-      props.onNavigateSource(uri)
+      if (!openAttachmentSource(uri, sourceLink.textContent ?? '')) {
+        props.onNavigateSource?.(uri)
+      }
     }
     return
   }
   const citation = target.closest('.citation-anchor') as HTMLElement | null
-  if (!citation || !props.onNavigateSource) return
+  if (!citation) return
   const idx = citation.getAttribute('data-citation-idx')
   if (!idx) return
   const map = props.citationMap
   if (!map || !map[idx]) return
-  props.onNavigateSource(map[idx].source_uri)
+  const source = map[idx]
+  if (!openAttachmentSource(source.source_uri, source.title ?? '')) {
+    props.onNavigateSource?.(source.source_uri)
+  }
+}
+
+function openAttachmentSource(uri: string, alt: string): boolean {
+  if (!uri.toLowerCase().startsWith('session-upload://')) return false
+  const src = buildApiUrl(API_ROUTES.AGENT_ATTACHMENT_RAW, { uri })
+  imagePreviewer.open([{ src, alt: alt || sourceBaseName(uri) }], 0)
+  return true
 }
 
 function normalizedKnowledgePath(value: string): string {
@@ -314,20 +328,13 @@ function sourcePath(uri: string): string {
 
 function buildSourceLinkCandidates() {
   const map = props.citationMap ?? {}
-  const basenameCounts = new Map<string, number>()
+  const citationNameCounts = new Map<string, number>()
   for (const source of Object.values(map)) {
     if (!source.source_uri || /^https?:\/\//i.test(source.source_uri)) {
       continue
     }
-    const name = sourceBaseName(source.source_uri)
-    basenameCounts.set(name, (basenameCounts.get(name) ?? 0) + 1)
-  }
-  for (const node of workspaceStore.flatNodes ?? []) {
-    if (node.isDir || !node.path) {
-      continue
-    }
-    const name = sourceBaseName(node.path)
-    basenameCounts.set(name, (basenameCounts.get(name) ?? 0) + 1)
+    const name = source.title || sourceBaseName(source.source_uri)
+    citationNameCounts.set(name, (citationNameCounts.get(name) ?? 0) + 1)
   }
 
   const candidates: Array<{ text: string; uri: string }> = []
@@ -349,18 +356,22 @@ function buildSourceLinkCandidates() {
       continue
     }
     const path = sourcePath(uri)
-    const name = sourceBaseName(uri)
-    for (const text of [path, basenameCounts.get(name) === 1 ? name : '']) {
+    const name = source.title || sourceBaseName(uri)
+    const isAttachment = uri.toLowerCase().startsWith('session-upload://')
+    for (const text of [isAttachment ? '' : path, citationNameCounts.get(name) === 1 ? name : '']) {
       addCandidate(text, uri)
     }
   }
+  const reservedCitationNames = new Set(
+    Object.values(map).map((source) => source.title || sourceBaseName(source.source_uri)),
+  )
   for (const node of workspaceStore.flatNodes ?? []) {
     if (node.isDir || !node.path) {
       continue
     }
     const path = sourcePath(node.path)
     const name = sourceBaseName(node.path)
-    for (const text of [path, basenameCounts.get(name) === 1 ? name : '']) {
+    for (const text of [path, reservedCitationNames.has(name) ? '' : name]) {
       addCandidate(text, node.path)
     }
   }

@@ -7,7 +7,7 @@
   edits emit the exact smart-cell string value back to the row API.
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import SmartMarkdownCell from '@/components/smart_forms/SmartMarkdownCell.vue'
@@ -29,6 +29,8 @@ const emit = defineEmits<{
 
 const expanded = ref(Boolean(props.cell.value) || props.column.type === 'file')
 const editing = ref(false)
+const fieldBody = ref<HTMLElement | null>(null)
+const markdownEditor = ref<InstanceType<typeof SmartMarkdownCell> | null>(null)
 const isSmart = computed(() => props.column.type === 'smart_text' || props.column.type === 'smart_tag')
 const hasValue = computed(() => Boolean(props.cell.value.trim()))
 const showBody = computed(() => props.column.type === 'file' || expanded.value || hasValue.value)
@@ -37,9 +39,15 @@ watch(() => props.cell.value, (value) => {
   if (value.trim()) expanded.value = true
 })
 
-function expandEditor(): void {
+async function expandEditor(): Promise<void> {
   if (!props.column.editable) return
   expanded.value = true
+  await nextTick()
+  if (markdownEditor.value) {
+    await markdownEditor.value.startEditing()
+    return
+  }
+  fieldBody.value?.querySelector<HTMLElement>('input, button')?.focus()
 }
 
 /** Expanded cards do not upload inline images; the table remains the owner of form assets. */
@@ -58,7 +66,7 @@ async function rejectInlineImage(): Promise<{ name: string; relativePath: string
         <span v-if="pending" class="pixel-loader" aria-label="正在智能填充"><i></i><i></i><i></i><i></i><i></i></span>
       </span>
     </header>
-    <div v-if="showBody" class="field-body" @dblclick="expandEditor">
+    <div v-if="showBody" ref="fieldBody" class="field-body" @dblclick="expandEditor">
       <button v-if="column.type === 'file'" class="file-link" type="button" @click="emit('download')">
         {{ cell.fileName || cell.value || '未上传文件' }}
       </button>
@@ -76,6 +84,7 @@ async function rejectInlineImage(): Promise<{ name: string; relativePath: string
       />
       <SmartMarkdownCell
         v-else
+        ref="markdownEditor"
         class="markdown-field"
         :value="cell.value"
         :path="markdownPath"
@@ -102,10 +111,21 @@ async function rejectInlineImage(): Promise<{ name: string; relativePath: string
   justify-content: space-between;
   gap: 8px;
   min-height: 28px;
-  padding: 0 4px;
+  padding: 0;
   color: var(--color-text-muted);
-  font-size: calc(11px * var(--font-scale));
-  font-weight: 650;
+  font: inherit;
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 400;
+}
+
+.field-heading > span:first-child {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 var(--space-8);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .field-actions { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }

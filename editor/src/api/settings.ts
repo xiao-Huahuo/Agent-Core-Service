@@ -17,6 +17,7 @@ export interface SettingsProfileResponse {
   knowledge_libraries?: SettingsKnowledgeLibraryResponse[]
   auto_ingest_on_upload?: boolean
   ocr_enabled?: boolean
+  vision_understanding_enabled?: boolean
   model_auto_download_enabled?: boolean
   knowledge_ignore_patterns?: string
   knowledge_supported_suffixes?: string[]
@@ -195,6 +196,7 @@ export function saveEditorPasteConfig(
 export interface KnowledgeIngestionConfigResponse {
   auto_ingest_on_upload: boolean
   ocr_enabled: boolean
+  vision_understanding_enabled: boolean
   knowledge_ignore_patterns: string
   restart_required?: boolean
   ignore_cleanup?: {
@@ -209,11 +211,14 @@ export function fetchKnowledgeIngestionConfig(userId: string): Promise<Knowledge
 
 export function saveKnowledgeIngestionConfig(
   userId: string,
-  params: { autoIngestOnUpload?: boolean; ocrEnabled?: boolean; knowledgeIgnorePatterns?: string },
+  params: { autoIngestOnUpload?: boolean; ocrEnabled?: boolean; visionUnderstandingEnabled?: boolean; knowledgeIgnorePatterns?: string },
 ): Promise<KnowledgeIngestionConfigResponse> {
   const body: Record<string, string | boolean> = { user_id: userId }
   if (params.autoIngestOnUpload !== undefined) body.auto_ingest_on_upload = params.autoIngestOnUpload
   if ('ocrEnabled' in params && params.ocrEnabled !== undefined) body.ocr_enabled = params.ocrEnabled
+  if ('visionUnderstandingEnabled' in params && params.visionUnderstandingEnabled !== undefined) {
+    body.vision_understanding_enabled = params.visionUnderstandingEnabled
+  }
   if (params.knowledgeIgnorePatterns !== undefined) body.knowledge_ignore_patterns = params.knowledgeIgnorePatterns
   return apiPut<KnowledgeIngestionConfigResponse>(API_ROUTES.SETTINGS_KNOWLEDGE_INGESTION, body)
 }
