@@ -104,7 +104,7 @@ watch(() => props.expandable, (value) => {
         <p>{{ entry.content_excerpt || '暂无文献内容' }}</p>
       </div>
       <button v-if="expandable" class="expand-button" type="button" :title="expanded ? '收起字段' : '展开全部字段'" @click.stop="toggleExpanded">
-        <IcIcon :name="expanded ? 'chevron-down' : 'chevron-right'" :size="15" />
+        <IcIcon :name="expanded ? 'chevron-down' : 'chevron-right'" :size="15" morph />
       </button>
       <time :datetime="entry.entered_at">{{ new Date(entry.entered_at).toLocaleString([], { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) }}</time>
     </div>

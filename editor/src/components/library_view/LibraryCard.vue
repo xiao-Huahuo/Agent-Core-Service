@@ -223,7 +223,7 @@ function handleDrop(event: DragEvent) {
           :title="detailsOpen ? '收起文件名和描述' : '展开文件名和描述'"
           @click.stop="toggleDetails"
         >
-          <IcIcon :name="detailsOpen ? 'chevron-down' : 'chevron-right'" :size="14" />
+          <IcIcon :name="detailsOpen ? 'chevron-down' : 'chevron-right'" :size="14" morph />
         </button>
         <input
           v-if="titleEditing"

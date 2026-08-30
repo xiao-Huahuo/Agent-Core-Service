@@ -78,6 +78,7 @@ Agent 框架不能消除模型幻觉。MetaWeave 因此优先提供检索、引�
 * OCR引擎: PaddleOCR
 * 日志与监控：logging / structlog + Prometheus + Grafana
 * 测试与质量：Pytest + Ruff + mypy
+* 前端图标: dsh + Morphicons + Lucide
 ## 项目结构
 
 ### 源代码（资源文件）项目结构

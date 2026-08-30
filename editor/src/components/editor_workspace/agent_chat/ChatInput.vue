@@ -488,23 +488,14 @@ function handleFileChange(event: Event) {
             :max-context-tokens="props.maxContextTokens"
           />
           <button
-            v-if="isStreaming"
-            class="send-btn stop-btn"
-            type="button"
-            title="中断输出"
-            @click="emit('cancel-stream')"
-          >
-            <IcIcon name="stop" :size="14" />
-          </button>
-          <button
-            v-else
             class="send-btn"
-            :disabled="disabled || !text.trim()"
+            :class="{ 'stop-btn': isStreaming }"
+            :disabled="!isStreaming && (disabled || !text.trim())"
             type="button"
-            title="发送"
-            @click="handleSend"
+            :title="isStreaming ? '中断输出' : '发送'"
+            @click="isStreaming ? emit('cancel-stream') : handleSend()"
           >
-            <IcIcon name="send" :size="15" />
+            <IcIcon :name="isStreaming ? 'stop' : 'send'" :size="15" morph />
           </button>
         </div>
       </div>

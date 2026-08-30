@@ -69,6 +69,7 @@ function toggle() {
       <IcIcon
         :name="expanded ? 'chevron-up' : 'chevron-down'"
         :size="15"
+        morph
         class="think-row__chevron"
         aria-hidden="true"
       />

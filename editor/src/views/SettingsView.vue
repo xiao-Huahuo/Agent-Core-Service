@@ -903,7 +903,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: 120px;
+  width: 136px;
   flex-shrink: 0;
   padding: var(--space-12) var(--space-8);
   border-right: 0;
@@ -911,7 +911,9 @@ onBeforeUnmount(() => {
 }
 
 .sidebar-tab {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
   width: 100%;
   padding: var(--space-8) var(--space-10);
   border: 0;
@@ -922,6 +924,10 @@ onBeforeUnmount(() => {
   text-align: left;
   cursor: pointer;
   transition: background 150ms, color 150ms;
+}
+
+.settings-sidebar .sidebar-tab-icon {
+  flex: 0 0 16px;
 }
 
 .sidebar-tab:hover {

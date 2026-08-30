@@ -71,7 +71,7 @@ async function copySource(): Promise<void> {
             :aria-label="copied ? '已复制' : '复制代码'"
             @click="copySource"
           >
-            <IcIcon :name="copied ? 'check' : 'copy'" :size="15" />
+            <IcIcon :name="copied ? 'check' : 'copy'" :size="15" morph />
           </button>
           <button
             v-if="editable"

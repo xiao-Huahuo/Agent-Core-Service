@@ -24,16 +24,9 @@ import type { KnowledgeFileNode } from '@/types/knowledge'
 
 import { useImagePreviewer } from '@/components/common/useImagePreviewer'
 import type { ImagePreviewItem } from '@/components/common/useImagePreviewer'
+import { createStaticMorphIcon } from '@/components/common/iconRegistry'
 import { formatSize } from '@/components/editor_workspace/fileResourceManagerUtils'
 import { materialFileIconForNode } from '@/components/editor_workspace/materialFileIcons'
-import blockIconUrl from '@/assets/icons/svg/ic/ic--outline-block.svg?url'
-import checkCircleIconUrl from '@/assets/icons/svg/ic/ic--outline-check-circle.svg?url'
-import errorIconUrl from '@/assets/icons/svg/ic/ic--outline-error-outline.svg?url'
-import graphIconUrl from '@/assets/icons/svg/ic/ic--outline-hub.svg?url'
-import spinnerIconUrl from '@/assets/icons/svg/ic/ic--outline-autorenew.svg?url'
-import starIconUrl from '@/assets/icons/svg/ic/ic--outline-star.svg?url'
-import visibilityIconUrl from '@/assets/icons/svg/ic/ic--outline-visibility.svg?url'
-import visibilityOffIconUrl from '@/assets/icons/svg/ic/ic--outline-visibility-off.svg?url'
 
 marked.setOptions({
   gfm: true,
@@ -231,31 +224,29 @@ function appendText(parent: HTMLElement, className: string, text: string): HTMLE
   return element
 }
 
-type MountedFileStatus = { iconUrl: string; title: string; state: string }
+type MountedFileStatus = { iconName: string; title: string; state: string }
 
 function indexStatus(node: KnowledgeFileNode): MountedFileStatus {
   if (node.indexStatus === 'indexed' || node.indexStatus === 'clean') {
-    return { iconUrl: checkCircleIconUrl, title: '已进入向量库', state: 'active' }
+    return { iconName: 'check-circle', title: '已进入向量库', state: 'active' }
   }
-  if (node.indexStatus === 'ignored') return { iconUrl: blockIconUrl, title: '入库已忽略', state: 'ignored' }
-  if (node.indexStatus === 'failed') return { iconUrl: errorIconUrl, title: '入库失败', state: 'failed' }
-  return { iconUrl: spinnerIconUrl, title: '待入库', state: 'pending' }
+  if (node.indexStatus === 'ignored') return { iconName: 'block', title: '入库已忽略', state: 'ignored' }
+  if (node.indexStatus === 'failed') return { iconName: 'error-outline', title: '入库失败', state: 'failed' }
+  return { iconName: 'spinner', title: '待入库', state: 'pending' }
 }
 
 function graphStatus(node: KnowledgeFileNode): MountedFileStatus {
-  if (node.graphStatus === 'graphed') return { iconUrl: graphIconUrl, title: '已入图谱', state: 'active' }
-  if (node.graphStatus === 'ignored') return { iconUrl: blockIconUrl, title: '图谱已忽略', state: 'ignored' }
-  return { iconUrl: spinnerIconUrl, title: '待入图谱', state: 'pending' }
+  if (node.graphStatus === 'graphed') return { iconName: 'hub', title: '已入图谱', state: 'active' }
+  if (node.graphStatus === 'ignored') return { iconName: 'block', title: '图谱已忽略', state: 'ignored' }
+  return { iconName: 'spinner', title: '待入图谱', state: 'pending' }
 }
 
 function appendStatusIcon(parent: HTMLElement, status: MountedFileStatus) {
   const wrapper = appendText(parent, `agent-mounted-file__status ${status.state}`, '')
   wrapper.title = status.title
   wrapper.setAttribute('aria-label', status.title)
-  const glyph = document.createElement('span')
-  glyph.className = 'agent-mounted-file__status-glyph'
-  glyph.style.maskImage = `url("${status.iconUrl}")`
-  glyph.style.webkitMaskImage = `url("${status.iconUrl}")`
+  const glyph = createStaticMorphIcon(status.iconName, 15)
+  glyph.setAttribute('class', 'agent-mounted-file__status-glyph')
   wrapper.appendChild(glyph)
 }
 
@@ -286,8 +277,8 @@ function buildMountedFileBlock(node: KnowledgeFileNode): HTMLButtonElement {
   const isPrivate = privacyStore.isPrivate('knowledge_path', node.path)
   const isFavorite = favoritesStore.isFavorite('knowledge_path', node.path)
   const fileStatuses: MountedFileStatus[] = [
-    { iconUrl: isPrivate ? visibilityOffIconUrl : visibilityIconUrl, title: isPrivate ? '私密' : '公开', state: isPrivate ? 'active' : 'inactive' },
-    { iconUrl: starIconUrl, title: isFavorite ? '已收藏' : '未收藏', state: isFavorite ? 'favorite' : 'inactive' },
+    { iconName: isPrivate ? 'visibility-off' : 'visibility', title: isPrivate ? '私密' : '公开', state: isPrivate ? 'active' : 'inactive' },
+    { iconName: 'star', title: isFavorite ? '已收藏' : '未收藏', state: isFavorite ? 'favorite' : 'inactive' },
     indexStatus(node),
     graphStatus(node),
   ]
@@ -458,14 +449,14 @@ async function highlightCodeBlocks() {
     if (pre.querySelector('.code-copy-btn')) return
     const btn = document.createElement('button')
     btn.className = 'code-copy-btn'
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+    btn.appendChild(createStaticMorphIcon('copy', 14))
     btn.title = '复制代码'
     btn.addEventListener('click', () => {
       const code = pre.querySelector('code')
       const text = code?.textContent ?? ''
       navigator.clipboard.writeText(text).then(() => {
-        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-        setTimeout(() => { btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' }, 1500)
+        btn.replaceChildren(createStaticMorphIcon('check', 14))
+        setTimeout(() => { btn.replaceChildren(createStaticMorphIcon('copy', 14)) }, 1500)
       })
     })
     pre.style.position = 'relative'
@@ -762,13 +753,6 @@ watch(() => props.isStreaming, (streaming, wasStreaming) => {
   display: block;
   width: 15px;
   height: 15px;
-  background: currentColor;
-  mask-position: center;
-  mask-repeat: no-repeat;
-  mask-size: contain;
-  -webkit-mask-position: center;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-size: contain;
 }
 
 .markdown-body :deep(img) {

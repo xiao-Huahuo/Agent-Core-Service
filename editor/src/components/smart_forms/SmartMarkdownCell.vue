@@ -190,7 +190,7 @@ defineExpose({ startEditing })
       :title="expanded ? '收缩内容' : '展开内容'"
       @click.stop="toggleExpanded"
     >
-      <IcIcon :name="expanded ? 'chevron-up' : 'chevron-down'" :size="13" />
+      <IcIcon :name="expanded ? 'chevron-up' : 'chevron-down'" :size="13" morph />
     </button>
     <textarea
       v-show="editing"

@@ -521,8 +521,7 @@ watch([compactToolbar, compressedToolbar], updateGraphModeSlider)
           <span>去重</span>
         </button>
         <button class="graph-action" type="button" :title="graphCanvasRef?.frozen ? '释放' : '定格'" @click="toggleFreeze">
-          <IcIcon v-if="graphCanvasRef?.frozen" name="play" :size="15" />
-          <IcIcon v-else name="pause" :size="15" />
+          <IcIcon :name="graphCanvasRef?.frozen ? 'play' : 'pause'" :size="15" morph />
           <span>{{ graphCanvasRef?.frozen ? '释放' : '定格' }}</span>
         </button>
       </div>

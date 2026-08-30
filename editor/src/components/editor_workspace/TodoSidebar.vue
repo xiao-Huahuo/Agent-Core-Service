@@ -526,7 +526,7 @@ function getAutomationPrompt(todoId: string): string {
             :disabled="isAutomationPending(item.id) || !getAutomation(item.id)"
             @click="toggleAutomation(item.id)"
           >
-            <IcIcon :name="getAutomation(item.id)?.enabled ? 'pause' : 'play'" :size="11" />
+            <IcIcon :name="getAutomation(item.id)?.enabled ? 'pause' : 'play'" :size="11" morph />
           </button>
           <button
             v-else

@@ -6,7 +6,27 @@
   selected key when the user switches sections.
 -->
 <script setup lang="ts">
+import IcIcon from '@/components/common/IcIcon.vue'
+
 export type SettingsTabKey = 'basic' | 'appearance' | 'llm' | 'tools' | 'terminal' | 'web' | 'browser' | 'memory' | 'graph' | 'safety' | 'storage' | 'floating' | 'skills' | 'mcp'
+
+/** Semantic icons remain local through the shared DSH + morphicons registry. */
+const TAB_ICONS: Record<SettingsTabKey, string> = {
+  basic: 'settings',
+  appearance: 'visibility',
+  llm: 'psychology',
+  tools: 'build',
+  terminal: 'code',
+  web: 'language',
+  browser: 'open-in-new',
+  memory: 'book',
+  graph: 'hub',
+  safety: 'shield',
+  storage: 'ingest',
+  floating: 'open-in-full',
+  skills: 'auto-awesome',
+  mcp: 'build',
+}
 
 defineProps<{
   tabs: Array<{ key: SettingsTabKey; label: string }>
@@ -28,7 +48,8 @@ defineEmits<{
       type="button"
       @click="$emit('select', tab.key)"
     >
-      {{ tab.label }}
+      <IcIcon class="sidebar-tab-icon" :name="TAB_ICONS[tab.key]" :size="16" />
+      <span>{{ tab.label }}</span>
     </button>
   </aside>
 </template>

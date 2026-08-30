@@ -5,10 +5,7 @@
 ### TODOs
 ### IDEAs
 
-- [ ] 新加入更多的图标
-  - 把图标全都换成DSH(D:\Projects\Python\deepseek-harness)的图标.本地下载.
-  - 关键的状态切换的图标换成morphicon图标,本地下载.
 - [ ] DSH Adapter的实现
   - 文档位于`docs/ADAPTER_DESIGN.md`
-  - 核心问题: 子Agent都可以
+  - 核心问题: 如何观测?
 ### BUGs

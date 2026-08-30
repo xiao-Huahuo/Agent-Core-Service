@@ -20,7 +20,10 @@
 5. 中大型代码改动应尽量在同一个 DSH Conversation 中完成分析、修改、测试、失败修复和最终总结，不能把每一步都拆成失去上下文的新进程。
 6. DSH 的有效权限继承 MW 父 Agent 当前的访问模式，子 Agent不得自行提高权限。
 7. MW 负责 DSH Runtime 进程及其全部后代进程的生命周期；DSH 输出结果后可以继续驻留，但 MW 关闭、显式停止或资源回收时必须彻底退出。
-8. DSH 处于开发阶段，因此 MW 固定经过验证的源码提交、SDK、Node、Cordis 配置和运行闭包，不在用户设备上追踪上游主分支。
+8. DSH Python SDK客户端随 MW 主程序发布；真正承载代码执行和 Web界面的 Windows Runtime不进入 MW 主安装包，而由“设置—存储管理—SDK 与运行组件”按 MW 固定清单懒加载。
+9. Windows Runtime使用固定 DSH 提交已有的 `node24-win-x64` 构建链生成，必须提供文件编辑、搜索、PowerShell、Git、测试和构建能力；MW 不从零实现 DSH SDK或代码 Agent循环。
+10. 同一个受管 Runtime同时提供 SDK JSON-RPC控制面和 DSH Web观测面。JSON-RPC是唯一写控制面；DSH Web对 MW 托管 Session实行服务端只读，只用于查看轨迹、工具调用、命令输出、diff、产物和最终回答。
+11. DSH 处于开发阶段，因此 MW 固定经过验证的源码提交、SDK、Cordis 配置、Windows Runtime和资源哈希，不在用户设备上追踪上游主分支，也不在运行时安装任意 npm插件。
 
 ## 2. 需求来源
 
@@ -36,11 +39,13 @@ DSH 已经提供调用宿主机 Codex 和 Claude Code 的 provider，但这些 p
 
 MW 已经要求用户配置 DeepSeek API。代码子 Agent应直接复用这份配置，而不是再要求 Codex 或 Claude Code 账户。因此本设计选择 DSH 自身作为代码 Agent 运行内核，并让 DSH 直接调用 DeepSeek API。
 
-### 2.3 用户不应感知 DSH 的安装与维护
+### 2.3 用户不应手工安装或维护 DSH
 
-DSH 是 MW 的内部运行组件，不是面向用户的独立产品。用户只安装 MW，不需要另外安装 DSH、Node、WSL 或 Docker，也不需要执行 npm install、配置 Cordis 或维护 DSH 会话目录。
+DSH 是 MW 的可选内部运行组件，不是 MW 的主 Agent，也不是要求用户另行配置的独立产品。用户只安装 MW 主程序，不需要自行安装 DSH、Node、WSL 或 Docker，不需要执行 npm install、配置 Cordis 或维护 DSH 会话目录。
 
-MW 安装包必须携带已构建的 DSH Runtime、独立 Node、固定 Cordis 配置、许可证和版本清单。所有升级都随 MW 正式版本交付。
+Python SDK客户端和 Adapter代码体积很小，随 MW 主程序交付。占据主要体积的 Windows Runtime、DSH Web资源、原生辅助文件、固定 Cordis配置、许可证和版本清单作为一个受管 SDK资源包发布。第一次创建 DSH 子 Agent时，MW检查兼容资源是否存在；未安装时先向用户展示版本、来源、下载大小和用途，再由资源管理器下载、校验、安装。用户也可以提前在“设置—存储管理—SDK 与运行组件”中安装、修复或卸载。
+
+按需安装不等于动态追随上游。每个 MW版本只接受兼容清单中固定的 Runtime版本和哈希；用户不接触 PyPI、npm或 DSH插件市场。SDK资源未安装、下载失败或被用户卸载时，仅 DSH代码子 Agent不可用，MW知识库与其他能力继续正常工作。
 
 ### 2.4 中大型代码修改需要持续上下文
 
@@ -66,7 +71,10 @@ DSH 不调用 MW 工具，因此不能依赖 MW 工具执行器逐次拦截。Ad
 - DSH 权限不得高于父 Agent当前权限。
 - 一轮完成后可以保留热 Runtime；Runtime 被回收后仍可从持久会话冷恢复。
 - MW 能够在取消、超时、崩溃、应用退出和资源回收时终止完整进程树。
-- 用户设备上不需要安装 DSH、Node、Codex、Claude Code、WSL 或 Docker。
+- Windows Runtime能够在真实仓库中读取、搜索、创建和修改代码，执行 PowerShell、Git、测试和构建，并依据失败结果继续修复。
+- 用户无需手工安装或配置 DSH、Node、Codex、Claude Code、WSL 或 Docker；DSH受管资源由 MW按需安装。
+- 用户能够从 MW打开当前 DSH子 Agent的原生 Web轨迹界面，且观察操作不会绕过 MW创建 Turn、修改权限、发送 Prompt或改变 Conversation状态。
+- SDK受管资源支持查看状态、下载进度、版本、磁盘占用、安装位置、修复和卸载；下载产物经过哈希与签名校验。
 - DSH 升级经过固定版本、构建闭包和真实任务测试，不影响已经安装的 MW。
 
 ### 3.2 明确不做的事情
@@ -75,8 +83,9 @@ DSH 不调用 MW 工具，因此不能依赖 MW 工具执行器逐次拦截。Ad
 - 不为 OpenAI、Anthropic、Kimi 或通用 OpenAI-compatible API 提供独立适配。DSH 始终使用 deepseek-official 的请求语义；自定义 base_url 只有在服务端兼容这套 DeepSeek 请求语义时才能工作。
 - 不把 MW 工具、数据库、设置服务、密码库、知识库或 MCP Server暴露给 DSH。
 - 不允许 DSH 创建自己的子 Agent。
-- 不把 DSH Web UI、TUI、审批界面或插件市场带入 MW。
-- 不在用户运行期间下载、安装或更新 DSH。
+- 不把 DSH Web变成第二个主 Agent或写控制面；不允许 MW托管 Session从 Web发送 Prompt、取消 Turn、回答审批、创建会话、修改模型/权限/设置或管理插件。
+- 不把 DSH TUI、交互式审批界面、设置中心或插件市场带入 MW。
+- 不在用户设备上从 PyPI/npm解析并安装任意最新版 DSH；只下载 MW兼容清单固定的、已签名的 Windows Runtime资源包。
 - 不把一次 Turn 完成误认为整个 Conversation 完成。
 - 不承诺在 Windows 受限模式下阻止 DSH 读取当前用户本来可以读取的所有文件，也不把文件模式描述成网络、注册表或 IPC 沙箱；这些上游限制必须在权限说明中如实呈现。
 
@@ -92,7 +101,7 @@ DSH 的 JSON-RPC Runtime 使用标准输入输出传递请求、响应和通知�
 
 ### 4.3 Cordis 可以裁剪成 MW 专用运行时
 
-DSH 的能力由 Cordis 插件组合。MW 可以只装载代码任务所需的组件，同时明确排除内部子 Agent、Web UI、用户插件、MCP 和无关工具。这使 DSH Runtime 的能力面可以由随安装包发布的只读配置决定。
+DSH 的能力由 Cordis 插件组合。MW 只装载代码任务、SDK JSON-RPC控制和只读 Web观测所需的组件，同时明确排除内部子 Agent、用户插件、MCP、TUI、审批、运行时升权和无关工具。MW专用组合在同一进程中装载 JSON-RPC Server与 Web Server，使 SDK和浏览器观察同一个 Agent、Session和事件流。能力面由受管 SDK资源包中的只读配置决定。
 
 ### 4.4 DSH 可以直接使用 DeepSeek
 
@@ -100,7 +109,7 @@ DSH 提供 deepseek-official 模型路由，可以使用 DEEPSEEK_API_KEY、DEEP
 
 ### 4.5 开发版风险可以通过固定版本控制
 
-DSH 仍处于快速开发阶段，但 MW 不需要动态跟随。固定提交、固定 SDK、固定配置、固定 Node 和哈希清单可以把“上游每天变化”转化为“MW 主动升级时才变化”。这与 DSH 调用 Codex、Claude Code 时固定并验证产品协议的思路一致。
+DSH 仍处于快速开发阶段，但 MW 不需要动态跟随。固定提交、固定 SDK客户端、固定配置、固定 Windows Runtime和哈希清单可以把“上游每天变化”转化为“MW 主动升级兼容清单时才变化”。懒加载只改变资源交付时机，不改变版本固定策略。
 
 ## 5. 宏观设计思路
 
@@ -117,16 +126,23 @@ DSH 仍处于快速开发阶段，但 MW 不需要动态跟随。固定提交、
 ~~~mermaid
 flowchart TD
     U[用户] --> P[MW 父 Agent]
+    U --> OW[DSH 只读 Web]
     P --> M[ChildAgentManager]
     M --> A[DshChildAgentExecutor]
     A --> C[DshConversationRegistry]
     A --> R[DeepSeekConfigResolver]
+    A --> I[DshRuntimePackageManager]
     C --> S[DshRuntimeSupervisor]
     S --> J[Windows Job Object]
-    J --> D[DSH JSON-RPC Runtime]
+    I --> S
+    J --> D[DSH MW Runtime]
+    D --> Q[JSON-RPC控制面]
+    D --> H[Web只读观测面]
+    Q --> A
+    H --> OW
     D --> L[DSH Agent Loop]
     L --> F[DSH 文件与搜索工具]
-    L --> W[DSH PowerShell与测试工具]
+    L --> PW[DSH PowerShell与测试工具]
     L --> K[DeepSeek API]
     D --> E[DshEventMapper]
     E --> M
@@ -140,7 +156,7 @@ flowchart TD
 1. MW 控制边界：负责子 Agent身份、父子关系、权限、进程、事件和用户可见状态。
 2. DSH 执行边界：负责代码推理、文件操作、命令执行、测试、会话上下文和 DeepSeek 请求。
 
-两边通过 JSON-RPC 交换控制消息与事件，不交换 MW 工具调用。
+两边通过 JSON-RPC 交换控制消息与事件，不交换 MW 工具调用。Web只读取同一 Runtime发布的 Session轨迹，不经过第二个 DSH进程，不取得控制权，也不直接读取 MW数据库。
 
 ## 7. 核心概念
 
@@ -158,7 +174,7 @@ Turn 是父 Agent向该子 Agent发送一次指令后，到 DSH 回到 idle 为�
 
 ### 7.4 Runtime
 
-Runtime 是承载 Conversation 的 DSH Node 进程。一个活动 Conversation 同一时间最多有一个 Runtime。Runtime 可以经历多轮 Turn，也可以在空闲后被回收并在下一次追问时重建。
+Runtime 是承载 Conversation 的 DSH Windows进程。它包含 Agent Loop、SDK JSON-RPC Server和只读 Web Server；三者共享同一个 Session与事件流。一个活动 Conversation 同一时间最多有一个 Runtime。Runtime 可以经历多轮 Turn，也可以在空闲后被回收并在下一次追问或用户打开历史轨迹时重建。
 
 ### 7.5 热续接与冷恢复
 
@@ -237,13 +253,33 @@ provider 不参与自由路由；DSH 路由固定为 deepseek-official。Adapter
 
 这样可以避免一段 Conversation 的同一进程在请求中途切换账户或端点。
 
-### 8.5 DshRuntimeSupervisor
+### 8.5 DshRuntimePackageManager
+
+DshRuntimePackageManager 是 DSH受管 SDK资源的唯一安装与解析入口。Adapter不得调用 pip、npm、npx或系统 PATH临时寻找 DSH，也不得把下载逻辑塞进 Supervisor。
+
+PackageManager 负责：
+
+- 根据 MW版本、Windows架构和兼容清单解析唯一允许的 Runtime版本。
+- 向设置页和首次使用确认框提供名称、版本、来源、下载大小、安装大小、状态、进度和错误摘要。
+- 把下载写入专用临时目录，支持有界重试和断点续传；未完成文件不得成为可启动版本。
+- 在解压前后校验 HTTPS来源、清单签名、SHA-256、文件列表、平台、架构、协议版本和发布者签名。
+- 把完整版本原子安装到受管目录，完成无模型、无凭据的本地自检后才切换当前版本指针。
+- 支持修复、取消下载和卸载；有活动 Runtime或仍被 Conversation固定引用的版本不得删除。
+- 将 Runtime会话数据与可删除的 SDK版本目录分离，卸载 Runtime不得删除 Conversation历史。
+
+后端以正式 `DshRuntimePackageManager` Service作为状态权威，并通过设置 API提供只读状态、安装、取消、修复和卸载操作；安装任务由应用生命周期统一关闭。前端在现有 StorageSettingsSection中新增独立的 `SdkManagement`组件，消费真实 API状态和进度，不自行推断文件存在性，也不使用前端假数据。组件安装或卸载成功后必须刷新存储路径、运行时总量和受管资源分布。
+
+资源状态至少包括 missing、downloading、verifying、installing、ready、failed、repairing和uninstalling。同一平台版本同时最多一个安装任务；并发首次使用请求复用同一任务，不重复下载。下载失败只返回 DSH_RUNTIME_NOT_INSTALLED或 DSH_RUNTIME_INSTALL_FAILED，不影响 MW其他业务能力。
+
+Python SDK客户端随 MW主程序发布，不作为大型受管资源单独下载。设置页可以把整项资源称为“DeepSeek Harness SDK”，但详情必须区分“SDK客户端”和“Windows Runtime”，避免把约几十 KB的客户端误报为全部磁盘占用。
+
+### 8.6 DshRuntimeSupervisor
 
 Supervisor 是所有 DSH Runtime 和后代进程的唯一生命周期责任方。一个 Conversation 最多登记一个 RuntimeHandle。
 
 Supervisor 负责：
 
-- 使用安装包内的 node.exe 和固定 Runtime 入口启动进程。
+- 只使用 PackageManager验证为 ready的固定 Windows Runtime可执行文件启动进程；不依赖系统 Node，也不在启动路径执行下载或安装。
 - 构造白名单环境，而不是复制 AgentService 的完整环境。
 - 通过 Windows 原生 launcher 以挂起状态创建进程，在任何 Node 代码执行前将其纳入 Job Object，再恢复主线程。
 - 保存 stdin、stdout、stderr、PID、Job Object、启动时间和退出状态。
@@ -252,9 +288,9 @@ Supervisor 负责：
 - 根据空闲回收、容量限制、显式停止和应用关闭执行退出阶梯。
 - 等待 Job Object 中的完整进程树消失后才报告回收完成。
 
-官方 Python SDK 当前自行创建 Popen 并复制父环境，不能直接证明满足上述要求。MW 随固定 DSH 提交携带同版本 SDK，并维护最小、可审计的生命周期补丁，使 SDK 接受由 Supervisor 提供的 process factory 和显式环境。Windows process factory 由一个窄原生 launcher 实现，返回 SDK 所需的管道和进程句柄，但不把进程树所有权交给 SDK。补丁身份、launcher 版本、补丁哈希和上游提交一并进入 manifest。
+官方 Python SDK客户端当前自行创建 Popen 并复制父环境，不能直接证明满足上述要求。MW主程序携带固定版本客户端和最小、可审计的生命周期补丁，使 SDK接受由 Supervisor提供的 process factory和显式环境。Windows process factory由一个窄原生 launcher实现，返回 SDK所需的管道和进程句柄，但不把进程树所有权交给 SDK。补丁身份、launcher版本、补丁哈希、上游提交和受管 Runtime资源版本一并进入 manifest。
 
-### 8.6 DshSessionProtocol
+### 8.7 DshSessionProtocol
 
 MW 固定版 Runtime 在上游 JSON-RPC Server 之上增加两个窄方法：session/open 与 session/flush。它们只补足持续 Conversation 所需的生命周期，不提供 MW 工具调用，也不改变 DSH Agent Loop。
 
@@ -286,7 +322,7 @@ MW turn_id 是本地数据库中的 UUID，与 DSH messageId 和 DSH turn序号�
 
 session_root 不通过 JSON-RPC 临时选择。Supervisor 在进程启动前把该 Conversation 的绝对 sessions 目录作为 DSH_SESSION_ROOT 注入 Runtime；session/open 只在这个固定存储内查找 dsh_session_id。MW 生成 ID、数据库记录、目录归属和 Runtime 环境四者必须一致。
 
-### 8.7 DshEventMapper
+### 8.8 DshEventMapper
 
 EventMapper 顺序消费 DSH 通知，不重新排序，也不从 stderr 猜测正常协议事件。
 
@@ -316,6 +352,9 @@ MW 构建三份来自同一模板的只读组合，差异只在默认沙箱模�
 三份组合共同包含：
 
 - JSON-RPC stdio Server。
+- 仅监听 `127.0.0.1` 且使用系统分配动态端口的 DSH Web Server。
+- DSH Web前端、Session投影、轨迹、工具调用、命令输出、diff和产物展示组件。
+- MW托管 Session只读策略和 Web API方法白名单。
 - Agent Core、Agent Loop、会话和上下文压缩组件。
 - deepseek-official 模型适配器。
 - DSH 本地子进程管理器。
@@ -328,16 +367,19 @@ MW 构建三份来自同一模板的只读组合，差异只在默认沙箱模�
 
 运行组合明确排除：
 
-- DSH Web UI、TUI 和控制台 UI。
+- DSH TUI 和控制台 UI。
+- Web端的 Prompt发送、Turn取消、交互响应、Session创建/删除、模型与凭据设置、权限修改、工作区切换、Agent Preset和插件管理能力。
 - Codex 与 Claude Code provider。
 - DSH subagent service、spawn/fork provider 和所有 subagent 工具。
 - MW Tool Bridge。
 - MCP Client 与任何 MCP Server。
 - 用户插件目录与自动插件发现。
-- 插件市场、自动下载和自动更新。
+- DSH自身的插件市场、插件自动下载和上游自动更新；MW的受管 Runtime下载只由 PackageManager执行。
 - 交互式审批工具和运行时权限提升入口。
 
 DSH 的文件和 PowerShell 工具是其代码能力的一部分，不属于 MW 工具。它们直接在 DSH Runtime 内执行，并受 DSH 沙箱策略和 Supervisor 进程边界控制。
+
+Windows发行物必须由固定 DSH提交已经提供的 `node24-win-x64` 单文件 Runtime构建链生成，而不是由 MW重写 SDK或 Agent Loop。构建产物至少包含 Windows x64 Runtime可执行文件、固定 ripgrep辅助程序、JSON-RPC与 Web所需的插件和前端资源。构建后必须在未安装 Node、DSH、WSL或 Docker的干净 Windows环境执行真实代码任务，证明 Runtime能够独立完成跨文件修改、PowerShell、测试失败诊断、修复和复测；Git能力在宿主已安装 Git时验收，缺少 Git不得影响非 Git代码任务。
 
 模式组合的工具面固定为：
 
@@ -348,6 +390,16 @@ DSH 的文件和 PowerShell 工具是其代码能力的一部分，不属于 MW 
 | full_access | read/write/edit | 可用 | 注册tool-pwsh，经danger-full-access执行 |
 
 因此 readonly 对模型控制的任意外部命令采取“能力不存在”，而不是依赖提示词。DSH内部为了搜索而启动的固定 ripgrep不等同于模型可填写任意命令，其参数和工作区仍由搜索工具实现控制。
+
+### 9.1 同一 Runtime 的只读 DSH Web
+
+用户在 MW子 Agent卡片点击“打开 DSH”时，MW只打开该 Runtime公布的本地 Web地址并定位到当前 dsh_session_id。不得为观察另启第二个 `dsh web`进程，也不得让两个 Runtime共享同一 session_root。浏览器看到的实时轨迹必须来自正在被 Supervisor管理的同一个 Agent和 Session。
+
+只读必须由 Host API强制，不得只隐藏输入框。MW托管 Session只允许 Web调用会话描述、历史分页、实时事件订阅、投影、工具展示和产物读取方法；所有能够创建或改变 Agent、Session、Turn、队列、交互、配置、权限、凭据、工作区和插件的调用都返回稳定只读错误。Web前端同时移除相应入口，避免向用户展示必然失败的操作。
+
+每个 Runtime生成不可预测的临时访问凭据，Web Server只绑定 loopback动态端口。MW打开 URL时传递受限凭据和目标 Session标识；凭据只授权该 Conversation，不得列举其他用户或其他 Child Agent会话。URL、请求日志和浏览器内容不得包含 DeepSeek API Key、MW凭据或完整进程环境。
+
+打开 Web不创建 Turn、不改变权限、不延长正在执行 Turn的超时，也不把 DSH变成 MW主 Agent。Runtime在线时直接打开；Conversation为 offline时，MW可以通过正常租约与冷恢复路径启动同一 Runtime、执行 session/open但不发送 session/prompt，然后开放历史页面。页面关闭不停止 Runtime；其后仍按普通 idle回收策略处理。
 
 ## 10. 权限继承设计
 
@@ -527,7 +579,7 @@ Runtime 主进程需要读取 Key 来调用模型，但模型控制的 PowerShel
 
 这不是同一 Windows 用户下的进程机密隔离。Runtime主进程内存中仍然持有 Key，而当前 DSH Windows文件沙箱不限制进程检查、调试或 IPC；拥有相应本机权限的恶意子进程理论上可能检查父进程。本文只承诺最小环境和不经正常工具环境传播，不承诺抵抗同用户主动进程攻击。若产品需要该保证，模型请求必须迁移到不同安全主体的本地凭据代理，DSH Runtime只持有短期、限域且不能换取原始 Key的句柄；在此之前，界面和安全文档必须披露这一边界。
 
-Runtime 主进程环境只保留运行必需变量，包括 Windows 系统路径、安装包 Node路径、工作区、DSH 会话根、临时目录和显式 DeepSeek 配置。不得以 os.environ.copy 的方式继承 AgentService 完整环境。Runtime 再创建工具子进程时必须进行第二次 DSH 环境清洗；“Supervisor 已使用白名单”不能替代这一层。
+Runtime 主进程环境只保留运行必需变量，包括 Windows 系统路径、受管 Runtime路径、工作区、DSH 会话根、临时目录和显式 DeepSeek 配置。不得以 os.environ.copy 的方式继承 AgentService 完整环境。Runtime 再创建工具子进程时必须进行第二次 DSH 环境清洗；“Supervisor 已使用白名单”不能替代这一层。
 
 日志可以记录：是否存在 Key、端点主机、模型名、配置来源和配置版本。日志不得记录 Key、Authorization、完整 URL 查询参数或完整环境。
 
@@ -614,6 +666,8 @@ MW 对外使用稳定错误码，不依赖 DSH 原始错误文本：
 | 错误码 | 含义 | Conversation 后续状态 |
 | --- | --- | --- |
 | DSH_CONFIG_MISSING | 缺少 DeepSeek URL或模型 | 保持 created/offline，可修复配置后重试 |
+| DSH_RUNTIME_NOT_INSTALLED | 当前 MW兼容的 Windows Runtime尚未安装 | 保持 created/offline，用户安装后重试 |
+| DSH_RUNTIME_INSTALL_FAILED | Runtime下载、签名、哈希、解压或自检失败 | 保持 created/offline，可修复或重试安装 |
 | DSH_RUNTIME_INVALID | 文件、哈希、补丁或版本不匹配 | failed，禁止启动 |
 | DSH_START_FAILED | Node、Runtime、Job Object或沙箱临时启动失败 | offline，可重试 |
 | DSH_PROTOCOL_INCOMPATIBLE | 握手或协议版本不匹配 | failed |
@@ -629,27 +683,50 @@ MW 对外使用稳定错误码，不依赖 DSH 原始错误文本：
 | DSH_RUNTIME_OWNERSHIP_UNCERTAIN | 无法证明旧Runtime进程树已退出 | Child Agent保持offline，内部租约保持reclaiming，禁止启动新Runtime |
 | DSH_SESSION_DATA_LOST | 磁盘durableSeq小于数据库水位 | failed，禁止继续写入 |
 | DSH_CONVERSATION_STOPPED | Conversation 已明确关闭 | 终止，不可追问 |
+| DSH_WEB_READ_ONLY | Web请求试图改变 MW托管 Session | Conversation状态不变，拒绝请求 |
 
 认证失败不自动重复请求。代码写入后发生的模型或进程错误也不自动重跑整个 Turn；父 Agent应先在同一 Conversation 中询问状态或要求检查工作区，避免重复修改。
 
 ## 18. 打包与部署
 
-MW Windows 安装包携带：
+MW Windows 主安装包只携带控制面的小型组件：
 
 ~~~text
-resources/dsh/
-├── node/node.exe
-├── runtime/                 已构建的 DSH 和依赖
-├── sdk/                     固定 Python SDK 与 MW 生命周期补丁
-├── config/cordis.yml        MW 专用 DSH 组合
-├── manifest.json
-├── LICENSE
-└── THIRD_PARTY_NOTICES.md
+resources/dsh-client/
+├── sdk/                     固定 Python SDK客户端
+├── sdk-patches/             MW生命周期补丁
+├── package-manager/         受管资源解析与校验逻辑
+├── launcher/                Windows Job Object launcher
+└── compatibility-root.json  MW信任根与兼容清单入口
 ~~~
 
-构建阶段从固定 DSH 提交生成 JavaScript 运行闭包。最终用户首次运行时不下载源码、不安装 npm 包，也不访问插件市场。
+占据主要体积的执行面不进入主安装包，而作为独立、签名的 Windows x64受管 SDK资源发布：
 
-正式包不使用 Electron 内置 Node，也不依赖 PATH 中的 Node、DSH、Codex、Claude Code、WSL 或 Docker。PowerShell 执行器按固定版 DSH 的 Windows解析规则选择 PowerShell 7 或系统 Windows PowerShell，并必须通过真实 Windows 测试。
+~~~text
+<base_data_dir>/assets/sdks/dsh/
+├── versions/
+│   └── <runtime-version>/
+│       ├── deepseek-harness-sdk-runtime-win-x64.exe
+│       ├── runtime-sidecars/
+│       ├── web/
+│       ├── config/
+│       │   ├── readonly.cordis.yml
+│       │   ├── sandbox.cordis.yml
+│       │   └── full-access.cordis.yml
+│       ├── manifest.json
+│       ├── LICENSE
+│       └── THIRD_PARTY_NOTICES.md
+├── downloads/               未完成下载，不可执行
+└── current.json             原子切换的当前兼容版本指针
+~~~
+
+MW发行流水线从固定 DSH提交调用上游 `scripts/build-exe-for-python-sdk.ts --targets=node24-win-x64` 生成 Windows Runtime，再加入 MW固定协议补丁、三份 Cordis组合和只读 Web资源，完成真实 Windows测试后签名并发布。MW不自行重写 SDK、Node单文件打包器或 Agent Loop。
+
+首次使用和设置页安装都通过 DshRuntimePackageManager。正式客户端不执行 pip、npm或 npx，不下载源码，不访问插件市场，也不把受管资源写入 MW安装目录。下载清单必须声明精确压缩大小和安装大小；界面显示真实进度，安装前征得用户确认。资源下载完成前不得创建 DSH Runtime。
+
+Runtime为单文件 Node执行闭包，不使用 Electron内置 Node，也不依赖 PATH中的 Node、DSH、Codex、Claude Code、WSL或 Docker。PowerShell执行器按固定版 DSH的 Windows解析规则选择 PowerShell 7或系统 Windows PowerShell，并必须通过真实 Windows测试。
+
+Conversation会话目录不位于 SDK版本目录中。卸载或替换 Runtime不得删除会话；删除 Conversation也不得删除共享 Runtime。卸载前 PackageManager检查所有活动 Runtime和版本引用，无法安全卸载时明确报告占用者，不通过强杀绕过 Supervisor。
 
 ## 19. 版本与升级
 
@@ -659,14 +736,15 @@ manifest.json 至少记录：
 - Python SDK 源码提交。
 - MW SDK生命周期补丁 ID和哈希。
 - Cordis 配置版本和哈希。
-- Node 版本。
-- 运行闭包文件哈希。
+- Windows Runtime版本、上游 `node24-win-x64`目标和内置 Node版本。
+- Runtime、sidecar、Web资源和 Cordis组合的逐文件哈希。
+- 资源下载 URL、压缩大小、安装大小、签名和签名密钥 ID。
 - 构建平台、架构和构建时间。
 - 已验证的 JSON-RPC serverInfo 与协议基线。
 
-Adapter 每次启动 Runtime 前校验组合。缺文件、哈希不符或版本组合未知时禁止运行。
+Adapter 每次启动 Runtime 前通过 PackageManager校验组合。未安装时返回 DSH_RUNTIME_NOT_INSTALLED；缺文件、哈希不符、签名无效或版本组合未知时禁止运行并提供修复入口。
 
-升级 DSH 时必须同时升级 Runtime 和 SDK，重新应用或重写 MW 补丁，并验证旧 Conversation 的冷恢复。如果新版本无法安全读取旧会话，升级代码必须明确迁移、保留旧 Runtime用于旧会话，或将旧 Conversation 标记为不可恢复；不能静默创建空会话冒充续接成功。
+升级 DSH 时必须发布新的兼容清单和受管 Runtime，必要时同时升级主程序中的 SDK客户端，重新应用或重写 MW补丁，并验证旧 Conversation的冷恢复。MW更新不能在后台偷偷替换正在使用的 Runtime；新版本先安装和自检，待旧 Runtime全部退出后才原子切换。若新版本无法安全读取旧会话，升级代码必须明确迁移、保留旧 Runtime用于旧会话，或将旧 Conversation标记为不可恢复；不能静默创建空会话冒充续接成功。
 
 ## 20. 安全边界
 
@@ -677,6 +755,8 @@ DSH 能访问当前工作区、自己的会话与临时目录、DeepSeek API，�
 ### 20.2 DSH 不能做什么
 
 MW 发行组合不注册内部子 Agent、Codex/Claude Code provider、用户插件或 MW工具连接，DSH 也不能请求 MW 替它执行工具或自行把受限模式改为完全访问。这是对已装载能力和控制面的保证；任意 PowerShell在当前 OS权限下还能启动哪些宿主程序，受上一节记录的操作系统边界约束。
+
+DSH Web不是新的信任主体。它只通过 loopback和每 Runtime临时凭据访问当前 Conversation的只读投影，服务端拒绝全部写方法。任何网页脚本、其他本机进程或用户手工构造的请求都不能借 Web绕过 ChildAgentManager、权限映射、Turn串行或 Supervisor生命周期。
 
 ### 20.3 真实限制
 
@@ -736,11 +816,36 @@ DSH Runtime仍以当前 Windows 用户身份运行。full_access 明确拥有该
 - 容量回收只选择 idle Runtime。
 - 正在运行的测试进程不会因为另一 Conversation 启动而被错误终止。
 
-### 21.5 安装包测试
+### 21.5 SDK资源安装测试
 
+- 未安装 Runtime时，首次创建 DSH子 Agent返回可安装状态，不启动残缺进程，也不影响其他 MW功能。
+- 设置页展示固定版本、来源、下载大小、安装大小、进度、磁盘占用、路径和失败原因。
+- 同一版本的并发安装请求只产生一次下载；取消、断点续传、失败重试和修复均不把临时文件标记为 ready。
+- HTTPS来源、清单签名、SHA-256、Windows x64平台、文件列表、协议版本或发布者签名任一不匹配都会失败关闭。
+- 新版本先安装和自检，再原子切换；切换失败继续使用旧版本。
+- 活动 Runtime或 Conversation版本引用阻止卸载；成功卸载 Runtime后 Conversation历史仍然存在。
+- 安装与卸载后的存储统计和“SDK 与运行组件”管理状态与真实磁盘一致。
+
+### 21.6 DSH Web观测测试
+
+- 同一 Runtime同时完成 JSON-RPC握手和 Web启动，Web展示的 session_id、事件 seq和最终回答与 SDK观察一致。
+- 用户从 MW打开当前 Child Agent后能看到实时 assistant、tool/call、tool/result、PowerShell输出、diff、测试结果、产物和 turn/end。
+- 观察过程中系统中只有该 Conversation的一个 DSH Runtime，没有第二个 `dsh web`进程或第二个 Session writer。
+- MW托管 Session的 Prompt、取消、交互响应、队列、创建/删除、设置、凭据、权限、工作区和插件写请求均由服务端返回 DSH_WEB_READ_ONLY。
+- Web只能访问 URL凭据授权的当前 Conversation，不能列举或打开其他用户、其他父会话或其他 Child Agent的 Session。
+- Web只监听 loopback动态端口；错误 URL、过期凭据、跨 Session凭据和非 loopback访问均被拒绝。
+- 打开 Web不创建 Turn、不发送 Prompt、不改变权限；关闭页面不停止 Runtime。
+- offline Conversation通过正常租约冷恢复后可以查看持久历史，但不会因为打开页面执行新一轮模型请求。
+- Web页面、网络响应和日志不包含 DeepSeek API Key、MW凭据或完整 Runtime环境。
+
+### 21.7 Windows发行物测试
+
+- 从固定提交使用上游 `node24-win-x64`构建链生成 Runtime和 `win_amd64`发行物。
 - 未安装 Node、DSH、Codex、Claude Code、WSL 和 Docker的 Windows 机器可运行。
 - 不依赖开发仓库 node_modules。
 - manifest 篡改和缺文件会被拒绝。
+- Windows Runtime在真实仓库完成跨文件读取、搜索、编辑、PowerShell、Git、测试失败、修复和复测。
+- 同一发行物提供 SDK JSON-RPC与只读 DSH Web，不依赖另装 DSH独立版。
 - API Key 不出现在命令行、日志、事件、会话文件和诊断包中。
 - DSH 启动的 PowerShell、Python、Node和测试进程不会通过环境继承获得 DeepSeek Key或 DSH内部环境；同用户主动进程检查边界在安全说明中披露。
 - 安装、升级和卸载后没有遗留进程与未登记运行目录。
@@ -752,13 +857,16 @@ DSH Runtime仍以当前 Windows 用户身份运行。full_access 明确拥有该
 | DSH 不使用 MW 工具 | Cordis 排除 Bridge、MCP和 MW 服务 | 工具目录快照与真实任务事件中只出现 DSH 工具 |
 | 只使用 DeepSeek语义 | 固定 deepseek-official 和三项配置映射 | 官方 DeepSeek与允许的兼容网关真实请求；不加载其他模型适配器 |
 | 修改代码并运行测试 | fs-sandbox、pwsh-sandbox和对应工具 | 真实仓库修改与测试任务 |
+| Windows原生代码能力 | 上游 `node24-win-x64` Runtime构建链和 MW固定 Cordis组合 | 干净 Windows机器上的跨文件修改、PowerShell、Git、失败修复与复测 |
 | 中大型修改复用 Conversation | 稳定 child_id、session_id和追问接口 | 多轮修改—失败—修复—复测场景 |
 | 回答后进程可驻留 | Turn 与 Runtime状态分离 | 第一轮 idle 后 PID仍存活，第二轮复用同 PID |
 | 空闲后仍可继续 | session/open、session/flush与持久化冷恢复 | 回收 PID 后 session/open 返回 resumed，并用同 session_id 完成追问 |
 | 权限继承父 Agent | 固定模式映射与每 Turn重解析 | 三模式真实 Windows 权限测试 |
 | 子 Agent不能自行升权 | 无审批/升权工具，模式由 Adapter注入 | DSH 请求更高权限无法改变执行模式 |
 | 无残留进程 | 挂起启动、命名 Job、KILL_ON_JOB_CLOSE、启动对账和统一退出阶梯 | 正常、超时、崩溃、强退、重启路径的进程树检查 |
-| 用户无需安装 DSH/Node | 安装包携带完整运行闭包 | 干净 Windows 环境冒烟测试 |
+| 用户无需手工安装 DSH/Node | PackageManager按兼容清单安装单文件 Windows Runtime | 主安装包不含 Runtime；首次使用确认、下载、校验、安装后在干净 Windows环境运行 |
+| Runtime不显著增大主 EXE | SDK客户端随主程序，Windows Runtime作为受管资源懒加载 | 主安装包内容审计与设置页真实下载/磁盘大小 |
+| 使用 DSH原生 Web观察 | 同一 Runtime装载 JSON-RPC和只读 Web，MW提供打开入口 | 实时轨迹一致性、单 Runtime检查和全写方法拒绝测试 |
 | 开发版升级可控 | 固定提交、补丁和 manifest | 哈希拒绝、版本拒绝和升级冷恢复测试 |
 
 ## 23. 完成定义
@@ -768,12 +876,15 @@ DSH Runtime仍以当前 Windows 用户身份运行。full_access 明确拥有该
 - 用户仅配置 MW 推荐的 DeepSeek API即可使用代码子 Agent。
 - DSH 使用自己的代码工具，不依赖或接触任何 MW 工具。
 - DSH 能完成真实的跨文件修改和测试闭环。
+- Windows x64 Runtime由固定 DSH提交的上游构建链生成，用户机器无需另装 Node或 DSH即可执行代码任务。
+- Python SDK客户端随 MW发布，大型 Runtime可在“SDK 与运行组件”中按需安装、查看进度、校验、修复和卸载，且不进入 MW主安装包。
+- 用户可以从 MW打开同一 Runtime提供的 DSH原生 Web查看轨迹；该 Web对 MW托管 Session服务端只读，不能成为第二控制面。
 - 父 Agent能够对同一 child_id 连续追问，中大型任务不会被迫丢失上下文。
 - Turn 完成、Runtime idle、Runtime offline 和 Conversation stopped 在状态与界面上不会混淆。
 - 三种 MW 权限模式被准确映射并在真实 Windows 环境执行；已知读取限制被如实说明。
 - 所有退出路径都能证明完整进程树已经消失。
 - API Key 和 MW 私有服务不越过规定边界。
-- Runtime、SDK、补丁、Node 和 Cordis 配置都能由 manifest 精确核对。
+- Runtime、SDK客户端、补丁、内置 Node、Web资源和 Cordis配置都能由 manifest精确核对。
 - 固定版真实 DSH、真实 DeepSeek API、真实文件修改和真实测试执行均通过验收。
 
 ## 24. 上游依据
@@ -783,6 +894,8 @@ DSH Runtime仍以当前 Windows 用户身份运行。full_access 明确拥有该
 - packages/sdk/protocol/src/types.ts：正式 JSON-RPC 请求和通知集合。
 - packages/sdk/server/src/server.ts：initialize、session/prompt、shutdown与事件通知；同时证明上游隐式 getOrCreateSession 使用 agents.create，不能代替本文要求的持久恢复。
 - python/sdk/src/deepseek_harness/client.py：stdio客户端、反向请求队列、进程创建和关闭行为。
+- python/sdk-runtime/platforms.json、scripts/build-exe-for-python-sdk.ts和对应 CI：Windows x64 Runtime、`win_amd64` wheel和单文件执行闭包的上游构建依据。
+- packages/bundle/web-app、packages/host/webserver、packages/client与packages/api/remotes：DSH Web组合、浏览器连接、Session投影和所有必须被 MW只读策略限制的写方法。
 - packages/core/agent-loop/src/index.ts：agents.create与agents.resume的会话所有权。
 - packages/session/session-persistence/src/index.ts及 coordinator.ts：prepare、load、flush和未闭合 Turn修复规则。
 - packages/subprocess/subprocess/src/index.ts：SENSITIVE_ENV_PATTERN、DSH_清洗和 scrubbedParentEnv。

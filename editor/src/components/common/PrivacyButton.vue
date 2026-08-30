@@ -49,7 +49,7 @@ function togglePrivacy() {
     @dblclick.stop.prevent
     @mousedown.stop
   >
-    <IcIcon :name="active ? 'visibility-off' : 'visibility'" :size="size" />
+    <IcIcon :name="active ? 'visibility-off' : 'visibility'" :size="size" morph />
   </button>
 </template>
 

@@ -8,9 +8,9 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { Download, Minus, Plus, RotateCcw } from 'lucide-vue-next'
 
 import { buildApiUrl } from '@/api/client'
+import IcIcon from '@/components/common/IcIcon.vue'
 import type { FilePreviewPayload, PdfPreviewPage } from '@/types/knowledge'
 
 const props = defineProps<{
@@ -207,10 +207,10 @@ onBeforeUnmount(() => {
 
       <div class="pdf-toolbar-actions">
         <div v-if="viewerMode === 'pages'" class="zoom-controls">
-          <button type="button" title="缩小" aria-label="缩小" @click="zoomFromCenter(0.8)"><Minus :size="16" /></button>
+          <button type="button" title="缩小" aria-label="缩小" @click="zoomFromCenter(0.8)"><IcIcon name="remove" :size="16" /></button>
           <button type="button" class="zoom-value" title="重置缩放" @click="zoomFromCenter(1 / scale)">{{ zoomLabel }}</button>
-          <button type="button" title="放大" aria-label="放大" @click="zoomFromCenter(1.25)"><Plus :size="16" /></button>
-          <button type="button" class="zoom-reset-button" title="重置缩放" aria-label="重置缩放" @click="zoomFromCenter(1 / scale)"><RotateCcw :size="15" /></button>
+          <button type="button" title="放大" aria-label="放大" @click="zoomFromCenter(1.25)"><IcIcon name="add" :size="16" /></button>
+          <button type="button" class="zoom-reset-button" title="重置缩放" aria-label="重置缩放" @click="zoomFromCenter(1 / scale)"><IcIcon name="replay" :size="15" /></button>
         </div>
         <button
           v-if="isCompiledLatexPdf"
@@ -220,7 +220,7 @@ onBeforeUnmount(() => {
           aria-label="下载编译 PDF"
           @click="downloadCompiledPdf"
         >
-          <Download :size="16" />
+          <IcIcon name="download" :size="16" />
         </button>
       </div>
     </header>

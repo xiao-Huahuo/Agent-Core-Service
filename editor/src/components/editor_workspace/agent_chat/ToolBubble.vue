@@ -238,8 +238,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           :aria-label="copied ? 'Copied' : 'Copy message'"
           @click="copyBubbleContent"
         >
-          <IcIcon v-if="copied" name="check" :size="14" />
-          <IcIcon v-else name="copy" :size="14" />
+          <IcIcon :name="copied ? 'check' : 'copy'" :size="14" morph />
         </button>
         <button
           class="feedback-action feedback-up"
@@ -297,8 +296,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
         :aria-label="copied ? 'Copied' : 'Copy message'"
         @click="copyBubbleContent"
       >
-        <IcIcon v-if="copied" name="check" :size="14" />
-        <IcIcon v-else name="copy" :size="14" />
+        <IcIcon :name="copied ? 'check' : 'copy'" :size="14" morph />
       </button>
     </div>
     <img :src="userAvatar" class="avatar" alt="user" />

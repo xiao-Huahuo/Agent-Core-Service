@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
         :aria-label="state.loading ? '停止' : '刷新'"
         @click="$emit('command', state.loading ? 'stop' : 'reload')"
       >
-        <IcIcon :name="state.loading ? 'close' : 'refresh'" :size="16" :class="{ spinning: state.loading }" />
+        <IcIcon :name="state.loading ? 'close' : 'refresh'" :size="16" morph :class="{ spinning: state.loading }" />
       </button>
       <button type="button" title="主页" aria-label="主页" @click="$emit('command', 'home')">
         <IcIcon name="home" :size="16" />
