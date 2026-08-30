@@ -157,8 +157,9 @@ function clearQuery() {
 function askAgentSearch() {
   const q = workspaceStore.searchQuery.trim()
   if (!q) return
+  const sourceLabels = workspaceStore.searchSources.map((source) => SEARCH_SOURCE_PRESENTATION[source].label).join('、')
   workspaceStore.agentSidebarOpen = true
-  workspaceStore.pendingAgentPrompt = `在知识库里找一个文件，特征是：${q}`
+  workspaceStore.pendingAgentPrompt = `请使用四库联合搜索工具搜索“${q}”。搜索范围：${sourceLabels}；全文搜索：${workspaceStore.fulltextEnabled ? '开启' : '关闭'}；语义搜索：${workspaceStore.semanticEnabled ? '开启' : '关闭'}。`
 }
 
 /** Submits through the owning page or navigates there from the toolbar. */

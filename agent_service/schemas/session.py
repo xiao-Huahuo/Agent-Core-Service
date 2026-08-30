@@ -81,6 +81,8 @@ class SessionOut(SQLModel):
     session_name: str
     created_at: datetime
     updated_at: datetime
+    parent_session_id: str | None = None
+    child_agent_run_id: str | None = None
 
     @classmethod
     def from_record(cls, record: SessionRecord) -> "SessionOut":
@@ -92,4 +94,6 @@ class SessionOut(SQLModel):
             session_name=record.session_name,
             created_at=record.created_at,
             updated_at=record.updated_at,
+            parent_session_id=record.parent_session_id,
+            child_agent_run_id=record.child_agent_run_id,
         )

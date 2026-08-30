@@ -32,6 +32,7 @@ import SessionDrawer from '@/components/editor_workspace/agent_chat/SessionDrawe
 import StreamingIndicator from '@/components/editor_workspace/agent_chat/StreamingIndicator.vue'
 import TaskListDrawer from '@/components/editor_workspace/agent_chat/TaskListDrawer.vue'
 import ChildAgentPanel from '@/components/editor_workspace/agent_chat/ChildAgentPanel.vue'
+import ChildAgentConversationDrawer from '@/components/editor_workspace/agent_chat/ChildAgentConversationDrawer.vue'
 import EnvironmentChangeCard from '@/components/editor_workspace/agent_chat/EnvironmentChangeCard.vue'
 import ChangeDetailDrawer from '@/components/editor_workspace/agent_chat/ChangeDetailDrawer.vue'
 import { cancelSessionChatAcrossWindows, useChatStore, useSessionChatStore } from '@/stores/chat'
@@ -42,7 +43,7 @@ import { useSkillsStore } from '@/stores/skills'
 import { useFavoritesStore } from '@/stores/favorites'
 import { useTaskListStore } from '@/stores/taskList'
 import { useWorkspaceStore } from '@/stores/workspace'
-import type { AgentAccessMode, AgentLoopMode } from '@/api/agent'
+import type { AgentAccessMode, AgentLoopMode, ChildAgentRecord } from '@/api/agent'
 import { fetchSessionState, type SessionRecord } from '@/api/session'
 import { fetchAgentAttachment, uploadAgentAttachment } from '@/api/agent'
 import { fetchLLMConfig, fetchSensitiveWords, saveSensitiveWords } from '@/api/settings'
@@ -94,6 +95,7 @@ const environmentWorkspaceOpen = computed(() => (
   environmentCardOpen.value || taskListCardOpen.value || childAgentCardOpen.value
 ))
 const selectedChangeSnapshot = ref<AgentChangeSnapshot | null>(null)
+const selectedChildAgent = ref<ChildAgentRecord | null>(null)
 const isBootstrapping = ref(false)
 const referenceText = ref('')
 const messageListRef = ref<MessageListApi | null>(null)
@@ -672,6 +674,15 @@ function closeChildAgentCard() {
   }
 }
 
+function showChildAgentConversation(child: ChildAgentRecord) {
+  selectedChildAgent.value = child
+}
+
+function syncSelectedChildAgent(children: ChildAgentRecord[]) {
+  if (!selectedChildAgent.value) return
+  selectedChildAgent.value = children.find((child) => child.run_id === selectedChildAgent.value?.run_id) ?? null
+}
+
 // 任务列表创建/更新自动打开时,联动展开融合侧边栏
 watch(() => taskListStore.sidebarOpen, (open) => {
   if (open) {
@@ -705,6 +716,7 @@ watch([userId, activeSessionId], syncChildAgentWatcher)
 watch(
   activeSessionId,
   async (sessionId) => {
+    selectedChildAgent.value = null
     // The first send creates and selects its session after inserting the local
     // user message. Reloading the still-empty history here would clear it.
     if (sessionId) useActiveSessionChat(sessionId)
@@ -1035,8 +1047,11 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
       </section>
       <section v-show="childAgentCardOpen" class="agent-sidebar-card child-agent-card">
         <ChildAgentPanel
-          :session-id="sessionStore.currentSessionId || ''"
+          :session-id="activeSessionId || ''"
+          :user-id="userId || ''"
           @close="closeChildAgentCard"
+          @open-conversation="showChildAgentConversation"
+          @children-update="syncSelectedChildAgent"
         />
       </section>
     </aside>
@@ -1045,6 +1060,14 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
         v-if="changeDetailOpen"
         :snapshot="selectedChangeSnapshot"
         @close="changeDetailOpen = false"
+      />
+    </Transition>
+    <Transition name="child-conversation-slide">
+      <ChildAgentConversationDrawer
+        v-if="selectedChildAgent"
+        :child="selectedChildAgent"
+        :user-id="userId || ''"
+        @close="selectedChildAgent = null"
       />
     </Transition>
     </div>
@@ -1555,6 +1578,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
 }
 
 .agent-content-row {
+  position: relative;
   display: flex;
   flex-direction: row;
   flex: 1;
@@ -1618,7 +1642,7 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
     opacity var(--transition-fast);
 }
 
-/* 融合侧边栏:无边框透明容器,内部纵向排列两张独立圆角阴影卡片,打开时占据宽度挤压对话区 */
+/* 融合侧边栏:无边框透明容器,内部纵向排列独立圆角卡片,打开时占据宽度挤压对话区 */
 .agent-sidebar {
   flex: 0 0 0px;
   display: flex;
@@ -1637,18 +1661,16 @@ function handleChangeUpdated(event: CustomEvent<AgentChangeSnapshot>) {
   padding: var(--space-10);
 }
 
-/* 圆角阴影卡片公共样式:用设计系统卡片底色 --color-bg-card(暗色 #111 / 亮色 #fff),
-   去边框,四周留白让阴影显形 */
+/* 三张环境卡片保持圆角与卡片底色，不叠加阴影。 */
 .agent-sidebar-card {
+  box-sizing: border-box;
   display: flex;
   min-height: 0;
   flex-direction: column;
-  border-radius: var(--radius-xl);
+  border: 4px solid var(--library-form-ring);
+  border-radius: var(--workspace-card-radius);
   background: var(--color-bg-card);
-  box-shadow:
-    0 0 0 4px var(--library-form-ring),
-    0 1px 3px rgba(0, 0, 0, 0.1),
-    0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: none;
 }
 
 /* 任务列表卡片:按内容弹性展示全部任务(不滚动),任务过多超高时才封顶内部滚动 */

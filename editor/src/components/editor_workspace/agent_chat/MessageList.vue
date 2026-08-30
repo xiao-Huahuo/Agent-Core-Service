@@ -11,13 +11,15 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import LoadingState from '@/components/common/LoadingState.vue'
 import LoaderCube from '@/components/editor_workspace/agent_chat/LoaderCube.vue'
 import FinalTurnSummary from '@/components/editor_workspace/agent_chat/FinalTurnSummary.vue'
+import AgentSearchResultBlocks from '@/components/editor_workspace/agent_chat/AgentSearchResultBlocks.vue'
 import MessageBubble from '@/components/editor_workspace/agent_chat/MessageBubble.vue'
 import { undoSessionChange } from '@/api/agentChanges'
 import type { AgentChangeSnapshot } from '@/api/agentChanges'
 import { useAvatar } from '@/components/editor_workspace/agent_chat/useAvatar'
 import type { AgentChatMessage, SourceItem } from '@/stores/chat'
-import { useChatStore } from '@/stores/chat'
+import { asSourceMap, useChatStore } from '@/stores/chat'
 import { useSettingsStore } from '@/stores/settings'
+import type { UnifiedSearchResult } from '@/types/unifiedSearch'
 
 const props = defineProps<{
   messages: AgentChatMessage[]
@@ -185,30 +187,6 @@ function shouldShowActions(message: AgentChatMessage, index: number) {
     && isFinalAssistantAnswer(message, index)
 }
 
-function asSourceMap(value: unknown): Record<string, SourceItem> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {}
-  }
-  const result: Record<string, SourceItem> = {}
-  for (const [key, source] of Object.entries(value as Record<string, unknown>)) {
-    if (!source || typeof source !== 'object' || Array.isArray(source)) {
-      continue
-    }
-    const record = source as Record<string, unknown>
-    const sourceUri = typeof record.source_uri === 'string' ? record.source_uri : ''
-    const content = typeof record.content === 'string' ? record.content : ''
-    if (sourceUri || content) {
-      result[key] = {
-        source_uri: sourceUri,
-        content,
-        source: typeof record.source === 'string' ? record.source : undefined,
-        title: typeof record.title === 'string' ? record.title : undefined,
-      }
-    }
-  }
-  return result
-}
-
 function extractCitationIds(content: string) {
   const ids: string[] = []
   const seen = new Set<string>()
@@ -277,6 +255,24 @@ function knowledgeSourcesForMessage(message: AgentChatMessage, messageIndex = -1
     sources.push({ ...source, citation_id: id })
   }
   return sources
+}
+
+/** Mount only search results the Agent actually cited in its final answer. */
+function searchResultsForMessage(message: AgentChatMessage, messageIndex = -1): UnifiedSearchResult[] {
+  if (isThinkingActive.value || !isCompletedAssistantContentMessage(message)) return []
+  const citationMap = citationMapForMessage(message, messageIndex)
+  const metadataUsed = Array.isArray(message.metadata?.used_citations)
+    ? message.metadata.used_citations.filter((item): item is string => typeof item === 'string')
+    : []
+  const usedIds = metadataUsed.length > 0 ? metadataUsed : extractCitationIds(message.content)
+  const seen = new Set<string>()
+  return usedIds.flatMap((id) => {
+    const result = citationMap[id]?.search_result
+    const key = result ? `${result.source}:${result.id}` : ''
+    if (!result || seen.has(key)) return []
+    seen.add(key)
+    return [result]
+  })
 }
 
 function changeSnapshotForMessage(message: AgentChatMessage): AgentChangeSnapshot | null {
@@ -359,6 +355,12 @@ defineExpose({
         :knowledge-sources="[]"
         :citation-map="message.role === 'assistant' ? citationMapForMessage(message, index) : {}"
         :change-snapshot="message.node === 'action' ? changeSnapshotForAction(index) : changeSnapshotForMessage(message)"
+      />
+      <AgentSearchResultBlocks
+        v-if="searchResultsForMessage(message, index).length"
+        class="assistant-summary-offset"
+        :results="searchResultsForMessage(message, index)"
+        :compact="compact"
       />
       <FinalTurnSummary
         v-if="message.role === 'assistant' && isFinalAssistantAnswer(message, index) && !isThinkingActive"

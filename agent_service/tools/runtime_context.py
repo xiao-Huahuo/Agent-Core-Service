@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from agent_service.services.settings.service import SettingsService
     from agent_service.services.task_list.service import TaskListService
     from agent_service.services.agent_change.service import AgentChangeService
+    from agent_service.services.unified_search import UnifiedSearchService
 
 AGENT_ACCESS_READONLY = "readonly"
 AGENT_ACCESS_SANDBOX = "sandbox"
@@ -41,6 +42,7 @@ class ToolRuntimeState:
     user_id: 当前用户 ID。
     session_id: 当前会话 ID。
     retrieval_service: 可复用的统一检索服务。
+    unified_search_service: 与前端统一搜索框共用的四库联合搜索服务。
     memory_service: 可复用的长期记忆写入服务。
     embedding_service: 可复用的 Embedding 向量生成服务。
     """
@@ -50,6 +52,7 @@ class ToolRuntimeState:
     session_id: str
     run_id: str
     retrieval_service: MemoryRetrievalService
+    unified_search_service: UnifiedSearchService | None = None
     memory_service: LongTermMemoryService | None = None
     embedding_service: EmbeddingService | None = None
     task_list_service: TaskListService | None = None
@@ -77,6 +80,7 @@ def set_tool_runtime(
     session_id: str,
     run_id: str | None = None,
     retrieval_service: MemoryRetrievalService | None = None,
+    unified_search_service: UnifiedSearchService | None = None,
     memory_service: LongTermMemoryService | None = None,
     embedding_service: EmbeddingService | None = None,
     task_list_service: TaskListService | None = None,
@@ -97,6 +101,7 @@ def set_tool_runtime(
     user_id: 当前用户 ID。
     session_id: 当前会话 ID。
     retrieval_service: 可选统一检索服务,用于测试或复用外部实例。
+    unified_search_service: 可选四库联合搜索服务,供 Agent 搜索工具复用前端检索链路。
     memory_service: 可选长期记忆写入服务。
     embedding_service: 可选 Embedding 向量生成服务。
     """
@@ -111,6 +116,7 @@ def set_tool_runtime(
         session_id=session_id,
         run_id=run_id or session_id,
         retrieval_service=retrieval_service or MemoryRetrievalService(config=config),
+        unified_search_service=unified_search_service,
         memory_service=resolved_memory_service,
         embedding_service=embedding_service or EmbeddingService(config=config),
         task_list_service=task_list_service,
@@ -165,6 +171,41 @@ def clear_agent_token_callback() -> None:
 
     if hasattr(_AGENT_TOKEN_CALLBACK, "callback"):
         delattr(_AGENT_TOKEN_CALLBACK, "callback")
+
+
+# ------------------------------------------------------------------
+# 流式思考文本回调 (用于 ModelDecisionNode → AgentCore 实时推送 DeepSeek reasoning_content)
+# ------------------------------------------------------------------
+
+_AGENT_THINKING_CALLBACK: local = local()
+
+
+def set_agent_thinking_callback(callback: Callable[[str], None]) -> None:
+    """
+    设置当前线程的 Agent 思考文本回调,供 ModelDecisionNode 在流式生成时
+    把模型 reasoning_content 的累积文本逐次推送给上层(用于前端 Think 条实时展示)。
+
+    callback: 接收累积思考文本内容的回调函数。
+    """
+
+    _AGENT_THINKING_CALLBACK.callback = callback
+
+
+def get_agent_thinking_callback() -> Callable[[str], None] | None:
+    """
+    获取当前线程的 Agent 思考文本回调。
+
+    返回值: 已设置的回调函数,未设置时返回 None。
+    """
+
+    return getattr(_AGENT_THINKING_CALLBACK, "callback", None)
+
+
+def clear_agent_thinking_callback() -> None:
+    """清理当前线程的 Agent 思考文本回调。"""
+
+    if hasattr(_AGENT_THINKING_CALLBACK, "callback"):
+        delattr(_AGENT_THINKING_CALLBACK, "callback")
 
 
 # ------------------------------------------------------------------
@@ -384,13 +425,15 @@ def register_tool_citation(
     source_uri: str,
     content: str,
     adopted_by_default: bool = False,
+    metadata: dict[str, Any] | None = None,
 ) -> str:
-    """Register one knowledge/tool citation for the current tool runtime."""
+    """Register one knowledge/tool citation plus optional render metadata."""
 
     state = get_tool_runtime()
     state.tool_citation_counter += 1
     citation_id = f"K{state.tool_citation_counter}"
     state.citation_map[citation_id] = {
+        **(metadata or {}),
         "source_uri": source_uri,
         "content": content,
         "source": "tool",

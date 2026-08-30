@@ -162,6 +162,7 @@ class AgentCore(ChildAgentRuntimeMixin, GraphRunnerMixin, SessionRuntimeMixin, M
         self.change_service = change_service
         self.skill_service = skill_service
         self.settings_service = settings_service
+        self.unified_search_service: Any = None
         self.activity_service: Any = None
         self.task_scheduler = task_scheduler or get_llm_task_scheduler(config, settings_service=settings_service)
         self.child_agent_manager = ChildAgentManager(
@@ -301,6 +302,9 @@ class AgentCore(ChildAgentRuntimeMixin, GraphRunnerMixin, SessionRuntimeMixin, M
             metadata["trace"] = turn_traces
         if isinstance(message, AIMessage):
             reasoning_content = (message.additional_kwargs or {}).get("reasoning_content")
+            if isinstance(reasoning_content, list):
+                # 流式合并时 reasoning_content 可能累积为片段列表,统一拼接为字符串。
+                reasoning_content = "".join(str(part) for part in reasoning_content)
             if reasoning_content:
                 metadata["reasoning_content"] = reasoning_content
             content = AgentCore._sanitize_agent_output(AgentCore._stringify_content(message.content))

@@ -67,7 +67,7 @@ describe('ToolCallInline summaries', () => {
           {
             event: 'tool_call_end',
             tool_name: 'search_knowledge',
-            display_name: '全库联合搜索',
+            display_name: '四库联合搜索',
             tool_args_summary: 'query=原神',
             result_count: 2,
             raw_content: '=== 文件名匹配 ===\n  [K1] 原神.md',
@@ -84,7 +84,7 @@ describe('ToolCallInline summaries', () => {
 
     const text = wrapper.text()
     expect(text).toContain('检索到 4 条知识')
-    expect(text).toContain('全库联合搜索：2 条结果 | 原神')
+    expect(text).toContain('四库联合搜索：2 条结果 | 原神')
     expect(text).toContain('列出 2 个文件 / 1 个文件夹')
   })
 

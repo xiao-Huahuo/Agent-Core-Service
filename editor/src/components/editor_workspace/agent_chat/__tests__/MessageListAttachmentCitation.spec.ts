@@ -41,4 +41,44 @@ describe('MessageList attachment citation recovery', () => {
     expect(wrapper.findAll('.citation-map')[1]?.text()).toContain(uri)
     expect(wrapper.findAll('.citation-map')[1]?.text()).toContain('image11.png')
   })
+
+  it('mounts only four-library results cited by the final Agent answer', () => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', { value: vi.fn(), configurable: true })
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [{
+          role: 'assistant',
+          content: '建议使用这个组件 [K2]',
+          node: 'agent',
+          metadata: {
+            citation_map: {
+              K1: {
+                source_uri: 'docs/a.md', content: '文件', source: 'tool',
+                search_result: { id: 'docs/a.md', source: 'files', title: 'a.md', snippet: '', locator: 'docs/a.md', updated_at: '', score: 1, matched_modes: ['title'], item: {} },
+              },
+              K2: {
+                source_uri: 'cards/a.vue', content: '组件', source: 'tool',
+                search_result: { id: 'cards/a.vue', source: 'components', title: 'Card', snippet: '', locator: 'cards/a.vue', updated_at: '', score: 1, matched_modes: ['title'], item: {} },
+              },
+            },
+          },
+        }],
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: {
+          MessageBubble: true,
+          FinalTurnSummary: true,
+          AgentSearchResultBlocks: {
+            props: ['results'],
+            template: '<div class="mounted-results">{{ results.map((item) => item.id).join(",") }}</div>',
+          },
+          LoadingState: true,
+          LoaderCube: true,
+        },
+      },
+    })
+
+    expect(wrapper.get('.mounted-results').text()).toBe('cards/a.vue')
+  })
 })

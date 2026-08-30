@@ -39,7 +39,7 @@ interface ExportData {
   messages: ExportMessage[]
   task_list?: AgentTaskList | null
   session_state?: Record<string, unknown> | null
-  child_agents?: unknown[]
+  child_agents?: Array<Record<string, unknown> & { messages: ExportMessage[] }>
 }
 
 function formatMessages(records: SessionMessageRecord[]): ExportMessage[] {
@@ -117,8 +117,13 @@ export async function exportSession(
     fetchMessages(session.session_id, userId, limit),
     fetchSessionTaskList(session.session_id).catch(() => null),
     fetchSessionState(session.session_id).catch(() => null),
-    fetchChildAgents(session.session_id).catch(() => null),
+    fetchChildAgents(session.session_id),
   ])
+
+  const childAgents = await Promise.all((childResponse.children ?? []).map(async (child) => ({
+    ...child,
+    messages: formatMessages(await fetchMessages(child.conversation_session_id, userId, limit)),
+  })))
 
   const data: ExportData = {
     session: {
@@ -131,7 +136,7 @@ export async function exportSession(
     messages: formatMessages(messages),
     task_list: taskListResponse?.task_list ?? null,
     session_state: stateResponse?.session_state ?? null,
-    child_agents: childResponse?.children ?? [],
+    child_agents: childAgents,
   }
 
   const yamlContent = toYaml(data)

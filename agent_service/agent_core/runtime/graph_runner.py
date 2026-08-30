@@ -51,6 +51,7 @@ from agent_service.services.scheduler import (
 from agent_service.tools import (
     ToolExecutor,
     ToolRegistry,
+    clear_agent_thinking_callback,
     clear_agent_token_callback,
     clear_context_mirror_callback,
     clear_context_compression_callback,
@@ -62,6 +63,7 @@ from agent_service.tools import (
     clear_tool_runtime,
     clear_tool_trace_callback,
     get_plan_state,
+    set_agent_thinking_callback,
     set_agent_token_callback,
     set_context_mirror_callback,
     set_context_compression_callback,
@@ -208,8 +210,10 @@ class GraphRunnerMixin:
         session_id: str,
         reference: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
+        user_message_metadata: dict[str, Any] | None = None,
         agent_mode: str = AGENT_LOOP_AUTO,
         agent_access_mode: str = "sandbox",
+        allow_child_spawn: bool = True,
     ) -> dict[str, Any]:
         """
         运行带 session 上下文和消息持久化的一轮 Agent,返回结构化结果。
@@ -229,8 +233,10 @@ class GraphRunnerMixin:
                 session_id=session_id,
                 reference=reference,
                 attachments=attachments,
+                user_message_metadata=user_message_metadata,
                 agent_mode=agent_mode,
                 agent_access_mode=agent_access_mode,
+                allow_child_spawn=allow_child_spawn,
             )
         )
         effective_access_mode = normalize_agent_access_mode(agent_access_mode)
@@ -258,9 +264,11 @@ class GraphRunnerMixin:
         session_id: str,
         reference: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
+        user_message_metadata: dict[str, Any] | None = None,
         agent_mode: str = AGENT_LOOP_AUTO,
         agent_access_mode: str = "sandbox",
         web_search_max_results: int | None = None,
+        allow_child_spawn: bool = True,
     ) -> Iterator[dict[str, Any]]:
         """
         运行带 session 上下文和消息持久化的一轮 Agent,逐节点产出 dict 事件。
@@ -406,6 +414,7 @@ class GraphRunnerMixin:
                 role="user",
                 content=prompt,
                 metadata_json={
+                    **(user_message_metadata or {}),
                     "source": "stream_session_prompt",
                     **({"reference": reference} if reference else {}),
                     **({"attachments": persisted_attachments} if persisted_attachments else {}),
@@ -474,6 +483,7 @@ class GraphRunnerMixin:
             latency_marks=latency_marks,
             turn_started_at=turn_started_at,
             context_overhead_tokens=runtime_system_tokens,
+            allow_child_spawn=allow_child_spawn,
         )
         _launch_auto_rename(self, user_id=user_id, session_id=session_id)
     def _stream_events(
@@ -569,6 +579,7 @@ class GraphRunnerMixin:
         _citation_map: dict[str, Any] = dict(citation_map or {})
         _latest_plan: dict[str, Any] | None = initial_plan
         _last_sent_content: list[str] = [""]
+        _last_sent_thinking: list[str] = [""]
         _last_node_completed_at: list[float] = [time.perf_counter()]
         _first_agent_delta_sent = False
 
@@ -601,6 +612,25 @@ class GraphRunnerMixin:
                 return
             token_queue.put({
                 "type": "token",
+                "node": "agent",
+                "content": delta,
+                "tool_calls": [],
+                "trace": [],
+            })
+
+        def on_thinking(cumulative_text: str) -> None:
+            """接收模型思考文本累积内容,按前向切片把增量放入队列供 SSE 推送。
+
+            思考文本与正文独立:不经过 streaming_sanitize(那是针对正文的 JSON/内部标记
+            拦截),只做增量切分,保证 Think 条实时渲染完整思考过程。
+            """
+            prev = _last_sent_thinking[0]
+            delta = cumulative_text[len(prev):] if len(cumulative_text) > len(prev) else ""
+            _last_sent_thinking[0] = cumulative_text
+            if not delta:
+                return
+            token_queue.put({
+                "type": "thinking",
                 "node": "agent",
                 "content": delta,
                 "tool_calls": [],
@@ -672,6 +702,7 @@ class GraphRunnerMixin:
                 session_id=session_id,
                 run_id=effective_run_id,
                 retrieval_service=retrieval_service,
+                unified_search_service=self.unified_search_service,
                 task_list_service=self.task_list_service,
                 change_service=self.change_service,
                 skill_service=self.skill_service,
@@ -701,6 +732,7 @@ class GraphRunnerMixin:
                 ),
             )
             set_agent_token_callback(on_token)
+            set_agent_thinking_callback(on_thinking)
             set_tool_trace_callback(on_tool_trace)
             set_planner_content_callback(on_planner_content)
             set_observation_content_callback(on_observation_content)
@@ -719,6 +751,7 @@ class GraphRunnerMixin:
                 token_queue.put({"type": "error", "error": exc})
             finally:
                 clear_agent_token_callback()
+                clear_agent_thinking_callback()
                 clear_tool_trace_callback()
                 clear_planner_content_callback()
                 clear_observation_content_callback()
@@ -836,6 +869,18 @@ class GraphRunnerMixin:
                         "trace": item.get("trace", []),
                         "model_name": self._model_name_for_node(item.get("node", "agent")),
                         "metadata": latency_metadata(extra_latency),
+                    }
+
+                elif item_type == "thinking":
+                    # 模型思考文本增量,前端据此实时渲染 DSH 风格 Think 条。
+                    yield {
+                        "type": "thinking",
+                        "node": item.get("node", "agent"),
+                        "content": item.get("content", ""),
+                        "tool_calls": item.get("tool_calls", []),
+                        "trace": item.get("trace", []),
+                        "model_name": self._model_name_for_node(item.get("node", "agent")),
+                        "metadata": latency_metadata(),
                     }
 
                 elif item_type == "tool_trace":

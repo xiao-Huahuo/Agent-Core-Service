@@ -126,6 +126,27 @@ describe('SearchPalette toolbar variant', () => {
     expect(wrapper.find('.spinner').exists()).toBe(false)
   })
 
+  it('passes the selected libraries and search modes to the Agent search request', async () => {
+    const workspaceStore = useWorkspaceStore()
+    workspaceStore.searchQuery = '多模态检索'
+    workspaceStore.searchSources = ['files', 'literature']
+    workspaceStore.fulltextEnabled = false
+    workspaceStore.semanticEnabled = true
+    const wrapper = mount(SearchPalette, {
+      props: { variant: 'page' },
+      global: { stubs: { Teleport: true, Transition: false } },
+    })
+
+    await wrapper.get('.search-input').trigger('focus')
+    await wrapper.get('.ai-search-btn').trigger('mousedown')
+
+    expect(workspaceStore.agentSidebarOpen).toBe(true)
+    expect(workspaceStore.pendingAgentPrompt).toContain('四库联合搜索')
+    expect(workspaceStore.pendingAgentPrompt).toContain('文件库、文献库')
+    expect(workspaceStore.pendingAgentPrompt).toContain('全文搜索：关闭')
+    expect(workspaceStore.pendingAgentPrompt).toContain('语义搜索：开启')
+  })
+
   it('tracks a moving toolbar anchor while the dropdown remains open', async () => {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => window.setTimeout(() => callback(0), 0))
     vi.stubGlobal('cancelAnimationFrame', (id: number) => window.clearTimeout(id))

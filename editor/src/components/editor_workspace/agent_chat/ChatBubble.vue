@@ -15,6 +15,7 @@ import ThinkingSummary from '@/components/editor_workspace/agent_chat/ThinkingSu
 import AttachmentBlocks from '@/components/editor_workspace/agent_chat/AttachmentBlocks.vue'
 import KnowledgeSources from '@/components/editor_workspace/agent_chat/KnowledgeSources.vue'
 import MarkdownContent from '@/components/editor_workspace/agent_chat/MarkdownContent.vue'
+import ThinkRow from '@/components/editor_workspace/agent_chat/ThinkRow.vue'
 import ToolCallInline from '@/components/editor_workspace/agent_chat/ToolCallInline.vue'
 import ThinkingInline from '@/components/editor_workspace/agent_chat/ThinkingInline.vue'
 import type { AgentChangeSnapshot } from '@/api/agentChanges'
@@ -260,6 +261,11 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
           思考过程
         </button>
       </Transition>
+      <ThinkRow
+        v-if="message.thinking"
+        :text="message.thinking"
+        :running="isStreaming"
+      />
       <ThinkingSummary
         v-if="typeof message.thinking_seconds === 'number' && hasAssistantContent && showActions === true"
         :seconds="message.thinking_seconds"

@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 
 import agentPanelSource from '@/components/editor_workspace/AgentPanel.vue?raw'
+import childConversationDrawerSource from '@/components/editor_workspace/agent_chat/ChildAgentConversationDrawer.vue?raw'
 import changeDetailDrawerSource from '@/components/editor_workspace/agent_chat/ChangeDetailDrawer.vue?raw'
 import messageListSource from '@/components/editor_workspace/agent_chat/MessageList.vue?raw'
 import sessionDrawerSource from '@/components/editor_workspace/agent_chat/SessionDrawer.vue?raw'
@@ -47,6 +48,18 @@ describe('Agent page workspace appearance', () => {
     expect(agentPanelSource).not.toContain('aria-label="环境与变更"')
     expect(agentPanelSource).not.toContain('aria-label="任务列表"')
     expect(agentPanelSource).not.toContain('aria-label="子 Agent"')
+  })
+
+  it('uses a border-only card for child conversation details and flat environment cards', () => {
+    expect(childConversationDrawerSource).not.toContain('child-conversation-header')
+    expect(childConversationDrawerSource).not.toContain('border-left:')
+    expect(childConversationDrawerSource).not.toContain('border-bottom:')
+    expect(childConversationDrawerSource).toMatch(
+      /\.child-conversation \{[^}]*margin: var\(--space-10\);[^}]*border: 4px solid var\(--library-form-ring\);[^}]*border-radius: var\(--workspace-card-radius\);/s,
+    )
+    expect(agentPanelSource).toMatch(
+      /\.agent-sidebar-card \{[^}]*border: 4px solid var\(--library-form-ring\);[^}]*border-radius: var\(--workspace-card-radius\);[^}]*box-shadow: none;/s,
+    )
   })
 
   it('matches the Library toolbar and filter-menu controls', () => {

@@ -61,134 +61,58 @@ def rebuild_knowledge_base(knowledge_dir: str = "") -> str:
         f"创建 {result.chunks_created} 个切片, "
         f"清理 {result.chunks_deleted} 个旧切片。"
     )
-def search_knowledge(query: str, fulltext: bool = True, semantic: bool = False) -> str:
-    """
-    在用户知识库中联合搜索文件。
-
-    query: 搜索关键词。
-    fulltext: 是否对文件内容做全文匹配,默认开启。
-    semantic: 是否启用语义搜索,默认关闭。
-    """
-
-    import os as _os
+def search_knowledge(
+    query: str,
+    sources: list[str] | None = None,
+    fulltext: bool = True,
+    semantic: bool = False,
+) -> str:
+    """复用前端同源服务搜索文件库、图书馆、组件库和文献库。"""
 
     runtime = get_tool_runtime()
-    from agent_service.services.knowledge_library import KnowledgeLibraryService
-    from agent_service.services.settings.service import SettingsService
-
-    if runtime.memory_service is None:
-        return "搜索失败: 当前工具运行时缺少记忆服务。"
-
-    settings_service = SettingsService(config=runtime.config, memory_service=runtime.memory_service)
-    knowledge_service = KnowledgeLibraryService(
-        config=runtime.config,
-        memory_service=runtime.memory_service,
-        settings_service=settings_service,
-        embedding_service=runtime.embedding_service,
+    service = runtime.unified_search_service
+    if service is None:
+        return "搜索失败: 当前 Agent 运行时缺少四库联合搜索服务。"
+    selected_sources = set(sources if sources is not None else ("files", "library", "components", "literature"))
+    payload = service.search(
+        user_id=runtime.user_id,
+        query=query,
+        sources=selected_sources,
+        fulltext=fulltext,
+        semantic=semantic,
     )
+    results = list(payload.get("results") or [])
+    if not results:
+        return f"四库联合搜索未找到与 '{query}' 相关的结果。"
 
-    # ---- 文件名搜索 ----
-    filename_results: list[str] = []
-    try:
-        tree = knowledge_service.list_files(user_id=runtime.user_id)
-
-        def _search_nodes(nodes: list[dict], results: list[dict]) -> None:
-            for node in nodes:
-                name = str(node.get("name", "") or "")
-                if query.lower() in name.lower():
-                    results.append({"path": str(node.get("path", "") or ""), "name": name})
-                children = node.get("children")
-                if isinstance(children, list):
-                    _search_nodes(children, results)
-
-        _search_nodes(tree, filename_results)
-    except ValueError:
-        pass
-
-    # ---- 全文内容搜索 ----
-    fulltext_results: list[dict] = []
-    library_root = str(knowledge_service.get_active_root_path(user_id=runtime.user_id))
-
-    def _is_in_library(uri: str) -> bool:
-        if not uri:
-            return False
-        try:
-            nu = _os.path.normcase(_os.path.normpath(uri))
-            nr = _os.path.normcase(_os.path.normpath(library_root))
-            return nu.startswith(nr + _os.path.sep) or nu == nr
-        except (ValueError, TypeError):
-            return False
-
-    if fulltext and runtime.memory_service is not None:
-        try:
-            raw = runtime.memory_service.search_knowledge_content(query=query, user_id=runtime.user_id)
-            disk_matches = knowledge_service.search_file_contents(user_id=runtime.user_id, query=query)
-            seen_paths: set[str] = set()
-            for item in [*raw, *disk_matches]:
-                uri = str(item.get("source_uri") or "")
-                if not _is_in_library(uri):
-                    continue
-                normalized_uri = _os.path.normcase(_os.path.normpath(uri))
-                if normalized_uri in seen_paths:
-                    continue
-                seen_paths.add(normalized_uri)
-                fulltext_results.append(item)
-        except Exception:
-            pass
-
-    # ---- 语义搜索 ----
-    semantic_results: list[dict] = []
-    if semantic:
-        try:
-            top_k = runtime.config.memory.knowledge_search_semantic_top_k
-            items = runtime.retrieval_service.retrieve_knowledge(
-                query=query, user_id=runtime.user_id, top_k=top_k,
-            )
-            seen_names: set[str] = set()
-            for item in items:
-                uri = item.memory.source_uri or ""
-                if not _is_in_library(uri):
-                    continue
-                name = _os.path.basename(uri)
-                if name in seen_names:
-                    continue
-                seen_names.add(name)
-                semantic_results.append({
-                    "source_uri": uri,
-                    "content": item.memory.content,
-                })
-        except Exception:
-            pass
-
-    # ---- 格式化输出 ----
-    lines: list[str] = []
-    if filename_results:
-        lines.append("=== 文件名匹配 ===")
-        for r in filename_results:
-            lines.append(f"  {r['name']}  ({r['path']})")
-    if fulltext_results:
-        lines.append("=== 内容匹配 ===")
-        for r in fulltext_results:
-            uri = str(r.get("source_uri") or "")
-            snippet = str(r.get("snippet") or "")
-            citation_id = register_tool_citation(source_uri=uri or "未知来源", content=snippet)
-            lines.append(f"  [{citation_id}] {_os.path.basename(uri)}")
-            if snippet:
-                lines.append(f"    片段: {snippet}")
-    if semantic_results:
-        lines.append("=== 语义匹配 ===")
-        for r in semantic_results:
-            uri = str(r.get("source_uri") or "")
-            content = str(r.get("content") or "")
-            citation_id = register_tool_citation(source_uri=uri or "未知来源", content=content)
-            lines.append(f"  [{citation_id}] {_os.path.basename(uri)}")
-            if content:
-                brief = content[:200] + ("..." if len(content) > 200 else "")
-                lines.append(f"    摘要: {brief}")
-
-    if not any([filename_results, fulltext_results, semantic_results]):
-        return f"在用户 {runtime.user_id} 的知识库中未找到与 '{query}' 相关的文件。"
-
+    source_labels = {
+        "files": "文件库",
+        "library": "图书馆",
+        "components": "组件库",
+        "literature": "文献库",
+    }
+    mode_labels = {"title": "标题", "fulltext": "全文", "semantic": "语义"}
+    lines = [
+        "请在最终回答中引用需要挂载的结果编号（例如 [K1]）。",
+        f"四库联合搜索共 {len(results)} 条结果:",
+    ]
+    for index, result in enumerate(results, 1):
+        source = str(result.get("source") or "")
+        title = str(result.get("title") or result.get("id") or "未命名结果")
+        locator = str(result.get("locator") or result.get("id") or title)
+        snippet = str(result.get("snippet") or "")
+        citation_id = register_tool_citation(
+            source_uri=locator,
+            content=snippet or title,
+            metadata={"search_result": result},
+        )
+        lines.append(f"{index}. [{source_labels.get(source, source)}] 来源: {locator} [{citation_id}]")
+        lines.append(f"   标题: {title}")
+        modes = [mode_labels.get(str(mode), str(mode)) for mode in result.get("matched_modes") or []]
+        if modes:
+            lines.append(f"   命中: {', '.join(modes)}")
+        if snippet:
+            lines.append(f"   片段: {snippet}")
     return "\n".join(lines)
 def _build_knowledge_service():
     """从当前工具运行时构建 KnowledgeLibraryService 实例。"""

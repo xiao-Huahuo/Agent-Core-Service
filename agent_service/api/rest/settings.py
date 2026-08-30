@@ -858,14 +858,13 @@ async def delete_memory(memory_id: str) -> dict[str, Any]:
 
 # ---- 安全配置（敏感词库） ----
 
-_SENSITIVE_WORDS_PATH = Path(__file__).resolve().parent.parent.parent.parent / "resources" / "safety" / "sensitive_words.json"
-
 
 @router.get("/settings/safety/sensitive-words")
 async def get_sensitive_words() -> dict[str, Any]:
     """读取敏感词库 JSON。"""
+    sensitive_words_path = _require_settings_service().config.storage.sensitive_words_path
     try:
-        data = json.loads(_SENSITIVE_WORDS_PATH.read_text(encoding="utf-8"))
+        data = json.loads(sensitive_words_path.read_text(encoding="utf-8"))
         return data
     except FileNotFoundError:
         return {"_description": "敏感词库,按类别分组。支持 exact 精确匹配 + regex 正则匹配", "categories": {}}
@@ -876,9 +875,10 @@ async def get_sensitive_words() -> dict[str, Any]:
 @router.post("/settings/safety/sensitive-words")
 async def save_sensitive_words(body: dict[str, Any]) -> dict[str, Any]:
     """保存敏感词库 JSON,并触发 SafetyService 热重载。"""
+    sensitive_words_path = _require_settings_service().config.storage.sensitive_words_path
     try:
-        _SENSITIVE_WORDS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _SENSITIVE_WORDS_PATH.write_text(
+        sensitive_words_path.parent.mkdir(parents=True, exist_ok=True)
+        sensitive_words_path.write_text(
             json.dumps(body, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )

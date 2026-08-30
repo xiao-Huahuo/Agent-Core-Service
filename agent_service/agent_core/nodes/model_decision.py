@@ -23,7 +23,12 @@ from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.scheduler import FOREGROUND_AGENT_TASK, LLMTaskScheduler, get_llm_task_scheduler
 from agent_service.tools import ToolExecutor
-from agent_service.tools.runtime_context import get_agent_token_callback, get_context_mirror_callback, get_tool_trace_callback
+from agent_service.tools.runtime_context import (
+    get_agent_thinking_callback,
+    get_agent_token_callback,
+    get_context_mirror_callback,
+    get_tool_trace_callback,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -381,6 +386,7 @@ class ModelDecisionNode:
         """
 
         cumulative = ""
+        cumulative_reasoning = ""
         final_message: Any = None
 
         context_callback = get_context_mirror_callback()
@@ -403,6 +409,11 @@ class ModelDecisionNode:
         # Each tool round starts a fresh cumulative model response. Reset the
         # outer stream's delta baseline before the first token of this call.
         token_callback("")
+        thinking_callback = get_agent_thinking_callback()
+        if thinking_callback is not None:
+            # 与正文同理:每轮工具循环重置思考基线,避免下一轮思考被上一轮累计文本
+            # 挡住增量(前向切片依赖前缀,基线必须从本轮重新开始)。
+            thinking_callback("")
 
         (
             user_api_key,
@@ -425,6 +436,14 @@ class ModelDecisionNode:
         ):
             is_complete = chunk.get("status") == "complete"
             if not is_complete:
+                # 思考文本(reasoning_content)与正文分开累积:思考走独立回调,
+                # 上层据此流式渲染 Think 条,正文仍走 token_callback。
+                reasoning_delta = chunk.get("reasoning_delta", "")
+                if reasoning_delta:
+                    cumulative_reasoning += reasoning_delta
+                    thinking_callback = get_agent_thinking_callback()
+                    if thinking_callback is not None:
+                        thinking_callback(cumulative_reasoning)
                 delta = chunk.get("content_delta", "")
                 if delta:
                     cumulative += delta

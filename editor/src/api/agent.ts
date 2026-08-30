@@ -49,6 +49,7 @@ export function streamPrompt(
     agentMode?: AgentLoopMode
     agentAccessMode?: AgentAccessMode
     attachments?: AgentAttachmentUploadResponse['attachment'][]
+    messageMetadata?: Record<string, unknown>
   } = {},
 ): AsyncGenerator<Record<string, unknown>> {
   const body = {
@@ -57,6 +58,7 @@ export function streamPrompt(
     prompt,
     reference: options.reference?.trim() || undefined,
     attachments: options.attachments?.length ? options.attachments : undefined,
+    message_metadata: options.messageMetadata,
     agent_mode: options.agentMode || 'auto',
     agent_access_mode: options.agentAccessMode || 'sandbox',
   }
@@ -268,6 +270,7 @@ export function fetchTokenUsageStats(
 
 export interface ChildAgentRecord {
   run_id: string
+  conversation_session_id: string
   parent_run_id: string
   goal: string
   mode: 'foreground' | 'background'

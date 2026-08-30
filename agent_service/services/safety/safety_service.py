@@ -42,9 +42,6 @@ from agent_service.services.scheduler import (
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_SENSITIVE_WORDS_PATH = Path(__file__).resolve().parent.parent.parent.parent / "resources" / "safety" / "sensitive_words.json"
-
-
 @dataclass(slots=True)
 class InputAuditResult:
     """输入审核综合结果(敏感词 + 意图)。"""
@@ -71,8 +68,16 @@ class SafetyService:
         sensitive_words_path: str | Path | None = None,
     ) -> None:
         self.config = config
-        path = Path(sensitive_words_path) if sensitive_words_path else DEFAULT_SENSITIVE_WORDS_PATH
-        self._sensitive_checker = SensitiveWordChecker.from_file(path) if path.exists() else None
+        self.sensitive_words_path = (
+            Path(sensitive_words_path).expanduser().resolve()
+            if sensitive_words_path is not None
+            else config.storage.sensitive_words_path
+        )
+        self._sensitive_checker = (
+            SensitiveWordChecker.from_file(self.sensitive_words_path)
+            if self.sensitive_words_path.exists()
+            else None
+        )
         self._intent_auditor = IntentAuditor(config=config, task_scheduler=task_scheduler)
         self._output_auditor = OutputAuditor(
             config=config,
@@ -261,7 +266,7 @@ class SafetyService:
     def reload_sensitive_words(self) -> None:
         """从磁盘重新加载敏感词库（热重载）。由 POST /settings/safety/sensitive-words 触发调用。"""
 
-        path = DEFAULT_SENSITIVE_WORDS_PATH
+        path = self.sensitive_words_path
         self._sensitive_checker = SensitiveWordChecker.from_file(path) if path.exists() else None
         self._output_auditor = OutputAuditor(
             config=self.config,

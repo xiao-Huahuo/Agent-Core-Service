@@ -45,6 +45,8 @@ class SessionRecord(SessionBase, table=True):
     created_at: 会话创建时间。
     updated_at: 会话最近更新时间。
     state_json: Agent 探索状态 JSON,跨轮持久化。
+    parent_session_id: 子 Agent 对话所属的主会话；根会话为空。
+    child_agent_run_id: 子 Agent 对话对应的运行 ID；根会话为空。
     """
 
     __tablename__ = "agent_sessions"
@@ -53,3 +55,14 @@ class SessionRecord(SessionBase, table=True):
     created_at: datetime = Field(default_factory=utc_now, index=True)
     updated_at: datetime = Field(default_factory=utc_now, index=True)
     state_json: str | None = Field(default=None, nullable=True)
+    parent_session_id: str | None = Field(
+        default=None,
+        foreign_key="agent_sessions.session_id",
+        index=True,
+        max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length,
+    )
+    child_agent_run_id: str | None = Field(
+        default=None,
+        index=True,
+        max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length,
+    )

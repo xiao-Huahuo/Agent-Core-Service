@@ -159,6 +159,19 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => workspaceStore.pendingMainSearchResult,
+  (result) => {
+    if (result?.source !== 'library') return
+    const item = result.item as unknown as LibraryItem
+    navigateTo(item.parent_id || '')
+    selectedItem.value = item
+    detailOpen.value = true
+    workspaceStore.pendingMainSearchResult = null
+  },
+  { immediate: true },
+)
+
 watch(selectedItem, (item) => {
   if (item?.item_type === 'collection') {
     void loadDrawerChildren(item.item_id)

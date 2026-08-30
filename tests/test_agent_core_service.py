@@ -427,6 +427,10 @@ def test_agent_core_run_session_prompt_uses_context_and_persists_messages() -> N
         reference="引用中的关键词是 blue-river",
         attachments=[attachment],
         agent_mode="plan",
+        user_message_metadata={
+            "wakeup": True,
+            "child_agent_event": {"event_name": "child_agent.completed", "child": {"run_id": "child-1"}},
+        },
     )
     saved_messages = message_service.list_recent_messages(user_id="user_1", session_id="sess_formal", limit=10)
 
@@ -442,6 +446,8 @@ def test_agent_core_run_session_prompt_uses_context_and_persists_messages() -> N
     )
     assert current_user.metadata_json["reference"] == "引用中的关键词是 blue-river"
     assert current_user.metadata_json["attachments"] == [attachment]
+    assert current_user.metadata_json["wakeup"] is True
+    assert current_user.metadata_json["child_agent_event"]["child"]["run_id"] == "child-1"
     assert current_user.created_at.isoformat(timespec="seconds") in fake_graph.stream_inputs[0]["messages"][-1].content
     assert any(message.role == "assistant" and message.content == "blue-river" for message in saved_messages)
 

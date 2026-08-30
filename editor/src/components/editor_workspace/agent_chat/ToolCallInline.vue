@@ -112,7 +112,7 @@ const FALLBACK_DISPLAY: Record<string, string> = {
   // 知识库工具
   get_knowledge_context: '检索知识',
   rebuild_knowledge_base: '重建知识库',
-  search_knowledge: '全库联合搜索',
+  search_knowledge: '四库联合搜索',
   save_uploaded_attachment_to_knowledge: '附件存入知识库',
   get_knowledge_file_url: '获取文件URL',
   // 图书馆工具
@@ -327,7 +327,7 @@ function toolSummary(entry: ToolEntry) {
   }
   if (entry.tool_name === 'search_knowledge') {
     const suffix = entry.labels.length > 0 ? ` 条结果 | ${entry.labels.join(' | ')}` : ' 条结果'
-    return `全库联合搜索：${entry.result_count ?? entry.call_count}${suffix}`
+    return `四库联合搜索：${entry.result_count ?? entry.call_count}${suffix}`
   }
   if (entry.tool_name === 'get_long_term_memory') {
     return `检索到 ${entry.result_count ?? entry.call_count} 条记忆`
@@ -595,9 +595,13 @@ function finalizedPatch(entry: ToolDisplayEntry) {
       >{{ entry.text }}</span>
     </div>
     <div
-      v-if="!entry.pending && entry.rawContents.length > 0 && expanded.has(entry.key)"
-      class="tool-result-collapse open"
+      v-if="!entry.pending && entry.rawContents.length > 0"
+      class="tool-result-collapse"
+      :class="{ open: expanded.has(entry.key) }"
+      :aria-hidden="!expanded.has(entry.key)"
+      :inert="!expanded.has(entry.key)"
     >
+      <div class="tool-result-collapse-inner">
       <div class="tool-result-content is-expandable">
         <div v-if="finalizedPatch(entry)" class="patch-preview" aria-label="局部代码修改">
           <span v-if="finalizedPatch(entry)?.path" class="patch-path">{{ finalizedPatch(entry)?.path }}</span>
@@ -690,6 +694,7 @@ function finalizedPatch(entry: ToolDisplayEntry) {
             <pre class="tool-result-text">{{ rawContent }}</pre>
           </div>
         </template>
+      </div>
       </div>
     </div>
     </div>
@@ -803,22 +808,33 @@ function finalizedPatch(entry: ToolDisplayEntry) {
 .tool-result-collapse {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: grid-template-rows 200ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .tool-result-collapse.open {
   grid-template-rows: 1fr;
 }
 
-.tool-result-content {
+.tool-result-collapse-inner {
+  min-height: 0;
   overflow: hidden;
+}
+
+.tool-result-content {
+  margin-top: var(--space-4);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
   background: transparent;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 200ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .tool-result-collapse.open .tool-result-content {
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 8px;
-  margin-top: var(--space-4);
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .tool-result-text {
@@ -1108,6 +1124,13 @@ function finalizedPatch(entry: ToolDisplayEntry) {
   100% {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-result-content {
+    transform: none;
+    transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
   }
 }
 

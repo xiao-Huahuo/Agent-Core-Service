@@ -338,6 +338,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** Pending virtual-library collection to open when LibraryView is mounted. */
   const pendingLibraryParentId = ref('')
 
+  /** One-shot four-library result consumed by a main library view. */
+  const pendingMainSearchResult = ref<UnifiedSearchResult | null>(null)
+
   /** One-shot smart-form row target consumed when LiteratureReadingView mounts. */
   const pendingLiteratureEntry = ref<{ formId: string; rowId: string } | null>(null)
 
@@ -1482,6 +1485,30 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         })
       }
     }
+  }
+
+  /** Open an Agent-mounted result in-place or hand it to its owning main library. */
+  async function openAgentSearchResult(result: UnifiedSearchResult, compact: boolean): Promise<void> {
+    if (!compact) {
+      await openSearchResultSidebar(result)
+      return
+    }
+    closeEditorSidebar()
+    pendingMainSearchResult.value = null
+    if (result.source === 'files') {
+      const node = result.item as unknown as KnowledgeFileNode
+      const liveNode = flatNodes.value.find((item) => item.path === node.path) ?? node
+      setMainView('editor')
+      await selectFile(liveNode)
+      return
+    }
+    if (result.source === 'literature') {
+      const item = result.item as Record<string, unknown>
+      openLiteratureEntry(String(item.form_id || ''), String(item.row_id || ''))
+      return
+    }
+    pendingMainSearchResult.value = result
+    setMainView(result.source === 'library' ? 'library' : 'component-library')
   }
 
   /** Replace one edited result in place so watchers do not interpret the edit as a new search. */
@@ -2827,6 +2854,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     browserSidebarUrl,
     browserSidebarNavigationId,
     pendingLibraryParentId,
+    pendingMainSearchResult,
     pendingLiteratureEntry,
     ingestionViewTab,
     editorMode,
@@ -2891,6 +2919,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     setMainView,
     openEditorSidebar,
     openSearchResultSidebar,
+    openAgentSearchResult,
     updateSearchSidebarResult,
     closeEditorSidebar,
     openBrowserSidebar,

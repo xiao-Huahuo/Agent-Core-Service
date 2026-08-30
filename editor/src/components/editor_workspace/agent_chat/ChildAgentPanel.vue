@@ -12,12 +12,18 @@ import IcIcon from '@/components/common/IcIcon.vue'
 import { fetchChildAgents, stopChildAgent } from '@/api/agent'
 import type { ChildAgentRecord } from '@/api/agent'
 import { getChildAgentAvatar } from '@/utils/childAgentAvatar'
+import { preloadChildAgentConversations } from '@/components/editor_workspace/agent_chat/childAgentConversations'
 
 const props = defineProps<{
   sessionId: string
+  userId: string
 }>()
 
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{
+  close: []
+  'open-conversation': [child: ChildAgentRecord]
+  'children-update': [children: ChildAgentRecord[]]
+}>()
 
 const children = ref<ChildAgentRecord[]>([])
 const error = ref('')
@@ -49,8 +55,8 @@ function isChildActive(child: ChildAgentRecord) {
   return ['created', 'running'].includes(child.status)
 }
 
-function latestRun(group: GoalGroup) {
-  return group.runs[group.runs.length - 1]
+function latestRun(group: GoalGroup): ChildAgentRecord {
+  return group.runs[group.runs.length - 1]!
 }
 
 function isExpanded(group: GoalGroup) {
@@ -89,6 +95,8 @@ async function reload() {
   try {
     const response = await fetchChildAgents(props.sessionId)
     children.value = response.children
+    emit('children-update', response.children)
+    void preloadChildAgentConversations(response.children, props.userId)
     error.value = ''
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '子 Agent 状态读取失败'
@@ -157,7 +165,7 @@ function resultText(result: unknown) {
   }
 }
 
-watch(() => props.sessionId, () => {
+watch([() => props.sessionId, () => props.userId], () => {
   void reload()
 })
 
@@ -187,23 +195,32 @@ onBeforeUnmount(() => {
     <div class="child-agent-content">
       <div v-if="goalGroups.length" class="child-agent-tasks">
         <article v-for="group in goalGroups" :key="group.goal" class="child-agent-task">
-          <button
-            class="child-agent-task-head"
-            type="button"
-            :aria-expanded="isExpanded(group)"
-            @click="toggleExpanded(group)"
-          >
-            <IcIcon name="chevron-down" class="child-agent-task-chevron" :class="{ expanded: isExpanded(group) }" :size="15" />
+          <div class="child-agent-task-head">
+            <button
+              class="child-agent-expand-button"
+              type="button"
+              :aria-label="isExpanded(group) ? '收起子 Agent 任务' : '展开子 Agent 任务'"
+              :aria-expanded="isExpanded(group)"
+              @click="toggleExpanded(group)"
+            >
+              <IcIcon name="chevron-down" class="child-agent-task-chevron" :class="{ expanded: isExpanded(group) }" :size="15" />
+            </button>
             <img
               :src="getChildAgentAvatar(latestRun(group).run_id)"
               class="child-agent-avatar"
               alt=""
             />
-            <span class="child-agent-name">{{ childDisplayName(latestRun(group)) }}</span>
+            <button
+              class="child-agent-name-link"
+              type="button"
+              @click="emit('open-conversation', latestRun(group))"
+            >
+              {{ childDisplayName(latestRun(group)) }}
+            </button>
             <span v-if="categoryBadge(latestRun(group))" class="child-agent-category">{{ categoryBadge(latestRun(group)) }}</span>
             <span class="child-agent-mode">{{ modeLabel(latestRun(group).mode) }}</span>
             <span class="child-agent-status" :data-status="latestRun(group).status">{{ statusLabel(latestRun(group).status) }}</span>
-          </button>
+          </div>
 
           <div class="child-agent-detail" :class="{ expanded: isExpanded(group) }">
             <div class="child-agent-detail-inner">
@@ -213,17 +230,22 @@ onBeforeUnmount(() => {
               </section>
 
               <div v-for="run in group.runs" :key="run.run_id" class="child-agent-run">
-                <button
-                  class="child-agent-run-head"
-                  type="button"
-                  :aria-expanded="isRunExpanded(run.run_id)"
-                  @click="toggleRun(run.run_id)"
-                >
+                <div class="child-agent-run-head">
                   <span class="child-agent-run-dot" :data-status="run.status"></span>
-                  <strong>{{ childDisplayName(run) }}</strong>
+                  <button class="child-agent-name-link run" type="button" @click="emit('open-conversation', run)">
+                    {{ childDisplayName(run) }}
+                  </button>
                   <span class="child-agent-status" :data-status="run.status">{{ statusLabel(run.status) }}</span>
-                  <IcIcon name="chevron-down" class="child-agent-run-chevron" :class="{ expanded: isRunExpanded(run.run_id) }" :size="14" />
-                </button>
+                  <button
+                    class="child-agent-expand-button"
+                    type="button"
+                    :aria-label="isRunExpanded(run.run_id) ? '收起运行信息' : '展开运行信息'"
+                    :aria-expanded="isRunExpanded(run.run_id)"
+                    @click="toggleRun(run.run_id)"
+                  >
+                    <IcIcon name="chevron-down" class="child-agent-run-chevron" :class="{ expanded: isRunExpanded(run.run_id) }" :size="14" />
+                  </button>
+                </div>
 
                 <div class="child-agent-run-detail" :class="{ expanded: isRunExpanded(run.run_id) }">
                   <div class="child-agent-run-detail-inner">
@@ -380,18 +402,29 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: var(--space-6);
   min-width: 0;
+  color: inherit;
+  font-family: var(--font-ui);
+  text-align: left;
+}
+
+.child-agent-expand-button:focus-visible,
+.child-agent-name-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.child-agent-expand-button {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
   padding: 0;
   border: 0;
   background: transparent;
   color: inherit;
-  font-family: var(--font-ui);
   cursor: pointer;
-  text-align: left;
-}
-
-.child-agent-task-head:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
 }
 
 .child-agent-task-chevron {
@@ -414,16 +447,27 @@ onBeforeUnmount(() => {
   object-fit: cover;
 }
 
-.child-agent-name {
+.child-agent-name-link {
   min-width: 0;
   overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--color-text-primary);
+  font-family: var(--font-ui);
   font-size: calc(12px * var(--font-scale));
   font-weight: 650;
   line-height: 1.35;
+  cursor: pointer;
   text-overflow: ellipsis;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--color-primary) 52%, transparent);
+  text-underline-offset: 2px;
   white-space: nowrap;
 }
+
+.child-agent-name-link:hover { color: var(--color-primary); }
+.child-agent-name-link.run { flex: 1; text-align: left; }
 
 .child-agent-category {
   flex: 0 0 auto;
@@ -495,28 +539,9 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: var(--space-6);
   min-width: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
   color: inherit;
   font-family: var(--font-ui);
-  cursor: pointer;
   text-align: left;
-}
-
-.child-agent-run-head:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-.child-agent-run-head strong {
-  min-width: 0;
-  overflow: hidden;
-  flex: 1;
-  color: var(--color-text-primary);
-  font-size: calc(12px * var(--font-scale));
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .child-agent-run-head .child-agent-status {

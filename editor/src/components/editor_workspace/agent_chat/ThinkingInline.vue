@@ -60,7 +60,7 @@ const FALLBACK_DISPLAY: Record<string, string> = {
   // 知识库工具
   get_knowledge_context: '检索知识',
   rebuild_knowledge_base: '重建知识库',
-  search_knowledge: '全库联合搜索',
+  search_knowledge: '四库联合搜索',
   save_uploaded_attachment_to_knowledge: '附件存入知识库',
   get_knowledge_file_url: '获取文件URL',
   // 图书馆工具

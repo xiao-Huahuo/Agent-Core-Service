@@ -9,18 +9,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
-import type { LiteratureEntry } from '@/api/literatureReading'
-import ComponentLibraryCard from '@/components/component_library/ComponentLibraryCard.vue'
 import IcIcon from '@/components/common/IcIcon.vue'
 import PixelLoader from '@/components/common/PixelLoader.vue'
 import SearchPalette from '@/components/editor_workspace/SearchPalette.vue'
 import SplitText from '@/components/editor_workspace/SplitText.vue'
-import LibraryCard from '@/components/library_view/LibraryCard.vue'
-import LiteratureEntryCard from '@/components/literature_reading/LiteratureEntryCard.vue'
-import SearchFileMediumTile from '@/components/search_page/SearchFileMediumTile.vue'
+import SearchNativeResultCard from '@/components/search_page/SearchNativeResultCard.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
-import type { ComponentLibraryItem } from '@/types/componentLibrary'
-import type { KnowledgeFileNode, LibraryItem } from '@/types/knowledge'
+import type { KnowledgeFileNode } from '@/types/knowledge'
 import type { SearchSource, UnifiedSearchResult } from '@/types/unifiedSearch'
 import { highlightMatch } from '@/utils/highlight'
 import { SEARCH_SOURCE_PRESENTATION } from '@/utils/searchSourcePresentation'
@@ -100,6 +95,25 @@ function openUnifiedResult(result: UnifiedSearchResult): void {
 /** Open a non-file split card in the same shared editor-sidebar column. */
 function openResultSidebar(result: UnifiedSearchResult): void {
   void workspaceStore.openSearchResultSidebar(result)
+}
+
+/** Route a native card's stronger open gesture through its existing workflow. */
+function openNativeResult(result: UnifiedSearchResult): void {
+  if (result.source === 'files') {
+    openFile(result.item as unknown as KnowledgeFileNode)
+    return
+  }
+  openResultSidebar(result)
+}
+
+/** Preserve the four split-mode grid layouts around the shared native card. */
+function nativeGridClass(source: SearchSource): string {
+  return {
+    files: 'file-medium-grid',
+    library: 'library-card-grid',
+    components: 'component-card-grid',
+    literature: 'literature-file-list',
+  }[source]
 }
 
 /** Move to a bounded unified-list page and clear a stale file preview. */
@@ -193,54 +207,14 @@ onMounted(syncFromStore)
             </header>
             <div v-if="sourceResults(source).length === 0" class="source-empty">此库没有匹配结果</div>
 
-            <div v-else-if="source === 'files'" class="file-medium-grid">
-              <SearchFileMediumTile
-                v-for="result in visibleSourceResults('files')"
+            <div v-else :class="nativeGridClass(source)">
+              <SearchNativeResultCard
+                v-for="result in visibleSourceResults(source)"
                 :key="result.id"
-                :node="result.item as unknown as KnowledgeFileNode"
-                :selected="workspaceStore.editorSidebarOpen && workspaceStore.selectedPath === result.locator"
-                @preview="previewFile"
-                @open="openFile"
-              />
-            </div>
-
-            <div v-else-if="source === 'library'" class="library-card-grid">
-              <LibraryCard
-                v-for="result in visibleSourceResults('library')"
-                :key="result.id"
-                :item="result.item as unknown as LibraryItem"
-                :selected="false"
-                :multi-select="false"
-                readonly
-                @select="openResultSidebar(result)"
-                @open="openResultSidebar(result)"
-                @edit="openResultSidebar(result)"
-                @download="openResultSidebar(result)"
-              />
-            </div>
-
-            <div v-else-if="source === 'components'" class="component-card-grid">
-              <ComponentLibraryCard
-                v-for="result in visibleSourceResults('components')"
-                :key="result.id"
-                :item="result.item as unknown as ComponentLibraryItem"
-                readonly
-                @open="openResultSidebar(result)"
-              />
-            </div>
-
-            <div v-else class="literature-file-list">
-              <LiteratureEntryCard
-                v-for="result in visibleSourceResults('literature')"
-                :key="result.id"
-                :entry="result.item as unknown as LiteratureEntry"
-                :form="null"
-                :row="null"
-                :selected="false"
-                :renaming="false"
-                :pending-column-ids="[]"
-                :expandable="false"
-                @select="openResultSidebar(result)"
+                :result="result"
+                :selected="result.source === 'files' && workspaceStore.editorSidebarOpen && workspaceStore.selectedPath === result.locator"
+                @activate="openUnifiedResult"
+                @open="openNativeResult"
               />
             </div>
 

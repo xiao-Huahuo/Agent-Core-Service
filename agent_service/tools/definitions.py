@@ -429,21 +429,27 @@ KNOWLEDGE_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
     BuiltinToolDefinition(
         name="search_knowledge",
         description=(
-            "全库联合搜索: 在当前用户知识库中同时做文件名/路径关键词匹配、全文内容匹配,并可选语义搜索。"
-            "适合用户要找某个文件、确认哪些文件包含关键词、或不知道路径但记得文件名/主题时使用。"
+            "四库联合搜索: 与前端统一搜索框相同,可搜索文件库、图书馆、组件库和文献库,并支持全文与语义搜索。"
+            "适合用户要跨库定位文件、图书、组件或文献,也可用 sources 严格限定搜索范围。"
+            "最终回答引用结果的 [K#] 编号时,前端会把该结果挂载为可点击的原生库块。"
             "如果只需要完整列出目录树和所有文件路径,请使用 list_knowledge_files;如果已经要回答正文内容,请使用 get_knowledge_context。"
         ),
         args_schema={
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "文件名、路径关键词、正文关键词或语义描述文本。"},
+                "sources": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["files", "library", "components", "literature"]},
+                    "description": "搜索来源；默认同时搜索文件库、图书馆、组件库和文献库。",
+                },
                 "fulltext": {"type": "boolean", "description": "是否启用全文内容搜索,默认 true。"},
                 "semantic": {"type": "boolean", "description": "是否启用语义搜索,默认 false。"},
             },
             "required": ["query"],
         },
         function=search_knowledge,
-        display_name="搜索知识库",
+        display_name="四库联合搜索",
     ),
     BuiltinToolDefinition(
         name="save_uploaded_attachment_to_knowledge",

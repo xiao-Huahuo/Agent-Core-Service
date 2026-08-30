@@ -1,5 +1,6 @@
 fastapi
 python-multipart
+PyYAML
 huggingface_hub
 langchain-core
 langchain-openai
@@ -22,10 +23,13 @@ pyinstaller
 duckduckgo_search
 ddgs
 mammoth
+xlrd
+fpdf2
 PyMuPDF
 Pillow
 paddlepaddle
 paddleocr
 requests
 bandit
+numpy
 scikit-learn

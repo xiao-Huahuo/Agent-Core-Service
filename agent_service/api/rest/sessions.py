@@ -4,7 +4,7 @@ Session 管理端点。
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import json
@@ -157,53 +157,40 @@ def _do_import(body: dict[str, Any]) -> dict[str, Any]:
 
     imported_count = 0
     with DBSession(engine) as db_session:
-        for raw in messages:
-            if not isinstance(raw, dict):
+        imported_count += _import_messages(
+            db_session=db_session,
+            message_service=message_service,
+            messages=messages,
+            session_id=session_id,
+            user_id=str(user_id),
+            fallback_created_at=now,
+        )
+
+        restored_children: list[dict[str, Any]] = []
+        for child in body.get("child_agents") or []:
+            if not isinstance(child, dict) or not str(child.get("run_id") or "").strip():
                 continue
-            role = raw.get("role", "")
-            if not role:
-                continue
-            content = raw.get("content", "") or ""
-            created_at_str = raw.get("created_at")
-            msg_created_at = _parse_iso_time(created_at_str) if created_at_str else now
-
-            metadata = dict(raw.get("metadata") or {}) if isinstance(raw.get("metadata"), dict) else {}
-            _rebind_imported_change_snapshots(metadata, session_id)
-            node = raw.get("node")
-            if node:
-                metadata["node"] = node
-            reference = raw.get("reference")
-            if reference:
-                metadata["reference"] = reference
-            attachments = raw.get("attachments")
-            if isinstance(attachments, list):
-                metadata["attachments"] = [item for item in attachments if isinstance(item, dict)]
-            trace_details = raw.get("trace_details")
-            if trace_details and isinstance(trace_details, list):
-                metadata["trace"] = trace_details
-            child_agent_event = raw.get("child_agent_event")
-            if child_agent_event and isinstance(child_agent_event, dict):
-                metadata["child_agent_event"] = child_agent_event
-
-            tool_calls = raw.get("tool_calls")
-            if not tool_calls or not isinstance(tool_calls, list):
-                tool_calls = []
-
-            tool_call_id = raw.get("tool_call_id")
-
-            record = MessageRecord(
-                message_id=message_service.generate_message_id(),
-                session_id=session_id,
+            run_id = str(child["run_id"])
+            child_session = session_service.create_child_agent_session(
                 user_id=str(user_id),
-                role=role,
-                content=content,
-                tool_call_id=tool_call_id,
-                tool_calls_json=tool_calls,
-                metadata_json=metadata,
-                created_at=msg_created_at,
+                parent_session_id=session_id,
+                run_id=run_id,
+                session_name=str(child.get("name") or child.get("goal") or run_id),
             )
-            db_session.add(record)
-            imported_count += 1
+            child_messages = child.get("messages")
+            if isinstance(child_messages, list):
+                imported_count += _import_messages(
+                    db_session=db_session,
+                    message_service=message_service,
+                    messages=child_messages,
+                    session_id=child_session.session_id,
+                    user_id=str(user_id),
+                    fallback_created_at=now,
+                )
+            restored_children.append({
+                **{key: value for key, value in child.items() if key != "messages"},
+                "conversation_session_id": child_session.session_id,
+            })
 
         # 更新会话的 updated_at 为最新消息时间
         if imported_count > 0:
@@ -226,7 +213,7 @@ def _do_import(body: dict[str, Any]) -> dict[str, Any]:
     state = _restore_session_state(
         raw_state=body.get("session_state"),
         task_list=body.get("task_list"),
-        child_agents=body.get("child_agents"),
+        child_agents=restored_children,
         session_id=session_id,
     )
     if state:
@@ -240,6 +227,56 @@ def _do_import(body: dict[str, Any]) -> dict[str, Any]:
         "updated_at": session.updated_at.isoformat(),
         "imported_count": imported_count,
     }
+
+
+def _import_messages(
+    *,
+    db_session: DBSession,
+    message_service: Any,
+    messages: list[Any],
+    session_id: str,
+    user_id: str,
+    fallback_created_at: datetime,
+) -> int:
+    """把一组可移植消息写入指定根会话或子 Agent 会话。"""
+
+    imported_count = 0
+    for index, raw in enumerate(messages):
+        if not isinstance(raw, dict):
+            continue
+        role = raw.get("role", "")
+        if not role:
+            continue
+        created_at = (
+            _parse_iso_time(raw.get("created_at"))
+            if raw.get("created_at")
+            else fallback_created_at + timedelta(microseconds=index)
+        )
+        metadata = dict(raw.get("metadata") or {}) if isinstance(raw.get("metadata"), dict) else {}
+        _rebind_imported_change_snapshots(metadata, session_id)
+        for key in ("node", "reference"):
+            if raw.get(key):
+                metadata[key] = raw[key]
+        if isinstance(raw.get("attachments"), list):
+            metadata["attachments"] = [item for item in raw["attachments"] if isinstance(item, dict)]
+        if isinstance(raw.get("trace_details"), list):
+            metadata["trace"] = raw["trace_details"]
+        if isinstance(raw.get("child_agent_event"), dict):
+            metadata["child_agent_event"] = raw["child_agent_event"]
+        tool_calls = raw.get("tool_calls") if isinstance(raw.get("tool_calls"), list) else []
+        db_session.add(MessageRecord(
+            message_id=message_service.generate_message_id(),
+            session_id=session_id,
+            user_id=user_id,
+            role=str(role),
+            content=str(raw.get("content") or ""),
+            tool_call_id=raw.get("tool_call_id"),
+            tool_calls_json=tool_calls,
+            metadata_json=metadata,
+            created_at=created_at,
+        ))
+        imported_count += 1
+    return imported_count
 
 
 def _parse_iso_time(value: str) -> datetime:

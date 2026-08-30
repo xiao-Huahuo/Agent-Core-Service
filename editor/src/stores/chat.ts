@@ -18,10 +18,13 @@ import { useSessionStore } from '@/stores/session'
 import { useTaskListStore } from '@/stores/taskList'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { MarkdownHtmlVisualizationPayload } from '@/types/knowledge'
+import { SEARCH_SOURCES, type SearchMatchMode, type UnifiedSearchResult } from '@/types/unifiedSearch'
 
 export interface AgentChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
+  /** 模型思考文本(reasoning_content)累积全文,供 DSH 风格 Think 条展示。 */
+  thinking?: string
   message_id?: string
   node?: string
   tool_calls?: unknown[]
@@ -70,6 +73,7 @@ export interface SourceItem {
   source?: string
   title?: string
   citation_id?: string
+  search_result?: UnifiedSearchResult
 }
 
 function asString(value: unknown): string {
@@ -99,6 +103,20 @@ function asFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
+/**
+ * 归一化后端持久化的 reasoning_content 为思考文本字符串。
+ * 老数据可能是字符串;流式合并时后端已统一为字符串,这里兼容列表片段。
+ */
+function asThinkingText(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+  }
+  if (Array.isArray(value)) {
+    return value.map((part) => (typeof part === 'string' ? part : '')).join('')
+  }
+  return ''
+}
+
 function asContextUsage(value: unknown): AgentContextUsage | null {
   const record = asRecord(value)
   const currentTokens = asFiniteNumber(record.current_tokens)
@@ -112,7 +130,30 @@ function asContextUsage(value: unknown): AgentContextUsage | null {
   }
 }
 
-function asSourceMap(value: unknown): Record<string, SourceItem> {
+/** Convert optional citation render metadata into a trusted four-library result. */
+function asUnifiedSearchResult(value: unknown): UnifiedSearchResult | undefined {
+  const record = asRecord(value)
+  const source = asString(record.source)
+  const id = asString(record.id)
+  const title = asString(record.title)
+  if (!id || !title || !SEARCH_SOURCES.includes(source as (typeof SEARCH_SOURCES)[number])) return undefined
+  return {
+    id,
+    source: source as UnifiedSearchResult['source'],
+    title,
+    snippet: asString(record.snippet),
+    locator: asString(record.locator),
+    updated_at: asString(record.updated_at),
+    score: asFiniteNumber(record.score) ?? 0,
+    matched_modes: Array.isArray(record.matched_modes)
+      ? record.matched_modes.filter((mode): mode is SearchMatchMode => ['title', 'fulltext', 'semantic'].includes(asString(mode)))
+      : [],
+    item: asRecord(record.item),
+  }
+}
+
+/** Normalize citations from streamed metadata and persisted message history. */
+export function asSourceMap(value: unknown): Record<string, SourceItem> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
@@ -127,6 +168,7 @@ function asSourceMap(value: unknown): Record<string, SourceItem> {
       content: asString(record.content),
       source: asString(record.source) || undefined,
       title: asString(record.title) || undefined,
+      search_result: asUnifiedSearchResult(record.search_result),
     }
   }
   return result
@@ -179,6 +221,9 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   /** Buffered text is keyed by its owner so a later action cannot steal it. */
   const pendingContent = new Map<AgentChatMessage, string>()
   let flushTimer: number | null = null
+  /** 思考文本独立缓冲,与正文 flush 互不干扰。 */
+  const pendingThinking = new Map<AgentChatMessage, string>()
+  let thinkingFlushTimer: number | null = null
   let turnStartedAtMs = 0
   /** Fast tools keep one perceptible shimmer window before the result replaces it. */
   const toolPreviewMinMs = 800
@@ -308,6 +353,39 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     scheduleContentFlush()
   }
 
+  /** Flushes buffered thinking text into the message that captured each delta. */
+  function flushStreamThinking(target?: AgentChatMessage) {
+    if (!target) {
+      thinkingFlushTimer = null
+    }
+    const entries = target
+      ? [[target, pendingThinking.get(target) ?? ''] as const]
+      : Array.from(pendingThinking.entries())
+    for (const [message, thinking] of entries) {
+      if (thinking) {
+        message.thinking = (message.thinking ?? '') + thinking
+      }
+      pendingThinking.delete(message)
+    }
+  }
+
+  /** Schedules one shared render-friendly flush for thinking deltas. */
+  function scheduleThinkingFlush() {
+    if (thinkingFlushTimer !== null) {
+      return
+    }
+    thinkingFlushTimer = window.requestAnimationFrame(() => flushStreamThinking())
+  }
+
+  /**
+   * Buffers a thinking delta against its owner. 思考文本与正文独立缓冲,
+   * 同一消息可能在流式中同时收到 thinking 与 delta 两种事件。
+   */
+  function appendStreamThinking(message: AgentChatMessage, thinking: string) {
+    pendingThinking.set(message, (pendingThinking.get(message) ?? '') + thinking)
+    scheduleThinkingFlush()
+  }
+
   function nowMs() {
     return typeof performance !== 'undefined' && typeof performance.now === 'function'
       ? performance.now()
@@ -354,31 +432,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
 
   /** Convert persisted session rows into the exact message shape used by the Agent page. */
   function restoreHistoryMessages(history: SessionMessageRecord[]): AgentChatMessage[] {
-    return history
-      .filter((message) => message.role !== 'tool' || message.metadata?.node === 'action')
-      .filter((message) => message.metadata?.node !== 'planner' && message.metadata?.node !== 'observation')
-      .filter((message) => {
-        return message.role !== 'assistant'
-          || message.content
-          || (message.tool_calls && message.tool_calls.length > 0)
-          || message.metadata?.node === 'action'
-          || message.metadata?.node === 'child_agent'
-      })
-      .map((message) => ({
-        role: message.role === 'tool' ? 'assistant' : message.role as AgentChatMessage['role'],
-        content: message.content,
-        message_id: message.message_id,
-        node: asString(message.metadata?.node),
-        tool_calls: message.tool_calls,
-        metadata: {
-          ...(message.metadata ?? {}),
-          ...(message.tool_call_id ? { tool_call_id: message.tool_call_id } : {}),
-        },
-        trace: asTrace(message.metadata?.trace),
-        created_at: message.created_at,
-        reference: asString(message.metadata?.reference) || undefined,
-        attachments: asAttachments(message.metadata?.attachments),
-      }))
+    return restoreAgentHistoryMessages(history)
   }
 
   async function loadHistory(sessionId: string, userId: string, limit?: number) {
@@ -713,7 +767,16 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
         userId,
         targetSessionId,
         prompt,
-        { signal, reference, agentMode, agentAccessMode, attachments: attachmentsForTurn },
+        {
+          signal,
+          reference,
+          agentMode,
+          agentAccessMode,
+          attachments: attachmentsForTurn,
+          messageMetadata: options.wakeup
+            ? { wakeup: true, child_agent_event: options.childAgentEvent }
+            : undefined,
+        },
       )) {
         const chunk = asRecord(rawChunk)
         const node = asString(chunk.node)
@@ -812,6 +875,17 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
           continue
         }
 
+        if (chunk.type === 'thinking') {
+          // 模型思考文本增量:累积到消息 thinking 字段供 Think 条展示。
+          // 与正文 delta 独立,不能落入下方 content 分支(否则会被当作最终正文)。
+          const thinkingMessage = ensureAssistant(node)
+          if (content) {
+            appendStreamThinking(thinkingMessage, content)
+          }
+          attachMetadataToMessage(thinkingMessage, metadata)
+          continue
+        }
+
         if (node === 'action') {
           if (trace.length > 0) {
             handleActionTraces(trace)
@@ -879,6 +953,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
         return
       }
       forceFlushContent()
+      flushStreamThinking()
       streamError.value = error instanceof Error ? error.message : 'Stream connection failed'
       const errorMessage = ensureAssistant('error')
       errorMessage.content = streamError.value
@@ -887,6 +962,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
       if (!signal.aborted) {
         await Promise.all(Array.from(pendingToolCompletions))
         forceFlushContent()
+        flushStreamThinking()
         attachCitationMapToLastFinalAssistant()
         isStreaming.value = false
         if (targetSessionId) sessionStore.setSessionStreaming(targetSessionId, false)
@@ -915,6 +991,11 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     streamAbortController?.abort()
     historyAbortController?.abort()
     cancelPendingFlush()
+    if (thinkingFlushTimer !== null) {
+      cancelAnimationFrame(thinkingFlushTimer)
+      thinkingFlushTimer = null
+    }
+    pendingThinking.clear()
     streamAbortController = null
     historyAbortController = null
     clearStreamTimeout()
@@ -1090,6 +1171,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     clearStreamTimeout()
     streamAbortController?.abort()
     forceFlushContent()
+    flushStreamThinking()
     isStreaming.value = false
     const lastAssistant = findLastAssistant()
     if (lastAssistant && lastAssistant.node !== 'action' && lastAssistant.node !== 'child_agent') {
@@ -1209,6 +1291,36 @@ interface AgentChatWindowState {
   streamingSessionId: string
   contextUsage: AgentContextUsage | null
   compressionStatus: AgentCompressionStatus
+}
+
+/** Reuse the Agent page's persisted-message mapping in read-only child conversations. */
+export function restoreAgentHistoryMessages(history: SessionMessageRecord[]): AgentChatMessage[] {
+  return history
+    .filter((message) => message.role !== 'tool' || message.metadata?.node === 'action')
+    .filter((message) => message.metadata?.node !== 'planner' && message.metadata?.node !== 'observation')
+    .filter((message) => {
+      return message.role !== 'assistant'
+        || message.content
+        || (message.tool_calls && message.tool_calls.length > 0)
+        || message.metadata?.node === 'action'
+        || message.metadata?.node === 'child_agent'
+    })
+    .map((message) => ({
+      role: message.role === 'tool' ? 'assistant' : message.role as AgentChatMessage['role'],
+      content: message.content,
+      thinking: asThinkingText(message.metadata?.reasoning_content),
+      message_id: message.message_id,
+      node: asString(message.metadata?.node),
+      tool_calls: message.tool_calls,
+      metadata: {
+        ...(message.metadata ?? {}),
+        ...(message.tool_call_id ? { tool_call_id: message.tool_call_id } : {}),
+      },
+      trace: asTrace(message.metadata?.trace),
+      created_at: message.created_at,
+      reference: asString(message.metadata?.reference) || undefined,
+      attachments: asAttachments(message.metadata?.attachments),
+    }))
 }
 
 type AgentChatStoreInstance = ReturnType<ReturnType<typeof createChatStore>>

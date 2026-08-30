@@ -216,6 +216,7 @@ def _build_agent_stream_response(
     session_id: str,
     reference: str | None = None,
     attachments: list[dict[str, Any]] | None = None,
+    message_metadata: dict[str, Any] | None = None,
     agent_mode: str | None = None,
     agent_access_mode: str | None = None,
 ) -> StreamingResponse:
@@ -243,6 +244,7 @@ def _build_agent_stream_response(
                     session_id=session_id,
                     reference=reference,
                     attachments=attachments,
+                    user_message_metadata=message_metadata,
                     agent_mode=agent_mode or "auto",
                     agent_access_mode=agent_access_mode or "sandbox",
                     web_search_max_results=ws_max_results,
@@ -294,6 +296,7 @@ async def agent_stream_post(
     session_id: str = Body(..., embed=True, min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length),
     reference: str | None = Body(default=None, embed=True),
     attachments: list[dict[str, Any]] | None = Body(default=None, embed=True),
+    message_metadata: dict[str, Any] | None = Body(default=None, embed=True),
     agent_mode: str = Body(default="auto", embed=True),
     agent_access_mode: str = Body(default="sandbox", embed=True),
 ) -> StreamingResponse:
@@ -305,6 +308,7 @@ async def agent_stream_post(
         session_id=session_id,
         reference=reference,
         attachments=attachments,
+        message_metadata=message_metadata,
         agent_mode=agent_mode,
         agent_access_mode=agent_access_mode,
     )

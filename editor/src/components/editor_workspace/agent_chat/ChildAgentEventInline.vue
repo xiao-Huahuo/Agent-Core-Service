@@ -96,6 +96,7 @@ const shortRunId = computed(() => {
 
     <div class="child-agent-event-detail" :class="{ expanded }">
       <div class="child-agent-event-detail-inner">
+      <div class="child-agent-event-detail-content">
       <div class="child-agent-event-grid">
         <div>
           <span>ID</span>
@@ -134,6 +135,7 @@ const shortRunId = computed(() => {
         <span>错误信息</span>
         <p class="is-error">{{ child.error }}</p>
       </section>
+      </div>
       </div>
     </div>
   </article>
@@ -232,7 +234,7 @@ const shortRunId = computed(() => {
 .child-agent-event-detail {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: grid-template-rows 200ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .child-agent-event-detail > .child-agent-event-detail-inner {
@@ -245,12 +247,24 @@ const shortRunId = computed(() => {
 }
 
 .child-agent-event-detail-inner {
-  display: grid;
-  gap: var(--space-8);
+  min-height: 0;
+  overflow: hidden;
 }
 
-.child-agent-event-detail.expanded .child-agent-event-detail-inner {
+.child-agent-event-detail-content {
+  display: grid;
+  gap: var(--space-8);
   padding: 0 var(--space-10) var(--space-10);
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 200ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.child-agent-event-detail.expanded .child-agent-event-detail-content {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .child-agent-event-grid {
@@ -322,6 +336,21 @@ const shortRunId = computed(() => {
 @media (max-width: 640px) {
   .child-agent-event-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .child-agent-event,
+  .child-agent-event-detail-content {
+    transform: none;
+  }
+
+  .child-agent-event {
+    animation: none;
+  }
+
+  .child-agent-event-detail-content {
+    transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
   }
 }
 </style>

@@ -136,6 +136,29 @@ describe('chat reference history', () => {
     expect(store.messages[0]?.metadata?.child_agent_event).toEqual(childAgentEvent)
   })
 
+  it('sends wakeup metadata with the automatic child completion prompt', async () => {
+    const childAgentEvent = {
+      event_name: 'child_agent.completed',
+      child: { run_id: 'child-1', status: 'completed' },
+    }
+    apiMocks.streamPrompt.mockImplementation(async function* () {})
+    const store = useChatStore()
+
+    await store.send('user-1', 'session-1', '继续主任务', '', 'auto', 'sandbox', {
+      wakeup: true,
+      childAgentEvent,
+    })
+
+    expect(apiMocks.streamPrompt).toHaveBeenCalledWith(
+      'user-1',
+      'session-1',
+      '继续主任务',
+      expect.objectContaining({
+        messageMetadata: { wakeup: true, child_agent_event: childAgentEvent },
+      }),
+    )
+  })
+
   it('loads the complete session request without dropping the first user message', async () => {
     apiMocks.fetchMessages.mockResolvedValue([
       { message_id: 'first', role: 'user', content: '第一条', metadata: {}, created_at: '2026-08-01T00:00:00Z' },
@@ -192,6 +215,39 @@ describe('chat reference history', () => {
     expect(assistant?.thinking_seconds).toBe(1.2)
     expect(assistant?.metadata?.backend_first_delta_seconds).toBe(1.2)
     nowSpy.mockRestore()
+  })
+
+  it('accumulates streamed thinking deltas into the assistant message', async () => {
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield { type: 'thinking', node: 'agent', content: '先分析' }
+      yield { type: 'thinking', node: 'agent', content: '调用链' }
+      yield { type: 'delta', node: 'agent', content: '回答' }
+    })
+    const store = useChatStore()
+
+    await store.send('user-1', 'session-1', '分析')
+
+    // 流结束时 store 同步冲刷 thinking 缓冲,因此 send 返回后即可断言。
+    const assistant = store.messages.find((message) => message.role === 'assistant')
+    expect(assistant?.thinking).toBe('先分析调用链')
+    expect(assistant?.content).toBe('回答')
+  })
+
+  it('restores persisted reasoning_content into message thinking', async () => {
+    apiMocks.fetchMessages.mockResolvedValue([
+      {
+        message_id: 'message-thinking',
+        role: 'assistant',
+        content: '回答',
+        metadata: { node: 'agent', reasoning_content: '持久化的思考全文' },
+        created_at: '2026-08-01T00:00:00Z',
+      },
+    ])
+    const store = useChatStore()
+
+    await store.loadHistory('session-1', 'user-1')
+
+    expect(store.messages[0]?.thinking).toBe('持久化的思考全文')
   })
 
   it('tracks backend context usage and the synchronous compression lifecycle', async () => {

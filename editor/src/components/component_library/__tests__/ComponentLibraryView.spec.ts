@@ -8,6 +8,7 @@ import CompactCodeInput from '@/components/common/CompactCodeInput.vue'
 import ComponentUploadForm from '@/components/component_library/ComponentUploadForm.vue'
 import componentUploadFormSource from '@/components/component_library/ComponentUploadForm.vue?raw'
 import { useSettingsStore } from '@/stores/settings'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { COMPONENT_TAGS } from '@/types/componentLibrary'
 import ComponentLibraryView from '@/views/ComponentLibraryView.vue'
 import FavoritesView from '@/views/FavoritesView.vue'
@@ -281,6 +282,31 @@ describe('ComponentLibraryView', () => {
     await wrapper.get('.detail-back').trigger('click')
     expect(wrapper.find('.detail-stub').exists()).toBe(false)
     expect(wrapper.find('.component-grid').exists()).toBe(true)
+  })
+
+  it('opens the exact component handed off by a sidebar Agent block', async () => {
+    const workspaceStore = useWorkspaceStore()
+    const component = {
+      component_id: 'cards/agent-card.vue', user_id: 'u1', title: 'Agent Card', tag: 'cards' as const,
+      source_format: 'vue', source: '<template><article>Agent</article></template>', builtin: false,
+      created_at: null, updated_at: null,
+    }
+    workspaceStore.pendingMainSearchResult = {
+      id: component.component_id, source: 'components', title: component.title, snippet: '',
+      locator: component.component_id, updated_at: '', score: 1, matched_modes: ['title'], item: component,
+    }
+    const wrapper = mount(ComponentLibraryView, {
+      global: {
+        stubs: {
+          ComponentLibraryCard: true,
+          ComponentLibraryDetail: { props: ['item'], template: '<section class="detail-stub">{{ item.component_id }}</section>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('.detail-stub').text()).toBe('cards/agent-card.vue')
+    expect(workspaceStore.pendingMainSearchResult).toBeNull()
   })
 
   it('persists card renames and replaces the visible component item', async () => {

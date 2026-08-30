@@ -819,13 +819,19 @@ class LLMTaskScheduler(LLMTaskRuntimeMixin):
         try:
             with self._acquire_model_pool(request.model_tier):
                 merged: Any = None
+                # DeepSeek 等模型的思考内容(reasoning_content)与正文分开推送:
+                # 单独 yield reasoning_delta 供上层实时透传,不污染 content_delta。
                 for chunk in model.stream(messages):
                     if not isinstance(chunk, BaseMessage):
                         continue
                     tool_calls = getattr(chunk, "tool_calls", None) or []
-                    has_reasoning = bool(
-                        getattr(chunk, "additional_kwargs", {}).get("reasoning_content")
-                    )
+                    reasoning = getattr(chunk, "additional_kwargs", {}).get("reasoning_content") or ""
+                    # 个别 provider 以列表形式返回思考片段,统一拼接为字符串。
+                    if isinstance(reasoning, list):
+                        reasoning = "".join(str(part) for part in reasoning)
+                    if isinstance(reasoning, str) and reasoning:
+                        yield {"reasoning_delta": reasoning}
+                    has_reasoning = bool(reasoning)
                     if not tool_calls and not has_reasoning:
                         content_delta = getattr(chunk, "content", "") or ""
                         if isinstance(content_delta, str) and content_delta:

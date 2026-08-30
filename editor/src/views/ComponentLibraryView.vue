@@ -224,6 +224,19 @@ watch(activeTag, () => {
 })
 
 watch(
+  () => workspaceStore.pendingMainSearchResult,
+  (result) => {
+    if (result?.source !== 'components') return
+    const component = result.item as unknown as ComponentLibraryItem
+    activeTag.value = component.tag
+    selectedComponent.value = component
+    uploadOpen.value = false
+    workspaceStore.pendingMainSearchResult = null
+  },
+  { immediate: true },
+)
+
+watch(
   [() => settingsStore.profile.userId, () => settingsStore.activeKnowledgeLibrary?.libraryId],
   () => {
     void Promise.all([loadComponents(), loadComponentFavorites()])

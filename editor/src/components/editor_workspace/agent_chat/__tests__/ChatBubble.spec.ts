@@ -9,11 +9,39 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
 import ChatBubble from '../ChatBubble.vue'
+import MessageBubble from '../MessageBubble.vue'
 import MessageList from '../MessageList.vue'
 import ToolBubble from '../ToolBubble.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 describe('ChatBubble user references', () => {
+  it('renders a persisted child completion wakeup as an Agent event instead of a user bubble', () => {
+    const wrapper = mount(MessageBubble, {
+      global: { plugins: [createPinia()] },
+      props: {
+        message: {
+          role: 'user',
+          content: '内部自动唤醒提示',
+          metadata: {
+            wakeup: true,
+            child_agent_event: {
+              event_name: 'child_agent.completed',
+              child: {
+                run_id: 'child-1', goal: '检索资料', mode: 'background', status: 'completed',
+                access_mode: 'readonly', allowed_tools: [], name: 'explore1',
+              },
+            },
+          },
+        },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+      },
+    })
+
+    expect(wrapper.get('.child-agent-event').text()).toContain('子 Agent 完成任务：explore1')
+    expect(wrapper.find('.bubble.user').exists()).toBe(false)
+  })
+
   it('renders a grey timestamp to the left of the user bubble', () => {
     const wrapper = mount(ChatBubble, {
       global: { plugins: [createPinia()] },
@@ -381,5 +409,89 @@ describe('ChatBubble user references', () => {
 
     await wrapper.get('.agent-mounted-file').trigger('click')
     expect(openEditorSidebar).toHaveBeenCalledWith(node)
+  })
+
+  it('renders a DSH-style Think row above completed assistant content', () => {
+    const wrapper = mount(ChatBubble, {
+      global: { plugins: [createPinia()] },
+      props: {
+        message: {
+          role: 'assistant',
+          content: '最终回答',
+          node: 'agent',
+          thinking: '第一步先检查调用链\n第二步再修改',
+        },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+        isStreaming: false,
+      },
+    })
+
+    const thinkRow = wrapper.get('[data-variant="think"]')
+    expect(thinkRow.attributes('data-state')).toBe('ok')
+    expect(thinkRow.text()).toContain('思考')
+    // 完成后摘要固定显示第一行
+    expect(thinkRow.text()).toContain('第一步先检查调用链')
+  })
+
+  it('follows the latest thinking line while the turn is streaming', () => {
+    const wrapper = mount(ChatBubble, {
+      global: { plugins: [createPinia()] },
+      props: {
+        message: {
+          role: 'assistant',
+          content: '',
+          node: 'agent',
+          thinking: '第一行\n第二行思考中',
+        },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+        isStreaming: true,
+      },
+    })
+
+    const thinkRow = wrapper.get('[data-variant="think"]')
+    expect(thinkRow.attributes('data-state')).toBe('running')
+    expect(thinkRow.text()).toContain('第二行思考中')
+  })
+
+  it('expands the full thinking text on row click', async () => {
+    const wrapper = mount(ChatBubble, {
+      global: { plugins: [createPinia()] },
+      props: {
+        message: {
+          role: 'assistant',
+          content: '最终回答',
+          node: 'agent',
+          thinking: '完整思考内容第一行\n完整思考内容第二行',
+        },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+        isStreaming: false,
+      },
+    })
+
+    expect(wrapper.find('.think-row__body').exists()).toBe(false)
+    await wrapper.get('.think-row__trigger').trigger('click')
+    expect(wrapper.get('.think-row__body').text()).toBe('完整思考内容第一行\n完整思考内容第二行')
+  })
+
+  it('renders the Think row in tool mode as well', () => {
+    const wrapper = mount(ToolBubble, {
+      global: { plugins: [createPinia()] },
+      props: {
+        message: {
+          role: 'assistant',
+          content: '工具模式回答',
+          node: 'agent',
+          thinking: '工具模式思考',
+        },
+        userAvatar: 'user.png',
+        agentAvatar: 'agent.png',
+        isStreaming: false,
+      },
+    })
+
+    expect(wrapper.get('[data-variant="think"]').text()).toContain('工具模式思考')
   })
 })

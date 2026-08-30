@@ -17,6 +17,7 @@ session = service.create_session(SessionCreate(user_id="u1"))
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from hashlib import sha256
 from uuid import uuid4
 
 from sqlalchemy import func
@@ -74,6 +75,39 @@ class SessionService:
             db_session.refresh(record)
             return SessionOut.from_record(record)
 
+    def create_child_agent_session(
+        self,
+        *,
+        user_id: str,
+        parent_session_id: str,
+        run_id: str,
+        session_name: str,
+    ) -> SessionOut:
+        """创建或返回一个不会进入根会话历史列表的子 Agent 对话。"""
+
+        session_id = self.child_agent_session_id(parent_session_id, run_id)
+        with Session(self.engine) as db_session:
+            parent = db_session.get(SessionRecord, parent_session_id)
+            if parent is None or parent.user_id != user_id or parent.parent_session_id is not None:
+                raise ValueError("子 Agent 对话必须归属于同一用户的根会话。")
+            existing = db_session.get(SessionRecord, session_id)
+            if existing is not None:
+                return SessionOut.from_record(existing)
+            now = self._utc_now()
+            record = SessionRecord(
+                session_id=session_id,
+                user_id=user_id,
+                session_name=session_name,
+                parent_session_id=parent_session_id,
+                child_agent_run_id=run_id,
+                created_at=now,
+                updated_at=now,
+            )
+            db_session.add(record)
+            db_session.commit()
+            db_session.refresh(record)
+            return SessionOut.from_record(record)
+
     def delete_session(self, session_id: str) -> bool:
         """
         删除指定会话。
@@ -85,18 +119,11 @@ class SessionService:
             record = db_session.get(SessionRecord, session_id)
             if record is None:
                 return False
-            # 先删除关联的消息，再删除会话
-            msgs = db_session.exec(
-                select(MessageRecord).where(MessageRecord.session_id == session_id)
-            ).all()
-            for msg in msgs:
-                db_session.delete(msg)
-            usage_records = db_session.exec(
-                select(TokenUsageRecord).where(TokenUsageRecord.session_id == session_id)
-            ).all()
-            for usage in usage_records:
-                db_session.delete(usage)
-            db_session.delete(record)
+            child_records = list(db_session.exec(
+                select(SessionRecord).where(SessionRecord.parent_session_id == session_id)
+            ).all())
+            for target in [*child_records, record]:
+                self._delete_session_record(db_session, target)
             db_session.commit()
             return True
 
@@ -111,22 +138,9 @@ class SessionService:
             records = db_session.exec(
                 select(SessionRecord).where(SessionRecord.user_id == user_id)
             ).all()
-            count = len(records)
-            # 先删除所有关联消息
-            for record in records:
-                msgs = db_session.exec(
-                    select(MessageRecord).where(MessageRecord.session_id == record.session_id)
-                ).all()
-                for msg in msgs:
-                    db_session.delete(msg)
-                usage_records = db_session.exec(
-                    select(TokenUsageRecord).where(TokenUsageRecord.session_id == record.session_id)
-                ).all()
-                for usage in usage_records:
-                    db_session.delete(usage)
-            # 再删除会话
-            for record in records:
-                db_session.delete(record)
+            count = sum(record.parent_session_id is None for record in records)
+            for record in sorted(records, key=lambda item: item.parent_session_id is None):
+                self._delete_session_record(db_session, record)
             db_session.commit()
             return count
 
@@ -135,7 +149,9 @@ class SessionService:
 
         with Session(self.engine) as db_session:
             records = db_session.exec(
-                select(SessionRecord).where(SessionRecord.user_id == user_id)
+                select(SessionRecord)
+                .where(SessionRecord.user_id == user_id)
+                .where(SessionRecord.parent_session_id.is_(None))
             ).all()
             pruned = 0
             for record in records:
@@ -223,6 +239,7 @@ class SessionService:
         statement = (
             select(SessionRecord)
             .where(SessionRecord.user_id == user_id)
+            .where(SessionRecord.parent_session_id.is_(None))
             .order_by(SessionRecord.updated_at.desc())
         )
         with Session(self.engine) as db_session:
@@ -234,6 +251,27 @@ class SessionService:
         """生成会话 ID。"""
 
         return f"sess_{uuid4().hex}"
+
+    @staticmethod
+    def child_agent_session_id(parent_session_id: str, run_id: str) -> str:
+        """生成稳定且定长的子 Agent 对话 Session ID。"""
+
+        digest = sha256(f"{parent_session_id}\0{run_id}".encode("utf-8")).hexdigest()
+        return f"child_{digest[:58]}"
+
+    @staticmethod
+    def _delete_session_record(db_session: Session, record: SessionRecord) -> None:
+        """删除一个 Session 及其消息和 token 用量记录。"""
+
+        for message in db_session.exec(
+            select(MessageRecord).where(MessageRecord.session_id == record.session_id)
+        ).all():
+            db_session.delete(message)
+        for usage in db_session.exec(
+            select(TokenUsageRecord).where(TokenUsageRecord.session_id == record.session_id)
+        ).all():
+            db_session.delete(usage)
+        db_session.delete(record)
 
     @staticmethod
     def _utc_now() -> datetime:

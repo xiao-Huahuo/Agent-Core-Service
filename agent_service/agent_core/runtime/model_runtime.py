@@ -200,6 +200,7 @@ class ModelRuntimeMixin:
                 }
                 return
             started_at = time.perf_counter()
+            cumulative_reasoning = ""
             yield {
                 "node": "agent",
                 "type": "context_mirror",
@@ -228,6 +229,19 @@ class ModelRuntimeMixin:
                 if chunk.get("status") == "complete":
                     final_message = chunk.get("message")
                     continue
+                reasoning_delta = chunk.get("reasoning_delta", "")
+                if reasoning_delta:
+                    # 思考文本实时透传,前端 Think 条在首字正文之前就能开始渲染。
+                    cumulative_reasoning += reasoning_delta
+                    yield {
+                        "type": "thinking",
+                        "node": "agent",
+                        "content": reasoning_delta,
+                        "tool_calls": [],
+                        "trace": [],
+                        "model_name": self._model_name_for_node("agent_simple"),
+                        "metadata": latency_metadata(),
+                    }
                 delta = chunk.get("content_delta", "")
                 if not delta:
                     continue
@@ -307,6 +321,7 @@ class ModelRuntimeMixin:
                         "node": "agent",
                         "source": "simple_answer_mode",
                         "trace": [simple_trace, safety_output_trace],
+                        **({"reasoning_content": cumulative_reasoning} if cumulative_reasoning else {}),
                         **citation_metadata,
                     },
                 )

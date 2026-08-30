@@ -192,6 +192,7 @@ def create_application_services(config: AgentConfig, *, database_engine: Engine)
         smart_form_service=smart_form_service,
         retrieval_service=retrieval_service,
     )
+    agent.unified_search_service = unified_search_service
     todo_service = TodoService(
         engine=memory_service.engine,
         config=config,

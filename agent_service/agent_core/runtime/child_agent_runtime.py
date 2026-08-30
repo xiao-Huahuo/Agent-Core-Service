@@ -37,6 +37,7 @@ from agent_service.scripts.draw_agent_graph import draw_agent_graph
 from agent_service.services.memory.context_builder import ContextBuilder
 from agent_service.services.child_agent import ChildAgentContract, ChildAgentEvent, ChildAgentManager
 from agent_service.services.message.service import MessageService
+from agent_service.services.session.service import SessionService
 from agent_service.services.session_attachment.service import SessionAttachmentService
 from agent_service.services.safety import SafetyService
 from agent_service.services.scheduler import (
@@ -105,7 +106,10 @@ class ChildAgentRuntimeMixin:
         active_children = [self._child_record_to_dict(record) for record in records]
         saved_children = self._load_session_state_list(session_id, "child_agents")
         # Live records win so the panel never renders a stale terminal status while a child is running.
-        children_by_run_id = {str(child.get("run_id") or ""): child for child in saved_children}
+        children_by_run_id = {
+            str(child.get("run_id") or ""): self._with_child_conversation_session(session_id, child)
+            for child in saved_children
+        }
         children_by_run_id.update({child["run_id"]: child for child in active_children})
         return list(children_by_run_id.values())
     def stop_child_agent(self, run_id: str) -> bool:
@@ -123,6 +127,10 @@ class ChildAgentRuntimeMixin:
         result = record.result
         return {
             "run_id": record.run_id,
+            "conversation_session_id": SessionService.child_agent_session_id(
+                record.contract.session_id,
+                record.run_id,
+            ),
             "parent_run_id": record.contract.parent_run_id,
             "goal": record.contract.goal,
             "category": record.contract.category,
@@ -134,6 +142,17 @@ class ChildAgentRuntimeMixin:
             "result": result.result if result is not None else None,
             "summary": result.summary if result is not None else "",
             "error": result.error if result is not None else None,
+        }
+    @staticmethod
+    def _with_child_conversation_session(session_id: str, child: dict[str, Any]) -> dict[str, Any]:
+        """补全旧快照缺失的正式子对话 Session ID。"""
+
+        run_id = str(child.get("run_id") or "")
+        if not run_id:
+            return child
+        return {
+            **child,
+            "conversation_session_id": SessionService.child_agent_session_id(session_id, run_id),
         }
     def _child_event_to_payload(self, event: ChildAgentEvent) -> dict[str, Any] | None:
         """将子 Agent 生命周期事件转换为前端可展示的 SSE payload。"""
@@ -358,10 +377,27 @@ class ChildAgentRuntimeMixin:
             context.raise_if_stopped()
             template = _resolve_child_agent_category_template(context.category, self.config.prompts)
             prompt = f"{template}\n\n{context.goal}" if template else context.goal
-            result = self.run_once(
+            if self.session_service is None:
+                result = self.run_once(
+                    prompt=prompt,
+                    user_id=context.user_id,
+                    session_id=SessionService.child_agent_session_id(context.session_id, context.run_id),
+                    agent_mode=context.agent_mode,
+                    agent_access_mode=context.access_mode,
+                    allow_child_spawn=False,
+                )
+                context.raise_if_stopped()
+                return str(result.get("final_output") or "")
+            child_session = self.session_service.create_child_agent_session(
+                user_id=context.user_id,
+                parent_session_id=context.session_id,
+                run_id=context.run_id,
+                session_name=context.name or context.goal,
+            )
+            result = self.run_session_prompt(
                 prompt=prompt,
                 user_id=context.user_id,
-                session_id=f"{context.session_id}:{context.run_id}",
+                session_id=child_session.session_id,
                 agent_mode=context.agent_mode,
                 agent_access_mode=context.access_mode,
                 allow_child_spawn=False,

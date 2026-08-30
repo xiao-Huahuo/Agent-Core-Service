@@ -311,3 +311,39 @@ def test_llm_task_scheduler_uses_local_qwen_for_incomplete_large_config() -> Non
 
     assert large[:3] == (scheduler.config.model.local_model_name, "", "")
     assert small[:3] == (scheduler.config.model.local_model_name, "", "")
+
+
+def test_llm_task_scheduler_stream_chat_yields_reasoning_delta(monkeypatch: object) -> None:
+    """流式 Chat 应把 DeepSeek 思考文本(reasoning_content)作为 reasoning_delta 单独产出。
+
+    思考文本与正文独立 yield,供上层实时透传渲染 Think 条;合并后的最终消息
+    仍保留完整思考内容,便于落库后历史消息展示。
+    """
+
+    from langchain_core.messages import AIMessageChunk
+
+    scheduler = get_llm_task_scheduler(make_scheduler_test_config())
+
+    class FakeModel:
+        def stream(self, messages: object):
+            yield AIMessageChunk(content="", additional_kwargs={"reasoning_content": "让我"})
+            yield AIMessageChunk(content="", additional_kwargs={"reasoning_content": "想想"})
+            yield AIMessageChunk(content="答案")
+
+    monkeypatch.setattr(scheduler, "_get_chat_model", lambda **kwargs: FakeModel())
+
+    chunks = list(
+        scheduler.stream_chat(
+            task_type=FOREGROUND_AGENT_TASK,
+            messages=[HumanMessage(content="hi")],
+        )
+    )
+
+    reasoning = [chunk["reasoning_delta"] for chunk in chunks if "reasoning_delta" in chunk]
+    assert reasoning == ["让我", "想想"]
+    content = [chunk["content_delta"] for chunk in chunks if "content_delta" in chunk and "status" not in chunk]
+    assert content == ["答案"]
+    assert chunks[-1]["status"] == "complete"
+    final_message = chunks[-1]["message"]
+    merged_reasoning = final_message.additional_kwargs.get("reasoning_content")
+    assert "".join(merged_reasoning) == "让我想想"

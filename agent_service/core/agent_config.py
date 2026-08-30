@@ -184,6 +184,12 @@ class AgentConfig:
                 return path.resolve()
             return (self.base_data_dir / path).resolve()
 
+        @property
+        def sensitive_words_path(self) -> Path:
+            """返回用户可持久化修改的项目级敏感词库路径。"""
+
+            return self.project_root / "resources" / "safety" / "sensitive_words.json"
+
         def ensure_directories(self) -> None:
             """创建运行目录与外部资源目录骨架。
 

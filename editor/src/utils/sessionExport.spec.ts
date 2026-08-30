@@ -121,7 +121,12 @@ describe('sessionExport child agent events', () => {
   })
 
   it('exports the recoverable environment, task list, and child-agent snapshots', async () => {
-    mocks.fetchMessages.mockResolvedValue([])
+    mocks.fetchMessages
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{
+        message_id: 'child-message', session_id: 'child-session-1', role: 'assistant', content: '完整子对话',
+        created_at: '2026-08-30T08:02:00Z', metadata: { node: 'agent' }, tool_calls: [],
+      }])
     mocks.fetchSessionTaskList.mockResolvedValue({ task_list: { task_list_id: 'tasks-1', items: [] } })
     mocks.fetchSessionState.mockResolvedValue({
       session_state: {
@@ -129,7 +134,9 @@ describe('sessionExport child agent events', () => {
         change_snapshot: { snapshot_id: 'change-1', additions: 3, deletions: 1, files: [], edits: [] },
       },
     })
-    mocks.fetchChildAgents.mockResolvedValue({ children: [{ run_id: 'child-1', status: 'completed' }] })
+    mocks.fetchChildAgents.mockResolvedValue({
+      children: [{ run_id: 'child-1', conversation_session_id: 'child-session-1', status: 'completed' }],
+    })
 
     await exportSession({ session_id: 'session-1', user_id: 'user-1', session_name: '测试', created_at: '', updated_at: '' }, 'user-1')
 
@@ -137,6 +144,22 @@ describe('sessionExport child agent events', () => {
     expect(exported.task_list.task_list_id).toBe('tasks-1')
     expect(exported.session_state.environment.branch).toBe('main')
     expect(exported.session_state.change_snapshot.snapshot_id).toBe('change-1')
-    expect(exported.child_agents).toEqual([{ run_id: 'child-1', status: 'completed' }])
+    expect(exported.child_agents[0].run_id).toBe('child-1')
+    expect(exported.child_agents[0].messages[0].content).toBe('完整子对话')
+    expect(mocks.fetchMessages).toHaveBeenNthCalledWith(2, 'child-session-1', 'user-1', undefined)
+  })
+
+  it('keeps reasoning_content in exported messages for round-trip import', async () => {
+    mocks.fetchMessages.mockResolvedValue([{
+      message_id: 'message-think', session_id: 'session-1', role: 'assistant', content: '回答',
+      created_at: '2026-08-30T08:00:00Z',
+      metadata: { node: 'agent', reasoning_content: '导出的思考全文' },
+      tool_calls: [],
+    }])
+
+    await exportSession({ session_id: 'session-1', user_id: 'user-1', session_name: '测试', created_at: '', updated_at: '' }, 'user-1')
+
+    const message = mocks.toYaml.mock.calls[0]?.[0].messages[0]
+    expect(message.metadata.reasoning_content).toBe('导出的思考全文')
   })
 })
