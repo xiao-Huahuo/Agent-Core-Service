@@ -215,6 +215,26 @@ def test_llm_task_scheduler_resolves_small_model_runtime() -> None:
     assert temperature == 0.3
 
 
+def test_observability_snapshot_matches_resolved_request_without_secrets() -> None:
+    """Debug 快照必须保留最终消息、工具 schema 和实际模型参数，但不得泄露密钥。"""
+
+    scheduler = get_llm_task_scheduler(make_scheduler_test_config())
+    snapshot = scheduler.build_observability_snapshot(
+        messages=[HumanMessage(content="inspect")],
+        tool_names=["list_available_tools"],
+        model_name="remote-model",
+        api_key="secret-key",
+        base_url="https://example.invalid/v1",
+        node="agent",
+    )
+
+    assert snapshot["messages"] == [{"role": "user", "content": "inspect"}]
+    assert snapshot["model"] == "remote-model"
+    assert snapshot["node"] == "agent"
+    assert snapshot["tools"][0]["function"]["name"] == "list_available_tools"
+    assert "secret-key" not in str(snapshot)
+
+
 def test_llm_task_scheduler_small_model_falls_back_to_runtime_primary_key() -> None:
     """验证用户只配置主模型 key 时,small 模型池会复用该运行时 key 和 base_url。"""
 

@@ -714,7 +714,7 @@ function finalizedPatch(entry: ToolDisplayEntry) {
   flex-direction: column;
   box-sizing: border-box;
   width: 100%;
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-4);
   border-radius: 8px;
   animation: tool-slide-in 220ms ease-out;
 }

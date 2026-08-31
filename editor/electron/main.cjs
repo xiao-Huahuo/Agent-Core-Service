@@ -1059,12 +1059,17 @@ ipcMain.on('agent:window-sync', (event, payload) => {
     'agent-loop-mode',
     'agent-access-mode',
     'chat-state',
+    'chat-meta',
+    'chat-stream',
     'chat-sync-request',
     'chat-cancel',
   ])
   if (!allowedTypes.has(type)) return
   for (const target of [mainWindow, floatingWindow]) {
     if (target && !target.isDestroyed() && target !== sender) {
+      // Hidden windows receive the terminal snapshot but never pay for live
+      // token painting; their state catches up when chat-state arrives.
+      if (type === 'chat-stream' && !target.isVisible()) continue
       target.webContents.send('agent:window-sync', { type, value })
     }
   }

@@ -43,6 +43,7 @@ describe('chat reference history', () => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     apiMocks.listSessions.mockResolvedValue([])
+    apiMocks.fetchTaskSuggestions.mockResolvedValue({ suggestions: [] })
   })
 
   afterEach(() => {
@@ -217,6 +218,30 @@ describe('chat reference history', () => {
     nowSpy.mockRestore()
   })
 
+  it('does not persist changing per-token latency metadata from thinking chunks', async () => {
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield {
+        type: 'thinking',
+        node: 'agent',
+        content: '先分析',
+        metadata: { latency: { backend_elapsed_ms: 10 } },
+      }
+      yield {
+        type: 'thinking',
+        node: 'agent',
+        content: '再回答',
+        metadata: { latency: { backend_elapsed_ms: 20 } },
+      }
+    })
+    const store = useChatStore()
+
+    await store.send('user-1', 'session-1', '请思考')
+
+    const assistant = store.messages.find((message) => message.role === 'assistant')
+    expect(assistant?.thinking).toBe('先分析再回答')
+    expect(assistant?.metadata?.latency).toBeUndefined()
+  })
+
   it('accumulates streamed thinking deltas into the assistant message', async () => {
     apiMocks.streamPrompt.mockImplementation(async function* () {
       yield { type: 'thinking', node: 'agent', content: '先分析' }
@@ -279,6 +304,31 @@ describe('chat reference history', () => {
       trigger_tokens: 128,
       target_tokens: 64,
     })
+  })
+
+  it('keeps displaying the real message mirror from a backend using the legacy context protocol', async () => {
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield {
+        type: 'context_mirror',
+        node: 'agent',
+        model_name: 'deepseek-v4-flash',
+        context_messages: [
+          { role: 'system', content: '最终系统提示' },
+          { role: 'user', content: '你好' },
+        ],
+      }
+      yield { type: 'delta', node: 'agent', content: '你好！' }
+    })
+    const store = useChatStore()
+
+    await store.send('user-1', 'session-1', '你好')
+
+    expect(store.contextSnapshots).toHaveLength(1)
+    expect(store.contextSnapshots[0]?.messages).toEqual([
+      { role: 'system', content: '最终系统提示' },
+      { role: 'user', content: '你好' },
+    ])
+    expect(store.contextSnapshots[0]?.model_kwargs).toEqual({ protocol: 'legacy_context_messages' })
   })
 
   it('refreshes follow-up suggestions after a streamed turn completes', async () => {
@@ -568,7 +618,7 @@ describe('chat reference history', () => {
     expect(action?.trace?.some((trace) => trace.event === 'tool_call_end')).toBe(true)
   })
 
-  it('mirrors incremental live chat state into the same session store without echoing it', async () => {
+  it('mirrors live text as ordered deltas without serializing full history for every update', async () => {
     const sent: Array<{ type: string; value: unknown }> = []
     let receive: ((payload: { type: string; value: unknown }) => void) | undefined
     Object.defineProperty(window, 'agentEditorDesktop', {
@@ -586,33 +636,73 @@ describe('chat reference history', () => {
     receive?.({ type: 'chat-sync-request', value: { sessionId: 'shared-session' } })
     expect(sent).toHaveLength(requestsBeforeMirrorProbe)
 
-    store.$patch({
-      messages: [{ role: 'assistant', content: '第一段流式文本', node: 'agent' }],
-      isStreaming: true,
-      streamStartedAtMs: 1234,
-      streamingSessionId: 'shared-session',
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      yield { type: 'thinking', node: 'agent', content: '先分析' }
+      yield { type: 'delta', node: 'agent', content: '最终回答' }
     })
-    await nextTick()
+    await store.send('user-1', 'shared-session', '开始长任务')
 
-    const outgoing = [...sent].reverse().find((item) => item.type === 'chat-state')
-    expect(outgoing?.value).toMatchObject({
-      sessionId: 'shared-session',
-      messageCount: 1,
-      isStreaming: true,
-      streamStartedAtMs: 1234,
-      messagePatches: [{ index: 0, message: { content: '第一段流式文本' } }],
+    const streamEvents = sent.filter((item) => item.type === 'chat-stream')
+    expect(streamEvents.map((item) => item.value)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sessionId: 'shared-session', field: 'thinking', delta: '先分析' }),
+      expect.objectContaining({ sessionId: 'shared-session', field: 'content', delta: '最终回答' }),
+    ]))
+    expect(streamEvents.every((item) => (
+      !('messages' in (item.value as Record<string, unknown>))
+      && !('messagePatches' in (item.value as Record<string, unknown>))
+    ))).toBe(true)
+
+    const sequence = streamEvents.map((item) => Number((item.value as Record<string, unknown>).seq))
+    expect(sequence).toEqual([...sequence].sort((left, right) => left - right))
+    expect(new Set(sequence).size).toBe(sequence.length)
+
+    store.$patch({ currentNode: 'planner' })
+    await nextTick()
+    const metaEvent = [...sent].reverse().find((item) => item.type === 'chat-meta')
+    expect(metaEvent?.value).toMatchObject({ sessionId: 'shared-session', currentNode: 'planner' })
+    expect('messages' in (metaEvent?.value as Record<string, unknown>)).toBe(false)
+
+    const snapshot = [...sent].reverse().find((item) => item.type === 'chat-state')?.value as Record<string, unknown>
+    receive?.({
+      type: 'chat-state',
+      value: {
+        ...snapshot,
+        sessionId: 'remote-session',
+        seq: 1,
+        messages: [{ role: 'assistant', content: '', node: 'agent' }],
+        isStreaming: true,
+      },
     })
+    const remoteAppend = {
+      sessionId: 'remote-session',
+      seq: 2,
+      index: 0,
+      operation: 'append',
+      field: 'content',
+      delta: '只追加一次',
+    }
+    receive?.({ type: 'chat-stream', value: remoteAppend })
+    receive?.({ type: 'chat-stream', value: remoteAppend })
+    receive?.({ type: 'chat-stream', value: { ...remoteAppend, seq: 1, delta: '过期内容' } })
+    expect(useSessionChatStore('remote-session').messages[0]?.content).toBe('只追加一次')
 
-    store.$patch({ messages: [], isStreaming: false, streamStartedAtMs: 0, streamingSessionId: '' })
-    await nextTick()
-    const sendsBeforeRemoteApply = sent.length
-    receive?.({ type: 'chat-state', value: outgoing?.value })
-    await nextTick()
+    sent.length = 0
+    apiMocks.streamPrompt.mockImplementation(async function* () {
+      for (let index = 0; index < 10_000; index += 1) yield { type: 'thinking', node: 'agent', content: '思' }
+      for (let index = 0; index < 10_000; index += 1) yield { type: 'delta', node: 'agent', content: '答' }
+    })
+    const longStore = useSessionChatStore('long-session')
+    await longStore.send('user-1', 'long-session', '长任务')
 
-    expect(store.messages[0]?.content).toBe('第一段流式文本')
-    expect(store.isStreaming).toBe(true)
-    expect(store.streamStartedAtMs).toBe(1234)
-    expect(sent).toHaveLength(sendsBeforeRemoteApply)
+    const longAssistant = longStore.messages.find((message) => message.role === 'assistant')
+    expect(longAssistant?.thinking).toHaveLength(10_000)
+    expect(longAssistant?.content).toHaveLength(10_000)
+    const longAppendEvents = sent.filter((item) => (
+      item.type === 'chat-stream'
+      && (item.value as Record<string, unknown>).operation === 'append'
+    ))
+    expect(longAppendEvents).toHaveLength(2)
+    expect(JSON.stringify(longAppendEvents).length).toBeLessThan(25_000)
   })
 
 })

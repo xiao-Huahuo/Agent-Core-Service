@@ -33,6 +33,7 @@ from agent_service.agent_core.nodes.compress import CompressNode
 from agent_service.agent_core.nodes.model_decision import get_user_llm_overrides
 from agent_service.agent_core.nodes.summary import SummaryNode
 from agent_service.agent_core.nodes.tool_call import ToolCallNode
+from agent_service.tools import get_agent_thinking_callback, get_agent_token_callback
 from agent_service.core.agent_config import AgentConfig
 from agent_service.models.longterm_memory_spec import LongTermMemorySpec
 from agent_service.models.message import MessageRecord
@@ -199,6 +200,45 @@ def test_agent_core_stream_run_wraps_graph_updates() -> None:
 
     assert "测试回复" in str(chunks[0])
     assert chunks[0].get("node") == "agent"
+
+
+def test_agent_stream_token_events_do_not_repeat_dynamic_latency_metadata() -> None:
+    """思考与普通正文 token 不得携带持续变化的耗时 metadata。"""
+
+    class FakeTokenStreamingGraph(FakeCompiledGraph):
+        """在图线程内调用正式 token 回调，复现真实流式协议。"""
+
+        def stream(self, inputs: dict[str, Any], config: dict[str, Any], stream_mode: str):
+            thinking_callback = get_agent_thinking_callback()
+            token_callback = get_agent_token_callback()
+            assert thinking_callback is not None
+            assert token_callback is not None
+            thinking_callback("思")
+            thinking_callback("思考")
+            token_callback("答")
+            token_callback("答案")
+            yield {
+                "agent": {
+                    "messages": [AIMessage(content="答案", additional_kwargs={"reasoning_content": "思考"})],
+                    "trace": [],
+                }
+            }
+
+    agent = AgentCore(config=make_test_config(), graph=FakeTokenStreamingGraph())
+    events = list(agent._stream_events(
+        messages=[HumanMessage(content="请回答")],
+        user_id="u1",
+        session_id="stream-metadata",
+        graph=agent.graph,
+        turn_started_at=time.perf_counter(),
+    ))
+
+    thinking_events = [event for event in events if event.get("type") == "thinking"]
+    delta_events = [event for event in events if event.get("type") == "delta"]
+    assert [event["content"] for event in thinking_events] == ["思", "考"]
+    assert all(event["metadata"] == {} for event in thinking_events)
+    assert delta_events[0]["metadata"]["latency"]["first_agent_delta_ms"] > 0
+    assert delta_events[1]["metadata"] == {}
 
 
 def test_agent_core_attaches_finalized_change_snapshot_to_live_payload() -> None:

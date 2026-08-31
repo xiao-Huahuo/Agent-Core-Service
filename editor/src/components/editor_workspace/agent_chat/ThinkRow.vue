@@ -7,7 +7,7 @@
   行尾扫光动画提示进行中;结束后摘要固定为第一行,点击整行可展开/收起全文。
 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 
@@ -19,33 +19,28 @@ const props = defineProps<{
 }>()
 
 const expanded = ref(false)
-const summaryRef = ref<HTMLSpanElement | null>(null)
-let scrollRafId = 0
+const summaryMaxChars = 300
+const summary = ref('')
+let processedTextLength = 0
 
-/** 摘要行: 运行中显示最新一行(跟随尾部),结束后显示第一行(与 DSH 行为一致)。 */
-const summary = computed(() => {
-  const text = props.text
-  if (props.running) {
-    const visible = text.trimEnd()
-    const newline = visible.lastIndexOf('\n')
-    return newline === -1 ? visible : visible.slice(newline + 1)
+/** Incrementally follows the latest line without rescanning the full reasoning text. */
+watch(() => [props.text, props.running] as const, ([text, running]) => {
+  if (!running) {
+    const newline = text.indexOf('\n')
+    summary.value = (newline === -1 ? text : text.slice(0, newline)).slice(0, summaryMaxChars)
+    processedTextLength = text.length
+    return
   }
-  const newline = text.indexOf('\n')
-  return newline === -1 ? text : text.slice(0, newline)
-})
-
-/** 运行中让摘要行横向跟随最新内容,结束后回到行首。 */
-function scheduleSummaryScroll() {
-  cancelAnimationFrame(scrollRafId)
-  scrollRafId = requestAnimationFrame(() => {
-    const element = summaryRef.value
-    if (element === null) return
-    element.scrollLeft = props.running ? element.scrollWidth - element.clientWidth : 0
-  })
-}
-
-watch(() => [props.running, summary.value], scheduleSummaryScroll, { immediate: true, flush: 'post' })
-onBeforeUnmount(() => cancelAnimationFrame(scrollRafId))
+  if (text.length < processedTextLength) {
+    processedTextLength = 0
+    summary.value = ''
+  }
+  const delta = text.slice(processedTextLength)
+  const visibleTail = (summary.value + delta).trimEnd()
+  const newline = visibleTail.lastIndexOf('\n')
+  summary.value = (newline >= 0 ? visibleTail.slice(newline + 1) : visibleTail).slice(-summaryMaxChars)
+  processedTextLength = text.length
+}, { immediate: true })
 
 function toggle() {
   expanded.value = !expanded.value
@@ -65,7 +60,7 @@ function toggle() {
       </span>
       <span class="think-row__title">思考</span>
       <span class="think-row__separator" aria-hidden="true"></span>
-      <span ref="summaryRef" class="think-row__summary" :data-follow-end="running || undefined">{{ summary }}</span>
+      <span class="think-row__summary" :data-follow-end="running || undefined">{{ summary }}</span>
       <IcIcon
         :name="expanded ? 'chevron-up' : 'chevron-down'"
         :size="15"
@@ -76,7 +71,7 @@ function toggle() {
     </button>
     <div class="think-row__collapse" :class="{ expanded }" :aria-hidden="!expanded">
       <div class="think-row__collapse-inner">
-        <div class="think-row__body">{{ text }}</div>
+        <div v-if="expanded" class="think-row__body">{{ text }}</div>
       </div>
     </div>
   </div>
@@ -174,17 +169,20 @@ function toggle() {
     color-mix(in srgb, var(--color-canvas) 60%, transparent) 55%,
     transparent 100%
   );
+  transform: translate3d(-100%, 0, 0);
   animation: mw-think-row-sweep 2.6s ease-out infinite;
+  contain: paint;
+  will-change: transform;
   pointer-events: none;
 }
 
 @keyframes mw-think-row-sweep {
   0% {
-    left: -300px;
+    transform: translate3d(-100%, 0, 0);
   }
   90%,
   100% {
-    left: 100%;
+    transform: translate3d(calc(100vw + 100%), 0, 0);
   }
 }
 

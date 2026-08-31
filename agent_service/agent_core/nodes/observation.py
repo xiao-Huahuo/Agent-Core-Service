@@ -29,7 +29,11 @@ from agent_service.services.scheduler import (
     get_llm_task_scheduler,
 )
 from agent_service.tools import ToolExecutor
-from agent_service.tools.runtime_context import get_observation_content_callback, get_tool_trace_callback
+from agent_service.tools.runtime_context import (
+    get_context_mirror_callback,
+    get_observation_content_callback,
+    get_tool_trace_callback,
+)
 
 
 class ObservationNode:
@@ -122,13 +126,27 @@ class ObservationNode:
         """调用 LLM,流式场景下通过 callback 逐 token 推送。"""
 
         api_key, base_url, model_name, small_api_key, small_base_url, small_model_name = get_user_llm_overrides(state)
+        messages = [system_message, context_message]
+        context_callback = get_context_mirror_callback()
+        if context_callback is not None:
+            context_callback(self.task_scheduler.build_observability_snapshot(
+                messages=messages,
+                model_tier=SMALL_MODEL_TIER,
+                api_key=api_key,
+                base_url=base_url,
+                model_name=model_name,
+                small_api_key=small_api_key,
+                small_base_url=small_base_url,
+                small_model_name=small_model_name,
+                node="observation",
+            ))
         callback = get_observation_content_callback()
         if callback is not None:
             cumulative = ""
             final_message: Any = None
             for chunk in self.task_scheduler.stream_chat(
                 task_type=FOREGROUND_AGENT_TASK,
-                messages=[system_message, context_message],
+                messages=messages,
                 model_tier=SMALL_MODEL_TIER,
                 api_key=api_key,
                 base_url=base_url,
@@ -152,7 +170,7 @@ class ObservationNode:
 
         return self.task_scheduler.invoke_chat(
             task_type=FOREGROUND_AGENT_TASK,
-            messages=[system_message, context_message],
+            messages=messages,
             model_tier=SMALL_MODEL_TIER,
             api_key=api_key,
             base_url=base_url,

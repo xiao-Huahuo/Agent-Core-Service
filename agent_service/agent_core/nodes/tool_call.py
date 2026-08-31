@@ -123,7 +123,8 @@ class ToolCallNode:
                 "tool_name": tool_name,
                 "display_name": display_name,
                 "tool_args_summary": args_summary,
-                "human_readable": f"正在调用工具「{display_name}」，参数：{args_summary}",
+                "tool_args": arguments,
+                "human_readable": f"正在调用工具「{display_name}」。",
                 # Stream the preview immediately so the UI can render the running tool row.
                 "chat_visible": True,
             }
@@ -181,6 +182,7 @@ class ToolCallNode:
                 "tool_name": tool_name,
                 "display_name": display_name,
                 "tool_args_summary": args_summary,
+                "tool_args": arguments,
                 "raw_content": content,
                 "duration_ms": duration_ms,
                 "human_readable": completion_text,

@@ -8,7 +8,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { listSessions } from '@/api/session'
+import { fetchMessages, fetchSessionState, listSessions } from '@/api/session'
+import { useChatStore } from '@/stores/chat'
 import { useSettingsStore } from '@/stores/settings'
 import DebugView from '@/views/DebugView.vue'
 
@@ -16,6 +17,8 @@ vi.mock('@/api/session', () => ({
   clearAllSessions: vi.fn(),
   createSession: vi.fn(),
   deleteSession: vi.fn(),
+  fetchMessages: vi.fn().mockResolvedValue([]),
+  fetchSessionState: vi.fn().mockResolvedValue({ session_state: null }),
   listSessions: vi.fn().mockResolvedValue([]),
   pruneEmptySessions: vi.fn(),
   updateSessionName: vi.fn(),
@@ -75,5 +78,42 @@ describe('DebugView session initialization', () => {
     await constantsTab!.trigger('click')
 
     expect(wrapper.findComponent({ name: 'GlobalConstantsPanel' }).exists()).toBe(true)
+  })
+
+  it('restores the exact model request snapshots for the selected debug session', async () => {
+    useSettingsStore().setUserId('1')
+    vi.mocked(listSessions).mockResolvedValue([{
+      session_id: 'session-1',
+      user_id: '1',
+      session_name: '真实会话',
+      created_at: '2026-08-31T00:00:00Z',
+      updated_at: '2026-08-31T00:00:00Z',
+    }])
+    vi.mocked(fetchMessages).mockResolvedValue([])
+    vi.mocked(fetchSessionState).mockResolvedValue({
+      session_state: {
+        context_snapshots: [{
+          call_index: 1,
+          node: 'agent',
+          model_tier: 'large',
+          model: 'deepseek-v4-flash',
+          temperature: 0,
+          timeout_seconds: 120,
+          model_kwargs: {},
+          messages: [{ role: 'user', content: '真实请求' }],
+          tools: [],
+        }],
+      },
+    })
+
+    const wrapper = mount(DebugView, {
+      global: { stubs: { AgentTracePanel: true, IcIcon: true } },
+    })
+    await flushPromises()
+    await flushPromises()
+
+    expect(fetchSessionState).toHaveBeenCalledWith('session-1')
+    expect(useChatStore().contextSnapshots[0]?.messages).toEqual([{ role: 'user', content: '真实请求' }])
+    wrapper.unmount()
   })
 })

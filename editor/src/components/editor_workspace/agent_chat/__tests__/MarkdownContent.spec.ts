@@ -255,6 +255,25 @@ describe('MarkdownContent streaming code highlight', () => {
     expect(wrapper.find('.stream-cursor').exists()).toBe(false)
   })
 
+  it('keeps completed Markdown block DOM stable while only the active tail grows', async () => {
+    const wrapper = mount(MarkdownContent, {
+      props: {
+        content: '已完成段落\n\n正在生成',
+        isStreaming: true,
+        citationMap: {},
+      },
+    })
+    await nextTick()
+    const stableParagraph = wrapper.findAll('.markdown-body p')[0]?.element
+    expect(stableParagraph).toBeDefined()
+
+    await wrapper.setProps({ content: '已完成段落\n\n正在生成更多内容' })
+    await nextTick()
+
+    expect(wrapper.findAll('.markdown-body p')[0]?.element).toBe(stableParagraph)
+    expect(wrapper.findAll('.markdown-body p')[1]?.text()).toContain('正在生成更多内容')
+  })
+
   it('removes the stream cursor without altering the final markdown content', async () => {
     const wrapper = mount(MarkdownContent, {
       props: {

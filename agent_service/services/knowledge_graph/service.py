@@ -157,7 +157,11 @@ class LLMKnowledgeGraphExtractor:
             model_tier=SMALL_MODEL_TIER,
             messages=[
                 SystemMessage(content=self._system_prompt()),
-                HumanMessage(content=self._human_prompt(document=document, section=section, content=content[:6000])),
+                HumanMessage(content=self._human_prompt(
+                    document=document,
+                    section=section,
+                    content=content[:self.config.limits.graph_single_section_max_chars],
+                )),
             ],
             model_name=self._value("model_name"),
             api_key=self._value("api_key"),

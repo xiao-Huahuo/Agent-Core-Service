@@ -201,6 +201,22 @@ class ModelRuntimeMixin:
                 return
             started_at = time.perf_counter()
             cumulative_reasoning = ""
+            simple_snapshot = {
+                **self.task_scheduler.build_observability_snapshot(
+                    messages=runtime_messages,
+                    tool_names=[],
+                    model_tier=SMALL_MODEL_TIER,
+                    api_key=api_key,
+                    base_url=base_url,
+                    model_name=model_name,
+                    small_api_key=small_api_key,
+                    small_base_url=small_base_url,
+                    small_model_name=small_model_name,
+                    node="agent_simple",
+                ),
+                "call_index": 1,
+            }
+            self._persist_session_state_value(session_id, "context_snapshots", [simple_snapshot])
             yield {
                 "node": "agent",
                 "type": "context_mirror",
@@ -208,6 +224,8 @@ class ModelRuntimeMixin:
                 "tool_calls": [],
                 "trace": [],
                 "model_name": self._model_name_for_node("agent_simple"),
+                "context_request": simple_snapshot,
+                "context_snapshots": [simple_snapshot],
                 "context_messages": serialized_runtime_messages,
                 "metadata": {
                     **latency_metadata(),
@@ -240,7 +258,8 @@ class ModelRuntimeMixin:
                         "tool_calls": [],
                         "trace": [],
                         "model_name": self._model_name_for_node("agent_simple"),
-                        "metadata": latency_metadata(),
+                        # 思考 token 不携带逐次变化的耗时，防止前端响应式风暴。
+                        "metadata": {},
                     }
                 delta = chunk.get("content_delta", "")
                 if not delta:
@@ -278,7 +297,8 @@ class ModelRuntimeMixin:
                     "tool_calls": [],
                     "trace": [],
                     "model_name": self._model_name_for_node("agent_simple"),
-                    "metadata": latency_metadata(extra_latency),
+                    # 仅首个正文增量报告首字延迟，终态仍携带完整 latency。
+                    "metadata": latency_metadata(extra_latency) if extra_latency else {},
                 }
 
             content = self._stringify_content(getattr(final_message, "content", "") if final_message is not None else cumulative)

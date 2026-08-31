@@ -58,6 +58,12 @@ export interface ContextAssembly {
   stats: AssemblyStats
 }
 
+/** Secret-free model request shape emitted immediately before invocation. */
+interface ModelRequestSnapshot {
+  messages?: Array<Record<string, unknown>>
+  tools?: Array<Record<string, unknown>>
+}
+
 /** 节点时间线条目 */
 export interface NodeTimelineItem {
   id: string
@@ -542,6 +548,56 @@ export function buildContextAssembly(messages: { role: string; content: unknown 
   }
 }
 
+/** Build a lossless readable view without reclassifying or trimming request data. */
+export function buildExactRequestAssembly(snapshot: ModelRequestSnapshot | undefined): ContextAssembly {
+  const blocks: AssemblyBlock[] = []
+  const pushExactBlock = (type: string, title: string, lines: string[], order: number) => {
+    blocks.push({
+      id: `${type}-${blocks.length}`,
+      type,
+      title,
+      accent: sourceAccent(type),
+      status: sourceStatus(type),
+      lines,
+      preview: lines.join('\n'),
+      lineCount: lines.length,
+      order,
+    })
+  }
+  for (const [index, message] of safeArray<Record<string, unknown>>(snapshot?.messages).entries()) {
+    const role = String(message.role || 'unknown')
+    const detail = { ...message }
+    delete detail.role
+    const content = detail.content
+    delete detail.content
+    const lines = [String(content ?? '')]
+    if (Object.keys(detail).length > 0) lines.push(JSON.stringify(detail, null, 2))
+    pushExactBlock(`message_${role}`, `${role} message`, lines, index + 1)
+  }
+  for (const tool of safeArray<Record<string, unknown>>(snapshot?.tools)) {
+    const functionDefinition = tool.function && typeof tool.function === 'object'
+      ? tool.function as Record<string, unknown>
+      : {}
+    pushExactBlock(
+      'tool_schema',
+      `tool: ${String(functionDefinition.name || 'unknown')}`,
+      [JSON.stringify(tool, null, 2)],
+      blocks.length + 1,
+    )
+  }
+  return {
+    blocks,
+    stats: {
+      blockCount: blocks.length,
+      lineCount: blocks.reduce((sum, block) => sum + block.lineCount, 0),
+      memoryCount: 0,
+      knowledgeCount: 0,
+      importantCount: 0,
+      historyCount: safeArray(snapshot?.messages).length,
+    },
+  }
+}
+
 function isAssistantRenderable(message: { role: string; content?: unknown; trace?: unknown; tool_calls?: unknown; node?: unknown }): boolean {
   if (message.role !== 'assistant') return false
   if (String(message.content || '').trim()) return true
@@ -832,22 +888,15 @@ export function useObsData() {
 
   const contextSources = computed(() => buildContextSources(messages.value))
 
-  /*
-   * 上下文拼装: 优先使用 agent 节点传来的完整上下文镜像 (模型收到的真实消息列表),
-   * 回退到从消息列表中解析系统消息的方式。
-   * 镜像消息格式为 [{role, content, ...}], 与 messages 格式兼容,
-   * 可直接传入 buildContextAssembly。
-   */
+  /** 上下文拼装只接受后端最终请求快照，禁止从聊天消息猜测模型输入。 */
   const contextAssembly = computed<ContextAssembly>(() => {
-    const mirror = chatStore.contextMirror as { role: string; content: unknown }[] | undefined
-    if (mirror && mirror.length > 0) {
-      return buildContextAssembly(mirror)
-    }
-    return buildContextAssembly(messages.value)
+    const latest = chatStore.contextSnapshots[chatStore.contextSnapshots.length - 1]
+    return buildExactRequestAssembly(latest)
   })
 
   /** 模型收到的完整上下文镜像, 由 agent 节点在调用 LLM 前通过 SSE 下发。 */
   const contextMirror = computed(() => chatStore.contextMirror || [])
+  const contextSnapshots = computed(() => chatStore.contextSnapshots || [])
 
   const memorySources = computed(() =>
     contextSources.value.filter((source) => ['important_summary', 'memory'].includes(source.type)),
@@ -954,6 +1003,14 @@ export function useObsData() {
       if (msg.role === 'user') break
       if (msg.role === 'assistant') {
         traces.unshift(...safeArray<Record<string, unknown>>(msg.trace))
+        if (msg.thinking?.trim()) {
+          traces.unshift({
+            node: msg.node || 'agent',
+            event: 'reasoning_content',
+            human_readable: msg.thinking,
+            chat_visible: false,
+          })
+        }
       }
     }
     return traces
@@ -1035,6 +1092,7 @@ export function useObsData() {
     contextSources,
     contextAssembly,
     contextMirror,
+    contextSnapshots,
     memorySources,
     knowledgeSources,
     schedulerSnapshot,

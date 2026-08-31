@@ -29,7 +29,7 @@ def test_main_agent_prompt_forbids_dsh_when_disabled() -> None:
 def test_static_prompt_does_not_duplicate_dynamic_dsh_rules() -> None:
     """DSH provider和状态规则只能由每轮动态提示维护。"""
 
-    static_prompt = AgentConfig.ModelConfig().system_prompt
+    static_prompt = AgentConfig.PromptConfig().agent_system_prompt
     assert "provider=dsh" not in static_prompt
     assert "DSH" not in static_prompt
     assert "禁止使用以下说辞" not in static_prompt

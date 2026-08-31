@@ -53,8 +53,9 @@ def list_available_tools() -> str:
             (line.strip() for line in description.split("\n") if line.strip()),
             "",
         )
-        if len(first_line) > 100:
-            first_line = first_line[:100].rstrip() + "…"
+        description_chars = runtime.config.limits.tool_registry_description_chars
+        if len(first_line) > description_chars:
+            first_line = first_line[:description_chars].rstrip() + "…"
         lines.append(f"- {display}({name}): {first_line}")
     return "\n".join(lines)
 def list_skills() -> str:

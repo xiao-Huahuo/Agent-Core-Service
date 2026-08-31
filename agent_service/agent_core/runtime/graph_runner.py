@@ -423,6 +423,9 @@ class GraphRunnerMixin:
             )
         )
 
+        # 新用户轮次开始即清空旧请求快照；若安全审核拦截，本轮应明确显示“没有模型调用”。
+        self._persist_session_state_value(session_id, "context_snapshots", [])
+
         # 将系统提示作为首个 SSE 事件下发, 供前端 Obs 面板的上下文拼装卡片使用。
         # 系统消息不在图节点输出中, 不走常规 node 事件, 需要单独 yield。
         for msg in messages:
@@ -662,7 +665,17 @@ class GraphRunnerMixin:
 
         compression_active = [False]
 
-        def on_context_mirror(messages: list[dict[str, Any]]) -> None:
+        context_snapshots: list[dict[str, Any]] = []
+
+        def on_context_mirror(snapshot: dict[str, Any]) -> None:
+            """Persist and stream every exact model request made during this user turn."""
+
+            normalized_snapshot = {
+                **snapshot,
+                "call_index": len(context_snapshots) + 1,
+            }
+            context_snapshots.append(normalized_snapshot)
+            messages = normalized_snapshot.get("messages", [])
             model_name = str((llm_config or {}).get("model_name") or self.config.model.model_name or "") or None
             usage = ContextBuilder.context_usage_from_serialized(
                 messages,
@@ -671,7 +684,13 @@ class GraphRunnerMixin:
                 extra_tokens=ContextBuilder.estimate_tool_definition_tokens(self.tools, model_name=model_name),
             )
             self._persist_session_state_value(session_id, "context_usage", usage)
-            token_queue.put({"type": "context_mirror", "messages": messages, "context_usage": usage})
+            self._persist_session_state_value(session_id, "context_snapshots", context_snapshots)
+            token_queue.put({
+                "type": "context_mirror",
+                "snapshot": normalized_snapshot,
+                "snapshots": list(context_snapshots),
+                "context_usage": usage,
+            })
 
         def on_context_compression(event: dict[str, Any]) -> None:
             compression_active[0] = event.get("event") == "compression_started"
@@ -878,7 +897,9 @@ class GraphRunnerMixin:
                         "tool_calls": item.get("tool_calls", []),
                         "trace": item.get("trace", []),
                         "model_name": self._model_name_for_node(item.get("node", "agent")),
-                        "metadata": latency_metadata(extra_latency),
+                        # 只有首个正文增量携带一次首字延迟；普通 token 不再制造
+                        # 每次都变化的 metadata，避免前端绕过文本缓冲逐 token 重绘。
+                        "metadata": latency_metadata(extra_latency) if extra_latency else {},
                     }
 
                 elif item_type == "thinking":
@@ -890,7 +911,8 @@ class GraphRunnerMixin:
                         "tool_calls": item.get("tool_calls", []),
                         "trace": item.get("trace", []),
                         "model_name": self._model_name_for_node(item.get("node", "agent")),
-                        "metadata": latency_metadata(),
+                        # 思考 token 只承载文本增量，完整耗时由终态事件统一报告。
+                        "metadata": {},
                     }
 
                 elif item_type == "tool_trace":
@@ -947,7 +969,9 @@ class GraphRunnerMixin:
                         "tool_calls": [],
                         "trace": [],
                         "model_name": self._model_name_for_node("agent"),
-                        "context_messages": item.get("messages", []),
+                        "context_request": item.get("snapshot", {}),
+                        "context_snapshots": item.get("snapshots", []),
+                        "context_messages": (item.get("snapshot") or {}).get("messages", []),
                         "metadata": {"context_usage": item.get("context_usage", {})},
                     }
 

@@ -19,7 +19,22 @@ export interface AgentStreamChunk {
   trace?: Array<Record<string, unknown>>
   metadata?: Record<string, unknown>
   context_messages?: unknown[]
+  context_request?: AgentModelRequestSnapshot
+  context_snapshots?: AgentModelRequestSnapshot[]
   visualization?: MarkdownHtmlVisualizationPayload
+}
+
+/** Exact secret-free request submitted to one model call. */
+export interface AgentModelRequestSnapshot {
+  call_index: number
+  node: string
+  model_tier: string
+  model: string
+  temperature: number
+  timeout_seconds: number
+  model_kwargs: Record<string, unknown>
+  messages: Array<Record<string, unknown>>
+  tools: Array<Record<string, unknown>>
 }
 
 export type AgentLoopMode = 'auto' | 'simple' | 'react' | 'plan'

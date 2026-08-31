@@ -18,7 +18,9 @@ interface TraceRecord {
   tool_name?: string
   display_name?: string
   tool_args_summary?: string
+  tool_args?: Record<string, unknown>
   result_summary?: string
+  raw_content?: string
 }
 
 const props = withDefaults(defineProps<{
@@ -68,6 +70,16 @@ function nodeColor(node: string | undefined): string {
 function traceKey(trace: TraceRecord, idx: number): string {
   return `${trace.node}-${trace.event}-${idx}`
 }
+
+/** Render the exact structured arguments captured by the action node. */
+function fullToolArguments(trace: TraceRecord): string {
+  return trace.tool_args ? JSON.stringify(trace.tool_args, null, 2) : trace.tool_args_summary || ''
+}
+
+/** Prefer the unmodified tool result; old traces may only have a summary. */
+function fullToolResult(trace: TraceRecord): string {
+  return trace.raw_content || trace.result_summary || ''
+}
 </script>
 
 <template>
@@ -99,14 +111,14 @@ function traceKey(trace: TraceRecord, idx: number): string {
           </div>
 
           <Transition name="detail">
-            <div v-if="stepExpanded[idx] && (trace.tool_args_summary || trace.result_summary)" class="step-detail">
-              <div v-if="trace.tool_args_summary" class="detail-block">
+            <div v-if="stepExpanded[idx] && (fullToolArguments(trace) || fullToolResult(trace))" class="step-detail">
+              <div v-if="fullToolArguments(trace)" class="detail-block">
                 <span class="detail-label">参数:</span>
-                <pre class="detail-value">{{ trace.tool_args_summary }}</pre>
+                <pre class="detail-value">{{ fullToolArguments(trace) }}</pre>
               </div>
-              <div v-if="trace.result_summary" class="detail-block">
+              <div v-if="fullToolResult(trace)" class="detail-block">
                 <span class="detail-label">返回:</span>
-                <pre class="detail-value">{{ trace.result_summary }}</pre>
+                <pre class="detail-value">{{ fullToolResult(trace) }}</pre>
               </div>
             </div>
           </Transition>

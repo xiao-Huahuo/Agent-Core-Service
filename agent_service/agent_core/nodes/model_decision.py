@@ -268,6 +268,19 @@ class ModelDecisionNode:
             state["messages"],
             limits=self.config.limits,
         )
+        context_callback = get_context_mirror_callback()
+        if context_callback is not None:
+            context_callback(self.task_scheduler.build_observability_snapshot(
+                messages=llm_messages,
+                tool_names=active_tool_names,
+                api_key=user_api_key,
+                base_url=user_base_url,
+                model_name=user_model_name,
+                small_api_key=user_small_api_key,
+                small_base_url=user_small_base_url,
+                small_model_name=user_small_model_name,
+                node="agent",
+            ))
         response = self.task_scheduler.invoke_chat(
             task_type=FOREGROUND_AGENT_TASK,
             messages=llm_messages,
@@ -401,8 +414,26 @@ class ModelDecisionNode:
             state["messages"],
             limits=self.config.limits,
         )
+        (
+            user_api_key,
+            user_base_url,
+            user_model_name,
+            user_small_api_key,
+            user_small_base_url,
+            user_small_model_name,
+        ) = self._get_user_model_overrides(state)
         if context_callback is not None:
-            context_callback(self._serialize_messages(llm_messages))
+            context_callback(self.task_scheduler.build_observability_snapshot(
+                messages=llm_messages,
+                tool_names=active_tool_names,
+                api_key=user_api_key,
+                base_url=user_base_url,
+                model_name=user_model_name,
+                small_api_key=user_small_api_key,
+                small_base_url=user_small_base_url,
+                small_model_name=user_small_model_name,
+                node="agent",
+            ))
         if trace_callback is not None:
             trace_callback({
                 "node": "agent",
@@ -420,14 +451,6 @@ class ModelDecisionNode:
             # 挡住增量(前向切片依赖前缀,基线必须从本轮重新开始)。
             thinking_callback("")
 
-        (
-            user_api_key,
-            user_base_url,
-            user_model_name,
-            user_small_api_key,
-            user_small_base_url,
-            user_small_model_name,
-        ) = self._get_user_model_overrides(state)
         for chunk in self.task_scheduler.stream_chat(
             task_type=FOREGROUND_AGENT_TASK,
             messages=llm_messages,

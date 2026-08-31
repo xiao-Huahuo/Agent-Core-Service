@@ -258,6 +258,7 @@ async function loadSelectedSessionHistory(sessionId: string, force = false) {
     try {
       const state = await fetchSessionState(sessionId)
       chatStore.value.setContextUsage(state.session_state?.context_usage)
+      chatStore.value.setContextSnapshots(state.session_state?.context_snapshots)
     } catch {
       // History remains usable before the session has produced a context-usage snapshot.
     }

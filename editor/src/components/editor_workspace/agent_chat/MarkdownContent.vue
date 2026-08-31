@@ -114,7 +114,8 @@ codeRenderer.code = ({ text, lang }: { text: string; lang?: string }) => {
   return `<pre><code${langAttr}>${highlighted}</code></pre>\n`
 }
 
-const sanitizedHtml = computed(() => {
+/** Parses and sanitizes one complete or currently active Markdown fragment. */
+function renderMarkdownHtml(source: string): string {
   // Allow citation-anchor class, data-citation-idx attribute, img tags, and
   // KaTeX style (katex 用 style 定位上下标/strut,DOMPurify 会清洗危险 CSS)。
   const purifyConfig = {
@@ -124,9 +125,114 @@ const sanitizedHtml = computed(() => {
   // 代码高亮在 renderer 内完成:代码 fence 内的 HTML 由 hljs 转义保留(不再被剥离),
   // 裸 HTML 由 DOMPurify 统一净化防 XSS。
   // 数学渲染在 marked 之后、净化之前:把 $...$ / $$...$$ 转成 KaTeX span。
-  const parsed = marked.parse(props.content, { async: false, renderer: codeRenderer }) as string
+  const parsed = marked.parse(source, { async: false, renderer: codeRenderer }) as string
   return DOMPurify.sanitize(renderMathInHtml(parsed), purifyConfig)
-})
+}
+
+let activeNodes: Node[] = []
+let streamBoundary: Comment | null = null
+let streamedSource = ''
+let pendingBlock = ''
+let pendingLine = ''
+let fenceCharacter = ''
+let fenceLength = 0
+
+/** Creates DOM through a template so sanitized top-level blocks need no layout wrappers. */
+function createMarkdownFragment(source: string): DocumentFragment {
+  const template = document.createElement('template')
+  template.innerHTML = renderMarkdownHtml(source)
+  return template.content
+}
+
+/** Removes only the active tail nodes, preserving every completed block node. */
+function clearActiveNodes() {
+  for (const node of activeNodes) node.parentNode?.removeChild(node)
+  activeNodes = []
+}
+
+/** Resets the append-only scanner when an authoritative response repairs its prefix. */
+function resetStreamingState(root: HTMLElement) {
+  root.replaceChildren()
+  activeNodes = []
+  streamedSource = ''
+  pendingBlock = ''
+  pendingLine = ''
+  fenceCharacter = ''
+  fenceLength = 0
+  streamBoundary = document.createComment('stream-active-tail')
+  root.appendChild(streamBoundary)
+}
+
+/** Scans only newly received characters and returns blocks completed by this delta. */
+function consumeStreamingDelta(delta: string): string[] {
+  const completedBlocks: string[] = []
+  pendingLine += delta
+  let newline = pendingLine.indexOf('\n')
+  while (newline >= 0) {
+    const line = pendingLine.slice(0, newline + 1)
+    pendingLine = pendingLine.slice(newline + 1)
+    pendingBlock += line
+    const content = line.slice(0, -1)
+    const fence = content.trimStart().match(/^(`{3,}|~{3,})/u)?.[1] ?? ''
+    if (fence) {
+      if (!fenceCharacter) {
+        fenceCharacter = fence[0] ?? ''
+        fenceLength = fence.length
+      } else if (fence[0] === fenceCharacter && fence.length >= fenceLength) {
+        fenceCharacter = ''
+        fenceLength = 0
+      }
+    }
+    if (!fenceCharacter && content.trim() === '' && pendingBlock.trim()) {
+      completedBlocks.push(pendingBlock)
+      pendingBlock = ''
+    }
+    newline = pendingLine.indexOf('\n')
+  }
+  return completedBlocks
+}
+
+/** Renders append-only streaming Markdown in O(active tail) work per draft tick. */
+function renderStreamingContent() {
+  const root = contentRef.value
+  if (!root) return
+  if (!streamBoundary || !props.content.startsWith(streamedSource)) resetStreamingState(root)
+
+  clearActiveNodes()
+  const delta = props.content.slice(streamedSource.length)
+  const completedBlocks = consumeStreamingDelta(delta)
+  if (completedBlocks.length > 0) {
+    // One parser/sanitizer pass per draft tick prevents a buffered network
+    // burst containing many paragraphs from becoming one long main-thread task.
+    root.insertBefore(createMarkdownFragment(completedBlocks.join('')), streamBoundary)
+  }
+  streamedSource = props.content
+  const activeTail = pendingBlock + pendingLine
+  if (activeTail) {
+    const fragment = createMarkdownFragment(activeTail)
+    activeNodes = Array.from(fragment.childNodes)
+    root.appendChild(fragment)
+  }
+}
+
+/** Final output is reparsed once as a whole to guarantee exact Markdown semantics. */
+function renderFinalContent() {
+  const root = contentRef.value
+  if (!root) return
+  root.innerHTML = renderMarkdownHtml(props.content)
+  activeNodes = []
+  streamedSource = ''
+  pendingBlock = ''
+  pendingLine = ''
+  fenceCharacter = ''
+  fenceLength = 0
+  streamBoundary = null
+}
+
+function renderCurrentContent() {
+  if (props.isStreaming) renderStreamingContent()
+  else renderFinalContent()
+}
 
 const sourceLinkSignature = computed(() => {
   const citationSources = Object.entries(props.citationMap ?? {})
@@ -466,6 +572,8 @@ async function highlightCodeBlocks() {
 
 onMounted(() => {
   contentRef.value?.addEventListener('click', handleClick)
+  renderCurrentContent()
+  if (!props.isStreaming) void highlightCodeBlocks()
 })
 
 onUnmounted(() => {
@@ -473,20 +581,18 @@ onUnmounted(() => {
   highlightCache.clear()
 })
 
-watch([sanitizedHtml, sourceLinkSignature], () => {
-  if (props.isStreaming) return
-  void highlightCodeBlocks()
-}, { immediate: true })
+watch(() => [props.content, props.isStreaming] as const, () => {
+  renderCurrentContent()
+  if (!props.isStreaming) void highlightCodeBlocks()
+}, { flush: 'post' })
 
-watch(() => props.isStreaming, (streaming, wasStreaming) => {
-  if (wasStreaming && !streaming) {
-    void highlightCodeBlocks()
-  }
+watch(sourceLinkSignature, () => {
+  if (!props.isStreaming) void highlightCodeBlocks()
 })
 </script>
 
 <template>
-  <div ref="contentRef" class="markdown-body" v-html="sanitizedHtml"></div>
+  <div ref="contentRef" class="markdown-body"></div>
 </template>
 
 <style scoped>

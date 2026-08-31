@@ -298,17 +298,17 @@ def clear_observation_content_callback() -> None:
 _CONTEXT_MIRROR_CALLBACK: local = local()
 
 
-def set_context_mirror_callback(callback: Callable[[list[dict[str, Any]]], None]) -> None:
+def set_context_mirror_callback(callback: Callable[[dict[str, Any]], None]) -> None:
     """
     设置当前线程的上下文镜像回调, 供 ModelDecisionNode 在调用 LLM 前
     将完整消息列表镜像给 AgentCore, 再由 SSE 下发给前端 Obs 面板。
 
-    callback: 接收序列化后的消息列表 (list[dict]) 的回调函数。
+    callback: 接收最终模型请求快照的回调函数。快照包含消息、工具定义和实际模型参数。
     """
     _CONTEXT_MIRROR_CALLBACK.callback = callback
 
 
-def get_context_mirror_callback() -> Callable[[list[dict[str, Any]]], None] | None:
+def get_context_mirror_callback() -> Callable[[dict[str, Any]], None] | None:
     """获取当前线程的上下文镜像回调。"""
     return getattr(_CONTEXT_MIRROR_CALLBACK, "callback", None)
 

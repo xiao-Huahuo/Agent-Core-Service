@@ -8,7 +8,15 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { buildAllSessionLatencyTurns, buildContextAssembly, buildLatencyTurns, buildRagHistory, buildRagMetrics, buildTokenSeries } from '../useObsData'
+import {
+  buildAllSessionLatencyTurns,
+  buildContextAssembly,
+  buildExactRequestAssembly,
+  buildLatencyTurns,
+  buildRagHistory,
+  buildRagMetrics,
+  buildTokenSeries,
+} from '../useObsData'
 
 describe('buildTokenSeries', () => {
   it('aggregates token usage by large/small model pool only', () => {
@@ -341,5 +349,28 @@ describe('buildContextAssembly', () => {
     expect(skillBlock?.lines).toContain('[Candidate skills]')
     expect(skillBlock?.lines).toContain('[Routed skills for this turn]')
     expect(assembly.blocks.find((block) => block.type === 'system')?.lines).toEqual(['核心系统提示'])
+  })
+})
+
+describe('buildExactRequestAssembly', () => {
+  it('preserves exact message fields and full tool schemas without heuristic regrouping', () => {
+    const assembly = buildExactRequestAssembly({
+      messages: [
+        { role: 'system', content: 'final system\nwith spacing' },
+        { role: 'assistant', content: '', tool_calls: [{ id: 'call-1', name: 'search', args: { q: 'x' } }] },
+        { role: 'tool', content: 'result', tool_call_id: 'call-1' },
+      ],
+      tools: [{ type: 'function', function: { name: 'search', parameters: { type: 'object' } } }],
+    })
+
+    expect(assembly.blocks.map((block) => block.type)).toEqual([
+      'message_system',
+      'message_assistant',
+      'message_tool',
+      'tool_schema',
+    ])
+    expect(assembly.blocks[0]?.lines[0]).toBe('final system\nwith spacing')
+    expect(assembly.blocks[1]?.lines[1]).toContain('call-1')
+    expect(assembly.blocks[3]?.lines[0]).toContain('"parameters"')
   })
 })

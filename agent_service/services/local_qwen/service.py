@@ -187,7 +187,10 @@ class LocalQwenService:
             "请描述图片中的对象、布局、空间关系、图表趋势和 OCR 无法表达的视觉含义。"
             "不要重复抄写 OCR 文本，不确定的内容明确说明。"
         )
-        ocr_context = ocr_text.strip()[:6000] or "（OCR 未识别到可靠文字）"
+        ocr_context = (
+            ocr_text.strip()[:self.config.limits.local_vision_ocr_context_chars]
+            or "（OCR 未识别到可靠文字）"
+        )
         with Image.open(image_path) as source:
             image = source.convert("RGB")
             messages = [{

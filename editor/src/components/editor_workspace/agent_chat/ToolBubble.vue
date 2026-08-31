@@ -346,7 +346,7 @@ function removeAttachment(attachment: AgentUploadedAttachment) {
   align-items: flex-start;
   gap: var(--space-8);
   width: 100%;
-  margin-bottom: var(--space-12);
+  margin-bottom: 0;
 }
 
 .tool-action-row :deep(.action-row) {

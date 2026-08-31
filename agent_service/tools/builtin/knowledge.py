@@ -394,10 +394,16 @@ def save_uploaded_attachment_to_knowledge(
         matches = [attachments[0]]
 
     if not matches:
-        available = "\n".join(f"- {item.filename} ({item.attachment_id})" for item in attachments[:8])
+        available = "\n".join(
+            f"- {item.filename} ({item.attachment_id})"
+            for item in attachments[:runtime.config.limits.tool_attachment_match_preview_count]
+        )
         return f"Attachment not found in this session. Available attachments:\n{available}"
     if len(matches) > 1:
-        available = "\n".join(f"- {item.filename} ({item.attachment_id})" for item in matches[:8])
+        available = "\n".join(
+            f"- {item.filename} ({item.attachment_id})"
+            for item in matches[:runtime.config.limits.tool_attachment_match_preview_count]
+        )
         return f"Multiple uploaded attachments matched. Please specify one attachment_id:\n{available}"
 
     record = matches[0]
@@ -500,11 +506,13 @@ def understand_image(attachment: str = "", prompt: str = "") -> str:
     ]
     if not matches:
         return "未找到指定图片。可用图片:\n" + "\n".join(
-            f"- {item.filename} ({item.attachment_id})" for item in images[:8]
+            f"- {item.filename} ({item.attachment_id})"
+            for item in images[:runtime.config.limits.tool_attachment_match_preview_count]
         )
     if len(matches) > 1 and normalized:
         return "匹配到多张图片，请指定 attachment_id:\n" + "\n".join(
-            f"- {item.filename} ({item.attachment_id})" for item in matches[:8]
+            f"- {item.filename} ({item.attachment_id})"
+            for item in matches[:runtime.config.limits.tool_attachment_match_preview_count]
         )
     record = matches[0]
     image_path = Path(record.path).expanduser().resolve()

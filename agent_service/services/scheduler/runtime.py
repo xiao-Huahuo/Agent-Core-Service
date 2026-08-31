@@ -24,6 +24,8 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 from langchain_openai import ChatOpenAI
+from langchain_core.messages import BaseMessage
+from langchain_core.utils.function_calling import convert_to_openai_tool
 
 from agent_service.services.scheduler.types import (
     BACKGROUND_FACT_RESOLUTION_TASK,
@@ -129,6 +131,75 @@ class LLMTaskRuntimeMixin:
                     model = model.bind_tools(tools)
             self._model_cache[cache_key] = model
             return model
+
+    def build_observability_snapshot(
+        self,
+        *,
+        messages: list[BaseMessage],
+        tool_names: list[str] | None = None,
+        model_tier: str = LARGE_MODEL_TIER,
+        temperature: float | None = None,
+        timeout_seconds: float | None = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model_name: str | None = None,
+        small_api_key: str | None = None,
+        small_base_url: str | None = None,
+        small_model_name: str | None = None,
+        node: str = "agent",
+    ) -> dict[str, Any]:
+        """返回即将提交给模型的完整、无密钥请求快照。
+
+        工具定义使用与 ``bind_tools`` 相同的 LangChain 转换函数生成，避免 Debug
+        页面根据工具名重建出与真实请求不同的 schema。模型名、温度和扩展参数也在
+        此处按实际运行时规则解析；API Key 属于密钥，永不进入快照。
+        """
+
+        selected_names = list(tool_names or [])
+        resolved_model, _resolved_key, _resolved_base_url, resolved_temperature = self._resolve_model_runtime(
+            model_tier=model_tier,
+            requested_temperature=temperature,
+            api_key=api_key,
+            base_url=base_url,
+            model_name=model_name,
+            small_api_key=small_api_key,
+            small_base_url=small_base_url,
+            small_model_name=small_model_name,
+        )
+        selected_name_set = set(selected_names)
+        tools = [
+            convert_to_openai_tool(tool)
+            for tool in self._get_tool_registry().to_langchain_tools()
+            if tool.name in selected_name_set
+        ]
+        return {
+            "node": node,
+            "model_tier": model_tier,
+            "model": resolved_model,
+            "temperature": resolved_temperature,
+            "timeout_seconds": timeout_seconds or self._resolve_timeout_seconds(FOREGROUND_AGENT_TASK),
+            "model_kwargs": self.config.model.get_model_kwargs(resolved_model),
+            "messages": self._serialize_observability_messages(messages),
+            "tools": tools,
+        }
+
+    @staticmethod
+    def _serialize_observability_messages(messages: list[BaseMessage]) -> list[dict[str, Any]]:
+        """按模型输入顺序保留消息正文、工具调用和工具响应关联字段。"""
+
+        role_map = {"system": "system", "human": "user", "ai": "assistant", "tool": "tool"}
+        serialized: list[dict[str, Any]] = []
+        for message in messages:
+            item: dict[str, Any] = {
+                "role": role_map.get(message.type, message.type),
+                "content": getattr(message, "content", "") or "",
+            }
+            for field_name in ("tool_calls", "tool_call_id", "name"):
+                value = getattr(message, field_name, None)
+                if value:
+                    item[field_name] = value
+            serialized.append(item)
+        return serialized
 
     def _resolve_model_runtime(
         self,

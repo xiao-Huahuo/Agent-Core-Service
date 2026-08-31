@@ -186,7 +186,7 @@ def delete_long_term_memory(content: str) -> str:
         return f"未找到内容匹配的长期记忆: {normalized_content}"
     success = runtime.memory_service.delete_memory(memory_id=matched.memory_id)
     if success:
-        return f"已删除长期记忆: {matched.content[:200]}"
+        return f"已删除长期记忆: {matched.content[:runtime.config.limits.tool_memory_mutation_result_chars]}"
     return f"删除长期记忆失败，可能已被删除。"
 def delete_long_term_rule(content: str) -> str:
     """
@@ -223,7 +223,7 @@ def delete_long_term_rule(content: str) -> str:
         return f"未找到内容匹配的长期规则: {normalized_content}"
     success = settings_service.delete_system_prompt_entry(prompt_id=matched["prompt_id"])
     if success:
-        return f"已删除长期规则: {matched['content'][:200]}"
+        return f"已删除长期规则: {matched['content'][:runtime.config.limits.tool_memory_mutation_result_chars]}"
     return f"删除长期规则失败，可能已被删除。"
 def write_long_term_rule(content: str) -> str:
     """

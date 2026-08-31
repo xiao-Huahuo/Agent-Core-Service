@@ -304,23 +304,29 @@ a {
 /* Shared status shimmer extracted from the pixel LoadingState's Thinking
    label, and reused by Agent thinking labels and pending tool announcements. */
 .thinking-shimmer-text {
-  color: transparent !important;
-  background: linear-gradient(
-    90deg,
-    var(--color-text-tertiary) 35%,
-    var(--color-text-primary) 50%,
-    var(--color-text-tertiary) 65%
-  );
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  color: var(--color-text-tertiary) !important;
+  isolation: isolate;
+}
+
+.thinking-shimmer-text::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-text-primary) 22%, transparent), transparent);
+  transform: translate3d(-120%, 0, 0);
   animation: thinking-text-shimmer 1.4s linear infinite;
+  pointer-events: none;
+  will-change: transform;
 }
 
 @keyframes thinking-text-shimmer {
   to {
-    background-position: -200% 0;
+    transform: translate3d(320%, 0, 0);
   }
 }
 
@@ -511,7 +517,7 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .thinking-shimmer-text {
+  .thinking-shimmer-text::after {
     animation: none !important;
   }
 

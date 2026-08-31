@@ -7,10 +7,10 @@
 -->
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import ThinkingSteps from '@/components/chat/ThinkingSteps.vue'
-import { useObsData, type AssemblyBlock } from '@/composable/useObsData'
+import { buildExactRequestAssembly, useObsData, type AssemblyBlock } from '@/composable/useObsData'
 import { useChatStore } from '@/stores/chat'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -24,6 +24,7 @@ const contextMode = ref<'raw' | 'readable'>('readable')
 const obs = useObsData()
 const chatStore = useChatStore()
 const settingsStore = useSettingsStore()
+const selectedCallIndex = ref(0)
 
 const cardTitle = computed(() => props.mode === 'trace' ? '语言轨迹' : '上下文拼装')
 
@@ -38,59 +39,22 @@ const thinkingModeLabel = computed(() => {
   return labels[mode] ?? mode
 })
 
-interface GroupedSource {
-  id: string
-  type: string
-  label: string
-  accent: string
-  items: typeof obs.contextSources.value
-}
-
-const groupedSources = computed<GroupedSource[]>(() => {
-  const groups: GroupedSource[] = []
-  for (const source of obs.contextSources.value) {
-    const lastGroup = groups.length > 0 ? groups[groups.length - 1]! : undefined
-    if (!lastGroup || lastGroup.type !== source.type) {
-      groups.push({
-        id: `${source.type}-${groups.length}`,
-        type: source.type,
-        label: source.label,
-        accent: source.accent,
-        items: [source],
-      })
-      continue
-    }
-    lastGroup.items.push(source)
-  }
-  return groups
-})
-
-const contextAssemblyState = computed(() => obs.contextAssembly?.value ?? {
+const contextSnapshots = computed(() => obs.contextSnapshots.value)
+watch(() => contextSnapshots.value.length, (length) => {
+  selectedCallIndex.value = Math.max(0, length - 1)
+}, { immediate: true })
+const selectedSnapshot = computed(() => contextSnapshots.value[selectedCallIndex.value])
+const contextAssemblyState = computed(() => selectedSnapshot.value
+  ? buildExactRequestAssembly(selectedSnapshot.value)
+  : {
   blocks: [],
   stats: { blockCount: 0, lineCount: 0, memoryCount: 0, knowledgeCount: 0 },
 })
 
 const assemblyBlocks = computed<AssemblyBlock[]>(() => contextAssemblyState.value.blocks)
-const assemblyStats = computed(() => contextAssemblyState.value.stats)
 
 const rawContextJson = computed(() => {
-  if ((obs.contextMirror?.value as unknown[])?.length > 0) {
-    return JSON.stringify(obs.contextMirror.value, null, 2)
-  }
-  const assembly = contextAssemblyState.value
-  if (!assembly.blocks || assembly.blocks.length === 0) return ''
-  const payload = {
-    stats: assembly.stats,
-    blocks: assembly.blocks.map((block) => ({
-      order: block.order,
-      type: block.type,
-      title: block.title,
-      status: block.status,
-      lineCount: block.lineCount,
-      lines: block.lines,
-    })),
-  }
-  return JSON.stringify(payload, null, 2)
+  return selectedSnapshot.value ? JSON.stringify(selectedSnapshot.value, null, 2) : ''
 })
 </script>
 
@@ -133,21 +97,31 @@ const rawContextJson = computed(() => {
           >
             Raw
           </button>
+          <select
+            v-if="contextSnapshots.length > 0"
+            v-model.number="selectedCallIndex"
+            class="call-select"
+            aria-label="选择模型调用"
+          >
+            <option v-for="(snapshot, index) in contextSnapshots" :key="index" :value="index">
+              #{{ snapshot.call_index }} {{ snapshot.node }} · {{ snapshot.model }}
+            </option>
+          </select>
         </div>
 
         <div v-if="contextMode === 'readable'" class="source-groups">
           <div class="assembly-overview">
             <div class="metric-row">
-              <span class="metric-label">拼装块</span>
-              <span class="metric-value">{{ assemblyStats.blockCount }}</span>
+              <span class="metric-label">消息</span>
+              <span class="metric-value">{{ selectedSnapshot?.messages.length ?? 0 }}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">总行数</span>
-              <span class="metric-value">{{ assemblyStats.lineCount }}</span>
+              <span class="metric-label">工具定义</span>
+              <span class="metric-value">{{ selectedSnapshot?.tools.length ?? 0 }}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">记忆/知识</span>
-              <span class="metric-value">{{ assemblyStats.memoryCount }}/{{ assemblyStats.knowledgeCount }}</span>
+              <span class="metric-label">模型层级</span>
+              <span class="metric-value metric-text">{{ selectedSnapshot?.model_tier ?? '—' }}</span>
             </div>
           </div>
 
@@ -182,36 +156,12 @@ const rawContextJson = computed(() => {
             </div>
           </div>
 
-          <div v-else-if="groupedSources.length > 0" class="fallback-groups">
-            <div
-              v-for="group in groupedSources"
-              :key="group.id"
-              class="source-group"
-              :style="{ '--source-accent': group.accent }"
-            >
-              <div class="source-header">
-                <span class="source-dot"></span>
-                <span class="source-title">{{ group.label }}</span>
-                <span class="source-count">{{ group.items.length }}</span>
-              </div>
-              <div class="source-items">
-                <p
-                  v-for="item in group.items"
-                  :key="item.id"
-                  class="source-text"
-                >
-                  {{ item.text }}
-                </p>
-              </div>
-            </div>
-          </div>
-
           <div v-else class="empty-state">
-            <span class="placeholder-text">$ 当前还没有系统上下文可供拆解</span>
+            <span class="placeholder-text">$ 当前轮次尚未调用模型，没有可展示的最终请求</span>
           </div>
         </div>
 
-        <pre v-else class="raw-context"><code>{{ rawContextJson || '$ 当前没有系统上下文原文' }}</code></pre>
+        <pre v-else class="raw-context"><code>{{ rawContextJson || '$ 当前轮次没有模型请求' }}</code></pre>
       </div>
     </div>
   </section>
@@ -305,6 +255,18 @@ const rawContextJson = computed(() => {
   margin-bottom: var(--space-10);
 }
 
+.call-select {
+  min-width: 0;
+  margin-left: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 3px var(--space-8);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  font-family: var(--font-ui);
+  font-size: calc(9px * var(--font-scale));
+}
+
 .mode-button {
   position: relative;
   z-index: 1;
@@ -369,6 +331,10 @@ const rawContextJson = computed(() => {
   color: var(--color-primary);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
+}
+
+.metric-text {
+  font-size: var(--font-size-sm);
 }
 
 .assembly-list,
@@ -507,6 +473,14 @@ const rawContextJson = computed(() => {
 }
 
 @media (max-width: 720px) {
+  .context-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .call-select {
+    width: 100%;
+    margin-left: 0;
+  }
   .assembly-overview {
     grid-template-columns: 1fr;
   }

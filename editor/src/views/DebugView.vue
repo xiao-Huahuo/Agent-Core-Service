@@ -17,6 +17,7 @@ import RuntimeApisPanel from '@/components/debug/RuntimeApisPanel.vue'
 import { useChatStore } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
+import { fetchSessionState } from '@/api/session'
 
 const activeTab = ref<'trace' | 'multimodal' | 'mk' | 'tools' | 'constants' | 'apis'>('trace')
 const debugTabsRef = ref<HTMLElement | null>(null)
@@ -55,8 +56,12 @@ async function ensureDebugHistoryLoaded() {
   }
 
   if (!sessionId) return
-  if (chatStore.loadedSessionId === sessionId && chatStore.messages.length > 0) return
-  await chatStore.loadHistory(sessionId, userId, 200)
+  if (chatStore.loadedSessionId !== sessionId || chatStore.messages.length === 0) {
+    await chatStore.loadHistory(sessionId, userId, 200)
+  }
+  const state = await fetchSessionState(sessionId)
+  chatStore.setContextUsage(state.session_state?.context_usage)
+  chatStore.setContextSnapshots(state.session_state?.context_snapshots)
 }
 
 watch(

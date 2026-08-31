@@ -10,7 +10,13 @@ import { computed, ref } from 'vue'
 import { acceptHMRUpdate, defineStore } from 'pinia'
 
 import { deleteAgentAttachment, fetchChildAgents, fetchTaskSuggestions, streamPrompt } from '@/api/agent'
-import type { AgentAccessMode, AgentAttachmentUploadResponse, AgentLoopMode, ChildAgentRecord } from '@/api/agent'
+import type {
+  AgentAccessMode,
+  AgentAttachmentUploadResponse,
+  AgentLoopMode,
+  AgentModelRequestSnapshot,
+  ChildAgentRecord,
+} from '@/api/agent'
 import { fetchMessages } from '@/api/session'
 import type { SessionMessageRecord } from '@/api/session'
 import type { AgentTaskList } from '@/api/taskList'
@@ -101,6 +107,17 @@ function asAttachments(value: unknown): AgentUploadedAttachment[] {
 
 function asFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+/** Drops the per-token elapsed clock while preserving one-shot latency fields. */
+function withoutStreamingElapsed(metadata: Record<string, unknown>): Record<string, unknown> {
+  const latency = asRecord(metadata.latency)
+  if (!('backend_elapsed_ms' in latency)) return metadata
+  const { backend_elapsed_ms: _elapsed, ...stableLatency } = latency
+  const { latency: _latency, ...stableMetadata } = metadata
+  return Object.keys(stableLatency).length > 0
+    ? { ...stableMetadata, latency: stableLatency }
+    : stableMetadata
 }
 
 /**
@@ -198,6 +215,8 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   const streamError = ref('')
   const loadedSessionId = ref('')
   const contextMirror = ref<unknown[]>([])
+  /** Every exact model request in the active user turn, in invocation order. */
+  const contextSnapshots = ref<AgentModelRequestSnapshot[]>([])
   const contextUsage = ref<AgentContextUsage | null>(null)
   const compressionStatus = ref<AgentCompressionStatus>('idle')
   const activeAgentMode = ref<AgentLoopMode>('auto')
@@ -224,6 +243,10 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   /** 思考文本独立缓冲,与正文 flush 互不干扰。 */
   const pendingThinking = new Map<AgentChatMessage, string>()
   let thinkingFlushTimer: number | null = null
+  /** A 20 Hz draft cadence leaves most frames available for input and animation. */
+  const streamDraftFlushMs = 50
+  /** Session identity is configured only for stores mirrored between Electron windows. */
+  let windowSyncSessionId = ''
   let turnStartedAtMs = 0
   /** Fast tools keep one perceptible shimmer window before the result replaces it. */
   const toolPreviewMinMs = 800
@@ -232,7 +255,11 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   const canSend = computed(() => !isStreaming.value)
 
   function appendMessage(message: AgentChatMessage) {
-    messages.value.push({ ...message })
+    const appended = { ...message }
+    messages.value.push(appended)
+    if (isStreaming.value && windowSyncSessionId) {
+      broadcastStreamMessage(windowSyncSessionId, messages.value.length - 1, appended)
+    }
   }
 
   function setContextUsage(value: unknown) {
@@ -240,6 +267,15 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
 
     const parsed = asContextUsage(value)
     if (parsed) contextUsage.value = parsed
+  }
+
+  /** Restore exact request snapshots from durable session state. */
+  function setContextSnapshots(value: unknown) {
+    const snapshots = Array.isArray(value)
+      ? value.filter((item): item is AgentModelRequestSnapshot => Boolean(item && typeof item === 'object'))
+      : []
+    contextSnapshots.value = snapshots
+    contextMirror.value = snapshots.length > 0 ? snapshots[snapshots.length - 1]!.messages : []
   }
 
   function findLastAssistant() {
@@ -334,6 +370,9 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     for (const [message, content] of entries) {
       if (content) {
         message.content += content
+        if (windowSyncSessionId) {
+          broadcastStreamDelta(windowSyncSessionId, messages.value.indexOf(message), 'content', content)
+        }
       }
       pendingContent.delete(message)
     }
@@ -344,7 +383,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     if (flushTimer !== null) {
       return
     }
-    flushTimer = window.requestAnimationFrame(() => flushStreamContent())
+    flushTimer = window.setTimeout(() => flushStreamContent(), streamDraftFlushMs)
   }
 
   /** Buffers a delta against its immutable owner rather than the latest message. */
@@ -364,6 +403,9 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     for (const [message, thinking] of entries) {
       if (thinking) {
         message.thinking = (message.thinking ?? '') + thinking
+        if (windowSyncSessionId) {
+          broadcastStreamDelta(windowSyncSessionId, messages.value.indexOf(message), 'thinking', thinking)
+        }
       }
       pendingThinking.delete(message)
     }
@@ -374,7 +416,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     if (thinkingFlushTimer !== null) {
       return
     }
-    thinkingFlushTimer = window.requestAnimationFrame(() => flushStreamThinking())
+    thinkingFlushTimer = window.setTimeout(() => flushStreamThinking(), streamDraftFlushMs)
   }
 
   /**
@@ -384,6 +426,15 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   function appendStreamThinking(message: AgentChatMessage, thinking: string) {
     pendingThinking.set(message, (pendingThinking.get(message) ?? '') + thinking)
     scheduleThinkingFlush()
+  }
+
+  /** Immediately commits all buffered thinking and cancels its pending draft tick. */
+  function forceFlushThinking() {
+    if (thinkingFlushTimer !== null) {
+      window.clearTimeout(thinkingFlushTimer)
+      thinkingFlushTimer = null
+    }
+    flushStreamThinking()
   }
 
   function nowMs() {
@@ -413,7 +464,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
       pendingContent.clear()
     }
     if (flushTimer !== null && pendingContent.size === 0) {
-      window.cancelAnimationFrame(flushTimer)
+      window.clearTimeout(flushTimer)
       flushTimer = null
     }
   }
@@ -421,7 +472,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
   /** Immediately commits buffered text, preserving other owners if one is selected. */
   function forceFlushContent(target?: AgentChatMessage) {
     if (flushTimer !== null) {
-      window.cancelAnimationFrame(flushTimer)
+      window.clearTimeout(flushTimer)
       flushTimer = null
     }
     flushStreamContent(target)
@@ -608,6 +659,9 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
         return true
       })
       message.trace.push(...fresh)
+      if (fresh.length > 0 && windowSyncSessionId) {
+        broadcastStreamMessage(windowSyncSessionId, messages.value.indexOf(message), message)
+      }
     }
 
     /** Appends non-tool traces to the currently active node message. */
@@ -782,7 +836,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
         const node = asString(chunk.node)
         const content = asString(chunk.content)
         const trace = asTrace(chunk.trace)
-        const metadata = asRecord(chunk.metadata)
+        const metadata = withoutStreamingElapsed(asRecord(chunk.metadata))
         const reportedUsage = asContextUsage(metadata.context_usage)
         if (reportedUsage) contextUsage.value = reportedUsage
         if (chunk.type === 'compression_started') compressionStatus.value = 'compressing'
@@ -825,7 +879,26 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
         }
 
         if (chunk.type === 'context_mirror' && Array.isArray(chunk.context_messages)) {
-          contextMirror.value = chunk.context_messages
+          const requestSnapshot = asRecord(chunk.context_request)
+          const legacySnapshot: AgentModelRequestSnapshot = {
+            call_index: contextSnapshots.value.length + 1,
+            node: node || 'agent',
+            model_tier: node === 'agent_simple' ? 'small' : 'large',
+            model: asString(chunk.model_name),
+            temperature: 0,
+            timeout_seconds: 0,
+            model_kwargs: { protocol: 'legacy_context_messages' },
+            messages: chunk.context_messages.filter(
+              (message): message is Record<string, unknown> => Boolean(message && typeof message === 'object'),
+            ),
+            tools: [],
+          }
+          const snapshots = Array.isArray(chunk.context_snapshots) && chunk.context_snapshots.length > 0
+            ? chunk.context_snapshots
+            : Object.keys(requestSnapshot).length > 0
+              ? [requestSnapshot]
+              : [...contextSnapshots.value, legacySnapshot]
+          setContextSnapshots(snapshots)
           continue
         }
 
@@ -922,8 +995,12 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
               backend_first_delta_seconds: Math.round((backendFirstDeltaMs / 1000) * 10) / 10,
             }
           }
-          message.tool_calls = announcedToolCalls
-          appendTraceToMessage(message, trace)
+          if (announcedToolCalls.length > 0) {
+            message.tool_calls = announcedToolCalls
+          }
+          if (trace.length > 0) {
+            appendTraceToMessage(message, trace)
+          }
         }
 
         // Tool announcements are handled after content from the same envelope,
@@ -953,7 +1030,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
         return
       }
       forceFlushContent()
-      flushStreamThinking()
+      forceFlushThinking()
       streamError.value = error instanceof Error ? error.message : 'Stream connection failed'
       const errorMessage = ensureAssistant('error')
       errorMessage.content = streamError.value
@@ -962,7 +1039,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
       if (!signal.aborted) {
         await Promise.all(Array.from(pendingToolCompletions))
         forceFlushContent()
-        flushStreamThinking()
+        forceFlushThinking()
         attachCitationMapToLastFinalAssistant()
         isStreaming.value = false
         if (targetSessionId) sessionStore.setSessionStreaming(targetSessionId, false)
@@ -992,7 +1069,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     historyAbortController?.abort()
     cancelPendingFlush()
     if (thinkingFlushTimer !== null) {
-      cancelAnimationFrame(thinkingFlushTimer)
+      window.clearTimeout(thinkingFlushTimer)
       thinkingFlushTimer = null
     }
     pendingThinking.clear()
@@ -1001,6 +1078,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     clearStreamTimeout()
     messages.value = []
     contextMirror.value = []
+    contextSnapshots.value = []
     contextUsage.value = null
     compressionStatus.value = 'idle'
     activeAgentMode.value = 'auto'
@@ -1147,6 +1225,11 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     childWatcherUserId = ''
   }
 
+  /** Binds this isolated store to the persisted session used by Electron IPC. */
+  function setWindowSyncSessionId(sessionId: string) {
+    windowSyncSessionId = sessionId
+  }
+
   function clearStreamTimeout() {
     if (streamTimeoutId !== null) {
       window.clearTimeout(streamTimeoutId)
@@ -1171,7 +1254,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     clearStreamTimeout()
     streamAbortController?.abort()
     forceFlushContent()
-    flushStreamThinking()
+    forceFlushThinking()
     isStreaming.value = false
     const lastAssistant = findLastAssistant()
     if (lastAssistant && lastAssistant.node !== 'action' && lastAssistant.node !== 'child_agent') {
@@ -1247,6 +1330,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     streamError,
     loadedSessionId,
     contextMirror,
+    contextSnapshots,
     contextUsage,
     compressionStatus,
     activeAgentMode,
@@ -1257,6 +1341,7 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     lastMessage,
     canSend,
     setContextUsage,
+    setContextSnapshots,
     loadHistory,
     syncHistory,
     refreshTaskSuggestions,
@@ -1271,14 +1356,15 @@ const createChatStore = (storeId: string) => defineStore(storeId, () => {
     currentCitationMap,
     startChildAgentWatcher,
     stopChildAgentWatcher,
+    setWindowSyncSessionId,
   }
 })
 
-/** Minimal incremental payload relayed between the two Electron Agent views. */
+/** Complete snapshot used only for initial synchronization and stream boundaries. */
 interface AgentChatWindowState {
   sessionId: string
-  messageCount: number
-  messagePatches: Array<{ index: number; message: AgentChatMessage }>
+  seq: number
+  messages: AgentChatMessage[]
   isStreaming: boolean
   streamStartedAtMs: number
   currentNode: string
@@ -1290,8 +1376,23 @@ interface AgentChatWindowState {
   suggestionsLoading: boolean
   streamingSessionId: string
   contextUsage: AgentContextUsage | null
+  contextSnapshots: AgentModelRequestSnapshot[]
   compressionStatus: AgentCompressionStatus
 }
+
+/** Message-independent state can stay synchronized without copying chat history. */
+type AgentChatMetaState = Omit<AgentChatWindowState, 'sessionId' | 'seq' | 'messages'>
+type AgentChatMetaEvent = AgentChatMetaState & { sessionId: string; seq: number }
+
+/** Ordered live update that never contains the complete conversation history. */
+type AgentChatStreamEvent = {
+  sessionId: string
+  seq: number
+  index: number
+} & (
+  | { operation: 'upsert'; message: AgentChatMessage }
+  | { operation: 'append'; field: 'thinking' | 'content'; delta: string }
+)
 
 /** Reuse the Agent page's persisted-message mapping in read-only child conversations. */
 export function restoreAgentHistoryMessages(history: SessionMessageRecord[]): AgentChatMessage[] {
@@ -1326,9 +1427,9 @@ export function restoreAgentHistoryMessages(history: SessionMessageRecord[]): Ag
 type AgentChatStoreInstance = ReturnType<ReturnType<typeof createChatStore>>
 
 const windowSyncedStores = new Map<string, AgentChatStoreInstance>()
-const previousMessageSignatures = new Map<string, string[]>()
-const previousStateSignatures = new Map<string, string>()
 const applyingRemoteState = new Set<string>()
+const outgoingWindowSyncSequence = new Map<string, number>()
+const incomingWindowSyncSequence = new Map<string, number>()
 let windowSyncListenerInstalled = false
 
 /** Clone Vue state into Electron-safe plain data without sending the full history. */
@@ -1336,17 +1437,16 @@ function cloneForWindowSync<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
-/** Build and send only messages changed since the previous render flush. */
-function broadcastChatState(sessionId: string, store: AgentChatStoreInstance, forceFull = false) {
-  if (!window.agentEditorDesktop?.windowSync || applyingRemoteState.has(sessionId)) return
-  const nextMessageSignatures = store.messages.map((message) => JSON.stringify(message))
-  const previous = previousMessageSignatures.get(sessionId) ?? []
-  const messagePatches = store.messages.flatMap((message, index) => (
-    forceFull || nextMessageSignatures[index] !== previous[index]
-      ? [{ index, message: cloneForWindowSync(message) }]
-      : []
-  ))
-  const scalarState = {
+/** Returns a monotonically increasing sequence shared by snapshots and deltas. */
+function nextWindowSyncSequence(sessionId: string): number {
+  const sequence = (outgoingWindowSyncSequence.get(sessionId) ?? 0) + 1
+  outgoingWindowSyncSequence.set(sessionId, sequence)
+  return sequence
+}
+
+/** Captures only state that is independent from the potentially huge message list. */
+function chatMetaState(store: AgentChatStoreInstance): AgentChatMetaState {
+  return {
     isStreaming: store.isStreaming,
     streamStartedAtMs: store.streamStartedAtMs,
     currentNode: store.currentNode,
@@ -1358,37 +1458,90 @@ function broadcastChatState(sessionId: string, store: AgentChatStoreInstance, fo
     suggestionsLoading: store.suggestionsLoading,
     streamingSessionId: store.streamingSessionId,
     contextUsage: store.contextUsage,
+    contextSnapshots: store.contextSnapshots,
     compressionStatus: store.compressionStatus,
   }
-  const stateSignature = JSON.stringify(scalarState)
-  if (!forceFull && messagePatches.length === 0 && previous.length === store.messages.length
-    && previousStateSignatures.get(sessionId) === stateSignature) return
-
-  previousMessageSignatures.set(sessionId, nextMessageSignatures)
-  previousStateSignatures.set(sessionId, stateSignature)
-  window.agentEditorDesktop.windowSync('chat-state', {
-    sessionId,
-    messageCount: store.messages.length,
-    messagePatches,
-    ...cloneForWindowSync(scalarState),
-  } satisfies AgentChatWindowState)
 }
 
-/** Apply one remote incremental snapshot without echoing it back to its owner. */
+/** Reference comparison is constant-time and catches every store replacement. */
+function sameChatMetaState(left: AgentChatMetaState, right: AgentChatMetaState): boolean {
+  return (Object.keys(left) as Array<keyof AgentChatMetaState>).every((key) => left[key] === right[key])
+}
+
+/** Sends a complete state only at a synchronization boundary. */
+function broadcastChatState(sessionId: string, store: AgentChatStoreInstance) {
+  if (!window.agentEditorDesktop?.windowSync || applyingRemoteState.has(sessionId)) return
+  window.agentEditorDesktop.windowSync('chat-state', cloneForWindowSync({
+    sessionId,
+    seq: nextWindowSyncSequence(sessionId),
+    messages: store.messages,
+    isStreaming: store.isStreaming,
+    streamStartedAtMs: store.streamStartedAtMs,
+    currentNode: store.currentNode,
+    streamError: store.streamError,
+    loadedSessionId: store.loadedSessionId,
+    activeAgentMode: store.activeAgentMode,
+    pendingAttachments: store.pendingAttachments,
+    taskSuggestions: store.taskSuggestions,
+    suggestionsLoading: store.suggestionsLoading,
+    streamingSessionId: store.streamingSessionId,
+    contextUsage: store.contextUsage,
+    contextSnapshots: store.contextSnapshots,
+    compressionStatus: store.compressionStatus,
+  } satisfies AgentChatWindowState))
+}
+
+/** Sends scalar and small collection changes without attaching message history. */
+function broadcastChatMeta(sessionId: string, state: AgentChatMetaState) {
+  if (!window.agentEditorDesktop?.windowSync || applyingRemoteState.has(sessionId)) return
+  window.agentEditorDesktop.windowSync('chat-meta', cloneForWindowSync({
+    sessionId,
+    seq: nextWindowSyncSequence(sessionId),
+    ...state,
+  } satisfies AgentChatMetaEvent))
+}
+
+/** Sends one new or structurally changed live message without scanning history. */
+function broadcastStreamMessage(sessionId: string, index: number, message: AgentChatMessage) {
+  if (!window.agentEditorDesktop?.windowSync || !sessionId || index < 0 || applyingRemoteState.has(sessionId)) return
+  window.agentEditorDesktop.windowSync('chat-stream', cloneForWindowSync({
+    sessionId,
+    seq: nextWindowSyncSequence(sessionId),
+    index,
+    operation: 'upsert',
+    message,
+  } satisfies AgentChatStreamEvent))
+}
+
+/** Sends one buffered text append; payload size is proportional only to new text. */
+function broadcastStreamDelta(
+  sessionId: string,
+  index: number,
+  field: 'thinking' | 'content',
+  delta: string,
+) {
+  if (!window.agentEditorDesktop?.windowSync || !sessionId || index < 0 || !delta || applyingRemoteState.has(sessionId)) return
+  window.agentEditorDesktop.windowSync('chat-stream', {
+    sessionId,
+    seq: nextWindowSyncSequence(sessionId),
+    index,
+    operation: 'append',
+    field,
+    delta,
+  } satisfies AgentChatStreamEvent)
+}
+
+/** Applies one ordered complete snapshot without echoing it to its owner. */
 function applyRemoteChatState(payload: AgentChatWindowState) {
-  if (!payload.sessionId || !Number.isInteger(payload.messageCount)) return
+  if (!payload.sessionId || !Number.isInteger(payload.seq) || !Array.isArray(payload.messages)) return
+  // A full snapshot establishes a new authoritative boundary and may come
+  // from a window that did not own the previous stream's local sequence.
+  incomingWindowSyncSequence.set(payload.sessionId, payload.seq)
   const store = useSessionChatStore(payload.sessionId)
-  const messages = store.messages.slice(0, payload.messageCount)
-  for (const patch of payload.messagePatches ?? []) {
-    if (Number.isInteger(patch.index) && patch.index >= 0 && patch.index < payload.messageCount) {
-      messages[patch.index] = cloneForWindowSync(patch.message)
-    }
-  }
-  if (messages.some((message) => !message)) return
 
   applyingRemoteState.add(payload.sessionId)
   store.$patch((state) => {
-    state.messages = messages
+    state.messages = cloneForWindowSync(payload.messages)
     state.isStreaming = Boolean(payload.isStreaming)
     state.streamStartedAtMs = Number.isFinite(payload.streamStartedAtMs) ? payload.streamStartedAtMs : 0
     state.currentNode = payload.currentNode || ''
@@ -1402,21 +1555,54 @@ function applyRemoteChatState(payload: AgentChatWindowState) {
     state.contextUsage = payload.contextUsage ?? null
     state.compressionStatus = payload.compressionStatus || 'idle'
   })
-  previousMessageSignatures.set(payload.sessionId, messages.map((message) => JSON.stringify(message)))
-  previousStateSignatures.set(payload.sessionId, JSON.stringify({
-    isStreaming: store.isStreaming,
-    streamStartedAtMs: store.streamStartedAtMs,
-    currentNode: store.currentNode,
-    streamError: store.streamError,
-    loadedSessionId: store.loadedSessionId,
-    activeAgentMode: store.activeAgentMode,
-    pendingAttachments: store.pendingAttachments,
-    taskSuggestions: store.taskSuggestions,
-    suggestionsLoading: store.suggestionsLoading,
-    streamingSessionId: store.streamingSessionId,
-    contextUsage: store.contextUsage,
-    compressionStatus: store.compressionStatus,
-  }))
+  store.setContextSnapshots(payload.contextSnapshots)
+  window.setTimeout(() => applyingRemoteState.delete(payload.sessionId), 0)
+}
+
+/** Applies ordered message-independent state without touching rendered history. */
+function applyRemoteChatMeta(payload: AgentChatMetaEvent) {
+  if (!payload.sessionId || !Number.isInteger(payload.seq)) return
+  if (payload.seq <= (incomingWindowSyncSequence.get(payload.sessionId) ?? 0)) return
+  incomingWindowSyncSequence.set(payload.sessionId, payload.seq)
+  const store = useSessionChatStore(payload.sessionId)
+  applyingRemoteState.add(payload.sessionId)
+  store.$patch((state) => {
+    state.isStreaming = Boolean(payload.isStreaming)
+    state.streamStartedAtMs = Number.isFinite(payload.streamStartedAtMs) ? payload.streamStartedAtMs : 0
+    state.currentNode = payload.currentNode || ''
+    state.streamError = payload.streamError || ''
+    state.loadedSessionId = payload.loadedSessionId || ''
+    state.activeAgentMode = payload.activeAgentMode
+    state.pendingAttachments = payload.pendingAttachments ?? []
+    state.taskSuggestions = payload.taskSuggestions ?? []
+    state.suggestionsLoading = Boolean(payload.suggestionsLoading)
+    state.streamingSessionId = payload.streamingSessionId || ''
+    state.contextUsage = payload.contextUsage ?? null
+    state.compressionStatus = payload.compressionStatus || 'idle'
+  })
+  store.setContextSnapshots(payload.contextSnapshots)
+  window.setTimeout(() => applyingRemoteState.delete(payload.sessionId), 0)
+}
+
+/** Applies one ordered stream event in O(delta) time. */
+function applyRemoteChatStream(payload: AgentChatStreamEvent) {
+  if (!payload.sessionId || !Number.isInteger(payload.seq) || !Number.isInteger(payload.index) || payload.index < 0) return
+  if (payload.seq <= (incomingWindowSyncSequence.get(payload.sessionId) ?? 0)) return
+  incomingWindowSyncSequence.set(payload.sessionId, payload.seq)
+  const store = useSessionChatStore(payload.sessionId)
+  applyingRemoteState.add(payload.sessionId)
+  if (payload.operation === 'upsert') {
+    const messages = [...store.messages]
+    messages[payload.index] = cloneForWindowSync(payload.message)
+    store.$patch((state) => {
+      state.messages = messages
+    })
+  } else {
+    const message = store.messages[payload.index]
+    if (message) {
+      message[payload.field] = (message[payload.field] ?? '') + payload.delta
+    }
+  }
   window.setTimeout(() => applyingRemoteState.delete(payload.sessionId), 0)
 }
 
@@ -1429,12 +1615,16 @@ function installChatWindowSyncListener() {
     const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId : ''
     if (type === 'chat-state') {
       applyRemoteChatState(payload as unknown as AgentChatWindowState)
+    } else if (type === 'chat-meta') {
+      applyRemoteChatMeta(payload as unknown as AgentChatMetaEvent)
+    } else if (type === 'chat-stream') {
+      applyRemoteChatStream(payload as unknown as AgentChatStreamEvent)
     } else if (type === 'chat-sync-request' && sessionId) {
       const store = windowSyncedStores.get(sessionId)
       // A newly-created mirror has no authoritative state yet. Let the window
       // that loaded history or owns the live stream answer the request.
       if (store && (store.loadedSessionId === sessionId || store.messages.length > 0 || store.isStreaming)) {
-        broadcastChatState(sessionId, store, true)
+        broadcastChatState(sessionId, store)
       }
     } else if (type === 'chat-cancel' && sessionId) {
       windowSyncedStores.get(sessionId)?.cancelStream()
@@ -1446,8 +1636,28 @@ function installChatWindowSyncListener() {
 function registerChatWindowSync(sessionId: string, store: AgentChatStoreInstance) {
   if (!sessionId || windowSyncedStores.get(sessionId) === store) return
   windowSyncedStores.set(sessionId, store)
-  previousMessageSignatures.set(sessionId, store.messages.map((message) => JSON.stringify(message)))
-  store.$subscribe(() => broadcastChatState(sessionId, store), { detached: true, flush: 'post' })
+  store.setWindowSyncSessionId(sessionId)
+  let wasStreaming = store.isStreaming
+  let previousMessageCount = store.messages.length
+  let previousMetaState = chatMetaState(store)
+  let previousPendingAttachmentCount = store.pendingAttachments.length
+  store.$subscribe(() => {
+    const streamingChanged = store.isStreaming !== wasStreaming
+    const messageCountChanged = store.messages.length !== previousMessageCount
+    const nextMetaState = chatMetaState(store)
+    // During a live stream, explicit O(delta) events own synchronization. A
+    // complete snapshot is sent only when the stream starts or reaches terminal state.
+    if (streamingChanged || (!store.isStreaming && messageCountChanged)) {
+      broadcastChatState(sessionId, store)
+    } else if (!sameChatMetaState(previousMetaState, nextMetaState)
+      || store.pendingAttachments.length !== previousPendingAttachmentCount) {
+      broadcastChatMeta(sessionId, nextMetaState)
+    }
+    previousMetaState = nextMetaState
+    previousPendingAttachmentCount = store.pendingAttachments.length
+    wasStreaming = store.isStreaming
+    previousMessageCount = store.messages.length
+  }, { detached: true, flush: 'post' })
   installChatWindowSyncListener()
   window.agentEditorDesktop?.windowSync?.('chat-sync-request', { sessionId })
 }
