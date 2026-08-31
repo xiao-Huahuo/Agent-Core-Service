@@ -48,6 +48,7 @@ const DEFAULT_PROFILE: UserSettingsProfile = {
   ocrEnabled: false,
   visionUnderstandingEnabled: false,
   modelAutoDownloadEnabled: false,
+  dshCodingAgentEnabled: false,
   knowledgeIgnorePatterns: '',
   knowledgeSupportedSuffixes: [],
   uiFontFamilies: [],
@@ -199,6 +200,7 @@ function mapBackendProfile(profileResponse: SettingsProfileResponse): Partial<Us
     ocrEnabled: Boolean(profileResponse.ocr_enabled),
     visionUnderstandingEnabled: Boolean(profileResponse.vision_understanding_enabled),
     modelAutoDownloadEnabled: Boolean(profileResponse.model_auto_download_enabled),
+    dshCodingAgentEnabled: Boolean(profileResponse.dsh_coding_agent_enabled),
     knowledgeIgnorePatterns: profileResponse.knowledge_ignore_patterns ?? '',
     knowledgeSupportedSuffixes: profileResponse.knowledge_supported_suffixes ?? [],
     uiFontFamilies: profileResponse.ui_font_families ?? [],
@@ -682,12 +684,13 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  async function saveKnowledgeIngestionSettings(params: { autoIngestOnUpload?: boolean; ocrEnabled?: boolean; visionUnderstandingEnabled?: boolean; knowledgeIgnorePatterns?: string }) {
+  async function saveKnowledgeIngestionSettings(params: { autoIngestOnUpload?: boolean; ocrEnabled?: boolean; visionUnderstandingEnabled?: boolean; dshCodingAgentEnabled?: boolean; knowledgeIgnorePatterns?: string }) {
     if (!hasUserId.value) {
       updateProfile({
         autoIngestOnUpload: params.autoIngestOnUpload ?? profile.value.autoIngestOnUpload,
         ocrEnabled: params.ocrEnabled ?? profile.value.ocrEnabled,
         visionUnderstandingEnabled: params.visionUnderstandingEnabled ?? profile.value.visionUnderstandingEnabled,
+        dshCodingAgentEnabled: params.dshCodingAgentEnabled ?? profile.value.dshCodingAgentEnabled,
         knowledgeIgnorePatterns: params.knowledgeIgnorePatterns ?? profile.value.knowledgeIgnorePatterns,
       })
       return
@@ -696,12 +699,14 @@ export const useSettingsStore = defineStore('settings', () => {
       autoIngestOnUpload: profile.value.autoIngestOnUpload,
       ocrEnabled: profile.value.ocrEnabled,
       visionUnderstandingEnabled: profile.value.visionUnderstandingEnabled,
+      dshCodingAgentEnabled: profile.value.dshCodingAgentEnabled,
       knowledgeIgnorePatterns: profile.value.knowledgeIgnorePatterns,
     }
     updateProfile({
       autoIngestOnUpload: params.autoIngestOnUpload ?? profile.value.autoIngestOnUpload,
       ocrEnabled: params.ocrEnabled ?? profile.value.ocrEnabled,
       visionUnderstandingEnabled: params.visionUnderstandingEnabled ?? profile.value.visionUnderstandingEnabled,
+      dshCodingAgentEnabled: params.dshCodingAgentEnabled ?? profile.value.dshCodingAgentEnabled,
       knowledgeIgnorePatterns: params.knowledgeIgnorePatterns ?? profile.value.knowledgeIgnorePatterns,
     })
     try {
@@ -710,6 +715,7 @@ export const useSettingsStore = defineStore('settings', () => {
         autoIngestOnUpload: result.auto_ingest_on_upload,
         ocrEnabled: result.ocr_enabled,
         visionUnderstandingEnabled: result.vision_understanding_enabled,
+        dshCodingAgentEnabled: result.dsh_coding_agent_enabled,
         knowledgeIgnorePatterns: result.knowledge_ignore_patterns,
       })
       return result

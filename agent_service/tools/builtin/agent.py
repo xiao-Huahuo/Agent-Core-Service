@@ -27,6 +27,7 @@ from agent_service.tools.builtin.builtin import (
 
 def spawn_child_agent(
     goal: str,
+    agent_type: str = "explore",
     mode: str = "background",
     allowed_tools: list[str] | None = None,
     access_mode: str = "sandbox",
@@ -39,15 +40,24 @@ def spawn_child_agent(
 ) -> str:
     """由主 Agent 创建一个前台或后台子 Agent,返回子任务运行信息。
 
-    category: 子 Agent 能力模板 key(agent/explore/plan)或自定义角色描述,可留空。
-    name: 子 Agent 名字;留空时自动用角色模板名(plan1/agent1/...)。
-    provider: native使用 MW通用子 Agent；dsh使用专用代码子 Agent。
-    workspace_root: DSH代码子 Agent的工作区绝对路径。
+    agent_type: explore、dsh或coding，这是模型必须显式选择的真实类型。
+    category/provider: 内部兼容字段，由 agent_type统一映射。
+    name: 子 Agent名字；留空时按类型自动生成。
+    workspace_root: dsh和coding代码 Agent的工作区绝对路径。
     """
 
     runtime = get_tool_runtime()
     if runtime.child_agent_spawner is None:
         return "当前 Agent 运行时未启用子 Agent 能力。"
+    normalized_type = agent_type.strip().lower()
+    if normalized_type not in {"explore", "dsh", "coding"}:
+        return "agent_type 必须是 explore、dsh 或 coding。"
+    type_mapping = {
+        "explore": ("native", "explore", "readonly"),
+        "dsh": ("dsh", "dsh", access_mode),
+        "coding": ("native", "coding", access_mode),
+    }
+    provider, category, access_mode = type_mapping[normalized_type]
     return runtime.child_agent_spawner(
         goal=goal,
         mode=mode,

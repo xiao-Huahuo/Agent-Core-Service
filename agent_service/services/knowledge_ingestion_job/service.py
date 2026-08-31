@@ -108,6 +108,7 @@ class KnowledgeIngestionJobService:
         self._stop_event = threading.Event()
         self._wake_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._submit_lock = threading.Lock()
         self._process_lock = threading.Lock()
         self._current_job_id = ""
         self._current_process: multiprocessing.Process | None = None
@@ -174,14 +175,29 @@ class KnowledgeIngestionJobService:
                 created_at=now,
                 updated_at=now,
             ))
-        with Session(self.engine) as db:
+        submitted: list[KnowledgeIngestionJobRecord] = []
+        with self._submit_lock, Session(self.engine) as db:
+            active_records = db.exec(
+                select(KnowledgeIngestionJobRecord).where(
+                    KnowledgeIngestionJobRecord.user_id == user_id,
+                    KnowledgeIngestionJobRecord.library_id == library_id,
+                    KnowledgeIngestionJobRecord.status.in_(ACTIVE_JOB_STATUSES),
+                )
+            ).all()
+            active_by_path = {record.path: record for record in active_records}
             for record in records:
+                existing = active_by_path.get(record.path)
+                if existing is not None:
+                    submitted.append(existing)
+                    continue
                 db.add(record)
+                active_by_path[record.path] = record
+                submitted.append(record)
             db.commit()
-            for record in records:
+            for record in submitted:
                 db.refresh(record)
         self._wake_event.set()
-        return [self._serialize(record) for record in records]
+        return [self._serialize(record) for record in submitted]
 
     def list_jobs(self, *, user_id: str, active_only: bool = False) -> list[dict[str, Any]]:
         """按创建时间列出用户任务，可只返回活动队列。"""

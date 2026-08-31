@@ -28,6 +28,7 @@ except ImportError:  # pragma: no cover - fallback only used when optional depen
 
 from agent_service.api.rest.deps import (
     _require_knowledge_graph_service,
+    _require_knowledge_graph_queue_service,
     _require_knowledge_library_service,
     _require_latex_service,
     _require_knowledge_ingestion_job_service,
@@ -754,14 +755,10 @@ async def get_knowledge_graph(
 
 from agent_service.services.knowledge_graph import (
     KnowledgeGraphService,
-    _run_graph_extraction,
-    _update_graph_progress,
     get_dedup_progress,
     _set_dedup_progress,
     get_graph_extraction_progress,
 )
-
-_graph_extraction_threads: dict[tuple[str, str], threading.Thread] = {}
 
 
 @router.post("/knowledge/graph/rebuild")
@@ -807,38 +804,17 @@ async def rebuild_knowledge_graph(body: dict[str, Any]) -> dict[str, Any]:
 
     user_llm_config = settings_svc.get_llm_config(user_id=normalized_user_id)
 
-    key = (normalized_user_id, library_id)
-    current_progress = get_graph_extraction_progress(normalized_user_id, library_id)
-    if current_progress.get("status") == "running":
-        return {"status": "already_running", "message": "图谱抽取已在运行中"}
-
-    _update_graph_progress(
-        normalized_user_id,
-        library_id,
-        status="running",
-        total=0,
-        current=0,
-        message="正在检查需要抽取的文件",
-        docs=[],
+    return _require_knowledge_graph_queue_service().submit(
+        config=config,
+        user_id=normalized_user_id,
+        library_id=library_id,
+        frontmatter_dir=frontmatter_dir,
+        user_llm_config=user_llm_config,
+        target_source_path=target_source_path,
+        target_is_dir=target_is_dir,
+        target_display_path=target_path,
+        force=force,
     )
-
-    thread = threading.Thread(
-        target=_run_graph_extraction,
-        kwargs={
-            "config": config,
-            "user_id": normalized_user_id,
-            "library_id": library_id,
-            "frontmatter_dir": frontmatter_dir,
-            "user_llm_config": user_llm_config,
-            "target_source_path": target_source_path,
-            "target_is_dir": target_is_dir,
-            "force": force,
-        },
-        daemon=True,
-    )
-    _graph_extraction_threads[key] = thread
-    thread.start()
-    return {"status": "started", "message": "图谱抽取已在后台启动"}
 
 
 @router.get("/knowledge/graph/rebuild/status")

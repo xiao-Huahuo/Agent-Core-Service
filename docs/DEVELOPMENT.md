@@ -39,6 +39,8 @@ npm run dev:electron
 
 `dev:electron` 只会并行启动 Vite 和 Electron，不会启动 Python 后端。Vite 默认监听 `http://127.0.0.1:5173`，开发代理将 API 转发到 `http://127.0.0.1:8002`，因此应在另一个终端先启动后端。
 
+`启动.bat` 只负责重启后端、gRPC和 Electron开发进程。DSH默认关闭且不会在启动脚本中解压；用户在基础设置开启 DSH后，前端壳层确认后端就绪并读取用户档案，再与模型初始化并行触发 DSH Runtime后台安装。
+
 `npm ci` 会先替换整个 `node_modules`。Windows 下执行前必须在原终端用 `Ctrl+C` 停止 `dev:electron`，并从托盘退出 Electron；否则 Rolldown 等已加载的 `.node` 原生文件会因占用而报 `EPERM unlink`。不要用 `taskkill /IM node.exe /F`，它会误杀同机上的其他 Node 服务。
 
 ### 4. 验证

@@ -274,7 +274,7 @@ async def get_download_progress() -> dict[str, dict[str, object]]:
 
 
 @router.get("/settings/models/management")
-async def get_model_management(
+def get_model_management(
     user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
 ) -> dict[str, Any]:
     """返回模型管理区需要的配置、磁盘、运行和真实下载状态。"""
@@ -540,6 +540,7 @@ async def save_knowledge_ingestion_config(body: dict[str, Any]) -> dict[str, Any
         auto_ingest_on_upload=body.get("auto_ingest_on_upload"),
         ocr_enabled=body.get("ocr_enabled"),
         vision_understanding_enabled=body.get("vision_understanding_enabled"),
+        dsh_coding_agent_enabled=body.get("dsh_coding_agent_enabled"),
         knowledge_ignore_patterns=body.get("knowledge_ignore_patterns"),
     )
     if body.get("ocr_enabled") is True:
@@ -551,6 +552,8 @@ async def save_knowledge_ingestion_config(body: dict[str, Any]) -> dict[str, Any
             download_if_missing=bool(preferences.get("auto_download_enabled")),
             prompt_if_missing=True,
         )
+    if result.get("dsh_coding_agent_enabled") is True:
+        _require_dsh_runtime_manager().start_install()
     if "knowledge_ignore_patterns" in body:
         try:
             cleanup_result = _require_knowledge_library_service().cleanup_ignored_sources(user_id=user_id)
@@ -895,7 +898,7 @@ async def save_sensitive_words(body: dict[str, Any]) -> dict[str, Any]:
 # ---- 存储管理 ----
 
 @router.get("/settings/storage/config")
-async def get_storage_config(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
+def get_storage_config(user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID")) -> dict[str, Any]:
     """返回所有存储路径的当前值、大小和元数据。"""
 
     svc = _require_settings_service()
@@ -945,8 +948,20 @@ async def clear_storage_path(body: dict[str, Any]) -> dict[str, Any]:
 
 # ---- SDK 与运行组件 ----
 
+@router.post("/settings/sdks/dsh/initialize")
+async def initialize_dsh_coding_agent(body: dict[str, Any]) -> dict[str, Any]:
+    """界面启动后按用户开关异步安装 DSH Runtime，不阻塞应用启动。"""
+
+    user_id = str(body.get("user_id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=422, detail="user_id is required")
+    if not _require_settings_service().is_dsh_coding_agent_enabled_for_user(user_id=user_id):
+        return {"status": "disabled", "enabled": False}
+    status = _require_dsh_runtime_manager().start_install()
+    return {"status": status["status"], "enabled": True}
+
 @router.get("/settings/sdks/dsh/management")
-async def get_dsh_sdk_management(
+def get_dsh_sdk_management(
     user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),  # noqa: ARG001
 ) -> dict[str, Any]:
     """返回 DSH SDK客户端与 Windows Runtime 的真实管理状态。"""
@@ -1008,7 +1023,7 @@ async def get_latex_status(
 
 
 @router.get("/settings/latex/management")
-async def get_latex_management(
+def get_latex_management(
     user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),  # noqa: ARG001
 ) -> dict[str, Any]:
     """返回编译管理区需要的发行版、来源、引擎、路径和磁盘详情。"""

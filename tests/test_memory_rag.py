@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import threading
 import time
+from types import SimpleNamespace
 from typing import Sequence
 
 from sqlmodel import SQLModel, create_engine
@@ -30,6 +31,7 @@ from agent_service.services.memory.rag.rerank import (
     RerankService,
     SentenceTransformerCrossEncoderProvider,
 )
+from agent_service.services.memory.rag import sentence_transformer_imports
 from agent_service.services.memory.retrieval_service import MemoryRetrievalService
 
 
@@ -161,6 +163,60 @@ def test_shared_embedding_and_rerank_factories_create_singletons(monkeypatch) ->
 
     assert embedding_module._get_shared_provider(config) is embedding
     assert rerank_module._get_shared_rerank_provider(config) is rerank
+
+
+def test_sentence_transformer_first_imports_are_serialized(monkeypatch) -> None:
+    """Embedding根包与 ReRank子模块不得同时进入 Python首次导入。"""
+
+    active = 0
+    max_active = 0
+    first_entered = threading.Event()
+    release_first = threading.Event()
+
+    def fake_import(module_name: str) -> SimpleNamespace:
+        nonlocal active, max_active
+        active += 1
+        max_active = max(max_active, active)
+        first_entered.set()
+        release_first.wait(timeout=2)
+        active -= 1
+        return SimpleNamespace(SentenceTransformer=object, CrossEncoder=object)
+
+    monkeypatch.setattr(sentence_transformer_imports.importlib, "import_module", fake_import)
+    embedding_thread = threading.Thread(target=sentence_transformer_imports.load_sentence_transformer_type)
+    rerank_thread = threading.Thread(target=sentence_transformer_imports.load_cross_encoder_type)
+    embedding_thread.start()
+    assert first_entered.wait(timeout=1)
+    rerank_thread.start()
+    time.sleep(0.05)
+    assert max_active == 1
+    release_first.set()
+    embedding_thread.join(timeout=1)
+    rerank_thread.join(timeout=1)
+    assert not embedding_thread.is_alive()
+    assert not rerank_thread.is_alive()
+
+
+def test_sentence_transformer_import_failure_exits_loading_state(monkeypatch) -> None:
+    """模块锁异常必须落到 error，不能让管理页永久显示 loading。"""
+
+    import agent_service.services.memory.rag.embedding as embedding_module
+    import agent_service.services.memory.rag.rerank as rerank_module
+
+    failure = RuntimeError("simulated module lock deadlock")
+    monkeypatch.setattr(embedding_module, "load_sentence_transformer_type", lambda: (_ for _ in ()).throw(failure))
+    monkeypatch.setattr(rerank_module, "load_cross_encoder_type", lambda: (_ for _ in ()).throw(failure))
+    embedding = SentenceTransformerEmbeddingProvider(config=make_rag_test_config())
+    rerank = SentenceTransformerCrossEncoderProvider(config=make_rag_test_config())
+
+    embedding._load_model_in_thread()
+    rerank._load_model_in_thread()
+
+    states = get_model_status().to_dict()
+    assert states["embedding"] == "error"
+    assert states["rerank"] == "error"
+    assert embedding._load_error is failure
+    assert rerank._load_error is failure
 
 
 class FakeRerankProvider(RerankProvider):

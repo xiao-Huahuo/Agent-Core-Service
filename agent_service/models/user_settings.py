@@ -50,6 +50,8 @@ class UserSettingsRecord(SQLModel, table=True):
     vision_understanding_enabled: bool = Field(default=False)
     # 用户显式启用后，启动后验证到的缺失模型才允许自动下载。
     model_auto_download_enabled: bool = Field(default=False)
+    # 用户显式开启后，主 Agent才可调度 DSH，并在界面启动后后台安装 Runtime。
+    dsh_coding_agent_enabled: bool = Field(default=False)
     long_term_memory_enabled: bool = Field(default=True)
     knowledge_ignore_patterns: str = Field(default=DEFAULT_VIDEO_IGNORE_PATTERNS, sa_column=Column(Text))
     disabled_tools: str = Field(default="", sa_column=Column(Text))

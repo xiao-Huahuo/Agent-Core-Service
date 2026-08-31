@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { streamLines } from '../client'
+import { ApiError, apiGet, streamLines } from '../client'
 
 describe('streamLines scheduling', () => {
   afterEach(() => {
@@ -40,5 +40,27 @@ describe('streamLines scheduling', () => {
 
     expect(received.length).toBeGreaterThan(0)
     expect(received.length).toBeLessThan(18)
+  })
+
+  it('uses an independent timeout signal for each management request', async () => {
+    const signals: AbortSignal[] = []
+    let resolveSecond: ((response: Response) => void) | undefined
+    vi.stubGlobal('fetch', vi.fn((path: string, init?: RequestInit) => {
+      signals.push(init?.signal as AbortSignal)
+      if (path === '/slow') {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+        })
+      }
+      return new Promise<Response>((resolve) => { resolveSecond = resolve })
+    }))
+
+    const slow = apiGet('/slow', undefined, { timeoutMs: 5 })
+    const independent = apiGet('/independent', undefined, { timeoutMs: 1000 })
+    await expect(slow).rejects.toEqual(expect.objectContaining<ApiError>({ status: 408 }))
+    expect(signals[0]?.aborted).toBe(true)
+    expect(signals[1]?.aborted).toBe(false)
+    resolveSecond?.(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    await expect(independent).resolves.toEqual({})
   })
 })

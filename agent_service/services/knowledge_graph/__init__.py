@@ -5,6 +5,7 @@
 """
 
 from agent_service.services.knowledge_graph.service import *  # noqa: F403
+from agent_service.services.knowledge_graph.queue import KnowledgeGraphQueueService
 from agent_service.services.knowledge_graph.service import (
     _batch_graph_sections,
     _build_llm_config,

@@ -355,8 +355,15 @@ class ChildAgentRuntimeMixin:
         name: 子 Agent 名字;留空时按同类别的已有数量自动生成(plan1/agent1/...)。
         """
 
-        if provider == "dsh" and not workspace_root.strip():
-            raise ValueError("DSH 子 Agent必须提供 workspace_root")
+        if provider == "native" and (category or "").strip() == "coding":
+            if self._dsh_coding_agent_enabled(user_id=user_id):
+                raise PermissionError("DSH已启用，代码任务必须使用 agent_type=dsh，不能使用coding后备类型。")
+            if not workspace_root.strip():
+                raise ValueError("coding 子 Agent必须提供 workspace_root")
+        if provider == "dsh":
+            self._require_dsh_coding_agent_enabled(user_id=user_id)
+            if not workspace_root.strip():
+                raise ValueError("DSH 子 Agent必须提供 workspace_root")
         effective_category = "dsh" if provider == "dsh" and not (category or "").strip() else (category or "")
         effective_name = (name or "").strip() or self._auto_child_agent_name(parent_run_id, effective_category)
         parent_tools = frozenset(
@@ -398,6 +405,8 @@ class ChildAgentRuntimeMixin:
             context.raise_if_stopped()
             template = _resolve_child_agent_category_template(context.category, self.config.prompts)
             prompt = f"{template}\n\n{context.goal}" if template else context.goal
+            if context.workspace_root:
+                prompt = f"{prompt}\n\n工作区绝对路径: {context.workspace_root}"
             if self.session_service is None:
                 result = self.run_once(
                     prompt=prompt,
@@ -510,6 +519,7 @@ class ChildAgentRuntimeMixin:
     ) -> str:
         """由原父 Agent在同一个 DSH Child Agent Conversation中提交后续 Turn。"""
 
+        self._require_dsh_coding_agent_enabled(user_id=user_id)
         record = self.child_agent_manager.get(run_id)
         if record is None:
             child = next(
@@ -549,3 +559,19 @@ class ChildAgentRuntimeMixin:
             record.context.parent_run_id = parent_run_id
         continued = self.child_agent_manager.continue_child(run_id=run_id, prompt=prompt, mode=mode)
         return json.dumps(self._child_record_to_dict(continued), ensure_ascii=False)
+
+    def _require_dsh_coding_agent_enabled(self, *, user_id: str) -> None:
+        """在所有 DSH创建与追问入口强制执行默认关闭的用户级门禁。"""
+
+        if not self._dsh_coding_agent_enabled(user_id=user_id):
+            raise PermissionError(
+                "DSH coding agent未启用；请先在基础设置开启“启用 DSH（deepseek-harness）作为 coding agent”。"
+            )
+
+    def _dsh_coding_agent_enabled(self, *, user_id: str) -> bool:
+        """读取当前用户的 DSH开关；设置服务不可用时安全回退为关闭。"""
+
+        return bool(
+            self.settings_service is not None
+            and self.settings_service.is_dsh_coding_agent_enabled_for_user(user_id=user_id)
+        )

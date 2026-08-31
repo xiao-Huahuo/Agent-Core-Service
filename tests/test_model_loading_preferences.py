@@ -55,6 +55,19 @@ def test_vision_understanding_defaults_to_false_and_persists() -> None:
     assert service.is_vision_understanding_enabled_for_user(user_id="u1") is True
 
 
+def test_dsh_coding_agent_defaults_to_false_and_persists() -> None:
+    """DSH必须默认关闭，只有用户显式开启后调度门禁才放行。"""
+
+    service = _make_settings_service()
+    assert service.ensure_user_profile(user_id="u1")["dsh_coding_agent_enabled"] is False
+    assert service.is_dsh_coding_agent_enabled_for_user(user_id="u1") is False
+
+    saved = service.save_knowledge_ingestion_config(user_id="u1", dsh_coding_agent_enabled=True)
+
+    assert saved["dsh_coding_agent_enabled"] is True
+    assert service.is_dsh_coding_agent_enabled_for_user(user_id="u1") is True
+
+
 def test_ocr_flag_lookup_ignores_unrelated_newer_columns() -> None:
     """模型管理读取 OCR 时不得因热重载数据库暂缺其他设置列而整体 500。"""
 

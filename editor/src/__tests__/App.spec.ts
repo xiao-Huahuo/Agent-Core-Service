@@ -22,6 +22,8 @@ describe('App', () => {
 
     expect(source).not.toContain('waitForModelsReady')
     expect(source).toContain('initializeManagedModels')
+    expect(source).toContain('initializeDshCodingAgent')
+    expect(source).toContain('Promise.allSettled')
     expect(source).toContain('<ModelLifecycleOverlay')
   })
 })

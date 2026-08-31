@@ -13,12 +13,16 @@ describe('knowledge ingestion settings API', () => {
     }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await saveKnowledgeIngestionConfig('u1', { visionUnderstandingEnabled: true })
+    await saveKnowledgeIngestionConfig('u1', {
+      visionUnderstandingEnabled: true,
+      dshCodingAgentEnabled: true,
+    })
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/settings/profile/ingestion')
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
       user_id: 'u1',
       vision_understanding_enabled: true,
+      dsh_coding_agent_enabled: true,
     })
   })
 })

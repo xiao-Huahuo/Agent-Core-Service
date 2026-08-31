@@ -6,6 +6,7 @@ import {
   cancelDshSdkInstall,
   fetchDshSdkManagement,
   installDshSdk,
+  initializeDshCodingAgent,
   repairDshSdk,
   uninstallDshSdk,
 } from '@/api/sdk'
@@ -29,11 +30,13 @@ describe('DSH SDK management API', () => {
 
   it('posts every lifecycle operation with the user id', async () => {
     await installDshSdk('u1')
+    await initializeDshCodingAgent('u1')
     await cancelDshSdkInstall('u1')
     await repairDshSdk('u1')
     await uninstallDshSdk('u1')
     expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
       '/settings/sdks/dsh/install',
+      '/settings/sdks/dsh/initialize',
       '/settings/sdks/dsh/install/cancel',
       '/settings/sdks/dsh/repair',
       '/settings/sdks/dsh/uninstall',

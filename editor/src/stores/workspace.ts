@@ -90,6 +90,11 @@ function flattenIngestibleNodes(nodes: KnowledgeFileNode[]): KnowledgeFileNode[]
   })
 }
 
+/** Return every non-ignored source file that can participate in graph extraction. */
+function flattenGraphSourceNodes(nodes: KnowledgeFileNode[]): KnowledgeFileNode[] {
+  return flattenNodes(nodes).filter((node) => !node.isDir && node.indexStatus !== 'ignored')
+}
+
 /** Return only files that must be ingested before graph extraction can start. */
 export function graphIngestionTargets(node: KnowledgeFileNode): KnowledgeFileNode[] {
   return flattenIngestibleNodes([node])
@@ -413,6 +418,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const INGESTION_HISTORY_LIMIT = 240
   let ingestionProgressTimer: ReturnType<typeof setTimeout> | null = null
   let ingestionProgressPulseTimer: ReturnType<typeof setInterval> | null = null
+  let activeIngestionRuns = 0
+  const trackedIngestionJobIds = new Set<string>()
+  const graphRequestedIngestionJobIds = new Set<string>()
   let completedIngestionQueueItems: IngestionQueueItem[] = []
   let lastIngestionQueueProcessed = 0
   let ingestionQueuePlannedTotal = 0
@@ -449,6 +457,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   function beginGraphProgress(initialValue = 6) {
+    if (graphProgressTimer !== null) {
+      clearTimeout(graphProgressTimer)
+      graphProgressTimer = null
+    }
     graphProgressVisible.value = true
     setGraphProgress(initialValue)
     graphProgressDetail.value = '正在检查需要抽取的文件'
@@ -627,80 +639,60 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   async function _triggerGraphExtraction(targetPath?: string, force = false) {
     const userId = useSettingsStore().profile.userId
-    if (!userId || graphQueue.value.length > 0) {
-      return
+    if (!userId) {
+      return false
     }
-    beginGraphProgress(6)
-    graphQueuePlannedTotal = 0
+    if (!graphProgressVisible.value || graphProgressTimer !== null) {
+      beginGraphProgress(0)
+      graphQueuePlannedTotal = 0
+    }
     try {
-      const result = await rebuildKnowledgeGraph(userId, targetPath, force)
-      if (result.status === 'already_running') {
-        showToast('已有一个图谱抽取任务在运行')
-      }
-      startGraphPolling()
+      await rebuildKnowledgeGraph(userId, targetPath, force)
+      if (graphPollingTimer === null) startGraphPolling()
+      return true
     } catch (error) {
       graphRebuildPending.value = false
-      completeGraphQueue('failed', 0, 0, error instanceof Error ? error.message : '启动失败')
+      showToast(error instanceof Error ? error.message : '图谱任务入队失败', 5000)
+      return false
     }
   }
 
   async function startGraphRebuild() {
     const userId = useSettingsStore().profile.userId
-    if (!userId || graphQueue.value.length > 0 || graphRebuildPending.value) {
+    if (!userId) {
       return
     }
-
     graphRebuildPending.value = true
-
-    // If ingestion already queued or running, wait for it to finish
-    if (ingestionQueue.value.length > 0 || refreshing.value) {
-      showToast('等待灌库完成后再进行图谱抽取')
-      if (refreshing.value) {
-        await new Promise<void>((resolve) => {
-          const unwatch = watch(refreshing, (val) => {
-            if (!val) {
-              unwatch()
-              resolve()
-            }
-          })
-        })
-      }
-      // Small delay for tree settle after ingestion completes
-      await new Promise((r) => setTimeout(r, 500))
-    } else {
-      // Trigger ingestion first, then graph
-      showToast('开始灌库后自动进行图谱抽取')
-      await markIndexing()
+    try {
+      await loadKnowledgeTree()
+      const sources = flattenGraphSourceNodes(tree.value)
+      const ingestionTargets = sources.filter((node) => graphIngestionTargets(node).length > 0)
+      const readyTargets = sources.filter((node) => !ingestionTargets.includes(node))
+      showToast('已启动逐文件灌库与图谱抽取流水线')
+      await Promise.all(readyTargets.map((node) => _triggerGraphExtraction(node.path, false)))
+      void runIngestionJobs(ingestionTargets, true)
+    } finally {
+      graphRebuildPending.value = false
     }
-
-    graphRebuildPending.value = false
-    await _triggerGraphExtraction()
   }
 
   async function extractGraphForNode(node: KnowledgeFileNode) {
     const userId = useSettingsStore().profile.userId
-    if (!userId || graphQueue.value.length > 0 || graphRebuildPending.value) {
+    if (!userId) {
       return
     }
     const force = shouldForceGraphExtraction(node)
-    graphRebuildPending.value = true
-    try {
-      const ingestionTargets = graphIngestionTargets(node)
-      if (ingestionTargets.length > 0) {
-        showToast(node.isDir ? '文件夹尚未完成灌库，灌库后抽取图谱' : '文件尚未灌库，灌库后抽取图谱')
-        await runIngestionJobs(ingestionTargets)
-        const failedTarget = ingestionTargets.find((target) => findFlatNode(target.path)?.indexStatus !== 'indexed')
-        if (failedTarget) {
-          showToast(`${failedTarget.name} 灌库未完成，已停止图谱抽取`)
-          return
-        }
-      } else {
-        showToast(force ? '复用现有灌库结果并重新抽取图谱' : '复用现有灌库结果抽取图谱')
-      }
-    } finally {
-      graphRebuildPending.value = false
+    const sources = flattenGraphSourceNodes([node])
+    const ingestionTargets = sources.filter((item) => graphIngestionTargets(item).length > 0)
+    if (ingestionTargets.length > 0) {
+      showToast(node.isDir ? '文件夹逐文件灌库并抽取图谱' : '文件灌库后立即抽取图谱')
+      void runIngestionJobs(ingestionTargets, true)
     }
-    await _triggerGraphExtraction(node.path, force)
+    await Promise.all(
+      sources
+        .filter((item) => !ingestionTargets.includes(item))
+        .map((target) => _triggerGraphExtraction(target.path, force)),
+    )
   }
 
   async function extractGraphForNodes(nodes: KnowledgeFileNode[]) {
@@ -715,21 +707,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
       return
     }
-    const userId = useSettingsStore().profile.userId
-    if (!userId || graphQueue.value.length > 0 || graphRebuildPending.value) {
-      return
+    const sources = flattenGraphSourceNodes(targets)
+    const ingestionTargets = sources.filter((node) => graphIngestionTargets(node).length > 0)
+    if (ingestionTargets.length > 0) {
+      showToast('选中文件逐个灌库并抽取图谱')
+      void runIngestionJobs(ingestionTargets, true)
     }
-    graphRebuildPending.value = true
-    try {
-      const ingestionTargets = targets.flatMap(graphIngestionTargets)
-      if (ingestionTargets.length > 0) {
-        showToast(`选中项尚未完成灌库，灌库后抽取图谱`)
-        await runIngestionJobs(ingestionTargets)
-      }
-    } finally {
-      graphRebuildPending.value = false
-    }
-    await _triggerGraphExtraction()
+    await Promise.all(
+      sources
+        .filter((item) => !ingestionTargets.includes(item))
+        .map((node) => _triggerGraphExtraction(node.path, shouldForceGraphExtraction(node))),
+    )
   }
 
   function clearGraphHistory() {
@@ -1188,8 +1176,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       clearTimeout(ingestionProgressTimer)
     }
     ingestionProgressTimer = setTimeout(() => {
+      if (activeIngestionRuns > 0) {
+        ingestionProgressTimer = null
+        return
+      }
       ingestionProgressVisible.value = false
       ingestionProgress.value = 0
+      trackedIngestionJobIds.clear()
+      graphRequestedIngestionJobIds.clear()
       ingestionProgressTimer = null
     }, delay)
   }
@@ -2004,11 +1998,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const activeStatuses = new Set(['queued', 'running', 'cancelling'])
     const activeJobs = jobs.filter((job) => activeStatuses.has(job.status))
     ingestionQueue.value = activeJobs.map(ingestionJobToQueueItem)
+    const trackedBatch = jobs.filter((job) => trackedIngestionJobIds.has(job.job_id))
     const activeCutoff = activeJobs.reduce(
       (earliest, job) => !earliest || job.created_at < earliest ? job.created_at : earliest,
       '',
     )
-    const currentBatch = activeCutoff ? jobs.filter((job) => job.created_at >= activeCutoff) : []
+    const currentBatch = trackedBatch.length > 0
+      ? trackedBatch
+      : (activeCutoff ? jobs.filter((job) => job.created_at >= activeCutoff) : [])
     ingestionQueuePlannedTotal = currentBatch.length
     const succeeded = currentBatch.filter((job) => job.status === 'finished').length
     const failed = currentBatch.filter((job) => ['failed', 'cancelled'].includes(job.status)).length
@@ -2054,19 +2051,29 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return response.jobs
   }
 
-  async function runIngestionJobs(nodes: KnowledgeFileNode[]) {
-    if (refreshing.value || nodes.length === 0) return
+  async function runIngestionJobs(nodes: KnowledgeFileNode[], extractGraphAfter = false) {
+    if (nodes.length === 0) return
     const userId = useSettingsStore().profile.userId
     if (!userId) return
+    activeIngestionRuns += 1
     refreshing.value = true
-    beginIngestionProgress(0)
+    if (!ingestionProgressVisible.value) beginIngestionProgress(0)
     try {
       const created = await createKnowledgeIngestionJobs(userId, nodes.map((node) => node.path))
       const targetIds = new Set(created.jobs.map((job) => job.job_id))
-      syncPersistentIngestionJobs(created.jobs)
+      created.jobs.forEach((job) => trackedIngestionJobIds.add(job.job_id))
+      await loadIngestionJobs()
       while (true) {
         const jobs = await loadIngestionJobs()
         const targets = jobs.filter((job) => targetIds.has(job.job_id))
+        if (extractGraphAfter) {
+          for (const job of targets) {
+            if (!['finished', 'skipped'].includes(job.status) || graphRequestedIngestionJobIds.has(job.job_id)) continue
+            graphRequestedIngestionJobIds.add(job.job_id)
+            const queued = await _triggerGraphExtraction(job.path, false)
+            if (!queued) graphRequestedIngestionJobIds.delete(job.job_id)
+          }
+        }
         if (targets.length > 0 && targets.every((job) => ['cancelled', 'finished', 'skipped', 'failed'].includes(job.status))) {
           const finished = targets.filter((job) => job.status === 'finished').length
           const cancelled = targets.filter((job) => job.status === 'cancelled').length
@@ -2080,8 +2087,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const message = error instanceof Error ? error.message : '未知错误'
       showToast(`灌库失败 — ${message}`)
     } finally {
-      refreshing.value = false
-      finishIngestionProgress()
+      activeIngestionRuns = Math.max(0, activeIngestionRuns - 1)
+      refreshing.value = activeIngestionRuns > 0
+      if (!refreshing.value) finishIngestionProgress()
     }
   }
 

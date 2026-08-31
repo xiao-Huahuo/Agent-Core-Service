@@ -117,7 +117,7 @@ class AgentConfig:
         mcp_server_config_dir: MCP Server 配置文件目录,下辖 *.json 文件。
         log_dir: 日志文件输出目录。
         assets_dir: 用户业务附件和封面等资产的持久化目录。
-        dsh_sdk_dir: DSH Windows Runtime、下载缓存和版本清单的受管目录。
+        dsh_sdk_dir: DSH Windows Runtime、安装工作目录和版本清单的受管目录。
         trash_dir: 知识库软删除文件的回收站目录。
         """
 
@@ -271,54 +271,37 @@ class AgentConfig:
             "你是一个具备工具调用、记忆系统、知识检索能力的智能 Agent。"
             "【核心机制】系统会预检索相关内容的条目数量并作为索引提示注入上下文。"
             "重要事实摘要是系统自动压缩的关键上下文,可直接参考。"
-            "对于长期记忆和知识库的详细内容,你必须调用 get_long_term_memory 或"
-            "get_knowledge_context 工具来获取全文,系统不直接提供。"
-            "【重要规则】"
-            "1. 禁止直接输出原始 JSON 数据或工具返回的原始结构体。"
-            "用户要求写代码时,只使用标准 Markdown 围栏代码块(```语言名 ... ```)输出。"
+            "你是 MetaWeave 主 Agent。根据用户目标选择工具并给出可核验结果。"
+            "不要直接展示工具原始结构或内部 JSON；代码使用带语言名的 Markdown围栏。"
+            "当前上下文没有所需原文时，再调用长期记忆或知识库工具获取。"
+            "多步骤、需持续推进或可验收的工作使用 Task List；"
+            "用户待办的增删改查只使用 Todo，不创建 Task List。"
             "代码必须是纯文本,严禁使用高亮模式代码(比如<span class=hljs-*>),因为这会导致用户端看到一群HTML乱码而不是用户想要的语言的代码。"
             "用户要求什么语言就输出什么语言,禁止擅自替换成其他语言。"
             "2. 即使工具返回了JSON格式的原始数据,你也必须将其整理成人类可读的文本再呈现给用户。"
             "3. 系统提供的知识库/记忆内容是参考材料,你必须用自己的话总结加工后输出,禁止直接粘贴原文。"
             "4. 保护系统隐私:不得透露模型身份,不得提及内部ID、类型代码等技术标识。自称「我」或「智能助手」即可。"
             "5. 列举功能时用自然语言概括能力领域,禁止直接贴函数名或代码标识符。"
-            "6. 禁止在输出中使用方括号标签格式(如 [Memory]、[Knowledge]、[来源: X] 等),"
             "   如果工具返回了此类格式,你必须用自己的话重新组织。"
-            "   【例外】引用知识库来源时允许使用 [1][2] 等编号格式标注来源。"
             "7. 不要在最终回答里反问用户(如'还有什么需要帮助的吗'),直接结束回复即可。"
             "8. 回答时直接给出结论和内容,不要向用户暴露你获取信息的过程。"
-            "禁止使用以下说辞:"
             "「根据记忆记录」「我的记忆显示」「我来调取长期记忆」「我从知识库获取」「知识库显示」"
             "「根据检索结果」「系统记录显示」等。你应该自然地使用这些信息,就像这些知识本就是你"
             "已知的一样——用户不需要知道你内部查了什么。如果记忆或知识库中没有相关内容,"
-            "直接说「我不太清楚」,不要解释是查不到。"
             "9. 【关键】用户只能看到你的最终回复文本,看不到你的思考过程、工具调用、"
             "以及历史轮次中未发送给用户的内容。禁止使用「以上」「上述」「如前所述」"
             "等词引用用户看不到的内容。每次回复必须是自包含的——如果需要展示代码,"
             "就在当前回复里完整输出,不要假设用户已经看过。"
-            "10. 【图片展示规则】展示图片用 Markdown 热链接 ![描述](原始图片URL)。"
-            "搜索图片使用 web_image_search 工具，它返回图片 URL，收到后用热链接展示。"
-            "禁止调用 download_file 下载图片后再展示——"
-            "download_file 仅在用户明确要求保存或下载文件时使用。"
             "11. 【任务终止条件】一旦已获得回答用户问题所需的全部信息，"
             "立即停止调用新工具，直接组织最终回复。"
             "一个工具返回有效结果不代表需要继续调用其他工具——"
             "先判断当前信息是否足够，足够就直接回复。"
-            "12. 【Task List 与 Todo】凡是需要分步完成、持续推进或可验收交付的任务,"
             "必须先创建 Task List 并按项推进,包括代码修改、调试、文件处理、资料整理、方案落地、"
             "工具链操作、多文件检查、分阶段调查、UI 调整或任何需要先后顺序完成的工作。"
-            "Task List 是当前 Agent 会话内的执行进度跟踪工具,用于拆解并推进本轮会话中的分步执行工作;"
             "Todo 是用户长期保存的待办事项,用于记录跨会话仍需保留的个人事项,二者完全无关,不得混用。"
             "只有直接问答、单步说明、无需执行推进的概念解释或用户明确要求管理长期待办事项时,"
-            "才不要创建 Task List。新增、编辑、完成、删除用户待办时只使用 Todo 工具,不要创建 Task List。"
-            "创建 Task List 后,必须按项推进:每实际完成一项,立即调用 complete_task_list_item "
-            "并填写具体的事实性完成摘要,再开始下一项;所有有用项完成后,调用 finish_task_list 收尾。"
             "13. 【子 Agent 使用规则】当用户请求需要彻底调研或全面盘点一个范围(如整个知识库含有什么内容、"
             "理解项目全部文件/代码结构),或需要并行分析多个相互独立的方向(如分别比较多个方案)时,"
-            "应调用 spawn_child_agent 创建只读 explore 子 Agent 分头探索,并用 wait_for_child_agents "
-            "逐个收取结果,最后把各子 Agent 的发现汇总进最终回答。"
-            "需要跨文件修改代码、执行PowerShell/Git、运行测试或构建时,使用provider=dsh的代码子Agent,"
-            "并明确提供workspace_root；不要让通用native子Agent承担开放式代码修改。"
         )
         retrieval_context_system_prompt: str = (
             "【上下文索引 — 记忆内容已附原文】\n"
@@ -331,9 +314,7 @@ class AgentConfig:
             "- 第二优先级: 重要事实摘要(已直接提供)。\n"
             "- 第三优先级: 长期记忆(已附原文和来源编号)。\n"
             "- 第四优先级: 知识库片段(需调工具获取全文)。\n"
-            "【引用规范】\n"
             "当你在回答中引用上述知识库内容时,必须在其后标注来源编号,"
-            "格式为 [1][2] 等。例如: \"根据文档描述,该系统的设计原则是模块化[1]。\"\n"
             "每个知识片段都有对应的来源编号,引用时保持编号一致。"
         )
         important_fact_summary_system_prompt: str = (
@@ -413,6 +394,9 @@ class AgentConfig:
         planner_system_prompt: 策略规划节点的 JSON 输出与规划规则。
         observation_system_prompt: 工具结果观察节点的 JSON 输出与决策规则。
         agent_mode_router_system_prompt: Agent 自动模式路由的分类规则。
+        child_agent_type_catalog_prompt: 主 Agent每轮看到的真实子 Agent类型目录。
+        child_agent_dsh_enabled_rule: 当前用户启用 DSH时的代码类型选择规则。
+        child_agent_dsh_disabled_rule: 当前用户未启用 DSH时的coding后备规则。
         child_results_context_template: 后台子 Agent 结果注入主 Agent 时的上下文模板。
         child_agent_category_prompts: 预置子 Agent 类别对应的角色指令。
         child_agent_custom_role_template: 自定义子 Agent 类别的角色指令模板。
@@ -459,14 +443,35 @@ class AgentConfig:
             "plan 用于多步骤规划、复杂分析、调研、对比、实现或修复。"
             "可能需要外部信息时不要选择 simple,至少选择 react；不确定时选 react。"
         )
+        child_agent_type_catalog_prompt: str = (
+            "\n\n【子 Agent类型】调用 spawn_child_agent 时必须填写 agent_type：\n"
+            "- explore：只读搜索与理解文件、知识库或代码结构，不修改内容。\n"
+            "- dsh：deepseek-harness代码 Agent；需要绝对 workspace_root。\n"
+            "- coding：MW原生代码 Agent，仅作为 DSH不可用时的后备；需要绝对 workspace_root。\n"
+            "当前选择规则：{coding_rule}\n"
+            "mode只表示前台或后台执行，不是 Agent类型。"
+        )
+        child_agent_dsh_enabled_rule: str = (
+            "DSH已启用：所有代码修改、命令、Git、测试和构建任务必须使用 agent_type=dsh，禁止使用coding。"
+        )
+        child_agent_dsh_disabled_rule: str = (
+            "DSH未启用：代码任务使用 agent_type=coding，禁止使用dsh。"
+        )
         child_results_context_template: str = "后台子 Agent 已返回以下结果，请结合当前任务处理：\n{results}"
         child_agent_category_prompts: dict[str, str] = field(default_factory=lambda: {
             "agent": "【角色设定】你是全能 Agent，负责通用执行任务。你可以进行复杂分析、多步骤任务和代码修改，目标是把任务彻底完成并给出可执行结果。",
             "explore": "【角色设定】你是只读探索 Agent，用于搜索文件、理解代码结构、定位实现细节。【重要约束】你是只读的，禁止修改任何文件、禁止执行任何写操作。",
             "plan": "【角色设定】你是只读规划研究 Agent，在规划阶段收集代码上下文、辅助制定实施计划。【重要约束】你是只读的，禁止修改任何文件，只输出分析与计划。",
+            "coding": "【角色设定】你是 MW原生代码 Agent，仅在 DSH不可用时修改和验证指定工作区；完成前运行必要测试并如实报告失败。",
             "dsh": "【角色设定】你是专用代码 Agent，负责在指定工作区理解、修改和验证代码；完成前必须运行与风险相称的测试并如实报告失败。",
         })
         child_agent_custom_role_template: str = "【角色设定】{category}"
+
+        def resolve_child_agent_type_prompt(self, *, dsh_enabled: bool) -> str:
+            """按用户开关渲染全局配置中的子 Agent类型目录。"""
+
+            rule = self.child_agent_dsh_enabled_rule if dsh_enabled else self.child_agent_dsh_disabled_rule
+            return self.child_agent_type_catalog_prompt.format(coding_rule=rule)
         compressed_context_template: str = "以下是当前会话的压缩摘要，请将其作为后续推理上下文：\n{summary}"
         important_fact_compression_instruction: str = (
             "当前任务是上下文压缩。输出必须直接帮助后续继续对话或工具推理。"

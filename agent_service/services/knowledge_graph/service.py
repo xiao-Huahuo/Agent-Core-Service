@@ -796,13 +796,22 @@ def _run_graph_extraction(
     target_is_dir: bool = False,
     force: bool = False,
     cancel_event: threading.Event | None = None,
+    progress_callback: Callable[..., None] | None = None,
 ) -> None:
-    """在后台线程中执行图谱抽取；force 用于显式重抽已是最新状态的目标。"""
+    """在后台线程中执行图谱抽取；可把逐文件进度交给外层队列聚合。"""
+
+    def emit_progress(**payload: Any) -> None:
+        """向队列聚合器报告进度；独立调用时保留原全局进度行为。"""
+
+        if progress_callback is not None:
+            progress_callback(**payload)
+            return
+        _update_graph_progress(user_id, library_id, **payload)
+
     try:
         llm_config = _build_llm_config(config, user_llm_config=user_llm_config)
         if not llm_config.get("small_api_key") or not llm_config.get("small_model_name"):
-            _update_graph_progress(
-                user_id, library_id,
+            emit_progress(
                 status="failed",
                 message="模型配置不完整，无法进行 LLM 语义抽取。请在「模型设置」中至少配置大模型的模型名和 API Key；小模型留空时会自动继承大模型。",
             )
@@ -835,7 +844,7 @@ def _run_graph_extraction(
         skipped_count = 0
         for path in paths:
             if cancel_event is not None and cancel_event.is_set():
-                _update_graph_progress(user_id, library_id, status="cancelled", message="图谱抽取已取消")
+                emit_progress(status="cancelled", message="图谱抽取已取消")
                 return
             doc_data = KnowledgeGraphService._load_document(path)
             document_ids_seen.add(doc_data.document_id)
@@ -861,8 +870,7 @@ def _run_graph_extraction(
                 pending_paths.append(path)
                 need_extract += 1
 
-        _update_graph_progress(
-            user_id, library_id,
+        emit_progress(
             status="running",
             total=need_extract,
             current=0,
@@ -892,7 +900,7 @@ def _run_graph_extraction(
 
         for di, doc_entry in enumerate(docs):
             if cancel_event is not None and cancel_event.is_set():
-                _update_graph_progress(user_id, library_id, status="cancelled", message="图谱抽取已取消", docs=docs)
+                emit_progress(status="cancelled", message="图谱抽取已取消", docs=docs)
                 return
             if circuit_breaker_hit:
                 print(f"\n  [BREAKER] circuit breaker hit, stopping")
@@ -907,8 +915,7 @@ def _run_graph_extraction(
                 stage="preparing",
                 stage_label="正在准备文档",
             )
-            _update_graph_progress(
-                user_id, library_id,
+            emit_progress(
                 status="running",
                 total=need_extract,
                 current=doc_index,
@@ -936,8 +943,7 @@ def _run_graph_extraction(
                         stage_current=0,
                         stage_total=section_total,
                     )
-                    _update_graph_progress(
-                        user_id, library_id,
+                    emit_progress(
                         status="running",
                         total=need_extract,
                         current=doc_index,
@@ -963,8 +969,7 @@ def _run_graph_extraction(
                         stage_total=total_sections,
                         message=f"已完成 {completed_batches}/{total_batches} 批请求",
                     )
-                    _update_graph_progress(
-                        user_id, library_id,
+                    emit_progress(
                         status="running",
                         total=need_extract,
                         current=doc_index,
@@ -985,8 +990,7 @@ def _run_graph_extraction(
                         on_progress=report_section_progress,
                     )
                 except GraphExtractionCancelled:
-                    _update_graph_progress(
-                        user_id, library_id,
+                    emit_progress(
                         status="cancelled",
                         message="图谱抽取已取消",
                         docs=docs,
@@ -1026,8 +1030,7 @@ def _run_graph_extraction(
                         stage="deduplicate_document",
                         stage_label="文档内实体去重",
                     )
-                    _update_graph_progress(
-                        user_id, library_id,
+                    emit_progress(
                         status="running",
                         total=need_extract,
                         current=doc_index,
@@ -1063,8 +1066,7 @@ def _run_graph_extraction(
                         stage="deduplicate_library",
                         stage_label="知识库实体去重",
                     )
-                    _update_graph_progress(
-                        user_id, library_id,
+                    emit_progress(
                         status="running",
                         total=need_extract,
                         current=doc_index,
@@ -1104,8 +1106,7 @@ def _run_graph_extraction(
                     stage="write_graph",
                     stage_label="正在写入知识图谱",
                 )
-                _update_graph_progress(
-                    user_id, library_id,
+                emit_progress(
                     status="running",
                     total=need_extract,
                     current=doc_index,
@@ -1168,8 +1169,7 @@ def _run_graph_extraction(
                     circuit_breaker_hit = True
 
             doc_index += 1
-            _update_graph_progress(
-                user_id, library_id,
+            emit_progress(
                 status="running",
                 total=need_extract,
                 current=doc_index,
@@ -1197,8 +1197,7 @@ def _run_graph_extraction(
         print(f"{'='*60}\n")
 
         if failed_count > 0 and completed_count == 0:
-            _update_graph_progress(
-                user_id, library_id,
+            emit_progress(
                 status="failed",
                 total=need_extract,
                 current=doc_index,
@@ -1206,8 +1205,7 @@ def _run_graph_extraction(
                 docs=docs,
             )
         elif circuit_breaker_hit:
-            _update_graph_progress(
-                user_id, library_id,
+            emit_progress(
                 status="completed",
                 total=need_extract,
                 current=need_extract,
@@ -1215,8 +1213,7 @@ def _run_graph_extraction(
                 docs=docs,
             )
         else:
-            _update_graph_progress(
-                user_id, library_id,
+            emit_progress(
                 status="completed",
                 total=need_extract,
                 current=need_extract,
@@ -1226,8 +1223,7 @@ def _run_graph_extraction(
     except Exception as exc:
         logger.exception("图谱抽取整体失败")
         print(f"\n  !! Graph extraction failed: {exc}\n")
-        _update_graph_progress(
-            user_id, library_id,
+        emit_progress(
             status="failed",
             message=f"抽取失败: {exc}",
         )

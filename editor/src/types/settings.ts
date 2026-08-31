@@ -38,6 +38,8 @@ export interface UserSettingsProfile {
   visionUnderstandingEnabled?: boolean
   /** Whether missing managed models should download automatically. */
   modelAutoDownloadEnabled?: boolean
+  /** Whether the main Agent may use DSH for coding tasks. Defaults to false. */
+  dshCodingAgentEnabled?: boolean
   /** Gitignore-like rules for files that must never enter the vector store. */
   knowledgeIgnorePatterns?: string
   /** Effective backend file suffixes that can enter the knowledge store. */

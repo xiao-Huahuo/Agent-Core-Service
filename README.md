@@ -937,6 +937,8 @@ $$
 
 SDK 管理负责 DSH 代码子 Agent 的 Windows Runtime。当前 Runtime 固定使用 DeepSeek Harness 提交 [`47f943859bef60e4160492346772ded9b24f765a`](https://github.com/deepseek-ai/deepseek-harness/commit/47f943859bef60e4160492346772ded9b24f765a)，机器可读锁位于 `resources/dsh/upstream.json`。SDK 只在锁定提交、MW 补丁、Cordis 配置、内置 Node 主版本或 Runtime版本变化时运行 `scripts/build_dsh_sdk.bat` 重新生产；生成的 ZIP与 manifest直接打入 `AgentService.exe`，不需要网上托管。
 
+“基础设置 → 启用 DSH”默认关闭。关闭时主 Agent不能创建或继续 DSH coding agent；开启后，应用界面完成启动即在独立后台线程校验并懒解压 Runtime，不阻塞后端、页面或其他模型初始化。再次关闭只停止后续 DSH调度，不自动删除已安装 Runtime。
+
 当前 Windows x64 内置 ZIP为 **66,008,168 bytes（约 63.0 MiB / 66.0 MB）**，首次使用时从 EXE资源懒解压，安装后为 **192,256,620 bytes（约 183.4 MiB / 192.3 MB）**。制品已经包含 Node 24、DSH 生产依赖、Web资源和 Job Object启动器，用户无需联网，也无需安装 Node、pnpm、Python、编译器或 DSH。缺少 ZIP或 manifest时，PyInstaller构建会直接失败。
 
 ## 亮点

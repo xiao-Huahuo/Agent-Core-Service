@@ -203,4 +203,41 @@ describe('management panels', () => {
     expect(wrapper.text()).toContain('D:/runtime/assets/sdks/dsh')
     wrapper.unmount()
   })
+
+  it('keeps SDK available while compiler retries its own transient failure', async () => {
+    vi.useFakeTimers()
+    fetchLatexManagement
+      .mockRejectedValueOnce(new Error('compiler timeout'))
+      .mockResolvedValueOnce({
+        status: 'ready', message: '可用', source: 'system', managed: false,
+        distribution: 'MiKTeX', version: '25.12', distribution_path: 'D:/MiKTeX',
+        runtime_path: '', size_bytes: 0, file_count: 1, engines: [], paths: {},
+      })
+    fetchDshSdkManagement.mockResolvedValue({
+      key: 'deepseek_harness', label: 'DeepSeek Harness SDK', role: '代码子 Agent',
+      version: '0.1.0-rc.5+mw.1', platform: 'Windows x64', path: 'D:/sdk',
+      size_bytes: 1, package_size_bytes: 1, file_count: 1, installed: true,
+      configured: true, in_use: false, status: 'ready', message: '可用',
+      processed_bytes: 0, total_bytes: 0, progress: null,
+    })
+    const compiler = mount(CompilerManagement, {
+      props: { userId: 'u1' }, global: { stubs: { IcIcon: iconStub } },
+    })
+    const sdk = mount(SdkManagement, {
+      props: { userId: 'u1' }, global: { stubs: { IcIcon: iconStub } },
+    })
+    await flushPromises()
+
+    expect(compiler.text()).toContain('compiler timeout')
+    expect(sdk.text()).toContain('DeepSeek Harness SDK')
+
+    await vi.advanceTimersByTimeAsync(750)
+    await flushPromises()
+    expect(compiler.text()).toContain('MiKTeX')
+    expect(compiler.text()).not.toContain('compiler timeout')
+    expect(fetchDshSdkManagement).toHaveBeenCalledTimes(1)
+    compiler.unmount()
+    sdk.unmount()
+    vi.useRealTimers()
+  })
 })

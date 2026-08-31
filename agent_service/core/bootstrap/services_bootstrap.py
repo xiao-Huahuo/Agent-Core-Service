@@ -28,7 +28,7 @@ from agent_service.services.dsh_adapter import DshChildAgentExecutor
 from agent_service.services.favorite.service import FavoriteService
 from agent_service.services.feedback.service import FeedbackService
 from agent_service.services.git.service import GitService
-from agent_service.services.knowledge_graph import KnowledgeGraphService
+from agent_service.services.knowledge_graph import KnowledgeGraphQueueService, KnowledgeGraphService
 from agent_service.services.knowledge_ingestion_job.service import KnowledgeIngestionJobService
 from agent_service.services.knowledge_library import KnowledgeLibraryService
 from agent_service.services.latex.service import LatexService
@@ -74,6 +74,7 @@ class ApplicationServices:
     latex_service: LatexService
     knowledge_ingestion_job_service: KnowledgeIngestionJobService
     knowledge_graph_service: KnowledgeGraphService
+    knowledge_graph_queue_service: KnowledgeGraphQueueService
     git_service: GitService
     library_service: LibraryService
     component_library_service: ComponentLibraryService
@@ -108,6 +109,7 @@ class ApplicationServices:
 
         self.automation_scheduler.shutdown()
         self.knowledge_ingestion_job_service.stop()
+        self.knowledge_graph_queue_service.stop()
         self.agent_queue_scheduler.shutdown()
         self.dsh_executor.shutdown()
         self.dsh_runtime_manager.shutdown()
@@ -177,6 +179,7 @@ def create_application_services(config: AgentConfig, *, database_engine: Engine)
         config=config,
         knowledge_library_service=knowledge_library_service,
     )
+    knowledge_graph_queue_service = KnowledgeGraphQueueService()
     component_library_service = ComponentLibraryService(
         settings_service=settings_service,
         legacy_engine=settings_service.engine,
@@ -242,6 +245,7 @@ def create_application_services(config: AgentConfig, *, database_engine: Engine)
         latex_service=latex_service,
         knowledge_ingestion_job_service=knowledge_ingestion_job_service,
         knowledge_graph_service=knowledge_graph_service,
+        knowledge_graph_queue_service=knowledge_graph_queue_service,
         git_service=git_service,
         library_service=library_service,
         component_library_service=component_library_service,

@@ -69,6 +69,23 @@ def test_submit_jobs_persists_file_details_and_pipeline(tmp_path: Path) -> None:
     assert restored[0]["stage_label"] == "等待灌库"
 
 
+def test_submit_reuses_same_active_file_and_appends_new_file(tmp_path: Path) -> None:
+    """重复全量提交不得复制在途文件，但必须把后来出现的文件追加到队列。"""
+
+    service, _library = _service(tmp_path)
+    first = tmp_path / "knowledge" / "first.md"
+    second = tmp_path / "knowledge" / "second.md"
+    first.write_text("# first", encoding="utf-8")
+    second.write_text("# second", encoding="utf-8")
+
+    initial = service.submit(user_id="u1", paths=["first.md"])
+    repeated = service.submit(user_id="u1", paths=["first.md", "second.md"])
+    active = service.list_jobs(user_id="u1", active_only=True)
+
+    assert repeated[0]["job_id"] == initial[0]["job_id"]
+    assert [job["path"] for job in active] == ["first.md", "second.md"]
+
+
 def test_progress_event_persists_detailed_stage_units(tmp_path: Path) -> None:
     """页、图片或切片等阶段单位必须直接进入任务记录。"""
 

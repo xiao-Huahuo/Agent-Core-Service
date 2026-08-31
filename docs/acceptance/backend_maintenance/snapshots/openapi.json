@@ -10557,6 +10557,49 @@
         "summary": "Save Sensitive Words"
       }
     },
+    "/settings/sdks/dsh/initialize": {
+      "post": {
+        "description": "界面启动后按用户开关异步安装 DSH Runtime，不阻塞应用启动。",
+        "operationId": "initialize_dsh_coding_agent_settings_sdks_dsh_initialize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Initialize Dsh Coding Agent Settings Sdks Dsh Initialize Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Initialize Dsh Coding Agent"
+      }
+    },
     "/settings/sdks/dsh/install": {
       "post": {
         "description": "在用户确认后异步安装当前 MW固定的 Windows Runtime。",

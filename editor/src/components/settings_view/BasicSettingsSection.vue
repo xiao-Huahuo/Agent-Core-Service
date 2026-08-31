@@ -17,6 +17,7 @@ const watchEnabledDraft = defineModel<boolean>('watchEnabledDraft', { required: 
 const autoIngestOnUploadDraft = defineModel<boolean>('autoIngestOnUploadDraft', { required: true })
 const ocrEnabledDraft = defineModel<boolean>('ocrEnabledDraft', { required: true })
 const visionUnderstandingEnabledDraft = defineModel<boolean>('visionUnderstandingEnabledDraft', { required: true })
+const dshCodingAgentEnabledDraft = defineModel<boolean>('dshCodingAgentEnabledDraft', { required: true })
 const knowledgeIgnorePatternsDraft = defineModel<string>('knowledgeIgnorePatternsDraft', { required: true })
 
 const props = defineProps<{
@@ -137,6 +138,16 @@ async function appendBlockedFileType(suffix: string): Promise<void> {
       <label>识图</label>
       <input v-model="visionUnderstandingEnabledDraft" type="checkbox" @change="$emit('save')" />
       <span class="hint-text">开启后才会调用本地 Qwen 补充图片语义；关闭时仅保留 OCR</span>
+    </div>
+    <div class="setting-row toggle-row">
+      <label>启用 DSH coding agent</label>
+      <input
+        v-model="dshCodingAgentEnabledDraft"
+        type="checkbox"
+        aria-label="启用 DSH（deepseek-harness）作为 coding agent"
+        @change="$emit('save')"
+      />
+      <span class="hint-text">使用 deepseek-harness 作为 coding agent；开启后在应用启动完成时后台加载</span>
     </div>
     <div class="setting-row ignore-row">
       <label>屏蔽区</label>

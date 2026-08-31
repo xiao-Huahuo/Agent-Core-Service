@@ -24,6 +24,7 @@
 9. Windows Runtime使用固定 DSH提交的生产依赖闭包生成，携带独立 Node 24与无 symlink的 DSH Node闭包，必须提供文件编辑、搜索、PowerShell、Git、测试和构建能力；MW不从零实现 DSH SDK或代码 Agent循环。
 10. 同一个受管 Runtime同时提供 SDK JSON-RPC控制面和 DSH Web观测面。JSON-RPC是唯一写控制面；DSH Web对 MW 托管 Session实行服务端只读，只用于查看轨迹、工具调用、命令输出、diff、产物和最终回答。
 11. DSH 处于开发阶段，因此 MW 固定经过验证的源码提交、SDK、Cordis 配置、Windows Runtime和资源哈希，不在用户设备上追踪上游主分支，也不在运行时安装任意 npm插件。
+12. DSH coding agent是用户级显式选择，默认关闭；关闭时后端拒绝创建和继续 DSH Conversation，开启后只在应用界面启动完成时后台安装内置 Runtime。
 
 ## 2. 需求来源
 

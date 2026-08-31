@@ -68,6 +68,11 @@ async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
       throw new ApiError(response.status, `Request failed: ${response.status} ${detail || response.statusText}`)
     }
     return await readJsonResponse<T>(response, path)
+  } catch (error: unknown) {
+    if (controller.signal.aborted) {
+      throw new ApiError(408, `接口 ${path} 请求超时`)
+    }
+    throw error
   } finally {
     clearTimeout(timeoutId)
   }

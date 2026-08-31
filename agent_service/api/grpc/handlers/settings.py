@@ -186,7 +186,7 @@ class SettingsGrpcHandlerMixin:
         )
 
     def GetKnowledgeIngestionConfig(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
-        """返回与 REST 相同的灌库、OCR 和识图用户设置。"""
+        """返回与 REST相同的基础开关，包括 DSH coding agent。"""
 
         user_id = self._require_struct_user_id(request=request, context=context)
         return ParseDict(
@@ -195,7 +195,7 @@ class SettingsGrpcHandlerMixin:
         )
 
     def SaveKnowledgeIngestionConfig(self, request: Struct, context: grpc.ServicerContext) -> Struct:  # noqa: N802
-        """保存与 REST 相同的灌库、OCR 和识图用户设置。"""
+        """保存与 REST相同的基础开关，包括 DSH coding agent。"""
 
         payload = MessageToDict(request)
         user_id = self._require_struct_user_id(request=request, context=context)
@@ -206,6 +206,10 @@ class SettingsGrpcHandlerMixin:
             vision_understanding_enabled=(
                 bool(payload["vision_understanding_enabled"])
                 if "vision_understanding_enabled" in payload else None
+            ),
+            dsh_coding_agent_enabled=(
+                bool(payload["dsh_coding_agent_enabled"])
+                if "dsh_coding_agent_enabled" in payload else None
             ),
             knowledge_ignore_patterns=(
                 str(payload["knowledge_ignore_patterns"])

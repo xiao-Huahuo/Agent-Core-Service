@@ -43,6 +43,11 @@ export function fetchDshSdkManagement(userId: string): Promise<DshSdkManagementS
   return apiGet(API_ROUTES.SETTINGS_DSH_SDK_MANAGEMENT, { user_id: userId })
 }
 
+/** Trigger the persisted post-startup DSH policy without waiting for extraction. */
+export function initializeDshCodingAgent(userId: string): Promise<{ status: string; enabled: boolean }> {
+  return apiPost(API_ROUTES.SETTINGS_DSH_SDK_INITIALIZE, { user_id: userId })
+}
+
 export function installDshSdk(userId: string): Promise<DshSdkManagementStatus> {
   return apiPost(API_ROUTES.SETTINGS_DSH_SDK_INSTALL, { user_id: userId })
 }

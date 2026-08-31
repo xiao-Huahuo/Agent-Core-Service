@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import inspect
 from types import SimpleNamespace
 from typing import Any
 
@@ -48,7 +49,9 @@ class _ModelManagementStub:
 
 
 class _SettingsStub:
-    """提供模型自动下载偏好的纯内存替身。"""
+    """提供模型与 DSH用户偏好的纯内存替身。"""
+
+    dsh_enabled = False
 
     def get_model_preferences(self, *, user_id: str) -> dict[str, object]:
         """返回默认关闭状态。"""
@@ -68,7 +71,28 @@ class _SettingsStub:
     def save_knowledge_ingestion_config(self, *, user_id: str, **payload: object) -> dict[str, object]:
         """返回 gRPC 传入的识图覆盖值。"""
 
-        return {"user_id": user_id, **{key: value for key, value in payload.items() if value is not None}}
+        result = {"user_id": user_id, **{key: value for key, value in payload.items() if value is not None}}
+        if "dsh_coding_agent_enabled" in result:
+            self.dsh_enabled = bool(result["dsh_coding_agent_enabled"])
+        return result
+
+    def is_dsh_coding_agent_enabled_for_user(self, *, user_id: str) -> bool:  # noqa: ARG002
+        """返回当前测试显式保存的 DSH开关。"""
+
+        return self.dsh_enabled
+
+
+class _DshRuntimeStub:
+    """记录 DSH后台安装是否被启动。"""
+
+    def __init__(self) -> None:
+        self.start_calls = 0
+
+    def start_install(self) -> dict[str, object]:
+        """模拟立即返回的后台安装任务。"""
+
+        self.start_calls += 1
+        return {"status": "verifying"}
 
 
 class _LatexManagementStub:
@@ -118,6 +142,15 @@ def test_management_rest_returns_service_owned_details(monkeypatch: Any) -> None
     assert compiler.json()["source"] == "system"
 
 
+def test_storage_management_reads_run_in_fastapi_threadpool() -> None:
+    """四个独立磁盘来源不得在主事件循环串行阻塞其他管理区。"""
+
+    assert not inspect.iscoroutinefunction(settings_rest.get_storage_config)
+    assert not inspect.iscoroutinefunction(settings_rest.get_model_management)
+    assert not inspect.iscoroutinefunction(settings_rest.get_latex_management)
+    assert not inspect.iscoroutinefunction(settings_rest.get_dsh_sdk_management)
+
+
 def test_model_preferences_and_initialization_match_over_rest_and_grpc(monkeypatch: Any) -> None:
     """模型偏好与启动后初始化必须通过 REST 和 gRPC 暴露相同字段。"""
 
@@ -164,8 +197,8 @@ def test_model_preferences_and_initialization_match_over_rest_and_grpc(monkeypat
     assert grpc_initialized == rest_initialized.json()
 
 
-def test_vision_setting_is_available_over_grpc() -> None:
-    """gRPC 面板必须能保存与 REST 同形的识图开关。"""
+def test_basic_agent_settings_are_available_over_grpc() -> None:
+    """gRPC面板必须能保存与 REST同形的识图和 DSH开关。"""
 
     settings_service = _SettingsStub()
     server = grpc.server(ThreadPoolExecutor(max_workers=1))
@@ -183,6 +216,7 @@ def test_vision_setting_is_available_over_grpc() -> None:
     try:
         payload = MessageToDict(AgentServiceStub(channel).SaveKnowledgeIngestionConfig(_struct({
             "user_id": "u1", "vision_understanding_enabled": True,
+            "dsh_coding_agent_enabled": True,
         }), timeout=5))
     finally:
         channel.close()
@@ -190,6 +224,28 @@ def test_vision_setting_is_available_over_grpc() -> None:
 
     assert payload["user_id"] == "u1"
     assert payload["vision_understanding_enabled"] is True
+    assert payload["dsh_coding_agent_enabled"] is True
+
+
+def test_dsh_setting_starts_background_install_and_initializes_after_startup(monkeypatch: Any) -> None:
+    """开启 DSH后应持久化并异步安装，启动后初始化复用同一后台任务。"""
+
+    settings_service = _SettingsStub()
+    runtime = _DshRuntimeStub()
+    monkeypatch.setattr(settings_rest, "_require_settings_service", lambda: settings_service)
+    monkeypatch.setattr(settings_rest, "_require_dsh_runtime_manager", lambda: runtime)
+    app = FastAPI()
+    app.include_router(settings_rest.router)
+    client = TestClient(app)
+
+    saved = client.put("/settings/profile/ingestion", json={
+        "user_id": "u1", "dsh_coding_agent_enabled": True,
+    })
+    initialized = client.post("/settings/sdks/dsh/initialize", json={"user_id": "u1"})
+
+    assert saved.json()["dsh_coding_agent_enabled"] is True
+    assert initialized.json() == {"status": "verifying", "enabled": True}
+    assert runtime.start_calls == 2
 
 
 def test_management_grpc_matches_rest_fields() -> None:

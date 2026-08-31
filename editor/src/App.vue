@@ -14,6 +14,7 @@ import UserIdGate from '@/components/common/UserIdGate.vue'
 import FloatingAgentRoot from '@/components/floating/FloatingAgentRoot.vue'
 import ModelLifecycleOverlay from '@/components/common/ModelLifecycleOverlay.vue'
 import { initializeManagedModels } from '@/api/settings'
+import { initializeDshCodingAgent } from '@/api/sdk'
 import { isFloatingWindow } from '@/floating/isFloating'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -38,7 +39,10 @@ async function initializeUserModels(userId: string) {
   initializedUsers.add(userId)
   try {
     await settingsStore.refreshUserProfile()
-    await initializeManagedModels(userId)
+    await Promise.allSettled([
+      initializeManagedModels(userId),
+      initializeDshCodingAgent(userId),
+    ])
     await window.agentEditorDesktop?.floatingSetVisible?.(Boolean(settingsStore.profile.floatingLaunchEnabled))
   } catch {
     initializedUsers.delete(userId)

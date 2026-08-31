@@ -21,6 +21,7 @@ from typing import Protocol
 from agent_service.core.agent_config import AgentConfig
 from agent_service.scripts.download_model import is_model_available, model_target_dir
 from agent_service.services.memory.rag.torch_loading import load_with_safe_module_apply
+from agent_service.services.memory.rag.sentence_transformer_imports import load_cross_encoder_type
 from agent_service.services.memory.rag.hybrid_retrieval import HybridRetrievalCandidate
 
 logger = logging.getLogger(__name__)
@@ -137,12 +138,15 @@ class SentenceTransformerCrossEncoderProvider:
         from agent_service.core.model_status import ModelState, set_model_state
 
         try:
-            from sentence_transformers.cross_encoder import CrossEncoder
-        except ImportError as exc:
+            CrossEncoder = load_cross_encoder_type()
+        except Exception as exc:  # noqa: BLE001
             set_model_state("rerank", ModelState.ERROR)
-            self._load_error = RuntimeError(
-                "缺少 sentence-transformers 依赖,无法加载本地 ReRank 模型。"
+            self._load_error = (
+                RuntimeError("缺少 sentence-transformers 依赖,无法加载本地 ReRank 模型。")
+                if isinstance(exc, ImportError)
+                else exc
             )
+            logger.exception("ReRank 模型依赖导入失败: %s", exc)
             return
 
         if not self.config.model.rerank_model_name:

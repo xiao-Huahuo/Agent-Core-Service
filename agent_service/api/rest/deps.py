@@ -24,7 +24,7 @@ from agent_service.services.dsh_adapter import DshChildAgentExecutor
 from agent_service.services.favorite.service import FavoriteService
 from agent_service.services.feedback.service import FeedbackService
 from agent_service.services.git.service import GitService
-from agent_service.services.knowledge_graph import KnowledgeGraphService
+from agent_service.services.knowledge_graph import KnowledgeGraphQueueService, KnowledgeGraphService
 from agent_service.services.knowledge_ingestion_job.service import KnowledgeIngestionJobService
 from agent_service.services.knowledge_library import KnowledgeLibraryService
 from agent_service.services.latex.service import LatexService
@@ -117,6 +117,12 @@ def _require_knowledge_graph_service() -> KnowledgeGraphService:
     """返回当前请求的 KnowledgeGraphService。"""
 
     return _require("knowledge_graph_service", "KnowledgeGraphService")
+
+
+def _require_knowledge_graph_queue_service() -> KnowledgeGraphQueueService:
+    """返回当前请求的 KnowledgeGraphQueueService。"""
+
+    return _require("knowledge_graph_queue_service", "KnowledgeGraphQueueService")
 
 
 def _require_git_service() -> GitService:

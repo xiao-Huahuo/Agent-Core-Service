@@ -25,6 +25,7 @@ const sdk = ref<DshSdkManagementStatus | null>(null)
 const expanded = ref(false)
 const loading = ref(false)
 const feedback = ref('')
+const lastRefreshFailed = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const workingStates = new Set(['verifying', 'extracting', 'installing', 'repairing', 'cancelling', 'uninstalling'])
@@ -46,9 +47,12 @@ async function refresh() {
   loading.value = true
   try {
     sdk.value = await fetchDshSdkManagement(props.userId)
+    lastRefreshFailed.value = false
     feedback.value = ''
   } catch (error: unknown) {
+    lastRefreshFailed.value = true
     feedback.value = error instanceof Error ? error.message : 'SDK 状态加载失败'
+    syncPolling()
   } finally {
     loading.value = false
   }
@@ -56,10 +60,10 @@ async function refresh() {
 
 function syncPolling() {
   if (pollTimer) clearInterval(pollTimer)
-  pollTimer = sdk.value && workingStates.has(sdk.value.status)
+  pollTimer = lastRefreshFailed.value || (sdk.value && workingStates.has(sdk.value.status))
     ? setInterval(async () => {
         await refresh()
-        if (!sdk.value || workingStates.has(sdk.value.status)) return
+        if (lastRefreshFailed.value || !sdk.value || workingStates.has(sdk.value.status)) return
         if (pollTimer) clearInterval(pollTimer)
         pollTimer = null
         emit('storageChanged')

@@ -831,8 +831,7 @@ CHILD_AGENT_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
             "一旦使用 background 创建了本轮所需的全部子 Agent,必须反复调用 wait_for_child_agents "
             "逐个收取结果;只要还有 created/running 子 Agent,就继续等待,不要输出最终结论。"
             "子 Agent 默认继承主 Agent 工具,但主 Agent 可缩小工具范围和沙盒权限。"
-            "需要跨文件修改代码、运行 PowerShell、Git、测试或构建时,provider必须选择dsh并提供workspace_root;"
-            "普通知识探索保持provider=native。"
+            "创建前台或后台子 Agent；provider与工作区选择遵循当前系统提示。"
         ),
         args_schema={
             "type": "object",
@@ -843,19 +842,21 @@ CHILD_AGENT_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
                 "access_mode": {"type": "string", "description": "readonly、sandbox 或 full_access。"},
                 "input_refs": {"type": "array", "description": "传给子 Agent 的输入引用列表。"},
                 "output_contract": {"type": "object", "description": "对子 Agent 结果格式的要求。"},
-                "category": {
+                "agent_type": {
                     "type": "string",
-                    "description": (
-                        "子 Agent 能力模板:agent(全能执行)/explore(只读探索)/plan(只读规划研究),"
-                        "或自定义角色描述。留空则不注入角色设定。"
-                    ),
+                    "enum": ["explore", "dsh", "coding"],
+                    "description": "真实子 Agent类型；代码任务有DSH时用dsh，否则用coding。",
                 },
                 "name": {
                     "type": "string",
                     "description": "子 Agent 名字,由主 Agent 起名;留空自动用角色模板名(如 plan1/agent1)。",
                 },
+                "workspace_root": {
+                    "type": "string",
+                    "description": "agent_type为dsh或coding时必填的工作区绝对路径。",
+                },
             },
-            "required": ["goal"],
+            "required": ["goal", "agent_type"],
         },
         function=spawn_child_agent,
     ),

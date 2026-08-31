@@ -126,6 +126,7 @@ export const API_ROUTES = {
   SETTINGS_STORAGE_CONFIG: '/settings/storage/config',
   SETTINGS_STORAGE_CLEAR: '/settings/storage/clear',
   SETTINGS_DSH_SDK_MANAGEMENT: '/settings/sdks/dsh/management',
+  SETTINGS_DSH_SDK_INITIALIZE: '/settings/sdks/dsh/initialize',
   SETTINGS_DSH_SDK_INSTALL: '/settings/sdks/dsh/install',
   SETTINGS_DSH_SDK_INSTALL_CANCEL: '/settings/sdks/dsh/install/cancel',
   SETTINGS_DSH_SDK_REPAIR: '/settings/sdks/dsh/repair',

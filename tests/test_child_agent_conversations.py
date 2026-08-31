@@ -10,6 +10,8 @@ import json
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from sqlmodel import select
 
 from agent_service.api.rest import sessions as sessions_api
@@ -143,3 +145,46 @@ def test_child_agent_executes_through_persisted_session_without_recursive_spawn(
     assert calls[0]["create"]["parent_session_id"] == "parent-session"
     assert calls[1]["run"]["session_id"] == "child-session-1"
     assert calls[1]["run"]["allow_child_spawn"] is False
+
+
+def test_dsh_child_agent_is_rejected_until_user_enables_it() -> None:
+    """provider=dsh不得绕过默认关闭的用户级设置。"""
+
+    agent = object.__new__(AgentCore)
+    agent.config = _config()
+    agent.settings_service = SimpleNamespace(
+        is_dsh_coding_agent_enabled_for_user=lambda **kwargs: False,
+    )
+
+    with pytest.raises(PermissionError, match="DSH coding agent未启用"):
+        agent._spawn_child_from_runtime(
+            parent_run_id="parent-run",
+            user_id="u1",
+            session_id="parent-session",
+            parent_access_mode="sandbox",
+            goal="修改代码",
+            provider="dsh",
+            workspace_root="D:/repo",
+        )
+
+
+def test_native_coding_fallback_is_rejected_when_dsh_is_enabled() -> None:
+    """有 DSH时后端也必须执行 dsh优先、coding仅后备的选择规则。"""
+
+    agent = object.__new__(AgentCore)
+    agent.config = _config()
+    agent.settings_service = SimpleNamespace(
+        is_dsh_coding_agent_enabled_for_user=lambda **kwargs: True,
+    )
+
+    with pytest.raises(PermissionError, match="必须使用 agent_type=dsh"):
+        agent._spawn_child_from_runtime(
+            parent_run_id="parent-run",
+            user_id="u1",
+            session_id="parent-session",
+            parent_access_mode="sandbox",
+            goal="修改代码",
+            category="coding",
+            provider="native",
+            workspace_root="D:/repo",
+        )

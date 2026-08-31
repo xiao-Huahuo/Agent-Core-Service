@@ -616,6 +616,11 @@ class ModelRuntimeMixin:
             return system_content
         try:
             if self.settings_service is not None:
+                system_content += self.config.prompts.resolve_child_agent_type_prompt(
+                    dsh_enabled=self.settings_service.is_dsh_coding_agent_enabled_for_user(
+                        user_id=user_id,
+                    ),
+                )
                 custom_prompt = self.settings_service.get_system_prompt(user_id=user_id)
                 if custom_prompt:
                     system_content += f"\n\n【用户自定义指令】\n{custom_prompt}"

@@ -20,6 +20,7 @@ function mountSection(ignorePatterns = '*.md') {
       autoIngestOnUploadDraft: false,
       ocrEnabledDraft: false,
       visionUnderstandingEnabledDraft: false,
+      dshCodingAgentEnabledDraft: false,
       knowledgeIgnorePatternsDraft: ignorePatterns,
       supportedFileTypes: ['.md', '.pdf'],
       hasChanges: false,
@@ -40,6 +41,8 @@ describe('BasicSettingsSection blocked file types', () => {
 
     expect(labels.indexOf('识图')).toBe(labels.indexOf('OCR') + 1)
     expect(wrapper.props('visionUnderstandingEnabledDraft')).toBe(false)
+    expect(labels.indexOf('启用 DSH coding agent')).toBe(labels.indexOf('识图') + 1)
+    expect(wrapper.props('dshCodingAgentEnabledDraft')).toBe(false)
   })
 
   it('renders below the ignore area and appends each supported extension only once', async () => {

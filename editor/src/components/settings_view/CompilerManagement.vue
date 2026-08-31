@@ -26,6 +26,7 @@ const compiler = ref<LatexManagementStatus | null>(null)
 const expanded = ref(false)
 const loading = ref(false)
 const feedback = ref('')
+const lastRefreshFailed = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 function formatBytes(bytes: number): string {
@@ -45,8 +46,12 @@ async function refresh() {
   loading.value = true
   try {
     compiler.value = await fetchLatexManagement(props.userId)
+    lastRefreshFailed.value = false
+    feedback.value = ''
   } catch (error: unknown) {
+    lastRefreshFailed.value = true
     feedback.value = error instanceof Error ? error.message : '编译器状态加载失败'
+    ensurePolling()
   } finally {
     loading.value = false
   }
@@ -57,7 +62,7 @@ function ensurePolling() {
   pollTimer = setInterval(async () => {
     await refresh()
     const status = compiler.value?.status
-    if (!status || ['downloading', 'installing', 'cancelling'].includes(status)) return
+    if (lastRefreshFailed.value || !status || ['downloading', 'installing', 'cancelling'].includes(status)) return
     if (pollTimer) clearInterval(pollTimer)
     pollTimer = null
     emit('storageChanged')
