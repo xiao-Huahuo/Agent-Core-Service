@@ -1,0 +1,71 @@
+# MetaWeave-managed DSH profile overlay.
+# Applied over the shipped `mw` profile (dsh-base + dsh-web-app).
+
+- id: webserver
+  config:
+    host: 127.0.0.1
+    port: 0
+
+- id: web-runtime
+  config:
+    printUrl: false
+    surfaceContext: false
+    trustedHosts: []
+
+- id: hmr
+  disabled: true
+
+- id: sandbox-policy
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE
+    workspaceRoot: !!js process.env.DSH_CWD
+
+- id: approval
+  config:
+    policy: never
+
+- id: permission
+  config:
+    defaultPreset: mw-managed
+    presets:
+      mw-managed:
+        sandbox: !!js process.env.DSH_PERMISSION_MODE
+        approval: never
+
+- id: tool-fs
+  disabled: false
+
+- id: tool-pwsh
+  disabled: !!js process.env.DSH_PERMISSION_MODE === 'read-only'
+
+- id: subagent-spawn-in-process
+  disabled: true
+
+- id: subagent-fork-in-process
+  disabled: true
+
+- id: tool-subagent-control
+  disabled: true
+
+- id: tool-subagent-list-agents
+  disabled: true
+
+- id: tool-subagent
+  disabled: true
+
+- id: tool-subagent-fork
+  disabled: true
+
+- id: tool-subagent-report
+  disabled: true
+
+- id: workflow-worker-thread
+  disabled: true
+
+- id: tool-workflow
+  disabled: true
+
+- insert:
+    - id: sdk-jsonrpc-server
+      name: '@deepseek-ai/dsh-sdk-jsonrpc-server'
+      inject: [agents, sessions]

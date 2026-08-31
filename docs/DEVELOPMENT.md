@@ -92,6 +92,49 @@ npm run test:e2e:smoke
 
 ## 构建
 
+### 一键生产 DSH Runtime SDK
+
+DSH Runtime SDK不在用户电脑生产，也不需要上传到网络。发布者只在升级 DSH源码、MW补丁、Cordis配置、Node主版本或 Runtime版本时更新sdk.
+#### 普通 MW构建
+
+全新克隆的 MW仓库已经包含 `resources/dsh/sdk/` 中固定的 ZIP与 manifest。普通开发和 EXE构建直接使用这份成品，不需要另行克隆 DSH，也不需要为了 DSH安装 Node、pnpm或 C编译器。
+
+#### 重新生产 SDK
+
+只有升级 DSH、MW补丁、Cordis配置、Node主版本或 Runtime版本时才重新生产 SDK。构建机需要 Git、Node 24、pnpm以及 `cl.exe`或 `gcc.exe`。在 MetaWeave根目录执行：
+```bat
+scripts\build_dsh_sdk.bat
+```
+
+脚本读取 `resources/dsh/upstream.json`，自动克隆其中锁定的 DSH仓库，checkout到完整 commit `47f943859bef60e4160492346772ded9b24f765a`，应用 `resources/dsh/patches/mw-runtime.patch`，然后在临时目录构建。它不跟随 `master`、tag或本机已有分支，也不修改开发者现有的 DSH工作区。
+
+无网络环境可以把本地 DSH仓库作为克隆来源；脚本仍会在临时目录 checkout锁定 commit并应用 MW补丁：
+
+如果源码位于其他位置,传入路径：
+```bat
+scripts\build_dsh_sdk.bat D:\Projects\Python\deepseek-harness
+```
+
+脚本构建生产闭包、编译 Job Object启动器，并生成：
+
+```text
+resources/dsh/sdk/
+├── dsh-runtime-win-x64-<version>.zip
+└── dsh-runtime-win-x64-<version>.manifest.json
+```
+
+升级源码版本时必须同时完成以下步骤：
+
+1. 将 `resources/dsh/upstream.json` 的 `repository`与 `commit`更新为经过审核的确切上游版本，不使用浮动分支。
+2. 以新提交为基线重新生成并审核 `resources/dsh/patches/mw-runtime.patch`，解决无法应用或行为变化的部分。
+3. 必要时更新 `runtime_version`与 `node_major`，完成 DSH协议、只读 Web和 Windows Runtime测试。
+4. 运行一键脚本，提交新的锁文件、补丁、ZIP和 manifest；四者必须一起更新。
+
+不要手工修改 manifest中的大小、归档哈希或补丁哈希；脚本会根据真实文件生成并复核。
+
+`AgentService.spec` 会再次校验锁定 commit、补丁 SHA-256、完整 ZIP、大小和归档 SHA-256，并把 ZIP与 manifest放入 `AgentService.exe`。SDK缺失、损坏，或者锁文件、补丁与 SDK不一致时，EXE构建立即失败。
+注: 任一制品不存在、损坏或版本不符，后端 EXE构建立即失败。应用启动时不解压 SDK；用户第一次安装或第一次运行 DSH子 Agent时才从 EXE内置 ZIP解压到运行目录。
+
 ### Electron 桌面安装包（推荐）
 
 当前正式发布形态是 **Electron 桌面端 + 内置后端 exe + NSIS 安装包**：
@@ -116,7 +159,7 @@ npm run dist:win
 0. `predist:win`: 调用 Electron 自带的安装脚本检查 `node_modules/electron/dist`；缺失时先从缓存或网络补齐，失败则立即中止。
 1. `npm run build-only`: 构建前端静态资源到 `editor/dist/`。
 2. `npm run prepare:default-resources`: 生成安装包资源模板到 `editor/.packaging/default-resources/`。
-3. `npm run build:backend`: 使用 `pyinstaller --clean` 读取根目录 `AgentService.spec`，生成 `dist/AgentService.exe`。
+3. `npm run build:backend`: 使用 `pyinstaller --clean` 读取根目录 `AgentService.spec`，校验并内置 DSH SDK，生成 `dist/AgentService.exe`；SDK缺失时此步直接失败。
 4. `npm run build:win-installer`: 再次确认 Electron 运行时存在，为本次构建创建独立时间戳目录，并调用 electron-builder 生成 Windows NSIS 安装包。
 
 PyInstaller 开始时会把 `editor/dist/` 复制到唯一临时快照，后续归档只读取该不可变副本，避免另一个 Vite 构建替换哈希资源后生成残缺 exe；进程退出时自动删除快照。
@@ -166,8 +209,9 @@ pyinstaller --clean AgentService.spec
 - 后端程序、Python 依赖与原生动态库；
 - `editor/dist/` 的稳定快照；
 - `agent_service/core/db/alembic/` 与根目录 `alembic.ini`。
+- 固定版本的 `resources/dsh/sdk/` manifest与 ZIP；缺失、损坏或版本漂移会中止构建。
 
-**不要把 `resources/` 或 `runtime/` 放入 PyInstaller datas**。默认资源由 Electron 安装包外置携带，运行数据必须保留在可写用户目录。由于 Torch、Transformers、PaddleOCR、OpenCV、SciPy 等科学计算运行库会随 exe 分发，单文件约 500 MiB 属于当前完整功能集的正常体积；本地模型权重不在 exe 中。
+**除 `resources/dsh/sdk/` 外，不要把整个 `resources/` 或 `runtime/` 放入 PyInstaller datas**。默认资源由 Electron安装包外置携带，运行数据必须保留在可写用户目录。当前 DSH SDK ZIP固定增加约 66.0 MB；Torch、Transformers、PaddleOCR、OpenCV、SciPy等科学计算运行库也随 EXE分发，本地模型权重仍不进入 EXE。
 
 ### 部署结构
 

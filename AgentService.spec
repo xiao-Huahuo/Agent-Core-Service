@@ -1,16 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller 构建配置 — 将后端和前端静态资源打包为单个 exe。
+"""PyInstaller 构建配置 — 将后端、前端和 DSH SDK打包为单个 exe。
 
 使用说明:
 先构建 editor/dist,再执行 `pyinstaller AgentService.spec`。
 构建产物输出到项目根目录的 dist/AgentService.exe。
-默认 resources 由 Electron 安装包作为外置模板携带,不进入后端 exe。
+默认 resources 由 Electron安装包外置携带；DSH SDK是例外，必须进入后端 exe。
 """
 
 import atexit
 from pathlib import Path
 import shutil
 import tempfile
+
+from scripts.build_dsh_windows_bundle import verify_bundle_files
 
 # SPECPATH 由 PyInstaller 在 exec spec 前注入,指向 spec 文件所在目录
 _project_root = Path(SPECPATH)  # noqa: F821
@@ -50,16 +52,26 @@ def _snapshot_required_data_dir(relative_path: str) -> tuple[str, str]:
     return (str(snapshot), destination)
 
 
+def _required_dsh_sdk_bundle() -> tuple[str, str]:
+    """验证固定 SDK制品后返回 PyInstaller目录映射，缺失或损坏立即失败。"""
+
+    source = _project_root / 'resources' / 'dsh' / 'sdk'
+    verify_bundle_files(source)
+    return (str(source), 'resources/dsh/sdk')
+
+
 a = Analysis(
     ['main.py'],
     pathex=[str(_project_root)],
     binaries=[],
-    # 只打包程序和前端静态资源。resources/ 与 runtime/ 都是用户可见目录:
-    # resources/ 由 Electron 安装包外置携带默认模板,runtime/ 首次运行生成。
+    # 普通 resources/由 Electron外置携带；DSH SDK必须进入 EXE供首次使用时懒解压。
+    # runtime/仍在首次运行时生成，不得写入安装目录。
     datas=[
         _snapshot_required_data_dir('editor/dist'),
         _required_data_dir('agent_service/core/db/alembic'),
         _required_data_file('alembic.ini'),
+        _required_data_dir('agent_service/vendor/deepseek_harness'),
+        _required_dsh_sdk_bundle(),
     ],
     hiddenimports=['xlrd', 'torchvision'],
     hookspath=[],

@@ -96,6 +96,27 @@ def test_child_name_is_passed_through() -> None:
         manager.close()
 
 
+def test_dsh_child_can_continue_with_same_run_id() -> None:
+    """DSH追问应复用 Child Agent身份并把新 Prompt交给原执行器。"""
+
+    manager = ChildAgentManager()
+    prompts: list[str] = []
+    try:
+        record = manager.spawn(
+            contract=_contract(mode="foreground", provider="dsh", session_id="session_dsh"),
+            executor=lambda context: prompts.append(context.goal) or context.goal,
+            parent_tools=frozenset({"dsh.read"}),
+            parent_access_mode="sandbox",
+        )
+        continued = manager.continue_child(run_id=record.run_id, prompt="修复失败测试", mode="foreground")
+        assert continued.run_id == record.run_id
+        assert prompts == [record.contract.goal, "修复失败测试"]
+        assert continued.result is not None
+        assert continued.result.result == "修复失败测试"
+    finally:
+        manager.close()
+
+
 def test_background_children_run_concurrently_and_queue_results() -> None:
     """后台子 Agent 不阻塞父调用,并且同一父级可并发收集多个结果。"""
 

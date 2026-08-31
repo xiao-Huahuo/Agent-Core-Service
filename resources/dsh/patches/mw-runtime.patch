@@ -1,0 +1,2100 @@
+diff --git a/apps/cli/package.json b/apps/cli/package.json
+index fdd4740b3c..28c7bef25a 100644
+--- a/apps/cli/package.json
++++ b/apps/cli/package.json
+@@ -50,6 +50,7 @@
+     "@deepseek-ai/dsh-pwsh-sandbox": "workspace:^",
+     "@deepseek-ai/dsh-session-projection": "workspace:^",
+     "@deepseek-ai/dsh-session-reference": "workspace:^",
++    "@deepseek-ai/dsh-sdk-jsonrpc-server": "workspace:^",
+     "@deepseek-ai/dsh-time-context": "workspace:^",
+     "@deepseek-ai/dsh-skill": "workspace:^",
+     "@deepseek-ai/dsh-skill-filesystem": "workspace:^",
+diff --git a/apps/web/src/main.ts b/apps/web/src/main.ts
+index feb85db15a..5e2d78bacc 100644
+--- a/apps/web/src/main.ts
++++ b/apps/web/src/main.ts
+@@ -5,6 +5,29 @@
+  */
+ import { AppWebEntry } from '@deepseek-ai/dsh-client-web'
+ 
++const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
++const managedToken = params.get('mw_token')
++if (managedToken !== null && params.get('readonly') === '1') {
++  document.cookie = `mw_dsh_token=${encodeURIComponent(managedToken)}; Path=/api; SameSite=Strict`
++  const managedSession = params.get('session')
++  if (managedSession !== null) {
++    window.localStorage.setItem('dsh.sessions.current', JSON.stringify({ sessionId: managedSession }))
++  }
++  document.documentElement.dataset.mwManagedReadonly = 'true'
++  const style = document.createElement('style')
++  style.textContent = `
++    html[data-mw-managed-readonly="true"] textarea,
++    html[data-mw-managed-readonly="true"] input:not([type="search"]) {
++      pointer-events: none !important;
++      opacity: .55 !important;
++    }
++    html[data-mw-managed-readonly="true"] button[type="submit"] {
++      display: none !important;
++    }
++  `
++  document.head.append(style)
++}
++
+ const el = document.getElementById('root')
+ if (el === null) throw new Error('web app: missing #root')
+ void new AppWebEntry(el).run()
+diff --git a/packages/boot/app-boot/src/profile.ts b/packages/boot/app-boot/src/profile.ts
+index 8f982bed80..1af1b4fe5a 100644
+--- a/packages/boot/app-boot/src/profile.ts
++++ b/packages/boot/app-boot/src/profile.ts
+@@ -113,6 +113,7 @@ export function resolveProfileDir(name: string, home: string = resolveDshHome())
+ /** The shipped profile templates auto-initialized on first use, by name. */
+ export const PROFILE_TEMPLATES: Record<string, readonly string[]> = {
+   web: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'],
++  mw: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'],
+   headless: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless'],
+ }
+ 
+diff --git a/packages/bundle/web-app/src/index.ts b/packages/bundle/web-app/src/index.ts
+index 9b5207dd02..147695748d 100644
+--- a/packages/bundle/web-app/src/index.ts
++++ b/packages/bundle/web-app/src/index.ts
+@@ -11,6 +11,7 @@
+  */
+ 
+ import { createRequire } from 'node:module'
++import { writeFileSync } from 'node:fs'
+ import { networkInterfaces } from 'node:os'
+ import { fileURLToPath } from 'node:url'
+ import type { Context } from '@deepseek-ai/cordis'
+@@ -156,28 +157,33 @@ export function apply(ctx: Context, config: Config): void {
+       })
+     })
+   }
+-  if (config.printUrl) {
++  const mwUrlFile = process.env.DSH_MW_WEB_URL_FILE?.trim()
++  if (config.printUrl || mwUrlFile) {
+     // The URL line is a readiness signal: supervisors (and the keyless CLI
+     // smoke) RPC as soon as they observe it, so it must not print while
+     // sibling rows (the /api route owner) are still mounting. Await Loader
+     // settlement first; a hand-built tree without a Loader prints at once.
+-    const printUrl = (): void => {
++    const publishUrl = (): void => {
+       // Reuse the exact LAN snapshot provided to the /api trust fence.
+       const lanCandidate = runtime.lanAddresses[0]
+       const port = ctx.webServer.port
+-      console.log(`dsh web: ${localWebUrl(ctx)}${lanCandidate === undefined ? '' : ` (LAN: http://${lanCandidate}:${String(port)})`}`)
++      const url = localWebUrl(ctx)
++      if (mwUrlFile) writeFileSync(mwUrlFile, url, { encoding: 'utf8', mode: 0o600 })
++      if (config.printUrl) {
++        console.log(`dsh web: ${url}${lanCandidate === undefined ? '' : ` (LAN: http://${lanCandidate}:${String(port)})`}`)
++      }
+     }
+     // This row's own activation can precede a sibling failure. The app owns
+     // readiness by waiting for its Loader tree, or prints at once in a
+     // hand-built context without Loader.
+     const settled = ctx.get('loader')?.await()
+-    if (settled === undefined) printUrl()
++    if (settled === undefined) publishUrl()
+     else {
+       void settled.then(() => {
+         // The tree can be disposed while the boot was in flight (early
+         // SIGTERM); a URL line for a dead server would only mislead, and
+         // reading the torn-down port would turn a clean shutdown into a crash.
+-        if (ctx.get('webServer') !== undefined) printUrl()
++        if (ctx.get('webServer') !== undefined) publishUrl()
+       // Loader reports a failed boot; this row only stays quiet.
+       }, () => {})
+     }
+diff --git a/packages/client/connection/src/index.ts b/packages/client/connection/src/index.ts
+index 35084918e8..e25bd2565d 100644
+--- a/packages/client/connection/src/index.ts
++++ b/packages/client/connection/src/index.ts
+@@ -28,6 +28,25 @@ export const name = 'client-connection'
+ 
+ /** Headroom for RPC JSON fields around aggregate base64 image payloads. */
+ const REQUEST_ENVELOPE_HEADROOM_BYTES = 1024 * 1024
++const MW_READ_ONLY_METHODS = new Set([
++  'host.describe',
++  'session.list',
++  'session.search',
++  'session.history',
++  'session.models',
++  'subagent.list',
++  'subagent.history',
++  'workspace.list',
++  'skill.list',
++  'agentPreset.list',
++  'agentPreset.read',
++  'llm.providers',
++  'llm.models',
++])
++
++function cookieValue(header: string | undefined, name: string): string | undefined {
++  return header?.split(';').map(part => part.trim()).find(part => part.startsWith(`${name}=`))?.slice(name.length + 1)
++}
+ 
+ function assertImageBodyCapacity(ctx: Context, maxRequestBodyBytes: number): void {
+   const attachments = ctx.get('attachments')
+@@ -131,6 +150,12 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
+   // The Loader resolves schema defaults; hand-built test contexts may pass none.
+   const trustedHosts = config?.trustedHosts ?? []
+   const maxRequestBodyBytes = config?.maxRequestBodyBytes ?? DEFAULT_MAX_REQUEST_BODY_BYTES
++  const mwReadOnly = process.env.DSH_MW_WEB_READ_ONLY === '1'
++  const mwToken = process.env.DSH_MW_WEB_TOKEN?.trim()
++  const mwSessionId = process.env.DSH_MW_SESSION_ID?.trim()
++  if (mwReadOnly && (!mwToken || !mwSessionId)) {
++    throw new Error('client-connection: MW read-only mode requires DSH_MW_WEB_TOKEN and DSH_MW_SESSION_ID')
++  }
+   // Config boundary: a malformed entry fails the load loudly here rather than
+   // silently authorizing its hostname prefix at request time.
+   for (const entry of trustedHosts) assertTrustedAuthority(entry)
+@@ -142,6 +167,14 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
+       const method = pathname.startsWith(`${API_PATH}/`)
+         ? pathname.slice(API_PATH.length + 1)
+         : undefined
++      if (mwReadOnly && method !== undefined) {
++        if (!MW_READ_ONLY_METHODS.has(method)) return new Response('DSH_WEB_READ_ONLY', { status: 403 })
++        const body = await request.clone().json().catch(() => undefined) as { payload?: Record<string, unknown> } | undefined
++        const addressed = body?.payload?.sessionId ?? body?.payload?.parentSessionId ?? body?.payload?.childSessionId
++        if (typeof addressed === 'string' && addressed !== mwSessionId) {
++          return new Response('forbidden session', { status: 403 })
++        }
++      }
+       if (method !== undefined
+         && PRIVILEGED_METHODS.has(method)
+         && !isTrustedApiRequest(request, [])) {
+@@ -162,6 +195,11 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
+     kind: 'prefix',
+     path: API_PATH,
+     handler: async (req, res) => {
++      if (mwReadOnly && cookieValue(req.headers.cookie, 'mw_dsh_token') !== encodeURIComponent(mwToken!)) {
++        res.writeHead(403)
++        res.end('forbidden')
++        return
++      }
+       if (!isTrustedApiRequest(req, trustedHosts)) {
+         res.writeHead(403)
+         res.end('forbidden')
+@@ -181,6 +219,10 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
+       apiCtx.effect(() => apiCtx.webServer.registerUpgrade({
+         path,
+         handler: (req, socket, head) => {
++          if (mwReadOnly && cookieValue(req.headers.cookie, 'mw_dsh_token') !== encodeURIComponent(mwToken!)) {
++            rejectWebSocketUpgrade(socket)
++            return
++          }
+           if (!isTrustedApiRequest(req, trustedHosts)) {
+             rejectWebSocketUpgrade(socket)
+             return
+diff --git a/packages/client/connection/tests/node-half.host.spec.ts b/packages/client/connection/tests/node-half.host.spec.ts
+index 0b30ce6520..f228208ae1 100644
+--- a/packages/client/connection/tests/node-half.host.spec.ts
++++ b/packages/client/connection/tests/node-half.host.spec.ts
+@@ -3,7 +3,7 @@ import { EventEmitter, once } from 'node:events'
+ import { createServer, request as httpRequest } from 'node:http'
+ import { PassThrough, Readable } from 'node:stream'
+ import { Context } from '@deepseek-ai/cordis'
+-import { describe, expect, it } from 'vitest'
++import { describe, expect, it, vi } from 'vitest'
+ import type { AddressInfo } from 'node:net'
+ import type { IncomingMessage, ServerResponse } from 'node:http'
+ import type { ApiProxy } from '@deepseek-ai/dsh-host-apiproxy/api'
+@@ -125,6 +125,32 @@ describe('connection node half', () => {
+     expect(upgrades).toHaveLength(0)
+   })
+ 
++  it('enforces the MW token and rejects every mutating Session method', async () => {
++    vi.stubEnv('DSH_MW_WEB_READ_ONLY', '1')
++    vi.stubEnv('DSH_MW_WEB_TOKEN', 'secret-token')
++    vi.stubEnv('DSH_MW_SESSION_ID', 'managed-session')
++    const { routes, dispose } = await mounted()
++    try {
++      const missing = fakeResponse()
++      await routes[0]!.handler(fakeRequest({ host: '127.0.0.1:3080' }), missing.response)
++      expect(missing.state.status).toBe(403)
++
++      const denied = fakeResponse()
++      const body: ClientRequest = {
++        type: 'client-request', rpcId: RpcId('mw-denied'), method: 'session.prompt',
++        payload: { sessionId: 'managed-session', content: [] },
++      }
++      await routes[0]!.handler(fakePost({
++        host: '127.0.0.1:3080', cookie: 'mw_dsh_token=secret-token',
++      }, `${API_PATH}/session.prompt`, body), denied.response)
++      expect(denied.state.status).toBe(403)
++      expect(denied.state.body).toBe('DSH_WEB_READ_ONLY')
++    } finally {
++      await dispose()
++      vi.unstubAllEnvs()
++    }
++  })
++
+   it('requires WebSocket upgrade for network GETs to either event path', async () => {
+     const { routes, dispose } = await mounted()
+     for (const path of [MUX_EVENTS_PATH, HOST_EVENTS_PATH]) {
+diff --git a/packages/sdk/protocol/src/index.ts b/packages/sdk/protocol/src/index.ts
+index 5f0aaca21d..06c8639d30 100644
+--- a/packages/sdk/protocol/src/index.ts
++++ b/packages/sdk/protocol/src/index.ts
+@@ -17,6 +17,10 @@ export type {
+   InitializeResult,
+   SdkRunStatus,
+   SessionEventNotification,
++  SessionFlushParams,
++  SessionFlushResult,
++  SessionOpenParams,
++  SessionOpenResult,
+   SessionStatusNotification,
+   SessionPromptParams,
+   SessionPromptResult,
+diff --git a/packages/sdk/protocol/src/types.ts b/packages/sdk/protocol/src/types.ts
+index 533b5f23c5..20abcdd97e 100644
+--- a/packages/sdk/protocol/src/types.ts
++++ b/packages/sdk/protocol/src/types.ts
+@@ -1,5 +1,5 @@
+ /**
+- * Named wire types for the DeepSeek Harness SDK runtime protocol: the three
++ * Named wire types for the DeepSeek Harness SDK runtime protocol: the five
+  * request/result pairs and the four server-to-client notification payloads
+  * exchanged over the newline-delimited JSON-RPC stdio transport. The server
+  * plugin (`@deepseek-ai/dsh-sdk-jsonrpc-server`) and SDK clients share these shapes;
+@@ -27,7 +27,37 @@ export interface InitializeParams {
+ /** Wire-stable server identity returned by initialization. */
+ export interface InitializeResult {
+   /** Wire-stable server identity (`deepseek-harness-sdk-runtime`) and version. */
+-  serverInfo: { name: string; version: string }
++  serverInfo: { name: string; version: string; capabilities?: string[] }
++}
++
++/** Open or resume one stable SDK Session before prompting it. */
++export interface SessionOpenParams {
++  /** Stable caller-owned Session UUID. */
++  sessionId: string
++}
++
++/** Result of opening a stable SDK Session. */
++export interface SessionOpenResult {
++  /** Opened Session identity. */
++  sessionId: string
++  /** Whether this call created, resumed, or reused the in-process Session. */
++  disposition: 'created' | 'resumed' | 'already-open'
++  /** Last event sequence currently present on the opened Session, or -1. */
++  durableSeq: number
++}
++
++/** Flush one already-open SDK Session. */
++export interface SessionFlushParams {
++  /** Stable opened Session identity. */
++  sessionId: string
++}
++
++/** Durable watermark returned after a successful flush. */
++export interface SessionFlushResult {
++  /** Flushed Session identity. */
++  sessionId: string
++  /** Last event sequence proven durable, or -1 for an empty Session. */
++  durableSeq: number
+ }
+ 
+ /** One user turn on one SDK session. */
+@@ -100,6 +130,8 @@ export interface HarnessSdkNotificationMap {
+ /** Client-to-server request methods with their param and result shapes. */
+ export interface HarnessSdkRequestMap {
+   'initialize': { params: InitializeParams; result: InitializeResult }
++  'session/open': { params: SessionOpenParams; result: SessionOpenResult }
++  'session/flush': { params: SessionFlushParams; result: SessionFlushResult }
+   'session/prompt': { params: SessionPromptParams; result: SessionPromptResult }
+   'shutdown': { params: undefined; result: Record<string, never> }
+ }
+diff --git a/packages/sdk/server/src/index.ts b/packages/sdk/server/src/index.ts
+index 20cb892b53..fdd8e164eb 100644
+--- a/packages/sdk/server/src/index.ts
++++ b/packages/sdk/server/src/index.ts
+@@ -18,8 +18,8 @@ import { HarnessSdkJsonRpcServer } from './server.ts'
+ export * from './server.ts'
+ 
+ export const name = 'sdk-jsonrpc-server'
+-// Only the agent factory is required; initialize reads the optional LLM seam with ctx.get().
+-export const inject = ['agents']
++// SessionStore owns the explicit flush barrier; initialize reads the optional LLM seam with ctx.get().
++export const inject = ['agents', 'sessions']
+ 
+ /** JSON-RPC deployment config plus runtime-only test hooks. */
+ export interface JsonRpcConfig {
+diff --git a/packages/sdk/server/src/server.ts b/packages/sdk/server/src/server.ts
+index 195caa908d..99b7d19ac8 100644
+--- a/packages/sdk/server/src/server.ts
++++ b/packages/sdk/server/src/server.ts
+@@ -11,6 +11,7 @@ import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
+ import { createUserMessage } from '@deepseek-ai/dsh-llm'
+ import { carrierKeyOf, type Scoped } from '@deepseek-ai/dsh-scope'
+ import { SessionId } from '@deepseek-ai/dsh-session'
++import type {} from '@deepseek-ai/dsh-session-persistence'
+ import type SubagentRuntime from '@deepseek-ai/dsh-subagent'
+ import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
+ import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
+@@ -19,6 +20,10 @@ import type {
+   InitializeResult,
+   JsonRpcTransportPeer,
+   SessionEventNotification,
++  SessionFlushParams,
++  SessionFlushResult,
++  SessionOpenParams,
++  SessionOpenResult,
+   SessionPromptParams,
+   SessionPromptResult,
+   SubagentFinishedNotification,
+@@ -121,7 +126,53 @@ export class HarnessSdkJsonRpcServer {
+       if (this.provider !== 'deepseek-official') throw new Error(`no adapter registered for provider "${this.provider}"`)
+       this.llmFiber = await this.ctx.plugin(LlmDeepSeek, {})
+     }
+-    return { serverInfo: { name: 'deepseek-harness-sdk-runtime', version: '0.0.1' } }
++    return {
++      serverInfo: {
++        name: 'deepseek-harness-sdk-runtime',
++        version: '0.0.1',
++        capabilities: ['mw-session-open-v1', 'mw-session-flush-v1'],
++      },
++    }
++  }
++
++  /**
++   * Open the exact caller-owned Session, resuming durable history when present.
++   * @param params - stable Session identity.
++   * @returns creation/resume disposition and current durable watermark.
++   */
++  async open(params: SessionOpenParams): Promise<SessionOpenResult> {
++    if (this.shuttingDown) throw new Error('SDK server is shutting down')
++    const existing = this.sessions.get(params.sessionId)
++    if (existing !== undefined) return this.openResult(params.sessionId, existing, 'already-open')
++    const pending = this.sessionCreations.get(params.sessionId)
++    if (pending !== undefined) return this.openResult(params.sessionId, await pending, 'already-open')
++    const persistence = this.ctx.get('sessionPersistence')
++    const persisted = persistence === undefined
++      ? false
++      : (await persistence.list()).some(meta => String(meta.id) === params.sessionId)
++    const creation = persisted ? this.resumeSession(params.sessionId) : this.createSession(params.sessionId)
++    this.sessionCreations.set(params.sessionId, creation)
++    try {
++      const record = await creation
++      return this.openResult(params.sessionId, record, persisted ? 'resumed' : 'created')
++    } finally {
++      this.sessionCreations.delete(params.sessionId)
++    }
++  }
++
++  /**
++   * Flush one already-open Session through the SessionStore durability barrier.
++   * @param params - opened Session identity.
++   * @returns the durable event watermark.
++   */
++  async flush(params: SessionFlushParams): Promise<SessionFlushResult> {
++    const record = this.sessions.get(params.sessionId)
++    if (record === undefined) throw new Error(`session is not open: ${params.sessionId}`)
++    await this.ctx.sessions.flush(record.handle.agent.session)
++    return {
++      sessionId: params.sessionId,
++      durableSeq: record.handle.agent.session.events.at(-1)?.seq ?? -1,
++    }
+   }
+ 
+   /**
+@@ -191,6 +242,10 @@ export class HarnessSdkJsonRpcServer {
+     switch (method) {
+       case 'initialize':
+         return this.initialize(params as unknown as InitializeParams)
++      case 'session/open':
++        return this.open(params as unknown as SessionOpenParams)
++      case 'session/flush':
++        return this.flush(params as unknown as SessionFlushParams)
+       case 'session/prompt':
+         return this.prompt(params as unknown as SessionPromptParams)
+       case 'shutdown':
+@@ -234,6 +289,34 @@ export class HarnessSdkJsonRpcServer {
+     return rec
+   }
+ 
++  /** Resume one durable Session under the SDK-selected model route. */
++  private async resumeSession(sessionId: string): Promise<SessionRecord> {
++    const handle = await this.ctx.agents.resume({
++      resumeSessionId: SessionId(sessionId),
++      agentOptions: {
++        provider: this.provider,
++        model: this.model,
++        ...this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens },
++      },
++    })
++    const rec: SessionRecord = { handle }
++    this.sessions.set(sessionId, rec)
++    return rec
++  }
++
++  /** Build one open response from the authoritative in-memory Session log. */
++  private openResult(
++    sessionId: string,
++    record: SessionRecord,
++    disposition: SessionOpenResult['disposition'],
++  ): SessionOpenResult {
++    return {
++      sessionId,
++      disposition,
++      durableSeq: record.handle.agent.session.events.at(-1)?.seq ?? -1,
++    }
++  }
++
+   private hasAdapterFor(provider: string): boolean {
+     return this.ctx.get('llm')?.listProviders().some(entry => entry.id === provider) ?? false
+   }
+diff --git a/packages/sdk/server/tests/plugin-apply.spec.ts b/packages/sdk/server/tests/plugin-apply.spec.ts
+index 320a61ac63..c6e893df82 100644
+--- a/packages/sdk/server/tests/plugin-apply.spec.ts
++++ b/packages/sdk/server/tests/plugin-apply.spec.ts
+@@ -161,7 +161,13 @@ describe('dsh-sdk-jsonrpc-server plugin apply', () => {
+       expect(response).toEqual({
+         jsonrpc: '2.0',
+         id: 'init-1',
+-        result: { serverInfo: { name: 'deepseek-harness-sdk-runtime', version: '0.0.1' } },
++        result: {
++          serverInfo: {
++            name: 'deepseek-harness-sdk-runtime',
++            version: '0.0.1',
++            capabilities: ['mw-session-open-v1', 'mw-session-flush-v1'],
++          },
++        },
+       })
+       expect(harness.exits()).toEqual([])
+     } finally {
+diff --git a/packages/sdk/server/tests/server.spec.ts b/packages/sdk/server/tests/server.spec.ts
+index 495f1d90f4..5b69168d78 100644
+--- a/packages/sdk/server/tests/server.spec.ts
++++ b/packages/sdk/server/tests/server.spec.ts
+@@ -124,8 +124,16 @@ describe('HarnessSdkJsonRpcServer', () => {
+         provider: 'deepseek-official',
+         model: 'dsagent-model',
+         maxTokens: 321,
+-      }) as { serverInfo: { name: string } }
++      }) as { serverInfo: { name: string; capabilities: string[] } }
+       expect(init.serverInfo.name).toBe('deepseek-harness-sdk-runtime')
++      expect(init.serverInfo.capabilities).toEqual(['mw-session-open-v1', 'mw-session-flush-v1'])
++
++      await expect(server.handleRequest('session/open', { sessionId: 'main' })).resolves.toMatchObject({
++        sessionId: 'main', disposition: 'created', durableSeq: -1,
++      })
++      await expect(server.handleRequest('session/open', { sessionId: 'main' })).resolves.toMatchObject({
++        sessionId: 'main', disposition: 'already-open', durableSeq: -1,
++      })
+ 
+       const receipt = await server.handleRequest('session/prompt', {
+         sessionId: 'main',
+@@ -147,6 +155,9 @@ describe('HarnessSdkJsonRpcServer', () => {
+           params: { sessionId: 'main', status: 'idle' },
+         })
+       })
++      await expect(server.handleRequest('session/flush', { sessionId: 'main' })).resolves.toMatchObject({
++        sessionId: 'main', durableSeq: expect.any(Number),
++      })
+ 
+       await server.handleRequest('session/prompt', {
+         sessionId: 'main',
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 1490a0f9f7..14ab2f92c8 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -23,7 +23,7 @@ importers:
+         version: link:packages/session-query/tool-session-query
+       '@stylistic/eslint-plugin':
+         specifier: ^5.10.0
+-        version: 5.10.0(eslint@10.5.0(jiti@2.7.0))
++        version: 5.10.0(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0))
+       '@testing-library/dom':
+         specifier: ^10.4.1
+         version: 10.4.1
+@@ -53,7 +53,7 @@ importers:
+         version: 4.17.1
+       eslint-plugin-sonarjs:
+         specifier: ^4.1.0
+-        version: 4.1.0(eslint@10.5.0(jiti@2.7.0))
++        version: 4.1.0(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0))
+       execa:
+         specifier: ^10.0.0
+         version: 10.0.0
+@@ -83,10 +83,10 @@ importers:
+         version: 1.32.0
+       mdast-util-from-markdown:
+         specifier: ^2.0.3
+-        version: 2.0.3
++        version: 2.0.3(supports-color@9.4.0)
+       mdast-util-gfm:
+         specifier: ^3.1.0
+-        version: 3.1.0
++        version: 3.1.0(supports-color@9.4.0)
+       mermaid:
+         specifier: 11.16.0
+         version: 11.16.0
+@@ -119,7 +119,7 @@ importers:
+         version: 6.0.3
+       vite-tsconfig-paths:
+         specifier: ^6.1.1
+-        version: 6.1.1(typescript@6.0.3)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
++        version: 6.1.1(supports-color@9.4.0)(typescript@6.0.3)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+       vitest:
+         specifier: ^4.1.8
+         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+@@ -216,6 +216,9 @@ importers:
+       '@deepseek-ai/dsh-schedule':
+         specifier: workspace:^
+         version: link:../../packages/schedule/schedule
++      '@deepseek-ai/dsh-sdk-jsonrpc-server':
++        specifier: workspace:^
++        version: link:../../packages/sdk/server
+       '@deepseek-ai/dsh-session-projection':
+         specifier: workspace:^
+         version: link:../../packages/session/session-projection
+@@ -397,7 +400,7 @@ importers:
+         version: 18.3.7(@types/react@18.3.31)
+       '@vitejs/plugin-react':
+         specifier: ^4.0.0
+-        version: 4.7.0(vite@6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
++        version: 4.7.0(supports-color@9.4.0)(vite@6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
+       fflate:
+         specifier: ^0.8.2
+         version: 0.8.3
+@@ -2344,13 +2347,13 @@ importers:
+         version: 0.16.47
+       mdast-util-from-markdown:
+         specifier: ^2.0.3
+-        version: 2.0.3
++        version: 2.0.3(supports-color@9.4.0)
+       mdast-util-gfm:
+         specifier: ^3.1.0
+-        version: 3.1.0
++        version: 3.1.0(supports-color@9.4.0)
+       mdast-util-math:
+         specifier: ^3.0.0
+-        version: 3.0.0
++        version: 3.0.0(supports-color@9.4.0)
+       micromark-core-commonmark:
+         specifier: ^2.0.3
+         version: 2.0.3
+@@ -5250,7 +5253,7 @@ importers:
+         version: link:../../../vendor/schemastery
+       '@earendil-works/pi-ai':
+         specifier: ^0.82.1
+-        version: 0.82.1(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)
++        version: 0.82.1(@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3))(supports-color@9.4.0)(ws@8.21.0)(zod@4.4.3)
+     devDependencies:
+       '@deepseek-ai/cordis':
+         specifier: workspace:^
+@@ -5477,7 +5480,7 @@ importers:
+         version: link:../../../vendor/schemastery
+       '@modelcontextprotocol/sdk':
+         specifier: ^1.12.0
+-        version: 1.29.0(zod@4.4.3)
++        version: 1.29.0(supports-color@9.4.0)(zod@4.4.3)
+       zod:
+         specifier: ^4.4.3
+         version: 4.4.3
+@@ -5502,10 +5505,10 @@ importers:
+         version: link:../../core/tools
+       '@modelcontextprotocol/server-everything':
+         specifier: ^2026.7.4
+-        version: 2026.7.4
++        version: 2026.7.4(supports-color@9.4.0)
+       '@modelcontextprotocol/server-filesystem':
+         specifier: ^2026.7.4
+-        version: 2026.7.10(zod@4.4.3)
++        version: 2026.7.10(supports-color@9.4.0)(zod@4.4.3)
+ 
+   packages/plan/plan-mode:
+     dependencies:
+@@ -7067,7 +7070,7 @@ importers:
+     dependencies:
+       '@anthropic-ai/claude-agent-sdk':
+         specifier: 0.3.220
+-        version: 0.3.220(@anthropic-ai/sdk@0.93.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
++        version: 0.3.220(@anthropic-ai/sdk@0.93.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3))(zod@4.4.3)
+       '@anthropic-ai/sdk':
+         specifier: 0.93.0
+         version: 0.93.0(zod@4.4.3)
+@@ -7635,7 +7638,7 @@ importers:
+         version: link:../loader-smoke
+       vitest:
+         specifier: ^4.1.8
+-        version: 4.1.8(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
++        version: 4.1.8(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+     devDependencies:
+       '@deepseek-ai/cordis':
+         specifier: workspace:^
+@@ -7684,7 +7687,7 @@ importers:
+         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+       vitest:
+         specifier: ^4.1.8
+-        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
++        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+     devDependencies:
+       '@deepseek-ai/cordis':
+         specifier: workspace:^
+@@ -8325,27 +8328,45 @@ importers:
+       '@deepseek-ai/cosmokit':
+         specifier: link:../../vendor/cosmokit
+         version: link:../../vendor/cosmokit
++      '@deepseek-ai/dsh':
++        specifier: workspace:^
++        version: link:../../apps/cli
+       '@deepseek-ai/dsh-acp':
+         specifier: workspace:^
+         version: link:../../packages/acp/acp
+       '@deepseek-ai/dsh-agent':
+         specifier: workspace:^
+         version: link:../../packages/core/agent
++      '@deepseek-ai/dsh-agent-default-model':
++        specifier: workspace:^
++        version: link:../../packages/core/agent-default-model
+       '@deepseek-ai/dsh-agent-instructions':
+         specifier: workspace:^
+         version: link:../../packages/context/agent-instructions
+       '@deepseek-ai/dsh-agent-loop':
+         specifier: workspace:^
+         version: link:../../packages/core/agent-loop
++      '@deepseek-ai/dsh-agent-presets':
++        specifier: workspace:^
++        version: link:../../packages/preset/agent-presets
+       '@deepseek-ai/dsh-agent-spine-demo':
+         specifier: workspace:^
+         version: link:../../packages/examples/agent-spine-demo
+       '@deepseek-ai/dsh-anonymous-user-id':
+         specifier: workspace:^
+         version: link:../../packages/identity/anonymous-user-id
++      '@deepseek-ai/dsh-api-gateway':
++        specifier: workspace:^
++        version: link:../../packages/api/gateway
++      '@deepseek-ai/dsh-api-remotes':
++        specifier: workspace:^
++        version: link:../../packages/api/remotes
+       '@deepseek-ai/dsh-app-boot':
+         specifier: workspace:^
+         version: link:../../packages/boot/app-boot
++      '@deepseek-ai/dsh-atomic-write':
++        specifier: workspace:^
++        version: link:../../packages/util/atomic-write
+       '@deepseek-ai/dsh-attachment':
+         specifier: workspace:^
+         version: link:../../packages/attachment/attachment
+@@ -8355,12 +8376,135 @@ importers:
+       '@deepseek-ai/dsh-brand':
+         specifier: workspace:^
+         version: link:../../packages/util/brand
++      '@deepseek-ai/dsh-client-connection':
++        specifier: workspace:^
++        version: link:../../packages/client/connection
++      '@deepseek-ai/dsh-client-hmr':
++        specifier: workspace:^
++        version: link:../../packages/client/hmr
++      '@deepseek-ai/dsh-client-locale':
++        specifier: workspace:^
++        version: link:../../packages/client/locale
++      '@deepseek-ai/dsh-client-modules':
++        specifier: workspace:^
++        version: link:../../packages/client/modules
++      '@deepseek-ai/dsh-client-runtime':
++        specifier: workspace:^
++        version: link:../../packages/client/runtime
++      '@deepseek-ai/dsh-client-schema-form':
++        specifier: workspace:^
++        version: link:../../packages/client/schema-form
++      '@deepseek-ai/dsh-client-ui-agent-preset':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-agent-preset
++      '@deepseek-ai/dsh-client-ui-attachment':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-attachment
++      '@deepseek-ai/dsh-client-ui-commands':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-commands
++      '@deepseek-ai/dsh-client-ui-conversation':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-conversation
++      '@deepseek-ai/dsh-client-ui-cordis':
++        specifier: workspace:^
++        version: link:../../packages/extensions/ui-cordis
++      '@deepseek-ai/dsh-client-ui-deliverables':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-deliverables
++      '@deepseek-ai/dsh-client-ui-directory-picker-browse':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-directory-picker-browse
++      '@deepseek-ai/dsh-client-ui-directory-picker-native':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-directory-picker-native
++      '@deepseek-ai/dsh-client-ui-goal':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-goal
++      '@deepseek-ai/dsh-client-ui-input-trigger':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-input-trigger
++      '@deepseek-ai/dsh-client-ui-jobs':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-jobs
++      '@deepseek-ai/dsh-client-ui-layout':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-layout
++      '@deepseek-ai/dsh-client-ui-message-feedback':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-message-feedback
++      '@deepseek-ai/dsh-client-ui-model-selection':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-model-selection
++      '@deepseek-ai/dsh-client-ui-permission-presets':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-permission-presets
++      '@deepseek-ai/dsh-client-ui-plan':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-plan
++      '@deepseek-ai/dsh-client-ui-primitives':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-primitives
++      '@deepseek-ai/dsh-client-ui-settings':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-settings
++      '@deepseek-ai/dsh-client-ui-settings-general':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-settings-general
++      '@deepseek-ai/dsh-client-ui-settings-models':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-settings-models
++      '@deepseek-ai/dsh-client-ui-settings-plugin-inventory':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-settings-plugin-inventory
++      '@deepseek-ai/dsh-client-ui-settings-plugins':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-settings-plugins
++      '@deepseek-ai/dsh-client-ui-sidebar':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-sidebar
++      '@deepseek-ai/dsh-client-ui-skill':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-skill
++      '@deepseek-ai/dsh-client-ui-slots':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-slots
++      '@deepseek-ai/dsh-client-ui-subagent':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-subagent
++      '@deepseek-ai/dsh-client-ui-theme':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-theme
++      '@deepseek-ai/dsh-client-ui-tool':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-tool
++      '@deepseek-ai/dsh-client-ui-trajectory':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-trajectory
++      '@deepseek-ai/dsh-client-ui-user-questions':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-user-questions
++      '@deepseek-ai/dsh-client-ui-workflow-run':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-workflow-run
++      '@deepseek-ai/dsh-client-ui-workspace':
++        specifier: workspace:^
++        version: link:../../packages/client/ui-workspace
++      '@deepseek-ai/dsh-client-web-react':
++        specifier: workspace:^
++        version: link:../../packages/client/web-react
++      '@deepseek-ai/dsh-cmdline':
++        specifier: workspace:^
++        version: link:../../packages/boot/cmdline
+       '@deepseek-ai/dsh-code-runtime':
+         specifier: workspace:^
+         version: link:../../packages/code-runtime/code-runtime
+       '@deepseek-ai/dsh-code-runtime-worker-thread':
+         specifier: workspace:^
+         version: link:../../packages/code-runtime/code-runtime-worker-thread
++      '@deepseek-ai/dsh-command-feedback':
++        specifier: workspace:^
++        version: link:../../packages/feedback/command-feedback
+       '@deepseek-ai/dsh-command-goal':
+         specifier: workspace:^
+         version: link:../../packages/goal/command-goal
+@@ -8376,6 +8520,9 @@ importers:
+       '@deepseek-ai/dsh-compaction-tool-result-pruner':
+         specifier: workspace:^
+         version: link:../../packages/compaction/compaction-tool-result-pruner
++      '@deepseek-ai/dsh-cordis-client-runner':
++        specifier: workspace:^
++        version: link:../../packages/extensions/cordis-client-runner
+       '@deepseek-ai/dsh-cordis-host-runner':
+         specifier: workspace:^
+         version: link:../../packages/extensions/cordis-host-runner
+@@ -8412,6 +8559,30 @@ importers:
+       '@deepseek-ai/dsh-hooks-codex':
+         specifier: workspace:^
+         version: link:../../packages/hooks/hooks-codex
++      '@deepseek-ai/dsh-host-apiproxy':
++        specifier: workspace:^
++        version: link:../../packages/host/apiproxy
++      '@deepseek-ai/dsh-host-directory-picker':
++        specifier: workspace:^
++        version: link:../../packages/host/directory-picker
++      '@deepseek-ai/dsh-host-directory-picker-auto':
++        specifier: workspace:^
++        version: link:../../packages/host/directory-picker-auto
++      '@deepseek-ai/dsh-host-directory-picker-browse':
++        specifier: workspace:^
++        version: link:../../packages/host/directory-picker-browse
++      '@deepseek-ai/dsh-host-directory-picker-native':
++        specifier: workspace:^
++        version: link:../../packages/host/directory-picker-native
++      '@deepseek-ai/dsh-host-frontend-static':
++        specifier: workspace:^
++        version: link:../../packages/host/frontend-static
++      '@deepseek-ai/dsh-host-plugin-inventory':
++        specifier: workspace:^
++        version: link:../../packages/host/plugin-inventory
++      '@deepseek-ai/dsh-host-webserver':
++        specifier: workspace:^
++        version: link:../../packages/host/webserver
+       '@deepseek-ai/dsh-invariants':
+         specifier: workspace:^
+         version: link:../../packages/runtime-diagnostics/invariants
+@@ -8436,6 +8607,12 @@ importers:
+       '@deepseek-ai/dsh-llm-retry':
+         specifier: workspace:^
+         version: link:../../packages/llm/llm-retry
++      '@deepseek-ai/dsh-message-feedback':
++        specifier: workspace:^
++        version: link:../../packages/feedback/message-feedback
++      '@deepseek-ai/dsh-native-command':
++        specifier: workspace:^
++        version: link:../../packages/util/native-command
+       '@deepseek-ai/dsh-output-retention':
+         specifier: workspace:^
+         version: link:../../packages/util/output-retention
+@@ -8457,6 +8634,9 @@ importers:
+       '@deepseek-ai/dsh-sandbox-policy':
+         specifier: workspace:^
+         version: link:../../packages/sandbox/sandbox-policy
++      '@deepseek-ai/dsh-sandbox-windows-acl':
++        specifier: workspace:^
++        version: link:../../packages/sandbox/sandbox-windows-acl
+       '@deepseek-ai/dsh-scope':
+         specifier: workspace:^
+         version: link:../../packages/core/scope
+@@ -8475,6 +8655,9 @@ importers:
+       '@deepseek-ai/dsh-session-checkpoint-policy':
+         specifier: workspace:^
+         version: link:../../packages/session/session-checkpoint-policy
++      '@deepseek-ai/dsh-session-log-export':
++        specifier: workspace:^
++        version: link:../../packages/session-query/session-log-export
+       '@deepseek-ai/dsh-session-persistence':
+         specifier: workspace:^
+         version: link:../../packages/session/session-persistence
+@@ -8487,6 +8670,9 @@ importers:
+       '@deepseek-ai/dsh-session-projection':
+         specifier: workspace:^
+         version: link:../../packages/session/session-projection
++      '@deepseek-ai/dsh-session-projection-cache':
++        specifier: workspace:^
++        version: link:../../packages/session/session-projection-cache
+       '@deepseek-ai/dsh-session-query':
+         specifier: workspace:^
+         version: link:../../packages/session-query/session-query
+@@ -8496,9 +8682,21 @@ importers:
+       '@deepseek-ai/dsh-session-reference':
+         specifier: workspace:^
+         version: link:../../packages/context/session-reference
++      '@deepseek-ai/dsh-session-stats':
++        specifier: workspace:^
++        version: link:../../packages/session/session-stats
++      '@deepseek-ai/dsh-session-telemetry':
++        specifier: workspace:^
++        version: link:../../packages/session/session-telemetry
++      '@deepseek-ai/dsh-session-telemetry-otel':
++        specifier: workspace:^
++        version: link:../../packages/session/session-telemetry-otel
+       '@deepseek-ai/dsh-session-title':
+         specifier: workspace:^
+         version: link:../../packages/session/session-title
++      '@deepseek-ai/dsh-session-title-llm':
++        specifier: workspace:^
++        version: link:../../packages/session/session-title-llm
+       '@deepseek-ai/dsh-settings':
+         specifier: workspace:^
+         version: link:../../packages/settings/settings
+@@ -8514,6 +8712,18 @@ importers:
+       '@deepseek-ai/dsh-skill-filesystem':
+         specifier: workspace:^
+         version: link:../../packages/skill/skill-filesystem
++      '@deepseek-ai/dsh-spill':
++        specifier: workspace:^
++        version: link:../../packages/spill/spill
++      '@deepseek-ai/dsh-storage':
++        specifier: workspace:^
++        version: link:../../packages/storage/storage
++      '@deepseek-ai/dsh-storage-domain':
++        specifier: workspace:^
++        version: link:../../packages/storage/storage-domain
++      '@deepseek-ai/dsh-storage-json':
++        specifier: workspace:^
++        version: link:../../packages/storage/storage-json
+       '@deepseek-ai/dsh-subagent':
+         specifier: workspace:^
+         version: link:../../packages/subagent/subagent
+@@ -8601,6 +8811,9 @@ importers:
+       '@deepseek-ai/dsh-typert-protocol':
+         specifier: workspace:^
+         version: link:../../packages/typert/protocol
++      '@deepseek-ai/dsh-typert-registry':
++        specifier: workspace:^
++        version: link:../../packages/typert/registry
+       '@deepseek-ai/dsh-user-approval':
+         specifier: workspace:^
+         version: link:../../packages/interaction/user-approval
+@@ -8610,6 +8823,9 @@ importers:
+       '@deepseek-ai/dsh-web':
+         specifier: workspace:^
+         version: link:../../packages/web/web
++      '@deepseek-ai/dsh-web-app':
++        specifier: workspace:^
++        version: link:../../packages/bundle/web-app
+       '@deepseek-ai/dsh-web-fetch-http':
+         specifier: workspace:^
+         version: link:../../packages/web/web-fetch-http
+@@ -8628,9 +8844,15 @@ importers:
+       '@deepseek-ai/dsh-workflow-worker-thread':
+         specifier: workspace:^
+         version: link:../../packages/workflow/workflow-worker-thread
++      '@deepseek-ai/dsh-workspace':
++        specifier: workspace:^
++        version: link:../../packages/workspace/workspace
+       '@deepseek-ai/schemastery':
+         specifier: link:../../vendor/schemastery
+         version: link:../../vendor/schemastery
++      tsx:
++        specifier: ^4.22.4
++        version: 4.22.4
+ 
+   vendor/cordis:
+     dependencies:
+@@ -8768,7 +8990,7 @@ importers:
+         version: 1.11.21
+       debug:
+         specifier: 4.4.3
+-        version: 4.4.3
++        version: 4.4.3(supports-color@9.4.0)
+       mermaid:
+         specifier: 11.16.0
+         version: 11.16.0
+@@ -14403,10 +14625,10 @@ snapshots:
+   '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.220':
+     optional: true
+ 
+-  '@anthropic-ai/claude-agent-sdk@0.3.220(@anthropic-ai/sdk@0.93.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)':
++  '@anthropic-ai/claude-agent-sdk@0.3.220(@anthropic-ai/sdk@0.93.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3))(zod@4.4.3)':
+     dependencies:
+       '@anthropic-ai/sdk': 0.93.0(zod@4.4.3)
+-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
++      '@modelcontextprotocol/sdk': 1.29.0(supports-color@9.4.0)(zod@4.4.3)
+       zod: 4.4.3
+     optionalDependencies:
+       '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.220
+@@ -14681,20 +14903,20 @@ snapshots:
+ 
+   '@babel/compat-data@7.29.7': {}
+ 
+-  '@babel/core@7.29.7':
++  '@babel/core@7.29.7(supports-color@9.4.0)':
+     dependencies:
+       '@babel/code-frame': 7.29.7
+       '@babel/generator': 7.29.7
+       '@babel/helper-compilation-targets': 7.29.7
+-      '@babel/helper-module-transforms': 7.29.7(@babel/core@7.29.7)
++      '@babel/helper-module-transforms': 7.29.7(@babel/core@7.29.7(supports-color@9.4.0))(supports-color@9.4.0)
+       '@babel/helpers': 7.29.7
+       '@babel/parser': 7.29.7
+       '@babel/template': 7.29.7
+-      '@babel/traverse': 7.29.7
++      '@babel/traverse': 7.29.7(supports-color@9.4.0)
+       '@babel/types': 7.29.7
+       '@jridgewell/remapping': 2.3.5
+       convert-source-map: 2.0.0
+-      debug: 4.4.3
++      debug: 4.4.3(supports-color@9.4.0)
+       gensync: 1.0.0-beta.2
+       json5: 2.2.3
+       semver: 6.3.1
+@@ -14728,19 +14950,19 @@ snapshots:
+ 
+   '@babel/helper-globals@7.29.7': {}
+ 
+-  '@babel/helper-module-imports@7.29.7':
++  '@babel/helper-module-imports@7.29.7(supports-color@9.4.0)':
+     dependencies:
+-      '@babel/traverse': 7.29.7
++      '@babel/traverse': 7.29.7(supports-color@9.4.0)
+       '@babel/types': 7.29.7
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  '@babel/helper-module-transforms@7.29.7(@babel/core@7.29.7)':
++  '@babel/helper-module-transforms@7.29.7(@babel/core@7.29.7(supports-color@9.4.0))(supports-color@9.4.0)':
+     dependencies:
+-      '@babel/core': 7.29.7
+-      '@babel/helper-module-imports': 7.29.7
++      '@babel/core': 7.29.7(supports-color@9.4.0)
++      '@babel/helper-module-imports': 7.29.7(supports-color@9.4.0)
+       '@babel/helper-validator-identifier': 7.29.7
+-      '@babel/traverse': 7.29.7
++      '@babel/traverse': 7.29.7(supports-color@9.4.0)
+     transitivePeerDependencies:
+       - supports-color
+ 
+@@ -14769,14 +14991,14 @@ snapshots:
+     dependencies:
+       '@babel/types': 8.0.0-rc.6
+ 
+-  '@babel/plugin-transform-react-jsx-self@7.29.7(@babel/core@7.29.7)':
++  '@babel/plugin-transform-react-jsx-self@7.29.7(@babel/core@7.29.7(supports-color@9.4.0))':
+     dependencies:
+-      '@babel/core': 7.29.7
++      '@babel/core': 7.29.7(supports-color@9.4.0)
+       '@babel/helper-plugin-utils': 7.29.7
+ 
+-  '@babel/plugin-transform-react-jsx-source@7.29.7(@babel/core@7.29.7)':
++  '@babel/plugin-transform-react-jsx-source@7.29.7(@babel/core@7.29.7(supports-color@9.4.0))':
+     dependencies:
+-      '@babel/core': 7.29.7
++      '@babel/core': 7.29.7(supports-color@9.4.0)
+       '@babel/helper-plugin-utils': 7.29.7
+ 
+   '@babel/runtime@7.29.7': {}
+@@ -14787,7 +15009,7 @@ snapshots:
+       '@babel/parser': 7.29.7
+       '@babel/types': 7.29.7
+ 
+-  '@babel/traverse@7.29.7':
++  '@babel/traverse@7.29.7(supports-color@9.4.0)':
+     dependencies:
+       '@babel/code-frame': 7.29.7
+       '@babel/generator': 7.29.7
+@@ -14795,7 +15017,7 @@ snapshots:
+       '@babel/parser': 7.29.7
+       '@babel/template': 7.29.7
+       '@babel/types': 7.29.7
+-      debug: 4.4.3
++      debug: 4.4.3(supports-color@9.4.0)
+     transitivePeerDependencies:
+       - supports-color
+ 
+@@ -14885,16 +15107,16 @@ snapshots:
+     transitivePeerDependencies:
+       - '@algolia/client-search'
+ 
+-  '@earendil-works/pi-ai@0.82.1(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)':
++  '@earendil-works/pi-ai@0.82.1(@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3))(supports-color@9.4.0)(ws@8.21.0)(zod@4.4.3)':
+     dependencies:
+       '@anthropic-ai/sdk': 0.91.1(zod@4.4.3)
+       '@aws-sdk/client-bedrock-runtime': 3.1048.0
+-      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
++      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3))(supports-color@9.4.0)
+       '@mistralai/mistralai': 2.2.6(@opentelemetry/api@1.9.0)
+       '@opentelemetry/api': 1.9.0
+       '@smithy/node-http-handler': 4.7.3
+-      http-proxy-agent: 7.0.2
+-      https-proxy-agent: 7.0.6
++      http-proxy-agent: 7.0.2(supports-color@9.4.0)
++      https-proxy-agent: 7.0.6(supports-color@9.4.0)
+       openai: 6.26.0(ws@8.21.0)(zod@4.4.3)
+       partial-json: 0.1.7
+       typebox: 1.1.38
+@@ -15168,17 +15390,17 @@ snapshots:
+   '@esbuild/win32-x64@0.28.1':
+     optional: true
+ 
+-  '@eslint-community/eslint-utils@4.9.1(eslint@10.5.0(jiti@2.7.0))':
++  '@eslint-community/eslint-utils@4.9.1(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0))':
+     dependencies:
+-      eslint: 10.5.0(jiti@2.7.0)
++      eslint: 10.5.0(jiti@2.7.0)(supports-color@9.4.0)
+       eslint-visitor-keys: 3.4.3
+ 
+   '@eslint-community/regexpp@4.12.2': {}
+ 
+-  '@eslint/config-array@0.23.5':
++  '@eslint/config-array@0.23.5(supports-color@9.4.0)':
+     dependencies:
+       '@eslint/object-schema': 3.0.5
+-      debug: 4.4.3
++      debug: 4.4.3(supports-color@9.4.0)
+       minimatch: 10.2.5
+     transitivePeerDependencies:
+       - supports-color
+@@ -15200,14 +15422,14 @@ snapshots:
+ 
+   '@exodus/bytes@1.15.1': {}
+ 
+-  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))':
++  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3))(supports-color@9.4.0)':
+     dependencies:
+-      google-auth-library: 10.7.0
++      google-auth-library: 10.7.0(supports-color@9.4.0)
+       p-retry: 4.6.2
+       protobufjs: 7.6.4
+       ws: 8.21.0
+     optionalDependencies:
+-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
++      '@modelcontextprotocol/sdk': 1.29.0(supports-color@9.4.0)(zod@4.4.3)
+     transitivePeerDependencies:
+       - bufferutil
+       - supports-color
+@@ -15461,7 +15683,7 @@ snapshots:
+ 
+   '@mixmark-io/domino@2.2.0': {}
+ 
+-  '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
++  '@modelcontextprotocol/sdk@1.29.0(supports-color@9.4.0)(zod@4.4.3)':
+     dependencies:
+       '@hono/node-server': 1.19.14(hono@4.12.29)
+       ajv: 8.20.0
+@@ -15471,8 +15693,8 @@ snapshots:
+       cross-spawn: 7.0.6
+       eventsource: 3.0.7
+       eventsource-parser: 3.1.0
+-      express: 5.2.1
+-      express-rate-limit: 8.5.2(express@5.2.1)
++      express: 5.2.1(supports-color@9.4.0)
++      express-rate-limit: 8.5.2(express@5.2.1(supports-color@9.4.0))
+       hono: 4.12.29
+       jose: 6.2.3
+       json-schema-typed: 8.0.2
+@@ -15483,20 +15705,20 @@ snapshots:
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  '@modelcontextprotocol/server-everything@2026.7.4':
++  '@modelcontextprotocol/server-everything@2026.7.4(supports-color@9.4.0)':
+     dependencies:
+-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
++      '@modelcontextprotocol/sdk': 1.29.0(supports-color@9.4.0)(zod@4.4.3)
+       cors: 2.8.6
+-      express: 5.2.1
++      express: 5.2.1(supports-color@9.4.0)
+       jszip: 3.10.1
+       zod: 4.4.3
+     transitivePeerDependencies:
+       - '@cfworker/json-schema'
+       - supports-color
+ 
+-  '@modelcontextprotocol/server-filesystem@2026.7.10(zod@4.4.3)':
++  '@modelcontextprotocol/server-filesystem@2026.7.10(supports-color@9.4.0)(zod@4.4.3)':
+     dependencies:
+-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
++      '@modelcontextprotocol/sdk': 1.29.0(supports-color@9.4.0)(zod@4.4.3)
+       diff: 8.0.4
+       glob: 10.5.0
+       minimatch: 10.2.5
+@@ -16174,11 +16396,11 @@ snapshots:
+ 
+   '@standard-schema/spec@1.1.0': {}
+ 
+-  '@stylistic/eslint-plugin@5.10.0(eslint@10.5.0(jiti@2.7.0))':
++  '@stylistic/eslint-plugin@5.10.0(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0))':
+     dependencies:
+-      '@eslint-community/eslint-utils': 4.9.1(eslint@10.5.0(jiti@2.7.0))
++      '@eslint-community/eslint-utils': 4.9.1(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0))
+       '@typescript-eslint/types': 8.61.0
+-      eslint: 10.5.0(jiti@2.7.0)
++      eslint: 10.5.0(jiti@2.7.0)(supports-color@9.4.0)
+       eslint-visitor-keys: 4.2.1
+       espree: 10.4.0
+       estraverse: 5.3.0
+@@ -16464,11 +16686,11 @@ snapshots:
+       d3-selection: 3.0.0
+       d3-transition: 3.0.1(d3-selection@3.0.0)
+ 
+-  '@vitejs/plugin-react@4.7.0(vite@6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))':
++  '@vitejs/plugin-react@4.7.0(supports-color@9.4.0)(vite@6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))':
+     dependencies:
+-      '@babel/core': 7.29.7
+-      '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7)
+-      '@babel/plugin-transform-react-jsx-source': 7.29.7(@babel/core@7.29.7)
++      '@babel/core': 7.29.7(supports-color@9.4.0)
++      '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7(supports-color@9.4.0))
++      '@babel/plugin-transform-react-jsx-source': 7.29.7(@babel/core@7.29.7(supports-color@9.4.0))
+       '@rolldown/pluginutils': 1.0.0-beta.27
+       '@types/babel__core': 7.20.5
+       react-refresh: 0.17.0
+@@ -16520,14 +16742,6 @@ snapshots:
+     optionalDependencies:
+       vite: 8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+ 
+-  '@vitest/mocker@4.1.8(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
+-    dependencies:
+-      '@vitest/spy': 4.1.8
+-      estree-walker: 3.0.3
+-      magic-string: 0.30.21
+-    optionalDependencies:
+-      vite: 8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+-
+   '@vitest/pretty-format@4.1.8':
+     dependencies:
+       tinyrainbow: 3.1.0
+@@ -16808,11 +17022,11 @@ snapshots:
+ 
+   birpc@4.0.0: {}
+ 
+-  body-parser@2.3.0:
++  body-parser@2.3.0(supports-color@9.4.0):
+     dependencies:
+       bytes: 3.1.2
+       content-type: 2.0.0
+-      debug: 4.4.3
++      debug: 4.4.3(supports-color@9.4.0)
+       http-errors: 2.0.1
+       iconv-lite: 0.7.3
+       on-finished: 2.4.1
+@@ -17139,9 +17353,11 @@ snapshots:
+ 
+   dayjs@1.11.21: {}
+ 
+-  debug@4.4.3:
++  debug@4.4.3(supports-color@9.4.0):
+     dependencies:
+       ms: 2.1.3
++    optionalDependencies:
++      supports-color: 9.4.0
+ 
+   decimal.js@10.6.0: {}
+ 
+@@ -17334,12 +17550,12 @@ snapshots:
+ 
+   escape-string-regexp@5.0.0: {}
+ 
+-  eslint-plugin-sonarjs@4.1.0(eslint@10.5.0(jiti@2.7.0)):
++  eslint-plugin-sonarjs@4.1.0(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0)):
+     dependencies:
+       '@eslint-community/regexpp': 4.12.2
+       builtin-modules: 3.3.0
+       bytes: 3.1.2
+-      eslint: 10.5.0(jiti@2.7.0)
++      eslint: 10.5.0(jiti@2.7.0)(supports-color@9.4.0)
+       functional-red-black-tree: 1.0.1
+       globals: 17.7.0
+       jsx-ast-utils-x: 0.1.0
+@@ -17364,11 +17580,11 @@ snapshots:
+ 
+   eslint-visitor-keys@5.0.1: {}
+ 
+-  eslint@10.5.0(jiti@2.7.0):
++  eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0):
+     dependencies:
+-      '@eslint-community/eslint-utils': 4.9.1(eslint@10.5.0(jiti@2.7.0))
++      '@eslint-community/eslint-utils': 4.9.1(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0))
+       '@eslint-community/regexpp': 4.12.2
+-      '@eslint/config-array': 0.23.5
++      '@eslint/config-array': 0.23.5(supports-color@9.4.0)
+       '@eslint/config-helpers': 0.6.0
+       '@eslint/core': 1.2.1
+       '@eslint/plugin-kit': 0.7.2
+@@ -17378,7 +17594,7 @@ snapshots:
+       '@types/estree': 1.0.9
+       ajv: 6.15.0
+       cross-spawn: 7.0.6
+-      debug: 4.4.3
++      debug: 4.4.3(supports-color@9.4.0)
+       escape-string-regexp: 4.0.0
+       eslint-scope: 9.1.2
+       eslint-visitor-keys: 5.0.1
+@@ -17457,25 +17673,25 @@ snapshots:
+ 
+   expect-type@1.3.0: {}
+ 
+-  express-rate-limit@8.5.2(express@5.2.1):
++  express-rate-limit@8.5.2(express@5.2.1(supports-color@9.4.0)):
+     dependencies:
+-      express: 5.2.1
++      express: 5.2.1(supports-color@9.4.0)
+       ip-address: 10.2.0
+ 
+-  express@5.2.1:
++  express@5.2.1(supports-color@9.4.0):
+     dependencies:
+       accepts: 2.0.0
+-      body-parser: 2.3.0
++      body-parser: 2.3.0(supports-color@9.4.0)
+       content-disposition: 1.1.0
+       content-type: 1.0.5
+       cookie: 0.7.2
+       cookie-signature: 1.2.2
+-      debug: 4.4.3
++      debug: 4.4.3(supports-color@9.4.0)
+       depd: 2.0.0
+       encodeurl: 2.0.0
+       escape-html: 1.0.3
+       etag: 1.8.1
+-      finalhandler: 2.1.1
++      finalhandler: 2.1.1(supports-color@9.4.0)
+       fresh: 2.0.0
+       http-errors: 2.0.1
+       merge-descriptors: 2.0.0
+@@ -17486,9 +17702,9 @@ snapshots:
+       proxy-addr: 2.0.7
+       qs: 6.15.3
+       range-parser: 1.3.0
+-      router: 2.2.0
+-      send: 1.2.1
+-      serve-static: 2.2.1
++      router: 2.2.0(supports-color@9.4.0)
++      send: 1.2.1(supports-color@9.4.0)
++      serve-static: 2.2.1(supports-color@9.4.0)
+       statuses: 2.0.2
+       type-is: 2.1.0
+       vary: 1.1.2
+@@ -17544,9 +17760,9 @@ snapshots:
+     dependencies:
+       flat-cache: 4.0.1
+ 
+-  finalhandler@2.1.1:
++  finalhandler@2.1.1(supports-color@9.4.0):
+     dependencies:
+-      debug: 4.4.3
++      debug: 4.4.3(supports-color@9.4.0)
+       encodeurl: 2.0.0
+       escape-html: 1.0.3
+       on-finished: 2.4.1
+@@ -17598,17 +17814,17 @@ snapshots:
+ 
+   functional-red-black-tree@1.0.1: {}
+ 
+-  gaxios@7.1.5:
++  gaxios@7.1.5(supports-color@9.4.0):
+     dependencies:
+       extend: 3.0.2
+-      https-proxy-agent: 7.0.6
++      https-proxy-agent: 7.0.6(supports-color@9.4.0)
+       node-fetch: 3.3.2
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  gcp-metadata@8.1.2:
++  gcp-metadata@8.1.2(supports-color@9.4.0):
+     dependencies:
+-      gaxios: 7.1.5
++      gaxios: 7.1.5(supports-color@9.4.0)
+       google-logging-utils: 1.1.3
+       json-bigint: 1.0.0
+     transitivePeerDependencies:
+@@ -17673,12 +17889,12 @@ snapshots:
+ 
+   globrex@0.1.2: {}
+ 
+-  google-auth-library@10.7.0:
++  google-auth-library@10.7.0(supports-color@9.4.0):
+     dependencies:
+       base64-js: 1.5.1
+       ecdsa-sig-formatter: 1.0.11
+-      gaxios: 7.1.5
+-      gcp-metadata: 8.1.2
++      gaxios: 7.1.5(supports-color@9.4.0)
++      gcp-metadata: 8.1.2(supports-color@9.4.0)
+       google-logging-utils: 1.1.3
+       jws: 4.0.1
+     transitivePeerDependencies:
+@@ -17740,17 +17956,17 @@ snapshots:
+       statuses: 2.0.2
+       toidentifier: 1.0.1
+ 
+-  http-proxy-agent@7.0.2:
++  http-proxy-agent@7.0.2(supports-color@9.4.0):
+     dependencies:
+       agent-base: 7.1.4
+-      debug: 4.4.3
++      debug: 4.4.3(supports-color@9.4.0)
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  https-proxy-agent@7.0.6:
++  https-proxy-agent@7.0.6(supports-color@9.4.0):
+     dependencies:
+       agent-base: 7.1.4
+-      debug: 4.4.3
++      debug: 4.4.3(supports-color@9.4.0)
+     transitivePeerDependencies:
+       - supports-color
+ 
+@@ -18145,14 +18361,14 @@ snapshots:
+       unist-util-is: 6.0.1
+       unist-util-visit-parents: 6.0.2
+ 
+-  mdast-util-from-markdown@2.0.3:
++  mdast-util-from-markdown@2.0.3(supports-color@9.4.0):
+     dependencies:
+       '@types/mdast': 4.0.4
+       '@types/unist': 3.0.3
+       decode-named-character-reference: 1.3.0
+       devlop: 1.1.0
+       mdast-util-to-string: 4.0.0
+-      micromark: 4.0.2
++      micromark: 4.0.2(supports-color@9.4.0)
+       micromark-util-decode-numeric-character-reference: 2.0.2
+       micromark-util-decode-string: 2.0.1
+       micromark-util-normalize-identifier: 2.0.1
+@@ -18170,62 +18386,62 @@ snapshots:
+       mdast-util-find-and-replace: 3.0.2
+       micromark-util-character: 2.1.1
+ 
+-  mdast-util-gfm-footnote@2.1.0:
++  mdast-util-gfm-footnote@2.1.0(supports-color@9.4.0):
+     dependencies:
+       '@types/mdast': 4.0.4
+       devlop: 1.1.0
+-      mdast-util-from-markdown: 2.0.3
++      mdast-util-from-markdown: 2.0.3(supports-color@9.4.0)
+       mdast-util-to-markdown: 2.1.2
+       micromark-util-normalize-identifier: 2.0.1
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  mdast-util-gfm-strikethrough@2.0.0:
++  mdast-util-gfm-strikethrough@2.0.0(supports-color@9.4.0):
+     dependencies:
+       '@types/mdast': 4.0.4
+-      mdast-util-from-markdown: 2.0.3
++      mdast-util-from-markdown: 2.0.3(supports-color@9.4.0)
+       mdast-util-to-markdown: 2.1.2
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  mdast-util-gfm-table@2.0.0:
++  mdast-util-gfm-table@2.0.0(supports-color@9.4.0):
+     dependencies:
+       '@types/mdast': 4.0.4
+       devlop: 1.1.0
+       markdown-table: 3.0.4
+-      mdast-util-from-markdown: 2.0.3
++      mdast-util-from-markdown: 2.0.3(supports-color@9.4.0)
+       mdast-util-to-markdown: 2.1.2
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  mdast-util-gfm-task-list-item@2.0.0:
++  mdast-util-gfm-task-list-item@2.0.0(supports-color@9.4.0):
+     dependencies:
+       '@types/mdast': 4.0.4
+       devlop: 1.1.0
+-      mdast-util-from-markdown: 2.0.3
++      mdast-util-from-markdown: 2.0.3(supports-color@9.4.0)
+       mdast-util-to-markdown: 2.1.2
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  mdast-util-gfm@3.1.0:
++  mdast-util-gfm@3.1.0(supports-color@9.4.0):
+     dependencies:
+-      mdast-util-from-markdown: 2.0.3
++      mdast-util-from-markdown: 2.0.3(supports-color@9.4.0)
+       mdast-util-gfm-autolink-literal: 2.0.1
+-      mdast-util-gfm-footnote: 2.1.0
+-      mdast-util-gfm-strikethrough: 2.0.0
+-      mdast-util-gfm-table: 2.0.0
+-      mdast-util-gfm-task-list-item: 2.0.0
++      mdast-util-gfm-footnote: 2.1.0(supports-color@9.4.0)
++      mdast-util-gfm-strikethrough: 2.0.0(supports-color@9.4.0)
++      mdast-util-gfm-table: 2.0.0(supports-color@9.4.0)
++      mdast-util-gfm-task-list-item: 2.0.0(supports-color@9.4.0)
+       mdast-util-to-markdown: 2.1.2
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  mdast-util-math@3.0.0:
++  mdast-util-math@3.0.0(supports-color@9.4.0):
+     dependencies:
+       '@types/hast': 3.0.5
+       '@types/mdast': 4.0.4
+       devlop: 1.1.0
+       longest-streak: 3.1.0
+-      mdast-util-from-markdown: 2.0.3
++      mdast-util-from-markdown: 2.0.3(supports-color@9.4.0)
+       mdast-util-to-markdown: 2.1.2
+       unist-util-remove-position: 5.0.0
+     transitivePeerDependencies:
+@@ -18473,10 +18689,10 @@ snapshots:
+ 
+   micromark-util-types@2.0.2: {}
+ 
+-  micromark@4.0.2:
++  micromark@4.0.2(supports-color@9.4.0):
+     dependencies:
+       '@types/debug': 4.1.13
+-      debug: 4.4.3
++      debug: 4.4.3(supports-color@9.4.0)
+       decode-named-character-reference: 1.3.0
+       devlop: 1.1.0
+       micromark-core-commonmark: 2.0.3
+@@ -19030,9 +19246,9 @@ snapshots:
+       points-on-curve: 0.2.0
+       points-on-path: 0.2.1
+ 
+-  router@2.2.0:
++  router@2.2.0(supports-color@9.4.0):
+     dependencies:
+-      debug: 4.4.3
++      debug: 4.4.3(supports-color@9.4.0)
+       depd: 2.0.0
+       is-promise: 4.0.0
+       parseurl: 1.3.3
+@@ -19074,9 +19290,9 @@ snapshots:
+ 
+   semver@7.8.5: {}
+ 
+-  send@1.2.1:
++  send@1.2.1(supports-color@9.4.0):
+     dependencies:
+-      debug: 4.4.3
++      debug: 4.4.3(supports-color@9.4.0)
+       encodeurl: 2.0.0
+       escape-html: 1.0.3
+       etag: 1.8.1
+@@ -19090,12 +19306,12 @@ snapshots:
+     transitivePeerDependencies:
+       - supports-color
+ 
+-  serve-static@2.2.1:
++  serve-static@2.2.1(supports-color@9.4.0):
+     dependencies:
+       encodeurl: 2.0.0
+       escape-html: 1.0.3
+       parseurl: 1.3.3
+-      send: 1.2.1
++      send: 1.2.1(supports-color@9.4.0)
+     transitivePeerDependencies:
+       - supports-color
+ 
+@@ -19460,9 +19676,9 @@ snapshots:
+       '@types/unist': 3.0.3
+       vfile-message: 4.0.3
+ 
+-  vite-tsconfig-paths@6.1.1(typescript@6.0.3)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
++  vite-tsconfig-paths@6.1.1(supports-color@9.4.0)(typescript@6.0.3)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
+     dependencies:
+-      debug: 4.4.3
++      debug: 4.4.3(supports-color@9.4.0)
+       globrex: 0.1.2
+       tsconfck: 3.1.6(typescript@6.0.3)
+       vite: 8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+@@ -19511,21 +19727,6 @@ snapshots:
+       tsx: 4.22.4
+       yaml: 2.9.0
+ 
+-  vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0):
+-    dependencies:
+-      lightningcss: 1.32.0
+-      picomatch: 4.0.4
+-      postcss: 8.5.15
+-      rolldown: 1.0.3
+-      tinyglobby: 0.2.17
+-    optionalDependencies:
+-      '@types/node': 26.1.2
+-      esbuild: 0.28.1
+-      fsevents: 2.3.3
+-      jiti: 2.7.0
+-      tsx: 4.22.4
+-      yaml: 2.9.0
+-
+   vitepress-plugin-mermaid@2.0.17(mermaid@11.16.0)(vitepress@1.6.4(@algolia/client-search@5.55.2)(@types/node@25.9.3)(@types/react@18.3.31)(lightningcss@1.32.0)(postcss@8.5.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@6.0.3)):
+     dependencies:
+       mermaid: 11.16.0
+@@ -19613,10 +19814,10 @@ snapshots:
+     transitivePeerDependencies:
+       - msw
+ 
+-  vitest@4.1.8(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
++  vitest@4.1.8(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
+     dependencies:
+       '@vitest/expect': 4.1.8
+-      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
++      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+       '@vitest/pretty-format': 4.1.8
+       '@vitest/runner': 4.1.8
+       '@vitest/snapshot': 4.1.8
+@@ -19633,7 +19834,7 @@ snapshots:
+       tinyexec: 1.2.4
+       tinyglobby: 0.2.17
+       tinyrainbow: 3.1.0
+-      vite: 8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
++      vite: 8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+       why-is-node-running: 2.3.0
+     optionalDependencies:
+       '@opentelemetry/api': 1.9.0
+@@ -19673,10 +19874,10 @@ snapshots:
+     transitivePeerDependencies:
+       - msw
+ 
+-  vitest@4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
++  vitest@4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
+     dependencies:
+       '@vitest/expect': 4.1.8
+-      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
++      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+       '@vitest/pretty-format': 4.1.8
+       '@vitest/runner': 4.1.8
+       '@vitest/snapshot': 4.1.8
+@@ -19693,7 +19894,7 @@ snapshots:
+       tinyexec: 1.2.4
+       tinyglobby: 0.2.17
+       tinyrainbow: 3.1.0
+-      vite: 8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
++      vite: 8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+       why-is-node-running: 2.3.0
+     optionalDependencies:
+       '@opentelemetry/api': 1.9.1
+diff --git a/python/sdk-runtime/package.json b/python/sdk-runtime/package.json
+index 89d4b81b22..78ae6e36fb 100644
+--- a/python/sdk-runtime/package.json
++++ b/python/sdk-runtime/package.json
+@@ -5,72 +5,144 @@
+   "private": true,
+   "type": "module",
+   "dependencies": {
++    "@deepseek-ai/cordis": "workspace:^",
+     "@deepseek-ai/cordis-plugin-group": "workspace:^",
+     "@deepseek-ai/cordis-plugin-include": "workspace:^",
+     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
+     "@deepseek-ai/cordis-plugin-timer": "workspace:^",
+     "@deepseek-ai/cosmokit": "workspace:^",
++    "@deepseek-ai/dsh": "workspace:^",
+     "@deepseek-ai/dsh-acp": "workspace:^",
+     "@deepseek-ai/dsh-agent": "workspace:^",
++    "@deepseek-ai/dsh-agent-default-model": "workspace:^",
++    "@deepseek-ai/dsh-agent-instructions": "workspace:^",
+     "@deepseek-ai/dsh-agent-loop": "workspace:^",
++    "@deepseek-ai/dsh-agent-presets": "workspace:^",
+     "@deepseek-ai/dsh-agent-spine-demo": "workspace:^",
++    "@deepseek-ai/dsh-anonymous-user-id": "workspace:^",
++    "@deepseek-ai/dsh-api-gateway": "workspace:^",
++    "@deepseek-ai/dsh-api-remotes": "workspace:^",
+     "@deepseek-ai/dsh-app-boot": "workspace:^",
++    "@deepseek-ai/dsh-atomic-write": "workspace:^",
+     "@deepseek-ai/dsh-attachment": "workspace:^",
+-    "@deepseek-ai/dsh-shell": "workspace:^",
+-    "@deepseek-ai/dsh-shell-env": "workspace:^",
+     "@deepseek-ai/dsh-bash-local": "workspace:^",
+     "@deepseek-ai/dsh-brand": "workspace:^",
++    "@deepseek-ai/dsh-client-connection": "workspace:^",
++    "@deepseek-ai/dsh-client-hmr": "workspace:^",
++    "@deepseek-ai/dsh-client-locale": "workspace:^",
++    "@deepseek-ai/dsh-client-modules": "workspace:^",
++    "@deepseek-ai/dsh-client-runtime": "workspace:^",
++    "@deepseek-ai/dsh-client-schema-form": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-agent-preset": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-attachment": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-commands": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-conversation": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-cordis": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-deliverables": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-directory-picker-browse": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-goal": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-input-trigger": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-jobs": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-layout": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-message-feedback": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-model-selection": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-permission-presets": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-plan": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-primitives": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-settings": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-settings-general": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-settings-models": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-settings-plugin-inventory": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-settings-plugins": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-sidebar": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-skill": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-subagent": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-theme": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-tool": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-trajectory": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-user-questions": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-workflow-run": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-workspace": "workspace:^",
++    "@deepseek-ai/dsh-client-web-react": "workspace:^",
++    "@deepseek-ai/dsh-cmdline": "workspace:^",
+     "@deepseek-ai/dsh-code-runtime": "workspace:^",
+     "@deepseek-ai/dsh-code-runtime-worker-thread": "workspace:^",
++    "@deepseek-ai/dsh-command-feedback": "workspace:^",
+     "@deepseek-ai/dsh-command-goal": "workspace:^",
+     "@deepseek-ai/dsh-commands": "workspace:^",
+     "@deepseek-ai/dsh-compaction": "workspace:^",
+     "@deepseek-ai/dsh-compaction-basic": "workspace:^",
+     "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:^",
++    "@deepseek-ai/dsh-cordis-client-runner": "workspace:^",
+     "@deepseek-ai/dsh-cordis-host-runner": "workspace:^",
+     "@deepseek-ai/dsh-credentials": "workspace:^",
+-    "@deepseek-ai/dsh-launch-environment": "workspace:^",
+     "@deepseek-ai/dsh-fs": "workspace:^",
+     "@deepseek-ai/dsh-fs-local": "workspace:^",
+     "@deepseek-ai/dsh-fs-observation-policy": "workspace:^",
+     "@deepseek-ai/dsh-fs-sandbox": "workspace:^",
+     "@deepseek-ai/dsh-goal": "workspace:^",
+     "@deepseek-ai/dsh-goal-round-driver": "workspace:^",
++    "@deepseek-ai/dsh-home-paths": "workspace:^",
+     "@deepseek-ai/dsh-hook-protocol": "workspace:^",
+     "@deepseek-ai/dsh-hooks-claude-code": "workspace:^",
+     "@deepseek-ai/dsh-hooks-codex": "workspace:^",
++    "@deepseek-ai/dsh-host-apiproxy": "workspace:^",
++    "@deepseek-ai/dsh-host-directory-picker": "workspace:^",
++    "@deepseek-ai/dsh-host-directory-picker-auto": "workspace:^",
++    "@deepseek-ai/dsh-host-directory-picker-browse": "workspace:^",
++    "@deepseek-ai/dsh-host-directory-picker-native": "workspace:^",
++    "@deepseek-ai/dsh-host-frontend-static": "workspace:^",
++    "@deepseek-ai/dsh-host-plugin-inventory": "workspace:^",
++    "@deepseek-ai/dsh-host-webserver": "workspace:^",
+     "@deepseek-ai/dsh-invariants": "workspace:^",
+-    "@deepseek-ai/dsh-sdk-jsonrpc-server": "workspace:^",
+-    "@deepseek-ai/dsh-sdk-jsonrpc-demo": "workspace:^",
++    "@deepseek-ai/dsh-jobs": "workspace:^",
++    "@deepseek-ai/dsh-jobs-local": "workspace:^",
++    "@deepseek-ai/dsh-launch-environment": "workspace:^",
+     "@deepseek-ai/dsh-llm": "workspace:^",
+     "@deepseek-ai/dsh-llm-deepseek": "workspace:^",
+     "@deepseek-ai/dsh-llm-pi-ai": "workspace:^",
+     "@deepseek-ai/dsh-llm-retry": "workspace:^",
+-    "@deepseek-ai/dsh-home-paths": "workspace:^",
++    "@deepseek-ai/dsh-message-feedback": "workspace:^",
++    "@deepseek-ai/dsh-native-command": "workspace:^",
++    "@deepseek-ai/dsh-output-retention": "workspace:^",
+     "@deepseek-ai/dsh-permission-presets": "workspace:^",
+     "@deepseek-ai/dsh-plan-mode": "workspace:^",
+-    "@deepseek-ai/dsh-terminal": "workspace:^",
+-    "@deepseek-ai/dsh-terminal-bash": "workspace:^",
+     "@deepseek-ai/dsh-repeat-tool-reminder": "workspace:^",
+-    "@deepseek-ai/dsh-output-retention": "workspace:^",
+     "@deepseek-ai/dsh-sandbox": "workspace:^",
+     "@deepseek-ai/dsh-sandbox-local": "workspace:^",
+     "@deepseek-ai/dsh-sandbox-policy": "workspace:^",
++    "@deepseek-ai/dsh-sandbox-windows-acl": "workspace:^",
+     "@deepseek-ai/dsh-scope": "workspace:^",
++    "@deepseek-ai/dsh-sdk-jsonrpc-demo": "workspace:^",
++    "@deepseek-ai/dsh-sdk-jsonrpc-server": "workspace:^",
+     "@deepseek-ai/dsh-sdk-protocol": "workspace:^",
+     "@deepseek-ai/dsh-session": "workspace:^",
+     "@deepseek-ai/dsh-session-checkpoint-policy": "workspace:^",
++    "@deepseek-ai/dsh-session-log-export": "workspace:^",
+     "@deepseek-ai/dsh-session-persistence": "workspace:^",
+     "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:^",
+     "@deepseek-ai/dsh-session-persistence-sqlite": "workspace:^",
+     "@deepseek-ai/dsh-session-projection": "workspace:^",
++    "@deepseek-ai/dsh-session-projection-cache": "workspace:^",
+     "@deepseek-ai/dsh-session-query": "workspace:^",
+     "@deepseek-ai/dsh-session-query-sqlite": "workspace:^",
+     "@deepseek-ai/dsh-session-reference": "workspace:^",
++    "@deepseek-ai/dsh-session-stats": "workspace:^",
++    "@deepseek-ai/dsh-session-telemetry": "workspace:^",
++    "@deepseek-ai/dsh-session-telemetry-otel": "workspace:^",
+     "@deepseek-ai/dsh-session-title": "workspace:^",
++    "@deepseek-ai/dsh-session-title-llm": "workspace:^",
+     "@deepseek-ai/dsh-settings": "workspace:^",
++    "@deepseek-ai/dsh-shell": "workspace:^",
++    "@deepseek-ai/dsh-shell-env": "workspace:^",
+     "@deepseek-ai/dsh-skill": "workspace:^",
+     "@deepseek-ai/dsh-skill-filesystem": "workspace:^",
++    "@deepseek-ai/dsh-spill": "workspace:^",
++    "@deepseek-ai/dsh-storage": "workspace:^",
++    "@deepseek-ai/dsh-storage-domain": "workspace:^",
++    "@deepseek-ai/dsh-storage-json": "workspace:^",
+     "@deepseek-ai/dsh-subagent": "workspace:^",
+     "@deepseek-ai/dsh-subagent-acp": "workspace:^",
+     "@deepseek-ai/dsh-subagent-fork-in-process": "workspace:^",
+@@ -79,39 +151,40 @@
+     "@deepseek-ai/dsh-subprocess": "workspace:^",
+     "@deepseek-ai/dsh-subprocess-local": "workspace:^",
+     "@deepseek-ai/dsh-system-prompt": "workspace:^",
+-    "@deepseek-ai/dsh-jobs": "workspace:^",
+-    "@deepseek-ai/dsh-jobs-local": "workspace:^",
++    "@deepseek-ai/dsh-terminal": "workspace:^",
++    "@deepseek-ai/dsh-terminal-bash": "workspace:^",
+     "@deepseek-ai/dsh-timeout": "workspace:^",
+-    "@deepseek-ai/dsh-tool-call-timeout-policy": "workspace:^",
+     "@deepseek-ai/dsh-token-meter": "workspace:^",
+     "@deepseek-ai/dsh-tool-ask-user": "workspace:^",
+     "@deepseek-ai/dsh-tool-bash": "workspace:^",
+     "@deepseek-ai/dsh-tool-bash-persistent": "workspace:^",
++    "@deepseek-ai/dsh-tool-call-timeout-policy": "workspace:^",
+     "@deepseek-ai/dsh-tool-cordis": "workspace:^",
+     "@deepseek-ai/dsh-tool-fs": "workspace:^",
+     "@deepseek-ai/dsh-tool-goal": "workspace:^",
++    "@deepseek-ai/dsh-tool-jobs": "workspace:^",
+     "@deepseek-ai/dsh-tool-skill": "workspace:^",
+     "@deepseek-ai/dsh-tool-str-replace-editor": "workspace:^",
+     "@deepseek-ai/dsh-tool-subagent": "workspace:^",
+     "@deepseek-ai/dsh-tool-subagent-control": "workspace:^",
+-    "@deepseek-ai/dsh-tool-jobs": "workspace:^",
+     "@deepseek-ai/dsh-tool-todo": "workspace:^",
+     "@deepseek-ai/dsh-tool-web": "workspace:^",
+     "@deepseek-ai/dsh-tool-workflow": "workspace:^",
+     "@deepseek-ai/dsh-tools": "workspace:^",
+     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
++    "@deepseek-ai/dsh-typert-registry": "workspace:^",
+     "@deepseek-ai/dsh-user-approval": "workspace:^",
+-    "@deepseek-ai/dsh-anonymous-user-id": "workspace:^",
+     "@deepseek-ai/dsh-user-questions": "workspace:^",
+     "@deepseek-ai/dsh-web": "workspace:^",
++    "@deepseek-ai/dsh-web-app": "workspace:^",
+     "@deepseek-ai/dsh-web-fetch-http": "workspace:^",
+     "@deepseek-ai/dsh-web-search-deepseek": "workspace:^",
+     "@deepseek-ai/dsh-web-search-exa": "workspace:^",
+     "@deepseek-ai/dsh-web-search-perplexity": "workspace:^",
+     "@deepseek-ai/dsh-workflow": "workspace:^",
+     "@deepseek-ai/dsh-workflow-worker-thread": "workspace:^",
+-    "@deepseek-ai/dsh-agent-instructions": "workspace:^",
+-    "@deepseek-ai/cordis": "workspace:^",
+-    "@deepseek-ai/schemastery": "workspace:^"
++    "@deepseek-ai/dsh-workspace": "workspace:^",
++    "@deepseek-ai/schemastery": "workspace:^",
++    "tsx": "^4.22.4"
+   }
+ }
+diff --git a/python/sdk-runtime/platforms.json b/python/sdk-runtime/platforms.json
+index 069378e8cb..ac17ebc2a4 100644
+--- a/python/sdk-runtime/platforms.json
++++ b/python/sdk-runtime/platforms.json
+@@ -10,5 +10,9 @@
+   "macos-arm64": {
+     "tag": "macosx_14_0_arm64",
+     "executable": "dsh-jsonrpc-agent-pkg-macos-arm64"
++  },
++  "win-x64": {
++    "tag": "win_amd64",
++    "executable": "dsh-jsonrpc-agent-pkg-win-x64.exe"
+   }
+ }
+diff --git a/scripts/build-exe-for-python-sdk.ts b/scripts/build-exe-for-python-sdk.ts
+index da1cea67c4..afed4a26a2 100644
+--- a/scripts/build-exe-for-python-sdk.ts
++++ b/scripts/build-exe-for-python-sdk.ts
+@@ -17,7 +17,7 @@ const root = resolve(import.meta.dirname, '..')
+ /** The closure manifest whose dependencies define the executable. */
+ const DEPLOY_ROOT_PACKAGE = 'dsh-jsonrpc-agent-pkg'
+ /** The closed-runtime app entry inside the deployed closure. */
+-const ENTRY_BIN = 'node_modules/@deepseek-ai/dsh-sdk-jsonrpc-demo/lib/packaged-bin.js'
++const ENTRY_BIN = 'node_modules/@deepseek-ai/dsh/lib/bin.js'
+ const OUTPUT_BASENAME = 'dsh-jsonrpc-agent-pkg'
+ /** Default Node major; SEA mode requires at least Node 22. */
+ const DEFAULT_NODE_RANGE = 'node24'
+@@ -43,13 +43,23 @@ const ASSET_GLOBS = [
+   'node_modules/**/*.js',
+   'node_modules/**/*.cjs',
+   'node_modules/**/*.mjs',
++  'node_modules/@deepseek-ai/dsh-sandbox-windows-acl/src/runner.ts',
+   'node_modules/**/package.json',
+   'node_modules/**/*.json',
++  'node_modules/**/*.yml',
++  'node_modules/**/*.yaml',
+   'node_modules/**/*.node',
+   'node_modules/**/*.wasm',
++  'node_modules/**/*.html',
++  'node_modules/**/*.css',
++  'node_modules/**/*.svg',
++  'node_modules/**/*.png',
++  'node_modules/**/*.ico',
++  'node_modules/**/*.woff2',
++  'node_modules/**/*.webmanifest',
+ ]
+ 
+-const PLATFORMS = ['linux', 'macos'] as const
++const PLATFORMS = ['linux', 'macos', 'win'] as const
+ const ARCHES = ['x64', 'arm64'] as const
+ type Platform = (typeof PLATFORMS)[number]
+ type Arch = (typeof ARCHES)[number]
+@@ -70,8 +80,7 @@ class Target {
+     /** pkg Node range (`node<major>`). */
+     readonly nodeRange: string,
+     /**
+-     * pkg platform tag. Windows is a documented non-goal
+-     * (.agents/notes/implemented/architecture/2026-07-10-single-file-executable-sdk-runtime-distribution.md).
++     * pkg platform tag used by the matching native build worker.
+      */
+     readonly platform: Platform,
+     /** pkg CPU tag. */
+@@ -111,7 +120,11 @@ class Target {
+    * @returns the host target; throws on an unsupported host platform or arch.
+    */
+   static host(): Target {
+-    const platform = process.platform === 'darwin' ? 'macos' : process.platform === 'linux' ? 'linux' : undefined
++    const platform = process.platform === 'darwin'
++      ? 'macos'
++      : process.platform === 'linux'
++        ? 'linux'
++        : process.platform === 'win32' ? 'win' : undefined
+     if (platform === undefined) {
+       throw new Error(`build-exe-for-python-sdk: unsupported host platform ${process.platform}; pass --targets explicitly.`)
+     }
+@@ -132,6 +145,10 @@ class BuildCli {
+     readonly targets: readonly Target[],
+     /** Skip step 1 (`pnpm run build`); lib/ artifacts must already exist. */
+     readonly skipBuild: boolean,
++    /** Reuse the existing staged node carrier; intended for packaging retries only. */
++    readonly skipDeploy: boolean,
++    /** Stop after producing the self-contained Node carrier. */
++    readonly nodeOnly: boolean,
+     /** Print every command and config patch instead of executing. */
+     readonly dryRun: boolean,
+   ) {}
+@@ -167,7 +184,7 @@ class BuildCli {
+       }
+       seen.add(key)
+     }
+-    return new BuildCli(targets, values['skip-build'], values['dry-run'])
++    return new BuildCli(targets, values['skip-build'], values['skip-deploy'], values['node-only'], values['dry-run'])
+   }
+ 
+   private static parseRaw(argv: string[]) {
+@@ -176,6 +193,8 @@ class BuildCli {
+       options: {
+         'targets': { type: 'string' },
+         'skip-build': { type: 'boolean', default: false },
++        'skip-deploy': { type: 'boolean', default: false },
++        'node-only': { type: 'boolean', default: false },
+         'dry-run': { type: 'boolean', default: false },
+         'help': { type: 'boolean', default: false },
+       },
+@@ -186,9 +205,11 @@ class BuildCli {
+     return [
+       'Usage: pnpm exec tsx scripts/build-exe-for-python-sdk.ts [flags]',
+       '',
+-      '  --targets=<t1,t2,...>  pkg targets, e.g. node24-linux-x64,node24-linux-arm64,node24-macos-arm64.',
++      '  --targets=<t1,t2,...>  pkg targets, e.g. node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-win-x64.',
+       '                         Default: the host platform only (on node24).',
+       '  --skip-build           skip `pnpm run build` (lib/ artifacts must already exist).',
++      '  --skip-deploy          reuse the existing staged node carrier for a packaging retry.',
++      '  --node-only            stop after producing the self-contained Node carrier.',
+       '  --dry-run              print every command and config patch without executing.',
+       '  --help                 print this help.',
+       '',
+@@ -228,7 +249,11 @@ class SingleExeBuild {
+ 
+   /** Verify the closure before compiling or packaging. */
+   async verifyClosure(): Promise<void> {
+-    await this.run('runtime dependency closure', pnpmBin(), ['run', 'verify-runtime-closure'])
++    await this.run(
++      'runtime dependency closure',
++      process.execPath,
++      ['--import', 'tsx/esm', 'scripts/verify-runtime-closure.ts'],
++    )
+   }
+ 
+   /** Build all package artifacts unless `--skip-build` was passed. */
+@@ -380,9 +405,16 @@ class SingleExeBuild {
+    * @returns the executable path and, on macOS, its helper path.
+    */
+   async pack(target: Target): Promise<string[]> {
+-    const product = join(this.outDir, `${OUTPUT_BASENAME}-${target.platform}-${target.arch}`)
++    const productBase = join(this.outDir, `${OUTPUT_BASENAME}-${target.platform}-${target.arch}`)
++    const product = target.platform === 'win' ? `${productBase}.exe` : productBase
+     await this.prepareNativePty(target)
+-    if (!this.cli.dryRun) await mkdir(this.outDir, { recursive: true })
++    if (!this.cli.dryRun) {
++      // The deploy root is also the Python carrier source. A previously synced
++      // SEA executable under src/ would embed its own fuse into the next blob.
++      await rm(join(this.staging, 'src'), { recursive: true, force: true })
++      await mkdir(this.outDir, { recursive: true })
++      await rm(product, { force: true })
++    }
+     await this.run(`pkg ${target.spec}`, pnpmBin(), [
+       'dlx',
+       PKG_SPEC,
+@@ -492,7 +524,14 @@ class SingleExeBuild {
+         cwd: root,
+         stdio: 'inherit',
+         // Artifact builds must not mutate or validate a developer's Git hooks.
+-        env: { ...process.env, CI: 'true' },
++        env: {
++          ...process.env,
++          CI: 'true',
++          NODE_ENV: 'development',
++          npm_config_production: 'false',
++          PNPM_CONFIG_CONFIRM_MODULES_PURGE: 'false',
++        },
++        shell: process.platform === 'win32' && command.endsWith('.cmd'),
+       })
+       child.once('error', (error) => {
+         reject(new Error(`build-exe-for-python-sdk: ${label} failed to spawn: ${error.message} (${printable})`))
+@@ -516,8 +555,14 @@ async function main(): Promise<void> {
+   console.log(`build-exe-for-python-sdk: staging: ${pipeline.staging}`)
+   await pipeline.verifyClosure()
+   await pipeline.build()
+-  await pipeline.deployStaging()
++  if (!cli.skipDeploy) {
++    await pipeline.deployStaging()
++  }
+   await pipeline.injectPkgConfig()
++  if (cli.nodeOnly) {
++    console.log(`build-exe-for-python-sdk: node carrier ready: ${pipeline.staging}`)
++    return
++  }
+   const products: string[] = []
+   for (const target of cli.targets) products.push(...await pipeline.pack(target))
+   pipeline.printProducts(products)
+diff --git a/scripts/verify-runtime-closure.ts b/scripts/verify-runtime-closure.ts
+index c87d562f59..e52d2b220b 100644
+--- a/scripts/verify-runtime-closure.ts
++++ b/scripts/verify-runtime-closure.ts
+@@ -4,7 +4,7 @@
+  * root peer can otherwise fail only when Cordis loads the packaged plugin.
+  */
+ import { globSync } from 'node:fs'
+-import { readFile } from 'node:fs/promises'
++import { readFile, writeFile } from 'node:fs/promises'
+ import { resolve } from 'node:path'
+ import { parseArgs } from 'node:util'
+ 
+@@ -24,7 +24,7 @@ interface WorkspacePackage {
+ const root = resolve(import.meta.dirname, '..')
+ const { values } = parseArgs({
+   args: process.argv.slice(2),
+-  options: { manifest: { type: 'string' } },
++  options: { manifest: { type: 'string' }, write: { type: 'boolean', default: false } },
+ })
+ const runtimeManifestPath = resolve(root, values.manifest ?? 'python/sdk-runtime/package.json')
+ const runtimeManifest = await loadManifest(runtimeManifestPath)
+@@ -41,6 +41,7 @@ for (const dependency of Object.keys(runtimeDependencies).sort()) {
+ }
+ 
+ const failures: string[] = []
++const missingPeers = new Set<string>()
+ for (let index = 0; index < queue.length; index += 1) {
+   const packageName = queue[index]
+   if (packageName === undefined) continue
+@@ -51,6 +52,7 @@ for (let index = 0; index < queue.length; index += 1) {
+   for (const peer of Object.keys(peers).sort()) {
+     if (!workspace.has(peer) || peerMeta[peer]?.optional === true) continue
+     if (runtimeDependencies[peer]?.startsWith('workspace:') === true) continue
++    missingPeers.add(peer)
+     failures.push(`${formatChain(runtimeName, packageName, parents)} -> ${peer}`)
+   }
+   const dependencies = {
+@@ -64,6 +66,20 @@ for (let index = 0; index < queue.length; index += 1) {
+   }
+ }
+ 
++const missingWorkspaceDependencies = queue.filter(
++  packageName => runtimeDependencies[packageName]?.startsWith('workspace:') !== true,
++)
++const additions = new Set([...missingPeers, ...missingWorkspaceDependencies])
++if (values.write && additions.size > 0) {
++    runtimeManifest.dependencies = Object.fromEntries(Object.entries({
++      ...runtimeDependencies,
++      ...Object.fromEntries([...additions].map(peer => [peer, 'workspace:^'])),
++    }).sort(([left], [right]) => left.localeCompare(right)))
++    await writeFile(runtimeManifestPath, `${JSON.stringify(runtimeManifest, undefined, 2)}\n`, 'utf8')
++    console.log(`verify-runtime-closure: added ${additions.size} required workspace dependency/dependencies; rerun until closed.`)
++    process.exit(0)
++}
++
+ if (failures.length > 0) {
+   console.error('verify-runtime-closure: required workspace peers are missing from python/sdk-runtime dependencies:')
+   for (const failure of failures) console.error(`  ${failure}`)

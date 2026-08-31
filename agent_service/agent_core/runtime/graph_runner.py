@@ -730,6 +730,16 @@ class GraphRunnerMixin:
                         **kwargs,
                     )
                 ),
+                child_agent_continuation=(
+                    None
+                    if not allow_child_spawn
+                    else lambda **kwargs: self._continue_child_from_runtime(
+                        parent_run_id=effective_run_id,
+                        user_id=user_id,
+                        session_id=session_id,
+                        **kwargs,
+                    )
+                ),
             )
             set_agent_token_callback(on_token)
             set_agent_thinking_callback(on_thinking)

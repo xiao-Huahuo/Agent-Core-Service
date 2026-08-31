@@ -19,6 +19,8 @@ from agent_service.services.agent_change.service import AgentChangeService
 from agent_service.services.agent_queue.service import AgentQueueService
 from agent_service.services.automation.service import AutomationService
 from agent_service.services.component_library.service import ComponentLibraryService
+from agent_service.services.dsh_runtime import DshRuntimePackageManager
+from agent_service.services.dsh_adapter import DshChildAgentExecutor
 from agent_service.services.favorite.service import FavoriteService
 from agent_service.services.feedback.service import FeedbackService
 from agent_service.services.git.service import GitService
@@ -247,3 +249,15 @@ def _require_model_management_service() -> ModelManagementService:
     """返回当前请求的 ModelManagementService。"""
 
     return _require("model_management_service", "ModelManagementService")
+
+
+def _require_dsh_runtime_manager() -> DshRuntimePackageManager:
+    """返回当前应用拥有的 DSH Runtime受管资源服务。"""
+
+    return _require("dsh_runtime_manager", "DshRuntimePackageManager")
+
+
+def _require_dsh_executor() -> DshChildAgentExecutor:
+    """返回当前应用拥有的 DSH Child Agent执行器。"""
+
+    return _require("dsh_executor", "DshChildAgentExecutor")

@@ -11,6 +11,7 @@
 ![LaTeX](https://img.shields.io/badge/typesetting-LaTeX-008080?logo=latex&logoColor=white)
 ![MCP](https://img.shields.io/badge/protocol-MCP-8B5CF6)
 ![PaddleOCR](https://img.shields.io/badge/OCR-PaddleOCR-005BAC)
+[![DSH Runtime SDK](https://img.shields.io/badge/DSH_Runtime_SDK-47f9438-4224EB)](https://github.com/deepseek-ai/deepseek-harness/commit/47f943859bef60e4160492346772ded9b24f765a)
 
 
 ## 简介
@@ -68,6 +69,8 @@ Agent 框架不能消除模型幻觉。MetaWeave 因此优先提供检索、引�
 * 反向代理：Vite
 * 智能体编排：LangGraph + LangChain
 * 模型接入：以 `DeepSeek-v4-flash`作为正式测试版, 同时支持用户配置的 OpenAI 兼容大小模型接口，并以内置 CPU 本地大模型`Qwen/Qwen3.5-2B` 提供未配置时的本地回退.
+* coding agent子智能体: [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness.git)；
+  * MW当前锁定上游提交 [`47f943859bef60e4160492346772ded9b24f765a`](https://github.com/deepseek-ai/deepseek-harness/commit/47f943859bef60e4160492346772ded9b24f765a)，叠加仓库内 MW补丁后生产 `0.1.0-rc.5+mw.1` Runtime SDK，并将成品随 MW仓库和 EXE固定发布。
 * 关联数据库：SQLite
 * 向量数据库：ChromaDB
 * 记忆与语义检索方案：RAG（向量检索 + 关键词检索 + ReRank）
@@ -83,7 +86,7 @@ Agent 框架不能消除模型幻觉。MetaWeave 因此优先提供检索、引�
 
 ### 源代码（资源文件）项目结构
 
-开发环境中的项目根目录包含后端、桌面前端、协议、测试、文档和随程序分发的默认资源。下面列出主要目录，并只展开入口、生命周期、注册、迁移、构建及集中配置等核心单文件；普通业务单文件由其所属目录概括。`resources/` 是可编辑的资源目录，不属于运行时数据；正式安装后，它会与 `runtime/` 一同放在 `%APPDATA%/MetaWeave`。
+开发环境中的项目根目录包含后端、桌面前端、协议、测试、文档和随程序分发的资源。下面列出主要目录，并只展开入口、生命周期、注册、迁移、构建及集中配置等核心单文件；普通业务单文件由其所属目录概括。`resources/` 是源码仓库的一部分，不属于运行时数据：普通默认资源由 Electron安装包外置携带，`resources/dsh/sdk/` 中开发者绑定的 DSH SDK则直接进入后端 EXE。
 
 ```text
 MetaWeave/                                  # 项目仓库根目录
@@ -125,6 +128,8 @@ MetaWeave/                                  # 项目仓库根目录
 │   │   ├── executor.py                    # 工具执行入口
 │   │   ├── runtime_context.py             # 工具运行上下文
 │   │   └── tool_registry.py               # 工具注册中心
+│   ├── vendor/                            # 随后端 EXE分发的固定第三方源码
+│   │   └── deepseek_harness/              # 固定 DSH Python SDK客户端
 │   └── requirements.txt                   # 后端依赖
 ├── editor/                                # Electron + Vue 桌面前端
 │   ├── .vscode/                           # 编辑器项目配置
@@ -161,18 +166,32 @@ MetaWeave/                                  # 项目仓库根目录
 │   └── 测试文件/                           # 测试夹具和样例文件
 ├── protos/                                # gRPC 协议定义
 │   └── agent_service.proto                # gRPC 协议源文件
-├── resources/                             # 随程序分发的默认资源
+├── resources/                             # 源码仓库中的程序资源
+│   ├── dsh/                               # 开发者绑定的 DSH发行资源
+│   │   ├── config/
+│   │   │   └── mw.patch.yml               # MW专用 Cordis配置
+│   │   ├── patches/
+│   │   │   └── mw-runtime.patch            # 相对锁定提交的 MW源码补丁
+│   │   ├── sdk/                           # 直接进入 AgentService.exe
+│   │   │   ├── dsh-runtime-win-x64-0.1.0-rc.5+mw.1.zip
+│   │   │   └── dsh-runtime-win-x64-0.1.0-rc.5+mw.1.manifest.json
+│   │   └── upstream.json                  # DSH提交、Runtime与 Node版本锁
 │   ├── knowledge/                         # 首次启动的默认知识库
 │   ├── mcp/                               # MCP 配置模板
 │   ├── safety/                            # 安全规则
 │   └── skills/                            # 随程序分发的内置 Skill
+├── native/
+│   └── dsh_job_launcher.c                 # Windows Job Object启动器源码
+├── scripts/                               # 仓库级构建脚本
+│   ├── build_dsh_sdk.bat                  # 一键生产内置 DSH SDK
+│   └── build_dsh_windows_bundle.py        # 锁定、构建、组包与哈希校验
 ├── supercomponents/                       # 独立组件原型与素材库
 │   ├── downloaded/                        # 下载的组件素材
 │   ├── new/                               # 当前组件候选
 │   └── old/                               # 历史组件素材
 ├── main.py                                # FastAPI 与 gRPC 后端入口
 ├── alembic.ini                            # Alembic 集中配置
-├── AgentService.spec                      # PyInstaller 后端构建配置
+├── AgentService.spec                      # PyInstaller配置；缺少 DSH SDK时构建失败
 ├── agent_graph*.mmd                       # Agent 状态图源文件
 └── 启动.bat                               # 前后端一键启动脚本
 ```
@@ -190,11 +209,17 @@ runtime/                                   # 应用运行时数据根目录
 │   │   └── agent_service.db        # 会话、设置、业务记录、记忆和索引元数据
 │   └── vector/                            # 向量数据库数据
 │       └── chroma/                 # ChromaDB 向量索引
-├── assets/                                # 运行期间生成或保存的业务资源
+├── assets/                                # 运行期间生成、保存或安装的资源
 │   ├── downloads/                  # 下载与临时导出资源
 │   ├── knowledge/                  # 知识文件预览资源
 │   ├── library/                    # 图书馆封面等运行资产
-│   └── vault/                      # 密码库附件
+│   ├── vault/                      # 密码库附件
+│   └── sdks/
+│       └── dsh/                    # 首次使用时从 EXE内置 ZIP懒解压
+│           ├── versions/
+│           │   └── 0.1.0-rc.5+mw.1/
+│           ├── work/               # 自检临时目录
+│           └── current.json        # 当前可用版本原子指针
 ├── uploads/                        # 按用户、知识库和 Session 隔离的会话附件
 ├── visualizations/                 # Markdown-to-HTML 生成结果
 ├── models/                                # 本地模型文件
@@ -463,24 +488,24 @@ runtime/                                   # 应用运行时数据根目录
 
 #### 多Agent能力
 Agent可以召唤子Agent,采用"**Agent蜂群**"(父子Agent)设计模式.
-  - 子 Agent 由主Agent启动，主Agent送给子Agent一个"子任务合同"(你是谁、要做什么、能用什么、不能做什么、最后交付什么),子Agent完成任务后,任务结果进入主Agent的消息队列(内存queue).子Agent的生命周期:
-  ```
-      created → running → completed
-                 ↘ failed
-                 ↘ stopped
-  ```
-  - 子Agent分为Plan/agent/Explore三种类型.
-  - 子Agent在独立于父Agent的线程中进行,拥有独立的上下文.
-  - 子Agent默认可以继承主Agent的全部工具,但是主Agent拥有对子Agent可用工具的配给权以及三种沙盒权限的控制权.**主Agent 不能授予自己没有的能力**。
-  - 子Agent分为前台和后台两种模式(子Agent的目标,工具与权限,前后台,工作状态和结果都需要在前端展示,但过程不必显示在前端):
-    - 前台子Agent(同步阻塞): 前台子Agent阻塞主Agent,主Agent在等待子Agent的工作结果完成之前一直等待.适合任务有前后依赖的情形.
-    - 后台子Agent(异步蜂群): 后台子Agent不阻塞主Agent,主Agent可以召唤多个后台子Agent并行做事,且在此期间主Agent可以继续做其他事情.主Agent可以查看后台任务("显式汇合",主Agent可以等子Agent)，也可以停止子Agent,子Agent收到父Agent的信号(终止/者信息调整)后做出响应(立即终止/将信息注入上下文).
-  - 子Agent不能召唤其他子Agent.
-  - 角色与身份:召唤时可在 `agent`(全能执行)、`explore`(只读探索)、`plan`(只读规划研究)三类预置角色中选择,系统以"【角色设定】"注入子Agent提示词开头,也可以传入自定义角色描述按原样注入。主Agent可以为子Agent起名,不命名时按同类别的已有数量自动生成递增名(plan1/plan2/agent1);每个子Agent按运行ID稳定分配一个头像,整个会话期间保持不变,方便持续追踪同一任务。
-  - 后台显式汇合:主Agent召唤后台子Agent后,可以反复调用"等待子Agent"工具逐个收取结果。该工具一次返回一个子Agent的终态结果,可以指定只等待某些子Agent,也可以等待全部;结果队列有货时立即返回,没有则阻塞到下一个结果或超时。只要还有子Agent处于 created/running,主Agent会继续等待,直到全部进入终态才汇总最终回答。
-  - 实时可见:子Agent的创建、开始、完成、失败、停止、上下文更新等生命周期事件实时推送到主Agent对话流,对话区渲染为可展开的事件条,左侧圆点颜色表示当前状态,展开可查看目标、权限、工具范围、阶段摘要、产出结果和错误信息。侧边栏把同一目标的多次召唤合并成一张任务卡片,显示头像、名字、类别、前后台和状态,展开可查看每次运行的详细记录,运行中的子Agent可直接点击停止。后台子Agent在主Agent流结束后才完成时,系统会自动补一条完成事件条提醒,这一机制称为唤醒;已在流内实时推送过的终态事件不会再次提醒,避免重复记录。
-  - 权限与隔离:子Agent的沙盒权限不能高于父Agent,可用工具取"父Agent授权的工具"与"父Agent自身工具"的交集,主Agent无法授予自己没有的能力。主Agent可停止子Agent,子Agent在协作式安全检查点响应停止信号立即终止,也可以向运行中的子Agent注入上下文更新,后者在下一个检查点读取。后台子Agent在线程池中并行执行互不阻塞,各会话的结果与事件队列相互隔离。
-
+子 Agent 由主Agent启动，主Agent送给子Agent一个"子任务合同"(你是谁、要做什么、能用什么、不能做什么、最后交付什么),子Agent完成任务后,任务结果进入主Agent的消息队列(内存queue).子Agent的生命周期:
+```
+created → running → completed
+         ↘ failed
+         ↘ stopped
+```
+- 子Agent分为Plan/agent/Explore三种类型.
+- 子Agent在独立于父Agent的线程中进行,拥有独立的上下文.
+- 子Agent默认可以继承主Agent的全部工具,但是主Agent拥有对子Agent可用工具的配给权以及三种沙盒权限的控制权.**主Agent 不能授予自己没有的能力**。
+- 子Agent分为前台和后台两种模式(子Agent的目标,工具与权限,前后台,工作状态和结果都需要在前端展示,但过程不必显示在前端):
+  - 前台子Agent(同步阻塞): 前台子Agent阻塞主Agent,主Agent在等待子Agent的工作结果完成之前一直等待.适合任务有前后依赖的情形.
+  - 后台子Agent(异步蜂群): 后台子Agent不阻塞主Agent,主Agent可以召唤多个后台子Agent并行做事,且在此期间主Agent可以继续做其他事情.主Agent可以查看后台任务("显式汇合",主Agent可以等子Agent)，也可以停止子Agent,子Agent收到父Agent的信号(终止/者信息调整)后做出响应(立即终止/将信息注入上下文).
+- 子Agent不能召唤其他子Agent.
+- 角色与身份:召唤时可在 `agent`(全能执行)、`explore`(只读探索)、`plan`(只读规划研究)三类预置角色中选择,系统以"【角色设定】"注入子Agent提示词开头,也可以传入自定义角色描述按原样注入。主Agent可以为子Agent起名,不命名时按同类别的已有数量自动生成递增名(plan1/plan2/agent1);每个子Agent按运行ID稳定分配一个头像,整个会话期间保持不变,方便持续追踪同一任务。
+- 后台显式汇合:主Agent召唤后台子Agent后,可以反复调用"等待子Agent"工具逐个收取结果。该工具一次返回一个子Agent的终态结果,可以指定只等待某些子Agent,也可以等待全部;结果队列有货时立即返回,没有则阻塞到下一个结果或超时。只要还有子Agent处于 created/running,主Agent会继续等待,直到全部进入终态才汇总最终回答。
+- 实时可见:子Agent的创建、开始、完成、失败、停止、上下文更新等生命周期事件实时推送到主Agent对话流,对话区渲染为可展开的事件条,左侧圆点颜色表示当前状态,展开可查看目标、权限、工具范围、阶段摘要、产出结果和错误信息。侧边栏把同一目标的多次召唤合并成一张任务卡片,显示头像、名字、类别、前后台和状态,展开可查看每次运行的详细记录,运行中的子Agent可直接点击停止。后台子Agent在主Agent流结束后才完成时,系统会自动补一条完成事件条提醒,这一机制称为唤醒;已在流内实时推送过的终态事件不会再次提醒,避免重复记录。
+- 权限与隔离:子Agent的沙盒权限不能高于父Agent,可用工具取"父Agent授权的工具"与"父Agent自身工具"的交集,主Agent无法授予自己没有的能力。主Agent可停止子Agent,子Agent在协作式安全检查点响应停止信号立即终止,也可以向运行中的子Agent注入上下文更新,后者在下一个检查点读取。后台子Agent在线程池中并行执行互不阻塞,各会话的结果与事件队列相互隔离。
+##### DSH 特殊子Agent
 
 #### 可观测性与可定制性
 ##### 对话内观测
@@ -909,6 +934,10 @@ $$
 模型管理覆盖本地 Qwen、Embedding、ReRank 和 PaddleOCR。本地 Qwen 行明确展示其作为主模型/小模型回退及图片理解模型的用途、CPU 设备、仓库、下载与内存状态；存储路径树同步展示 `runtime/models/local-llm/` 的真实占用。每个模型首行显示配置名称、磁盘大小、下载/加载状态、当前是否启用和操作入口；展开后可以查看用途、完整路径、文件数、磁盘完整性、内存使用状态、模型仓库、OCR 语言和运行设备。Hugging Face 模型按仓库总字节和实际落盘字节显示真实百分比；PaddleOCR 等无法提前获得总量的任务只显示实时落盘字节和当前阶段，不生成假百分比。
 
 编译管理当前负责 LaTeX 环境。系统会明确显示编译器来自系统安装还是 MetaWeave 托管，并列出发行版、版本、位置、大小、文件数、latexmk 以及 pdfLaTeX/XeLaTeX/LuaLaTeX 的可用状态。没有 MiKTeX 时可以在此确认安装、查看下载或安装阶段、取消、失败重试；只有 MetaWeave 托管的运行时可以卸载。
+
+SDK 管理负责 DSH 代码子 Agent 的 Windows Runtime。当前 Runtime 固定使用 DeepSeek Harness 提交 [`47f943859bef60e4160492346772ded9b24f765a`](https://github.com/deepseek-ai/deepseek-harness/commit/47f943859bef60e4160492346772ded9b24f765a)，机器可读锁位于 `resources/dsh/upstream.json`。SDK 只在锁定提交、MW 补丁、Cordis 配置、内置 Node 主版本或 Runtime版本变化时运行 `scripts/build_dsh_sdk.bat` 重新生产；生成的 ZIP与 manifest直接打入 `AgentService.exe`，不需要网上托管。
+
+当前 Windows x64 内置 ZIP为 **66,008,168 bytes（约 63.0 MiB / 66.0 MB）**，首次使用时从 EXE资源懒解压，安装后为 **192,256,620 bytes（约 183.4 MiB / 192.3 MB）**。制品已经包含 Node 24、DSH 生产依赖、Web资源和 Job Object启动器，用户无需联网，也无需安装 Node、pnpm、Python、编译器或 DSH。缺少 ZIP或 manifest时，PyInstaller构建会直接失败。
 
 ## 亮点
 ### 三端响应式布局

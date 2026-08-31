@@ -24,6 +24,7 @@ STORAGE_PATH_DEFINITIONS: dict[str, dict[str, Any]] = {
     "components_dir": {"label": "组件库", "parent": "managed_root", "can_clear": False, "requires_restart": False},
     "base_data_dir": {"label": "运行时数据", "parent": None, "can_clear": False, "requires_restart": False},
     "assets_dir": {"label": "受管资源", "parent": "base_data_dir", "can_clear": False, "requires_restart": False},
+    "dsh_sdk_dir": {"label": "DeepSeek Harness SDK", "parent": "assets_dir", "can_clear": False, "requires_restart": False},
     "db_dir": {"label": "数据库", "parent": "base_data_dir", "can_clear": False, "requires_restart": False},
     "relation_db_dir": {"label": "关系库路径", "parent": "db_dir", "can_clear": False, "requires_restart": False},
     "sqlite_path": {"label": "SQLite 数据库", "parent": "relation_db_dir", "can_clear": False, "requires_restart": False},

@@ -549,6 +549,33 @@
             "title": "Agent Mode",
             "type": "string"
           },
+          "attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachments"
+          },
+          "message_metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Metadata"
+          },
           "prompt": {
             "minLength": 1,
             "title": "Prompt",
@@ -778,7 +805,7 @@
         "type": "object"
       },
       "ComponentLibraryItemUpdate": {
-        "description": "Validate one persistent component-file rename request.",
+        "description": "Validate one incremental component title, source, or tag update.",
         "properties": {
           "component_id": {
             "maxLength": 512,
@@ -786,11 +813,44 @@
             "title": "Component Id",
             "type": "string"
           },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 2000000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tag"
+          },
           "title": {
-            "maxLength": 180,
-            "minLength": 1,
-            "title": "Title",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 180,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
           },
           "user_id": {
             "maxLength": 128,
@@ -801,8 +861,7 @@
         },
         "required": [
           "user_id",
-          "component_id",
-          "title"
+          "component_id"
         ],
         "title": "ComponentLibraryItemUpdate",
         "type": "object"
@@ -1672,6 +1731,145 @@
         "title": "StructuredGenerationSource",
         "type": "object"
       },
+      "UnifiedSearchResponse": {
+        "description": "返回统一排序序列、四库分组和真实计数。",
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "fulltext": {
+            "title": "Fulltext",
+            "type": "boolean"
+          },
+          "groups": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/UnifiedSearchResultOut"
+              },
+              "type": "array"
+            },
+            "title": "Groups",
+            "type": "object"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/UnifiedSearchResultOut"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "selected_sources": {
+            "items": {
+              "enum": [
+                "files",
+                "library",
+                "components",
+                "literature"
+              ],
+              "type": "string"
+            },
+            "title": "Selected Sources",
+            "type": "array"
+          },
+          "semantic": {
+            "title": "Semantic",
+            "type": "boolean"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query",
+          "selected_sources",
+          "fulltext",
+          "semantic",
+          "results",
+          "groups",
+          "counts",
+          "total"
+        ],
+        "title": "UnifiedSearchResponse",
+        "type": "object"
+      },
+      "UnifiedSearchResultOut": {
+        "description": "统一列表和分裂原生卡片共同消费的一条结果。",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "item": {
+            "additionalProperties": true,
+            "title": "Item",
+            "type": "object"
+          },
+          "locator": {
+            "default": "",
+            "title": "Locator",
+            "type": "string"
+          },
+          "matched_modes": {
+            "items": {
+              "enum": [
+                "title",
+                "fulltext",
+                "semantic"
+              ],
+              "type": "string"
+            },
+            "title": "Matched Modes",
+            "type": "array"
+          },
+          "score": {
+            "default": 0.0,
+            "title": "Score",
+            "type": "number"
+          },
+          "snippet": {
+            "default": "",
+            "title": "Snippet",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "files",
+              "library",
+              "components",
+              "literature"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "default": "",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "title",
+          "matched_modes",
+          "item"
+        ],
+        "title": "UnifiedSearchResultOut",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -2295,6 +2493,45 @@
         "summary": "Transition Task"
       }
     },
+    "/agent/attachments/raw": {
+      "get": {
+        "description": "按完整 session-upload URI 返回对应附件原文件。",
+        "operationId": "get_agent_attachment_raw_agent_attachments_raw_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "uri",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Uri",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Agent Attachment Raw"
+      }
+    },
     "/agent/attachments/upload": {
       "post": {
         "description": "Upload a file into the current Agent session context without knowledge ingestion.",
@@ -2396,6 +2633,66 @@
           }
         },
         "summary": "Delete Agent Attachment"
+      },
+      "get": {
+        "description": "返回单个会话附件的最新后台解析状态。",
+        "operationId": "get_agent_attachment_agent_attachments__attachment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Agent Attachment Agent Attachments  Attachment Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Agent Attachment"
       }
     },
     "/agent/cancel": {
@@ -2482,6 +2779,74 @@
           }
         },
         "summary": "Agent Children"
+      }
+    },
+    "/agent/children/{run_id}/dsh-web": {
+      "get": {
+        "description": "返回当前用户 DSH子 Agent对应的同进程只读 Web地址。",
+        "operationId": "get_child_agent_dsh_web_agent_children__run_id__dsh_web_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "用户 ID",
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "description": "用户 ID",
+              "minLength": 1,
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "主 Agent 会话 ID",
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "description": "主 Agent 会话 ID",
+              "minLength": 1,
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Get Child Agent Dsh Web Agent Children  Run Id  Dsh Web Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Child Agent Dsh Web"
       }
     },
     "/agent/children/{run_id}/stop": {
@@ -3653,7 +4018,7 @@
         "summary": "List Component Library Items"
       },
       "patch": {
-        "description": "Persist an inline title edit by renaming its canonical source file.",
+        "description": "Persist an incremental component title, source, or tag update.",
         "operationId": "rename_component_library_item_component_library_components_patch",
         "requestBody": {
           "content": {
@@ -7249,6 +7614,87 @@
         "summary": "Add Privacy"
       }
     },
+    "/search": {
+      "get": {
+        "description": "严格按照用户选中的库和搜索能力执行联合搜索。",
+        "operationId": "search_all_libraries_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sources",
+            "required": false,
+            "schema": {
+              "default": "files,library,components,literature",
+              "title": "Sources",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "fulltext",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Fulltext",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "semantic",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Semantic",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnifiedSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search All Libraries"
+      }
+    },
     "/sessions": {
       "delete": {
         "description": "清空指定用户的所有会话。",
@@ -9443,6 +9889,49 @@
         "summary": "Check Model Disk"
       }
     },
+    "/settings/models/delete": {
+      "post": {
+        "description": "删除用户明确选择的模型，并抑制本次进程内自动重新下载。",
+        "operationId": "delete_managed_model_settings_models_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Managed Model Settings Models Delete Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Managed Model"
+      }
+    },
     "/settings/models/download": {
       "post": {
         "description": "异步触发指定模型的后台下载。\n\nbody: { \"model\": \"embedding\" | \"rerank\" | \"paddleocr\" | \"local_qwen\" }\n返回后前端轮询 GET /settings/models/status 获取进度。",
@@ -9486,6 +9975,49 @@
         "summary": "Download Model"
       }
     },
+    "/settings/models/download-confirmed": {
+      "post": {
+        "description": "在用户确认后启动指定模型的后台下载。",
+        "operationId": "download_confirmed_model_settings_models_download_confirmed_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Download Confirmed Model Settings Models Download Confirmed Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Confirmed Model"
+      }
+    },
     "/settings/models/download-progress": {
       "get": {
         "description": "返回各模型真实字节、总量、阶段和确定/不确定进度。",
@@ -9508,6 +10040,49 @@
           }
         },
         "summary": "Get Download Progress"
+      }
+    },
+    "/settings/models/initialize": {
+      "post": {
+        "description": "在前端完整启动后触发四类模型的独立后台验证任务。",
+        "operationId": "initialize_models_settings_models_initialize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Initialize Models Settings Models Initialize Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Initialize Models"
       }
     },
     "/settings/models/load": {
@@ -9596,6 +10171,92 @@
           }
         },
         "summary": "Get Model Management"
+      }
+    },
+    "/settings/models/preferences": {
+      "get": {
+        "description": "返回当前用户持久化的模型自动下载偏好。",
+        "operationId": "get_model_preferences_settings_models_preferences_get",
+        "parameters": [
+          {
+            "description": "用户 ID",
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "description": "用户 ID",
+              "minLength": 1,
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Model Preferences Settings Models Preferences Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Model Preferences"
+      },
+      "put": {
+        "description": "保存模型自动下载偏好；该设置默认关闭。",
+        "operationId": "save_model_preferences_settings_models_preferences_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Save Model Preferences Settings Models Preferences Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Model Preferences"
       }
     },
     "/settings/models/status": {
@@ -9750,7 +10411,7 @@
         "summary": "Get Knowledge Ingestion Config"
       },
       "put": {
-        "description": "保存知识库灌库配置。body: user_id 必填,auto_ingest_on_upload/ocr_enabled 可选。",
+        "description": "保存知识库灌库、OCR 与本地识图配置。",
         "operationId": "save_knowledge_ingestion_config_settings_profile_ingestion_put",
         "requestBody": {
           "content": {
@@ -9894,6 +10555,223 @@
           }
         },
         "summary": "Save Sensitive Words"
+      }
+    },
+    "/settings/sdks/dsh/install": {
+      "post": {
+        "description": "在用户确认后异步安装当前 MW固定的 Windows Runtime。",
+        "operationId": "install_dsh_sdk_settings_sdks_dsh_install_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Install Dsh Sdk Settings Sdks Dsh Install Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Install Dsh Sdk"
+      }
+    },
+    "/settings/sdks/dsh/install/cancel": {
+      "post": {
+        "description": "取消当前 DSH Runtime校验或解压安装任务。",
+        "operationId": "cancel_dsh_sdk_install_settings_sdks_dsh_install_cancel_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cancel Dsh Sdk Install Settings Sdks Dsh Install Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Dsh Sdk Install"
+      }
+    },
+    "/settings/sdks/dsh/management": {
+      "get": {
+        "description": "返回 DSH SDK客户端与 Windows Runtime 的真实管理状态。",
+        "operationId": "get_dsh_sdk_management_settings_sdks_dsh_management_get",
+        "parameters": [
+          {
+            "description": "用户 ID",
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "description": "用户 ID",
+              "minLength": 1,
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Dsh Sdk Management Settings Sdks Dsh Management Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Dsh Sdk Management"
+      }
+    },
+    "/settings/sdks/dsh/repair": {
+      "post": {
+        "description": "重新校验内置 SDK并原子替换损坏的 DSH Runtime。",
+        "operationId": "repair_dsh_sdk_settings_sdks_dsh_repair_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Repair Dsh Sdk Settings Sdks Dsh Repair Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Repair Dsh Sdk"
+      }
+    },
+    "/settings/sdks/dsh/uninstall": {
+      "post": {
+        "description": "卸载 DSH Runtime，保留独立的 Child Agent Conversation历史。",
+        "operationId": "uninstall_dsh_sdk_settings_sdks_dsh_uninstall_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Uninstall Dsh Sdk Settings Sdks Dsh Uninstall Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Uninstall Dsh Sdk"
       }
     },
     "/settings/storage/clear": {

@@ -23,6 +23,8 @@ from agent_service.services.agent_queue.service import AgentQueueService
 from agent_service.services.automation.scheduler import AutomationScheduler
 from agent_service.services.automation.service import AutomationService
 from agent_service.services.component_library.service import ComponentLibraryService
+from agent_service.services.dsh_runtime import DshRuntimePackageManager
+from agent_service.services.dsh_adapter import DshChildAgentExecutor
 from agent_service.services.favorite.service import FavoriteService
 from agent_service.services.feedback.service import FeedbackService
 from agent_service.services.git.service import GitService
@@ -64,6 +66,8 @@ class ApplicationServices:
     message_service: MessageService
     settings_service: SettingsService
     model_management_service: ModelManagementService
+    dsh_runtime_manager: DshRuntimePackageManager
+    dsh_executor: DshChildAgentExecutor
     attachment_service: SessionAttachmentService
     skill_service: SkillService
     knowledge_library_service: KnowledgeLibraryService
@@ -105,6 +109,8 @@ class ApplicationServices:
         self.automation_scheduler.shutdown()
         self.knowledge_ingestion_job_service.stop()
         self.agent_queue_scheduler.shutdown()
+        self.dsh_executor.shutdown()
+        self.dsh_runtime_manager.shutdown()
 
 
 def create_application_services(config: AgentConfig, *, database_engine: Engine) -> ApplicationServices:
@@ -119,6 +125,7 @@ def create_application_services(config: AgentConfig, *, database_engine: Engine)
         config=config,
         settings_service=settings_service,
     )
+    dsh_runtime_manager = DshRuntimePackageManager(config=config)
     activity_service = ActivityService(engine=database_engine, config=config, create_tables=False)
     knowledge_graph_service = KnowledgeGraphService(config=config, engine=database_engine, create_tables=False)
     knowledge_library_service = KnowledgeLibraryService(
@@ -183,6 +190,12 @@ def create_application_services(config: AgentConfig, *, database_engine: Engine)
         config=config,
         settings_service=settings_service,
     )
+    dsh_executor = DshChildAgentExecutor(
+        config=config,
+        settings_service=settings_service,
+        runtime_manager=dsh_runtime_manager,
+    )
+    agent.dsh_executor = dsh_executor
     retrieval_service = MemoryRetrievalService(config=config, memory_service=memory_service)
     unified_search_service = UnifiedSearchService(
         settings_service=settings_service,
@@ -221,6 +234,8 @@ def create_application_services(config: AgentConfig, *, database_engine: Engine)
         message_service=message_service,
         settings_service=settings_service,
         model_management_service=model_management_service,
+        dsh_runtime_manager=dsh_runtime_manager,
+        dsh_executor=dsh_executor,
         attachment_service=attachment_service,
         skill_service=skill_service,
         knowledge_library_service=knowledge_library_service,

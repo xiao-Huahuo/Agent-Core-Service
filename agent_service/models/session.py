@@ -47,6 +47,10 @@ class SessionRecord(SessionBase, table=True):
     state_json: Agent 探索状态 JSON,跨轮持久化。
     parent_session_id: 子 Agent 对话所属的主会话；根会话为空。
     child_agent_run_id: 子 Agent 对话对应的运行 ID；根会话为空。
+    child_agent_provider: 子 Agent执行器类型；当前为 native或dsh。
+    dsh_session_id: DSH Runtime持久 Session标识，仅 DSH子会话存在。
+    child_workspace_root: DSH代码子 Agent绑定的规范化工作区。
+    dsh_runtime_version: 创建或最近恢复会话使用的受管 Runtime版本。
     """
 
     __tablename__ = "agent_sessions"
@@ -66,3 +70,7 @@ class SessionRecord(SessionBase, table=True):
         index=True,
         max_length=DEFAULT_BUSINESS_LIMITS.standard_id_max_length,
     )
+    child_agent_provider: str | None = Field(default=None, index=True, max_length=32)
+    dsh_session_id: str | None = Field(default=None, index=True, max_length=64)
+    child_workspace_root: str | None = Field(default=None, max_length=DEFAULT_BUSINESS_LIMITS.secret_max_length)
+    dsh_runtime_version: str | None = Field(default=None, max_length=64)

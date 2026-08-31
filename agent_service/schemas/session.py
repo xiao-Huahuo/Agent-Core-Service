@@ -83,6 +83,10 @@ class SessionOut(SQLModel):
     updated_at: datetime
     parent_session_id: str | None = None
     child_agent_run_id: str | None = None
+    child_agent_provider: str | None = None
+    dsh_session_id: str | None = None
+    child_workspace_root: str | None = None
+    dsh_runtime_version: str | None = None
 
     @classmethod
     def from_record(cls, record: SessionRecord) -> "SessionOut":
@@ -96,4 +100,8 @@ class SessionOut(SQLModel):
             updated_at=record.updated_at,
             parent_session_id=record.parent_session_id,
             child_agent_run_id=record.child_agent_run_id,
+            child_agent_provider=record.child_agent_provider,
+            dsh_session_id=record.dsh_session_id,
+            child_workspace_root=record.child_workspace_root,
+            dsh_runtime_version=record.dsh_runtime_version,
         )

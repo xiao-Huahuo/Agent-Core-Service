@@ -90,7 +90,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EB7E980>",
+        "default": "<function utc_now at 0x0000020C9184F7E0>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -252,7 +252,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EB172E0>",
+        "default": "<function utc_now at 0x0000020C9184C180>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -427,7 +427,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1ED104A0>",
+        "default": "<function utc_now at 0x0000020C919E5300>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -439,7 +439,7 @@
       }
     ],
     "constraints": [
-      "ForeignKeyConstraint(<sqlalchemy.sql.base.ReadOnlyColumnCollection object at 0x000001CF1FE65DA0>, None, table=Table('agent_messages', MetaData(), Column('user_id', AutoString(length=128), table=<agent_messages>, nullable=False), Column('role', AutoString(length=32), table=<agent_messages>, nullable=False), Column('content', Text(), table=<agent_messages>), Column('tool_call_id', AutoString(length=128), table=<agent_messages>), Column('tool_calls_json', JSON(), table=<agent_messages>), Column('metadata_json', JSON(), table=<agent_messages>), Column('is_summarized', Boolean(), table=<agent_messages>, nullable=False, default=ScalarElementColumnDefault(False)), Column('message_id', AutoString(length=64), table=<agent_messages>, primary_key=True, nullable=False), Column('session_id', AutoString(length=64), ForeignKey('agent_sessions.session_id'), table=<agent_messages>, nullable=False), Column('created_at', DateTime(), table=<agent_messages>, nullable=False, default=CallableColumnDefault(<function utc_now at 0x000001CF1ED104A0>)), schema=None))",
+      "ForeignKeyConstraint(<sqlalchemy.sql.base.ReadOnlyColumnCollection object at 0x0000020C92B23B50>, None, table=Table('agent_messages', MetaData(), Column('user_id', AutoString(length=128), table=<agent_messages>, nullable=False), Column('role', AutoString(length=32), table=<agent_messages>, nullable=False), Column('content', Text(), table=<agent_messages>), Column('tool_call_id', AutoString(length=128), table=<agent_messages>), Column('tool_calls_json', JSON(), table=<agent_messages>), Column('metadata_json', JSON(), table=<agent_messages>), Column('is_summarized', Boolean(), table=<agent_messages>, nullable=False, default=ScalarElementColumnDefault(False)), Column('message_id', AutoString(length=64), table=<agent_messages>, primary_key=True, nullable=False), Column('session_id', AutoString(length=64), ForeignKey('agent_sessions.session_id'), table=<agent_messages>, nullable=False), Column('created_at', DateTime(), table=<agent_messages>, nullable=False, default=CallableColumnDefault(<function utc_now at 0x0000020C919E5300>)), schema=None))",
       "PrimaryKeyConstraint(Column('message_id', AutoString(length=64), table=<agent_messages>, primary_key=True, nullable=False))"
     ],
     "indexes": [
@@ -513,7 +513,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EB7E0C0>",
+        "default": "<function utc_now at 0x0000020C9184EF20>",
         "foreign_keys": [],
         "index": false,
         "name": "updated_at",
@@ -654,7 +654,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EB7C720>",
+        "default": "<function utc_now at 0x0000020C9184D580>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -665,7 +665,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EB7C900>",
+        "default": "<function utc_now at 0x0000020C9184D760>",
         "foreign_keys": [],
         "index": true,
         "name": "updated_at",
@@ -768,7 +768,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EADDBC0>",
+        "default": "<function utc_now at 0x0000020C9179E160>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -779,7 +779,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EADDC60>",
+        "default": "<function utc_now at 0x0000020C9179E200>",
         "foreign_keys": [],
         "index": true,
         "name": "updated_at",
@@ -799,17 +799,114 @@
         "server_default": null,
         "type": "VARCHAR",
         "unique": false
+      },
+      {
+        "default": null,
+        "foreign_keys": [
+          "agent_sessions.session_id"
+        ],
+        "index": true,
+        "name": "parent_session_id",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "type": "VARCHAR(64)",
+        "unique": false
+      },
+      {
+        "default": null,
+        "foreign_keys": [],
+        "index": true,
+        "name": "child_agent_run_id",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "type": "VARCHAR(64)",
+        "unique": false
+      },
+      {
+        "default": null,
+        "foreign_keys": [],
+        "index": true,
+        "name": "child_agent_provider",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "type": "VARCHAR(32)",
+        "unique": false
+      },
+      {
+        "default": null,
+        "foreign_keys": [],
+        "index": true,
+        "name": "dsh_session_id",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "type": "VARCHAR(64)",
+        "unique": false
+      },
+      {
+        "default": null,
+        "foreign_keys": [],
+        "index": false,
+        "name": "child_workspace_root",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "type": "VARCHAR(1024)",
+        "unique": false
+      },
+      {
+        "default": null,
+        "foreign_keys": [],
+        "index": false,
+        "name": "dsh_runtime_version",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "type": "VARCHAR(64)",
+        "unique": false
       }
     ],
     "constraints": [
+      "ForeignKeyConstraint(<sqlalchemy.sql.base.ReadOnlyColumnCollection object at 0x0000020C92B23CE0>, None, table=Table('agent_sessions', MetaData(), Column('user_id', AutoString(length=128), table=<agent_sessions>, nullable=False), Column('session_name', AutoString(length=255), table=<agent_sessions>, nullable=False), Column('session_id', AutoString(length=64), table=<agent_sessions>, primary_key=True, nullable=False), Column('created_at', DateTime(), table=<agent_sessions>, nullable=False, default=CallableColumnDefault(<function utc_now at 0x0000020C9179E160>)), Column('updated_at', DateTime(), table=<agent_sessions>, nullable=False, default=CallableColumnDefault(<function utc_now at 0x0000020C9179E200>)), Column('state_json', AutoString(), table=<agent_sessions>), Column('parent_session_id', AutoString(length=64), ForeignKey('agent_sessions.session_id'), table=<agent_sessions>), Column('child_agent_run_id', AutoString(length=64), table=<agent_sessions>), Column('child_agent_provider', AutoString(length=32), table=<agent_sessions>), Column('dsh_session_id', AutoString(length=64), table=<agent_sessions>), Column('child_workspace_root', AutoString(length=1024), table=<agent_sessions>), Column('dsh_runtime_version', AutoString(length=64), table=<agent_sessions>), schema=None))",
       "PrimaryKeyConstraint(Column('session_id', AutoString(length=64), table=<agent_sessions>, primary_key=True, nullable=False))"
     ],
     "indexes": [
       {
         "columns": [
+          "child_agent_provider"
+        ],
+        "name": "ix_agent_sessions_child_agent_provider",
+        "unique": false
+      },
+      {
+        "columns": [
+          "child_agent_run_id"
+        ],
+        "name": "ix_agent_sessions_child_agent_run_id",
+        "unique": false
+      },
+      {
+        "columns": [
           "created_at"
         ],
         "name": "ix_agent_sessions_created_at",
+        "unique": false
+      },
+      {
+        "columns": [
+          "dsh_session_id"
+        ],
+        "name": "ix_agent_sessions_dsh_session_id",
+        "unique": false
+      },
+      {
+        "columns": [
+          "parent_session_id"
+        ],
+        "name": "ix_agent_sessions_parent_session_id",
         "unique": false
       },
       {
@@ -953,7 +1050,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1ED6E0C0>",
+        "default": "<function utc_now at 0x0000020C91A42F20>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -1074,7 +1171,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EBD9580>",
+        "default": "<function utc_now at 0x0000020C9189E3E0>",
         "foreign_keys": [],
         "index": false,
         "name": "started_at",
@@ -1307,7 +1404,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EB7FC40>",
+        "default": "<function utc_now at 0x0000020C9189CAE0>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",
@@ -1318,7 +1415,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EB7FE20>",
+        "default": "<function utc_now at 0x0000020C9189CCC0>",
         "foreign_keys": [],
         "index": false,
         "name": "updated_at",
@@ -1436,7 +1533,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EBDA480>",
+        "default": "<function utc_now at 0x0000020C9189F2E0>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -1548,7 +1645,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EC0C680>",
+        "default": "<function utc_now at 0x0000020C918DD4E0>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -1682,7 +1779,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EC6E0C0>",
+        "default": "<function utc_now at 0x0000020C9193EF20>",
         "foreign_keys": [],
         "index": true,
         "name": "updated_at",
@@ -1866,7 +1963,7 @@
         "unique": null
       },
       {
-        "default": "<function utc_now at 0x000001CF1EC6CAE0>",
+        "default": "<function utc_now at 0x0000020C9193D940>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -1877,7 +1974,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EC6C9A0>",
+        "default": "<function utc_now at 0x0000020C9193D800>",
         "foreign_keys": [],
         "index": true,
         "name": "updated_at",
@@ -2082,7 +2179,7 @@
         "unique": null
       },
       {
-        "default": "<function utc_now at 0x000001CF1EC0F240>",
+        "default": "<function utc_now at 0x0000020C9193C040>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -2093,7 +2190,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EC0F1A0>",
+        "default": "<function utc_now at 0x0000020C9193C0E0>",
         "foreign_keys": [],
         "index": true,
         "name": "updated_at",
@@ -2375,7 +2472,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EC0D300>",
+        "default": "<function utc_now at 0x0000020C918DE160>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -2408,7 +2505,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EC0D4E0>",
+        "default": "<function utc_now at 0x0000020C918DE340>",
         "foreign_keys": [],
         "index": false,
         "name": "updated_at",
@@ -2581,7 +2678,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1ECD27A0>",
+        "default": "<function utc_now at 0x0000020C91997600>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",
@@ -2867,7 +2964,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EC6F240>",
+        "default": "<function utc_now at 0x0000020C919940E0>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",
@@ -2878,7 +2975,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EC6F380>",
+        "default": "<function utc_now at 0x0000020C91994220>",
         "foreign_keys": [],
         "index": false,
         "name": "updated_at",
@@ -2999,7 +3096,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1ECD0EA0>",
+        "default": "<function utc_now at 0x0000020C91995D00>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",
@@ -3096,7 +3193,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1ED6C540>",
+        "default": "<function utc_now at 0x0000020C91A413A0>",
         "foreign_keys": [],
         "index": true,
         "name": "last_viewed_at",
@@ -3274,7 +3371,7 @@
         "unique": null
       },
       {
-        "default": "<function utc_now at 0x000001CF1EB144A0>",
+        "default": "<function utc_now at 0x0000020C917F4D60>",
         "foreign_keys": [],
         "index": true,
         "name": "valid_from",
@@ -3362,7 +3459,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EADC360>",
+        "default": "<function utc_now at 0x0000020C9179EFC0>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -3373,7 +3470,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EADFBA0>",
+        "default": "<function utc_now at 0x0000020C9179D580>",
         "foreign_keys": [],
         "index": true,
         "name": "updated_at",
@@ -3526,7 +3623,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EBDB4C0>",
+        "default": "<function utc_now at 0x0000020C918DC360>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -3750,7 +3847,7 @@
         "unique": null
       },
       {
-        "default": "<function utc_now at 0x000001CF1EB15BC0>",
+        "default": "<function utc_now at 0x0000020C917F6A20>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -3762,7 +3859,7 @@
       }
     ],
     "constraints": [
-      "ForeignKeyConstraint(<sqlalchemy.sql.base.ReadOnlyColumnCollection object at 0x000001CF1FE663E0>, None, table=Table('session_attachments', MetaData(), Column('attachment_id', AutoString(length=64), table=<session_attachments>, primary_key=True, nullable=False), Column('user_id', AutoString(length=128), table=<session_attachments>, nullable=False), Column('session_id', AutoString(length=64), ForeignKey('agent_sessions.session_id'), table=<session_attachments>, nullable=False), Column('library_id', AutoString(length=128), table=<session_attachments>, nullable=False), Column('library_name', AutoString(length=255), table=<session_attachments>, nullable=False, default=ScalarElementColumnDefault('')), Column('filename', AutoString(length=512), table=<session_attachments>, nullable=False), Column('stored_name', AutoString(length=512), table=<session_attachments>, nullable=False), Column('path', Text(), table=<session_attachments>), Column('text_path', Text(), table=<session_attachments>), Column('uri', Text(), table=<session_attachments>), Column('mime_type', AutoString(length=255), table=<session_attachments>, nullable=False, default=ScalarElementColumnDefault('')), Column('size', Integer(), table=<session_attachments>, nullable=False, default=ScalarElementColumnDefault(0)), Column('source_type', AutoString(length=64), table=<session_attachments>, nullable=False, default=ScalarElementColumnDefault('')), Column('summary', Text(), table=<session_attachments>), Column('metadata_json', JSON(), table=<session_attachments>), Column('created_at', DateTime(), table=<session_attachments>, nullable=False, default=CallableColumnDefault(<function utc_now at 0x000001CF1EB15BC0>)), schema=None))",
+      "ForeignKeyConstraint(<sqlalchemy.sql.base.ReadOnlyColumnCollection object at 0x0000020C92B78270>, None, table=Table('session_attachments', MetaData(), Column('attachment_id', AutoString(length=64), table=<session_attachments>, primary_key=True, nullable=False), Column('user_id', AutoString(length=128), table=<session_attachments>, nullable=False), Column('session_id', AutoString(length=64), ForeignKey('agent_sessions.session_id'), table=<session_attachments>, nullable=False), Column('library_id', AutoString(length=128), table=<session_attachments>, nullable=False), Column('library_name', AutoString(length=255), table=<session_attachments>, nullable=False, default=ScalarElementColumnDefault('')), Column('filename', AutoString(length=512), table=<session_attachments>, nullable=False), Column('stored_name', AutoString(length=512), table=<session_attachments>, nullable=False), Column('path', Text(), table=<session_attachments>), Column('text_path', Text(), table=<session_attachments>), Column('uri', Text(), table=<session_attachments>), Column('mime_type', AutoString(length=255), table=<session_attachments>, nullable=False, default=ScalarElementColumnDefault('')), Column('size', Integer(), table=<session_attachments>, nullable=False, default=ScalarElementColumnDefault(0)), Column('source_type', AutoString(length=64), table=<session_attachments>, nullable=False, default=ScalarElementColumnDefault('')), Column('summary', Text(), table=<session_attachments>), Column('metadata_json', JSON(), table=<session_attachments>), Column('created_at', DateTime(), table=<session_attachments>, nullable=False, default=CallableColumnDefault(<function utc_now at 0x0000020C917F6A20>)), schema=None))",
       "PrimaryKeyConstraint(Column('attachment_id', AutoString(length=64), table=<session_attachments>, primary_key=True, nullable=False))"
     ],
     "indexes": [
@@ -4139,7 +4236,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1ED13420>",
+        "default": "<function utc_now at 0x0000020C91A402C0>",
         "foreign_keys": [],
         "index": true,
         "name": "created_at",
@@ -4150,7 +4247,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1ED13380>",
+        "default": "<function utc_now at 0x0000020C91A40220>",
         "foreign_keys": [],
         "index": true,
         "name": "updated_at",
@@ -4284,7 +4381,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1ED10E00>",
+        "default": "<function utc_now at 0x0000020C919E4EA0>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",
@@ -4295,7 +4392,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1ED10D60>",
+        "default": "<function utc_now at 0x0000020C919E4900>",
         "foreign_keys": [],
         "index": true,
         "name": "updated_at",
@@ -4362,7 +4459,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EDC4AE0>",
+        "default": "<function utc_now at 0x0000020C91A8D940>",
         "foreign_keys": [],
         "index": false,
         "name": "imported_at",
@@ -4492,7 +4589,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1ED6F7E0>",
+        "default": "<function utc_now at 0x0000020C91A8C680>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",
@@ -4503,7 +4600,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1ED6F6A0>",
+        "default": "<function utc_now at 0x0000020C91A8C540>",
         "foreign_keys": [],
         "index": false,
         "name": "updated_at",
@@ -4597,7 +4694,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EE14540>",
+        "default": "<function utc_now at 0x0000020C91AE9760>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",
@@ -4608,7 +4705,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EE147C0>",
+        "default": "<function utc_now at 0x0000020C91AE99E0>",
         "foreign_keys": [],
         "index": false,
         "name": "updated_at",
@@ -4727,7 +4824,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EE15800>",
+        "default": "<function utc_now at 0x0000020C91AEAA20>",
         "foreign_keys": [],
         "index": false,
         "name": "updated_at",
@@ -4813,7 +4910,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EE16480>",
+        "default": "<function utc_now at 0x0000020C91AEB6A0>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",
@@ -4824,7 +4921,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EE165C0>",
+        "default": "<function utc_now at 0x0000020C91AEB7E0>",
         "foreign_keys": [],
         "index": false,
         "name": "updated_at",
@@ -4944,6 +5041,28 @@
         "foreign_keys": [],
         "index": false,
         "name": "ocr_enabled",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "type": "BOOLEAN",
+        "unique": false
+      },
+      {
+        "default": "False",
+        "foreign_keys": [],
+        "index": false,
+        "name": "vision_understanding_enabled",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "type": "BOOLEAN",
+        "unique": false
+      },
+      {
+        "default": "False",
+        "foreign_keys": [],
+        "index": false,
+        "name": "model_auto_download_enabled",
         "nullable": false,
         "primary_key": false,
         "server_default": null,
@@ -5138,7 +5257,7 @@
         "unique": null
       },
       {
-        "default": "<function utc_now at 0x000001CF1EDC6B60>",
+        "default": "<function utc_now at 0x0000020C91A8FC40>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",
@@ -5149,7 +5268,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EDC6C00>",
+        "default": "<function utc_now at 0x0000020C91A8FCE0>",
         "foreign_keys": [],
         "index": false,
         "name": "updated_at",
@@ -5202,7 +5321,7 @@
         "unique": null
       },
       {
-        "default": "<function utc_now at 0x000001CF1EDC5620>",
+        "default": "<function utc_now at 0x0000020C91A8E480>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",
@@ -5307,7 +5426,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EE62700>",
+        "default": "<function utc_now at 0x0000020C91B2B920>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",
@@ -5428,7 +5547,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EE60180>",
+        "default": "<function utc_now at 0x0000020C91B293A0>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",
@@ -5439,7 +5558,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EE600E0>",
+        "default": "<function utc_now at 0x0000020C91B29300>",
         "foreign_keys": [],
         "index": false,
         "name": "updated_at",
@@ -5536,7 +5655,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EE17380>",
+        "default": "<function utc_now at 0x0000020C91B285E0>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",
@@ -5547,7 +5666,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EE172E0>",
+        "default": "<function utc_now at 0x0000020C91B28540>",
         "foreign_keys": [],
         "index": false,
         "name": "updated_at",
@@ -5600,7 +5719,7 @@
         "unique": false
       },
       {
-        "default": "<function utc_now at 0x000001CF1EE61080>",
+        "default": "<function utc_now at 0x0000020C91B2A2A0>",
         "foreign_keys": [],
         "index": false,
         "name": "created_at",

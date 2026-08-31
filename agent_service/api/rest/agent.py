@@ -10,14 +10,16 @@ import queue
 import threading
 from typing import Any, Iterator
 
-from fastapi import APIRouter, Body, File, Form, Query, UploadFile
+from fastapi import APIRouter, Body, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
 from agent_service.api.recall_details import build_recall_details_payload
 from agent_service.api.rest.deps import (
     _require_agent,
     _require_attachment_service,
+    _require_dsh_executor,
     _require_message_service,
+    _require_session_service,
     _require_settings_service,
 )
 from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
@@ -422,6 +424,38 @@ async def update_child_agent(run_id: str, body: dict[str, Any]) -> dict[str, Any
     agent = _require_agent()
     agent.update_child_agent(run_id, body)
     return {"run_id": run_id, "ok": True}
+
+
+@router.get("/agent/children/{run_id}/dsh-web")
+async def get_child_agent_dsh_web(
+    run_id: str,
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),
+    session_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="主 Agent 会话 ID"),
+) -> dict[str, str]:
+    """返回当前用户 DSH子 Agent对应的同进程只读 Web地址。"""
+
+    try:
+        session = _require_session_service().get_session(session_id)
+        if session is None or session.user_id != user_id:
+            raise PermissionError("不能查看其他用户的 DSH 子 Agent")
+        child = next(
+            (item for item in _require_agent().list_child_agents_for_session(session_id) if item.get("run_id") == run_id),
+            None,
+        )
+        if child is None:
+            raise KeyError("DSH 子 Agent不存在")
+        url = _require_dsh_executor().ensure_web(child={**child, "session_id": session_id}, user_id=user_id)
+        return {"run_id": run_id, "url": url}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 # ------------------------------------------------------------------

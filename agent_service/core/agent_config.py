@@ -117,6 +117,7 @@ class AgentConfig:
         mcp_server_config_dir: MCP Server 配置文件目录,下辖 *.json 文件。
         log_dir: 日志文件输出目录。
         assets_dir: 用户业务附件和封面等资产的持久化目录。
+        dsh_sdk_dir: DSH Windows Runtime、下载缓存和版本清单的受管目录。
         trash_dir: 知识库软删除文件的回收站目录。
         """
 
@@ -136,6 +137,7 @@ class AgentConfig:
         mcp_server_config_dir: Path = field(default_factory=lambda: Path("resources/mcp"))
         log_dir: Path = field(default_factory=lambda: Path("logs"))
         assets_dir: Path = field(default_factory=lambda: Path("assets"))
+        dsh_sdk_dir: Path = field(default_factory=lambda: Path("assets/sdks/dsh"))
         trash_dir: Path = field(default_factory=lambda: Path("trash"))
 
         def __post_init__(self) -> None:
@@ -156,6 +158,7 @@ class AgentConfig:
             self.mcp_server_config_dir = self._resolve_project_path(self.mcp_server_config_dir)
             self.log_dir = self._resolve_runtime_path(self.log_dir)
             self.assets_dir = self._resolve_runtime_path(self.assets_dir)
+            self.dsh_sdk_dir = self._resolve_runtime_path(self.dsh_sdk_dir)
             self.trash_dir = self._resolve_runtime_path(self.trash_dir)
 
         def _resolve_project_path(self, path_value: Path | str) -> Path:
@@ -212,6 +215,7 @@ class AgentConfig:
             self.mcp_server_config_dir.mkdir(parents=True, exist_ok=True)
             self.log_dir.mkdir(parents=True, exist_ok=True)
             self.assets_dir.mkdir(parents=True, exist_ok=True)
+            self.dsh_sdk_dir.mkdir(parents=True, exist_ok=True)
             self.trash_dir.mkdir(parents=True, exist_ok=True)
             # 外置资源骨架: 确保 project_root 下有空目录,即使读取回退到 _MEIPASS
             for res_dir in ("resources/knowledge", "resources/mcp", "resources/safety", "resources/skills"):
@@ -313,6 +317,8 @@ class AgentConfig:
             "理解项目全部文件/代码结构),或需要并行分析多个相互独立的方向(如分别比较多个方案)时,"
             "应调用 spawn_child_agent 创建只读 explore 子 Agent 分头探索,并用 wait_for_child_agents "
             "逐个收取结果,最后把各子 Agent 的发现汇总进最终回答。"
+            "需要跨文件修改代码、执行PowerShell/Git、运行测试或构建时,使用provider=dsh的代码子Agent,"
+            "并明确提供workspace_root；不要让通用native子Agent承担开放式代码修改。"
         )
         retrieval_context_system_prompt: str = (
             "【上下文索引 — 记忆内容已附原文】\n"
@@ -458,6 +464,7 @@ class AgentConfig:
             "agent": "【角色设定】你是全能 Agent，负责通用执行任务。你可以进行复杂分析、多步骤任务和代码修改，目标是把任务彻底完成并给出可执行结果。",
             "explore": "【角色设定】你是只读探索 Agent，用于搜索文件、理解代码结构、定位实现细节。【重要约束】你是只读的，禁止修改任何文件、禁止执行任何写操作。",
             "plan": "【角色设定】你是只读规划研究 Agent，在规划阶段收集代码上下文、辅助制定实施计划。【重要约束】你是只读的，禁止修改任何文件，只输出分析与计划。",
+            "dsh": "【角色设定】你是专用代码 Agent，负责在指定工作区理解、修改和验证代码；完成前必须运行与风险相称的测试并如实报告失败。",
         })
         child_agent_custom_role_template: str = "【角色设定】{category}"
         compressed_context_template: str = "以下是当前会话的压缩摘要，请将其作为后续推理上下文：\n{summary}"
@@ -1311,6 +1318,29 @@ class AgentConfig:
         grpc_host: str = "[::]"
         grpc_port: int = 50051
 
+    @dataclass(slots=True)
+    class DshConfig:
+        """管理 MW 固定 DSH Windows Runtime 的版本与进程容量。
+
+        runtime_version: 当前 MW 版本唯一允许的 DSH Runtime 版本。
+        signer_thumbprint: 可选的 Windows Authenticode 证书指纹。
+        max_live_runtimes: 同时保留的 DSH热 Runtime上限。
+        idle_timeout_seconds: 空闲 Runtime可在后续调度时回收的秒数。
+        """
+
+        runtime_version: str = "0.1.0-rc.5+mw.1"
+        signer_thumbprint: str = ""
+        max_live_runtimes: int = 2
+        idle_timeout_seconds: int = 600
+
+        def __post_init__(self) -> None:
+            """拒绝会破坏 Runtime容量控制的非正参数。"""
+
+            if self.max_live_runtimes <= 0:
+                raise ValueError("dsh.max_live_runtimes 必须为正数")
+            if self.idle_timeout_seconds <= 0:
+                raise ValueError("dsh.idle_timeout_seconds 必须为正数")
+
     constants: Constants = field(default_factory=Constants)
     storage: StorageConfig = field(default_factory=StorageConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
@@ -1323,6 +1353,7 @@ class AgentConfig:
     limits: BusinessLimitsConfig = field(default_factory=BusinessLimitsConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
+    dsh: DshConfig = field(default_factory=DshConfig)
 
     @classmethod
     def load_config(
@@ -1366,6 +1397,7 @@ class AgentConfig:
             limits=cls.BusinessLimitsConfig(**data["limits"]),
             logging=cls.LoggingConfig(**data["logging"]),
             server=cls.ServerConfig(**data["server"]),
+            dsh=cls.DshConfig(**data["dsh"]),
         )
 
 
@@ -1469,7 +1501,12 @@ class AgentConfig:
             "AGENT_MCP_SERVER_CONFIG_DIR": ("storage", "mcp_server_config_dir", str),
             "AGENT_LOG_DIR": ("storage", "log_dir", str),
             "AGENT_ASSETS_DIR": ("storage", "assets_dir", str),
+            "AGENT_DSH_SDK_DIR": ("storage", "dsh_sdk_dir", str),
             "AGENT_TRASH_DIR": ("storage", "trash_dir", str),
+            "AGENT_DSH_RUNTIME_VERSION": ("dsh", "runtime_version", str),
+            "AGENT_DSH_SIGNER_THUMBPRINT": ("dsh", "signer_thumbprint", str),
+            "AGENT_DSH_MAX_LIVE_RUNTIMES": ("dsh", "max_live_runtimes", int),
+            "AGENT_DSH_IDLE_TIMEOUT_SECONDS": ("dsh", "idle_timeout_seconds", int),
             "AGENT_MODEL_PROVIDER": ("model", "provider", str),
             "AGENT_MODEL_NAME": ("model", "model_name", str),
             "AGENT_MODEL_API_KEY": ("model", "api_key", str),

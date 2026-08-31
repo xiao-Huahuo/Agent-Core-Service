@@ -82,6 +82,10 @@ class SessionService:
         parent_session_id: str,
         run_id: str,
         session_name: str,
+        provider: str = "native",
+        dsh_session_id: str | None = None,
+        workspace_root: str = "",
+        dsh_runtime_version: str | None = None,
     ) -> SessionOut:
         """创建或返回一个不会进入根会话历史列表的子 Agent 对话。"""
 
@@ -100,6 +104,10 @@ class SessionService:
                 session_name=session_name,
                 parent_session_id=parent_session_id,
                 child_agent_run_id=run_id,
+                child_agent_provider=provider,
+                dsh_session_id=dsh_session_id,
+                child_workspace_root=workspace_root or None,
+                dsh_runtime_version=dsh_runtime_version,
                 created_at=now,
                 updated_at=now,
             )

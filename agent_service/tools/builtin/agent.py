@@ -34,11 +34,15 @@ def spawn_child_agent(
     output_contract: dict[str, Any] | None = None,
     category: str = "",
     name: str = "",
+    provider: str = "native",
+    workspace_root: str = "",
 ) -> str:
     """由主 Agent 创建一个前台或后台子 Agent,返回子任务运行信息。
 
     category: 子 Agent 能力模板 key(agent/explore/plan)或自定义角色描述,可留空。
     name: 子 Agent 名字;留空时自动用角色模板名(plan1/agent1/...)。
+    provider: native使用 MW通用子 Agent；dsh使用专用代码子 Agent。
+    workspace_root: DSH代码子 Agent的工作区绝对路径。
     """
 
     runtime = get_tool_runtime()
@@ -53,6 +57,8 @@ def spawn_child_agent(
         output_contract=output_contract or {},
         category=category or None,
         name=name or None,
+        provider=provider,
+        workspace_root=workspace_root,
     )
 def wait_for_child_agents(
     run_ids: list[str] | None = None,
@@ -67,3 +73,16 @@ def wait_for_child_agents(
         run_ids=run_ids or [],
         timeout_seconds=timeout_seconds,
     )
+
+
+def continue_child_agent(
+    run_id: str,
+    prompt: str,
+    mode: str = "background",
+) -> str:
+    """向同一个 DSH Child Agent Conversation提交后续 Turn。"""
+
+    runtime = get_tool_runtime()
+    if runtime.child_agent_continuation is None:
+        return "当前 Agent 运行时未启用 DSH 子 Agent持续追问能力。"
+    return runtime.child_agent_continuation(run_id=run_id, prompt=prompt, mode=mode)

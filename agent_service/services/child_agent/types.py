@@ -59,6 +59,8 @@ class ChildAgentContract:
     timeout_seconds: float | None = None
     category: str = ""
     name: str = ""
+    provider: str = "native"
+    workspace_root: str = ""
 
 
 @dataclass(slots=True)
@@ -89,6 +91,7 @@ class ChildAgentEvent:
     created_at: float
     category: str = ""
     name: str = ""
+    provider: str = "native"
     summary: str = ""
     result: Any = None
     error: str | None = None
@@ -116,6 +119,8 @@ class ChildAgentExecutionContext:
     cancellation: Event
     category: str = ""
     name: str = ""
+    provider: str = "native"
+    workspace_root: str = ""
     _updates: list[Mapping[str, Any]] = field(default_factory=list)
     _updates_lock: Lock = field(default_factory=Lock)
 

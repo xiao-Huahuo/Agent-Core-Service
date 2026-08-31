@@ -9,7 +9,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
-import { fetchChildAgents, stopChildAgent } from '@/api/agent'
+import { fetchChildAgentDshWeb, fetchChildAgents, stopChildAgent } from '@/api/agent'
 import type { ChildAgentRecord } from '@/api/agent'
 import { getChildAgentAvatar } from '@/utils/childAgentAvatar'
 import { preloadChildAgentConversations } from '@/components/editor_workspace/agent_chat/childAgentConversations'
@@ -109,6 +109,24 @@ async function stopChild(child: ChildAgentRecord) {
     await reload()
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '停止子 Agent 失败'
+  }
+}
+
+async function openChild(child: ChildAgentRecord) {
+  if (child.provider !== 'dsh') {
+    emit('open-conversation', child)
+    return
+  }
+  try {
+    const response = await fetchChildAgentDshWeb(child.run_id, props.userId, props.sessionId)
+    if (window.agentEditorDesktop?.openExternal) {
+      await window.agentEditorDesktop.openExternal(response.url)
+    } else {
+      window.open(response.url, '_blank', 'noopener,noreferrer')
+    }
+    error.value = ''
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : 'DSH Web 打开失败'
   }
 }
 
@@ -213,7 +231,8 @@ onBeforeUnmount(() => {
             <button
               class="child-agent-name-link"
               type="button"
-              @click="emit('open-conversation', latestRun(group))"
+              :title="latestRun(group).provider === 'dsh' ? '在 DSH Web 中查看' : '查看子 Agent 对话'"
+              @click="openChild(latestRun(group))"
             >
               {{ childDisplayName(latestRun(group)) }}
             </button>
@@ -232,7 +251,7 @@ onBeforeUnmount(() => {
               <div v-for="run in group.runs" :key="run.run_id" class="child-agent-run">
                 <div class="child-agent-run-head">
                   <span class="child-agent-run-dot" :data-status="run.status"></span>
-                  <button class="child-agent-name-link run" type="button" @click="emit('open-conversation', run)">
+                  <button class="child-agent-name-link run" type="button" :title="run.provider === 'dsh' ? '在 DSH Web 中查看' : '查看子 Agent 对话'" @click="openChild(run)">
                     {{ childDisplayName(run) }}
                   </button>
                   <span class="child-agent-status" :data-status="run.status">{{ statusLabel(run.status) }}</span>

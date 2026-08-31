@@ -12,6 +12,7 @@ import re
 import threading
 import time
 from collections.abc import Iterator, Sequence
+from dataclasses import replace
 from typing import Any
 from uuid import uuid4
 
@@ -35,7 +36,7 @@ from agent_service.core.agent_config import AgentConfig, DEFAULT_BUSINESS_LIMITS
 from agent_service.schemas.message import MessageCreate
 from agent_service.scripts.draw_agent_graph import draw_agent_graph
 from agent_service.services.memory.context_builder import ContextBuilder
-from agent_service.services.child_agent import ChildAgentContract, ChildAgentEvent, ChildAgentManager
+from agent_service.services.child_agent import ChildAgentContract, ChildAgentEvent, ChildAgentManager, ChildAgentStatus
 from agent_service.services.message.service import MessageService
 from agent_service.services.session.service import SessionService
 from agent_service.services.session_attachment.service import SessionAttachmentService
@@ -135,6 +136,8 @@ class ChildAgentRuntimeMixin:
             "goal": record.contract.goal,
             "category": record.contract.category,
             "name": record.contract.name,
+            "provider": record.contract.provider,
+            "workspace_root": record.contract.workspace_root,
             "mode": record.contract.mode,
             "status": record.status.value,
             "access_mode": record.effective_access_mode,
@@ -174,6 +177,7 @@ class ChildAgentRuntimeMixin:
                         "goal": event.goal,
                         "category": event.category,
                         "name": event.name,
+                        "provider": event.provider,
                         "mode": event.mode,
                         "status": event.status.value,
                         "access_mode": event.access_mode,
@@ -286,6 +290,7 @@ class ChildAgentRuntimeMixin:
                         "goal": record.contract.goal,
                         "category": record.contract.category,
                         "name": record.contract.name,
+                        "provider": record.contract.provider,
                         "mode": record.contract.mode,
                         "status": status_value,
                         "access_mode": record.effective_access_mode,
@@ -341,6 +346,8 @@ class ChildAgentRuntimeMixin:
         output_contract: dict[str, Any] | None = None,
         category: str | None = None,
         name: str | None = None,
+        provider: str = "native",
+        workspace_root: str = "",
     ) -> str:
         """由当前主 Agent 工具上下文创建真实子 Agent并返回 JSON 摘要。
 
@@ -348,24 +355,38 @@ class ChildAgentRuntimeMixin:
         name: 子 Agent 名字;留空时按同类别的已有数量自动生成(plan1/agent1/...)。
         """
 
-        effective_name = (name or "").strip() or self._auto_child_agent_name(parent_run_id, category)
+        if provider == "dsh" and not workspace_root.strip():
+            raise ValueError("DSH 子 Agent必须提供 workspace_root")
+        effective_category = "dsh" if provider == "dsh" and not (category or "").strip() else (category or "")
+        effective_name = (name or "").strip() or self._auto_child_agent_name(parent_run_id, effective_category)
         parent_tools = frozenset(
             definition.name
             for definition in (self.tool_registry.definitions.values() if self.tool_registry else [])
-            if definition.name not in {"spawn_child_agent", "wait_for_child_agents"}
+            if definition.name not in {"spawn_child_agent", "wait_for_child_agents", "continue_child_agent"}
         )
+        if provider == "dsh":
+            parent_tools = frozenset(
+                {"dsh.read", "dsh.search"}
+                | ({"dsh.edit", "dsh.pwsh", "dsh.git", "dsh.test"} if access_mode != "readonly" else set())
+            )
         contract = ChildAgentContract(
             goal=goal,
             parent_run_id=parent_run_id,
             user_id=user_id,
             session_id=session_id,
             mode=mode,
-            allowed_tools=frozenset(allowed_tools) if allowed_tools is not None else None,
+            allowed_tools=(
+                None
+                if provider == "dsh"
+                else frozenset(allowed_tools) if allowed_tools is not None else None
+            ),
             access_mode=access_mode,
             input_refs=tuple(input_refs or []),
             output_contract=output_contract or {},
-            category=category or "",
+            category=effective_category,
             name=effective_name,
+            provider=provider,
+            workspace_root=workspace_root,
         )
 
         def execute_child(context: Any) -> str:
@@ -405,12 +426,29 @@ class ChildAgentRuntimeMixin:
             context.raise_if_stopped()
             return str(result.get("final_output") or "")
 
+        executor = execute_child
+        if provider == "dsh":
+            dsh_executor = getattr(self, "dsh_executor", None)
+            if dsh_executor is None:
+                raise RuntimeError("DSH 子 Agent执行器尚未初始化")
+            executor = dsh_executor
         record = self.child_agent_manager.spawn(
             contract=contract,
-            executor=execute_child,
+            executor=executor,
             parent_tools=parent_tools,
             parent_access_mode=parent_access_mode,
         )
+        if provider == "dsh" and self.session_service is not None:
+            self.session_service.create_child_agent_session(
+                user_id=user_id,
+                parent_session_id=session_id,
+                run_id=record.run_id,
+                session_name=effective_name or goal,
+                provider="dsh",
+                dsh_session_id=dsh_executor.session_id_for_run(record.run_id),
+                workspace_root=workspace_root,
+                dsh_runtime_version=self.config.dsh.runtime_version,
+            )
         return json.dumps(self._child_record_to_dict(record), ensure_ascii=False)
     def _auto_child_agent_name(self, parent_run_id: str, category: str | None) -> str:
         """按同类别的已有子 Agent 数量生成递增默认名(plan1/agent1/...)。"""
@@ -459,3 +497,55 @@ class ChildAgentRuntimeMixin:
             },
             ensure_ascii=False,
         )
+
+    def _continue_child_from_runtime(
+        self,
+        *,
+        parent_run_id: str,
+        user_id: str,
+        session_id: str,
+        run_id: str,
+        prompt: str,
+        mode: str = "background",
+    ) -> str:
+        """由原父 Agent在同一个 DSH Child Agent Conversation中提交后续 Turn。"""
+
+        record = self.child_agent_manager.get(run_id)
+        if record is None:
+            child = next(
+                (item for item in self.list_child_agents_for_session(session_id) if item.get("run_id") == run_id),
+                None,
+            )
+            if child is None or child.get("provider") != "dsh":
+                raise KeyError(f"当前会话不存在 DSH 子 Agent {run_id}")
+            dsh_executor = getattr(self, "dsh_executor", None)
+            if dsh_executor is None:
+                raise RuntimeError("DSH 子 Agent执行器尚未初始化")
+            status_value = str(child.get("status") or "completed")
+            status = ChildAgentStatus(status_value) if status_value in {"completed", "failed", "stopped"} else ChildAgentStatus.FAILED
+            record = self.child_agent_manager.restore(
+                run_id=run_id,
+                contract=ChildAgentContract(
+                    goal=str(child.get("goal") or "继续代码任务"),
+                    parent_run_id=str(child.get("parent_run_id") or parent_run_id),
+                    user_id=user_id,
+                    session_id=session_id,
+                    mode=mode,
+                    allowed_tools=frozenset(str(item) for item in child.get("allowed_tools") or []),
+                    access_mode=str(child.get("access_mode") or "sandbox"),
+                    category=str(child.get("category") or "dsh"),
+                    name=str(child.get("name") or ""),
+                    provider="dsh",
+                    workspace_root=str(child.get("workspace_root") or ""),
+                ),
+                executor=dsh_executor,
+                status=status,
+            )
+        if record.contract.session_id != session_id or record.contract.user_id != user_id:
+            raise PermissionError(f"当前会话不能继续子 Agent {run_id}")
+        if record.contract.parent_run_id != parent_run_id:
+            record.contract = replace(record.contract, parent_run_id=parent_run_id)
+            assert record.context is not None
+            record.context.parent_run_id = parent_run_id
+        continued = self.child_agent_manager.continue_child(run_id=run_id, prompt=prompt, mode=mode)
+        return json.dumps(self._child_record_to_dict(continued), ensure_ascii=False)

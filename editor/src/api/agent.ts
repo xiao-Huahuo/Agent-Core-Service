@@ -282,6 +282,8 @@ export interface ChildAgentRecord {
   error?: string | null
   category?: string
   name?: string
+  provider?: 'native' | 'dsh'
+  workspace_root?: string
 }
 
 export interface ChildAgentListResponse {
@@ -295,6 +297,10 @@ export function fetchChildAgents(sessionId: string): Promise<ChildAgentListRespo
 
 export function stopChildAgent(runId: string): Promise<{ run_id: string; ok: boolean }> {
   return apiPost<{ run_id: string; ok: boolean }>(`${API_ROUTES.AGENT_CHILDREN}/${encodeURIComponent(runId)}/stop`, {})
+}
+
+export function fetchChildAgentDshWeb(runId: string, userId: string, sessionId: string): Promise<{ run_id: string; url: string }> {
+  return apiGet(API_ROUTES.AGENT_CHILD_DSH_WEB(runId), { user_id: userId, session_id: sessionId })
 }
 
 export function updateChildAgent(runId: string, update: Record<string, unknown>): Promise<{ run_id: string; ok: boolean }> {

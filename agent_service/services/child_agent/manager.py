@@ -71,6 +71,7 @@ class ChildAgentManager:
         )
         self._records: dict[str, ChildAgentRecord] = {}
         self._futures: dict[str, Future[Any]] = {}
+        self._executors: dict[str, ChildAgentExecutor] = {}
         self._result_queues: defaultdict[str, Queue[ChildAgentResult]] = defaultdict(Queue)
         self._event_queues_by_session: defaultdict[str, Queue[ChildAgentEvent]] = defaultdict(Queue)
         self._lock = Lock()
@@ -96,6 +97,8 @@ class ChildAgentManager:
             raise ValueError("子 Agent 目标不能为空。")
         if contract.mode not in {"foreground", "background"}:
             raise ValueError("子 Agent mode 必须是 foreground 或 background。")
+        if contract.provider not in {"native", "dsh"}:
+            raise ValueError("子 Agent provider 必须是 native 或 dsh。")
 
         effective_parent_access = normalize_agent_access_mode(parent_access_mode)
         effective_child_access = normalize_agent_access_mode(contract.access_mode)
@@ -124,6 +127,8 @@ class ChildAgentManager:
             cancellation=cancellation,
             category=contract.category,
             name=contract.name,
+            provider=contract.provider,
+            workspace_root=contract.workspace_root,
         )
         record = ChildAgentRecord(
             run_id=run_id,
@@ -134,6 +139,7 @@ class ChildAgentManager:
         )
         with self._lock:
             self._records[run_id] = record
+            self._executors[run_id] = executor
             self._result_queues[contract.parent_run_id]
         self._emit("child_agent.created", record)
 
@@ -144,11 +150,84 @@ class ChildAgentManager:
             future.result()
         return record
 
+    def continue_child(self, *, run_id: str, prompt: str, mode: str = "background") -> ChildAgentRecord:
+        """在同一 DSH Child Agent身份和热 Conversation中提交下一轮指令。"""
+
+        record = self._require_record(run_id)
+        if record.contract.provider != "dsh":
+            raise ValueError("只有 DSH 子 Agent支持持续追问")
+        if not prompt.strip():
+            raise ValueError("DSH 子 Agent追问不能为空")
+        if mode not in {"foreground", "background"}:
+            raise ValueError("子 Agent mode 必须是 foreground 或 background。")
+        if record.status in {ChildAgentStatus.CREATED, ChildAgentStatus.RUNNING}:
+            raise RuntimeError("DSH 子 Agent当前仍在运行")
+        assert record.context is not None
+        record.context.goal = prompt.strip()
+        record.context.cancellation = Event()
+        record.result = None
+        record.status = ChildAgentStatus.CREATED
+        self._discard_queued_results(record.contract.parent_run_id, run_id)
+        executor = self._executors[run_id]
+        self._emit("child_agent.turn_created", record)
+        future = self._executor.submit(self._run, record, executor)
+        with self._lock:
+            self._futures[run_id] = future
+        if mode == "foreground":
+            future.result()
+        return record
+
     def get(self, run_id: str) -> ChildAgentRecord | None:
         """按运行 ID 查询子 Agent 当前记录。"""
 
         with self._lock:
             return self._records.get(run_id)
+
+    def restore(
+        self,
+        *,
+        run_id: str,
+        contract: ChildAgentContract,
+        executor: ChildAgentExecutor,
+        status: ChildAgentStatus = ChildAgentStatus.COMPLETED,
+    ) -> ChildAgentRecord:
+        """把数据库/Session快照中的终态 DSH Child Agent恢复为可追问记录。"""
+
+        if status in {ChildAgentStatus.CREATED, ChildAgentStatus.RUNNING}:
+            raise ValueError("不能从快照恢复活动中的子 Agent")
+        context = ChildAgentExecutionContext(
+            run_id=run_id,
+            parent_run_id=contract.parent_run_id,
+            goal=contract.goal,
+            user_id=contract.user_id,
+            session_id=contract.session_id,
+            agent_mode=contract.agent_mode,
+            allowed_tools=contract.allowed_tools or frozenset(),
+            access_mode=contract.access_mode,
+            input_refs=contract.input_refs,
+            output_contract=contract.output_contract,
+            cancellation=Event(),
+            category=contract.category,
+            name=contract.name,
+            provider=contract.provider,
+            workspace_root=contract.workspace_root,
+        )
+        record = ChildAgentRecord(
+            run_id=run_id,
+            contract=contract,
+            status=status,
+            effective_tools=contract.allowed_tools or frozenset(),
+            effective_access_mode=contract.access_mode,
+            context=context,
+        )
+        with self._lock:
+            existing = self._records.get(run_id)
+            if existing is not None:
+                return existing
+            self._records[run_id] = record
+            self._executors[run_id] = executor
+            self._result_queues[contract.parent_run_id]
+        return record
 
     def list_children(self, parent_run_id: str) -> list[ChildAgentRecord]:
         """列出指定父 Agent 创建的全部子 Agent。"""
@@ -338,6 +417,21 @@ class ChildAgentManager:
         for result in results:
             result_queue.put(result)
 
+    def _discard_queued_results(self, parent_run_id: str, run_id: str) -> None:
+        """移除同一 DSH Child Agent上一轮尚未消费的结果，避免追问收到旧 Turn。"""
+
+        result_queue = self._result_queues[parent_run_id]
+        retained: list[ChildAgentResult] = []
+        while True:
+            try:
+                result = result_queue.get_nowait()
+            except Empty:
+                break
+            if result.run_id != run_id:
+                retained.append(result)
+        for result in retained:
+            result_queue.put(result)
+
     def _emit(self, event_name: str, record: ChildAgentRecord) -> None:
         """向可选事件观察者发送状态变化。"""
 
@@ -358,6 +452,7 @@ class ChildAgentManager:
                     created_at=time.time(),
                     category=record.contract.category,
                     name=record.contract.name,
+                    provider=record.contract.provider,
                     summary=result.summary if result is not None else "",
                     result=result.result if result is not None else None,
                     error=result.error if result is not None else None,

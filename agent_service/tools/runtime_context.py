@@ -67,6 +67,7 @@ class ToolRuntimeState:
     network_citation_counter: int = 0
     child_agent_spawner: Callable[..., str] | None = None
     child_agent_waiter: Callable[..., str] | None = None
+    child_agent_continuation: Callable[..., str] | None = None
     latest_file_patch: dict[str, str | bool] | None = None
 
 
@@ -93,6 +94,7 @@ def set_tool_runtime(
     long_term_memory_enabled: bool = True,
     child_agent_spawner: Callable[..., str] | None = None,
     child_agent_waiter: Callable[..., str] | None = None,
+    child_agent_continuation: Callable[..., str] | None = None,
 ) -> None:
     """
     设置当前线程的工具运行时状态。
@@ -129,6 +131,7 @@ def set_tool_runtime(
         citation_map=citation_map if citation_map is not None else {},
         child_agent_spawner=child_agent_spawner,
         child_agent_waiter=child_agent_waiter,
+        child_agent_continuation=child_agent_continuation,
     )
 
 

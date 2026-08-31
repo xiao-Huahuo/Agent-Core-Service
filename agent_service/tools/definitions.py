@@ -21,6 +21,7 @@ from agent_service.tools.builtin import (
     add_library_collection,
     add_todo,
     complete_task_list_item,
+    continue_child_agent,
     create_task_list,
     create_knowledge_folder,
     delete_knowledge_file,
@@ -830,6 +831,8 @@ CHILD_AGENT_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
             "一旦使用 background 创建了本轮所需的全部子 Agent,必须反复调用 wait_for_child_agents "
             "逐个收取结果;只要还有 created/running 子 Agent,就继续等待,不要输出最终结论。"
             "子 Agent 默认继承主 Agent 工具,但主 Agent 可缩小工具范围和沙盒权限。"
+            "需要跨文件修改代码、运行 PowerShell、Git、测试或构建时,provider必须选择dsh并提供workspace_root;"
+            "普通知识探索保持provider=native。"
         ),
         args_schema={
             "type": "object",
@@ -878,6 +881,25 @@ CHILD_AGENT_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
         },
         function=wait_for_child_agents,
     ),
+    BuiltinToolDefinition(
+        name="continue_child_agent",
+        display_name="继续 DSH 子 Agent",
+        description=(
+            "向已完成或失败的 DSH 子 Agent提交下一轮指令,复用原 run_id、Runtime和会话上下文。"
+            "用于修复刚才失败的测试、继续检查调用链或完善同一代码任务。"
+            "提交background后继续使用wait_for_child_agents收取结果。"
+        ),
+        args_schema={
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string", "description": "原 DSH 子 Agent run_id。"},
+                "prompt": {"type": "string", "description": "基于现有上下文继续执行的明确指令。"},
+                "mode": {"type": "string", "enum": ["foreground", "background"], "description": "默认background。"},
+            },
+            "required": ["run_id", "prompt"],
+        },
+        function=continue_child_agent,
+    ),
 ]
 
 TODO_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
@@ -916,6 +938,15 @@ TODO_TOOL_DEFINITIONS: list[BuiltinToolDefinition] = [
                     "type": "string",
                     "enum": ["none", "daily", "weekly", "monthly"],
                     "description": "循环频率，默认 none（仅执行一次）。",
+                },
+                "provider": {
+                    "type": "string",
+                    "enum": ["native", "dsh"],
+                    "description": "native为通用知识子 Agent；dsh为专用代码子 Agent。默认native。",
+                },
+                "workspace_root": {
+                    "type": "string",
+                    "description": "provider=dsh时要修改和测试的工作区绝对路径。",
                 },
                 "recurrence_interval": {
                     "type": "integer",

@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import CompilerManagement from '../CompilerManagement.vue'
 import ModelManagement from '../ModelManagement.vue'
+import SdkManagement from '../SdkManagement.vue'
 
 const {
   fetchModelManagement,
@@ -21,6 +22,11 @@ const {
   installLatexRuntime,
   cancelLatexInstall,
   uninstallLatexRuntime,
+  fetchDshSdkManagement,
+  installDshSdk,
+  cancelDshSdkInstall,
+  repairDshSdk,
+  uninstallDshSdk,
 } = vi.hoisted(() => ({
   fetchModelManagement: vi.fn(),
   checkModelDisk: vi.fn().mockResolvedValue({}),
@@ -31,6 +37,11 @@ const {
   installLatexRuntime: vi.fn(),
   cancelLatexInstall: vi.fn(),
   uninstallLatexRuntime: vi.fn(),
+  fetchDshSdkManagement: vi.fn(),
+  installDshSdk: vi.fn(),
+  cancelDshSdkInstall: vi.fn(),
+  repairDshSdk: vi.fn(),
+  uninstallDshSdk: vi.fn(),
 }))
 
 vi.mock('@/api/settings', () => ({
@@ -46,6 +57,14 @@ vi.mock('@/api/latex', () => ({
   installLatexRuntime,
   cancelLatexInstall,
   uninstallLatexRuntime,
+}))
+
+vi.mock('@/api/sdk', () => ({
+  fetchDshSdkManagement,
+  installDshSdk,
+  cancelDshSdkInstall,
+  repairDshSdk,
+  uninstallDshSdk,
 }))
 
 const iconStub = { template: '<span class="icon-stub"></span>' }
@@ -158,5 +177,30 @@ describe('management panels', () => {
     expect(wrapper.text()).toContain('D:/runtime/miktex')
     expect(wrapper.text()).toContain('pdflatex')
     expect(wrapper.text()).toContain('xelatex')
+  })
+
+  it('shows the backend-owned DSH Runtime version, progress and install path', async () => {
+    fetchDshSdkManagement.mockResolvedValue({
+      key: 'deepseek_harness', label: 'DeepSeek Harness SDK', role: '代码子 Agent 与只读执行轨迹',
+      version: '0.1.0-rc.5+mw.1', platform: 'Windows x64', path: 'D:/runtime/assets/sdks/dsh',
+      size_bytes: 0, package_size_bytes: 4096, file_count: 0,
+      installed: false, configured: true, in_use: false,
+      status: 'extracting', message: '正在解压 Windows Runtime', processed_bytes: 1024,
+      total_bytes: 4096, progress: 25,
+    })
+    const wrapper = mount(SdkManagement, {
+      props: { userId: 'u1' },
+      global: { stubs: { IcIcon: iconStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('DeepSeek Harness SDK')
+    expect(wrapper.text()).toContain('0.1.0-rc.5+mw.1')
+    expect(wrapper.text()).toMatch(/1.0 KB\s+\/ 4.0 KB/u)
+    expect(wrapper.get('progress').attributes('value')).toBe('25')
+    expect(wrapper.text()).toContain('正在解压 Windows Runtime')
+    await wrapper.findAll('.icon-action')[1]!.trigger('click')
+    expect(wrapper.text()).toContain('D:/runtime/assets/sdks/dsh')
+    wrapper.unmount()
   })
 })

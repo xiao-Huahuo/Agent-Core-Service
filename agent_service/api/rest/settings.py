@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Query
 from agent_service.core.agent_config import DEFAULT_BUSINESS_LIMITS
 from agent_service.api.rest.deps import (
     _require_agent,
+    _require_dsh_runtime_manager,
     _require_knowledge_library_service,
     _require_latex_service,
     _require_model_management_service,
@@ -940,6 +941,62 @@ async def clear_storage_path(body: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---- LaTeX 运行环境 ----
+
+
+# ---- SDK 与运行组件 ----
+
+@router.get("/settings/sdks/dsh/management")
+async def get_dsh_sdk_management(
+    user_id: str = Query(..., min_length=DEFAULT_BUSINESS_LIMITS.nonempty_min_length, description="用户 ID"),  # noqa: ARG001
+) -> dict[str, Any]:
+    """返回 DSH SDK客户端与 Windows Runtime 的真实管理状态。"""
+
+    return _require_dsh_runtime_manager().get_management_status()
+
+
+@router.post("/settings/sdks/dsh/install")
+async def install_dsh_sdk(body: dict[str, Any]) -> dict[str, Any]:
+    """在用户确认后异步安装当前 MW固定的 Windows Runtime。"""
+
+    if not str(body.get("user_id") or "").strip():
+        raise HTTPException(status_code=422, detail="user_id is required")
+    try:
+        return _require_dsh_runtime_manager().start_install()
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/settings/sdks/dsh/install/cancel")
+async def cancel_dsh_sdk_install(body: dict[str, Any]) -> dict[str, Any]:
+    """取消当前 DSH Runtime校验或解压安装任务。"""
+
+    if not str(body.get("user_id") or "").strip():
+        raise HTTPException(status_code=422, detail="user_id is required")
+    return _require_dsh_runtime_manager().cancel_install()
+
+
+@router.post("/settings/sdks/dsh/repair")
+async def repair_dsh_sdk(body: dict[str, Any]) -> dict[str, Any]:
+    """重新校验内置 SDK并原子替换损坏的 DSH Runtime。"""
+
+    if not str(body.get("user_id") or "").strip():
+        raise HTTPException(status_code=422, detail="user_id is required")
+    try:
+        return _require_dsh_runtime_manager().start_install(repair=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/settings/sdks/dsh/uninstall")
+async def uninstall_dsh_sdk(body: dict[str, Any]) -> dict[str, Any]:
+    """卸载 DSH Runtime，保留独立的 Child Agent Conversation历史。"""
+
+    if not str(body.get("user_id") or "").strip():
+        raise HTTPException(status_code=422, detail="user_id is required")
+    try:
+        return _require_dsh_runtime_manager().uninstall()
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 @router.get("/settings/latex/status")
 async def get_latex_status(

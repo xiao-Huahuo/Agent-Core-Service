@@ -12,6 +12,7 @@ import 'echarts'
 import IcIcon from '@/components/common/IcIcon.vue'
 import CompilerManagement from '@/components/settings_view/CompilerManagement.vue'
 import ModelManagement from '@/components/settings_view/ModelManagement.vue'
+import SdkManagement from '@/components/settings_view/SdkManagement.vue'
 import { saveModelPreferences } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
 import { API_ROUTES } from '@/router/api_routes'
@@ -56,6 +57,7 @@ const ROOT_ORDER = [
   'knowledge_dir', 'managed_root', 'markdown_dir', 'frontmatter_dir', 'library_storage_dir', 'forms_dir', 'components_dir', 'latex_build_cache_dir', 'base_data_dir',
   'assets_dir', 'db_dir', 'relation_db_dir', 'vector_db_dir', 'sqlite_path', 'chroma_persist_dir',
   'log_dir', 'models_dir',
+  'dsh_sdk_dir',
   'embedding_model_dir', 'local_model_dir', 'paddleocr_model_dir', 'rerank_model_dir',
   'latex_runtime_dir', 'latex_distribution_dir', 'latex_repository_dir', 'latex_temp_dir',
   'trash_dir',
@@ -358,6 +360,7 @@ watch(
 
     <ModelManagement :user-id="settingsStore.profile.userId" @storage-changed="loadStorageConfig" />
     <CompilerManagement :user-id="settingsStore.profile.userId" @storage-changed="loadStorageConfig" />
+    <SdkManagement :user-id="settingsStore.profile.userId" @storage-changed="loadStorageConfig" />
 
     <header class="storage-path-header">
       <h4>存储路径</h4>

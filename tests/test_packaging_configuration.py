@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from agent_service.api.rest import settings as settings_api
 from agent_service.core.agent_config import AgentConfig
 from agent_service.services.safety.safety_service import SafetyService
+from scripts.build_dsh_windows_bundle import verify_bundle_files
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -61,8 +62,18 @@ def test_pyinstaller_spec_collects_runtime_files_without_all_service_submodules(
     assert "_snapshot_required_data_dir('editor/dist')" in spec
     assert "_required_data_dir('agent_service/core/db/alembic')" in spec
     assert "_required_data_file('alembic.ini')" in spec
+    assert "_required_dsh_sdk_bundle()" in spec
     assert "collect_submodules('agent_service')" not in spec
     assert "['xlrd', 'torchvision']" in spec
+
+
+def test_checked_in_dsh_sdk_bundle_matches_locked_release() -> None:
+    """正式 EXE将收集的内置 SDK必须通过版本、大小和 SHA-256门禁。"""
+
+    archive, manifest = verify_bundle_files(PROJECT_ROOT / "resources" / "dsh" / "sdk")
+
+    assert archive.stat().st_size == 66_008_168
+    assert manifest.is_file()
 
 
 def test_backend_direct_runtime_dependencies_are_declared() -> None:
