@@ -12,6 +12,7 @@ import { nextTick } from 'vue'
 
 import MarkdownContent from '../MarkdownContent.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
+import type { SearchSource, UnifiedSearchResult } from '@/types/unifiedSearch'
 
 const { openImagePreview } = vi.hoisted(() => ({ openImagePreview: vi.fn() }))
 
@@ -53,6 +54,34 @@ describe('MarkdownContent source links', () => {
     expect(sourceLink.text()).toBe('01_climate_change_nasa.md')
     await sourceLink.trigger('click')
     expect(onNavigateSource).toHaveBeenCalledWith('1/3/01_climate_change_nasa.md')
+  })
+
+  it('opens every four-library K citation through the shared result sidebar', async () => {
+    const workspaceStore = useWorkspaceStore()
+    const openSearchResultSidebar = vi.spyOn(workspaceStore, 'openSearchResultSidebar').mockResolvedValue()
+    const sources: SearchSource[] = ['files', 'library', 'components', 'literature']
+    const citationMap = Object.fromEntries(sources.map((source, index) => {
+      const searchResult: UnifiedSearchResult = {
+        id: `${source}-1`, source, title: source, snippet: '',
+        locator: source === 'library' ? 'https://example.com/library-1' : `${source}/1`, updated_at: '',
+        score: 1, matched_modes: ['title'], item: {},
+      }
+      return [`K${index + 1}`, {
+        source_uri: searchResult.locator,
+        content: source,
+        search_result: searchResult,
+      }]
+    }))
+    const wrapper = mount(MarkdownContent, {
+      props: {
+        content: sources.map((_, index) => `[K${index + 1}]`).join(' '),
+        citationMap,
+      },
+    })
+
+    for (const anchor of wrapper.findAll('.citation-anchor')) await anchor.trigger('click')
+
+    expect(openSearchResultSidebar.mock.calls.map(([result]) => result.source)).toEqual(sources)
   })
 
   it('renders inline and display math after DOMPurify', async () => {

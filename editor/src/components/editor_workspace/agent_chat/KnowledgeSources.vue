@@ -3,7 +3,7 @@
 
   Usage:
   Shows retrieved knowledge source files below assistant messages as individual
-  file entries. Each source can be clicked to navigate to that file.
+  entries. Local and four-library sources open in the shared right sidebar.
 -->
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -42,7 +42,12 @@ function toggle() {
   expanded.value = !expanded.value
 }
 
-function openSource(uri: string) {
+function openSource(source: SourceItem) {
+  const uri = source.source_uri
+  if (source.search_result) {
+    void workspaceStore.openSearchResultSidebar(source.search_result)
+    return
+  }
   if (/^https?:\/\//i.test(uri)) {
     if (window.agentEditorDesktop?.openExternal) {
       void window.agentEditorDesktop.openExternal(uri)
@@ -58,8 +63,7 @@ function openSource(uri: string) {
     node = flatNodes.find((n) => n.path.endsWith(`/${name}`) || n.name === name)
   }
   if (node) {
-    workspaceStore.setMainView('editor')
-    workspaceStore.selectFile(node)
+    void workspaceStore.openEditorSidebar(node)
   }
 }
 </script>
@@ -77,7 +81,7 @@ function openSource(uri: string) {
         :key="source.source_uri + index"
         class="source-item"
         type="button"
-        @click="openSource(source.source_uri)"
+        @click="openSource(source)"
       >
         <span class="source-index">{{ source.citation_id ?? index + 1 }}</span>
         <span class="source-name">{{ sourceName(source) }}</span>

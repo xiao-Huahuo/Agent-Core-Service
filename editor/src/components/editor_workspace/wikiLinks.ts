@@ -141,8 +141,9 @@ export function wikiLinkSuggestions(
       return { path, title, folder: parentFolder(path), target }
     })
     .filter((item) => (
-      !normalizedQuery || item.title.toLocaleLowerCase().includes(normalizedQuery)
-        || item.path.toLocaleLowerCase().includes(normalizedQuery)
+      !item.path.toLocaleLowerCase().startsWith('.mw/')
+      && (!normalizedQuery || item.title.toLocaleLowerCase().includes(normalizedQuery)
+        || item.path.toLocaleLowerCase().includes(normalizedQuery))
     ))
     .sort((left, right) => {
       const leftStarts = left.title.toLocaleLowerCase().startsWith(normalizedQuery) ? 0 : 1

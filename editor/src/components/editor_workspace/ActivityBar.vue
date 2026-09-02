@@ -6,7 +6,7 @@
   to future workspace tools. Buttons expose native tooltips through title text.
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import IcIcon from '@/components/common/IcIcon.vue'
 import ThemeToggleButton from '@/components/common/ThemeToggleButton.vue'
@@ -175,6 +175,18 @@ function closeActivityMenu() {
   if (props.displayMode === 'management') return
   activeMenu.value = null
 }
+
+/** Close the expanded branch whenever pointer interaction leaves its trigger and submenu. */
+function closeActivityMenuOnOutsidePointer(event: Event): void {
+  const activityBar = activityBarRef.value
+  if (!activeMenu.value || !activityBar || !(event.target instanceof Node)) return
+  const activeTrigger = activityBar.querySelector<HTMLElement>('.knowledge-button[aria-expanded="true"]')
+  const activeGroup = activeTrigger?.closest<HTMLElement>('.knowledge-group')
+  if (!activeGroup?.contains(event.target)) activeMenu.value = null
+}
+
+onMounted(() => document.addEventListener('pointerdown', closeActivityMenuOnOutsidePointer))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', closeActivityMenuOnOutsidePointer))
 </script>
 
 <template>

@@ -65,3 +65,49 @@
 - 历史 API 使用语义投影，原始事件继续供上下文/观测读取。
 - 旧会话只读投影 926 → 69；不迁移、不删除用户原始数据。
 - Python：2 + 13 + 22 passed；Vitest：27 passed；Chromium 重载：1 passed。
+
+---
+
+# Notes: Agent 对话来源、结果块布局与库菜单
+
+## 待核对链路
+- 来源区块：来源点击事件如何从消息组件传递到编辑工作区，以及现有主区/右侧区打开参数。
+- 四类内容块：Agent 消息元数据如何合并挂载文件、图书馆、文献阅读和组件库结果；搜索页分裂模式使用的布局结构。
+- 库菜单：按钮、二级菜单宿主及现有 click-outside 模式。
+
+## 验证证据
+- `KnowledgeSources.openSource` 对本地节点调用 `setMainView('editor') + selectFile`，直接导致离开Agent主区。
+- `workspace.openEditorSidebar` 已是搜索页预览和Agent页挂载文件共用的右侧编辑区入口。
+- `AgentSearchResultBlocks` 当前将所有source放进同一个 `auto-fit` grid；`SearchPage`分裂模式则按source渲染独立section及原生布局。
+- `ActivityBar` 的 `activeMenu` 没有document级外部点击监听，现有 `closeActivityMenu` 只覆盖菜单项导航且management模式刻意不关闭。
+- 失败基线：新增的来源侧栏、四库分行、外部点击用例各失败1项，其余17项通过。
+- 实现后回归：3个测试文件共21项全部通过。
+- Chromium实际界面：来源打开后右侧编辑区可见且Agent主区保留；四个source section顺序和纵向几何正确；库菜单点击顶栏后隐藏，2项通过。
+- 桌面截图视觉检查：四类原生卡片独立分段，没有混排和横向溢出。
+- `npm run build-only`通过；全量`vue-tsc --build`仅报告仓库既有错误，本次文件未出现在错误列表。
+- 定向ESLint为0错误；既有E2E的`force: true`保留1条无关warning。
+- Playwright复用了PID 12816的既有5173 Vite服务；该Node进程累计CPU时间8分钟以上，并非本轮短暂冒烟创建，故保留运行。
+
+---
+
+# Notes: 四库 K 引用侧栏导航
+
+## 已确认链路
+- `search_knowledge` 已把四库原生结果写入 `citation_map[K#].search_result`，历史消息恢复时 `asSourceMap` 会保留该字段。
+- 挂载结果块已通过 `workspace.openAgentSearchResult`/`openSearchResultSidebar` 支持四库原生导航。
+- 正文 `[K#]` 当前只把 `source_uri` 交给本地文件/网页回调，丢失 `search_result`，因此非文件库点击无响应。
+- 底部 `KnowledgeSources` 同样只接收 URI；本地文件侧栏修复已存在，但尚未消费四库 `search_result`。
+
+## 修复边界
+- 正文与来源区优先使用完整 `search_result` 打开共享右侧侧栏。
+- 无 `search_result` 的旧引用保留附件预览、网页打开和本地文件兼容路径。
+
+## 回归结果
+- 失败基线：正文四库 K 引用测试得到 0 次侧栏调用，准确复现缺陷。
+- 修复后：`MarkdownContent.spec.ts` 13项通过，`FinalTurnSummary.spec.ts` 4项通过。
+- 图书馆测试使用 HTTP locator，确认 `search_result` 优先于普通网页跳转。
+- 后端四库注册回归：`test_agent_tool_registry.py` 3项通过。
+- 历史消息引用恢复：`MessageListAttachmentCitation.spec.ts` 3项通过。
+- 生产构建：`npm run build-only`通过；定向ESLint 0错误。
+- Chromium实际界面：依次点击 `[K1]` 至 `[K4]`，四类侧栏均正确显示且Agent主区保留，1项通过。
+- 视觉检查：1440×900暗色界面的文献侧栏完整可见，标题、字段/内容切换和关闭入口无截断。

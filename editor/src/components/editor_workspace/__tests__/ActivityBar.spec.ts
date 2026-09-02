@@ -74,6 +74,7 @@ describe('ActivityBar', () => {
     searchActive: false,
     browserActive: false,
     settingsActive: false,
+    isDark: false,
   }
 
   it('opens knowledge submenu and preserves child navigation events', async () => {
@@ -117,6 +118,18 @@ describe('ActivityBar', () => {
 
     await trigger.trigger('click')
     expect(wrapper.emitted('knowledgeMenuVisibilityChange')).toEqual([[true], [false]])
+  })
+
+  it('closes an open library submenu when the user clicks elsewhere', async () => {
+    const wrapper = mount(ActivityBar, { props, attachTo: document.body })
+    await wrapper.get('button[aria-label="库"]').trigger('click')
+
+    expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(true)
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[aria-label="知识库菜单"]').exists()).toBe(false)
+    wrapper.unmount()
   })
 
   it('keeps the submenu open after child navigation but lets the parent toggle it', async () => {

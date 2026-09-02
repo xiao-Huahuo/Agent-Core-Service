@@ -16,6 +16,56 @@ const profile = {
 
 const mountedFileName = '原神阴间地图汇总报告.md'
 const mountedFilePath = `文档/${mountedFileName}`
+const sourceFilePath = '资料/冬冬国.md'
+
+const mountedSearchResults = {
+  K1: {
+    source_uri: sourceFilePath,
+    content: '测试来源',
+    search_result: {
+      id: sourceFilePath, source: 'files', title: '冬冬国.md', snippet: '测试来源', locator: sourceFilePath,
+      updated_at: '', score: 1, matched_modes: ['title'],
+      item: { name: '冬冬国.md', path: sourceFilePath, isDir: false, size: 1024 },
+    },
+  },
+  K2: {
+    source_uri: 'https://example.com/knowledge-book', content: '图书馆来源',
+    search_result: {
+      id: 'book-1', source: 'library', title: '知识手册', snippet: '图书馆来源', locator: 'https://example.com/knowledge-book',
+      updated_at: '', score: 0.9, matched_modes: ['title'],
+      item: {
+        item_id: 'book-1', user_id: 'e2e-user', library_id: 'default', parent_id: '', item_type: 'book',
+        content_type: 'knowledge_file', title: '知识手册', display_title: '知识手册', description: '',
+        source_path: '资料/知识手册.pdf', source_url: '', source_name: '知识手册.pdf', source_mime: 'application/pdf',
+        source_size: 2048, source_mtime: '', source_exists: true, cover_mode: 'title', cover_asset_id: '',
+        cover_asset: null, tags: [], child_count: 0, index_status: 'indexed', graph_status: 'graphed', created_at: '', updated_at: '',
+      },
+    },
+  },
+  K3: {
+    source_uri: 'component://SearchPanel', content: '组件来源',
+    search_result: {
+      id: 'SearchPanel.vue', source: 'components', title: 'SearchPanel', snippet: '组件来源', locator: 'SearchPanel.vue',
+      updated_at: '', score: 0.8, matched_modes: ['title'],
+      item: {
+        component_id: 'SearchPanel.vue', user_id: 'e2e-user', title: 'SearchPanel', tag: 'cards', source_format: 'vue',
+        source: '<template><section>Search Panel</section></template>', builtin: false, created_at: null, updated_at: null,
+      },
+    },
+  },
+  K4: {
+    source_uri: 'literature://paper-1', content: '文献来源',
+    search_result: {
+      id: 'form-1:row-1', source: 'literature', title: '检索研究', snippet: '文献来源', locator: '.mw/forms/paper.pdf',
+      updated_at: '', score: 0.7, matched_modes: ['title'],
+      item: {
+        form_id: 'form-1', form_title: '研究文献', row_id: 'row-1', title: '检索研究', file_name: 'paper.pdf',
+        asset_path: '.mw/forms/paper.pdf', content_excerpt: '文献来源', file_size: 4096,
+        entered_at: '', updated_at: '', last_viewed_at: '', tags: [], rating: 5,
+      },
+    },
+  },
+}
 
 async function mockWorkspace(page: Page): Promise<void> {
   let streamCompleted = false
@@ -26,14 +76,14 @@ async function mockWorkspace(page: Page): Promise<void> {
       streamCompleted = true
       const event = {
         node: 'agent',
-        content: `📄 [打开《${mountedFileName}》](/knowledge/files/raw?user_id=e2e-user&path=${encodeURIComponent(mountedFilePath)})`,
+        content: `四库来源：[K1] [K2] [K3] [K4]\n\n📄 [打开《${mountedFileName}》](/knowledge/files/raw?user_id=e2e-user&path=${encodeURIComponent(mountedFilePath)})`,
         tool_calls: [],
         trace: [],
         metadata: {
           citation_map: {
-            K1: { source_uri: '资料/冬冬国.md', content: '测试来源' },
+            ...mountedSearchResults,
           },
-          used_citations: ['K1'],
+          used_citations: ['K1', 'K2', 'K3', 'K4'],
           change_snapshot: {
             snapshot_id: 'snap-e2e', session_id: 'e2e-session', run_id: 'run-e2e', created_at: '',
             additions: 10, deletions: 2, is_undone: false, edits: [],
@@ -70,11 +120,17 @@ async function mockWorkspace(page: Page): Promise<void> {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ tree: [{
-          name: mountedFileName, path: mountedFilePath, isDir: false,
-          size: 24576, createdAt: '2026-08-21 09:30', mtime: '2026-08-21 10:00',
-          indexStatus: 'indexed', graphStatus: 'graphed',
-        }] }),
+        body: JSON.stringify({ tree: [
+          {
+            name: mountedFileName, path: mountedFilePath, isDir: false,
+            size: 24576, createdAt: '2026-08-21 09:30', mtime: '2026-08-21 10:00',
+            indexStatus: 'indexed', graphStatus: 'graphed',
+          },
+          {
+            name: '冬冬国.md', path: sourceFilePath, isDir: false,
+            size: 1024, createdAt: '', mtime: '', indexStatus: 'indexed', graphStatus: 'graphed',
+          },
+        ] }),
       })
       return
     }
@@ -151,6 +207,22 @@ test('renders and opens an encoded Agent file block', async ({ page }, testInfo)
   await expect(block).toBeVisible()
   await expect(block.locator('.agent-mounted-file__status')).toHaveCount(4)
   await expect(block).toContainText(`D:/Knowledge/${mountedFilePath}`)
+
+  const mountedSections = page.locator('.agent-page-mode .agent-search-result-section')
+  await expect(mountedSections).toHaveCount(4)
+  expect(await mountedSections.evaluateAll((sections) => sections.map((section) => section.getAttribute('data-source')))).toEqual([
+    'files', 'library', 'components', 'literature',
+  ])
+  const sectionY = await mountedSections.evaluateAll((sections) => sections.map((section) => section.getBoundingClientRect().y))
+  expect(sectionY).toEqual([...sectionY].sort((left, right) => left - right))
+
+  const summary = page.locator('.agent-page-mode .final-turn-summary')
+  await summary.getByRole('button', { name: '来源' }).click()
+  await summary.getByRole('button', { name: /冬冬国\.md/ }).click()
+  const sourceSidebar = page.locator('.editor-sidebar-content')
+  await expect(sourceSidebar).toHaveAttribute('aria-hidden', 'false')
+  await expect(page.locator('.agent-page-mode')).toBeVisible()
+  await page.getByRole('button', { name: '关闭编辑区侧边栏' }).click()
   await page.screenshot({ path: testInfo.outputPath('agent-file-dark.png'), fullPage: true })
 
   await block.click()
@@ -172,6 +244,32 @@ test('renders and opens an encoded Agent file block', async ({ page }, testInfo)
   await page.mouse.up()
   await expect.poll(async () => (await editorSidebar.boundingBox())?.width ?? 0).toBeLessThan(editorWidthBefore - 60)
   await page.screenshot({ path: testInfo.outputPath('agent-file-sidebar-open.png'), fullPage: true })
+})
+
+test('opens four-library inline K citations in their native right sidebars', async ({ page }, testInfo) => {
+  await mockWorkspace(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Agent', exact: true }).click()
+  await page.locator('textarea[placeholder="输入消息..."]').fill('展示四库引用')
+  await page.getByRole('button', { name: '发送' }).click()
+
+  const sidebar = page.locator('.editor-sidebar-content')
+  const sources = ['files', 'library', 'components', 'literature'] as const
+  for (const [index, source] of sources.entries()) {
+    await page.locator(`.citation-anchor[data-citation-idx="K${index + 1}"]`).click()
+    await expect(sidebar).toHaveAttribute('aria-hidden', 'false')
+    if (source === 'files') {
+      await expect(sidebar.locator('.sidebar-editor-panel')).toBeVisible()
+    } else {
+      await expect(sidebar.locator(`.search-result-sidebar[data-source="${source}"]`)).toBeVisible()
+    }
+    await expect(page.locator('.agent-page-mode')).toBeVisible()
+    if (source === 'literature') {
+      await page.screenshot({ path: testInfo.outputPath('four-library-k-citation-sidebar.png'), fullPage: true })
+    }
+    await page.getByRole('button', { name: '关闭编辑区侧边栏' }).click()
+  }
 })
 
 test('keeps mounted files, changes, and input controls compact in Agent sidebar mode', async ({ page }, testInfo) => {
@@ -325,4 +423,16 @@ test('shows the selected vault type non-empty field union', async ({ page }, tes
   await expect(page.locator('.vault-table th')).toHaveText(['', '项目名称', '用户名', '密码', '网站 URI', '创建时间', '拥有者'])
   await expect(page.locator('.vault-table')).not.toContainText('secret')
   await page.screenshot({ path: testInfo.outputPath('vault-login-columns.png'), fullPage: true })
+})
+
+test('closes the library submenu after clicking outside it', async ({ page }) => {
+  await mockWorkspace(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: '库', exact: true }).click()
+  await expect(page.locator('[aria-label="知识库菜单"]')).toBeVisible()
+  await page.locator('.topbar').click({ position: { x: 8, y: 8 } })
+
+  await expect(page.locator('[aria-label="知识库菜单"]')).toBeHidden()
 })

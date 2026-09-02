@@ -42,4 +42,28 @@ describe('AgentSearchResultBlocks', () => {
     await wrapper.findAll('.native-result')[2]?.trigger('click')
     expect(open).toHaveBeenLastCalledWith(results[2], true)
   })
+
+  it('separates the four libraries into split-mode source rows', () => {
+    const results = (['literature', 'files', 'components', 'library'] as SearchSource[]).map(result)
+    const wrapper = mount(AgentSearchResultBlocks, {
+      props: { results },
+      global: {
+        stubs: {
+          SearchNativeResultCard: {
+            props: ['result'],
+            template: '<span class="native-result">{{ result.source }}</span>',
+          },
+        },
+      },
+    })
+
+    const sections = wrapper.findAll('.agent-search-result-section')
+    expect(sections).toHaveLength(4)
+    expect(sections.map((section) => section.attributes('data-source'))).toEqual([
+      'files', 'library', 'components', 'literature',
+    ])
+    expect(sections.map((section) => section.findAll('.native-result').map((item) => item.text()))).toEqual([
+      ['files'], ['library'], ['components'], ['literature'],
+    ])
+  })
 })

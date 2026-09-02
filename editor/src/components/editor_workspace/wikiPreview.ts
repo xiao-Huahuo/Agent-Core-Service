@@ -16,7 +16,7 @@ import {
   decorateRenderedMarkdownImages,
   rewriteMarkdownImageUrls,
 } from '@/components/editor_workspace/markdownImageUrls'
-import { renderMathInHtml } from '@/components/editor_workspace/mathRender'
+import { extractPreviewMath, renderMathInPreviewDom } from '@/components/editor_workspace/mathRender'
 import type { KnowledgeFileNode } from '@/types/knowledge'
 
 import {
@@ -69,8 +69,11 @@ function renderEmbeddedMarkdown(markdown: string, context: WikiPreviewContext): 
     userId: context.userId,
     currentFilePath: context.currentPath,
   })
-  const html = marked.parse(rewritten, { async: false, gfm: true, breaks: true }) as string
-  return DOMPurify.sanitize(renderMathInHtml(html), {
+  const { markdown: protectedMarkdown, displayBlocks, inlineBlocks } = extractPreviewMath(rewritten)
+  const root = document.createElement('div')
+  root.innerHTML = marked.parse(protectedMarkdown, { async: false, gfm: true, breaks: true }) as string
+  renderMathInPreviewDom(root, displayBlocks, inlineBlocks)
+  return DOMPurify.sanitize(root.innerHTML, {
     ADD_ATTR: ['class', 'target', 'rel'],
     ADD_TAGS: ['span'],
   })

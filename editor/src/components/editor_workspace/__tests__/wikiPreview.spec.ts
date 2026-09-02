@@ -60,6 +60,20 @@ describe('wikiPreview', () => {
     expect(root.textContent).not.toContain('不应嵌入')
   })
 
+  it('renders adjacent inline formulas in embeds without treating their boundary as display math', async () => {
+    knowledgeMocks.readKnowledgeFile.mockResolvedValue({
+      content: String.raw`- 行向量与列向量: $\left( a_1,a_2,a_3,... \right)$$\begin{pmatrix} a_1 \\ a_2 \\ a_3 \end{pmatrix}$`,
+    })
+    const root = document.createElement('div')
+    root.textContent = '![[target]]'
+
+    await decorateWikiPreview(root, context())
+
+    expect(root.querySelectorAll('.katex')).toHaveLength(2)
+    expect(root.querySelector('.katex-error')).toBeNull()
+    expect(root.textContent).not.toContain('ParseError')
+  })
+
   it('embeds a local knowledge image through the existing raw-file endpoint', async () => {
     const root = document.createElement('div')
     root.textContent = '![[static/chart.png]]'

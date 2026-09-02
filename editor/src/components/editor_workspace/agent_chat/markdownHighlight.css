@@ -1,0 +1,103 @@
+/*
+ * highlight.js color tokens for Agent Markdown code blocks.
+ *
+ * Usage: loaded globally by MarkdownContent.vue and switched by the root
+ * data-theme attribute so streamed and finalized code share one theme.
+ */
+.hljs {
+  color: var(--hljs-fg, #e6e6e6);
+  background: transparent;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link {
+  color: var(--hljs-keyword, #ff79c6);
+}
+
+.hljs-string,
+.hljs-addition,
+.hljs-attribute,
+.hljs-template-variable,
+.hljs-selector-id {
+  color: var(--hljs-string, #50fa7b);
+}
+
+.hljs-number,
+.hljs-built_in,
+.hljs-type,
+.hljs-params {
+  color: var(--hljs-type, #8be9fd);
+}
+
+.hljs-title,
+.hljs-title.function_ {
+  color: var(--hljs-function, #50fa7b);
+}
+
+.hljs-title.class_,
+.hljs-title.class_.inherited__ {
+  color: var(--hljs-class, #f1fa8c);
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--hljs-comment, #6272a4);
+  font-style: italic;
+}
+
+.hljs-literal,
+.hljs-selector-attr,
+.hljs-selector-pseudo,
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-meta .hljs-string {
+  color: var(--hljs-constant, #bd93f9);
+}
+
+.hljs-variable,
+.hljs-variable.language_,
+.hljs-variable.constant_ {
+  color: var(--hljs-variable, #f8f8f2);
+}
+
+.hljs-deletion {
+  color: var(--hljs-deletion, #f55);
+}
+
+.hljs-attr,
+.hljs-property,
+.hljs-regexp {
+  color: var(--hljs-attr, #f1fa8c);
+}
+
+.hljs-punctuation,
+.hljs-operator {
+  color: var(--hljs-operator, #ff79c6);
+}
+
+.hljs-subst {
+  color: var(--hljs-fg, #e6e6e6);
+}
+
+.hljs-doctag,
+.hljs-doctag .hljs-keyword {
+  color: var(--hljs-comment, #6272a4);
+}
+
+[data-theme="light"] .hljs {
+  --hljs-fg: #24292e;
+  --hljs-keyword: #d73a49;
+  --hljs-string: #032f62;
+  --hljs-type: #6f42c1;
+  --hljs-function: #6f42c1;
+  --hljs-class: #e36209;
+  --hljs-comment: #6a737d;
+  --hljs-constant: #005cc5;
+  --hljs-variable: #24292e;
+  --hljs-deletion: #b31d28;
+  --hljs-attr: #22863a;
+  --hljs-operator: #d73a49;
+}
