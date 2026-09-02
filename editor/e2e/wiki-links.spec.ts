@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 const fileContent: Record<string, string> = {
   'notes/source.md': '# 来源\n\n[[target#目标章节|打开目标章节]]\n\n![[target#嵌入章节]]\n\n![[static/chart.png]]\n\n![[loop]]',
-  'notes/target.md': '# 目标文档\n\n## 目标章节\n\n跳转后的正文。\n\n## 嵌入章节\n\n| 模型 | 成绩 |\n| --- | --- |\n| MetaWeave | 100 |',
+  'notes/target.md': '# 目标文档\n\n## 目标章节\n\n跳转后的正文。\n\n## 嵌入章节\n\n| 模型 | 成绩 |\n| --- | --- |\n| MetaWeave | 100 |\n\n- 行向量与列向量: $\\left( a_1,a_2,a_3,... \\right)$$\\begin{pmatrix} a_1 \\\\ a_2 \\\\ a_3 \\end{pmatrix}$',
   'notes/loop.md': '递归内容 ![[loop]]',
 }
 
@@ -75,6 +75,9 @@ test('Obsidian wiki links suggest, navigate, highlight, and recursively embed', 
   await page.getByRole('button', { name: 'Preview' }).click()
   await expect(page.locator('.wiki-link')).toHaveText('打开目标章节')
   await expect(page.locator('.wiki-embed table')).toContainText('MetaWeave')
+  await expect(page.locator('.wiki-embed .katex')).toHaveCount(2)
+  await expect(page.locator('.wiki-embed .katex-error')).toHaveCount(0)
+  await expect(page.locator('.wiki-embed')).not.toContainText('ParseError')
   await expect(page.locator('.wiki-embed-image')).toBeVisible()
   await expect(page.locator('.wiki-embed-limit')).toContainText('5 层上限')
   await page.screenshot({ path: testInfo.outputPath('wiki-links-preview.png'), fullPage: true })
